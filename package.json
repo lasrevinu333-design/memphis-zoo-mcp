@@ -1,0 +1,17 @@
+{
+  "name": "memphis-zoo-mcp",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.18.0",
+    "@supabase/supabase-js": "^2.103.2",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "octokit": "^5.0.3",
+    "zod": "^4.1.12"
+  }
+}
