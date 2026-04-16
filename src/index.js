@@ -229,6 +229,85 @@ function createMcpServer() {
     }
   );
 
+  server.tool(
+    "supabase_migration_apply",
+    {
+      name: z.string().min(1),
+      sql: z.string().min(1),
+    },
+    async ({ name, sql }) => {
+      try {
+        const client = getSupabaseConfig();
+
+        const normalized = sql.trim().toLowerCase();
+
+        if (!normalized.startsWith("begin")) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: "Migration must start with BEGIN.",
+              },
+            ],
+          };
+        }
+
+        if (!normalized.includes("commit")) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: "Migration must include COMMIT.",
+              },
+            ],
+          };
+        }
+
+        const { data, error } = await client.rpc("run_sql_migration", {
+          p_name: name,
+          p_sql: sql,
+        });
+
+        if (error) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Supabase migration failed: ${error.message}`,
+              },
+            ],
+          };
+        }
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  ok: true,
+                  name,
+                  result: data,
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Supabase migration apply failed: ${error.message}`,
+            },
+          ],
+        };
+      }
+    }
+  );
+
   return server;
 }
 
