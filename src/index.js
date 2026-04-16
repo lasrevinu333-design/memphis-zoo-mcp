@@ -13,7 +13,7 @@ app.use(express.json({ limit: "10mb" }));
 function createMcpServer() {
   const server = new McpServer({
     name: process.env.APP_NAME || "Memphis Zoo MCP",
-    version: "0.1.1",
+    version: "0.2.0",
   });
 
   const octokit = new Octokit({
@@ -27,16 +27,42 @@ function createMcpServer() {
         })
       : null;
 
-  function getGithubConfig() {
+  function getAllowedGithubRepos(defaultRepo) {
+    const raw = process.env.GITHUB_ALLOWED_REPOS || defaultRepo;
+    return Array.from(
+      new Set(
+        String(raw || "")
+          .split(",")
+          .map((repoName) => repoName.trim())
+          .filter(Boolean)
+      )
+    );
+  }
+
+  function getGithubConfig(targetRepo) {
     const owner = process.env.GITHUB_OWNER;
-    const repo = process.env.GITHUB_REPO;
+    const defaultRepo = process.env.GITHUB_REPO;
     const token = process.env.GITHUB_TOKEN;
 
-    if (!owner || !repo || !token) {
+    if (!owner || !defaultRepo || !token) {
       throw new Error("GitHub is not configured. Check GITHUB_OWNER, GITHUB_REPO, and GITHUB_TOKEN in .env.");
     }
 
-    return { owner, repo };
+    const allowedRepos = getAllowedGithubRepos(defaultRepo);
+    const repo = (targetRepo || defaultRepo).trim();
+
+    if (!allowedRepos.includes(repo)) {
+      throw new Error(
+        `Repo \"${repo}\" is not allowed. Allowed repos: ${allowedRepos.join(", ")}`
+      );
+    }
+
+    return {
+      owner,
+      repo,
+      defaultRepo,
+      allowedRepos,
+    };
   }
 
   function getSupabaseConfig() {
@@ -89,6 +115,7 @@ function createMcpServer() {
     "github_debug_config",
     {},
     async () => {
+      const defaultRepo = process.env.GITHUB_REPO || null;
       return {
         content: [
           {
@@ -96,7 +123,8 @@ function createMcpServer() {
             text: JSON.stringify(
               {
                 owner: process.env.GITHUB_OWNER || null,
-                repo: process.env.GITHUB_REPO || null,
+                defaultRepo,
+                allowedRepos: getAllowedGithubRepos(defaultRepo || ""),
                 hasToken: !!process.env.GITHUB_TOKEN,
               },
               null,
@@ -111,11 +139,12 @@ function createMcpServer() {
   server.tool(
     "github_list_directory",
     {
+      repo: z.string().optional(),
       path: z.string().optional(),
     },
-    async ({ path }) => {
+    async ({ repo: targetRepo, path }) => {
       try {
-        const { owner, repo } = getGithubConfig();
+        const { owner, repo } = getGithubConfig(targetRepo);
         const normalizedPath = normalizeGithubPath(path || "");
 
         const response = await octokit.rest.repos.getContent({
@@ -145,7 +174,16 @@ function createMcpServer() {
           content: [
             {
               type: "text",
-              text: JSON.stringify(items, null, 2),
+              text: JSON.stringify(
+                {
+                  owner,
+                  repo,
+                  path: normalizedPath || "<repo-root>",
+                  items,
+                },
+                null,
+                2
+              ),
             },
           ],
         };
@@ -154,7 +192,7 @@ function createMcpServer() {
           content: [
             {
               type: "text",
-              text: `Failed to list GitHub directory "${path || "/"}" from ${process.env.GITHUB_OWNER || "?"}/${process.env.GITHUB_REPO || "?"}: ${getGithubErrorDetail(error)}`,
+              text: `Failed to list GitHub directory \"${path || "/"}\"${targetRepo ? ` in repo \"${targetRepo}\"` : ""}: ${getGithubErrorDetail(error)}`,
             },
           ],
         };
@@ -165,11 +203,12 @@ function createMcpServer() {
   server.tool(
     "github_read_file",
     {
+      repo: z.string().optional(),
       path: z.string().min(1),
     },
-    async ({ path }) => {
+    async ({ repo: targetRepo, path }) => {
       try {
-        const { owner, repo } = getGithubConfig();
+        const { owner, repo } = getGithubConfig(targetRepo);
         const normalizedPath = normalizeGithubPath(path);
 
         const response = await octokit.rest.repos.getContent({
@@ -204,7 +243,7 @@ function createMcpServer() {
           content: [
             {
               type: "text",
-              text: `Failed to read GitHub file "${path}" from ${process.env.GITHUB_OWNER || "?"}/${process.env.GITHUB_REPO || "?"}: ${getGithubErrorDetail(error)}`,
+              text: `Failed to read GitHub file \"${path}\"${targetRepo ? ` in repo \"${targetRepo}\"` : ""}: ${getGithubErrorDetail(error)}`,
             },
           ],
         };
@@ -215,13 +254,14 @@ function createMcpServer() {
   server.tool(
     "github_write_file",
     {
+      repo: z.string().optional(),
       path: z.string().min(1),
       content: z.string(),
       commit_message: z.string().min(1),
     },
-    async ({ path, content, commit_message }) => {
+    async ({ repo: targetRepo, path, content, commit_message }) => {
       try {
-        const { owner, repo } = getGithubConfig();
+        const { owner, repo } = getGithubConfig(targetRepo);
         const normalizedPath = normalizeGithubPath(path);
         let sha;
         let mode = "created";
@@ -238,7 +278,7 @@ function createMcpServer() {
               content: [
                 {
                   type: "text",
-                  text: `Cannot write to "${normalizedPath}" because it is a directory in ${owner}/${repo}.`,
+                  text: `Cannot write to \"${normalizedPath}\" because it is a directory in ${owner}/${repo}.`,
                 },
               ],
             };
@@ -269,7 +309,7 @@ function createMcpServer() {
           content: [
             {
               type: "text",
-              text: `${mode === "created" ? "Created" : "Updated"} "${normalizedPath}" successfully in ${owner}/${repo}.\nCommit: ${writeResponse.data.commit.sha}`,
+              text: `${mode === "created" ? "Created" : "Updated"} \"${normalizedPath}\" successfully in ${owner}/${repo}.\nCommit: ${writeResponse.data.commit.sha}`,
             },
           ],
         };
@@ -278,7 +318,7 @@ function createMcpServer() {
           content: [
             {
               type: "text",
-              text: `Failed to write GitHub file "${path}" in ${process.env.GITHUB_OWNER || "?"}/${process.env.GITHUB_REPO || "?"}: ${getGithubErrorDetail(error)}`,
+              text: `Failed to write GitHub file \"${path}\"${targetRepo ? ` in repo \"${targetRepo}\"` : ""}: ${getGithubErrorDetail(error)}`,
             },
           ],
         };
@@ -289,13 +329,14 @@ function createMcpServer() {
   server.tool(
     "github_update_file",
     {
+      repo: z.string().optional(),
       path: z.string().min(1),
       content: z.string(),
       commit_message: z.string().min(1),
     },
-    async ({ path, content, commit_message }) => {
+    async ({ repo: targetRepo, path, content, commit_message }) => {
       try {
-        const { owner, repo } = getGithubConfig();
+        const { owner, repo } = getGithubConfig(targetRepo);
         const normalizedPath = normalizeGithubPath(path);
 
         const existing = await octokit.rest.repos.getContent({
@@ -309,7 +350,7 @@ function createMcpServer() {
             content: [
               {
                 type: "text",
-                text: `Cannot update "${normalizedPath}" because it is not a normal file in ${owner}/${repo}.`,
+                text: `Cannot update \"${normalizedPath}\" because it is not a normal file in ${owner}/${repo}.`,
               },
             ],
           };
@@ -330,7 +371,7 @@ function createMcpServer() {
           content: [
             {
               type: "text",
-              text: `Updated "${normalizedPath}" successfully in ${owner}/${repo}.\nCommit: ${updateResponse.data.commit.sha}`,
+              text: `Updated \"${normalizedPath}\" successfully in ${owner}/${repo}.\nCommit: ${updateResponse.data.commit.sha}`,
             },
           ],
         };
@@ -339,7 +380,7 @@ function createMcpServer() {
           content: [
             {
               type: "text",
-              text: `Failed to update GitHub file "${path}" in ${process.env.GITHUB_OWNER || "?"}/${process.env.GITHUB_REPO || "?"}: ${getGithubErrorDetail(error)}`,
+              text: `Failed to update GitHub file \"${path}\"${targetRepo ? ` in repo \"${targetRepo}\"` : ""}: ${getGithubErrorDetail(error)}`,
             },
           ],
         };
