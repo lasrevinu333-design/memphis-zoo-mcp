@@ -241,23 +241,23 @@ function createMcpServer() {
 
         const normalized = sql.trim().toLowerCase();
 
-        if (!normalized.startsWith("begin")) {
+        if (!normalized) {
           return {
             content: [
               {
                 type: "text",
-                text: "Migration must start with BEGIN.",
+                text: "Migration SQL cannot be empty.",
               },
             ],
           };
         }
 
-        if (!normalized.includes("commit")) {
+        if (normalized.startsWith("begin") || normalized.includes("commit")) {
           return {
             content: [
               {
                 type: "text",
-                text: "Migration must include COMMIT.",
+                text: "Do not include BEGIN/COMMIT. Submit the migration body only.",
               },
             ],
           };
