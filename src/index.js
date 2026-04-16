@@ -64,6 +64,29 @@ function createMcpServer() {
   );
 
   server.tool(
+    "github_debug_config",
+    {},
+    async () => {
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                owner: process.env.GITHUB_OWNER || null,
+                repo: process.env.GITHUB_REPO || null,
+                hasToken: !!process.env.GITHUB_TOKEN,
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    }
+  );
+
+  server.tool(
     "github_read_file",
     {
       path: z.string().min(1),
@@ -83,7 +106,7 @@ function createMcpServer() {
             content: [
               {
                 type: "text",
-                text: `Path exists, but it is not a plain file: ${path}`,
+                text: `Path exists, but it is not a plain file: ${owner}/${repo}/${path}`,
               },
             ],
           };
@@ -100,11 +123,17 @@ function createMcpServer() {
           ],
         };
       } catch (error) {
+        let detail = error.message;
+
+        if (error.status) {
+          detail = `status=${error.status} ${error.message}`;
+        }
+
         return {
           content: [
             {
               type: "text",
-              text: `Failed to read GitHub file "${path}": ${error.message}`,
+              text: `Failed to read GitHub file "${path}" from ${process.env.GITHUB_OWNER || "?"}/${process.env.GITHUB_REPO || "?"}: ${detail}`,
             },
           ],
         };
@@ -134,7 +163,7 @@ function createMcpServer() {
             content: [
               {
                 type: "text",
-                text: `Cannot update "${path}" because it is not a normal file.`,
+                text: `Cannot update "${path}" because it is not a normal file in ${owner}/${repo}.`,
               },
             ],
           };
@@ -155,16 +184,22 @@ function createMcpServer() {
           content: [
             {
               type: "text",
-              text: `Updated "${path}" successfully.\nCommit: ${updateResponse.data.commit.sha}`,
+              text: `Updated "${path}" successfully in ${owner}/${repo}.\nCommit: ${updateResponse.data.commit.sha}`,
             },
           ],
         };
       } catch (error) {
+        let detail = error.message;
+
+        if (error.status) {
+          detail = `status=${error.status} ${error.message}`;
+        }
+
         return {
           content: [
             {
               type: "text",
-              text: `Failed to update GitHub file "${path}": ${error.message}`,
+              text: `Failed to update GitHub file "${path}" in ${process.env.GITHUB_OWNER || "?"}/${process.env.GITHUB_REPO || "?"}: ${detail}`,
             },
           ],
         };
