@@ -13,7 +13,7 @@ app.use(express.json({ limit: "10mb" }));
 function createMcpServer() {
   const server = new McpServer({
     name: process.env.APP_NAME || "Memphis Zoo MCP",
-    version: "0.1.0",
+    version: "0.1.1",
   });
 
   const octokit = new Octokit({
@@ -44,6 +44,28 @@ function createMcpServer() {
       throw new Error("Supabase is not configured. Check SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env.");
     }
     return supabase;
+  }
+
+  function normalizeGithubPath(path) {
+    return String(path || "").trim().replace(/^\/+/, "");
+  }
+
+  function getGithubErrorDetail(error) {
+    if (error?.status) {
+      return `status=${error.status} ${error.message}`;
+    }
+    return error?.message || "Unknown GitHub error";
+  }
+
+  function sanitizeReadOnlySql(sql) {
+    const trimmed = String(sql || "").trim();
+    const withoutTrailingSemicolons = trimmed.replace(/;\s*$/, "");
+    const normalized = withoutTrailingSemicolons.toLowerCase();
+
+    return {
+      sql: withoutTrailingSemicolons,
+      normalized,
+    };
   }
 
   server.tool(
@@ -87,6 +109,60 @@ function createMcpServer() {
   );
 
   server.tool(
+    "github_list_directory",
+    {
+      path: z.string().optional(),
+    },
+    async ({ path }) => {
+      try {
+        const { owner, repo } = getGithubConfig();
+        const normalizedPath = normalizeGithubPath(path || "");
+
+        const response = await octokit.rest.repos.getContent({
+          owner,
+          repo,
+          path: normalizedPath,
+        });
+
+        if (!Array.isArray(response.data)) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Path is not a directory: ${owner}/${repo}/${normalizedPath || "<repo-root>"}`,
+              },
+            ],
+          };
+        }
+
+        const items = response.data.map((item) => ({
+          name: item.name,
+          path: item.path,
+          type: item.type,
+        }));
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(items, null, 2),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Failed to list GitHub directory "${path || "/"}" from ${process.env.GITHUB_OWNER || "?"}/${process.env.GITHUB_REPO || "?"}: ${getGithubErrorDetail(error)}`,
+            },
+          ],
+        };
+      }
+    }
+  );
+
+  server.tool(
     "github_read_file",
     {
       path: z.string().min(1),
@@ -94,11 +170,12 @@ function createMcpServer() {
     async ({ path }) => {
       try {
         const { owner, repo } = getGithubConfig();
+        const normalizedPath = normalizeGithubPath(path);
 
         const response = await octokit.rest.repos.getContent({
           owner,
           repo,
-          path,
+          path: normalizedPath,
         });
 
         if (!("content" in response.data) || typeof response.data.content !== "string") {
@@ -106,7 +183,7 @@ function createMcpServer() {
             content: [
               {
                 type: "text",
-                text: `Path exists, but it is not a plain file: ${owner}/${repo}/${path}`,
+                text: `Path exists, but it is not a plain file: ${owner}/${repo}/${normalizedPath}`,
               },
             ],
           };
@@ -123,17 +200,85 @@ function createMcpServer() {
           ],
         };
       } catch (error) {
-        let detail = error.message;
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Failed to read GitHub file "${path}" from ${process.env.GITHUB_OWNER || "?"}/${process.env.GITHUB_REPO || "?"}: ${getGithubErrorDetail(error)}`,
+            },
+          ],
+        };
+      }
+    }
+  );
 
-        if (error.status) {
-          detail = `status=${error.status} ${error.message}`;
+  server.tool(
+    "github_write_file",
+    {
+      path: z.string().min(1),
+      content: z.string(),
+      commit_message: z.string().min(1),
+    },
+    async ({ path, content, commit_message }) => {
+      try {
+        const { owner, repo } = getGithubConfig();
+        const normalizedPath = normalizeGithubPath(path);
+        let sha;
+        let mode = "created";
+
+        try {
+          const existing = await octokit.rest.repos.getContent({
+            owner,
+            repo,
+            path: normalizedPath,
+          });
+
+          if (Array.isArray(existing.data)) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Cannot write to "${normalizedPath}" because it is a directory in ${owner}/${repo}.`,
+                },
+              ],
+            };
+          }
+
+          if ("sha" in existing.data && typeof existing.data.sha === "string") {
+            sha = existing.data.sha;
+            mode = "updated";
+          }
+        } catch (error) {
+          if (error?.status !== 404) {
+            throw error;
+          }
         }
+
+        const encodedContent = Buffer.from(content, "utf8").toString("base64");
+
+        const writeResponse = await octokit.rest.repos.createOrUpdateFileContents({
+          owner,
+          repo,
+          path: normalizedPath,
+          message: commit_message,
+          content: encodedContent,
+          ...(sha ? { sha } : {}),
+        });
 
         return {
           content: [
             {
               type: "text",
-              text: `Failed to read GitHub file "${path}" from ${process.env.GITHUB_OWNER || "?"}/${process.env.GITHUB_REPO || "?"}: ${detail}`,
+              text: `${mode === "created" ? "Created" : "Updated"} "${normalizedPath}" successfully in ${owner}/${repo}.\nCommit: ${writeResponse.data.commit.sha}`,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Failed to write GitHub file "${path}" in ${process.env.GITHUB_OWNER || "?"}/${process.env.GITHUB_REPO || "?"}: ${getGithubErrorDetail(error)}`,
             },
           ],
         };
@@ -151,19 +296,20 @@ function createMcpServer() {
     async ({ path, content, commit_message }) => {
       try {
         const { owner, repo } = getGithubConfig();
+        const normalizedPath = normalizeGithubPath(path);
 
         const existing = await octokit.rest.repos.getContent({
           owner,
           repo,
-          path,
+          path: normalizedPath,
         });
 
-        if (!("sha" in existing.data) || typeof existing.data.sha !== "string") {
+        if (Array.isArray(existing.data) || !("sha" in existing.data) || typeof existing.data.sha !== "string") {
           return {
             content: [
               {
                 type: "text",
-                text: `Cannot update "${path}" because it is not a normal file in ${owner}/${repo}.`,
+                text: `Cannot update "${normalizedPath}" because it is not a normal file in ${owner}/${repo}.`,
               },
             ],
           };
@@ -174,7 +320,7 @@ function createMcpServer() {
         const updateResponse = await octokit.rest.repos.createOrUpdateFileContents({
           owner,
           repo,
-          path,
+          path: normalizedPath,
           message: commit_message,
           content: encodedContent,
           sha: existing.data.sha,
@@ -184,22 +330,16 @@ function createMcpServer() {
           content: [
             {
               type: "text",
-              text: `Updated "${path}" successfully in ${owner}/${repo}.\nCommit: ${updateResponse.data.commit.sha}`,
+              text: `Updated "${normalizedPath}" successfully in ${owner}/${repo}.\nCommit: ${updateResponse.data.commit.sha}`,
             },
           ],
         };
       } catch (error) {
-        let detail = error.message;
-
-        if (error.status) {
-          detail = `status=${error.status} ${error.message}`;
-        }
-
         return {
           content: [
             {
               type: "text",
-              text: `Failed to update GitHub file "${path}" in ${process.env.GITHUB_OWNER || "?"}/${process.env.GITHUB_REPO || "?"}: ${detail}`,
+              text: `Failed to update GitHub file "${path}" in ${process.env.GITHUB_OWNER || "?"}/${process.env.GITHUB_REPO || "?"}: ${getGithubErrorDetail(error)}`,
             },
           ],
         };
@@ -215,21 +355,21 @@ function createMcpServer() {
     async ({ sql }) => {
       try {
         const client = getSupabaseConfig();
+        const sanitized = sanitizeReadOnlySql(sql);
 
-        const normalized = sql.trim().toLowerCase();
-        if (!normalized.startsWith("select")) {
+        if (!(sanitized.normalized.startsWith("select") || sanitized.normalized.startsWith("with"))) {
           return {
             content: [
               {
                 type: "text",
-                text: "Only SELECT queries are allowed in supabase_sql_read.",
+                text: "Only read-only SELECT/CTE queries are allowed in supabase_sql_read.",
               },
             ],
           };
         }
 
         const { data, error } = await client.rpc("run_sql_readonly", {
-          p_sql: sql,
+          p_sql: sanitized.sql,
         });
 
         if (error) {
