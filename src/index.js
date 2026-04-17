@@ -10,89 +10,131 @@ import { createClient } from "@supabase/supabase-js";
 const app = express();
 app.use(express.json({ limit: "10mb" }));
 
+const octokit = new Octokit({
+  auth: process.env.GITHUB_TOKEN,
+});
+
+const supabaseAdmin =
+  process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
+    ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+        auth: { persistSession: false, autoRefreshToken: false },
+      })
+    : null;
+
+function getAllowedGithubRepos(defaultRepo) {
+  const raw = process.env.GITHUB_ALLOWED_REPOS || defaultRepo;
+  return Array.from(
+    new Set(
+      String(raw || "")
+        .split(",")
+        .map((repoName) => repoName.trim())
+        .filter(Boolean)
+    )
+  );
+}
+
+function getGithubConfig(targetRepo) {
+  const owner = process.env.GITHUB_OWNER;
+  const defaultRepo = process.env.GITHUB_REPO;
+  const token = process.env.GITHUB_TOKEN;
+
+  if (!owner || !defaultRepo || !token) {
+    throw new Error("GitHub is not configured. Check GITHUB_OWNER, GITHUB_REPO, and GITHUB_TOKEN in .env.");
+  }
+
+  const allowedRepos = getAllowedGithubRepos(defaultRepo);
+  const repo = (targetRepo || defaultRepo).trim();
+
+  if (!allowedRepos.includes(repo)) {
+    throw new Error(`Repo \"${repo}\" is not allowed. Allowed repos: ${allowedRepos.join(", ")}`);
+  }
+
+  return {
+    owner,
+    repo,
+    defaultRepo,
+    allowedRepos,
+  };
+}
+
+function getSupabaseConfig() {
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY || !supabaseAdmin) {
+    throw new Error("Supabase is not configured. Check SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env.");
+  }
+  return supabaseAdmin;
+}
+
+function normalizeGithubPath(path) {
+  return String(path || "").trim().replace(/^\/+/, "");
+}
+
+function getGithubErrorDetail(error) {
+  if (error?.status) {
+    return `status=${error.status} ${error.message}`;
+  }
+  return error?.message || "Unknown GitHub error";
+}
+
+function sanitizeReadOnlySql(sql) {
+  const trimmed = String(sql || "").trim();
+  const withoutTrailingSemicolons = trimmed.replace(/;\s*$/, "");
+  const normalized = withoutTrailingSemicolons.toLowerCase();
+
+  return {
+    sql: withoutTrailingSemicolons,
+    normalized,
+  };
+}
+
+function getAdminApiKey() {
+  return String(process.env.ADMIN_API_KEY || "").trim();
+}
+
+function setAdminApiCors(res) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Admin-Key");
+  res.setHeader("Vary", "Origin");
+}
+
+function requireAdminApiAuth(req, res, next) {
+  const configuredKey = getAdminApiKey();
+
+  if (!configuredKey) {
+    res.status(503).json({
+      ok: false,
+      error: "ADMIN_API_KEY is not configured on the server.",
+    });
+    return;
+  }
+
+  const providedKey = String(req.header("x-admin-key") || "").trim();
+
+  if (!providedKey || providedKey !== configuredKey) {
+    res.status(401).json({
+      ok: false,
+      error: "Unauthorized",
+    });
+    return;
+  }
+
+  next();
+}
+
+async function runAdminRpc(functionName, args = {}) {
+  const client = getSupabaseConfig();
+  const { data, error } = await client.rpc(functionName, args);
+  if (error) {
+    throw new Error(error.message || `RPC failed: ${functionName}`);
+  }
+  return data;
+}
+
 function createMcpServer() {
   const server = new McpServer({
     name: process.env.APP_NAME || "Memphis Zoo MCP",
-    version: "0.2.0",
+    version: "0.3.0",
   });
-
-  const octokit = new Octokit({
-    auth: process.env.GITHUB_TOKEN,
-  });
-
-  const supabase =
-    process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
-      ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
-          auth: { persistSession: false, autoRefreshToken: false },
-        })
-      : null;
-
-  function getAllowedGithubRepos(defaultRepo) {
-    const raw = process.env.GITHUB_ALLOWED_REPOS || defaultRepo;
-    return Array.from(
-      new Set(
-        String(raw || "")
-          .split(",")
-          .map((repoName) => repoName.trim())
-          .filter(Boolean)
-      )
-    );
-  }
-
-  function getGithubConfig(targetRepo) {
-    const owner = process.env.GITHUB_OWNER;
-    const defaultRepo = process.env.GITHUB_REPO;
-    const token = process.env.GITHUB_TOKEN;
-
-    if (!owner || !defaultRepo || !token) {
-      throw new Error("GitHub is not configured. Check GITHUB_OWNER, GITHUB_REPO, and GITHUB_TOKEN in .env.");
-    }
-
-    const allowedRepos = getAllowedGithubRepos(defaultRepo);
-    const repo = (targetRepo || defaultRepo).trim();
-
-    if (!allowedRepos.includes(repo)) {
-      throw new Error(
-        `Repo \"${repo}\" is not allowed. Allowed repos: ${allowedRepos.join(", ")}`
-      );
-    }
-
-    return {
-      owner,
-      repo,
-      defaultRepo,
-      allowedRepos,
-    };
-  }
-
-  function getSupabaseConfig() {
-    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY || !supabase) {
-      throw new Error("Supabase is not configured. Check SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env.");
-    }
-    return supabase;
-  }
-
-  function normalizeGithubPath(path) {
-    return String(path || "").trim().replace(/^\/+/, "");
-  }
-
-  function getGithubErrorDetail(error) {
-    if (error?.status) {
-      return `status=${error.status} ${error.message}`;
-    }
-    return error?.message || "Unknown GitHub error";
-  }
-
-  function sanitizeReadOnlySql(sql) {
-    const trimmed = String(sql || "").trim();
-    const withoutTrailingSemicolons = trimmed.replace(/;\s*$/, "");
-    const normalized = withoutTrailingSemicolons.toLowerCase();
-
-    return {
-      sql: withoutTrailingSemicolons,
-      normalized,
-    };
-  }
 
   server.tool(
     "ping",
@@ -527,6 +569,112 @@ function createMcpServer() {
   return server;
 }
 
+app.use("/admin-api", (req, res, next) => {
+  setAdminApiCors(res);
+  if (req.method === "OPTIONS") {
+    res.sendStatus(200);
+    return;
+  }
+  next();
+});
+
+app.get("/admin-api/health", requireAdminApiAuth, (_req, res) => {
+  res.status(200).json({
+    ok: true,
+    authenticated: true,
+  });
+});
+
+app.post("/admin-api/bundle", requireAdminApiAuth, async (req, res) => {
+  try {
+    const payload = req.body && typeof req.body === "object" ? req.body : {};
+    const data = await runAdminRpc("tool_admin_bundle", {
+      p_location_limit: Number(payload.p_location_limit ?? 60),
+      p_activity_limit: Number(payload.p_activity_limit ?? 20),
+      p_ticket_limit: Number(payload.p_ticket_limit ?? 100),
+      p_exception_limit: Number(payload.p_exception_limit ?? 25),
+      p_device_limit: Number(payload.p_device_limit ?? 100),
+    });
+
+    res.status(200).json({
+      ok: true,
+      data,
+    });
+  } catch (error) {
+    console.error("admin bundle failed:", error);
+    res.status(500).json({
+      ok: false,
+      error: error.message || "Admin bundle failed",
+    });
+  }
+});
+
+app.post("/admin-api/close-ticket", requireAdminApiAuth, async (req, res) => {
+  try {
+    const ticketId = String(req.body?.ticket_id || "").trim();
+    const closedBy = String(req.body?.closed_by || "").trim();
+    const closeNotes = req.body?.close_notes == null ? null : String(req.body.close_notes);
+
+    if (!ticketId || !closedBy) {
+      res.status(400).json({
+        ok: false,
+        error: "ticket_id and closed_by are required.",
+      });
+      return;
+    }
+
+    const data = await runAdminRpc("tool_close_maintenance_ticket", {
+      p_ticket_id: ticketId,
+      p_closed_by: closedBy,
+      p_close_notes: closeNotes,
+    });
+
+    res.status(200).json({
+      ok: true,
+      data,
+    });
+  } catch (error) {
+    console.error("close ticket failed:", error);
+    res.status(500).json({
+      ok: false,
+      error: error.message || "Close ticket failed",
+    });
+  }
+});
+
+app.post("/admin-api/force-close-session", requireAdminApiAuth, async (req, res) => {
+  try {
+    const sessionUuid = String(req.body?.session_uuid || "").trim();
+    const closedBy = String(req.body?.closed_by || "").trim();
+    const reason = req.body?.reason == null ? null : String(req.body.reason);
+
+    if (!sessionUuid || !closedBy) {
+      res.status(400).json({
+        ok: false,
+        error: "session_uuid and closed_by are required.",
+      });
+      return;
+    }
+
+    const data = await runAdminRpc("tool_force_close_session", {
+      p_session_uuid: sessionUuid,
+      p_closed_by: closedBy,
+      p_reason: reason,
+    });
+
+    res.status(200).json({
+      ok: true,
+      data,
+    });
+  } catch (error) {
+    console.error("force close session failed:", error);
+    res.status(500).json({
+      ok: false,
+      error: error.message || "Force close session failed",
+    });
+  }
+});
+
 app.get("/", (_req, res) => {
   res.status(200).send("Memphis Zoo MCP server is running.");
 });
@@ -607,4 +755,5 @@ app.listen(port, () => {
   console.log("MCP endpoint: /mcp");
   console.log("Legacy SSE endpoint: /sse");
   console.log("Legacy messages endpoint: /messages");
+  console.log("Admin API endpoint: /admin-api");
 });
