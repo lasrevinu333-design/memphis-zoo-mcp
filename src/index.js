@@ -231,7 +231,9 @@ async function runPublicDashboardSummary() {
       location_type,
       form_type,
       latest_employee_name,
+      latest_completed_at,
       latest_completed_at_display,
+      services_performed,
       open_ticket_count,
       status_code,
       status_color,
@@ -281,7 +283,7 @@ async function runPublicDashboardSummary() {
 function createMcpServer() {
   const server = new McpServer({
     name: process.env.APP_NAME || "Memphis Zoo MCP",
-    version: "0.3.2",
+    version: "0.3.3",
   });
 
   server.tool(
