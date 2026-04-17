@@ -130,10 +130,58 @@ async function runAdminRpc(functionName, args = {}) {
   return data;
 }
 
+function toSafeInt(value, fallback) {
+  const parsed = Number.parseInt(String(value ?? fallback), 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+async function runReadOnlySql(sql) {
+  const client = getSupabaseConfig();
+  const sanitized = sanitizeReadOnlySql(sql);
+
+  if (!(sanitized.normalized.startsWith("select") || sanitized.normalized.startsWith("with"))) {
+    throw new Error("Only read-only SELECT/CTE queries are allowed.");
+  }
+
+  const { data, error } = await client.rpc("run_sql_readonly", {
+    p_sql: sanitized.sql,
+  });
+
+  if (error) {
+    throw new Error(error.message || "run_sql_readonly failed");
+  }
+
+  return data;
+}
+
+async function runAdminBundleViaSqlRead(limits = {}) {
+  const pLocationLimit = toSafeInt(limits.p_location_limit, 60);
+  const pActivityLimit = toSafeInt(limits.p_activity_limit, 20);
+  const pTicketLimit = toSafeInt(limits.p_ticket_limit, 100);
+  const pExceptionLimit = toSafeInt(limits.p_exception_limit, 25);
+  const pDeviceLimit = toSafeInt(limits.p_device_limit, 100);
+
+  const sql = `
+    select public.tool_admin_bundle(
+      ${pLocationLimit},
+      ${pActivityLimit},
+      ${pTicketLimit},
+      ${pExceptionLimit},
+      ${pDeviceLimit}
+    ) as data
+  `;
+
+  const rows = await runReadOnlySql(sql);
+  if (Array.isArray(rows) && rows.length > 0) {
+    return rows[0]?.data ?? {};
+  }
+  return {};
+}
+
 function createMcpServer() {
   const server = new McpServer({
     name: process.env.APP_NAME || "Memphis Zoo MCP",
-    version: "0.3.0",
+    version: "0.3.1",
   });
 
   server.tool(
@@ -437,35 +485,7 @@ function createMcpServer() {
     },
     async ({ sql }) => {
       try {
-        const client = getSupabaseConfig();
-        const sanitized = sanitizeReadOnlySql(sql);
-
-        if (!(sanitized.normalized.startsWith("select") || sanitized.normalized.startsWith("with"))) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: "Only read-only SELECT/CTE queries are allowed in supabase_sql_read.",
-              },
-            ],
-          };
-        }
-
-        const { data, error } = await client.rpc("run_sql_readonly", {
-          p_sql: sanitized.sql,
-        });
-
-        if (error) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Supabase query failed: ${error.message}`,
-              },
-            ],
-          };
-        }
-
+        const data = await runReadOnlySql(sql);
         return {
           content: [
             {
@@ -588,13 +608,7 @@ app.get("/admin-api/health", requireAdminApiAuth, (_req, res) => {
 app.post("/admin-api/bundle", requireAdminApiAuth, async (req, res) => {
   try {
     const payload = req.body && typeof req.body === "object" ? req.body : {};
-    const data = await runAdminRpc("tool_admin_bundle", {
-      p_location_limit: Number(payload.p_location_limit ?? 60),
-      p_activity_limit: Number(payload.p_activity_limit ?? 20),
-      p_ticket_limit: Number(payload.p_ticket_limit ?? 100),
-      p_exception_limit: Number(payload.p_exception_limit ?? 25),
-      p_device_limit: Number(payload.p_device_limit ?? 100),
-    });
+    const data = await runAdminBundleViaSqlRead(payload);
 
     res.status(200).json({
       ok: true,
