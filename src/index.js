@@ -97,6 +97,13 @@ function setAdminApiCors(res) {
   res.setHeader("Vary", "Origin");
 }
 
+function setPublicDashboardCors(res) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Vary", "Origin");
+}
+
 function requireAdminApiAuth(req, res, next) {
   const configuredKey = getAdminApiKey();
 
@@ -135,6 +142,11 @@ function toSafeInt(value, fallback) {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
+function sqlLiteral(value) {
+  if (value == null) return "null";
+  return `'${String(value).replace(/'/g, "''")}'`;
+}
+
 async function runReadOnlySql(sql) {
   const client = getSupabaseConfig();
   const sanitized = sanitizeReadOnlySql(sql);
@@ -149,6 +161,21 @@ async function runReadOnlySql(sql) {
 
   if (error) {
     throw new Error(error.message || "run_sql_readonly failed");
+  }
+
+  return data;
+}
+
+async function runWriteSql(namePrefix, sql) {
+  const client = getSupabaseConfig();
+  const migrationName = `${namePrefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const { data, error } = await client.rpc("run_sql_migration", {
+    p_name: migrationName,
+    p_sql: String(sql || "").trim(),
+  });
+
+  if (error) {
+    throw new Error(error.message || "run_sql_migration failed");
   }
 
   return data;
@@ -178,10 +205,83 @@ async function runAdminBundleViaSqlRead(limits = {}) {
   return {};
 }
 
+async function runPublicDashboardSummary() {
+  const snapshotRows = await runReadOnlySql(`
+    select
+      snapshot_at,
+      operational_day_start,
+      active_sessions,
+      pending_submit_sessions,
+      closed_sessions_today,
+      open_ticket_count,
+      overdue_locations,
+      due_soon_locations,
+      in_progress_locations,
+      active_locations,
+      operational_day_start::text as operational_day_start_text
+    from public.v_admin_health_snapshot
+    order by snapshot_at desc
+    limit 1
+  `);
+
+  const locationRows = await runReadOnlySql(`
+    select
+      location_code,
+      location_name,
+      location_type,
+      form_type,
+      latest_employee_name,
+      latest_completed_at_display,
+      open_ticket_count,
+      status_code,
+      status_color,
+      duration_display
+    from public.v_location_dashboard_status
+    order by
+      case status_color
+        when 'red' then 1
+        when 'yellow' then 2
+        when 'blue' then 3
+        when 'black' then 4
+        when 'green' then 5
+        else 9
+      end,
+      open_ticket_count desc,
+      location_name
+  `);
+
+  const ticketRows = await runReadOnlySql(`
+    select
+      ticket_id,
+      location_code,
+      location_name,
+      maintenance_issue,
+      reported_by,
+      fixture_type,
+      fixture_identifier,
+      out_of_order,
+      date_submitted_display,
+      created_at_display
+    from public.v_open_maintenance_tickets
+    order by date_submitted desc nulls last, created_at desc nulls last, location_code
+  `);
+
+  const snapshot = Array.isArray(snapshotRows) && snapshotRows.length ? snapshotRows[0] : {};
+  const locations = Array.isArray(locationRows) ? locationRows : [];
+  const tickets = Array.isArray(ticketRows) ? ticketRows : [];
+
+  return {
+    snapshot,
+    restrooms: locations.filter((row) => String(row.location_type || row.form_type || "").toLowerCase() === "restroom"),
+    exhibits: locations.filter((row) => String(row.location_type || row.form_type || "").toLowerCase() !== "restroom"),
+    open_tickets: tickets,
+  };
+}
+
 function createMcpServer() {
   const server = new McpServer({
     name: process.env.APP_NAME || "Memphis Zoo MCP",
-    version: "0.3.1",
+    version: "0.3.2",
   });
 
   server.tool(
@@ -598,6 +698,15 @@ app.use("/admin-api", (req, res, next) => {
   next();
 });
 
+app.use("/dashboard-api", (req, res, next) => {
+  setPublicDashboardCors(res);
+  if (req.method === "OPTIONS") {
+    res.sendStatus(200);
+    return;
+  }
+  next();
+});
+
 app.get("/admin-api/health", requireAdminApiAuth, (_req, res) => {
   res.status(200).json({
     ok: true,
@@ -637,15 +746,15 @@ app.post("/admin-api/close-ticket", requireAdminApiAuth, async (req, res) => {
       return;
     }
 
-    const data = await runAdminRpc("tool_close_maintenance_ticket", {
-      p_ticket_id: ticketId,
-      p_closed_by: closedBy,
-      p_close_notes: closeNotes,
-    });
+    await runWriteSql(
+      "admin_close_ticket",
+      `select public.close_maintenance_ticket(${sqlLiteral(ticketId)}::uuid, ${sqlLiteral(closedBy)}, ${sqlLiteral(closeNotes)});`
+    );
 
     res.status(200).json({
       ok: true,
-      data,
+      ticket_id: ticketId,
+      status: "closed",
     });
   } catch (error) {
     console.error("close ticket failed:", error);
@@ -670,21 +779,37 @@ app.post("/admin-api/force-close-session", requireAdminApiAuth, async (req, res)
       return;
     }
 
-    const data = await runAdminRpc("tool_force_close_session", {
-      p_session_uuid: sessionUuid,
-      p_closed_by: closedBy,
-      p_reason: reason,
-    });
+    await runWriteSql(
+      "admin_force_close_session",
+      `select public.force_close_session(${sqlLiteral(sessionUuid)}, ${sqlLiteral(closedBy)}, ${sqlLiteral(reason)});`
+    );
 
     res.status(200).json({
       ok: true,
-      data,
+      session_uuid: sessionUuid,
+      status: "closed",
     });
   } catch (error) {
     console.error("force close session failed:", error);
     res.status(500).json({
       ok: false,
       error: error.message || "Force close session failed",
+    });
+  }
+});
+
+app.get("/dashboard-api/summary", async (_req, res) => {
+  try {
+    const data = await runPublicDashboardSummary();
+    res.status(200).json({
+      ok: true,
+      data,
+    });
+  } catch (error) {
+    console.error("dashboard summary failed:", error);
+    res.status(500).json({
+      ok: false,
+      error: error.message || "Dashboard summary failed",
     });
   }
 });
@@ -770,4 +895,5 @@ app.listen(port, () => {
   console.log("Legacy SSE endpoint: /sse");
   console.log("Legacy messages endpoint: /messages");
   console.log("Admin API endpoint: /admin-api");
+  console.log("Dashboard API endpoint: /dashboard-api");
 });
