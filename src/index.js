@@ -21,6 +21,17 @@ const supabaseAdmin =
       })
     : null;
 
+const SCAN_RPC_ALLOWLIST = new Set([
+  "tool_get_system_settings",
+  "tool_list_active_employees",
+  "tool_get_location_scan_state",
+  "tool_start_session",
+  "tool_finish_session",
+  "tool_complete_session",
+  "tool_ping_device",
+  "tool_record_scan_event"
+]);
+
 function getAllowedGithubRepos(defaultRepo) {
   const raw = process.env.GITHUB_ALLOWED_REPOS || defaultRepo;
   return Array.from(
@@ -104,6 +115,13 @@ function setPublicDashboardCors(res) {
   res.setHeader("Vary", "Origin");
 }
 
+function setScanApiCors(res) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Vary", "Origin");
+}
+
 function requireAdminApiAuth(req, res, next) {
   const configuredKey = getAdminApiKey();
 
@@ -128,13 +146,17 @@ function requireAdminApiAuth(req, res, next) {
   next();
 }
 
-async function runAdminRpc(functionName, args = {}) {
+async function runRpc(functionName, args = {}) {
   const client = getSupabaseConfig();
   const { data, error } = await client.rpc(functionName, args);
   if (error) {
     throw new Error(error.message || `RPC failed: ${functionName}`);
   }
   return data;
+}
+
+async function runAdminRpc(functionName, args = {}) {
+  return await runRpc(functionName, args);
 }
 
 function toSafeInt(value, fallback) {
@@ -283,7 +305,7 @@ async function runPublicDashboardSummary() {
 function createMcpServer() {
   const server = new McpServer({
     name: process.env.APP_NAME || "Memphis Zoo MCP",
-    version: "0.3.3",
+    version: "0.3.4",
   });
 
   server.tool(
@@ -709,6 +731,15 @@ app.use("/dashboard-api", (req, res, next) => {
   next();
 });
 
+app.use("/scan-api", (req, res, next) => {
+  setScanApiCors(res);
+  if (req.method === "OPTIONS") {
+    res.sendStatus(200);
+    return;
+  }
+  next();
+});
+
 app.get("/admin-api/health", requireAdminApiAuth, (_req, res) => {
   res.status(200).json({
     ok: true,
@@ -816,6 +847,37 @@ app.get("/dashboard-api/summary", async (_req, res) => {
   }
 });
 
+app.get("/scan-api/health", async (_req, res) => {
+  res.status(200).json({
+    ok: true,
+    available_functions: Array.from(SCAN_RPC_ALLOWLIST)
+  });
+});
+
+app.post("/scan-api/rpc", async (req, res) => {
+  try {
+    const fn = String(req.body?.fn || "").trim();
+    const args = req.body?.args && typeof req.body.args === "object" ? req.body.args : {};
+
+    if (!SCAN_RPC_ALLOWLIST.has(fn)) {
+      res.status(400).json({
+        ok: false,
+        error: `Function not allowed: ${fn}`,
+      });
+      return;
+    }
+
+    const data = await runRpc(fn, args);
+    res.status(200).json({ ok: true, data });
+  } catch (error) {
+    console.error("scan rpc failed:", error);
+    res.status(500).json({
+      ok: false,
+      error: error.message || "Scan RPC failed",
+    });
+  }
+});
+
 app.get("/", (_req, res) => {
   res.status(200).send("Memphis Zoo MCP server is running.");
 });
@@ -898,4 +960,5 @@ app.listen(port, () => {
   console.log("Legacy messages endpoint: /messages");
   console.log("Admin API endpoint: /admin-api");
   console.log("Dashboard API endpoint: /dashboard-api");
+  console.log("Scan API endpoint: /scan-api");
 });
