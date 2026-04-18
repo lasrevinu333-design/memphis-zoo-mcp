@@ -30,9 +30,12 @@ const SCAN_RPC_ALLOWLIST = new Set([
   "tool_record_scan_event"
 ]);
 
-const APP_VERSION = "mcp-2026.04.18.2";
+const APP_VERSION = "mcp-2026.04.18.3";
 const SCAN_CONTRACT_VERSION = "scan.v1";
 const DASHBOARD_CONTRACT_VERSION = "dashboard.v1";
+const CANARY_RESTROOM_CODE = "TETM";
+const CANARY_EXHIBIT_CODE = "TETX";
+const CANARY_DEVICE_ID = "canary-check";
 
 function buildHealthPayload(area, extra = {}) {
   return {
@@ -354,6 +357,88 @@ async function runPublicDashboardSummary() {
   };
 }
 
+async function runCanaryChecks() {
+  const checks = {};
+  const failures = [];
+
+  async function safeCheck(name, fn) {
+    try {
+      const result = await fn();
+      checks[name] = { ok: true, ...result };
+      return true;
+    } catch (error) {
+      const message = error?.message || String(error);
+      checks[name] = { ok: false, error: message };
+      failures.push(`${name}: ${message}`);
+      return false;
+    }
+  }
+
+  await safeCheck("restroom_scan_state", async () => {
+    const state = await runRpc("tool_get_location_scan_state", {
+      p_location_code: CANARY_RESTROOM_CODE,
+      p_device_id: CANARY_DEVICE_ID,
+    });
+    if (!state || state.location_code !== CANARY_RESTROOM_CODE) {
+      throw new Error("restroom scan state missing expected location code");
+    }
+    if (String(state.form_type || state.location_type || "").toLowerCase() !== "restroom") {
+      throw new Error(`expected restroom form_type, got ${state.form_type || state.location_type || "unknown"}`);
+    }
+    return {
+      location_code: state.location_code,
+      form_type: state.form_type || null,
+      location_type: state.location_type || null,
+      suggested_action: state.suggested_action || null,
+    };
+  });
+
+  await safeCheck("exhibit_scan_state", async () => {
+    const state = await runRpc("tool_get_location_scan_state", {
+      p_location_code: CANARY_EXHIBIT_CODE,
+      p_device_id: CANARY_DEVICE_ID,
+    });
+    if (!state || state.location_code !== CANARY_EXHIBIT_CODE) {
+      throw new Error("exhibit scan state missing expected location code");
+    }
+    if (String(state.form_type || state.location_type || "").toLowerCase() !== "exhibit") {
+      throw new Error(`expected exhibit form_type, got ${state.form_type || state.location_type || "unknown"}`);
+    }
+    return {
+      location_code: state.location_code,
+      form_type: state.form_type || null,
+      location_type: state.location_type || null,
+      suggested_action: state.suggested_action || null,
+    };
+  });
+
+  await safeCheck("dashboard_summary", async () => {
+    const summary = await runPublicDashboardSummary();
+    if (!summary || !summary.meta || summary.meta.version !== APP_VERSION) {
+      throw new Error("dashboard summary missing expected meta version");
+    }
+    if (!Array.isArray(summary.restrooms) || !Array.isArray(summary.exhibits) || !Array.isArray(summary.open_tickets)) {
+      throw new Error("dashboard summary missing expected arrays");
+    }
+    const restroomFound = summary.restrooms.some((row) => row.location_code === CANARY_RESTROOM_CODE);
+    const exhibitFound = summary.exhibits.some((row) => row.location_code === CANARY_EXHIBIT_CODE);
+    if (!restroomFound) throw new Error(`restroom canary ${CANARY_RESTROOM_CODE} not found in restroom rows`);
+    if (!exhibitFound) throw new Error(`exhibit canary ${CANARY_EXHIBIT_CODE} not found in exhibit rows`);
+    return {
+      restrooms_count: summary.restrooms.length,
+      exhibits_count: summary.exhibits.length,
+      open_tickets_count: summary.open_tickets.length,
+    };
+  });
+
+  return {
+    ok: failures.length === 0,
+    checks,
+    failure_count: failures.length,
+    failures,
+  };
+}
+
 function createMcpServer() {
   const server = new McpServer({ name: process.env.APP_NAME || "Memphis Zoo MCP", version: APP_VERSION });
 
@@ -458,6 +543,17 @@ app.get("/admin-api/health", requireAdminApiAuth, (_req, res) => {
 
 app.get("/dashboard-api/health", (_req, res) => {
   res.status(200).json(buildHealthPayload("dashboard"));
+});
+
+app.get("/dashboard-api/canary", async (_req, res) => {
+  try {
+    const result = await runCanaryChecks();
+    const statusCode = result.ok ? 200 : 503;
+    res.status(statusCode).json(buildHealthPayload("dashboard_canary", result));
+  } catch (error) {
+    console.error("dashboard canary failed:", error);
+    res.status(500).json({ ok: false, area: "dashboard_canary", version: APP_VERSION, error: error.message || "Dashboard canary failed" });
+  }
 });
 
 app.post("/admin-api/bundle", requireAdminApiAuth, async (req, res) => {
@@ -587,6 +683,7 @@ app.listen(port, () => {
   console.log(`App version: ${APP_VERSION}`);
   console.log(`Listening on http://localhost:${port}`);
   console.log("Version endpoint: /version");
+  console.log("Dashboard canary endpoint: /dashboard-api/canary");
   console.log("MCP endpoint: /mcp");
   console.log("Legacy SSE endpoint: /sse");
   console.log("Legacy messages endpoint: /messages");
