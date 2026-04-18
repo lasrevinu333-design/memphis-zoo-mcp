@@ -30,6 +30,24 @@ const SCAN_RPC_ALLOWLIST = new Set([
   "tool_record_scan_event"
 ]);
 
+const APP_VERSION = "mcp-2026.04.18.2";
+const SCAN_CONTRACT_VERSION = "scan.v1";
+const DASHBOARD_CONTRACT_VERSION = "dashboard.v1";
+
+function buildHealthPayload(area, extra = {}) {
+  return {
+    ok: true,
+    app: "memphis-zoo-mcp",
+    area,
+    version: APP_VERSION,
+    contracts: {
+      scan: SCAN_CONTRACT_VERSION,
+      dashboard: DASHBOARD_CONTRACT_VERSION,
+    },
+    ...extra,
+  };
+}
+
 function getAllowedGithubRepos(defaultRepo) {
   const raw = process.env.GITHUB_ALLOWED_REPOS || defaultRepo;
   return Array.from(
@@ -321,6 +339,15 @@ async function runPublicDashboardSummary() {
   return {
     snapshot,
     attendance,
+    meta: {
+      app: "memphis-zoo-mcp",
+      version: APP_VERSION,
+      contracts: {
+        scan: SCAN_CONTRACT_VERSION,
+        dashboard: DASHBOARD_CONTRACT_VERSION,
+      },
+      generated_at: new Date().toISOString(),
+    },
     restrooms: locations.filter((row) => String(row.location_type || row.form_type || "").toLowerCase() === "restroom"),
     exhibits: locations.filter((row) => String(row.location_type || row.form_type || "").toLowerCase() !== "restroom"),
     open_tickets: tickets,
@@ -328,13 +355,13 @@ async function runPublicDashboardSummary() {
 }
 
 function createMcpServer() {
-  const server = new McpServer({ name: process.env.APP_NAME || "Memphis Zoo MCP", version: "0.3.8" });
+  const server = new McpServer({ name: process.env.APP_NAME || "Memphis Zoo MCP", version: APP_VERSION });
 
   server.tool("ping", { message: z.string().optional() }, async ({ message }) => ({ content: [{ type: "text", text: `MCP server is alive. ${message || ""}`.trim() }] }));
 
   server.tool("github_debug_config", {}, async () => {
     const defaultRepo = process.env.GITHUB_REPO || null;
-    return { content: [{ type: "text", text: JSON.stringify({ owner: process.env.GITHUB_OWNER || null, defaultRepo, allowedRepos: getAllowedGithubRepos(defaultRepo || ""), hasToken: !!process.env.GITHUB_TOKEN }, null, 2) }] };
+    return { content: [{ type: "text", text: JSON.stringify({ owner: process.env.GITHUB_OWNER || null, defaultRepo, allowedRepos: getAllowedGithubRepos(defaultRepo || ""), hasToken: !!process.env.GITHUB_TOKEN, version: APP_VERSION }, null, 2) }] };
   });
 
   server.tool("github_list_directory", { repo: z.string().optional(), path: z.string().optional() }, async ({ repo: targetRepo, path }) => {
@@ -421,7 +448,17 @@ app.use("/admin-api", (req, res, next) => { setAdminApiCors(res); if (req.method
 app.use("/dashboard-api", (req, res, next) => { setPublicDashboardCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/scan-api", (req, res, next) => { setScanApiCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 
-app.get("/admin-api/health", requireAdminApiAuth, (_req, res) => { res.status(200).json({ ok: true, authenticated: true }); });
+app.get("/version", (_req, res) => {
+  res.status(200).json(buildHealthPayload("version"));
+});
+
+app.get("/admin-api/health", requireAdminApiAuth, (_req, res) => {
+  res.status(200).json(buildHealthPayload("admin", { authenticated: true }));
+});
+
+app.get("/dashboard-api/health", (_req, res) => {
+  res.status(200).json(buildHealthPayload("dashboard"));
+});
 
 app.post("/admin-api/bundle", requireAdminApiAuth, async (req, res) => {
   try {
@@ -484,7 +521,9 @@ app.post("/dashboard-api/close-ticket", async (req, res) => {
   }
 });
 
-app.get("/scan-api/health", async (_req, res) => { res.status(200).json({ ok: true, available_functions: Array.from(SCAN_RPC_ALLOWLIST) }); });
+app.get("/scan-api/health", (_req, res) => {
+  res.status(200).json(buildHealthPayload("scan", { available_functions: Array.from(SCAN_RPC_ALLOWLIST) }));
+});
 
 app.post("/scan-api/rpc", async (req, res) => {
   try {
@@ -492,7 +531,7 @@ app.post("/scan-api/rpc", async (req, res) => {
     const args = req.body?.args && typeof req.body.args === "object" ? req.body.args : {};
     if (!SCAN_RPC_ALLOWLIST.has(fn)) { res.status(400).json({ ok: false, error: `Function not allowed: ${fn}` }); return; }
     const data = await runRpc(fn, args);
-    res.status(200).json({ ok: true, data });
+    res.status(200).json({ ok: true, data, meta: { version: APP_VERSION, contract_version: SCAN_CONTRACT_VERSION } });
   } catch (error) {
     console.error("scan rpc failed:", error);
     res.status(500).json({ ok: false, error: error.message || "Scan RPC failed" });
@@ -545,8 +584,9 @@ app.post("/messages", async (req, res) => {
 const port = Number(process.env.PORT || 3000);
 app.listen(port, () => {
   console.log("Memphis Zoo MCP server initialized.");
-  console.log(`App name: ${process.env.APP_NAME || "Memphis Zoo MCP"}`);
+  console.log(`App version: ${APP_VERSION}`);
   console.log(`Listening on http://localhost:${port}`);
+  console.log("Version endpoint: /version");
   console.log("MCP endpoint: /mcp");
   console.log("Legacy SSE endpoint: /sse");
   console.log("Legacy messages endpoint: /messages");
