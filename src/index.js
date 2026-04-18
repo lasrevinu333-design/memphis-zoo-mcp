@@ -88,6 +88,10 @@ function getAdminApiKey() {
   return String(process.env.ADMIN_API_KEY || "").trim();
 }
 
+function getAttendanceSourceUrl() {
+  return String(process.env.ATTENDANCE_SOURCE_URL || "https://nd.memzoo.org/").trim();
+}
+
 function setAdminApiCors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
@@ -140,6 +144,93 @@ function sqlLiteral(value) {
   return `'${String(value).replace(/'/g, "''")}'`;
 }
 
+function decodeHtml(text) {
+  return String(text || "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&#39;/gi, "'")
+    .replace(/&quot;/gi, '"');
+}
+
+function stripTags(text) {
+  return decodeHtml(String(text || "").replace(/<[^>]*>/g, " ")).replace(/\s+/g, " ").trim();
+}
+
+function parseIntegerText(text) {
+  const cleaned = String(text || "").replace(/[^\d-]/g, "");
+  if (!cleaned) return null;
+  const parsed = Number.parseInt(cleaned, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseAttendanceFromHtml(html) {
+  const source = String(html || "");
+  const attendanceCardMatch = source.match(/<h5[^>]*>\s*Attendance\s*<\/h5>[\s\S]{0,1200}?<div[^>]*class="card-body"[^>]*>([\s\S]{0,1200}?)<\/div>/i);
+  if (!attendanceCardMatch) {
+    throw new Error("Attendance card not found in source HTML.");
+  }
+
+  const cardHtml = attendanceCardMatch[1];
+  const valueMatch = cardHtml.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+  const currentValue = parseIntegerText(stripTags(valueMatch?.[1] || ""));
+  if (currentValue == null) {
+    throw new Error("Attendance value not found in attendance card.");
+  }
+
+  const text = stripTags(cardHtml);
+  const lastYearMatch = text.match(/Last Year:\s*([\d,]+)/i);
+  const plannedMatch = text.match(/Planned:\s*([\d,]+)/i);
+  const yesterdayMatch = text.match(/Yesterday:\s*([\d,]+)/i);
+  const yesterdayPlanMatch = text.match(/Yesterday Plan:\s*([\d,]+)/i);
+
+  return {
+    ok: true,
+    source_url: getAttendanceSourceUrl(),
+    value: currentValue,
+    display: currentValue.toLocaleString("en-US"),
+    last_year: parseIntegerText(lastYearMatch?.[1] || ""),
+    planned: parseIntegerText(plannedMatch?.[1] || ""),
+    yesterday: parseIntegerText(yesterdayMatch?.[1] || ""),
+    yesterday_plan: parseIntegerText(yesterdayPlanMatch?.[1] || ""),
+    fetched_at: new Date().toISOString(),
+  };
+}
+
+async function fetchExternalAttendanceSummary() {
+  const url = getAttendanceSourceUrl();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      redirect: "follow",
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "Memphis-Zoo-MCP/0.3.5 (+dashboard attendance fetch)",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      },
+    });
+    if (!response.ok) {
+      throw new Error(`Attendance source HTTP ${response.status}`);
+    }
+    const html = await response.text();
+    return parseAttendanceFromHtml(html);
+  } catch (error) {
+    return {
+      ok: false,
+      source_url: url,
+      value: null,
+      display: "--",
+      error: error?.name === "AbortError" ? "Attendance source request timed out." : (error?.message || "Attendance fetch failed."),
+      fetched_at: new Date().toISOString(),
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function runReadOnlySql(sql) {
   const client = getSupabaseConfig();
   const sanitized = sanitizeReadOnlySql(sql);
@@ -172,28 +263,29 @@ async function runAdminBundleViaSqlRead(limits = {}) {
 }
 
 async function runPublicDashboardSummary() {
-  const snapshotRows = await runReadOnlySql(`
-    select snapshot_at, operational_day_start, active_sessions, pending_submit_sessions, closed_sessions_today, open_ticket_count,
-           overdue_locations, due_soon_locations, in_progress_locations, active_locations, operational_day_start::text as operational_day_start_text
-    from public.v_admin_health_snapshot
-    order by snapshot_at desc
-    limit 1
-  `);
-
-  const locationRows = await runReadOnlySql(`
-    select location_code, location_name, location_type, form_type, latest_employee_name, latest_completed_at,
-           latest_completed_at_display, services_performed, open_ticket_count, status_code, status_color, duration_display
-    from public.v_location_dashboard_status
-    order by case status_color when 'red' then 1 when 'yellow' then 2 when 'blue' then 3 when 'black' then 4 when 'green' then 5 else 9 end,
-             open_ticket_count desc, location_name
-  `);
-
-  const ticketRows = await runReadOnlySql(`
-    select ticket_id, location_code, location_name, maintenance_issue, reported_by, fixture_type, fixture_identifier,
-           out_of_order, date_submitted_display, created_at_display
-    from public.v_open_maintenance_tickets
-    order by date_submitted desc nulls last, created_at desc nulls last, location_code
-  `);
+  const [snapshotRows, locationRows, ticketRows, attendance] = await Promise.all([
+    runReadOnlySql(`
+      select snapshot_at, operational_day_start, active_sessions, pending_submit_sessions, closed_sessions_today, open_ticket_count,
+             overdue_locations, due_soon_locations, in_progress_locations, active_locations, operational_day_start::text as operational_day_start_text
+      from public.v_admin_health_snapshot
+      order by snapshot_at desc
+      limit 1
+    `),
+    runReadOnlySql(`
+      select location_code, location_name, location_type, form_type, latest_employee_name, latest_completed_at,
+             latest_completed_at_display, services_performed, open_ticket_count, status_code, status_color, duration_display
+      from public.v_location_dashboard_status
+      order by case status_color when 'red' then 1 when 'yellow' then 2 when 'blue' then 3 when 'black' then 4 when 'green' then 5 else 9 end,
+               open_ticket_count desc, location_name
+    `),
+    runReadOnlySql(`
+      select ticket_id, location_code, location_name, maintenance_issue, reported_by, fixture_type, fixture_identifier,
+             out_of_order, date_submitted_display, created_at_display
+      from public.v_open_maintenance_tickets
+      order by date_submitted desc nulls last, created_at desc nulls last, location_code
+    `),
+    fetchExternalAttendanceSummary(),
+  ]);
 
   const snapshot = Array.isArray(snapshotRows) && snapshotRows.length ? snapshotRows[0] : {};
   const locations = Array.isArray(locationRows) ? locationRows : [];
@@ -201,6 +293,7 @@ async function runPublicDashboardSummary() {
 
   return {
     snapshot,
+    attendance,
     restrooms: locations.filter((row) => String(row.location_type || row.form_type || "").toLowerCase() === "restroom"),
     exhibits: locations.filter((row) => String(row.location_type || row.form_type || "").toLowerCase() !== "restroom"),
     open_tickets: tickets,
@@ -208,7 +301,7 @@ async function runPublicDashboardSummary() {
 }
 
 function createMcpServer() {
-  const server = new McpServer({ name: process.env.APP_NAME || "Memphis Zoo MCP", version: "0.3.4" });
+  const server = new McpServer({ name: process.env.APP_NAME || "Memphis Zoo MCP", version: "0.3.5" });
 
   server.tool("ping", { message: z.string().optional() }, async ({ message }) => ({ content: [{ type: "text", text: `MCP server is alive. ${message || ""}`.trim() }] }));
 
