@@ -165,29 +165,14 @@ function parseIntegerText(text) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function parseAttendanceFromHtml(html) {
-  const source = String(html || "").replace(/\r/g, "");
-  const headerIndex = source.search(/<h5[^>]*>\s*Attendance\s*<\/h5>/i);
-  if (headerIndex < 0) {
-    throw new Error("Attendance header not found in source HTML.");
-  }
-
-  const nearbyHtml = source.slice(headerIndex, headerIndex + 2500);
-  const valueMatch = nearbyHtml.match(/<h1[^>]*>\s*([\d,]+)\s*<\/h1>/i);
-  const currentValue = parseIntegerText(valueMatch?.[1] || "");
-  if (currentValue == null) {
-    throw new Error("Attendance value not found near Attendance header.");
-  }
-
-  const nearbyText = stripTags(nearbyHtml);
+function buildAttendancePayload(currentValue, nearbyText, sourceUrl) {
   const lastYearMatch = nearbyText.match(/Last Year:\s*([\d,]+)/i);
   const plannedMatch = nearbyText.match(/Planned:\s*([\d,]+)/i);
   const yesterdayMatch = nearbyText.match(/Yesterday:\s*([\d,]+)/i);
   const yesterdayPlanMatch = nearbyText.match(/Yesterday Plan:\s*([\d,]+)/i);
-
   return {
     ok: true,
-    source_url: getAttendanceSourceUrl(),
+    source_url: sourceUrl,
     value: currentValue,
     display: currentValue.toLocaleString("en-US"),
     last_year: parseIntegerText(lastYearMatch?.[1] || ""),
@@ -196,6 +181,43 @@ function parseAttendanceFromHtml(html) {
     yesterday_plan: parseIntegerText(yesterdayPlanMatch?.[1] || ""),
     fetched_at: new Date().toISOString(),
   };
+}
+
+function parseAttendanceFromHtml(html) {
+  const source = String(html || "").replace(/\r/g, "");
+  const sourceUrl = getAttendanceSourceUrl();
+
+  const headerIndex = source.search(/<h5[^>]*>\s*Attendance\s*<\/h5>/i);
+  if (headerIndex >= 0) {
+    const nearbyHtml = source.slice(headerIndex, headerIndex + 4000);
+    const nearbyText = stripTags(nearbyHtml);
+    const valueMatch = nearbyHtml.match(/<h1[^>]*>\s*([\d,]+)\s*<\/h1>/i) || nearbyText.match(/Attendance\s+([\d,]+)/i);
+    const currentValue = parseIntegerText(valueMatch?.[1] || "");
+    if (currentValue != null) {
+      return buildAttendancePayload(currentValue, nearbyText, sourceUrl);
+    }
+  }
+
+  const fullText = stripTags(source);
+  const looseSectionMatch = fullText.match(/Attendance\s+([\d,]+)[\s\S]{0,300}?Last Year:\s*([\d,]+)[\s\S]{0,200}?Planned:\s*([\d,]+)[\s\S]{0,300}?Yesterday:\s*([\d,]+)[\s\S]{0,200}?Yesterday Plan:\s*([\d,]+)/i);
+  if (looseSectionMatch) {
+    const currentValue = parseIntegerText(looseSectionMatch[1]);
+    if (currentValue != null) {
+      return {
+        ok: true,
+        source_url: sourceUrl,
+        value: currentValue,
+        display: currentValue.toLocaleString("en-US"),
+        last_year: parseIntegerText(looseSectionMatch[2]),
+        planned: parseIntegerText(looseSectionMatch[3]),
+        yesterday: parseIntegerText(looseSectionMatch[4]),
+        yesterday_plan: parseIntegerText(looseSectionMatch[5]),
+        fetched_at: new Date().toISOString(),
+      };
+    }
+  }
+
+  throw new Error("Attendance value not found in source HTML.");
 }
 
 async function fetchExternalAttendanceSummary() {
@@ -208,7 +230,7 @@ async function fetchExternalAttendanceSummary() {
       redirect: "follow",
       signal: controller.signal,
       headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; Memphis-Zoo-MCP/0.3.6; +dashboard attendance fetch)",
+        "User-Agent": "Mozilla/5.0 (compatible; Memphis-Zoo-MCP/0.3.7; +dashboard attendance fetch)",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
         "Cache-Control": "no-cache",
@@ -305,7 +327,7 @@ async function runPublicDashboardSummary() {
 }
 
 function createMcpServer() {
-  const server = new McpServer({ name: process.env.APP_NAME || "Memphis Zoo MCP", version: "0.3.6" });
+  const server = new McpServer({ name: process.env.APP_NAME || "Memphis Zoo MCP", version: "0.3.7" });
 
   server.tool("ping", { message: z.string().optional() }, async ({ message }) => ({ content: [{ type: "text", text: `MCP server is alive. ${message || ""}`.trim() }] }));
 
