@@ -299,7 +299,8 @@ async function runPublicDashboardSummary() {
     `),
     runReadOnlySql(`
       select location_code, location_name, location_type, form_type, latest_employee_name, latest_completed_at,
-             latest_completed_at_display, services_performed, open_ticket_count, status_code, status_color, duration_display
+             latest_completed_at_display, services_performed, open_ticket_count, status_code, status_color, duration_display,
+             open_session_status, open_session_employee_name
       from public.v_location_dashboard_status
       order by case status_color when 'red' then 1 when 'yellow' then 2 when 'blue' then 3 when 'black' then 4 when 'green' then 5 else 9 end,
                open_ticket_count desc, location_name
@@ -327,7 +328,7 @@ async function runPublicDashboardSummary() {
 }
 
 function createMcpServer() {
-  const server = new McpServer({ name: process.env.APP_NAME || "Memphis Zoo MCP", version: "0.3.7" });
+  const server = new McpServer({ name: process.env.APP_NAME || "Memphis Zoo MCP", version: "0.3.8" });
 
   server.tool("ping", { message: z.string().optional() }, async ({ message }) => ({ content: [{ type: "text", text: `MCP server is alive. ${message || ""}`.trim() }] }));
 
