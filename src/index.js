@@ -30,7 +30,7 @@ const SCAN_RPC_ALLOWLIST = new Set([
   "tool_record_scan_event"
 ]);
 
-const APP_VERSION = "mcp-2026.04.18.3";
+const APP_VERSION = "mcp-2026.04.18.4";
 const SCAN_CONTRACT_VERSION = "scan.v1";
 const DASHBOARD_CONTRACT_VERSION = "dashboard.v1";
 const CANARY_RESTROOM_CODE = "TETM";
@@ -109,10 +109,6 @@ function getAdminApiKey() {
   return String(process.env.ADMIN_API_KEY || "").trim();
 }
 
-function getAttendanceSourceUrl() {
-  return String(process.env.ATTENDANCE_SOURCE_URL || "https://nd.memzoo.org/").trim();
-}
-
 function setAdminApiCors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
@@ -165,119 +161,6 @@ function sqlLiteral(value) {
   return `'${String(value).replace(/'/g, "''")}'`;
 }
 
-function decodeHtml(text) {
-  return String(text || "")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&#39;/gi, "'")
-    .replace(/&quot;/gi, '"');
-}
-
-function stripTags(text) {
-  return decodeHtml(String(text || "").replace(/<[^>]*>/g, " ")).replace(/\s+/g, " ").trim();
-}
-
-function parseIntegerText(text) {
-  const cleaned = String(text || "").replace(/[^\d-]/g, "");
-  if (!cleaned) return null;
-  const parsed = Number.parseInt(cleaned, 10);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function buildAttendancePayload(currentValue, nearbyText, sourceUrl) {
-  const lastYearMatch = nearbyText.match(/Last Year:\s*([\d,]+)/i);
-  const plannedMatch = nearbyText.match(/Planned:\s*([\d,]+)/i);
-  const yesterdayMatch = nearbyText.match(/Yesterday:\s*([\d,]+)/i);
-  const yesterdayPlanMatch = nearbyText.match(/Yesterday Plan:\s*([\d,]+)/i);
-  return {
-    ok: true,
-    source_url: sourceUrl,
-    value: currentValue,
-    display: currentValue.toLocaleString("en-US"),
-    last_year: parseIntegerText(lastYearMatch?.[1] || ""),
-    planned: parseIntegerText(plannedMatch?.[1] || ""),
-    yesterday: parseIntegerText(yesterdayMatch?.[1] || ""),
-    yesterday_plan: parseIntegerText(yesterdayPlanMatch?.[1] || ""),
-    fetched_at: new Date().toISOString(),
-  };
-}
-
-function parseAttendanceFromHtml(html) {
-  const source = String(html || "").replace(/\r/g, "");
-  const sourceUrl = getAttendanceSourceUrl();
-
-  const headerIndex = source.search(/<h5[^>]*>\s*Attendance\s*<\/h5>/i);
-  if (headerIndex >= 0) {
-    const nearbyHtml = source.slice(headerIndex, headerIndex + 4000);
-    const nearbyText = stripTags(nearbyHtml);
-    const valueMatch = nearbyHtml.match(/<h1[^>]*>\s*([\d,]+)\s*<\/h1>/i) || nearbyText.match(/Attendance\s+([\d,]+)/i);
-    const currentValue = parseIntegerText(valueMatch?.[1] || "");
-    if (currentValue != null) {
-      return buildAttendancePayload(currentValue, nearbyText, sourceUrl);
-    }
-  }
-
-  const fullText = stripTags(source);
-  const looseSectionMatch = fullText.match(/Attendance\s+([\d,]+)[\s\S]{0,300}?Last Year:\s*([\d,]+)[\s\S]{0,200}?Planned:\s*([\d,]+)[\s\S]{0,300}?Yesterday:\s*([\d,]+)[\s\S]{0,200}?Yesterday Plan:\s*([\d,]+)/i);
-  if (looseSectionMatch) {
-    const currentValue = parseIntegerText(looseSectionMatch[1]);
-    if (currentValue != null) {
-      return {
-        ok: true,
-        source_url: sourceUrl,
-        value: currentValue,
-        display: currentValue.toLocaleString("en-US"),
-        last_year: parseIntegerText(looseSectionMatch[2]),
-        planned: parseIntegerText(looseSectionMatch[3]),
-        yesterday: parseIntegerText(looseSectionMatch[4]),
-        yesterday_plan: parseIntegerText(looseSectionMatch[5]),
-        fetched_at: new Date().toISOString(),
-      };
-    }
-  }
-
-  throw new Error("Attendance value not found in source HTML.");
-}
-
-async function fetchExternalAttendanceSummary() {
-  const url = getAttendanceSourceUrl();
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10000);
-  try {
-    const response = await fetch(url, {
-      method: "GET",
-      redirect: "follow",
-      signal: controller.signal,
-      headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; Memphis-Zoo-MCP/0.3.7; +dashboard attendance fetch)",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Cache-Control": "no-cache",
-        "Pragma": "no-cache",
-        "Upgrade-Insecure-Requests": "1",
-      },
-    });
-    if (!response.ok) {
-      throw new Error(`Attendance source HTTP ${response.status}`);
-    }
-    const html = await response.text();
-    return parseAttendanceFromHtml(html);
-  } catch (error) {
-    return {
-      ok: false,
-      source_url: url,
-      value: null,
-      display: "--",
-      error: error?.name === "AbortError" ? "Attendance source request timed out." : (error?.message || "Attendance fetch failed."),
-      fetched_at: new Date().toISOString(),
-    };
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
 async function runReadOnlySql(sql) {
   const client = getSupabaseConfig();
   const sanitized = sanitizeReadOnlySql(sql);
@@ -310,7 +193,7 @@ async function runAdminBundleViaSqlRead(limits = {}) {
 }
 
 async function runPublicDashboardSummary() {
-  const [snapshotRows, locationRows, ticketRows, attendance] = await Promise.all([
+  const [snapshotRows, locationRows, ticketRows] = await Promise.all([
     runReadOnlySql(`
       select snapshot_at, operational_day_start, active_sessions, pending_submit_sessions, closed_sessions_today, open_ticket_count,
              overdue_locations, due_soon_locations, in_progress_locations, active_locations, operational_day_start::text as operational_day_start_text
@@ -332,7 +215,6 @@ async function runPublicDashboardSummary() {
       from public.v_open_maintenance_tickets
       order by date_submitted desc nulls last, created_at desc nulls last, location_code
     `),
-    fetchExternalAttendanceSummary(),
   ]);
 
   const snapshot = Array.isArray(snapshotRows) && snapshotRows.length ? snapshotRows[0] : {};
@@ -341,7 +223,6 @@ async function runPublicDashboardSummary() {
 
   return {
     snapshot,
-    attendance,
     meta: {
       app: "memphis-zoo-mcp",
       version: APP_VERSION,
@@ -379,18 +260,9 @@ async function runCanaryChecks() {
       p_location_code: CANARY_RESTROOM_CODE,
       p_device_id: CANARY_DEVICE_ID,
     });
-    if (!state || state.location_code !== CANARY_RESTROOM_CODE) {
-      throw new Error("restroom scan state missing expected location code");
-    }
-    if (String(state.form_type || state.location_type || "").toLowerCase() !== "restroom") {
-      throw new Error(`expected restroom form_type, got ${state.form_type || state.location_type || "unknown"}`);
-    }
-    return {
-      location_code: state.location_code,
-      form_type: state.form_type || null,
-      location_type: state.location_type || null,
-      suggested_action: state.suggested_action || null,
-    };
+    if (!state || state.location_code !== CANARY_RESTROOM_CODE) throw new Error("restroom scan state missing expected location code");
+    if (String(state.form_type || state.location_type || "").toLowerCase() !== "restroom") throw new Error(`expected restroom form_type, got ${state.form_type || state.location_type || "unknown"}`);
+    return { location_code: state.location_code, form_type: state.form_type || null, location_type: state.location_type || null, suggested_action: state.suggested_action || null };
   });
 
   await safeCheck("exhibit_scan_state", async () => {
@@ -398,37 +270,20 @@ async function runCanaryChecks() {
       p_location_code: CANARY_EXHIBIT_CODE,
       p_device_id: CANARY_DEVICE_ID,
     });
-    if (!state || state.location_code !== CANARY_EXHIBIT_CODE) {
-      throw new Error("exhibit scan state missing expected location code");
-    }
-    if (String(state.form_type || state.location_type || "").toLowerCase() !== "exhibit") {
-      throw new Error(`expected exhibit form_type, got ${state.form_type || state.location_type || "unknown"}`);
-    }
-    return {
-      location_code: state.location_code,
-      form_type: state.form_type || null,
-      location_type: state.location_type || null,
-      suggested_action: state.suggested_action || null,
-    };
+    if (!state || state.location_code !== CANARY_EXHIBIT_CODE) throw new Error("exhibit scan state missing expected location code");
+    if (String(state.form_type || state.location_type || "").toLowerCase() !== "exhibit") throw new Error(`expected exhibit form_type, got ${state.form_type || state.location_type || "unknown"}`);
+    return { location_code: state.location_code, form_type: state.form_type || null, location_type: state.location_type || null, suggested_action: state.suggested_action || null };
   });
 
   await safeCheck("dashboard_summary", async () => {
     const summary = await runPublicDashboardSummary();
-    if (!summary || !summary.meta || summary.meta.version !== APP_VERSION) {
-      throw new Error("dashboard summary missing expected meta version");
-    }
-    if (!Array.isArray(summary.restrooms) || !Array.isArray(summary.exhibits) || !Array.isArray(summary.open_tickets)) {
-      throw new Error("dashboard summary missing expected arrays");
-    }
+    if (!summary || !summary.meta || summary.meta.version !== APP_VERSION) throw new Error("dashboard summary missing expected meta version");
+    if (!Array.isArray(summary.restrooms) || !Array.isArray(summary.exhibits) || !Array.isArray(summary.open_tickets)) throw new Error("dashboard summary missing expected arrays");
     const restroomFound = summary.restrooms.some((row) => row.location_code === CANARY_RESTROOM_CODE);
     const exhibitFound = summary.exhibits.some((row) => row.location_code === CANARY_EXHIBIT_CODE);
     if (!restroomFound) throw new Error(`restroom canary ${CANARY_RESTROOM_CODE} not found in restroom rows`);
     if (!exhibitFound) throw new Error(`exhibit canary ${CANARY_EXHIBIT_CODE} not found in exhibit rows`);
-    return {
-      restrooms_count: summary.restrooms.length,
-      exhibits_count: summary.exhibits.length,
-      open_tickets_count: summary.open_tickets.length,
-    };
+    return { restrooms_count: summary.restrooms.length, exhibits_count: summary.exhibits.length, open_tickets_count: summary.open_tickets.length };
   });
 
   return {
@@ -548,8 +403,7 @@ app.get("/dashboard-api/health", (_req, res) => {
 app.get("/dashboard-api/canary", async (_req, res) => {
   try {
     const result = await runCanaryChecks();
-    const statusCode = result.ok ? 200 : 503;
-    res.status(statusCode).json(buildHealthPayload("dashboard_canary", result));
+    res.status(result.ok ? 200 : 503).json(buildHealthPayload("dashboard_canary", result));
   } catch (error) {
     console.error("dashboard canary failed:", error);
     res.status(500).json({ ok: false, area: "dashboard_canary", version: APP_VERSION, error: error.message || "Dashboard canary failed" });
