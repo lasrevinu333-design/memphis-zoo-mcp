@@ -166,24 +166,24 @@ function parseIntegerText(text) {
 }
 
 function parseAttendanceFromHtml(html) {
-  const source = String(html || "");
-  const attendanceCardMatch = source.match(/<h5[^>]*>\s*Attendance\s*<\/h5>[\s\S]{0,1200}?<div[^>]*class="card-body"[^>]*>([\s\S]{0,1200}?)<\/div>/i);
-  if (!attendanceCardMatch) {
-    throw new Error("Attendance card not found in source HTML.");
+  const source = String(html || "").replace(/\r/g, "");
+  const headerIndex = source.search(/<h5[^>]*>\s*Attendance\s*<\/h5>/i);
+  if (headerIndex < 0) {
+    throw new Error("Attendance header not found in source HTML.");
   }
 
-  const cardHtml = attendanceCardMatch[1];
-  const valueMatch = cardHtml.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
-  const currentValue = parseIntegerText(stripTags(valueMatch?.[1] || ""));
+  const nearbyHtml = source.slice(headerIndex, headerIndex + 2500);
+  const valueMatch = nearbyHtml.match(/<h1[^>]*>\s*([\d,]+)\s*<\/h1>/i);
+  const currentValue = parseIntegerText(valueMatch?.[1] || "");
   if (currentValue == null) {
-    throw new Error("Attendance value not found in attendance card.");
+    throw new Error("Attendance value not found near Attendance header.");
   }
 
-  const text = stripTags(cardHtml);
-  const lastYearMatch = text.match(/Last Year:\s*([\d,]+)/i);
-  const plannedMatch = text.match(/Planned:\s*([\d,]+)/i);
-  const yesterdayMatch = text.match(/Yesterday:\s*([\d,]+)/i);
-  const yesterdayPlanMatch = text.match(/Yesterday Plan:\s*([\d,]+)/i);
+  const nearbyText = stripTags(nearbyHtml);
+  const lastYearMatch = nearbyText.match(/Last Year:\s*([\d,]+)/i);
+  const plannedMatch = nearbyText.match(/Planned:\s*([\d,]+)/i);
+  const yesterdayMatch = nearbyText.match(/Yesterday:\s*([\d,]+)/i);
+  const yesterdayPlanMatch = nearbyText.match(/Yesterday Plan:\s*([\d,]+)/i);
 
   return {
     ok: true,
@@ -208,8 +208,12 @@ async function fetchExternalAttendanceSummary() {
       redirect: "follow",
       signal: controller.signal,
       headers: {
-        "User-Agent": "Memphis-Zoo-MCP/0.3.5 (+dashboard attendance fetch)",
+        "User-Agent": "Mozilla/5.0 (compatible; Memphis-Zoo-MCP/0.3.6; +dashboard attendance fetch)",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+        "Upgrade-Insecure-Requests": "1",
       },
     });
     if (!response.ok) {
@@ -301,7 +305,7 @@ async function runPublicDashboardSummary() {
 }
 
 function createMcpServer() {
-  const server = new McpServer({ name: process.env.APP_NAME || "Memphis Zoo MCP", version: "0.3.5" });
+  const server = new McpServer({ name: process.env.APP_NAME || "Memphis Zoo MCP", version: "0.3.6" });
 
   server.tool("ping", { message: z.string().optional() }, async ({ message }) => ({ content: [{ type: "text", text: `MCP server is alive. ${message || ""}`.trim() }] }));
 
