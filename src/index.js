@@ -385,79 +385,348 @@ async function runCanaryChecks() {
 }
 
 function createMcpServer() {
-  const server = new McpServer({ name: process.env.APP_NAME || "Memphis Zoo MCP", version: APP_VERSION });
-  server.tool("ping", { message: z.string().optional() }, async ({ message }) => ({ content: [{ type: "text", text: `MCP server is alive. ${message || ""}`.trim() }] }));
+  const server = new McpServer({
+    name: process.env.APP_NAME || "Memphis Zoo MCP",
+    version: APP_VERSION,
+  });
+
+  server.tool(
+    "ping",
+    { message: z.string().optional() },
+    async ({ message }) => ({
+      content: [{ type: "text", text: `MCP server is alive. ${message || ""}`.trim() }],
+    })
+  );
+
+  server.tool("github_debug_config", {}, async () => {
+    const defaultRepo = process.env.GITHUB_REPO || null;
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(
+            {
+              owner: process.env.GITHUB_OWNER || null,
+              defaultRepo,
+              allowedRepos: getAllowedGithubRepos(defaultRepo || ""),
+              hasToken: !!process.env.GITHUB_TOKEN,
+              version: APP_VERSION,
+              release_id: RELEASE_ID,
+            },
+            null,
+            2
+          ),
+        },
+      ],
+    };
+  });
+
+  server.tool(
+    "github_list_directory",
+    { repo: z.string().optional(), path: z.string().optional() },
+    async ({ repo: targetRepo, path }) => {
+      try {
+        const { owner, repo } = getGithubConfig(targetRepo);
+        const normalizedPath = normalizeGithubPath(path || "");
+        const response = await octokit.rest.repos.getContent({
+          owner,
+          repo,
+          path: normalizedPath,
+        });
+
+        if (!Array.isArray(response.data)) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Path is not a directory: ${owner}/${repo}/${normalizedPath || "<repo-root>"}`,
+              },
+            ],
+          };
+        }
+
+        const items = response.data.map((item) => ({
+          name: item.name,
+          path: item.path,
+          type: item.type,
+        }));
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  owner,
+                  repo,
+                  path: normalizedPath || "<repo-root>",
+                  items,
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Failed to list GitHub directory "${path || "/"}"${targetRepo ? ` in repo "${targetRepo}"` : ""}: ${getGithubErrorDetail(error)}`,
+            },
+          ],
+        };
+      }
+    }
+  );
+
+  server.tool(
+    "github_read_file",
+    { repo: z.string().optional(), path: z.string().min(1) },
+    async ({ repo: targetRepo, path }) => {
+      try {
+        const { owner, repo } = getGithubConfig(targetRepo);
+        const normalizedPath = normalizeGithubPath(path);
+        const response = await octokit.rest.repos.getContent({
+          owner,
+          repo,
+          path: normalizedPath,
+        });
+
+        if (!("content" in response.data) || typeof response.data.content !== "string") {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Path exists, but it is not a plain file: ${owner}/${repo}/${normalizedPath}`,
+              },
+            ],
+          };
+        }
+
+        const decoded = Buffer.from(response.data.content, "base64").toString("utf8");
+        return { content: [{ type: "text", text: decoded }] };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Failed to read GitHub file "${path}"${targetRepo ? ` in repo "${targetRepo}"` : ""}: ${getGithubErrorDetail(error)}`,
+            },
+          ],
+        };
+      }
+    }
+  );
+
+  server.tool(
+    "github_write_file",
+    {
+      repo: z.string().optional(),
+      path: z.string().min(1),
+      content: z.string(),
+      commit_message: z.string().min(1),
+    },
+    async ({ repo: targetRepo, path, content, commit_message }) => {
+      try {
+        const { owner, repo } = getGithubConfig(targetRepo);
+        const normalizedPath = normalizeGithubPath(path);
+        let sha;
+        let mode = "created";
+
+        try {
+          const existing = await octokit.rest.repos.getContent({
+            owner,
+            repo,
+            path: normalizedPath,
+          });
+          if (Array.isArray(existing.data)) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Cannot write to "${normalizedPath}" because it is a directory in ${owner}/${repo}.`,
+                },
+              ],
+            };
+          }
+          if ("sha" in existing.data && typeof existing.data.sha === "string") {
+            sha = existing.data.sha;
+            mode = "updated";
+          }
+        } catch (error) {
+          if (error?.status !== 404) throw error;
+        }
+
+        const encodedContent = Buffer.from(content, "utf8").toString("base64");
+        const writeResponse = await octokit.rest.repos.createOrUpdateFileContents({
+          owner,
+          repo,
+          path: normalizedPath,
+          message: commit_message,
+          content: encodedContent,
+          ...(sha ? { sha } : {}),
+        });
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `${mode === "created" ? "Created" : "Updated"} "${normalizedPath}" successfully in ${owner}/${repo}.\nCommit: ${writeResponse.data.commit.sha}`,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Failed to write GitHub file "${path}"${targetRepo ? ` in repo "${targetRepo}"` : ""}: ${getGithubErrorDetail(error)}`,
+            },
+          ],
+        };
+      }
+    }
+  );
+
+  server.tool(
+    "github_update_file",
+    {
+      repo: z.string().optional(),
+      path: z.string().min(1),
+      content: z.string(),
+      commit_message: z.string().min(1),
+    },
+    async ({ repo: targetRepo, path, content, commit_message }) => {
+      try {
+        const { owner, repo } = getGithubConfig(targetRepo);
+        const normalizedPath = normalizeGithubPath(path);
+        const existing = await octokit.rest.repos.getContent({
+          owner,
+          repo,
+          path: normalizedPath,
+        });
+
+        if (
+          Array.isArray(existing.data) ||
+          !("sha" in existing.data) ||
+          typeof existing.data.sha !== "string"
+        ) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Cannot update "${normalizedPath}" because it is not a normal file in ${owner}/${repo}.`,
+              },
+            ],
+          };
+        }
+
+        const encodedContent = Buffer.from(content, "utf8").toString("base64");
+        const updateResponse = await octokit.rest.repos.createOrUpdateFileContents({
+          owner,
+          repo,
+          path: normalizedPath,
+          message: commit_message,
+          content: encodedContent,
+          sha: existing.data.sha,
+        });
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Updated "${normalizedPath}" successfully in ${owner}/${repo}.\nCommit: ${updateResponse.data.commit.sha}`,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Failed to update GitHub file "${path}"${targetRepo ? ` in repo "${targetRepo}"` : ""}: ${getGithubErrorDetail(error)}`,
+            },
+          ],
+        };
+      }
+    }
+  );
+
+  server.tool(
+    "supabase_sql_read",
+    { sql: z.string().min(1) },
+    async ({ sql }) => {
+      try {
+        const data = await runReadOnlySql(sql);
+        return {
+          content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
+        };
+      } catch (error) {
+        return {
+          content: [{ type: "text", text: `Supabase read failed: ${error.message}` }],
+        };
+      }
+    }
+  );
+
+  server.tool(
+    "supabase_migration_apply",
+    { name: z.string().min(1), sql: z.string().min(1) },
+    async ({ name, sql }) => {
+      try {
+        const client = getSupabaseConfig();
+        const normalized = sql.trim().toLowerCase();
+
+        if (!normalized) {
+          return {
+            content: [{ type: "text", text: "Migration SQL cannot be empty." }],
+          };
+        }
+
+        if (normalized.startsWith("begin") || normalized.includes("commit")) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: "Do not include BEGIN/COMMIT. Submit the migration body only.",
+              },
+            ],
+          };
+        }
+
+        const { data, error } = await client.rpc("run_sql_migration", {
+          p_name: name,
+          p_sql: sql,
+        });
+
+        if (error) {
+          return {
+            content: [{ type: "text", text: `Supabase migration failed: ${error.message}` }],
+          };
+        }
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({ ok: true, name, result: data }, null, 2),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Supabase migration apply failed: ${error.message}`,
+            },
+          ],
+        };
+      }
+    }
+  );
+
   return server;
 }
-
-app.use("/admin-api", (req, res, next) => { setAdminApiCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
-app.use("/dashboard-api", (req, res, next) => { setPublicDashboardCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
-app.use("/scan-api", (req, res, next) => { setScanApiCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
-app.get("/version", (_req, res) => { res.status(200).json(buildHealthPayload("version")); });
-app.get("/admin-api/health", requireAdminApiAuth, (_req, res) => { res.status(200).json(buildHealthPayload("admin", { authenticated: true })); });
-app.get("/dashboard-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("dashboard")); });
-app.get("/dashboard-api/canary", async (_req, res) => {
-  try { const result = await runCanaryChecks(); res.status(result.ok ? 200 : 503).json(buildHealthPayload("dashboard_canary", result)); }
-  catch (error) { console.error("dashboard canary failed:", error); res.status(500).json({ ok: false, area: "dashboard_canary", version: APP_VERSION, release_id: RELEASE_ID, error: error.message || "Dashboard canary failed" }); }
-});
-app.get("/dashboard-api/current-attendance", async (_req, res) => {
-  try { const data = await fetchCurrentAttendance(); res.status(200).json({ ok: true, data, meta: { version: APP_VERSION, release_id: RELEASE_ID } }); }
-  catch (error) { console.error("current attendance fetch failed:", error); res.status(502).json({ ok: false, error: error.message || "Current attendance fetch failed", source_url: ATTENDANCE_SOURCE_URL }); }
-});
-app.post("/admin-api/bundle", requireAdminApiAuth, async (req, res) => {
-  try { const payload = req.body && typeof req.body === "object" ? req.body : {}; const data = await runAdminBundleViaSqlRead(payload); res.status(200).json({ ok: true, data }); }
-  catch (error) { console.error("admin bundle failed:", error); res.status(500).json({ ok: false, error: error.message || "Admin bundle failed" }); }
-});
-app.post("/admin-api/close-ticket", requireAdminApiAuth, async (req, res) => {
-  try { const ticketId = String(req.body?.ticket_id || "").trim(); const closedBy = String(req.body?.closed_by || "").trim(); const closeNotes = req.body?.close_notes == null ? null : String(req.body.close_notes); if (!ticketId || !closedBy) { res.status(400).json({ ok: false, error: "ticket_id and closed_by are required." }); return; } await runWriteSql("admin_close_ticket", `select public.close_maintenance_ticket(${sqlLiteral(ticketId)}::uuid, ${sqlLiteral(closedBy)}, ${sqlLiteral(closeNotes)});`); res.status(200).json({ ok: true, ticket_id: ticketId, status: "closed" }); }
-  catch (error) { console.error("close ticket failed:", error); res.status(500).json({ ok: false, error: error.message || "Close ticket failed" }); }
-});
-app.post("/admin-api/force-close-session", requireAdminApiAuth, async (req, res) => {
-  try { const sessionUuid = String(req.body?.session_uuid || "").trim(); const closedBy = String(req.body?.closed_by || "").trim(); const reason = req.body?.reason == null ? null : String(req.body.reason); if (!sessionUuid || !closedBy) { res.status(400).json({ ok: false, error: "session_uuid and closed_by are required." }); return; } await runWriteSql("admin_force_close_session", `select public.force_close_session(${sqlLiteral(sessionUuid)}, ${sqlLiteral(closedBy)}, ${sqlLiteral(reason)});`); res.status(200).json({ ok: true, session_uuid: sessionUuid, status: "closed" }); }
-  catch (error) { console.error("force close session failed:", error); res.status(500).json({ ok: false, error: error.message || "Force close session failed" }); }
-});
-app.get("/dashboard-api/summary", async (_req, res) => {
-  try { const data = await runPublicDashboardSummary(); res.status(200).json({ ok: true, data }); }
-  catch (error) { console.error("dashboard summary failed:", error); res.status(500).json({ ok: false, error: error.message || "Dashboard summary failed" }); }
-});
-app.post("/dashboard-api/close-ticket", async (req, res) => {
-  try { const ticketId = String(req.body?.ticket_id || "").trim(); if (!ticketId) { res.status(400).json({ ok: false, error: "ticket_id is required." }); return; } await runWriteSql("dashboard_close_ticket", `select public.close_maintenance_ticket(${sqlLiteral(ticketId)}::uuid, 'Dashboard', null);`); res.status(200).json({ ok: true, ticket_id: ticketId, status: "closed" }); }
-  catch (error) { console.error("dashboard close ticket failed:", error); res.status(500).json({ ok: false, error: error.message || "Dashboard close ticket failed" }); }
-});
-app.get("/scan-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("scan", { available_functions: Array.from(SCAN_RPC_ALLOWLIST) })); });
-app.post("/scan-api/rpc", async (req, res) => {
-  try { const fn = String(req.body?.fn || "").trim(); const args = req.body?.args && typeof req.body.args === "object" ? req.body.args : {}; if (!SCAN_RPC_ALLOWLIST.has(fn)) { res.status(400).json({ ok: false, error: `Function not allowed: ${fn}` }); return; } const data = await runRpc(fn, args); res.status(200).json({ ok: true, data, meta: { version: APP_VERSION, release_id: RELEASE_ID, contract_version: SCAN_CONTRACT_VERSION } }); }
-  catch (error) { console.error("scan rpc failed:", error); res.status(500).json({ ok: false, error: error.message || "Scan RPC failed" }); }
-});
-app.get("/", (_req, res) => { res.status(200).send("Memphis Zoo MCP server is running."); });
-app.get("/mcp", (_req, res) => { res.status(405).send("GET not supported on /mcp for this server."); });
-app.options("/mcp", (_req, res) => { res.sendStatus(200); });
-app.post("/mcp", async (req, res) => {
-  try { const server = createMcpServer(); const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined }); res.on("close", () => { transport.close(); }); await server.connect(transport); await transport.handleRequest(req, res, req.body); }
-  catch (error) { console.error("MCP request failed:", error); if (!res.headersSent) { res.status(500).json({ jsonrpc: "2.0", error: { code: -32603, message: "Internal server error" }, id: null }); } }
-});
-let sseTransport = null;
-let sseServer = null;
-app.get("/sse", async (_req, res) => {
-  try { sseServer = createMcpServer(); sseTransport = new SSEServerTransport("/messages", res); await sseServer.connect(sseTransport); }
-  catch (error) { console.error("SSE connection failed:", error); if (!res.headersSent) res.status(500).send("SSE connection failed"); }
-});
-app.post("/messages", async (req, res) => {
-  try { if (!sseTransport) { res.status(400).send("No active SSE transport"); return; } await sseTransport.handlePostMessage(req, res, req.body); }
-  catch (error) { console.error("SSE post message failed:", error); if (!res.headersSent) res.status(500).send("SSE post message failed"); }
-});
-const port = Number(process.env.PORT || 3000);
-app.listen(port, () => {
-  console.log("Memphis Zoo MCP server initialized.");
-  console.log(`App version: ${APP_VERSION}`);
-  console.log(`Listening on http://localhost:${port}`);
-  console.log("Version endpoint: /version");
-  console.log("Dashboard canary endpoint: /dashboard-api/canary");
-  console.log("Dashboard attendance endpoint: /dashboard-api/current-attendance");
-  console.log("MCP endpoint: /mcp");
-  console.log("Legacy SSE endpoint: /sse");
-  console.log("Legacy messages endpoint: /messages");
-  console.log("Admin API endpoint: /admin-api");
-  console.log("Dashboard API endpoint: /dashboard-api");
-  console.log("Scan API endpoint: /scan-api");
-});
