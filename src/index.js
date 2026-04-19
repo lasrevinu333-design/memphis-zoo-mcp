@@ -82,7 +82,7 @@ function getGithubConfig(targetRepo) {
   const repo = (targetRepo || defaultRepo).trim();
 
   if (!allowedRepos.includes(repo)) {
-    throw new Error(`Repo \"${repo}\" is not allowed. Allowed repos: ${allowedRepos.join(", ")}`);
+    throw new Error(`Repo "${repo}" is not allowed. Allowed repos: ${allowedRepos.join(", ")}`);
   }
 
   return { owner, repo, defaultRepo, allowedRepos };
@@ -200,23 +200,28 @@ async function fetchCurrentAttendance(options = {}) {
   if (!options.force && attendanceCache.data && now - attendanceCache.fetched_at_ms < ATTENDANCE_CACHE_MS) {
     return { ...attendanceCache.data, cached: true, stale: false };
   }
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), ATTENDANCE_TIMEOUT_MS);
+
   try {
     const response = await fetch(ATTENDANCE_SOURCE_URL, {
       method: "GET",
       signal: controller.signal,
       headers: {
-        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "user-agent": "memphis-zoo-mcp/current-attendance",
         "cache-control": "no-cache",
         pragma: "no-cache",
       },
     });
+
     if (!response.ok) throw new Error(`Attendance source returned HTTP ${response.status}`);
+
     const contentType = String(response.headers.get("content-type") || "").toLowerCase();
     const html = await response.text();
     const parsed = parseAttendanceHtml(html);
+
     const data = {
       ...parsed,
       source_url: ATTENDANCE_SOURCE_URL,
@@ -225,11 +230,17 @@ async function fetchCurrentAttendance(options = {}) {
       cached: false,
       stale: false,
     };
+
     attendanceCache = { data, fetched_at_ms: now };
     return data;
   } catch (error) {
     if (attendanceCache.data) {
-      return { ...attendanceCache.data, cached: true, stale: true, warning: error?.message || "Attendance fetch failed." };
+      return {
+        ...attendanceCache.data,
+        cached: true,
+        stale: true,
+        warning: error?.message || "Attendance fetch failed.",
+      };
     }
     throw error;
   } finally {
@@ -251,7 +262,10 @@ async function runReadOnlySql(sql) {
 async function runWriteSql(namePrefix, sql) {
   const client = getSupabaseConfig();
   const migrationName = `${namePrefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  const { data, error } = await client.rpc("run_sql_migration", { p_name: migrationName, p_sql: String(sql || "").trim() });
+  const { data, error } = await client.rpc("run_sql_migration", {
+    p_name: migrationName,
+    p_sql: String(sql || "").trim(),
+  });
   if (error) throw new Error(error.message || "run_sql_migration failed");
   return data;
 }
@@ -333,28 +347,60 @@ async function runCanaryChecks() {
   }
 
   await safeCheck("restroom_scan_state", async () => {
-    const state = await runRpc("tool_get_location_scan_state", { p_location_code: CANARY_RESTROOM_CODE, p_device_id: CANARY_DEVICE_ID });
-    if (!state || state.location_code !== CANARY_RESTROOM_CODE) throw new Error("restroom scan state missing expected location code");
-    if (String(state.form_type || state.location_type || "").toLowerCase() !== "restroom") throw new Error(`expected restroom form_type, got ${state.form_type || state.location_type || "unknown"}`);
-    return { location_code: state.location_code, form_type: state.form_type || null, location_type: state.location_type || null, suggested_action: state.suggested_action || null };
+    const state = await runRpc("tool_get_location_scan_state", {
+      p_location_code: CANARY_RESTROOM_CODE,
+      p_device_id: CANARY_DEVICE_ID,
+    });
+    if (!state || state.location_code !== CANARY_RESTROOM_CODE) {
+      throw new Error("restroom scan state missing expected location code");
+    }
+    if (String(state.form_type || state.location_type || "").toLowerCase() !== "restroom") {
+      throw new Error(`expected restroom form_type, got ${state.form_type || state.location_type || "unknown"}`);
+    }
+    return {
+      location_code: state.location_code,
+      form_type: state.form_type || null,
+      location_type: state.location_type || null,
+      suggested_action: state.suggested_action || null,
+    };
   });
 
   await safeCheck("exhibit_scan_state", async () => {
-    const state = await runRpc("tool_get_location_scan_state", { p_location_code: CANARY_EXHIBIT_CODE, p_device_id: CANARY_DEVICE_ID });
-    if (!state || state.location_code !== CANARY_EXHIBIT_CODE) throw new Error("exhibit scan state missing expected location code");
-    if (String(state.form_type || state.location_type || "").toLowerCase() !== "exhibit") throw new Error(`expected exhibit form_type, got ${state.form_type || state.location_type || "unknown"}`);
-    return { location_code: state.location_code, form_type: state.form_type || null, location_type: state.location_type || null, suggested_action: state.suggested_action || null };
+    const state = await runRpc("tool_get_location_scan_state", {
+      p_location_code: CANARY_EXHIBIT_CODE,
+      p_device_id: CANARY_DEVICE_ID,
+    });
+    if (!state || state.location_code !== CANARY_EXHIBIT_CODE) {
+      throw new Error("exhibit scan state missing expected location code");
+    }
+    if (String(state.form_type || state.location_type || "").toLowerCase() !== "exhibit") {
+      throw new Error(`expected exhibit form_type, got ${state.form_type || state.location_type || "unknown"}`);
+    }
+    return {
+      location_code: state.location_code,
+      form_type: state.form_type || null,
+      location_type: state.location_type || null,
+      suggested_action: state.suggested_action || null,
+    };
   });
 
   await safeCheck("dashboard_summary", async () => {
     const summary = await runPublicDashboardSummary();
-    if (!summary || !summary.meta || summary.meta.version !== APP_VERSION) throw new Error("dashboard summary missing expected meta version");
-    if (!Array.isArray(summary.restrooms) || !Array.isArray(summary.exhibits) || !Array.isArray(summary.open_tickets)) throw new Error("dashboard summary missing expected arrays");
+    if (!summary || !summary.meta || summary.meta.version !== APP_VERSION) {
+      throw new Error("dashboard summary missing expected meta version");
+    }
+    if (!Array.isArray(summary.restrooms) || !Array.isArray(summary.exhibits) || !Array.isArray(summary.open_tickets)) {
+      throw new Error("dashboard summary missing expected arrays");
+    }
     const restroomFound = summary.restrooms.some((row) => row.location_code === CANARY_RESTROOM_CODE);
     const exhibitFound = summary.exhibits.some((row) => row.location_code === CANARY_EXHIBIT_CODE);
     if (!restroomFound) throw new Error(`restroom canary ${CANARY_RESTROOM_CODE} not found in restroom rows`);
     if (!exhibitFound) throw new Error(`exhibit canary ${CANARY_EXHIBIT_CODE} not found in exhibit rows`);
-    return { restrooms_count: summary.restrooms.length, exhibits_count: summary.exhibits.length, open_tickets_count: summary.open_tickets.length };
+    return {
+      restrooms_count: summary.restrooms.length,
+      exhibits_count: summary.exhibits.length,
+      open_tickets_count: summary.open_tickets.length,
+    };
   });
 
   await safeCheck("open_session_consistency", async () => {
@@ -365,23 +411,33 @@ async function runCanaryChecks() {
          or (open_session_status is null and open_session_employee_name is not null)
     `);
     const inconsistentCount = Array.isArray(rows) && rows.length ? Number(rows[0].inconsistent_count || 0) : 0;
-    if (inconsistentCount !== 0) throw new Error(`found ${inconsistentCount} inconsistent open session rows`);
+    if (inconsistentCount !== 0) {
+      throw new Error(`found ${inconsistentCount} inconsistent open session rows`);
+    }
     return { inconsistent_count: inconsistentCount };
   });
 
   await safeCheck("ticket_count_consistency", async () => {
     const rows = await runReadOnlySql(`
-      select (select count(*)::int from public.v_open_maintenance_tickets) as view_count,
-             (select count(*)::int from public.maintenance_tickets where status = 'open') as table_count
+      select
+        (select count(*)::int from public.v_open_maintenance_tickets) as view_count,
+        (select count(*)::int from public.maintenance_tickets where status = 'open') as table_count
     `);
     const row = Array.isArray(rows) && rows.length ? rows[0] : {};
     const viewCount = Number(row.view_count || 0);
     const tableCount = Number(row.table_count || 0);
-    if (viewCount !== tableCount) throw new Error(`ticket counts differ: view=${viewCount}, table=${tableCount}`);
+    if (viewCount !== tableCount) {
+      throw new Error(`ticket counts differ: view=${viewCount}, table=${tableCount}`);
+    }
     return { view_count: viewCount, table_count: tableCount };
   });
 
-  return { ok: failures.length === 0, checks, failure_count: failures.length, failures };
+  return {
+    ok: failures.length === 0,
+    checks,
+    failure_count: failures.length,
+    failures,
+  };
 }
 
 function createMcpServer() {
@@ -573,7 +629,8 @@ function createMcpServer() {
           content: [
             {
               type: "text",
-              text: `${mode === "created" ? "Created" : "Updated"} "${normalizedPath}" successfully in ${owner}/${repo}.\nCommit: ${writeResponse.data.commit.sha}`,
+              text: `${mode === "created" ? "Created" : "Updated"} "${normalizedPath}" successfully in ${owner}/${repo}.
+Commit: ${writeResponse.data.commit.sha}`,
             },
           ],
         };
@@ -637,7 +694,8 @@ function createMcpServer() {
           content: [
             {
               type: "text",
-              text: `Updated "${normalizedPath}" successfully in ${owner}/${repo}.\nCommit: ${updateResponse.data.commit.sha}`,
+              text: `Updated "${normalizedPath}" successfully in ${owner}/${repo}.
+Commit: ${updateResponse.data.commit.sha}`,
             },
           ],
         };
@@ -730,3 +788,269 @@ function createMcpServer() {
 
   return server;
 }
+
+app.use("/admin-api", (req, res, next) => {
+  setAdminApiCors(res);
+  if (req.method === "OPTIONS") {
+    res.sendStatus(200);
+    return;
+  }
+  next();
+});
+
+app.use("/dashboard-api", (req, res, next) => {
+  setPublicDashboardCors(res);
+  if (req.method === "OPTIONS") {
+    res.sendStatus(200);
+    return;
+  }
+  next();
+});
+
+app.use("/scan-api", (req, res, next) => {
+  setScanApiCors(res);
+  if (req.method === "OPTIONS") {
+    res.sendStatus(200);
+    return;
+  }
+  next();
+});
+
+app.get("/version", (_req, res) => {
+  res.status(200).json(buildHealthPayload("version"));
+});
+
+app.get("/admin-api/health", requireAdminApiAuth, (_req, res) => {
+  res.status(200).json(buildHealthPayload("admin", { authenticated: true }));
+});
+
+app.get("/dashboard-api/health", (_req, res) => {
+  res.status(200).json(buildHealthPayload("dashboard"));
+});
+
+app.get("/dashboard-api/canary", async (_req, res) => {
+  try {
+    const result = await runCanaryChecks();
+    res.status(result.ok ? 200 : 503).json(buildHealthPayload("dashboard_canary", result));
+  } catch (error) {
+    console.error("dashboard canary failed:", error);
+    res.status(500).json({
+      ok: false,
+      area: "dashboard_canary",
+      version: APP_VERSION,
+      release_id: RELEASE_ID,
+      error: error.message || "Dashboard canary failed",
+    });
+  }
+});
+
+app.get("/dashboard-api/current-attendance", async (_req, res) => {
+  try {
+    const data = await fetchCurrentAttendance();
+    res.status(200).json({
+      ok: true,
+      data,
+      meta: { version: APP_VERSION, release_id: RELEASE_ID },
+    });
+  } catch (error) {
+    console.error("current attendance fetch failed:", error);
+    res.status(502).json({
+      ok: false,
+      error: error.message || "Current attendance fetch failed",
+      source_url: ATTENDANCE_SOURCE_URL,
+    });
+  }
+});
+
+app.post("/admin-api/bundle", requireAdminApiAuth, async (req, res) => {
+  try {
+    const payload = req.body && typeof req.body === "object" ? req.body : {};
+    const data = await runAdminBundleViaSqlRead(payload);
+    res.status(200).json({ ok: true, data });
+  } catch (error) {
+    console.error("admin bundle failed:", error);
+    res.status(500).json({ ok: false, error: error.message || "Admin bundle failed" });
+  }
+});
+
+app.post("/admin-api/close-ticket", requireAdminApiAuth, async (req, res) => {
+  try {
+    const ticketId = String(req.body?.ticket_id || "").trim();
+    const closedBy = String(req.body?.closed_by || "").trim();
+    const closeNotes = req.body?.close_notes == null ? null : String(req.body.close_notes);
+
+    if (!ticketId || !closedBy) {
+      res.status(400).json({ ok: false, error: "ticket_id and closed_by are required." });
+      return;
+    }
+
+    await runWriteSql(
+      "admin_close_ticket",
+      `select public.close_maintenance_ticket(${sqlLiteral(ticketId)}::uuid, ${sqlLiteral(closedBy)}, ${sqlLiteral(closeNotes)});`
+    );
+
+    res.status(200).json({ ok: true, ticket_id: ticketId, status: "closed" });
+  } catch (error) {
+    console.error("close ticket failed:", error);
+    res.status(500).json({ ok: false, error: error.message || "Close ticket failed" });
+  }
+});
+
+app.post("/admin-api/force-close-session", requireAdminApiAuth, async (req, res) => {
+  try {
+    const sessionUuid = String(req.body?.session_uuid || "").trim();
+    const closedBy = String(req.body?.closed_by || "").trim();
+    const reason = req.body?.reason == null ? null : String(req.body.reason);
+
+    if (!sessionUuid || !closedBy) {
+      res.status(400).json({ ok: false, error: "session_uuid and closed_by are required." });
+      return;
+    }
+
+    await runWriteSql(
+      "admin_force_close_session",
+      `select public.force_close_session(${sqlLiteral(sessionUuid)}, ${sqlLiteral(closedBy)}, ${sqlLiteral(reason)});`
+    );
+
+    res.status(200).json({ ok: true, session_uuid: sessionUuid, status: "closed" });
+  } catch (error) {
+    console.error("force close session failed:", error);
+    res.status(500).json({ ok: false, error: error.message || "Force close session failed" });
+  }
+});
+
+app.get("/dashboard-api/summary", async (_req, res) => {
+  try {
+    const data = await runPublicDashboardSummary();
+    res.status(200).json({ ok: true, data });
+  } catch (error) {
+    console.error("dashboard summary failed:", error);
+    res.status(500).json({ ok: false, error: error.message || "Dashboard summary failed" });
+  }
+});
+
+app.post("/dashboard-api/close-ticket", async (req, res) => {
+  try {
+    const ticketId = String(req.body?.ticket_id || "").trim();
+    if (!ticketId) {
+      res.status(400).json({ ok: false, error: "ticket_id is required." });
+      return;
+    }
+
+    await runWriteSql(
+      "dashboard_close_ticket",
+      `select public.close_maintenance_ticket(${sqlLiteral(ticketId)}::uuid, 'Dashboard', null);`
+    );
+
+    res.status(200).json({ ok: true, ticket_id: ticketId, status: "closed" });
+  } catch (error) {
+    console.error("dashboard close ticket failed:", error);
+    res.status(500).json({ ok: false, error: error.message || "Dashboard close ticket failed" });
+  }
+});
+
+app.get("/scan-api/health", (_req, res) => {
+  res.status(200).json(buildHealthPayload("scan", { available_functions: Array.from(SCAN_RPC_ALLOWLIST) }));
+});
+
+app.post("/scan-api/rpc", async (req, res) => {
+  try {
+    const fn = String(req.body?.fn || "").trim();
+    const args = req.body?.args && typeof req.body.args === "object" ? req.body.args : {};
+
+    if (!SCAN_RPC_ALLOWLIST.has(fn)) {
+      res.status(400).json({ ok: false, error: `Function not allowed: ${fn}` });
+      return;
+    }
+
+    const data = await runRpc(fn, args);
+    res.status(200).json({
+      ok: true,
+      data,
+      meta: {
+        version: APP_VERSION,
+        release_id: RELEASE_ID,
+        contract_version: SCAN_CONTRACT_VERSION,
+      },
+    });
+  } catch (error) {
+    console.error("scan rpc failed:", error);
+    res.status(500).json({ ok: false, error: error.message || "Scan RPC failed" });
+  }
+});
+
+app.get("/", (_req, res) => {
+  res.status(200).send("Memphis Zoo MCP server is running.");
+});
+
+app.get("/mcp", (_req, res) => {
+  res.status(405).send("GET not supported on /mcp for this server.");
+});
+
+app.options("/mcp", (_req, res) => {
+  res.sendStatus(200);
+});
+
+app.post("/mcp", async (req, res) => {
+  try {
+    const server = createMcpServer();
+    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+    res.on("close", () => {
+      transport.close();
+    });
+    await server.connect(transport);
+    await transport.handleRequest(req, res, req.body);
+  } catch (error) {
+    console.error("MCP request failed:", error);
+    if (!res.headersSent) {
+      res.status(500).json({
+        jsonrpc: "2.0",
+        error: { code: -32603, message: "Internal server error" },
+        id: null,
+      });
+    }
+  }
+});
+
+let sseTransport = null;
+let sseServer = null;
+
+app.get("/sse", async (_req, res) => {
+  try {
+    sseServer = createMcpServer();
+    sseTransport = new SSEServerTransport("/messages", res);
+    await sseServer.connect(sseTransport);
+  } catch (error) {
+    console.error("SSE connection failed:", error);
+    if (!res.headersSent) res.status(500).send("SSE connection failed");
+  }
+});
+
+app.post("/messages", async (req, res) => {
+  try {
+    if (!sseTransport) {
+      res.status(400).send("No active SSE transport");
+      return;
+    }
+    await sseTransport.handlePostMessage(req, res, req.body);
+  } catch (error) {
+    console.error("SSE post message failed:", error);
+    if (!res.headersSent) res.status(500).send("SSE post message failed");
+  }
+});
+
+const port = Number(process.env.PORT || 3000);
+app.listen(port, () => {
+  console.log("Memphis Zoo MCP server initialized.");
+  console.log(`App version: ${APP_VERSION}`);
+  console.log(`Listening on http://localhost:${port}`);
+  console.log("Version endpoint: /version");
+  console.log("Dashboard canary endpoint: /dashboard-api/canary");
+  console.log("Dashboard attendance endpoint: /dashboard-api/current-attendance");
+  console.log("MCP endpoint: /mcp");
+  console.log("Legacy SSE endpoint: /sse");
+  console.log("Legacy messages endpoint: /messages");
+  console.log("Admin API endpoint: /admin-api");
+  console.log("Dashboard API endpoint: /dashboard-api");
+  console.log("Scan API endpoint: /scan-api");
+});
