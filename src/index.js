@@ -40,6 +40,7 @@ const CANARY_DEVICE_ID = "canary-check";
 const ATTENDANCE_SOURCE_URL = String(process.env.ND_MEMZOO_ATTENDANCE_URL || "https://nd.memzoo.org").trim();
 const ATTENDANCE_TIMEOUT_MS = toSafeInt(process.env.ND_MEMZOO_ATTENDANCE_TIMEOUT_MS, 8000);
 const ATTENDANCE_CACHE_MS = toSafeInt(process.env.ND_MEMZOO_ATTENDANCE_CACHE_MS, 60000);
+const ATTENDANCE_CF_CLEARANCE = String(process.env.ND_MEMZOO_CF_CLEARANCE || "").trim();
 let attendanceCache = { data: null, fetched_at_ms: 0 };
 
 function buildHealthPayload(area, extra = {}) {
@@ -205,15 +206,32 @@ async function fetchCurrentAttendance(options = {}) {
   const timeout = setTimeout(() => controller.abort(), ATTENDANCE_TIMEOUT_MS);
 
   try {
+    const requestHeaders = {
+      accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+      "accept-encoding": "gzip, deflate, br, zstd",
+      "accept-language": "en-US,en;q=0.9",
+      "cache-control": "no-cache",
+      pragma: "no-cache",
+      priority: "u=0, i",
+      "sec-ch-ua": '"Google Chrome";v="147", "Not.A/Brand";v="8", "Chromium";v="147"',
+      "sec-ch-ua-mobile": "?0",
+      "sec-ch-ua-platform": '"Windows"',
+      "sec-fetch-dest": "document",
+      "sec-fetch-mode": "navigate",
+      "sec-fetch-site": "none",
+      "sec-fetch-user": "?1",
+      "upgrade-insecure-requests": "1",
+      "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
+    };
+
+    if (ATTENDANCE_CF_CLEARANCE) {
+      requestHeaders.cookie = `cf_clearance=${ATTENDANCE_CF_CLEARANCE}`;
+    }
+
     const response = await fetch(ATTENDANCE_SOURCE_URL, {
       method: "GET",
       signal: controller.signal,
-      headers: {
-        accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "user-agent": "memphis-zoo-mcp/current-attendance",
-        "cache-control": "no-cache",
-        pragma: "no-cache",
-      },
+      headers: requestHeaders,
     });
 
     if (!response.ok) throw new Error(`Attendance source returned HTTP ${response.status}`);
@@ -629,8 +647,7 @@ function createMcpServer() {
           content: [
             {
               type: "text",
-              text: `${mode === "created" ? "Created" : "Updated"} "${normalizedPath}" successfully in ${owner}/${repo}.
-Commit: ${writeResponse.data.commit.sha}`,
+              text: `${mode === "created" ? "Created" : "Updated"} "${normalizedPath}" successfully in ${owner}/${repo}.\nCommit: ${writeResponse.data.commit.sha}`,
             },
           ],
         };
@@ -694,8 +711,7 @@ Commit: ${writeResponse.data.commit.sha}`,
           content: [
             {
               type: "text",
-              text: `Updated "${normalizedPath}" successfully in ${owner}/${repo}.
-Commit: ${updateResponse.data.commit.sha}`,
+              text: `Updated "${normalizedPath}" successfully in ${owner}/${repo}.\nCommit: ${updateResponse.data.commit.sha}`,
             },
           ],
         };
