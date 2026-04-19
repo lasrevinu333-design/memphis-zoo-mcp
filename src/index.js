@@ -30,7 +30,8 @@ const SCAN_RPC_ALLOWLIST = new Set([
   "tool_record_scan_event"
 ]);
 
-const APP_VERSION = "mcp-2026.04.18.4";
+const RELEASE_ID = "release-2026.04.19.1";
+const APP_VERSION = RELEASE_ID;
 const SCAN_CONTRACT_VERSION = "scan.v1";
 const DASHBOARD_CONTRACT_VERSION = "dashboard.v1";
 const CANARY_RESTROOM_CODE = "TETM";
@@ -43,6 +44,7 @@ function buildHealthPayload(area, extra = {}) {
     app: "memphis-zoo-mcp",
     area,
     version: APP_VERSION,
+    release_id: RELEASE_ID,
     contracts: {
       scan: SCAN_CONTRACT_VERSION,
       dashboard: DASHBOARD_CONTRACT_VERSION,
@@ -226,6 +228,7 @@ async function runPublicDashboardSummary() {
     meta: {
       app: "memphis-zoo-mcp",
       version: APP_VERSION,
+      release_id: RELEASE_ID,
       contracts: {
         scan: SCAN_CONTRACT_VERSION,
         dashboard: DASHBOARD_CONTRACT_VERSION,
@@ -286,6 +289,31 @@ async function runCanaryChecks() {
     return { restrooms_count: summary.restrooms.length, exhibits_count: summary.exhibits.length, open_tickets_count: summary.open_tickets.length };
   });
 
+  await safeCheck("open_session_consistency", async () => {
+    const rows = await runReadOnlySql(`
+      select count(*)::int as inconsistent_count
+      from public.v_location_dashboard_status
+      where (open_session_status in ('active','pending_submit') and open_session_employee_name is null)
+         or (open_session_status is null and open_session_employee_name is not null)
+    `);
+    const inconsistentCount = Array.isArray(rows) && rows.length ? Number(rows[0].inconsistent_count || 0) : 0;
+    if (inconsistentCount !== 0) throw new Error(`found ${inconsistentCount} inconsistent open session rows`);
+    return { inconsistent_count: inconsistentCount };
+  });
+
+  await safeCheck("ticket_count_consistency", async () => {
+    const rows = await runReadOnlySql(`
+      select
+        (select count(*)::int from public.v_open_maintenance_tickets) as view_count,
+        (select count(*)::int from public.maintenance_tickets where status = 'open') as table_count
+    `);
+    const row = Array.isArray(rows) && rows.length ? rows[0] : {};
+    const viewCount = Number(row.view_count || 0);
+    const tableCount = Number(row.table_count || 0);
+    if (viewCount !== tableCount) throw new Error(`ticket counts differ: view=${viewCount}, table=${tableCount}`);
+    return { view_count: viewCount, table_count: tableCount };
+  });
+
   return {
     ok: failures.length === 0,
     checks,
@@ -301,7 +329,7 @@ function createMcpServer() {
 
   server.tool("github_debug_config", {}, async () => {
     const defaultRepo = process.env.GITHUB_REPO || null;
-    return { content: [{ type: "text", text: JSON.stringify({ owner: process.env.GITHUB_OWNER || null, defaultRepo, allowedRepos: getAllowedGithubRepos(defaultRepo || ""), hasToken: !!process.env.GITHUB_TOKEN, version: APP_VERSION }, null, 2) }] };
+    return { content: [{ type: "text", text: JSON.stringify({ owner: process.env.GITHUB_OWNER || null, defaultRepo, allowedRepos: getAllowedGithubRepos(defaultRepo || ""), hasToken: !!process.env.GITHUB_TOKEN, version: APP_VERSION, release_id: RELEASE_ID }, null, 2) }] };
   });
 
   server.tool("github_list_directory", { repo: z.string().optional(), path: z.string().optional() }, async ({ repo: targetRepo, path }) => {
@@ -406,7 +434,7 @@ app.get("/dashboard-api/canary", async (_req, res) => {
     res.status(result.ok ? 200 : 503).json(buildHealthPayload("dashboard_canary", result));
   } catch (error) {
     console.error("dashboard canary failed:", error);
-    res.status(500).json({ ok: false, area: "dashboard_canary", version: APP_VERSION, error: error.message || "Dashboard canary failed" });
+    res.status(500).json({ ok: false, area: "dashboard_canary", version: APP_VERSION, release_id: RELEASE_ID, error: error.message || "Dashboard canary failed" });
   }
 });
 
@@ -481,7 +509,7 @@ app.post("/scan-api/rpc", async (req, res) => {
     const args = req.body?.args && typeof req.body.args === "object" ? req.body.args : {};
     if (!SCAN_RPC_ALLOWLIST.has(fn)) { res.status(400).json({ ok: false, error: `Function not allowed: ${fn}` }); return; }
     const data = await runRpc(fn, args);
-    res.status(200).json({ ok: true, data, meta: { version: APP_VERSION, contract_version: SCAN_CONTRACT_VERSION } });
+    res.status(200).json({ ok: true, data, meta: { version: APP_VERSION, release_id: RELEASE_ID, contract_version: SCAN_CONTRACT_VERSION } });
   } catch (error) {
     console.error("scan rpc failed:", error);
     res.status(500).json({ ok: false, error: error.message || "Scan RPC failed" });
