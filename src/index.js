@@ -6,6 +6,7 @@ import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { z } from "zod";
 import { Octokit } from "octokit";
 import { createClient } from "@supabase/supabase-js";
+import { createMessagingRouter } from "./messaging-api.js";
 
 const app = express();
 app.use(express.json({ limit: "10mb" }));
@@ -30,10 +31,11 @@ const SCAN_RPC_ALLOWLIST = new Set([
   "tool_record_scan_event"
 ]);
 
-const RELEASE_ID = "release-2026.04.20.1";
+const RELEASE_ID = "release-2026.04.20.2";
 const APP_VERSION = RELEASE_ID;
 const SCAN_CONTRACT_VERSION = "scan.v1";
 const DASHBOARD_CONTRACT_VERSION = "dashboard.v1";
+const MESSAGING_CONTRACT_VERSION = "messaging.v1";
 const CANARY_RESTROOM_CODE = "TETM";
 const CANARY_EXHIBIT_CODE = "TETX";
 const CANARY_DEVICE_ID = "canary-check";
@@ -53,6 +55,7 @@ function buildHealthPayload(area, extra = {}) {
     contracts: {
       scan: SCAN_CONTRACT_VERSION,
       dashboard: DASHBOARD_CONTRACT_VERSION,
+      messaging: MESSAGING_CONTRACT_VERSION,
     },
     ...extra,
   };
@@ -161,6 +164,13 @@ function setPublicDashboardCors(res) {
 }
 
 function setScanApiCors(res) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Vary", "Origin");
+}
+
+function setMessagingApiCors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -455,6 +465,7 @@ async function runPublicDashboardSummary() {
       contracts: {
         scan: SCAN_CONTRACT_VERSION,
         dashboard: DASHBOARD_CONTRACT_VERSION,
+        messaging: MESSAGING_CONTRACT_VERSION,
       },
       generated_at: new Date().toISOString(),
     },
@@ -629,6 +640,7 @@ function createMcpServer() {
 app.use("/admin-api", (req, res, next) => { setAdminApiCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/dashboard-api", (req, res, next) => { setPublicDashboardCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/scan-api", (req, res, next) => { setScanApiCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
+app.use("/messaging-api", (req, res, next) => { setMessagingApiCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); }, createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: MESSAGING_CONTRACT_VERSION }));
 app.get("/version", (_req, res) => { res.status(200).json(buildHealthPayload("version")); });
 app.get("/admin-api/health", requireAdminApiAuth, (_req, res) => { res.status(200).json(buildHealthPayload("admin", { authenticated: true })); });
 app.get("/dashboard-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("dashboard")); });
@@ -719,6 +731,7 @@ app.listen(port, () => {
   console.log("Dashboard canary endpoint: /dashboard-api/canary");
   console.log("Dashboard attendance endpoint: /dashboard-api/current-attendance");
   console.log("Admin attendance update endpoint: /admin-api/attendance-update");
+  console.log("Messaging API endpoint: /messaging-api");
   console.log("MCP endpoint: /mcp");
   console.log("Legacy SSE endpoint: /sse");
   console.log("Legacy messages endpoint: /messages");
