@@ -30,7 +30,7 @@ const SCAN_RPC_ALLOWLIST = new Set([
   "tool_record_scan_event"
 ]);
 
-const RELEASE_ID = "release-2026.04.19.1";
+const RELEASE_ID = "release-2026.04.20.1";
 const APP_VERSION = RELEASE_ID;
 const SCAN_CONTRACT_VERSION = "scan.v1";
 const DASHBOARD_CONTRACT_VERSION = "dashboard.v1";
@@ -114,6 +114,36 @@ function sanitizeReadOnlySql(sql) {
 
 function getAdminApiKey() {
   return String(process.env.ADMIN_API_KEY || "").trim();
+}
+
+function getDashboardClosePin() {
+  return String(process.env.DASHBOARD_CLOSE_PIN || "").trim();
+}
+
+function normalizeDashboardCloser(value) {
+  const normalized = String(value || "").trim();
+  return normalized || "Dashboard PIN";
+}
+
+function requireDashboardClosePin(req, res, next) {
+  const configuredPin = getDashboardClosePin();
+  if (!configuredPin) {
+    res.status(503).json({ ok: false, error: "DASHBOARD_CLOSE_PIN is not configured on the server." });
+    return;
+  }
+
+  const providedPin = String(req.body?.pin || "").trim();
+  if (!/^\d{4}$/.test(providedPin)) {
+    res.status(400).json({ ok: false, error: "A valid 4-digit PIN is required." });
+    return;
+  }
+
+  if (providedPin !== configuredPin) {
+    res.status(401).json({ ok: false, error: "Invalid dashboard PIN." });
+    return;
+  }
+
+  next();
 }
 
 function setAdminApiCors(res) {
@@ -645,8 +675,17 @@ app.get("/dashboard-api/summary", async (_req, res) => {
   try { const data = await runPublicDashboardSummary(); res.status(200).json({ ok: true, data }); }
   catch (error) { console.error("dashboard summary failed:", error); res.status(500).json({ ok: false, error: error.message || "Dashboard summary failed" }); }
 });
-app.post("/dashboard-api/close-ticket", async (req, res) => {
-  try { const ticketId = String(req.body?.ticket_id || "").trim(); if (!ticketId) { res.status(400).json({ ok: false, error: "ticket_id is required." }); return; } await runWriteSql("dashboard_close_ticket", `select public.close_maintenance_ticket(${sqlLiteral(ticketId)}::uuid, 'Dashboard', null);`); res.status(200).json({ ok: true, ticket_id: ticketId, status: "closed" }); }
+app.post("/dashboard-api/close-ticket", requireDashboardClosePin, async (req, res) => {
+  try {
+    const ticketId = String(req.body?.ticket_id || "").trim();
+    const closedBy = normalizeDashboardCloser(req.body?.closed_by);
+    if (!ticketId) {
+      res.status(400).json({ ok: false, error: "ticket_id is required." });
+      return;
+    }
+    await runWriteSql("dashboard_close_ticket", `select public.close_maintenance_ticket(${sqlLiteral(ticketId)}::uuid, ${sqlLiteral(closedBy)}, null);`);
+    res.status(200).json({ ok: true, ticket_id: ticketId, status: "closed" });
+  }
   catch (error) { console.error("dashboard close ticket failed:", error); res.status(500).json({ ok: false, error: error.message || "Dashboard close ticket failed" }); }
 });
 app.get("/scan-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("scan", { available_functions: Array.from(SCAN_RPC_ALLOWLIST) })); });
