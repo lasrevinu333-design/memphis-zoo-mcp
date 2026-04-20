@@ -90,6 +90,34 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   });
 
+  router.post("/memphis/message", async (req, res) => {
+    try {
+      const userId = String(req.body?.user_id || "").trim();
+      const body = String(req.body?.body || "").trim();
+      const thread = await runRpc("msg_get_or_create_memphis_thread", { p_user_id: userId });
+      const userMessage = await runRpc("msg_send_message", {
+        p_thread_id: thread.id,
+        p_sender_user_id: userId,
+        p_body: body,
+        p_message_type: "text",
+        p_metadata_json: { channel: "memphis" }
+      });
+      const memphisRows = await runReadOnlySql("select public.msg_get_memphis_user_id() as memphis_user_id");
+      const memphisUserId = Array.isArray(memphisRows) && memphisRows.length ? memphisRows[0].memphis_user_id : null;
+      if (!memphisUserId) throw new Error("Memphis bot identity not found.");
+      const botMessage = await runRpc("msg_send_message", {
+        p_thread_id: thread.id,
+        p_sender_user_id: memphisUserId,
+        p_body: "Memphis is online. AI-linked operational answers are coming soon.",
+        p_message_type: "bot_response",
+        p_metadata_json: { channel: "memphis", placeholder: true }
+      });
+      res.status(200).json({ ok: true, data: { thread, user_message: userMessage, bot_message: botMessage }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+    } catch (error) {
+      fail(res, error, "Send Memphis message failed");
+    }
+  });
+
   router.post("/broadcast", async (req, res) => {
     try {
       const senderUserId = String(req.body?.sender_user_id || "").trim();
