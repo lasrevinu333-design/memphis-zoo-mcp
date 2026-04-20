@@ -401,7 +401,7 @@ async function runPublicDashboardSummary() {
              latest_completed_at_display, services_performed, open_ticket_count, status_code, status_color, duration_display,
              open_session_status, open_session_employee_name
       from public.v_location_dashboard_status
-      order by case status_color when 'red' then 1 when 'yellow' then 2 when 'blue' then 3 when 'black' then 4 when 'green' then 5 else 9 end,
+      order by case status_color when 'red' then 1 when 'yellow' then 2 when 'blue' then 3 when 'green' then 4 when 'black' then 5 else 9 end,
                open_ticket_count desc, location_name
     `),
     runReadOnlySql(`
