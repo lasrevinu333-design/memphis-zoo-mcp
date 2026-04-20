@@ -1,6 +1,7 @@
 {
   "name": "memphis-zoo-mcp",
   "version": "1.0.0",
+  "description": "Memphis Zoo MCP backend. Package version is semantic; runtime deploy identity is defined by RELEASE_ID in src/index.js.",
   "type": "module",
   "main": "src/index.js",
   "scripts": {
