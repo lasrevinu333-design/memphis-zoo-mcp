@@ -11,6 +11,18 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     res.status(200).json(buildHealthPayload("messaging", { contract_version: contractVersion }));
   });
 
+  router.get("/me/by-device", async (req, res) => {
+    try {
+      const deviceId = String(req.query.device_id || "").trim();
+      if (!deviceId) throw new Error("device_id is required.");
+      const rows = await runReadOnlySql(`select * from public.msg_get_user_by_device(${`'${deviceId.replace(/'/g, "''")}'`})`);
+      const data = Array.isArray(rows) && rows.length ? rows[0] : null;
+      res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+    } catch (error) {
+      fail(res, error, "Device identity lookup failed");
+    }
+  });
+
   router.get("/users", async (req, res) => {
     try {
       const userId = String(req.query.user_id || "").trim() || null;
