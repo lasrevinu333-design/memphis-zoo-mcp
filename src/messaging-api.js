@@ -81,6 +81,17 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   });
 
+  router.post("/message/:messageId/delete", async (req, res) => {
+    try {
+      const messageId = String(req.params.messageId || "").trim();
+      const requestUserId = String(req.body?.request_user_id || "").trim();
+      const data = await runRpc("msg_delete_message", { p_message_id: messageId, p_request_user_id: requestUserId });
+      res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+    } catch (error) {
+      fail(res, error, "Delete message failed");
+    }
+  });
+
   router.post("/thread/:threadId/read", async (req, res) => {
     try {
       const threadId = String(req.params.threadId || "").trim();
