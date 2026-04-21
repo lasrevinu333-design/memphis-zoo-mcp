@@ -67,6 +67,24 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   });
 
+  router.post("/thread/group", async (req, res) => {
+    try {
+      const createdByUserId = String(req.body?.created_by_user_id || "").trim();
+      const title = req.body?.title == null ? null : String(req.body.title);
+      const memberUserIds = Array.isArray(req.body?.member_user_ids)
+        ? req.body.member_user_ids.map((x) => String(x || "").trim()).filter(Boolean)
+        : [];
+      const data = await runRpc("msg_create_group_thread", {
+        p_created_by_user_id: createdByUserId,
+        p_title: title,
+        p_member_user_ids: memberUserIds
+      });
+      res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+    } catch (error) {
+      fail(res, error, "Create group thread failed");
+    }
+  });
+
   router.post("/thread/:threadId/message", async (req, res) => {
     try {
       const threadId = String(req.params.threadId || "").trim();
