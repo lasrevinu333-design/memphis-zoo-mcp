@@ -7,6 +7,10 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     res.status(400).json({ ok: false, error: error?.message || fallback });
   }
 
+  function esc(value) {
+    return String(value || "").replace(/'/g, "''");
+  }
+
   router.get("/health", (_req, res) => {
     res.status(200).json(buildHealthPayload("messaging", { contract_version: contractVersion }));
   });
@@ -15,7 +19,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     try {
       const deviceId = String(req.query.device_id || "").trim();
       if (!deviceId) throw new Error("device_id is required.");
-      const rows = await runReadOnlySql(`select * from public.msg_get_user_by_device(${`'${deviceId.replace(/'/g, "''")}'`})`);
+      const rows = await runReadOnlySql(`select * from public.msg_get_user_by_device('${esc(deviceId)}')`);
       const data = Array.isArray(rows) && rows.length ? rows[0] : null;
       res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
@@ -26,7 +30,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
   router.get("/users", async (req, res) => {
     try {
       const userId = String(req.query.user_id || "").trim() || null;
-      const rows = await runReadOnlySql(`select * from public.msg_list_users(${userId ? `'${userId}'::uuid` : "null::uuid"})`);
+      const rows = await runReadOnlySql(`select * from public.msg_list_users(${userId ? `'${esc(userId)}'::uuid` : "null::uuid"})`);
       res.status(200).json({ ok: true, data: rows || [], meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Messaging users failed");
@@ -36,7 +40,11 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
   router.get("/threads", async (req, res) => {
     try {
       const userId = String(req.query.user_id || "").trim();
-      const rows = await runReadOnlySql(`select * from public.msg_list_threads('${userId}'::uuid)`);
+      const deviceId = String(req.query.device_id || "").trim();
+      const sql = deviceId
+        ? `select * from public.msg_list_threads_for_device('${esc(userId)}'::uuid, '${esc(deviceId)}')`
+        : `select * from public.msg_list_threads('${esc(userId)}'::uuid)`;
+      const rows = await runReadOnlySql(sql);
       res.status(200).json({ ok: true, data: rows || [], meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Messaging threads failed");
@@ -48,8 +56,8 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const threadId = String(req.params.threadId || "").trim();
       const userId = String(req.query.user_id || "").trim();
       const limit = Number.parseInt(String(req.query.limit || 50), 10) || 50;
-      const before = req.query.before ? `'${String(req.query.before).trim()}'::timestamptz` : "null::timestamptz";
-      const rows = await runReadOnlySql(`select * from public.msg_list_thread_messages('${threadId}'::uuid, '${userId}'::uuid, ${Math.min(Math.max(limit, 1), 200)}, ${before})`);
+      const before = req.query.before ? `'${esc(String(req.query.before).trim())}'::timestamptz` : "null::timestamptz";
+      const rows = await runReadOnlySql(`select * from public.msg_list_thread_messages('${esc(threadId)}'::uuid, '${esc(userId)}'::uuid, ${Math.min(Math.max(limit, 1), 200)}, ${before})`);
       res.status(200).json({ ok: true, data: rows || [], meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Thread messages failed");
@@ -60,7 +68,11 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     try {
       const createdByUserId = String(req.body?.created_by_user_id || "").trim();
       const otherUserId = String(req.body?.other_user_id || "").trim();
+      const deviceId = String(req.body?.device_id || "").trim();
       const data = await runRpc("msg_get_or_create_direct_thread", { p_user_a: createdByUserId, p_user_b: otherUserId });
+      if (deviceId && data?.id) {
+        await runRpc("msg_unhide_thread_for_device", { p_thread_id: data.id, p_device_identifier: deviceId });
+      }
       res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Create direct thread failed");
@@ -71,6 +83,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     try {
       const createdByUserId = String(req.body?.created_by_user_id || "").trim();
       const title = req.body?.title == null ? null : String(req.body.title);
+      const deviceId = String(req.body?.device_id || "").trim();
       const memberUserIds = Array.isArray(req.body?.member_user_ids)
         ? req.body.member_user_ids.map((x) => String(x || "").trim()).filter(Boolean)
         : [];
@@ -79,6 +92,9 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         p_title: title,
         p_member_user_ids: memberUserIds
       });
+      if (deviceId && data?.id) {
+        await runRpc("msg_unhide_thread_for_device", { p_thread_id: data.id, p_device_identifier: deviceId });
+      }
       res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Create group thread failed");
@@ -99,14 +115,14 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   });
 
-  router.post("/message/:messageId/delete", async (req, res) => {
+  router.post("/thread/:threadId/delete", async (req, res) => {
     try {
-      const messageId = String(req.params.messageId || "").trim();
-      const requestUserId = String(req.body?.request_user_id || "").trim();
-      const data = await runRpc("msg_delete_message", { p_message_id: messageId, p_request_user_id: requestUserId });
+      const threadId = String(req.params.threadId || "").trim();
+      const deviceId = String(req.body?.device_id || "").trim();
+      const data = await runRpc("msg_hide_thread_for_device", { p_thread_id: threadId, p_device_identifier: deviceId });
       res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
-      fail(res, error, "Delete message failed");
+      fail(res, error, "Delete thread failed");
     }
   });
 
@@ -124,7 +140,11 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
   router.post("/memphis/thread", async (req, res) => {
     try {
       const userId = String(req.body?.user_id || "").trim();
+      const deviceId = String(req.body?.device_id || "").trim();
       const data = await runRpc("msg_get_or_create_memphis_thread", { p_user_id: userId });
+      if (deviceId && data?.id) {
+        await runRpc("msg_unhide_thread_for_device", { p_thread_id: data.id, p_device_identifier: deviceId });
+      }
       res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Get Memphis thread failed");
@@ -134,8 +154,12 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
   router.post("/memphis/message", async (req, res) => {
     try {
       const userId = String(req.body?.user_id || "").trim();
+      const deviceId = String(req.body?.device_id || "").trim();
       const body = String(req.body?.body || "").trim();
       const thread = await runRpc("msg_get_or_create_memphis_thread", { p_user_id: userId });
+      if (deviceId && thread?.id) {
+        await runRpc("msg_unhide_thread_for_device", { p_thread_id: thread.id, p_device_identifier: deviceId });
+      }
       const userMessage = await runRpc("msg_send_message", {
         p_thread_id: thread.id,
         p_sender_user_id: userId,
