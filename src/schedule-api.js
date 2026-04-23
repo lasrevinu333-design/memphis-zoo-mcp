@@ -47,6 +47,15 @@ export function createScheduleRouter({
     return `array[${cleaned.map((id) => `'${esc(id)}'::uuid`).join(",")}]::uuid[]`;
   }
 
+  function toNullableRating(value) {
+    if (value == null || value === "") return null;
+    const parsed = Number.parseInt(String(value), 10);
+    if (!Number.isFinite(parsed) || parsed < 1 || parsed > 5) {
+      throw new Error("Ratings must be integers from 1 to 5, or blank.");
+    }
+    return parsed;
+  }
+
   async function getServiceDate() {
     const rows = await runReadOnlySql("select public.sch_service_date(now()) as service_date");
     return Array.isArray(rows) && rows.length ? rows[0].service_date : null;
@@ -147,6 +156,34 @@ export function createScheduleRouter({
       res.status(200).json({ ok: true, data: rows || [], meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Location groups failed");
+    }
+  });
+
+  router.get("/locations/workload-settings", async (_req, res) => {
+    try {
+      const rows = await runReadOnlySql(`select * from public.sch_list_location_workload_settings()`);
+      res.status(200).json({ ok: true, data: rows || [], meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+    } catch (error) {
+      fail(res, error, "Location workload settings failed");
+    }
+  });
+
+  router.post("/locations/:locationId/workload-settings", requireAdminApiAuth, async (req, res) => {
+    try {
+      const locationId = String(req.params.locationId || "").trim();
+      if (!locationId) throw new Error("locationId is required.");
+      const difficultyRating = toNullableRating(req.body?.difficulty_rating);
+      const priorityRating = toNullableRating(req.body?.priority_rating);
+      const workloadNotes = req.body?.workload_notes == null ? null : String(req.body.workload_notes);
+      const data = await runRpc("sch_set_location_workload_settings", {
+        p_location_id: locationId,
+        p_difficulty_rating: difficultyRating,
+        p_priority_rating: priorityRating,
+        p_workload_notes: workloadNotes,
+      });
+      res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+    } catch (error) {
+      fail(res, error, "Update location workload settings failed");
     }
   });
 
