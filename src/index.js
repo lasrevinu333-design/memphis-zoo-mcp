@@ -8,6 +8,7 @@ import { Octokit } from "octokit";
 import { createClient } from "@supabase/supabase-js";
 import { createMessagingRouter } from "./messaging-api.js";
 import { createScheduleRouter } from "./schedule-api.js";
+import { createEventsAdminRouter, createEventsPublicRouter, createEventMaintenanceController, EVENTS_CONTRACT_VERSION } from "./events-api.js";
 
 const app = express();
 app.use(express.json({ limit: "10mb" }));
@@ -59,6 +60,7 @@ function buildHealthPayload(area, extra = {}) {
       dashboard: DASHBOARD_CONTRACT_VERSION,
       messaging: MESSAGING_CONTRACT_VERSION,
       schedule: SCHEDULE_CONTRACT_VERSION,
+      events: EVENTS_CONTRACT_VERSION,
     },
     ...extra,
   };
@@ -130,6 +132,10 @@ function getSchedulePin() {
   return "1129";
 }
 
+function getEventsInputPin() {
+  return String(process.env.EVENTS_INPUT_PIN || "1129").trim();
+}
+
 function normalizeDashboardCloser(value) {
   const normalized = String(value || "").trim();
   return normalized || "Dashboard PIN";
@@ -170,10 +176,28 @@ function requireSchedulePin(req, res, next) {
   next();
 }
 
+function requireEventsInputPin(req, res, next) {
+  const configuredPin = getEventsInputPin();
+  if (!/^\d{4}$/.test(configuredPin)) {
+    res.status(503).json({ ok: false, error: "EVENTS_INPUT_PIN is not configured as a valid 4-digit PIN on the server." });
+    return;
+  }
+  const providedPin = String(req.header("x-events-pin") || req.body?.pin || "").trim();
+  if (!/^\d{4}$/.test(providedPin)) {
+    res.status(400).json({ ok: false, error: "A valid 4-digit events PIN is required." });
+    return;
+  }
+  if (providedPin !== configuredPin) {
+    res.status(401).json({ ok: false, error: "Invalid events PIN." });
+    return;
+  }
+  next();
+}
+
 function setAdminApiCors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Admin-Key");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Admin-Key, X-Events-Pin");
   res.setHeader("Vary", "Origin");
 }
 
@@ -201,7 +225,7 @@ function setMessagingApiCors(res) {
 function setScheduleApiCors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Schedule-Pin");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Schedule-Pin, X-Events-Pin");
   res.setHeader("Vary", "Origin");
 }
 
@@ -443,6 +467,8 @@ async function runWriteSql(namePrefix, sql) {
   return data;
 }
 
+const eventMaintenanceController = createEventMaintenanceController({ runReadOnlySql, runWriteSql, runRpc });
+
 async function runAdminBundleViaSqlRead(limits = {}) {
   const pLocationLimit = toSafeInt(limits.p_location_limit, 60);
   const pActivityLimit = toSafeInt(limits.p_activity_limit, 20);
@@ -495,6 +521,7 @@ async function runPublicDashboardSummary() {
         dashboard: DASHBOARD_CONTRACT_VERSION,
         messaging: MESSAGING_CONTRACT_VERSION,
         schedule: SCHEDULE_CONTRACT_VERSION,
+      events: EVENTS_CONTRACT_VERSION,
       },
       generated_at: new Date().toISOString(),
     },
@@ -669,9 +696,11 @@ function createMcpServer() {
 app.use("/admin-api", (req, res, next) => { setAdminApiCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/dashboard-api", (req, res, next) => { setPublicDashboardCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/scan-api", (req, res, next) => { setScanApiCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
-app.use("/messaging-api", (req, res, next) => { setMessagingApiCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); }, createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: MESSAGING_CONTRACT_VERSION }));
-app.use("/schedule-api", (req, res, next) => { setScheduleApiCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); }, createScheduleRouter({ runReadOnlySql, runRpc, buildHealthPayload, requireAdminApiAuth: requireSchedulePin, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: SCHEDULE_CONTRACT_VERSION }));
-app.get("/version", (_req, res) => { res.status(200).json(buildHealthPayload("version")); });
+app.use("/messaging-api", (req, res, next) => { setMessagingApiCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } eventMaintenanceController.kick("messaging_api_request"); next(); }, createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: MESSAGING_CONTRACT_VERSION }));
+app.use("/schedule-api", (req, res, next) => { setScheduleApiCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } eventMaintenanceController.kick("schedule_api_request"); next(); }, createScheduleRouter({ runReadOnlySql, runRpc, buildHealthPayload, requireAdminApiAuth: requireSchedulePin, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: SCHEDULE_CONTRACT_VERSION }));
+app.use("/dashboard-api/events", createEventsPublicRouter({ runReadOnlySql, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController }));
+app.use("/admin-api/events", requireEventsInputPin, createEventsAdminRouter({ runReadOnlySql, runWriteSql, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController }));
+app.get("/version", (_req, res) => { eventMaintenanceController.kick("version_ping"); res.status(200).json(buildHealthPayload("version")); });
 app.get("/admin-api/health", requireAdminApiAuth, (_req, res) => { res.status(200).json(buildHealthPayload("admin", { authenticated: true })); });
 app.get("/dashboard-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("dashboard")); });
 app.get("/schedule-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("schedule", { contract_version: SCHEDULE_CONTRACT_VERSION })); });
@@ -733,7 +762,7 @@ app.post("/dashboard-api/close-ticket", requireDashboardClosePin, async (req, re
 });
 app.get("/scan-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("scan", { available_functions: Array.from(SCAN_RPC_ALLOWLIST) })); });
 app.post("/scan-api/rpc", async (req, res) => {
-  try { const fn = String(req.body?.fn || "").trim(); const args = req.body?.args && typeof req.body.args === "object" ? req.body.args : {}; if (!SCAN_RPC_ALLOWLIST.has(fn)) { res.status(400).json({ ok: false, error: `Function not allowed: ${fn}` }); return; } const data = await runRpc(fn, args); res.status(200).json({ ok: true, data, meta: { version: APP_VERSION, release_id: RELEASE_ID, contract_version: SCAN_CONTRACT_VERSION } }); }
+  try { eventMaintenanceController.kick("scan_api_rpc"); const fn = String(req.body?.fn || "").trim(); const args = req.body?.args && typeof req.body.args === "object" ? req.body.args : {}; if (!SCAN_RPC_ALLOWLIST.has(fn)) { res.status(400).json({ ok: false, error: `Function not allowed: ${fn}` }); return; } const data = await runRpc(fn, args); res.status(200).json({ ok: true, data, meta: { version: APP_VERSION, release_id: RELEASE_ID, contract_version: SCAN_CONTRACT_VERSION } }); }
   catch (error) { console.error("scan rpc failed:", error); res.status(500).json({ ok: false, error: error.message || "Scan RPC failed" }); }
 });
 app.get("/", (_req, res) => { res.status(200).send("Memphis Zoo MCP server is running."); });
@@ -763,6 +792,8 @@ app.listen(port, () => {
   console.log("Dashboard attendance endpoint: /dashboard-api/current-attendance");
   console.log("Admin attendance update endpoint: /admin-api/attendance-update");
   console.log("Messaging API endpoint: /messaging-api");
+  console.log("Dashboard events endpoint: /dashboard-api/events");
+  console.log("Admin events endpoint: /admin-api/events");
   console.log("Schedule API endpoint: /schedule-api");
   console.log("MCP endpoint: /mcp");
   console.log("Legacy SSE endpoint: /sse");
