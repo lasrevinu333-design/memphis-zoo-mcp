@@ -27,6 +27,14 @@ export function createScheduleRouter({
     return raw;
   }
 
+  function requireTime(value) {
+    const raw = String(value || "").trim();
+    if (!/^\d{2}:\d{2}(:\d{2})?$/.test(raw)) {
+      throw new Error("closing_time must be HH:MM or HH:MM:SS.");
+    }
+    return raw;
+  }
+
   function optionalTimestampLiteral(value) {
     const raw = String(value || "").trim();
     if (!raw) return "now()";
@@ -50,8 +58,8 @@ export function createScheduleRouter({
   function toNullableRating(value) {
     if (value == null || value === "") return null;
     const parsed = Number.parseInt(String(value), 10);
-    if (!Number.isFinite(parsed) || parsed < 1 || parsed > 5) {
-      throw new Error("Ratings must be integers from 1 to 5, or blank.");
+    if (!Number.isFinite(parsed) || parsed < 1 || parsed > 10) {
+      throw new Error("Ratings must be integers from 1 to 10, or blank.");
     }
     return parsed;
   }
@@ -123,6 +131,37 @@ export function createScheduleRouter({
       });
     } catch (error) {
       fail(res, error, "Schedule day failed");
+    }
+  });
+
+  router.get("/settings/close-time", async (req, res) => {
+    try {
+      const serviceDate = requireDate(req.query.service_date || req.query.date || (await getServiceDate()));
+      const rows = await runReadOnlySql(`select public.sch_get_schedule_close_time('${esc(serviceDate)}'::date) as closing_time`);
+      const closingTime = Array.isArray(rows) && rows.length ? rows[0].closing_time : null;
+      res.status(200).json({
+        ok: true,
+        data: { service_date: serviceDate, closing_time: closingTime },
+        meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion },
+      });
+    } catch (error) {
+      fail(res, error, "Close time lookup failed");
+    }
+  });
+
+  router.post("/settings/close-time", requireAdminApiAuth, async (req, res) => {
+    try {
+      const serviceDate = requireDate(req.body?.service_date || req.body?.date || (await getServiceDate()));
+      const closingTime = requireTime(req.body?.closing_time);
+      const notes = req.body?.notes == null ? null : String(req.body.notes);
+      const data = await runRpc("sch_set_schedule_close_time", {
+        p_service_date: serviceDate,
+        p_closing_time: closingTime,
+        p_notes: notes,
+      });
+      res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+    } catch (error) {
+      fail(res, error, "Close time update failed");
     }
   });
 
