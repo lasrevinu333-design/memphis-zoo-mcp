@@ -126,6 +126,10 @@ function getDashboardClosePin() {
   return String(process.env.DASHBOARD_CLOSE_PIN || "").trim();
 }
 
+function getSchedulePin() {
+  return "1129";
+}
+
 function normalizeDashboardCloser(value) {
   const normalized = String(value || "").trim();
   return normalized || "Dashboard PIN";
@@ -149,6 +153,20 @@ function requireDashboardClosePin(req, res, next) {
     return;
   }
 
+  next();
+}
+
+function requireSchedulePin(req, res, next) {
+  const configuredPin = getSchedulePin();
+  const providedPin = String(req.header("x-schedule-pin") || req.body?.pin || "").trim();
+  if (!/^\d{4}$/.test(providedPin)) {
+    res.status(400).json({ ok: false, error: "A valid 4-digit scheduler PIN is required." });
+    return;
+  }
+  if (providedPin !== configuredPin) {
+    res.status(401).json({ ok: false, error: "Invalid scheduler PIN." });
+    return;
+  }
   next();
 }
 
@@ -183,7 +201,7 @@ function setMessagingApiCors(res) {
 function setScheduleApiCors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Admin-Key");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Schedule-Pin");
   res.setHeader("Vary", "Origin");
 }
 
@@ -652,7 +670,7 @@ app.use("/admin-api", (req, res, next) => { setAdminApiCors(res); if (req.method
 app.use("/dashboard-api", (req, res, next) => { setPublicDashboardCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/scan-api", (req, res, next) => { setScanApiCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/messaging-api", (req, res, next) => { setMessagingApiCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); }, createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: MESSAGING_CONTRACT_VERSION }));
-app.use("/schedule-api", (req, res, next) => { setScheduleApiCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); }, createScheduleRouter({ runReadOnlySql, runRpc, buildHealthPayload, requireAdminApiAuth, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: SCHEDULE_CONTRACT_VERSION }));
+app.use("/schedule-api", (req, res, next) => { setScheduleApiCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); }, createScheduleRouter({ runReadOnlySql, runRpc, buildHealthPayload, requireAdminApiAuth: requireSchedulePin, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: SCHEDULE_CONTRACT_VERSION }));
 app.get("/version", (_req, res) => { res.status(200).json(buildHealthPayload("version")); });
 app.get("/admin-api/health", requireAdminApiAuth, (_req, res) => { res.status(200).json(buildHealthPayload("admin", { authenticated: true })); });
 app.get("/dashboard-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("dashboard")); });
@@ -733,7 +751,7 @@ app.get("/sse", async (_req, res) => {
 });
 app.post("/messages", async (req, res) => {
   try { if (!sseTransport) { res.status(400).send("No active SSE transport"); return; } await sseTransport.handlePostMessage(req, res, req.body); }
-  catch (error) { console.error("SSE post message failed:", error); if (!res.headersSent) res.status(500).send("SSE post message failed"); }
+  catch (error) { console.error("SSE post message failed:", error); if (!res.headersSent) res.status(500).send("SSE post message failed" ); }
 });
 const port = Number(process.env.PORT || 3000);
 app.listen(port, () => {
