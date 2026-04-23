@@ -120,10 +120,10 @@ export function createScheduleRouter({
   router.get("/employees", async (_req, res) => {
     try {
       const rows = await runReadOnlySql(`
-        select id as employee_id, employee_code, display_name, role, active, color_hex, sort_order
+        select id as employee_id, employee_code, display_name, role, active
         from public.employees
         where active = true
-        order by sort_order nulls last, display_name
+        order by display_name
       `);
       res.status(200).json({ ok: true, data: rows || [], meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
@@ -134,15 +134,15 @@ export function createScheduleRouter({
   router.get("/location-groups", async (_req, res) => {
     try {
       const rows = await runReadOnlySql(`
-        select lg.id as location_group_id, lg.group_code, lg.group_name, lg.priority_level, lg.sort_order,
+        select lg.id as location_group_id, lg.group_code, lg.group_name,
                coalesce(array_agg(l.location_name order by l.sort_order nulls last, l.location_name)
                  filter (where l.id is not null), array[]::text[]) as included_locations
         from public.location_groups lg
         left join public.location_group_memberships m on m.location_group_id = lg.id and m.active = true
         left join public.locations l on l.id = m.location_id and l.active = true
         where lg.active = true
-        group by lg.id, lg.group_code, lg.group_name, lg.priority_level, lg.sort_order
-        order by lg.sort_order nulls last, lg.group_name
+        group by lg.id, lg.group_code, lg.group_name
+        order by lg.group_name
       `);
       res.status(200).json({ ok: true, data: rows || [], meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
