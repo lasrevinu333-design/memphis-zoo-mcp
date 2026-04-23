@@ -10,6 +10,7 @@ export function createScheduleRouter({
   contractVersion,
 }) {
   const router = express.Router();
+  const requireSchedulePin = requireAdminApiAuth;
 
   function fail(res, error, fallback = "Schedule request failed", status = 400) {
     res.status(status).json({ ok: false, error: error?.message || fallback });
@@ -149,7 +150,7 @@ export function createScheduleRouter({
     }
   });
 
-  router.post("/settings/close-time", requireAdminApiAuth, async (req, res) => {
+  router.post("/settings/close-time", requireSchedulePin, async (req, res) => {
     try {
       const serviceDate = requireDate(req.body?.service_date || req.body?.date || (await getServiceDate()));
       const closingTime = requireTime(req.body?.closing_time);
@@ -207,7 +208,7 @@ export function createScheduleRouter({
     }
   });
 
-  router.post("/locations/:locationId/workload-settings", requireAdminApiAuth, async (req, res) => {
+  router.post("/locations/:locationId/workload-settings", requireSchedulePin, async (req, res) => {
     try {
       const locationId = String(req.params.locationId || "").trim();
       if (!locationId) throw new Error("locationId is required.");
@@ -239,7 +240,7 @@ export function createScheduleRouter({
     }
   });
 
-  router.post("/generate-daily", requireAdminApiAuth, async (req, res) => {
+  router.post("/generate-daily", requireSchedulePin, async (req, res) => {
     try {
       const serviceDate = requireDate(req.body?.service_date || req.body?.date || (await getServiceDate()));
       const force = req.body?.force !== false;
@@ -250,7 +251,7 @@ export function createScheduleRouter({
     }
   });
 
-  router.post("/absence-preview", requireAdminApiAuth, async (req, res) => {
+  router.post("/absence-preview", requireSchedulePin, async (req, res) => {
     try {
       const serviceDate = requireDate(req.body?.service_date || req.body?.date || (await getServiceDate()));
       const absentIdsSql = uuidArrayLiteral(req.body?.absent_employee_ids || []);
@@ -262,7 +263,7 @@ export function createScheduleRouter({
     }
   });
 
-  router.post("/absence-publish", requireAdminApiAuth, async (_req, res) => {
+  router.post("/absence-publish", requireSchedulePin, async (_req, res) => {
     res.status(501).json({
       ok: false,
       error: "Absence publish is intentionally not enabled in framework mode yet. Use preview-first workflow.",
