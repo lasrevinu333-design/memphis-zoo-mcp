@@ -108,15 +108,25 @@ function isGreetingOnly(text = "") {
 
 function isConversationalOpener(text = "") {
   const lower = normalizeLoose(text);
-  return /(what up|whats up|what s up|how are you|you getting things figured out|getting things figured out|doing better|you good|hows it going|how s it going)/.test(lower);
+  return /(what up|whats up|what s up|how are you|you getting things figured out|getting things figured out|doing better|you good|hows it going|how s it going|you alive|are you alive|are you connected|connected and alive|hello there|dude what it do)/.test(lower);
 }
 
 function openerReply(text = "") {
   const lower = normalizeLoose(text);
+  if (/connected/.test(lower)) return "Yeah. I am up and talking. What do you need?";
+  if (/alive/.test(lower)) return "Still kicking. What are we checking?";
   if (/figured out|doing better|better/.test(lower)) return "Yeah, better than before. Still ugly in a few corners, but a lot less confused. What do you need?";
   if (/how are you|you good|hows it going|how s it going/.test(lower)) return "Doing alright. Slightly less feral than yesterday. What are you trying to pin down?";
-  if (/what up|whats up|what s up/.test(lower)) return "Not much. Just chewing through schedule logic and trying not to embarrass myself. What do you need?";
+  if (/what up|whats up|what s up|dude what it do/.test(lower)) return "Not much. Just chewing through schedule logic and trying not to embarrass myself. What do you need?";
   return "Hey. What are we trying to solve?";
+}
+
+function genericConversationalFallback(text = "") {
+  const lower = normalizeLoose(text);
+  if (/alive|connected/.test(lower)) return "Yeah. I am here and connected enough to answer real system questions. Give me one.";
+  if (/sparrow/.test(lower)) return "That depends. African or European?";
+  if (/hello|hey|hi/.test(lower)) return "Hey. What do you need?";
+  return "I am here. Ask me something specific or just talk to me like a person.";
 }
 
 function inferIntent(text = "") {
@@ -599,37 +609,34 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     if (name === "get_employee_profile") {
       const employeeName = String(args.employee_name || "").trim();
       const rows = await runReadOnlySql(`
-        with employee_match as (
-          select id, display_name, employee_code, role, active
-          from public.employees
-          where display_name ilike ${sqlLikeLiteral(employeeName)}
-          order by length(display_name), display_name
-          limit 1
-        ), primary_groups as (
-          select array_agg(lg.group_name order by lg.group_name) as names
-          from public.employee_primary_group_assignments epga
-          join employee_match em on em.id = epga.employee_id
-          join public.location_groups lg on lg.id = epga.location_group_id
-          where epga.active = true
-        ), secondary_groups as (
-          select array_agg(lg.group_name order by lg.group_name) as names
-          from public.employee_location_group_assignments elga
-          join employee_match em on em.id = elga.employee_id
-          join public.location_groups lg on lg.id = elga.location_group_id
-          where elga.active = true
-        ), device_assignment as (
-          select d.device_name
-          from public.devices d
-          join employee_match em on em.id = d.assigned_employee_id
-          where d.active = true
-          order by d.device_name
-          limit 1
-        )
-        select em.display_name, em.employee_code, em.role, em.active,
-               coalesce((select names from primary_groups), array[]::text[]) as primary_groups,
-               coalesce((select names from secondary_groups), array[]::text[]) as secondary_groups,
-               (select device_name from device_assignment) as device_name
-        from employee_match em
+        select
+          em.display_name,
+          em.employee_code,
+          em.role,
+          em.active,
+          coalesce((
+            select array_agg(lg.group_name order by lg.group_name)
+            from public.employee_primary_group_assignments epga
+            join public.location_groups lg on lg.id = epga.location_group_id
+            where epga.active = true and epga.employee_id = em.id
+          ), array[]::text[]) as primary_groups,
+          coalesce((
+            select array_agg(lg.group_name order by lg.group_name)
+            from public.employee_location_group_assignments elga
+            join public.location_groups lg on lg.id = elga.location_group_id
+            where elga.active = true and elga.employee_id = em.id
+          ), array[]::text[]) as secondary_groups,
+          (
+            select d.device_name
+            from public.devices d
+            where d.active = true and d.assigned_employee_id = em.id
+            order by d.device_name
+            limit 1
+          ) as device_name
+        from public.employees em
+        where em.display_name ilike ${sqlLikeLiteral(employeeName)}
+        order by length(em.display_name), em.display_name
+        limit 1
       `);
       return Array.isArray(rows) && rows.length ? rows[0] : null;
     }
@@ -637,7 +644,19 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     if (name === "get_location_details") {
       const location = String(args.location || "").trim();
       const locationRows = await runReadOnlySql(`
-        with location_match as (
+        select
+          lm.id,
+          lm.location_code,
+          lm.location_name,
+          lm.location_type,
+          lm.form_type,
+          lm.active,
+          lm.notes,
+          lm.difficulty_rating,
+          lm.priority_rating,
+          lm.workload_notes,
+          coalesce(array_agg(distinct lg.group_name) filter (where lg.group_name is not null), array[]::text[]) as group_names
+        from (
           select l.id, l.location_code, l.location_name, l.location_type, l.form_type, l.active, l.notes, l.difficulty_rating, l.priority_rating, l.workload_notes
           from public.locations l
           where l.active = true
@@ -649,9 +668,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
             )
           order by case when lower(l.location_code)=lower('${esc(location)}') then 0 else 1 end, length(l.location_name), l.location_name
           limit 1
-        )
-        select lm.*, coalesce(array_agg(distinct lg.group_name) filter (where lg.group_name is not null), array[]::text[]) as group_names
-        from location_match lm
+        ) lm
         left join public.location_group_memberships lgm on lgm.location_id = lm.id and lgm.active = true
         left join public.location_groups lg on lg.id = lgm.location_group_id and lg.active = true
         group by lm.id, lm.location_code, lm.location_name, lm.location_type, lm.form_type, lm.active, lm.notes, lm.difficulty_rating, lm.priority_rating, lm.workload_notes
@@ -837,7 +854,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     }
 
     await saveThreadContext(runRpc, threadId, { last_intent: inferIntent(text), last_service_date: relativeServiceDate, last_subject_type: "generic" });
-    return { text: "Tell me a little more. If you want system info, ask me who has an area, who is off, what is open, what your schedule looks like, or what is going sideways on the dashboard.", meta: { fallback: true, mode: "local_generic" } };
+    return { text: genericConversationalFallback(text), meta: { fallback: true, mode: "local_generic" } };
   }
 
   async function generateReply({ deviceId = "", userMessage = "", threadId = "" }) {
