@@ -111,6 +111,17 @@ function isConversationalOpener(text = "") {
   return /(what up|whats up|what s up|how are you|you getting things figured out|getting things figured out|doing better|you good|hows it going|how s it going|you alive|are you alive|are you connected|connected and alive|hello there|dude what it do)/.test(lower);
 }
 
+function isWeatherQuestion(text = "") {
+  return /\b(weather|forecast|temperature|rain|storm|sunny|cloudy|wind|humid|humidity)\b/i.test(String(text || ""));
+}
+
+function isGeneralKnowledgeQuestion(text = "") {
+  const lower = String(text || "").toLowerCase();
+  if (isWeatherQuestion(lower)) return true;
+  if (/sparrow|capital of|who invented|how tall|what is the meaning|tell me about|define |explain |why is the sky|how far|how many/i.test(lower)) return true;
+  return false;
+}
+
 function openerReply(text = "") {
   const lower = normalizeLoose(text);
   if (/connected/.test(lower)) return "Yeah. I am up and talking. What do you need?";
@@ -125,6 +136,7 @@ function genericConversationalFallback(text = "") {
   const lower = normalizeLoose(text);
   if (/alive|connected/.test(lower)) return "Yeah. I am here and connected enough to answer real system questions. Give me one.";
   if (/sparrow/.test(lower)) return "That depends. African or European?";
+  if (/weather/.test(lower)) return "I should be able to answer weather, but my general-answer side did not land that one cleanly. Ask again with the city name and I’ll use that context.";
   if (/hello|hey|hi/.test(lower)) return "Hey. What do you need?";
   return "I am here. Ask me something specific or just talk to me like a person.";
 }
@@ -150,12 +162,13 @@ function findLocationCode(text) {
 }
 
 function isSystemSpecificQuestion(text = "", threadContext = {}) {
+  if (isGeneralKnowledgeQuestion(text)) return false;
   const intent = inferIntent(text);
   if (intent !== "generic") return true;
   if (findLocationCode(text)) return true;
   const lower = String(text || "").toLowerCase();
   if (/(aquarium|zambezi|teton|expo|dashboard|tickets|attendance|schedule|absence|cover|coverage|employee|location|owner|restroom|primate|china|east admin|west admin|breezeway|herpetarium|komodos|nocturnal)/i.test(lower)) return true;
-  if (threadContext?.last_subject_type && !["conversation", "generic"].includes(String(threadContext.last_subject_type))) return true;
+  if (threadContext?.last_subject_type && !["conversation", "generic", "general_knowledge", "weather"].includes(String(threadContext.last_subject_type))) return true;
   return false;
 }
 
@@ -401,16 +414,20 @@ function mergeContextDate(text, threadContext = {}, explicitServiceDate = null) 
   return threadContext?.last_service_date || null;
 }
 
-async function tryGeminiConversation({ apiKey, userMessage, webEnabled }) {
+async function tryGeminiConversation({ apiKey, userMessage, webEnabled, threadContext }) {
+  const locationHint = isWeatherQuestion(userMessage) ? "The user is located in Memphis, Tennessee, unless they specify another location." : "";
+  const priorHint = threadContext?.last_subject_type === "weather" ? "Previous exchange was about weather in Memphis, Tennessee." : "";
   const systemInstruction = [
     "You are Memphis, a conversational assistant for Memphis Zoo operations.",
     "Be human, natural, and useful.",
     "For casual chat, greetings, follow-up questions, or broad reasoning, answer directly and conversationally.",
     "Do not drift into a canned feature list unless the user explicitly asks what you can do.",
+    locationHint,
+    priorHint,
     webEnabled
       ? "You may answer broader general questions as a normal online Gemini model would."
       : "Stay focused on conversation and Memphis Zoo context."
-  ].join(" ");
+  ].filter(Boolean).join(" ");
   const response = await fetch(`${GEMINI_BASE_URL}/${encodeURIComponent(DEFAULT_MODEL)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -736,7 +753,8 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     const assignedEmployee = await fetchAssignedEmployeeForDevice(runReadOnlySql, deviceId);
 
     if (isGreetingOnly(text) || isConversationalOpener(text)) {
-      await saveThreadContext(runRpc, threadId, { last_intent: "conversation", last_service_date: relativeServiceDate, last_subject_type: "conversation" });
+      const subjectType = isWeatherQuestion(text) ? "weather" : "conversation";
+      await saveThreadContext(runRpc, threadId, { last_intent: "conversation", last_service_date: relativeServiceDate, last_subject_type: subjectType });
       return { text: openerReply(text), meta: { fallback: true, mode: "local_conversation" } };
     }
 
@@ -853,7 +871,8 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       return { text: summarizeDashboard(data.snapshot, data.attention_locations, data.attendance), meta: { fallback: true, mode: "local_dashboard" } };
     }
 
-    await saveThreadContext(runRpc, threadId, { last_intent: inferIntent(text), last_service_date: relativeServiceDate, last_subject_type: "generic" });
+    const subjectType = isWeatherQuestion(text) ? "weather" : (isGeneralKnowledgeQuestion(text) ? "general_knowledge" : "generic");
+    await saveThreadContext(runRpc, threadId, { last_intent: inferIntent(text), last_service_date: relativeServiceDate, last_subject_type: subjectType });
     return { text: genericConversationalFallback(text), meta: { fallback: true, mode: "local_generic" } };
   }
 
@@ -869,9 +888,10 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     }
 
     try {
-      const text = await tryGeminiConversation({ apiKey, userMessage, webEnabled });
+      const text = await tryGeminiConversation({ apiKey, userMessage, webEnabled, threadContext });
       if (text && !/^i can help with /i.test(text.trim())) {
-        await saveThreadContext(runRpc, threadId, { last_intent: "conversation", last_subject_type: "conversation" });
+        const subjectType = isWeatherQuestion(userMessage) ? "weather" : (isGeneralKnowledgeQuestion(userMessage) ? "general_knowledge" : "conversation");
+        await saveThreadContext(runRpc, threadId, { last_intent: "conversation", last_subject_type: subjectType });
         return { text, meta: { fallback: false, provider: "gemini", model: DEFAULT_MODEL, mode: "conversation_first" } };
       }
     } catch (error) {
