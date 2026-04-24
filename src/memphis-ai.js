@@ -46,14 +46,18 @@ function buildSystemPrompt({ webEnabled }) {
   return [
     "You are Memphis, the operational assistant for Memphis Zoo custodial systems.",
     "Answer internal system questions about scans, locations, employees, schedules, absences, coverage, upcoming events, dashboard status, attendance, and open tickets.",
+    "Be human, friendly, and easy to talk to.",
+    "Be logical and fact-driven. Correctness matters more than style.",
     "Prefer tool calls for factual answers. Do not invent operational facts.",
     "Understand relative dates like today and tomorrow when answering schedule and absence questions.",
     "When asked who is filling in for an absent employee, use schedule or absence coverage data and say clearly if the system does not show a named replacement.",
+    "Use a light, occasional joke when it fits naturally, but keep it small and never let humor get in the way of the answer.",
     webEnabled
       ? "External web lookup is allowed on this device when clearly needed for current outside information."
       : "External web lookup is not allowed on this device. If asked for outside or general knowledge unrelated to Memphis Zoo systems, explain that this device is limited to internal system questions.",
-    "Keep answers concise, practical, and operationally useful.",
-    "If information is missing, say so plainly."
+    "Lead with the answer, then add supporting detail.",
+    "If information is missing, say so plainly instead of pretending.",
+    "Do not sound robotic, corporate, or overly formal."
   ].join(" ");
 }
 
@@ -189,7 +193,7 @@ async function callGeminiGenerate({ apiKey, model, systemInstruction, contents, 
       systemInstruction: { parts: [{ text: systemInstruction }] },
       contents,
       tools,
-      generationConfig: { temperature: 0.2 }
+      generationConfig: { temperature: 0.3 }
     })
   });
   const payload = await response.json().catch(() => null);
@@ -233,7 +237,7 @@ function findLocationCode(text) {
 }
 
 function summarizeEvents(events = []) {
-  if (!events.length) return "There are no upcoming events in the system right now.";
+  if (!events.length) return "I don't see any upcoming events in the system right now. Quiet little patch of grass.";
   return events.slice(0, 6).map((event) => {
     const attendees = event.attendee_count == null ? "attendees not listed" : `${event.attendee_count} attendees`;
     return `${event.event_name} in ${event.group_name || event.group_code} on ${event.event_date} from ${event.start_time} to ${event.end_time}, ${attendees}.`;
@@ -252,7 +256,7 @@ function summarizeAssignments(assignments = [], emptyText) {
 }
 
 function summarizeEmployeeAssignments(assignments = [], employeeName, serviceDate) {
-  if (!assignments.length) return `I could not find schedule assignments for ${employeeName} on ${serviceDate}.`;
+  if (!assignments.length) return `I couldn't find schedule assignments for ${employeeName} on ${serviceDate}. Either they're clear, off, or the schedule gods are hiding the page.`;
   return `${employeeName} on ${serviceDate}: ` + assignments.slice(0, 12).map((row) => {
     const group = row.group_name || row.group_code || "Unknown area";
     const start = row.coverage_start || "—";
@@ -262,7 +266,7 @@ function summarizeEmployeeAssignments(assignments = [], employeeName, serviceDat
 }
 
 function summarizeTickets(tickets = [], location = "") {
-  if (!tickets.length) return location ? `There are no open tickets matching ${location}.` : "There are no open tickets right now.";
+  if (!tickets.length) return location ? `No open tickets matching ${location}. Small mercy.` : "No open tickets right now. The maintenance gremlins are behaving.";
   return tickets.slice(0, 8).map((ticket) => `${ticket.location_name || ticket.location_code}: ${ticket.maintenance_issue}.`).join(" ");
 }
 
@@ -289,7 +293,7 @@ function summarizeAbsenceCoverage(data = {}, employeeName = "") {
   if (employeeName) {
     if (!coverage.length) {
       const notesText = notes.length ? ` Notes: ${notes.join(" | ")}` : "";
-      return `I could not find explicit coverage rows for ${employeeName} on ${serviceDate}.${notesText}`.trim();
+      return `I couldn't find explicit coverage rows for ${employeeName} on ${serviceDate}.${notesText}`.trim();
     }
     return `${employeeName} on ${serviceDate}: ` + coverage.slice(0, 12).map((row) => {
       const group = row.group_name || row.group_code || "Unknown area";
@@ -301,7 +305,7 @@ function summarizeAbsenceCoverage(data = {}, employeeName = "") {
   }
 
   if (!absentPeople.length && !notes.length) {
-    return `I do not see any absence notes or replacement coverage for ${serviceDate}.`;
+    return `I don't see any absence notes or replacement coverage for ${serviceDate}. Nice when the board isn't on fire.`;
   }
 
   const absentLine = absentPeople.length
@@ -314,7 +318,7 @@ function summarizeAbsenceCoverage(data = {}, employeeName = "") {
 }
 
 function summarizeEmployeeProfile(profile = null) {
-  if (!profile) return "I could not find that employee in the system.";
+  if (!profile) return "I couldn't find that employee in the system.";
   const parts = [`${profile.display_name} (${profile.employee_code || 'no code'})`];
   if (profile.role) parts.push(`role ${profile.role}`);
   if (profile.device_name) parts.push(`device ${profile.device_name}`);
@@ -324,7 +328,7 @@ function summarizeEmployeeProfile(profile = null) {
 }
 
 function summarizeLocationDetails(data = {}) {
-  if (!data?.location) return "I could not find that location in the system.";
+  if (!data?.location) return "I couldn't find that location in the system.";
   const loc = data.location;
   const parts = [`${loc.location_name} (${loc.location_code})`];
   if (loc.location_type) parts.push(`type ${loc.location_type}`);
@@ -776,7 +780,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
           service_date: relativeServiceDate
         });
         return {
-          text: summarizeAssignments(data.assignments, `I could not find schedule assignments for ${text} on ${data.service_date}.`),
+          text: summarizeAssignments(data.assignments, `I couldn't find schedule assignments for ${text} on ${data.service_date}.`),
           meta: { fallback: true, mode: "local_area_schedule" }
         };
       }
@@ -788,7 +792,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     }
 
     return {
-      text: "Memphis can help with scans, locations, employees, schedules, absences and coverage, events, dashboard metrics, tickets, and current ownership. Ask what area someone is covering, who is absent, what scan state a location is in, or what the dashboard is flagging.",
+      text: "I can help with scans, locations, employees, schedules, absences and coverage, events, dashboard metrics, tickets, and current ownership. Ask me what's covered, who's off, what the dashboard is yelling about, or where the next mess is brewing.",
       meta: { fallback: true, mode: "local_generic" }
     };
   }
@@ -814,7 +818,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
         const text = extractGeminiText(payload);
         if (!calls.length) {
           return {
-            text: text || "Memphis could not produce an answer for that yet.",
+            text: text || "I couldn't produce a clean answer for that yet.",
             meta: { fallback: false, provider: "gemini", model }
           };
         }
@@ -831,7 +835,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       }
 
       return {
-        text: "Memphis hit a tool loop limit before finishing that answer.",
+        text: "I hit a tool loop limit before finishing that answer. Very glamorous, I know.",
         meta: { fallback: false, provider: "gemini", model, loop_limit: true }
       };
     } catch (error) {
