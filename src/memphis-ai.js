@@ -73,6 +73,7 @@ function buildSystemPrompt({ webEnabled }) {
     "Understand relative dates like today and tomorrow when answering schedule and absence questions.",
     "When asked who is filling in for an absent employee, use live scheduler or absence coverage data and say clearly if the system does not show a named replacement.",
     "If asked about my schedule on an employee device, resolve the employee assigned to that device and answer from the live scheduler.",
+    "When a user asks about an area in natural language, detect the area name inside the sentence instead of requiring the exact area name alone.",
     "Use a light, occasional joke when it fits naturally, but keep it small and never let humor get in the way of the answer.",
     webEnabled
       ? "External web lookup is allowed on this device when clearly needed for current outside information."
@@ -103,7 +104,7 @@ function buildGeminiTools() {
         parameters: {
           type: "OBJECT",
           properties: {
-            area: { type: "STRING", description: "Area, location group name, or group code." },
+            area: { type: "STRING", description: "Area, location group name, group code, or a natural-language sentence containing the area." },
             service_date: { type: "STRING", description: "Optional date in YYYY-MM-DD. Defaults to today service date." }
           },
           required: ["area"]
@@ -148,7 +149,7 @@ function buildGeminiTools() {
         parameters: {
           type: "OBJECT",
           properties: {
-            location: { type: "STRING", description: "Location code, location name, or area name." }
+            location: { type: "STRING", description: "Location code, location name, area name, or a sentence containing it." }
           },
           required: ["location"]
         }
@@ -168,12 +169,7 @@ function buildGeminiTools() {
       {
         name: "get_open_tickets",
         description: "List open maintenance tickets, optionally filtered by a location code or name.",
-        parameters: {
-          type: "OBJECT",
-          properties: {
-            location: { type: "STRING", description: "Optional location code or location name filter." }
-          }
-        }
+        parameters: { type: "OBJECT", properties: { location: { type: "STRING", description: "Optional location code or location name filter." } } }
       },
       {
         name: "get_dashboard_summary",
@@ -185,9 +181,7 @@ function buildGeminiTools() {
         description: "Check the scan system state for a specific location code.",
         parameters: {
           type: "OBJECT",
-          properties: {
-            location_code: { type: "STRING", description: "Location code to inspect." }
-          },
+          properties: { location_code: { type: "STRING", description: "Location code to inspect." } },
           required: ["location_code"]
         }
       },
@@ -420,7 +414,12 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
         join public.location_groups lg on lg.id = e.location_group_id
         where e.event_date >= current_date
           and e.event_date <= current_date + ${days}
-          ${area ? `and (lg.group_name ilike ${sqlLikeLiteral(area)} or lg.group_code ilike ${sqlLikeLiteral(area)})` : ""}
+          ${area ? `and (
+            lg.group_name ilike ${sqlLikeLiteral(area)}
+            or lg.group_code ilike ${sqlLikeLiteral(area)}
+            or lower('${esc(area)}') like '%' || lower(lg.group_name) || '%'
+            or lower('${esc(area)}') like '%' || lower(lg.group_code) || '%'
+          )` : ""}
         order by e.event_date asc, e.start_time asc, e.event_name asc
       `);
       return { events: rows || [] };
@@ -434,6 +433,8 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
         from public.sch_get_daily_schedule('${esc(serviceDate)}'::date)
         where group_name ilike ${sqlLikeLiteral(area)}
            or group_code ilike ${sqlLikeLiteral(area)}
+           or lower('${esc(area)}') like '%' || lower(group_name) || '%'
+           or lower('${esc(area)}') like '%' || lower(group_code) || '%'
         order by group_name asc, segment_number asc
       `);
       return { service_date: serviceDate, assignments: rows || [] };
@@ -550,6 +551,8 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
             and (
               l.location_code ilike ${sqlLikeLiteral(location)}
               or l.location_name ilike ${sqlLikeLiteral(location)}
+              or lower('${esc(location)}') like '%' || lower(l.location_code) || '%'
+              or lower('${esc(location)}') like '%' || lower(l.location_name) || '%'
             )
           order by case when lower(l.location_code)=lower('${esc(location)}') then 0 else 1 end,
                    length(l.location_name),
@@ -694,16 +697,14 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       }
     }
 
-    if (lower.includes("schedule") || lower.includes("assigned") || lower.includes("working")) {
+    if (lower.includes("schedule") || lower.includes("assigned") || lower.includes("working") || lower.includes("aquarium") || lower.includes("restroom") || lower.includes("zambezi") || lower.includes("teton") || lower.includes("expo")) {
       const employeeName = await guessEmployeeName(runRpc, text);
       if (employeeName) {
         const data = await executeTool("get_employee_schedule", { employee_name: employeeName, service_date: relativeServiceDate });
         return { text: summarizeEmployeeAssignments(data.assignments, employeeName, data.service_date), meta: { fallback: true, mode: "local_employee_schedule" } };
       }
-      if (/(today|tomorrow|group|teton|expo|zambezi|primate|event center|aquarium|restroom)/i.test(text)) {
-        const data = await executeTool("get_area_schedule", { area: text, service_date: relativeServiceDate });
-        return { text: summarizeAssignments(data.assignments, `I couldn't find schedule assignments for ${text} on ${data.service_date}.`), meta: { fallback: true, mode: "local_area_schedule" } };
-      }
+      const data = await executeTool("get_area_schedule", { area: text, service_date: relativeServiceDate });
+      return { text: summarizeAssignments(data.assignments, `I couldn't find schedule assignments for ${text} on ${data.service_date}.`), meta: { fallback: true, mode: "local_area_schedule" } };
     }
 
     if (lower.includes("dashboard") || lower.includes("summary") || lower.includes("status") || lower.includes("metrics") || lower.includes("attendance")) {
