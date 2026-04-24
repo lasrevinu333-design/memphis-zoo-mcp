@@ -145,6 +145,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     try {
       const userId = String(req.body?.user_id || "").trim();
       const body = String(req.body?.body || "").trim();
+      const deviceId = String(req.body?.device_id || "").trim();
       if (!userId) throw new Error("user_id is required.");
       if (!body) throw new Error("body is required.");
 
@@ -164,7 +165,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
 
       let reply;
       try {
-        reply = await memphisResponder.generateReply({ userId, userMessage: body });
+        reply = await memphisResponder.generateReply({ userId, deviceId, threadId: thread.id, userMessage: body });
       } catch (error) {
         console.error("memphis ai reply failed:", error);
         reply = {
