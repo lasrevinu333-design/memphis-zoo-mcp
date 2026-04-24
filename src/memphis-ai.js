@@ -97,6 +97,30 @@ function allowWebSearch({ deviceId = "", identityRole = "" }) {
   return String(identityRole || "").trim().toLowerCase() === "manager";
 }
 
+function isGreetingOnly(text = "") {
+  const lower = normalizeLoose(text);
+  return /^(hi|hey|hello|yo|sup|whats up|what s up|what up|good morning|good afternoon|good evening|howdy)( dude| man| memphis| brother| bro)?$/.test(lower);
+}
+
+function isConversationalOpener(text = "") {
+  const lower = normalizeLoose(text);
+  return /(what up|whats up|what s up|how are you|you getting things figured out|getting things figured out|doing better|you good|hows it going|how s it going)/.test(lower);
+}
+
+function openerReply(text = "") {
+  const lower = normalizeLoose(text);
+  if (/figured out|doing better|better/.test(lower)) {
+    return "Yeah, better than before. Still ugly in a few corners, but a lot less confused. What do you need?";
+  }
+  if (/how are you|you good|hows it going|how s it going/.test(lower)) {
+    return "Doing alright. Slightly less feral than yesterday. What are you trying to pin down?";
+  }
+  if (/what up|whats up|what s up/.test(lower)) {
+    return "Not much. Just chewing through schedule logic and trying not to embarrass myself. What do you need?";
+  }
+  return "Hey. What are we trying to solve?";
+}
+
 async function fetchDeviceIdentity(runReadOnlySql, deviceId) {
   const normalized = String(deviceId || "").trim();
   if (!normalized) return null;
@@ -153,11 +177,13 @@ function buildSystemPrompt({ webEnabled }) {
     "Answer internal system questions about scans, locations, employees, schedules, absences, coverage, upcoming events, dashboard status, attendance, and open tickets.",
     "Use live scheduler views and current database facts whenever tools are available.",
     "Understand relative dates like today and tomorrow.",
+    "If the user opens with a greeting or casual human check-in, reply like a person first, then steer naturally toward the task.",
+    "Do not answer greetings with a capability list unless the user explicitly asks what you can do.",
     "If asked about my schedule on an employee device, resolve the employee assigned to that device.",
     "When the user refers to an area in normal speech, detect the area name inside the sentence.",
     "Explain why an area is open when the data supports it.",
     "When asked who should cover something, rank candidates using live shift coverage, overlap conflicts, load, familiarity, preference, and proximity.",
-    "Be direct, practical, and clear. No invented facts.",
+    "Be conversational, human, and practical. No invented facts. No corporate brochure tone.",
     webEnabled
       ? "External web lookup is allowed on this device when clearly needed for current outside information."
       : "External web lookup is not allowed on this device. If asked for outside or general knowledge unrelated to Memphis Zoo systems, explain that this device is limited to internal system questions."
@@ -191,7 +217,7 @@ async function callGeminiGenerate({ apiKey, model, systemInstruction, contents, 
   const response = await fetch(`${GEMINI_BASE_URL}/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ systemInstruction: { parts: [{ text: systemInstruction }] }, contents, tools, generationConfig: { temperature: 0.3 } })
+    body: JSON.stringify({ systemInstruction: { parts: [{ text: systemInstruction }] }, contents, tools, generationConfig: { temperature: 0.45 } })
   });
   const payload = await response.json().catch(() => null);
   if (!response.ok) throw new Error(payload?.error?.message || payload?.message || `Gemini HTTP ${response.status}`);
@@ -232,7 +258,7 @@ function findLocationCode(text) {
 }
 
 function summarizeEvents(events = []) {
-  if (!events.length) return "I don't see any upcoming events in the system right now. Quiet little patch of grass.";
+  if (!events.length) return "I don't see any upcoming events in the system right now.";
   return events.slice(0, 6).map((event) => {
     const attendees = event.attendee_count == null ? "attendees not listed" : `${event.attendee_count} attendees`;
     return `${event.event_name} in ${event.group_name || event.group_code} on ${event.event_date} from ${event.start_time} to ${event.end_time}, ${attendees}.`;
@@ -251,7 +277,7 @@ function summarizeAssignments(assignments = [], emptyText) {
 }
 
 function summarizeEmployeeAssignments(assignments = [], employeeName, serviceDate) {
-  if (!assignments.length) return `I couldn't find schedule assignments for ${employeeName} on ${serviceDate}. Either they're clear, off, or the schedule gods are hiding the page.`;
+  if (!assignments.length) return `I couldn't find schedule assignments for ${employeeName} on ${serviceDate}.`;
   return `${employeeName} on ${serviceDate}: ` + assignments.slice(0, 12).map((row) => {
     const group = row.group_name || row.group_code || "Unknown area";
     const start = row.coverage_start || "—";
@@ -261,7 +287,7 @@ function summarizeEmployeeAssignments(assignments = [], employeeName, serviceDat
 }
 
 function summarizeTickets(tickets = [], location = "") {
-  if (!tickets.length) return location ? `No open tickets matching ${location}. Small mercy.` : "No open tickets right now. The maintenance gremlins are behaving.";
+  if (!tickets.length) return location ? `No open tickets matching ${location}.` : "No open tickets right now.";
   return tickets.slice(0, 8).map((ticket) => `${ticket.location_name || ticket.location_code}: ${ticket.maintenance_issue}.`).join(" ");
 }
 
@@ -295,7 +321,7 @@ function summarizeAbsenceCoverage(data = {}, employeeName = "") {
       return `${group} is covered by ${filler} from ${start} to ${end}`;
     }).join("; ") + ".";
   }
-  if (!absentPeople.length && !notes.length) return `I don't see any absence notes or replacement coverage for ${serviceDate}. Nice when the board isn't on fire.`;
+  if (!absentPeople.length && !notes.length) return `I don't see any absence notes or replacement coverage for ${serviceDate}.`;
   const absentLine = absentPeople.length ? `Absent on ${serviceDate}: ${absentPeople.join(", ")}.` : `Absence notes exist for ${serviceDate}.`;
   const coverageLine = coverage.length ? ` Coverage examples: ${coverage.slice(0, 10).map((row) => `${row.group_name || row.group_code} covered by ${row.assigned_employee_name || "Open"} ${row.coverage_start || "—"}-${row.coverage_end || "—"}`).join("; ")}.` : "";
   return `${absentLine}${coverageLine}`.trim();
@@ -722,6 +748,14 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     const assignedEmployee = await fetchAssignedEmployeeForDevice(runReadOnlySql, deviceId);
     let nextContext = { context_json: {} };
 
+    if (isGreetingOnly(text) || isConversationalOpener(text)) {
+      await saveThreadContext(runRpc, threadId, { last_intent: 'conversation', last_service_date: relativeServiceDate, last_subject_type: 'conversation' });
+      return {
+        text: openerReply(text),
+        meta: { fallback: true, mode: 'local_conversation' }
+      };
+    }
+
     if (lower.includes("event")) {
       const area = await resolveAreaName(runReadOnlySql, text, threadContext);
       const data = await executeTool("get_upcoming_events", { days: 14, area });
@@ -852,7 +886,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
 
     await saveThreadContext(runRpc, threadId, { last_intent: inferIntent(text), last_service_date: relativeServiceDate, last_subject_type: 'generic' });
     return {
-      text: "I can help with scans, locations, employees, live schedules, coverage recommendations, absences and coverage, open segments, workload, events, dashboard metrics, tickets, and current ownership. Ask me who has Aquarium, who should cover Zambezi, what is open, or what your device is assigned today.",
+      text: "Give me something to grab onto. Ask me who has an area, who is off, what is open, what your schedule looks like, or what is going sideways on the dashboard.",
       meta: { fallback: true, mode: "local_generic" }
     };
   }
@@ -875,8 +909,12 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
         const calls = extractGeminiFunctionCalls(payload);
         const text = extractGeminiText(payload);
         if (!calls.length) {
-          await saveThreadContext(runRpc, threadId, { last_intent: inferIntent(userMessage), last_service_date: extractExplicitDate(userMessage) || null, last_subject_type: 'generic' });
-          return { text: text || "I couldn't produce a clean answer for that yet.", meta: { fallback: false, provider: "gemini", model } };
+          if (text && !/^i can help with /i.test(text.trim())) {
+            await saveThreadContext(runRpc, threadId, { last_intent: inferIntent(userMessage), last_service_date: extractExplicitDate(userMessage) || null, last_subject_type: 'generic' });
+            return { text, meta: { fallback: false, provider: "gemini", model } };
+          }
+          const local = await generateLocalReply(userMessage, { deviceId, threadId });
+          return { text: local.text, meta: { ...(local.meta || {}), fallback: false, provider: "gemini", model, converted_from_generic: true } };
         }
         const modelParts = payload?.candidates?.[0]?.content?.parts || [];
         contents.push({ role: "model", parts: modelParts });
@@ -890,7 +928,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
         }
         contents.push({ role: "user", parts: functionResponseParts });
       }
-      return { text: "I hit a tool loop limit before finishing that answer. Very glamorous, I know.", meta: { fallback: false, provider: "gemini", model, loop_limit: true } };
+      return { text: "I hit a tool loop limit before finishing that answer. Ask it one more way and I’ll take another swing.", meta: { fallback: false, provider: "gemini", model, loop_limit: true } };
     } catch (error) {
       console.error("memphis gemini path failed:", error);
       const local = await generateLocalReply(userMessage, { deviceId, threadId });
