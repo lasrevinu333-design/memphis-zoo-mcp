@@ -45,7 +45,7 @@ async function fetchDeviceIdentity(runReadOnlySql, deviceId) {
 function buildSystemPrompt({ webEnabled }) {
   return [
     "You are Memphis, the operational assistant for Memphis Zoo custodial systems.",
-    "Answer internal system questions about schedules, upcoming events, scan state, dashboard status, open tickets, employees, and messaging-related operations.",
+    "Answer internal system questions about schedules, absences, coverage, upcoming events, scan state, dashboard status, open tickets, employees, and messaging-related operations.",
     "Prefer tool calls for factual answers. Do not invent operational facts.",
     "Understand relative dates like today and tomorrow when answering schedule questions.",
     webEnabled
@@ -95,6 +95,17 @@ function buildGeminiTools() {
         }
       },
       {
+        name: "get_absence_coverage",
+        description: "Find who is absent and who is covering their assigned areas on a given service date.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            employee_name: { type: "STRING", description: "Optional absent employee name or partial name." },
+            service_date: { type: "STRING", description: "Optional date in YYYY-MM-DD. Defaults to today service date." }
+          }
+        }
+      },
+      {
         name: "get_current_owner",
         description: "Find who currently owns a specific location according to the schedule system.",
         parameters: {
@@ -118,7 +129,7 @@ function buildGeminiTools() {
       },
       {
         name: "get_dashboard_summary",
-        description: "Get a summary of current operational dashboard metrics and problem locations.",
+        description: "Get a summary of current operational dashboard metrics, attendance, and problem locations.",
         parameters: {
           type: "OBJECT",
           properties: {}
@@ -208,8 +219,8 @@ function summarizeEvents(events = []) {
 
 function summarizeAssignments(assignments = [], emptyText) {
   if (!assignments.length) return emptyText;
-  return assignments.slice(0, 10).map((row) => {
-    const employee = row.employee_name || "Open";
+  return assignments.slice(0, 12).map((row) => {
+    const employee = row.employee_name || row.assigned_employee_name || "Open";
     const group = row.group_name || row.group_code || "Unknown area";
     const start = row.coverage_start || "—";
     const end = row.coverage_end || "—";
@@ -219,7 +230,7 @@ function summarizeAssignments(assignments = [], emptyText) {
 
 function summarizeEmployeeAssignments(assignments = [], employeeName, serviceDate) {
   if (!assignments.length) return `I could not find schedule assignments for ${employeeName} on ${serviceDate}.`;
-  return `${employeeName} on ${serviceDate}: ` + assignments.slice(0, 10).map((row) => {
+  return `${employeeName} on ${serviceDate}: ` + assignments.slice(0, 12).map((row) => {
     const group = row.group_name || row.group_code || "Unknown area";
     const start = row.coverage_start || "—";
     const end = row.coverage_end || "—";
@@ -232,8 +243,9 @@ function summarizeTickets(tickets = [], location = "") {
   return tickets.slice(0, 8).map((ticket) => `${ticket.location_name || ticket.location_code}: ${ticket.maintenance_issue}.`).join(" ");
 }
 
-function summarizeDashboard(snapshot = {}, attention = []) {
+function summarizeDashboard(snapshot = {}, attention = [], attendance = null) {
   const bits = [];
+  if (attendance?.attendance != null) bits.push(`attendance ${attendance.attendance}`);
   if (snapshot.open_ticket_count != null) bits.push(`${snapshot.open_ticket_count} open tickets`);
   if (snapshot.overdue_locations != null) bits.push(`${snapshot.overdue_locations} overdue locations`);
   if (snapshot.due_soon_locations != null) bits.push(`${snapshot.due_soon_locations} due soon`);
@@ -243,6 +255,39 @@ function summarizeDashboard(snapshot = {}, attention = []) {
     ? ` Attention locations: ${attention.slice(0, 8).map((row) => `${row.location_name || row.location_code} (${row.status_code}, ${row.open_ticket_count} tickets)`).join("; ")}.`
     : "";
   return `${summary}${focus}`.trim();
+}
+
+function summarizeAbsenceCoverage(data = {}, employeeName = "") {
+  const serviceDate = data.service_date || "the requested day";
+  const absentPeople = Array.isArray(data.absent_employees) ? data.absent_employees : [];
+  const coverage = Array.isArray(data.coverage_rows) ? data.coverage_rows : [];
+  const notes = Array.isArray(data.absence_notes) ? data.absence_notes : [];
+
+  if (employeeName) {
+    if (!coverage.length) {
+      const notesText = notes.length ? ` Notes: ${notes.join(" | ")}` : "";
+      return `I could not find explicit coverage rows for ${employeeName} on ${serviceDate}.${notesText}`.trim();
+    }
+    return `${employeeName} on ${serviceDate}: ` + coverage.slice(0, 12).map((row) => {
+      const group = row.group_name || row.group_code || "Unknown area";
+      const filler = row.assigned_employee_name || "Open";
+      const start = row.coverage_start || "—";
+      const end = row.coverage_end || "—";
+      return `${group} is covered by ${filler} from ${start} to ${end}`;
+    }).join("; ") + ".";
+  }
+
+  if (!absentPeople.length && !notes.length) {
+    return `I do not see any absence notes or replacement coverage for ${serviceDate}.`;
+  }
+
+  const absentLine = absentPeople.length
+    ? `Absent on ${serviceDate}: ${absentPeople.join(", ")}.`
+    : `Absence notes exist for ${serviceDate}.`;
+  const coverageLine = coverage.length
+    ? ` Coverage examples: ${coverage.slice(0, 10).map((row) => `${row.group_name || row.group_code} covered by ${row.assigned_employee_name || "Open"} ${row.coverage_start || "—"}-${row.coverage_end || "—"}`).join("; ")}.`
+    : "";
+  return `${absentLine}${coverageLine}`.trim();
 }
 
 async function guessEmployeeName(runRpc, text) {
@@ -271,6 +316,23 @@ async function guessEmployeeName(runRpc, text) {
     }
   }
   return best || "";
+}
+
+function extractAbsentNames(notes = []) {
+  const found = new Set();
+  for (const note of notes) {
+    const raw = String(note || "");
+    const offMatch = raw.match(/([^\.]+?)\s+off/i);
+    if (offMatch) {
+      const names = offMatch[1]
+        .replace(/^.*?:\s*/, "")
+        .split(/,| and /i)
+        .map((x) => x.trim())
+        .filter(Boolean);
+      names.forEach((name) => found.add(name));
+    }
+  }
+  return Array.from(found);
 }
 
 export function createMemphisResponder({ runReadOnlySql, runRpc }) {
@@ -348,6 +410,59 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       return { service_date: serviceDate, assignments: rows || [] };
     }
 
+    if (name === "get_absence_coverage") {
+      const serviceDate = normalizeDate(args.service_date) || await getDefaultServiceDate(runReadOnlySql);
+      const employeeName = String(args.employee_name || "").trim();
+      const employeeRows = employeeName
+        ? await runReadOnlySql(`
+            select id, display_name
+            from public.employees
+            where active = true and display_name ilike ${sqlLikeLiteral(employeeName)}
+            order by length(display_name), display_name
+            limit 1
+          `)
+        : [];
+      const employee = Array.isArray(employeeRows) && employeeRows.length ? employeeRows[0] : null;
+      const coverageRows = employee
+        ? await runReadOnlySql(`
+            select
+              lg.group_name,
+              lg.group_code,
+              to_char(dga.coverage_start, 'HH24:MI') as coverage_start,
+              to_char(dga.coverage_end, 'HH24:MI') as coverage_end,
+              ae.display_name as assigned_employee_name,
+              de.display_name as derived_from_employee_name,
+              dga.assignment_type,
+              dga.reason_code,
+              dga.notes
+            from public.daily_group_assignments dga
+            join public.location_groups lg on lg.id = dga.location_group_id
+            left join public.employees ae on ae.id = dga.assigned_employee_id
+            left join public.employees de on de.id = dga.derived_from_employee_id
+            where dga.active = true
+              and dga.assignment_date = '${esc(serviceDate)}'::date
+              and (
+                dga.derived_from_employee_id = '${esc(employee.id)}'::uuid
+                or dga.notes ilike ${sqlLikeLiteral(employee.display_name)}
+              )
+            order by lg.group_name, dga.coverage_start asc nulls last
+          `)
+        : [];
+      const noteRows = await runReadOnlySql(`
+        select distinct notes
+        from public.sch_get_daily_schedule('${esc(serviceDate)}'::date)
+        where notes is not null and notes <> '' and notes ilike '%off%'
+      `);
+      const absenceNotes = (noteRows || []).map((row) => row.notes).filter(Boolean);
+      return {
+        service_date: serviceDate,
+        employee_name: employee?.display_name || employeeName || null,
+        absent_employees: extractAbsentNames(absenceNotes),
+        absence_notes: absenceNotes,
+        coverage_rows: coverageRows || []
+      };
+    }
+
     if (name === "get_current_owner") {
       const locationCode = String(args.location_code || "").trim();
       const at = String(args.at || "").trim();
@@ -379,7 +494,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     }
 
     if (name === "get_dashboard_summary") {
-      const [snapshotRows, badRows] = await Promise.all([
+      const [snapshotRows, badRows, attendanceRows] = await Promise.all([
         runReadOnlySql(`
           select *
           from public.v_admin_health_snapshot
@@ -402,11 +517,18 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
                    open_ticket_count desc,
                    location_name
           limit 15
+        `),
+        runReadOnlySql(`
+          select attendance, last_year, planned, yesterday, yesterday_plan, fetched_at, updated_at
+          from public.current_attendance_state
+          where id = 1
+          limit 1
         `)
       ]);
       return {
         snapshot: Array.isArray(snapshotRows) && snapshotRows.length ? snapshotRows[0] : {},
-        attention_locations: badRows || []
+        attention_locations: badRows || [],
+        attendance: Array.isArray(attendanceRows) && attendanceRows.length ? attendanceRows[0] : null
       };
     }
 
@@ -445,6 +567,18 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       return { text: summarizeTickets(data.tickets, findLocationCode(text)), meta: { fallback: true, mode: "local_tickets" } };
     }
 
+    if (lower.includes("absent") || lower.includes("off") || lower.includes("cover") || lower.includes("covering") || lower.includes("fill") || lower.includes("filling")) {
+      const employeeName = await guessEmployeeName(runRpc, text);
+      const data = await executeTool("get_absence_coverage", {
+        employee_name: employeeName,
+        service_date: relativeServiceDate
+      });
+      return {
+        text: summarizeAbsenceCoverage(data, employeeName),
+        meta: { fallback: true, mode: "local_absence_coverage" }
+      };
+    }
+
     if (lower.includes("owner") || lower.includes("who owns") || lower.includes("who has")) {
       const code = findLocationCode(text);
       if (code) {
@@ -481,7 +615,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
         };
       }
 
-      if (/(today|tomorrow|group|teton|expo|zambezi|primate|event center)/i.test(text)) {
+      if (/(today|tomorrow|group|teton|expo|zambezi|primate|event center|aquarium|restroom)/i.test(text)) {
         const data = await executeTool("get_area_schedule", {
           area: text,
           service_date: relativeServiceDate
@@ -493,13 +627,13 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       }
     }
 
-    if (lower.includes("dashboard") || lower.includes("summary") || lower.includes("status")) {
+    if (lower.includes("dashboard") || lower.includes("summary") || lower.includes("status") || lower.includes("metrics") || lower.includes("attendance")) {
       const data = await executeTool("get_dashboard_summary", {});
-      return { text: summarizeDashboard(data.snapshot, data.attention_locations), meta: { fallback: true, mode: "local_dashboard" } };
+      return { text: summarizeDashboard(data.snapshot, data.attention_locations, data.attendance), meta: { fallback: true, mode: "local_dashboard" } };
     }
 
     return {
-      text: "Memphis can help with schedules, events, scan state, dashboard status, tickets, and employee assignments. Ask me something like who is assigned tomorrow, what events are coming up, or what open tickets we have.",
+      text: "Memphis can help with schedules, absences and coverage, events, scan state, dashboard metrics, tickets, and employee assignments. Ask who is absent, who is covering, what events are coming up, what scan state a location is in, or what the dashboard is flagging.",
       meta: { fallback: true, mode: "local_generic" }
     };
   }
