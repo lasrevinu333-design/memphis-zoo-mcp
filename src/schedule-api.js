@@ -321,12 +321,20 @@ export function createScheduleRouter({
     }
   });
 
-  router.post("/absence-publish", requireSchedulePin, async (_req, res) => {
-    res.status(501).json({
-      ok: false,
-      error: "Absence publish is intentionally not enabled in framework mode yet. Use preview-first workflow.",
-      meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion },
-    });
+  router.post("/absence-publish", requireSchedulePin, async (req, res) => {
+    try {
+      const serviceDate = requireDate(req.body?.service_date || req.body?.date || (await getServiceDate()));
+      const absentIds = Array.isArray(req.body?.absent_employee_ids)
+        ? req.body.absent_employee_ids.map((x) => String(x || "").trim()).filter(Boolean)
+        : [];
+      const data = await runRpc("sch_absence_publish", {
+        p_service_date: serviceDate,
+        p_absent_employee_ids: absentIds,
+      });
+      res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+    } catch (error) {
+      fail(res, error, "Absence publish failed");
+    }
   });
 
   return router;
