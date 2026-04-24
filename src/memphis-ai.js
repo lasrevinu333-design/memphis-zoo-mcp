@@ -42,6 +42,27 @@ async function fetchDeviceIdentity(runReadOnlySql, deviceId) {
   return Array.isArray(rows) && rows.length ? rows[0] : null;
 }
 
+async function fetchAssignedEmployeeForDevice(runReadOnlySql, deviceId) {
+  const normalized = String(deviceId || "").trim();
+  if (!normalized) return null;
+  const rows = await runReadOnlySql(`
+    select
+      d.device_id,
+      d.device_name,
+      d.assigned_employee_id,
+      e.display_name as assigned_employee_name,
+      e.employee_code,
+      e.role,
+      d.active as device_active,
+      coalesce(e.active, false) as employee_active
+    from public.devices d
+    left join public.employees e on e.id = d.assigned_employee_id
+    where d.device_id = '${esc(normalized)}'
+    limit 1
+  `);
+  return Array.isArray(rows) && rows.length ? rows[0] : null;
+}
+
 function buildSystemPrompt({ webEnabled }) {
   return [
     "You are Memphis, the operational assistant for Memphis Zoo custodial systems.",
@@ -50,7 +71,8 @@ function buildSystemPrompt({ webEnabled }) {
     "Be logical and fact-driven. Correctness matters more than style.",
     "Prefer tool calls for factual answers. Do not invent operational facts.",
     "Understand relative dates like today and tomorrow when answering schedule and absence questions.",
-    "When asked who is filling in for an absent employee, use schedule or absence coverage data and say clearly if the system does not show a named replacement.",
+    "When asked who is filling in for an absent employee, use live scheduler or absence coverage data and say clearly if the system does not show a named replacement.",
+    "If asked about my schedule on an employee device, resolve the employee assigned to that device and answer from the live scheduler.",
     "Use a light, occasional joke when it fits naturally, but keep it small and never let humor get in the way of the answer.",
     webEnabled
       ? "External web lookup is allowed on this device when clearly needed for current outside information."
@@ -77,7 +99,7 @@ function buildGeminiTools() {
       },
       {
         name: "get_area_schedule",
-        description: "Look up who is assigned to an area or location group on a given service date.",
+        description: "Look up who is assigned to an area or location group on a given service date using the live scheduler.",
         parameters: {
           type: "OBJECT",
           properties: {
@@ -89,14 +111,13 @@ function buildGeminiTools() {
       },
       {
         name: "get_employee_schedule",
-        description: "Look up what areas an employee is assigned to on a given date.",
+        description: "Look up what areas an employee is assigned to on a given date using the live scheduler.",
         parameters: {
           type: "OBJECT",
           properties: {
             employee_name: { type: "STRING", description: "Employee display name or partial name." },
             service_date: { type: "STRING", description: "Optional date in YYYY-MM-DD. Defaults to today service date." }
-          },
-          required: ["employee_name"]
+          }
         }
       },
       {
@@ -157,10 +178,7 @@ function buildGeminiTools() {
       {
         name: "get_dashboard_summary",
         description: "Get a summary of current operational dashboard metrics, attendance, and problem locations.",
-        parameters: {
-          type: "OBJECT",
-          properties: {}
-        }
+        parameters: { type: "OBJECT", properties: {} }
       },
       {
         name: "get_scan_state",
@@ -176,10 +194,7 @@ function buildGeminiTools() {
       {
         name: "list_active_employees",
         description: "List currently active employees in the system.",
-        parameters: {
-          type: "OBJECT",
-          properties: {}
-        }
+        parameters: { type: "OBJECT", properties: {} }
       }
     ]
   }];
@@ -197,9 +212,7 @@ async function callGeminiGenerate({ apiKey, model, systemInstruction, contents, 
     })
   });
   const payload = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(payload?.error?.message || payload?.message || `Gemini HTTP ${response.status}`);
-  }
+  if (!response.ok) throw new Error(payload?.error?.message || payload?.message || `Gemini HTTP ${response.status}`);
   return payload;
 }
 
@@ -278,9 +291,7 @@ function summarizeDashboard(snapshot = {}, attention = [], attendance = null) {
   if (snapshot.due_soon_locations != null) bits.push(`${snapshot.due_soon_locations} due soon`);
   if (snapshot.in_progress_locations != null) bits.push(`${snapshot.in_progress_locations} in progress`);
   const summary = bits.length ? `Dashboard snapshot: ${bits.join(", ")}.` : "Dashboard snapshot is available.";
-  const focus = attention.length
-    ? ` Attention locations: ${attention.slice(0, 8).map((row) => `${row.location_name || row.location_code} (${row.status_code}, ${row.open_ticket_count} tickets)`).join("; ")}.`
-    : "";
+  const focus = attention.length ? ` Attention locations: ${attention.slice(0, 8).map((row) => `${row.location_name || row.location_code} (${row.status_code}, ${row.open_ticket_count} tickets)`).join("; ")}.` : "";
   return `${summary}${focus}`.trim();
 }
 
@@ -308,12 +319,8 @@ function summarizeAbsenceCoverage(data = {}, employeeName = "") {
     return `I don't see any absence notes or replacement coverage for ${serviceDate}. Nice when the board isn't on fire.`;
   }
 
-  const absentLine = absentPeople.length
-    ? `Absent on ${serviceDate}: ${absentPeople.join(", ")}.`
-    : `Absence notes exist for ${serviceDate}.`;
-  const coverageLine = coverage.length
-    ? ` Coverage examples: ${coverage.slice(0, 10).map((row) => `${row.group_name || row.group_code} covered by ${row.assigned_employee_name || "Open"} ${row.coverage_start || "—"}-${row.coverage_end || "—"}`).join("; ")}.`
-    : "";
+  const absentLine = absentPeople.length ? `Absent on ${serviceDate}: ${absentPeople.join(", ")}.` : `Absence notes exist for ${serviceDate}.`;
+  const coverageLine = coverage.length ? ` Coverage examples: ${coverage.slice(0, 10).map((row) => `${row.group_name || row.group_code} covered by ${row.assigned_employee_name || "Open"} ${row.coverage_start || "—"}-${row.coverage_end || "—"}`).join("; ")}.` : "";
   return `${absentLine}${coverageLine}`.trim();
 }
 
@@ -390,6 +397,10 @@ function extractAbsentNames(notes = []) {
   return Array.from(found);
 }
 
+async function getLiveScheduleRows(runReadOnlySql, serviceDate) {
+  return await runReadOnlySql(`select * from public.sch_get_daily_schedule('${esc(serviceDate)}'::date)`);
+}
+
 export function createMemphisResponder({ runReadOnlySql, runRpc }) {
   async function executeTool(name, args = {}) {
     if (name === "get_upcoming_events") {
@@ -419,23 +430,11 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       const area = String(args.area || "").trim();
       const serviceDate = normalizeDate(args.service_date) || await getDefaultServiceDate(runReadOnlySql);
       const rows = await runReadOnlySql(`
-        select
-          dga.assignment_date,
-          lg.group_name,
-          lg.group_code,
-          e.display_name as employee_name,
-          to_char(dga.coverage_start, 'HH24:MI') as coverage_start,
-          to_char(dga.coverage_end, 'HH24:MI') as coverage_end,
-          dga.assignment_type,
-          dga.reason_code,
-          dga.notes
-        from public.daily_group_assignments dga
-        join public.location_groups lg on lg.id = dga.location_group_id
-        left join public.employees e on e.id = dga.assigned_employee_id
-        where dga.active = true
-          and dga.assignment_date = '${esc(serviceDate)}'::date
-          and (lg.group_name ilike ${sqlLikeLiteral(area)} or lg.group_code ilike ${sqlLikeLiteral(area)})
-        order by dga.coverage_start asc nulls last, e.display_name asc nulls last
+        select *
+        from public.sch_get_daily_schedule('${esc(serviceDate)}'::date)
+        where group_name ilike ${sqlLikeLiteral(area)}
+           or group_code ilike ${sqlLikeLiteral(area)}
+        order by group_name asc, segment_number asc
       `);
       return { service_date: serviceDate, assignments: rows || [] };
     }
@@ -443,24 +442,12 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     if (name === "get_employee_schedule") {
       const employeeName = String(args.employee_name || "").trim();
       const serviceDate = normalizeDate(args.service_date) || await getDefaultServiceDate(runReadOnlySql);
+      if (!employeeName) return { service_date: serviceDate, assignments: [] };
       const rows = await runReadOnlySql(`
-        select
-          dga.assignment_date,
-          e.display_name as employee_name,
-          lg.group_name,
-          lg.group_code,
-          to_char(dga.coverage_start, 'HH24:MI') as coverage_start,
-          to_char(dga.coverage_end, 'HH24:MI') as coverage_end,
-          dga.assignment_type,
-          dga.reason_code,
-          dga.notes
-        from public.daily_group_assignments dga
-        join public.employees e on e.id = dga.assigned_employee_id
-        join public.location_groups lg on lg.id = dga.location_group_id
-        where dga.active = true
-          and dga.assignment_date = '${esc(serviceDate)}'::date
-          and e.display_name ilike ${sqlLikeLiteral(employeeName)}
-        order by dga.coverage_start asc nulls last, lg.group_name asc
+        select *
+        from public.sch_get_daily_schedule('${esc(serviceDate)}'::date)
+        where assigned_employee_name ilike ${sqlLikeLiteral(employeeName)}
+        order by group_name asc, segment_number asc
       `);
       return { service_date: serviceDate, assignments: rows || [] };
     }
@@ -478,41 +465,24 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
           `)
         : [];
       const employee = Array.isArray(employeeRows) && employeeRows.length ? employeeRows[0] : null;
-      const coverageRows = employee
-        ? await runReadOnlySql(`
-            select
-              lg.group_name,
-              lg.group_code,
-              to_char(dga.coverage_start, 'HH24:MI') as coverage_start,
-              to_char(dga.coverage_end, 'HH24:MI') as coverage_end,
-              ae.display_name as assigned_employee_name,
-              de.display_name as derived_from_employee_name,
-              dga.assignment_type,
-              dga.reason_code,
-              dga.notes
-            from public.daily_group_assignments dga
-            join public.location_groups lg on lg.id = dga.location_group_id
-            left join public.employees ae on ae.id = dga.assigned_employee_id
-            left join public.employees de on de.id = dga.derived_from_employee_id
-            where dga.active = true
-              and dga.assignment_date = '${esc(serviceDate)}'::date
-              and (
-                dga.derived_from_employee_id = '${esc(employee.id)}'::uuid
-                or dga.notes ilike ${sqlLikeLiteral(employee.display_name)}
-              )
-            order by lg.group_name, dga.coverage_start asc nulls last
-          `)
-        : [];
-      const noteRows = await runReadOnlySql(`
-        select distinct notes
-        from public.sch_get_daily_schedule('${esc(serviceDate)}'::date)
-        where notes is not null and notes <> '' and notes ilike '%off%'
+      const absenceRows = await runReadOnlySql(`
+        select e.id as employee_id, e.display_name, dao.absence_type, dao.notes
+        from public.daily_absence_overrides dao
+        join public.employees e on e.id = dao.employee_id
+        where dao.absence_date = '${esc(serviceDate)}'::date
+          and dao.active = true
+          ${employee ? `and dao.employee_id = '${esc(employee.id)}'::uuid` : ""}
+        order by e.display_name
       `);
-      const absenceNotes = (noteRows || []).map((row) => row.notes).filter(Boolean);
+      const scheduleRows = await getLiveScheduleRows(runReadOnlySql, serviceDate);
+      const coverageRows = employee
+        ? (scheduleRows || []).filter((row) => String(row.notes || "").toLowerCase().includes(employee.display_name.toLowerCase()))
+        : [];
+      const absenceNotes = Array.from(new Set((scheduleRows || []).map((row) => row.notes).filter((note) => note && /off|absent/i.test(String(note)))));
       return {
         service_date: serviceDate,
         employee_name: employee?.display_name || employeeName || null,
-        absent_employees: extractAbsentNames(absenceNotes),
+        absent_employees: (absenceRows || []).map((row) => row.display_name),
         absence_notes: absenceNotes,
         coverage_rows: coverageRows || []
       };
@@ -614,17 +584,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     if (name === "get_open_tickets") {
       const location = String(args.location || "").trim();
       const rows = await runReadOnlySql(`
-        select
-          ticket_id,
-          location_code,
-          location_name,
-          maintenance_issue,
-          reported_by,
-          fixture_type,
-          fixture_identifier,
-          out_of_order,
-          date_submitted_display,
-          created_at_display
+        select ticket_id, location_code, location_name, maintenance_issue, reported_by, fixture_type, fixture_identifier, out_of_order, date_submitted_display, created_at_display
         from public.v_open_maintenance_tickets
         ${location ? `where location_code ilike ${sqlLikeLiteral(location)} or location_name ilike ${sqlLikeLiteral(location)}` : ""}
         order by date_submitted desc nulls last, created_at desc nulls last
@@ -635,35 +595,15 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
 
     if (name === "get_dashboard_summary") {
       const [snapshotRows, badRows, attendanceRows] = await Promise.all([
+        runReadOnlySql(`select * from public.v_admin_health_snapshot order by snapshot_at desc limit 1`),
         runReadOnlySql(`
-          select *
-          from public.v_admin_health_snapshot
-          order by snapshot_at desc
-          limit 1
-        `),
-        runReadOnlySql(`
-          select
-            location_code,
-            location_name,
-            status_code,
-            status_color,
-            open_ticket_count,
-            latest_employee_name,
-            latest_completed_at_display,
-            open_session_status
+          select location_code, location_name, status_code, status_color, open_ticket_count, latest_employee_name, latest_completed_at_display, open_session_status
           from public.v_location_dashboard_status
           where status_code <> 'okay' or open_ticket_count > 0
-          order by case status_color when 'red' then 1 when 'yellow' then 2 when 'blue' then 3 else 9 end,
-                   open_ticket_count desc,
-                   location_name
+          order by case status_color when 'red' then 1 when 'yellow' then 2 when 'blue' then 3 else 9 end, open_ticket_count desc, location_name
           limit 15
         `),
-        runReadOnlySql(`
-          select attendance, last_year, planned, yesterday, yesterday_plan, fetched_at, updated_at
-          from public.current_attendance_state
-          where id = 1
-          limit 1
-        `)
+        runReadOnlySql(`select attendance, last_year, planned, yesterday, yesterday_plan, fetched_at, updated_at from public.current_attendance_state where id = 1 limit 1`)
       ]);
       return {
         snapshot: Array.isArray(snapshotRows) && snapshotRows.length ? snapshotRows[0] : {},
@@ -674,10 +614,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
 
     if (name === "get_scan_state") {
       const locationCode = String(args.location_code || "").trim();
-      const data = await runRpc("tool_get_location_scan_state", {
-        p_location_code: locationCode,
-        p_device_id: DEFAULT_SCAN_DEVICE_ID
-      });
+      const data = await runRpc("tool_get_location_scan_state", { p_location_code: locationCode, p_device_id: DEFAULT_SCAN_DEVICE_ID });
       return data;
     }
 
@@ -689,13 +626,12 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     throw new Error(`Unknown Memphis tool: ${name}`);
   }
 
-  async function generateLocalReply(userMessage) {
+  async function generateLocalReply(userMessage, { deviceId = "" } = {}) {
     const text = String(userMessage || "").trim();
     const lower = text.toLowerCase();
     const relativeOffset = inferRelativeDateOffset(text);
-    const relativeServiceDate = relativeOffset === 0
-      ? await getDefaultServiceDate(runReadOnlySql)
-      : await getRelativeServiceDate(runReadOnlySql, relativeOffset);
+    const relativeServiceDate = relativeOffset === 0 ? await getDefaultServiceDate(runReadOnlySql) : await getRelativeServiceDate(runReadOnlySql, relativeOffset);
+    const assignedEmployee = await fetchAssignedEmployeeForDevice(runReadOnlySql, deviceId);
 
     if (lower.includes("event")) {
       const data = await executeTool("get_upcoming_events", { days: 14 });
@@ -709,13 +645,18 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
 
     if (lower.includes("absent") || lower.includes("off") || lower.includes("cover") || lower.includes("covering") || lower.includes("fill") || lower.includes("filling")) {
       const employeeName = await guessEmployeeName(runRpc, text);
-      const data = await executeTool("get_absence_coverage", {
-        employee_name: employeeName,
+      const data = await executeTool("get_absence_coverage", { employee_name: employeeName, service_date: relativeServiceDate });
+      return { text: summarizeAbsenceCoverage(data, employeeName), meta: { fallback: true, mode: "local_absence_coverage" } };
+    }
+
+    if ((lower.includes("my schedule") || lower === "schedule" || lower.includes("what am i assigned") || lower.includes("what am i doing today")) && assignedEmployee?.assigned_employee_name) {
+      const data = await executeTool("get_employee_schedule", {
+        employee_name: assignedEmployee.assigned_employee_name,
         service_date: relativeServiceDate
       });
       return {
-        text: summarizeAbsenceCoverage(data, employeeName),
-        meta: { fallback: true, mode: "local_absence_coverage" }
+        text: summarizeEmployeeAssignments(data.assignments, assignedEmployee.assigned_employee_name, data.service_date),
+        meta: { fallback: true, mode: "local_my_schedule" }
       };
     }
 
@@ -732,9 +673,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       const query = code || text;
       if (/(teton|zambezi|aquarium|primate|restroom|bonobos|breezeway|event center|location|tetm|tetx|code)/i.test(text) || code) {
         const data = await executeTool("get_location_details", { location: query });
-        if (data?.location) {
-          return { text: summarizeLocationDetails(data), meta: { fallback: true, mode: "local_location_details" } };
-        }
+        if (data?.location) return { text: summarizeLocationDetails(data), meta: { fallback: true, mode: "local_location_details" } };
       }
     }
 
@@ -743,10 +682,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       if (code) {
         const owner = await executeTool("get_current_owner", { location_code: code });
         if (!owner) return { text: `I could not find a current owner for ${code}.`, meta: { fallback: true, mode: "local_owner" } };
-        return {
-          text: `${owner.location_name || owner.location_code || code} is currently owned by ${owner.owner_display_name || owner.employee_name || "nobody listed"}.`,
-          meta: { fallback: true, mode: "local_owner" }
-        };
+        return { text: `${owner.location_name || owner.location_code || code} is currently owned by ${owner.owner_display_name || owner.employee_name || "nobody listed"}.`, meta: { fallback: true, mode: "local_owner" } };
       }
     }
 
@@ -754,35 +690,19 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       const code = findLocationCode(text);
       if (code) {
         const stateValue = await executeTool("get_scan_state", { location_code: code });
-        return {
-          text: `${stateValue.location_name || stateValue.location_code || code} is currently ${stateValue.suggested_action || stateValue.status || "available"}.`,
-          meta: { fallback: true, mode: "local_scan" }
-        };
+        return { text: `${stateValue.location_name || stateValue.location_code || code} is currently ${stateValue.suggested_action || stateValue.status || "available"}.`, meta: { fallback: true, mode: "local_scan" } };
       }
     }
 
     if (lower.includes("schedule") || lower.includes("assigned") || lower.includes("working")) {
       const employeeName = await guessEmployeeName(runRpc, text);
       if (employeeName) {
-        const data = await executeTool("get_employee_schedule", {
-          employee_name: employeeName,
-          service_date: relativeServiceDate
-        });
-        return {
-          text: summarizeEmployeeAssignments(data.assignments, employeeName, data.service_date),
-          meta: { fallback: true, mode: "local_employee_schedule" }
-        };
+        const data = await executeTool("get_employee_schedule", { employee_name: employeeName, service_date: relativeServiceDate });
+        return { text: summarizeEmployeeAssignments(data.assignments, employeeName, data.service_date), meta: { fallback: true, mode: "local_employee_schedule" } };
       }
-
       if (/(today|tomorrow|group|teton|expo|zambezi|primate|event center|aquarium|restroom)/i.test(text)) {
-        const data = await executeTool("get_area_schedule", {
-          area: text,
-          service_date: relativeServiceDate
-        });
-        return {
-          text: summarizeAssignments(data.assignments, `I couldn't find schedule assignments for ${text} on ${data.service_date}.`),
-          meta: { fallback: true, mode: "local_area_schedule" }
-        };
+        const data = await executeTool("get_area_schedule", { area: text, service_date: relativeServiceDate });
+        return { text: summarizeAssignments(data.assignments, `I couldn't find schedule assignments for ${text} on ${data.service_date}.`), meta: { fallback: true, mode: "local_area_schedule" } };
       }
     }
 
@@ -792,7 +712,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     }
 
     return {
-      text: "I can help with scans, locations, employees, schedules, absences and coverage, events, dashboard metrics, tickets, and current ownership. Ask me what's covered, who's off, what the dashboard is yelling about, or where the next mess is brewing.",
+      text: "I can help with scans, locations, employees, live schedules, absences and coverage, events, dashboard metrics, tickets, and current ownership. Ask me what's covered, who's off, what the dashboard is yelling about, or what your device is assigned today.",
       meta: { fallback: true, mode: "local_generic" }
     };
   }
@@ -802,9 +722,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     const identity = await fetchDeviceIdentity(runReadOnlySql, deviceId);
     const webEnabled = allowWebSearch({ deviceId, identityRole: identity?.role || "" });
 
-    if (!apiKey) {
-      return await generateLocalReply(userMessage);
-    }
+    if (!apiKey) return await generateLocalReply(userMessage, { deviceId });
 
     const systemInstruction = buildSystemPrompt({ webEnabled });
     const model = DEFAULT_MODEL;
@@ -817,10 +735,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
         const calls = extractGeminiFunctionCalls(payload);
         const text = extractGeminiText(payload);
         if (!calls.length) {
-          return {
-            text: text || "I couldn't produce a clean answer for that yet.",
-            meta: { fallback: false, provider: "gemini", model }
-          };
+          return { text: text || "I couldn't produce a clean answer for that yet.", meta: { fallback: false, provider: "gemini", model } };
         }
         const modelParts = payload?.candidates?.[0]?.content?.parts || [];
         contents.push({ role: "model", parts: modelParts });
@@ -833,14 +748,10 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
         }
         contents.push({ role: "user", parts: functionResponseParts });
       }
-
-      return {
-        text: "I hit a tool loop limit before finishing that answer. Very glamorous, I know.",
-        meta: { fallback: false, provider: "gemini", model, loop_limit: true }
-      };
+      return { text: "I hit a tool loop limit before finishing that answer. Very glamorous, I know.", meta: { fallback: false, provider: "gemini", model, loop_limit: true } };
     } catch (error) {
       console.error("memphis gemini path failed:", error);
-      const local = await generateLocalReply(userMessage);
+      const local = await generateLocalReply(userMessage, { deviceId });
       return {
         text: local.text,
         meta: {
