@@ -13,8 +13,19 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     return String(value || "").replace(/'/g, "''");
   }
 
+  function getGeminiDiagnostics() {
+    const geminiApiKey = String(process.env.GEMINI_API_KEY || "").trim();
+    const googleApiKey = String(process.env.GOOGLE_API_KEY || "").trim();
+    const model = String(process.env.MEMPHIS_GEMINI_MODEL || process.env.GEMINI_MODEL || "gemini-2.5-flash").trim();
+    return {
+      gemini_configured: Boolean(geminiApiKey || googleApiKey),
+      gemini_key_source: geminiApiKey ? "GEMINI_API_KEY" : (googleApiKey ? "GOOGLE_API_KEY" : null),
+      memphis_model: model || null,
+    };
+  }
+
   router.get("/health", (_req, res) => {
-    res.status(200).json(buildHealthPayload("messaging", { contract_version: contractVersion }));
+    res.status(200).json(buildHealthPayload("messaging", { contract_version: contractVersion, memphis: getGeminiDiagnostics() }));
   });
 
   router.get("/me/by-device", async (req, res) => {
@@ -169,8 +180,8 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       } catch (error) {
         console.error("memphis ai reply failed:", error);
         reply = {
-          text: "Memphis hit an internal error while answering that. Try again in a moment.",
-          meta: { fallback: true, error: error?.message || "unknown_error" }
+          text: `Memphis hit an internal error while answering that. ${error?.message || "Unknown error."}`,
+          meta: { fallback: true, error: error?.message || "unknown_error", diagnostics: getGeminiDiagnostics() }
         };
       }
 
