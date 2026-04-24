@@ -140,6 +140,13 @@ function isGeneralKnowledgeQuestion(text = "") {
   return false;
 }
 
+function shouldTreatAsPureOpener(text = "") {
+  const lower = normalizeLoose(text);
+  if (isWeatherQuestion(lower)) return false;
+  if (/(who|what|when|where|why|how)\b/.test(lower)) return false;
+  return isGreetingOnly(text) || (isConversationalOpener(text) && String(text || "").trim().length < 40);
+}
+
 function openerReply(text = "") {
   const lower = normalizeLoose(text);
   if (/connected/.test(lower)) return "Yeah. I am up and talking. What do you need?";
@@ -158,6 +165,17 @@ function genericConversationalFallback(text = "", threadContext = {}) {
   if (/weather/.test(lower)) return `I should be able to answer weather for ${weatherLocation || DEFAULT_WEATHER_LOCATION}, but my general-answer side did not land it cleanly.`;
   if (/hello|hey|hi/.test(lower)) return "Hey. What do you need?";
   return "I am here. Ask me something specific or just talk to me like a person.";
+}
+
+function summarizeWeatherPayload(weather) {
+  if (!weather) return `I could not pull weather for ${DEFAULT_WEATHER_LOCATION} right now.`;
+  const temp = weather.temperature_c == null ? "temperature unavailable" : `${Math.round(Number(weather.temperature_c))}°C`;
+  const wind = weather.wind_kmh == null ? "wind unavailable" : `${Math.round(Number(weather.wind_kmh))} km/h wind`;
+  const high = weather.high_c == null ? "high unavailable" : `high ${Math.round(Number(weather.high_c))}°C`;
+  const low = weather.low_c == null ? "low unavailable" : `low ${Math.round(Number(weather.low_c))}°C`;
+  const precip = weather.precipitation_probability == null ? "precipitation unknown" : `${Math.round(Number(weather.precipitation_probability))}% chance of precipitation`;
+  const condition = weather.condition || "conditions unavailable";
+  return `${weather.location || DEFAULT_WEATHER_LOCATION} today: ${condition}, ${temp}, ${high}, ${low}, ${wind}, ${precip}.`;
 }
 
 function inferIntent(text = "") {
@@ -431,6 +449,39 @@ function mergeContextDate(text, threadContext = {}, explicitServiceDate = null) 
   const direct = extractExplicitDate(text);
   if (direct) return direct;
   return threadContext?.last_service_date || null;
+}
+
+async function fetchWeatherForMemphisTn(location = DEFAULT_WEATHER_LOCATION) {
+  const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=1&language=en&format=json`);
+  const geo = await geoRes.json().catch(() => null);
+  const first = geo?.results?.[0];
+  if (!first?.latitude || !first?.longitude) throw new Error("Weather geocoding failed");
+  const forecastRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(first.latitude)}&longitude=${encodeURIComponent(first.longitude)}&current=temperature_2m,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=1`);
+  const forecast = await forecastRes.json().catch(() => null);
+  if (!forecast?.current || !forecast?.daily) throw new Error("Weather forecast failed");
+  return {
+    location,
+    temperature_c: forecast.current.temperature_2m,
+    wind_kmh: forecast.current.wind_speed_10m,
+    high_c: forecast.daily.temperature_2m_max?.[0],
+    low_c: forecast.daily.temperature_2m_min?.[0],
+    precipitation_probability: forecast.daily.precipitation_probability_max?.[0],
+    condition: weatherCodeToText(forecast.current.weather_code)
+  };
+}
+
+function weatherCodeToText(code) {
+  const value = Number(code);
+  if (value === 0) return "clear";
+  if ([1,2,3].includes(value)) return "partly cloudy";
+  if ([45,48].includes(value)) return "foggy";
+  if ([51,53,55,56,57].includes(value)) return "drizzle";
+  if ([61,63,65,66,67].includes(value)) return "rain";
+  if ([71,73,75,77].includes(value)) return "snow";
+  if ([80,81,82].includes(value)) return "rain showers";
+  if ([85,86].includes(value)) return "snow showers";
+  if ([95,96,99].includes(value)) return "thunderstorms";
+  return "mixed conditions";
 }
 
 async function tryGeminiConversation({ apiKey, userMessage, webEnabled, threadContext }) {
@@ -774,10 +825,22 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     const relativeServiceDate = mergeContextDate(text, threadContext, extractExplicitDate(text)) || (relativeOffset === 0 ? await getDefaultServiceDate(runReadOnlySql) : await getRelativeServiceDate(runReadOnlySql, relativeOffset));
     const assignedEmployee = await fetchAssignedEmployeeForDevice(runReadOnlySql, deviceId);
 
-    if (isGreetingOnly(text) || isConversationalOpener(text)) {
+    if (shouldTreatAsPureOpener(text)) {
       const subjectType = isWeatherQuestion(text) ? "weather" : "conversation";
       await saveThreadContext(runRpc, threadId, { last_intent: "conversation", last_service_date: relativeServiceDate, last_subject_type: subjectType, context_json: subjectType === "weather" ? { weather_location: inferWeatherLocation(text, threadContext) || DEFAULT_WEATHER_LOCATION } : {} });
       return { text: openerReply(text), meta: { fallback: true, mode: "local_conversation" } };
+    }
+
+    if (isWeatherQuestion(text)) {
+      const location = inferWeatherLocation(text, threadContext) || DEFAULT_WEATHER_LOCATION;
+      try {
+        const weather = await fetchWeatherForMemphisTn(location);
+        await saveThreadContext(runRpc, threadId, { last_intent: "weather", last_service_date: relativeServiceDate, last_subject_type: "weather", context_json: { weather_location: location } });
+        return { text: summarizeWeatherPayload(weather), meta: { fallback: true, mode: "local_weather_direct" } };
+      } catch (error) {
+        await saveThreadContext(runRpc, threadId, { last_intent: "weather", last_service_date: relativeServiceDate, last_subject_type: "weather", context_json: { weather_location: location } });
+        return { text: `I could not pull live weather for ${location} right now.`, meta: { fallback: true, mode: "local_weather_failed", error: error?.message || "weather_failed" } };
+      }
     }
 
     if (lower.includes("event")) {
@@ -908,6 +971,17 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
 
     if (!apiKey || explicitSystem) {
       return await generateSystemReply(userMessage, { deviceId, threadId });
+    }
+
+    if (isWeatherQuestion(userMessage)) {
+      const location = inferWeatherLocation(userMessage, threadContext) || DEFAULT_WEATHER_LOCATION;
+      try {
+        const weather = await fetchWeatherForMemphisTn(location);
+        await saveThreadContext(runRpc, threadId, { last_intent: "weather", last_subject_type: "weather", context_json: { weather_location: location } });
+        return { text: summarizeWeatherPayload(weather), meta: { fallback: false, provider: "weather_direct", mode: "conversation_weather_direct" } };
+      } catch (error) {
+        console.error("memphis direct weather path failed:", error);
+      }
     }
 
     try {
