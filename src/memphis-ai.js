@@ -253,60 +253,121 @@ function extractGeminiFunctionCalls(payload) {
   return parts.filter((part) => part?.functionCall && part.functionCall.name);
 }
 
-function isSystemSpecificQuestion(text = "", threadContext = {}) {
-  const intent = inferIntent(text);
-  if (intent !== 'generic') return true;
-  if (findLocationCode(text)) return true;
+async function getDefaultServiceDate(runReadOnlySql) {
+  const rows = await runReadOnlySql("select public.sch_service_date(now()) as service_date");
+  return Array.isArray(rows) && rows.length ? rows[0].service_date : null;
+}
+
+async function getRelativeServiceDate(runReadOnlySql, offsetDays = 0) {
+  const safeOffset = Number.isFinite(Number(offsetDays)) ? Number(offsetDays) : 0;
+  const rows = await runReadOnlySql(`select public.sch_service_date(now() + interval '${safeOffset} day') as service_date`);
+  return Array.isArray(rows) && rows.length ? rows[0].service_date : null;
+}
+
+function inferRelativeDateOffset(text) {
   const lower = String(text || "").toLowerCase();
-  if (/(aquarium|zambezi|teton|expo|event center|dashboard|tickets|attendance|schedule|absence|cover|coverage|employee|location|owner|restroom|herpetarium|komodos|nocturnal|primate|china|east admin|west admin|breezeway)/i.test(lower)) return true;
-  if (threadContext?.last_subject_type && threadContext.last_subject_type !== 'conversation' && threadContext.last_subject_type !== 'generic') return true;
-  return false;
+  if (lower.includes("tomorrow")) return 1;
+  if (lower.includes("yesterday")) return -1;
+  return 0;
 }
 
-async function tryGeminiConversation({ apiKey, userMessage, webEnabled }) {
-  const payload = await callGeminiGenerate({
-    apiKey,
-    model: DEFAULT_MODEL,
-    systemInstruction: buildConversationPrompt({ webEnabled }),
-    contents: [{ role: "user", parts: [{ text: userMessage }] }],
-    tools: null,
-    temperature: 0.65
-  });
-  return extractGeminiText(payload);
+function findLocationCode(text) {
+  const match = String(text || "").match(/\b[A-Z]{3,5}\b/);
+  return match ? match[0] : "";
 }
 
-async function tryGeminiSystem({ apiKey, userMessage, deviceId, threadId, runRpc, webEnabled, executeTool }) {
-  const systemInstruction = buildSystemPrompt({ webEnabled });
-  const tools = buildGeminiTools();
-  const contents = [{ role: "user", parts: [{ text: userMessage }] }];
+function summarizeEvents(events = []) {
+  if (!events.length) return "I don't see any upcoming events in the system right now.";
+  return events.slice(0, 6).map((event) => {
+    const attendees = event.attendee_count == null ? "attendees not listed" : `${event.attendee_count} attendees`;
+    return `${event.event_name} in ${event.group_name || event.group_code} on ${event.event_date} from ${event.start_time} to ${event.end_time}, ${attendees}.`;
+  }).join(" ");
+}
 
-  for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
-    const payload = await callGeminiGenerate({
-      apiKey,
-      model: DEFAULT_MODEL,
-      systemInstruction,
-      contents,
-      tools,
-      temperature: 0.45
-    });
-    const calls = extractGeminiFunctionCalls(payload);
-    const text = extractGeminiText(payload);
-    if (!calls.length) {
-      return text;
+function summarizeAssignments(assignments = [], emptyText) {
+  if (!assignments.length) return emptyText;
+  return assignments.slice(0, 12).map((row) => {
+    const employee = row.employee_name || row.assigned_employee_name || "Open";
+    const group = row.group_name || row.group_code || "Unknown area";
+    const start = row.coverage_start || "—";
+    const end = row.coverage_end || "—";
+    return `${employee} covers ${group} from ${start} to ${end}.`;
+  }).join(" ");
+}
+
+function summarizeEmployeeAssignments(assignments = [], employeeName, serviceDate) {
+  if (!assignments.length) return `I couldn't find schedule assignments for ${employeeName} on ${serviceDate}.`;
+  return `${employeeName} on ${serviceDate}: ` + assignments.slice(0, 12).map((row) => {
+    const group = row.group_name || row.group_code || "Unknown area";
+    const start = row.coverage_start || "—";
+    const end = row.coverage_end || "—";
+    return `${group} from ${start} to ${end}`;
+  }).join("; ") + ".";
+}
+
+function summarizeTickets(tickets = [], location = "") {
+  if (!tickets.length) return location ? `No open tickets matching ${location}.` : "No open tickets right now.";
+  return tickets.slice(0, 8).map((ticket) => `${ticket.location_name || ticket.location_code}: ${ticket.maintenance_issue}.`).join(" ");
+}
+
+function summarizeDashboard(snapshot = {}, attention = [], attendance = null) {
+  const bits = [];
+  if (attendance?.attendance != null) bits.push(`attendance ${attendance.attendance}`);
+  if (snapshot.open_ticket_count != null) bits.push(`${snapshot.open_ticket_count} open tickets`);
+  if (snapshot.overdue_locations != null) bits.push(`${snapshot.overdue_locations} overdue locations`);
+  if (snapshot.due_soon_locations != null) bits.push(`${snapshot.due_soon_locations} due soon`);
+  if (snapshot.in_progress_locations != null) bits.push(`${snapshot.in_progress_locations} in progress`);
+  const summary = bits.length ? `Dashboard snapshot: ${bits.join(", ")}.` : "Dashboard snapshot is available.";
+  const focus = attention.length ? ` Attention locations: ${attention.slice(0, 8).map((row) => `${row.location_name || row.location_code} (${row.status_code}, ${row.open_ticket_count} tickets)`).join("; ")}.` : "";
+  return `${summary}${focus}`.trim();
+}
+
+function summarizeAbsenceCoverage(data = {}, employeeName = "") {
+  const serviceDate = data.service_date || "the requested day";
+  const absentPeople = Array.isArray(data.absent_employees) ? data.absent_employees : [];
+  const coverage = Array.isArray(data.coverage_rows) ? data.coverage_rows : [];
+  const notes = Array.isArray(data.absence_notes) ? data.absence_notes : [];
+  if (employeeName) {
+    if (!coverage.length) {
+      const notesText = notes.length ? ` Notes: ${notes.join(" | ")}` : "";
+      return `I couldn't find explicit coverage rows for ${employeeName} on ${serviceDate}.${notesText}`.trim();
     }
-    const modelParts = payload?.candidates?.[0]?.content?.parts || [];
-    contents.push({ role: "model", parts: modelParts });
-    const functionResponseParts = [];
-    for (const callPart of calls) {
-      const name = callPart.functionCall.name;
-      const args = callPart.functionCall.args || {};
-      if (name === 'get_my_schedule' && !args.device_id && deviceId) args.device_id = deviceId;
-      const output = await executeTool(name, args);
-      functionResponseParts.push({ functionResponse: { name, response: output } });
-    }
-    contents.push({ role: "user", parts: functionResponseParts });
+    return `${employeeName} on ${serviceDate}: ` + coverage.slice(0, 12).map((row) => {
+      const group = row.group_name || row.group_code || "Unknown area";
+      const filler = row.assigned_employee_name || "Open";
+      const start = row.coverage_start || "—";
+      const end = row.coverage_end || "—";
+      return `${group} is covered by ${filler} from ${start} to ${end}`;
+    }).join("; ") + ".";
   }
-  return "";
+  if (!absentPeople.length && !notes.length) return `I don't see any absence notes or replacement coverage for ${serviceDate}.`;
+  const absentLine = absentPeople.length ? `Absent on ${serviceDate}: ${absentPeople.join(", ")}.` : `Absence notes exist for ${serviceDate}.`;
+  const coverageLine = coverage.length ? ` Coverage examples: ${coverage.slice(0, 10).map((row) => `${row.group_name || row.group_code} covered by ${row.assigned_employee_name || "Open"} ${row.coverage_start || "—"}-${row.coverage_end || "—"}`).join("; ")}.` : "";
+  return `${absentLine}${coverageLine}`.trim();
+}
+
+function summarizeEmployeeProfile(profile = null) {
+  if (!profile) return "I couldn't find that employee in the system.";
+  const parts = [`${profile.display_name} (${profile.employee_code || 'no code'})`];
+  if (profile.role) parts.push(`role ${profile.role}`);
+  if (profile.device_name) parts.push(`device ${profile.device_name}`);
+  if (profile.primary_groups?.length) parts.push(`primary groups: ${profile.primary_groups.join(', ')}`);
+  if (profile.secondary_groups?.length) parts.push(`secondary groups: ${profile.secondary_groups.join(', ')}`);
+  return parts.join('. ') + '.';
+}
+
+function summarizeLocationDetails(data = {}) {
+  if (!data?.location) return "I couldn't find that location in the system.";
+  const loc = data.location;
+  const parts = [`${loc.location_name} (${loc.location_code})`];
+  if (loc.location_type) parts.push(`type ${loc.location_type}`);
+  if (loc.form_type) parts.push(`form ${loc.form_type}`);
+  if (loc.group_names?.length) parts.push(`groups: ${loc.group_names.join(', ')}`);
+  if (loc.difficulty_rating != null || loc.priority_rating != null) parts.push(`difficulty ${loc.difficulty_rating ?? 'n/a'}, priority ${loc.priority_rating ?? 'n/a'}`);
+  if (loc.workload_notes) parts.push(`workload notes: ${loc.workload_notes}`);
+  if (loc.notes) parts.push(`notes: ${loc.notes}`);
+  if (data.current_owner?.owner_display_name || data.current_owner?.employee_name) parts.push(`current owner ${data.current_owner.owner_display_name || data.current_owner.employee_name}`);
+  return parts.join('. ') + '.';
 }
 
 function summarizeLoadSummary(rows = [], serviceDate = "") {
@@ -364,6 +425,16 @@ function inferIntent(text = "") {
   if (/(dashboard|summary|attendance|overdue)/i.test(lower)) return "dashboard_summary";
   if (/(who is assigned|assigned to|schedule for|who has)/i.test(lower)) return "area_schedule";
   return "generic";
+}
+
+function isSystemSpecificQuestion(text = "", threadContext = {}) {
+  const intent = inferIntent(text);
+  if (intent !== 'generic') return true;
+  if (findLocationCode(text)) return true;
+  const lower = String(text || "").toLowerCase();
+  if (/(aquarium|zambezi|teton|expo|event center|dashboard|tickets|attendance|schedule|absence|cover|coverage|employee|location|owner|restroom|herpetarium|komodos|nocturnal|primate|china|east admin|west admin|breezeway)/i.test(lower)) return true;
+  if (threadContext?.last_subject_type && threadContext.last_subject_type !== 'conversation' && threadContext.last_subject_type !== 'generic') return true;
+  return false;
 }
 
 async function resolveAreaName(runReadOnlySql, text = "", threadContext = {}) {
@@ -639,7 +710,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
         left join public.location_groups lg on lg.id = lgm.location_group_id and lg.active = true
         group by lm.id, lm.location_code, lm.location_name, lm.location_type, lm.form_type, lm.active, lm.notes, lm.difficulty_rating, lm.priority_rating, lm.workload_notes
       `);
-      const loc = Array.isArray(locationRows) && rows.length ? locationRows[0] : null;
+      const loc = Array.isArray(locationRows) && locationRows.length ? locationRows[0] : null;
       if (!loc) return { location: null, current_owner: null };
       const ownerRows = await runReadOnlySql(`select * from public.sch_get_current_owner('${esc(loc.location_code)}', now())`);
       return { location: loc, current_owner: Array.isArray(ownerRows) && ownerRows.length ? ownerRows[0] : null };
@@ -842,6 +913,35 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     };
   }
 
+  async function tryGeminiConversation({ apiKey, userMessage, webEnabled }) {
+    const payload = await callGeminiGenerate({ apiKey, model: DEFAULT_MODEL, systemInstruction: buildConversationPrompt({ webEnabled }), contents: [{ role: "user", parts: [{ text: userMessage }] }], tools: null, temperature: 0.65 });
+    return extractGeminiText(payload);
+  }
+
+  async function tryGeminiSystem({ apiKey, userMessage, deviceId, webEnabled, executeTool }) {
+    const systemInstruction = buildSystemPrompt({ webEnabled });
+    const tools = buildGeminiTools();
+    const contents = [{ role: "user", parts: [{ text: userMessage }] }];
+    for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
+      const payload = await callGeminiGenerate({ apiKey, model: DEFAULT_MODEL, systemInstruction, contents, tools, temperature: 0.45 });
+      const calls = extractGeminiFunctionCalls(payload);
+      const text = extractGeminiText(payload);
+      if (!calls.length) return text;
+      const modelParts = payload?.candidates?.[0]?.content?.parts || [];
+      contents.push({ role: "model", parts: modelParts });
+      const functionResponseParts = [];
+      for (const callPart of calls) {
+        const name = callPart.functionCall.name;
+        const args = callPart.functionCall.args || {};
+        if (name === 'get_my_schedule' && !args.device_id && deviceId) args.device_id = deviceId;
+        const output = await executeTool(name, args);
+        functionResponseParts.push({ functionResponse: { name, response: output } });
+      }
+      contents.push({ role: "user", parts: functionResponseParts });
+    }
+    return "";
+  }
+
   async function generateReply({ deviceId = "", userMessage = "", threadId = "" }) {
     const apiKey = getGeminiApiKey();
     const identity = await fetchDeviceIdentity(runReadOnlySql, deviceId);
@@ -867,7 +967,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     }
 
     try {
-      const text = await tryGeminiSystem({ apiKey, userMessage, deviceId, threadId, runRpc, webEnabled, executeTool });
+      const text = await tryGeminiSystem({ apiKey, userMessage, deviceId, webEnabled, executeTool });
       if (text && !/^i can help with /i.test(text.trim())) {
         await saveThreadContext(runRpc, threadId, { last_intent: inferIntent(userMessage), last_service_date: extractExplicitDate(userMessage) || null, last_subject_type: 'generic' });
         return { text, meta: { fallback: false, provider: 'gemini', model: DEFAULT_MODEL, mode: 'system_with_tools' } };
