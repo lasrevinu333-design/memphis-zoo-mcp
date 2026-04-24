@@ -45,9 +45,10 @@ async function fetchDeviceIdentity(runReadOnlySql, deviceId) {
 function buildSystemPrompt({ webEnabled }) {
   return [
     "You are Memphis, the operational assistant for Memphis Zoo custodial systems.",
-    "Answer internal system questions about schedules, absences, coverage, upcoming events, scan state, dashboard status, open tickets, employees, and messaging-related operations.",
+    "Answer internal system questions about scans, locations, employees, schedules, absences, coverage, upcoming events, dashboard status, attendance, and open tickets.",
     "Prefer tool calls for factual answers. Do not invent operational facts.",
-    "Understand relative dates like today and tomorrow when answering schedule questions.",
+    "Understand relative dates like today and tomorrow when answering schedule and absence questions.",
+    "When asked who is filling in for an absent employee, use schedule or absence coverage data and say clearly if the system does not show a named replacement.",
     webEnabled
       ? "External web lookup is allowed on this device when clearly needed for current outside information."
       : "External web lookup is not allowed on this device. If asked for outside or general knowledge unrelated to Memphis Zoo systems, explain that this device is limited to internal system questions.",
@@ -103,6 +104,28 @@ function buildGeminiTools() {
             employee_name: { type: "STRING", description: "Optional absent employee name or partial name." },
             service_date: { type: "STRING", description: "Optional date in YYYY-MM-DD. Defaults to today service date." }
           }
+        }
+      },
+      {
+        name: "get_employee_profile",
+        description: "Look up employee profile details including role, code, device assignment, and primary groups.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            employee_name: { type: "STRING", description: "Employee display name or partial name." }
+          },
+          required: ["employee_name"]
+        }
+      },
+      {
+        name: "get_location_details",
+        description: "Look up a location or area by code or name including type, form type, workload, and notes.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            location: { type: "STRING", description: "Location code, location name, or area name." }
+          },
+          required: ["location"]
         }
       },
       {
@@ -290,6 +313,34 @@ function summarizeAbsenceCoverage(data = {}, employeeName = "") {
   return `${absentLine}${coverageLine}`.trim();
 }
 
+function summarizeEmployeeProfile(profile = null) {
+  if (!profile) return "I could not find that employee in the system.";
+  const parts = [`${profile.display_name} (${profile.employee_code || 'no code'})`];
+  if (profile.role) parts.push(`role ${profile.role}`);
+  if (profile.device_name) parts.push(`device ${profile.device_name}`);
+  if (profile.primary_groups?.length) parts.push(`primary groups: ${profile.primary_groups.join(', ')}`);
+  if (profile.secondary_groups?.length) parts.push(`secondary groups: ${profile.secondary_groups.join(', ')}`);
+  return parts.join('. ') + '.';
+}
+
+function summarizeLocationDetails(data = {}) {
+  if (!data?.location) return "I could not find that location in the system.";
+  const loc = data.location;
+  const parts = [`${loc.location_name} (${loc.location_code})`];
+  if (loc.location_type) parts.push(`type ${loc.location_type}`);
+  if (loc.form_type) parts.push(`form ${loc.form_type}`);
+  if (loc.group_names?.length) parts.push(`groups: ${loc.group_names.join(', ')}`);
+  if (loc.difficulty_rating != null || loc.priority_rating != null) {
+    parts.push(`difficulty ${loc.difficulty_rating ?? 'n/a'}, priority ${loc.priority_rating ?? 'n/a'}`);
+  }
+  if (loc.workload_notes) parts.push(`workload notes: ${loc.workload_notes}`);
+  if (loc.notes) parts.push(`notes: ${loc.notes}`);
+  if (data.current_owner?.owner_display_name || data.current_owner?.employee_name) {
+    parts.push(`current owner ${data.current_owner.owner_display_name || data.current_owner.employee_name}`);
+  }
+  return parts.join('. ') + '.';
+}
+
 async function guessEmployeeName(runRpc, text) {
   const raw = String(text || "").trim();
   if (!raw) return "";
@@ -463,6 +514,91 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       };
     }
 
+    if (name === "get_employee_profile") {
+      const employeeName = String(args.employee_name || "").trim();
+      const rows = await runReadOnlySql(`
+        with employee_match as (
+          select id, display_name, employee_code, role, active
+          from public.employees
+          where display_name ilike ${sqlLikeLiteral(employeeName)}
+          order by length(display_name), display_name
+          limit 1
+        ), primary_groups as (
+          select array_agg(lg.group_name order by lg.group_name) as names
+          from public.employee_primary_group_assignments epga
+          join employee_match em on em.id = epga.employee_id
+          join public.location_groups lg on lg.id = epga.location_group_id
+          where epga.active = true
+        ), secondary_groups as (
+          select array_agg(lg.group_name order by lg.group_name) as names
+          from public.employee_location_group_assignments elga
+          join employee_match em on em.id = elga.employee_id
+          join public.location_groups lg on lg.id = elga.location_group_id
+          where elga.active = true
+        ), device_assignment as (
+          select d.device_name
+          from public.devices d
+          join employee_match em on em.id = d.assigned_employee_id
+          where d.active = true
+          order by d.device_name
+          limit 1
+        )
+        select
+          em.display_name,
+          em.employee_code,
+          em.role,
+          em.active,
+          coalesce((select names from primary_groups), array[]::text[]) as primary_groups,
+          coalesce((select names from secondary_groups), array[]::text[]) as secondary_groups,
+          (select device_name from device_assignment) as device_name
+        from employee_match em
+      `);
+      return Array.isArray(rows) && rows.length ? rows[0] : null;
+    }
+
+    if (name === "get_location_details") {
+      const location = String(args.location || "").trim();
+      const locationRows = await runReadOnlySql(`
+        with location_match as (
+          select
+            l.id,
+            l.location_code,
+            l.location_name,
+            l.location_type,
+            l.form_type,
+            l.active,
+            l.notes,
+            l.difficulty_rating,
+            l.priority_rating,
+            l.workload_notes
+          from public.locations l
+          where l.active = true
+            and (
+              l.location_code ilike ${sqlLikeLiteral(location)}
+              or l.location_name ilike ${sqlLikeLiteral(location)}
+            )
+          order by case when lower(l.location_code)=lower('${esc(location)}') then 0 else 1 end,
+                   length(l.location_name),
+                   l.location_name
+          limit 1
+        )
+        select
+          lm.*,
+          coalesce(array_agg(distinct lg.group_name) filter (where lg.group_name is not null), array[]::text[]) as group_names
+        from location_match lm
+        left join public.location_group_memberships lgm on lgm.location_id = lm.id and lgm.active = true
+        left join public.location_groups lg on lg.id = lgm.location_group_id and lg.active = true
+        group by lm.id, lm.location_code, lm.location_name, lm.location_type, lm.form_type, lm.active, lm.notes, lm.difficulty_rating, lm.priority_rating, lm.workload_notes
+      `);
+      const loc = Array.isArray(locationRows) && locationRows.length ? locationRows[0] : null;
+      if (!loc) return { location: null, current_owner: null };
+      const ownerRows = await runReadOnlySql(`select * from public.sch_get_current_owner('${esc(loc.location_code)}', now())`);
+      return {
+        location: loc,
+        current_owner: Array.isArray(ownerRows) && ownerRows.length ? ownerRows[0] : null
+      };
+    }
+
     if (name === "get_current_owner") {
       const locationCode = String(args.location_code || "").trim();
       const at = String(args.at || "").trim();
@@ -579,6 +715,25 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       };
     }
 
+    if (lower.includes("employee") || lower.includes("role") || lower.includes("device")) {
+      const employeeName = await guessEmployeeName(runRpc, text);
+      if (employeeName) {
+        const profile = await executeTool("get_employee_profile", { employee_name: employeeName });
+        return { text: summarizeEmployeeProfile(profile), meta: { fallback: true, mode: "local_employee_profile" } };
+      }
+    }
+
+    if (lower.includes("location") || lower.includes("where is") || lower.includes("what is") || lower.includes("tell me about")) {
+      const code = findLocationCode(text);
+      const query = code || text;
+      if (/(teton|zambezi|aquarium|primate|restroom|bonobos|breezeway|event center|location|tetm|tetx|code)/i.test(text) || code) {
+        const data = await executeTool("get_location_details", { location: query });
+        if (data?.location) {
+          return { text: summarizeLocationDetails(data), meta: { fallback: true, mode: "local_location_details" } };
+        }
+      }
+    }
+
     if (lower.includes("owner") || lower.includes("who owns") || lower.includes("who has")) {
       const code = findLocationCode(text);
       if (code) {
@@ -633,7 +788,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     }
 
     return {
-      text: "Memphis can help with schedules, absences and coverage, events, scan state, dashboard metrics, tickets, and employee assignments. Ask who is absent, who is covering, what events are coming up, what scan state a location is in, or what the dashboard is flagging.",
+      text: "Memphis can help with scans, locations, employees, schedules, absences and coverage, events, dashboard metrics, tickets, and current ownership. Ask what area someone is covering, who is absent, what scan state a location is in, or what the dashboard is flagging.",
       meta: { fallback: true, mode: "local_generic" }
     };
   }
