@@ -29,6 +29,55 @@ function extractExplicitDate(text) {
   return match ? match[1] : null;
 }
 
+function extractTimeWindow(text) {
+  const raw = String(text || "").replace(/\s+/g, " ");
+  const explicitRange = raw.match(/(\d{1,2}(?::\d{2})?\s*(?:am|pm)|\d{3,4}\s*(?:am|pm))[\s]*(?:to|\-|–|—)[\s]*(\d{1,2}(?::\d{2})?\s*(?:am|pm)|\d{3,4}\s*(?:am|pm))/i);
+  if (explicitRange) {
+    return { start: normalizeHumanTime(explicitRange[1]), end: normalizeHumanTime(explicitRange[2]) };
+  }
+  const single = raw.match(/\b(?:at|for|around|after)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)|\d{3,4}\s*(?:am|pm))\b/i);
+  if (single) {
+    const start = normalizeHumanTime(single[1]);
+    if (start) return { start, end: start };
+  }
+  return null;
+}
+
+function normalizeHumanTime(value) {
+  const raw = String(value || "").trim().toLowerCase().replace(/\s+/g, "");
+  let match = raw.match(/^(\d{1,2})(?::(\d{2}))?(am|pm)$/i);
+  if (match) {
+    let hour = Number(match[1]);
+    const minute = Number(match[2] || '0');
+    const meridiem = String(match[3] || '').toLowerCase();
+    if (meridiem === 'pm' && hour < 12) hour += 12;
+    if (meridiem === 'am' && hour === 12) hour = 0;
+    return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+  }
+  match = raw.match(/^(\d{3,4})(am|pm)$/i);
+  if (match) {
+    const digits = match[1];
+    const meridiem = String(match[2] || '').toLowerCase();
+    let hour = Number(digits.length === 3 ? digits.slice(0, 1) : digits.slice(0, 2));
+    const minute = Number(digits.length === 3 ? digits.slice(1) : digits.slice(2));
+    if (!Number.isFinite(hour) || !Number.isFinite(minute) || minute > 59) return '';
+    if (meridiem === 'pm' && hour < 12) hour += 12;
+    if (meridiem === 'am' && hour === 12) hour = 0;
+    return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+  }
+  return '';
+}
+
+function addMinutesToTime(value, minutesToAdd = 0) {
+  const raw = String(value || '').trim();
+  if (!/^\d{2}:\d{2}$/.test(raw)) return raw;
+  const [h, m] = raw.split(':').map(Number);
+  const total = Math.max(0, (h * 60) + m + minutesToAdd);
+  const hour = Math.floor(total / 60) % 24;
+  const minute = total % 60;
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+}
+
 function toSafeInt(value, fallback, min = 1, max = 90) {
   const parsed = Number.parseInt(String(value ?? fallback), 10);
   if (!Number.isFinite(parsed)) return fallback;
@@ -107,6 +156,7 @@ function buildSystemPrompt({ webEnabled }) {
     "If asked about my schedule on an employee device, resolve the employee assigned to that device.",
     "When the user refers to an area in normal speech, detect the area name inside the sentence.",
     "Explain why an area is open when the data supports it.",
+    "When asked who should cover something, rank candidates using live shift coverage, overlap conflicts, load, familiarity, preference, and proximity.",
     "Be direct, practical, and clear. No invented facts.",
     webEnabled
       ? "External web lookup is allowed on this device when clearly needed for current outside information."
@@ -124,6 +174,7 @@ function buildGeminiTools() {
       { name: "get_absence_coverage", description: "Find who is absent and who is covering their assigned areas on a given service date.", parameters: { type: "OBJECT", properties: { employee_name: { type: "STRING" }, service_date: { type: "STRING" } } } },
       { name: "get_open_segments", description: "List currently open schedule segments, optionally filtered by area.", parameters: { type: "OBJECT", properties: { service_date: { type: "STRING" }, area: { type: "STRING" } } } },
       { name: "get_employee_load_summary", description: "Summarize employee load for a service date.", parameters: { type: "OBJECT", properties: { service_date: { type: "STRING" }, employee_name: { type: "STRING" } } } },
+      { name: "get_coverage_candidates", description: "Recommend who should cover an area segment and explain why.", parameters: { type: "OBJECT", properties: { service_date: { type: "STRING" }, area: { type: "STRING" }, coverage_start: { type: "STRING" }, coverage_end: { type: "STRING" } }, required: ["area"] } },
       { name: "explain_open_segment", description: "Explain why an area segment is open.", parameters: { type: "OBJECT", properties: { service_date: { type: "STRING" }, area: { type: "STRING" } }, required: ["area"] } },
       { name: "get_employee_profile", description: "Look up employee profile details including role, code, device assignment, and primary groups.", parameters: { type: "OBJECT", properties: { employee_name: { type: "STRING" } }, required: ["employee_name"] } },
       { name: "get_location_details", description: "Look up a location or area by code or name including type, form type, workload, and notes.", parameters: { type: "OBJECT", properties: { location: { type: "STRING" } }, required: ["location"] } },
@@ -140,12 +191,7 @@ async function callGeminiGenerate({ apiKey, model, systemInstruction, contents, 
   const response = await fetch(`${GEMINI_BASE_URL}/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: systemInstruction }] },
-      contents,
-      tools,
-      generationConfig: { temperature: 0.3 }
-    })
+    body: JSON.stringify({ systemInstruction: { parts: [{ text: systemInstruction }] }, contents, tools, generationConfig: { temperature: 0.3 } })
   });
   const payload = await response.json().catch(() => null);
   if (!response.ok) throw new Error(payload?.error?.message || payload?.message || `Gemini HTTP ${response.status}`);
@@ -236,7 +282,6 @@ function summarizeAbsenceCoverage(data = {}, employeeName = "") {
   const absentPeople = Array.isArray(data.absent_employees) ? data.absent_employees : [];
   const coverage = Array.isArray(data.coverage_rows) ? data.coverage_rows : [];
   const notes = Array.isArray(data.absence_notes) ? data.absence_notes : [];
-
   if (employeeName) {
     if (!coverage.length) {
       const notesText = notes.length ? ` Notes: ${notes.join(" | ")}` : "";
@@ -250,7 +295,6 @@ function summarizeAbsenceCoverage(data = {}, employeeName = "") {
       return `${group} is covered by ${filler} from ${start} to ${end}`;
     }).join("; ") + ".";
   }
-
   if (!absentPeople.length && !notes.length) return `I don't see any absence notes or replacement coverage for ${serviceDate}. Nice when the board isn't on fire.`;
   const absentLine = absentPeople.length ? `Absent on ${serviceDate}: ${absentPeople.join(", ")}.` : `Absence notes exist for ${serviceDate}.`;
   const coverageLine = coverage.length ? ` Coverage examples: ${coverage.slice(0, 10).map((row) => `${row.group_name || row.group_code} covered by ${row.assigned_employee_name || "Open"} ${row.coverage_start || "—"}-${row.coverage_end || "—"}`).join("; ")}.` : "";
@@ -291,6 +335,11 @@ function summarizeOpenSegments(rows = [], serviceDate = "") {
   return rows.slice(0, 12).map((row) => `${row.group_name || row.group_code} ${row.coverage_start || '—'}-${row.coverage_end || '—'} (${row.reason_open || 'open'})`).join("; ") + ".";
 }
 
+function summarizeCoverageCandidates(rows = [], groupName = "") {
+  if (!rows.length) return `I don't see any eligible coverage candidates for ${groupName || 'that segment'}.`;
+  return rows.slice(0, 6).map((row, index) => `#${index + 1} ${row.employee_name} scored ${Number(row.recommendation_score || 0).toFixed(1)}. ${row.explanation || ''}`.trim()).join(" ");
+}
+
 async function guessEmployeeName(runRpc, text) {
   const raw = String(text || "").trim();
   if (!raw) return "";
@@ -318,19 +367,6 @@ async function guessEmployeeName(runRpc, text) {
   return best || "";
 }
 
-function extractAbsentNames(notes = []) {
-  const found = new Set();
-  for (const note of notes) {
-    const raw = String(note || "");
-    const offMatch = raw.match(/([^\.]+?)\s+off/i);
-    if (offMatch) {
-      const names = offMatch[1].replace(/^.*?:\s*/, "").split(/,| and /i).map((x) => x.trim()).filter(Boolean);
-      names.forEach((name) => found.add(name));
-    }
-  }
-  return Array.from(found);
-}
-
 async function getLiveScheduleRows(runReadOnlySql, serviceDate) {
   return await runReadOnlySql(`select * from public.sch_get_daily_schedule('${esc(serviceDate)}'::date)`);
 }
@@ -340,6 +376,7 @@ function inferIntent(text = "") {
   if (/(my schedule|what am i assigned|what am i doing)/i.test(lower)) return "my_schedule";
   if (/(who is off|who'?s off|absent|covering|fill in|filling in|cover)/i.test(lower)) return "absence_coverage";
   if (/(open segments|what is open|who is open|uncovered|unassigned)/i.test(lower)) return "open_segments";
+  if (/(who can cover|who should cover|best backup|best person to cover|coverage candidate)/i.test(lower)) return "coverage_candidates";
   if (/(load|heaviest day|workload|busy)/i.test(lower)) return "employee_load_summary";
   if (/(who owns|current owner|who has)/i.test(lower)) return "current_owner";
   if (/(tickets|maintenance)/i.test(lower)) return "open_tickets";
@@ -354,7 +391,7 @@ async function resolveAreaName(runReadOnlySql, text = "", threadContext = {}) {
   const contextArea = String(threadContext?.last_group_name || "").trim();
   if (!raw && contextArea) return contextArea;
   const rows = await runReadOnlySql(`
-    select distinct group_name, group_code
+    select distinct group_name, group_code, location_group_id
     from public.v_memphis_area_schedule
     where lower('${esc(raw)}') like '%' || lower(group_name) || '%'
        or lower('${esc(raw)}') like '%' || lower(group_code) || '%'
@@ -500,6 +537,49 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       return { service_date: serviceDate, load_rows: rows || [] };
     }
 
+    if (name === "get_coverage_candidates") {
+      const serviceDate = normalizeDate(args.service_date) || await getDefaultServiceDate(runReadOnlySql);
+      const area = String(args.area || "").trim();
+      const areaRows = await runReadOnlySql(`
+        select distinct location_group_id, group_name, group_code
+        from public.v_memphis_area_schedule
+        where service_date = '${esc(serviceDate)}'::date
+          and (
+            group_name ilike ${sqlLikeLiteral(area)}
+            or group_code ilike ${sqlLikeLiteral(area)}
+            or lower('${esc(area)}') like '%' || lower(group_name) || '%'
+            or lower('${esc(area)}') like '%' || lower(group_code) || '%'
+          )
+        order by length(group_name), group_name
+        limit 1
+      `);
+      const target = Array.isArray(areaRows) && areaRows.length ? areaRows[0] : null;
+      if (!target?.location_group_id) return { service_date: serviceDate, group_name: area, candidates: [] };
+      const openRows = await runReadOnlySql(`
+        select *
+        from public.v_memphis_open_segments
+        where service_date = '${esc(serviceDate)}'::date
+          and location_group_id = '${esc(target.location_group_id)}'::uuid
+        order by segment_number asc
+        limit 1
+      `);
+      const timeWindow = extractTimeWindow(`${args.coverage_start || ''} ${args.coverage_end || ''}`);
+      const coverageStart = String(args.coverage_start || openRows?.[0]?.coverage_start || timeWindow?.start || '06:00').slice(0, 5);
+      const coverageEnd = String(args.coverage_end || openRows?.[0]?.coverage_end || timeWindow?.end || addMinutesToTime(coverageStart, 60)).slice(0, 5);
+      const rows = await runReadOnlySql(`
+        select *
+        from public.sch_get_coverage_candidates(
+          '${esc(serviceDate)}'::date,
+          '${esc(target.location_group_id)}'::uuid,
+          '${esc(coverageStart)}'::time,
+          '${esc(coverageEnd)}'::time
+        )
+        order by recommendation_score desc, employee_name asc
+        limit 10
+      `);
+      return { service_date: serviceDate, group_name: target.group_name || target.group_code || area, coverage_start: coverageStart, coverage_end: coverageEnd, candidates: rows || [] };
+    }
+
     if (name === "explain_open_segment") {
       const serviceDate = normalizeDate(args.service_date) || await getDefaultServiceDate(runReadOnlySql);
       const area = String(args.area || "").trim();
@@ -617,11 +697,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
         `),
         runReadOnlySql(`select attendance, last_year, planned, yesterday, yesterday_plan, fetched_at, updated_at from public.current_attendance_state where id = 1 limit 1`)
       ]);
-      return {
-        snapshot: Array.isArray(snapshotRows) && snapshotRows.length ? snapshotRows[0] : {},
-        attention_locations: badRows || [],
-        attendance: Array.isArray(attendanceRows) && attendanceRows.length ? attendanceRows[0] : null
-      };
+      return { snapshot: Array.isArray(snapshotRows) && snapshotRows.length ? snapshotRows[0] : {}, attention_locations: badRows || [], attendance: Array.isArray(attendanceRows) && attendanceRows.length ? attendanceRows[0] : null };
     }
 
     if (name === "get_scan_state") {
@@ -674,6 +750,15 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       nextContext = { last_intent: 'my_schedule', last_employee_name: data.employee_name || assignedEmployee.assigned_employee_name, last_service_date: relativeServiceDate, last_subject_type: 'employee' };
       await saveThreadContext(runRpc, threadId, nextContext);
       return { text: summarizeEmployeeAssignments(data.assignments, data.employee_name || assignedEmployee.assigned_employee_name, data.service_date), meta: { fallback: true, mode: "local_my_schedule" } };
+    }
+
+    if (/(who can cover|who should cover|best backup|best person to cover|coverage candidate)/i.test(lower)) {
+      const area = await resolveAreaName(runReadOnlySql, text, threadContext);
+      const timeWindow = extractTimeWindow(text) || {};
+      const data = await executeTool("get_coverage_candidates", { service_date: relativeServiceDate, area, coverage_start: timeWindow.start, coverage_end: timeWindow.end });
+      nextContext = { last_intent: 'coverage_candidates', last_group_name: area || null, last_service_date: relativeServiceDate, last_subject_type: 'group', context_json: { coverage_start: data.coverage_start || null, coverage_end: data.coverage_end || null } };
+      await saveThreadContext(runRpc, threadId, nextContext);
+      return { text: summarizeCoverageCandidates(data.candidates, data.group_name || area), meta: { fallback: true, mode: 'local_coverage_candidates' } };
     }
 
     if (/(open segments|what is open|what's open|uncovered|unassigned)/i.test(lower)) {
@@ -767,7 +852,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
 
     await saveThreadContext(runRpc, threadId, { last_intent: inferIntent(text), last_service_date: relativeServiceDate, last_subject_type: 'generic' });
     return {
-      text: "I can help with scans, locations, employees, live schedules, absences and coverage, open segments, workload, events, dashboard metrics, tickets, and current ownership. Ask me who has Aquarium, who is off, what is open, or what your device is assigned today.",
+      text: "I can help with scans, locations, employees, live schedules, coverage recommendations, absences and coverage, open segments, workload, events, dashboard metrics, tickets, and current ownership. Ask me who has Aquarium, who should cover Zambezi, what is open, or what your device is assigned today.",
       meta: { fallback: true, mode: "local_generic" }
     };
   }
