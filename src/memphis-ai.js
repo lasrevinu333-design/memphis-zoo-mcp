@@ -1,6 +1,7 @@
 const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 const DEFAULT_MODEL = String(process.env.MEMPHIS_GEMINI_MODEL || process.env.GEMINI_MODEL || "gemini-2.5-flash").trim();
 const DEFAULT_SCAN_DEVICE_ID = "memphis-bot";
+const DEFAULT_WEATHER_LOCATION = "Memphis, Tennessee";
 
 function esc(value) {
   return String(value || "").replace(/'/g, "''");
@@ -115,10 +116,27 @@ function isWeatherQuestion(text = "") {
   return /\b(weather|forecast|temperature|rain|storm|sunny|cloudy|wind|humid|humidity)\b/i.test(String(text || ""));
 }
 
+function mentionsMemphisPlace(text = "") {
+  return /\bmemphis\b/i.test(String(text || ""));
+}
+
+function inferWeatherLocation(text = "", threadContext = {}) {
+  if (!isWeatherQuestion(text) && threadContext?.last_subject_type !== "weather") return "";
+  if (mentionsMemphisPlace(text)) return DEFAULT_WEATHER_LOCATION;
+  if (threadContext?.context_json?.weather_location) return String(threadContext.context_json.weather_location || "");
+  return DEFAULT_WEATHER_LOCATION;
+}
+
+function augmentWeatherPrompt(userMessage = "", threadContext = {}) {
+  const location = inferWeatherLocation(userMessage, threadContext);
+  if (!location) return userMessage;
+  return `${String(userMessage || "").trim()}\n\nWeather location context: ${location}. If the user says \"here\" or asks weather without another city, use ${location}.`;
+}
+
 function isGeneralKnowledgeQuestion(text = "") {
   const lower = String(text || "").toLowerCase();
   if (isWeatherQuestion(lower)) return true;
-  if (/sparrow|capital of|who invented|how tall|what is the meaning|tell me about|define |explain |why is the sky|how far|how many/i.test(lower)) return true;
+  if (/sparrow|capital of|who invented|how tall|what is the meaning|define |explain |why is the sky|how far|how many/i.test(lower)) return true;
   return false;
 }
 
@@ -132,11 +150,12 @@ function openerReply(text = "") {
   return "Hey. What are we trying to solve?";
 }
 
-function genericConversationalFallback(text = "") {
+function genericConversationalFallback(text = "", threadContext = {}) {
   const lower = normalizeLoose(text);
+  const weatherLocation = inferWeatherLocation(text, threadContext);
   if (/alive|connected/.test(lower)) return "Yeah. I am here and connected enough to answer real system questions. Give me one.";
   if (/sparrow/.test(lower)) return "That depends. African or European?";
-  if (/weather/.test(lower)) return "I should be able to answer weather, but my general-answer side did not land that one cleanly. Ask again with the city name and I’ll use that context.";
+  if (/weather/.test(lower)) return `I should be able to answer weather for ${weatherLocation || DEFAULT_WEATHER_LOCATION}, but my general-answer side did not land it cleanly.`;
   if (/hello|hey|hi/.test(lower)) return "Hey. What do you need?";
   return "I am here. Ask me something specific or just talk to me like a person.";
 }
@@ -415,8 +434,8 @@ function mergeContextDate(text, threadContext = {}, explicitServiceDate = null) 
 }
 
 async function tryGeminiConversation({ apiKey, userMessage, webEnabled, threadContext }) {
-  const locationHint = isWeatherQuestion(userMessage) ? "The user is located in Memphis, Tennessee, unless they specify another location." : "";
-  const priorHint = threadContext?.last_subject_type === "weather" ? "Previous exchange was about weather in Memphis, Tennessee." : "";
+  const locationHint = isWeatherQuestion(userMessage) ? `The default weather location is ${DEFAULT_WEATHER_LOCATION}. If the user says here, local, or weather without another city, use ${DEFAULT_WEATHER_LOCATION}.` : "";
+  const priorHint = threadContext?.last_subject_type === "weather" ? `Previous exchange was about weather in ${threadContext?.context_json?.weather_location || DEFAULT_WEATHER_LOCATION}.` : "";
   const systemInstruction = [
     "You are Memphis, a conversational assistant for Memphis Zoo operations.",
     "Be human, natural, and useful.",
@@ -428,12 +447,15 @@ async function tryGeminiConversation({ apiKey, userMessage, webEnabled, threadCo
       ? "You may answer broader general questions as a normal online Gemini model would."
       : "Stay focused on conversation and Memphis Zoo context."
   ].filter(Boolean).join(" ");
+  const prompt = isWeatherQuestion(userMessage) || threadContext?.last_subject_type === "weather"
+    ? augmentWeatherPrompt(userMessage, threadContext)
+    : userMessage;
   const response = await fetch(`${GEMINI_BASE_URL}/${encodeURIComponent(DEFAULT_MODEL)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: systemInstruction }] },
-      contents: [{ role: "user", parts: [{ text: userMessage }] }],
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
       generationConfig: { temperature: 0.65 }
     })
   });
@@ -754,7 +776,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
 
     if (isGreetingOnly(text) || isConversationalOpener(text)) {
       const subjectType = isWeatherQuestion(text) ? "weather" : "conversation";
-      await saveThreadContext(runRpc, threadId, { last_intent: "conversation", last_service_date: relativeServiceDate, last_subject_type: subjectType });
+      await saveThreadContext(runRpc, threadId, { last_intent: "conversation", last_service_date: relativeServiceDate, last_subject_type: subjectType, context_json: subjectType === "weather" ? { weather_location: inferWeatherLocation(text, threadContext) || DEFAULT_WEATHER_LOCATION } : {} });
       return { text: openerReply(text), meta: { fallback: true, mode: "local_conversation" } };
     }
 
@@ -871,9 +893,10 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       return { text: summarizeDashboard(data.snapshot, data.attention_locations, data.attendance), meta: { fallback: true, mode: "local_dashboard" } };
     }
 
+    const weatherLocation = inferWeatherLocation(text, threadContext);
     const subjectType = isWeatherQuestion(text) ? "weather" : (isGeneralKnowledgeQuestion(text) ? "general_knowledge" : "generic");
-    await saveThreadContext(runRpc, threadId, { last_intent: inferIntent(text), last_service_date: relativeServiceDate, last_subject_type: subjectType });
-    return { text: genericConversationalFallback(text), meta: { fallback: true, mode: "local_generic" } };
+    await saveThreadContext(runRpc, threadId, { last_intent: inferIntent(text), last_service_date: relativeServiceDate, last_subject_type: subjectType, context_json: weatherLocation ? { weather_location: weatherLocation } : {} });
+    return { text: genericConversationalFallback(text, threadContext), meta: { fallback: true, mode: "local_generic" } };
   }
 
   async function generateReply({ deviceId = "", userMessage = "", threadId = "" }) {
@@ -891,7 +914,8 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       const text = await tryGeminiConversation({ apiKey, userMessage, webEnabled, threadContext });
       if (text && !/^i can help with /i.test(text.trim())) {
         const subjectType = isWeatherQuestion(userMessage) ? "weather" : (isGeneralKnowledgeQuestion(userMessage) ? "general_knowledge" : "conversation");
-        await saveThreadContext(runRpc, threadId, { last_intent: "conversation", last_subject_type: subjectType });
+        const weatherLocation = inferWeatherLocation(userMessage, threadContext);
+        await saveThreadContext(runRpc, threadId, { last_intent: "conversation", last_subject_type: subjectType, context_json: weatherLocation ? { weather_location: weatherLocation } : {} });
         return { text, meta: { fallback: false, provider: "gemini", model: DEFAULT_MODEL, mode: "conversation_first" } };
       }
     } catch (error) {
