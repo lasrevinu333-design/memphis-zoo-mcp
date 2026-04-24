@@ -442,15 +442,20 @@ async function resolveAreaName(runReadOnlySql, text = "", threadContext = {}) {
   const contextArea = String(threadContext?.last_group_name || "").trim();
   if (!raw && contextArea) return contextArea;
   const rows = await runReadOnlySql(`
-    select distinct group_name, group_code, location_group_id
-    from public.v_memphis_area_schedule
-    where lower('${esc(raw)}') like '%' || lower(group_name) || '%'
-       or lower('${esc(raw)}') like '%' || lower(group_code) || '%'
-       or group_name ilike ${sqlLikeLiteral(raw)}
-       or group_code ilike ${sqlLikeLiteral(raw)}
-    order by length(group_name), group_name
-    limit 1
-  `);
+        with matched_groups as (
+          select group_name, group_code, location_group_id, min(length(group_name)) as sort_len
+          from public.v_memphis_area_schedule
+          where lower('${esc(raw)}') like '%' || lower(group_name) || '%'
+             or lower('${esc(raw)}') like '%' || lower(group_code) || '%'
+             or group_name ilike ${sqlLikeLiteral(raw)}
+             or group_code ilike ${sqlLikeLiteral(raw)}
+          group by group_name, group_code, location_group_id
+        )
+        select group_name, group_code, location_group_id
+        from matched_groups
+        order by sort_len, group_name
+        limit 1
+      `);
   if (Array.isArray(rows) && rows.length) return rows[0].group_name || rows[0].group_code || contextArea || raw;
   return contextArea || raw;
 }
@@ -592,16 +597,21 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       const serviceDate = normalizeDate(args.service_date) || await getDefaultServiceDate(runReadOnlySql);
       const area = String(args.area || "").trim();
       const areaRows = await runReadOnlySql(`
-        select distinct location_group_id, group_name, group_code
-        from public.v_memphis_area_schedule
-        where service_date = '${esc(serviceDate)}'::date
-          and (
-            group_name ilike ${sqlLikeLiteral(area)}
-            or group_code ilike ${sqlLikeLiteral(area)}
-            or lower('${esc(area)}') like '%' || lower(group_name) || '%'
-            or lower('${esc(area)}') like '%' || lower(group_code) || '%'
-          )
-        order by length(group_name), group_name
+        with matched_groups as (
+          select location_group_id, group_name, group_code, min(length(group_name)) as sort_len
+          from public.v_memphis_area_schedule
+          where service_date = '${esc(serviceDate)}'::date
+            and (
+              group_name ilike ${sqlLikeLiteral(area)}
+              or group_code ilike ${sqlLikeLiteral(area)}
+              or lower('${esc(area)}') like '%' || lower(group_name) || '%'
+              or lower('${esc(area)}') like '%' || lower(group_code) || '%'
+            )
+          group by location_group_id, group_name, group_code
+        )
+        select location_group_id, group_name, group_code
+        from matched_groups
+        order by sort_len, group_name
         limit 1
       `);
       const target = Array.isArray(areaRows) && areaRows.length ? areaRows[0] : null;
