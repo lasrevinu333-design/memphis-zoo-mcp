@@ -28,6 +28,13 @@ function extractExplicitDate(text) {
   return match ? match[1] : null;
 }
 
+function inferRelativeDateOffset(text) {
+  const lower = String(text || "").toLowerCase();
+  if (lower.includes("tomorrow")) return 1;
+  if (lower.includes("yesterday")) return -1;
+  return 0;
+}
+
 function extractTimeWindow(text) {
   const raw = String(text || "").replace(/\s+/g, " ");
   const explicitRange = raw.match(/(\d{1,2}(?::\d{2})?\s*(?:am|pm)|\d{3,4}\s*(?:am|pm))[\s]*(?:to|\-|–|—)[\s]*(\d{1,2}(?::\d{2})?\s*(?:am|pm)|\d{3,4}\s*(?:am|pm))/i);
@@ -73,6 +80,12 @@ function addMinutesToTime(value, minutesToAdd = 0) {
   const hour = Math.floor(total / 60) % 24;
   const minute = total % 60;
   return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+function toSafeInt(value, fallback, min = 1, max = 90) {
+  const parsed = Number.parseInt(String(value ?? fallback), 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(Math.max(parsed, min), max);
 }
 
 function getGeminiApiKey() {
@@ -256,6 +269,17 @@ async function saveThreadContext(runRpc, threadId, context = {}) {
   });
 }
 
+async function getDefaultServiceDate(runReadOnlySql) {
+  const rows = await runReadOnlySql("select public.sch_service_date(now()) as service_date");
+  return Array.isArray(rows) && rows.length ? rows[0].service_date : null;
+}
+
+async function getRelativeServiceDate(runReadOnlySql, offsetDays = 0) {
+  const safeOffset = Number.isFinite(Number(offsetDays)) ? Number(offsetDays) : 0;
+  const rows = await runReadOnlySql(`select public.sch_service_date(now() + interval '${safeOffset} day') as service_date`);
+  return Array.isArray(rows) && rows.length ? rows[0].service_date : null;
+}
+
 async function getAllAreaRows(runReadOnlySql, serviceDate) {
   const rows = await runReadOnlySql(`
     select distinct location_group_id, group_name, group_code
@@ -368,7 +392,15 @@ function mergeContextDate(text, threadContext = {}, explicitServiceDate = null) 
 }
 
 async function tryGeminiConversation({ apiKey, userMessage, webEnabled }) {
-  const systemInstruction = buildConversationPrompt({ webEnabled });
+  const systemInstruction = [
+    "You are Memphis, a conversational assistant for Memphis Zoo operations.",
+    "Be human, natural, and useful.",
+    "For casual chat, greetings, follow-up questions, or broad reasoning, answer directly and conversationally.",
+    "Do not drift into a canned feature list unless the user explicitly asks what you can do.",
+    webEnabled
+      ? "You may answer broader general questions as a normal online Gemini model would."
+      : "Stay focused on conversation and Memphis Zoo context."
+  ].join(" ");
   const response = await fetch(`${GEMINI_BASE_URL}/${encodeURIComponent(DEFAULT_MODEL)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -380,7 +412,8 @@ async function tryGeminiConversation({ apiKey, userMessage, webEnabled }) {
   });
   const payload = await response.json().catch(() => null);
   if (!response.ok) throw new Error(payload?.error?.message || payload?.message || `Gemini HTTP ${response.status}`);
-  return extractGeminiText(payload);
+  const parts = payload?.candidates?.[0]?.content?.parts || [];
+  return parts.filter((part) => typeof part?.text === "string" && part.text.trim()).map((part) => part.text.trim()).join("\n\n").trim();
 }
 
 export function createMemphisResponder({ runReadOnlySql, runRpc }) {
@@ -684,6 +717,11 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     const relativeOffset = inferRelativeDateOffset(text);
     const relativeServiceDate = mergeContextDate(text, threadContext, extractExplicitDate(text)) || (relativeOffset === 0 ? await getDefaultServiceDate(runReadOnlySql) : await getRelativeServiceDate(runReadOnlySql, relativeOffset));
     const assignedEmployee = await fetchAssignedEmployeeForDevice(runReadOnlySql, deviceId);
+
+    if (isGreetingOnly(text) || isConversationalOpener(text)) {
+      await saveThreadContext(runRpc, threadId, { last_intent: "conversation", last_service_date: relativeServiceDate, last_subject_type: "conversation" });
+      return { text: openerReply(text), meta: { fallback: true, mode: "local_conversation" } };
+    }
 
     if (lower.includes("event")) {
       const areaRow = await resolveAreaRow(runReadOnlySql, relativeServiceDate, text, threadContext);
