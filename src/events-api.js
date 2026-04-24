@@ -1,4 +1,5 @@
 import express from "express";
+import { aiParseEventTexts } from "./events-ai-parser.js";
 
 const EVENTS_TIME_ZONE = "America/Chicago";
 const EVENTS_CONTRACT_VERSION = "events.v1";
@@ -8,10 +9,6 @@ const MAX_NOTIFICATIONS_PER_RUN = 50;
 
 function fail(res, error, fallback = "Events request failed", statusCode = 400) {
   res.status(statusCode).json({ ok: false, error: error?.message || fallback });
-}
-
-function esc(value) {
-  return String(value || "").replace(/'/g, "''");
 }
 
 function sqlLiteral(value) {
@@ -361,14 +358,7 @@ export function createEventMaintenanceController({ runReadOnlySql, runWriteSql, 
         const memphisUserId = pending[0]?.memphis_user_id || null;
         if (memphisUserId) {
           for (const row of pending) {
-            await sendEventNotification({
-              runRpc,
-              runWriteSql,
-              eventRow: row,
-              assignmentRow: row,
-              memphisUserId,
-              kind: row.notification_kind,
-            });
+            await sendEventNotification({ runRpc, runWriteSql, eventRow: row, assignmentRow: row, memphisUserId, kind: row.notification_kind });
           }
         }
       }
@@ -391,14 +381,7 @@ export function createEventMaintenanceController({ runReadOnlySql, runWriteSql, 
   };
 }
 
-export function createEventsPublicRouter({
-  runReadOnlySql,
-  runWriteSql,
-  buildHealthPayload,
-  appVersion,
-  releaseId,
-  maintenanceController,
-}) {
+export function createEventsPublicRouter({ runReadOnlySql, runWriteSql, buildHealthPayload, appVersion, releaseId, maintenanceController }) {
   const router = express.Router();
 
   router.get("/", async (_req, res) => {
@@ -408,40 +391,20 @@ export function createEventsPublicRouter({
         await purgeExpiredEvents(runWriteSql);
       }
       const events = await listUpcomingEvents(runReadOnlySql);
-      res.status(200).json({
-        ok: true,
-        data: events,
-        meta: {
-          version: appVersion,
-          release_id: releaseId,
-          contract_version: EVENTS_CONTRACT_VERSION,
-          timezone: EVENTS_TIME_ZONE,
-        }
-      });
+      res.status(200).json({ ok: true, data: events, meta: { version: appVersion, release_id: releaseId, contract_version: EVENTS_CONTRACT_VERSION, timezone: EVENTS_TIME_ZONE } });
     } catch (error) {
       fail(res, error, "Upcoming events failed", 500);
     }
   });
 
   router.get("/health", (_req, res) => {
-    res.status(200).json(buildHealthPayload("events_public", {
-      contract_version: EVENTS_CONTRACT_VERSION,
-      timezone: EVENTS_TIME_ZONE,
-    }));
+    res.status(200).json(buildHealthPayload("events_public", { contract_version: EVENTS_CONTRACT_VERSION, timezone: EVENTS_TIME_ZONE }));
   });
 
   router.get("/location-groups", async (_req, res) => {
     try {
       const rows = await listLocationGroups(runReadOnlySql);
-      res.status(200).json({
-        ok: true,
-        data: rows,
-        meta: {
-          version: appVersion,
-          release_id: releaseId,
-          contract_version: EVENTS_CONTRACT_VERSION,
-        }
-      });
+      res.status(200).json({ ok: true, data: rows, meta: { version: appVersion, release_id: releaseId, contract_version: EVENTS_CONTRACT_VERSION } });
     } catch (error) {
       fail(res, error, "Location groups failed", 500);
     }
@@ -450,14 +413,7 @@ export function createEventsPublicRouter({
   return router;
 }
 
-export function createEventsAdminRouter({
-  runReadOnlySql,
-  runWriteSql,
-  buildHealthPayload,
-  appVersion,
-  releaseId,
-  maintenanceController,
-}) {
+export function createEventsAdminRouter({ runReadOnlySql, runWriteSql, buildHealthPayload, appVersion, releaseId, maintenanceController }) {
   const router = express.Router();
 
   router.get("/", async (_req, res) => {
@@ -465,42 +421,35 @@ export function createEventsAdminRouter({
       maintenanceController?.kick("events_admin_list");
       await purgeExpiredEvents(runWriteSql);
       const events = await listUpcomingEvents(runReadOnlySql);
-      res.status(200).json({
-        ok: true,
-        data: events,
-        meta: {
-          version: appVersion,
-          release_id: releaseId,
-          contract_version: EVENTS_CONTRACT_VERSION,
-          timezone: EVENTS_TIME_ZONE,
-        }
-      });
+      res.status(200).json({ ok: true, data: events, meta: { version: appVersion, release_id: releaseId, contract_version: EVENTS_CONTRACT_VERSION, timezone: EVENTS_TIME_ZONE } });
     } catch (error) {
       fail(res, error, "Admin events list failed", 500);
     }
   });
 
   router.get("/health", (_req, res) => {
-    res.status(200).json(buildHealthPayload("events_admin", {
-      contract_version: EVENTS_CONTRACT_VERSION,
-      timezone: EVENTS_TIME_ZONE,
-    }));
+    res.status(200).json(buildHealthPayload("events_admin", { contract_version: EVENTS_CONTRACT_VERSION, timezone: EVENTS_TIME_ZONE }));
   });
 
   router.get("/location-groups", async (_req, res) => {
     try {
       const rows = await listLocationGroups(runReadOnlySql);
-      res.status(200).json({
-        ok: true,
-        data: rows,
-        meta: {
-          version: appVersion,
-          release_id: releaseId,
-          contract_version: EVENTS_CONTRACT_VERSION,
-        }
-      });
+      res.status(200).json({ ok: true, data: rows, meta: { version: appVersion, release_id: releaseId, contract_version: EVENTS_CONTRACT_VERSION } });
     } catch (error) {
       fail(res, error, "Location groups failed", 500);
+    }
+  });
+
+  router.post("/parse-ai", async (req, res) => {
+    try {
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const texts = Array.isArray(body.texts) ? body.texts.map((text) => String(text || "").trim()).filter(Boolean) : [String(body.text || "").trim()].filter(Boolean);
+      if (!texts.length) throw new Error("text or texts is required.");
+      const groups = await listLocationGroups(runReadOnlySql);
+      const parsed = await aiParseEventTexts({ texts, locationGroups: groups });
+      res.status(200).json({ ok: true, data: parsed, meta: { version: appVersion, release_id: releaseId, contract_version: EVENTS_CONTRACT_VERSION, provider: "gemini" } });
+    } catch (error) {
+      fail(res, error, "AI event parse failed", 400);
     }
   });
 
@@ -510,15 +459,7 @@ export function createEventsAdminRouter({
       await purgeExpiredEvents(runWriteSql);
       const record = await createEventRecord(runWriteSql, req.body && typeof req.body === "object" ? req.body : {});
       maintenanceController?.kick("events_admin_create_after");
-      res.status(200).json({
-        ok: true,
-        data: record,
-        meta: {
-          version: appVersion,
-          release_id: releaseId,
-          contract_version: EVENTS_CONTRACT_VERSION,
-        }
-      });
+      res.status(200).json({ ok: true, data: record, meta: { version: appVersion, release_id: releaseId, contract_version: EVENTS_CONTRACT_VERSION } });
     } catch (error) {
       fail(res, error, "Create event failed", 400);
     }
@@ -527,15 +468,7 @@ export function createEventsAdminRouter({
   router.delete("/:eventId", async (req, res) => {
     try {
       const result = await deleteEventRecord(runWriteSql, req.params.eventId);
-      res.status(200).json({
-        ok: true,
-        data: result,
-        meta: {
-          version: appVersion,
-          release_id: releaseId,
-          contract_version: EVENTS_CONTRACT_VERSION,
-        }
-      });
+      res.status(200).json({ ok: true, data: result, meta: { version: appVersion, release_id: releaseId, contract_version: EVENTS_CONTRACT_VERSION } });
     } catch (error) {
       fail(res, error, "Delete event failed", 400);
     }
