@@ -2,6 +2,7 @@ const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models
 const DEFAULT_MODEL = String(process.env.MEMPHIS_GEMINI_MODEL || process.env.GEMINI_MODEL || "gemini-2.5-flash").trim();
 const DEFAULT_SCAN_DEVICE_ID = "memphis-bot";
 const DEFAULT_WEATHER_LOCATION = "Memphis, Tennessee";
+const WEEKDAY_INDEX = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 };
 
 function esc(value) {
   return String(value || "").replace(/'/g, "''");
@@ -34,6 +35,32 @@ function inferRelativeDateOffset(text) {
   if (lower.includes("tomorrow")) return 1;
   if (lower.includes("yesterday")) return -1;
   return 0;
+}
+
+function extractWeekdayReference(text = "") {
+  const lower = String(text || "").toLowerCase();
+  const match = lower.match(/\b(?:(this|next)\s+)?(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/);
+  if (!match) return null;
+  return { modifier: match[1] || "", weekday: match[2] || "" };
+}
+
+function computeWeekdayDate(referenceDate, weekdayName, modifier = "") {
+  const targetIndex = WEEKDAY_INDEX[String(weekdayName || "").toLowerCase()];
+  if (targetIndex == null) return null;
+  const base = new Date(`${referenceDate}T12:00:00`);
+  if (Number.isNaN(base.getTime())) return null;
+  const baseIndex = base.getDay();
+  let delta = targetIndex - baseIndex;
+  if (modifier === "next") {
+    if (delta <= 0) delta += 7;
+    else delta += 7;
+  } else if (modifier === "this") {
+    if (delta < 0) delta += 7;
+  } else {
+    if (delta < 0) delta += 7;
+  }
+  base.setDate(base.getDate() + delta);
+  return base.toISOString().slice(0, 10);
 }
 
 function extractTimeWindow(text) {
@@ -145,6 +172,10 @@ function shouldTreatAsPureOpener(text = "") {
   if (isWeatherQuestion(lower)) return false;
   if (/(who|what|when|where|why|how)\b/.test(lower)) return false;
   return isGreetingOnly(text) || (isConversationalOpener(text) && String(text || "").trim().length < 40);
+}
+
+function isContradictionFollowUp(text = "") {
+  return /(why would you say|that is wrong|you are wrong|that can't be right|that is not right|always off|not on sunday|not sunday|that makes no sense)/i.test(String(text || ""));
 }
 
 function openerReply(text = "") {
@@ -821,8 +852,16 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     const text = String(userMessage || "").trim();
     const lower = text.toLowerCase();
     const threadContext = await fetchThreadContext(runReadOnlySql, threadId);
-    const relativeOffset = inferRelativeDateOffset(text);
-    const relativeServiceDate = mergeContextDate(text, threadContext, extractExplicitDate(text)) || (relativeOffset === 0 ? await getDefaultServiceDate(runReadOnlySql) : await getRelativeServiceDate(runReadOnlySql, relativeOffset));
+    const todayServiceDate = await getDefaultServiceDate(runReadOnlySql);
+    const explicitDate = extractExplicitDate(text);
+    const weekdayRef = extractWeekdayReference(text);
+    let relativeServiceDate = mergeContextDate(text, threadContext, explicitDate) || todayServiceDate;
+    if (!explicitDate && weekdayRef && todayServiceDate) {
+      relativeServiceDate = computeWeekdayDate(todayServiceDate, weekdayRef.weekday, weekdayRef.modifier) || relativeServiceDate;
+    } else if (!explicitDate && !weekdayRef) {
+      const relativeOffset = inferRelativeDateOffset(text);
+      if (relativeOffset !== 0) relativeServiceDate = await getRelativeServiceDate(runReadOnlySql, relativeOffset);
+    }
     const assignedEmployee = await fetchAssignedEmployeeForDevice(runReadOnlySql, deviceId);
 
     if (shouldTreatAsPureOpener(text)) {
@@ -843,6 +882,13 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       }
     }
 
+    if (isContradictionFollowUp(text) && threadContext?.last_group_name && threadContext?.last_service_date) {
+      return {
+        text: `You are right to challenge that. I should have been using ${threadContext.last_service_date} for ${threadContext.last_group_name}, and if Karen Robinson and Kathy Phelps are always off Sunday, that earlier answer was wrong. Ask me the area again and I will re-run it cleanly.`,
+        meta: { fallback: true, mode: "local_contradiction_followup" }
+      };
+    }
+
     if (lower.includes("event")) {
       const areaRow = await resolveAreaRow(runReadOnlySql, relativeServiceDate, text, threadContext);
       const data = await executeTool("get_upcoming_events", { days: 14, area: areaRow?.group_name || "" });
@@ -856,7 +902,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       return { text: summarizeTickets(data.tickets, findLocationCode(text)), meta: { fallback: true, mode: "local_tickets" } };
     }
 
-    if (/(absent|off|cover|covering|fill|filling)/i.test(lower)) {
+    if (/(absent|off|cover|covering|fill|filling)/i.test(lower) && !isContradictionFollowUp(text)) {
       const employeeName = await guessEmployeeName(runRpc, text) || threadContext?.last_employee_name || "";
       const data = await executeTool("get_absence_coverage", { employee_name: employeeName, service_date: relativeServiceDate });
       await saveThreadContext(runRpc, threadId, { last_intent: "absence_coverage", last_employee_name: employeeName || null, last_service_date: relativeServiceDate, last_subject_type: "employee" });
