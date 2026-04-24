@@ -47,6 +47,7 @@ function buildSystemPrompt({ webEnabled }) {
     "You are Memphis, the operational assistant for Memphis Zoo custodial systems.",
     "Answer internal system questions about schedules, upcoming events, scan state, dashboard status, open tickets, employees, and messaging-related operations.",
     "Prefer tool calls for factual answers. Do not invent operational facts.",
+    "Understand relative dates like today and tomorrow when answering schedule questions.",
     webEnabled
       ? "Web search is allowed on this device, but use it only when the user clearly needs outside or current public information."
       : "Web search is not allowed on this device. If asked for outside or general knowledge unrelated to Memphis Zoo systems, explain that this device is limited to internal system questions.",
@@ -230,6 +231,19 @@ async function getDefaultServiceDate(runReadOnlySql) {
   return Array.isArray(rows) && rows.length ? rows[0].service_date : null;
 }
 
+async function getRelativeServiceDate(runReadOnlySql, offsetDays = 0) {
+  const safeOffset = Number.isFinite(Number(offsetDays)) ? Number(offsetDays) : 0;
+  const rows = await runReadOnlySql(`select public.sch_service_date(now() + interval '${safeOffset} day') as service_date`);
+  return Array.isArray(rows) && rows.length ? rows[0].service_date : null;
+}
+
+function inferRelativeDateOffset(text) {
+  const lower = String(text || "").toLowerCase();
+  if (lower.includes("tomorrow")) return 1;
+  if (lower.includes("yesterday")) return -1;
+  return 0;
+}
+
 function findLocationCode(text) {
   const match = String(text || "").match(/\b[A-Z]{3,5}\b/);
   return match ? match[0] : "";
@@ -254,6 +268,16 @@ function summarizeAssignments(assignments = [], emptyText) {
   }).join(" ");
 }
 
+function summarizeEmployeeAssignments(assignments = [], employeeName, serviceDate) {
+  if (!assignments.length) return `I could not find schedule assignments for ${employeeName} on ${serviceDate}.`;
+  return `${employeeName} on ${serviceDate}: ` + assignments.slice(0, 10).map((row) => {
+    const group = row.group_name || row.group_code || "Unknown area";
+    const start = row.coverage_start || "—";
+    const end = row.coverage_end || "—";
+    return `${group} from ${start} to ${end}`;
+  }).join("; ") + ".";
+}
+
 function summarizeTickets(tickets = [], location = "") {
   if (!tickets.length) return location ? `There are no open tickets matching ${location}.` : "There are no open tickets right now.";
   return tickets.slice(0, 8).map((ticket) => `${ticket.location_name || ticket.location_code}: ${ticket.maintenance_issue}.`).join(" ");
@@ -270,6 +294,34 @@ function summarizeDashboard(snapshot = {}, attention = []) {
     ? ` Attention locations: ${attention.slice(0, 8).map((row) => `${row.location_name || row.location_code} (${row.status_code}, ${row.open_ticket_count} tickets)`).join("; ")}.`
     : "";
   return `${summary}${focus}`.trim();
+}
+
+async function guessEmployeeName(runRpc, text) {
+  const raw = String(text || "").trim();
+  if (!raw) return "";
+  const employees = await runRpc("tool_list_active_employees", {});
+  const list = Array.isArray(employees) ? employees : [];
+  const lowered = raw.toLowerCase();
+
+  let best = null;
+  for (const employee of list) {
+    const name = String(employee.display_name || employee.employee_name || "").trim();
+    if (!name) continue;
+    const nameLower = name.toLowerCase();
+    if (lowered.includes(nameLower)) {
+      if (!best || name.length > best.length) best = name;
+      continue;
+    }
+    const parts = nameLower.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2 && parts.every((part) => lowered.includes(part))) {
+      if (!best || name.length > best.length) best = name;
+      continue;
+    }
+    if (parts.length && parts.some((part) => part.length >= 4 && lowered.includes(part))) {
+      if (!best || name.length > best.length) best = name;
+    }
+  }
+  return best || "";
 }
 
 export function createMemphisResponder({ runReadOnlySql, runRpc }) {
@@ -429,6 +481,10 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
   async function generateLocalReply(userMessage) {
     const text = String(userMessage || "").trim();
     const lower = text.toLowerCase();
+    const relativeOffset = inferRelativeDateOffset(text);
+    const relativeServiceDate = relativeOffset === 0
+      ? await getDefaultServiceDate(runReadOnlySql)
+      : await getRelativeServiceDate(runReadOnlySql, relativeOffset);
 
     if (lower.includes("event")) {
       const data = await executeTool("get_upcoming_events", { days: 14 });
@@ -455,21 +511,37 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     if (lower.includes("scan") || lower.includes("state")) {
       const code = findLocationCode(text);
       if (code) {
-        const state = await executeTool("get_scan_state", { location_code: code });
+        const stateValue = await executeTool("get_scan_state", { location_code: code });
         return {
-          text: `${state.location_name || state.location_code || code} is currently ${state.suggested_action || state.status || "available"}.`,
+          text: `${stateValue.location_name || stateValue.location_code || code} is currently ${stateValue.suggested_action || stateValue.status || "available"}.`,
           meta: { fallback: true, mode: "local_scan" }
         };
       }
     }
 
-    if ((lower.includes("assigned") || lower.includes("schedule")) && /(today|tomorrow|group|teton|expo|zambezi|primate|event center)/i.test(text)) {
-      const area = text;
-      const data = await executeTool("get_area_schedule", { area });
-      return {
-        text: summarizeAssignments(data.assignments, `I could not find schedule assignments for ${area} on ${data.service_date}.`),
-        meta: { fallback: true, mode: "local_area_schedule" }
-      };
+    if (lower.includes("schedule") || lower.includes("assigned") || lower.includes("working")) {
+      const employeeName = await guessEmployeeName(runRpc, text);
+      if (employeeName) {
+        const data = await executeTool("get_employee_schedule", {
+          employee_name: employeeName,
+          service_date: relativeServiceDate
+        });
+        return {
+          text: summarizeEmployeeAssignments(data.assignments, employeeName, data.service_date),
+          meta: { fallback: true, mode: "local_employee_schedule" }
+        };
+      }
+
+      if (/(today|tomorrow|group|teton|expo|zambezi|primate|event center)/i.test(text)) {
+        const data = await executeTool("get_area_schedule", {
+          area: text,
+          service_date: relativeServiceDate
+        });
+        return {
+          text: summarizeAssignments(data.assignments, `I could not find schedule assignments for ${text} on ${data.service_date}.`),
+          meta: { fallback: true, mode: "local_area_schedule" }
+        };
+      }
     }
 
     if (lower.includes("dashboard") || lower.includes("summary") || lower.includes("status")) {
@@ -478,7 +550,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     }
 
     return {
-      text: "Memphis can help with schedules, events, scan state, dashboard status, tickets, and employee assignments. Ask me a system question tied to those areas.",
+      text: "Memphis can help with schedules, events, scan state, dashboard status, tickets, and employee assignments. Ask me something like who is assigned tomorrow, what events are coming up, or what open tickets we have.",
       meta: { fallback: true, mode: "local_generic" }
     };
   }
