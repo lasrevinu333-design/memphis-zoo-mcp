@@ -112,8 +112,8 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
   router.post("/thread/:threadId/delete", async (req, res) => {
     try {
       const threadId = String(req.params.threadId || "").trim();
-      const deviceId = String(req.body?.device_id || "").trim();
-      const data = await runRpc("msg_hide_thread_for_device", { p_thread_id: threadId, p_device_identifier: deviceId });
+      if (!threadId) throw new Error("threadId is required.");
+      const data = await runRpc("msg_delete_thread_permanently", { p_thread_id: threadId });
       res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Delete thread failed");
@@ -134,13 +134,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
   router.post("/memphis/thread", async (req, res) => {
     try {
       const userId = String(req.body?.user_id || "").trim();
-      const deviceId = String(req.body?.device_id || "").trim();
       const data = await runRpc("msg_get_or_create_memphis_thread", { p_user_id: userId });
-      if (deviceId && data?.id) {
-        try {
-          await runRpc("msg_unhide_thread_for_device", { p_thread_id: data.id, p_device_identifier: deviceId });
-        } catch {}
-      }
       res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Get Memphis thread failed");
@@ -150,17 +144,11 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
   router.post("/memphis/message", async (req, res) => {
     try {
       const userId = String(req.body?.user_id || "").trim();
-      const deviceId = String(req.body?.device_id || "").trim();
       const body = String(req.body?.body || "").trim();
       if (!userId) throw new Error("user_id is required.");
       if (!body) throw new Error("body is required.");
 
       const thread = await runRpc("msg_get_or_create_memphis_thread", { p_user_id: userId });
-      if (deviceId && thread?.id) {
-        try {
-          await runRpc("msg_unhide_thread_for_device", { p_thread_id: thread.id, p_device_identifier: deviceId });
-        } catch {}
-      }
 
       const userMessage = await runRpc("msg_send_message", {
         p_thread_id: thread.id,
@@ -176,7 +164,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
 
       let reply;
       try {
-        reply = await memphisResponder.generateReply({ userId, deviceId, userMessage: body });
+        reply = await memphisResponder.generateReply({ userId, userMessage: body });
       } catch (error) {
         console.error("memphis ai reply failed:", error);
         reply = {
