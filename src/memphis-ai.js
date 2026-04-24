@@ -190,6 +190,19 @@ function buildSystemPrompt({ webEnabled }) {
   ].join(" ");
 }
 
+function buildConversationPrompt({ webEnabled }) {
+  return [
+    "You are Memphis, a conversational assistant for Memphis Zoo operations.",
+    "Be human, natural, and useful.",
+    "For casual chat, greetings, follow-up questions, or broad reasoning, answer directly and conversationally.",
+    "Do not drift into a canned feature list unless the user explicitly asks what you can do.",
+    "If the user asks a clearly internal operations question, you may rely on system follow-up in a later turn, but do not pretend to know unseen system facts.",
+    webEnabled
+      ? "You may answer broader general questions as a normal online Gemini model would."
+      : "Stay focused on conversation and Memphis Zoo context."
+  ].join(" ");
+}
+
 function buildGeminiTools() {
   return [{
     functionDeclarations: [
@@ -213,11 +226,17 @@ function buildGeminiTools() {
   }];
 }
 
-async function callGeminiGenerate({ apiKey, model, systemInstruction, contents, tools }) {
+async function callGeminiGenerate({ apiKey, model, systemInstruction, contents, tools = null, temperature = 0.45 }) {
+  const body = {
+    systemInstruction: { parts: [{ text: systemInstruction }] },
+    contents,
+    generationConfig: { temperature }
+  };
+  if (tools) body.tools = tools;
   const response = await fetch(`${GEMINI_BASE_URL}/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ systemInstruction: { parts: [{ text: systemInstruction }] }, contents, tools, generationConfig: { temperature: 0.45 } })
+    body: JSON.stringify(body)
   });
   const payload = await response.json().catch(() => null);
   if (!response.ok) throw new Error(payload?.error?.message || payload?.message || `Gemini HTTP ${response.status}`);
@@ -234,121 +253,60 @@ function extractGeminiFunctionCalls(payload) {
   return parts.filter((part) => part?.functionCall && part.functionCall.name);
 }
 
-async function getDefaultServiceDate(runReadOnlySql) {
-  const rows = await runReadOnlySql("select public.sch_service_date(now()) as service_date");
-  return Array.isArray(rows) && rows.length ? rows[0].service_date : null;
-}
-
-async function getRelativeServiceDate(runReadOnlySql, offsetDays = 0) {
-  const safeOffset = Number.isFinite(Number(offsetDays)) ? Number(offsetDays) : 0;
-  const rows = await runReadOnlySql(`select public.sch_service_date(now() + interval '${safeOffset} day') as service_date`);
-  return Array.isArray(rows) && rows.length ? rows[0].service_date : null;
-}
-
-function inferRelativeDateOffset(text) {
+function isSystemSpecificQuestion(text = "", threadContext = {}) {
+  const intent = inferIntent(text);
+  if (intent !== 'generic') return true;
+  if (findLocationCode(text)) return true;
   const lower = String(text || "").toLowerCase();
-  if (lower.includes("tomorrow")) return 1;
-  if (lower.includes("yesterday")) return -1;
-  return 0;
+  if (/(aquarium|zambezi|teton|expo|event center|dashboard|tickets|attendance|schedule|absence|cover|coverage|employee|location|owner|restroom|herpetarium|komodos|nocturnal|primate|china|east admin|west admin|breezeway)/i.test(lower)) return true;
+  if (threadContext?.last_subject_type && threadContext.last_subject_type !== 'conversation' && threadContext.last_subject_type !== 'generic') return true;
+  return false;
 }
 
-function findLocationCode(text) {
-  const match = String(text || "").match(/\b[A-Z]{3,5}\b/);
-  return match ? match[0] : "";
+async function tryGeminiConversation({ apiKey, userMessage, webEnabled }) {
+  const payload = await callGeminiGenerate({
+    apiKey,
+    model: DEFAULT_MODEL,
+    systemInstruction: buildConversationPrompt({ webEnabled }),
+    contents: [{ role: "user", parts: [{ text: userMessage }] }],
+    tools: null,
+    temperature: 0.65
+  });
+  return extractGeminiText(payload);
 }
 
-function summarizeEvents(events = []) {
-  if (!events.length) return "I don't see any upcoming events in the system right now.";
-  return events.slice(0, 6).map((event) => {
-    const attendees = event.attendee_count == null ? "attendees not listed" : `${event.attendee_count} attendees`;
-    return `${event.event_name} in ${event.group_name || event.group_code} on ${event.event_date} from ${event.start_time} to ${event.end_time}, ${attendees}.`;
-  }).join(" ");
-}
+async function tryGeminiSystem({ apiKey, userMessage, deviceId, threadId, runRpc, webEnabled, executeTool }) {
+  const systemInstruction = buildSystemPrompt({ webEnabled });
+  const tools = buildGeminiTools();
+  const contents = [{ role: "user", parts: [{ text: userMessage }] }];
 
-function summarizeAssignments(assignments = [], emptyText) {
-  if (!assignments.length) return emptyText;
-  return assignments.slice(0, 12).map((row) => {
-    const employee = row.employee_name || row.assigned_employee_name || "Open";
-    const group = row.group_name || row.group_code || "Unknown area";
-    const start = row.coverage_start || "—";
-    const end = row.coverage_end || "—";
-    return `${employee} covers ${group} from ${start} to ${end}.`;
-  }).join(" ");
-}
-
-function summarizeEmployeeAssignments(assignments = [], employeeName, serviceDate) {
-  if (!assignments.length) return `I couldn't find schedule assignments for ${employeeName} on ${serviceDate}.`;
-  return `${employeeName} on ${serviceDate}: ` + assignments.slice(0, 12).map((row) => {
-    const group = row.group_name || row.group_code || "Unknown area";
-    const start = row.coverage_start || "—";
-    const end = row.coverage_end || "—";
-    return `${group} from ${start} to ${end}`;
-  }).join("; ") + ".";
-}
-
-function summarizeTickets(tickets = [], location = "") {
-  if (!tickets.length) return location ? `No open tickets matching ${location}.` : "No open tickets right now.";
-  return tickets.slice(0, 8).map((ticket) => `${ticket.location_name || ticket.location_code}: ${ticket.maintenance_issue}.`).join(" ");
-}
-
-function summarizeDashboard(snapshot = {}, attention = [], attendance = null) {
-  const bits = [];
-  if (attendance?.attendance != null) bits.push(`attendance ${attendance.attendance}`);
-  if (snapshot.open_ticket_count != null) bits.push(`${snapshot.open_ticket_count} open tickets`);
-  if (snapshot.overdue_locations != null) bits.push(`${snapshot.overdue_locations} overdue locations`);
-  if (snapshot.due_soon_locations != null) bits.push(`${snapshot.due_soon_locations} due soon`);
-  if (snapshot.in_progress_locations != null) bits.push(`${snapshot.in_progress_locations} in progress`);
-  const summary = bits.length ? `Dashboard snapshot: ${bits.join(", ")}.` : "Dashboard snapshot is available.";
-  const focus = attention.length ? ` Attention locations: ${attention.slice(0, 8).map((row) => `${row.location_name || row.location_code} (${row.status_code}, ${row.open_ticket_count} tickets)`).join("; ")}.` : "";
-  return `${summary}${focus}`.trim();
-}
-
-function summarizeAbsenceCoverage(data = {}, employeeName = "") {
-  const serviceDate = data.service_date || "the requested day";
-  const absentPeople = Array.isArray(data.absent_employees) ? data.absent_employees : [];
-  const coverage = Array.isArray(data.coverage_rows) ? data.coverage_rows : [];
-  const notes = Array.isArray(data.absence_notes) ? data.absence_notes : [];
-  if (employeeName) {
-    if (!coverage.length) {
-      const notesText = notes.length ? ` Notes: ${notes.join(" | ")}` : "";
-      return `I couldn't find explicit coverage rows for ${employeeName} on ${serviceDate}.${notesText}`.trim();
+  for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
+    const payload = await callGeminiGenerate({
+      apiKey,
+      model: DEFAULT_MODEL,
+      systemInstruction,
+      contents,
+      tools,
+      temperature: 0.45
+    });
+    const calls = extractGeminiFunctionCalls(payload);
+    const text = extractGeminiText(payload);
+    if (!calls.length) {
+      return text;
     }
-    return `${employeeName} on ${serviceDate}: ` + coverage.slice(0, 12).map((row) => {
-      const group = row.group_name || row.group_code || "Unknown area";
-      const filler = row.assigned_employee_name || "Open";
-      const start = row.coverage_start || "—";
-      const end = row.coverage_end || "—";
-      return `${group} is covered by ${filler} from ${start} to ${end}`;
-    }).join("; ") + ".";
+    const modelParts = payload?.candidates?.[0]?.content?.parts || [];
+    contents.push({ role: "model", parts: modelParts });
+    const functionResponseParts = [];
+    for (const callPart of calls) {
+      const name = callPart.functionCall.name;
+      const args = callPart.functionCall.args || {};
+      if (name === 'get_my_schedule' && !args.device_id && deviceId) args.device_id = deviceId;
+      const output = await executeTool(name, args);
+      functionResponseParts.push({ functionResponse: { name, response: output } });
+    }
+    contents.push({ role: "user", parts: functionResponseParts });
   }
-  if (!absentPeople.length && !notes.length) return `I don't see any absence notes or replacement coverage for ${serviceDate}.`;
-  const absentLine = absentPeople.length ? `Absent on ${serviceDate}: ${absentPeople.join(", ")}.` : `Absence notes exist for ${serviceDate}.`;
-  const coverageLine = coverage.length ? ` Coverage examples: ${coverage.slice(0, 10).map((row) => `${row.group_name || row.group_code} covered by ${row.assigned_employee_name || "Open"} ${row.coverage_start || "—"}-${row.coverage_end || "—"}`).join("; ")}.` : "";
-  return `${absentLine}${coverageLine}`.trim();
-}
-
-function summarizeEmployeeProfile(profile = null) {
-  if (!profile) return "I couldn't find that employee in the system.";
-  const parts = [`${profile.display_name} (${profile.employee_code || 'no code'})`];
-  if (profile.role) parts.push(`role ${profile.role}`);
-  if (profile.device_name) parts.push(`device ${profile.device_name}`);
-  if (profile.primary_groups?.length) parts.push(`primary groups: ${profile.primary_groups.join(', ')}`);
-  if (profile.secondary_groups?.length) parts.push(`secondary groups: ${profile.secondary_groups.join(', ')}`);
-  return parts.join('. ') + '.';
-}
-
-function summarizeLocationDetails(data = {}) {
-  if (!data?.location) return "I couldn't find that location in the system.";
-  const loc = data.location;
-  const parts = [`${loc.location_name} (${loc.location_code})`];
-  if (loc.location_type) parts.push(`type ${loc.location_type}`);
-  if (loc.form_type) parts.push(`form ${loc.form_type}`);
-  if (loc.group_names?.length) parts.push(`groups: ${loc.group_names.join(', ')}`);
-  if (loc.difficulty_rating != null || loc.priority_rating != null) parts.push(`difficulty ${loc.difficulty_rating ?? 'n/a'}, priority ${loc.priority_rating ?? 'n/a'}`);
-  if (loc.workload_notes) parts.push(`workload notes: ${loc.workload_notes}`);
-  if (loc.notes) parts.push(`notes: ${loc.notes}`);
-  if (data.current_owner?.owner_display_name || data.current_owner?.employee_name) parts.push(`current owner ${data.current_owner.owner_display_name || data.current_owner.employee_name}`);
-  return parts.join('. ') + '.';
+  return "";
 }
 
 function summarizeLoadSummary(rows = [], serviceDate = "") {
@@ -391,10 +349,6 @@ async function guessEmployeeName(runRpc, text) {
     }
   }
   return best || "";
-}
-
-async function getLiveScheduleRows(runReadOnlySql, serviceDate) {
-  return await runReadOnlySql(`select * from public.sch_get_daily_schedule('${esc(serviceDate)}'::date)`);
 }
 
 function inferIntent(text = "") {
@@ -685,7 +639,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
         left join public.location_groups lg on lg.id = lgm.location_group_id and lg.active = true
         group by lm.id, lm.location_code, lm.location_name, lm.location_type, lm.form_type, lm.active, lm.notes, lm.difficulty_rating, lm.priority_rating, lm.workload_notes
       `);
-      const loc = Array.isArray(locationRows) && locationRows.length ? locationRows[0] : null;
+      const loc = Array.isArray(locationRows) && rows.length ? locationRows[0] : null;
       if (!loc) return { location: null, current_owner: null };
       const ownerRows = await runReadOnlySql(`select * from public.sch_get_current_owner('${esc(loc.location_code)}', now())`);
       return { location: loc, current_owner: Array.isArray(ownerRows) && ownerRows.length ? ownerRows[0] : null };
@@ -750,10 +704,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
 
     if (isGreetingOnly(text) || isConversationalOpener(text)) {
       await saveThreadContext(runRpc, threadId, { last_intent: 'conversation', last_service_date: relativeServiceDate, last_subject_type: 'conversation' });
-      return {
-        text: openerReply(text),
-        meta: { fallback: true, mode: 'local_conversation' }
-      };
+      return { text: openerReply(text), meta: { fallback: true, mode: 'local_conversation' } };
     }
 
     if (lower.includes("event")) {
@@ -886,7 +837,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
 
     await saveThreadContext(runRpc, threadId, { last_intent: inferIntent(text), last_service_date: relativeServiceDate, last_subject_type: 'generic' });
     return {
-      text: "Give me something to grab onto. Ask me who has an area, who is off, what is open, what your schedule looks like, or what is going sideways on the dashboard.",
+      text: "Tell me a little more. If you want system info, ask me who has an area, who is off, what is open, what your schedule looks like, or what is going sideways on the dashboard.",
       meta: { fallback: true, mode: "local_generic" }
     };
   }
@@ -895,54 +846,37 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     const apiKey = getGeminiApiKey();
     const identity = await fetchDeviceIdentity(runReadOnlySql, deviceId);
     const webEnabled = allowWebSearch({ deviceId, identityRole: identity?.role || "" });
+    const threadContext = await fetchThreadContext(runReadOnlySql, threadId);
+    const explicitSystem = isSystemSpecificQuestion(userMessage, threadContext);
 
-    if (!apiKey) return await generateLocalReply(userMessage, { deviceId, threadId });
+    if (!apiKey) {
+      return await generateLocalReply(userMessage, { deviceId, threadId });
+    }
 
-    const systemInstruction = buildSystemPrompt({ webEnabled });
-    const model = DEFAULT_MODEL;
-    const tools = buildGeminiTools();
-    const contents = [{ role: "user", parts: [{ text: userMessage }] }];
+    if (!explicitSystem) {
+      try {
+        const text = await tryGeminiConversation({ apiKey, userMessage, webEnabled });
+        if (text && !/^i can help with /i.test(text.trim())) {
+          await saveThreadContext(runRpc, threadId, { last_intent: 'conversation', last_subject_type: 'conversation' });
+          return { text, meta: { fallback: false, provider: 'gemini', model: DEFAULT_MODEL, mode: 'conversation_first' } };
+        }
+      } catch (error) {
+        console.error('memphis conversation gemini path failed:', error);
+      }
+      return await generateLocalReply(userMessage, { deviceId, threadId });
+    }
 
     try {
-      for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
-        const payload = await callGeminiGenerate({ apiKey, model, systemInstruction, contents, tools });
-        const calls = extractGeminiFunctionCalls(payload);
-        const text = extractGeminiText(payload);
-        if (!calls.length) {
-          if (text && !/^i can help with /i.test(text.trim())) {
-            await saveThreadContext(runRpc, threadId, { last_intent: inferIntent(userMessage), last_service_date: extractExplicitDate(userMessage) || null, last_subject_type: 'generic' });
-            return { text, meta: { fallback: false, provider: "gemini", model } };
-          }
-          const local = await generateLocalReply(userMessage, { deviceId, threadId });
-          return { text: local.text, meta: { ...(local.meta || {}), fallback: false, provider: "gemini", model, converted_from_generic: true } };
-        }
-        const modelParts = payload?.candidates?.[0]?.content?.parts || [];
-        contents.push({ role: "model", parts: modelParts });
-        const functionResponseParts = [];
-        for (const callPart of calls) {
-          const name = callPart.functionCall.name;
-          const args = callPart.functionCall.args || {};
-          if (name === 'get_my_schedule' && !args.device_id && deviceId) args.device_id = deviceId;
-          const output = await executeTool(name, args);
-          functionResponseParts.push({ functionResponse: { name, response: output } });
-        }
-        contents.push({ role: "user", parts: functionResponseParts });
+      const text = await tryGeminiSystem({ apiKey, userMessage, deviceId, threadId, runRpc, webEnabled, executeTool });
+      if (text && !/^i can help with /i.test(text.trim())) {
+        await saveThreadContext(runRpc, threadId, { last_intent: inferIntent(userMessage), last_service_date: extractExplicitDate(userMessage) || null, last_subject_type: 'generic' });
+        return { text, meta: { fallback: false, provider: 'gemini', model: DEFAULT_MODEL, mode: 'system_with_tools' } };
       }
-      return { text: "I hit a tool loop limit before finishing that answer. Ask it one more way and I’ll take another swing.", meta: { fallback: false, provider: "gemini", model, loop_limit: true } };
     } catch (error) {
-      console.error("memphis gemini path failed:", error);
-      const local = await generateLocalReply(userMessage, { deviceId, threadId });
-      return {
-        text: local.text,
-        meta: {
-          ...(local.meta || {}),
-          gemini_error: error?.message || "gemini_failed",
-          provider: "gemini",
-          model,
-          web_enabled: webEnabled
-        }
-      };
+      console.error('memphis system gemini path failed:', error);
     }
+
+    return await generateLocalReply(userMessage, { deviceId, threadId });
   }
 
   return { generateReply };
