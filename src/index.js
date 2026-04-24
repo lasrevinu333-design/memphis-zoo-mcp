@@ -521,7 +521,7 @@ async function runPublicDashboardSummary() {
         dashboard: DASHBOARD_CONTRACT_VERSION,
         messaging: MESSAGING_CONTRACT_VERSION,
         schedule: SCHEDULE_CONTRACT_VERSION,
-      events: EVENTS_CONTRACT_VERSION,
+        events: EVENTS_CONTRACT_VERSION,
       },
       generated_at: new Date().toISOString(),
     },
@@ -698,7 +698,7 @@ app.use("/dashboard-api", (req, res, next) => { setPublicDashboardCors(res); if 
 app.use("/scan-api", (req, res, next) => { setScanApiCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/messaging-api", (req, res, next) => { setMessagingApiCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } eventMaintenanceController.kick("messaging_api_request"); next(); }, createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: MESSAGING_CONTRACT_VERSION }));
 app.use("/schedule-api", (req, res, next) => { setScheduleApiCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } eventMaintenanceController.kick("schedule_api_request"); next(); }, createScheduleRouter({ runReadOnlySql, runRpc, buildHealthPayload, requireAdminApiAuth: requireSchedulePin, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: SCHEDULE_CONTRACT_VERSION }));
-app.use("/dashboard-api/events", createEventsPublicRouter({ runReadOnlySql, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController }));
+app.use("/dashboard-api/events", createEventsPublicRouter({ runReadOnlySql, runWriteSql, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController }));
 app.use("/admin-api/events", requireEventsInputPin, createEventsAdminRouter({ runReadOnlySql, runWriteSql, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController }));
 app.get("/version", (_req, res) => { eventMaintenanceController.kick("version_ping"); res.status(200).json(buildHealthPayload("version")); });
 app.get("/admin-api/health", requireAdminApiAuth, (_req, res) => { res.status(200).json(buildHealthPayload("admin", { authenticated: true })); });
@@ -780,7 +780,7 @@ app.get("/sse", async (_req, res) => {
 });
 app.post("/messages", async (req, res) => {
   try { if (!sseTransport) { res.status(400).send("No active SSE transport"); return; } await sseTransport.handlePostMessage(req, res, req.body); }
-  catch (error) { console.error("SSE post message failed:", error); if (!res.headersSent) res.status(500).send("SSE post message failed" ); }
+  catch (error) { console.error("SSE post message failed:", error); if (!res.headersSent) res.status(500).send("SSE post message failed"); }
 });
 const port = Number(process.env.PORT || 3000);
 app.listen(port, () => {
