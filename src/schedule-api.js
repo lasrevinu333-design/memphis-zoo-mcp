@@ -70,6 +70,25 @@ export function createScheduleRouter({
     return Array.isArray(rows) && rows.length ? rows[0].service_date : null;
   }
 
+  async function getAssignedEmployeeForDevice(deviceId) {
+    const rows = await runReadOnlySql(`
+      select
+        d.device_id,
+        d.device_name,
+        d.assigned_employee_id,
+        e.display_name as assigned_employee_name,
+        e.employee_code,
+        e.role,
+        d.active as device_active,
+        coalesce(e.active, false) as employee_active
+      from public.devices d
+      left join public.employees e on e.id = d.assigned_employee_id
+      where d.device_id = '${esc(deviceId)}'
+      limit 1
+    `);
+    return Array.isArray(rows) && rows.length ? rows[0] : null;
+  }
+
   function groupScheduleRows(rows) {
     const groups = [];
     const byId = new Map();
@@ -132,6 +151,45 @@ export function createScheduleRouter({
       });
     } catch (error) {
       fail(res, error, "Schedule day failed");
+    }
+  });
+
+  router.get("/my-day", async (req, res) => {
+    try {
+      const deviceId = String(req.query.device_id || req.query.device || "").trim();
+      if (!deviceId) throw new Error("device_id is required.");
+      const serviceDate = requireDate(req.query.service_date || req.query.date || (await getServiceDate()));
+      const assignment = await getAssignedEmployeeForDevice(deviceId);
+      if (!assignment || !assignment.device_active) {
+        res.status(404).json({ ok: false, error: "Active device assignment not found." });
+        return;
+      }
+      if (!assignment.assigned_employee_id || !assignment.employee_active) {
+        res.status(404).json({ ok: false, error: "This device is not assigned to an active employee." });
+        return;
+      }
+      const rows = await runReadOnlySql(`
+        select *
+        from public.sch_get_daily_schedule('${esc(serviceDate)}'::date)
+        where assigned_employee_id = '${esc(assignment.assigned_employee_id)}'::uuid
+        order by group_name, segment_number
+      `);
+      res.status(200).json({
+        ok: true,
+        data: {
+          service_date: serviceDate,
+          device_id: assignment.device_id,
+          device_name: assignment.device_name,
+          employee_id: assignment.assigned_employee_id,
+          employee_name: assignment.assigned_employee_name,
+          employee_code: assignment.employee_code,
+          role: assignment.role,
+          groups: groupScheduleRows(rows),
+        },
+        meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion },
+      });
+    } catch (error) {
+      fail(res, error, "Personal schedule lookup failed");
     }
   });
 
