@@ -1,5 +1,5 @@
-const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
-const DEFAULT_MODEL = String(process.env.MEMPHIS_OPENAI_MODEL || process.env.OPENAI_MODEL || "gpt-4.1").trim();
+const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
+const DEFAULT_MODEL = String(process.env.MEMPHIS_GEMINI_MODEL || process.env.GEMINI_MODEL || "gemini-2.5-flash").trim();
 const DEFAULT_SCAN_DEVICE_ID = "memphis-bot";
 const MAX_TOOL_ROUNDS = 6;
 
@@ -22,8 +22,8 @@ function toSafeInt(value, fallback, min = 1, max = 90) {
   return Math.min(Math.max(parsed, min), max);
 }
 
-function getOpenAiApiKey() {
-  return String(process.env.OPENAI_API_KEY || "").trim();
+function getGeminiApiKey() {
+  return String(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "").trim();
 }
 
 function allowWebSearch({ deviceId = "", identityRole = "" }) {
@@ -49,181 +49,130 @@ function buildSystemPrompt({ webEnabled }) {
     "Prefer tool calls for factual answers. Do not invent operational facts.",
     "Understand relative dates like today and tomorrow when answering schedule questions.",
     webEnabled
-      ? "Web search is allowed on this device, but use it only when the user clearly needs outside or current public information."
-      : "Web search is not allowed on this device. If asked for outside or general knowledge unrelated to Memphis Zoo systems, explain that this device is limited to internal system questions.",
+      ? "External web lookup is allowed on this device when clearly needed for current outside information."
+      : "External web lookup is not allowed on this device. If asked for outside or general knowledge unrelated to Memphis Zoo systems, explain that this device is limited to internal system questions.",
     "Keep answers concise, practical, and operationally useful.",
     "If information is missing, say so plainly."
   ].join(" ");
 }
 
-function buildTools({ webEnabled }) {
-  const tools = [
-    {
-      type: "function",
-      name: "get_upcoming_events",
-      description: "List upcoming Memphis Zoo events, optionally filtered by area and days ahead.",
-      strict: true,
-      parameters: {
-        type: "object",
-        properties: {
-          days: { type: "integer", description: "How many days ahead to search, default 14." },
-          area: { type: "string", description: "Optional event area or location group name/code." }
-        },
-        additionalProperties: false
+function buildGeminiTools() {
+  return [{
+    functionDeclarations: [
+      {
+        name: "get_upcoming_events",
+        description: "List upcoming Memphis Zoo events, optionally filtered by area and days ahead.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            days: { type: "INTEGER", description: "How many days ahead to search, default 14." },
+            area: { type: "STRING", description: "Optional event area or location group name/code." }
+          }
+        }
+      },
+      {
+        name: "get_area_schedule",
+        description: "Look up who is assigned to an area or location group on a given service date.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            area: { type: "STRING", description: "Area, location group name, or group code." },
+            service_date: { type: "STRING", description: "Optional date in YYYY-MM-DD. Defaults to today service date." }
+          },
+          required: ["area"]
+        }
+      },
+      {
+        name: "get_employee_schedule",
+        description: "Look up what areas an employee is assigned to on a given date.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            employee_name: { type: "STRING", description: "Employee display name or partial name." },
+            service_date: { type: "STRING", description: "Optional date in YYYY-MM-DD. Defaults to today service date." }
+          },
+          required: ["employee_name"]
+        }
+      },
+      {
+        name: "get_current_owner",
+        description: "Find who currently owns a specific location according to the schedule system.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            location_code: { type: "STRING", description: "Location code such as TETM or TETX." },
+            at: { type: "STRING", description: "Optional ISO-like timestamp." }
+          },
+          required: ["location_code"]
+        }
+      },
+      {
+        name: "get_open_tickets",
+        description: "List open maintenance tickets, optionally filtered by a location code or name.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            location: { type: "STRING", description: "Optional location code or location name filter." }
+          }
+        }
+      },
+      {
+        name: "get_dashboard_summary",
+        description: "Get a summary of current operational dashboard metrics and problem locations.",
+        parameters: {
+          type: "OBJECT",
+          properties: {}
+        }
+      },
+      {
+        name: "get_scan_state",
+        description: "Check the scan system state for a specific location code.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            location_code: { type: "STRING", description: "Location code to inspect." }
+          },
+          required: ["location_code"]
+        }
+      },
+      {
+        name: "list_active_employees",
+        description: "List currently active employees in the system.",
+        parameters: {
+          type: "OBJECT",
+          properties: {}
+        }
       }
-    },
-    {
-      type: "function",
-      name: "get_area_schedule",
-      description: "Look up who is assigned to an area or location group on a given service date.",
-      strict: true,
-      parameters: {
-        type: "object",
-        properties: {
-          area: { type: "string", description: "Area, location group name, or group code." },
-          service_date: { type: "string", description: "Optional date in YYYY-MM-DD. Defaults to today service date." }
-        },
-        required: ["area"],
-        additionalProperties: false
-      }
-    },
-    {
-      type: "function",
-      name: "get_employee_schedule",
-      description: "Look up what areas an employee is assigned to on a given date.",
-      strict: true,
-      parameters: {
-        type: "object",
-        properties: {
-          employee_name: { type: "string", description: "Employee display name or partial name." },
-          service_date: { type: "string", description: "Optional date in YYYY-MM-DD. Defaults to today service date." }
-        },
-        required: ["employee_name"],
-        additionalProperties: false
-      }
-    },
-    {
-      type: "function",
-      name: "get_current_owner",
-      description: "Find who currently owns a specific location according to the schedule system.",
-      strict: true,
-      parameters: {
-        type: "object",
-        properties: {
-          location_code: { type: "string", description: "Location code such as TETM or TETX." },
-          at: { type: "string", description: "Optional ISO-like timestamp." }
-        },
-        required: ["location_code"],
-        additionalProperties: false
-      }
-    },
-    {
-      type: "function",
-      name: "get_open_tickets",
-      description: "List open maintenance tickets, optionally filtered by a location code or name.",
-      strict: true,
-      parameters: {
-        type: "object",
-        properties: {
-          location: { type: "string", description: "Optional location code or location name filter." }
-        },
-        additionalProperties: false
-      }
-    },
-    {
-      type: "function",
-      name: "get_dashboard_summary",
-      description: "Get a summary of current operational dashboard metrics and problem locations.",
-      strict: true,
-      parameters: {
-        type: "object",
-        properties: {},
-        additionalProperties: false
-      }
-    },
-    {
-      type: "function",
-      name: "get_scan_state",
-      description: "Check the scan system state for a specific location code.",
-      strict: true,
-      parameters: {
-        type: "object",
-        properties: {
-          location_code: { type: "string", description: "Location code to inspect." }
-        },
-        required: ["location_code"],
-        additionalProperties: false
-      }
-    },
-    {
-      type: "function",
-      name: "list_active_employees",
-      description: "List currently active employees in the system.",
-      strict: true,
-      parameters: {
-        type: "object",
-        properties: {},
-        additionalProperties: false
-      }
-    }
-  ];
-
-  if (webEnabled) {
-    tools.push({ type: "web_search", external_web_access: true });
-  }
-
-  return tools;
+    ]
+  }];
 }
 
-async function createResponse({ apiKey, model, instructions, input, tools, previousResponseId }) {
-  const body = {
-    model,
-    instructions,
-    input,
-    tools,
-    tool_choice: "auto"
-  };
-  if (String(model || "").startsWith("gpt-5")) {
-    body.reasoning = { effort: "low" };
-  }
-  if (previousResponseId) body.previous_response_id = previousResponseId;
-
-  const response = await fetch(OPENAI_RESPONSES_URL, {
+async function callGeminiGenerate({ apiKey, model, systemInstruction, contents, tools }) {
+  const response = await fetch(`${GEMINI_BASE_URL}/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`
-    },
-    body: JSON.stringify(body)
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: systemInstruction }] },
+      contents,
+      tools,
+      generationConfig: { temperature: 0.2 }
+    })
   });
-
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new Error(payload?.error?.message || payload?.message || `OpenAI HTTP ${response.status}`);
+    throw new Error(payload?.error?.message || payload?.message || `Gemini HTTP ${response.status}`);
   }
   return payload;
 }
 
-function extractResponseText(response) {
-  if (typeof response?.output_text === "string" && response.output_text.trim()) {
-    return response.output_text.trim();
-  }
-  const outputs = Array.isArray(response?.output) ? response.output : [];
-  const parts = [];
-  for (const item of outputs) {
-    if (item?.type === "message" && Array.isArray(item.content)) {
-      for (const content of item.content) {
-        if (content?.type === "output_text" && content.text) {
-          parts.push(String(content.text));
-        }
-      }
-    }
-  }
-  return parts.join("\n\n").trim();
+function extractGeminiText(payload) {
+  const parts = payload?.candidates?.[0]?.content?.parts || [];
+  return parts.filter((part) => typeof part?.text === "string" && part.text.trim()).map((part) => part.text.trim()).join("\n\n").trim();
 }
 
-function extractFunctionCalls(response) {
-  return (Array.isArray(response?.output) ? response.output : []).filter((item) => item?.type === "function_call");
+function extractGeminiFunctionCalls(payload) {
+  const parts = payload?.candidates?.[0]?.content?.parts || [];
+  return parts.filter((part) => part?.functionCall && part.functionCall.name);
 }
 
 async function getDefaultServiceDate(runReadOnlySql) {
@@ -556,7 +505,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
   }
 
   async function generateReply({ deviceId = "", userMessage = "" }) {
-    const apiKey = getOpenAiApiKey();
+    const apiKey = getGeminiApiKey();
     const identity = await fetchDeviceIdentity(runReadOnlySql, deviceId);
     const webEnabled = allowWebSearch({ deviceId, identityRole: identity?.role || "" });
 
@@ -564,65 +513,47 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       return await generateLocalReply(userMessage);
     }
 
-    const tools = buildTools({ webEnabled });
-    const instructions = buildSystemPrompt({ webEnabled });
+    const systemInstruction = buildSystemPrompt({ webEnabled });
     const model = DEFAULT_MODEL;
+    const tools = buildGeminiTools();
+    const contents = [{ role: "user", parts: [{ text: userMessage }] }];
 
     try {
-      let response = await createResponse({
-        apiKey,
-        model,
-        instructions,
-        input: userMessage,
-        tools
-      });
-
       for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
-        const calls = extractFunctionCalls(response);
-        if (!calls.length) break;
-        const toolOutputs = [];
-        for (const call of calls) {
-          let parsedArgs = {};
-          try {
-            parsedArgs = call.arguments ? JSON.parse(call.arguments) : {};
-          } catch {
-            parsedArgs = {};
-          }
-          const output = await executeTool(call.name, parsedArgs);
-          toolOutputs.push({
-            type: "function_call_output",
-            call_id: call.call_id,
-            output: JSON.stringify(output)
-          });
+        const payload = await callGeminiGenerate({ apiKey, model, systemInstruction, contents, tools });
+        const calls = extractGeminiFunctionCalls(payload);
+        const text = extractGeminiText(payload);
+        if (!calls.length) {
+          return {
+            text: text || "Memphis could not produce an answer for that yet.",
+            meta: { fallback: false, provider: "gemini", model }
+          };
         }
-        response = await createResponse({
-          apiKey,
-          model,
-          instructions,
-          input: toolOutputs,
-          tools,
-          previousResponseId: response.id
-        });
+        const modelParts = payload?.candidates?.[0]?.content?.parts || [];
+        contents.push({ role: "model", parts: modelParts });
+        const functionResponseParts = [];
+        for (const callPart of calls) {
+          const name = callPart.functionCall.name;
+          const args = callPart.functionCall.args || {};
+          const output = await executeTool(name, args);
+          functionResponseParts.push({ functionResponse: { name, response: output } });
+        }
+        contents.push({ role: "user", parts: functionResponseParts });
       }
 
-      const text = extractResponseText(response) || "Memphis could not produce an answer for that yet.";
       return {
-        text,
-        meta: {
-          fallback: false,
-          model,
-          web_enabled: webEnabled,
-          response_id: response?.id || null
-        }
+        text: "Memphis hit a tool loop limit before finishing that answer.",
+        meta: { fallback: false, provider: "gemini", model, loop_limit: true }
       };
     } catch (error) {
-      console.error("memphis openai path failed:", error);
+      console.error("memphis gemini path failed:", error);
       const local = await generateLocalReply(userMessage);
       return {
         text: local.text,
         meta: {
           ...(local.meta || {}),
-          openai_error: error?.message || "openai_failed",
+          gemini_error: error?.message || "gemini_failed",
+          provider: "gemini",
           model,
           web_enabled: webEnabled
         }
