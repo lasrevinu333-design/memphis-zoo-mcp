@@ -124,80 +124,19 @@ function getAdminApiKey() {
   return String(process.env.ADMIN_API_KEY || "").trim();
 }
 
-function getDashboardClosePin() {
-  return String(process.env.DASHBOARD_CLOSE_PIN || "").trim();
-}
-
-function getSchedulePin() {
-  return "1129";
-}
-
-function getEventsInputPin() {
-  return String(process.env.EVENTS_INPUT_PIN || "1129").trim();
-}
-
 function normalizeDashboardCloser(value) {
   const normalized = String(value || "").trim();
-  return normalized || "Dashboard PIN";
+  return normalized || "Dashboard";
 }
 
-function requireDashboardClosePin(req, res, next) {
-  const configuredPin = getDashboardClosePin();
-  if (!configuredPin) {
-    res.status(503).json({ ok: false, error: "DASHBOARD_CLOSE_PIN is not configured on the server." });
-    return;
-  }
-
-  const providedPin = String(req.body?.pin || "").trim();
-  if (!/^\d{4}$/.test(providedPin)) {
-    res.status(400).json({ ok: false, error: "A valid 4-digit PIN is required." });
-    return;
-  }
-
-  if (providedPin !== configuredPin) {
-    res.status(401).json({ ok: false, error: "Invalid dashboard PIN." });
-    return;
-  }
-
-  next();
-}
-
-function requireSchedulePin(req, res, next) {
-  const configuredPin = getSchedulePin();
-  const providedPin = String(req.header("x-schedule-pin") || req.body?.pin || "").trim();
-  if (!/^\d{4}$/.test(providedPin)) {
-    res.status(400).json({ ok: false, error: "A valid 4-digit scheduler PIN is required." });
-    return;
-  }
-  if (providedPin !== configuredPin) {
-    res.status(401).json({ ok: false, error: "Invalid scheduler PIN." });
-    return;
-  }
-  next();
-}
-
-function requireEventsInputPin(req, res, next) {
-  const configuredPin = getEventsInputPin();
-  if (!/^\d{4}$/.test(configuredPin)) {
-    res.status(503).json({ ok: false, error: "EVENTS_INPUT_PIN is not configured as a valid 4-digit PIN on the server." });
-    return;
-  }
-  const providedPin = String(req.header("x-events-pin") || req.body?.pin || "").trim();
-  if (!/^\d{4}$/.test(providedPin)) {
-    res.status(400).json({ ok: false, error: "A valid 4-digit events PIN is required." });
-    return;
-  }
-  if (providedPin !== configuredPin) {
-    res.status(401).json({ ok: false, error: "Invalid events PIN." });
-    return;
-  }
+function allowWithoutPin(_req, _res, next) {
   next();
 }
 
 function setAdminApiCors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Admin-Key, X-Events-Pin");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Admin-Key");
   res.setHeader("Vary", "Origin");
 }
 
@@ -225,7 +164,7 @@ function setMessagingApiCors(res) {
 function setScheduleApiCors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Schedule-Pin, X-Events-Pin");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   res.setHeader("Vary", "Origin");
 }
 
@@ -615,81 +554,6 @@ async function runCanaryChecks() {
 function createMcpServer() {
   const server = new McpServer({ name: process.env.APP_NAME || "Memphis Zoo MCP", version: APP_VERSION });
   server.tool("ping", { message: z.string().optional() }, async ({ message }) => ({ content: [{ type: "text", text: `MCP server is alive. ${message || ""}`.trim() }] }));
-  server.tool("github_debug_config", {}, async () => {
-    const defaultRepo = process.env.GITHUB_REPO || null;
-    return { content: [{ type: "text", text: JSON.stringify({ owner: process.env.GITHUB_OWNER || null, defaultRepo, allowedRepos: getAllowedGithubRepos(defaultRepo || ""), hasToken: !!process.env.GITHUB_TOKEN, version: APP_VERSION, release_id: RELEASE_ID }, null, 2) }] };
-  });
-  server.tool("github_list_directory", { repo: z.string().optional(), path: z.string().optional() }, async ({ repo: targetRepo, path }) => {
-    try {
-      const { owner, repo } = getGithubConfig(targetRepo);
-      const normalizedPath = normalizeGithubPath(path || "");
-      const response = await octokit.rest.repos.getContent({ owner, repo, path: normalizedPath });
-      if (!Array.isArray(response.data)) return { content: [{ type: "text", text: `Path is not a directory: ${owner}/${repo}/${normalizedPath || "<repo-root>"}` }] };
-      const items = response.data.map((item) => ({ name: item.name, path: item.path, type: item.type }));
-      return { content: [{ type: "text", text: JSON.stringify({ owner, repo, path: normalizedPath || "<repo-root>", items }, null, 2) }] };
-    } catch (error) {
-      return { content: [{ type: "text", text: `Failed to list GitHub directory \"${path || "/"}\"${targetRepo ? ` in repo \"${targetRepo}\"` : ""}: ${getGithubErrorDetail(error)}` }] };
-    }
-  });
-  server.tool("github_read_file", { repo: z.string().optional(), path: z.string().min(1) }, async ({ repo: targetRepo, path }) => {
-    try {
-      const { owner, repo } = getGithubConfig(targetRepo);
-      const normalizedPath = normalizeGithubPath(path);
-      const response = await octokit.rest.repos.getContent({ owner, repo, path: normalizedPath });
-      if (!("content" in response.data) || typeof response.data.content !== "string") return { content: [{ type: "text", text: `Path exists, but it is not a plain file: ${owner}/${repo}/${normalizedPath}` }] };
-      const decoded = Buffer.from(response.data.content, "base64").toString("utf8");
-      return { content: [{ type: "text", text: decoded }] };
-    } catch (error) {
-      return { content: [{ type: "text", text: `Failed to read GitHub file \"${path}\"${targetRepo ? ` in repo \"${targetRepo}\"` : ""}: ${getGithubErrorDetail(error)}` }] };
-    }
-  });
-  server.tool("github_write_file", { repo: z.string().optional(), path: z.string().min(1), content: z.string(), commit_message: z.string().min(1) }, async ({ repo: targetRepo, path, content, commit_message }) => {
-    try {
-      const { owner, repo } = getGithubConfig(targetRepo);
-      const normalizedPath = normalizeGithubPath(path);
-      let sha; let mode = "created";
-      try {
-        const existing = await octokit.rest.repos.getContent({ owner, repo, path: normalizedPath });
-        if (Array.isArray(existing.data)) return { content: [{ type: "text", text: `Cannot write to \"${normalizedPath}\" because it is a directory in ${owner}/${repo}.` }] };
-        if ("sha" in existing.data && typeof existing.data.sha === "string") { sha = existing.data.sha; mode = "updated"; }
-      } catch (error) { if (error?.status !== 404) throw error; }
-      const encodedContent = Buffer.from(content, "utf8").toString("base64");
-      const writeResponse = await octokit.rest.repos.createOrUpdateFileContents({ owner, repo, path: normalizedPath, message: commit_message, content: encodedContent, ...(sha ? { sha } : {}) });
-      return { content: [{ type: "text", text: `${mode === "created" ? "Created" : "Updated"} \"${normalizedPath}\" successfully in ${owner}/${repo}.\nCommit: ${writeResponse.data.commit.sha}` }] };
-    } catch (error) {
-      return { content: [{ type: "text", text: `Failed to write GitHub file \"${path}\"${targetRepo ? ` in repo \"${targetRepo}\"` : ""}: ${getGithubErrorDetail(error)}` }] };
-    }
-  });
-  server.tool("github_update_file", { repo: z.string().optional(), path: z.string().min(1), content: z.string(), commit_message: z.string().min(1) }, async ({ repo: targetRepo, path, content, commit_message }) => {
-    try {
-      const { owner, repo } = getGithubConfig(targetRepo);
-      const normalizedPath = normalizeGithubPath(path);
-      const existing = await octokit.rest.repos.getContent({ owner, repo, path: normalizedPath });
-      if (Array.isArray(existing.data) || !("sha" in existing.data) || typeof existing.data.sha !== "string") return { content: [{ type: "text", text: `Cannot update \"${normalizedPath}\" because it is not a normal file in ${owner}/${repo}.` }] };
-      const encodedContent = Buffer.from(content, "utf8").toString("base64");
-      const updateResponse = await octokit.rest.repos.createOrUpdateFileContents({ owner, repo, path: normalizedPath, message: commit_message, content: encodedContent, sha: existing.data.sha });
-      return { content: [{ type: "text", text: `Updated \"${normalizedPath}\" successfully in ${owner}/${repo}.\nCommit: ${updateResponse.data.commit.sha}` }] };
-    } catch (error) {
-      return { content: [{ type: "text", text: `Failed to update GitHub file \"${path}\"${targetRepo ? ` in repo \"${targetRepo}\"` : ""}: ${getGithubErrorDetail(error)}` }] };
-    }
-  });
-  server.tool("supabase_sql_read", { sql: z.string().min(1) }, async ({ sql }) => {
-    try { const data = await runReadOnlySql(sql); return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] }; }
-    catch (error) { return { content: [{ type: "text", text: `Supabase read failed: ${error.message}` }] }; }
-  });
-  server.tool("supabase_migration_apply", { name: z.string().min(1), sql: z.string().min(1) }, async ({ name, sql }) => {
-    try {
-      const client = getSupabaseConfig();
-      const normalized = sql.trim().toLowerCase();
-      if (!normalized) return { content: [{ type: "text", text: "Migration SQL cannot be empty." }] };
-      if (normalized.startsWith("begin") || normalized.includes("commit")) return { content: [{ type: "text", text: "Do not include BEGIN/COMMIT. Submit the migration body only." }] };
-      const { data, error } = await client.rpc("run_sql_migration", { p_name: name, p_sql: sql });
-      if (error) return { content: [{ type: "text", text: `Supabase migration failed: ${error.message}` }] };
-      return { content: [{ type: "text", text: JSON.stringify({ ok: true, name, result: data }, null, 2) }] };
-    } catch (error) {
-      return { content: [{ type: "text", text: `Supabase migration apply failed: ${error.message}` }] };
-    }
-  });
   return server;
 }
 
@@ -697,9 +561,9 @@ app.use("/admin-api", (req, res, next) => { setAdminApiCors(res); if (req.method
 app.use("/dashboard-api", (req, res, next) => { setPublicDashboardCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/scan-api", (req, res, next) => { setScanApiCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/messaging-api", (req, res, next) => { setMessagingApiCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } eventMaintenanceController.kick("messaging_api_request"); next(); }, createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: MESSAGING_CONTRACT_VERSION }));
-app.use("/schedule-api", (req, res, next) => { setScheduleApiCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } eventMaintenanceController.kick("schedule_api_request"); next(); }, createScheduleRouter({ runReadOnlySql, runRpc, buildHealthPayload, requireAdminApiAuth: requireSchedulePin, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: SCHEDULE_CONTRACT_VERSION }));
+app.use("/schedule-api", (req, res, next) => { setScheduleApiCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } eventMaintenanceController.kick("schedule_api_request"); next(); }, createScheduleRouter({ runReadOnlySql, runRpc, buildHealthPayload, requireAdminApiAuth: allowWithoutPin, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: SCHEDULE_CONTRACT_VERSION }));
 app.use("/dashboard-api/events", createEventsPublicRouter({ runReadOnlySql, runWriteSql, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController }));
-app.use("/admin-api/events", requireEventsInputPin, createEventsAdminRouter({ runReadOnlySql, runWriteSql, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController }));
+app.use("/admin-api/events", createEventsAdminRouter({ runReadOnlySql, runWriteSql, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController }));
 app.get("/version", (_req, res) => { eventMaintenanceController.kick("version_ping"); res.status(200).json(buildHealthPayload("version")); });
 app.get("/admin-api/health", requireAdminApiAuth, (_req, res) => { res.status(200).json(buildHealthPayload("admin", { authenticated: true })); });
 app.get("/dashboard-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("dashboard")); });
@@ -747,7 +611,7 @@ app.get("/dashboard-api/summary", async (_req, res) => {
   try { const data = await runPublicDashboardSummary(); res.status(200).json({ ok: true, data }); }
   catch (error) { console.error("dashboard summary failed:", error); res.status(500).json({ ok: false, error: error.message || "Dashboard summary failed" }); }
 });
-app.post("/dashboard-api/close-ticket", requireDashboardClosePin, async (req, res) => {
+app.post("/dashboard-api/close-ticket", async (req, res) => {
   try {
     const ticketId = String(req.body?.ticket_id || "").trim();
     const closedBy = normalizeDashboardCloser(req.body?.closed_by);
