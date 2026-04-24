@@ -1,7 +1,9 @@
 import express from "express";
+import { createMemphisResponder } from "./memphis-ai.js";
 
 export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPayload, appVersion, releaseId, contractVersion }) {
   const router = express.Router();
+  const memphisResponder = createMemphisResponder({ runReadOnlySql, runRpc });
 
   function fail(res, error, fallback = "Messaging request failed") {
     res.status(400).json({ ok: false, error: error?.message || fallback });
@@ -132,7 +134,13 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
   router.post("/memphis/thread", async (req, res) => {
     try {
       const userId = String(req.body?.user_id || "").trim();
+      const deviceId = String(req.body?.device_id || "").trim();
       const data = await runRpc("msg_get_or_create_memphis_thread", { p_user_id: userId });
+      if (deviceId && data?.id) {
+        try {
+          await runRpc("msg_unhide_thread_for_device", { p_thread_id: data.id, p_device_identifier: deviceId });
+        } catch {}
+      }
       res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Get Memphis thread failed");
@@ -142,8 +150,18 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
   router.post("/memphis/message", async (req, res) => {
     try {
       const userId = String(req.body?.user_id || "").trim();
+      const deviceId = String(req.body?.device_id || "").trim();
       const body = String(req.body?.body || "").trim();
+      if (!userId) throw new Error("user_id is required.");
+      if (!body) throw new Error("body is required.");
+
       const thread = await runRpc("msg_get_or_create_memphis_thread", { p_user_id: userId });
+      if (deviceId && thread?.id) {
+        try {
+          await runRpc("msg_unhide_thread_for_device", { p_thread_id: thread.id, p_device_identifier: deviceId });
+        } catch {}
+      }
+
       const userMessage = await runRpc("msg_send_message", {
         p_thread_id: thread.id,
         p_sender_user_id: userId,
@@ -151,16 +169,34 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         p_message_type: "text",
         p_metadata_json: { channel: "memphis" }
       });
+
       const memphisRows = await runReadOnlySql("select public.msg_get_memphis_user_id() as memphis_user_id");
       const memphisUserId = Array.isArray(memphisRows) && memphisRows.length ? memphisRows[0].memphis_user_id : null;
       if (!memphisUserId) throw new Error("Memphis bot identity not found.");
+
+      let reply;
+      try {
+        reply = await memphisResponder.generateReply({ userId, deviceId, userMessage: body });
+      } catch (error) {
+        console.error("memphis ai reply failed:", error);
+        reply = {
+          text: "Memphis hit an internal error while answering that. Try again in a moment.",
+          meta: { fallback: true, error: error?.message || "unknown_error" }
+        };
+      }
+
       const botMessage = await runRpc("msg_send_message", {
         p_thread_id: thread.id,
         p_sender_user_id: memphisUserId,
-        p_body: "Memphis is online. AI-linked operational answers are coming soon.",
+        p_body: String(reply?.text || "Memphis could not produce an answer."),
         p_message_type: "bot_response",
-        p_metadata_json: { channel: "memphis", placeholder: true }
+        p_metadata_json: {
+          channel: "memphis",
+          ai: true,
+          ...(reply?.meta && typeof reply.meta === "object" ? reply.meta : {})
+        }
       });
+
       res.status(200).json({ ok: true, data: { thread, user_message: userMessage, bot_message: botMessage }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Send Memphis message failed");
