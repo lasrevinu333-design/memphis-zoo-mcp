@@ -73,6 +73,7 @@ function normalizeEventPayload(payload = {}) {
 }
 
 async function purgeExpiredEvents(runWriteSql) {
+  if (typeof runWriteSql !== "function") return;
   await runWriteSql(
     "events_app_purge",
     `delete from public.events_app_events
@@ -244,27 +245,27 @@ async function sendEventNotification({ runRpc, runWriteSql, eventRow, assignment
 
 async function getPendingNotifications(runReadOnlySql) {
   const rows = await runReadOnlySql(`
-    with memphis as (
-      select public.msg_get_memphis_user_id() as memphis_user_id
+    with now_ctx as (
+      select now() at time zone '${EVENTS_TIME_ZONE}' as local_now,
+             public.msg_get_memphis_user_id() as memphis_user_id
     ),
-    due_day_before as (
+    day_before_due as (
       select
-        e.id as event_id,
+        e.id,
         e.event_name,
         e.location_group_id,
-        lg.group_code,
-        lg.group_name,
         e.event_date,
-        to_char(e.start_time, 'HH24:MI:SS') as start_time,
-        to_char(e.end_time, 'HH24:MI:SS') as end_time,
+        e.start_time,
+        e.end_time,
         e.attendee_count,
         e.notes,
-        dga.assigned_employee_id as employee_id,
+        lg.group_code,
+        lg.group_name,
+        emp.id as employee_id,
         emp.display_name as employee_name,
-        to_char(dga.coverage_start, 'HH24:MI:SS') as coverage_start,
-        to_char(dga.coverage_end, 'HH24:MI:SS') as coverage_end,
         mu.id as msg_user_id,
-        mda.device_identifier,
+        dga.coverage_start,
+        dga.coverage_end,
         'day_before'::text as notification_kind,
         ((e.event_date::timestamp - interval '1 day') + time '${DAY_BEFORE_NOTIFICATION_TIME}') as scheduled_for_local
       from public.events_app_events e
@@ -273,37 +274,37 @@ async function getPendingNotifications(runReadOnlySql) {
         on dga.location_group_id = e.location_group_id
        and dga.assignment_date = e.event_date
        and dga.active = true
+       and dga.assigned_employee_id is not null
       join public.employees emp on emp.id = dga.assigned_employee_id and emp.active = true
-      left join public.msg_users mu on mu.employee_id = emp.id and mu.is_active = true
-      left join public.msg_device_assignments mda on mda.msg_user_id = mu.id and mda.is_active = true
-      where not exists (
-        select 1
-        from public.events_app_notification_log log
-        where log.event_id = e.id
-          and log.employee_id = dga.assigned_employee_id
-          and log.notification_kind = 'day_before'
-      )
-        and ((e.event_date::timestamp - interval '1 day') + time '${DAY_BEFORE_NOTIFICATION_TIME}')
-            <= (now() at time zone '${EVENTS_TIME_ZONE}')
+      join public.msg_users mu on mu.employee_id = emp.id and mu.is_active = true
+      cross join now_ctx
+      where (now_ctx.local_now)::date = (e.event_date - interval '1 day')::date
+        and now_ctx.local_now >= ((e.event_date::timestamp - interval '1 day') + time '${DAY_BEFORE_NOTIFICATION_TIME}')
+        and not exists (
+          select 1
+          from public.events_app_notification_log log
+          where log.event_id = e.id
+            and log.employee_id = emp.id
+            and log.notification_kind = 'day_before'
+        )
     ),
-    due_shift_plus_fifteen as (
+    shift_due as (
       select
-        e.id as event_id,
+        e.id,
         e.event_name,
         e.location_group_id,
-        lg.group_code,
-        lg.group_name,
         e.event_date,
-        to_char(e.start_time, 'HH24:MI:SS') as start_time,
-        to_char(e.end_time, 'HH24:MI:SS') as end_time,
+        e.start_time,
+        e.end_time,
         e.attendee_count,
         e.notes,
-        dga.assigned_employee_id as employee_id,
+        lg.group_code,
+        lg.group_name,
+        emp.id as employee_id,
         emp.display_name as employee_name,
-        to_char(dga.coverage_start, 'HH24:MI:SS') as coverage_start,
-        to_char(dga.coverage_end, 'HH24:MI:SS') as coverage_end,
         mu.id as msg_user_id,
-        mda.device_identifier,
+        dga.coverage_start,
+        dga.coverage_end,
         'shift_plus_fifteen'::text as notification_kind,
         (e.event_date::timestamp + dga.coverage_start + interval '15 minutes') as scheduled_for_local
       from public.events_app_events e
@@ -312,31 +313,29 @@ async function getPendingNotifications(runReadOnlySql) {
         on dga.location_group_id = e.location_group_id
        and dga.assignment_date = e.event_date
        and dga.active = true
+       and dga.assigned_employee_id is not null
+       and dga.coverage_start is not null
       join public.employees emp on emp.id = dga.assigned_employee_id and emp.active = true
-      left join public.msg_users mu on mu.employee_id = emp.id and mu.is_active = true
-      left join public.msg_device_assignments mda on mda.msg_user_id = mu.id and mda.is_active = true
-      where dga.coverage_start is not null
+      join public.msg_users mu on mu.employee_id = emp.id and mu.is_active = true
+      cross join now_ctx
+      where (now_ctx.local_now)::date = e.event_date
+        and now_ctx.local_now >= (e.event_date::timestamp + dga.coverage_start + interval '15 minutes')
         and not exists (
           select 1
           from public.events_app_notification_log log
           where log.event_id = e.id
-            and log.employee_id = dga.assigned_employee_id
+            and log.employee_id = emp.id
             and log.notification_kind = 'shift_plus_fifteen'
         )
-        and (e.event_date::timestamp + dga.coverage_start + interval '15 minutes')
-            <= (now() at time zone '${EVENTS_TIME_ZONE}')
+      order by e.id, emp.id, dga.coverage_start asc nulls last
     )
-    select
-      pending.*,
-      memphis.memphis_user_id
+    select *
     from (
-      select * from due_day_before
+      select * from day_before_due
       union all
-      select * from due_shift_plus_fifteen
+      select * from shift_due
     ) pending
-    cross join memphis
-    where pending.msg_user_id is not null
-    order by pending.scheduled_for_local asc, pending.event_date asc, pending.coverage_start asc nulls first
+    order by pending.scheduled_for_local asc, pending.event_date asc, pending.event_name asc
     limit ${MAX_NOTIFICATIONS_PER_RUN}
   `);
   return Array.isArray(rows) ? rows : [];
@@ -358,33 +357,20 @@ export function createEventMaintenanceController({ runReadOnlySql, runWriteSql, 
     try {
       await purgeExpiredEvents(runWriteSql);
       const pending = await getPendingNotifications(runReadOnlySql);
-      for (const row of pending) {
-        await sendEventNotification({
-          runRpc,
-          runWriteSql,
-          eventRow: {
-            id: row.event_id,
-            event_name: row.event_name,
-            location_group_id: row.location_group_id,
-            group_code: row.group_code,
-            group_name: row.group_name,
-            event_date: row.event_date,
-            start_time: row.start_time,
-            end_time: row.end_time,
-            attendee_count: row.attendee_count,
-            notes: row.notes,
-          },
-          assignmentRow: {
-            employee_id: row.employee_id,
-            employee_name: row.employee_name,
-            coverage_start: row.coverage_start,
-            coverage_end: row.coverage_end,
-            msg_user_id: row.msg_user_id,
-            device_identifier: row.device_identifier,
-          },
-          memphisUserId: row.memphis_user_id,
-          kind: row.notification_kind,
-        });
+      if (pending.length) {
+        const memphisUserId = pending[0]?.memphis_user_id || null;
+        if (memphisUserId) {
+          for (const row of pending) {
+            await sendEventNotification({
+              runRpc,
+              runWriteSql,
+              eventRow: row,
+              assignmentRow: row,
+              memphisUserId,
+              kind: row.notification_kind,
+            });
+          }
+        }
       }
       return { ok: true, reason, processed: pending.length };
     } catch (error) {
@@ -418,7 +404,9 @@ export function createEventsPublicRouter({
   router.get("/", async (_req, res) => {
     try {
       maintenanceController?.kick("events_public_list");
-      await purgeExpiredEvents(runWriteSql);
+      if (typeof runWriteSql === "function") {
+        await purgeExpiredEvents(runWriteSql);
+      }
       const events = await listUpcomingEvents(runReadOnlySql);
       res.status(200).json({
         ok: true,
