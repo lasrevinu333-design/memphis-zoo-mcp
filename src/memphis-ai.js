@@ -1,5 +1,5 @@
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
-const DEFAULT_MODEL = String(process.env.MEMPHIS_OPENAI_MODEL || "gpt-5").trim();
+const DEFAULT_MODEL = String(process.env.MEMPHIS_OPENAI_MODEL || process.env.OPENAI_MODEL || "gpt-4.1").trim();
 const DEFAULT_SCAN_DEVICE_ID = "memphis-bot";
 const MAX_TOOL_ROUNDS = 6;
 
@@ -8,7 +8,7 @@ function esc(value) {
 }
 
 function sqlLikeLiteral(value) {
-  return `'%${String(value || "").replace(/'/g, "''")}%'`;
+  return `'%${String(value || "").replace(/'/g, "''") }%'`;
 }
 
 function normalizeDate(value) {
@@ -45,11 +45,11 @@ async function fetchDeviceIdentity(runReadOnlySql, deviceId) {
 function buildSystemPrompt({ webEnabled }) {
   return [
     "You are Memphis, the operational assistant for Memphis Zoo custodial systems.",
-    "Your job is to answer questions about internal systems including schedules, upcoming events, scan state, dashboard status, open tickets, employees, and messaging-related operational context.",
+    "Answer internal system questions about schedules, upcoming events, scan state, dashboard status, open tickets, employees, and messaging-related operations.",
     "Prefer tool calls for factual answers. Do not invent operational facts.",
     webEnabled
       ? "Web search is allowed on this device, but use it only when the user clearly needs outside or current public information."
-      : "Web search is not allowed on this device. If asked for outside or general knowledge unrelated to Memphis Zoo systems, politely explain that this device is limited to internal system questions.",
+      : "Web search is not allowed on this device. If asked for outside or general knowledge unrelated to Memphis Zoo systems, explain that this device is limited to internal system questions.",
     "Keep answers concise, practical, and operationally useful.",
     "If information is missing, say so plainly."
   ].join(" ");
@@ -61,6 +61,7 @@ function buildTools({ webEnabled }) {
       type: "function",
       name: "get_upcoming_events",
       description: "List upcoming Memphis Zoo events, optionally filtered by area and days ahead.",
+      strict: true,
       parameters: {
         type: "object",
         properties: {
@@ -74,6 +75,7 @@ function buildTools({ webEnabled }) {
       type: "function",
       name: "get_area_schedule",
       description: "Look up who is assigned to an area or location group on a given service date.",
+      strict: true,
       parameters: {
         type: "object",
         properties: {
@@ -88,6 +90,7 @@ function buildTools({ webEnabled }) {
       type: "function",
       name: "get_employee_schedule",
       description: "Look up what areas an employee is assigned to on a given date.",
+      strict: true,
       parameters: {
         type: "object",
         properties: {
@@ -102,6 +105,7 @@ function buildTools({ webEnabled }) {
       type: "function",
       name: "get_current_owner",
       description: "Find who currently owns a specific location according to the schedule system.",
+      strict: true,
       parameters: {
         type: "object",
         properties: {
@@ -116,6 +120,7 @@ function buildTools({ webEnabled }) {
       type: "function",
       name: "get_open_tickets",
       description: "List open maintenance tickets, optionally filtered by a location code or name.",
+      strict: true,
       parameters: {
         type: "object",
         properties: {
@@ -128,6 +133,7 @@ function buildTools({ webEnabled }) {
       type: "function",
       name: "get_dashboard_summary",
       description: "Get a summary of current operational dashboard metrics and problem locations.",
+      strict: true,
       parameters: {
         type: "object",
         properties: {},
@@ -138,6 +144,7 @@ function buildTools({ webEnabled }) {
       type: "function",
       name: "get_scan_state",
       description: "Check the scan system state for a specific location code.",
+      strict: true,
       parameters: {
         type: "object",
         properties: {
@@ -151,6 +158,7 @@ function buildTools({ webEnabled }) {
       type: "function",
       name: "list_active_employees",
       description: "List currently active employees in the system.",
+      strict: true,
       parameters: {
         type: "object",
         properties: {},
@@ -174,6 +182,9 @@ async function createResponse({ apiKey, model, instructions, input, tools, previ
     tools,
     tool_choice: "auto"
   };
+  if (String(model || "").startsWith("gpt-5")) {
+    body.reasoning = { effort: "low" };
+  }
   if (previousResponseId) body.previous_response_id = previousResponseId;
 
   const response = await fetch(OPENAI_RESPONSES_URL, {
@@ -217,6 +228,48 @@ function extractFunctionCalls(response) {
 async function getDefaultServiceDate(runReadOnlySql) {
   const rows = await runReadOnlySql("select public.sch_service_date(now()) as service_date");
   return Array.isArray(rows) && rows.length ? rows[0].service_date : null;
+}
+
+function findLocationCode(text) {
+  const match = String(text || "").match(/\b[A-Z]{3,5}\b/);
+  return match ? match[0] : "";
+}
+
+function summarizeEvents(events = []) {
+  if (!events.length) return "There are no upcoming events in the system right now.";
+  return events.slice(0, 6).map((event) => {
+    const attendees = event.attendee_count == null ? "attendees not listed" : `${event.attendee_count} attendees`;
+    return `${event.event_name} in ${event.group_name || event.group_code} on ${event.event_date} from ${event.start_time} to ${event.end_time}, ${attendees}.`;
+  }).join(" ");
+}
+
+function summarizeAssignments(assignments = [], emptyText) {
+  if (!assignments.length) return emptyText;
+  return assignments.slice(0, 10).map((row) => {
+    const employee = row.employee_name || "Open";
+    const group = row.group_name || row.group_code || "Unknown area";
+    const start = row.coverage_start || "—";
+    const end = row.coverage_end || "—";
+    return `${employee} covers ${group} from ${start} to ${end}.`;
+  }).join(" ");
+}
+
+function summarizeTickets(tickets = [], location = "") {
+  if (!tickets.length) return location ? `There are no open tickets matching ${location}.` : "There are no open tickets right now.";
+  return tickets.slice(0, 8).map((ticket) => `${ticket.location_name || ticket.location_code}: ${ticket.maintenance_issue}.`).join(" ");
+}
+
+function summarizeDashboard(snapshot = {}, attention = []) {
+  const bits = [];
+  if (snapshot.open_ticket_count != null) bits.push(`${snapshot.open_ticket_count} open tickets`);
+  if (snapshot.overdue_locations != null) bits.push(`${snapshot.overdue_locations} overdue locations`);
+  if (snapshot.due_soon_locations != null) bits.push(`${snapshot.due_soon_locations} due soon`);
+  if (snapshot.in_progress_locations != null) bits.push(`${snapshot.in_progress_locations} in progress`);
+  const summary = bits.length ? `Dashboard snapshot: ${bits.join(", ")}.` : "Dashboard snapshot is available.";
+  const focus = attention.length
+    ? ` Attention locations: ${attention.slice(0, 8).map((row) => `${row.location_name || row.location_code} (${row.status_code}, ${row.open_ticket_count} tickets)`).join("; ")}.`
+    : "";
+  return `${summary}${focus}`.trim();
 }
 
 export function createMemphisResponder({ runReadOnlySql, runRpc }) {
@@ -373,67 +426,136 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     throw new Error(`Unknown Memphis tool: ${name}`);
   }
 
-  async function generateReply({ userId = "", deviceId = "", userMessage = "" }) {
-    const apiKey = getOpenAiApiKey();
-    if (!apiKey) {
+  async function generateLocalReply(userMessage) {
+    const text = String(userMessage || "").trim();
+    const lower = text.toLowerCase();
+
+    if (lower.includes("event")) {
+      const data = await executeTool("get_upcoming_events", { days: 14 });
+      return { text: summarizeEvents(data.events), meta: { fallback: true, mode: "local_events" } };
+    }
+
+    if (lower.includes("ticket")) {
+      const data = await executeTool("get_open_tickets", { location: findLocationCode(text) || "" });
+      return { text: summarizeTickets(data.tickets, findLocationCode(text)), meta: { fallback: true, mode: "local_tickets" } };
+    }
+
+    if (lower.includes("owner") || lower.includes("who owns") || lower.includes("who has")) {
+      const code = findLocationCode(text);
+      if (code) {
+        const owner = await executeTool("get_current_owner", { location_code: code });
+        if (!owner) return { text: `I could not find a current owner for ${code}.`, meta: { fallback: true, mode: "local_owner" } };
+        return {
+          text: `${owner.location_name || owner.location_code || code} is currently owned by ${owner.owner_display_name || owner.employee_name || "nobody listed"}.`,
+          meta: { fallback: true, mode: "local_owner" }
+        };
+      }
+    }
+
+    if (lower.includes("scan") || lower.includes("state")) {
+      const code = findLocationCode(text);
+      if (code) {
+        const state = await executeTool("get_scan_state", { location_code: code });
+        return {
+          text: `${state.location_name || state.location_code || code} is currently ${state.suggested_action || state.status || "available"}.`,
+          meta: { fallback: true, mode: "local_scan" }
+        };
+      }
+    }
+
+    if ((lower.includes("assigned") || lower.includes("schedule")) && /(today|tomorrow|group|teton|expo|zambezi|primate|event center)/i.test(text)) {
+      const area = text;
+      const data = await executeTool("get_area_schedule", { area });
       return {
-        text: "Memphis AI is not configured on the server yet. Set OPENAI_API_KEY to bring the real bot online.",
-        meta: { fallback: true, reason: "missing_openai_api_key" }
+        text: summarizeAssignments(data.assignments, `I could not find schedule assignments for ${area} on ${data.service_date}.`),
+        meta: { fallback: true, mode: "local_area_schedule" }
       };
     }
 
+    if (lower.includes("dashboard") || lower.includes("summary") || lower.includes("status")) {
+      const data = await executeTool("get_dashboard_summary", {});
+      return { text: summarizeDashboard(data.snapshot, data.attention_locations), meta: { fallback: true, mode: "local_dashboard" } };
+    }
+
+    return {
+      text: "Memphis can help with schedules, events, scan state, dashboard status, tickets, and employee assignments. Ask me a system question tied to those areas.",
+      meta: { fallback: true, mode: "local_generic" }
+    };
+  }
+
+  async function generateReply({ deviceId = "", userMessage = "" }) {
+    const apiKey = getOpenAiApiKey();
     const identity = await fetchDeviceIdentity(runReadOnlySql, deviceId);
     const webEnabled = allowWebSearch({ deviceId, identityRole: identity?.role || "" });
+
+    if (!apiKey) {
+      return await generateLocalReply(userMessage);
+    }
+
     const tools = buildTools({ webEnabled });
     const instructions = buildSystemPrompt({ webEnabled });
     const model = DEFAULT_MODEL;
 
-    let response = await createResponse({
-      apiKey,
-      model,
-      instructions,
-      input: userMessage,
-      tools
-    });
-
-    for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
-      const calls = extractFunctionCalls(response);
-      if (!calls.length) break;
-      const toolOutputs = [];
-      for (const call of calls) {
-        let parsedArgs = {};
-        try {
-          parsedArgs = call.arguments ? JSON.parse(call.arguments) : {};
-        } catch {
-          parsedArgs = {};
-        }
-        const output = await executeTool(call.name, parsedArgs);
-        toolOutputs.push({
-          type: "function_call_output",
-          call_id: call.call_id,
-          output: JSON.stringify(output)
-        });
-      }
-      response = await createResponse({
+    try {
+      let response = await createResponse({
         apiKey,
         model,
         instructions,
-        input: toolOutputs,
-        tools,
-        previousResponseId: response.id
+        input: userMessage,
+        tools
       });
-    }
 
-    const text = extractResponseText(response) || "Memphis could not produce an answer for that yet.";
-    return {
-      text,
-      meta: {
-        fallback: false,
-        model,
-        web_enabled: webEnabled,
-        response_id: response?.id || null
+      for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
+        const calls = extractFunctionCalls(response);
+        if (!calls.length) break;
+        const toolOutputs = [];
+        for (const call of calls) {
+          let parsedArgs = {};
+          try {
+            parsedArgs = call.arguments ? JSON.parse(call.arguments) : {};
+          } catch {
+            parsedArgs = {};
+          }
+          const output = await executeTool(call.name, parsedArgs);
+          toolOutputs.push({
+            type: "function_call_output",
+            call_id: call.call_id,
+            output: JSON.stringify(output)
+          });
+        }
+        response = await createResponse({
+          apiKey,
+          model,
+          instructions,
+          input: toolOutputs,
+          tools,
+          previousResponseId: response.id
+        });
       }
-    };
+
+      const text = extractResponseText(response) || "Memphis could not produce an answer for that yet.";
+      return {
+        text,
+        meta: {
+          fallback: false,
+          model,
+          web_enabled: webEnabled,
+          response_id: response?.id || null
+        }
+      };
+    } catch (error) {
+      console.error("memphis openai path failed:", error);
+      const local = await generateLocalReply(userMessage);
+      return {
+        text: local.text,
+        meta: {
+          ...(local.meta || {}),
+          openai_error: error?.message || "openai_failed",
+          model,
+          web_enabled: webEnabled
+        }
+      };
+    }
   }
 
   return { generateReply };
