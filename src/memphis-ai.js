@@ -39,7 +39,7 @@ function inferRelativeDateOffset(text) {
 
 function extractWeekdayReference(text = "") {
   const lower = String(text || "").toLowerCase();
-  const match = lower.match(/\b(?:(this|next)\s+)?(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/);
+  const match = lower.match(/\b(?:(this|next|coming)\s+)?(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/);
   if (!match) return null;
   return { modifier: match[1] || "", weekday: match[2] || "" };
 }
@@ -52,12 +52,9 @@ function computeWeekdayDate(referenceDate, weekdayName, modifier = "") {
   const baseIndex = base.getDay();
   let delta = targetIndex - baseIndex;
   if (modifier === "next") {
-    if (delta <= 0) delta += 7;
-    else delta += 7;
-  } else if (modifier === "this") {
-    if (delta < 0) delta += 7;
+    while (delta <= 0) delta += 7;
   } else {
-    if (delta < 0) delta += 7;
+    while (delta < 0) delta += 7;
   }
   base.setDate(base.getDate() + delta);
   return base.toISOString().slice(0, 10);
@@ -66,7 +63,9 @@ function computeWeekdayDate(referenceDate, weekdayName, modifier = "") {
 function extractTimeWindow(text) {
   const raw = String(text || "").replace(/\s+/g, " ");
   const explicitRange = raw.match(/(\d{1,2}(?::\d{2})?\s*(?:am|pm)|\d{3,4}\s*(?:am|pm))[\s]*(?:to|\-|–|—)[\s]*(\d{1,2}(?::\d{2})?\s*(?:am|pm)|\d{3,4}\s*(?:am|pm))/i);
-  if (explicitRange) return { start: normalizeHumanTime(explicitRange[1]), end: normalizeHumanTime(explicitRange[2]) };
+  if (explicitRange) {
+    return { start: normalizeHumanTime(explicitRange[1]), end: normalizeHumanTime(explicitRange[2]) };
+  }
   const single = raw.match(/\b(?:at|for|around|after)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)|\d{3,4}\s*(?:am|pm))\b/i);
   if (single) {
     const start = normalizeHumanTime(single[1]);
@@ -136,7 +135,7 @@ function isGreetingOnly(text = "") {
 
 function isConversationalOpener(text = "") {
   const lower = normalizeLoose(text);
-  return /(what up|whats up|what s up|how are you|you getting things figured out|getting things figured out|doing better|you good|hows it going|how s it going|you alive|are you alive|are you connected|connected and alive|hello there|dude what it do)/.test(lower);
+  return /(what up|whats up|what s up|how are you|you getting things figured out|doing better|you good|hows it going|how s it going|you alive|are you alive|are you connected|connected and alive|hello there|dude what it do)/.test(lower);
 }
 
 function isWeatherQuestion(text = "") {
@@ -154,12 +153,6 @@ function inferWeatherLocation(text = "", threadContext = {}) {
   return DEFAULT_WEATHER_LOCATION;
 }
 
-function augmentWeatherPrompt(userMessage = "", threadContext = {}) {
-  const location = inferWeatherLocation(userMessage, threadContext);
-  if (!location) return userMessage;
-  return `${String(userMessage || "").trim()}\n\nWeather location context: ${location}. If the user says \"here\" or asks weather without another city, use ${location}.`;
-}
-
 function isGeneralKnowledgeQuestion(text = "") {
   const lower = String(text || "").toLowerCase();
   if (isWeatherQuestion(lower)) return true;
@@ -175,7 +168,7 @@ function shouldTreatAsPureOpener(text = "") {
 }
 
 function isContradictionFollowUp(text = "") {
-  return /(why would you say|that is wrong|you are wrong|that can't be right|that is not right|always off|not on sunday|not sunday|that makes no sense)/i.test(String(text || ""));
+  return /(why would you say|that is wrong|you are wrong|that can.?t be right|that is not right|always off|not on sunday|not sunday|that makes no sense|did i ask about)/i.test(String(text || ""));
 }
 
 function openerReply(text = "") {
@@ -193,7 +186,7 @@ function genericConversationalFallback(text = "", threadContext = {}) {
   const weatherLocation = inferWeatherLocation(text, threadContext);
   if (/alive|connected/.test(lower)) return "Yeah. I am here and connected enough to answer real system questions. Give me one.";
   if (/sparrow/.test(lower)) return "That depends. African or European?";
-  if (/weather/.test(lower)) return `I should be able to answer weather for ${weatherLocation || DEFAULT_WEATHER_LOCATION}, but my general-answer side did not land it cleanly.`;
+  if (/weather/.test(lower)) return `I should be able to answer weather for ${weatherLocation || DEFAULT_WEATHER_LOCATION}, but I could not verify it live right now.`;
   if (/hello|hey|hi/.test(lower)) return "Hey. What do you need?";
   return "I am here. Ask me something specific or just talk to me like a person.";
 }
@@ -207,6 +200,20 @@ function summarizeWeatherPayload(weather) {
   const precip = weather.precipitation_probability == null ? "precipitation unknown" : `${Math.round(Number(weather.precipitation_probability))}% chance of precipitation`;
   const condition = weather.condition || "conditions unavailable";
   return `${weather.location || DEFAULT_WEATHER_LOCATION} today: ${condition}, ${temp}, ${high}, ${low}, ${wind}, ${precip}.`;
+}
+
+function weatherCodeToText(code) {
+  const value = Number(code);
+  if (value === 0) return "clear";
+  if ([1, 2, 3].includes(value)) return "partly cloudy";
+  if ([45, 48].includes(value)) return "foggy";
+  if ([51, 53, 55, 56, 57].includes(value)) return "drizzle";
+  if ([61, 63, 65, 66, 67].includes(value)) return "rain";
+  if ([71, 73, 75, 77].includes(value)) return "snow";
+  if ([80, 81, 82].includes(value)) return "rain showers";
+  if ([85, 86].includes(value)) return "snow showers";
+  if ([95, 96, 99].includes(value)) return "thunderstorms";
+  return "mixed conditions";
 }
 
 function inferIntent(text = "") {
@@ -248,11 +255,12 @@ function summarizeEvents(events = []) {
   }).join(" ");
 }
 
-function summarizeAssignments(assignments = [], emptyText) {
+function summarizeAssignments(assignments = [], emptyText, groupName = "", serviceDate = "") {
   if (!assignments.length) return emptyText;
-  return assignments.slice(0, 12).map((row) => {
+  const prefix = groupName ? `${groupName} on ${serviceDate}: ` : "";
+  return prefix + assignments.slice(0, 12).map((row) => {
     const employee = row.employee_name || row.assigned_employee_name || "Open";
-    const group = row.group_name || row.group_code || "Unknown area";
+    const group = row.group_name || row.group_code || groupName || "Unknown area";
     const start = row.coverage_start || "—";
     const end = row.coverage_end || "—";
     return `${employee} covers ${group} from ${start} to ${end}.`;
@@ -501,20 +509,6 @@ async function fetchWeatherForMemphisTn(location = DEFAULT_WEATHER_LOCATION) {
   };
 }
 
-function weatherCodeToText(code) {
-  const value = Number(code);
-  if (value === 0) return "clear";
-  if ([1,2,3].includes(value)) return "partly cloudy";
-  if ([45,48].includes(value)) return "foggy";
-  if ([51,53,55,56,57].includes(value)) return "drizzle";
-  if ([61,63,65,66,67].includes(value)) return "rain";
-  if ([71,73,75,77].includes(value)) return "snow";
-  if ([80,81,82].includes(value)) return "rain showers";
-  if ([85,86].includes(value)) return "snow showers";
-  if ([95,96,99].includes(value)) return "thunderstorms";
-  return "mixed conditions";
-}
-
 async function tryGeminiConversation({ apiKey, userMessage, webEnabled, threadContext }) {
   const locationHint = isWeatherQuestion(userMessage) ? `The default weather location is ${DEFAULT_WEATHER_LOCATION}. If the user says here, local, or weather without another city, use ${DEFAULT_WEATHER_LOCATION}.` : "";
   const priorHint = threadContext?.last_subject_type === "weather" ? `Previous exchange was about weather in ${threadContext?.context_json?.weather_location || DEFAULT_WEATHER_LOCATION}.` : "";
@@ -567,7 +561,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     if (name === "get_area_schedule") {
       const serviceDate = normalizeDate(args.service_date) || await getDefaultServiceDate(runReadOnlySql);
       const target = await resolveAreaRow(runReadOnlySql, serviceDate, String(args.area || "").trim(), {});
-      if (!target?.location_group_id) return { service_date: serviceDate, assignments: [] };
+      if (!target?.location_group_id) return { service_date: serviceDate, assignments: [], group_name: "" };
       const rows = await runReadOnlySql(`
         select *
         from public.v_memphis_area_schedule
@@ -856,19 +850,15 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     const explicitDate = extractExplicitDate(text);
     const weekdayRef = extractWeekdayReference(text);
     let relativeServiceDate = mergeContextDate(text, threadContext, explicitDate) || todayServiceDate;
+
     if (!explicitDate && weekdayRef && todayServiceDate) {
       relativeServiceDate = computeWeekdayDate(todayServiceDate, weekdayRef.weekday, weekdayRef.modifier) || relativeServiceDate;
     } else if (!explicitDate && !weekdayRef) {
       const relativeOffset = inferRelativeDateOffset(text);
       if (relativeOffset !== 0) relativeServiceDate = await getRelativeServiceDate(runReadOnlySql, relativeOffset);
     }
-    const assignedEmployee = await fetchAssignedEmployeeForDevice(runReadOnlySql, deviceId);
 
-    if (shouldTreatAsPureOpener(text)) {
-      const subjectType = isWeatherQuestion(text) ? "weather" : "conversation";
-      await saveThreadContext(runRpc, threadId, { last_intent: "conversation", last_service_date: relativeServiceDate, last_subject_type: subjectType, context_json: subjectType === "weather" ? { weather_location: inferWeatherLocation(text, threadContext) || DEFAULT_WEATHER_LOCATION } : {} });
-      return { text: openerReply(text), meta: { fallback: true, mode: "local_conversation" } };
-    }
+    const assignedEmployee = await fetchAssignedEmployeeForDevice(runReadOnlySql, deviceId);
 
     if (isWeatherQuestion(text)) {
       const location = inferWeatherLocation(text, threadContext) || DEFAULT_WEATHER_LOCATION;
@@ -882,9 +872,21 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       }
     }
 
-    if (isContradictionFollowUp(text) && threadContext?.last_group_name && threadContext?.last_service_date) {
+    if (shouldTreatAsPureOpener(text)) {
+      await saveThreadContext(runRpc, threadId, { last_intent: "conversation", last_service_date: relativeServiceDate, last_subject_type: "conversation" });
+      return { text: openerReply(text), meta: { fallback: true, mode: "local_conversation" } };
+    }
+
+    if (isContradictionFollowUp(text) && threadContext?.last_intent === "area_schedule" && threadContext?.last_group_name && threadContext?.last_service_date) {
+      const rerun = await executeTool("get_area_schedule", { area: threadContext.last_group_name, service_date: threadContext.last_service_date });
+      const rerunText = summarizeAssignments(
+        rerun.assignments,
+        `I still don't find assignments for ${threadContext.last_group_name} on ${threadContext.last_service_date}.`,
+        threadContext.last_group_name,
+        threadContext.last_service_date
+      );
       return {
-        text: `You are right to challenge that. I should have been using ${threadContext.last_service_date} for ${threadContext.last_group_name}, and if Karen Robinson and Kathy Phelps are always off Sunday, that earlier answer was wrong. Ask me the area again and I will re-run it cleanly.`,
+        text: `You are right to question that. I re-ran ${threadContext.last_group_name} for ${threadContext.last_service_date}. ${rerunText} If that conflicts with the real Sunday staffing pattern, the schedule data itself needs correction.`,
         meta: { fallback: true, mode: "local_contradiction_followup" }
       };
     }
@@ -902,20 +904,37 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       return { text: summarizeTickets(data.tickets, findLocationCode(text)), meta: { fallback: true, mode: "local_tickets" } };
     }
 
-    if (/(absent|off|cover|covering|fill|filling)/i.test(lower) && !isContradictionFollowUp(text)) {
+    const intent = inferIntent(text);
+
+    if (intent === "area_schedule") {
+      const areaRow = await resolveAreaRow(runReadOnlySql, relativeServiceDate, text, threadContext);
+      const data = await executeTool("get_area_schedule", { area: areaRow?.group_name || text, service_date: relativeServiceDate });
+      await saveThreadContext(runRpc, threadId, { last_intent: "area_schedule", last_group_name: areaRow?.group_name || data.group_name || null, last_service_date: relativeServiceDate, last_subject_type: "group" });
+      return {
+        text: summarizeAssignments(
+          data.assignments,
+          `I couldn't find schedule assignments for ${areaRow?.group_name || text} on ${data.service_date}.`,
+          areaRow?.group_name || data.group_name || "",
+          data.service_date
+        ),
+        meta: { fallback: true, mode: "local_area_schedule" }
+      };
+    }
+
+    if (intent === "absence_coverage") {
       const employeeName = await guessEmployeeName(runRpc, text) || threadContext?.last_employee_name || "";
       const data = await executeTool("get_absence_coverage", { employee_name: employeeName, service_date: relativeServiceDate });
       await saveThreadContext(runRpc, threadId, { last_intent: "absence_coverage", last_employee_name: employeeName || null, last_service_date: relativeServiceDate, last_subject_type: "employee" });
       return { text: summarizeAbsenceCoverage(data, employeeName), meta: { fallback: true, mode: "local_absence_coverage" } };
     }
 
-    if ((lower.includes("my schedule") || lower === "schedule" || lower.includes("what am i assigned") || lower.includes("what am i doing today")) && assignedEmployee?.assigned_employee_name) {
+    if (intent === "my_schedule" && assignedEmployee?.assigned_employee_name) {
       const data = await executeTool("get_my_schedule", { device_id: deviceId, service_date: relativeServiceDate });
       await saveThreadContext(runRpc, threadId, { last_intent: "my_schedule", last_employee_name: data.employee_name || assignedEmployee.assigned_employee_name, last_service_date: relativeServiceDate, last_subject_type: "employee" });
       return { text: summarizeEmployeeAssignments(data.assignments, data.employee_name || assignedEmployee.assigned_employee_name, data.service_date), meta: { fallback: true, mode: "local_my_schedule" } };
     }
 
-    if (/(who can cover|who should cover|best backup|best person to cover|coverage candidate)/i.test(lower)) {
+    if (intent === "coverage_candidates") {
       const areaRow = await resolveAreaRow(runReadOnlySql, relativeServiceDate, text, threadContext);
       const timeWindow = extractTimeWindow(text) || {};
       const data = await executeTool("get_coverage_candidates", { service_date: relativeServiceDate, area: areaRow?.group_name || text, coverage_start: timeWindow.start, coverage_end: timeWindow.end });
@@ -923,14 +942,14 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       return { text: summarizeCoverageCandidates(data.candidates, data.group_name || areaRow?.group_name || text), meta: { fallback: true, mode: "local_coverage_candidates" } };
     }
 
-    if (/(open segments|what is open|what's open|uncovered|unassigned)/i.test(lower)) {
+    if (intent === "open_segments") {
       const areaRow = await resolveAreaRow(runReadOnlySql, relativeServiceDate, text, threadContext);
       const data = await executeTool("get_open_segments", { service_date: relativeServiceDate, area: areaRow?.group_name || "" });
       await saveThreadContext(runRpc, threadId, { last_intent: "open_segments", last_group_name: areaRow?.group_name || null, last_service_date: relativeServiceDate, last_subject_type: "group" });
       return { text: summarizeOpenSegments(data.open_segments, data.service_date), meta: { fallback: true, mode: "local_open_segments" } };
     }
 
-    if (/(load|workload|heaviest|busy)/i.test(lower)) {
+    if (intent === "employee_load_summary") {
       const employeeName = await guessEmployeeName(runRpc, text) || threadContext?.last_employee_name || "";
       const data = await executeTool("get_employee_load_summary", { service_date: relativeServiceDate, employee_name: employeeName });
       await saveThreadContext(runRpc, threadId, { last_intent: "employee_load_summary", last_employee_name: employeeName || null, last_service_date: relativeServiceDate, last_subject_type: employeeName ? "employee" : "summary" });
@@ -964,7 +983,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       }
     }
 
-    if (lower.includes("owner") || lower.includes("who owns") || lower.includes("who has")) {
+    if (intent === "current_owner") {
       const code = findLocationCode(text) || threadContext?.last_location_code || "";
       if (code) {
         const owner = await executeTool("get_current_owner", { location_code: code });
@@ -983,20 +1002,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       }
     }
 
-    if (lower.includes("schedule") || lower.includes("assigned") || lower.includes("working") || lower.includes("aquarium") || lower.includes("restroom") || lower.includes("zambezi") || lower.includes("teton") || lower.includes("expo") || lower.includes("cleans")) {
-      const employeeName = await guessEmployeeName(runRpc, text) || threadContext?.last_employee_name || "";
-      if (employeeName) {
-        const data = await executeTool("get_employee_schedule", { employee_name: employeeName, service_date: relativeServiceDate });
-        await saveThreadContext(runRpc, threadId, { last_intent: "employee_schedule", last_employee_name: employeeName, last_service_date: relativeServiceDate, last_subject_type: "employee" });
-        return { text: summarizeEmployeeAssignments(data.assignments, employeeName, data.service_date), meta: { fallback: true, mode: "local_employee_schedule" } };
-      }
-      const areaRow = await resolveAreaRow(runReadOnlySql, relativeServiceDate, text, threadContext);
-      const data = await executeTool("get_area_schedule", { area: areaRow?.group_name || text, service_date: relativeServiceDate });
-      await saveThreadContext(runRpc, threadId, { last_intent: "area_schedule", last_group_name: areaRow?.group_name || data.group_name || null, last_service_date: relativeServiceDate, last_subject_type: "group" });
-      return { text: summarizeAssignments(data.assignments, `I couldn't find schedule assignments for ${areaRow?.group_name || text} on ${data.service_date}.`), meta: { fallback: true, mode: "local_area_schedule" } };
-    }
-
-    if (lower.includes("dashboard") || lower.includes("summary") || lower.includes("status") || lower.includes("metrics") || lower.includes("attendance")) {
+    if (intent === "dashboard_summary") {
       const data = await executeTool("get_dashboard_summary", {});
       await saveThreadContext(runRpc, threadId, { last_intent: "dashboard_summary", last_service_date: relativeServiceDate, last_subject_type: "summary" });
       return { text: summarizeDashboard(data.snapshot, data.attention_locations, data.attendance), meta: { fallback: true, mode: "local_dashboard" } };
