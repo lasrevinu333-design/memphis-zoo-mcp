@@ -73,7 +73,7 @@ export function redactSecrets(value, seen = new WeakSet()) {
 
   const redacted = {};
   for (const [key, item] of Object.entries(value)) {
-    redacted[key] = keyLooksSecret(key) ? mask(item) : redactSecrets(item, seen);
+    redacted[key] = keyLooksSecret(key) ? redactSecretValue(item) : redactSecrets(item, seen);
   }
   return redacted;
 }
