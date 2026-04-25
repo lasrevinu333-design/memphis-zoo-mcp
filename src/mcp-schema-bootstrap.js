@@ -1,10 +1,13 @@
 import { z } from "zod";
+import express from "express";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerMcpTool } from "./mcp/register.js";
 import { textResponse } from "./mcp/responses.js";
 import { registerGithubTools } from "./mcp/github-tools.js";
 import { registerSupabaseTools } from "./mcp/supabase-tools.js";
 import { registerServerTools } from "./mcp/server-tools.js";
+import { validateRuntimeEnv } from "./config/env.js";
+import { getToolManifest } from "./mcp/tool-manifest.js";
 
 /**
  * Compatibility/bootstrap layer for the Memphis Zoo MCP server.
@@ -13,12 +16,9 @@ import { registerServerTools } from "./mcp/server-tools.js";
  * Express app, routes, /mcp transport, /sse transport, dashboard APIs, scan
  * APIs, messaging APIs, and event APIs untouched.
  *
- * The only thing it changes is MCP tool registration:
- *   - old src/index.js can keep calling server.tool(...)
- *   - this bootstrap registers the newer modular MCP tools instead
- *   - duplicate legacy tool registrations are ignored for the modular names
- *
- * This lets us migrate the MCP layer without carving up the main server body.
+ * It currently does two small bootstrap jobs:
+ *   - replaces legacy MCP tool registration with the modular MCP tool layer
+ *   - adds read-only HTTP diagnostic routes before Express starts listening
  */
 
 const MODULAR_TOOL_NAMES = new Set([
@@ -43,6 +43,46 @@ function getAppInfo() {
     name: process.env.APP_NAME || "Memphis Zoo MCP",
     version: releaseId,
     release_id: releaseId,
+  };
+}
+
+function installHttpDiagnostics(app) {
+  if (!app || app.__memphisHttpDiagnosticsInstalled) return;
+
+  Object.defineProperty(app, "__memphisHttpDiagnosticsInstalled", {
+    value: true,
+    enumerable: false,
+    configurable: false,
+  });
+
+  app.get("/mcp-tools.json", (_req, res) => {
+    res.status(200).json(getToolManifest({ includePlanned: true }));
+  });
+
+  app.get("/status/deep", (_req, res) => {
+    const env = validateRuntimeEnv({ strict: false });
+    res.status(env.ok ? 200 : 503).json({
+      ok: env.ok,
+      app: getAppInfo(),
+      env,
+      tools: getToolManifest({ includePlanned: true }),
+      generated_at: new Date().toISOString(),
+    });
+  });
+}
+
+const originalListen = express.application?.listen;
+
+if (typeof originalListen === "function" && !express.application.__memphisDiagnosticsListenPatched) {
+  Object.defineProperty(express.application, "__memphisDiagnosticsListenPatched", {
+    value: true,
+    enumerable: false,
+    configurable: false,
+  });
+
+  express.application.listen = function patchedListen(...args) {
+    installHttpDiagnostics(this);
+    return originalListen.apply(this, args);
   };
 }
 
@@ -96,7 +136,6 @@ if (typeof originalTool === "function" && !McpServer.prototype.__memphisSchemaBo
 
     const canRegister = typeof this.registerTool === "function";
 
-    // server.tool(name, inputSchema, callback)
     if (
       canRegister &&
       arguments.length === 3 &&
@@ -114,7 +153,6 @@ if (typeof originalTool === "function" && !McpServer.prototype.__memphisSchemaBo
       );
     }
 
-    // server.tool(name, description, inputSchema, callback)
     if (
       canRegister &&
       arguments.length === 4 &&
