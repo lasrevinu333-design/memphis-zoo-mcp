@@ -970,6 +970,13 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     const identity = await fetchDeviceIdentity(runReadOnlySql, deviceId);
     const webEnabled = allowWebSearch({ deviceId, identityRole: identity?.role || "" });
     const threadContext = await fetchThreadContext(runReadOnlySql, threadId);
+    const contactReply = await answerInternalContactQuestion(runReadOnlySql, userMessage);
+
+    if (contactReply) {
+      await saveThreadContext(runRpc, threadId, { last_intent: "internal_contact_lookup", last_subject_type: "contact" });
+      return { text: contactReply, meta: { fallback: true, mode: "local_internal_contact" } };
+    }
+
     const explicitSystem = isSystemSpecificQuestion(userMessage, threadContext);
 
     if (!apiKey || explicitSystem) {
