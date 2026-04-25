@@ -280,6 +280,12 @@ export async function aiParseEventTexts({ texts, locationGroups }) {
     const attendeeValue = ai.attendee_count == null || ai.attendee_count === "" ? local.attendee_count : Number.parseInt(String(ai.attendee_count), 10);
     const normalizedEventName = cleanEventName(ai.event_name || local.event_name || "", locationGroups, matchedGroup);
     const normalizedNotes = cleanNotes([String(ai.notes || "").trim(), String(ai.review_notes || "").trim()].filter(Boolean).join(" | "), normalizedEventName, matchedGroup);
+    const eventDate = normalizePossibleDate(ai.event_date) || local.event_date;
+    const startTime = normalizePossibleTime(ai.start_time) || local.start_time;
+    const endTime = normalizePossibleTime(ai.end_time) || local.end_time;
+    const confidence = String(ai.confidence || "").trim().toLowerCase() || null;
+    const reviewNotes = String(ai.review_notes || "").trim() || null;
+    const warnings = buildParseWarnings({ eventName: normalizedEventName, locationGroupId: matchedGroup?.location_group_id || "", eventDate, startTime, endTime, confidence, reviewNotes });
     return {
       event_name: normalizedEventName,
       location_group_id: matchedGroup?.location_group_id || "",
