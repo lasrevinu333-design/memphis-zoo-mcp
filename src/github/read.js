@@ -89,24 +89,63 @@ export async function listDirectory({ github, repo, path = "", ref, recursive = 
       recursive: "true",
     });
 
-    const entries = treeResponse.data.tree
-      .filter((item) => item.type === "blob")
-      .filter((item) => String(item.path || "").toLowerCase().includes(searchQuery))
+    const files = treeResponse.data.tree.filter((item) => item.type === "blob");
+    const pathEntries = files
+      .filter((item) => String(item.path || "").toLowerCase().includes(searchQuery.query))
       .slice(0, limit)
       .map((item) => ({
         path: item.path,
         type: "file",
+        match_type: "path",
         size: item.size ?? null,
         sha: item.sha,
         url: item.url,
       }));
+
+    const contentEntries = [];
+
+    if (searchQuery.includeContent) {
+      const candidates = files.filter(canSearchFileContent).slice(0, Math.min(limit, 50));
+
+      for (const item of candidates) {
+        const contentResult = await getContentOrNull({
+          github,
+          repo: target.repo,
+          path: item.path,
+          ref: target.ref,
+        });
+
+        if (!contentResult || Array.isArray(contentResult) || contentResult.type !== "file" || !contentResult.content) {
+          continue;
+        }
+
+        const buffer = decodeContent(contentResult.content);
+        if (looksBinary(buffer)) continue;
+
+        const matches = findLineMatches(buffer.toString("utf8"), searchQuery.query);
+        if (!matches.length) continue;
+
+        contentEntries.push({
+          path: item.path,
+          type: "file",
+          match_type: "content",
+          size: item.size ?? null,
+          sha: item.sha,
+          url: item.url,
+          matches,
+        });
+      }
+    }
+
+    const entries = searchQuery.includeContent ? contentEntries : pathEntries;
 
     return {
       ok: true,
       repo: `${target.owner}/${target.repo}`,
       ref: target.ref,
       path: "",
-      search: searchQuery,
+      search: searchQuery.query,
+      include_content: searchQuery.includeContent,
       recursive: true,
       truncated: entries.length >= limit,
       count: entries.length,
