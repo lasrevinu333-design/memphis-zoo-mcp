@@ -43,6 +43,17 @@ const diffSummary = summarizeTextDiff("a\nb\n", "a\nc\n");
 assert.equal(diffSummary.changed, true);
 assert.equal(typeof makeUnifiedDiff({ oldText: "a\n", newText: "b\n", path: "x.txt" }), "string");
 
+assert.equal(esc("Bob's"), "Bob''s");
+assert.equal(sqlLikeLiteral("Zoo"), "'%Zoo%'");
+assert.equal(normalizeLoose("Teton Pavilion!"), "teton pavilion");
+assert.equal(normalizeDate("2026-04-25"), "2026-04-25");
+assert.equal(normalizeDate("04/25/2026"), null);
+assert.equal(extractExplicitDate("on 2026-04-25 please"), "2026-04-25");
+assert.deepEqual(extractTimeWindow("9am to 1030am"), { start: "09:00", end: "10:30" });
+assert.equal(addMinutesToTime("09:30", 45), "10:15");
+assert.equal(toSafeInt("100", 14, 1, 60), 60);
+assert.equal(computeWeekdayDate("2026-04-25", "sunday", "this"), "2026-04-26");
+
 const fullPreview = previewFullReplacement({ oldText: "a\n", newText: "b\n", path: "x.txt" });
 assert.equal(fullPreview.changed, true);
 const replacePreview = previewTextReplacement({ oldText: "hello world", find: "world", replace: "zoo", path: "x.txt" });
