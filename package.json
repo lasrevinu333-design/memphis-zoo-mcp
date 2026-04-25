@@ -5,7 +5,8 @@
   "type": "module",
   "main": "src/index.js",
   "scripts": {
-    "start": "node src/mcp-schema-bootstrap.js"
+    "start": "node src/mcp-schema-bootstrap.js",
+    "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.18.0",
