@@ -287,17 +287,19 @@ export async function aiParseEventTexts({ texts, locationGroups }) {
     const reviewNotes = String(ai.review_notes || "").trim() || null;
     const warnings = buildParseWarnings({ eventName: normalizedEventName, locationGroupId: matchedGroup?.location_group_id || "", eventDate, startTime, endTime, confidence, reviewNotes });
     return {
+      raw_text: row.text,
       event_name: normalizedEventName,
       location_group_id: matchedGroup?.location_group_id || "",
-      event_date: normalizePossibleDate(ai.event_date) || local.event_date,
-      start_time: normalizePossibleTime(ai.start_time) || local.start_time,
-      end_time: normalizePossibleTime(ai.end_time) || local.end_time,
+      event_date: eventDate,
+      start_time: startTime,
+      end_time: endTime,
       attendee_count: Number.isFinite(attendeeValue) ? String(attendeeValue) : null,
       notes: normalizedNotes,
-      location_group_name: matchedGroup?.group_name || ai.event_area_name || "",
+      location_group_name: matchedGroup?.group_name || ai.event_area_name || local.matched_group?.group_name || "",
       created_by: "Input Console AI Parse",
-      confidence: String(ai.confidence || "").trim().toLowerCase() || null,
-      review_notes: String(ai.review_notes || "").trim() || null
+      confidence,
+      review_notes: reviewNotes,
+      warnings
     };
   });
 }
