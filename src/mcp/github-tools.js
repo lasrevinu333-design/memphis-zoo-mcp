@@ -3,6 +3,7 @@ import { createGithubClient } from "../github/client.js";
 import { batchReadFiles, listDirectory, readFile } from "../github/read.js";
 import { writeFile, updateFile, replaceTextInFile } from "../github/write.js";
 import { createBranch, openPullRequest } from "../github/branch.js";
+import { searchFiles } from "../github/search.js";
 import { registerMcpTool } from "./register.js";
 import { jsonResponse, textResponse } from "./responses.js";
 import { getToolManifest } from "./tool-manifest.js";
