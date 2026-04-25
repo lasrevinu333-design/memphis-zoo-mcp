@@ -881,7 +881,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     }
 
     if (/(load|workload|heaviest|busy)/i.test(lower)) {
-      const employeeName = await guessEmployeeName(runRpc, text) || threadContext?.last_employee_name || "";
+      const employeeName = await guessEmployeeName(runRpc, text) || (shouldUseEmployeeContext(text) ? threadContext?.last_employee_name : "") || "";
       const data = await executeTool("get_employee_load_summary", { service_date: relativeServiceDate, employee_name: employeeName });
       await saveThreadContext(runRpc, threadId, { last_intent: "employee_load_summary", last_employee_name: employeeName || null, last_service_date: relativeServiceDate, last_subject_type: employeeName ? "employee" : "summary" });
       return { text: summarizeLoadSummary(data.load_rows, data.service_date), meta: { fallback: true, mode: "local_load_summary" } };
