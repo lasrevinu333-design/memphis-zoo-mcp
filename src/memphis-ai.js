@@ -923,14 +923,9 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     }
 
     if (/\b(who works|who is working|who's working|staff|staffing|scheduled)\b/i.test(text)) {
-      const rows = await runReadOnlySql(`
-        select *
-        from public.v_memphis_area_schedule
-        where service_date = '${esc(relativeServiceDate)}'::date
-        order by group_name asc, coverage_start asc, segment_number asc
-      `);
+      const daily = await generateDailyStaffScheduleReply({ runReadOnlySql, runRpc, serviceDate: relativeServiceDate });
       await saveThreadContext(runRpc, threadId, { last_intent: "daily_staff_schedule", last_service_date: relativeServiceDate, last_subject_type: "summary" });
-      return { text: summarizeAssignments(rows || [], `I couldn't find schedule assignments for anyone on ${relativeServiceDate}.`), meta: { fallback: true, mode: "local_daily_staff_schedule" } };
+      return daily;
     }
 
     if (lower.includes("schedule") || lower.includes("assigned") || lower.includes("works") || lower.includes("working") || lower.includes("scheduled") || lower.includes("staff") || lower.includes("aquarium") || lower.includes("restroom") || lower.includes("zambezi") || lower.includes("teton") || lower.includes("expo") || lower.includes("cleans")) {
