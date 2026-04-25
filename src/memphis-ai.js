@@ -853,7 +853,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     }
 
     if (/(absent|off|cover|covering|fill|filling)/i.test(lower) && !isContradictionFollowUp(text)) {
-      const employeeName = await guessEmployeeName(runRpc, text) || threadContext?.last_employee_name || "";
+      const employeeName = await guessEmployeeName(runRpc, text) || (shouldUseEmployeeContext(text) ? threadContext?.last_employee_name : "") || "";
       const data = await executeTool("get_absence_coverage", { employee_name: employeeName, service_date: relativeServiceDate });
       await saveThreadContext(runRpc, threadId, { last_intent: "absence_coverage", last_employee_name: employeeName || null, last_service_date: relativeServiceDate, last_subject_type: "employee" });
       return { text: summarizeAbsenceCoverage(data, employeeName), meta: { fallback: true, mode: "local_absence_coverage" } };
