@@ -61,10 +61,10 @@ export function summarizeDailyAssignments(assignments = [], serviceDate = "") {
 
 export async function generateDailyStaffScheduleReply({ runReadOnlySql, runRpc, serviceDate } = {}) {
   await ensureDailySchedule(runRpc, serviceDate);
-  const rows = await fetchDailyAreaScheduleRows(runReadOnlySql, serviceDate);
+  const roster = await fetchDailyRosterRows(runReadOnlySql, serviceDate);
 
   return {
-    text: summarizeDailyAssignments(rows, serviceDate),
+    text: summarizeDailyRoster(roster, serviceDate),
     meta: {
       fallback: true,
       mode: "local_daily_staff_schedule",
