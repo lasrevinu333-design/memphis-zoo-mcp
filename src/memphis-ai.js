@@ -2,23 +2,6 @@ const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models
 const DEFAULT_MODEL = String(process.env.MEMPHIS_GEMINI_MODEL || process.env.GEMINI_MODEL || "gemini-2.5-flash").trim();
 const DEFAULT_SCAN_DEVICE_ID = "memphis-bot";
 const DEFAULT_WEATHER_LOCATION = "Memphis, Tennessee";
-const WEEKDAY_INDEX = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 };
-
-function esc(value) {
-  return String(value || "").replace(/'/g, "''");
-}
-
-function sqlLikeLiteral(value) {
-  return `'%${String(value || "").replace(/'/g, "''") }%'`;
-}
-
-function normalizeLoose(value) {
-  return String(value || "")
-    .toLowerCase()
-    .replace(/pavillion/g, "pavilion")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-}
 
 function normalizeDate(value) {
   const raw = String(value || "").trim();
