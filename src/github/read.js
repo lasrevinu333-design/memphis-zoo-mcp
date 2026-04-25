@@ -7,14 +7,72 @@ import {
   resolveGithubTarget,
 } from "./client.js";
 
+const TEXT_SEARCH_EXTENSIONS = new Set([
+  ".js",
+  ".mjs",
+  ".cjs",
+  ".json",
+  ".md",
+  ".txt",
+  ".html",
+  ".css",
+  ".sql",
+  ".yml",
+  ".yaml",
+]);
+
 function parseSearchPath(path) {
   const text = String(path || "").trim();
-  if (!text.startsWith("search:")) return null;
 
-  const query = text.slice("search:".length).trim().toLowerCase();
-  if (!query) throw new Error("search query is required after search:.");
+  if (text.startsWith("search-content:")) {
+    const query = text.slice("search-content:".length).trim().toLowerCase();
+    if (!query) throw new Error("search query is required after search-content:.");
+    return { query, includeContent: true };
+  }
 
-  return query;
+  if (text.startsWith("search:")) {
+    const query = text.slice("search:".length).trim().toLowerCase();
+    if (!query) throw new Error("search query is required after search:.");
+    return { query, includeContent: false };
+  }
+
+  return null;
+}
+
+function textSearchExtension(path) {
+  const lower = String(path || "").toLowerCase();
+  const match = lower.match(/(\.[a-z0-9_-]+)$/);
+  return match ? match[1] : "";
+}
+
+function canSearchFileContent(entry) {
+  const path = String(entry?.path || "").toLowerCase();
+  const size = Number(entry?.size || 0);
+
+  if (!path || size <= 0 || size > 250_000) return false;
+  if (path.includes("package-lock.json") || path.includes("node_modules/") || path.includes(".git/")) return false;
+
+  return TEXT_SEARCH_EXTENSIONS.has(textSearchExtension(path));
+}
+
+function findLineMatches(text, query, maxMatches = 5) {
+  const lines = String(text || "").split("\n");
+  const matches = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const hit = line.toLowerCase().indexOf(query);
+    if (hit === -1) continue;
+
+    matches.push({
+      line: index + 1,
+      preview: line.slice(Math.max(0, hit - 100), Math.min(line.length, hit + query.length + 100)),
+    });
+
+    if (matches.length >= maxMatches) break;
+  }
+
+  return matches;
 }
 
 export async function listDirectory({ github, repo, path = "", ref, recursive = false, maxEntries = 500 } = {}) {
