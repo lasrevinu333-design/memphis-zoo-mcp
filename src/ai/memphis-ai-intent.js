@@ -39,6 +39,14 @@ const LOCATION_CODE_STOP_WORDS = new Set([
   "SCHEDULE",
   "ASSIGNED",
   "LOCATION",
+  "MEMPHIS",
+  "ZOO",
+  "MCP",
+  "API",
+  "AI",
+  "GEMINI",
+  "RENDER",
+  "GITHUB",
 ]);
 
 const SYSTEM_INTENT_PATTERN = /\b(schedule|assigned|assignment|working|cover|coverage|candidate|backup|absence|absent|off|open segment|uncovered|unassigned|ticket|maintenance|dashboard|attendance|scan|owner|location|event|employee|workload|load|area|group|restroom|aquarium|zambezi|teton|expo|pavilion|clean|cleans|cleaned)\b/i;
