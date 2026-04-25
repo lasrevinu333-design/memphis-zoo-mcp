@@ -277,8 +277,8 @@ export async function aiParseEventTexts({ texts, locationGroups }) {
     const ai = byIndex.get(row.index) || {};
     const local = extractLocalHints(row.text, locationGroups);
     const matchedGroup = matchLocationGroup(locationGroups, ai.event_area_name || "") || local.matched_group;
-    const attendeeValue = ai.attendee_count == null || ai.attendee_count === "" ? null : Number.parseInt(String(ai.attendee_count), 10);
-    const normalizedEventName = cleanEventName(ai.event_name || "", locationGroups, matchedGroup);
+    const attendeeValue = ai.attendee_count == null || ai.attendee_count === "" ? local.attendee_count : Number.parseInt(String(ai.attendee_count), 10);
+    const normalizedEventName = cleanEventName(ai.event_name || local.event_name || "", locationGroups, matchedGroup);
     const normalizedNotes = cleanNotes([String(ai.notes || "").trim(), String(ai.review_notes || "").trim()].filter(Boolean).join(" | "), normalizedEventName, matchedGroup);
     return {
       event_name: normalizedEventName,
