@@ -283,9 +283,9 @@ export async function aiParseEventTexts({ texts, locationGroups }) {
     return {
       event_name: normalizedEventName,
       location_group_id: matchedGroup?.location_group_id || "",
-      event_date: normalizePossibleDate(ai.event_date),
-      start_time: normalizePossibleTime(ai.start_time),
-      end_time: normalizePossibleTime(ai.end_time),
+      event_date: normalizePossibleDate(ai.event_date) || local.event_date,
+      start_time: normalizePossibleTime(ai.start_time) || local.start_time,
+      end_time: normalizePossibleTime(ai.end_time) || local.end_time,
       attendee_count: Number.isFinite(attendeeValue) ? String(attendeeValue) : null,
       notes: normalizedNotes,
       location_group_name: matchedGroup?.group_name || ai.event_area_name || "",
