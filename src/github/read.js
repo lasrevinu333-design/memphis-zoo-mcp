@@ -19,8 +19,42 @@ function parseSearchPath(path) {
 
 export async function listDirectory({ github, repo, path = "", ref, recursive = false, maxEntries = 500 } = {}) {
   const target = resolveGithubTarget({ github, repo, ref });
-  const resolvedPath = normalizeRepoPath(path);
+  const searchQuery = parseSearchPath(path);
+  const resolvedPath = searchQuery ? "" : normalizeRepoPath(path);
   const limit = Math.min(Math.max(Number.parseInt(String(maxEntries), 10) || 500, 1), 10000);
+
+  if (searchQuery) {
+    const treeResponse = await github.octokit.rest.git.getTree({
+      owner: target.owner,
+      repo: target.repo,
+      tree_sha: target.ref,
+      recursive: "true",
+    });
+
+    const entries = treeResponse.data.tree
+      .filter((item) => item.type === "blob")
+      .filter((item) => String(item.path || "").toLowerCase().includes(searchQuery))
+      .slice(0, limit)
+      .map((item) => ({
+        path: item.path,
+        type: "file",
+        size: item.size ?? null,
+        sha: item.sha,
+        url: item.url,
+      }));
+
+    return {
+      ok: true,
+      repo: `${target.owner}/${target.repo}`,
+      ref: target.ref,
+      path: "",
+      search: searchQuery,
+      recursive: true,
+      truncated: entries.length >= limit,
+      count: entries.length,
+      entries,
+    };
+  }
 
   if (recursive) {
     const treeResponse = await github.octokit.rest.git.getTree({
