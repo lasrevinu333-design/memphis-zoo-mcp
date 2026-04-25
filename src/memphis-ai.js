@@ -714,8 +714,9 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     const threadContext = await fetchThreadContext(runReadOnlySql, threadId);
     const todayServiceDate = await getDefaultServiceDate(runReadOnlySql);
     const explicitDate = extractExplicitDate(text);
+    const explicitToday = /\btoday\b/i.test(text);
     const weekdayRef = extractWeekdayReference(text);
-    let relativeServiceDate = mergeContextDate(text, threadContext, explicitDate) || todayServiceDate;
+    let relativeServiceDate = explicitToday ? todayServiceDate : (mergeContextDate(text, threadContext, explicitDate) || todayServiceDate);
     if (!explicitDate && weekdayRef && todayServiceDate) {
       relativeServiceDate = computeWeekdayDate(todayServiceDate, weekdayRef.weekday, weekdayRef.modifier) || relativeServiceDate;
     } else if (!explicitDate && !weekdayRef) {
