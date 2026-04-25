@@ -16,6 +16,7 @@ import { generateWeeklyScheduleReply } from "./ai/memphis-ai-weekly.js";
 import { generateDailyStaffScheduleReply } from "./ai/memphis-ai-daily.js";
 import { answerInternalContactQuestion } from "./ai/memphis-ai-contacts.js";
 import { answerEmployeeWeeklyScheduleQuestion } from "./ai/memphis-ai-employee-week.js";
+import { answerOpsManagerScheduleQuestion } from "./ai/memphis-ai-ops-schedule.js";
 
 const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 const DEFAULT_MODEL = String(process.env.MEMPHIS_GEMINI_MODEL || process.env.GEMINI_MODEL || "gemini-2.5-flash").trim();
