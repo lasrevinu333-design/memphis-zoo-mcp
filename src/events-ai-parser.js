@@ -180,6 +180,56 @@ function cleanNotes(notes, eventName, matchedGroup) {
   return cleanupLooseText(result);
 }
 
+function detectTimeRange(text) {
+  const raw = String(text || "").replace(/\s+/g, " ");
+  const timePattern = "(\\d{1,2}(?::\\d{2})?\\s*(?:am|pm)|\\d{3,4}\\s*(?:am|pm)|\\d{2}:\\d{2}(?::\\d{2})?)";
+  const match = raw.match(new RegExp(`${timePattern}[\\s]*(?:to|\\-|–|—)[\\s]*${timePattern}`, "i"));
+  if (!match) return null;
+  const start = normalizePossibleTime(match[1]);
+  const end = normalizePossibleTime(match[2]);
+  if (!start || !end) return null;
+  return { start_time: start, end_time: end, matched_text: match[0] };
+}
+
+function detectAttendeeCount(text) {
+  const raw = String(text || "");
+  let match = raw.match(/\b(\d{1,5})\s*(attendees|guests|people|students)\b/i);
+  if (match) return Number.parseInt(match[1], 10);
+  match = raw.match(/\b(?:attendance|count)\s*[:\-]?\s*(\d{1,5})\b/i);
+  if (match) return Number.parseInt(match[1], 10);
+  return null;
+}
+
+function extractLocalHints(text, locationGroups) {
+  const raw = String(text || "").trim();
+  const matchedGroup = matchLocationGroup(locationGroups, raw);
+  const timeRange = detectTimeRange(raw);
+  const attendeeCount = detectAttendeeCount(raw);
+  const eventDate = normalizePossibleDate(raw);
+  const eventName = cleanEventName(raw, locationGroups, matchedGroup);
+
+  return {
+    event_name: eventName,
+    matched_group: matchedGroup,
+    event_date: eventDate,
+    start_time: timeRange?.start_time || "",
+    end_time: timeRange?.end_time || "",
+    attendee_count: Number.isFinite(attendeeCount) ? attendeeCount : null,
+  };
+}
+
+function buildParseWarnings({ eventName, locationGroupId, eventDate, startTime, endTime, confidence, reviewNotes }) {
+  const warnings = [];
+  if (!eventName) warnings.push("missing_event_name");
+  if (!locationGroupId) warnings.push("missing_area");
+  if (!eventDate) warnings.push("missing_date");
+  if (!startTime || !endTime) warnings.push("missing_time");
+  if (startTime && endTime && endTime <= startTime) warnings.push("end_not_after_start");
+  if (!confidence || confidence === "low") warnings.push("low_confidence");
+  if (reviewNotes) warnings.push("review_notes_present");
+  return Array.from(new Set(warnings));
+}
+
 async function callGeminiJson({ prompt, schemaDescription }) {
   const apiKey = getGeminiApiKey();
   if (!apiKey) throw new Error("Gemini parsing is not configured on the server.");
