@@ -1,668 +1,832 @@
-import "dotenv/config";
-import express from "express";
+#!/usr/bin/env node
+
+/**
+ * Memphis Zoo MPC / MCP Replacement Server
+ *
+ * Save this file as:
+ *   server.mjs
+ *
+ * Or keep your current entry filename and replace its contents with this script.
+ *
+ * Required install:
+ *   npm install @modelcontextprotocol/sdk pg zod
+ *
+ * Required env for GitHub tools:
+ *   GITHUB_TOKEN=your_github_token
+ *
+ * Optional env for GitHub tools:
+ *   GITHUB_DEFAULT_REPO=owner/repo
+ *   GITHUB_BRANCH=main
+ *
+ * Required env for Supabase tools:
+ *   SUPABASE_DB_URL=postgresql://...
+ *
+ * Alternative Supabase env names also accepted:
+ *   DATABASE_URL
+ *   POSTGRES_URL
+ */
+
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { Octokit } from "octokit";
-import { createClient } from "@supabase/supabase-js";
-import { createMessagingRouter } from "./messaging-api.js";
-import { createScheduleRouter } from "./schedule-api.js";
-import { createEventsAdminRouter, createEventsPublicRouter, createEventMaintenanceController, EVENTS_CONTRACT_VERSION } from "./events-api.js";
+import pg from "pg";
 
-const app = express();
-app.use(express.json({ limit: "10mb" }));
+const { Pool } = pg;
 
-const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
+// ---------------------------------------------------------
+// Server
+// ---------------------------------------------------------
 
-const supabaseAdmin =
-  process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
-    ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
-        auth: { persistSession: false, autoRefreshToken: false },
-      })
-    : null;
+const server = new McpServer({
+  name: "memphis-zoo-mpc",
+  version: "1.1.0",
+});
 
-const SCAN_RPC_ALLOWLIST = new Set([
-  "tool_get_system_settings",
-  "tool_list_active_employees",
-  "tool_get_location_scan_state",
-  "tool_start_session",
-  "tool_finish_session",
-  "tool_complete_session",
-  "tool_ping_device",
-  "tool_record_scan_event"
-]);
+// ---------------------------------------------------------
+// Environment
+// ---------------------------------------------------------
 
-const RELEASE_ID = "release-2026.04.23.1";
-const APP_VERSION = RELEASE_ID;
-const SCAN_CONTRACT_VERSION = "scan.v1";
-const DASHBOARD_CONTRACT_VERSION = "dashboard.v1";
-const MESSAGING_CONTRACT_VERSION = "messaging.v1";
-const SCHEDULE_CONTRACT_VERSION = "schedule.v1";
-const CANARY_RESTROOM_CODE = "TETM";
-const CANARY_EXHIBIT_CODE = "TETX";
-const CANARY_DEVICE_ID = "canary-check";
-const ATTENDANCE_SOURCE_URL = String(process.env.ND_MEMZOO_ATTENDANCE_URL || "https://nd.memzoo.org").trim();
-const ATTENDANCE_TIMEOUT_MS = toSafeInt(process.env.ND_MEMZOO_ATTENDANCE_TIMEOUT_MS, 8000);
-const ATTENDANCE_CACHE_MS = toSafeInt(process.env.ND_MEMZOO_ATTENDANCE_CACHE_MS, 60000);
-const ATTENDANCE_CF_CLEARANCE = String(process.env.ND_MEMZOO_CF_CLEARANCE || "").trim();
-let attendanceCache = { data: null, fetched_at_ms: 0 };
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN || process.env.GH_TOKEN || "";
 
-function buildHealthPayload(area, extra = {}) {
+const GITHUB_DEFAULT_REPO =
+  process.env.GITHUB_DEFAULT_REPO || process.env.GITHUB_REPO || "";
+
+const GITHUB_BRANCH = process.env.GITHUB_BRANCH || "main";
+
+const SUPABASE_DB_URL =
+  process.env.SUPABASE_DB_URL ||
+  process.env.DATABASE_URL ||
+  process.env.POSTGRES_URL ||
+  "";
+
+let pool = null;
+
+// ---------------------------------------------------------
+// Response helpers
+// ---------------------------------------------------------
+
+function textResponse(text) {
   return {
-    ok: true,
-    app: "memphis-zoo-mcp",
-    area,
-    version: APP_VERSION,
-    release_id: RELEASE_ID,
-    contracts: {
-      scan: SCAN_CONTRACT_VERSION,
-      dashboard: DASHBOARD_CONTRACT_VERSION,
-      messaging: MESSAGING_CONTRACT_VERSION,
-      schedule: SCHEDULE_CONTRACT_VERSION,
-      events: EVENTS_CONTRACT_VERSION,
-    },
-    ...extra,
-  };
-}
-
-function getAllowedGithubRepos(defaultRepo) {
-  const raw = process.env.GITHUB_ALLOWED_REPOS || defaultRepo;
-  return Array.from(
-    new Set(
-      String(raw || "")
-        .split(",")
-        .map((repoName) => repoName.trim())
-        .filter(Boolean)
-    )
-  );
-}
-
-function getGithubConfig(targetRepo) {
-  const owner = process.env.GITHUB_OWNER;
-  const defaultRepo = process.env.GITHUB_REPO;
-  const token = process.env.GITHUB_TOKEN;
-
-  if (!owner || !defaultRepo || !token) {
-    throw new Error("GitHub is not configured. Check GITHUB_OWNER, GITHUB_REPO, and GITHUB_TOKEN in .env.");
-  }
-
-  const allowedRepos = getAllowedGithubRepos(defaultRepo);
-  const repo = (targetRepo || defaultRepo).trim();
-
-  if (!allowedRepos.includes(repo)) {
-    throw new Error(`Repo \"${repo}\" is not allowed. Allowed repos: ${allowedRepos.join(", ")}`);
-  }
-
-  return { owner, repo, defaultRepo, allowedRepos };
-}
-
-function getSupabaseConfig() {
-  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY || !supabaseAdmin) {
-    throw new Error("Supabase is not configured. Check SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env.");
-  }
-  return supabaseAdmin;
-}
-
-function normalizeGithubPath(path) {
-  return String(path || "").trim().replace(/^\/+/, "");
-}
-
-function getGithubErrorDetail(error) {
-  if (error?.status) return `status=${error.status} ${error.message}`;
-  return error?.message || "Unknown GitHub error";
-}
-
-function sanitizeReadOnlySql(sql) {
-  const trimmed = String(sql || "").trim();
-  const withoutTrailingSemicolons = trimmed.replace(/;\s*$/, "");
-  const normalized = withoutTrailingSemicolons.toLowerCase();
-  return { sql: withoutTrailingSemicolons, normalized };
-}
-
-function getAdminApiKey() {
-  return String(process.env.ADMIN_API_KEY || "").trim();
-}
-
-function normalizeDashboardCloser(value) {
-  const normalized = String(value || "").trim();
-  return normalized || "Dashboard";
-}
-
-function allowWithoutPin(_req, _res, next) {
-  next();
-}
-
-function setAdminApiCors(res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Admin-Key");
-  res.setHeader("Vary", "Origin");
-}
-
-function setPublicDashboardCors(res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  res.setHeader("Vary", "Origin");
-}
-
-function setScanApiCors(res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  res.setHeader("Vary", "Origin");
-}
-
-function setMessagingApiCors(res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  res.setHeader("Vary", "Origin");
-}
-
-function setScheduleApiCors(res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  res.setHeader("Vary", "Origin");
-}
-
-function requireAdminApiAuth(req, res, next) {
-  const configuredKey = getAdminApiKey();
-  if (!configuredKey) {
-    res.status(503).json({ ok: false, error: "ADMIN_API_KEY is not configured on the server." });
-    return;
-  }
-  const providedKey = String(req.header("x-admin-key") || "").trim();
-  if (!providedKey || providedKey !== configuredKey) {
-    res.status(401).json({ ok: false, error: "Unauthorized" });
-    return;
-  }
-  next();
-}
-
-async function runRpc(functionName, args = {}) {
-  const client = getSupabaseConfig();
-  const { data, error } = await client.rpc(functionName, args);
-  if (error) throw new Error(error.message || `RPC failed: ${functionName}`);
-  return data;
-}
-
-function toSafeInt(value, fallback) {
-  const parsed = Number.parseInt(String(value ?? fallback), 10);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
-}
-
-function toNullableInt(value) {
-  if (value == null || value === "") return null;
-  const parsed = Number.parseInt(String(value), 10);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function sqlLiteral(value) {
-  if (value == null) return "null";
-  return `'${String(value).replace(/'/g, "''")}'`;
-}
-
-function parseAttendanceMetric(text, label) {
-  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const pattern = new RegExp(`${escaped}:\\s*([\\d,]+)`, "i");
-  const match = text.match(pattern);
-  if (!match) return null;
-  const parsed = Number.parseInt(String(match[1]).replace(/,/g, ""), 10);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function parseAttendanceHtml(html) {
-  const normalized = String(html || "").replace(/\r/g, "");
-  const attendanceBlock = normalized.match(/<h5[^>]*>\s*Attendance\s*<\/h5>[\s\S]{0,2500}?<\/div>\s*<\/div>/i);
-  const source = attendanceBlock ? attendanceBlock[0] : normalized;
-  const currentMatch = source.match(/<h1[^>]*>\s*([\d,]+)\s*<\/h1>/i);
-  if (!currentMatch) throw new Error("Attendance card found but current attendance value was not found.");
-  const attendance = Number.parseInt(String(currentMatch[1]).replace(/,/g, ""), 10);
-  if (!Number.isFinite(attendance) || attendance < 0) throw new Error("Parsed attendance value is invalid.");
-  const text = source.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-  return {
-    attendance,
-    last_year: parseAttendanceMetric(text, "Last Year"),
-    planned: parseAttendanceMetric(text, "Planned"),
-    yesterday: parseAttendanceMetric(text, "Yesterday"),
-    yesterday_plan: parseAttendanceMetric(text, "Yesterday Plan"),
-    parse_method: "html_attendance_card",
-  };
-}
-
-function normalizeAttendanceRecord(row) {
-  if (!row) return null;
-  const attendance = toNullableInt(row.attendance);
-  const lastYear = toNullableInt(row.last_year);
-  const planned = toNullableInt(row.planned);
-  const yesterday = toNullableInt(row.yesterday);
-  const yesterdayPlan = toNullableInt(row.yesterday_plan);
-  if (attendance == null && lastYear == null && planned == null && yesterday == null && yesterdayPlan == null) {
-    return null;
-  }
-  return {
-    attendance,
-    last_year: lastYear,
-    planned,
-    yesterday,
-    yesterday_plan: yesterdayPlan,
-    parse_method: row.parse_method || "stored_state",
-    source_url: row.source_url || null,
-    source: row.source || null,
-    content_type: row.content_type || null,
-    fetched_at: row.fetched_at || null,
-    updated_at: row.updated_at || null,
-    cached: false,
-    stale: false,
-  };
-}
-
-async function loadStoredAttendance() {
-  const rows = await runReadOnlySql(`
-    select attendance, last_year, planned, yesterday, yesterday_plan, source, fetched_at, updated_at
-    from public.current_attendance_state
-    where id = 1
-    limit 1
-  `);
-  if (!Array.isArray(rows) || rows.length === 0) return null;
-  return normalizeAttendanceRecord(rows[0]);
-}
-
-async function persistAttendanceState(payload = {}) {
-  const attendance = toNullableInt(payload.attendance);
-  const lastYear = toNullableInt(payload.last_year);
-  const planned = toNullableInt(payload.planned);
-  const yesterday = toNullableInt(payload.yesterday);
-  const yesterdayPlan = toNullableInt(payload.yesterday_plan);
-  const source = payload.source == null ? null : String(payload.source);
-  const fetchedAt = payload.fetched_at == null ? null : String(payload.fetched_at);
-
-  if (attendance == null) {
-    throw new Error("attendance is required and must be an integer.");
-  }
-
-  await runWriteSql(
-    "attendance_state_upsert",
-    `insert into public.current_attendance_state (
-       id, attendance, last_year, planned, yesterday, yesterday_plan, source, fetched_at, updated_at
-     ) values (
-       1,
-       ${sqlLiteral(attendance)},
-       ${sqlLiteral(lastYear)},
-       ${sqlLiteral(planned)},
-       ${sqlLiteral(yesterday)},
-       ${sqlLiteral(yesterdayPlan)},
-       ${sqlLiteral(source)},
-       ${fetchedAt ? `${sqlLiteral(fetchedAt)}::timestamptz` : "null"},
-       now()
-     )
-     on conflict (id) do update set
-       attendance = excluded.attendance,
-       last_year = excluded.last_year,
-       planned = excluded.planned,
-       yesterday = excluded.yesterday,
-       yesterday_plan = excluded.yesterday_plan,
-       source = excluded.source,
-       fetched_at = excluded.fetched_at,
-       updated_at = now();`
-  );
-
-  return await loadStoredAttendance();
-}
-
-async function fetchCurrentAttendance(options = {}) {
-  const now = Date.now();
-  if (!options.force && attendanceCache.data && now - attendanceCache.fetched_at_ms < ATTENDANCE_CACHE_MS) {
-    return { ...attendanceCache.data, cached: true, stale: false };
-  }
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), ATTENDANCE_TIMEOUT_MS);
-
-  try {
-    const requestHeaders = {
-      accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-      "accept-encoding": "gzip, deflate, br, zstd",
-      "accept-language": "en-US,en;q=0.9",
-      "cache-control": "no-cache",
-      pragma: "no-cache",
-      priority: "u=0, i",
-      "sec-ch-ua": '"Google Chrome";v="147", "Not.A/Brand";v="8", "Chromium";v="147"',
-      "sec-ch-ua-mobile": "?0",
-      "sec-ch-ua-platform": '"Windows"',
-      "sec-fetch-dest": "document",
-      "sec-fetch-mode": "navigate",
-      "sec-fetch-site": "none",
-      "sec-fetch-user": "?1",
-      "upgrade-insecure-requests": "1",
-      "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
-    };
-
-    if (ATTENDANCE_CF_CLEARANCE) {
-      requestHeaders.cookie = `cf_clearance=${ATTENDANCE_CF_CLEARANCE}`;
-    }
-
-    const response = await fetch(ATTENDANCE_SOURCE_URL, {
-      method: "GET",
-      signal: controller.signal,
-      headers: requestHeaders,
-    });
-
-    if (!response.ok) throw new Error(`Attendance source returned HTTP ${response.status}`);
-
-    const contentType = String(response.headers.get("content-type") || "").toLowerCase();
-    const html = await response.text();
-    const parsed = parseAttendanceHtml(html);
-
-    const data = {
-      ...parsed,
-      source_url: ATTENDANCE_SOURCE_URL,
-      source: "scrape",
-      content_type: contentType,
-      fetched_at: new Date().toISOString(),
-      cached: false,
-      stale: false,
-    };
-
-    attendanceCache = { data, fetched_at_ms: now };
-    return data;
-  } catch (error) {
-    if (attendanceCache.data) {
-      return {
-        ...attendanceCache.data,
-        cached: true,
-        stale: true,
-        warning: error?.message || "Attendance fetch failed.",
-      };
-    }
-    throw error;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-async function runReadOnlySql(sql) {
-  const client = getSupabaseConfig();
-  const sanitized = sanitizeReadOnlySql(sql);
-  if (!(sanitized.normalized.startsWith("select") || sanitized.normalized.startsWith("with"))) {
-    throw new Error("Only read-only SELECT/CTE queries are allowed.");
-  }
-  const { data, error } = await client.rpc("run_sql_readonly", { p_sql: sanitized.sql });
-  if (error) throw new Error(error.message || "run_sql_readonly failed");
-  return data;
-}
-
-async function runWriteSql(namePrefix, sql) {
-  const client = getSupabaseConfig();
-  const migrationName = `${namePrefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  const { data, error } = await client.rpc("run_sql_migration", {
-    p_name: migrationName,
-    p_sql: String(sql || "").trim(),
-  });
-  if (error) throw new Error(error.message || "run_sql_migration failed");
-  return data;
-}
-
-const eventMaintenanceController = createEventMaintenanceController({ runReadOnlySql, runWriteSql, runRpc });
-
-async function runAdminBundleViaSqlRead(limits = {}) {
-  const pLocationLimit = toSafeInt(limits.p_location_limit, 60);
-  const pActivityLimit = toSafeInt(limits.p_activity_limit, 20);
-  const pTicketLimit = toSafeInt(limits.p_ticket_limit, 100);
-  const pExceptionLimit = toSafeInt(limits.p_exception_limit, 25);
-  const pDeviceLimit = toSafeInt(limits.p_device_limit, 100);
-  const sql = `select public.tool_admin_bundle(${pLocationLimit},${pActivityLimit},${pTicketLimit},${pExceptionLimit},${pDeviceLimit}) as data`;
-  const rows = await runReadOnlySql(sql);
-  if (Array.isArray(rows) && rows.length > 0) return rows[0]?.data ?? {};
-  return {};
-}
-
-async function runPublicDashboardSummary() {
-  const [snapshotRows, locationRows, ticketRows] = await Promise.all([
-    runReadOnlySql(`
-      select snapshot_at, operational_day_start, active_sessions, pending_submit_sessions, closed_sessions_today, open_ticket_count,
-             overdue_locations, due_soon_locations, in_progress_locations, active_locations, operational_day_start::text as operational_day_start_text
-      from public.v_admin_health_snapshot
-      order by snapshot_at desc
-      limit 1
-    `),
-    runReadOnlySql(`
-      select location_code, location_name, location_type, form_type, latest_employee_name, latest_completed_at,
-             latest_completed_at_display, services_performed, open_ticket_count, status_code, status_color, duration_display,
-             open_session_status, open_session_employee_name
-      from public.v_location_dashboard_status
-      order by case status_color when 'red' then 1 when 'yellow' then 2 when 'blue' then 3 when 'green' then 4 when 'black' then 5 else 9 end,
-               open_ticket_count desc, location_name
-    `),
-    runReadOnlySql(`
-      select ticket_id, location_code, location_name, maintenance_issue, reported_by, fixture_type, fixture_identifier,
-             out_of_order, date_submitted_display, created_at_display
-      from public.v_open_maintenance_tickets
-      order by date_submitted desc nulls last, created_at desc nulls last, location_code
-    `),
-  ]);
-
-  const snapshot = Array.isArray(snapshotRows) && snapshotRows.length ? snapshotRows[0] : {};
-  const locations = Array.isArray(locationRows) ? locationRows : [];
-  const tickets = Array.isArray(ticketRows) ? ticketRows : [];
-
-  return {
-    snapshot,
-    meta: {
-      app: "memphis-zoo-mcp",
-      version: APP_VERSION,
-      release_id: RELEASE_ID,
-      contracts: {
-        scan: SCAN_CONTRACT_VERSION,
-        dashboard: DASHBOARD_CONTRACT_VERSION,
-        messaging: MESSAGING_CONTRACT_VERSION,
-        schedule: SCHEDULE_CONTRACT_VERSION,
-        events: EVENTS_CONTRACT_VERSION,
+    content: [
+      {
+        type: "text",
+        text: String(text),
       },
-      generated_at: new Date().toISOString(),
+    ],
+  };
+}
+
+function jsonResponse(value) {
+  return textResponse(JSON.stringify(value, null, 2));
+}
+
+// ---------------------------------------------------------
+// GitHub helpers
+// ---------------------------------------------------------
+
+function requireGithubToken() {
+  if (!GITHUB_TOKEN) {
+    throw new Error(
+      "Missing GITHUB_TOKEN or GH_TOKEN environment variable. GitHub tools cannot run without it."
+    );
+  }
+}
+
+function resolveRepo(repo) {
+  const resolved = repo || GITHUB_DEFAULT_REPO;
+
+  if (!resolved) {
+    throw new Error(
+      "Missing repo. Provide repo as 'owner/repo' or set GITHUB_DEFAULT_REPO."
+    );
+  }
+
+  if (!/^[^/\s]+\/[^/\s]+$/.test(resolved)) {
+    throw new Error(`Invalid repo '${resolved}'. Expected format: owner/repo`);
+  }
+
+  return resolved;
+}
+
+function resolveRef(ref) {
+  return ref || GITHUB_BRANCH || "main";
+}
+
+function normalizeRepoPath(inputPath) {
+  const clean = String(inputPath || "").trim().replace(/^\/+/, "");
+
+  if (!clean) {
+    return "";
+  }
+
+  const parts = clean.split("/").filter(Boolean);
+
+  if (parts.some((part) => part === "." || part === "..")) {
+    throw new Error("Path cannot contain '.' or '..' segments.");
+  }
+
+  return parts.join("/");
+}
+
+function encodeRepoPath(path) {
+  return normalizeRepoPath(path)
+    .split("/")
+    .filter(Boolean)
+    .map(encodeURIComponent)
+    .join("/");
+}
+
+function encodeContent(content) {
+  return Buffer.from(String(content), "utf8").toString("base64");
+}
+
+function decodeBase64Content(base64Content) {
+  return Buffer.from(String(base64Content).replace(/\n/g, ""), "base64");
+}
+
+function looksBinary(buffer) {
+  return buffer.includes(0);
+}
+
+async function githubRequest(method, apiPath, body = undefined) {
+  requireGithubToken();
+
+  const response = await fetch(`https://api.github.com${apiPath}`, {
+    method,
+    headers: {
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${GITHUB_TOKEN}`,
+      "X-GitHub-Api-Version": "2022-11-28",
+      "User-Agent": "memphis-zoo-mpc",
+      ...(body ? { "Content-Type": "application/json" } : {}),
     },
-    restrooms: locations.filter((row) => String(row.location_type || row.form_type || "").toLowerCase() === "restroom"),
-    exhibits: locations.filter((row) => String(row.location_type || row.form_type || "").toLowerCase() !== "restroom"),
-    open_tickets: tickets,
-  };
-}
+    body: body ? JSON.stringify(body) : undefined,
+  });
 
-async function runCanaryChecks() {
-  const checks = {};
-  const failures = [];
+  const raw = await response.text();
 
-  async function safeCheck(name, fn) {
-    try {
-      const result = await fn();
-      checks[name] = { ok: true, ...result };
-      return true;
-    } catch (error) {
-      const message = error?.message || String(error);
-      checks[name] = { ok: false, error: message };
-      failures.push(`${name}: ${message}`);
-      return false;
-    }
+  let parsed;
+  try {
+    parsed = raw ? JSON.parse(raw) : null;
+  } catch {
+    parsed = raw;
   }
 
-  await safeCheck("restroom_scan_state", async () => {
-    const state = await runRpc("tool_get_location_scan_state", {
-      p_location_code: CANARY_RESTROOM_CODE,
-      p_device_id: CANARY_DEVICE_ID,
-    });
-    if (!state || state.location_code !== CANARY_RESTROOM_CODE) throw new Error("restroom scan state missing expected location code");
-    if (String(state.form_type || state.location_type || "").toLowerCase() !== "restroom") throw new Error(`expected restroom form_type, got ${state.form_type || state.location_type || "unknown"}`);
-    return { location_code: state.location_code, form_type: state.form_type || null, location_type: state.location_type || null, suggested_action: state.suggested_action || null };
-  });
+  if (!response.ok) {
+    const error = new Error(
+      `GitHub API error ${response.status}: ${
+        typeof parsed === "string" ? parsed : JSON.stringify(parsed, null, 2)
+      }`
+    );
 
-  await safeCheck("exhibit_scan_state", async () => {
-    const state = await runRpc("tool_get_location_scan_state", {
-      p_location_code: CANARY_EXHIBIT_CODE,
-      p_device_id: CANARY_DEVICE_ID,
-    });
-    if (!state || state.location_code !== CANARY_EXHIBIT_CODE) throw new Error("exhibit scan state missing expected location code");
-    if (String(state.form_type || state.location_type || "").toLowerCase() !== "exhibit") throw new Error(`expected exhibit form_type, got ${state.form_type || state.location_type || "unknown"}`);
-    return { location_code: state.location_code, form_type: state.form_type || null, location_type: state.location_type || null, suggested_action: state.suggested_action || null };
-  });
+    error.status = response.status;
+    error.details = parsed;
 
-  await safeCheck("dashboard_summary", async () => {
-    const summary = await runPublicDashboardSummary();
-    if (!summary || !summary.meta || summary.meta.version !== APP_VERSION) throw new Error("dashboard summary missing expected meta version");
-    if (!Array.isArray(summary.restrooms) || !Array.isArray(summary.exhibits) || !Array.isArray(summary.open_tickets)) throw new Error("dashboard summary missing expected arrays");
-    const restroomFound = summary.restrooms.some((row) => row.location_code === CANARY_RESTROOM_CODE);
-    const exhibitFound = summary.exhibits.some((row) => row.location_code === CANARY_EXHIBIT_CODE);
-    if (!restroomFound) throw new Error(`restroom canary ${CANARY_RESTROOM_CODE} not found in restroom rows`);
-    if (!exhibitFound) throw new Error(`exhibit canary ${CANARY_EXHIBIT_CODE} not found in exhibit rows`);
-    return { restrooms_count: summary.restrooms.length, exhibits_count: summary.exhibits.length, open_tickets_count: summary.open_tickets.length };
-  });
-
-  await safeCheck("open_session_consistency", async () => {
-    const rows = await runReadOnlySql(`
-      select count(*)::int as inconsistent_count
-      from public.v_location_dashboard_status
-      where (open_session_status in ('active','pending_submit') and open_session_employee_name is null)
-         or (open_session_status is null and open_session_employee_name is not null)
-    `);
-    const inconsistentCount = Array.isArray(rows) && rows.length ? Number(rows[0].inconsistent_count || 0) : 0;
-    if (inconsistentCount !== 0) throw new Error(`found ${inconsistentCount} inconsistent open session rows`);
-    return { inconsistent_count: inconsistentCount };
-  });
-
-  await safeCheck("ticket_count_consistency", async () => {
-    const rows = await runReadOnlySql(`
-      select
-        (select count(*)::int from public.v_open_maintenance_tickets) as view_count,
-        (select count(*)::int from public.maintenance_tickets where status = 'open') as table_count
-    `);
-    const row = Array.isArray(rows) && rows.length ? rows[0] : {};
-    const viewCount = Number(row.view_count || 0);
-    const tableCount = Number(row.table_count || 0);
-    if (viewCount !== tableCount) throw new Error(`ticket counts differ: view=${viewCount}, table=${tableCount}`);
-    return { view_count: viewCount, table_count: tableCount };
-  });
-
-  return {
-    ok: failures.length === 0,
-    checks,
-    failure_count: failures.length,
-    failures,
-  };
-}
-
-function createMcpServer() {
-  const server = new McpServer({ name: process.env.APP_NAME || "Memphis Zoo MCP", version: APP_VERSION });
-  server.tool("ping", { message: z.string().optional() }, async ({ message }) => ({ content: [{ type: "text", text: `MCP server is alive. ${message || ""}`.trim() }] }));
-  return server;
-}
-
-app.use("/admin-api", (req, res, next) => { setAdminApiCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
-app.use("/dashboard-api", (req, res, next) => { setPublicDashboardCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
-app.use("/scan-api", (req, res, next) => { setScanApiCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
-app.use("/messaging-api", (req, res, next) => { setMessagingApiCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } eventMaintenanceController.kick("messaging_api_request"); next(); }, createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: MESSAGING_CONTRACT_VERSION }));
-app.use("/schedule-api", (req, res, next) => { setScheduleApiCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } eventMaintenanceController.kick("schedule_api_request"); next(); }, createScheduleRouter({ runReadOnlySql, runRpc, buildHealthPayload, requireAdminApiAuth: allowWithoutPin, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: SCHEDULE_CONTRACT_VERSION }));
-app.use("/dashboard-api/events", createEventsPublicRouter({ runReadOnlySql, runWriteSql, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController }));
-app.use("/admin-api/events", createEventsAdminRouter({ runReadOnlySql, runWriteSql, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController }));
-app.get("/version", (_req, res) => { eventMaintenanceController.kick("version_ping"); res.status(200).json(buildHealthPayload("version")); });
-app.get("/admin-api/health", requireAdminApiAuth, (_req, res) => { res.status(200).json(buildHealthPayload("admin", { authenticated: true })); });
-app.get("/dashboard-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("dashboard")); });
-app.get("/schedule-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("schedule", { contract_version: SCHEDULE_CONTRACT_VERSION })); });
-app.get("/dashboard-api/canary", async (_req, res) => {
-  try { const result = await runCanaryChecks(); res.status(result.ok ? 200 : 503).json(buildHealthPayload("dashboard_canary", result)); }
-  catch (error) { console.error("dashboard canary failed:", error); res.status(500).json({ ok: false, area: "dashboard_canary", version: APP_VERSION, release_id: RELEASE_ID, error: error.message || "Dashboard canary failed" }); }
-});
-app.get("/dashboard-api/current-attendance", async (_req, res) => {
-  try {
-    const stored = await loadStoredAttendance();
-    if (stored) {
-      res.status(200).json({ ok: true, data: stored, meta: { version: APP_VERSION, release_id: RELEASE_ID, mode: "stored" } });
-      return;
-    }
-    const data = await fetchCurrentAttendance();
-    res.status(200).json({ ok: true, data, meta: { version: APP_VERSION, release_id: RELEASE_ID, mode: "scrape" } });
+    throw error;
   }
-  catch (error) { console.error("current attendance fetch failed:", error); res.status(502).json({ ok: false, error: error.message || "Current attendance fetch failed", source_url: ATTENDANCE_SOURCE_URL }); }
-});
-app.post("/admin-api/attendance-update", requireAdminApiAuth, async (req, res) => {
+
+  return parsed;
+}
+
+async function githubGetContentOrNull({ repo, path, ref }) {
+  const resolvedRepo = resolveRepo(repo);
+  const resolvedPath = normalizeRepoPath(path);
+  const resolvedRef = resolveRef(ref);
+  const encodedPath = encodeRepoPath(resolvedPath);
+
   try {
-    const payload = req.body && typeof req.body === "object" ? req.body : {};
-    const data = await persistAttendanceState(payload);
-    attendanceCache = { data: null, fetched_at_ms: 0 };
-    res.status(200).json({ ok: true, data, meta: { version: APP_VERSION, release_id: RELEASE_ID } });
+    return await githubRequest(
+      "GET",
+      `/repos/${resolvedRepo}/contents/${encodedPath}?ref=${encodeURIComponent(
+        resolvedRef
+      )}`
+    );
   } catch (error) {
-    console.error("attendance update failed:", error);
-    res.status(400).json({ ok: false, error: error.message || "Attendance update failed" });
-  }
-});
-app.post("/admin-api/bundle", requireAdminApiAuth, async (req, res) => {
-  try { const payload = req.body && typeof req.body === "object" ? req.body : {}; const data = await runAdminBundleViaSqlRead(payload); res.status(200).json({ ok: true, data }); }
-  catch (error) { console.error("admin bundle failed:", error); res.status(500).json({ ok: false, error: error.message || "Admin bundle failed" }); }
-});
-app.post("/admin-api/close-ticket", requireAdminApiAuth, async (req, res) => {
-  try { const ticketId = String(req.body?.ticket_id || "").trim(); const closedBy = String(req.body?.closed_by || "").trim(); const closeNotes = req.body?.close_notes == null ? null : String(req.body.close_notes); if (!ticketId || !closedBy) { res.status(400).json({ ok: false, error: "ticket_id and closed_by are required." }); return; } await runWriteSql("admin_close_ticket", `select public.close_maintenance_ticket(${sqlLiteral(ticketId)}::uuid, ${sqlLiteral(closedBy)}, ${sqlLiteral(closeNotes)});`); res.status(200).json({ ok: true, ticket_id: ticketId, status: "closed" }); }
-  catch (error) { console.error("close ticket failed:", error); res.status(500).json({ ok: false, error: error.message || "Close ticket failed" }); }
-});
-app.post("/admin-api/force-close-session", requireAdminApiAuth, async (req, res) => {
-  try { const sessionUuid = String(req.body?.session_uuid || "").trim(); const closedBy = String(req.body?.closed_by || "").trim(); const reason = req.body?.reason == null ? null : String(req.body.reason); if (!sessionUuid || !closedBy) { res.status(400).json({ ok: false, error: "session_uuid and closed_by are required." }); return; } await runWriteSql("admin_force_close_session", `select public.force_close_session(${sqlLiteral(sessionUuid)}, ${sqlLiteral(closedBy)}, ${sqlLiteral(reason)});`); res.status(200).json({ ok: true, session_uuid: sessionUuid, status: "closed" }); }
-  catch (error) { console.error("force close session failed:", error); res.status(500).json({ ok: false, error: error.message || "Force close session failed" }); }
-});
-app.get("/dashboard-api/summary", async (_req, res) => {
-  try { const data = await runPublicDashboardSummary(); res.status(200).json({ ok: true, data }); }
-  catch (error) { console.error("dashboard summary failed:", error); res.status(500).json({ ok: false, error: error.message || "Dashboard summary failed" }); }
-});
-app.post("/dashboard-api/close-ticket", async (req, res) => {
-  try {
-    const ticketId = String(req.body?.ticket_id || "").trim();
-    const closedBy = normalizeDashboardCloser(req.body?.closed_by);
-    if (!ticketId) {
-      res.status(400).json({ ok: false, error: "ticket_id is required." });
-      return;
+    if (error.status === 404) {
+      return null;
     }
-    await runWriteSql("dashboard_close_ticket", `select public.close_maintenance_ticket(${sqlLiteral(ticketId)}::uuid, ${sqlLiteral(closedBy)}, null);`);
-    res.status(200).json({ ok: true, ticket_id: ticketId, status: "closed" });
+
+    throw error;
   }
-  catch (error) { console.error("dashboard close ticket failed:", error); res.status(500).json({ ok: false, error: error.message || "Dashboard close ticket failed" }); }
+}
+
+function assertGithubFileResult(result, path) {
+  if (!result) {
+    throw new Error(`File not found: ${path}`);
+  }
+
+  if (Array.isArray(result)) {
+    throw new Error(`'${path}' is a directory, not a file.`);
+  }
+
+  if (result.type !== "file") {
+    throw new Error(`'${path}' is not a file. GitHub type: ${result.type}`);
+  }
+}
+
+// ---------------------------------------------------------
+// Supabase helpers
+// ---------------------------------------------------------
+
+function getPool() {
+  if (!SUPABASE_DB_URL) {
+    throw new Error(
+      "Missing SUPABASE_DB_URL, DATABASE_URL, or POSTGRES_URL environment variable."
+    );
+  }
+
+  if (!pool) {
+    pool = new Pool({
+      connectionString: SUPABASE_DB_URL,
+      ssl:
+        SUPABASE_DB_URL.includes("localhost") ||
+        SUPABASE_DB_URL.includes("127.0.0.1")
+          ? false
+          : { rejectUnauthorized: false },
+    });
+  }
+
+  return pool;
+}
+
+function assertReadOnlySql(sql) {
+  const trimmed = String(sql || "").trim();
+
+  if (!trimmed) {
+    throw new Error("SQL cannot be empty.");
+  }
+
+  const withoutTrailingSemicolon = trimmed.replace(/;\s*$/, "");
+
+  if (withoutTrailingSemicolon.includes(";")) {
+    throw new Error("Only one SQL statement is allowed.");
+  }
+
+  const startsReadOnly =
+    /^(select|with|explain)\b/i.test(withoutTrailingSemicolon);
+
+  if (!startsReadOnly) {
+    throw new Error(
+      "Only read-only SQL is allowed. Query must start with SELECT, WITH, or EXPLAIN."
+    );
+  }
+
+  const forbidden =
+    /\b(insert|update|delete|drop|alter|create|truncate|grant|revoke|comment|vacuum|analyze|call|do|execute|merge)\b/i;
+
+  if (forbidden.test(withoutTrailingSemicolon)) {
+    throw new Error("Mutating SQL is not allowed in supabase_sql_read.");
+  }
+
+  return withoutTrailingSemicolon;
+}
+
+// ---------------------------------------------------------
+// Tool: ping
+// ---------------------------------------------------------
+
+server.tool(
+  "ping",
+  {
+    message: z.string().optional(),
+  },
+  async ({ message }) => {
+    return textResponse(message ? `pong: ${message}` : "pong");
+  }
+);
+
+// ---------------------------------------------------------
+// Tool: github_debug_config
+// ---------------------------------------------------------
+
+server.tool("github_debug_config", {}, async () => {
+  return jsonResponse({
+    github_token_present: Boolean(GITHUB_TOKEN),
+    github_default_repo: GITHUB_DEFAULT_REPO || null,
+    github_branch: GITHUB_BRANCH,
+    supabase_db_url_present: Boolean(SUPABASE_DB_URL),
+    node_version: process.version,
+  });
 });
-app.get("/scan-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("scan", { available_functions: Array.from(SCAN_RPC_ALLOWLIST) })); });
-app.post("/scan-api/rpc", async (req, res) => {
-  try { eventMaintenanceController.kick("scan_api_rpc"); const fn = String(req.body?.fn || "").trim(); const args = req.body?.args && typeof req.body.args === "object" ? req.body.args : {}; if (!SCAN_RPC_ALLOWLIST.has(fn)) { res.status(400).json({ ok: false, error: `Function not allowed: ${fn}` }); return; } const data = await runRpc(fn, args); res.status(200).json({ ok: true, data, meta: { version: APP_VERSION, release_id: RELEASE_ID, contract_version: SCAN_CONTRACT_VERSION } }); }
-  catch (error) { console.error("scan rpc failed:", error); res.status(500).json({ ok: false, error: error.message || "Scan RPC failed" }); }
-});
-app.get("/", (_req, res) => { res.status(200).send("Memphis Zoo MCP server is running."); });
-app.get("/mcp", (_req, res) => { res.status(405).send("GET not supported on /mcp for this server."); });
-app.options("/mcp", (_req, res) => { res.sendStatus(200); });
-app.post("/mcp", async (req, res) => {
-  try { const server = createMcpServer(); const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined }); res.on("close", () => { transport.close(); }); await server.connect(transport); await transport.handleRequest(req, res, req.body); }
-  catch (error) { console.error("MCP request failed:", error); if (!res.headersSent) { res.status(500).json({ jsonrpc: "2.0", error: { code: -32603, message: "Internal server error" }, id: null }); } }
-});
-let sseTransport = null;
-let sseServer = null;
-app.get("/sse", async (_req, res) => {
-  try { sseServer = createMcpServer(); sseTransport = new SSEServerTransport("/messages", res); await sseServer.connect(sseTransport); }
-  catch (error) { console.error("SSE connection failed:", error); if (!res.headersSent) res.status(500).send("SSE connection failed"); }
-});
-app.post("/messages", async (req, res) => {
-  try { if (!sseTransport) { res.status(400).send("No active SSE transport"); return; } await sseTransport.handlePostMessage(req, res, req.body); }
-  catch (error) { console.error("SSE post message failed:", error); if (!res.headersSent) res.status(500).send("SSE post message failed"); }
-});
-const port = Number(process.env.PORT || 3000);
-app.listen(port, () => {
-  console.log("Memphis Zoo MCP server initialized.");
-  console.log(`App version: ${APP_VERSION}`);
-  console.log(`Listening on http://localhost:${port}`);
-  console.log("Version endpoint: /version");
-  console.log("Dashboard canary endpoint: /dashboard-api/canary");
-  console.log("Dashboard attendance endpoint: /dashboard-api/current-attendance");
-  console.log("Admin attendance update endpoint: /admin-api/attendance-update");
-  console.log("Messaging API endpoint: /messaging-api");
-  console.log("Dashboard events endpoint: /dashboard-api/events");
-  console.log("Admin events endpoint: /admin-api/events");
-  console.log("Schedule API endpoint: /schedule-api");
-  console.log("MCP endpoint: /mcp");
-  console.log("Legacy SSE endpoint: /sse");
-  console.log("Legacy messages endpoint: /messages");
-  console.log("Admin API endpoint: /admin-api");
-  console.log("Dashboard API endpoint: /dashboard-api");
-  console.log("Scan API endpoint: /scan-api");
-});
+
+// ---------------------------------------------------------
+// Tool: github_list_directory
+// ---------------------------------------------------------
+
+server.tool(
+  "github_list_directory",
+  {
+    repo: z.string().optional(),
+    path: z.string().optional(),
+    ref: z.string().optional(),
+    recursive: z.boolean().optional(),
+    max_entries: z.number().int().positive().max(10000).optional(),
+  },
+  async ({ repo, path = "", ref, recursive = false, max_entries = 500 }) => {
+    const resolvedRepo = resolveRepo(repo);
+    const resolvedPath = normalizeRepoPath(path);
+    const resolvedRef = resolveRef(ref);
+
+    if (recursive) {
+      const tree = await githubRequest(
+        "GET",
+        `/repos/${resolvedRepo}/git/trees/${encodeURIComponent(
+          resolvedRef
+        )}?recursive=1`
+      );
+
+      const prefix = resolvedPath ? `${resolvedPath}/` : "";
+
+      const entries = tree.tree
+        .filter((item) => {
+          if (!resolvedPath) return true;
+          return item.path === resolvedPath || item.path.startsWith(prefix);
+        })
+        .slice(0, max_entries)
+        .map((item) => ({
+          path: item.path,
+          type: item.type,
+          size: item.size ?? null,
+          sha: item.sha,
+          url: item.url,
+        }));
+
+      return jsonResponse({
+        repo: resolvedRepo,
+        ref: resolvedRef,
+        path: resolvedPath,
+        recursive: true,
+        truncated: entries.length >= max_entries,
+        count: entries.length,
+        entries,
+      });
+    }
+
+    const encodedPath = encodeRepoPath(resolvedPath);
+
+    const apiPath =
+      `/repos/${resolvedRepo}/contents` +
+      (encodedPath ? `/${encodedPath}` : "") +
+      `?ref=${encodeURIComponent(resolvedRef)}`;
+
+    const result = await githubRequest("GET", apiPath);
+
+    if (Array.isArray(result)) {
+      return jsonResponse({
+        repo: resolvedRepo,
+        ref: resolvedRef,
+        path: resolvedPath,
+        count: result.length,
+        entries: result.map((item) => ({
+          name: item.name,
+          path: item.path,
+          type: item.type,
+          size: item.size,
+          sha: item.sha,
+          url: item.html_url,
+        })),
+      });
+    }
+
+    return jsonResponse({
+      repo: resolvedRepo,
+      ref: resolvedRef,
+      name: result.name,
+      path: result.path,
+      type: result.type,
+      size: result.size,
+      sha: result.sha,
+      url: result.html_url,
+    });
+  }
+);
+
+// ---------------------------------------------------------
+// Tool: github_read_file
+// ---------------------------------------------------------
+
+server.tool(
+  "github_read_file",
+  {
+    repo: z.string().optional(),
+    path: z.string().min(1),
+    ref: z.string().optional(),
+    format: z.enum(["text", "json", "base64"]).optional(),
+    max_bytes: z.number().int().positive().max(10_000_000).optional(),
+  },
+  async ({ repo, path, ref, format = "json", max_bytes = 1_000_000 }) => {
+    const resolvedRepo = resolveRepo(repo);
+    const resolvedPath = normalizeRepoPath(path);
+    const resolvedRef = resolveRef(ref);
+
+    const result = await githubGetContentOrNull({
+      repo: resolvedRepo,
+      path: resolvedPath,
+      ref: resolvedRef,
+    });
+
+    assertGithubFileResult(result, resolvedPath);
+
+    if (result.size > max_bytes) {
+      throw new Error(
+        `File is too large to read safely. Size: ${result.size} bytes. Limit: ${max_bytes} bytes.`
+      );
+    }
+
+    const buffer = decodeBase64Content(result.content);
+
+    if (format === "base64") {
+      return jsonResponse({
+        repo: resolvedRepo,
+        ref: resolvedRef,
+        path: result.path,
+        name: result.name,
+        sha: result.sha,
+        size: result.size,
+        encoding: "base64",
+        html_url: result.html_url,
+        content: result.content,
+      });
+    }
+
+    if (looksBinary(buffer)) {
+      throw new Error(
+        `File appears to be binary. Use format: "base64" if you really need it.`
+      );
+    }
+
+    const content = buffer.toString("utf8");
+
+    if (format === "text") {
+      return textResponse(content);
+    }
+
+    return jsonResponse({
+      repo: resolvedRepo,
+      ref: resolvedRef,
+      path: result.path,
+      name: result.name,
+      sha: result.sha,
+      size: result.size,
+      encoding: "utf8",
+      html_url: result.html_url,
+      content,
+    });
+  }
+);
+
+// ---------------------------------------------------------
+// Tool: github_write_file
+// Creates a new file by default.
+// Can overwrite only when overwrite is true.
+// Supports dry_run.
+// ---------------------------------------------------------
+
+server.tool(
+  "github_write_file",
+  {
+    repo: z.string().optional(),
+    path: z.string().min(1),
+    content: z.string(),
+    commit_message: z.string().min(1),
+    branch: z.string().optional(),
+    overwrite: z.boolean().optional(),
+    dry_run: z.boolean().optional(),
+  },
+  async ({
+    repo,
+    path,
+    content,
+    commit_message,
+    branch,
+    overwrite = false,
+    dry_run = false,
+  }) => {
+    const resolvedRepo = resolveRepo(repo);
+    const resolvedPath = normalizeRepoPath(path);
+    const targetBranch = branch || GITHUB_BRANCH;
+    const encodedPath = encodeRepoPath(resolvedPath);
+
+    const existing = await githubGetContentOrNull({
+      repo: resolvedRepo,
+      path: resolvedPath,
+      ref: targetBranch,
+    });
+
+    if (existing && Array.isArray(existing)) {
+      throw new Error(`'${resolvedPath}' is a directory, not a file.`);
+    }
+
+    if (existing && !overwrite) {
+      throw new Error(
+        `File already exists: ${resolvedPath}. Use github_update_file, or set overwrite: true.`
+      );
+    }
+
+    if (dry_run) {
+      return jsonResponse({
+        dry_run: true,
+        action: existing ? "would_overwrite" : "would_create",
+        repo: resolvedRepo,
+        branch: targetBranch,
+        path: resolvedPath,
+        previous_sha: existing?.sha || null,
+        new_content_bytes: Buffer.byteLength(content, "utf8"),
+        commit_message,
+      });
+    }
+
+    const body = {
+      message: commit_message,
+      content: encodeContent(content),
+      branch: targetBranch,
+    };
+
+    if (existing?.sha) {
+      body.sha = existing.sha;
+    }
+
+    const result = await githubRequest(
+      "PUT",
+      `/repos/${resolvedRepo}/contents/${encodedPath}`,
+      body
+    );
+
+    return jsonResponse({
+      message: existing ? "File overwritten." : "File created.",
+      action: existing ? "overwrite" : "create",
+      repo: resolvedRepo,
+      branch: targetBranch,
+      path: resolvedPath,
+      previous_sha: existing?.sha || null,
+      new_sha: result.content?.sha || null,
+      commit_url: result.commit?.html_url || null,
+      file_url: result.content?.html_url || null,
+    });
+  }
+);
+
+// ---------------------------------------------------------
+// Tool: github_update_file
+// Safely updates an existing file.
+// expected_sha prevents accidental overwrite if file changed.
+// Supports dry_run.
+// ---------------------------------------------------------
+
+server.tool(
+  "github_update_file",
+  {
+    repo: z.string().optional(),
+    path: z.string().min(1),
+    content: z.string(),
+    commit_message: z.string().min(1),
+    branch: z.string().optional(),
+    expected_sha: z.string().optional(),
+    dry_run: z.boolean().optional(),
+  },
+  async ({
+    repo,
+    path,
+    content,
+    commit_message,
+    branch,
+    expected_sha,
+    dry_run = false,
+  }) => {
+    const resolvedRepo = resolveRepo(repo);
+    const resolvedPath = normalizeRepoPath(path);
+    const targetBranch = branch || GITHUB_BRANCH;
+    const encodedPath = encodeRepoPath(resolvedPath);
+
+    const existing = await githubGetContentOrNull({
+      repo: resolvedRepo,
+      path: resolvedPath,
+      ref: targetBranch,
+    });
+
+    assertGithubFileResult(existing, resolvedPath);
+
+    if (expected_sha && existing.sha !== expected_sha) {
+      throw new Error(
+        [
+          "Refusing to update because expected_sha does not match current file SHA.",
+          `Path: ${resolvedPath}`,
+          `Expected: ${expected_sha}`,
+          `Current:  ${existing.sha}`,
+          "Read the file again, inspect the current content, then retry with the current SHA.",
+        ].join("\n")
+      );
+    }
+
+    const oldBuffer = decodeBase64Content(existing.content);
+    const oldContent = oldBuffer.toString("utf8");
+
+    if (oldContent === content) {
+      return jsonResponse({
+        message: "No update needed. Content is unchanged.",
+        repo: resolvedRepo,
+        branch: targetBranch,
+        path: resolvedPath,
+        sha: existing.sha,
+        file_url: existing.html_url,
+      });
+    }
+
+    if (dry_run) {
+      return jsonResponse({
+        dry_run: true,
+        action: "would_update",
+        repo: resolvedRepo,
+        branch: targetBranch,
+        path: resolvedPath,
+        current_sha: existing.sha,
+        old_content_bytes: Buffer.byteLength(oldContent, "utf8"),
+        new_content_bytes: Buffer.byteLength(content, "utf8"),
+        old_line_count: oldContent.split("\n").length,
+        new_line_count: content.split("\n").length,
+        commit_message,
+      });
+    }
+
+    const result = await githubRequest(
+      "PUT",
+      `/repos/${resolvedRepo}/contents/${encodedPath}`,
+      {
+        message: commit_message,
+        content: encodeContent(content),
+        sha: existing.sha,
+        branch: targetBranch,
+      }
+    );
+
+    return jsonResponse({
+      message: "File updated.",
+      action: "update",
+      repo: resolvedRepo,
+      branch: targetBranch,
+      path: resolvedPath,
+      previous_sha: existing.sha,
+      new_sha: result.content?.sha || null,
+      commit_url: result.commit?.html_url || null,
+      file_url: result.content?.html_url || null,
+    });
+  }
+);
+
+// ---------------------------------------------------------
+// Tool: supabase_sql_read
+// Read-only SQL only.
+// ---------------------------------------------------------
+
+server.tool(
+  "supabase_sql_read",
+  {
+    sql: z.string().min(1),
+  },
+  async ({ sql }) => {
+    const safeSql = assertReadOnlySql(sql);
+    const db = getPool();
+
+    const result = await db.query(safeSql);
+
+    return jsonResponse({
+      rowCount: result.rowCount,
+      rows: result.rows,
+    });
+  }
+);
+
+// ---------------------------------------------------------
+// Tool: supabase_migration_apply
+// Applies SQL migration once by name.
+// ---------------------------------------------------------
+
+server.tool(
+  "supabase_migration_apply",
+  {
+    name: z.string().min(1),
+    sql: z.string().min(1),
+  },
+  async ({ name, sql }) => {
+    const db = getPool();
+    const client = await db.connect();
+
+    try {
+      await client.query("BEGIN");
+
+      await client.query(`
+        create table if not exists public.mcp_migrations (
+          id bigserial primary key,
+          name text not null unique,
+          applied_at timestamptz not null default now()
+        )
+      `);
+
+      const existing = await client.query(
+        "select id, name, applied_at from public.mcp_migrations where name = $1",
+        [name]
+      );
+
+      if (existing.rowCount > 0) {
+        await client.query("ROLLBACK");
+
+        return jsonResponse({
+          message: "Migration already applied.",
+          migration: existing.rows[0],
+        });
+      }
+
+      await client.query(sql);
+
+      const inserted = await client.query(
+        "insert into public.mcp_migrations (name) values ($1) returning id, name, applied_at",
+        [name]
+      );
+
+      await client.query("COMMIT");
+
+      return jsonResponse({
+        message: "Migration applied.",
+        migration: inserted.rows[0],
+      });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+);
+
+// ---------------------------------------------------------
+// Start MCP server
+// ---------------------------------------------------------
+
+const transport = new StdioServerTransport();
+await server.connect(transport);
+
+
+
+PACKAGE.JSON OPTION
+
+If you need a package.json for this script, use:
+
+{
+  "name": "memphis-zoo-mpc",
+  "version": "1.1.0",
+  "type": "module",
+  "main": "server.mjs",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "pg": "^8.13.0",
+    "zod": "^3.23.8"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
+
+INSTALL
+
+npm install
+node server.mjs
+
+ENVIRONMENT
+
+GitHub:
+
+export GITHUB_TOKEN="your_github_token"
+export GITHUB_DEFAULT_REPO="owner/repo"
+export GITHUB_BRANCH="main"
+
+Supabase:
+
+export SUPABASE_DB_URL="postgresql://..."
+
+SAFER EDIT FLOW
+
+1. Read the file:
+
+{
+  "repo": "owner/repo",
+  "path": "README.md",
+  "format": "json"
+}
+
+2. Copy the returned sha.
+
+3. Dry-run the update:
+
+{
+  "repo": "owner/repo",
+  "path": "README.md",
+  "content": "new full file content",
+  "commit_message": "Update README",
+  "expected_sha": "sha_from_read_result",
+  "dry_run": true
+}
+
+4. Run the same update with dry_run false.
