@@ -896,7 +896,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     }
 
     if (lower.includes("employee") || lower.includes("role") || lower.includes("device")) {
-      const employeeName = await guessEmployeeName(runRpc, text) || threadContext?.last_employee_name || "";
+      const employeeName = await guessEmployeeName(runRpc, text) || (shouldUseEmployeeContext(text) ? threadContext?.last_employee_name : "") || "";
       if (employeeName) {
         const profile = await executeTool("get_employee_profile", { employee_name: employeeName });
         await saveThreadContext(runRpc, threadId, { last_intent: "employee_profile", last_employee_name: employeeName, last_service_date: relativeServiceDate, last_subject_type: "employee" });
