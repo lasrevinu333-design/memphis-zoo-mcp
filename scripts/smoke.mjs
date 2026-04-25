@@ -11,6 +11,14 @@ import {
   createEventMaintenanceController,
   EVENTS_CONTRACT_VERSION,
 } from "../src/events-api.js";
+import { createGithubClient } from "../src/github/client.js";
+import { listDirectory, readFile, batchReadFiles } from "../src/github/read.js";
+import { previewFullReplacement, previewTextReplacement } from "../src/github/patch.js";
+import { writeFile, updateFile, replaceTextInFile } from "../src/github/write.js";
+import { sanitizeReadOnlySql } from "../src/supabase/read.js";
+import { normalizeMigrationInput } from "../src/supabase/migrations.js";
+import { getToolManifest } from "../src/mcp/tool-manifest.js";
+import { createMcpServer } from "../src/mcp/create-mcp-server.js";
 
 const envResult = validateRuntimeEnv({ strict: false });
 assert.equal(typeof envResult.ok, "boolean");
@@ -23,6 +31,31 @@ assert.notEqual(redacted.GITHUB_TOKEN, "ghp_example_secret_value_1234567890");
 const diffSummary = summarizeTextDiff("a\nb\n", "a\nc\n");
 assert.equal(diffSummary.changed, true);
 assert.equal(typeof makeUnifiedDiff({ oldText: "a\n", newText: "b\n", path: "x.txt" }), "string");
+
+const fullPreview = previewFullReplacement({ oldText: "a\n", newText: "b\n", path: "x.txt" });
+assert.equal(fullPreview.changed, true);
+const replacePreview = previewTextReplacement({ oldText: "hello world", find: "world", replace: "zoo", path: "x.txt" });
+assert.equal(replacePreview.changed, true);
+
+assert.equal(typeof createGithubClient, "function");
+assert.equal(typeof listDirectory, "function");
+assert.equal(typeof readFile, "function");
+assert.equal(typeof batchReadFiles, "function");
+assert.equal(typeof writeFile, "function");
+assert.equal(typeof updateFile, "function");
+assert.equal(typeof replaceTextInFile, "function");
+
+const sanitizedSql = sanitizeReadOnlySql("select 1 as ok;");
+assert.equal(sanitizedSql.sql, "select 1 as ok");
+assert.throws(() => sanitizeReadOnlySql("delete from public.foo"));
+assert.equal(normalizeMigrationInput({ name: "test_migration", sql: "select 1;" }).name, "test_migration");
+
+const manifest = getToolManifest();
+assert.equal(manifest.ok, true);
+assert.ok(manifest.tools.some((tool) => tool.name === "github_batch_read"));
+
+const modularMcpServer = createMcpServer({ version: "smoke", releaseId: "smoke" });
+assert.ok(modularMcpServer);
 
 const responder = createMemphisResponder({
   runReadOnlySql: async () => [],
