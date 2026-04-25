@@ -978,6 +978,12 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       return { text: contactReply, meta: { fallback: true, mode: "local_internal_contact" } };
     }
 
+    const weeklyEmployeeReply = await answerEmployeeWeeklyScheduleQuestion(runReadOnlySql, userMessage, threadContext);
+    if (weeklyEmployeeReply) {
+      await saveThreadContext(runRpc, threadId, { last_intent: "employee_weekly_schedule", last_subject_type: "employee" });
+      return { text: weeklyEmployeeReply, meta: { fallback: true, mode: "local_employee_weekly_schedule" } };
+    }
+
     const explicitSystem = isSystemSpecificQuestion(userMessage, threadContext);
 
     if (!apiKey || explicitSystem) {
