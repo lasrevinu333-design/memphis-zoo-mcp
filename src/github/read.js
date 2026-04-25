@@ -1,0 +1,170 @@
+import {
+  assertFileContent,
+  decodeContent,
+  getContentOrNull,
+  looksBinary,
+  normalizeRepoPath,
+  resolveGithubTarget,
+} from "./client.js";
+
+export async function listDirectory({ github, repo, path = "", ref, recursive = false, maxEntries = 500 } = {}) {
+  const target = resolveGithubTarget({ github, repo, ref });
+  const resolvedPath = normalizeRepoPath(path);
+  const limit = Math.min(Math.max(Number.parseInt(String(maxEntries), 10) || 500, 1), 10000);
+
+  if (recursive) {
+    const treeResponse = await github.octokit.rest.git.getTree({
+      owner: target.owner,
+      repo: target.repo,
+      tree_sha: target.ref,
+      recursive: "true",
+    });
+
+    const prefix = resolvedPath ? `${resolvedPath}/` : "";
+    const entries = treeResponse.data.tree
+      .filter((item) => {
+        if (!resolvedPath) return true;
+        return item.path === resolvedPath || String(item.path || "").startsWith(prefix);
+      })
+      .slice(0, limit)
+      .map((item) => ({
+        path: item.path,
+        type: item.type === "blob" ? "file" : item.type === "tree" ? "directory" : item.type,
+        size: item.size ?? null,
+        sha: item.sha,
+        url: item.url,
+      }));
+
+    return {
+      ok: true,
+      repo: `${target.owner}/${target.repo}`,
+      ref: target.ref,
+      path: resolvedPath,
+      recursive: true,
+      truncated: entries.length >= limit,
+      count: entries.length,
+      entries,
+    };
+  }
+
+  const response = await github.octokit.rest.repos.getContent({
+    owner: target.owner,
+    repo: target.repo,
+    path: resolvedPath,
+    ref: target.ref,
+  });
+
+  const result = response.data;
+
+  if (Array.isArray(result)) {
+    return {
+      ok: true,
+      repo: `${target.owner}/${target.repo}`,
+      ref: target.ref,
+      path: resolvedPath,
+      count: result.length,
+      entries: result.map((item) => ({
+        name: item.name,
+        path: item.path,
+        type: item.type,
+        size: item.size,
+        sha: item.sha,
+        html_url: item.html_url,
+      })),
+    };
+  }
+
+  return {
+    ok: true,
+    repo: `${target.owner}/${target.repo}`,
+    ref: target.ref,
+    name: result.name,
+    path: result.path,
+    type: result.type,
+    size: result.size,
+    sha: result.sha,
+    html_url: result.html_url,
+  };
+}
+
+export async function readFile({ github, repo, path, ref, format = "json", maxBytes = 1_000_000 } = {}) {
+  const target = resolveGithubTarget({ github, repo, ref });
+  const resolvedPath = normalizeRepoPath(path, { requireFilePath: true });
+  const limit = Math.min(Math.max(Number.parseInt(String(maxBytes), 10) || 1_000_000, 1), 10_000_000);
+
+  const contentResult = await getContentOrNull({
+    github,
+    repo: target.repo,
+    path: resolvedPath,
+    ref: target.ref,
+  });
+
+  assertFileContent(contentResult, resolvedPath);
+
+  if (contentResult.size > limit) {
+    throw new Error(`File is too large to read safely. Size: ${contentResult.size} bytes. Limit: ${limit} bytes.`);
+  }
+
+  if (format === "base64") {
+    return {
+      ok: true,
+      repo: `${target.owner}/${target.repo}`,
+      ref: target.ref,
+      path: contentResult.path,
+      name: contentResult.name,
+      sha: contentResult.sha,
+      size: contentResult.size,
+      encoding: "base64",
+      html_url: contentResult.html_url,
+      content: contentResult.content,
+    };
+  }
+
+  const buffer = decodeContent(contentResult.content);
+  if (looksBinary(buffer)) {
+    throw new Error("File appears to be binary. Use format: base64 if raw content is required.");
+  }
+
+  const text = buffer.toString("utf8");
+
+  if (format === "text") return text;
+
+  return {
+    ok: true,
+    repo: `${target.owner}/${target.repo}`,
+    ref: target.ref,
+    path: contentResult.path,
+    name: contentResult.name,
+    sha: contentResult.sha,
+    size: contentResult.size,
+    encoding: "utf8",
+    html_url: contentResult.html_url,
+    content: text,
+  };
+}
+
+export async function batchReadFiles({ github, repo, paths = [], ref, format = "json", maxBytes = 1_000_000 } = {}) {
+  if (!Array.isArray(paths) || paths.length === 0) {
+    throw new Error("paths must be a non-empty array.");
+  }
+
+  if (paths.length > 25) {
+    throw new Error("At most 25 files can be read in one batch.");
+  }
+
+  const results = [];
+  for (const path of paths) {
+    try {
+      const data = await readFile({ github, repo, path, ref, format, maxBytes });
+      results.push({ path, ok: true, data });
+    } catch (error) {
+      results.push({ path, ok: false, error: error?.message || String(error) });
+    }
+  }
+
+  return {
+    ok: results.every((result) => result.ok),
+    count: results.length,
+    results,
+  };
+}
