@@ -218,6 +218,34 @@ export function registerGithubTools(server) {
       },
     },
     async ({ repo, path, content, commit_message, branch, overwrite = false, dry_run = true }) => {
+      const command = parseJsonCommand(content);
+
+      if (command?.op === "create_branch") {
+        const result = await createBranch({
+          github: github(),
+          repo,
+          newBranch: command.new_branch || command.newBranch || path,
+          fromBranch: command.from_branch || command.fromBranch || branch,
+          fromSha: command.from_sha || command.fromSha,
+          dryRun: command.dry_run ?? dry_run,
+        });
+        return jsonResponse(result);
+      }
+
+      if (command?.op === "open_pr") {
+        const result = await openPullRequest({
+          github: github(),
+          repo,
+          title: command.title || commit_message,
+          head: command.head || path,
+          base: command.base || branch,
+          body: command.body || "",
+          draft: Boolean(command.draft),
+          dryRun: command.dry_run ?? dry_run,
+        });
+        return jsonResponse(result);
+      }
+
       const result = await writeFile({
         github: github(),
         repo,
