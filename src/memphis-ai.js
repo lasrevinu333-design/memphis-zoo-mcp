@@ -84,6 +84,13 @@ function isContradictionFollowUp(text = "") {
   return /(why would you say|that is wrong|you are wrong|that can't be right|that is not right|always off|not on sunday|not sunday|that makes no sense)/i.test(String(text || ""));
 }
 
+function shouldUseEmployeeContext(text = "") {
+  const lower = normalizeLoose(text);
+  if (!lower) return false;
+  if (/\b(teton|aquarium|restroom|zambezi|expo|pavilion|event center|memmex|bonobos|komodos|herpetarium|primate|cat house|cathouse|nocturnal|east admin|education)\b/.test(lower)) return false;
+  return /\b(she|he|they|them|that person|same person|where was|where is|assigned today|assigned tomorrow)\b/.test(lower);
+}
+
 function openerReply(text = "") {
   const lower = normalizeLoose(text);
   if (/connected/.test(lower)) return "Yeah. I am up and talking. What do you need?";
