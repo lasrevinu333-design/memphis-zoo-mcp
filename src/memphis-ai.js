@@ -4,60 +4,6 @@ const DEFAULT_SCAN_DEVICE_ID = "memphis-bot";
 const DEFAULT_WEATHER_LOCATION = "Memphis, Tennessee";
 
 
-function extractTimeWindow(text) {
-  const raw = String(text || "").replace(/\s+/g, " ");
-  const explicitRange = raw.match(/(\d{1,2}(?::\d{2})?\s*(?:am|pm)|\d{3,4}\s*(?:am|pm))[\s]*(?:to|\-|–|—)[\s]*(\d{1,2}(?::\d{2})?\s*(?:am|pm)|\d{3,4}\s*(?:am|pm))/i);
-  if (explicitRange) {
-    return { start: normalizeHumanTime(explicitRange[1]), end: normalizeHumanTime(explicitRange[2]) };
-  }
-  const single = raw.match(/\b(?:at|for|around|after)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)|\d{3,4}\s*(?:am|pm))\b/i);
-  if (single) {
-    const start = normalizeHumanTime(single[1]);
-    if (start) return { start, end: start };
-  }
-  return null;
-}
-
-function normalizeHumanTime(value) {
-  const raw = String(value || "").trim().toLowerCase().replace(/\s+/g, "");
-  let match = raw.match(/^(\d{1,2})(?::(\d{2}))?(am|pm)$/i);
-  if (match) {
-    let hour = Number(match[1]);
-    const minute = Number(match[2] || "0");
-    const meridiem = String(match[3] || "").toLowerCase();
-    if (meridiem === "pm" && hour < 12) hour += 12;
-    if (meridiem === "am" && hour === 12) hour = 0;
-    return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-  }
-  match = raw.match(/^(\d{3,4})(am|pm)$/i);
-  if (match) {
-    const digits = match[1];
-    const meridiem = String(match[2] || "").toLowerCase();
-    let hour = Number(digits.length === 3 ? digits.slice(0, 1) : digits.slice(0, 2));
-    const minute = Number(digits.length === 3 ? digits.slice(1) : digits.slice(2));
-    if (!Number.isFinite(hour) || !Number.isFinite(minute) || minute > 59) return "";
-    if (meridiem === "pm" && hour < 12) hour += 12;
-    if (meridiem === "am" && hour === 12) hour = 0;
-    return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-  }
-  return "";
-}
-
-function addMinutesToTime(value, minutesToAdd = 0) {
-  const raw = String(value || "").trim();
-  if (!/^\d{2}:\d{2}$/.test(raw)) return raw;
-  const [h, m] = raw.split(":").map(Number);
-  const total = Math.max(0, (h * 60) + m + minutesToAdd);
-  const hour = Math.floor(total / 60) % 24;
-  const minute = total % 60;
-  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-}
-
-function toSafeInt(value, fallback, min = 1, max = 90) {
-  const parsed = Number.parseInt(String(value ?? fallback), 10);
-  if (!Number.isFinite(parsed)) return fallback;
-  return Math.min(Math.max(parsed, min), max);
-}
 
 function getGeminiApiKey() {
   return String(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "").trim();
