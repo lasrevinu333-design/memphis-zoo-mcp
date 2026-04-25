@@ -1,0 +1,247 @@
+import { z } from "zod";
+import { createGithubClient } from "../github/client.js";
+import { batchReadFiles, listDirectory, readFile } from "../github/read.js";
+import { writeFile, updateFile, replaceTextInFile } from "../github/write.js";
+import { registerMcpTool } from "./register.js";
+import { jsonResponse, textResponse } from "./responses.js";
+
+function github() {
+  return createGithubClient();
+}
+
+function commitMessage(value, fallback) {
+  return String(value || fallback || "Update file via MCP").trim();
+}
+
+export function registerGithubTools(server) {
+  registerMcpTool(
+    server,
+    "github_debug_config",
+    {
+      description: "Return redacted GitHub runtime configuration.",
+      inputSchema: {},
+    },
+    async () => {
+      const client = github();
+      return jsonResponse({
+        ok: true,
+        github_token_present: true,
+        github_owner: client.owner,
+        github_repo: client.defaultRepo,
+        github_allowed_repos: client.allowedRepos,
+        github_branch: client.branch,
+        node_version: process.version,
+      });
+    }
+  );
+
+  registerMcpTool(
+    server,
+    "github_list_directory",
+    {
+      description: "List files and directories in an allowed GitHub repository.",
+      inputSchema: {
+        repo: z.string().optional(),
+        path: z.string().optional(),
+        ref: z.string().optional(),
+        recursive: z.boolean().optional(),
+        max_entries: z.number().int().positive().max(10000).optional(),
+      },
+    },
+    async ({ repo, path = "", ref, recursive = false, max_entries = 500 }) => {
+      const result = await listDirectory({
+        github: github(),
+        repo,
+        path,
+        ref,
+        recursive,
+        maxEntries: max_entries,
+      });
+      return jsonResponse(result);
+    }
+  );
+
+  registerMcpTool(
+    server,
+    "github_repo_tree",
+    {
+      description: "Return a recursive repository tree for an allowed repo.",
+      inputSchema: {
+        repo: z.string().optional(),
+        path: z.string().optional(),
+        ref: z.string().optional(),
+        max_entries: z.number().int().positive().max(10000).optional(),
+      },
+    },
+    async ({ repo, path = "", ref, max_entries = 1000 }) => {
+      const result = await listDirectory({
+        github: github(),
+        repo,
+        path,
+        ref,
+        recursive: true,
+        maxEntries: max_entries,
+      });
+      return jsonResponse(result);
+    }
+  );
+
+  registerMcpTool(
+    server,
+    "github_read_file",
+    {
+      description: "Read one file from an allowed GitHub repository.",
+      inputSchema: {
+        repo: z.string().optional(),
+        path: z.string().min(1),
+        ref: z.string().optional(),
+        format: z.enum(["text", "json", "base64"]).optional(),
+        max_bytes: z.number().int().positive().max(10_000_000).optional(),
+      },
+    },
+    async ({ repo, path, ref, format = "json", max_bytes = 1_000_000 }) => {
+      const result = await readFile({
+        github: github(),
+        repo,
+        path,
+        ref,
+        format,
+        maxBytes: max_bytes,
+      });
+      return format === "text" ? textResponse(result) : jsonResponse(result);
+    }
+  );
+
+  registerMcpTool(
+    server,
+    "github_batch_read",
+    {
+      description: "Read several files from an allowed GitHub repository in one request.",
+      inputSchema: {
+        repo: z.string().optional(),
+        paths: z.array(z.string().min(1)).min(1).max(25),
+        ref: z.string().optional(),
+        format: z.enum(["json", "text", "base64"]).optional(),
+        max_bytes: z.number().int().positive().max(10_000_000).optional(),
+      },
+    },
+    async ({ repo, paths, ref, format = "json", max_bytes = 1_000_000 }) => {
+      const result = await batchReadFiles({
+        github: github(),
+        repo,
+        paths,
+        ref,
+        format,
+        maxBytes: max_bytes,
+      });
+      return jsonResponse(result);
+    }
+  );
+
+  registerMcpTool(
+    server,
+    "github_write_file",
+    {
+      description: "Create a file, or overwrite only when explicitly allowed. Dry-run defaults to true in the modular layer.",
+      inputSchema: {
+        repo: z.string().optional(),
+        path: z.string().min(1),
+        content: z.string(),
+        commit_message: z.string().min(1),
+        branch: z.string().optional(),
+        overwrite: z.boolean().optional(),
+        dry_run: z.boolean().optional(),
+      },
+    },
+    async ({ repo, path, content, commit_message, branch, overwrite = false, dry_run = true }) => {
+      const result = await writeFile({
+        github: github(),
+        repo,
+        path,
+        content,
+        commitMessage: commitMessage(commit_message, "Create file via MCP"),
+        branch,
+        overwrite,
+        dryRun: dry_run,
+      });
+      return jsonResponse(result);
+    }
+  );
+
+  registerMcpTool(
+    server,
+    "github_update_file",
+    {
+      description: "Update an existing file. Requires expected_sha in the modular layer. Dry-run defaults to true.",
+      inputSchema: {
+        repo: z.string().optional(),
+        path: z.string().min(1),
+        content: z.string(),
+        commit_message: z.string().min(1),
+        branch: z.string().optional(),
+        expected_sha: z.string().min(1),
+        dry_run: z.boolean().optional(),
+      },
+    },
+    async ({ repo, path, content, commit_message, branch, expected_sha, dry_run = true }) => {
+      const result = await updateFile({
+        github: github(),
+        repo,
+        path,
+        content,
+        commitMessage: commitMessage(commit_message, "Update file via MCP"),
+        branch,
+        expectedSha: expected_sha,
+        dryRun: dry_run,
+      });
+      return jsonResponse(result);
+    }
+  );
+
+  registerMcpTool(
+    server,
+    "github_replace_text",
+    {
+      description: "Replace exact text in an existing file with SHA protection and diff preview.",
+      inputSchema: {
+        repo: z.string().optional(),
+        path: z.string().min(1),
+        find: z.string().min(1),
+        replace: z.string(),
+        commit_message: z.string().min(1),
+        branch: z.string().optional(),
+        expected_sha: z.string().min(1),
+        occurrence: z.enum(["first", "all"]).optional(),
+        expected_matches: z.number().int().positive().optional(),
+        dry_run: z.boolean().optional(),
+      },
+    },
+    async ({
+      repo,
+      path,
+      find,
+      replace,
+      commit_message,
+      branch,
+      expected_sha,
+      occurrence = "first",
+      expected_matches,
+      dry_run = true,
+    }) => {
+      const result = await replaceTextInFile({
+        github: github(),
+        repo,
+        path,
+        find,
+        replace,
+        commitMessage: commitMessage(commit_message, "Replace text via MCP"),
+        branch,
+        expectedSha: expected_sha,
+        occurrence,
+        expectedMatches: expected_matches,
+        dryRun: dry_run,
+      });
+      return jsonResponse(result);
+    }
+  );
+}
