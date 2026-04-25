@@ -38,6 +38,20 @@ function keyLooksSecret(key) {
   return DEFAULT_SECRET_KEYS.some((secretKey) => normalized.includes(secretKey));
 }
 
+function redactSecretValue(value) {
+  if (value == null) return value;
+
+  if (typeof value === "boolean" || typeof value === "number") {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    return mask(value);
+  }
+
+  return "[redacted]";
+}
+
 export function redactSecrets(value, seen = new WeakSet()) {
   if (value == null) return value;
 
