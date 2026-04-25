@@ -94,10 +94,10 @@ export const MCP_TOOL_MANIFEST = Object.freeze([
     name: "github_search_files",
     safety: TOOL_SAFETY.READ,
     status: "current-via-alias",
-    description: "Search repository file paths through github_list_directory path=search:term.",
+    description: "Search repository file paths with path=search:term, or text contents with path=search-content:term.",
     requires: ["github"],
     alias_tool: "github_list_directory",
-    inputs: ["path=search:term", "max_entries"],
+    inputs: ["path=search:term", "path=search-content:term", "max_entries"],
   },
   {
     name: "github_preview_patch",
