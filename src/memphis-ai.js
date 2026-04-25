@@ -940,7 +940,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     }
 
     if (lower.includes("schedule") || lower.includes("assigned") || lower.includes("works") || lower.includes("working") || lower.includes("scheduled") || lower.includes("staff") || lower.includes("aquarium") || lower.includes("restroom") || lower.includes("zambezi") || lower.includes("teton") || lower.includes("expo") || lower.includes("cleans")) {
-      const employeeName = await guessEmployeeName(runRpc, text) || threadContext?.last_employee_name || "";
+      const employeeName = await guessEmployeeName(runRpc, text) || (shouldUseEmployeeContext(text) ? threadContext?.last_employee_name : "") || "";
       if (employeeName) {
         const data = await executeTool("get_employee_schedule", { employee_name: employeeName, service_date: relativeServiceDate });
         await saveThreadContext(runRpc, threadId, { last_intent: "employee_schedule", last_employee_name: employeeName, last_service_date: relativeServiceDate, last_subject_type: "employee" });
