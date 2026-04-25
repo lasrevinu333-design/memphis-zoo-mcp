@@ -19,6 +19,17 @@ import { sanitizeReadOnlySql } from "../src/supabase/read.js";
 import { normalizeMigrationInput } from "../src/supabase/migrations.js";
 import { getToolManifest } from "../src/mcp/tool-manifest.js";
 import { createMcpServer } from "../src/mcp/create-mcp-server.js";
+import {
+  addMinutesToTime,
+  computeWeekdayDate,
+  esc,
+  extractExplicitDate,
+  extractTimeWindow,
+  normalizeDate,
+  normalizeLoose,
+  sqlLikeLiteral,
+  toSafeInt,
+} from "../src/ai/memphis-ai-utils.js";
 
 const envResult = validateRuntimeEnv({ strict: false });
 assert.equal(typeof envResult.ok, "boolean");
