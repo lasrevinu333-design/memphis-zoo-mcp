@@ -18,6 +18,31 @@ function hasBatchPaths(paths) {
   return Array.isArray(paths) && paths.length > 0;
 }
 
+function parseBatchPath(path) {
+  const text = String(path || "").trim();
+  if (!text.startsWith("batch:")) return null;
+
+  const paths = text
+    .slice("batch:".length)
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return paths.length ? paths : null;
+}
+
+function parseJsonCommand(content) {
+  const raw = String(content || "").trim();
+  if (!raw.startsWith("{")) return null;
+
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
+  } catch (_error) {
+    return null;
+  }
+}
+
 export function registerGithubTools(server) {
   registerMcpTool(
     server,
