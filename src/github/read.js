@@ -7,6 +7,16 @@ import {
   resolveGithubTarget,
 } from "./client.js";
 
+function parseSearchPath(path) {
+  const text = String(path || "").trim();
+  if (!text.startsWith("search:")) return null;
+
+  const query = text.slice("search:".length).trim().toLowerCase();
+  if (!query) throw new Error("search query is required after search:.");
+
+  return query;
+}
+
 export async function listDirectory({ github, repo, path = "", ref, recursive = false, maxEntries = 500 } = {}) {
   const target = resolveGithubTarget({ github, repo, ref });
   const resolvedPath = normalizeRepoPath(path);
