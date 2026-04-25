@@ -263,6 +263,17 @@ export function registerGithubTools(server) {
       expected_matches,
       dry_run = true,
     }) => {
+      const command = parseJsonCommand(content);
+
+      if (command?.op === "replace_text") {
+        find = command.find;
+        replace = command.replace;
+        expected_sha = command.expected_sha || expected_sha;
+        occurrence = command.occurrence || occurrence;
+        expected_matches = command.expected_matches || expected_matches;
+        dry_run = command.dry_run ?? dry_run;
+      }
+
       if (find != null) {
         if (replace == null) {
           throw new Error("replace is required when find is supplied.");
