@@ -3,48 +3,6 @@ const DEFAULT_MODEL = String(process.env.MEMPHIS_GEMINI_MODEL || process.env.GEM
 const DEFAULT_SCAN_DEVICE_ID = "memphis-bot";
 const DEFAULT_WEATHER_LOCATION = "Memphis, Tennessee";
 
-function normalizeDate(value) {
-  const raw = String(value || "").trim();
-  return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null;
-}
-
-function extractExplicitDate(text) {
-  const match = String(text || "").match(/\b(20\d{2}-\d{2}-\d{2})\b/);
-  return match ? match[1] : null;
-}
-
-function inferRelativeDateOffset(text) {
-  const lower = String(text || "").toLowerCase();
-  if (lower.includes("tomorrow")) return 1;
-  if (lower.includes("yesterday")) return -1;
-  return 0;
-}
-
-function extractWeekdayReference(text = "") {
-  const lower = String(text || "").toLowerCase();
-  const match = lower.match(/\b(?:(this|next)\s+)?(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/);
-  if (!match) return null;
-  return { modifier: match[1] || "", weekday: match[2] || "" };
-}
-
-function computeWeekdayDate(referenceDate, weekdayName, modifier = "") {
-  const targetIndex = WEEKDAY_INDEX[String(weekdayName || "").toLowerCase()];
-  if (targetIndex == null) return null;
-  const base = new Date(`${referenceDate}T12:00:00`);
-  if (Number.isNaN(base.getTime())) return null;
-  const baseIndex = base.getDay();
-  let delta = targetIndex - baseIndex;
-  if (modifier === "next") {
-    if (delta <= 0) delta += 7;
-    else delta += 7;
-  } else if (modifier === "this") {
-    if (delta < 0) delta += 7;
-  } else {
-    if (delta < 0) delta += 7;
-  }
-  base.setDate(base.getDate() + delta);
-  return base.toISOString().slice(0, 10);
-}
 
 function extractTimeWindow(text) {
   const raw = String(text || "").replace(/\s+/g, " ");
