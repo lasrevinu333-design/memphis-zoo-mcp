@@ -141,11 +141,17 @@ export function registerGithubTools(server) {
       },
     },
     async ({ repo, path, paths, ref, format = "json", max_bytes = 1_000_000 }) => {
-      if (hasBatchPaths(paths)) {
+      if (path === "__manifest__" || path === "manifest:tools") {
+        return jsonResponse(getToolManifest({ includePlanned: true }));
+      }
+
+      const batchPaths = hasBatchPaths(paths) ? paths : parseBatchPath(path);
+
+      if (hasBatchPaths(batchPaths)) {
         const result = await batchReadFiles({
           github: github(),
           repo,
-          paths,
+          paths: batchPaths,
           ref,
           format,
           maxBytes: max_bytes,
@@ -154,7 +160,7 @@ export function registerGithubTools(server) {
       }
 
       if (!path) {
-        throw new Error("path is required unless paths is supplied for batch read.");
+        throw new Error("path is required unless paths or batch:path1,path2 is supplied for batch read.");
       }
 
       const result = await readFile({
