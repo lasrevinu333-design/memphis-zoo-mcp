@@ -972,6 +972,13 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     const identity = await fetchDeviceIdentity(runReadOnlySql, deviceId);
     const webEnabled = allowWebSearch({ deviceId, identityRole: identity?.role || "" });
     const threadContext = await fetchThreadContext(runReadOnlySql, threadId);
+    const opsScheduleReply = await answerOpsManagerScheduleQuestion(runReadOnlySql, userMessage);
+
+    if (opsScheduleReply) {
+      await saveThreadContext(runRpc, threadId, { last_intent: "ops_manager_schedule", last_subject_type: "contact" });
+      return { text: opsScheduleReply, meta: { fallback: true, mode: "local_ops_manager_schedule" } };
+    }
+
     const contactReply = await answerInternalContactQuestion(runReadOnlySql, userMessage);
 
     if (contactReply) {
