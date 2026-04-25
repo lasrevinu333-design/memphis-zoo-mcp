@@ -33,6 +33,26 @@ function parseBatchPath(path) {
   return paths.length ? paths : null;
 }
 
+function parseSearchPath(path) {
+  const text = String(path || "").trim();
+
+  if (text.startsWith("search-content:")) {
+    return {
+      query: text.slice("search-content:".length).trim(),
+      includeContent: true,
+    };
+  }
+
+  if (text.startsWith("search:")) {
+    return {
+      query: text.slice("search:".length).trim(),
+      includeContent: false,
+    };
+  }
+
+  return null;
+}
+
 function parseJsonCommand(content) {
   const raw = String(content || "").trim();
   if (!raw.startsWith("{")) return null;
