@@ -781,6 +781,12 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     }
     const assignedEmployee = await fetchAssignedEmployeeForDevice(runReadOnlySql, deviceId);
 
+    if (isWeeklyScheduleQuestion(text)) {
+      const weekly = await generateWeeklyScheduleReply({ runReadOnlySql, runRpc, text, todayServiceDate, relativeServiceDate });
+      await saveThreadContext(runRpc, threadId, { last_intent: "weekly_staff_schedule", last_service_date: weekly.meta?.dates?.[0] || relativeServiceDate, last_subject_type: "summary", context_json: { dates: weekly.meta?.dates || [] } });
+      return weekly;
+    }
+
     if (shouldTreatAsPureOpener(text)) {
       const subjectType = isWeatherQuestion(text) ? "weather" : "conversation";
       await saveThreadContext(runRpc, threadId, {
