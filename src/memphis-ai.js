@@ -251,8 +251,28 @@ function formatAttendanceTimestamp(value) {
   return date.toLocaleString("en-US", { timeZone: "America/Chicago", hour: "numeric", minute: "2-digit", month: "short", day: "numeric" });
 }
 
-function summarizeAttendance(attendance = null) {
+function summarizeAttendance(attendance = null, queryText = "") {
   if (!attendance || attendance.attendance == null) return "I don't have a current attendance count available right now.";
+
+  const lower = normalizeLoose(queryText);
+  const updated = formatAttendanceTimestamp(attendance.updated_at || attendance.fetched_at);
+  const updatedText = updated ? ` Last updated ${updated}.` : "";
+
+  if (lower.includes("yesterday")) {
+    if (attendance.yesterday != null) return `Yesterday's attendance was ${Number(attendance.yesterday).toLocaleString()} guests.${updatedText}`;
+    return `I don't have yesterday's attendance available yet. Today's attendance so far is ${Number(attendance.attendance).toLocaleString()} guests.${updatedText}`;
+  }
+
+  if (lower.includes("planned") || lower.includes("plan")) {
+    if (lower.includes("yesterday") && attendance.yesterday_plan != null) return `Yesterday's planned attendance was ${Number(attendance.yesterday_plan).toLocaleString()} guests.${updatedText}`;
+    if (attendance.planned != null) return `Today's planned attendance is ${Number(attendance.planned).toLocaleString()} guests. Current attendance so far is ${Number(attendance.attendance).toLocaleString()} guests.${updatedText}`;
+    return `I don't have planned attendance available yet. Today's attendance so far is ${Number(attendance.attendance).toLocaleString()} guests.${updatedText}`;
+  }
+
+  if (lower.includes("last year") || lower.includes("last-year")) {
+    if (attendance.last_year != null) return `Attendance on this day last year was ${Number(attendance.last_year).toLocaleString()} guests.${updatedText}`;
+    return `I don't have last year's comparison attendance available yet. Today's attendance so far is ${Number(attendance.attendance).toLocaleString()} guests.${updatedText}`;
+  }
 
   const parts = [`Today's attendance so far is ${Number(attendance.attendance).toLocaleString()} guests`];
   if (attendance.planned != null) parts.push(`planned attendance is ${Number(attendance.planned).toLocaleString()}`);
@@ -260,9 +280,7 @@ function summarizeAttendance(attendance = null) {
   if (attendance.yesterday != null) parts.push(`yesterday was ${Number(attendance.yesterday).toLocaleString()}`);
   if (attendance.yesterday_plan != null) parts.push(`yesterday's plan was ${Number(attendance.yesterday_plan).toLocaleString()}`);
 
-  const updated = formatAttendanceTimestamp(attendance.updated_at || attendance.fetched_at);
-  const source = attendance.source ? ` Source: ${attendance.source}.` : "";
-  return `${parts.join(". ")}.${updated ? ` Last updated ${updated}.` : ""}${source}`;
+  return `${parts.join(". ")}.${updatedText}`;
 }
 
 function summarizeAbsenceCoverage(data = {}, employeeName = "") {
