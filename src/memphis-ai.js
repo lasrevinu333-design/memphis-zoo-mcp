@@ -28,7 +28,14 @@ const GEMINI_MAX_OUTPUT_TOKENS = Number.parseInt(String(process.env.MEMPHIS_GEMI
 
 
 function getGeminiApiKey() {
-  return String(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "").trim();
+  return String(
+    process.env.GEMINI_API_KEY ||
+    process.env.MEMPHIS_GEMINI_API_KEY ||
+    process.env.GOOGLE_API_KEY ||
+    process.env.GOOGLE_GENAI_API_KEY ||
+    process.env.EVENTS_GEMINI_API_KEY ||
+    ""
+  ).trim();
 }
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = GEMINI_TIMEOUT_MS) {
@@ -72,6 +79,54 @@ function isBroadGeneralQuestion(text = "") {
   return isGeneralKnowledgeQuestion(text) || /\b(tell me about|teach me|what causes|how do i|how do you|how to|why does|why do|what is|what are|who invented|history of)\b/i.test(String(text || ""));
 }
 
+function isContactLookupPrompt(text = "") {
+  const lower = normalizeLoose(text);
+  if (!lower) return false;
+
+  if (/\b(phone|number|contact|call|boss|director|supervisor)\b/.test(lower)) return true;
+  if (/\b(eric|operle|brandy|gull|haley|lejman|jennifer|sheffield)\b/.test(lower)) return true;
+  if (/\b(who is|who are|who s|whos|who's)\b/.test(lower) && /\b(ops manager|operations manager|manager|managers|custodial manager|horticulture manager|water quality manager|facilities manager)\b/.test(lower)) return true;
+
+  return false;
+}
+
+function isNamedOpsPersonPrompt(text = "") {
+  const lower = normalizeLoose(text);
+  return /\b(eric|operle|brandy|gull|haley|lejman|jennifer|sheffield)\b/.test(lower);
+}
+
+function hasExplicitDayOrRelativeDate(text = "") {
+  const lower = normalizeLoose(text);
+  return /\b(today|tomorrow|yesterday|sunday|monday|tuesday|wednesday|thursday|friday|saturday|next week|this week)\b/.test(lower) || Boolean(extractExplicitDate(text));
+}
+
+function isNamedRegularOpsSchedulePrompt(text = "") {
+  const lower = normalizeLoose(text);
+  if (!isNamedOpsPersonPrompt(text)) return false;
+  if (hasExplicitDayOrRelativeDate(text)) return false;
+  return /\b(when does|what days|which days|regular|normal|weekly|standing|schedule|work again|works again)\b/.test(lower);
+}
+
+function isOpsManagerSchedulePrompt(text = "") {
+  const lower = normalizeLoose(text);
+  if (!lower) return false;
+
+  const mentionsOps =
+    /\b(ops|operations|manager|boss|director|custodial manager|horticulture manager|water quality manager)\b/.test(lower) ||
+    isNamedOpsPersonPrompt(text);
+
+  const asksSchedule =
+    /\b(schedule|work|works|working|shift|shifts|on duty|duty|coverage|cover|covers|today|tomorrow|sunday|monday|tuesday|wednesday|thursday|friday|saturday|again)\b/.test(lower);
+
+  return Boolean(mentionsOps && asksSchedule);
+}
+
+function isEmployeeAreaQuestion(text = "") {
+  const lower = normalizeLoose(text);
+  if (!lower) return false;
+  return /\b(area|areas|assignment|assignments|assigned|where)\b/.test(lower);
+}
+
 function mentionsMemphisPlace(text = "") {
   return /\bmemphis\b/i.test(String(text || ""));
 }
@@ -93,15 +148,16 @@ function isGeneralKnowledgeQuestion(text = "") {
   const lower = String(text || "").toLowerCase();
   if (isWeatherQuestion(lower)) return true;
   if (isRecipeQuestion(lower)) return true;
-  if (/sparrow|capital of|who invented|how tall|what is the meaning|define |definition of|explain |why is the sky|how far|how many|science of|history of|recipe|ingredients|cook|bake|pumpkin pie|creme brulee|pretzel|pretzels/i.test(lower)) return true;
+  if (/sparrow|swallow|air speed velocity|capital of|who invented|how tall|what is the meaning|define |definition of|explain |why is the sky|how far|how many|science of|history of|recipe|ingredients|cook|bake|pumpkin pie|creme brulee|pretzel|pretzels/i.test(lower)) return true;
   return false;
 }
 
 function shouldTreatAsPureOpener(text = "") {
   const lower = normalizeLoose(text);
   if (isWeatherQuestion(lower)) return false;
+  if (isGreetingOnly(text) || (isConversationalOpener(text) && String(text || "").trim().length < 40)) return true;
   if (/(who|what|when|where|why|how)\b/.test(lower)) return false;
-  return isGreetingOnly(text) || (isConversationalOpener(text) && String(text || "").trim().length < 40);
+  return false;
 }
 
 function isContradictionFollowUp(text = "") {
@@ -131,7 +187,7 @@ function genericConversationalFallback(text = "", threadContext = {}) {
   if (/alive|connected/.test(lower)) return "Yeah. I am here and connected enough to answer real system questions. Give me one.";
   if (/sparrow/.test(lower)) return "That depends. African or European?";
   if (/weather/.test(lower)) return `I should be able to answer weather for ${weatherLocation || DEFAULT_WEATHER_LOCATION}, but my general-answer side did not land it cleanly.`;
-  if (/recipe|ingredients|cook|bake|pumpkin pie|creme brulee|pretzel|pretzels/.test(lower)) return "That is a general recipe question. I tried the general-answer path and it did not return cleanly, so I am not going to invent details. Check the Gemini/API key and retry.";
+  if (/recipe|ingredients|cook|bake|pumpkin pie|creme brulee|pretzel|pretzels/.test(lower)) return "That is a general recipe question, but Gemini did not return a clean answer. Check the Gemini/API key, model access, or Render env vars and retry.";
   if (/hello|hey|hi/.test(lower)) return "Hey. What do you need?";
   return "I am here. Ask me something specific or just talk to me like a person.";
 }
@@ -815,7 +871,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     }
     const assignedEmployee = await fetchAssignedEmployeeForDevice(runReadOnlySql, deviceId);
 
-    if (/(schedule|assigned|works|working|scheduled|staff|staffing|teton|aquarium|restroom|zambezi|expo|cleans|cover|coverage|open segment|uncovered|unassigned)/i.test(text)) {
+    if (/(schedule|assigned|assignment|assignments|area|areas|works|working|scheduled|staff|staffing|teton|aquarium|restroom|zambezi|expo|cleans|cover|coverage|open segment|uncovered|unassigned)/i.test(text)) {
       await ensureDailySchedule(runRpc, relativeServiceDate);
     }
 
@@ -966,7 +1022,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       return daily;
     }
 
-    if (lower.includes("schedule") || lower.includes("assigned") || lower.includes("works") || lower.includes("working") || lower.includes("scheduled") || lower.includes("staff") || lower.includes("aquarium") || lower.includes("restroom") || lower.includes("zambezi") || lower.includes("teton") || lower.includes("expo") || lower.includes("cleans")) {
+    if (lower.includes("schedule") || lower.includes("assigned") || lower.includes("assignment") || lower.includes("areas") || lower.includes("area") || lower.includes("works") || lower.includes("working") || lower.includes("scheduled") || lower.includes("staff") || lower.includes("aquarium") || lower.includes("restroom") || lower.includes("zambezi") || lower.includes("teton") || lower.includes("expo") || lower.includes("cleans")) {
       const employeeName = await guessEmployeeName(runRpc, text) || (shouldUseEmployeeContext(text) ? threadContext?.last_employee_name : "") || "";
       if (employeeName) {
         const data = await executeTool("get_employee_schedule", { employee_name: employeeName, service_date: relativeServiceDate });
@@ -996,18 +1052,26 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     const identity = await fetchDeviceIdentity(runReadOnlySql, deviceId);
     const webEnabled = allowWebSearch({ deviceId, identityRole: identity?.role || "" });
     const threadContext = await fetchThreadContext(runReadOnlySql, threadId);
-    const opsScheduleReply = await answerOpsManagerScheduleQuestion(runReadOnlySql, userMessage);
 
-    if (opsScheduleReply) {
-      await saveThreadContext(runRpc, threadId, { last_intent: "ops_manager_schedule", last_subject_type: "contact" });
-      return { text: opsScheduleReply, meta: { fallback: true, mode: "local_ops_manager_schedule" } };
+    if (isOpsManagerSchedulePrompt(userMessage)) {
+      const opsScheduleText = isNamedRegularOpsSchedulePrompt(userMessage)
+        ? `${userMessage} regular schedule`
+        : userMessage;
+      const opsScheduleReply = await answerOpsManagerScheduleQuestion(runReadOnlySql, opsScheduleText);
+
+      if (opsScheduleReply) {
+        await saveThreadContext(runRpc, threadId, { last_intent: "ops_manager_schedule", last_subject_type: "contact" });
+        return { text: opsScheduleReply, meta: { fallback: true, mode: "local_ops_manager_schedule" } };
+      }
     }
 
-    const contactReply = await answerInternalContactQuestion(runReadOnlySql, userMessage);
+    if (isContactLookupPrompt(userMessage)) {
+      const contactReply = await answerInternalContactQuestion(runReadOnlySql, userMessage);
 
-    if (contactReply) {
-      await saveThreadContext(runRpc, threadId, { last_intent: "internal_contact_lookup", last_subject_type: "contact" });
-      return { text: contactReply, meta: { fallback: true, mode: "local_internal_contact" } };
+      if (contactReply) {
+        await saveThreadContext(runRpc, threadId, { last_intent: "internal_contact_lookup", last_subject_type: "contact" });
+        return { text: contactReply, meta: { fallback: true, mode: "local_internal_contact" } };
+      }
     }
 
     const weeklyEmployeeReply = await answerEmployeeWeeklyScheduleQuestion(runReadOnlySql, userMessage, threadContext);
@@ -1016,7 +1080,9 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       return { text: weeklyEmployeeReply, meta: { fallback: true, mode: "local_employee_weekly_schedule" } };
     }
 
-    const explicitSystem = isSystemSpecificQuestion(userMessage, threadContext);
+    const explicitSystem =
+      !isGeneralKnowledgeQuestion(userMessage) &&
+      (isSystemSpecificQuestion(userMessage, threadContext) || isEmployeeAreaQuestion(userMessage));
 
     if (!apiKey || explicitSystem) {
       return await generateSystemReply(userMessage, { deviceId, threadId });
