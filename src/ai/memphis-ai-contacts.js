@@ -43,6 +43,19 @@ function summarizeContact(contact) {
   return parts.join(". ") + ".";
 }
 
+function isAmbiguousFirstNameOnly(text = "", firstName = "") {
+  const lower = normalizeLoose(text);
+  const name = normalizeLoose(firstName);
+  if (!lower || !name) return false;
+  if (lower.includes("operle") || lower.includes("facilities") || lower.includes("custodial")) return false;
+  return new RegExp(`\\b${name}\\b`).test(lower);
+}
+
+function summarizeAmbiguousContacts(contacts = [], firstName = "") {
+  const options = contacts.map((contact, index) => `${index + 1}. ${contact.display_name}, ${contact.role_title}${contact.department ? `, ${contact.department}` : ""}`);
+  return `I found more than one ${firstName}. Which one do you mean? ${options.join("; ")}.`;
+}
+
 export async function answerInternalContactQuestion(runReadOnlySql, text = "") {
   if (!isContactQuestion(text)) return null;
 
