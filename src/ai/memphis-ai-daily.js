@@ -19,16 +19,55 @@ export async function fetchDailyRosterRows(runReadOnlySql, serviceDate) {
   return Array.isArray(rows) ? rows : [];
 }
 
-export function summarizeDailyRoster(roster = [], serviceDate = "") {
-  if (!roster.length) return `I couldn't find anyone scheduled to work on ${serviceDate}.`;
+function getDayOfWeekFromIsoDate(serviceDate = "") {
+  const date = new Date(`${serviceDate}T12:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date.getDay();
+}
 
-  const people = roster.map((row) => {
+export async function fetchDailyOpsManagerRows(runReadOnlySql, serviceDate) {
+  const dayOfWeek = getDayOfWeekFromIsoDate(serviceDate);
+  if (dayOfWeek == null) return [];
+  const rows = await runReadOnlySql(`select s.display_name as employee_name, coalesce(c.role_title, 'Ops Manager') as role_title, s.shift_start, s.shift_end, c.phone from public.ops_manager_weekly_schedules s left join public.internal_ops_contacts c on c.id = s.contact_id where s.active = true and s.day_of_week = ${Number(dayOfWeek)} order by s.shift_start asc, s.display_name asc`);
+  return Array.isArray(rows) ? rows : [];
+}
+
+function detectStaffAudience(queryText = "") {
+  const lower = String(queryText || "").toLowerCase();
+  if (/\b(ops|operations|manager|managers|boss|director)\b/.test(lower)) return "ops";
+  if (/\b(custodian|custodians|custodial)\b/.test(lower)) return "custodians";
+  return "all";
+}
+
+function summarizeRosterPeople(rows = [], includeRole = false) {
+  return rows.map((row) => {
     const start = String(row.shift_start || "—").slice(0, 5);
     const end = String(row.shift_end || "—").slice(0, 5);
-    return `${row.employee_name} ${start}-${end}`;
+    const role = includeRole && row.role_title ? ` (${row.role_title})` : "";
+    return `${row.employee_name}${role} ${start}-${end}`;
   });
+}
 
-  return `${serviceDate}: ${people.join("; ")}. Ask who is where if you want area assignments.`;
+export function summarizeDailyRoster(roster = [], serviceDate = "", opsRows = [], queryText = "") {
+  const audience = detectStaffAudience(queryText);
+  const custodianPeople = summarizeRosterPeople(roster, false);
+  const opsPeople = summarizeRosterPeople(opsRows, true);
+
+  if (audience === "ops") {
+    if (!opsPeople.length) return `I couldn't find any ops managers scheduled to work on ${serviceDate}.`;
+    return `${serviceDate}: Ops managers: ${opsPeople.join("; ")}.`;
+  }
+
+  if (audience === "custodians") {
+    if (!custodianPeople.length) return `I couldn't find any custodians scheduled to work on ${serviceDate}.`;
+    return `${serviceDate}: Custodians: ${custodianPeople.join("; ")}. Ask who is where if you want area assignments.`;
+  }
+
+  if (!custodianPeople.length && !opsPeople.length) return `I couldn't find anyone scheduled to work on ${serviceDate}.`;
+
+  const sections = [];
+  sections.push(`Ops managers: ${opsPeople.length ? opsPeople.join("; ") : "none listed"}`);
+  sections.push(`Custodians: ${custodianPeople.length ? custodianPeople.join("; ") : "none listed"}`);
+  return `${serviceDate}: ${sections.join(". ")}. Ask who is where if you want area assignments.`;
 }
 
 export function summarizeDailyAssignments(assignments = [], serviceDate = "") {
