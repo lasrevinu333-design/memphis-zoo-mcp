@@ -620,6 +620,7 @@ async function tryGeminiConversation({ apiKey, userMessage, webEnabled, threadCo
     "Be human, natural, concise, and useful.",
     "For casual chat, greetings, follow-up questions, or broad reasoning, answer directly and conversationally.",
     "If the question is general knowledge, food, cooking, a recipe, definitions, history, science, or practical advice, answer it directly instead of saying it is outside zoo operations.",
+    "When recent thread context is provided, use it to understand follow-ups, callbacks, jokes, quotes, and implied references.",
     "Do not drift into a canned feature list unless the user explicitly asks what you can do.",
     "Do not claim access to internal Memphis Zoo records unless the local system tools supplied that information.",
     locationHint,
