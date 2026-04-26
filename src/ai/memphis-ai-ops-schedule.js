@@ -26,7 +26,8 @@ function isOpsScheduleQuestion(text = "") {
 function extractExplicitDayOfWeek(text = "") {
   const lower = normalizeLoose(text);
   for (const [name, index] of Object.entries(DAY_LOOKUP)) {
-    if (new RegExp(`\\b${name}\\b`).test(lower)) return index;
+    if (new RegExp(`\\b${name}s?\\b`).test(lower)) return index;
+    if (new RegExp(`\\b${name}[a-z]{1,2}\\b`).test(lower)) return index;
   }
   return null;
 }
