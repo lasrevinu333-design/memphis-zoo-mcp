@@ -110,6 +110,7 @@ function genericConversationalFallback(text = "", threadContext = {}) {
   if (/alive|connected/.test(lower)) return "Yeah. I am here and connected enough to answer real system questions. Give me one.";
   if (/sparrow/.test(lower)) return "That depends. African or European?";
   if (/weather/.test(lower)) return `I should be able to answer weather for ${weatherLocation || DEFAULT_WEATHER_LOCATION}, but my general-answer side did not land it cleanly.`;
+  if (/recipe|ingredients|cook|bake|pumpkin pie|creme brulee/.test(lower)) return "That is a general recipe question, but my general-answer side did not answer cleanly. Try again after a redeploy, or ask with the dish name and I will route it to general answer mode first.";
   if (/hello|hey|hi/.test(lower)) return "Hey. What do you need?";
   return "I am here. Ask me something specific or just talk to me like a person.";
 }
