@@ -1113,7 +1113,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       const data = await executeTool("get_dashboard_summary", {});
       await saveThreadContext(runRpc, threadId, { last_intent: "dashboard_summary", last_service_date: relativeServiceDate, last_subject_type: "summary" });
       const attendanceOnly = /\b(attendance|guest|guests|visitor|visitors)\b/i.test(text);
-      return { text: attendanceOnly ? summarizeAttendance(data.attendance) : summarizeDashboard(data.snapshot, data.attention_locations, data.attendance), meta: { fallback: true, mode: attendanceOnly ? "local_attendance" : "local_dashboard" } };
+      return { text: attendanceOnly ? summarizeAttendance(data.attendance, text) : summarizeDashboard(data.snapshot, data.attention_locations, data.attendance), meta: { fallback: true, mode: attendanceOnly ? "local_attendance" : "local_dashboard" } };
     }
 
     const weatherLocation = inferWeatherLocation(text, threadContext);
