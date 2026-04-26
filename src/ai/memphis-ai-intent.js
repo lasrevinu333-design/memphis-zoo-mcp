@@ -49,7 +49,7 @@ const LOCATION_CODE_STOP_WORDS = new Set([
   "GITHUB",
 ]);
 
-const SYSTEM_INTENT_PATTERN = /\b(schedule|assigned|assignment|works|working|scheduled|staff|staffing|cover|coverage|candidate|backup|absence|absent|off|open segment|uncovered|unassigned|ticket|maintenance|dashboard|attendance|scan|owner|location|event|events|upcoming|coming up|employee|workload|load|area|group|restroom|aquarium|zambezi|teton|expo|pavilion|clean|cleans|cleaned)\b/i;
+const SYSTEM_INTENT_PATTERN = /\b(schedule|assigned|assignment|works|working|scheduled|staff|staffing|cover|coverage|candidate|backup|absence|absent|off|open segment|uncovered|unassigned|ticket|maintenance|dashboard|attendance|guests|guest|visitors|visitor|scan|owner|location|event|events|upcoming|coming up|employee|workload|load|area|group|restroom|aquarium|zambezi|teton|expo|pavilion|clean|cleans|cleaned)\b/i;
 
 function originalTokenLooksUppercaseCode(token) {
   return /[A-Z]/.test(token) && token === token.toUpperCase();
