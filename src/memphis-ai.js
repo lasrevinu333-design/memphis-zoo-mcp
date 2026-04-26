@@ -244,6 +244,27 @@ function summarizeDashboard(snapshot = {}, attention = [], attendance = null) {
   return `${summary}${focus}`.trim();
 }
 
+function formatAttendanceTimestamp(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString("en-US", { timeZone: "America/Chicago", hour: "numeric", minute: "2-digit", month: "short", day: "numeric" });
+}
+
+function summarizeAttendance(attendance = null) {
+  if (!attendance || attendance.attendance == null) return "I don't have a current attendance count available right now.";
+
+  const parts = [`Today's attendance so far is ${Number(attendance.attendance).toLocaleString()} guests`];
+  if (attendance.planned != null) parts.push(`planned attendance is ${Number(attendance.planned).toLocaleString()}`);
+  if (attendance.last_year != null) parts.push(`last year was ${Number(attendance.last_year).toLocaleString()}`);
+  if (attendance.yesterday != null) parts.push(`yesterday was ${Number(attendance.yesterday).toLocaleString()}`);
+  if (attendance.yesterday_plan != null) parts.push(`yesterday's plan was ${Number(attendance.yesterday_plan).toLocaleString()}`);
+
+  const updated = formatAttendanceTimestamp(attendance.updated_at || attendance.fetched_at);
+  const source = attendance.source ? ` Source: ${attendance.source}.` : "";
+  return `${parts.join(". ")}.${updated ? ` Last updated ${updated}.` : ""}${source}`;
+}
+
 function summarizeAbsenceCoverage(data = {}, employeeName = "") {
   const serviceDate = data.service_date || "the requested day";
   const absentPeople = Array.isArray(data.absent_employees) ? data.absent_employees : [];
