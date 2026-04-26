@@ -14,6 +14,10 @@ export async function fetchDailyAreaScheduleRows(runReadOnlySql, serviceDate) {
   return Array.isArray(rows) ? rows : [];
 }
 
+function wait(ms = 300) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export async function fetchDailyRosterRows(runReadOnlySql, serviceDate) {
   const rows = await runReadOnlySql(`select dwr.service_date, e.display_name as employee_name, dwr.shift_start, dwr.shift_end, dwr.active, dwr.source_type from public.daily_work_roster dwr join public.employees e on e.id = dwr.employee_id where dwr.service_date = '${esc(serviceDate)}'::date and dwr.active = true order by dwr.shift_start asc, e.display_name asc`);
   return Array.isArray(rows) ? rows : [];
