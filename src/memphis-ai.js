@@ -547,7 +547,7 @@ function weatherCodeToText(code) {
   return "mixed conditions";
 }
 
-async function tryGeminiConversation({ apiKey, userMessage, webEnabled, threadContext }) {
+async function tryGeminiConversation({ apiKey, userMessage, webEnabled, threadContext, recentMessages = [] }) {
   const generalKnowledge = isBroadGeneralQuestion(userMessage);
   const locationHint = isWeatherQuestion(userMessage) ? `The default weather location is ${DEFAULT_WEATHER_LOCATION}. If the user says here, local, or asks weather without another city, use ${DEFAULT_WEATHER_LOCATION}.` : "";
   const priorHint = threadContext?.last_subject_type === "weather" ? `Previous exchange was about weather in ${threadContext?.context_json?.weather_location || DEFAULT_WEATHER_LOCATION}.` : "";
