@@ -844,7 +844,8 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
 
     if (lower.includes("event")) {
       const areaRow = await resolveAreaRow(runReadOnlySql, relativeServiceDate, text, threadContext);
-      const data = await executeTool("get_upcoming_events", { days: 14, area: areaRow?.group_name || "" });
+      const eventArea = areaRow?.group_name === "Event Center" && !/\b(event center|event centre|ec)\b/i.test(text) ? "" : (areaRow?.group_name || "");
+      const data = await executeTool("get_upcoming_events", { days: 14, area: eventArea });
       await saveThreadContext(runRpc, threadId, { last_intent: "upcoming_events", last_group_name: areaRow?.group_name || null, last_service_date: relativeServiceDate, last_subject_type: "group" });
       return { text: summarizeEvents(data.events), meta: { fallback: true, mode: "local_events" } };
     }
