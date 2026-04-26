@@ -321,7 +321,7 @@ async function getAllAreaRows(runReadOnlySql, serviceDate) {
 function scoreAreaMatch(candidate, rawNeedle) {
   const needle = normalizeLoose(rawNeedle);
   if (!needle) return -1;
-  const candidates = [candidate.group_name, candidate.group_code].filter(Boolean).map(normalizeLoose);
+  const candidates = [candidate.group_name, candidate.group_code].concat(candidate.aliases || []).filter(Boolean).map(normalizeLoose);
   let best = -1;
   for (const value of candidates) {
     if (!value) continue;
