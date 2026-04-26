@@ -562,7 +562,9 @@ async function tryGeminiConversation({ apiKey, userMessage, webEnabled, threadCo
     priorHint,
     (webEnabled || generalKnowledge) ? "You may answer broader general questions as a normal Gemini model would." : "Stay focused on conversation and Memphis Zoo context.",
   ].filter(Boolean).join(" ");
-  const prompt = isWeatherQuestion(userMessage) || threadContext?.last_subject_type === "weather" ? augmentWeatherPrompt(userMessage, threadContext) : userMessage;
+  const recentContext = formatRecentThreadMessages(recentMessages);
+  const promptBase = isWeatherQuestion(userMessage) || threadContext?.last_subject_type === "weather" ? augmentWeatherPrompt(userMessage, threadContext) : userMessage;
+  const prompt = recentContext ? `${recentContext}\n\nCurrent user message: ${promptBase}` : promptBase;
   const response = await fetchWithTimeout(`${GEMINI_BASE_URL}/${encodeURIComponent(DEFAULT_MODEL)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
