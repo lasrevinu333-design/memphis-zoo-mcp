@@ -98,12 +98,13 @@ export function summarizeDailyAssignments(assignments = [], serviceDate = "") {
   return `${serviceDate} staffing: ${lines.join(". ")}.${suffix}`;
 }
 
-export async function generateDailyStaffScheduleReply({ runReadOnlySql, runRpc, serviceDate } = {}) {
+export async function generateDailyStaffScheduleReply({ runReadOnlySql, runRpc, serviceDate, queryText = "" } = {}) {
   await ensureDailySchedule(runRpc, serviceDate);
   const roster = await fetchDailyRosterRows(runReadOnlySql, serviceDate);
+  const opsRows = await fetchDailyOpsManagerRows(runReadOnlySql, serviceDate);
 
   return {
-    text: summarizeDailyRoster(roster, serviceDate),
+    text: summarizeDailyRoster(roster, serviceDate, opsRows, queryText),
     meta: {
       fallback: true,
       mode: "local_daily_staff_schedule",
