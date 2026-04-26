@@ -1070,7 +1070,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       return { text: summarizeAssignments(data.assignments, `I couldn't find schedule assignments for ${areaRow?.group_name || text} on ${data.service_date}.`), meta: { fallback: true, mode: "local_area_schedule" } };
     }
 
-    if (lower.includes("dashboard") || lower.includes("summary") || lower.includes("status") || lower.includes("metrics") || lower.includes("attendance")) {
+    if (lower.includes("dashboard") || lower.includes("summary") || lower.includes("status") || lower.includes("metrics") || lower.includes("attendance") || lower.includes("guest") || lower.includes("guests") || lower.includes("visitor") || lower.includes("visitors")) {
       const data = await executeTool("get_dashboard_summary", {});
       await saveThreadContext(runRpc, threadId, { last_intent: "dashboard_summary", last_service_date: relativeServiceDate, last_subject_type: "summary" });
       return { text: summarizeDashboard(data.snapshot, data.attention_locations, data.attendance), meta: { fallback: true, mode: "local_dashboard" } };
