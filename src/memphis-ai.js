@@ -1136,7 +1136,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     }
 
     try {
-      const text = await tryGeminiConversation({ apiKey, userMessage, webEnabled, threadContext });
+      const text = await tryGeminiConversation({ apiKey, userMessage, webEnabled, threadContext, recentMessages });
       if (text) {
         const subjectType = isWeatherQuestion(userMessage) ? "weather" : (isGeneralKnowledgeQuestion(userMessage) ? "general_knowledge" : "conversation");
         const weatherLocation = inferWeatherLocation(userMessage, threadContext);
