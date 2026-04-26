@@ -22,11 +22,23 @@ const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models
 const DEFAULT_MODEL = String(process.env.MEMPHIS_GEMINI_MODEL || process.env.GEMINI_MODEL || "gemini-2.5-flash").trim();
 const DEFAULT_SCAN_DEVICE_ID = "memphis-bot";
 const DEFAULT_WEATHER_LOCATION = "Memphis, Tennessee";
+const GEMINI_TIMEOUT_MS = Number.parseInt(String(process.env.MEMPHIS_GEMINI_TIMEOUT_MS || "12000"), 10);
+const GEMINI_MAX_OUTPUT_TOKENS = Number.parseInt(String(process.env.MEMPHIS_GEMINI_MAX_OUTPUT_TOKENS || "900"), 10);
 
 
 
 function getGeminiApiKey() {
   return String(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "").trim();
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = GEMINI_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), Math.max(1000, Number(timeoutMs) || 12000));
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function allowWebSearch({ deviceId = "", identityRole = "" }) {
@@ -52,6 +64,14 @@ function isWeatherQuestion(text = "") {
   return /\b(weather|forecast|temperature|rain|storm|sunny|cloudy|wind|humid|humidity)\b/i.test(String(text || ""));
 }
 
+function isRecipeQuestion(text = "") {
+  return /\b(recipe|ingredients|cook|cooking|bake|baking|homemade|pie|pretzel|pretzels|creme brulee|crème brûlée|cake|cookies|bread|sauce|soup)\b/i.test(String(text || ""));
+}
+
+function isBroadGeneralQuestion(text = "") {
+  return isGeneralKnowledgeQuestion(text) || /\b(tell me about|teach me|what causes|how do i|how do you|how to|why does|why do|what is|what are|who invented|history of)\b/i.test(String(text || ""));
+}
+
 function mentionsMemphisPlace(text = "") {
   return /\bmemphis\b/i.test(String(text || ""));
 }
@@ -72,7 +92,8 @@ function augmentWeatherPrompt(userMessage = "", threadContext = {}) {
 function isGeneralKnowledgeQuestion(text = "") {
   const lower = String(text || "").toLowerCase();
   if (isWeatherQuestion(lower)) return true;
-  if (/sparrow|capital of|who invented|how tall|what is the meaning|define |explain |why is the sky|how far|how many|recipe|ingredients|cook|bake|pumpkin pie|creme brulee/i.test(lower)) return true;
+  if (isRecipeQuestion(lower)) return true;
+  if (/sparrow|capital of|who invented|how tall|what is the meaning|define |definition of|explain |why is the sky|how far|how many|science of|history of|recipe|ingredients|cook|bake|pumpkin pie|creme brulee|pretzel|pretzels/i.test(lower)) return true;
   return false;
 }
 
@@ -110,7 +131,7 @@ function genericConversationalFallback(text = "", threadContext = {}) {
   if (/alive|connected/.test(lower)) return "Yeah. I am here and connected enough to answer real system questions. Give me one.";
   if (/sparrow/.test(lower)) return "That depends. African or European?";
   if (/weather/.test(lower)) return `I should be able to answer weather for ${weatherLocation || DEFAULT_WEATHER_LOCATION}, but my general-answer side did not land it cleanly.`;
-  if (/recipe|ingredients|cook|bake|pumpkin pie|creme brulee/.test(lower)) return "That is a general recipe question, but my general-answer side did not answer cleanly. Try again after a redeploy, or ask with the dish name and I will route it to general answer mode first.";
+  if (/recipe|ingredients|cook|bake|pumpkin pie|creme brulee|pretzel|pretzels/.test(lower)) return "That is a general recipe question. I tried the general-answer path and it did not return cleanly, so I am not going to invent details. Check the Gemini/API key and retry.";
   if (/hello|hey|hi/.test(lower)) return "Hey. What do you need?";
   return "I am here. Ask me something specific or just talk to me like a person.";
 }
@@ -312,9 +333,7 @@ function summarizeWeeklyAssignments(days = []) {
   return sections.join("\n");
 }
 
-async function getAllAreaRows(runReadOnlySql, serviceDate) {
-  const rows = await runReadOnlySql(`select distinct location_group_id, group_name, group_code from public.v_memphis_area_schedule where service_date = '${esc(serviceDate)}'::date order by group_name asc, group_code asc`);
-  if (false && Array.isArray(rows) && rows.length) return rows;
+async function getAllAreaRows(runReadOnlySql, _serviceDate = "") {
   const groupRows = await runReadOnlySql("select lg.id as location_group_id, lg.group_name, lg.group_code, coalesce(array_agg(a.alias_text order by a.alias_text) filter (where a.alias_text is not null), array[]::text[]) as aliases from public.location_groups lg left join public.location_group_aliases a on a.location_group_id = lg.id and a.active = true where lg.active = true group by lg.id, lg.group_name, lg.group_code order by lg.group_name asc, lg.group_code asc");
   return Array.isArray(groupRows) ? groupRows : [];
 }
@@ -440,25 +459,28 @@ function weatherCodeToText(code) {
 }
 
 async function tryGeminiConversation({ apiKey, userMessage, webEnabled, threadContext }) {
-  const locationHint = isWeatherQuestion(userMessage) ? `The default weather location is ${DEFAULT_WEATHER_LOCATION}. If the user says here, local, or weather without another city, use ${DEFAULT_WEATHER_LOCATION}.` : "";
+  const generalKnowledge = isBroadGeneralQuestion(userMessage);
+  const locationHint = isWeatherQuestion(userMessage) ? `The default weather location is ${DEFAULT_WEATHER_LOCATION}. If the user says here, local, or asks weather without another city, use ${DEFAULT_WEATHER_LOCATION}.` : "";
   const priorHint = threadContext?.last_subject_type === "weather" ? `Previous exchange was about weather in ${threadContext?.context_json?.weather_location || DEFAULT_WEATHER_LOCATION}.` : "";
   const systemInstruction = [
     "You are Memphis, a conversational assistant for Memphis Zoo operations.",
-    "Be human, natural, and useful.",
+    "Be human, natural, concise, and useful.",
     "For casual chat, greetings, follow-up questions, or broad reasoning, answer directly and conversationally.",
+    "If the question is general knowledge, food, cooking, a recipe, definitions, history, science, or practical advice, answer it directly instead of saying it is outside zoo operations.",
     "Do not drift into a canned feature list unless the user explicitly asks what you can do.",
+    "Do not claim access to internal Memphis Zoo records unless the local system tools supplied that information.",
     locationHint,
     priorHint,
-    webEnabled ? "You may answer broader general questions as a normal online Gemini model would." : "Stay focused on conversation and Memphis Zoo context.",
+    (webEnabled || generalKnowledge) ? "You may answer broader general questions as a normal Gemini model would." : "Stay focused on conversation and Memphis Zoo context.",
   ].filter(Boolean).join(" ");
   const prompt = isWeatherQuestion(userMessage) || threadContext?.last_subject_type === "weather" ? augmentWeatherPrompt(userMessage, threadContext) : userMessage;
-  const response = await fetch(`${GEMINI_BASE_URL}/${encodeURIComponent(DEFAULT_MODEL)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+  const response = await fetchWithTimeout(`${GEMINI_BASE_URL}/${encodeURIComponent(DEFAULT_MODEL)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: systemInstruction }] },
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.65 },
+      generationConfig: { temperature: generalKnowledge ? 0.55 : 0.65, maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS },
     }),
   });
   const payload = await response.json().catch(() => null);
@@ -843,7 +865,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       };
     }
 
-    if (lower.includes("event")) {
+    if (lower.includes("event") || lower.includes("upcoming") || lower.includes("coming up")) {
       const areaRow = await resolveAreaRow(runReadOnlySql, relativeServiceDate, text, threadContext);
       const eventArea = areaRow?.group_name === "Event Center" && !/\b(event center|event centre|ec)\b/i.test(text) ? "" : (areaRow?.group_name || "");
       const data = await executeTool("get_upcoming_events", { days: 14, area: eventArea });
@@ -1013,7 +1035,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
 
     try {
       const text = await tryGeminiConversation({ apiKey, userMessage, webEnabled, threadContext });
-      if (text && !/^i can help with /i.test(text.trim())) {
+      if (text) {
         const subjectType = isWeatherQuestion(userMessage) ? "weather" : (isGeneralKnowledgeQuestion(userMessage) ? "general_knowledge" : "conversation");
         const weatherLocation = inferWeatherLocation(userMessage, threadContext);
         await saveThreadContext(runRpc, threadId, { last_intent: "conversation", last_subject_type: subjectType, context_json: weatherLocation ? { weather_location: weatherLocation } : {} });
