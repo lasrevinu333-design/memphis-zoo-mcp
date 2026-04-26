@@ -313,7 +313,7 @@ function summarizeWeeklyAssignments(days = []) {
 
 async function getAllAreaRows(runReadOnlySql, serviceDate) {
   const rows = await runReadOnlySql(`select distinct location_group_id, group_name, group_code from public.v_memphis_area_schedule where service_date = '${esc(serviceDate)}'::date order by group_name asc, group_code asc`);
-  if (Array.isArray(rows) && rows.length) return rows;
+  if (false && Array.isArray(rows) && rows.length) return rows;
   const groupRows = await runReadOnlySql("select id as location_group_id, group_name, group_code from public.location_groups where active = true order by group_name asc, group_code asc");
   return Array.isArray(groupRows) ? groupRows : [];
 }
