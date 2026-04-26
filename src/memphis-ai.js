@@ -1087,6 +1087,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     const identity = await fetchDeviceIdentity(runReadOnlySql, deviceId);
     const webEnabled = allowWebSearch({ deviceId, identityRole: identity?.role || "" });
     const threadContext = await fetchThreadContext(runReadOnlySql, threadId);
+    const recentMessages = await fetchRecentThreadMessages(runReadOnlySql, threadId, 10);
 
     if (isOpsManagerSchedulePrompt(userMessage)) {
       const opsScheduleText = isNamedRegularOpsSchedulePrompt(userMessage)
