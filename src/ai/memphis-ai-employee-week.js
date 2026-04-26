@@ -14,7 +14,7 @@ function isEmployeeWeeklyScheduleQuestion(text = "") {
   const lower = normalizeLoose(text);
   if (!lower) return false;
 
-  const asksSchedule = /\b(weekly schedule|regular schedule|normal schedule|standing schedule|what days|which days|days does|days is|work week|weekly|every week)\b/.test(lower);
+  const asksSchedule = /\b(weekly schedule|regular schedule|normal schedule|standing schedule|what days|which days|days does|days is|work week|weekly|every week|when does|when do|work next|works next|next work|next shift)\b/.test(lower);
   const mentionsEmployeeSchedule = /\b(schedule|work|works|working|shift|shifts)\b/.test(lower);
 
   return asksSchedule || (mentionsEmployeeSchedule && /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|week)\b/.test(lower));
