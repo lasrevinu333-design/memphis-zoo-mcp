@@ -1090,7 +1090,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       }
     }
 
-    if (/\b(who works|who is working|who's working|which custodians work|which ops managers work|staff|staffing|custodian|custodians|scheduled)\b/i.test(text)) {
+    if (/\b(who works|who work|who is working|who's working|who all works|which custodians work|which ops managers work|would is working|staff|staffing|custodian|custodians|scheduled)\b/i.test(text)) {
       const daily = await generateDailyStaffScheduleReply({ runReadOnlySql, runRpc, serviceDate: relativeServiceDate, queryText: text });
       await saveThreadContext(runRpc, threadId, { last_intent: "daily_staff_schedule", last_service_date: relativeServiceDate, last_subject_type: "summary" });
       return daily;
