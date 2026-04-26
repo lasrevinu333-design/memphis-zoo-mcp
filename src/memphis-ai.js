@@ -222,8 +222,15 @@ function summarizeAssignments(assignments = [], emptyText) {
   }).join(" ");
 }
 
-function summarizeEmployeeAssignments(assignments = [], employeeName, serviceDate) {
-  if (!assignments.length) return `I couldn't find schedule assignments for ${employeeName} on ${serviceDate}.`;
+function summarizeEmployeeAssignments(assignments = [], employeeName, serviceDate, staticShift = null) {
+  if (!assignments.length) {
+    if (staticShift?.employee_name) {
+      const start = String(staticShift.shift_start || "—").slice(0, 5);
+      const end = String(staticShift.shift_end || "—").slice(0, 5);
+      return `${staticShift.employee_name} is scheduled to work on ${serviceDate} from ${start} to ${end}, but area assignments have not been generated yet.`;
+    }
+    return `I couldn't find schedule assignments for ${employeeName} on ${serviceDate}.`;
+  }
   return `${employeeName} on ${serviceDate}: ` + assignments.slice(0, 12).map((row) => `${row.group_name || row.group_code || "Unknown area"} from ${row.coverage_start || "—"} to ${row.coverage_end || "—"}`).join("; ") + ".";
 }
 
