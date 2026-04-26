@@ -1094,7 +1094,8 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     if (lower.includes("dashboard") || lower.includes("summary") || lower.includes("status") || lower.includes("metrics") || lower.includes("attendance") || lower.includes("guest") || lower.includes("guests") || lower.includes("visitor") || lower.includes("visitors")) {
       const data = await executeTool("get_dashboard_summary", {});
       await saveThreadContext(runRpc, threadId, { last_intent: "dashboard_summary", last_service_date: relativeServiceDate, last_subject_type: "summary" });
-      return { text: summarizeDashboard(data.snapshot, data.attention_locations, data.attendance), meta: { fallback: true, mode: "local_dashboard" } };
+      const attendanceOnly = /\b(attendance|guest|guests|visitor|visitors)\b/i.test(text);
+      return { text: attendanceOnly ? summarizeAttendance(data.attendance) : summarizeDashboard(data.snapshot, data.attention_locations, data.attendance), meta: { fallback: true, mode: attendanceOnly ? "local_attendance" : "local_dashboard" } };
     }
 
     const weatherLocation = inferWeatherLocation(text, threadContext);
