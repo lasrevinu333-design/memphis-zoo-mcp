@@ -71,5 +71,10 @@ export async function answerInternalContactQuestion(runReadOnlySql, text = "") {
   const contacts = Array.isArray(rows) ? rows : [];
   if (!contacts.length) return null;
 
+  if (isAmbiguousFirstNameOnly(text, "Eric")) {
+    const erics = contacts.filter((contact) => normalizeLoose(contact.display_name).includes("eric"));
+    if (erics.length > 1) return summarizeAmbiguousContacts(erics, "Eric");
+  }
+
   return contacts.map(summarizeContact).join(" ");
 }
