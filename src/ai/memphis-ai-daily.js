@@ -104,7 +104,11 @@ export function summarizeDailyAssignments(assignments = [], serviceDate = "") {
 
 export async function generateDailyStaffScheduleReply({ runReadOnlySql, runRpc, serviceDate, queryText = "" } = {}) {
   await ensureDailySchedule(runRpc, serviceDate);
-  const roster = await fetchDailyRosterRows(runReadOnlySql, serviceDate);
+  let roster = await fetchDailyRosterRows(runReadOnlySql, serviceDate);
+  if (!roster.length) {
+    await wait(450);
+    roster = await fetchDailyRosterRows(runReadOnlySql, serviceDate);
+  }
   const opsRows = await fetchDailyOpsManagerRows(runReadOnlySql, serviceDate);
 
   return {
