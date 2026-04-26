@@ -111,15 +111,21 @@ async function listLocationGroups(runReadOnlySql) {
       lg.group_code,
       lg.group_name,
       coalesce(
-        array_agg(l.location_name order by l.sort_order nulls last, l.location_name)
-          filter (where l.id is not null),
+        array_agg(distinct item.name order by item.name)
+          filter (where item.name is not null),
         array[]::text[]
       ) as included_locations
     from public.location_groups lg
-    left join public.location_group_memberships lgm
-      on lgm.location_group_id = lg.id and lgm.active = true
-    left join public.locations l
-      on l.id = lgm.location_id and l.active = true
+    left join lateral (
+      select l.location_name as name
+      from public.location_group_memberships lgm
+      join public.locations l on l.id = lgm.location_id and l.active = true
+      where lgm.location_group_id = lg.id and lgm.active = true
+      union
+      select alias_text as name
+      from public.location_group_aliases a
+      where a.location_group_id = lg.id and a.active = true
+    ) item on true
     where lg.active = true
     group by lg.id, lg.group_code, lg.group_name
     order by lg.group_name asc
