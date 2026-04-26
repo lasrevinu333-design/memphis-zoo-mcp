@@ -20,7 +20,13 @@ function wait(ms = 300) {
 
 export async function fetchDailyRosterRows(runReadOnlySql, serviceDate) {
   const rows = await runReadOnlySql(`select dwr.service_date, e.display_name as employee_name, dwr.shift_start, dwr.shift_end, dwr.active, dwr.source_type from public.daily_work_roster dwr join public.employees e on e.id = dwr.employee_id where dwr.service_date = '${esc(serviceDate)}'::date and dwr.active = true order by dwr.shift_start asc, e.display_name asc`);
-  return Array.isArray(rows) ? rows : [];
+  const rosterRows = Array.isArray(rows) ? rows : [];
+  if (rosterRows.length) return rosterRows;
+
+  const day = getDayOfWeekFromIsoDate(serviceDate);
+  if (day == null) return [];
+  const templateRows = await runReadOnlySql(`select '${esc(serviceDate)}'::date as service_date, e.display_name as employee_name, est.shift_start, est.shift_end, est.active, 'shift_template' as source_type from public.employee_shift_templates est join public.employees e on e.id = est.employee_id where est.active = true and e.active = true and est.day_of_week = ${Number(day)} order by est.shift_start asc, e.display_name asc`);
+  return Array.isArray(templateRows) ? templateRows : [];
 }
 
 function getDayOfWeekFromIsoDate(serviceDate = "") {
