@@ -72,7 +72,7 @@ function augmentWeatherPrompt(userMessage = "", threadContext = {}) {
 function isGeneralKnowledgeQuestion(text = "") {
   const lower = String(text || "").toLowerCase();
   if (isWeatherQuestion(lower)) return true;
-  if (/sparrow|capital of|who invented|how tall|what is the meaning|define |explain |why is the sky|how far|how many/i.test(lower)) return true;
+  if (/sparrow|capital of|who invented|how tall|what is the meaning|define |explain |why is the sky|how far|how many|recipe|ingredients|cook|bake|pumpkin pie|creme brulee/i.test(lower)) return true;
   return false;
 }
 
