@@ -1125,8 +1125,9 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       const employeeName = await guessEmployeeName(runRpc, text) || (shouldUseEmployeeContext(text) ? threadContext?.last_employee_name : "") || "";
       if (employeeName) {
         const data = await executeTool("get_employee_schedule", { employee_name: employeeName, service_date: relativeServiceDate });
+        const staticShift = data.assignments?.length ? null : await fetchStaticEmployeeShift(runReadOnlySql, employeeName, data.service_date);
         await saveThreadContext(runRpc, threadId, { last_intent: "employee_schedule", last_employee_name: employeeName, last_service_date: relativeServiceDate, last_subject_type: "employee" });
-        return { text: summarizeEmployeeAssignments(data.assignments, employeeName, data.service_date), meta: { fallback: true, mode: "local_employee_schedule" } };
+        return { text: summarizeEmployeeAssignments(data.assignments, employeeName, data.service_date, staticShift), meta: { fallback: true, mode: staticShift && !data.assignments?.length ? "local_employee_static_shift_no_assignments" : "local_employee_schedule" } };
       }
       const areaRow = await resolveAreaRow(runReadOnlySql, relativeServiceDate, text, threadContext);
       const data = await executeTool("get_area_schedule", { area: areaRow?.group_name || text, service_date: relativeServiceDate });
