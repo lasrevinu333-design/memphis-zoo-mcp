@@ -16,7 +16,7 @@ function isOpsScheduleQuestion(text = "") {
   const lower = normalizeLoose(text);
   if (!lower) return false;
 
-  const mentionsOps = /\b(ops|operations|manager|boss|director|custodial manager|horticulture manager|water quality manager)\b/.test(lower)
+  const mentionsOps = /\b(ops|operations|manager|managers|boss|director|custodial manager|horticulture manager|water quality manager)\b/.test(lower)
     || /\b(eric|operle|brandy|gull|haley|lejman|jennifer|sheffield)\b/.test(lower);
   const asksSchedule = /\b(schedule|work|works|working|shift|shifts|cover|covers|coverage|who is|who's|who has|today|tomorrow|sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/.test(lower);
 
