@@ -526,6 +526,24 @@ async function fetchDeviceIdentity(runReadOnlySql, deviceId) {
   return Array.isArray(rows) && rows.length ? rows[0] : null;
 }
 
+async function fetchStaticEmployeeShift(runReadOnlySql, employeeName = "", serviceDate = "") {
+  const rawName = String(employeeName || "").trim();
+  const rawDate = String(serviceDate || "").trim();
+  if (!rawName || !rawDate) return null;
+  const rows = await runReadOnlySql(`
+    select e.display_name as employee_name, est.shift_start, est.shift_end, est.notes
+    from public.employee_shift_templates est
+    join public.employees e on e.id = est.employee_id
+    where est.active = true
+      and e.active = true
+      and e.display_name ilike ${sqlLikeLiteral(rawName)}
+      and est.day_of_week = extract(dow from '${esc(rawDate)}'::date)::int
+    order by length(e.display_name), est.shift_start
+    limit 1
+  `);
+  return Array.isArray(rows) && rows.length ? rows[0] : null;
+}
+
 async function guessEmployeeName(runRpc, text) {
   const raw = String(text || "").trim();
   if (!raw) return "";
