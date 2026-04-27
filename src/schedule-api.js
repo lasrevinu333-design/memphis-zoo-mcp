@@ -89,6 +89,18 @@ export function createScheduleRouter({
     return Array.isArray(rows) && rows.length ? rows[0] : null;
   }
 
+  function toCsvValue(value) {
+    if (value == null) return "";
+    const text = String(value);
+    return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  }
+
+  function rowsToCsv(rows = [], columns = []) {
+    const header = columns.map((column) => toCsvValue(column.label)).join(",");
+    const body = rows.map((row) => columns.map((column) => toCsvValue(row[column.key])).join(","));
+    return [header, ...body].join("\n") + "\n";
+  }
+
   function groupScheduleRows(rows) {
     const groups = [];
     const byId = new Map();
