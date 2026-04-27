@@ -269,6 +269,57 @@ export function createScheduleRouter({
     }
   });
 
+  router.get("/coverage-templates/export.csv", async (_req, res) => {
+    try {
+      const rows = await runReadOnlySql(`
+        select
+          ct.id as coverage_template_id,
+          ct.day_of_week,
+          case ct.day_of_week
+            when 0 then 'Sunday'
+            when 1 then 'Monday'
+            when 2 then 'Tuesday'
+            when 3 then 'Wednesday'
+            when 4 then 'Thursday'
+            when 5 then 'Friday'
+            when 6 then 'Saturday'
+          end as weekday,
+          lg.group_name,
+          lg.group_code,
+          ct.segment_number,
+          coalesce(e.display_name, '') as assigned_employee,
+          ct.owner_type,
+          to_char(ct.coverage_start, 'HH24:MI:SS') as coverage_start,
+          to_char(ct.coverage_end, 'HH24:MI:SS') as coverage_end,
+          ct.active,
+          coalesce(ct.notes, '') as notes
+        from public.coverage_templates ct
+        join public.location_groups lg on lg.id = ct.location_group_id
+        left join public.employees e on e.id = ct.assigned_employee_id
+        order by ct.day_of_week, lg.group_name, ct.segment_number, ct.coverage_start
+      `);
+      const csv = rowsToCsv(rows || [], [
+        { key: "coverage_template_id", label: "coverage_template_id" },
+        { key: "day_of_week", label: "day_of_week" },
+        { key: "weekday", label: "weekday" },
+        { key: "group_name", label: "group_name" },
+        { key: "group_code", label: "group_code" },
+        { key: "segment_number", label: "segment_number" },
+        { key: "assigned_employee", label: "assigned_employee" },
+        { key: "owner_type", label: "owner_type" },
+        { key: "coverage_start", label: "coverage_start" },
+        { key: "coverage_end", label: "coverage_end" },
+        { key: "active", label: "active" },
+        { key: "notes", label: "notes" },
+      ]);
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", "attachment; filename=coverage-templates.csv");
+      res.status(200).send(csv);
+    } catch (error) {
+      fail(res, error, "Coverage template export failed");
+    }
+  });
+
   router.get("/locations/workload-settings", async (_req, res) => {
     try {
       const rows = await runReadOnlySql(`select * from public.sch_list_location_workload_settings()`);
