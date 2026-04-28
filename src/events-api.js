@@ -6,6 +6,8 @@ const EVENTS_CONTRACT_VERSION = "events.v1";
 const DAY_BEFORE_NOTIFICATION_TIME = "08:00:00";
 const EVENT_MAINTENANCE_COOLDOWN_MS = 20 * 1000;
 const MAX_NOTIFICATIONS_PER_RUN = 50;
+const MAX_SCAN_ALERTS_PER_RUN = 50;
+const SCAN_ALERT_COOLDOWN_MINUTES = 30;
 
 function fail(res, error, fallback = "Events request failed", statusCode = 400) {
   res.status(statusCode).json({ ok: false, error: error?.message || fallback });
@@ -345,6 +347,24 @@ async function getPendingNotifications(runReadOnlySql) {
   return Array.isArray(rows) ? rows : [];
 }
 
+async function queueDueScanAlerts(runRpc) {
+  if (typeof runRpc !== "function") {
+    return { ok: true, skipped: true, reason: "runRpc_missing" };
+  }
+
+  try {
+    const result = await runRpc("sch_queue_due_scan_alerts", {
+      p_limit: MAX_SCAN_ALERTS_PER_RUN,
+      p_dry_run: false,
+      p_cooldown_minutes: SCAN_ALERT_COOLDOWN_MINUTES,
+    });
+    return result || { ok: true, result_count: 0 };
+  } catch (error) {
+    console.error("scan alert queue failed:", error);
+    return { ok: false, error: error?.message || "Scan alert queue failed" };
+  }
+}
+
 export function createEventMaintenanceController({ runReadOnlySql, runWriteSql, runRpc }) {
   let lastRunAt = 0;
   let running = false;
@@ -376,7 +396,8 @@ export function createEventMaintenanceController({ runReadOnlySql, runWriteSql, 
           }
         }
       }
-      return { ok: true, reason, processed: pending.length };
+      const scanAlerts = await queueDueScanAlerts(runRpc);
+      return { ok: true, reason, processed: pending.length, scan_alerts: scanAlerts };
     } catch (error) {
       console.error("events maintenance failed:", error);
       return { ok: false, error: error?.message || "Events maintenance failed" };
