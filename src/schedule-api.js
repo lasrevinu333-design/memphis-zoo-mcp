@@ -206,6 +206,37 @@ export function createScheduleRouter({
     }
   });
 
+  router.get("/my-day-summary", async (req, res) => {
+    try {
+      const deviceId = String(req.query.device_id || req.query.device || "").trim();
+      if (!deviceId) throw new Error("device_id is required.");
+      const serviceDate = requireDate(req.query.service_date || req.query.date || (await getServiceDate()));
+      const assignment = await getAssignedEmployeeForDevice(deviceId);
+      if (!assignment || !assignment.device_active) {
+        res.status(404).json({ ok: false, error: "Active device assignment not found." });
+        return;
+      }
+      if (!assignment.assigned_employee_id || !assignment.employee_active) {
+        res.status(404).json({ ok: false, error: "This device is not assigned to an active employee." });
+        return;
+      }
+      const rows = await runReadOnlySql(`
+        select public.sch_employee_my_schedule_summary(
+          '${esc(serviceDate)}'::date,
+          '${esc(assignment.assigned_employee_id)}'::uuid
+        ) as data
+      `);
+      const data = Array.isArray(rows) && rows.length ? rows[0].data : null;
+      res.status(200).json({
+        ok: true,
+        data,
+        meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion },
+      });
+    } catch (error) {
+      fail(res, error, "Personal schedule summary failed");
+    }
+  });
+
   router.get("/settings/close-time", async (req, res) => {
     try {
       const serviceDate = requireDate(req.query.service_date || req.query.date || (await getServiceDate()));
