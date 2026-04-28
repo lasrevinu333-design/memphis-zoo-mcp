@@ -371,6 +371,38 @@ export function createScheduleRouter({
     }
   });
 
+  router.get("/my-schedule", async (req, res) => {
+    try {
+      const serviceDate = requireDate(req.query.service_date || req.query.date || (await getServiceDate()));
+      const atSql = optionalTimestampLiteral(req.query.as_of || req.query.at);
+      const { employeeId } = await resolveEmployeeIdFromRequest(req);
+      const rows = await runReadOnlySql(`
+        select public.sch_employee_my_schedule_page(
+          '${esc(serviceDate)}'::date,
+          '${esc(employeeId)}'::uuid,
+          ${atSql}
+        ) as data
+      `);
+      const data = Array.isArray(rows) && rows.length ? rows[0].data : null;
+      if (!data?.ok) {
+        res.status(404).send(renderMyScheduleHtml(data || { employee: { display_name: "My Schedule" }, items: [], notice: "Schedule not found." }));
+        return;
+      }
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.status(200).send(renderMyScheduleHtml(data));
+    } catch (error) {
+      res.status(400).send(renderMyScheduleHtml({
+        employee: { display_name: "My Schedule" },
+        shift: null,
+        phase: "error",
+        as_of_time: "",
+        service_date: "",
+        notice: error?.message || "Schedule preview failed.",
+        items: [],
+      }));
+    }
+  });
+
   router.get("/settings/close-time", async (req, res) => {
     try {
       const serviceDate = requireDate(req.query.service_date || req.query.date || (await getServiceDate()));
