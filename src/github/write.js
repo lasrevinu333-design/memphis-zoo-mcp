@@ -187,6 +187,149 @@ export async function updateFile({
   };
 }
 
+function countOccurrences(text, find) {
+  if (!find) return 0;
+  return String(text).split(String(find)).length - 1;
+}
+
+function applyTextPatch(source, patch, index) {
+  const find = String(patch?.find ?? "");
+  const replace = String(patch?.replace ?? "");
+  const occurrence = patch?.occurrence || "first";
+  const expectedMatches = patch?.expected_matches ?? patch?.expectedMatches;
+
+  if (!find) throw new Error(`Patch ${index + 1}: find text is required.`);
+  if (!["first", "all"].includes(occurrence)) {
+    throw new Error(`Patch ${index + 1}: occurrence must be "first" or "all".`);
+  }
+
+  const matches = countOccurrences(source, find);
+  if (matches === 0) throw new Error(`Patch ${index + 1}: find text was not found.`);
+  if (expectedMatches != null && Number(expectedMatches) !== matches) {
+    throw new Error(`Patch ${index + 1}: expected ${expectedMatches} match(es), found ${matches}.`);
+  }
+
+  const nextText = occurrence === "all"
+    ? source.split(find).join(replace)
+    : source.replace(find, replace);
+
+  return {
+    nextText,
+    metadata: {
+      index: index + 1,
+      occurrence,
+      matches,
+      applied_matches: occurrence === "all" ? matches : 1,
+    },
+  };
+}
+
+export async function replaceManyInFile({
+  github,
+  repo,
+  path,
+  replacements,
+  commitMessage,
+  branch,
+  expectedSha,
+  dryRun = true,
+} = {}) {
+  const target = resolveGithubTarget({ github, repo, branch });
+  const resolvedPath = normalizeRepoPath(path, { requireFilePath: true });
+  const targetBranch = target.branch;
+
+  if (!commitMessage) throw new Error("commitMessage is required.");
+  if (!expectedSha) throw new Error("expectedSha is required for replaceManyInFile.");
+  if (!Array.isArray(replacements) || replacements.length === 0) {
+    throw new Error("replacements must be a non-empty array.");
+  }
+
+  const existing = await getContentOrNull({
+    github,
+    repo: target.repo,
+    path: resolvedPath,
+    ref: targetBranch,
+  });
+
+  assertFileContent(existing, resolvedPath);
+
+  if (existing.sha !== expectedSha) {
+    throw new Error(`SHA mismatch for ${resolvedPath}. Expected ${expectedSha}, current ${existing.sha}.`);
+  }
+
+  const oldContent = decodeContent(existing.content).toString("utf8");
+  let nextText = oldContent;
+  const applied = [];
+
+  for (let index = 0; index < replacements.length; index += 1) {
+    const result = applyTextPatch(nextText, replacements[index], index);
+    nextText = result.nextText;
+    applied.push(result.metadata);
+  }
+
+  const preview = previewFullReplacement({
+    oldText: oldContent,
+    newText: nextText,
+    path: resolvedPath,
+  });
+
+  const responsePreview = { ...preview, newText: undefined };
+
+  if (!preview.changed) {
+    return {
+      ok: true,
+      message: "No update needed. Content is unchanged.",
+      repo: `${target.owner}/${target.repo}`,
+      branch: targetBranch,
+      path: resolvedPath,
+      sha: existing.sha,
+      file_url: existing.html_url,
+      applied,
+      preview: responsePreview,
+    };
+  }
+
+  if (dryRun) {
+    return {
+      ok: true,
+      dry_run: true,
+      action: "would_replace_many",
+      repo: `${target.owner}/${target.repo}`,
+      branch: targetBranch,
+      path: resolvedPath,
+      current_sha: existing.sha,
+      commit_message: commitMessage,
+      applied,
+      preview: responsePreview,
+    };
+  }
+
+  const response = await github.octokit.rest.repos.createOrUpdateFileContents({
+    owner: target.owner,
+    repo: target.repo,
+    path: resolvedPath,
+    message: commitMessage,
+    content: encodeContent(nextText),
+    sha: existing.sha,
+    branch: targetBranch,
+  });
+
+  return {
+    ok: true,
+    message: "Multiple text replacements applied.",
+    action: "replace_many",
+    repo: `${target.owner}/${target.repo}`,
+    branch: targetBranch,
+    path: resolvedPath,
+    previous_sha: existing.sha,
+    new_sha: response.data.content?.sha || null,
+    commit_url: response.data.commit?.html_url || null,
+    file_url: response.data.content?.html_url || null,
+    applied,
+    preview: responsePreview,
+  };
+}
+
 export async function replaceTextInFile({
   github,
   repo,
