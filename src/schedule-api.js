@@ -134,6 +134,108 @@ export function createScheduleRouter({
     return groups;
   }
 
+  function htmlEscape(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  async function resolveEmployeeIdFromRequest(req) {
+    const deviceId = String(req.query.device_id || req.query.device || "").trim();
+    const employeeId = String(req.query.employee_id || "").trim();
+    const employeeName = String(req.query.employee_name || req.query.name || "").trim();
+    const employeeCode = String(req.query.employee_code || req.query.code || "").trim();
+
+    if (deviceId) {
+      const assignment = await getAssignedEmployeeForDevice(deviceId);
+      if (!assignment || !assignment.device_active) throw new Error("Active device assignment not found.");
+      if (!assignment.assigned_employee_id || !assignment.employee_active) {
+        throw new Error("This device is not assigned to an active employee.");
+      }
+      return { employeeId: assignment.assigned_employee_id, assignment };
+    }
+
+    if (employeeId) return { employeeId, assignment: null };
+
+    if (!employeeName && !employeeCode) {
+      throw new Error("device_id, employee_id, employee_name, or employee_code is required.");
+    }
+
+    const predicate = employeeCode
+      ? `employee_code ilike '${esc(employeeCode)}'`
+      : `display_name ilike '${esc(employeeName)}'`;
+    const employeeRows = await runReadOnlySql(`
+      select id as employee_id
+      from public.employees
+      where active = true and ${predicate}
+      order by display_name
+      limit 1
+    `);
+    if (!Array.isArray(employeeRows) || !employeeRows.length) throw new Error("Active employee not found.");
+    return { employeeId: employeeRows[0].employee_id, assignment: null };
+  }
+
+  function renderMyScheduleHtml(data) {
+    const employee = data?.employee || {};
+    const shift = data?.shift || {};
+    const items = Array.isArray(data?.items) ? data.items : [];
+    const restroomItems = items.filter((item) => item?.is_public_restroom);
+    const otherItems = items.filter((item) => !item?.is_public_restroom);
+    const renderItems = (list) => list.length
+      ? list.map((item) => `<li>${htmlEscape(item.name)}</li>`).join("")
+      : `<li class="muted">None listed</li>`;
+
+    return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>My Schedule</title>
+<style>
+  :root { --teal:#0f4d57; --teal2:#0b3b43; --mint:#e8f4ef; --line:#cfe1db; --text:#173238; --muted:#63787d; --warn:#fff3cd; --warnline:#f0d98a; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, sans-serif; background:#eef5f3; color:var(--text); }
+  .top { background:linear-gradient(135deg,var(--teal),var(--teal2)); color:white; padding:22px 18px 26px; border-bottom-left-radius:24px; border-bottom-right-radius:24px; box-shadow:0 4px 16px rgba(0,0,0,.18); }
+  .eyebrow { font-size:13px; opacity:.84; letter-spacing:.03em; text-transform:uppercase; }
+  h1 { margin:6px 0 3px; font-size:30px; line-height:1.08; }
+  .shift { font-size:17px; opacity:.95; }
+  .wrap { max-width:720px; margin:0 auto; padding:16px; }
+  .notice { background:var(--warn); border:1px solid var(--warnline); border-radius:16px; padding:12px 14px; margin-bottom:14px; font-weight:650; }
+  .card { background:white; border:1px solid var(--line); border-radius:20px; padding:16px; margin:14px 0; box-shadow:0 2px 10px rgba(20,60,70,.07); }
+  .card h2 { margin:0 0 10px; font-size:20px; color:var(--teal); }
+  ul { list-style:none; padding:0; margin:0; display:grid; gap:8px; }
+  li { padding:11px 12px; background:#f8fbfa; border:1px solid #e1ece8; border-radius:13px; font-weight:620; }
+  li.muted { color:var(--muted); font-weight:500; }
+  .meta { margin-top:14px; color:var(--muted); font-size:13px; text-align:center; }
+  .pill { display:inline-block; padding:5px 9px; border-radius:999px; background:rgba(255,255,255,.16); font-size:13px; margin-top:8px; }
+</style>
+</head>
+<body>
+  <header class="top">
+    <div class="eyebrow">Custodial Scheduler</div>
+    <h1>${htmlEscape(employee.display_name || "My Schedule")}</h1>
+    <div class="shift">${htmlEscape(shift.start || "")} - ${htmlEscape(shift.end || "")}</div>
+    <div class="pill">${htmlEscape(data?.phase || "current")} • ${htmlEscape(data?.as_of_time || "")}</div>
+  </header>
+  <main class="wrap">
+    ${data?.notice ? `<div class="notice">${htmlEscape(data.notice)}</div>` : ""}
+    <section class="card">
+      <h2>Public Restrooms</h2>
+      <ul>${renderItems(restroomItems)}</ul>
+    </section>
+    <section class="card">
+      <h2>Other Assigned Areas</h2>
+      <ul>${renderItems(otherItems)}</ul>
+    </section>
+    <div class="meta">${htmlEscape(data?.service_date || "")} • Employee code: ${htmlEscape(employee.employee_code || "")}</div>
+  </main>
+</body>
+</html>`;
+  }
+
   router.get("/health", (_req, res) => {
     res.status(200).json(buildHealthPayload("schedule", { contract_version: contractVersion }));
   });
