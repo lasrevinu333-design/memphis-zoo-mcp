@@ -209,27 +209,59 @@ export function createScheduleRouter({
   router.get("/my-day-summary", async (req, res) => {
     try {
       const deviceId = String(req.query.device_id || req.query.device || "").trim();
-      if (!deviceId) throw new Error("device_id is required.");
+      const employeeId = String(req.query.employee_id || "").trim();
+      const employeeName = String(req.query.employee_name || req.query.name || "").trim();
+      if (!deviceId && !employeeId && !employeeName) {
+        throw new Error("device_id, employee_id, or employee_name is required.");
+      }
+
       const serviceDate = requireDate(req.query.service_date || req.query.date || (await getServiceDate()));
-      const assignment = await getAssignedEmployeeForDevice(deviceId);
-      if (!assignment || !assignment.device_active) {
-        res.status(404).json({ ok: false, error: "Active device assignment not found." });
-        return;
+      const atSql = optionalTimestampLiteral(req.query.as_of || req.query.at);
+      let resolvedEmployeeId = employeeId;
+      let assignment = null;
+
+      if (deviceId) {
+        assignment = await getAssignedEmployeeForDevice(deviceId);
+        if (!assignment || !assignment.device_active) {
+          res.status(404).json({ ok: false, error: "Active device assignment not found." });
+          return;
+        }
+        if (!assignment.assigned_employee_id || !assignment.employee_active) {
+          res.status(404).json({ ok: false, error: "This device is not assigned to an active employee." });
+          return;
+        }
+        resolvedEmployeeId = assignment.assigned_employee_id;
+      } else if (employeeName) {
+        const employeeRows = await runReadOnlySql(`
+          select id as employee_id
+          from public.employees
+          where active = true
+            and display_name ilike '${esc(employeeName)}'
+          order by display_name
+          limit 1
+        `);
+        if (!Array.isArray(employeeRows) || !employeeRows.length) {
+          res.status(404).json({ ok: false, error: "Active employee not found." });
+          return;
+        }
+        resolvedEmployeeId = employeeRows[0].employee_id;
       }
-      if (!assignment.assigned_employee_id || !assignment.employee_active) {
-        res.status(404).json({ ok: false, error: "This device is not assigned to an active employee." });
-        return;
-      }
+
       const rows = await runReadOnlySql(`
-        select public.sch_employee_my_schedule_summary(
+        select public.sch_employee_my_schedule_page(
           '${esc(serviceDate)}'::date,
-          '${esc(assignment.assigned_employee_id)}'::uuid
+          '${esc(resolvedEmployeeId)}'::uuid,
+          ${atSql}
         ) as data
       `);
       const data = Array.isArray(rows) && rows.length ? rows[0].data : null;
       res.status(200).json({
         ok: true,
-        data,
+        data: {
+          ...(data || {}),
+          device_id: assignment?.device_id || deviceId || null,
+          device_name: assignment?.device_name || null,
+        },
         meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion },
       });
     } catch (error) {
