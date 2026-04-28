@@ -127,6 +127,7 @@ export function createScheduleRouter({
         coverage_end: row.coverage_end,
         status: row.status,
         load_points: row.load_points,
+        coverage_purpose: row.coverage_purpose || "area_owner",
         notes: row.notes,
       });
     }
@@ -141,7 +142,7 @@ export function createScheduleRouter({
     try {
       const serviceDate = await getServiceDate();
       if (!serviceDate) throw new Error("Could not resolve service date.");
-      const rows = await runReadOnlySql(`select * from public.sch_get_daily_schedule('${esc(serviceDate)}'::date)`);
+      const rows = await runReadOnlySql(`select * from public.sch_get_daily_schedule_with_purpose('${esc(serviceDate)}'::date)`);
       res.status(200).json({
         ok: true,
         data: { service_date: serviceDate, groups: groupScheduleRows(rows) },
@@ -155,7 +156,7 @@ export function createScheduleRouter({
   router.get("/day", async (req, res) => {
     try {
       const serviceDate = requireDate(req.query.service_date || req.query.date);
-      const rows = await runReadOnlySql(`select * from public.sch_get_daily_schedule('${esc(serviceDate)}'::date)`);
+      const rows = await runReadOnlySql(`select * from public.sch_get_daily_schedule_with_purpose('${esc(serviceDate)}'::date)`);
       res.status(200).json({
         ok: true,
         data: { service_date: serviceDate, groups: groupScheduleRows(rows) },
@@ -182,7 +183,7 @@ export function createScheduleRouter({
       }
       const rows = await runReadOnlySql(`
         select *
-        from public.sch_get_daily_schedule('${esc(serviceDate)}'::date)
+        from public.sch_get_daily_schedule_with_purpose('${esc(serviceDate)}'::date)
         where assigned_employee_id = '${esc(assignment.assigned_employee_id)}'::uuid
         order by group_name, segment_number
       `);
@@ -289,6 +290,7 @@ export function createScheduleRouter({
           ct.segment_number,
           coalesce(e.display_name, '') as assigned_employee,
           ct.owner_type,
+          ct.coverage_purpose,
           to_char(ct.coverage_start, 'HH24:MI:SS') as coverage_start,
           to_char(ct.coverage_end, 'HH24:MI:SS') as coverage_end,
           ct.active,
@@ -307,6 +309,7 @@ export function createScheduleRouter({
         { key: "segment_number", label: "segment_number" },
         { key: "assigned_employee", label: "assigned_employee" },
         { key: "owner_type", label: "owner_type" },
+        { key: "coverage_purpose", label: "coverage_purpose" },
         { key: "coverage_start", label: "coverage_start" },
         { key: "coverage_end", label: "coverage_end" },
         { key: "active", label: "active" },
