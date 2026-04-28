@@ -315,6 +315,20 @@ export function registerGithubTools(server) {
     }) => {
       const command = parseJsonCommand(content);
 
+      if (command?.op === "replace_many") {
+        const result = await replaceManyInFile({
+          github: github(),
+          repo,
+          path,
+          replacements: command.replacements,
+          commitMessage: commitMessage(commit_message, "Replace multiple text blocks via MCP"),
+          branch,
+          expectedSha: command.expected_sha || expected_sha,
+          dryRun: command.dry_run ?? dry_run,
+        });
+        return jsonResponse(result);
+      }
+
       if (command?.op === "replace_text") {
         find = command.find;
         replace = command.replace;
