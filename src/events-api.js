@@ -46,8 +46,21 @@ function toNullableInt(value) {
   return parsed;
 }
 
+function cleanEventName(value) {
+  let text = String(value || "").replace(/\s+/g, " " ).trim();
+  const labelPattern = /\b(Start Time|End Time|Location|Area|Host Department|Projected|Attendees|Event Date|Date|Notes?)\b[:\s]*/i;
+  const labelMatch = text.match(labelPattern);
+  if (labelMatch && labelMatch.index > 0) {
+    text = text.slice(0, labelMatch.index).trim();
+  }
+  text = text.replace(/^Event Name\s*[:\-]?\s*/i, "").trim();
+  text = text.replace(/[,;:\-\s]+$/g, "").trim();
+  if (text.length > 120) text = `${text.slice(0, 117).trim()}...`;
+  return text;
+}
+
 function normalizeEventPayload(payload = {}) {
-  const eventName = String(payload.event_name || "").trim();
+  const eventName = cleanEventName(payload.event_name);
   const locationGroupId = String(payload.location_group_id || "").trim();
   const eventDate = String(payload.event_date || "").trim();
   const startTime = normalizeTimeInput(payload.start_time);
