@@ -520,6 +520,7 @@ export function createEventMaintenanceController({ runReadOnlySql, runWriteSql, 
     lastRunAt = now;
     try {
       await purgeExpiredEvents(runWriteSql);
+      const scheduleSync = await ensureUpcomingEventScheduleState({ runReadOnlySql, runRpc });
       const pending = await getPendingNotifications(runReadOnlySql);
       if (pending.length) {
         const memphisUserId = pending[0]?.memphis_user_id || null;
@@ -537,7 +538,7 @@ export function createEventMaintenanceController({ runReadOnlySql, runWriteSql, 
         }
       }
       const scanAlerts = await queueDueScanAlerts(runRpc);
-      return { ok: true, reason, processed: pending.length, scan_alerts: scanAlerts };
+      return { ok: true, reason, processed: pending.length, schedule_sync: scheduleSync, scan_alerts: scanAlerts };
     } catch (error) {
       console.error("events maintenance failed:", error);
       return { ok: false, error: error?.message || "Events maintenance failed" };
