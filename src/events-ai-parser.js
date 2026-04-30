@@ -19,12 +19,22 @@ function inferEventYear(month, day) {
   return currentYear;
 }
 
+function isValidCalendarDate(year, month, day) {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return false;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+  const candidate = new Date(year, month - 1, day);
+  return candidate.getFullYear() === year && candidate.getMonth() === month - 1 && candidate.getDate() === day;
+}
+
 function normalizePossibleDate(value) {
   const raw = String(value || "").trim();
   if (!raw) return "";
   if (isIsoDate(raw)) return raw;
 
-  const normalized = raw.replace(/\b(\d{1,2})(st|nd|rd|th)\b/gi, "$1");
+  const normalized = raw
+    .replace(/\b(\d{1,2})(st|nd|rd|th)\b/gi, "$1")
+    .replace(/\b([a-z]{3,9})\.(?=\s+\d{1,2}\b)/gi, "$1")
+    .replace(/\b(\d{1,2})\s+([a-z]{3,9})\.(?=\b)/gi, "$1 $2");
 
   let match = normalized.match(/\b(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?\b/);
   if (match) {
