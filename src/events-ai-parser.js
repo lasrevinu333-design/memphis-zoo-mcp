@@ -245,7 +245,7 @@ export async function aiParseEventTexts({ texts, locationGroups }) {
   if (!rows.length) return [];
   const groupCatalog = (locationGroups || []).map((group) => ({ group_name: group.group_name, group_code: group.group_code, included_locations: group.included_locations || [] }));
   const today = new Date().toISOString().slice(0, 10);
-  const schemaDescription = JSON.stringify({ type: "array", items: { index: "number", event_name: "string", event_area_name: "string", event_date: "YYYY-MM-DD", start_time: "HH:MM or 6:30 PM", end_time: "HH:MM or 9 PM", attendee_count: "number|null", notes: "string", confidence: "high|medium|low", review_notes: "string" } });
+  const schemaDescription = JSON.stringify({ type: "array", items: { index: "number", event_name: "string", event_area_name: "string", event_date: "YYYY-MM-DD or month/day text without a year", start_time: "HH:MM or 6:30 PM or 630p or 6p", end_time: "HH:MM or 9 PM or 930p or 9p", attendee_count: "number|null", notes: "string", confidence: "high|medium|low", review_notes: "string" } });
   const prompt = [
     "You are parsing custodial event intake for Memphis Zoo.",
     "Extract only the exact event data needed for the system.",
@@ -254,9 +254,9 @@ export async function aiParseEventTexts({ texts, locationGroups }) {
     "2. event_area_name must be matched to the closest valid area from the catalog.",
     "3. Put leftover useful details into notes.",
     "4. Throw away irrelevant junk.",
-    `5. Assume today's date is ${today} when inferring missing years.`,
-    "6. Times may be returned as either 24-hour HH:MM or human format like 6:30 PM. The server will normalize them.",
-    "7. Dates may be returned as YYYY-MM-DD or recognizable human date text. The server will normalize them.",
+    `5. Assume today's date is ${today} when inferring missing years. A year is not required; month and day are enough.`,
+    "6. Times may be returned as either 24-hour HH:MM or human format like 6:30 PM, 630pm, 6am, 6p, or 630p. The server will normalize them.",
+    "7. Dates may be returned as YYYY-MM-DD, numeric month/day, or recognizable human date text like Apr 30 or April 30th. The server will normalize them.",
     "8. Add confidence as high, medium, or low.",
     "9. Add short review_notes when the row still looks ambiguous.",
     `Valid area catalog: ${JSON.stringify(groupCatalog)}`,
