@@ -590,9 +590,30 @@ export function createScheduleRouter({
     try {
       const serviceDate = requireDate(req.body?.service_date || req.body?.date || (await getServiceDate()));
       const absentIdsSql = uuidArrayLiteral(req.body?.absent_employee_ids || []);
+      const initialState = await getDailyGenerationState(serviceDate);
+      let generatedBeforePreview = false;
+
+      if (initialState.assignment_count === 0) {
+        await runRpc("sch_generate_daily_schedule", { p_service_date: serviceDate, p_force: true });
+        generatedBeforePreview = true;
+      }
+
+      const finalState = generatedBeforePreview ? await getDailyGenerationState(serviceDate) : initialState;
       const rows = await runReadOnlySql(`select public.sch_absence_preview('${esc(serviceDate)}'::date, ${absentIdsSql}) as data`);
       const data = Array.isArray(rows) && rows.length ? rows[0].data : null;
-      res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+      res.status(200).json({
+        ok: true,
+        data,
+        meta: {
+          version: appVersion,
+          release_id: releaseId,
+          contract_version: contractVersion,
+          generated_before_preview: generatedBeforePreview,
+          generation_mode: generatedBeforePreview ? "auto_generated" : "existing",
+          generated_roster_rows: finalState.roster_count,
+          generated_assignment_rows: finalState.assignment_count,
+        },
+      });
     } catch (error) {
       fail(res, error, "Absence preview failed");
     }
