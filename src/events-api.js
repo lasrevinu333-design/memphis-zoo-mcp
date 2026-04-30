@@ -366,10 +366,9 @@ async function getPendingNotifications(runReadOnlySql) {
       from public.msg_device_assignments mda
       where mda.is_active = true
       group by mda.msg_user_id
-    )
-    select *
-    from (
-      select distinct on (e.id, emp.id)
+    ),
+    candidate_notifications as (
+      select
         e.id,
         e.event_name,
         e.location_group_id,
@@ -384,9 +383,9 @@ async function getPendingNotifications(runReadOnlySql) {
         emp.display_name as employee_name,
         mu.id as msg_user_id,
         coalesce(md.device_identifiers, array[]::text[]) as device_identifiers,
-        oa.coverage_start,
-        oa.coverage_end,
-        oa.assignment_source,
+        min(oa.coverage_start) as coverage_start,
+        max(oa.coverage_end) as coverage_end,
+        min(oa.assignment_source) as assignment_source,
         'day_before'::text as notification_kind,
         ((e.event_date::timestamp - interval '1 day') + time '${DAY_BEFORE_NOTIFICATION_TIME}') as scheduled_for_local,
         public.msg_get_memphis_user_id() as memphis_user_id
@@ -407,11 +406,25 @@ async function getPendingNotifications(runReadOnlySql) {
             and log.employee_id = emp.id
             and log.notification_kind = 'day_before'
         )
-      order by e.id, emp.id, oa.coverage_start asc nulls last
+      group by
+        e.id,
+        e.event_name,
+        e.location_group_id,
+        e.event_date,
+        e.start_time,
+        e.end_time,
+        e.attendee_count,
+        e.notes,
+        lg.group_code,
+        lg.group_name,
+        emp.id,
+        emp.display_name,
+        mu.id,
+        md.device_identifiers
 
       union all
 
-      select distinct on (e.id, emp.id)
+      select
         e.id,
         e.event_name,
         e.location_group_id,
@@ -426,11 +439,11 @@ async function getPendingNotifications(runReadOnlySql) {
         emp.display_name as employee_name,
         mu.id as msg_user_id,
         coalesce(md.device_identifiers, array[]::text[]) as device_identifiers,
-        oa.coverage_start,
-        oa.coverage_end,
-        oa.assignment_source,
+        min(oa.coverage_start) as coverage_start,
+        max(oa.coverage_end) as coverage_end,
+        min(oa.assignment_source) as assignment_source,
         'shift_plus_fifteen'::text as notification_kind,
-        (e.event_date::timestamp + oa.coverage_start + interval '15 minutes') as scheduled_for_local,
+        (e.event_date::timestamp + min(oa.coverage_start) + interval '15 minutes') as scheduled_for_local,
         public.msg_get_memphis_user_id() as memphis_user_id
       from public.events_app_events e
       join public.location_groups lg on lg.id = e.location_group_id
@@ -450,9 +463,25 @@ async function getPendingNotifications(runReadOnlySql) {
             and log.employee_id = emp.id
             and log.notification_kind = 'shift_plus_fifteen'
         )
-      order by e.id, emp.id, oa.coverage_start asc nulls last
-    ) pending
-    order by pending.scheduled_for_local asc, pending.event_date asc, pending.event_name asc
+      group by
+        e.id,
+        e.event_name,
+        e.location_group_id,
+        e.event_date,
+        e.start_time,
+        e.end_time,
+        e.attendee_count,
+        e.notes,
+        lg.group_code,
+        lg.group_name,
+        emp.id,
+        emp.display_name,
+        mu.id,
+        md.device_identifiers
+    )
+    select *
+    from candidate_notifications
+    order by scheduled_for_local asc, event_date asc, event_name asc
     limit ${MAX_NOTIFICATIONS_PER_RUN}
   `);
   return Array.isArray(rows) ? rows : [];
