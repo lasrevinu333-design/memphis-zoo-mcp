@@ -70,6 +70,20 @@ export function createScheduleRouter({
     return Array.isArray(rows) && rows.length ? rows[0].service_date : null;
   }
 
+  async function getDailyGenerationState(serviceDate) {
+    const rows = await runReadOnlySql(`
+      select
+        (select count(*)::int from public.daily_work_roster where service_date = '${esc(serviceDate)}'::date) as roster_count,
+        (select count(*)::int from public.daily_schedule_assignments where service_date = '${esc(serviceDate)}'::date) as assignment_count
+    `);
+    return Array.isArray(rows) && rows.length
+      ? {
+          roster_count: Number(rows[0].roster_count || 0),
+          assignment_count: Number(rows[0].assignment_count || 0),
+        }
+      : { roster_count: 0, assignment_count: 0 };
+  }
+
   async function getAssignedEmployeeForDevice(deviceId) {
     const rows = await runReadOnlySql(`
       select
