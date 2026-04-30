@@ -302,11 +302,15 @@ async function sendEventNotification({ runRpc, runWriteSql, eventRow, assignment
      do nothing;`
   );
 
-  if (assignmentRow.device_identifier) {
+  const deviceIdentifiers = Array.isArray(assignmentRow.device_identifiers)
+    ? assignmentRow.device_identifiers.map((value) => String(value || "").trim()).filter(Boolean)
+    : [String(assignmentRow.device_identifier || "").trim()].filter(Boolean);
+
+  for (const deviceIdentifier of deviceIdentifiers) {
     try {
       await runRpc("msg_unhide_thread_for_device", {
         p_thread_id: thread.id,
-        p_device_identifier: assignmentRow.device_identifier,
+        p_device_identifier: deviceIdentifier,
       });
     } catch (_error) {
       // Non-fatal. Device visibility can lag behind message delivery.
