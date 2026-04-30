@@ -60,7 +60,7 @@ function normalizePossibleDate(value) {
   return "";
 }
 
-function normalizePossibleTime(value) {
+function normalizePossibleTime(value, options = {}) {
   const raw = String(value || "").trim().toLowerCase();
   if (!raw) return "";
   if (/^\d{2}:\d{2}(:\d{2})?$/.test(raw)) return raw.length === 5 ? `${raw}:00` : raw;
@@ -68,22 +68,20 @@ function normalizePossibleTime(value) {
   let compact = raw.replace(/\./g, ":").replace(/\s+/g, "");
   compact = compact.replace(/(\d)(a|p)$/i, (_full, digit, meridiem) => `${digit}${meridiem}m`);
 
-  let match = compact.match(/^(\d{1,2})(?::?(\d{2}))?(am|pm)$/i);
+  const fallbackMeridiem = String(options?.fallbackMeridiem || "").toLowerCase();
+  let match = compact.match(/^(\d{1,2})(?::?(\d{2}))?(am|pm)?$/i);
   if (match) {
     let hour = Number(match[1]);
     const minute = Number(match[2] || "0");
-    const meridiem = String(match[3] || "").toLowerCase();
-    if (!Number.isFinite(hour) || !Number.isFinite(minute) || hour < 1 || hour > 12 || minute > 59) return "";
-    if (meridiem === "pm" && hour < 12) hour += 12;
-    if (meridiem === "am" && hour === 12) hour = 0;
-    return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00`;
-  }
-
-  match = compact.match(/^(\d{1,2})(?::?(\d{2}))$/);
-  if (match) {
-    const hour = Number(match[1]);
-    const minute = Number(match[2] || "0");
-    if (Number.isFinite(hour) && Number.isFinite(minute) && hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
+    const meridiem = String(match[3] || fallbackMeridiem || "").toLowerCase();
+    if (!Number.isFinite(hour) || !Number.isFinite(minute) || minute > 59) return "";
+    if (meridiem) {
+      if (hour < 1 || hour > 12) return "";
+      if (meridiem === "pm" && hour < 12) hour += 12;
+      if (meridiem === "am" && hour === 12) hour = 0;
+      return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00`;
+    }
+    if (hour >= 0 && hour <= 23) {
       return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00`;
     }
   }
