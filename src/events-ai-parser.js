@@ -24,7 +24,9 @@ function normalizePossibleDate(value) {
   if (!raw) return "";
   if (isIsoDate(raw)) return raw;
 
-  let match = raw.match(/\b(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?\b/);
+  const normalized = raw.replace(/\b(\d{1,2})(st|nd|rd|th)\b/gi, "$1");
+
+  let match = normalized.match(/\b(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?\b/);
   if (match) {
     const month = Number(match[1]);
     const day = Number(match[2]);
@@ -35,7 +37,7 @@ function normalizePossibleDate(value) {
   }
 
   const monthNames = Object.keys(MONTH_LOOKUP).sort((a, b) => b.length - a.length).join("|");
-  match = raw.match(new RegExp(`\\b(${monthNames})\\s+(\\d{1,2})(?:,?\\s*(\\d{2,4}))?\\b`, "i"));
+  match = normalized.match(new RegExp(`\\b(${monthNames})\\s+(\\d{1,2})(?:,?\\s*(\\d{2,4}))?\\b`, "i"));
   if (match) {
     const month = MONTH_LOOKUP[String(match[1]).toLowerCase()];
     const day = Number(match[2]);
@@ -45,7 +47,7 @@ function normalizePossibleDate(value) {
     }
   }
 
-  match = raw.match(new RegExp(`\\b(\\d{1,2})\\s+(${monthNames})(?:,?\\s*(\\d{2,4}))?\\b`, "i"));
+  match = normalized.match(new RegExp(`\\b(\\d{1,2})\\s+(${monthNames})(?:,?\\s*(\\d{2,4}))?\\b`, "i"));
   if (match) {
     const day = Number(match[1]);
     const month = MONTH_LOOKUP[String(match[2]).toLowerCase()];
@@ -63,25 +65,15 @@ function normalizePossibleTime(value) {
   if (!raw) return "";
   if (/^\d{2}:\d{2}(:\d{2})?$/.test(raw)) return raw.length === 5 ? `${raw}:00` : raw;
 
-  let compact = raw.replace(/\s+/g, "");
-  let match = compact.match(/^(\d{1,2})(?::(\d{2}))?(am|pm)$/i);
+  let compact = raw.replace(/\./g, ":").replace(/\s+/g, "");
+  compact = compact.replace(/(\d)(a|p)$/i, (_full, digit, meridiem) => `${digit}${meridiem}m`);
+
+  let match = compact.match(/^(\d{1,2})(?::?(\d{2}))?(am|pm)$/i);
   if (match) {
     let hour = Number(match[1]);
     const minute = Number(match[2] || "0");
     const meridiem = String(match[3] || "").toLowerCase();
-    if (!Number.isFinite(hour) || !Number.isFinite(minute) || minute > 59) return "";
-    if (meridiem === "pm" && hour < 12) hour += 12;
-    if (meridiem === "am" && hour === 12) hour = 0;
-    return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00`;
-  }
-
-  match = compact.match(/^(\d{3,4})(am|pm)$/i);
-  if (match) {
-    const digits = match[1];
-    const meridiem = String(match[2] || "").toLowerCase();
-    let hour = Number(digits.length === 3 ? digits.slice(0, 1) : digits.slice(0, 2));
-    const minute = Number(digits.length === 3 ? digits.slice(1) : digits.slice(2));
-    if (!Number.isFinite(hour) || !Number.isFinite(minute) || minute > 59) return "";
+    if (!Number.isFinite(hour) || !Number.isFinite(minute) || hour < 1 || hour > 12 || minute > 59) return "";
     if (meridiem === "pm" && hour < 12) hour += 12;
     if (meridiem === "am" && hour === 12) hour = 0;
     return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00`;
