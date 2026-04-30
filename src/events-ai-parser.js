@@ -171,11 +171,18 @@ function cleanNotes(notes, eventName, matchedGroup) {
 
 function detectTimeRange(text) {
   const raw = String(text || "").replace(/\s+/g, " ");
-  const timePattern = "(\\d{1,2}(?::?\\d{2})?\\s*(?:a|p|am|pm)|\\d{2}:\\d{2}(?::\\d{2})?)";
+  const timePattern = "(\\d{1,2}(?::?\\d{2})?\\s*(?:am|pm|a|p)?|\\d{2}:\\d{2}(?::\\d{2})?)";
   const match = raw.match(new RegExp(`${timePattern}[\\s]*(?:to|\\-|–|—)[\\s]*${timePattern}`, "i"));
   if (!match) return null;
-  const start = normalizePossibleTime(match[1]);
-  const end = normalizePossibleTime(match[2]);
+  const startToken = String(match[1] || "").trim();
+  const endToken = String(match[2] || "").trim();
+  const startMeridiem = startToken.match(/(am|pm|a|p)\b/i)?.[1]?.toLowerCase() || "";
+  const endMeridiem = endToken.match(/(am|pm|a|p)\b/i)?.[1]?.toLowerCase() || "";
+  const normalizeMeridiem = (value) => (value === "a" ? "am" : value === "p" ? "pm" : value);
+  const inferredStartMeridiem = normalizeMeridiem(startMeridiem || endMeridiem);
+  const inferredEndMeridiem = normalizeMeridiem(endMeridiem || startMeridiem);
+  const start = normalizePossibleTime(startToken, { fallbackMeridiem: inferredStartMeridiem });
+  const end = normalizePossibleTime(endToken, { fallbackMeridiem: inferredEndMeridiem });
   if (!start || !end) return null;
   return { start_time: start, end_time: end, matched_text: match[0] };
 }
