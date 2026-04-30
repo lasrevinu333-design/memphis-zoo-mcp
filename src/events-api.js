@@ -148,6 +148,51 @@ async function listLocationGroups(runReadOnlySql) {
   return Array.isArray(rows) ? rows : [];
 }
 
+async function getUpcomingEventScheduleStates(runReadOnlySql) {
+  const rows = await runReadOnlySql(`
+    select
+      e.event_date,
+      count(distinct e.id)::int as event_count,
+      (
+        select count(*)::int
+        from public.daily_schedule_assignments dsa
+        where dsa.service_date = e.event_date
+      ) as schedule_assignment_count,
+      (
+        select count(*)::int
+        from public.daily_group_assignments dga
+        where dga.assignment_date = e.event_date
+          and dga.active = true
+          and dga.assigned_employee_id is not null
+      ) as group_assignment_count
+    from public.events_app_events e
+    where e.event_date between (now() at time zone '${EVENTS_TIME_ZONE}')::date
+      and ((now() at time zone '${EVENTS_TIME_ZONE}')::date + 1)
+    group by e.event_date
+    order by e.event_date asc
+  `);
+  return Array.isArray(rows) ? rows : [];
+}
+
+async function ensureUpcomingEventScheduleState({ runReadOnlySql, runRpc }) {
+  if (typeof runRpc !== "function") {
+    return { ok: true, skipped: true, reason: "runRpc_missing", generated_dates: [] };
+  }
+
+  const states = await getUpcomingEventScheduleStates(runReadOnlySql);
+  const generatedDates = [];
+
+  for (const state of states) {
+    if (Number(state?.schedule_assignment_count || 0) > 0) continue;
+    const eventDate = String(state?.event_date || "").trim();
+    if (!eventDate) continue;
+    await runRpc("sch_generate_daily_schedule", { p_service_date: eventDate, p_force: true });
+    generatedDates.push(eventDate);
+  }
+
+  return { ok: true, checked_dates: states.length, generated_dates: generatedDates };
+}
+
 async function createEventRecord(runWriteSql, payload) {
   const record = normalizeEventPayload(payload);
   await runWriteSql(
