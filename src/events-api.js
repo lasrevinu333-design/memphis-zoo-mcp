@@ -322,9 +322,54 @@ async function sendEventNotification({ runRpc, runWriteSql, eventRow, assignment
 
 async function getPendingNotifications(runReadOnlySql) {
   const rows = await runReadOnlySql(`
+    with owner_assignments as (
+      select
+        dga.assignment_date,
+        dga.location_group_id,
+        dga.assigned_employee_id as employee_id,
+        dga.coverage_start,
+        dga.coverage_end,
+        'daily_group_assignments'::text as assignment_source
+      from public.daily_group_assignments dga
+      where dga.active = true
+        and dga.assigned_employee_id is not null
+
+      union all
+
+      select
+        dsa.service_date as assignment_date,
+        dsa.location_group_id,
+        dsa.assigned_employee_id as employee_id,
+        dsa.coverage_start,
+        dsa.coverage_end,
+        'daily_schedule_assignments'::text as assignment_source
+      from public.daily_schedule_assignments dsa
+      where dsa.assigned_employee_id is not null
+        and coalesce(dsa.coverage_purpose, 'area_owner') = 'area_owner'
+        and not exists (
+          select 1
+          from public.daily_group_assignments dga
+          where dga.assignment_date = dsa.service_date
+            and dga.location_group_id = dsa.location_group_id
+            and dga.active = true
+            and dga.assigned_employee_id is not null
+        )
+    ),
+    msg_devices as (
+      select
+        mda.msg_user_id,
+        coalesce(
+          array_agg(distinct mda.device_identifier)
+            filter (where mda.device_identifier is not null and btrim(mda.device_identifier) <> ''),
+          array[]::text[]
+        ) as device_identifiers
+      from public.msg_device_assignments mda
+      where mda.is_active = true
+      group by mda.msg_user_id
+    )
     select *
     from (
-      select
+      select distinct on (e.id, emp.id)
         e.id,
         e.event_name,
         e.location_group_id,
@@ -338,20 +383,21 @@ async function getPendingNotifications(runReadOnlySql) {
         emp.id as employee_id,
         emp.display_name as employee_name,
         mu.id as msg_user_id,
-        dga.coverage_start,
-        dga.coverage_end,
+        coalesce(md.device_identifiers, array[]::text[]) as device_identifiers,
+        oa.coverage_start,
+        oa.coverage_end,
+        oa.assignment_source,
         'day_before'::text as notification_kind,
         ((e.event_date::timestamp - interval '1 day') + time '${DAY_BEFORE_NOTIFICATION_TIME}') as scheduled_for_local,
         public.msg_get_memphis_user_id() as memphis_user_id
       from public.events_app_events e
       join public.location_groups lg on lg.id = e.location_group_id
-      join public.daily_group_assignments dga
-        on dga.location_group_id = e.location_group_id
-       and dga.assignment_date = e.event_date
-       and dga.active = true
-       and dga.assigned_employee_id is not null
-      join public.employees emp on emp.id = dga.assigned_employee_id and emp.active = true
+      join owner_assignments oa
+        on oa.location_group_id = e.location_group_id
+       and oa.assignment_date = e.event_date
+      join public.employees emp on emp.id = oa.employee_id and emp.active = true
       join public.msg_users mu on mu.employee_id = emp.id and mu.is_active = true
+      left join msg_devices md on md.msg_user_id = mu.id
       where (now() at time zone '${EVENTS_TIME_ZONE}')::date = (e.event_date - interval '1 day')::date
         and (now() at time zone '${EVENTS_TIME_ZONE}') >= ((e.event_date::timestamp - interval '1 day') + time '${DAY_BEFORE_NOTIFICATION_TIME}')
         and not exists (
@@ -361,10 +407,11 @@ async function getPendingNotifications(runReadOnlySql) {
             and log.employee_id = emp.id
             and log.notification_kind = 'day_before'
         )
+      order by e.id, emp.id, oa.coverage_start asc nulls last
 
       union all
 
-      select
+      select distinct on (e.id, emp.id)
         e.id,
         e.event_name,
         e.location_group_id,
@@ -378,23 +425,24 @@ async function getPendingNotifications(runReadOnlySql) {
         emp.id as employee_id,
         emp.display_name as employee_name,
         mu.id as msg_user_id,
-        dga.coverage_start,
-        dga.coverage_end,
+        coalesce(md.device_identifiers, array[]::text[]) as device_identifiers,
+        oa.coverage_start,
+        oa.coverage_end,
+        oa.assignment_source,
         'shift_plus_fifteen'::text as notification_kind,
-        (e.event_date::timestamp + dga.coverage_start + interval '15 minutes') as scheduled_for_local,
+        (e.event_date::timestamp + oa.coverage_start + interval '15 minutes') as scheduled_for_local,
         public.msg_get_memphis_user_id() as memphis_user_id
       from public.events_app_events e
       join public.location_groups lg on lg.id = e.location_group_id
-      join public.daily_group_assignments dga
-        on dga.location_group_id = e.location_group_id
-       and dga.assignment_date = e.event_date
-       and dga.active = true
-       and dga.assigned_employee_id is not null
-       and dga.coverage_start is not null
-      join public.employees emp on emp.id = dga.assigned_employee_id and emp.active = true
+      join owner_assignments oa
+        on oa.location_group_id = e.location_group_id
+       and oa.assignment_date = e.event_date
+       and oa.coverage_start is not null
+      join public.employees emp on emp.id = oa.employee_id and emp.active = true
       join public.msg_users mu on mu.employee_id = emp.id and mu.is_active = true
+      left join msg_devices md on md.msg_user_id = mu.id
       where (now() at time zone '${EVENTS_TIME_ZONE}')::date = e.event_date
-        and (now() at time zone '${EVENTS_TIME_ZONE}') >= (e.event_date::timestamp + dga.coverage_start + interval '15 minutes')
+        and (now() at time zone '${EVENTS_TIME_ZONE}') >= (e.event_date::timestamp + oa.coverage_start + interval '15 minutes')
         and not exists (
           select 1
           from public.events_app_notification_log log
@@ -402,6 +450,7 @@ async function getPendingNotifications(runReadOnlySql) {
             and log.employee_id = emp.id
             and log.notification_kind = 'shift_plus_fifteen'
         )
+      order by e.id, emp.id, oa.coverage_start asc nulls last
     ) pending
     order by pending.scheduled_for_local asc, pending.event_date asc, pending.event_name asc
     limit ${MAX_NOTIFICATIONS_PER_RUN}
