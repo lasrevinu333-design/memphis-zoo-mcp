@@ -173,7 +173,7 @@ function cleanNotes(notes, eventName, matchedGroup) {
 
 function detectTimeRange(text) {
   const raw = String(text || "").replace(/\s+/g, " ");
-  const timePattern = "(\\d{1,2}(?::\\d{2})?\\s*(?:am|pm)|\\d{3,4}\\s*(?:am|pm)|\\d{2}:\\d{2}(?::\\d{2})?)";
+  const timePattern = "(\\d{1,2}(?::?\\d{2})?\\s*(?:a|p|am|pm)|\\d{2}:\\d{2}(?::\\d{2})?)";
   const match = raw.match(new RegExp(`${timePattern}[\\s]*(?:to|\\-|–|—)[\\s]*${timePattern}`, "i"));
   if (!match) return null;
   const start = normalizePossibleTime(match[1]);
