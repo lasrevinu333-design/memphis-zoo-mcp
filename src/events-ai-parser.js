@@ -102,9 +102,8 @@ function cleanupLooseText(text) {
 function stripTimeDateNoise(text) {
   return String(text || "")
     .replace(/\b\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?\b/gi, " ")
-    .replace(/\b(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\s+\d{1,2}(?:,?\s*\d{2,4})?\b/gi, " ")
-    .replace(/\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b/gi, " ")
-    .replace(/\b\d{3,4}\s*(?:am|pm)\b/gi, " ")
+    .replace(/\b(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s*\d{2,4})?\b/gi, " ")
+    .replace(/\b\d{1,2}(?:\:?\d{2})?\s*(?:a|p|am|pm)\b/gi, " ")
     .replace(/\b\d{2}:\d{2}(?::\d{2})?\b/gi, " ")
     .replace(/\b\d{1,5}\s*(?:attendees|guests|people|students)\b/gi, " ");
 }
