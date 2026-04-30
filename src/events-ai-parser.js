@@ -41,7 +41,7 @@ function normalizePossibleDate(value) {
     const month = Number(match[1]);
     const day = Number(match[2]);
     let year = match[3] ? Number(String(match[3]).length === 2 ? `20${match[3]}` : match[3]) : inferEventYear(month, day);
-    if (Number.isFinite(month) && Number.isFinite(day) && Number.isFinite(year)) {
+    if (Number.isFinite(month) && Number.isFinite(day) && Number.isFinite(year) && isValidCalendarDate(year, month, day)) {
       return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     }
   }
@@ -52,7 +52,7 @@ function normalizePossibleDate(value) {
     const month = MONTH_LOOKUP[String(match[1]).toLowerCase()];
     const day = Number(match[2]);
     let year = match[3] ? Number(String(match[3]).length === 2 ? `20${match[3]}` : match[3]) : inferEventYear(month, day);
-    if (Number.isFinite(month) && Number.isFinite(day) && Number.isFinite(year)) {
+    if (Number.isFinite(month) && Number.isFinite(day) && Number.isFinite(year) && isValidCalendarDate(year, month, day)) {
       return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     }
   }
@@ -62,7 +62,7 @@ function normalizePossibleDate(value) {
     const day = Number(match[1]);
     const month = MONTH_LOOKUP[String(match[2]).toLowerCase()];
     let year = match[3] ? Number(String(match[3]).length === 2 ? `20${match[3]}` : match[3]) : inferEventYear(month, day);
-    if (Number.isFinite(month) && Number.isFinite(day) && Number.isFinite(year)) {
+    if (Number.isFinite(month) && Number.isFinite(day) && Number.isFinite(year) && isValidCalendarDate(year, month, day)) {
       return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     }
   }
