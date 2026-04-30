@@ -31,7 +31,16 @@ function isUuid(value) {
 function normalizeTimeInput(value) {
   const raw = String(value || "").trim().toLowerCase();
   if (!raw) throw new Error("Time is required.");
-  if (/^\d{2}:\d{2}(:\d{2})?$/.test(raw)) return raw.length === 5 ? `${raw}:00` : raw;
+  if (/^\d{2}:\d{2}(:\d{2})?$/.test(raw)) {
+    const [hourText, minuteText, secondText = "00"] = raw.split(":");
+    const hour = Number(hourText);
+    const minute = Number(minuteText);
+    const second = Number(secondText);
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59) {
+      throw new Error("24-hour times must stay within 00:00:00 and 23:59:59.");
+    }
+    return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:${String(second).padStart(2, "0")}`;
+  }
 
   let compact = raw.replace(/\./g, ":").replace(/\s+/g, "");
   compact = compact.replace(/(\d)(a|p)$/i, (_full, digit, meridiem) => `${digit}${meridiem}m`);
