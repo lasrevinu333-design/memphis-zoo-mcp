@@ -29,12 +29,35 @@ function isUuid(value) {
 }
 
 function normalizeTimeInput(value) {
-  const raw = String(value || "").trim();
+  const raw = String(value || "").trim().toLowerCase();
   if (!raw) throw new Error("Time is required.");
-  if (!/^\d{2}:\d{2}(:\d{2})?$/.test(raw)) {
-    throw new Error("Time must be HH:MM or HH:MM:SS.");
+  if (/^\d{2}:\d{2}(:\d{2})?$/.test(raw)) return raw.length === 5 ? `${raw}:00` : raw;
+
+  let compact = raw.replace(/\./g, ":").replace(/\s+/g, "");
+  compact = compact.replace(/(\d)(a|p)$/i, (_full, digit, meridiem) => `${digit}${meridiem}m`);
+  const match = compact.match(/^(\d{1,2})(?::?(\d{2}))?(am|pm)?$/i);
+  if (!match) {
+    throw new Error("Time must be HH:MM, HH:MM:SS, or a recognizable format like 6pm, 630p, or 6:30 pm.");
   }
-  return raw.length === 5 ? `${raw}:00` : raw;
+
+  let hour = Number(match[1]);
+  const minute = Number(match[2] || "0");
+  const meridiem = String(match[3] || "").toLowerCase();
+  if (!Number.isFinite(hour) || !Number.isFinite(minute) || minute < 0 || minute > 59) {
+    throw new Error("Time must be HH:MM, HH:MM:SS, or a recognizable format like 6pm, 630p, or 6:30 pm.");
+  }
+
+  if (meridiem) {
+    if (hour < 1 || hour > 12) {
+      throw new Error("12-hour times must use an hour from 1 to 12.");
+    }
+    if (meridiem === "pm" && hour < 12) hour += 12;
+    if (meridiem === "am" && hour === 12) hour = 0;
+  } else if (hour < 0 || hour > 23) {
+    throw new Error("24-hour times must use an hour from 00 to 23.");
+  }
+
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00`;
 }
 
 function toNullableInt(value) {
