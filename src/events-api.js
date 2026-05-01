@@ -709,8 +709,12 @@ export function createEventsAdminRouter({
   appVersion,
   releaseId,
   maintenanceController,
+  requireAdminApiAuth,
 }) {
   const router = express.Router();
+  if (typeof requireAdminApiAuth === "function") {
+    router.use(requireAdminApiAuth);
+  }
 
   router.get("/", async (_req, res) => {
     try {
