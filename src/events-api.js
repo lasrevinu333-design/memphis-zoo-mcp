@@ -540,25 +540,46 @@ async function queueDueScanAlerts(runRpc) {
 export function createEventMaintenanceController({ runReadOnlySql, runWriteSql, runRpc }) {
   let lastRunAt = 0;
   let running = false;
+  let lastStartedAt = null;
+  let lastFinishedAt = null;
+  let lastResult = null;
+
+  function buildStatus() {
+    return {
+      running,
+      last_started_at: lastStartedAt,
+      last_finished_at: lastFinishedAt,
+      last_run_at: lastRunAt ? new Date(lastRunAt).toISOString() : null,
+      last_result: lastResult,
+    };
+  }
 
   async function runMaintenance(reason = "manual") {
-    if (running) return { ok: true, skipped: true, reason: "already_running" };
+    if (running) {
+      const result = { ok: true, skipped: true, reason: "already_running" };
+      lastResult = result;
+      return result;
+    }
     const now = Date.now();
     if (now - lastRunAt < EVENT_MAINTENANCE_COOLDOWN_MS) {
-      return { ok: true, skipped: true, reason: "cooldown" };
+      const result = { ok: true, skipped: true, reason: "cooldown" };
+      lastResult = result;
+      return result;
     }
 
     running = true;
     lastRunAt = now;
+    lastStartedAt = new Date(now).toISOString();
     try {
       await purgeExpiredEvents(runWriteSql);
       const scheduleSync = await ensureUpcomingEventScheduleState({ runReadOnlySql, runRpc });
       const pending = await getPendingNotifications(runReadOnlySql);
+      const notificationResults = [];
       if (pending.length) {
         const memphisUserId = pending[0]?.memphis_user_id || null;
         if (memphisUserId) {
           for (const row of pending) {
-            await sendEventNotification({
+            const outcome = await sendEventNotification({
               runRpc,
               runWriteSql,
               eventRow: row,
@@ -566,16 +587,31 @@ export function createEventMaintenanceController({ runReadOnlySql, runWriteSql, 
               memphisUserId,
               kind: row.notification_kind,
             });
+            notificationResults.push({
+              event_id: row.id,
+              event_name: row.event_name,
+              employee_id: row.employee_id,
+              employee_name: row.employee_name,
+              notification_kind: row.notification_kind,
+              result: outcome,
+            });
           }
+        } else {
+          notificationResults.push({ ok: false, error: "missing_memphis_user_id" });
         }
       }
       const scanAlerts = await queueDueScanAlerts(runRpc);
-      return { ok: true, reason, processed: pending.length, schedule_sync: scheduleSync, scan_alerts: scanAlerts };
+      const result = { ok: true, reason, processed: pending.length, notification_results: notificationResults, schedule_sync: scheduleSync, scan_alerts: scanAlerts };
+      lastResult = result;
+      return result;
     } catch (error) {
       console.error("events maintenance failed:", error);
-      return { ok: false, error: error?.message || "Events maintenance failed" };
+      const result = { ok: false, error: error?.message || "Events maintenance failed" };
+      lastResult = result;
+      return result;
     } finally {
       running = false;
+      lastFinishedAt = new Date().toISOString();
     }
   }
 
@@ -583,9 +619,15 @@ export function createEventMaintenanceController({ runReadOnlySql, runWriteSql, 
     kick(reason = "kick") {
       runMaintenance(reason).catch((error) => {
         console.error("events maintenance kick failed:", error);
+        lastResult = { ok: false, error: error?.message || "Events maintenance kick failed" };
+        lastFinishedAt = new Date().toISOString();
+        running = false;
       });
     },
     runMaintenance,
+    getStatus() {
+      return buildStatus();
+    },
   };
 }
 
