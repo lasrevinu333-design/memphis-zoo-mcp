@@ -664,10 +664,20 @@ export function createEventsPublicRouter({
   });
 
   router.get("/health", (_req, res) => {
+    const status = typeof maintenanceController?.getStatus === "function" ? maintenanceController.getStatus() : null;
     res.status(200).json(
       buildHealthPayload("events_public", {
         contract_version: EVENTS_CONTRACT_VERSION,
         timezone: EVENTS_TIME_ZONE,
+        maintenance: status
+          ? {
+              running: Boolean(status.running),
+              last_started_at: status.last_started_at || null,
+              last_finished_at: status.last_finished_at || null,
+              last_run_at: status.last_run_at || null,
+              last_result: status.last_result || null,
+            }
+          : null,
       })
     );
   });
