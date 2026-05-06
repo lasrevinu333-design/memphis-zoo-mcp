@@ -19,6 +19,9 @@ This rebuild is staged so the deployed server stays bootable after each change. 
 - `scripts/smoke.mjs` asserts key manifest statuses and Supabase migration metadata shape.
 - `docs/mcp-tools.md` distinguishes direct MCP tools from compatibility-command tool names.
 - `src/supabase/migrations.js` returns structured migration and audit metadata for dry-run and apply responses.
+- `src/routes/index.js` is the route factory barrel used by `src/index.js` and smoke tests.
+- `src/ai/index.js` is the Memphis AI helper barrel used by `src/memphis-ai.js` and smoke tests.
+- `src/services/index.js` is the service barrel used by `src/messaging-api.js` and smoke tests for Memphis responder access.
 
 ## Safety rules
 
