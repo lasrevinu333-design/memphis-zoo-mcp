@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { validateRuntimeEnv } from "../src/config/env.js";
 import { redactSecrets } from "../src/utils/redact-secrets.js";
 import { summarizeTextDiff, makeUnifiedDiff } from "../src/utils/diff.js";
-import { createMemphisResponder } from "../src/memphis-ai.js";
+import { createMemphisResponder } from "../src/services/index.js";
 import {
   createMessagingRouter,
   createScheduleRouter,
