@@ -77,7 +77,9 @@ Routes are mounted under:
 
 See `src/schedule-api.js` for route-level details until the route split phase documents them fully.
 
-## Planned diagnostic routes
+## Diagnostic routes
+
+These are installed by the compatibility bootstrap before Express starts listening.
 
 | Method | Path | Purpose |
 |---|---|---|
