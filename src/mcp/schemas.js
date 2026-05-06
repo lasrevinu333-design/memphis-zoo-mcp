@@ -4,6 +4,10 @@ export const optionalString = z.string().optional();
 export const positiveInt = z.number().int().positive();
 export const dryRun = z.boolean().optional();
 
+export const pingInputSchema = {
+  message: z.string().optional(),
+};
+
 export const serverToolManifestInputSchema = {
   include_planned: z.boolean().optional(),
 };
