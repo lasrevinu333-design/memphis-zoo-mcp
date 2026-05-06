@@ -6,12 +6,19 @@ This rebuild is staged so the deployed server stays bootable after each change. 
 
 1. Keep Render startup stable.
 2. Keep `/mcp`, `/sse`, dashboard, admin, scan, messaging, schedule, and events routes working.
-3. Move GitHub and Supabase MCP tools out of `src/index.js`.
-4. Replace bootstrap schema patching with direct `registerTool` usage.
-5. Add safer GitHub reads and writes: batch reads, repo tree, diff previews, patch-style updates, dry runs, and SHA checks.
-6. Add startup and smoke diagnostics.
-7. Add documentation for routes, env vars, and tools.
-8. Split large files after guardrails exist.
+3. Continue reducing remaining `src/index.js` runtime responsibilities after smoke coverage is strong.
+4. Replace bootstrap schema patching with direct `registerTool` usage once deployed schemas are verified without the compatibility layer.
+5. Keep safer GitHub reads and writes active: batch reads, repo tree, diff previews, patch-style updates, dry runs, and SHA checks.
+6. Keep startup and smoke diagnostics aligned with the manifest.
+7. Keep documentation for routes, env vars, and tools aligned with code.
+8. Split large files after guardrails exist, starting with the lowest-risk AI/service seams.
+
+## Current progress snapshot
+
+- `src/mcp/tool-manifest.js` is aligned to current direct MCP tools as `mcp-tools.v2`.
+- `scripts/smoke.mjs` asserts key manifest statuses and Supabase migration metadata shape.
+- `docs/mcp-tools.md` distinguishes direct MCP tools from compatibility-command tool names.
+- `src/supabase/migrations.js` returns structured migration and audit metadata for dry-run and apply responses.
 
 ## Safety rules
 
