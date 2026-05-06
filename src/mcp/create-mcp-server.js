@@ -1,5 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "zod";
+import { pingInputSchema } from "./schemas.js";
 import { registerMcpTool } from "./register.js";
 import { textResponse } from "./responses.js";
 import { registerGithubTools } from "./github-tools.js";
@@ -23,9 +23,7 @@ export function createMcpServer(options = {}) {
     "ping",
     {
       description: "Basic MCP liveness check.",
-      inputSchema: {
-        message: z.string().optional(),
-      },
+      inputSchema: pingInputSchema,
     },
     async ({ message } = {}) => {
       return textResponse(`MCP server is alive. ${message || ""}`.trim());
