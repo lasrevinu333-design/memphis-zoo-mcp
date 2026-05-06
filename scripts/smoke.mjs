@@ -71,7 +71,13 @@ assert.equal(typeof replaceTextInFile, "function");
 const sanitizedSql = sanitizeReadOnlySql("select 1 as ok;");
 assert.equal(sanitizedSql.sql, "select 1 as ok");
 assert.throws(() => sanitizeReadOnlySql("delete from public.foo"));
-assert.equal(normalizeMigrationInput({ name: "test_migration", sql: "select 1;" }).name, "test_migration");
+const normalizedMigration = normalizeMigrationInput({ name: "test_migration", sql: "select 1;" });
+assert.equal(normalizedMigration.name, "test_migration");
+assert.equal(normalizedMigration.sql_bytes, 9);
+const migrationDryRun = await applyMigration({ name: "test_migration", sql: "select 1;" });
+assert.equal(migrationDryRun.audit.action, "would_apply_migration");
+assert.equal(migrationDryRun.audit.log_table, "public.migration_log");
+assert.equal(migrationDryRun.migration.name, "test_migration");
 
 const manifest = getToolManifest();
 assert.equal(manifest.ok, true);
