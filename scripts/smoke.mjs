@@ -75,7 +75,18 @@ assert.equal(normalizeMigrationInput({ name: "test_migration", sql: "select 1;" 
 
 const manifest = getToolManifest();
 assert.equal(manifest.ok, true);
-assert.ok(manifest.tools.some((tool) => tool.name === "github_batch_read"));
+assert.equal(manifest.version, "mcp-tools.v2");
+const toolByName = new Map(manifest.tools.map((tool) => [tool.name, tool]));
+for (const toolName of [
+  "server_tool_manifest",
+  "server_deep_health",
+  "github_repo_tree",
+  "github_batch_read",
+  "github_replace_text",
+]) {
+  assert.equal(toolByName.get(toolName)?.status, "current");
+}
+assert.equal(toolByName.get("github_search_files")?.status, "current-via-compatibility-command");
 
 const modularMcpServer = createMcpServer({ version: "smoke", releaseId: "smoke" });
 assert.ok(modularMcpServer);
