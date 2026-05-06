@@ -2,6 +2,8 @@
 
 This document tracks the currently known HTTP routes. It is a map, not a replacement for the code.
 
+Route factories for messaging, schedule, and events are re-exported from `src/routes/index.js`. `src/index.js` imports through that barrel so future route extraction can move behind one stable seam.
+
 ## Core
 
 | Method | Path | Purpose |
