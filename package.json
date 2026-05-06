@@ -8,7 +8,8 @@
     "start": "node src/mcp-schema-bootstrap.js",
     "start:bootstrap": "node src/mcp-schema-bootstrap.js",
     "start:direct": "node src/index.js",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "test:events-parser": "node scripts/events-parser-tests.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.18.0",
