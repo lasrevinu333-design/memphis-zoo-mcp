@@ -29,8 +29,9 @@ import {
   normalizeLoose,
   sqlLikeLiteral,
   toSafeInt,
-} from "../src/ai/memphis-ai-utils.js";
-import { findLocationCode, isSystemSpecificQuestion } from "../src/ai/memphis-ai-intent.js";
+  findLocationCode,
+  isSystemSpecificQuestion,
+} from "../src/ai/index.js";
 
 const envResult = validateRuntimeEnv({ strict: false });
 assert.equal(typeof envResult.ok, "boolean");
