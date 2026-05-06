@@ -102,6 +102,12 @@ for (const toolName of [
 }
 assert.equal(toolByName.get("github_search_files")?.status, "current-via-compatibility-command");
 
+assert.ok(pingInputSchema.message);
+assert.ok(serverDeepHealthInputSchema.strict_env);
+assert.ok(githubBatchReadInputSchema.paths);
+assert.ok(githubReplaceTextInputSchema.expected_sha);
+assert.ok(supabaseMigrationApplyInputSchema.dry_run);
+
 const modularMcpServer = createMcpServer({ version: "smoke", releaseId: "smoke" });
 assert.ok(modularMcpServer);
 
