@@ -80,9 +80,7 @@ export function registerGithubTools(server) {
     "github_debug_config",
     {
       description: "Return redacted GitHub runtime configuration and modular MCP status.",
-      inputSchema: {
-        include_manifest: z.boolean().optional(),
-      },
+      inputSchema: githubDebugConfigInputSchema,
     },
     async ({ include_manifest = false } = {}) => {
       const client = github();
@@ -111,13 +109,7 @@ export function registerGithubTools(server) {
     "github_list_directory",
     {
       description: "List files and directories in an allowed GitHub repository. Use recursive:true for repo-tree behavior.",
-      inputSchema: {
-        repo: z.string().optional(),
-        path: z.string().optional(),
-        ref: z.string().optional(),
-        recursive: z.boolean().optional(),
-        max_entries: z.number().int().positive().max(10000).optional(),
-      },
+      inputSchema: githubListDirectoryInputSchema,
     },
     async ({ repo, path = "", ref, recursive = false, max_entries = 500 }) => {
       const result = await listDirectory({
@@ -137,12 +129,7 @@ export function registerGithubTools(server) {
     "github_repo_tree",
     {
       description: "Return a recursive repository tree for an allowed repo.",
-      inputSchema: {
-        repo: z.string().optional(),
-        path: z.string().optional(),
-        ref: z.string().optional(),
-        max_entries: z.number().int().positive().max(10000).optional(),
-      },
+      inputSchema: githubRepoTreeInputSchema,
     },
     async ({ repo, path = "", ref, max_entries = 1000 }) => {
       const result = await listDirectory({
@@ -162,14 +149,7 @@ export function registerGithubTools(server) {
     "github_read_file",
     {
       description: "Read one file, or read several files when paths is supplied.",
-      inputSchema: {
-        repo: z.string().optional(),
-        path: z.string().optional(),
-        paths: z.array(z.string().min(1)).min(1).max(25).optional(),
-        ref: z.string().optional(),
-        format: z.enum(["text", "json", "base64"]).optional(),
-        max_bytes: z.number().int().positive().max(10_000_000).optional(),
-      },
+      inputSchema: githubReadFileInputSchema,
     },
     async ({ repo, path, paths, ref, format = "json", max_bytes = 1_000_000 }) => {
       if (path === "__manifest__" || path === "manifest:tools") {
@@ -211,13 +191,7 @@ export function registerGithubTools(server) {
     "github_batch_read",
     {
       description: "Read several files from an allowed GitHub repository in one request.",
-      inputSchema: {
-        repo: z.string().optional(),
-        paths: z.array(z.string().min(1)).min(1).max(25),
-        ref: z.string().optional(),
-        format: z.enum(["json", "text", "base64"]).optional(),
-        max_bytes: z.number().int().positive().max(10_000_000).optional(),
-      },
+      inputSchema: githubBatchReadInputSchema,
     },
     async ({ repo, paths, ref, format = "json", max_bytes = 1_000_000 }) => {
       const result = await batchReadFiles({
@@ -237,15 +211,7 @@ export function registerGithubTools(server) {
     "github_write_file",
     {
       description: "Create a file, or overwrite only when explicitly allowed. Dry-run defaults to true in the modular layer.",
-      inputSchema: {
-        repo: z.string().optional(),
-        path: z.string().min(1),
-        content: z.string(),
-        commit_message: z.string().min(1),
-        branch: z.string().optional(),
-        overwrite: z.boolean().optional(),
-        dry_run: z.boolean().optional(),
-      },
+      inputSchema: githubWriteFileInputSchema,
     },
     async ({ repo, path, content, commit_message, branch, overwrite = false, dry_run = true }) => {
       const command = parseJsonCommand(content);
@@ -295,19 +261,7 @@ export function registerGithubTools(server) {
     "github_update_file",
     {
       description: "Update an existing file, or replace exact text when find and replace are supplied. Requires expected_sha.",
-      inputSchema: {
-        repo: z.string().optional(),
-        path: z.string().min(1),
-        content: z.string().optional(),
-        find: z.string().optional(),
-        replace: z.string().optional(),
-        commit_message: z.string().min(1),
-        branch: z.string().optional(),
-        expected_sha: z.string().optional(),
-        occurrence: z.enum(["first", "all"]).optional(),
-        expected_matches: z.number().int().positive().optional(),
-        dry_run: z.boolean().optional(),
-      },
+      inputSchema: githubUpdateFileInputSchema,
     },
     async ({
       repo,
@@ -391,18 +345,7 @@ export function registerGithubTools(server) {
     "github_replace_text",
     {
       description: "Replace exact text in an existing file with SHA protection and diff preview.",
-      inputSchema: {
-        repo: z.string().optional(),
-        path: z.string().min(1),
-        find: z.string().min(1),
-        replace: z.string(),
-        commit_message: z.string().min(1),
-        branch: z.string().optional(),
-        expected_sha: z.string().min(1),
-        occurrence: z.enum(["first", "all"]).optional(),
-        expected_matches: z.number().int().positive().optional(),
-        dry_run: z.boolean().optional(),
-      },
+      inputSchema: githubReplaceTextInputSchema,
     },
     async ({
       repo,
