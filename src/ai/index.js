@@ -4,6 +4,8 @@ export {
   esc,
   extractExplicitDate,
   extractTimeWindow,
+  extractWeekdayReference,
+  inferRelativeDateOffset,
   normalizeDate,
   normalizeLoose,
   sqlLikeLiteral,
@@ -13,5 +15,5 @@ export { findLocationCode, isSystemSpecificQuestion } from "./memphis-ai-intent.
 export { generateWeeklyScheduleReply } from "./memphis-ai-weekly.js";
 export { generateDailyStaffScheduleReply, summarizeDailyAssignments, summarizeDailyRoster } from "./memphis-ai-daily.js";
 export { answerInternalContactQuestion } from "./memphis-ai-contacts.js";
-export { answerEmployeeWeekQuestion } from "./memphis-ai-employee-week.js";
+export { answerEmployeeWeeklyScheduleQuestion } from "./memphis-ai-employee-week.js";
 export { answerOpsManagerScheduleQuestion } from "./memphis-ai-ops-schedule.js";
