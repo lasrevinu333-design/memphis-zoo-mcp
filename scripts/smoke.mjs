@@ -3,14 +3,14 @@ import { validateRuntimeEnv } from "../src/config/env.js";
 import { redactSecrets } from "../src/utils/redact-secrets.js";
 import { summarizeTextDiff, makeUnifiedDiff } from "../src/utils/diff.js";
 import { createMemphisResponder } from "../src/memphis-ai.js";
-import { createMessagingRouter } from "../src/messaging-api.js";
-import { createScheduleRouter } from "../src/schedule-api.js";
 import {
+  createMessagingRouter,
+  createScheduleRouter,
   createEventsAdminRouter,
   createEventsPublicRouter,
   createEventMaintenanceController,
   EVENTS_CONTRACT_VERSION,
-} from "../src/events-api.js";
+} from "../src/routes/index.js";
 import { createGithubClient } from "../src/github/client.js";
 import { listDirectory, readFile, batchReadFiles } from "../src/github/read.js";
 import { previewFullReplacement, previewTextReplacement } from "../src/github/patch.js";
