@@ -6,9 +6,14 @@ import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { z } from "zod";
 import { Octokit } from "octokit";
 import { createClient } from "@supabase/supabase-js";
-import { createMessagingRouter } from "./messaging-api.js";
-import { createScheduleRouter } from "./schedule-api.js";
-import { createEventsAdminRouter, createEventsPublicRouter, createEventMaintenanceController, EVENTS_CONTRACT_VERSION } from "./events-api.js";
+import {
+  EVENTS_CONTRACT_VERSION,
+  createEventMaintenanceController,
+  createEventsAdminRouter,
+  createEventsPublicRouter,
+  createMessagingRouter,
+  createScheduleRouter,
+} from "./routes/index.js";
 
 const app = express();
 app.use(express.json({ limit: "10mb" }));
