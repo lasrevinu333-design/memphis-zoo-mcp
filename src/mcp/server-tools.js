@@ -1,5 +1,5 @@
-import { z } from "zod";
 import { validateRuntimeEnv } from "../config/env.js";
+import { serverDeepHealthInputSchema, serverToolManifestInputSchema } from "./schemas.js";
 import { getToolManifest } from "./tool-manifest.js";
 import { registerMcpTool } from "./register.js";
 import { jsonResponse } from "./responses.js";
@@ -12,9 +12,7 @@ export function registerServerTools(server, options = {}) {
     "server_tool_manifest",
     {
       description: "Return the machine-readable MCP tool manifest.",
-      inputSchema: {
-        include_planned: z.boolean().optional(),
-      },
+      inputSchema: serverToolManifestInputSchema,
     },
     async ({ include_planned = true } = {}) => {
       return jsonResponse(getToolManifest({ includePlanned: include_planned }));
@@ -26,9 +24,7 @@ export function registerServerTools(server, options = {}) {
     "server_deep_health",
     {
       description: "Run non-destructive server health diagnostics.",
-      inputSchema: {
-        strict_env: z.boolean().optional(),
-      },
+      inputSchema: serverDeepHealthInputSchema,
     },
     async ({ strict_env = false } = {}) => {
       const env = validateRuntimeEnv({ strict: strict_env });
