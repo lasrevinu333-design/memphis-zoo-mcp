@@ -16,7 +16,7 @@ import { listDirectory, readFile, batchReadFiles } from "../src/github/read.js";
 import { previewFullReplacement, previewTextReplacement } from "../src/github/patch.js";
 import { writeFile, updateFile, replaceTextInFile } from "../src/github/write.js";
 import { sanitizeReadOnlySql } from "../src/supabase/read.js";
-import { normalizeMigrationInput } from "../src/supabase/migrations.js";
+import { applyMigration, normalizeMigrationInput } from "../src/supabase/migrations.js";
 import { getToolManifest } from "../src/mcp/tool-manifest.js";
 import { createMcpServer } from "../src/mcp/create-mcp-server.js";
 import {
