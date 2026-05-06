@@ -23,6 +23,7 @@ This rebuild is staged so the deployed server stays bootable after each change. 
 - `src/ai/index.js` is the Memphis AI helper barrel used by `src/memphis-ai.js` and smoke tests.
 - `src/services/index.js` is the service barrel used by `src/messaging-api.js` and smoke tests for Memphis responder access.
 - `src/mcp/schemas.js` centralizes modular MCP input schemas for ping, server, GitHub, and Supabase tools.
+- `package.json` keeps production `start` on the bootstrap path while exposing `start:bootstrap` and `start:direct` for controlled verification.
 
 ## Safety rules
 
