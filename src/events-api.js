@@ -172,6 +172,10 @@ async function listLocationGroups(runReadOnlySql) {
       select alias_text as name
       from public.location_group_aliases a
       where a.location_group_id = lg.id and a.active = true
+      union
+      select alias_text as name
+      from public.event_area_aliases eaa
+      where eaa.location_group_id = lg.id and eaa.active = true
     ) item on true
     where lg.active = true
     group by lg.id, lg.group_code, lg.group_name
