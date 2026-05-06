@@ -1,5 +1,5 @@
 import express from "express";
-import { createMemphisResponder } from "./memphis-ai.js";
+import { createMemphisResponder } from "./services/index.js";
 
 export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPayload, appVersion, releaseId, contractVersion }) {
   const router = express.Router();
