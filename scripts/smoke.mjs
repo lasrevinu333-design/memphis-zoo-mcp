@@ -20,6 +20,13 @@ import { applyMigration, normalizeMigrationInput } from "../src/supabase/migrati
 import { getToolManifest } from "../src/mcp/tool-manifest.js";
 import { createMcpServer } from "../src/mcp/create-mcp-server.js";
 import {
+  githubBatchReadInputSchema,
+  githubReplaceTextInputSchema,
+  pingInputSchema,
+  serverDeepHealthInputSchema,
+  supabaseMigrationApplyInputSchema,
+} from "../src/mcp/schemas.js";
+import {
   addMinutesToTime,
   computeWeekdayDate,
   esc,
