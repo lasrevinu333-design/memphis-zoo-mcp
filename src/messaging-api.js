@@ -24,6 +24,30 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     };
   }
 
+  function isCapabilityPrompt(body) {
+    const raw = String(body || "").trim().toLowerCase().replace(/[^a-z0-9\s']/g, " ").replace(/\s+/g, " ");
+    return /\b(what can you do|what do you do|help|commands|features|abilities|capabilities|how can you help)\b/.test(raw);
+  }
+
+  function buildCapabilityReply() {
+    return [
+      "I can help with Memphis Zoo operations using local system data first.",
+      "Ask me about staffing, schedules, who is working, where someone is assigned, your own schedule from this device, open areas, coverage candidates, upcoming events, attendance, open maintenance tickets, location details, current owner, scan state, manager schedules, and internal contacts.",
+      "Try: 'Who is working today?', 'Where is Tammy assigned?', 'What is my schedule tomorrow?', 'Who can cover Aquarium?', 'Any open tickets at Teton?', or 'What events are coming up?'"
+    ].join(" ");
+  }
+
+  function isZooRelatedPrompt(body) {
+    return /\b(memphis zoo|zoo|animal|animals|keeper|keepers|exhibit|habitat|guest|guests|visitor|visitors|attendance|event|events|maintenance|custodial|facilities|operations|ops|aquarium|teton|zambezi|primate|pavilion|herpetarium|cat house|nocturnal|komodo|bonobo)\b/i.test(String(body || ""));
+  }
+
+  function augmentPromptForZooInfoGuardrails(body) {
+    const raw = String(body || "").trim();
+    if (!raw || !isZooRelatedPrompt(raw)) return raw;
+    const priorYear = Math.max(2025, new Date().getFullYear() - 1);
+    return `${raw}\n\nInternal Memphis instruction: This is zoo-related. Prefer local Memphis system data over general model knowledge. If answering with Gemini/general knowledge instead of local records, do not rely on web/current information newer than ${priorYear}. For anything that could have changed after ${priorYear}, say it may need verification in the local system or by a manager.`;
+  }
+
   function normalizeMemphisPromptForLocalRouting(body) {
     const raw = String(body || "").trim();
     if (!raw) return raw;
@@ -193,17 +217,22 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
 
       let reply;
       try {
-        const routedBody = normalizeMemphisPromptForLocalRouting(body);
-        reply = await memphisResponder.generateReply({ userId, deviceId, threadId: thread.id, userMessage: routedBody });
-        if (routedBody !== body) {
-          reply = {
-            ...reply,
-            meta: {
-              ...(reply?.meta && typeof reply.meta === "object" ? reply.meta : {}),
-              routed_from: body,
-              routing_hint: "self_schedule",
-            },
-          };
+        if (isCapabilityPrompt(body)) {
+          reply = { text: buildCapabilityReply(), meta: { fallback: true, mode: "local_capability_reply" } };
+        } else {
+          const routedBody = normalizeMemphisPromptForLocalRouting(body);
+          const aiBody = routedBody === body ? augmentPromptForZooInfoGuardrails(routedBody) : routedBody;
+          reply = await memphisResponder.generateReply({ userId, deviceId, threadId: thread.id, userMessage: aiBody });
+          if (routedBody !== body || aiBody !== body) {
+            reply = {
+              ...reply,
+              meta: {
+                ...(reply?.meta && typeof reply.meta === "object" ? reply.meta : {}),
+                routed_from: body,
+                routing_hint: routedBody !== body ? "self_schedule" : "zoo_info_guardrail",
+              },
+            };
+          }
         }
       } catch (error) {
         console.error("memphis ai reply failed:", error);
