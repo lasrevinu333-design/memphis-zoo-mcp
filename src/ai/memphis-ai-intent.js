@@ -49,7 +49,11 @@ const LOCATION_CODE_STOP_WORDS = new Set([
   "GITHUB",
 ]);
 
-const SYSTEM_INTENT_PATTERN = /\b(schedule|assigned|assignment|works|working|scheduled|staff|staffing|cover|coverage|candidate|backup|absence|absent|off|open segment|uncovered|unassigned|ticket|maintenance|dashboard|attendance|guests|guest|visitors|visitor|scan|owner|location|event|events|upcoming|coming up|employee|workload|load|area|group|restroom|aquarium|zambezi|teton|expo|pavilion|clean|cleans|cleaned)\b/i;
+const SYSTEM_INTENT_PATTERN = /\b(schedule|assigned|assignment|assignments|works|working|scheduled|staff|staffing|shift|shifts|roster|lineup|line up|on today|on tomorrow|on duty|duty|where am i|where are we|where is everyone|where's everyone|who is where|who's where|who is on|who's on|cover|coverage|candidate|backup|absence|absent|off|open segment|uncovered|unassigned|ticket|maintenance|dashboard|attendance|guests|guest|visitors|visitor|scan|owner|location|event|events|upcoming|coming up|employee|workload|load|area|areas|group|groups|restroom|aquarium|zambezi|teton|expo|pavilion|clean|cleans|cleaned)\b/i;
+
+const LOCAL_SCHEDULE_PHRASE_PATTERN = /\b(my day|my shift|my shifts|my area|my areas|what am i doing|where am i|where do i go|where should i go|am i working|do i work|when do i work|when am i in|who do we have|who all do we have|who is here|who's here|who is in|who's in|who is on|who's on|who works|who's working|who is working|who covers|who has|what areas|which areas|what is open|what's open|need coverage|needs coverage|find coverage|fill coverage|coverage for)\b/i;
+
+const LOCAL_SCHEDULE_CONTEXT_PATTERN = /\b(today|tomorrow|yesterday|this week|next week|sunday|monday|tuesday|wednesday|thursday|friday|saturday|morning|afternoon|tonight|tonite|opening|closing|close|open)\b/i;
 
 function originalTokenLooksUppercaseCode(token) {
   return /[A-Z]/.test(token) && token === token.toUpperCase();
@@ -83,10 +87,12 @@ export function isSystemSpecificQuestion(text = "", threadContext = {}) {
 
   if (findLocationCode(raw)) return true;
   if (SYSTEM_INTENT_PATTERN.test(raw)) return true;
+  if (LOCAL_SCHEDULE_PHRASE_PATTERN.test(raw)) return true;
+  if (LOCAL_SCHEDULE_CONTEXT_PATTERN.test(raw) && /\b(who|what|where|when|which|am i|do i|we have|everyone|anybody|someone|somebody)\b/i.test(raw)) return true;
 
   const lastSubject = String(threadContext?.last_subject_type || "").toLowerCase();
   const hasOperationalContext = ["group", "location", "employee", "summary"].includes(lastSubject);
-  const looksLikeFollowUp = /\b(who|what|where|when|why|how|again|there|that|those|them|it|today|tomorrow|next|this|same)\b/i.test(raw);
+  const looksLikeFollowUp = /\b(who|what|where|when|why|how|again|there|that|those|them|it|today|tomorrow|next|this|same|shift|area|coverage|open)\b/i.test(raw);
 
-  return Boolean(hasOperationalContext && looksLikeFollowUp && raw.length < 120);
+  return Boolean(hasOperationalContext && looksLikeFollowUp && raw.length < 140);
 }
