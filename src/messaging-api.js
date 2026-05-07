@@ -24,6 +24,23 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     };
   }
 
+  function normalizeMemphisPromptForLocalRouting(body) {
+    const raw = String(body || "").trim();
+    if (!raw) return raw;
+
+    const alreadySelfSchedule = /\b(my schedule|what am i assigned|what am i doing today)\b/i.test(raw);
+    if (alreadySelfSchedule) return raw;
+
+    const asksSelfSchedule = /\b(when do i work|when am i working|when am i in|am i working|do i work|what'?s my shift|what is my shift|my shift|where am i|where do i go|where should i go|what area am i|which area am i|what areas am i|which areas am i|what am i doing|where am i assigned)\b/i.test(raw);
+    const hasDateOrScheduleContext = /\b(today|tomorrow|tonight|tonite|this morning|this afternoon|sunday|monday|tuesday|wednesday|thursday|friday|saturday|schedule|shift|assigned|assignment|area|areas|work|working)\b/i.test(raw);
+
+    if (asksSelfSchedule || (/\b(i|me|my)\b/i.test(raw) && hasDateOrScheduleContext && /\b(work|working|shift|schedule|assigned|assignment|area|areas)\b/i.test(raw))) {
+      return `my schedule: ${raw}`;
+    }
+
+    return raw;
+  }
+
   router.get("/health", (_req, res) => {
     res.status(200).json(buildHealthPayload("messaging", { contract_version: contractVersion, memphis: getGeminiDiagnostics() }));
   });
@@ -176,7 +193,18 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
 
       let reply;
       try {
-        reply = await memphisResponder.generateReply({ userId, deviceId, threadId: thread.id, userMessage: body });
+        const routedBody = normalizeMemphisPromptForLocalRouting(body);
+        reply = await memphisResponder.generateReply({ userId, deviceId, threadId: thread.id, userMessage: routedBody });
+        if (routedBody !== body) {
+          reply = {
+            ...reply,
+            meta: {
+              ...(reply?.meta && typeof reply.meta === "object" ? reply.meta : {}),
+              routed_from: body,
+              routing_hint: "self_schedule",
+            },
+          };
+        }
       } catch (error) {
         console.error("memphis ai reply failed:", error);
         reply = {
