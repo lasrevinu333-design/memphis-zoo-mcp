@@ -16,8 +16,8 @@ function isOpsScheduleQuestion(text = "") {
   const lower = normalizeLoose(text);
   if (!lower) return false;
 
-  const mentionsOps = /\b(ops|operations|manager|managers|boss|director|custodial manager|horticulture manager|water quality manager)\b/.test(lower)
-    || /\b(eric|operle|brandy|gull|haley|lejman|jennifer|sheffield)\b/.test(lower);
+  const mentionsOps = /\b(ops|operations|manager|managers|boss|director|custodial manager|facilities manager|facility manager|maintenance manager|horticulture manager|water quality manager)\b/.test(lower)
+    || /\b(eric|operle|mckenney|mckenny|brandy|gull|haley|lejman|jennifer|sheffield)\b/.test(lower);
   const asksSchedule = /\b(schedule|work|works|working|shift|shifts|cover|covers|coverage|who is|who's|who has|today|tomorrow|sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/.test(lower);
 
   return mentionsOps && asksSchedule;
@@ -34,24 +34,20 @@ function extractExplicitDayOfWeek(text = "") {
 
 function extractNameTerm(text = "") {
   const lower = normalizeLoose(text);
-  if (/\beric\b|\boperle\b/.test(lower)) return "Eric";
+  if (/\bmckenney\b|\bmckenny\b|\bfacilities manager\b|\bfacility manager\b|\bmaintenance manager\b/.test(lower)) return "Eric McKenney";
+  if (/\boperle\b|\bcustodial manager\b/.test(lower)) return "Eric Operle";
+  if (/\beric\b/.test(lower)) return "Eric";
   if (/\bbrandy\b|\bgull\b/.test(lower)) return "Brandy";
   if (/\bhaley\b|\blejman\b/.test(lower)) return "Haley";
   if (/\bjennifer\b|\bsheffield\b/.test(lower)) return "Jennifer";
   return "";
 }
 
-async function resolveRelativeDay(runReadOnlySql, text = "") {
-  const lower = normalizeLoose(text);
-  const explicitDow = extractExplicitDayOfWeek(text);
-  if (explicitDow != null) return { day_of_week: explicitDow, label: DAY_NAMES[explicitDow] };
-
-  const offset = lower.includes("tomorrow") ? 1 : 0;
-  const rows = await runReadOnlySql(`select extract(dow from public.sch_service_date(now() + interval '${offset} day'))::int as day_of_week, public.sch_service_date(now() + interval '${offset} day') as service_date`);
-  const row = Array.isArray(rows) && rows.length ? rows[0] : null;
-  const day = Number(row?.day_of_week ?? 0);
-  const date = row?.service_date || "";
-  return { day_of_week: day, label: offset === 1 ? `tomorrow (${date}, ${DAY_NAMES[day]})` : `today (${date}, ${DAY_NAMES[day]})` };
+function buildNameFilter(nameTerm = "") {
+  const value = String(nameTerm || "").trim();
+  if (!value) return "";
+  if (value === "Eric") return "and s.display_name ilike '%Eric%'";
+  return `and s.display_name ilike ${`'%${esc(value)}%'`}`;
 }
 
 function summarizeRows(rows = [], label = "") {
@@ -67,8 +63,8 @@ function summarizeRows(rows = [], label = "") {
   return `Ops manager schedule for ${label}: ${parts.join("; ")}.`;
 }
 
-function summarizeWeekly(rows = []) {
-  if (!rows.length) return "I don't see a regular ops manager schedule listed for that person.";
+function summarizeWeeklyForOne(rows = []) {
+  if (!rows.length) return "";
 
   const name = rows[0].display_name;
   const role = rows[0].role_title;
@@ -94,6 +90,19 @@ function summarizeWeekly(rows = []) {
   return `${name} (${role}) works ${chunks.join("; ")}.${phone}`;
 }
 
+function summarizeWeekly(rows = []) {
+  if (!rows.length) return "I don't see a regular ops manager schedule listed for that person.";
+
+  const byPerson = new Map();
+  for (const row of rows) {
+    const key = row.display_name || "Unknown";
+    if (!byPerson.has(key)) byPerson.set(key, []);
+    byPerson.get(key).push(row);
+  }
+
+  return Array.from(byPerson.values()).map(summarizeWeeklyForOne).filter(Boolean).join(" ");
+}
+
 export async function answerOpsManagerScheduleQuestion(runReadOnlySql, text = "") {
   if (!isOpsScheduleQuestion(text)) return null;
 
@@ -107,14 +116,14 @@ export async function answerOpsManagerScheduleQuestion(runReadOnlySql, text = ""
       from public.ops_manager_weekly_schedules s
       left join public.internal_ops_contacts c on c.id = s.contact_id
       where s.active = true
-        and s.display_name ilike '%${esc(nameTerm)}%'
-      order by s.day_of_week, s.shift_start
+        ${buildNameFilter(nameTerm)}
+      order by s.display_name, s.day_of_week, s.shift_start
     `);
     return summarizeWeekly(Array.isArray(rows) ? rows : []);
   }
 
   const day = await resolveRelativeDay(runReadOnlySql, text);
-  const nameFilter = nameTerm ? `and s.display_name ilike '%${esc(nameTerm)}%'` : "";
+  const nameFilter = buildNameFilter(nameTerm);
   const rows = await runReadOnlySql(`
     select s.display_name, c.role_title, c.phone, s.day_of_week, s.shift_start, s.shift_end
     from public.ops_manager_weekly_schedules s
@@ -126,4 +135,17 @@ export async function answerOpsManagerScheduleQuestion(runReadOnlySql, text = ""
   `);
 
   return summarizeRows(Array.isArray(rows) ? rows : [], day.label);
+}
+
+async function resolveRelativeDay(runReadOnlySql, text = "") {
+  const lower = normalizeLoose(text);
+  const explicitDow = extractExplicitDayOfWeek(text);
+  if (explicitDow != null) return { day_of_week: explicitDow, label: DAY_NAMES[explicitDow] };
+
+  const offset = lower.includes("tomorrow") ? 1 : 0;
+  const rows = await runReadOnlySql(`select extract(dow from public.sch_service_date(now() + interval '${offset} day'))::int as day_of_week, public.sch_service_date(now() + interval '${offset} day') as service_date`);
+  const row = Array.isArray(rows) && rows.length ? rows[0] : null;
+  const day = Number(row?.day_of_week ?? 0);
+  const date = row?.service_date || "";
+  return { day_of_week: day, label: offset === 1 ? `tomorrow (${date}, ${DAY_NAMES[day]})` : `today (${date}, ${DAY_NAMES[day]})` };
 }
