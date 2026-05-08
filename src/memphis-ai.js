@@ -83,8 +83,10 @@ function isBroadGeneralQuestion(text = "") {
 function isContactLookupPrompt(text = "") {
   const lower = normalizeLoose(text);
   if (!lower) return false;
+  if (findLocationCode(text)) return false;
+  if (/\b(aquarium|restroom|teton|zambezi|expo|pavilion|event center|memmex|bonobos|komodos|herpetarium|primate|cat house|cathouse|nocturnal|east admin|education)\b/.test(lower)) return false;
 
-  if (/\b(phone|number|contact|call|boss|director|supervisor)\b/.test(lower)) return true;
+  if (/\b(phone|number|contact|call|text|reach|boss|director|supervisor)\b/.test(lower)) return true;
   if (/\b(eric|operle|brandy|gull|haley|lejman|jennifer|sheffield)\b/.test(lower)) return true;
   if (/\b(who is|who are|who s|whos|who's)\b/.test(lower) && /\b(ops manager|operations manager|manager|managers|custodial manager|horticulture manager|water quality manager|facilities manager)\b/.test(lower)) return true;
 
@@ -127,7 +129,7 @@ function isOpsManagerSchedulePrompt(text = "") {
 function isEmployeeAreaQuestion(text = "") {
   const lower = normalizeLoose(text);
   if (!lower) return false;
-  return /\b(area|areas|assignment|assignments|assigned|where)\b/.test(lower);
+  return /\b(area|areas|assignment|assignments|assigned|where|who has|who covers|who owns|current owner)\b/.test(lower);
 }
 
 function mentionsMemphisPlace(text = "") {
