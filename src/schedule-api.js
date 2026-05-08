@@ -146,6 +146,34 @@ export function createScheduleRouter({
     return autoGenerateState;
   }
 
+  function summarizeAssignmentDiff(data = {}) {
+    const removed = Array.isArray(data?.removed_assignments) ? data.removed_assignments : [];
+    const reassigned = Array.isArray(data?.reassigned_assignments) ? data.reassigned_assignments : [];
+    const openSegments = Array.isArray(data?.open_segments) ? data.open_segments : [];
+    const warnings = Array.isArray(data?.overload_warnings) ? data.overload_warnings : [];
+    const groups = new Set();
+    const employees = new Set();
+    const collect = (row) => {
+      const groupName = String(row?.group_name || row?.area_name || row?.location_name || row?.group_code || "").trim();
+      const employeeName = String(row?.employee_name || row?.assigned_employee_name || row?.display_name || "").trim();
+      if (groupName) groups.add(groupName);
+      if (employeeName) employees.add(employeeName);
+    };
+    removed.forEach(collect);
+    reassigned.forEach(collect);
+    openSegments.forEach(collect);
+    return {
+      changed_groups: Array.from(groups),
+      changed_employees: Array.from(employees),
+      counts: {
+        removed_assignments: removed.length,
+        reassigned_assignments: reassigned.length,
+        open_segments: openSegments.length,
+        warnings: warnings.length,
+      },
+    };
+  }
+
   async function getAssignedEmployeeForDevice(deviceId) {
     const rows = await runReadOnlySql(`
       select
@@ -696,6 +724,8 @@ export function createScheduleRouter({
       const finalState = generatedBeforePreview ? await getDailyGenerationState(serviceDate) : initialState;
       const rows = await runReadOnlySql(`select public.sch_absence_preview('${esc(serviceDate)}'::date, ${absentIdsSql}) as data`);
       const data = Array.isArray(rows) && rows.length ? rows[0].data : null;
+      const diff = summarizeAssignmentDiff(data || {});
+      if (data && typeof data === "object") Object.assign(data, diff);
       res.status(200).json({
         ok: true,
         data,
@@ -724,6 +754,15 @@ export function createScheduleRouter({
         p_service_date: serviceDate,
         p_absent_employee_ids: absentIds,
       });
+      if (data && typeof data === "object") {
+        const diff = summarizeAssignmentDiff({
+          removed_assignments: data.removed_assignments || data.generate_result?.removed_assignments,
+          reassigned_assignments: data.reassigned_assignments || data.generate_result?.reassigned_assignments,
+          open_segments: data.open_segments || data.generate_result?.open_segments,
+          overload_warnings: data.overload_warnings || data.generate_result?.overload_warnings,
+        });
+        data.generate_result = { ...(data.generate_result || {}), ...diff };
+      }
       res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Absence publish failed");
