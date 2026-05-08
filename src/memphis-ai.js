@@ -10,6 +10,7 @@ import {
   extractWeekdayReference,
   findLocationCode,
   generateDailyStaffScheduleReply,
+  hasLocationKeyword,
   generateWeeklyScheduleReply,
   inferRelativeDateOffset,
   isSystemSpecificQuestion,
@@ -83,8 +84,7 @@ function isBroadGeneralQuestion(text = "") {
 function isContactLookupPrompt(text = "") {
   const lower = normalizeLoose(text);
   if (!lower) return false;
-  if (findLocationCode(text)) return false;
-  if (/\b(aquarium|restroom|teton|zambezi|expo|pavilion|event center|memmex|bonobos|komodos|herpetarium|primate|cat house|cathouse|nocturnal|east admin|education)\b/.test(lower)) return false;
+  if (findLocationCode(text) || hasLocationKeyword(text)) return false;
 
   if (/\b(phone|number|contact|call|text|reach|boss|director|supervisor)\b/.test(lower)) return true;
   if (/\b(eric|operle|brandy|gull|haley|lejman|jennifer|sheffield)\b/.test(lower)) return true;
@@ -113,8 +113,7 @@ function isNamedRegularOpsSchedulePrompt(text = "") {
 function isOpsManagerSchedulePrompt(text = "") {
   const lower = normalizeLoose(text);
   if (!lower) return false;
-  if (findLocationCode(text)) return false;
-  if (/\b(aquarium|restroom|teton|zambezi|expo|pavilion|event center|memmex|bonobos|komodos|herpetarium|primate|cat house|cathouse|nocturnal|east admin|education)\b/.test(lower)) return false;
+  if (findLocationCode(text) || hasLocationKeyword(text)) return false;
 
   const mentionsOps =
     /\b(ops|operations|manager|boss|director|custodial manager|horticulture manager|water quality manager)\b/.test(lower) ||
@@ -172,7 +171,7 @@ function isContradictionFollowUp(text = "") {
 function shouldUseEmployeeContext(text = "") {
   const lower = normalizeLoose(text);
   if (!lower) return false;
-  if (/\b(teton|aquarium|restroom|zambezi|expo|pavilion|event center|memmex|bonobos|komodos|herpetarium|primate|cat house|cathouse|nocturnal|east admin|education)\b/.test(lower)) return false;
+  if (hasLocationKeyword(text)) return false;
   return /\b(she|he|they|them|that person|same person|where was|where is|assigned today|assigned tomorrow)\b/.test(lower);
 }
 
@@ -1178,7 +1177,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     const threadContext = await fetchThreadContext(runReadOnlySql, threadId);
     const recentMessages = await fetchRecentThreadMessages(runReadOnlySql, threadId, 10);
 
-    const locationHint = findLocationCode(userMessage) || /\b(aquarium|restroom|teton|zambezi|expo|pavilion|event center|memmex|bonobos|komodos|herpetarium|primate|cat house|cathouse|nocturnal|east admin|education)\b/i.test(userMessage);
+    const locationHint = findLocationCode(userMessage) || hasLocationKeyword(userMessage);
 
     if (!locationHint && isOpsManagerSchedulePrompt(userMessage)) {
       const opsScheduleText = isNamedRegularOpsSchedulePrompt(userMessage)

@@ -1,4 +1,5 @@
-import { esc, findLocationCode, normalizeLoose } from "./memphis-ai-utils.js";
+import { esc, normalizeLoose } from "./memphis-ai-utils.js";
+import { findLocationCode, hasLocationKeyword } from "./memphis-ai-intent.js";
 
 const DAY_NAMES = {
   0: "Sunday",
@@ -15,8 +16,7 @@ const DAY_LOOKUP = Object.fromEntries(Object.entries(DAY_NAMES).map(([value, nam
 function isOpsScheduleQuestion(text = "") {
   const lower = normalizeLoose(text);
   if (!lower) return false;
-  if (findLocationCode(text)) return false;
-  if (/\b(aquarium|restroom|teton|zambezi|expo|pavilion|event center|memmex|bonobos|komodos|herpetarium|primate|cat house|cathouse|nocturnal|east admin|education)\b/.test(lower)) return false;
+  if (findLocationCode(text) || hasLocationKeyword(text)) return false;
 
   const mentionsOps = /\b(ops|operations|manager|managers|boss|director|custodial manager|facilities manager|facility manager|maintenance manager|horticulture manager|water quality manager)\b/.test(lower)
     || /\b(eric|operle|mckenney|mckenny|brandy|gull|haley|lejman|jennifer|sheffield)\b/.test(lower);
