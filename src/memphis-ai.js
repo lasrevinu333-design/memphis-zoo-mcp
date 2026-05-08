@@ -174,23 +174,31 @@ function shouldUseEmployeeContext(text = "") {
 
 function openerReply(text = "") {
   const lower = normalizeLoose(text);
-  if (/connected/.test(lower)) return "Yeah. I am up and talking. What do you need?";
-  if (/alive/.test(lower)) return "Still kicking. What are we checking?";
-  if (/figured out|doing better|better/.test(lower)) return "Yeah, better than before. Still ugly in a few corners, but a lot less confused. What do you need?";
-  if (/how are you|you good|hows it going|how s it going/.test(lower)) return "Doing alright. Slightly less feral than yesterday. What are you trying to pin down?";
-  if (/what up|whats up|what s up|dude what it do/.test(lower)) return "Not much. Just chewing through schedule logic and trying not to embarrass myself. What do you need?";
+  if (/connected/.test(lower)) return "Yeah. I am connected. What do you need?";
+  if (/alive/.test(lower)) return "Yeah. I am here. What are we checking?";
+  if (/figured out|doing better|better/.test(lower)) return "Yeah, better than before. What do you need?";
+  if (/how are you|you good|hows it going|how s it going/.test(lower)) return "Doing alright. What are you trying to pin down?";
+  if (/what up|whats up|what s up|dude what it do/.test(lower)) return "Not much. What do you need?";
   return "Hey. What are we trying to solve?";
 }
 
 function genericConversationalFallback(text = "", threadContext = {}) {
   const lower = normalizeLoose(text);
   const weatherLocation = inferWeatherLocation(text, threadContext);
-  if (/alive|connected/.test(lower)) return "Yeah. I am here and connected enough to answer real system questions. Give me one.";
+  if (/alive|connected/.test(lower)) return "Yeah. I am here and ready for system questions.";
   if (/sparrow/.test(lower)) return "That depends. African or European?";
-  if (/weather/.test(lower)) return `I should be able to answer weather for ${weatherLocation || DEFAULT_WEATHER_LOCATION}, but my general-answer side did not land it cleanly.`;
-  if (/recipe|ingredients|cook|bake|pumpkin pie|creme brulee|pretzel|pretzels/.test(lower)) return "That is a general recipe question, but Gemini did not return a clean answer. Check the Gemini/API key, model access, or Render env vars and retry.";
+  if (/weather/.test(lower)) return `I could not land a clean weather answer for ${weatherLocation || DEFAULT_WEATHER_LOCATION} right now.`;
+  if (/recipe|ingredients|cook|bake|pumpkin pie|creme brulee|pretzel|pretzels/.test(lower)) return "I did not get a clean general-answer response for that recipe question. Check the Gemini/API setup and try again.";
   if (/hello|hey|hi/.test(lower)) return "Hey. What do you need?";
-  return "I am here. Ask me something specific or just talk to me like a person.";
+  return "I am here. Ask me something specific and I will keep it tight.";
+}
+
+function formatLead(label, value) {
+  return `${label}: ${value}.`;
+}
+
+function joinBullets(lines = []) {
+  return lines.filter(Boolean).join(" ");
 }
 
 function summarizeWeatherPayload(weather) {
@@ -1105,7 +1113,11 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
         const owner = await executeTool("get_current_owner", { location_code: code });
         await saveThreadContext(runRpc, threadId, { last_intent: "current_owner", last_location_code: code, last_service_date: relativeServiceDate, last_subject_type: "location" });
         if (!owner) return { text: `I could not find a current owner for ${code}.`, meta: { fallback: true, mode: "local_owner" } };
-        return { text: `${owner.location_name || owner.location_code || code} is currently owned by ${owner.owner_display_name || owner.employee_name || "nobody listed"}.`, meta: { fallback: true, mode: "local_owner" } };
+        return { text: joinBullets([
+          formatLead("Current owner", owner.owner_display_name || owner.employee_name || "nobody listed"),
+          owner.location_name || owner.location_code ? `Location: ${owner.location_name || owner.location_code}.` : "",
+          owner.coverage_start || owner.coverage_end ? `Coverage: ${owner.coverage_start || "?"} to ${owner.coverage_end || "?"}.` : "",
+        ]), meta: { fallback: true, mode: "local_owner" } };
       }
     }
 
@@ -1114,7 +1126,11 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       if (code) {
         const stateValue = await executeTool("get_scan_state", { location_code: code });
         await saveThreadContext(runRpc, threadId, { last_intent: "scan_state", last_location_code: code, last_service_date: relativeServiceDate, last_subject_type: "location" });
-        return { text: `${stateValue.location_name || stateValue.location_code || code} is currently ${stateValue.suggested_action || stateValue.status || "available"}.`, meta: { fallback: true, mode: "local_scan" } };
+        return { text: joinBullets([
+          formatLead("Scan state", stateValue.suggested_action || stateValue.status || "available"),
+          stateValue.location_name || stateValue.location_code ? `Location: ${stateValue.location_name || stateValue.location_code}.` : "",
+          stateValue.open_session_status ? `Session: ${stateValue.open_session_status}.` : "",
+        ]), meta: { fallback: true, mode: "local_scan" } };
       }
     }
 
