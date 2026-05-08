@@ -4,8 +4,11 @@ function isContactQuestion(text = "") {
   const lower = normalizeLoose(text);
   if (!lower) return false;
 
-  return /\b(who is|who's|contact|phone|number|manager|boss|director|ops manager|operations manager|custodial manager|horticulture manager|water quality|facilities manager)\b/.test(lower)
-    || /\b(eric|operle|brandy|gull|haley|lejman|jennifer|sheffield)\b/.test(lower);
+  const explicitContactIntent = /\b(contact|phone|number|call|text|reach|how do i reach|how can i reach)\b/.test(lower);
+  const namedLookup = /\b(eric|operle|brandy|gull|haley|lejman|jennifer|sheffield)\b/.test(lower);
+  const titledLookup = /\b(ops manager|operations manager|custodial manager|horticulture manager|water quality manager|facilities manager)\b/.test(lower) && /\b(who is|who's|contact|phone|number)\b/.test(lower);
+
+  return explicitContactIntent || namedLookup || titledLookup;
 }
 
 function contactWhereClause(text = "") {
@@ -35,10 +38,10 @@ function contactWhereClause(text = "") {
   return `(${filters.join(" or ")})`;
 }
 
-function summarizeContact(contact) {
+function summarizeContact(contact, { includePhone = false } = {}) {
   const parts = [`${contact.display_name}: ${contact.role_title}`];
   if (contact.department) parts.push(contact.department);
-  if (contact.phone) parts.push(`phone ${contact.phone}`);
+  if (includePhone && contact.phone) parts.push(`phone ${contact.phone}`);
   if (contact.notes) parts.push(contact.notes);
   return parts.join(". ") + ".";
 }
@@ -59,6 +62,7 @@ function summarizeAmbiguousContacts(contacts = [], firstName = "") {
 export async function answerInternalContactQuestion(runReadOnlySql, text = "") {
   if (!isContactQuestion(text)) return null;
 
+  const includePhone = /\b(contact|phone|number|call|text|reach|how do i reach|how can i reach)\b/.test(normalizeLoose(text));
   const where = contactWhereClause(text);
   const rows = await runReadOnlySql(`
     select display_name, role_title, department, phone, notes, active, sort_order
@@ -76,5 +80,5 @@ export async function answerInternalContactQuestion(runReadOnlySql, text = "") {
     if (erics.length > 1) return summarizeAmbiguousContacts(erics, "Eric");
   }
 
-  return contacts.map(summarizeContact).join(" ");
+  return contacts.map((contact) => summarizeContact(contact, { includePhone })).join(" ");
 }

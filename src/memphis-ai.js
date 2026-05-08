@@ -524,6 +524,67 @@ async function resolveAreaRow(runReadOnlySql, serviceDate, text = "", threadCont
   return best ? best.row : null;
 }
 
+async function resolveLocationRow(runReadOnlySql, text = "", threadContext = {}) {
+  const raw = String(text || "").trim();
+  const contextCode = String(threadContext?.last_location_code || "").trim();
+  const source = findLocationCode(raw) || raw || contextCode;
+  if (!source) return null;
+  const rows = await runReadOnlySql(`
+    select l.id, l.location_code, l.location_name, l.location_type, l.form_type, l.active,
+      coalesce(array_agg(distinct lg.group_name) filter (where lg.group_name is not null), array[]::text[]) as group_names
+    from public.locations l
+    left join public.location_group_memberships lgm on lgm.location_id = l.id and lgm.active = true
+    left join public.location_groups lg on lg.id = lgm.location_group_id and lg.active = true
+    where l.active = true and (
+      l.location_code ilike ${sqlLikeLiteral(source)}
+      or l.location_name ilike ${sqlLikeLiteral(source)}
+      or lower(${sqlLikeLiteral(source)}) like '%' || lower(l.location_code) || '%'
+      or lower(${sqlLikeLiteral(source)}) like '%' || lower(l.location_name) || '%'
+      or exists (
+        select 1
+        from public.location_group_memberships lgm2
+        join public.location_groups lg2 on lg2.id = lgm2.location_group_id and lg2.active = true
+        left join public.location_group_aliases lga2 on lga2.location_group_id = lg2.id and lga2.active = true
+        where lgm2.location_id = l.id
+          and lgm2.active = true
+          and (
+            lg2.group_name ilike ${sqlLikeLiteral(source)}
+            or lg2.group_code ilike ${sqlLikeLiteral(source)}
+            or coalesce(lga2.alias_text, '') ilike ${sqlLikeLiteral(source)}
+            or lower(${sqlLikeLiteral(source)}) like '%' || lower(lg2.group_name) || '%'
+            or lower(${sqlLikeLiteral(source)}) like '%' || lower(lg2.group_code) || '%'
+            or lower(${sqlLikeLiteral(source)}) like '%' || lower(coalesce(lga2.alias_text, '')) || '%'
+          )
+      )
+    )
+    group by l.id, l.location_code, l.location_name, l.location_type, l.form_type, l.active
+    order by case when lower(l.location_code)=lower(${sqlLikeLiteral(source)}) then 0 when lower(l.location_name)=lower(${sqlLikeLiteral(source)}) then 1 else 2 end,
+             length(l.location_name), l.location_name
+    limit 1
+  `);
+  return Array.isArray(rows) && rows.length ? rows[0] : null;
+}
+
+async function summarizeOwnerQuestion(runReadOnlySql, serviceDate, text = "", threadContext = {}) {
+  const location = await resolveLocationRow(runReadOnlySql, text, threadContext);
+  if (location?.location_code) {
+    const ownerRows = await runReadOnlySql(`select * from public.sch_get_current_owner('${esc(location.location_code)}', now())`);
+    const owner = Array.isArray(ownerRows) && ownerRows.length ? ownerRows[0] : null;
+    if (owner?.owner_display_name || owner?.employee_name) {
+      return `Current owner: ${owner.owner_display_name || owner.employee_name}. Location: ${location.location_name || location.location_code}. Coverage: ${owner.coverage_start || '—'}-${owner.coverage_end || '—'}.`;
+    }
+  }
+
+  const areaRow = await resolveAreaRow(runReadOnlySql, serviceDate, text, threadContext);
+  if (!areaRow?.group_name) return "";
+  const rows = await runReadOnlySql(`select * from public.v_memphis_area_schedule where service_date = '${esc(serviceDate)}'::date and (group_name ilike ${sqlLikeLiteral(areaRow.group_name)} or group_code ilike ${sqlLikeLiteral(areaRow.group_code || areaRow.group_name)}) order by coverage_start asc, segment_number asc`);
+  const assignments = Array.isArray(rows) ? rows.filter((row) => row.employee_name || row.assigned_employee_name) : [];
+  if (!assignments.length) return `I could not find an assignment for ${areaRow.group_name} on ${serviceDate}.`;
+  const lines = assignments.slice(0, 4).map((row) => `${row.employee_name || row.assigned_employee_name} ${row.coverage_start || '—'}-${row.coverage_end || '—'}`);
+  const label = areaRow.group_name || location?.location_name || "that area";
+  return `${label}: ${lines.join('; ')}.`;
+}
+
 async function fetchAssignedEmployeeForDevice(runReadOnlySql, deviceId) {
   const normalized = String(deviceId || "").trim();
   if (!normalized) return null;
@@ -1111,17 +1172,16 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     }
 
     if (lower.includes("owner") || lower.includes("who owns") || lower.includes("who has")) {
-      const code = findLocationCode(text) || threadContext?.last_location_code || "";
-      if (code) {
-        const owner = await executeTool("get_current_owner", { location_code: code });
-        await saveThreadContext(runRpc, threadId, { last_intent: "current_owner", last_location_code: code, last_service_date: relativeServiceDate, last_subject_type: "location" });
-        if (!owner) return { text: `I could not find a current owner for ${code}.`, meta: { fallback: true, mode: "local_owner" } };
-        return { text: joinBullets([
-          formatLead("Current owner", owner.owner_display_name || owner.employee_name || "nobody listed"),
-          owner.location_name || owner.location_code ? `Location: ${owner.location_name || owner.location_code}.` : "",
-          owner.coverage_start || owner.coverage_end ? `Coverage: ${owner.coverage_start || "?"} to ${owner.coverage_end || "?"}.` : "",
-        ]), meta: { fallback: true, mode: "local_owner" } };
-      }
+      const locationRow = await resolveLocationRow(runReadOnlySql, text, threadContext);
+      const ownerText = await summarizeOwnerQuestion(runReadOnlySql, relativeServiceDate, text, threadContext);
+      await saveThreadContext(runRpc, threadId, {
+        last_intent: "current_owner",
+        last_location_code: locationRow?.location_code || threadContext?.last_location_code || null,
+        last_group_name: locationRow?.group_names?.[0] || threadContext?.last_group_name || null,
+        last_service_date: relativeServiceDate,
+        last_subject_type: locationRow?.location_code ? "location" : "group"
+      });
+      if (ownerText) return { text: ownerText, meta: { fallback: true, mode: "local_owner" } };
     }
 
     if (lower.includes("scan") || lower.includes("state")) {
