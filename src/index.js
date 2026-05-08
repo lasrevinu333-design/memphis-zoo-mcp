@@ -38,7 +38,7 @@ const SCAN_RPC_ALLOWLIST = new Set([
   "tool_record_scan_event"
 ]);
 
-const RELEASE_ID = "release-2026.04.30.3";
+const RELEASE_ID = "release-2026.05.08.2";
 const APP_VERSION = RELEASE_ID;
 const SCAN_CONTRACT_VERSION = "scan.v1";
 const DASHBOARD_CONTRACT_VERSION = "dashboard.v1";
