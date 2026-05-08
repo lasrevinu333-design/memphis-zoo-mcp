@@ -221,15 +221,14 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
           reply = { text: buildCapabilityReply(), meta: { fallback: true, mode: "local_capability_reply" } };
         } else {
           const routedBody = normalizeMemphisPromptForLocalRouting(body);
-          const aiBody = routedBody === body ? augmentPromptForZooInfoGuardrails(routedBody) : routedBody;
-          reply = await memphisResponder.generateReply({ userId, deviceId, threadId: thread.id, userMessage: aiBody });
-          if (routedBody !== body || aiBody !== body) {
+          reply = await memphisResponder.generateReply({ userId, deviceId, threadId: thread.id, userMessage: routedBody });
+          if (routedBody !== body) {
             reply = {
               ...reply,
               meta: {
                 ...(reply?.meta && typeof reply.meta === "object" ? reply.meta : {}),
                 routed_from: body,
-                routing_hint: routedBody !== body ? "self_schedule" : "zoo_info_guardrail",
+                routing_hint: "self_schedule",
               },
             };
           }
