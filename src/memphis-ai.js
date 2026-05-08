@@ -464,18 +464,18 @@ function getWeekStartDate(text = "", todayServiceDate, relativeServiceDate) {
   return relativeServiceDate || todayServiceDate;
 }
 
-async function ensureDailySchedule(runRpc, serviceDate) {
+async function ensureDailySchedule(runRpc, serviceDate, { force = false } = {}) {
   try {
-    return await runRpc("sch_generate_daily_schedule", { p_service_date: serviceDate, p_force: false });
+    return await runRpc("sch_generate_daily_schedule", { p_service_date: serviceDate, p_force: force });
   } catch (error) {
     console.error("memphis schedule generation failed:", serviceDate, error);
     return null;
   }
 }
 
-async function ensureScheduleRange(runRpc, dates = []) {
+async function ensureScheduleRange(runRpc, dates = [], { force = false } = {}) {
   for (const serviceDate of dates) {
-    await ensureDailySchedule(runRpc, serviceDate);
+    await ensureDailySchedule(runRpc, serviceDate, { force });
   }
 }
 
@@ -1066,7 +1066,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     let relativeServiceDate = explicitToday ? todayServiceDate : (mergeContextDate(text, threadContext, explicitDate) || todayServiceDate);
     const futureWindowOffset = daysBetweenIsoDates(todayServiceDate, relativeServiceDate);
     if (futureWindowOffset != null && futureWindowOffset >= 0 && futureWindowOffset < 7) {
-      await ensureScheduleRange(runRpc, buildScheduleDateRange(todayServiceDate, 7));
+      await ensureScheduleRange(runRpc, buildScheduleDateRange(todayServiceDate, 7), { force: true });
     }
     if (!explicitDate && weekdayRef && todayServiceDate) {
       relativeServiceDate = computeWeekdayDate(todayServiceDate, weekdayRef.weekday, weekdayRef.modifier) || relativeServiceDate;
@@ -1246,7 +1246,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       let data = await executeTool("get_area_schedule", { area: areaRow?.group_name || text, service_date: relativeServiceDate });
       const futureOffset = daysBetweenIsoDates(todayServiceDate, relativeServiceDate);
       if ((!Array.isArray(data?.assignments) || !data.assignments.length) && futureOffset != null && futureOffset >= 0 && futureOffset < 7) {
-        await ensureDailySchedule(runRpc, relativeServiceDate);
+        await ensureDailySchedule(runRpc, relativeServiceDate, { force: true });
         data = await executeTool("get_area_schedule", { area: areaRow?.group_name || text, service_date: relativeServiceDate });
       }
       await saveThreadContext(runRpc, threadId, { last_intent: "area_schedule", last_group_name: areaRow?.group_name || data.group_name || null, last_service_date: relativeServiceDate, last_subject_type: "group" });
