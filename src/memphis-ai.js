@@ -128,7 +128,7 @@ function isOpsManagerSchedulePrompt(text = "") {
 function isEmployeeAreaQuestion(text = "") {
   const lower = normalizeLoose(text);
   if (!lower) return false;
-  return /\b(area|areas|assignment|assignments|assigned|where|who has|who covers|who owns|current owner)\b/.test(lower);
+  return /\b(area|areas|assignment|assignments|assigned|where|who has|who covers|who owns|current owner|clean|cleans|cleaning|who cleans)\b/.test(lower);
 }
 
 function mentionsMemphisPlace(text = "") {
@@ -507,8 +507,23 @@ function scoreAreaMatch(candidate, rawNeedle) {
   return best;
 }
 
-async function resolveAreaRow(runReadOnlySql, serviceDate, text = "", threadContext = {}) {
+function normalizeAreaPrompt(text = "", threadContext = {}) {
   const raw = String(text || "").trim();
+  if (!raw) return String(threadContext?.last_group_name || "").trim();
+  const aliasMap = new Map([
+    ["lomodos", "komodos"],
+    ["komodo", "komodos"],
+  ]);
+  const normalized = normalizeLoose(raw);
+  if (aliasMap.has(normalized)) return aliasMap.get(normalized);
+  if (/^(how about|what about)\b/i.test(raw) && String(threadContext?.last_group_name || "").trim()) {
+    return `${threadContext.last_group_name} ${raw}`;
+  }
+  return raw;
+}
+
+async function resolveAreaRow(runReadOnlySql, serviceDate, text = "", threadContext = {}) {
+  const raw = normalizeAreaPrompt(text, threadContext);
   const contextArea = String(threadContext?.last_group_name || "").trim();
   const source = raw || contextArea;
   if (!source) return null;

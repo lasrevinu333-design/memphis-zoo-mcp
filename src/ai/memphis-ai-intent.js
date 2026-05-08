@@ -98,7 +98,7 @@ export function isSystemSpecificQuestion(text = "", threadContext = {}) {
 
   const lastSubject = String(threadContext?.last_subject_type || "").toLowerCase();
   const hasOperationalContext = ["group", "location", "employee", "summary"].includes(lastSubject);
-  const looksLikeFollowUp = /\b(who|what|where|when|why|how|again|there|that|those|them|it|today|tomorrow|next|this|same|shift|area|coverage|open)\b/i.test(raw);
+  const looksLikeFollowUp = /\b(who|what|where|when|why|how|about|again|there|that|those|them|it|today|tomorrow|next|this|same|shift|area|coverage|open|sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/i.test(raw);
 
   return Boolean(hasOperationalContext && looksLikeFollowUp && raw.length < 140);
 }
