@@ -11,6 +11,9 @@ export function createScheduleRouter({
 }) {
   const router = express.Router();
   const requireSchedulePin = requireAdminApiAuth;
+  const AUTO_GENERATE_WINDOW_DAYS = 7;
+  const AUTO_GENERATE_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+  let autoGenerateState = { lastStartedAt: 0, running: false, lastCompletedAt: 0, lastWindowStart: null, lastResult: [] };
 
   function fail(res, error, fallback = "Schedule request failed", status = 400) {
     res.status(status).json({ ok: false, error: error?.message || fallback });
@@ -125,6 +128,22 @@ export function createScheduleRouter({
       });
     }
     return generated;
+  }
+
+  async function maybeAutoGenerateWindow(anchorDate = null) {
+    const now = Date.now();
+    if (autoGenerateState.running) return autoGenerateState;
+    if (now - autoGenerateState.lastStartedAt < AUTO_GENERATE_COOLDOWN_MS) return autoGenerateState;
+    const startDate = requireDate(anchorDate || (await getServiceDate()));
+    autoGenerateState = { ...autoGenerateState, running: true, lastStartedAt: now, lastWindowStart: startDate };
+    try {
+      const generated = await ensureScheduleRange(startDate, AUTO_GENERATE_WINDOW_DAYS, { force: false });
+      autoGenerateState = { ...autoGenerateState, running: false, lastCompletedAt: Date.now(), lastResult: generated, lastWindowStart: startDate };
+    } catch (error) {
+      console.error("schedule auto-generate window failed:", error);
+      autoGenerateState = { ...autoGenerateState, running: false };
+    }
+    return autoGenerateState;
   }
 
   async function getAssignedEmployeeForDevice(deviceId) {
@@ -605,6 +624,13 @@ export function createScheduleRouter({
     }
   });
 
+  router.use(async (req, _res, next) => {
+    if (req.method === "GET" && !req.path.startsWith("/generation-window") && !req.path.startsWith("/health")) {
+      maybeAutoGenerateWindow().catch((error) => console.error("schedule auto-generate trigger failed:", error));
+    }
+    next();
+  });
+
   router.get("/current-owner", async (req, res) => {
     try {
       const locationCode = String(req.query.location_code || req.query.code || "").trim();
@@ -633,9 +659,11 @@ export function createScheduleRouter({
     try {
       const serviceDate = requireDate(req.query.service_date || req.query.date || (await getServiceDate()));
       const days = Math.max(1, Math.min(14, Number.parseInt(String(req.query.days || 7), 10) || 7));
+      const triggerAuto = String(req.query.trigger_auto || "").trim() === "1";
+      if (triggerAuto) await maybeAutoGenerateWindow(serviceDate);
       const window = await getScheduleRangeStatus(serviceDate, days);
       const ready_days = window.filter((row) => row.ready).length;
-      res.status(200).json({ ok: true, data: { service_date: serviceDate, days, ready_days, missing_days: Math.max(0, days - ready_days), window }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+      res.status(200).json({ ok: true, data: { service_date: serviceDate, days, ready_days, missing_days: Math.max(0, days - ready_days), window, auto_generation: { running: autoGenerateState.running, last_started_at: autoGenerateState.lastStartedAt || null, last_completed_at: autoGenerateState.lastCompletedAt || null, last_window_start: autoGenerateState.lastWindowStart || null, generated_days: Array.isArray(autoGenerateState.lastResult) ? autoGenerateState.lastResult.filter((row) => row.generated).length : 0 } }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Schedule window status failed");
     }
