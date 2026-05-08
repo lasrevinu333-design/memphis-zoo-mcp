@@ -1064,6 +1064,10 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     const explicitToday = /\btoday\b/i.test(text);
     const weekdayRef = extractWeekdayReference(text);
     let relativeServiceDate = explicitToday ? todayServiceDate : (mergeContextDate(text, threadContext, explicitDate) || todayServiceDate);
+    const futureWindowOffset = daysBetweenIsoDates(todayServiceDate, relativeServiceDate);
+    if (futureWindowOffset != null && futureWindowOffset >= 0 && futureWindowOffset < 7) {
+      await ensureScheduleRange(runRpc, buildScheduleDateRange(todayServiceDate, 7));
+    }
     if (!explicitDate && weekdayRef && todayServiceDate) {
       relativeServiceDate = computeWeekdayDate(todayServiceDate, weekdayRef.weekday, weekdayRef.modifier) || relativeServiceDate;
     } else if (!explicitDate && !weekdayRef) {
