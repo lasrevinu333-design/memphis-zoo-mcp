@@ -84,6 +84,34 @@ export function createScheduleRouter({
       : { roster_count: 0, assignment_count: 0 };
   }
 
+  function addDaysToIsoDate(serviceDate, daysToAdd = 0) {
+    const base = new Date(`${serviceDate}T12:00:00`);
+    if (Number.isNaN(base.getTime())) return serviceDate;
+    base.setDate(base.getDate() + Number(daysToAdd || 0));
+    return base.toISOString().slice(0, 10);
+  }
+
+  async function ensureScheduleRange(startDate, days = 7, { force = false } = {}) {
+    const totalDays = Math.max(1, Math.min(14, Number.parseInt(String(days || 7), 10) || 7));
+    const generated = [];
+    for (let offset = 0; offset < totalDays; offset += 1) {
+      const serviceDate = addDaysToIsoDate(startDate, offset);
+      const before = await getDailyGenerationState(serviceDate);
+      const shouldGenerate = force || before.assignment_count === 0 || before.roster_count === 0;
+      if (shouldGenerate) {
+        await runRpc("sch_generate_daily_schedule", { p_service_date: serviceDate, p_force: force });
+      }
+      const after = await getDailyGenerationState(serviceDate);
+      generated.push({
+        service_date: serviceDate,
+        generated: shouldGenerate,
+        roster_count: after.roster_count,
+        assignment_count: after.assignment_count,
+      });
+    }
+    return generated;
+  }
+
   async function getAssignedEmployeeForDevice(deviceId) {
     const rows = await runReadOnlySql(`
       select
@@ -583,6 +611,18 @@ export function createScheduleRouter({
       res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Generate daily schedule failed");
+    }
+  });
+
+  router.post("/generate-range", requireSchedulePin, async (req, res) => {
+    try {
+      const serviceDate = requireDate(req.body?.service_date || req.body?.date || (await getServiceDate()));
+      const days = Math.max(1, Math.min(14, Number.parseInt(String(req.body?.days || 7), 10) || 7));
+      const force = req.body?.force === true;
+      const generated_days = await ensureScheduleRange(serviceDate, days, { force });
+      res.status(200).json({ ok: true, data: { service_date: serviceDate, days, generated_days }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+    } catch (error) {
+      fail(res, error, "Generate schedule range failed");
     }
   });
 

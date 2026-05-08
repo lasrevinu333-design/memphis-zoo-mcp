@@ -84,7 +84,17 @@ Routes are mounted under:
 /schedule-api
 ```
 
-See `src/schedule-api.js` for route-level details until the route split phase documents them fully.
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/schedule-api/current-owner` | Resolve the active owner for a location code. |
+| `POST` | `/schedule-api/generate-daily` | Generate one day of schedule data. |
+| `POST` | `/schedule-api/generate-range` | Ensure a forward schedule window exists, defaulting to 7 days. |
+| `POST` | `/schedule-api/absence-preview` | Preview absence impact against the stored day schedule. |
+| `POST` | `/schedule-api/absence-publish` | Publish absence changes against the stored day schedule. |
+| `GET` | `/schedule-api/locations/workload-settings` | List workload settings used by balancing. |
+| `POST` | `/schedule-api/locations/:locationId/workload-settings` | Update workload settings for a location. |
+
+See `src/schedule-api.js` for remaining route-level details.
 
 ## Diagnostic routes
 

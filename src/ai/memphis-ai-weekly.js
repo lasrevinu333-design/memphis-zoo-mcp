@@ -16,9 +16,9 @@ function getWeekStartDate(text = "", todayServiceDate, relativeServiceDate) {
   return relativeServiceDate || todayServiceDate;
 }
 
-async function ensureDailySchedule(runRpc, serviceDate) {
+async function ensureDailySchedule(runRpc, serviceDate, { force = false } = {}) {
   try {
-    return await runRpc("sch_generate_daily_schedule", { p_service_date: serviceDate, p_force: false });
+    return await runRpc("sch_generate_daily_schedule", { p_service_date: serviceDate, p_force: force });
   } catch (error) {
     console.error("memphis weekly schedule generation failed:", serviceDate, error);
     return null;
@@ -59,8 +59,11 @@ export async function generateWeeklyScheduleReply({
   const days = [];
 
   for (const serviceDate of dates) {
-    await ensureDailySchedule(runRpc, serviceDate);
-    const rows = await fetchAreaScheduleRows(runReadOnlySql, serviceDate);
+    let rows = await fetchAreaScheduleRows(runReadOnlySql, serviceDate);
+    if (!rows.length) {
+      await ensureDailySchedule(runRpc, serviceDate);
+      rows = await fetchAreaScheduleRows(runReadOnlySql, serviceDate);
+    }
     days.push({ service_date: serviceDate, assignments: rows });
   }
 

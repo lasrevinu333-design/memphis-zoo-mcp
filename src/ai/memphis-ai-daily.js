@@ -1,8 +1,8 @@
 import { esc } from "./memphis-ai-utils.js";
 
-export async function ensureDailySchedule(runRpc, serviceDate) {
+export async function ensureDailySchedule(runRpc, serviceDate, { force = false } = {}) {
   try {
-    return await runRpc("sch_generate_daily_schedule", { p_service_date: serviceDate, p_force: false });
+    return await runRpc("sch_generate_daily_schedule", { p_service_date: serviceDate, p_force: force });
   } catch (error) {
     console.error("memphis daily schedule generation failed:", serviceDate, error);
     return null;
@@ -109,9 +109,11 @@ export function summarizeDailyAssignments(assignments = [], serviceDate = "") {
 }
 
 export async function generateDailyStaffScheduleReply({ runReadOnlySql, runRpc, serviceDate, queryText = "" } = {}) {
-  await ensureDailySchedule(runRpc, serviceDate);
+  let generatedBeforeRead = false;
   let roster = await fetchDailyRosterRows(runReadOnlySql, serviceDate);
   if (!roster.length) {
+    await ensureDailySchedule(runRpc, serviceDate);
+    generatedBeforeRead = true;
     await wait(450);
     roster = await fetchDailyRosterRows(runReadOnlySql, serviceDate);
   }
@@ -123,7 +125,7 @@ export async function generateDailyStaffScheduleReply({ runReadOnlySql, runRpc, 
       fallback: true,
       mode: "local_daily_staff_schedule",
       service_date: serviceDate,
-      generated_before_read: true,
+      generated_before_read: generatedBeforeRead,
     },
   };
 }
