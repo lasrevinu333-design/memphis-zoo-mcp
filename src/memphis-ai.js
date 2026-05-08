@@ -445,6 +445,13 @@ function buildScheduleDateRange(startDate, days = 7) {
   return Array.from({ length: days }, (_value, index) => addDaysToIsoDate(startDate, index));
 }
 
+function daysBetweenIsoDates(fromDate, toDate) {
+  const from = new Date(`${String(fromDate || "")}T12:00:00`);
+  const to = new Date(`${String(toDate || "")}T12:00:00`);
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return null;
+  return Math.round((to.getTime() - from.getTime()) / 86400000);
+}
+
 function isWeeklyScheduleQuestion(text = "") {
   const raw = String(text || "");
   const lower = normalizeLoose(raw);
@@ -1232,7 +1239,12 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
         return { text: summarizeEmployeeAssignments(data.assignments, employeeName, data.service_date, staticShift), meta: { fallback: true, mode: staticShift && !data.assignments?.length ? "local_employee_static_shift_no_assignments" : "local_employee_schedule" } };
       }
       const areaRow = await resolveAreaRow(runReadOnlySql, relativeServiceDate, text, threadContext);
-      const data = await executeTool("get_area_schedule", { area: areaRow?.group_name || text, service_date: relativeServiceDate });
+      let data = await executeTool("get_area_schedule", { area: areaRow?.group_name || text, service_date: relativeServiceDate });
+      const futureOffset = daysBetweenIsoDates(todayServiceDate, relativeServiceDate);
+      if ((!Array.isArray(data?.assignments) || !data.assignments.length) && futureOffset != null && futureOffset >= 0 && futureOffset < 7) {
+        await ensureDailySchedule(runRpc, relativeServiceDate);
+        data = await executeTool("get_area_schedule", { area: areaRow?.group_name || text, service_date: relativeServiceDate });
+      }
       await saveThreadContext(runRpc, threadId, { last_intent: "area_schedule", last_group_name: areaRow?.group_name || data.group_name || null, last_service_date: relativeServiceDate, last_subject_type: "group" });
       const noAssignmentsText = data.service_date && data.service_date > todayServiceDate
         ? `I do not see generated schedule assignments for ${areaRow?.group_name || text} on ${data.service_date} yet.`
