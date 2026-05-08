@@ -1,4 +1,4 @@
-import { esc, normalizeLoose } from "./memphis-ai-utils.js";
+import { esc, findLocationCode, normalizeLoose } from "./memphis-ai-utils.js";
 
 const DAY_NAMES = {
   0: "Sunday",
@@ -15,6 +15,8 @@ const DAY_LOOKUP = Object.fromEntries(Object.entries(DAY_NAMES).map(([value, nam
 function isOpsScheduleQuestion(text = "") {
   const lower = normalizeLoose(text);
   if (!lower) return false;
+  if (findLocationCode(text)) return false;
+  if (/\b(aquarium|restroom|teton|zambezi|expo|pavilion|event center|memmex|bonobos|komodos|herpetarium|primate|cat house|cathouse|nocturnal|east admin|education)\b/.test(lower)) return false;
 
   const mentionsOps = /\b(ops|operations|manager|managers|boss|director|custodial manager|facilities manager|facility manager|maintenance manager|horticulture manager|water quality manager)\b/.test(lower)
     || /\b(eric|operle|mckenney|mckenny|brandy|gull|haley|lejman|jennifer|sheffield)\b/.test(lower);
@@ -50,25 +52,25 @@ function buildNameFilter(nameTerm = "") {
   return `and s.display_name ilike ${`'%${esc(value)}%'`}`;
 }
 
-function summarizeRows(rows = [], label = "") {
+function summarizeRows(rows = [], label = "", { includePhone = false } = {}) {
   if (!rows.length) return `I don't see an ops manager schedule listed for ${label || "that day"}.`;
 
   const parts = rows.map((row) => {
     const start = String(row.shift_start || "").slice(0, 5);
     const end = String(row.shift_end || "").slice(0, 5);
-    const phone = row.phone ? `, phone ${row.phone}` : "";
+    const phone = includePhone && row.phone ? `, phone ${row.phone}` : "";
     return `${row.display_name} (${row.role_title}) ${start}-${end}${phone}`;
   });
 
   return `Ops manager schedule for ${label}: ${parts.join("; ")}.`;
 }
 
-function summarizeWeeklyForOne(rows = []) {
+function summarizeWeeklyForOne(rows = [], { includePhone = false } = {}) {
   if (!rows.length) return "";
 
   const name = rows[0].display_name;
   const role = rows[0].role_title;
-  const phone = rows[0].phone ? ` Phone ${rows[0].phone}.` : "";
+  const phone = includePhone && rows[0].phone ? ` Phone ${rows[0].phone}.` : "";
   const byTime = new Map();
 
   for (const row of rows) {
@@ -90,7 +92,7 @@ function summarizeWeeklyForOne(rows = []) {
   return `${name} (${role}) works ${chunks.join("; ")}.${phone}`;
 }
 
-function summarizeWeekly(rows = []) {
+function summarizeWeekly(rows = [], { includePhone = false } = {}) {
   if (!rows.length) return "I don't see a regular ops manager schedule listed for that person.";
 
   const byPerson = new Map();
@@ -100,7 +102,7 @@ function summarizeWeekly(rows = []) {
     byPerson.get(key).push(row);
   }
 
-  return Array.from(byPerson.values()).map(summarizeWeeklyForOne).filter(Boolean).join(" ");
+  return Array.from(byPerson.values()).map((rowsForPerson) => summarizeWeeklyForOne(rowsForPerson, { includePhone })).filter(Boolean).join(" ");
 }
 
 export async function answerOpsManagerScheduleQuestion(runReadOnlySql, text = "") {
@@ -108,6 +110,7 @@ export async function answerOpsManagerScheduleQuestion(runReadOnlySql, text = ""
 
   const nameTerm = extractNameTerm(text);
   const lower = normalizeLoose(text);
+  const includePhone = /\b(phone|number|contact|call|text|reach)\b/.test(lower);
   const asksWeekly = /\b(weekly|regular|normal|standing|what days|which days|schedule)\b/.test(lower) && Boolean(nameTerm);
 
   if (asksWeekly) {
@@ -119,7 +122,7 @@ export async function answerOpsManagerScheduleQuestion(runReadOnlySql, text = ""
         ${buildNameFilter(nameTerm)}
       order by s.display_name, s.day_of_week, s.shift_start
     `);
-    return summarizeWeekly(Array.isArray(rows) ? rows : []);
+    return summarizeWeekly(Array.isArray(rows) ? rows : [], { includePhone });
   }
 
   const day = await resolveRelativeDay(runReadOnlySql, text);
@@ -134,7 +137,7 @@ export async function answerOpsManagerScheduleQuestion(runReadOnlySql, text = ""
     order by s.shift_start, s.display_name
   `);
 
-  return summarizeRows(Array.isArray(rows) ? rows : [], day.label);
+  return summarizeRows(Array.isArray(rows) ? rows : [], day.label, { includePhone });
 }
 
 async function resolveRelativeDay(runReadOnlySql, text = "") {

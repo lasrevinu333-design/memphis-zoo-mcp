@@ -111,6 +111,8 @@ function isNamedRegularOpsSchedulePrompt(text = "") {
 function isOpsManagerSchedulePrompt(text = "") {
   const lower = normalizeLoose(text);
   if (!lower) return false;
+  if (findLocationCode(text)) return false;
+  if (/\b(aquarium|restroom|teton|zambezi|expo|pavilion|event center|memmex|bonobos|komodos|herpetarium|primate|cat house|cathouse|nocturnal|east admin|education)\b/.test(lower)) return false;
 
   const mentionsOps =
     /\b(ops|operations|manager|boss|director|custodial manager|horticulture manager|water quality manager)\b/.test(lower) ||
@@ -1174,7 +1176,9 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     const threadContext = await fetchThreadContext(runReadOnlySql, threadId);
     const recentMessages = await fetchRecentThreadMessages(runReadOnlySql, threadId, 10);
 
-    if (isOpsManagerSchedulePrompt(userMessage)) {
+    const locationHint = findLocationCode(userMessage) || /\b(aquarium|restroom|teton|zambezi|expo|pavilion|event center|memmex|bonobos|komodos|herpetarium|primate|cat house|cathouse|nocturnal|east admin|education)\b/i.test(userMessage);
+
+    if (!locationHint && isOpsManagerSchedulePrompt(userMessage)) {
       const opsScheduleText = isNamedRegularOpsSchedulePrompt(userMessage)
         ? `${userMessage} regular schedule`
         : userMessage;
