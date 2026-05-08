@@ -135,6 +135,11 @@ function mentionsMemphisPlace(text = "") {
   return /\bmemphis\b/i.test(String(text || ""));
 }
 
+function hasDateReference(text = "") {
+  const raw = String(text || "");
+  return Boolean(extractExplicitDate(raw) || inferRelativeDateOffset(raw) || extractWeekdayReference(raw));
+}
+
 function inferWeatherLocation(text = "", threadContext = {}) {
   if (!isWeatherQuestion(text) && threadContext?.last_subject_type !== "weather") return "";
   if (mentionsMemphisPlace(text)) return DEFAULT_WEATHER_LOCATION;
@@ -510,16 +515,12 @@ function scoreAreaMatch(candidate, rawNeedle) {
 function normalizeAreaPrompt(text = "", threadContext = {}) {
   const raw = String(text || "").trim();
   if (!raw) return String(threadContext?.last_group_name || "").trim();
-  const aliasMap = new Map([
-    ["lomodos", "komodos"],
-    ["komodo", "komodos"],
-  ]);
-  const normalized = normalizeLoose(raw);
-  if (aliasMap.has(normalized)) return aliasMap.get(normalized);
-  if (/^(how about|what about)\b/i.test(raw) && String(threadContext?.last_group_name || "").trim()) {
-    return `${threadContext.last_group_name} ${raw}`;
+  let rewritten = raw;
+  rewritten = rewritten.replace(/\blomodos\b/ig, "komodos").replace(/\bkomodo\b/ig, "komodos");
+  if (/^(how about|what about)\b/i.test(rewritten) && String(threadContext?.last_group_name || "").trim()) {
+    return `${threadContext.last_group_name} ${rewritten}`;
   }
-  return raw;
+  return rewritten;
 }
 
 async function resolveAreaRow(runReadOnlySql, serviceDate, text = "", threadContext = {}) {
@@ -1218,7 +1219,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       return daily;
     }
 
-    if (lower.includes("schedule") || lower.includes("assigned") || lower.includes("assignment") || lower.includes("areas") || lower.includes("area") || lower.includes("works") || lower.includes("working") || lower.includes("scheduled") || lower.includes("staff") || lower.includes("aquarium") || lower.includes("restroom") || lower.includes("zambezi") || lower.includes("teton") || lower.includes("expo") || lower.includes("cleans")) {
+    if (lower.includes("schedule") || lower.includes("assigned") || lower.includes("assignment") || lower.includes("areas") || lower.includes("area") || lower.includes("works") || lower.includes("working") || lower.includes("scheduled") || lower.includes("staff") || lower.includes("aquarium") || lower.includes("restroom") || lower.includes("zambezi") || lower.includes("teton") || lower.includes("expo") || lower.includes("cleans") || hasLocationKeyword(text) || ((/^(how about|what about)\b/i.test(text) || hasDateReference(text)) && threadContext?.last_subject_type === "group" && threadContext?.last_group_name)) {
       const employeeName = await guessEmployeeName(runRpc, text) || (shouldUseEmployeeContext(text) ? threadContext?.last_employee_name : "") || "";
       if (employeeName) {
         const data = await executeTool("get_employee_schedule", { employee_name: employeeName, service_date: relativeServiceDate });
