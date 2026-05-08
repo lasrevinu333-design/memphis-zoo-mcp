@@ -44,6 +44,7 @@ const SCAN_CONTRACT_VERSION = "scan.v1";
 const DASHBOARD_CONTRACT_VERSION = "dashboard.v1";
 const MESSAGING_CONTRACT_VERSION = "messaging.v1";
 const SCHEDULE_CONTRACT_VERSION = "schedule.v1";
+const GUEST_REPORTS_CONTRACT_VERSION = "guest-reports.v1";
 const CANARY_RESTROOM_CODE = "TETM";
 const CANARY_EXHIBIT_CODE = "TETX";
 const CANARY_DEVICE_ID = "canary-check";
@@ -173,6 +174,13 @@ function setScheduleApiCors(res) {
   res.setHeader("Vary", "Origin");
 }
 
+function setGuestApiCors(res) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Vary", "Origin");
+}
+
 function requireAdminApiAuth(req, res, next) {
   const configuredKey = getAdminApiKey();
   if (!configuredKey) {
@@ -208,6 +216,10 @@ function toNullableInt(value) {
 function sqlLiteral(value) {
   if (value == null) return "null";
   return `'${String(value).replace(/'/g, "''")}'`;
+}
+
+function isUuid(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || "").trim());
 }
 
 function parseAttendanceMetric(text, label) {
@@ -423,6 +435,167 @@ async function runAdminBundleViaSqlRead(limits = {}) {
   const rows = await runReadOnlySql(sql);
   if (Array.isArray(rows) && rows.length > 0) return rows[0]?.data ?? {};
   return {};
+}
+
+async function ensureGuestReportsSchema() {
+  await runWriteSql(
+    "guest_reports_schema",
+    `create table if not exists public.guest_cleanliness_reports (
+       id uuid primary key default gen_random_uuid(),
+       location_code text not null,
+       location_name text null,
+       issue_type text not null,
+       severity text not null,
+       notes text null,
+       status text not null default 'open',
+       source text not null default 'guest_qr',
+       submitted_at timestamptz not null default now(),
+       resolved_at timestamptz null,
+       notification_status text not null default 'pending',
+       notified_employee_user_id uuid null,
+       notified_ops_count integer not null default 0,
+       metadata_json jsonb not null default '{}'::jsonb
+     );
+     create index if not exists idx_guest_cleanliness_reports_submitted_at on public.guest_cleanliness_reports (submitted_at desc);
+     create index if not exists idx_guest_cleanliness_reports_location_code on public.guest_cleanliness_reports (location_code);
+     create index if not exists idx_guest_cleanliness_reports_status on public.guest_cleanliness_reports (status);`
+  );
+}
+
+async function resolveGuestReportLocation(locationCode) {
+  const code = String(locationCode || "").trim().toUpperCase();
+  if (!code) throw new Error("location_code is required.");
+  const rows = await runReadOnlySql(`
+    select l.id as location_id, l.location_code, l.location_name, l.location_type, l.form_type
+    from public.locations l
+    where l.active = true and upper(l.location_code) = ${sqlLiteral(code)}
+    order by l.location_name
+    limit 1
+  `);
+  if (!Array.isArray(rows) || !rows.length) {
+    throw new Error("Location not found.");
+  }
+  return rows[0];
+}
+
+async function resolveOpsManagerRecipients() {
+  const rows = await runReadOnlySql(`
+    select distinct mu.user_id, mu.display_name, mu.role
+    from public.msg_users mu
+    where coalesce(mu.active, true) = true
+      and (
+        lower(coalesce(mu.role, '')) like '%ops manager%'
+        or lower(coalesce(mu.role, '')) like '%operations manager%'
+        or lower(coalesce(mu.role, '')) = 'manager'
+      )
+    order by mu.display_name
+  `);
+  return Array.isArray(rows) ? rows.filter((row) => isUuid(row.user_id)) : [];
+}
+
+async function createGuestCleanlinessReport({ location, issueType, severity, notes, reporterContext = {} }) {
+  const issue = String(issueType || "Cleanliness issue").trim() || "Cleanliness issue";
+  const level = String(severity || "normal").trim().toLowerCase() || "normal";
+  const noteText = notes == null ? null : String(notes).trim() || null;
+  const metadata = {
+    ...reporterContext,
+    submitted_via: "guest_qr",
+  };
+  const rows = await runWriteSql(
+    "guest_cleanliness_report_insert",
+    `insert into public.guest_cleanliness_reports (
+      location_code,
+      location_name,
+      issue_type,
+      severity,
+      notes,
+      metadata_json
+    ) values (
+      ${sqlLiteral(location.location_code)},
+      ${sqlLiteral(location.location_name || null)},
+      ${sqlLiteral(issue)},
+      ${sqlLiteral(level)},
+      ${sqlLiteral(noteText)},
+      ${sqlLiteral(JSON.stringify(metadata))}::jsonb
+    )
+    returning id, location_code, location_name, issue_type, severity, notes, status, source, submitted_at, resolved_at, notification_status, notified_employee_user_id, notified_ops_count, metadata_json`
+  );
+  if (!Array.isArray(rows) || !rows.length) throw new Error("Guest report could not be created.");
+  return rows[0];
+}
+
+function buildGuestReportNotificationBody(report, ownerName) {
+  const severityLabel = String(report.severity || "normal").toUpperCase();
+  const notes = report.notes ? ` Notes: ${report.notes}` : "";
+  const owner = ownerName ? ` Current owner: ${ownerName}.` : "";
+  return `Guest cleanliness report for ${report.location_name || report.location_code} (${report.location_code}). Issue: ${report.issue_type}. Severity: ${severityLabel}.${owner}${notes}`.trim();
+}
+
+async function notifyGuestReportRecipients({ report, currentOwner, opsRecipients, memphisUserId }) {
+  const notified = { employee_user_id: null, ops_count: 0, errors: [] };
+  const recipientIds = [];
+  const ownerUserId = currentOwner?.msg_user_id || currentOwner?.user_id || null;
+  if (isUuid(ownerUserId)) {
+    recipientIds.push({ user_id: ownerUserId, kind: "current_owner", display_name: currentOwner?.assigned_employee_name || currentOwner?.display_name || null });
+  }
+  for (const ops of opsRecipients || []) {
+    if (!recipientIds.some((entry) => entry.user_id === ops.user_id)) {
+      recipientIds.push({ user_id: ops.user_id, kind: "ops_manager", display_name: ops.display_name || null });
+    }
+  }
+
+  const body = buildGuestReportNotificationBody(report, currentOwner?.assigned_employee_name || null);
+  for (const recipient of recipientIds) {
+    try {
+      const thread = await runRpc("msg_get_or_create_direct_thread", { p_user_a: memphisUserId, p_user_b: recipient.user_id });
+      await runRpc("msg_send_message", {
+        p_thread_id: thread.id,
+        p_sender_user_id: memphisUserId,
+        p_body: body,
+        p_message_type: "bot_response",
+        p_metadata_json: {
+          channel: "memphis",
+          source: "guest_cleanliness_report",
+          report_id: report.id,
+          location_code: report.location_code,
+          recipient_kind: recipient.kind,
+        },
+      });
+      if (recipient.kind === "current_owner") notified.employee_user_id = recipient.user_id;
+      if (recipient.kind === "ops_manager") notified.ops_count += 1;
+    } catch (error) {
+      notified.errors.push({ user_id: recipient.user_id, error: error?.message || "notification_failed" });
+    }
+  }
+
+  await runWriteSql(
+    "guest_report_notification_status",
+    `update public.guest_cleanliness_reports
+       set notification_status = ${sqlLiteral(notified.errors.length ? (recipientIds.length ? "partial" : "failed") : "sent")},
+           notified_employee_user_id = ${sqlLiteral(notified.employee_user_id)}${notified.employee_user_id ? "::uuid" : ""},
+           notified_ops_count = ${Number(notified.ops_count || 0)},
+           metadata_json = coalesce(metadata_json, '{}'::jsonb) || ${sqlLiteral(JSON.stringify({ notification_errors: notified.errors }))}::jsonb
+     where id = ${sqlLiteral(report.id)}::uuid`
+  );
+
+  return notified;
+}
+
+async function listGuestCleanlinessReports({ status, locationCode, limit = 100 } = {}) {
+  const filters = [];
+  if (status) filters.push(`status = ${sqlLiteral(String(status).trim().toLowerCase())}`);
+  if (locationCode) filters.push(`upper(location_code) = ${sqlLiteral(String(locationCode).trim().toUpperCase())}`);
+  const where = filters.length ? `where ${filters.join(" and ")}` : "";
+  const rows = await runReadOnlySql(`
+    select id, location_code, location_name, issue_type, severity, notes, status, source,
+           submitted_at, resolved_at, notification_status, notified_employee_user_id,
+           notified_ops_count, metadata_json
+    from public.guest_cleanliness_reports
+    ${where}
+    order by submitted_at desc
+    limit ${Math.max(1, Math.min(500, Number(limit) || 100))}
+  `);
+  return Array.isArray(rows) ? rows : [];
 }
 
 async function runPublicDashboardSummary() {
@@ -1090,12 +1263,76 @@ app.use("/dashboard-api", (req, res, next) => { setPublicDashboardCors(res); if 
 app.use("/scan-api", (req, res, next) => { setScanApiCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/messaging-api", (req, res, next) => { setMessagingApiCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } eventMaintenanceController.kick("messaging_api_request"); next(); }, createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: MESSAGING_CONTRACT_VERSION }));
 app.use("/schedule-api", (req, res, next) => { setScheduleApiCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } eventMaintenanceController.kick("schedule_api_request"); next(); }, createScheduleRouter({ runReadOnlySql, runRpc, buildHealthPayload, requireAdminApiAuth: allowWithoutPin, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: SCHEDULE_CONTRACT_VERSION }));
+app.use("/guest-api", (req, res, next) => { setGuestApiCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/dashboard-api/events", createEventsPublicRouter({ runReadOnlySql, runWriteSql, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController }));
 app.use("/admin-api/events", createEventsAdminRouter({ runReadOnlySql, runWriteSql, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController, requireAdminApiAuth: allowWithoutPin }));
 app.get("/version", (_req, res) => { setPublicDashboardCors(res); eventMaintenanceController.kick("version_ping"); res.status(200).json(buildHealthPayload("version")); });
 app.get("/admin-api/health", requireAdminApiAuth, (_req, res) => { res.status(200).json(buildHealthPayload("admin", { authenticated: true })); });
 app.get("/dashboard-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("dashboard")); });
 app.get("/schedule-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("schedule", { contract_version: SCHEDULE_CONTRACT_VERSION })); });
+app.get("/guest-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("guest_reports", { contract_version: GUEST_REPORTS_CONTRACT_VERSION })); });
+app.get("/guest-api/locations/:locationCode", async (req, res) => {
+  try {
+    const location = await resolveGuestReportLocation(req.params.locationCode);
+    res.status(200).json({ ok: true, data: location, meta: { version: APP_VERSION, release_id: RELEASE_ID, contract_version: GUEST_REPORTS_CONTRACT_VERSION } });
+  } catch (error) {
+    res.status(404).json({ ok: false, error: error?.message || "Location lookup failed" });
+  }
+});
+app.post("/guest-api/report-cleanliness", async (req, res) => {
+  try {
+    await ensureGuestReportsSchema();
+    const locationCode = String(req.body?.location_code || req.body?.code || "").trim();
+    const issueType = String(req.body?.issue_type || req.body?.issue || "").trim();
+    const severity = String(req.body?.severity || "normal").trim();
+    const notes = req.body?.notes == null ? null : String(req.body.notes);
+    if (!locationCode) {
+      res.status(400).json({ ok: false, error: "location_code is required." });
+      return;
+    }
+    if (!issueType) {
+      res.status(400).json({ ok: false, error: "issue_type is required." });
+      return;
+    }
+    const location = await resolveGuestReportLocation(locationCode);
+    const report = await createGuestCleanlinessReport({
+      location,
+      issueType,
+      severity,
+      notes,
+      reporterContext: {
+        ip: req.ip || null,
+        user_agent: String(req.get("user-agent") || "").slice(0, 500),
+      },
+    });
+    const currentOwnerRows = await runReadOnlySql(`select * from public.sch_get_current_owner(${sqlLiteral(location.location_code)}, now())`);
+    const currentOwner = Array.isArray(currentOwnerRows) && currentOwnerRows.length ? currentOwnerRows[0] : null;
+    const opsRecipients = await resolveOpsManagerRecipients();
+    const memphisRows = await runReadOnlySql("select public.msg_get_memphis_user_id() as memphis_user_id");
+    const memphisUserId = Array.isArray(memphisRows) && memphisRows.length ? memphisRows[0].memphis_user_id : null;
+    let notification = { employee_user_id: null, ops_count: 0, errors: [{ error: "Memphis bot identity not found." }] };
+    if (isUuid(memphisUserId)) {
+      notification = await notifyGuestReportRecipients({ report, currentOwner, opsRecipients, memphisUserId });
+    }
+    res.status(200).json({ ok: true, data: { report, location, current_owner: currentOwner, notification }, meta: { version: APP_VERSION, release_id: RELEASE_ID, contract_version: GUEST_REPORTS_CONTRACT_VERSION } });
+  } catch (error) {
+    console.error("guest cleanliness report failed:", error);
+    res.status(500).json({ ok: false, error: error?.message || "Guest cleanliness report failed" });
+  }
+});
+app.get("/dashboard-api/guest-cleanliness-issues", async (req, res) => {
+  try {
+    await ensureGuestReportsSchema();
+    const status = req.query.status ? String(req.query.status) : "";
+    const locationCode = req.query.location_code ? String(req.query.location_code) : "";
+    const limit = req.query.limit ? Number(req.query.limit) : 100;
+    const rows = await listGuestCleanlinessReports({ status, locationCode, limit });
+    res.status(200).json({ ok: true, data: rows, meta: { version: APP_VERSION, release_id: RELEASE_ID, contract_version: GUEST_REPORTS_CONTRACT_VERSION } });
+  } catch (error) {
+    console.error("guest cleanliness issue list failed:", error);
+    res.status(500).json({ ok: false, error: error?.message || "Guest cleanliness issue list failed" });
+  }
+});
 app.get("/dashboard-api/canary", async (_req, res) => {
   try { const result = await runCanaryChecks(); res.status(result.ok ? 200 : 503).json(buildHealthPayload("dashboard_canary", result)); }
   catch (error) { console.error("dashboard canary failed:", error); res.status(500).json({ ok: false, area: "dashboard_canary", version: APP_VERSION, release_id: RELEASE_ID, error: error.message || "Dashboard canary failed" }); }

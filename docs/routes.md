@@ -39,8 +39,17 @@ Route factories for messaging, schedule, and events are re-exported from `src/ro
 | `GET` | `/dashboard-api/canary` | Dashboard canary checks. |
 | `GET` | `/dashboard-api/current-attendance` | Attendance payload. |
 | `GET` | `/dashboard-api/summary` | Dashboard summary. |
+| `GET` | `/dashboard-api/guest-cleanliness-issues` | List guest-submitted cleanliness reports for hub/dashboard display. |
 | `POST` | `/dashboard-api/close-ticket` | Dashboard maintenance ticket close. |
 | Various | `/dashboard-api/events` | Public event routes. |
+
+## Guest API
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/guest-api/health` | Guest-report API health. |
+| `GET` | `/guest-api/locations/:locationCode` | Resolve a guest-report location by code. |
+| `POST` | `/guest-api/report-cleanliness` | Submit a guest cleanliness issue tied to a location QR. |
 
 ## Scan API
 
