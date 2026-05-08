@@ -88,6 +88,7 @@ Routes are mounted under:
 |---|---|---|
 | `GET` | `/schedule-api/current-owner` | Resolve the active owner for a location code. |
 | `POST` | `/schedule-api/generate-daily` | Generate one day of schedule data. |
+| `GET` | `/schedule-api/generation-window` | Show readiness for a forward schedule window. |
 | `POST` | `/schedule-api/generate-range` | Ensure a forward schedule window exists, defaulting to 7 days. |
 | `POST` | `/schedule-api/absence-preview` | Preview absence impact against the stored day schedule. |
 | `POST` | `/schedule-api/absence-publish` | Publish absence changes against the stored day schedule. |

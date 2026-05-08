@@ -91,22 +91,37 @@ export function createScheduleRouter({
     return base.toISOString().slice(0, 10);
   }
 
-  async function ensureScheduleRange(startDate, days = 7, { force = false } = {}) {
+  async function getScheduleRangeStatus(startDate, days = 7) {
     const totalDays = Math.max(1, Math.min(14, Number.parseInt(String(days || 7), 10) || 7));
-    const generated = [];
+    const rows = [];
     for (let offset = 0; offset < totalDays; offset += 1) {
       const serviceDate = addDaysToIsoDate(startDate, offset);
-      const before = await getDailyGenerationState(serviceDate);
-      const shouldGenerate = force || before.assignment_count === 0 || before.roster_count === 0;
-      if (shouldGenerate) {
-        await runRpc("sch_generate_daily_schedule", { p_service_date: serviceDate, p_force: force });
-      }
-      const after = await getDailyGenerationState(serviceDate);
-      generated.push({
+      const state = await getDailyGenerationState(serviceDate);
+      rows.push({
         service_date: serviceDate,
+        roster_count: state.roster_count,
+        assignment_count: state.assignment_count,
+        ready: state.roster_count > 0 && state.assignment_count > 0,
+      });
+    }
+    return rows;
+  }
+
+  async function ensureScheduleRange(startDate, days = 7, { force = false } = {}) {
+    const statuses = await getScheduleRangeStatus(startDate, days);
+    const generated = [];
+    for (const row of statuses) {
+      const shouldGenerate = force || !row.ready;
+      if (shouldGenerate) {
+        await runRpc("sch_generate_daily_schedule", { p_service_date: row.service_date, p_force: force });
+      }
+      const after = await getDailyGenerationState(row.service_date);
+      generated.push({
+        service_date: row.service_date,
         generated: shouldGenerate,
         roster_count: after.roster_count,
         assignment_count: after.assignment_count,
+        ready: after.roster_count > 0 && after.assignment_count > 0,
       });
     }
     return generated;
@@ -611,6 +626,18 @@ export function createScheduleRouter({
       res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Generate daily schedule failed");
+    }
+  });
+
+  router.get("/generation-window", async (req, res) => {
+    try {
+      const serviceDate = requireDate(req.query.service_date || req.query.date || (await getServiceDate()));
+      const days = Math.max(1, Math.min(14, Number.parseInt(String(req.query.days || 7), 10) || 7));
+      const window = await getScheduleRangeStatus(serviceDate, days);
+      const ready_days = window.filter((row) => row.ready).length;
+      res.status(200).json({ ok: true, data: { service_date: serviceDate, days, ready_days, missing_days: Math.max(0, days - ready_days), window }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+    } catch (error) {
+      fail(res, error, "Schedule window status failed");
     }
   });
 
