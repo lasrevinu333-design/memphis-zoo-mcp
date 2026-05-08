@@ -146,25 +146,37 @@ export function createScheduleRouter({
     return autoGenerateState;
   }
 
-  function summarizeAssignmentDiff(data = {}) {
+  function summarizeAssignmentDiff(data = {}, { absentEmployeeIds = [] } = {}) {
     const removed = Array.isArray(data?.removed_assignments) ? data.removed_assignments : [];
     const reassigned = Array.isArray(data?.reassigned_assignments) ? data.reassigned_assignments : [];
     const openSegments = Array.isArray(data?.open_segments) ? data.open_segments : [];
     const warnings = Array.isArray(data?.overload_warnings) ? data.overload_warnings : [];
+    const absentSet = new Set((Array.isArray(absentEmployeeIds) ? absentEmployeeIds : []).map((x) => String(x || "").trim()).filter(Boolean));
     const groups = new Set();
-    const employees = new Set();
-    const collect = (row) => {
+    const recipientEmployees = new Set();
+    const removedEmployees = new Set();
+    const collectGroup = (row) => {
       const groupName = String(row?.group_name || row?.area_name || row?.location_name || row?.group_code || "").trim();
-      const employeeName = String(row?.employee_name || row?.assigned_employee_name || row?.display_name || "").trim();
       if (groupName) groups.add(groupName);
-      if (employeeName) employees.add(employeeName);
     };
-    removed.forEach(collect);
-    reassigned.forEach(collect);
-    openSegments.forEach(collect);
+    const employeeIdFor = (row) => String(row?.employee_id || row?.assigned_employee_id || "").trim();
+    const employeeNameFor = (row) => String(row?.employee_name || row?.assigned_employee_name || row?.display_name || "").trim();
+    removed.forEach((row) => {
+      collectGroup(row);
+      const employeeName = employeeNameFor(row);
+      if (employeeName) removedEmployees.add(employeeName);
+    });
+    reassigned.forEach((row) => {
+      collectGroup(row);
+      const employeeId = employeeIdFor(row);
+      const employeeName = employeeNameFor(row);
+      if (employeeName && !absentSet.has(employeeId)) recipientEmployees.add(employeeName);
+    });
+    openSegments.forEach(collectGroup);
     return {
       changed_groups: Array.from(groups),
-      changed_employees: Array.from(employees),
+      changed_employees: Array.from(recipientEmployees),
+      removed_employees: Array.from(removedEmployees),
       counts: {
         removed_assignments: removed.length,
         reassigned_assignments: reassigned.length,
@@ -724,7 +736,8 @@ export function createScheduleRouter({
       const finalState = generatedBeforePreview ? await getDailyGenerationState(serviceDate) : initialState;
       const rows = await runReadOnlySql(`select public.sch_absence_preview('${esc(serviceDate)}'::date, ${absentIdsSql}) as data`);
       const data = Array.isArray(rows) && rows.length ? rows[0].data : null;
-      const diff = summarizeAssignmentDiff(data || {});
+      const absentEmployeeIds = Array.isArray(req.body?.absent_employee_ids) ? req.body.absent_employee_ids.map((x) => String(x || "").trim()).filter(Boolean) : [];
+      const diff = summarizeAssignmentDiff(data || {}, { absentEmployeeIds });
       if (data && typeof data === "object") Object.assign(data, diff);
       res.status(200).json({
         ok: true,
@@ -760,7 +773,7 @@ export function createScheduleRouter({
           reassigned_assignments: data.reassigned_assignments || data.generate_result?.reassigned_assignments,
           open_segments: data.open_segments || data.generate_result?.open_segments,
           overload_warnings: data.overload_warnings || data.generate_result?.overload_warnings,
-        });
+        }, { absentEmployeeIds: absentIds });
         data.generate_result = { ...(data.generate_result || {}), ...diff };
       }
       res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
