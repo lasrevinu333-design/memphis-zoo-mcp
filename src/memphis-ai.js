@@ -66,7 +66,7 @@ function isGreetingOnly(text = "") {
 
 function isConversationalOpener(text = "") {
   const lower = normalizeLoose(text);
-  return /(what up|whats up|what s up|how are you|you getting things figured out|getting things figured out|doing better|you good|hows it going|how s it going|you alive|are you alive|are you connected|connected and alive|hello there|dude what it do)/.test(lower);
+  return /(what up|whats up|what s up|how are you|you getting things figured out|getting things figured out|doing better|you good|hows it going|how s it going|you alive|are you alive|are you connected|connected and alive|hello there|dude what it do|who are you|what are you)/.test(lower);
 }
 
 function isWeatherQuestion(text = "") {
@@ -193,12 +193,14 @@ function openerReply(text = "") {
 function genericConversationalFallback(text = "", threadContext = {}) {
   const lower = normalizeLoose(text);
   const weatherLocation = inferWeatherLocation(text, threadContext);
+  if (/\bwho are you\b/.test(lower)) return "I am Memphis. I help with schedules, area coverage, contacts, tickets, scans, and day-of operations questions for the zoo.";
+  if (/\bwhat are you\b/.test(lower)) return "I am Memphis, the zoo operations assistant. Ask me about who covers an area, schedules, contacts, tickets, scans, or events.";
   if (/alive|connected/.test(lower)) return "Yeah. I am here and ready for system questions.";
   if (/sparrow/.test(lower)) return "That depends. African or European?";
   if (/weather/.test(lower)) return `I could not land a clean weather answer for ${weatherLocation || DEFAULT_WEATHER_LOCATION} right now.`;
   if (/recipe|ingredients|cook|bake|pumpkin pie|creme brulee|pretzel|pretzels/.test(lower)) return "I did not get a clean general-answer response for that recipe question. Check the Gemini/API setup and try again.";
   if (/hello|hey|hi/.test(lower)) return "Hey. What do you need?";
-  return "I am here. Ask me something specific and I will keep it tight.";
+  return "I am here and ready. Ask me a schedule, area, contact, ticket, scan, or events question.";
 }
 
 function formatLead(label, value) {
@@ -1230,7 +1232,10 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       const areaRow = await resolveAreaRow(runReadOnlySql, relativeServiceDate, text, threadContext);
       const data = await executeTool("get_area_schedule", { area: areaRow?.group_name || text, service_date: relativeServiceDate });
       await saveThreadContext(runRpc, threadId, { last_intent: "area_schedule", last_group_name: areaRow?.group_name || data.group_name || null, last_service_date: relativeServiceDate, last_subject_type: "group" });
-      return { text: summarizeAssignments(data.assignments, `I couldn't find schedule assignments for ${areaRow?.group_name || text} on ${data.service_date}.`), meta: { fallback: true, mode: "local_area_schedule" } };
+      const noAssignmentsText = data.service_date && data.service_date > todayServiceDate
+        ? `I do not see generated schedule assignments for ${areaRow?.group_name || text} on ${data.service_date} yet.`
+        : `I couldn't find schedule assignments for ${areaRow?.group_name || text} on ${data.service_date}.`;
+      return { text: summarizeAssignments(data.assignments, noAssignmentsText), meta: { fallback: true, mode: "local_area_schedule" } };
     }
 
     if (lower.includes("dashboard") || lower.includes("summary") || lower.includes("status") || lower.includes("metrics") || lower.includes("attendance") || lower.includes("guest") || lower.includes("guests") || lower.includes("visitor") || lower.includes("visitors")) {
