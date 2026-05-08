@@ -182,6 +182,8 @@ function shouldUseEmployeeContext(text = "") {
 
 function openerReply(text = "") {
   const lower = normalizeLoose(text);
+  if (/\bwho are you\b/.test(lower)) return "I am Memphis. I help with schedules, area coverage, contacts, tickets, scans, and day-of operations questions for the zoo.";
+  if (/\bwhat are you\b/.test(lower)) return "I am Memphis, the zoo operations assistant. Ask me about who covers an area, schedules, contacts, tickets, scans, or events.";
   if (/connected/.test(lower)) return "Yeah. I am connected. What do you need?";
   if (/alive/.test(lower)) return "Yeah. I am here. What are we checking?";
   if (/figured out|doing better|better/.test(lower)) return "Yeah, better than before. What do you need?";
