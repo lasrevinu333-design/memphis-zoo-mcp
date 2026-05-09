@@ -493,12 +493,17 @@ async function resolveOpsManagerRecipients() {
   return Array.isArray(rows) ? rows.filter((row) => isUuid(row.user_id)) : [];
 }
 
-async function createGuestCleanlinessReport({ location, issueType, severity, notes, reporterContext = {} }) {
+async function createGuestCleanlinessReport({ location, issueType, severity, notes, reporter = {}, reporterContext = {} }) {
   const issue = String(issueType || "Cleanliness issue").trim() || "Cleanliness issue";
   const level = String(severity || "normal").trim().toLowerCase() || "normal";
   const noteText = notes == null ? null : String(notes).trim() || null;
   const metadata = {
     ...reporterContext,
+    reporter: {
+      name: String(reporter.name || "").trim() || null,
+      phone: String(reporter.phone || "").trim() || null,
+      email: String(reporter.email || "").trim() || null,
+    },
     submitted_via: "guest_qr",
   };
   const rows = await runWriteSql(
@@ -1286,6 +1291,11 @@ app.post("/guest-api/report-cleanliness", async (req, res) => {
     const issueType = String(req.body?.issue_type || req.body?.issue || "").trim();
     const severity = String(req.body?.severity || "normal").trim();
     const notes = req.body?.notes == null ? null : String(req.body.notes);
+    const reporter = {
+      name: req.body?.guest_name ?? req.body?.name ?? null,
+      phone: req.body?.guest_phone ?? req.body?.phone ?? null,
+      email: req.body?.guest_email ?? req.body?.email ?? null,
+    };
     if (!locationCode) {
       res.status(400).json({ ok: false, error: "location_code is required." });
       return;
@@ -1300,6 +1310,7 @@ app.post("/guest-api/report-cleanliness", async (req, res) => {
       issueType,
       severity,
       notes,
+      reporter,
       reporterContext: {
         ip: req.ip || null,
         user_agent: String(req.get("user-agent") || "").slice(0, 500),
