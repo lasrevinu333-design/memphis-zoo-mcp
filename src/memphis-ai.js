@@ -64,6 +64,10 @@ function isGreetingOnly(text = "") {
   return /^(hi|hey|hello|yo|sup|whats up|what s up|what up|good morning|good afternoon|good evening|howdy)( dude| man| memphis| brother| bro)?$/.test(lower);
 }
 
+function isSelfIdentityQuestion(text = "") {
+  return /^(who am i|what is my name|what's my name|whats my name)$/i.test(String(text || "").trim());
+}
+
 function isConversationalOpener(text = "") {
   const lower = normalizeLoose(text);
   return /(what up|whats up|what s up|how are you|you getting things figured out|getting things figured out|doing better|you good|hows it going|how s it going|you alive|are you alive|are you connected|connected and alive|hello there|dude what it do|who are you|what are you)/.test(lower);
@@ -531,7 +535,11 @@ function normalizeAreaPrompt(text = "", threadContext = {}) {
   const raw = String(text || "").trim();
   if (!raw) return String(threadContext?.last_group_name || "").trim();
   let rewritten = raw;
-  rewritten = rewritten.replace(/\blomodos\b/ig, "komodos").replace(/\bkomodo\b/ig, "komodos");
+  rewritten = rewritten
+    .replace(/\blomodos\b/ig, "komodos")
+    .replace(/\bkomodo\b/ig, "komodos")
+    .replace(/\bcathouse cafe restrooms\b/ig, "cathouse")
+    .replace(/\bcat house cafe restrooms\b/ig, "cat house");
   if (/^(how about|what about)\b/i.test(rewritten) && String(threadContext?.last_group_name || "").trim()) {
     return `${threadContext.last_group_name} ${rewritten}`;
   }
@@ -1149,6 +1157,17 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
         });
         return { text: `I could not pull live weather for ${location} right now.`, meta: { fallback: true, mode: "local_weather_failed", error: error?.message || "weather_failed" } };
       }
+    }
+
+    if (isSelfIdentityQuestion(text)) {
+      const assignedEmployee = deviceId ? await fetchAssignedEmployeeForDevice(runReadOnlySql, deviceId) : null;
+      const identity = deviceId ? await fetchDeviceIdentity(runReadOnlySql, deviceId) : null;
+      const name = assignedEmployee?.assigned_employee_name || identity?.display_name || identity?.user_name || "";
+      if (name) {
+        await saveThreadContext(runRpc, threadId, { last_intent: "self_identity", last_employee_name: name, last_subject_type: "employee" });
+        return { text: `You are ${name}.`, meta: { fallback: true, mode: "local_self_identity" } };
+      }
+      return { text: "I do not have your assigned identity on this device yet.", meta: { fallback: true, mode: "local_self_identity_missing" } };
     }
 
     if (isContradictionFollowUp(text) && threadContext?.last_group_name && threadContext?.last_service_date) {
