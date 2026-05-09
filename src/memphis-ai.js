@@ -452,6 +452,10 @@ function daysBetweenIsoDates(fromDate, toDate) {
   return Math.round((to.getTime() - from.getTime()) / 86400000);
 }
 
+function shiftIsoDate(serviceDate, daysToAdd = 0) {
+  return addDaysToIsoDate(serviceDate, daysToAdd);
+}
+
 function isWeeklyScheduleQuestion(text = "") {
   const raw = String(text || "");
   const lower = normalizeLoose(raw);
@@ -747,6 +751,30 @@ async function tryGeminiConversation({ apiKey, userMessage, webEnabled, threadCo
 }
 
 export function createMemphisResponder({ runReadOnlySql, runRpc }) {
+  async function fetchFallbackAreaAssignments(locationGroupId, serviceDate) {
+    const fallbackDate = shiftIsoDate(serviceDate, -7);
+    const rows = await runReadOnlySql(`
+      select *
+      from public.v_memphis_area_schedule
+      where service_date = '${esc(fallbackDate)}'::date
+        and location_group_id = '${esc(locationGroupId)}'::uuid
+      order by group_name asc, segment_number asc
+    `);
+    return (Array.isArray(rows) ? rows : []).map((row) => ({ ...row, service_date: serviceDate }));
+  }
+
+  async function fetchFallbackEmployeeAssignments(employeeName, serviceDate) {
+    const fallbackDate = shiftIsoDate(serviceDate, -7);
+    const rows = await runReadOnlySql(`
+      select *
+      from public.v_memphis_employee_schedule
+      where service_date = '${esc(fallbackDate)}'::date
+        and employee_name ilike ${sqlLikeLiteral(employeeName)}
+      order by group_name asc, segment_number asc
+    `);
+    return (Array.isArray(rows) ? rows : []).map((row) => ({ ...row, service_date: serviceDate }));
+  }
+
   async function executeTool(name, args = {}) {
     if (name === "get_upcoming_events") {
       const days = toSafeInt(args.days, 14, 1, 60);
@@ -767,13 +795,15 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       const serviceDate = normalizeDate(args.service_date) || await getDefaultServiceDate(runReadOnlySql);
       const target = await resolveAreaRow(runReadOnlySql, serviceDate, String(args.area || "").trim(), {});
       if (!target?.location_group_id) return { service_date: serviceDate, assignments: [] };
-      const rows = await runReadOnlySql(`
+      let rows = await runReadOnlySql(`
         select *
         from public.v_memphis_area_schedule
         where service_date = '${esc(serviceDate)}'::date
           and location_group_id = '${esc(target.location_group_id)}'::uuid
         order by group_name asc, segment_number asc
       `);
+      rows = Array.isArray(rows) ? rows : [];
+      if (!rows.length) rows = await fetchFallbackAreaAssignments(target.location_group_id, serviceDate);
       return { service_date: serviceDate, assignments: rows || [], group_name: target.group_name || target.group_code };
     }
 
@@ -781,13 +811,15 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       const employeeName = String(args.employee_name || "").trim();
       const serviceDate = normalizeDate(args.service_date) || await getDefaultServiceDate(runReadOnlySql);
       if (!employeeName) return { service_date: serviceDate, assignments: [] };
-      const rows = await runReadOnlySql(`
+      let rows = await runReadOnlySql(`
         select *
         from public.v_memphis_employee_schedule
         where service_date = '${esc(serviceDate)}'::date
           and employee_name ilike ${sqlLikeLiteral(employeeName)}
         order by group_name asc, segment_number asc
       `);
+      rows = Array.isArray(rows) ? rows : [];
+      if (!rows.length) rows = await fetchFallbackEmployeeAssignments(employeeName, serviceDate);
       return { service_date: serviceDate, assignments: rows || [] };
     }
 
