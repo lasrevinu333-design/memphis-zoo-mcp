@@ -47,22 +47,58 @@ function byteSizeJson(value) {
 
 function compactRowsToByteLimit(rows, maxBytes) {
   if (!Array.isArray(rows)) {
-    return { rows, row_count: null, response_bytes: byteSizeJson(rows), response_truncated: false };
+    const responseBytes = byteSizeJson(rows);
+    if (responseBytes <= maxBytes) {
+      return { rows, row_count: null, response_bytes: responseBytes, response_truncated: false };
+    }
+    return {
+      rows: null,
+      row_count: null,
+      response_bytes: 0,
+      response_truncated: true,
+      omitted_oversized_value_bytes: responseBytes,
+    };
   }
 
   const compacted = [];
   let bytes = Buffer.byteLength("[]", "utf8");
+  let omittedOversizedRows = 0;
 
   for (const row of rows) {
     const rowBytes = byteSizeJson(row) + 1;
-    if (compacted.length > 0 && bytes + rowBytes > maxBytes) {
+
+    if (rowBytes > maxBytes) {
+      omittedOversizedRows += 1;
+      if (compacted.length === 0) {
+        return {
+          rows: [],
+          row_count: 0,
+          response_bytes: bytes,
+          response_truncated: true,
+          omitted_oversized_rows: omittedOversizedRows,
+          first_oversized_row_bytes: rowBytes,
+        };
+      }
       return {
         rows: compacted,
         row_count: compacted.length,
         response_bytes: bytes,
         response_truncated: true,
+        omitted_oversized_rows: omittedOversizedRows,
+        first_oversized_row_bytes: rowBytes,
       };
     }
+
+    if (bytes + rowBytes > maxBytes) {
+      return {
+        rows: compacted,
+        row_count: compacted.length,
+        response_bytes: bytes,
+        response_truncated: true,
+        omitted_oversized_rows: omittedOversizedRows,
+      };
+    }
+
     compacted.push(row);
     bytes += rowBytes;
   }
@@ -72,6 +108,7 @@ function compactRowsToByteLimit(rows, maxBytes) {
     row_count: compacted.length,
     response_bytes: bytes,
     response_truncated: false,
+    omitted_oversized_rows: omittedOversizedRows,
   };
 }
 
@@ -135,6 +172,9 @@ export async function runReadOnlySql({ client, sql, maxRows, max_rows, maxRespon
     row_limit_truncated: rowLimitTruncated,
     response_truncated: compacted.response_truncated,
     response_bytes: compacted.response_bytes,
+    omitted_oversized_rows: compacted.omitted_oversized_rows,
+    first_oversized_row_bytes: compacted.first_oversized_row_bytes,
+    omitted_oversized_value_bytes: compacted.omitted_oversized_value_bytes,
     limits,
     wrapped: canWrapReadQuery(sanitized.normalized),
     rows: compacted.rows,
