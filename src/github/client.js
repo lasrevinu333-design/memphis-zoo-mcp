@@ -1,5 +1,19 @@
 import { Octokit } from "octokit";
 
+export const GITHUB_CONTENT_API_HARD_MAX_BYTES = 100_000_000;
+export const GITHUB_STABLE_READ_MAX_BYTES = 50_000_000;
+export const GITHUB_STABLE_WRITE_MAX_BYTES = 50_000_000;
+
+function toSafeInt(value, fallback, { min = 1, max = Number.MAX_SAFE_INTEGER } = {}) {
+  const parsed = Number.parseInt(String(value ?? fallback), 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(min, Math.min(max, parsed));
+}
+
+export function getStableLimit(envName, fallback, hardMax = GITHUB_CONTENT_API_HARD_MAX_BYTES) {
+  return toSafeInt(process.env[envName], fallback, { min: 1, max: hardMax });
+}
+
 export function getAllowedRepos(defaultRepo = "") {
   return Array.from(
     new Set(
@@ -93,6 +107,15 @@ export function decodeContent(base64Content) {
   return Buffer.from(String(base64Content || "").replace(/\n/g, ""), "base64");
 }
 
+export function normalizeRawContentToBuffer(value) {
+  if (Buffer.isBuffer(value)) return value;
+  if (value instanceof ArrayBuffer) return Buffer.from(value);
+  if (ArrayBuffer.isView(value)) return Buffer.from(value.buffer, value.byteOffset, value.byteLength);
+  if (typeof value === "string") return Buffer.from(value, "utf8");
+  if (value == null) return Buffer.alloc(0);
+  return Buffer.from(JSON.stringify(value), "utf8");
+}
+
 export function looksBinary(buffer) {
   return Buffer.isBuffer(buffer) && buffer.includes(0);
 }
@@ -119,4 +142,21 @@ export async function getContentOrNull({ github, repo, path, ref }) {
     if (error?.status === 404) return null;
     throw error;
   }
+}
+
+export async function getRawFileBuffer({ github, repo, path, ref }) {
+  const target = resolveGithubTarget({ github, repo, ref });
+  const normalizedPath = normalizeRepoPath(path, { requireFilePath: true });
+
+  const response = await github.octokit.request("GET /repos/{owner}/{repo}/contents/{path}", {
+    owner: target.owner,
+    repo: target.repo,
+    path: normalizedPath,
+    ref: target.ref,
+    headers: {
+      accept: "application/vnd.github.raw",
+    },
+  });
+
+  return normalizeRawContentToBuffer(response.data);
 }
