@@ -8,6 +8,8 @@ const GITHUB_CONTENT_API_MAX_BYTES = 100_000_000;
 const GITHUB_STABLE_BATCH_MAX_FILES = 500;
 const GITHUB_STABLE_LIST_MAX_ENTRIES = 100_000;
 const GITHUB_STABLE_REPLACE_MANY_MAX_PATCHES = 5_000;
+const SUPABASE_SQL_READ_MAX_ROWS = 250_000;
+const SUPABASE_SQL_READ_MAX_RESPONSE_BYTES = 100_000_000;
 
 export const pingInputSchema = {
   message: z.string().optional(),
@@ -96,6 +98,8 @@ export const githubReplaceTextInputSchema = {
 
 export const supabaseSqlReadInputSchema = {
   sql: z.string().min(1),
+  max_rows: positiveInt.max(SUPABASE_SQL_READ_MAX_ROWS).optional(),
+  max_response_bytes: positiveInt.max(SUPABASE_SQL_READ_MAX_RESPONSE_BYTES).optional(),
 };
 
 export const supabaseMigrationApplyInputSchema = {
