@@ -10,7 +10,7 @@ import {
   normalizeRepoPath,
   resolveGithubTarget,
 } from "./client.js";
-import { previewFullReplacement, previewTextReplacement } from "./patch.js";
+import { previewFullReplacement } from "./patch.js";
 import { summarizeTextDiff } from "../utils/diff.js";
 
 const DEFAULT_WRITE_MAX_BYTES = GITHUB_STABLE_WRITE_MAX_BYTES;
@@ -46,17 +46,18 @@ function trimDiff(diff) {
   return { diff: `${text.slice(0, max)}\n... diff truncated at ${max} characters ...\n`, truncated: true };
 }
 
-function compactPreview(preview, { includeNewText = false } = {}) {
+function compactPreview(preview, extra = {}) {
   const trimmed = trimDiff(preview?.diff);
   return {
     ...preview,
+    ...extra,
     diff: trimmed.diff,
-    diff_truncated: trimmed.truncated,
-    newText: includeNewText ? preview?.newText : undefined,
+    diff_truncated: trimmed.truncated || Boolean(preview?.diff_truncated),
+    newText: undefined,
   };
 }
 
-function stableFullPreview({ oldText, newText, path }) {
+function stableFullPreview({ oldText, newText, path, extra = {} }) {
   const oldBytes = Buffer.byteLength(String(oldText ?? ""), "utf8");
   const newBytes = Buffer.byteLength(String(newText ?? ""), "utf8");
   const maxPreview = previewMaxBytes();
@@ -66,6 +67,7 @@ function stableFullPreview({ oldText, newText, path }) {
       ok: true,
       changed: String(oldText ?? "") !== String(newText ?? ""),
       path,
+      ...extra,
       summary: summarizeTextDiff(String(oldText ?? ""), String(newText ?? "")),
       diff: "Diff omitted because preview input exceeds stable preview byte limit.",
       diff_truncated: true,
@@ -74,7 +76,7 @@ function stableFullPreview({ oldText, newText, path }) {
     };
   }
 
-  return compactPreview(previewFullReplacement({ oldText, newText, path }));
+  return compactPreview(previewFullReplacement({ oldText, newText, path }), extra);
 }
 
 async function existingTextForWrite({ github, repo, path, ref, existing }) {
@@ -83,38 +85,6 @@ async function existingTextForWrite({ github, repo, path, ref, existing }) {
     return buffer.toString("utf8");
   }
   return decodeContent(existing.content).toString("utf8");
-}
-
-function compactTextReplacementPreview(args) {
-  const maxPreview = previewMaxBytes();
-  const oldBytes = Buffer.byteLength(String(args.oldText ?? ""), "utf8");
-  const replaceBytes = Buffer.byteLength(String(args.replace ?? ""), "utf8");
-  const findBytes = Buffer.byteLength(String(args.find ?? ""), "utf8");
-
-  if (oldBytes + replaceBytes + findBytes > maxPreview) {
-    const find = String(args.find ?? "");
-    const source = String(args.oldText ?? "");
-    const matches = find ? source.split(find).length - 1 : 0;
-    if (!find) throw new Error("find text is required.");
-    if (matches === 0) throw new Error("find text was not found.");
-    if (args.expectedMatches != null && Number(args.expectedMatches) !== matches) {
-      throw new Error(`Expected ${args.expectedMatches} match(es), found ${matches}.`);
-    }
-    return {
-      ok: true,
-      changed: true,
-      path: args.path,
-      occurrence: args.occurrence || "first",
-      matches,
-      applied_matches: args.occurrence === "all" ? matches : 1,
-      summary: { changed: true, old_line_count: source.split("\n").length, new_line_count: null, same_prefix_lines: null, same_suffix_lines: null, lines_removed: null, lines_added: null },
-      diff: "Diff omitted because replacement preview exceeds stable preview byte limit.",
-      diff_truncated: true,
-      newText: undefined,
-    };
-  }
-
-  return compactPreview(previewTextReplacement(args));
 }
 
 export async function writeFile({ github, repo, path, content, commitMessage, branch, overwrite = false, dryRun = true } = {}) {
@@ -162,7 +132,6 @@ export async function updateFile({ github, repo, path, content, commitMessage, b
   const preview = stableFullPreview({ oldText: oldContent, newText: finalContent, path: resolvedPath });
 
   if (!preview.changed) return { ok: true, message: "No update needed. Content is unchanged.", repo: `${target.owner}/${target.repo}`, branch: targetBranch, path: resolvedPath, sha: existing.sha, file_url: existing.html_url, preview };
-
   if (dryRun) return { ok: true, dry_run: true, action: "would_update", repo: `${target.owner}/${target.repo}`, branch: targetBranch, path: resolvedPath, current_sha: existing.sha, commit_message: commitMessage, limits: { max_write_bytes: size.limit }, preview };
 
   const response = await github.octokit.rest.repos.createOrUpdateFileContents({ owner: target.owner, repo: target.repo, path: resolvedPath, message: commitMessage, content: encodeContent(finalContent), sha: existing.sha, branch: targetBranch });
@@ -225,21 +194,35 @@ export async function replaceTextInFile({ github, repo, path, find, replace, com
   const target = resolveGithubTarget({ github, repo, branch });
   const resolvedPath = normalizeRepoPath(path, { requireFilePath: true });
   const targetBranch = target.branch;
+  const needle = String(find ?? "");
+  const replacement = String(replace ?? "");
+
   if (!commitMessage) throw new Error("commitMessage is required.");
   if (!expectedSha) throw new Error("expectedSha is required for replaceTextInFile.");
+  if (!needle) throw new Error("find text is required.");
+  if (!["first", "all"].includes(occurrence)) throw new Error('occurrence must be "first" or "all".');
 
   const existing = await getContentOrNull({ github, repo: target.repo, path: resolvedPath, ref: targetBranch });
   assertFileContent(existing, resolvedPath);
   if (existing.sha !== expectedSha) throw new Error(`SHA mismatch for ${resolvedPath}. Expected ${expectedSha}, current ${existing.sha}.`);
 
   const oldContent = await existingTextForWrite({ github, repo: target.repo, path: resolvedPath, ref: targetBranch, existing });
-  const fullPreview = previewTextReplacement({ oldText: oldContent, find, replace, path: resolvedPath, occurrence, expectedMatches });
-  const size = assertWriteSize(fullPreview.newText, resolvedPath);
-  const preview = compactPreview(fullPreview);
+  const matches = countOccurrences(oldContent, needle);
+  if (matches === 0) throw new Error("find text was not found.");
+  if (expectedMatches != null && Number(expectedMatches) !== matches) throw new Error(`Expected ${expectedMatches} match(es), found ${matches}.`);
+
+  const nextText = occurrence === "all" ? oldContent.split(needle).join(replacement) : oldContent.replace(needle, replacement);
+  const size = assertWriteSize(nextText, resolvedPath);
+  const preview = stableFullPreview({
+    oldText: oldContent,
+    newText: nextText,
+    path: resolvedPath,
+    extra: { occurrence, matches, applied_matches: occurrence === "all" ? matches : 1 },
+  });
 
   if (!preview.changed) return { ok: true, message: "No update needed. Content is unchanged.", repo: `${target.owner}/${target.repo}`, branch: targetBranch, path: resolvedPath, sha: existing.sha, file_url: existing.html_url, preview };
   if (dryRun) return { ok: true, dry_run: true, action: "would_replace_text", repo: `${target.owner}/${target.repo}`, branch: targetBranch, path: resolvedPath, current_sha: existing.sha, commit_message: commitMessage, limits: { max_write_bytes: size.limit }, preview };
 
-  const response = await github.octokit.rest.repos.createOrUpdateFileContents({ owner: target.owner, repo: target.repo, path: resolvedPath, message: commitMessage, content: encodeContent(fullPreview.newText), sha: existing.sha, branch: targetBranch });
+  const response = await github.octokit.rest.repos.createOrUpdateFileContents({ owner: target.owner, repo: target.repo, path: resolvedPath, message: commitMessage, content: encodeContent(nextText), sha: existing.sha, branch: targetBranch });
   return { ok: true, message: "Text replacement applied.", action: "replace_text", repo: `${target.owner}/${target.repo}`, branch: targetBranch, path: resolvedPath, previous_sha: existing.sha, new_sha: response.data.content?.sha || null, commit_url: response.data.commit?.html_url || null, file_url: response.data.content?.html_url || null, limits: { max_write_bytes: size.limit }, preview };
 }
