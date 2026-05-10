@@ -9,11 +9,11 @@ export function registerSupabaseTools(server) {
     server,
     "supabase_sql_read",
     {
-      description: "Run read-only SQL through the configured Supabase RPC.",
+      description: "Run read-only SQL through the configured Supabase RPC with stable row and response-size caps.",
       inputSchema: supabaseSqlReadInputSchema,
     },
-    async ({ sql }) => {
-      const result = await runReadOnlySql({ sql });
+    async ({ sql, max_rows, max_response_bytes } = {}) => {
+      const result = await runReadOnlySql({ sql, max_rows, max_response_bytes });
       return jsonResponse(result);
     }
   );
@@ -25,8 +25,8 @@ export function registerSupabaseTools(server) {
       description: "Apply an explicit SQL migration through the configured Supabase RPC. Dry-run defaults to true in the modular layer.",
       inputSchema: supabaseMigrationApplyInputSchema,
     },
-    async ({ name, sql, dry_run = true }) => {
-      const result = await applyMigration({ name, sql, dryRun: dry_run });
+    async ({ name, sql, dry_run = true, allow_large = false } = {}) => {
+      const result = await applyMigration({ name, sql, dryRun: dry_run, allow_large });
       return jsonResponse(result);
     }
   );
