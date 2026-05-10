@@ -66,4 +66,4 @@ export async function applyMigration({ client, name, sql, dryRun = true } = {}) 
     data,
     ...buildMigrationMetadata({ normalized, dryRun: false, action: "migration_applied" }),
   };
-}
+} 
