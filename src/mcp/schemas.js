@@ -4,6 +4,11 @@ export const optionalString = z.string().optional();
 export const positiveInt = z.number().int().positive();
 export const dryRun = z.boolean().optional();
 
+const GITHUB_CONTENT_API_MAX_BYTES = 100_000_000;
+const GITHUB_STABLE_BATCH_MAX_FILES = 500;
+const GITHUB_STABLE_LIST_MAX_ENTRIES = 100_000;
+const GITHUB_STABLE_REPLACE_MANY_MAX_PATCHES = 5_000;
+
 export const pingInputSchema = {
   message: z.string().optional(),
 };
@@ -25,31 +30,31 @@ export const githubListDirectoryInputSchema = {
   path: optionalString,
   ref: optionalString,
   recursive: z.boolean().optional(),
-  max_entries: positiveInt.max(10000).optional(),
+  max_entries: positiveInt.max(GITHUB_STABLE_LIST_MAX_ENTRIES).optional(),
 };
 
 export const githubRepoTreeInputSchema = {
   repo: optionalString,
   path: optionalString,
   ref: optionalString,
-  max_entries: positiveInt.max(10000).optional(),
+  max_entries: positiveInt.max(GITHUB_STABLE_LIST_MAX_ENTRIES).optional(),
 };
 
 export const githubReadFileInputSchema = {
   repo: optionalString,
   path: optionalString,
-  paths: z.array(z.string().min(1)).min(1).max(25).optional(),
+  paths: z.array(z.string().min(1)).min(1).max(GITHUB_STABLE_BATCH_MAX_FILES).optional(),
   ref: optionalString,
   format: z.enum(["text", "json", "base64"]).optional(),
-  max_bytes: positiveInt.max(10_000_000).optional(),
+  max_bytes: positiveInt.max(GITHUB_CONTENT_API_MAX_BYTES).optional(),
 };
 
 export const githubBatchReadInputSchema = {
   repo: optionalString,
-  paths: z.array(z.string().min(1)).min(1).max(25),
+  paths: z.array(z.string().min(1)).min(1).max(GITHUB_STABLE_BATCH_MAX_FILES),
   ref: optionalString,
   format: z.enum(["json", "text", "base64"]).optional(),
-  max_bytes: positiveInt.max(10_000_000).optional(),
+  max_bytes: positiveInt.max(GITHUB_CONTENT_API_MAX_BYTES).optional(),
 };
 
 export const githubWriteFileInputSchema = {
@@ -97,4 +102,9 @@ export const supabaseMigrationApplyInputSchema = {
   name: z.string().min(1),
   sql: z.string().min(1),
   dry_run: dryRun,
+  allow_large: z.boolean().optional(),
+};
+
+export const githubReplaceManyCompatibilityLimits = {
+  max_patches: GITHUB_STABLE_REPLACE_MANY_MAX_PATCHES,
 };
