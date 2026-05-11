@@ -863,6 +863,15 @@ export function createScheduleRouter({
     }
   });
 
+  router.post("/pto/parse-report", async (req, res) => {
+    try {
+      const parsed = parsePtoReportText(req.body?.report_text || "");
+      res.status(200).json({ ok: true, data: { detected_count: parsed.detected_rows.length, kept_count: parsed.kept_rows.length, rows: parsed.import_rows }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+    } catch (error) {
+      fail(res, error, "PTO report parse failed");
+    }
+  });
+
   router.get("/location-groups", async (_req, res) => {
     try {
       const rows = await runReadOnlySql(`
