@@ -154,6 +154,65 @@ export function createScheduleRouter({
       where active = true
       order by display_name
     `);
+    const normalizeName = (value) => String(value || "")
+      .toLowerCase()
+      .normalize("NFKD")
+      .replace(/[^a-z\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    const tokenizeName = (value) => normalizeName(value).split(" ").filter(Boolean);
+    const firstNameAliases = new Map([
+      ["kathy", ["kathryn", "kathy", "katie", "kat"]],
+      ["kathryn", ["kathryn", "kathy", "katie", "kat"]],
+      ["kinnaye", ["kinnaye", "kinny", "kinaye", "kenny"]],
+      ["kinny", ["kinnaye", "kinny", "kinaye", "kenny"]],
+      ["daniel", ["daniel", "dan"]],
+      ["markiesha", ["markiesha", "markesha", "markeisha"]],
+    ]);
+    function canonicalReportName(value = "") {
+      const text = String(value || "").trim();
+      if (!text) return "";
+      if (text.includes(",")) {
+        const [last, rest] = text.split(",", 2).map((part) => part.trim()).filter(Boolean);
+        return [rest, last].filter(Boolean).join(" ").trim();
+      }
+      return text;
+    }
+    function nameScore(inputName, employeeName) {
+      const rawInput = canonicalReportName(inputName);
+      const rawEmployee = String(employeeName || "").trim();
+      const a = tokenizeName(rawInput);
+      const b = tokenizeName(rawEmployee);
+      if (!a.length || !b.length) return -Infinity;
+      let score = 0;
+      const aFirst = a[0];
+      const bFirst = b[0];
+      const aLast = a[a.length - 1];
+      const bLast = b[b.length - 1];
+      if (aLast === bLast) score += 10;
+      else if (aLast && bLast && (aLast.startsWith(bLast) || bLast.startsWith(aLast))) score += 7;
+      const aAliases = new Set(firstNameAliases.get(aFirst) || [aFirst]);
+      const bAliases = new Set(firstNameAliases.get(bFirst) || [bFirst]);
+      if (aAliases.has(bFirst) || bAliases.has(aFirst)) score += 8;
+      else if (aFirst && bFirst && (aFirst.startsWith(bFirst) || bFirst.startsWith(aFirst))) score += 6;
+      for (const token of a) if (b.includes(token)) score += 1;
+      return score;
+    }
+    function resolveEmployeeLoose(employeeId, employeeName) {
+      if (employeeId && byId.has(employeeId)) return byId.get(employeeId);
+      const exact = byName.get(String(employeeName || "").trim().toLowerCase());
+      if (exact) return exact;
+      let best = null;
+      let bestScore = -Infinity;
+      for (const row of employeeRows || []) {
+        const score = nameScore(employeeName, row.display_name);
+        if (score > bestScore) {
+          best = row;
+          bestScore = score;
+        }
+      }
+      return bestScore >= 12 ? best : null;
+    }
     const byId = new Map();
     const byName = new Map();
     for (const row of employeeRows || []) {
@@ -167,7 +226,7 @@ export function createScheduleRouter({
     for (const rawRow of inputRows) {
       const employeeId = String(rawRow?.employee_id || "").trim();
       const employeeName = String(rawRow?.employee_name || rawRow?.display_name || "").trim();
-      const employee = employeeId ? byId.get(employeeId) : byName.get(employeeName.toLowerCase());
+      const employee = resolveEmployeeLoose(employeeId, employeeName);
       if (!employee?.employee_id) {
         throw new Error(`Could not resolve PTO employee: ${employeeName || employeeId || "unknown"}`);
       }
@@ -211,6 +270,62 @@ export function createScheduleRouter({
     `);
 
     return normalized;
+  }
+
+  function parsePtoReportText(reportText = "") {
+    const text = String(reportText || "").replace(/\r/g, " ").replace(/\n/g, " ").replace(/\s+/g, " ").trim();
+    if (!text) throw new Error("report_text is required.");
+    const rowPattern = /(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{1,2}),\s+(\d{4})\s+(Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday)\s+([^,]+,\s*[^A\d]+?(?:\s+[A-Z])?)\s+(Approved|Submitted|Cancelled|Refused)\b/g;
+    const rows = [];
+    let match;
+    while ((match = rowPattern.exec(text)) !== null) {
+      const [, month, day, year, dayOfWeek, employeeName, status] = match;
+      const date = new Date(`${month} ${day}, ${year} 12:00:00`);
+      if (Number.isNaN(date.getTime())) continue;
+      rows.push({
+        service_date: date.toISOString().slice(0, 10),
+        day_of_week: dayOfWeek,
+        employee_name: String(employeeName || "").trim(),
+        status: String(status || "").trim(),
+      });
+    }
+    if (!rows.length) throw new Error("No PTO rows were detected in the report text.");
+
+    const bestByKey = new Map();
+    const rank = { approved: 3, submitted: 2, cancelled: 1, refused: 0 };
+    for (const row of rows) {
+      const key = `${row.service_date}__${row.employee_name.toLowerCase()}`;
+      const prior = bestByKey.get(key);
+      const currentRank = rank[row.status.toLowerCase()] ?? -1;
+      const priorRank = prior ? (rank[String(prior.status || "").toLowerCase()] ?? -1) : -1;
+      if (!prior || currentRank > priorRank) bestByKey.set(key, row);
+    }
+
+    const kept = Array.from(bestByKey.values()).filter((row) => /^(approved|submitted)$/i.test(row.status));
+    const grouped = new Map();
+    for (const row of kept) {
+      const key = row.employee_name.toLowerCase();
+      if (!grouped.has(key)) grouped.set(key, { employee_name: row.employee_name, dates: [] });
+      grouped.get(key).dates.push(row.service_date);
+    }
+
+    const importedRows = [];
+    for (const group of grouped.values()) {
+      const dates = Array.from(new Set(group.dates)).sort();
+      let start = dates[0];
+      let end = dates[0];
+      const pushRange = () => importedRows.push({ employee_name: group.employee_name, start_date: start, end_date: end, pto_type: "PTO", notes: "Imported from PTO report" });
+      for (let i = 1; i < dates.length; i += 1) {
+        const prev = new Date(`${end}T12:00:00`);
+        prev.setDate(prev.getDate() + 1);
+        const expected = prev.toISOString().slice(0, 10);
+        if (dates[i] === expected) end = dates[i];
+        else { pushRange(); start = dates[i]; end = dates[i]; }
+      }
+      pushRange();
+    }
+
+    return { detected_rows: rows, kept_rows: kept, import_rows: importedRows };
   }
 
   function toNullableRating(value) {
@@ -735,6 +850,16 @@ export function createScheduleRouter({
       res.status(200).json({ ok: true, data: { imported_count: imported.length, rows: imported }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "PTO import failed");
+    }
+  });
+
+  router.post("/pto/import-report", requireSchedulePin, async (req, res) => {
+    try {
+      const parsed = parsePtoReportText(req.body?.report_text || "");
+      const imported = await importPtoRows(parsed.import_rows || []);
+      res.status(200).json({ ok: true, data: { detected_count: parsed.detected_rows.length, kept_count: parsed.kept_rows.length, imported_count: imported.length, rows: imported }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+    } catch (error) {
+      fail(res, error, "PTO report import failed");
     }
   });
 
