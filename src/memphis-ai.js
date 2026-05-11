@@ -604,9 +604,10 @@ async function resolveLocationRow(runReadOnlySql, text = "", threadContext = {})
   return Array.isArray(rows) && rows.length ? rows[0] : null;
 }
 
-async function summarizeOwnerQuestion(runReadOnlySql, serviceDate, text = "", threadContext = {}) {
+async function summarizeOwnerQuestion(runReadOnlySql, runRpc, serviceDate, todayServiceDate, text = "", threadContext = {}) {
   const location = await resolveLocationRow(runReadOnlySql, text, threadContext);
-  if (location?.location_code) {
+  const futureOffset = daysBetweenIsoDates(todayServiceDate, serviceDate);
+  if (location?.location_code && (futureOffset == null || futureOffset <= 0)) {
     const ownerRows = await runReadOnlySql(`select * from public.sch_get_current_owner('${esc(location.location_code)}', now())`);
     const owner = Array.isArray(ownerRows) && ownerRows.length ? ownerRows[0] : null;
     if (owner?.owner_display_name || owner?.employee_name) {
@@ -616,9 +617,20 @@ async function summarizeOwnerQuestion(runReadOnlySql, serviceDate, text = "", th
 
   const areaRow = await resolveAreaRow(runReadOnlySql, serviceDate, text, threadContext);
   if (!areaRow?.group_name) return "";
-  const rows = await runReadOnlySql(`select * from public.v_memphis_area_schedule where service_date = '${esc(serviceDate)}'::date and (group_name ilike ${sqlLikeLiteral(areaRow.group_name)} or group_code ilike ${sqlLikeLiteral(areaRow.group_code || areaRow.group_name)}) order by coverage_start asc, segment_number asc`);
-  const assignments = Array.isArray(rows) ? rows.filter((row) => row.employee_name || row.assigned_employee_name) : [];
-  if (!assignments.length) return `I could not find an assignment for ${areaRow.group_name} on ${serviceDate}.`;
+  if (futureOffset != null && futureOffset >= 0 && futureOffset < 7) {
+    await ensureDailySchedule(runRpc, serviceDate, { force: true });
+  }
+  let rows = await runReadOnlySql(`select * from public.v_memphis_area_schedule where service_date = '${esc(serviceDate)}'::date and (group_name ilike ${sqlLikeLiteral(areaRow.group_name)} or group_code ilike ${sqlLikeLiteral(areaRow.group_code || areaRow.group_name)}) order by coverage_start asc, segment_number asc`);
+  rows = Array.isArray(rows) ? rows : [];
+  let assignments = rows.filter((row) => row.employee_name || row.assigned_employee_name);
+  if (!assignments.length && futureOffset != null && futureOffset > 0 && futureOffset < 7) {
+    const fallbackRows = await runReadOnlySql(`select * from public.v_memphis_area_schedule where service_date = '${esc(shiftIsoDate(serviceDate, -7))}'::date and (group_name ilike ${sqlLikeLiteral(areaRow.group_name)} or group_code ilike ${sqlLikeLiteral(areaRow.group_code || areaRow.group_name)}) order by coverage_start asc, segment_number asc`);
+    assignments = (Array.isArray(fallbackRows) ? fallbackRows : []).filter((row) => row.employee_name || row.assigned_employee_name).map((row) => ({ ...row, service_date: serviceDate }));
+  }
+  if (!assignments.length) {
+    if (futureOffset != null && futureOffset > 0) return `I do not see generated schedule assignments for ${areaRow.group_name} on ${serviceDate} yet.`;
+    return `I could not find an assignment for ${areaRow.group_name} on ${serviceDate}.`;
+  }
   const lines = assignments.slice(0, 4).map((row) => `${row.employee_name || row.assigned_employee_name} ${row.coverage_start || '—'}-${row.coverage_end || '—'}`);
   const label = areaRow.group_name || location?.location_name || "that area";
   return `${label}: ${lines.join('; ')}.`;
@@ -1104,15 +1116,15 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     const explicitToday = /\btoday\b/i.test(text);
     const weekdayRef = extractWeekdayReference(text);
     let relativeServiceDate = explicitToday ? todayServiceDate : (mergeContextDate(text, threadContext, explicitDate) || todayServiceDate);
-    const futureWindowOffset = daysBetweenIsoDates(todayServiceDate, relativeServiceDate);
-    if (futureWindowOffset != null && futureWindowOffset >= 0 && futureWindowOffset < 7) {
-      await ensureScheduleRange(runRpc, buildScheduleDateRange(todayServiceDate, 7), { force: true });
-    }
     if (!explicitDate && weekdayRef && todayServiceDate) {
       relativeServiceDate = computeWeekdayDate(todayServiceDate, weekdayRef.weekday, weekdayRef.modifier) || relativeServiceDate;
     } else if (!explicitDate && !weekdayRef) {
       const relativeOffset = inferRelativeDateOffset(text);
       if (relativeOffset !== 0) relativeServiceDate = await getRelativeServiceDate(runReadOnlySql, relativeOffset);
+    }
+    const futureWindowOffset = daysBetweenIsoDates(todayServiceDate, relativeServiceDate);
+    if (futureWindowOffset != null && futureWindowOffset >= 0 && futureWindowOffset < 7) {
+      await ensureScheduleRange(runRpc, buildScheduleDateRange(todayServiceDate, 7), { force: true });
     }
     const assignedEmployee = await fetchAssignedEmployeeForDevice(runReadOnlySql, deviceId);
 
@@ -1255,7 +1267,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
 
     if (lower.includes("owner") || lower.includes("who owns") || lower.includes("who has")) {
       const locationRow = await resolveLocationRow(runReadOnlySql, text, threadContext);
-      const ownerText = await summarizeOwnerQuestion(runReadOnlySql, relativeServiceDate, text, threadContext);
+      const ownerText = await summarizeOwnerQuestion(runReadOnlySql, runRpc, relativeServiceDate, todayServiceDate, text, threadContext);
       await saveThreadContext(runRpc, threadId, {
         last_intent: "current_owner",
         last_location_code: locationRow?.location_code || threadContext?.last_location_code || null,
