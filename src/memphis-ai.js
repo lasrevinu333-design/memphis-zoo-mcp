@@ -620,11 +620,23 @@ async function summarizeOwnerQuestion(runReadOnlySql, runRpc, serviceDate, today
   if (futureOffset != null && futureOffset >= 0 && futureOffset < 7) {
     await ensureDailySchedule(runRpc, serviceDate, { force: true });
   }
-  let rows = await runReadOnlySql(`select * from public.v_memphis_area_schedule where service_date = '${esc(serviceDate)}'::date and (group_name ilike ${sqlLikeLiteral(areaRow.group_name)} or group_code ilike ${sqlLikeLiteral(areaRow.group_code || areaRow.group_name)}) order by coverage_start asc, segment_number asc`);
+  let rows = [];
+  if (areaRow?.location_group_id) {
+    rows = await runReadOnlySql(`select * from public.v_memphis_area_schedule where service_date = '${esc(serviceDate)}'::date and location_group_id = '${esc(areaRow.location_group_id)}'::uuid order by coverage_start asc, segment_number asc`);
+  }
+  if (!Array.isArray(rows) || !rows.length) {
+    rows = await runReadOnlySql(`select * from public.v_memphis_area_schedule where service_date = '${esc(serviceDate)}'::date and (group_name ilike ${sqlLikeLiteral(areaRow.group_name)} or group_code ilike ${sqlLikeLiteral(areaRow.group_code || areaRow.group_name)}) order by coverage_start asc, segment_number asc`);
+  }
   rows = Array.isArray(rows) ? rows : [];
   let assignments = rows.filter((row) => row.employee_name || row.assigned_employee_name);
   if (!assignments.length && futureOffset != null && futureOffset > 0 && futureOffset < 7) {
-    const fallbackRows = await runReadOnlySql(`select * from public.v_memphis_area_schedule where service_date = '${esc(shiftIsoDate(serviceDate, -7))}'::date and (group_name ilike ${sqlLikeLiteral(areaRow.group_name)} or group_code ilike ${sqlLikeLiteral(areaRow.group_code || areaRow.group_name)}) order by coverage_start asc, segment_number asc`);
+    let fallbackRows = [];
+    if (areaRow?.location_group_id) {
+      fallbackRows = await runReadOnlySql(`select * from public.v_memphis_area_schedule where service_date = '${esc(shiftIsoDate(serviceDate, -7))}'::date and location_group_id = '${esc(areaRow.location_group_id)}'::uuid order by coverage_start asc, segment_number asc`);
+    }
+    if (!Array.isArray(fallbackRows) || !fallbackRows.length) {
+      fallbackRows = await runReadOnlySql(`select * from public.v_memphis_area_schedule where service_date = '${esc(shiftIsoDate(serviceDate, -7))}'::date and (group_name ilike ${sqlLikeLiteral(areaRow.group_name)} or group_code ilike ${sqlLikeLiteral(areaRow.group_code || areaRow.group_name)}) order by coverage_start asc, segment_number asc`);
+    }
     assignments = (Array.isArray(fallbackRows) ? fallbackRows : []).filter((row) => row.employee_name || row.assigned_employee_name).map((row) => ({ ...row, service_date: serviceDate }));
   }
   if (!assignments.length) {
