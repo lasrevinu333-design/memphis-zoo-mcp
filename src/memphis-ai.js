@@ -573,9 +573,13 @@ function rewriteFollowUpWithContext(text = "", threadContext = {}) {
   const lastEmployeeName = String(threadContext?.last_employee_name || "").trim();
   const lastLocationCode = String(threadContext?.last_location_code || "").trim();
   const lastQuestionShape = String(threadContext?.context_json?.last_question_shape || "").trim();
+  const lastSubjectKind = String(threadContext?.context_json?.last_subject_kind || "").trim();
 
   if ((lastIntent === "current_owner" || lastQuestionShape === "current_owner") && (lastGroupName || lastLocationCode)) {
-    return `who has ${lastLocationCode || lastGroupName} ${raw}`;
+    const ownerSubject = lastSubjectKind === "group" && lastGroupName
+      ? lastGroupName
+      : (lastLocationCode || lastGroupName);
+    return `who has ${ownerSubject} ${raw}`;
   }
 
   if ((lastIntent === "employee_schedule" || lastQuestionShape === "employee_schedule") && lastEmployeeName) {
@@ -1334,17 +1338,21 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     if (lower.includes("owner") || lower.includes("who owns") || lower.includes("who has")) {
       const locationRow = await resolveLocationRow(runReadOnlySql, text, threadContext);
       const areaRow = await resolveAreaRow(runReadOnlySql, relativeServiceDate, text, threadContext);
+      const explicitLocationCode = findLocationCode(text);
+      const shouldTreatAsLocationOwner = Boolean(!areaRow?.group_name && (explicitLocationCode || locationRow?.location_code));
       const ownerText = await summarizeOwnerQuestion(runReadOnlySql, runRpc, relativeServiceDate, todayServiceDate, text, threadContext);
       await saveThreadContext(runRpc, threadId, {
         last_intent: "current_owner",
-        last_location_code: locationRow?.location_code || threadContext?.last_location_code || null,
+        last_location_code: shouldTreatAsLocationOwner ? (locationRow?.location_code || explicitLocationCode || threadContext?.last_location_code || null) : null,
         last_group_name: areaRow?.group_name || locationRow?.group_names?.[0] || threadContext?.last_group_name || null,
         last_service_date: relativeServiceDate,
-        last_subject_type: locationRow?.location_code ? "location" : "group",
+        last_subject_type: shouldTreatAsLocationOwner ? "location" : "group",
         context_json: mergeContextJson(threadContext, {
           last_question_shape: "current_owner",
-          last_subject_kind: locationRow?.location_code ? "location" : "group",
-          last_subject_label: locationRow?.location_code || areaRow?.group_name || locationRow?.group_names?.[0] || threadContext?.last_group_name || null,
+          last_subject_kind: shouldTreatAsLocationOwner ? "location" : "group",
+          last_subject_label: shouldTreatAsLocationOwner
+            ? (locationRow?.location_code || explicitLocationCode || areaRow?.group_name || locationRow?.group_names?.[0] || threadContext?.last_group_name || null)
+            : (areaRow?.group_name || locationRow?.group_names?.[0] || threadContext?.last_group_name || null),
         })
       });
       if (ownerText) return { text: ownerText, meta: { fallback: true, mode: "local_owner" } };
