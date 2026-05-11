@@ -31,6 +31,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
 
   function buildCapabilityReply() {
     return [
+      "I am Memphis, the Memphis Zoo operations assistant.",
       "I can help with Memphis Zoo operations using local system data first.",
       "Ask me about staffing, schedules, who is working, where someone is assigned, your own schedule from this device, open areas, coverage candidates, upcoming events, attendance, open maintenance tickets, location details, current owner, scan state, manager schedules, and internal contacts.",
       "Try: 'Who has Aquarium today?', 'Where is Tammy assigned?', 'What is my schedule tomorrow?', 'Who can cover Aquarium?', 'Any open tickets at Teton?', or 'What events are coming up?'"
