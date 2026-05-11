@@ -71,7 +71,9 @@ setContext("t-owner", {
   last_subject_type: "group",
   context_json: { last_question_shape: "current_owner" },
 });
-const ownerFollowUpReply = await responder.generateReply({ threadId: "t-owner", userMessage: "what about tomorrow?" });
+const ownerFirstReply = await responder.generateReply({ threadId: "t-owner-live-flow", userMessage: "Who has lomodos today?" });
+assert.equal(ownerFirstReply.meta?.mode, "local_owner");
+const ownerFollowUpReply = await responder.generateReply({ threadId: "t-owner-live-flow", userMessage: "what about tomorrow?" });
 assert.equal(ownerFollowUpReply.meta?.mode, "local_owner");
 assert.match(ownerFollowUpReply.text, /Komodos: Tester Tomorrow/i);
 

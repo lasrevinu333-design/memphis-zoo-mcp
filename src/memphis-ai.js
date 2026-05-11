@@ -1333,17 +1333,18 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
 
     if (lower.includes("owner") || lower.includes("who owns") || lower.includes("who has")) {
       const locationRow = await resolveLocationRow(runReadOnlySql, text, threadContext);
+      const areaRow = await resolveAreaRow(runReadOnlySql, relativeServiceDate, text, threadContext);
       const ownerText = await summarizeOwnerQuestion(runReadOnlySql, runRpc, relativeServiceDate, todayServiceDate, text, threadContext);
       await saveThreadContext(runRpc, threadId, {
         last_intent: "current_owner",
         last_location_code: locationRow?.location_code || threadContext?.last_location_code || null,
-        last_group_name: locationRow?.group_names?.[0] || threadContext?.last_group_name || null,
+        last_group_name: areaRow?.group_name || locationRow?.group_names?.[0] || threadContext?.last_group_name || null,
         last_service_date: relativeServiceDate,
         last_subject_type: locationRow?.location_code ? "location" : "group",
         context_json: mergeContextJson(threadContext, {
           last_question_shape: "current_owner",
           last_subject_kind: locationRow?.location_code ? "location" : "group",
-          last_subject_label: locationRow?.location_code || locationRow?.group_names?.[0] || threadContext?.last_group_name || null,
+          last_subject_label: locationRow?.location_code || areaRow?.group_name || locationRow?.group_names?.[0] || threadContext?.last_group_name || null,
         })
       });
       if (ownerText) return { text: ownerText, meta: { fallback: true, mode: "local_owner" } };
