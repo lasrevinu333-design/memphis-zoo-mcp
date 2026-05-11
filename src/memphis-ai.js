@@ -68,6 +68,10 @@ function isSelfIdentityQuestion(text = "") {
   return /^(who am i|what is my name|what's my name|whats my name)$/i.test(String(text || "").trim());
 }
 
+function isMemphisIdentityQuestion(text = "") {
+  return /^(what is your name|what's your name|whats your name|your name|who are you|what are you)$/i.test(String(text || "").trim());
+}
+
 function isConversationalOpener(text = "") {
   const lower = normalizeLoose(text);
   return /(what up|whats up|what s up|how are you|you getting things figured out|getting things figured out|doing better|you good|hows it going|how s it going|you alive|are you alive|are you connected|connected and alive|hello there|dude what it do|who are you|what are you)/.test(lower);
@@ -207,6 +211,13 @@ function genericConversationalFallback(text = "", threadContext = {}) {
   if (/recipe|ingredients|cook|bake|pumpkin pie|creme brulee|pretzel|pretzels/.test(lower)) return "I did not get a clean general-answer response for that recipe question. Check the Gemini/API setup and try again.";
   if (/hello|hey|hi/.test(lower)) return "Hey. What do you need?";
   return "I am here and ready. Ask me a schedule, area, contact, ticket, scan, or events question.";
+}
+
+function mergeContextJson(threadContext = {}, patch = {}) {
+  return {
+    ...(threadContext?.context_json && typeof threadContext.context_json === "object" ? threadContext.context_json : {}),
+    ...(patch && typeof patch === "object" ? patch : {}),
+  };
 }
 
 function formatLead(label, value) {
@@ -544,6 +555,46 @@ function normalizeAreaPrompt(text = "", threadContext = {}) {
     return `${threadContext.last_group_name} ${rewritten}`;
   }
   return rewritten;
+}
+
+function isFollowUpPrompt(text = "") {
+  const raw = String(text || "").trim();
+  if (!raw) return false;
+  return /^(what about|how about|and what about|and|tomorrow|today|yesterday|next week|this week|next|this|same|what about tomorrow|what about today|how about tomorrow|how about today)\b/i.test(raw)
+    || /^(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i.test(raw);
+}
+
+function rewriteFollowUpWithContext(text = "", threadContext = {}) {
+  const raw = String(text || "").trim();
+  if (!isFollowUpPrompt(raw)) return raw;
+
+  const lastIntent = String(threadContext?.last_intent || "").trim();
+  const lastGroupName = String(threadContext?.last_group_name || "").trim();
+  const lastEmployeeName = String(threadContext?.last_employee_name || "").trim();
+  const lastLocationCode = String(threadContext?.last_location_code || "").trim();
+  const lastQuestionShape = String(threadContext?.context_json?.last_question_shape || "").trim();
+
+  if ((lastIntent === "current_owner" || lastQuestionShape === "current_owner") && (lastGroupName || lastLocationCode)) {
+    return `who has ${lastLocationCode || lastGroupName} ${raw}`;
+  }
+
+  if ((lastIntent === "employee_schedule" || lastQuestionShape === "employee_schedule") && lastEmployeeName) {
+    return `${lastEmployeeName} ${raw}`;
+  }
+
+  if ((lastIntent === "my_schedule" || lastQuestionShape === "my_schedule")) {
+    return `my schedule ${raw}`;
+  }
+
+  if ((lastIntent === "location_details" || lastQuestionShape === "location_details") && lastLocationCode) {
+    return `tell me about ${lastLocationCode} ${raw}`;
+  }
+
+  if ((lastIntent === "area_schedule" || lastQuestionShape === "area_schedule" || threadContext?.last_subject_type === "group") && lastGroupName) {
+    return `${lastGroupName} ${raw}`;
+  }
+
+  return raw;
 }
 
 async function resolveAreaRow(runReadOnlySql, serviceDate, text = "", threadContext = {}) {
@@ -1120,9 +1171,10 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
   }
 
   async function generateSystemReply(userMessage, { deviceId = "", threadId = "" } = {}) {
-    const text = String(userMessage || "").trim();
-    const lower = text.toLowerCase();
     const threadContext = await fetchThreadContext(runReadOnlySql, threadId);
+    const rewrittenMessage = rewriteFollowUpWithContext(userMessage, threadContext);
+    const text = String(rewrittenMessage || "").trim();
+    const lower = text.toLowerCase();
     const todayServiceDate = await getDefaultServiceDate(runReadOnlySql);
     const explicitDate = extractExplicitDate(text);
     const explicitToday = /\btoday\b/i.test(text);
@@ -1156,7 +1208,9 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
         last_intent: "conversation",
         last_service_date: relativeServiceDate,
         last_subject_type: subjectType,
-        context_json: subjectType === "weather" ? { weather_location: inferWeatherLocation(text, threadContext) || DEFAULT_WEATHER_LOCATION } : {},
+        context_json: mergeContextJson(threadContext, subjectType === "weather"
+          ? { weather_location: inferWeatherLocation(text, threadContext) || DEFAULT_WEATHER_LOCATION, last_question_shape: "conversation" }
+          : { last_question_shape: "conversation" }),
       });
       return { text: openerReply(text), meta: { fallback: true, mode: "local_conversation" } };
     }
@@ -1169,7 +1223,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
           last_intent: "weather",
           last_service_date: relativeServiceDate,
           last_subject_type: "weather",
-          context_json: { weather_location: location },
+          context_json: mergeContextJson(threadContext, { weather_location: location, last_question_shape: "weather" }),
         });
         return { text: summarizeWeatherPayload(weather), meta: { fallback: true, mode: "local_weather_direct" } };
       } catch (error) {
@@ -1177,7 +1231,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
           last_intent: "weather",
           last_service_date: relativeServiceDate,
           last_subject_type: "weather",
-          context_json: { weather_location: location },
+          context_json: mergeContextJson(threadContext, { weather_location: location, last_question_shape: "weather" }),
         });
         return { text: `I could not pull live weather for ${location} right now.`, meta: { fallback: true, mode: "local_weather_failed", error: error?.message || "weather_failed" } };
       }
@@ -1188,7 +1242,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       const identity = deviceId ? await fetchDeviceIdentity(runReadOnlySql, deviceId) : null;
       const name = assignedEmployee?.assigned_employee_name || identity?.display_name || identity?.user_name || "";
       if (name) {
-        await saveThreadContext(runRpc, threadId, { last_intent: "self_identity", last_employee_name: name, last_subject_type: "employee" });
+        await saveThreadContext(runRpc, threadId, { last_intent: "self_identity", last_employee_name: name, last_subject_type: "employee", context_json: mergeContextJson(threadContext, { last_question_shape: "self_identity", last_subject_kind: "employee", last_subject_label: name }) });
         return { text: `You are ${name}.`, meta: { fallback: true, mode: "local_self_identity" } };
       }
       return { text: "I do not have your assigned identity on this device yet.", meta: { fallback: true, mode: "local_self_identity_missing" } };
@@ -1205,7 +1259,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       const areaRow = await resolveAreaRow(runReadOnlySql, relativeServiceDate, text, threadContext);
       const eventArea = areaRow?.group_name === "Event Center" && !/\b(event center|event centre|ec)\b/i.test(text) ? "" : (areaRow?.group_name || "");
       const data = await executeTool("get_upcoming_events", { days: 14, area: eventArea });
-      await saveThreadContext(runRpc, threadId, { last_intent: "upcoming_events", last_group_name: areaRow?.group_name || null, last_service_date: relativeServiceDate, last_subject_type: "group" });
+      await saveThreadContext(runRpc, threadId, { last_intent: "upcoming_events", last_group_name: areaRow?.group_name || null, last_service_date: relativeServiceDate, last_subject_type: "group", context_json: mergeContextJson(threadContext, { last_question_shape: "upcoming_events", last_subject_kind: "group", last_subject_label: areaRow?.group_name || null }) });
       return { text: summarizeEvents(data.events), meta: { fallback: true, mode: "local_events" } };
     }
 
@@ -1224,7 +1278,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
 
     if ((lower.includes("my schedule") || lower === "schedule" || lower.includes("what am i assigned") || lower.includes("what am i doing today")) && assignedEmployee?.assigned_employee_name) {
       const data = await executeTool("get_my_schedule", { device_id: deviceId, service_date: relativeServiceDate });
-      await saveThreadContext(runRpc, threadId, { last_intent: "my_schedule", last_employee_name: data.employee_name || assignedEmployee.assigned_employee_name, last_service_date: relativeServiceDate, last_subject_type: "employee" });
+      await saveThreadContext(runRpc, threadId, { last_intent: "my_schedule", last_employee_name: data.employee_name || assignedEmployee.assigned_employee_name, last_service_date: relativeServiceDate, last_subject_type: "employee", context_json: mergeContextJson(threadContext, { last_question_shape: "my_schedule", last_subject_kind: "employee", last_subject_label: data.employee_name || assignedEmployee.assigned_employee_name }) });
       return { text: summarizeEmployeeAssignments(data.assignments, data.employee_name || assignedEmployee.assigned_employee_name, data.service_date), meta: { fallback: true, mode: "local_my_schedule" } };
     }
 
@@ -1285,7 +1339,12 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
         last_location_code: locationRow?.location_code || threadContext?.last_location_code || null,
         last_group_name: locationRow?.group_names?.[0] || threadContext?.last_group_name || null,
         last_service_date: relativeServiceDate,
-        last_subject_type: locationRow?.location_code ? "location" : "group"
+        last_subject_type: locationRow?.location_code ? "location" : "group",
+        context_json: mergeContextJson(threadContext, {
+          last_question_shape: "current_owner",
+          last_subject_kind: locationRow?.location_code ? "location" : "group",
+          last_subject_label: locationRow?.location_code || locationRow?.group_names?.[0] || threadContext?.last_group_name || null,
+        })
       });
       if (ownerText) return { text: ownerText, meta: { fallback: true, mode: "local_owner" } };
     }
@@ -1309,12 +1368,12 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       return daily;
     }
 
-    if (lower.includes("schedule") || lower.includes("assigned") || lower.includes("assignment") || lower.includes("areas") || lower.includes("area") || lower.includes("works") || lower.includes("working") || lower.includes("scheduled") || lower.includes("staff") || lower.includes("aquarium") || lower.includes("restroom") || lower.includes("zambezi") || lower.includes("teton") || lower.includes("expo") || lower.includes("cleans") || hasLocationKeyword(text) || ((/^(how about|what about)\b/i.test(text) || hasDateReference(text)) && threadContext?.last_subject_type === "group" && threadContext?.last_group_name)) {
+    if (lower.includes("schedule") || lower.includes("assigned") || lower.includes("assignment") || lower.includes("areas") || lower.includes("area") || lower.includes("works") || lower.includes("working") || lower.includes("scheduled") || lower.includes("staff") || lower.includes("aquarium") || lower.includes("restroom") || lower.includes("zambezi") || lower.includes("teton") || lower.includes("expo") || lower.includes("cleans") || hasLocationKeyword(text) || ((/^(how about|what about)\b/i.test(text) || hasDateReference(text)) && threadContext?.last_subject_type === "group" && threadContext?.last_group_name) || ((/^(how about|what about)\b/i.test(text) || hasDateReference(text)) && threadContext?.last_subject_type === "employee" && threadContext?.last_employee_name) || ((/^(how about|what about)\b/i.test(text) || hasDateReference(text)) && threadContext?.context_json?.last_question_shape === "my_schedule")) {
       const employeeName = await guessEmployeeName(runRpc, text) || (shouldUseEmployeeContext(text) ? threadContext?.last_employee_name : "") || "";
       if (employeeName) {
         const data = await executeTool("get_employee_schedule", { employee_name: employeeName, service_date: relativeServiceDate });
         const staticShift = data.assignments?.length ? null : await fetchStaticEmployeeShift(runReadOnlySql, employeeName, data.service_date);
-        await saveThreadContext(runRpc, threadId, { last_intent: "employee_schedule", last_employee_name: employeeName, last_service_date: relativeServiceDate, last_subject_type: "employee" });
+        await saveThreadContext(runRpc, threadId, { last_intent: "employee_schedule", last_employee_name: employeeName, last_service_date: relativeServiceDate, last_subject_type: "employee", context_json: mergeContextJson(threadContext, { last_question_shape: "employee_schedule", last_subject_kind: "employee", last_subject_label: employeeName }) });
         return { text: summarizeEmployeeAssignments(data.assignments, employeeName, data.service_date, staticShift), meta: { fallback: true, mode: staticShift && !data.assignments?.length ? "local_employee_static_shift_no_assignments" : "local_employee_schedule" } };
       }
       const areaRow = await resolveAreaRow(runReadOnlySql, relativeServiceDate, text, threadContext);
@@ -1324,7 +1383,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
         await ensureDailySchedule(runRpc, relativeServiceDate, { force: true });
         data = await executeTool("get_area_schedule", { area: areaRow?.group_name || text, service_date: relativeServiceDate });
       }
-      await saveThreadContext(runRpc, threadId, { last_intent: "area_schedule", last_group_name: areaRow?.group_name || data.group_name || null, last_service_date: relativeServiceDate, last_subject_type: "group" });
+      await saveThreadContext(runRpc, threadId, { last_intent: "area_schedule", last_group_name: areaRow?.group_name || data.group_name || null, last_service_date: relativeServiceDate, last_subject_type: "group", context_json: mergeContextJson(threadContext, { last_question_shape: "area_schedule", last_subject_kind: "group", last_subject_label: areaRow?.group_name || data.group_name || null }) });
       const noAssignmentsText = data.service_date && data.service_date > todayServiceDate
         ? `I do not see generated schedule assignments for ${areaRow?.group_name || text} on ${data.service_date} yet.`
         : `I couldn't find schedule assignments for ${areaRow?.group_name || text} on ${data.service_date}.`;
@@ -1340,7 +1399,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
 
     const weatherLocation = inferWeatherLocation(text, threadContext);
     const subjectType = isWeatherQuestion(text) ? "weather" : (isGeneralKnowledgeQuestion(text) ? "general_knowledge" : "generic");
-    await saveThreadContext(runRpc, threadId, { last_intent: "generic", last_service_date: relativeServiceDate, last_subject_type: subjectType, context_json: weatherLocation ? { weather_location: weatherLocation } : {} });
+    await saveThreadContext(runRpc, threadId, { last_intent: "generic", last_service_date: relativeServiceDate, last_subject_type: subjectType, context_json: mergeContextJson(threadContext, weatherLocation ? { weather_location: weatherLocation, last_question_shape: "generic" } : { last_question_shape: "generic" }) });
     return { text: genericConversationalFallback(text, threadContext), meta: { fallback: true, mode: "local_generic" } };
   }
 
@@ -1351,6 +1410,22 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     const threadContext = await fetchThreadContext(runReadOnlySql, threadId);
     const recentMessages = await fetchRecentThreadMessages(runReadOnlySql, threadId, 10);
 
+    if (isMemphisIdentityQuestion(userMessage)) {
+      await saveThreadContext(runRpc, threadId, {
+        last_intent: "memphis_identity",
+        last_subject_type: "conversation",
+        context_json: mergeContextJson(threadContext, {
+          last_question_shape: "memphis_identity",
+          last_subject_kind: "assistant",
+          last_subject_label: "Memphis",
+        }),
+      });
+      return {
+        text: "I am Memphis, the Memphis Zoo operations assistant. I help with schedules, area coverage, contacts, tickets, scans, and day-of operations questions.",
+        meta: { fallback: true, mode: "local_memphis_identity" }
+      };
+    }
+
     const locationHint = findLocationCode(userMessage) || hasLocationKeyword(userMessage);
 
     if (!locationHint && isOpsManagerSchedulePrompt(userMessage)) {
@@ -1360,7 +1435,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       const opsScheduleReply = await answerOpsManagerScheduleQuestion(runReadOnlySql, opsScheduleText);
 
       if (opsScheduleReply) {
-        await saveThreadContext(runRpc, threadId, { last_intent: "ops_manager_schedule", last_subject_type: "contact" });
+        await saveThreadContext(runRpc, threadId, { last_intent: "ops_manager_schedule", last_subject_type: "contact", context_json: mergeContextJson(threadContext, { last_question_shape: "ops_manager_schedule", last_subject_kind: "contact" }) });
         return { text: opsScheduleReply, meta: { fallback: true, mode: "local_ops_manager_schedule" } };
       }
     }
@@ -1369,14 +1444,14 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       const contactReply = await answerInternalContactQuestion(runReadOnlySql, userMessage);
 
       if (contactReply) {
-        await saveThreadContext(runRpc, threadId, { last_intent: "internal_contact_lookup", last_subject_type: "contact" });
+        await saveThreadContext(runRpc, threadId, { last_intent: "internal_contact_lookup", last_subject_type: "contact", context_json: mergeContextJson(threadContext, { last_question_shape: "internal_contact_lookup", last_subject_kind: "contact" }) });
         return { text: contactReply, meta: { fallback: true, mode: "local_internal_contact" } };
       }
     }
 
     const weeklyEmployeeReply = await answerEmployeeWeeklyScheduleQuestion(runReadOnlySql, userMessage, threadContext);
     if (weeklyEmployeeReply) {
-      await saveThreadContext(runRpc, threadId, { last_intent: "employee_weekly_schedule", last_subject_type: "employee" });
+      await saveThreadContext(runRpc, threadId, { last_intent: "employee_weekly_schedule", last_subject_type: "employee", context_json: mergeContextJson(threadContext, { last_question_shape: "employee_weekly_schedule", last_subject_kind: "employee" }) });
       return { text: weeklyEmployeeReply, meta: { fallback: true, mode: "local_employee_weekly_schedule" } };
     }
 
@@ -1392,7 +1467,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       const location = inferWeatherLocation(userMessage, threadContext) || DEFAULT_WEATHER_LOCATION;
       try {
         const weather = await fetchWeatherForMemphisTn(location);
-        await saveThreadContext(runRpc, threadId, { last_intent: "weather", last_subject_type: "weather", context_json: { weather_location: location } });
+        await saveThreadContext(runRpc, threadId, { last_intent: "weather", last_subject_type: "weather", context_json: mergeContextJson(threadContext, { weather_location: location, last_question_shape: "weather", last_subject_kind: "weather", last_subject_label: location }) });
         return { text: summarizeWeatherPayload(weather), meta: { fallback: false, provider: "weather_direct", mode: "conversation_weather_direct" } };
       } catch (error) {
         console.error("memphis direct weather path failed:", error);
@@ -1404,7 +1479,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       if (text) {
         const subjectType = isWeatherQuestion(userMessage) ? "weather" : (isGeneralKnowledgeQuestion(userMessage) ? "general_knowledge" : "conversation");
         const weatherLocation = inferWeatherLocation(userMessage, threadContext);
-        await saveThreadContext(runRpc, threadId, { last_intent: "conversation", last_subject_type: subjectType, context_json: weatherLocation ? { weather_location: weatherLocation } : {} });
+        await saveThreadContext(runRpc, threadId, { last_intent: "conversation", last_subject_type: subjectType, context_json: mergeContextJson(threadContext, weatherLocation ? { weather_location: weatherLocation, last_question_shape: "conversation", last_subject_kind: subjectType, last_subject_label: weatherLocation } : { last_question_shape: "conversation", last_subject_kind: subjectType }) });
         return { text, meta: { fallback: false, provider: "gemini", model: DEFAULT_MODEL, mode: "conversation_first" } };
       }
     } catch (error) {
