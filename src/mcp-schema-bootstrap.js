@@ -9,6 +9,7 @@ import { registerServerTools } from "./mcp/server-tools.js";
 import { validateRuntimeEnv } from "./config/env.js";
 import { getToolManifest } from "./mcp/tool-manifest.js";
 import { normalizeMcpServerName } from "./mcp/create-mcp-server.js";
+import { RELEASE_ID } from "./app-version.js";
 
 /**
  * Compatibility/bootstrap layer for the Memphis Zoo MCP server.
@@ -39,11 +40,10 @@ const MODULAR_TOOL_NAMES = new Set([
 ]);
 
 function getAppInfo() {
-  const releaseId = "release-2026.04.23.1";
   return {
     name: normalizeMcpServerName(process.env.APP_NAME),
-    version: releaseId,
-    release_id: releaseId,
+    version: RELEASE_ID,
+    release_id: RELEASE_ID,
   };
 }
 

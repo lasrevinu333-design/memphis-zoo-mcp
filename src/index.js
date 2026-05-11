@@ -14,6 +14,7 @@ import {
   createMessagingRouter,
   createScheduleRouter,
 } from "./routes/index.js";
+import { APP_VERSION, RELEASE_ID } from "./app-version.js";
 
 const app = express();
 app.use(express.json({ limit: "10mb" }));
@@ -38,8 +39,6 @@ const SCAN_RPC_ALLOWLIST = new Set([
   "tool_record_scan_event"
 ]);
 
-const RELEASE_ID = "release-2026.05.08.2";
-const APP_VERSION = RELEASE_ID;
 const SCAN_CONTRACT_VERSION = "scan.v1";
 const DASHBOARD_CONTRACT_VERSION = "dashboard.v1";
 const MESSAGING_CONTRACT_VERSION = "messaging.v1";
@@ -196,6 +195,9 @@ function requireAdminApiAuth(req, res, next) {
 }
 
 async function runRpc(functionName, args = {}) {
+  if (functionName === "sch_generate_daily_schedule") {
+    return await runScheduleGenerationViaSql(args?.p_service_date, args?.p_force === true);
+  }
   const client = getSupabaseConfig();
   const { data, error } = await client.rpc(functionName, args);
   if (error) throw new Error(error.message || `RPC failed: ${functionName}`);
@@ -421,6 +423,54 @@ async function runWriteSql(namePrefix, sql) {
   });
   if (error) throw new Error(error.message || "run_sql_migration failed");
   return data;
+}
+
+async function runScheduleGenerationViaSql(serviceDate, force = false) {
+  const normalizedDate = String(serviceDate || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedDate)) {
+    throw new Error("p_service_date is required and must be YYYY-MM-DD.");
+  }
+
+  const beforeRows = await runReadOnlySql(`
+    select count(*)::int as assignment_count
+    from public.daily_schedule_assignments
+    where service_date = '${esc(normalizedDate)}'::date
+  `);
+  const deletedExistingRows = force && Array.isArray(beforeRows) && beforeRows.length
+    ? Number(beforeRows[0].assignment_count || 0)
+    : 0;
+
+  await runWriteSql(
+    "schedule_generate_daily",
+    `select public.sch_generate_daily_schedule('${esc(normalizedDate)}'::date, ${force ? "true" : "false"});`
+  );
+
+  const rows = await runReadOnlySql(`
+    select
+      public.sch_get_schedule_close_time('${esc(normalizedDate)}'::date)::text as close_time,
+      (select count(*)::int from public.daily_work_roster where service_date = '${esc(normalizedDate)}'::date and active = true) as work_roster_rows,
+      (select count(*)::int from public.daily_schedule_assignments where service_date = '${esc(normalizedDate)}'::date) as generated_rows,
+      (select count(*)::int from public.daily_absence_overrides where absence_date = '${esc(normalizedDate)}'::date and active = true) as active_absence_count,
+      (select count(*)::int from public.daily_schedule_assignments where service_date = '${esc(normalizedDate)}'::date and coalesce(source_type, '') like '%auto_reassigned%') as reassigned_open_rows,
+      case when exists (
+        select 1
+        from public.coverage_templates ct
+        where ct.day_of_week = extract(dow from '${esc(normalizedDate)}'::date)::int
+          and ct.active = true
+      ) then 'coverage_templates' else 'legacy_fallback' end as mode
+  `);
+  const row = Array.isArray(rows) && rows.length ? rows[0] : {};
+  return {
+    service_date: normalizedDate,
+    close_time: row.close_time || null,
+    deleted_existing_rows: deletedExistingRows,
+    work_roster_rows: Number(row.work_roster_rows || 0),
+    generated_rows: Number(row.generated_rows || 0),
+    reassigned_open_rows: Number(row.reassigned_open_rows || 0),
+    active_absence_count: Number(row.active_absence_count || 0),
+    mode: row.mode || "legacy_fallback",
+    execution_path: "run_sql_migration_wrapper",
+  };
 }
 
 const eventMaintenanceController = createEventMaintenanceController({ runReadOnlySql, runWriteSql, runRpc });
