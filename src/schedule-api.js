@@ -3,6 +3,7 @@ import express from "express";
 export function createScheduleRouter({
   runReadOnlySql,
   runRpc,
+  runWriteSql,
   buildHealthPayload,
   requireAdminApiAuth,
   appVersion,
@@ -57,6 +58,159 @@ export function createScheduleRouter({
       }
     }
     return `array[${cleaned.map((id) => `'${esc(id)}'::uuid`).join(",")}]::uuid[]`;
+  }
+
+  function normalizeUuidList(values) {
+    if (!Array.isArray(values)) return [];
+    const cleaned = values.map((x) => String(x || "").trim()).filter(Boolean);
+    for (const id of cleaned) {
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
+        throw new Error(`Invalid UUID: ${id}`);
+      }
+    }
+    return Array.from(new Set(cleaned));
+  }
+
+  async function listPtoRows({ startDate, endDate = startDate } = {}) {
+    const rows = await runReadOnlySql(`
+      select
+        p.id,
+        p.employee_id,
+        e.display_name as employee_name,
+        e.employee_code,
+        p.start_date,
+        p.end_date,
+        p.pto_type,
+        p.source,
+        p.notes,
+        p.active,
+        p.created_at,
+        p.updated_at
+      from public.employee_planned_time_off p
+      join public.employees e on e.id = p.employee_id
+      where p.active = true
+        and p.start_date <= '${esc(endDate)}'::date
+        and p.end_date >= '${esc(startDate)}'::date
+      order by p.start_date asc, e.display_name asc, p.end_date asc
+    `);
+    return Array.isArray(rows) ? rows : [];
+  }
+
+  async function hasPtoTable() {
+    const rows = await runReadOnlySql(`select to_regclass('public.employee_planned_time_off') is not null as exists`);
+    return Boolean(Array.isArray(rows) && rows.length && rows[0].exists);
+  }
+
+  async function getPtoAbsentEmployeeIds(serviceDate) {
+    const rows = await runReadOnlySql(`
+      select distinct employee_id
+      from public.employee_planned_time_off
+      where active = true
+        and start_date <= '${esc(serviceDate)}'::date
+        and end_date >= '${esc(serviceDate)}'::date
+      order by employee_id
+    `);
+    return Array.isArray(rows) ? rows.map((row) => String(row.employee_id || "").trim()).filter(Boolean) : [];
+  }
+
+  async function mergeExplicitAndPtoAbsences(serviceDate, explicitIds = []) {
+    const explicit = normalizeUuidList(explicitIds);
+    const ptoIds = await getPtoAbsentEmployeeIds(serviceDate);
+    return {
+      explicit,
+      pto_ids: ptoIds,
+      merged: Array.from(new Set([...explicit, ...ptoIds])),
+    };
+  }
+
+  async function ensurePtoTable() {
+    if (typeof runWriteSql !== "function") throw new Error("PTO write path is not configured.");
+    await runWriteSql("pto_schema", `
+      create table if not exists public.employee_planned_time_off (
+        id uuid primary key default gen_random_uuid(),
+        employee_id uuid not null references public.employees(id) on delete cascade,
+        start_date date not null,
+        end_date date not null,
+        pto_type text not null default 'PTO',
+        source text not null default 'import',
+        notes text null,
+        active boolean not null default true,
+        created_at timestamptz not null default now(),
+        updated_at timestamptz not null default now(),
+        constraint employee_planned_time_off_date_order check (end_date >= start_date),
+        constraint employee_planned_time_off_unique unique (employee_id, start_date, end_date, pto_type, source)
+      );
+      create index if not exists employee_planned_time_off_active_dates_idx on public.employee_planned_time_off (active, start_date, end_date);
+      create index if not exists employee_planned_time_off_employee_dates_idx on public.employee_planned_time_off (employee_id, start_date, end_date);
+    `);
+  }
+
+  async function importPtoRows(inputRows = []) {
+    await ensurePtoTable();
+    if (!Array.isArray(inputRows) || !inputRows.length) throw new Error("rows must be a non-empty array.");
+    const employeeRows = await runReadOnlySql(`
+      select id as employee_id, display_name, employee_code
+      from public.employees
+      where active = true
+      order by display_name
+    `);
+    const byId = new Map();
+    const byName = new Map();
+    for (const row of employeeRows || []) {
+      const employeeId = String(row.employee_id || "").trim();
+      const displayName = String(row.display_name || "").trim();
+      if (employeeId) byId.set(employeeId, row);
+      if (displayName) byName.set(displayName.toLowerCase(), row);
+    }
+
+    const normalized = [];
+    for (const rawRow of inputRows) {
+      const employeeId = String(rawRow?.employee_id || "").trim();
+      const employeeName = String(rawRow?.employee_name || rawRow?.display_name || "").trim();
+      const employee = employeeId ? byId.get(employeeId) : byName.get(employeeName.toLowerCase());
+      if (!employee?.employee_id) {
+        throw new Error(`Could not resolve PTO employee: ${employeeName || employeeId || "unknown"}`);
+      }
+      normalized.push({
+        employee_id: String(employee.employee_id),
+        employee_name: String(employee.display_name || employeeName || "").trim(),
+        start_date: requireDate(rawRow?.start_date || rawRow?.service_date),
+        end_date: requireDate(rawRow?.end_date || rawRow?.return_date || rawRow?.start_date || rawRow?.service_date),
+        pto_type: String(rawRow?.pto_type || rawRow?.type || "PTO").trim() || "PTO",
+        source: String(rawRow?.source || "import").trim() || "import",
+        notes: rawRow?.notes == null ? null : String(rawRow.notes),
+      });
+    }
+
+    const valuesSql = normalized.map((row) => `(
+      '${esc(row.employee_id)}'::uuid,
+      '${esc(row.start_date)}'::date,
+      '${esc(row.end_date)}'::date,
+      '${esc(row.pto_type)}',
+      '${esc(row.source)}',
+      ${row.notes == null ? "null" : `'${esc(row.notes)}'`},
+      true
+    )`).join(",\n");
+
+    await runWriteSql("pto_import", `
+      insert into public.employee_planned_time_off (
+        employee_id,
+        start_date,
+        end_date,
+        pto_type,
+        source,
+        notes,
+        active
+      )
+      values ${valuesSql}
+      on conflict (employee_id, start_date, end_date, pto_type, source)
+      do update set
+        notes = excluded.notes,
+        active = true,
+        updated_at = now();
+    `);
+
+    return normalized;
   }
 
   function toNullableRating(value) {
@@ -564,6 +718,26 @@ export function createScheduleRouter({
     }
   });
 
+  router.get("/pto", async (req, res) => {
+    try {
+      const startDate = requireDate(req.query.start_date || req.query.service_date || req.query.date || (await getServiceDate()));
+      const endDate = requireDate(req.query.end_date || startDate);
+      const rows = (await hasPtoTable()) ? await listPtoRows({ startDate, endDate }) : [];
+      res.status(200).json({ ok: true, data: { start_date: startDate, end_date: endDate, rows }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+    } catch (error) {
+      fail(res, error, "PTO lookup failed");
+    }
+  });
+
+  router.post("/pto/import", requireSchedulePin, async (req, res) => {
+    try {
+      const imported = await importPtoRows(req.body?.rows || []);
+      res.status(200).json({ ok: true, data: { imported_count: imported.length, rows: imported }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+    } catch (error) {
+      fail(res, error, "PTO import failed");
+    }
+  });
+
   router.get("/location-groups", async (_req, res) => {
     try {
       const rows = await runReadOnlySql(`
@@ -724,7 +898,8 @@ export function createScheduleRouter({
   router.post("/absence-preview", requireSchedulePin, async (req, res) => {
     try {
       const serviceDate = requireDate(req.body?.service_date || req.body?.date || (await getServiceDate()));
-      const absentIdsSql = uuidArrayLiteral(req.body?.absent_employee_ids || []);
+      const absenceSet = await mergeExplicitAndPtoAbsences(serviceDate, req.body?.absent_employee_ids || []);
+      const absentIdsSql = uuidArrayLiteral(absenceSet.merged);
       const initialState = await getDailyGenerationState(serviceDate);
       let generatedBeforePreview = false;
 
@@ -736,9 +911,8 @@ export function createScheduleRouter({
       const finalState = generatedBeforePreview ? await getDailyGenerationState(serviceDate) : initialState;
       const rows = await runReadOnlySql(`select public.sch_absence_preview('${esc(serviceDate)}'::date, ${absentIdsSql}) as data`);
       const data = Array.isArray(rows) && rows.length ? rows[0].data : null;
-      const absentEmployeeIds = Array.isArray(req.body?.absent_employee_ids) ? req.body.absent_employee_ids.map((x) => String(x || "").trim()).filter(Boolean) : [];
-      const diff = summarizeAssignmentDiff(data || {}, { absentEmployeeIds });
-      if (data && typeof data === "object") Object.assign(data, diff);
+      const diff = summarizeAssignmentDiff(data || {}, { absentEmployeeIds: absenceSet.merged });
+      if (data && typeof data === "object") Object.assign(data, diff, { explicit_absent_employee_ids: absenceSet.explicit, pto_absent_employee_ids: absenceSet.pto_ids, effective_absent_employee_ids: absenceSet.merged });
       res.status(200).json({
         ok: true,
         data,
@@ -760,12 +934,10 @@ export function createScheduleRouter({
   router.post("/absence-publish", requireSchedulePin, async (req, res) => {
     try {
       const serviceDate = requireDate(req.body?.service_date || req.body?.date || (await getServiceDate()));
-      const absentIds = Array.isArray(req.body?.absent_employee_ids)
-        ? req.body.absent_employee_ids.map((x) => String(x || "").trim()).filter(Boolean)
-        : [];
+      const absenceSet = await mergeExplicitAndPtoAbsences(serviceDate, req.body?.absent_employee_ids || []);
       const data = await runRpc("sch_absence_publish", {
         p_service_date: serviceDate,
-        p_absent_employee_ids: absentIds,
+        p_absent_employee_ids: absenceSet.merged,
       });
       if (data && typeof data === "object") {
         const diff = summarizeAssignmentDiff({
@@ -773,8 +945,11 @@ export function createScheduleRouter({
           reassigned_assignments: data.reassigned_assignments || data.generate_result?.reassigned_assignments,
           open_segments: data.open_segments || data.generate_result?.open_segments,
           overload_warnings: data.overload_warnings || data.generate_result?.overload_warnings,
-        }, { absentEmployeeIds: absentIds });
+        }, { absentEmployeeIds: absenceSet.merged });
         data.generate_result = { ...(data.generate_result || {}), ...diff };
+        data.explicit_absent_employee_ids = absenceSet.explicit;
+        data.pto_absent_employee_ids = absenceSet.pto_ids;
+        data.effective_absent_employee_ids = absenceSet.merged;
       }
       res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
