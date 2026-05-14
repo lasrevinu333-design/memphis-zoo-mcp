@@ -1,5 +1,103 @@
 import express from "express";
 
+const MONTH_LOOKUP = {
+  january: 1, jan: 1,
+  february: 2, feb: 2,
+  march: 3, mar: 3,
+  april: 4, apr: 4,
+  may: 5,
+  june: 6, jun: 6,
+  july: 7, jul: 7,
+  august: 8, aug: 8,
+  september: 9, sept: 9, sep: 9,
+  october: 10, oct: 10,
+  november: 11, nov: 11,
+  december: 12, dec: 12,
+};
+
+const PTO_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
+const PTO_GEMINI_MODEL = String(process.env.SCHEDULE_GEMINI_MODEL || process.env.MEMPHIS_GEMINI_MODEL || process.env.GEMINI_MODEL || "gemini-2.5-flash").trim();
+const PTO_GEMINI_TIMEOUT_MS = Math.max(1000, Number.parseInt(String(process.env.SCHEDULE_GEMINI_TIMEOUT_MS || process.env.MEMPHIS_GEMINI_TIMEOUT_MS || "12000"), 10) || 12000);
+const PTO_GEMINI_MAX_OUTPUT_TOKENS = Math.max(256, Number.parseInt(String(process.env.SCHEDULE_GEMINI_MAX_OUTPUT_TOKENS || "1200"), 10) || 1200);
+
+function getScheduleGeminiApiKey() {
+  return String(
+    process.env.SCHEDULE_GEMINI_API_KEY ||
+    process.env.GEMINI_API_KEY ||
+    process.env.MEMPHIS_GEMINI_API_KEY ||
+    process.env.GOOGLE_API_KEY ||
+    process.env.GOOGLE_GENAI_API_KEY ||
+    ""
+  ).trim();
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = PTO_GEMINI_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function normalizeLoose(value) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function buildDate(year, month, day) {
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return "";
+  if (year < 2000 || year > 2100 || month < 1 || month > 12 || day < 1 || day > 31) return "";
+  const date = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+  if (date.getUTCFullYear() !== year || (date.getUTCMonth() + 1) !== month || date.getUTCDate() !== day) return "";
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function normalizePossibleDate(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+
+  const monthNames = Object.keys(MONTH_LOOKUP).sort((a, b) => b.length - a.length).join("|");
+  let match = raw.match(new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+(${monthNames})\\.?(?:,?\\s*(\\d{2,4}))?\\b`, "i"));
+  if (match) {
+    const year = match[3] ? Number(String(match[3]).length === 2 ? `20${match[3]}` : match[3]) : NaN;
+    return buildDate(year, MONTH_LOOKUP[String(match[2]).toLowerCase()], Number(match[1]));
+  }
+
+  match = raw.match(/\b(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?\b/);
+  if (match) {
+    const year = match[3] ? Number(String(match[3]).length === 2 ? `20${match[3]}` : match[3]) : NaN;
+    return buildDate(year, Number(match[1]), Number(match[2]));
+  }
+
+  match = raw.match(new RegExp(`\\b(${monthNames})\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s*(\\d{2,4}))?\\b`, "i"));
+  if (match) {
+    const year = match[3] ? Number(String(match[3]).length === 2 ? `20${match[3]}` : match[3]) : NaN;
+    return buildDate(year, MONTH_LOOKUP[String(match[1]).toLowerCase()], Number(match[2]));
+  }
+
+  return "";
+}
+
+function safeJsonParse(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    const match = String(text || "").match(/\{[\s\S]*\}/);
+    if (!match) return null;
+    try {
+      return JSON.parse(match[0]);
+    } catch {
+      return null;
+    }
+  }
+}
+
 export function createScheduleRouter({
   runReadOnlySql,
   runRpc,
@@ -287,6 +385,10 @@ export function createScheduleRouter({
         day_of_week: dayOfWeek,
         employee_name: String(employeeName || "").trim(),
         status: String(status || "").trim(),
+        provider: "local-parser",
+        provider_used: "local-parser",
+        provider_fallback: false,
+        warnings: [],
       });
     }
     if (!rows.length) throw new Error("No PTO rows were detected in the report text.");
@@ -305,8 +407,9 @@ export function createScheduleRouter({
     const grouped = new Map();
     for (const row of kept) {
       const key = row.employee_name.toLowerCase();
-      if (!grouped.has(key)) grouped.set(key, { employee_name: row.employee_name, dates: [] });
+      if (!grouped.has(key)) grouped.set(key, { employee_name: row.employee_name, dates: [], rows: [] });
       grouped.get(key).dates.push(row.service_date);
+      grouped.get(key).rows.push(row);
     }
 
     const importedRows = [];
@@ -314,7 +417,7 @@ export function createScheduleRouter({
       const dates = Array.from(new Set(group.dates)).sort();
       let start = dates[0];
       let end = dates[0];
-      const pushRange = () => importedRows.push({ employee_name: group.employee_name, start_date: start, end_date: end, pto_type: "PTO", notes: "Imported from PTO report" });
+      const pushRange = () => importedRows.push({ employee_name: group.employee_name, start_date: start, end_date: end, pto_type: "PTO", notes: "Imported from PTO report", source: "report", provider: "local-parser", provider_used: "local-parser", provider_fallback: false, warnings: [] });
       for (let i = 1; i < dates.length; i += 1) {
         const prev = new Date(`${end}T12:00:00`);
         prev.setDate(prev.getDate() + 1);
@@ -325,7 +428,157 @@ export function createScheduleRouter({
       pushRange();
     }
 
-    return { detected_rows: rows, kept_rows: kept, import_rows: importedRows };
+    return { detected_rows: rows, kept_rows: kept, import_rows: importedRows, provider: "local-parser", providers_used: ["local-parser"], fallback_count: 0 };
+  }
+
+  function shouldUseGeminiForPto(localResult = {}) {
+    if (!Array.isArray(localResult?.detected_rows) || !localResult.detected_rows.length) return true;
+    if (!Array.isArray(localResult?.import_rows) || !localResult.import_rows.length) return true;
+    const keptCount = Array.isArray(localResult?.kept_rows) ? localResult.kept_rows.length : 0;
+    return keptCount < localResult.detected_rows.length;
+  }
+
+  function normalizePtoEmployeeName(value = "") {
+    const text = String(value || "").trim();
+    if (!text) return "";
+    if (text.includes(",")) {
+      const [last, rest] = text.split(",", 2).map((part) => part.trim()).filter(Boolean);
+      return [rest, last].filter(Boolean).join(" ").trim();
+    }
+    return text;
+  }
+
+  function buildPtoGeminiPrompt(reportText = "", localResult = {}) {
+    const detectedRows = Array.isArray(localResult?.detected_rows)
+      ? localResult.detected_rows.map((row) => ({
+          service_date: row.service_date || "",
+          day_of_week: row.day_of_week || "",
+          employee_name: row.employee_name || "",
+          status: row.status || "",
+        }))
+      : [];
+
+    return [
+      "You are extracting employee PTO date ranges from a Memphis Zoo PTO report into strict JSON.",
+      "Return JSON only. No markdown. No explanation.",
+      "Output shape: {\"rows\":[{...}]}",
+      "Each row must include: employee_name, start_date, end_date, pto_type, notes, confidence, review_notes, warnings",
+      "Rules:",
+      "- employee_name should be the employee's display name in normal order when known, like 'Jane Smith'.",
+      "- start_date and end_date must be YYYY-MM-DD.",
+      "- collapse consecutive PTO dates for the same employee into one range row.",
+      "- include only approved or submitted PTO rows. Ignore cancelled and refused rows.",
+      "- pto_type should usually be PTO unless the report clearly says otherwise.",
+      "- notes should be short plain text or null.",
+      "- confidence must be one of high, medium, low.",
+      "- warnings must be an array using only: missing_employee_name, missing_date, ignored_status, ambiguous_range, ambiguous_employee.",
+      "- Do not invent dates or employees.",
+      "Raw PTO report text:",
+      String(reportText || ""),
+      "Local parser extraction for reference:",
+      JSON.stringify(detectedRows),
+    ].join("\n");
+  }
+
+  async function tryGeminiParsePtoReportText(reportText = "", localResult = {}) {
+    const apiKey = getScheduleGeminiApiKey();
+    if (!apiKey) return { ok: false, reason: "gemini_not_configured" };
+    const prompt = buildPtoGeminiPrompt(reportText, localResult);
+    const response = await fetchWithTimeout(`${PTO_GEMINI_BASE_URL}/${encodeURIComponent(PTO_GEMINI_MODEL)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.1, maxOutputTokens: PTO_GEMINI_MAX_OUTPUT_TOKENS, responseMimeType: "application/json" },
+      }),
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(payload?.error?.message || payload?.message || `Gemini HTTP ${response.status}`);
+    const text = (payload?.candidates?.[0]?.content?.parts || [])
+      .filter((part) => typeof part?.text === "string" && part.text.trim())
+      .map((part) => part.text.trim())
+      .join("\n\n");
+    const parsed = safeJsonParse(text);
+    const rows = Array.isArray(parsed?.rows) ? parsed.rows : null;
+    if (!rows) throw new Error("Gemini returned invalid JSON PTO rows payload.");
+    return { ok: true, provider: "gemini", model: PTO_GEMINI_MODEL, rows };
+  }
+
+  function normalizeGeminiPtoRow(raw = {}) {
+    const employeeName = normalizePtoEmployeeName(raw.employee_name || raw.name || "");
+    const startDate = normalizePossibleDate(raw.start_date || raw.date_start || raw.from || "");
+    const endDate = normalizePossibleDate(raw.end_date || raw.date_end || raw.to || raw.start_date || "");
+    const warningSet = new Set(
+      Array.isArray(raw.warnings)
+        ? raw.warnings.map((item) => String(item || "").trim()).filter(Boolean)
+        : []
+    );
+    if (!employeeName) warningSet.add("missing_employee_name");
+    if (!startDate || !endDate) warningSet.add("missing_date");
+    if (startDate && endDate && endDate < startDate) warningSet.add("ambiguous_range");
+    const warnings = Array.from(warningSet).filter((item) => ["missing_employee_name", "missing_date", "ignored_status", "ambiguous_range", "ambiguous_employee"].includes(item));
+
+    return {
+      employee_name: employeeName,
+      start_date: startDate,
+      end_date: endDate || startDate,
+      pto_type: String(raw.pto_type || raw.type || "PTO").trim() || "PTO",
+      notes: raw.notes == null ? "Imported from PTO report" : String(raw.notes || "").trim() || "Imported from PTO report",
+      source: "report",
+      confidence: ["high", "medium", "low"].includes(String(raw.confidence || "").toLowerCase()) ? String(raw.confidence).toLowerCase() : (warnings.length ? "medium" : "high"),
+      review_notes: raw.review_notes == null ? (warnings.length ? warnings.join(", ") : null) : String(raw.review_notes || "").trim() || null,
+      warnings,
+      provider: "gemini",
+      provider_used: "gemini",
+      provider_fallback: false,
+      model: PTO_GEMINI_MODEL,
+    };
+  }
+
+  function chooseBestPtoParse(localResult, geminiRows = []) {
+    const normalizedGeminiRows = (Array.isArray(geminiRows) ? geminiRows : [])
+      .map((row) => normalizeGeminiPtoRow(row))
+      .filter((row) => row.employee_name && row.start_date && row.end_date && row.end_date >= row.start_date);
+
+    if (!normalizedGeminiRows.length) {
+      return {
+        ...localResult,
+        fallback_count: 0,
+      };
+    }
+
+    const localRows = Array.isArray(localResult?.import_rows) ? localResult.import_rows : [];
+    const localWarnings = localRows.reduce((sum, row) => sum + (Array.isArray(row?.warnings) ? row.warnings.length : 0), 0);
+    const geminiWarnings = normalizedGeminiRows.reduce((sum, row) => sum + (Array.isArray(row?.warnings) ? row.warnings.length : 0), 0);
+
+    if (!localRows.length || geminiWarnings <= localWarnings) {
+      return {
+        detected_rows: Array.isArray(localResult?.detected_rows) ? localResult.detected_rows : [],
+        kept_rows: normalizedGeminiRows,
+        import_rows: normalizedGeminiRows,
+        provider: "gemini",
+        providers_used: ["local-parser", "gemini"],
+        fallback_count: localRows.length,
+      };
+    }
+
+    return {
+      ...localResult,
+      providers_used: ["local-parser", "gemini"],
+      fallback_count: normalizedGeminiRows.length,
+    };
+  }
+
+  async function aiParsePtoReportText(reportText = "") {
+    const local = parsePtoReportText(reportText);
+    if (!shouldUseGeminiForPto(local)) return local;
+    try {
+      const geminiResult = await tryGeminiParsePtoReportText(reportText, local);
+      if (!geminiResult?.ok || !Array.isArray(geminiResult.rows)) return local;
+      return chooseBestPtoParse(local, geminiResult.rows);
+    } catch {
+      return local;
+    }
   }
 
   function toNullableRating(value) {
@@ -452,6 +705,230 @@ export function createScheduleRouter({
         open_segments: openSegments.length,
         warnings: warnings.length,
       },
+    };
+  }
+
+  function summarizeWeekWindow(windowRows = []) {
+    const rows = Array.isArray(windowRows) ? windowRows : [];
+    const readyRows = rows.filter((row) => row && row.ready);
+    const missingRows = rows.filter((row) => !row || !row.ready);
+    const totalAssignments = rows.reduce((sum, row) => sum + Number(row?.assignment_count || 0), 0);
+    const totalRoster = rows.reduce((sum, row) => sum + Number(row?.roster_count || 0), 0);
+    const missingDates = missingRows.map((row) => String(row?.service_date || "")).filter(Boolean);
+    const fullestDay = rows.reduce((best, row) => {
+      const score = Number(row?.assignment_count || 0);
+      if (!best || score > Number(best?.assignment_count || 0)) return row;
+      return best;
+    }, null);
+    return {
+      ready_days: readyRows.length,
+      missing_days: missingRows.length,
+      total_assignments: totalAssignments,
+      total_roster_rows: totalRoster,
+      missing_dates: missingDates,
+      fullest_day: fullestDay
+        ? {
+            service_date: fullestDay.service_date,
+            assignment_count: Number(fullestDay.assignment_count || 0),
+            roster_count: Number(fullestDay.roster_count || 0),
+          }
+        : null,
+    };
+  }
+
+  function buildWeekSummaryText({ serviceDate, days, windowRows, autoGeneration }) {
+    const summary = summarizeWeekWindow(windowRows);
+    const parts = [];
+    parts.push(`${summary.ready_days} of ${days} visible days are ready starting ${serviceDate}.`);
+    if (summary.missing_days) {
+      parts.push(`Missing days: ${summary.missing_dates.slice(0, 6).join(", ")}${summary.missing_dates.length > 6 ? ", ..." : ""}.`);
+    } else {
+      parts.push("No missing days in the current window.");
+    }
+    parts.push(`${summary.total_assignments} total assignments and ${summary.total_roster_rows} roster rows are loaded across the window.`);
+    if (summary.fullest_day?.service_date) {
+      parts.push(`Heaviest visible day is ${summary.fullest_day.service_date} with ${summary.fullest_day.assignment_count} assignments.`);
+    }
+    if (autoGeneration?.running) parts.push("Automatic week fill is running now.");
+    else if (autoGeneration?.last_completed_at) parts.push(`Automatic week fill last checked ${autoGeneration.last_window_start || serviceDate} and generated ${Number(autoGeneration.generated_days || 0)} day(s).`);
+    return parts.join(" ");
+  }
+
+  function buildAbsenceSummaryText(data = {}, meta = {}, serviceDate = "") {
+    const diff = summarizeAssignmentDiff(data || {}, { absentEmployeeIds: data?.effective_absent_employee_ids || [] });
+    const parts = [];
+    if (meta?.generated_before_preview) parts.push(`Base schedule for ${serviceDate} was auto-generated before previewing absences.`);
+    parts.push(`${diff.counts.removed_assignments} assignments would be removed, ${diff.counts.reassigned_assignments} would likely be reassigned, and ${diff.counts.open_segments} segments would remain open.`);
+    if (diff.changed_groups.length) parts.push(`Most affected groups: ${diff.changed_groups.slice(0, 6).join(", ")}.`);
+    if (diff.changed_employees.length) parts.push(`Likely reassigned employees: ${diff.changed_employees.slice(0, 6).join(", ")}.`);
+    if (Array.isArray(data?.overload_warnings) && data.overload_warnings.length) parts.push(`Warnings: ${data.overload_warnings.slice(0, 4).join(" | ")}.`);
+    return parts.join(" ");
+  }
+
+  async function listLocationGroups() {
+    const rows = await runReadOnlySql(`
+      select lg.id as location_group_id, lg.group_code, lg.group_name,
+             coalesce(array_agg(l.location_name order by l.sort_order nulls last, l.location_name)
+               filter (where l.id is not null), array[]::text[]) as included_locations
+      from public.location_groups lg
+      left join public.location_group_memberships m on m.location_group_id = lg.id and m.active = true
+      left join public.locations l on l.id = m.location_id and l.active = true
+      where lg.active = true
+      group by lg.id, lg.group_code, lg.group_name
+      order by lg.group_name
+    `);
+    return Array.isArray(rows) ? rows : [];
+  }
+
+  function matchLocationGroup(locationGroups = [], query = "") {
+    const needle = normalizeLoose(query);
+    if (!needle) return null;
+    let best = null;
+    for (const group of locationGroups || []) {
+      const names = [group.group_name, group.group_code].concat(group.included_locations || []).filter(Boolean);
+      for (const name of names) {
+        const normalized = normalizeLoose(name);
+        if (!normalized) continue;
+        let score = -1;
+        if (needle === normalized) score = 1000 + normalized.length;
+        else if (needle.includes(normalized)) score = 700 + normalized.length;
+        else if (normalized.includes(needle)) score = 500 + needle.length;
+        else {
+          const needleParts = needle.split(/\s+/).filter(Boolean);
+          const nameParts = normalized.split(/\s+/).filter(Boolean);
+          const overlap = needleParts.filter((part) => nameParts.includes(part)).length;
+          if (overlap) score = (overlap * 80) + normalized.length;
+        }
+        if (score >= 0 && (!best || score > best.score)) best = { group, score };
+      }
+    }
+    return best?.group || null;
+  }
+
+  async function listDayGroups(serviceDate) {
+    const rows = await runReadOnlySql(`
+      select *
+      from public.v_memphis_area_schedule
+      where service_date = '${esc(serviceDate)}'::date
+      order by group_name asc, segment_number asc
+    `);
+    return Array.isArray(rows) ? rows : [];
+  }
+
+  function summarizeOpenAndOverloadedGroups(rows = []) {
+    const grouped = new Map();
+    for (const row of Array.isArray(rows) ? rows : []) {
+      const key = String(row.location_group_id || row.group_code || row.group_name || row.location_name || "").trim() || `row-${grouped.size + 1}`;
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          location_group_id: row.location_group_id || null,
+          group_name: row.group_name || row.location_name || row.group_code || "Unnamed Group",
+          group_code: row.group_code || "",
+          open_segments: 0,
+          overload_segments: 0,
+          total_segments: 0,
+          load_points: 0,
+          assigned_names: new Set(),
+        });
+      }
+      const entry = grouped.get(key);
+      const assignedName = String(row.assigned_employee_name || row.employee_name || "").trim();
+      const status = String(row.status || row.owner_type || "").trim().toUpperCase();
+      const loadPoints = Number(row.load_points || 0);
+      entry.total_segments += 1;
+      entry.load_points += loadPoints;
+      if (!assignedName || status === "OPEN") entry.open_segments += 1;
+      if (loadPoints >= 18) entry.overload_segments += 1;
+      if (assignedName) entry.assigned_names.add(assignedName);
+    }
+    return Array.from(grouped.values()).map((entry) => ({
+      ...entry,
+      assigned_names: Array.from(entry.assigned_names),
+    }));
+  }
+
+  function buildSchedulerRecommendationPrompt({ serviceDate, groupSummaries = [], locationGroups = [], userPrompt = "" }) {
+    const compactGroups = groupSummaries.map((group) => ({
+      group_name: group.group_name,
+      group_code: group.group_code,
+      open_segments: group.open_segments,
+      overload_segments: group.overload_segments,
+      total_segments: group.total_segments,
+      load_points: group.load_points,
+      assigned_names: group.assigned_names,
+    }));
+    const compactLocations = (locationGroups || []).slice(0, 120).map((group) => ({
+      group_name: group.group_name,
+      group_code: group.group_code,
+      included_locations: group.included_locations || [],
+    }));
+    return [
+      "You are assisting with Memphis Zoo custodial schedule operations.",
+      "Return JSON only. No markdown. No explanation.",
+      "Output shape: {\"summary\": string, \"recommendations\": [{\"group_name\": string, \"priority\": \"high\"|\"medium\"|\"low\", \"action\": string, \"reason\": string}], \"watchouts\": [string]}",
+      "Keep recommendations operational, concise, and grounded in the provided schedule state.",
+      "Do not invent employees or groups that are not in the data.",
+      `Service date: ${serviceDate}`,
+      userPrompt ? `Operator question: ${userPrompt}` : "Operator question: Recommend what needs attention first for this schedule.",
+      "Group summary:",
+      JSON.stringify(compactGroups),
+      "Known location groups:",
+      JSON.stringify(compactLocations),
+    ].join("\n");
+  }
+
+  async function tryGeminiSchedulerRecommendations({ serviceDate, groupSummaries = [], locationGroups = [], userPrompt = "" }) {
+    const apiKey = getScheduleGeminiApiKey();
+    if (!apiKey) return { ok: false, reason: "gemini_not_configured" };
+    const prompt = buildSchedulerRecommendationPrompt({ serviceDate, groupSummaries, locationGroups, userPrompt });
+    const response = await fetchWithTimeout(`${PTO_GEMINI_BASE_URL}/${encodeURIComponent(PTO_GEMINI_MODEL)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.2, maxOutputTokens: PTO_GEMINI_MAX_OUTPUT_TOKENS, responseMimeType: "application/json" },
+      }),
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(payload?.error?.message || payload?.message || `Gemini HTTP ${response.status}`);
+    const text = (payload?.candidates?.[0]?.content?.parts || [])
+      .filter((part) => typeof part?.text === "string" && part.text.trim())
+      .map((part) => part.text.trim())
+      .join("\n\n");
+    const parsed = safeJsonParse(text);
+    if (!parsed || typeof parsed !== "object") throw new Error("Gemini returned invalid scheduler recommendations JSON.");
+    return { ok: true, provider: "gemini", model: PTO_GEMINI_MODEL, data: parsed };
+  }
+
+  function buildFallbackSchedulerRecommendations({ serviceDate, groupSummaries = [], userPrompt = "" }) {
+    const sorted = [...(groupSummaries || [])].sort((a, b) => {
+      const aScore = (a.open_segments * 100) + (a.overload_segments * 20) + a.load_points;
+      const bScore = (b.open_segments * 100) + (b.overload_segments * 20) + b.load_points;
+      return bScore - aScore;
+    });
+    const recommendations = sorted
+      .filter((group) => group.open_segments > 0 || group.overload_segments > 0)
+      .slice(0, 5)
+      .map((group) => ({
+        group_name: group.group_name,
+        priority: group.open_segments > 0 ? "high" : (group.overload_segments > 0 ? "medium" : "low"),
+        action: group.open_segments > 0 ? "Fill open segments or reduce coverage expectations for this group first." : "Review whether load can be split across nearby staff.",
+        reason: group.open_segments > 0
+          ? `${group.open_segments} open segment(s) with ${group.total_segments} total segment(s).`
+          : `${group.overload_segments} overloaded segment(s) and ${group.load_points} total load points.`,
+      }));
+    const watchouts = sorted
+      .filter((group) => group.open_segments > 0 || group.overload_segments > 0)
+      .slice(0, 4)
+      .map((group) => `${group.group_name}: ${group.open_segments} open, ${group.overload_segments} overloaded.`);
+    const summary = recommendations.length
+      ? `Priority groups for ${serviceDate}: ${recommendations.map((item) => item.group_name).join(", ")}.`
+      : `No open or overloaded groups detected for ${serviceDate}.`;
+    return {
+      provider: "rule-based",
+      summary: userPrompt ? `${summary} Request considered: ${userPrompt}` : summary,
+      recommendations,
+      watchouts,
     };
   }
 
@@ -865,8 +1342,8 @@ export function createScheduleRouter({
 
   router.post("/pto/parse-report", async (req, res) => {
     try {
-      const parsed = parsePtoReportText(req.body?.report_text || "");
-      res.status(200).json({ ok: true, data: { detected_count: parsed.detected_rows.length, kept_count: parsed.kept_rows.length, rows: parsed.import_rows }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+      const parsed = await aiParsePtoReportText(req.body?.report_text || "");
+      res.status(200).json({ ok: true, data: { detected_count: parsed.detected_rows.length, kept_count: parsed.kept_rows.length, rows: parsed.import_rows, provider: parsed.provider, providers_used: parsed.providers_used, fallback_count: parsed.fallback_count }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "PTO report parse failed");
     }
@@ -874,20 +1351,43 @@ export function createScheduleRouter({
 
   router.get("/location-groups", async (_req, res) => {
     try {
-      const rows = await runReadOnlySql(`
-        select lg.id as location_group_id, lg.group_code, lg.group_name,
-               coalesce(array_agg(l.location_name order by l.sort_order nulls last, l.location_name)
-                 filter (where l.id is not null), array[]::text[]) as included_locations
-        from public.location_groups lg
-        left join public.location_group_memberships m on m.location_group_id = lg.id and m.active = true
-        left join public.locations l on l.id = m.location_id and l.active = true
-        where lg.active = true
-        group by lg.id, lg.group_code, lg.group_name
-        order by lg.group_name
-      `);
+      const rows = await listLocationGroups();
       res.status(200).json({ ok: true, data: rows || [], meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Location groups failed");
+    }
+  });
+
+  router.post("/ai/recommendations", requireSchedulePin, async (req, res) => {
+    try {
+      const serviceDate = requireDate(req.body?.service_date || req.body?.date || (await getServiceDate()));
+      const prompt = String(req.body?.prompt || "").trim();
+      const dayRows = await listDayGroups(serviceDate);
+      const groupSummaries = summarizeOpenAndOverloadedGroups(dayRows);
+      const locationGroups = await listLocationGroups();
+      let ai = null;
+      try {
+        ai = await tryGeminiSchedulerRecommendations({ serviceDate, groupSummaries, locationGroups, userPrompt: prompt });
+      } catch {
+        ai = null;
+      }
+      const fallback = buildFallbackSchedulerRecommendations({ serviceDate, groupSummaries, userPrompt: prompt });
+      const data = ai?.ok && ai.data
+        ? {
+            provider: ai.provider,
+            model: ai.model,
+            summary: String(ai.data.summary || fallback.summary || "").trim() || fallback.summary,
+            recommendations: Array.isArray(ai.data.recommendations) ? ai.data.recommendations : fallback.recommendations,
+            watchouts: Array.isArray(ai.data.watchouts) ? ai.data.watchouts : fallback.watchouts,
+            group_summaries: groupSummaries,
+          }
+        : {
+            ...fallback,
+            group_summaries: groupSummaries,
+          };
+      res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+    } catch (error) {
+      fail(res, error, "Scheduler AI recommendations failed");
     }
   });
 
@@ -1011,7 +1511,8 @@ export function createScheduleRouter({
       if (triggerAuto) await maybeAutoGenerateWindow(serviceDate);
       const window = await getScheduleRangeStatus(serviceDate, days);
       const ready_days = window.filter((row) => row.ready).length;
-      res.status(200).json({ ok: true, data: { service_date: serviceDate, days, ready_days, missing_days: Math.max(0, days - ready_days), window, auto_generation: { running: autoGenerateState.running, last_started_at: autoGenerateState.lastStartedAt || null, last_completed_at: autoGenerateState.lastCompletedAt || null, last_window_start: autoGenerateState.lastWindowStart || null, generated_days: Array.isArray(autoGenerateState.lastResult) ? autoGenerateState.lastResult.filter((row) => row.generated).length : 0 } }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+      const autoGeneration = { running: autoGenerateState.running, last_started_at: autoGenerateState.lastStartedAt || null, last_completed_at: autoGenerateState.lastCompletedAt || null, last_window_start: autoGenerateState.lastWindowStart || null, generated_days: Array.isArray(autoGenerateState.lastResult) ? autoGenerateState.lastResult.filter((row) => row.generated).length : 0 };
+      res.status(200).json({ ok: true, data: { service_date: serviceDate, days, ready_days, missing_days: Math.max(0, days - ready_days), window, auto_generation: autoGeneration, ai_summary: buildWeekSummaryText({ serviceDate, days, windowRows: window, autoGeneration }) }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Schedule window status failed");
     }
@@ -1047,9 +1548,12 @@ export function createScheduleRouter({
       const data = Array.isArray(rows) && rows.length ? rows[0].data : null;
       const diff = summarizeAssignmentDiff(data || {}, { absentEmployeeIds: absenceSet.merged });
       if (data && typeof data === "object") Object.assign(data, diff, { explicit_absent_employee_ids: absenceSet.explicit, pto_absent_employee_ids: absenceSet.pto_ids, effective_absent_employee_ids: absenceSet.merged });
+      const aiSummary = buildAbsenceSummaryText(data || {}, {
+        generated_before_preview: generatedBeforePreview,
+      }, serviceDate);
       res.status(200).json({
         ok: true,
-        data,
+        data: data && typeof data === "object" ? { ...data, ai_summary: aiSummary } : data,
         meta: {
           version: appVersion,
           release_id: releaseId,
