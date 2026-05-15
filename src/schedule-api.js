@@ -171,41 +171,111 @@ export function createScheduleRouter({
 
   async function listPtoRows({ startDate, endDate = startDate } = {}) {
     const rows = await runReadOnlySql(`
-      select
-        p.id,
-        p.employee_id,
-        e.display_name as employee_name,
-        e.employee_code,
-        p.start_date,
-        p.end_date,
-        p.pto_type,
-        p.source,
-        p.notes,
-        p.active,
-        p.created_at,
-        p.updated_at
-      from public.employee_planned_time_off p
-      join public.employees e on e.id = p.employee_id
-      where p.active = true
-        and p.start_date <= '${esc(endDate)}'::date
-        and p.end_date >= '${esc(startDate)}'::date
-      order by p.start_date asc, e.display_name asc, p.end_date asc
+      select *
+      from (
+        select
+          p.id,
+          p.employee_id,
+          e.display_name as employee_name,
+          e.employee_code,
+          p.start_date,
+          p.end_date,
+          p.pto_type,
+          p.source,
+          p.notes,
+          p.active,
+          p.created_at,
+          p.updated_at,
+          'employee_planned_time_off'::text as source_table
+        from public.employee_planned_time_off p
+        join public.employees e on e.id = p.employee_id
+        where p.active = true
+          and p.start_date <= '${esc(endDate)}'::date
+          and p.end_date >= '${esc(startDate)}'::date
+
+        union all
+
+        select
+          ep.id,
+          ep.employee_id,
+          e.display_name as employee_name,
+          e.employee_code,
+          ep.start_date,
+          ep.end_date,
+          ep.absence_type as pto_type,
+          'employee_pto'::text as source,
+          ep.notes,
+          ep.active,
+          ep.created_at,
+          ep.updated_at,
+          'employee_pto'::text as source_table
+        from public.employee_pto ep
+        join public.employees e on e.id = ep.employee_id
+        where ep.active = true
+          and ep.start_date <= '${esc(endDate)}'::date
+          and ep.end_date >= '${esc(startDate)}'::date
+
+        union all
+
+        select
+          dao.id,
+          dao.employee_id,
+          e.display_name as employee_name,
+          e.employee_code,
+          dao.absence_date as start_date,
+          dao.absence_date as end_date,
+          dao.absence_type as pto_type,
+          'daily_absence_overrides'::text as source,
+          dao.notes,
+          dao.active,
+          dao.created_at,
+          dao.updated_at,
+          'daily_absence_overrides'::text as source_table
+        from public.daily_absence_overrides dao
+        join public.employees e on e.id = dao.employee_id
+        where dao.active = true
+          and dao.absence_date between '${esc(startDate)}'::date and '${esc(endDate)}'::date
+      ) pto
+      order by start_date asc, employee_name asc, end_date asc, source_table asc
     `);
     return Array.isArray(rows) ? rows : [];
   }
 
   async function hasPtoTable() {
-    const rows = await runReadOnlySql(`select to_regclass('public.employee_planned_time_off') is not null as exists`);
+    const rows = await runReadOnlySql(`
+      select
+        to_regclass('public.employee_planned_time_off') is not null
+        or to_regclass('public.employee_pto') is not null
+        or to_regclass('public.daily_absence_overrides') is not null as exists
+    `);
     return Boolean(Array.isArray(rows) && rows.length && rows[0].exists);
   }
 
   async function getPtoAbsentEmployeeIds(serviceDate) {
     const rows = await runReadOnlySql(`
       select distinct employee_id
-      from public.employee_planned_time_off
-      where active = true
-        and start_date <= '${esc(serviceDate)}'::date
-        and end_date >= '${esc(serviceDate)}'::date
+      from (
+        select employee_id
+        from public.employee_planned_time_off
+        where active = true
+          and start_date <= '${esc(serviceDate)}'::date
+          and end_date >= '${esc(serviceDate)}'::date
+
+        union
+
+        select employee_id
+        from public.employee_pto
+        where active = true
+          and start_date <= '${esc(serviceDate)}'::date
+          and end_date >= '${esc(serviceDate)}'::date
+
+        union
+
+        select employee_id
+        from public.daily_absence_overrides
+        where active = true
+          and absence_date = '${esc(serviceDate)}'::date
+      ) absent
       order by employee_id
     `);
     return Array.isArray(rows) ? rows.map((row) => String(row.employee_id || "").trim()).filter(Boolean) : [];
