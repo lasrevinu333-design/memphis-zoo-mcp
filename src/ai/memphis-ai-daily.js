@@ -41,6 +41,18 @@ export async function fetchDailyOpsManagerRows(runReadOnlySql, serviceDate) {
   return Array.isArray(rows) ? rows : [];
 }
 
+export async function fetchDailyAbsenceRows(runReadOnlySql, serviceDate) {
+  const rows = await runReadOnlySql(`
+    select e.display_name as employee_name, dao.absence_type, dao.notes
+    from public.daily_absence_overrides dao
+    join public.employees e on e.id = dao.employee_id
+    where dao.absence_date = '${esc(serviceDate)}'::date
+      and dao.active = true
+    order by e.display_name
+  `);
+  return Array.isArray(rows) ? rows : [];
+}
+
 function detectStaffAudience(queryText = "") {
   const lower = String(queryText || "").toLowerCase();
   if (/\b(ops|operations|manager|managers|boss|director)\b/.test(lower)) return "ops";
