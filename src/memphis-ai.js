@@ -433,6 +433,7 @@ async function fetchRecentThreadMessages(runReadOnlySql, threadId, limit = 10) {
 }
 
 function formatRecentThreadMessages(messages = []) {
+  return sharedFormatRecentThreadMessages(messages);
   const lines = messages
     .map((row) => {
       const speaker = row.message_type === "bot_response" ? "Memphis" : "User";
