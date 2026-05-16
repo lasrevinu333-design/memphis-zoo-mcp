@@ -83,7 +83,10 @@ export function summarizeDailyRoster(roster = [], serviceDate = "", opsRows = []
   const audience = detectStaffAudience(queryText);
   const custodianPeople = summarizeRosterPeople(roster, false);
   const opsPeople = summarizeRosterPeople(opsRows, true);
-  const absentPeople = Array.isArray(absenceRows) ? absenceRows.map((row) => `${row.employee_name}${row.absence_type ? ` (${row.absence_type})` : ""}`).filter(Boolean) : [];
+  const absentPeople = Array.isArray(absenceRows) ? absenceRows.map((row) => {
+    const label = displayAbsenceType(row.absence_type);
+    return `${row.employee_name}${label ? ` (${label})` : ""}`;
+  }).filter(Boolean) : [];
   const absenceSuffix = absentPeople.length ? ` Out today: ${absentPeople.join("; ")}.` : "";
 
   if (audience === "ops") {
