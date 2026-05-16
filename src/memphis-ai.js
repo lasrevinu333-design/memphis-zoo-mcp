@@ -162,9 +162,7 @@ function inferWeatherLocation(text = "", threadContext = {}) {
 }
 
 function augmentWeatherPrompt(userMessage = "", threadContext = {}) {
-  const location = inferWeatherLocation(userMessage, threadContext);
-  if (!location) return userMessage;
-  return `${String(userMessage || "").trim()}\n\nWeather location context: ${location}. If the user says \"here\" or asks weather without another city, use ${location}.`;
+  return sharedAugmentWeatherPrompt(userMessage, threadContext);
 }
 
 function isGeneralKnowledgeQuestion(text = "") {
