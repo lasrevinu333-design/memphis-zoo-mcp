@@ -251,10 +251,7 @@ function genericConversationalFallback(text = "", threadContext = {}) {
 }
 
 function mergeContextJson(threadContext = {}, patch = {}) {
-  return {
-    ...(threadContext?.context_json && typeof threadContext.context_json === "object" ? threadContext.context_json : {}),
-    ...(patch && typeof patch === "object" ? patch : {}),
-  };
+  return sharedMergeContextJson(threadContext, patch);
 }
 
 function formatLead(label, value) {
