@@ -132,9 +132,10 @@ export async function generateDailyStaffScheduleReply({ runReadOnlySql, runRpc, 
     roster = await fetchDailyRosterRows(runReadOnlySql, serviceDate);
   }
   const opsRows = await fetchDailyOpsManagerRows(runReadOnlySql, serviceDate);
+  const absenceRows = await fetchDailyAbsenceRows(runReadOnlySql, serviceDate);
 
   return {
-    text: summarizeDailyRoster(roster, serviceDate, opsRows, queryText),
+    text: summarizeDailyRoster(roster, serviceDate, opsRows, queryText, absenceRows),
     meta: {
       fallback: true,
       mode: "local_daily_staff_schedule",
