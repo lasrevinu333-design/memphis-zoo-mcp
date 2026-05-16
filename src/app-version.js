@@ -1,2 +1,2 @@
-export const RELEASE_ID = "release-2026.05.15.9";
+export const RELEASE_ID = "release-2026.05.15.10";
 export const APP_VERSION = RELEASE_ID;
