@@ -216,29 +216,7 @@ function employeeTokenMatchScore(queryToken = "", nameToken = "") {
 }
 
 function scoreEmployeeNameMatch(userText = "", displayName = "") {
-  const query = normalizeEmployeeMatchText(userText);
-  const name = normalizeEmployeeMatchText(displayName);
-  if (!query || !name) return 0;
-  if (query.includes(name)) return 1000 + name.length;
-
-  const nameTokens = name.split(/\s+/).filter(Boolean);
-  const queryTokens = query.split(/\s+/).filter(Boolean);
-  let score = 0;
-
-  for (const nameToken of nameTokens) {
-    let bestTokenScore = 0;
-    for (const queryToken of queryTokens) {
-      bestTokenScore = Math.max(bestTokenScore, employeeTokenMatchScore(queryToken, nameToken));
-    }
-    score += bestTokenScore;
-  }
-
-  const firstName = nameTokens[0] || "";
-  const lastName = nameTokens[nameTokens.length - 1] || "";
-  if (firstName && queryTokens.some((token) => employeeTokenMatchScore(token, firstName) >= 18)) score += 80;
-  if (lastName && queryTokens.some((token) => employeeTokenMatchScore(token, lastName) >= 22)) score += 40;
-
-  return score;
+  return sharedScoreEmployeeNameMatch(userText, displayName);
 }
 
 function weekdayNameForIsoDate(serviceDate = "") {
