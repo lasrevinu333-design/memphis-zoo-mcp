@@ -340,7 +340,7 @@ function summarizeAssignments(assignments = [], emptyText) {
     const group = row.group_name || row.group_code || "Unknown area";
     const start = row.coverage_start || "—";
     const end = row.coverage_end || "—";
-    return `${employee} covers ${group} from ${start} to ${end}.`;
+    return `${employee} covers ${group} from ${start} to ${end}${lunchTextForAssignment(row)}.`;
   }).join(" ");
 }
 
