@@ -28,16 +28,52 @@ function extractNameCandidate(text = "", threadContext = {}) {
     return String(threadContext.last_employee_name || "").trim();
   }
 
-  const possessive = raw.match(/\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)['’]s\b/);
+  const possessive = raw.match(/\b([A-Z][A-Za-z]*(?:\s+[A-Z][A-Za-z]*)?)['’]s\b/);
   if (possessive?.[1]) return possessive[1].trim();
 
-  const named = raw.match(/\b(?:for|is|does|did|was|where is|what is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/);
+  const named = raw.match(/\b(?:for|is|does|did|was|where is|what is)\s+([A-Z][A-Za-z]*(?:\s+[A-Z][A-Za-z]*)?)/);
   if (named?.[1]) return named[1].trim();
 
-  const lowerName = lower.match(/\b(tammy|karen|kathy|michael|sherita|alijah|daniel|markiesha)\b/);
+  const lowerName = lower.match(/\b(tammy|karen|kathy|michael|sherita|alijah|daniel|markiesha|markeisha|markesha|markeisha)\b/);
   if (lowerName?.[1]) return lowerName[1];
 
   return "";
+}
+
+function employeeTokenScore(queryToken = "", nameToken = "") {
+  const query = normalizeLoose(queryToken);
+  const name = normalizeLoose(nameToken);
+  if (!query || !name) return 0;
+  if (query === name) return 40;
+  if (query.length >= 3 && name.startsWith(query)) return 30;
+  if (name.length >= 3 && query.startsWith(name)) return 28;
+  if (query.length >= 4 && name.includes(query)) return 24;
+
+  let distance = 0;
+  const maxLength = Math.max(query.length, name.length);
+  const minLength = Math.min(query.length, name.length);
+  for (let i = 0; i < minLength; i += 1) if (query[i] !== name[i]) distance += 1;
+  distance += maxLength - minLength;
+  if (maxLength >= 5 && distance <= 1) return 22;
+  if (maxLength >= 7 && distance <= 2) return 16;
+  return 0;
+}
+
+function scoreEmployeeMatch(candidate = "", displayName = "") {
+  const query = normalizeLoose(candidate);
+  const name = normalizeLoose(displayName);
+  if (!query || !name) return 0;
+  if (query.includes(name)) return 1000 + name.length;
+
+  const queryTokens = query.split(/\s+/).filter(Boolean);
+  const nameTokens = name.split(/\s+/).filter(Boolean);
+  let score = 0;
+  for (const nameToken of nameTokens) {
+    score += Math.max(...queryTokens.map((queryToken) => employeeTokenScore(queryToken, nameToken)), 0);
+  }
+  if (nameTokens[0] && queryTokens.some((token) => employeeTokenScore(token, nameTokens[0]) >= 16)) score += 80;
+  if (nameTokens[nameTokens.length - 1] && queryTokens.some((token) => employeeTokenScore(token, nameTokens[nameTokens.length - 1]) >= 22)) score += 40;
+  return score;
 }
 
 function compressTemplateRows(rows = []) {
