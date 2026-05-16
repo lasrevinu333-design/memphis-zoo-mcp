@@ -761,24 +761,7 @@ async function fetchStaticEmployeeShift(runReadOnlySql, employeeName = "", servi
 }
 
 async function guessEmployeeName(runRpc, text) {
-  const raw = String(text || "").trim();
-  if (!raw) return "";
-  const employees = await runRpc("tool_list_active_employees", {});
-  const list = Array.isArray(employees) ? employees : [];
-  let best = null;
-  let bestScore = 0;
-
-  for (const employee of list) {
-    const name = String(employee.display_name || employee.employee_name || "").trim();
-    if (!name) continue;
-    const score = scoreEmployeeNameMatch(raw, name);
-    if (score > bestScore) {
-      best = name;
-      bestScore = score;
-    }
-  }
-
-  return bestScore >= 70 ? best : "";
+  return await sharedGuessEmployeeName(runRpc, text);
 }
 
 function mergeContextDate(text, threadContext = {}, explicitServiceDate = null) {
