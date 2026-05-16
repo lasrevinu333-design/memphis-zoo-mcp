@@ -68,4 +68,76 @@ assert.match(labeledInline.event_date, /^\d{4}-05-09$/);
 assertTime(labeledInline, "09:00:00", "18:00:00");
 assert.equal(labeledInline.attendee_count, "1000");
 
+const endOfSummer = await parseOne("Event Name: End of Summer Bash | Event Area: Event Center | Event Date: 5-9 | Start Time: 9 | End Time: 6p");
+assert.equal(endOfSummer.event_name, "End of Summer Bash");
+assertTime(endOfSummer, "09:00:00", "18:00:00");
+
+const startStrong = await parseOne("Event Name: Start Strong Camp | Event Area: Event Center | Event Date: 5-9 | Start Time: 9 | End Time: 6p");
+assert.equal(startStrong.event_name, "Start Strong Camp");
+assertTime(startStrong, "09:00:00", "18:00:00");
+
+const originalFetch = global.fetch;
+const originalGeminiApiKey = process.env.EVENTS_GEMINI_API_KEY;
+
+try {
+  process.env.EVENTS_GEMINI_API_KEY = "test-key";
+  let capturedPrompt = "";
+  global.fetch = async (_url, options = {}) => {
+    const body = JSON.parse(String(options.body || "{}"));
+    capturedPrompt = String(body?.contents?.[0]?.parts?.[0]?.text || "");
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          candidates: [{
+            content: {
+              parts: [{
+                text: JSON.stringify({
+                  rows: [{
+                    source_index: 1,
+                    event_name: "End of Summer Bash",
+                    location_group_id: locationGroups[0].location_group_id,
+                    location_group_name: locationGroups[0].group_name,
+                    event_date: "2026-05-09",
+                    start_time: "10:00:00",
+                    end_time: "11:00:00",
+                    attendee_count: "42",
+                    notes: "",
+                    confidence: "high",
+                    review_notes: null,
+                    warnings: [],
+                  }],
+                }),
+              }],
+            },
+          }],
+        };
+      },
+    };
+  };
+
+  const rows = await aiParseEventTexts({
+    texts: [
+      "Baby Day EC 5/9 9a-6p 500 guests",
+      "Event Area: Event Center",
+    ],
+    locationGroups,
+  });
+
+  assert.match(capturedPrompt, /"source_index":1/);
+  assert.doesNotMatch(capturedPrompt, /"source_index":0,"text":"Event Area: Event Center"/);
+  assert.equal(rows[0].event_name, "Baby Day");
+  assert.equal(rows[0].provider_used, "local-parser");
+  assert.equal(rows[1].event_name, "End of Summer Bash");
+  assert.equal(rows[1].provider_used, "gemini");
+  assert.equal(rows[1].start_time, "10:00:00");
+  assert.equal(rows[1].end_time, "11:00:00");
+  assert.equal(rows[1].attendee_count, "42");
+} finally {
+  global.fetch = originalFetch;
+  if (originalGeminiApiKey == null) delete process.env.EVENTS_GEMINI_API_KEY;
+  else process.env.EVENTS_GEMINI_API_KEY = originalGeminiApiKey;
+}
+
 console.log("events parser golden tests passed");

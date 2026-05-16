@@ -775,6 +775,8 @@ export function createEventsAdminRouter({
       if (!texts.length) throw new Error("text or texts is required.");
       const groups = await listLocationGroups(runReadOnlySql);
       const parsed = await aiParseEventTexts({ texts, locationGroups: groups });
+      const providersUsed = Array.from(new Set(parsed.map((row) => String(row?.provider_used || row?.provider || "local-parser").trim()).filter(Boolean)));
+      const fallbackCount = parsed.filter((row) => row?.provider_fallback).length;
       res.status(200).json({
         ok: true,
         data: parsed,
@@ -782,7 +784,9 @@ export function createEventsAdminRouter({
           version: appVersion,
           release_id: releaseId,
           contract_version: EVENTS_CONTRACT_VERSION,
-          provider: "gemini",
+          provider: providersUsed.length === 1 ? providersUsed[0] : "hybrid",
+          providers_used: providersUsed,
+          fallback_count: fallbackCount,
         },
       });
     } catch (error) {

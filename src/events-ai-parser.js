@@ -23,12 +23,12 @@ const FIELD_LABELS = [
   "Event Date",
   "Date",
   "Start Time",
-  "Start",
   "Begin Time",
-  "Begin",
   "End Time",
-  "End",
   "Stop Time",
+  "Start",
+  "Begin",
+  "End",
   "Stop",
   "Projected",
   "Attendees",
@@ -57,6 +57,32 @@ const GARBAGE_PHRASES = [
   "host department",
   "tbd",
 ];
+
+const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
+const GEMINI_MODEL = String(process.env.EVENTS_GEMINI_MODEL || process.env.MEMPHIS_GEMINI_MODEL || process.env.GEMINI_MODEL || "gemini-2.5-flash").trim();
+const GEMINI_TIMEOUT_MS = Math.max(1000, Number.parseInt(String(process.env.EVENTS_GEMINI_TIMEOUT_MS || process.env.MEMPHIS_GEMINI_TIMEOUT_MS || "12000"), 10) || 12000);
+const GEMINI_MAX_OUTPUT_TOKENS = Math.max(256, Number.parseInt(String(process.env.EVENTS_GEMINI_MAX_OUTPUT_TOKENS || "1200"), 10) || 1200);
+
+function getGeminiApiKey() {
+  return String(
+    process.env.EVENTS_GEMINI_API_KEY ||
+    process.env.GEMINI_API_KEY ||
+    process.env.MEMPHIS_GEMINI_API_KEY ||
+    process.env.GOOGLE_API_KEY ||
+    process.env.GOOGLE_GENAI_API_KEY ||
+    ""
+  ).trim();
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = GEMINI_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 function escapeRegex(value) {
   return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -92,27 +118,48 @@ function cleanupLooseText(text) {
 
 function normalizeIntakeText(raw) {
   let text = String(raw || "").replace(/\r/g, "\n").replace(/\t/g, " | ");
-  for (const label of FIELD_LABELS) {
-    text = text.replace(new RegExp(`\\b${escapeRegex(label)}\\b\\s*:?`, "ig"), ` | ${label}: `);
+  const labels = [...FIELD_LABELS].sort((a, b) => b.length - a.length);
+  for (const label of labels) {
+    const after = label.includes(" ") ? "" : "(?!\\s+(?:Time))";
+    text = text.replace(new RegExp(`(^|[|\\n;])\\s*${escapeRegex(label)}${after}\\s*:?`, "ig"), (_m, p) => `${p} ${label}: `);
   }
-  return text
-    .replace(/\n+/g, " | ")
-    .replace(/\s*\|\s*/g, " | ")
-    .replace(/(?:^\s*\|\s*)+|(?:\s*\|\s*)+$/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+  return text.replace(/\n+/g, " | ").replace(/\s*\|\s*/g, " | ").replace(/(?:^\s*\|\s*)+|(?:\s*\|\s*)+$/g, "").replace(/\s+/g, " ").trim();
 }
 
 function parseLabelMap(text) {
   const normalized = normalizeIntakeText(text);
   const result = {};
-  const labels = FIELD_LABELS.map(escapeRegex).join("|");
-  const regex = new RegExp(`(?:^|\\|)\\s*(${labels})\\s*:\\s*([^|]*?)(?=\\s*\\|\\s*(?:${labels})\\s*:|$)`, "ig");
-  let match;
-  while ((match = regex.exec(normalized))) {
-    const key = normalizeLoose(match[1]);
-    const value = cleanupLooseText(match[2]);
-    if (value && !result[key]) result[key] = value;
+  const labels = [...FIELD_LABELS].sort((a, b) => b.length - a.length);
+  const segments = normalized.split(/\s*\|\s*/).map((segment) => String(segment || "").trim()).filter(Boolean);
+  for (const segment of segments) {
+    const colonMatch = segment.match(/^([^:]+):\s*(.*)$/);
+    if (colonMatch) {
+      const rawLabel = String(colonMatch[1] || "").trim();
+      const value = cleanupLooseText(colonMatch[2]);
+      const matchedLabel = FIELD_LABELS.find((label) => normalizeLoose(label) === normalizeLoose(rawLabel));
+      if (matchedLabel && value) {
+        const key = normalizeLoose(matchedLabel);
+        if (!result[key]) result[key] = value;
+        continue;
+      }
+    }
+    for (const label of labels) {
+      const labelGuard = label.includes(" ") ? "" : "(?!\\s+time)";
+      const otherLabels = labels
+        .filter((candidate) => candidate !== label)
+        .map((candidate) => candidate.includes(" ") ? escapeRegex(candidate) : `${escapeRegex(candidate)}(?!\\s+time)`)
+        .join("|");
+      const pattern = otherLabels
+        ? new RegExp(`(^|\\s)${escapeRegex(label)}${labelGuard}\\s+(.+?)(?=\\s+(?:${otherLabels})(?:\\s|:|$)|$)`, "i")
+        : new RegExp(`(^|\\s)${escapeRegex(label)}${labelGuard}\\s+(.+)$`, "i");
+      const match = segment.match(pattern);
+      if (!match) continue;
+      const value = cleanupLooseText(match[2] || "");
+      if (!value) continue;
+      const key = normalizeLoose(label);
+      if (!result[key]) result[key] = value;
+      break;
+    }
   }
   return result;
 }
@@ -176,6 +223,15 @@ function extractTimeParts(value) {
     .replace(/\s+/g, " ")
     .trim();
 
+  const canonicalMatch = raw.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (canonicalMatch) {
+    const hour = Number(canonicalMatch[1]);
+    const minute = Number(canonicalMatch[2]);
+    const second = Number(canonicalMatch[3] || "0");
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59) return null;
+    return { hour, minute, second, meridiem: "", explicit: false };
+  }
+
   const matches = [...raw.matchAll(/\b(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?|am|pm|a|p)?\b|\b(\d{3,4})\s*(a\.?m\.?|p\.?m\.?|am|pm|a|p)?\b/gi)];
   if (!matches.length) return null;
 
@@ -205,6 +261,7 @@ function materializeTime(parts, fallbackMeridiem = "") {
   if (!parts) return "";
   let hour = Number(parts.hour);
   const minute = Number(parts.minute || 0);
+  const second = Number(parts.second || 0);
   let meridiem = String(parts.meridiem || fallbackMeridiem || "").toLowerCase();
   if (meridiem === "a") meridiem = "am";
   if (meridiem === "p") meridiem = "pm";
@@ -215,8 +272,8 @@ function materializeTime(parts, fallbackMeridiem = "") {
     if (meridiem === "am" && hour === 12) hour = 0;
   }
 
-  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return "";
-  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00`;
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59) return "";
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:${String(second).padStart(2, "0")}`;
 }
 
 function timeToMinutes(value) {
@@ -252,6 +309,18 @@ function detectTimeRange(text) {
   const pair = normalizeTimePair(match[1], match[2]);
   if (!pair.start_time || !pair.end_time) return null;
   return { ...pair, matched_text: match[0] };
+}
+
+function detectInlineLabeledTimeRange(text) {
+  const raw = String(text || "").replace(/\s+/g, " ").trim();
+  if (!raw) return null;
+  const nextField = "(?:\\s+|\\s*\\|\\s*)";
+  const startMatch = raw.match(new RegExp(`\\b(?:start time|start|begin time|begin)\\b\\s*:?\\s*([^|,;]+?)(?=${nextField}\\b(?:end time|end|stop time|stop)\\b|$)`, "i"));
+  const endMatch = raw.match(new RegExp(`\\b(?:end time|end|stop time|stop)\\b\\s*:?\\s*([^|,;]+?)(?=(?:${nextField}\\b(?:attendees|attendance|guests|people|students|pax|persons|notes|details|comments|needs)\\b)|$)`, "i"));
+  if (!startMatch || !endMatch) return null;
+  const pair = normalizeTimePair(String(startMatch[1] || "").trim(), String(endMatch[1] || "").trim());
+  if (!pair.start_time || !pair.end_time) return null;
+  return { ...pair, matched_text: `${startMatch[0]} ${endMatch[0]}`.trim() };
 }
 
 function detectAttendeeCount(text) {
@@ -315,7 +384,7 @@ function cleanEventName(eventName, matchedGroup) {
   result = removeAreaText(result, matchedGroup);
   result = stripTimeDateNoise(result);
   result = result.replace(/\b(?:need|needs|requires|required|setup|cleanup|attendees|guests|people|students|notes?|details?)\b.*$/i, " ");
-  result = result.replace(/\b(?:start time|end time|event date|event area|location|venue|area|projected|attendance|attendees)\b.*$/i, " ");
+  result = result.replace(/\b(?:start time|begin time|end time|stop time|event date|event area|location group|location|venue|area|projected|attendance|attendees)\b.*$/i, " ");
   return cleanupLooseText(result);
 }
 
@@ -328,7 +397,7 @@ function cleanNotes(notes, eventName, matchedGroup) {
 
 function extractFallbackTitle(text, matchedGroup, timeRange) {
   let result = normalizeIntakeText(text);
-  result = result.replace(/\b(Event Name|Event Area|Location Group|Location|Venue|Area|Event Date|Date|Start Time|End Time|Projected|Attendees|Attendance|Guests|People|Notes|Details|Host Department|Manager on Duty)\s*:/gi, " ");
+  result = result.replace(/\b(Event Name|Event Area|Location Group|Location|Venue|Area|Event Date|Date|Start Time|Begin Time|End Time|Stop Time|Projected|Attendees|Attendance|Guests|People|Notes|Details|Host Department|Manager on Duty)\s*:/gi, " ");
   if (timeRange?.matched_text) result = result.replace(timeRange.matched_text, " ");
   result = removeAreaText(result, matchedGroup);
   result = stripTimeDateNoise(result);
@@ -357,9 +426,11 @@ function parseOneEventText(rawText, locationGroups, index = 0) {
   const notesFromLabel = firstLabelValue(labels, ["Notes", "Details", "Comments", "Comment", "Needs"]);
 
   const matchedGroup = matchLocationGroup(locationGroups, areaFromLabel) || matchLocationGroup(locationGroups, normalizedText);
-  const timeRange = startFromLabel && endFromLabel
-    ? { ...normalizeTimePair(startFromLabel, endFromLabel), matched_text: `${startFromLabel} ${endFromLabel}` }
-    : detectTimeRange(normalizedText);
+  const labeledTimeRange = detectInlineLabeledTimeRange(normalizedText);
+  const timeRange = labeledTimeRange
+    || (startFromLabel && endFromLabel
+      ? { ...normalizeTimePair(startFromLabel, endFromLabel), matched_text: `${startFromLabel} ${endFromLabel}` }
+      : detectTimeRange(normalizedText));
   const eventDate = normalizePossibleDate(dateFromLabel) || normalizePossibleDate(endFromLabel) || normalizePossibleDate(normalizedText);
   const attendeeValue = detectAttendeeCount(attendeesFromLabel) ?? detectAttendeeCount(normalizedText);
   const eventName = cleanEventName(eventNameFromLabel || extractFallbackTitle(normalizedText, matchedGroup, timeRange), matchedGroup);
@@ -386,9 +457,188 @@ function parseOneEventText(rawText, locationGroups, index = 0) {
   };
 }
 
+function shouldUseGemini(localRow) {
+  if (!localRow || !Array.isArray(localRow.warnings) || !localRow.warnings.length) return false;
+  return localRow.warnings.some((warning) => [
+    "missing_event_name",
+    "missing_area",
+    "missing_date",
+    "missing_time",
+    "end_not_after_start",
+  ].includes(warning));
+}
+
+function buildGeminiPrompt(rows, locationGroups) {
+  const groups = (locationGroups || []).map((group) => ({
+    location_group_id: group.location_group_id,
+    group_name: group.group_name,
+    group_code: group.group_code,
+    included_locations: group.included_locations || [],
+  }));
+
+  return [
+    "You are extracting Memphis Zoo event intake rows into strict JSON.",
+    "Return JSON only. No markdown. No explanation.",
+    "Output shape: {\"rows\":[{...}]}",
+    "Each row must include:",
+    "source_index, event_name, location_group_id, location_group_name, event_date, start_time, end_time, attendee_count, notes, confidence, review_notes, warnings",
+    "Rules:",
+    "- event_date must be YYYY-MM-DD when known, else empty string.",
+    "- start_time and end_time must be HH:MM:SS 24-hour when known, else empty string.",
+    "- attendee_count must be a string integer or null.",
+    "- location_group_id must match one of the provided location groups when you can infer it, else empty string.",
+    "- location_group_name should be the canonical group name when matched, else your best short area text.",
+    "- warnings must be an array using these values when applicable: missing_event_name, missing_area, missing_date, missing_time, end_not_after_start, ambiguous_area, ambiguous_date, ambiguous_time.",
+    "- confidence must be one of high, medium, low.",
+    "- review_notes should be short plain text or null.",
+    "- Do not invent facts. Leave fields blank if unknown.",
+    "- Preserve each source_index exactly as provided in the input rows.",
+    "Location groups:",
+    JSON.stringify(groups),
+    "Input rows:",
+    JSON.stringify((rows || []).map((row) => ({
+      source_index: Number(row?.source_index),
+      text: String(row?.text || ""),
+    }))),
+  ].join("\n");
+}
+
+function safeJsonParse(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    const match = String(text || "").match(/\{[\s\S]*\}/);
+    if (!match) return null;
+    try {
+      return JSON.parse(match[0]);
+    } catch {
+      return null;
+    }
+  }
+}
+
+async function tryGeminiParseTexts({ rows, locationGroups }) {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) return { ok: false, reason: "gemini_not_configured" };
+  const prompt = buildGeminiPrompt(rows, locationGroups);
+  const response = await fetchWithTimeout(`${GEMINI_BASE_URL}/${encodeURIComponent(GEMINI_MODEL)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.15, maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS, responseMimeType: "application/json" },
+    }),
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(payload?.error?.message || payload?.message || `Gemini HTTP ${response.status}`);
+  const text = (payload?.candidates?.[0]?.content?.parts || [])
+    .filter((part) => typeof part?.text === "string" && part.text.trim())
+    .map((part) => part.text.trim())
+    .join("\n\n");
+  const parsed = safeJsonParse(text);
+  const parsedRows = Array.isArray(parsed?.rows) ? parsed.rows : null;
+  if (!parsedRows) throw new Error("Gemini returned invalid JSON rows payload.");
+  return { ok: true, provider: "gemini", model: GEMINI_MODEL, rows: parsedRows };
+}
+
+function mergeWarnings(...warningLists) {
+  return Array.from(new Set(warningLists.flat().filter(Boolean)));
+}
+
+function normalizeGeminiRow(raw = {}, locationGroups = [], fallbackText = "", index = 0) {
+  const matchedGroup = raw.location_group_id
+    ? (locationGroups || []).find((group) => String(group.location_group_id || "") === String(raw.location_group_id || "")) || null
+    : matchLocationGroup(locationGroups, raw.location_group_name || fallbackText);
+  const locationGroupId = matchedGroup?.location_group_id || String(raw.location_group_id || "").trim();
+  const locationGroupName = matchedGroup?.group_name || String(raw.location_group_name || "").trim();
+  const eventDate = normalizePossibleDate(raw.event_date);
+  const timePair = normalizeTimePair(raw.start_time, raw.end_time);
+  const attendeeRaw = raw.attendee_count == null || raw.attendee_count === "" ? null : Number.parseInt(String(raw.attendee_count), 10);
+  const attendeeCount = Number.isFinite(attendeeRaw) ? String(attendeeRaw) : null;
+  const eventName = cleanEventName(raw.event_name || "", matchedGroup);
+  const notes = cleanNotes(raw.notes || "", eventName, matchedGroup);
+  const warnings = mergeWarnings(
+    Array.isArray(raw.warnings) ? raw.warnings.map((x) => String(x || "").trim()).filter(Boolean) : [],
+    buildParseWarnings({ eventName, locationGroupId, eventDate, startTime: timePair.start_time, endTime: timePair.end_time })
+  );
+
+  return {
+    raw_text: normalizeIntakeText(fallbackText),
+    source_index: Number.isFinite(Number(raw.source_index)) ? Number(raw.source_index) : index,
+    event_name: eventName,
+    location_group_id: locationGroupId || "",
+    location_group_name: locationGroupName || "",
+    event_date: eventDate,
+    start_time: timePair.start_time || "",
+    end_time: timePair.end_time || "",
+    attendee_count: attendeeCount,
+    notes,
+    created_by: "Input Console Parse",
+    confidence: ["high", "medium", "low"].includes(String(raw.confidence || "").toLowerCase()) ? String(raw.confidence).toLowerCase() : (warnings.length ? "medium" : "high"),
+    review_notes: raw.review_notes == null ? (warnings.length ? warnings.join(", ") : null) : String(raw.review_notes || "").trim() || null,
+    warnings,
+    provider: "gemini",
+    provider_used: "gemini",
+    provider_fallback: false,
+    model: GEMINI_MODEL,
+  };
+}
+
+function decorateLocalRow(row, { providerFallback = false } = {}) {
+  return {
+    ...row,
+    provider: "local-parser",
+    provider_used: "local-parser",
+    provider_fallback: providerFallback,
+  };
+}
+
+function chooseBestRow(localRow, geminiRow) {
+  if (!geminiRow) return localRow;
+  const localWarnings = Array.isArray(localRow?.warnings) ? localRow.warnings.length : 99;
+  const geminiWarnings = Array.isArray(geminiRow?.warnings) ? geminiRow.warnings.length : 99;
+  if (geminiWarnings < localWarnings) return geminiRow;
+  if (geminiWarnings > localWarnings) return localRow;
+  const localFilled = [localRow.event_name, localRow.location_group_id, localRow.event_date, localRow.start_time, localRow.end_time].filter(Boolean).length;
+  const geminiFilled = [geminiRow.event_name, geminiRow.location_group_id, geminiRow.event_date, geminiRow.start_time, geminiRow.end_time].filter(Boolean).length;
+  if (geminiFilled > localFilled) return geminiRow;
+  return localRow;
+}
+
 export async function aiParseEventTexts({ texts, locationGroups }) {
   const rows = texts
     .map((text, index) => ({ index, text: String(text || "").trim() }))
     .filter((row) => row.text);
-  return rows.map((row) => parseOneEventText(row.text, locationGroups || [], row.index));
+
+  const localRows = rows.map((row) => decorateLocalRow(parseOneEventText(row.text, locationGroups || [], row.index)));
+  const rowsNeedingAi = localRows.filter(shouldUseGemini);
+  if (!rowsNeedingAi.length) return localRows;
+
+  try {
+    const aiInputRows = rowsNeedingAi.map((row) => ({
+      source_index: row.source_index,
+      text: row.raw_text,
+    }));
+    const aiRowBySourceIndex = new Map(aiInputRows.map((row) => [row.source_index, row]));
+    const geminiResult = await tryGeminiParseTexts({
+      rows: aiInputRows,
+      locationGroups: locationGroups || [],
+    });
+    if (!geminiResult?.ok || !Array.isArray(geminiResult.rows)) return localRows.map((row) => decorateLocalRow(row, { providerFallback: shouldUseGemini(row) }));
+
+    const geminiRows = geminiResult.rows.map((row, idx) => {
+      const requestedSourceIndex = Number(row?.source_index);
+      const fallbackRow = aiRowBySourceIndex.get(requestedSourceIndex) || aiInputRows[idx];
+      return normalizeGeminiRow(
+        row,
+        locationGroups || [],
+        fallbackRow?.text || "",
+        fallbackRow?.source_index ?? idx
+      );
+    });
+    const bySourceIndex = new Map(geminiRows.map((row) => [row.source_index, row]));
+    return localRows.map((localRow) => chooseBestRow(localRow, bySourceIndex.get(localRow.source_index)));
+  } catch {
+    return localRows.map((row) => decorateLocalRow(row, { providerFallback: shouldUseGemini(row) }));
+  }
 }
