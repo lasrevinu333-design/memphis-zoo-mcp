@@ -188,6 +188,89 @@ function shouldUseEmployeeContext(text = "") {
   return /\b(she|he|they|them|that person|same person|where was|where is|assigned today|assigned tomorrow)\b/.test(lower);
 }
 
+function normalizeEmployeeMatchText(value = "") {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function levenshteinDistance(a = "", b = "") {
+  const left = String(a || "");
+  const right = String(b || "");
+  if (left === right) return 0;
+  if (!left) return right.length;
+  if (!right) return left.length;
+
+  const previous = Array.from({ length: right.length + 1 }, (_value, index) => index);
+  const current = Array(right.length + 1).fill(0);
+
+  for (let i = 1; i <= left.length; i += 1) {
+    current[0] = i;
+    for (let j = 1; j <= right.length; j += 1) {
+      const cost = left[i - 1] === right[j - 1] ? 0 : 1;
+      current[j] = Math.min(
+        previous[j] + 1,
+        current[j - 1] + 1,
+        previous[j - 1] + cost
+      );
+    }
+    for (let j = 0; j <= right.length; j += 1) previous[j] = current[j];
+  }
+
+  return previous[right.length];
+}
+
+function employeeTokenMatchScore(queryToken = "", nameToken = "") {
+  const query = normalizeEmployeeMatchText(queryToken);
+  const name = normalizeEmployeeMatchText(nameToken);
+  if (!query || !name) return 0;
+  if (query === name) return 40;
+  if (query.length >= 3 && name.startsWith(query)) return 30;
+  if (name.length >= 3 && query.startsWith(name)) return 28;
+  if (query.length >= 4 && name.includes(query)) return 24;
+  if (name.length >= 4 && query.includes(name)) return 22;
+
+  const distance = levenshteinDistance(query, name);
+  const maxLength = Math.max(query.length, name.length);
+  if (maxLength >= 5 && distance <= 1) return 25;
+  if (maxLength >= 7 && distance <= 2) return 18;
+  return 0;
+}
+
+function scoreEmployeeNameMatch(userText = "", displayName = "") {
+  const query = normalizeEmployeeMatchText(userText);
+  const name = normalizeEmployeeMatchText(displayName);
+  if (!query || !name) return 0;
+  if (query.includes(name)) return 1000 + name.length;
+
+  const nameTokens = name.split(/\s+/).filter(Boolean);
+  const queryTokens = query.split(/\s+/).filter(Boolean);
+  let score = 0;
+
+  for (const nameToken of nameTokens) {
+    let bestTokenScore = 0;
+    for (const queryToken of queryTokens) {
+      bestTokenScore = Math.max(bestTokenScore, employeeTokenMatchScore(queryToken, nameToken));
+    }
+    score += bestTokenScore;
+  }
+
+  const firstName = nameTokens[0] || "";
+  const lastName = nameTokens[nameTokens.length - 1] || "";
+  if (firstName && queryTokens.some((token) => employeeTokenMatchScore(token, firstName) >= 18)) score += 80;
+  if (lastName && queryTokens.some((token) => employeeTokenMatchScore(token, lastName) >= 22)) score += 40;
+
+  return score;
+}
+
+function weekdayNameForIsoDate(serviceDate = "") {
+  const date = new Date(`${serviceDate}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return "that day";
+  return ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][date.getDay()] || "that day";
+}
+
 function openerReply(text = "") {
   const lower = normalizeLoose(text);
   if (/\bwho are you\b/.test(lower)) return "I am Memphis. I help with schedules, area coverage, contacts, tickets, scans, and day-of operations questions for the zoo.";
