@@ -446,18 +446,7 @@ function formatRecentThreadMessages(messages = []) {
 }
 
 async function saveThreadContext(runRpc, threadId, context = {}) {
-  const normalized = String(threadId || "").trim();
-  if (!normalized) return null;
-  return await runRpc("msg_set_memphis_thread_context", {
-    p_thread_id: normalized,
-    p_last_intent: context.last_intent ?? null,
-    p_last_employee_name: context.last_employee_name ?? null,
-    p_last_group_name: context.last_group_name ?? null,
-    p_last_location_code: context.last_location_code ?? null,
-    p_last_service_date: context.last_service_date ?? null,
-    p_last_subject_type: context.last_subject_type ?? null,
-    p_context_json: context.context_json ?? {},
-  });
+  return await sharedSaveThreadContext(runRpc, threadId, context);
 }
 
 async function getDefaultServiceDate(runReadOnlySql) {
