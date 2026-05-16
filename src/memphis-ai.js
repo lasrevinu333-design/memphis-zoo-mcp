@@ -32,7 +32,7 @@ import {
 const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 const DEFAULT_MODEL = String(process.env.MEMPHIS_GEMINI_MODEL || process.env.GEMINI_MODEL || "gemini-2.5-flash").trim();
 const DEFAULT_SCAN_DEVICE_ID = "memphis-bot";
-const DEFAULT_WEATHER_LOCATION = "Memphis, Tennessee";
+const DEFAULT_WEATHER_LOCATION = SHARED_DEFAULT_WEATHER_LOCATION;
 const GEMINI_TIMEOUT_MS = Number.parseInt(String(process.env.MEMPHIS_GEMINI_TIMEOUT_MS || "12000"), 10);
 const GEMINI_MAX_OUTPUT_TOKENS = Number.parseInt(String(process.env.MEMPHIS_GEMINI_MAX_OUTPUT_TOKENS || "900"), 10);
 
