@@ -729,25 +729,7 @@ async function fetchDeviceIdentity(runReadOnlySql, deviceId) {
 }
 
 async function resolveEmployeeByLooseName(runReadOnlySql, employeeName = "") {
-  const rawName = String(employeeName || "").trim();
-  if (!rawName) return null;
-
-  const rows = await runReadOnlySql(`
-    select public.sch_resolve_employee_ref('${esc(rawName)}') as data
-  `);
-  const resolved = Array.isArray(rows) && rows.length ? rows[0].data : null;
-
-  if (!resolved?.ok || !resolved.employee_id) return null;
-
-  return {
-    id: resolved.employee_id,
-    display_name: resolved.employee_name,
-    employee_code: resolved.employee_code,
-    role: resolved.role,
-    match_source: resolved.match_source,
-    matched_text: resolved.matched_text,
-    score: resolved.score,
-  };
+  return await sharedResolveEmployeeByLooseName(runReadOnlySql, employeeName);
 }
 
 async function fetchStaticEmployeeShift(runReadOnlySql, employeeName = "", serviceDate = "") {
