@@ -1528,6 +1528,88 @@ export function createScheduleRouter({
     }
   });
 
+  router.get("/shift-templates", async (req, res) => {
+    try {
+      const employeeRef = String(req.query.employee || req.query.employee_name || req.query.employee_code || "").trim();
+      const includeInactive = String(req.query.include_inactive || "").trim() === "1";
+      let employeeFilterSql = "";
+
+      if (employeeRef) {
+        const resolvedRows = await runReadOnlySql(`
+          select public.sch_resolve_employee_ref('${esc(employeeRef)}') as data
+        `);
+        const resolved = Array.isArray(resolvedRows) && resolvedRows.length ? resolvedRows[0].data : null;
+        if (!resolved?.ok || !resolved.employee_id) {
+          res.status(404).json({ ok: false, error: "Shift template lookup could not resolve that employee." });
+          return;
+        }
+        employeeFilterSql = `and e.id = '${esc(resolved.employee_id)}'::uuid`;
+      }
+
+      const rows = await runReadOnlySql(`
+        select
+          est.id as template_id,
+          est.employee_id,
+          e.display_name as employee_name,
+          e.employee_code,
+          est.day_of_week,
+          case est.day_of_week
+            when 0 then 'Sunday'
+            when 1 then 'Monday'
+            when 2 then 'Tuesday'
+            when 3 then 'Wednesday'
+            when 4 then 'Thursday'
+            when 5 then 'Friday'
+            when 6 then 'Saturday'
+          end as weekday,
+          to_char(est.shift_start, 'HH24:MI:SS') as shift_start,
+          to_char(est.shift_end, 'HH24:MI:SS') as shift_end,
+          case when est.lunch_start is null then null else to_char(est.lunch_start, 'HH24:MI:SS') end as lunch_start,
+          case when est.lunch_end is null then null else to_char(est.lunch_end, 'HH24:MI:SS') end as lunch_end,
+          est.color_hex,
+          est.active,
+          est.notes,
+          est.updated_at
+        from public.employee_shift_templates est
+        join public.employees e on e.id = est.employee_id
+        where (${includeInactive ? "true" : "est.active = true"})
+          ${employeeFilterSql}
+        order by e.display_name, est.day_of_week, est.shift_start
+      `);
+
+      res.status(200).json({ ok: true, data: rows || [], meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+    } catch (error) {
+      fail(res, error, "Shift templates failed");
+    }
+  });
+
+  router.patch("/shift-templates/metadata", requireSchedulePin, async (req, res) => {
+    try {
+      const employeeRef = String(req.body?.employee || req.body?.employee_ref || req.body?.employee_name || req.body?.employee_code || "").trim();
+      const dayOfWeek = Number.parseInt(String(req.body?.day_of_week ?? req.body?.weekday_index ?? ""), 10);
+      const lunchStart = req.body?.lunch_start == null || req.body?.lunch_start === "" ? null : requireTime(req.body.lunch_start);
+      const lunchEnd = req.body?.lunch_end == null || req.body?.lunch_end === "" ? null : requireTime(req.body.lunch_end);
+      const colorHex = req.body?.color_hex == null || req.body?.color_hex === "" ? null : String(req.body.color_hex).trim();
+      const notes = req.body?.notes == null ? null : String(req.body.notes);
+
+      if (!employeeRef) throw new Error("employee or employee_ref is required.");
+      if (!Number.isInteger(dayOfWeek) || dayOfWeek < 0 || dayOfWeek > 6) throw new Error("day_of_week must be 0-6.");
+
+      const data = await runRpc("sch_set_employee_shift_template_metadata", {
+        p_employee_ref: employeeRef,
+        p_day_of_week: dayOfWeek,
+        p_lunch_start: lunchStart,
+        p_lunch_end: lunchEnd,
+        p_color_hex: colorHex,
+        p_notes: notes,
+      });
+
+      res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+    } catch (error) {
+      fail(res, error, "Shift template metadata update failed");
+    }
+  });
+
   router.get("/pto", async (req, res) => {
     try {
       const startDate = requireDate(req.query.start_date || req.query.service_date || req.query.date || (await getServiceDate()));
