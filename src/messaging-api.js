@@ -24,6 +24,54 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     };
   }
 
+  function isDirectContactPrompt(body = "") {
+    const raw = String(body || "").trim();
+    const lower = raw.toLowerCase().replace(/[^a-z0-9\s']/g, " " ).replace(/\s+/g, " " ).trim();
+    return /\b(phone|number|contact|call|text|reach)\b/.test(lower)
+      && /\b(eric|operle|mckenneys?|mckinneys?|mcken+e+y?s?|brandy|gull|haley|lejman|jennifer|sheffield|manager|director|facilities|custodial|horticulture|water quality)\b/.test(lower);
+  }
+
+  function scoreContactPrompt(body = "", contact = {}) {
+    const lower = String(body || "").toLowerCase().replace(/[^a-z0-9\s]/g, " " ).replace(/\s+/g, " " ).trim();
+    const haystack = `${contact.display_name || ""} ${contact.role_title || ""} ${contact.department || ""}`.toLowerCase();
+    let score = 0;
+    for (const token of lower.split(/\s+/).filter((x) => x.length >= 3 && !["phone","number","contact","call","text","reach","need","please","give"].includes(x))) {
+      if (haystack.includes(token)) score += 50 + token.length;
+      if (/^mck/.test(token) && haystack.includes("mckenney")) score += 130;
+      if (/^oper/.test(token) && haystack.includes("operle")) score += 130;
+    }
+    if (lower.includes("facilities") && haystack.includes("facilities")) score += 180;
+    if (lower.includes("custodial") && haystack.includes("custodial")) score += 180;
+    return score;
+  }
+
+  function summarizeDirectContact(contact = {}, includePhone = true) {
+    const parts = [`${contact.display_name}: ${contact.role_title}`];
+    if (contact.department) parts.push(contact.department);
+    if (includePhone && contact.phone) parts.push(`phone ${contact.phone}`);
+    else if (includePhone) parts.push("phone not listed");
+    return parts.join(". " ) + ".";
+  }
+
+  async function directContactReply(body = "") {
+    if (!isDirectContactPrompt(body)) return null;
+    const contacts = await runReadOnlySql(`
+      select display_name, role_title, department, phone, active, sort_order
+      from public.internal_ops_contacts
+      where active = true
+      order by sort_order asc, display_name asc
+    `);
+    const ranked = (Array.isArray(contacts) ? contacts : [])
+      .map((contact) => ({ contact, score: scoreContactPrompt(body, contact) }))
+      .sort((a, b) => b.score - a.score || Number(a.contact.sort_order || 999) - Number(b.contact.sort_order || 999));
+    const best = ranked[0];
+    if (best && best.score >= 70) return summarizeDirectContact(best.contact, true);
+    if (/\b(manager|managers|director|contact|phone|number)\b/i.test(String(body || ""))) {
+      return ranked.slice(0, 6).map((row) => summarizeDirectContact(row.contact, true)).join(" " );
+    }
+    return null;
+  }
+
   function isCapabilityPrompt(body) {
     const raw = String(body || "").trim().toLowerCase().replace(/[^a-z0-9\s']/g, " ").replace(/\s+/g, " ");
     return /\b(what can you do|what do you do|help|commands|features|abilities|capabilities|how can you help)\b/.test(raw);
