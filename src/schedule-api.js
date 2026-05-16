@@ -1172,6 +1172,74 @@ export function createScheduleRouter({
     res.status(200).json(buildHealthPayload("schedule", { contract_version: contractVersion }));
   });
 
+  router.get("/audit/day", async (req, res) => {
+    try {
+      const serviceDate = requireDate(req.query.service_date || req.query.date || (await getServiceDate()));
+      const rows = await runReadOnlySql(`
+        select public.sch_audit_schedule_day('${esc(serviceDate)}'::date) as data
+      `);
+      const data = Array.isArray(rows) && rows.length ? rows[0].data : null;
+      res.status(200).json({
+        ok: true,
+        data,
+        meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion },
+      });
+    } catch (error) {
+      fail(res, error, "Schedule audit failed");
+    }
+  });
+
+  router.get("/work-status", async (req, res) => {
+    try {
+      const serviceDate = requireDate(req.query.service_date || req.query.date || (await getServiceDate()));
+      const employeeId = String(req.query.employee_id || "").trim();
+      const employeeCode = String(req.query.employee_code || req.query.code || "").trim();
+      const employeeName = String(req.query.employee_name || req.query.name || req.query.employee || "").trim();
+      let resolvedEmployeeId = employeeId;
+
+      if (resolvedEmployeeId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(resolvedEmployeeId)) {
+        throw new Error("employee_id must be a valid UUID.");
+      }
+
+      if (!resolvedEmployeeId && employeeCode) {
+        const employeeRows = await runReadOnlySql(`
+          select id as employee_id
+          from public.employees
+          where active = true
+            and employee_code ilike '${esc(employeeCode)}'
+          order by display_name
+          limit 1
+        `);
+        resolvedEmployeeId = Array.isArray(employeeRows) && employeeRows.length ? employeeRows[0].employee_id : "";
+      }
+
+      if (!resolvedEmployeeId && employeeName) {
+        const resolvedRows = await runReadOnlySql(`
+          select public.sch_resolve_employee_ref('${esc(employeeName)}') as data
+        `);
+        const resolved = Array.isArray(resolvedRows) && resolvedRows.length ? resolvedRows[0].data : null;
+        if (resolved?.ok && resolved.employee_id) resolvedEmployeeId = resolved.employee_id;
+      }
+
+      if (!resolvedEmployeeId) throw new Error("employee_id, employee_code, or employee_name is required and must resolve to an active employee.");
+
+      const rows = await runReadOnlySql(`
+        select public.sch_get_employee_work_status(
+          '${esc(serviceDate)}'::date,
+          '${esc(resolvedEmployeeId)}'::uuid
+        ) as data
+      `);
+      const data = Array.isArray(rows) && rows.length ? rows[0].data : null;
+      res.status(200).json({
+        ok: true,
+        data,
+        meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion },
+      });
+    } catch (error) {
+      fail(res, error, "Employee work status failed");
+    }
+  });
+
   router.get("/today", async (_req, res) => {
     try {
       const serviceDate = await getServiceDate();
