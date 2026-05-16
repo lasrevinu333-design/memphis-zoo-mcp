@@ -1395,7 +1395,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       return { text: summarizeTickets(data.tickets, findLocationCode(text)), meta: { fallback: true, mode: "local_tickets" } };
     }
 
-    if (/(absent|off|cover|covering|fill|filling)/i.test(lower) && !isContradictionFollowUp(text)) {
+    if (/(pto|p\s*t\s*o|time off|callout|call out|sick|vacation|absent|absence|absences|off|out on|out today|out tomorrow|who is out|who's out|cover|covering|fill|filling)/i.test(lower) && !isContradictionFollowUp(text)) {
       const employeeName = await guessEmployeeName(runRpc, text) || (shouldUseEmployeeContext(text) ? threadContext?.last_employee_name : "") || "";
       const data = await executeTool("get_absence_coverage", { employee_name: employeeName, service_date: relativeServiceDate });
       await saveThreadContext(runRpc, threadId, { last_intent: "absence_coverage", last_employee_name: employeeName || null, last_service_date: relativeServiceDate, last_subject_type: "employee" });
