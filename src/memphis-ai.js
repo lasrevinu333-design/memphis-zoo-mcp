@@ -429,24 +429,7 @@ async function fetchThreadContext(runReadOnlySql, threadId) {
 }
 
 async function fetchRecentThreadMessages(runReadOnlySql, threadId, limit = 10) {
-  const normalized = String(threadId || "").trim();
-  if (!normalized) return [];
-  const safeLimit = Math.min(Math.max(Number.parseInt(String(limit), 10) || 10, 2), 20);
-  const rows = await runReadOnlySql(`
-    select message_type, body
-    from (
-      select sent_at, message_type, body
-      from public.msg_messages
-      where thread_id = '${esc(normalized)}'::uuid
-        and message_type in ('text', 'bot_response')
-        and body is not null
-        and trim(body) <> ''
-      order by sent_at desc
-      limit ${safeLimit}
-    ) recent
-    order by sent_at asc
-  `);
-  return Array.isArray(rows) ? rows : [];
+  return await sharedFetchRecentThreadMessages(runReadOnlySql, threadId, limit);
 }
 
 function formatRecentThreadMessages(messages = []) {
