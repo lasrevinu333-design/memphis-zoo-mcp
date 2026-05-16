@@ -858,25 +858,21 @@ async function resolveEmployeeByLooseName(runReadOnlySql, employeeName = "") {
   if (!rawName) return null;
 
   const rows = await runReadOnlySql(`
-    select id, display_name, employee_code, role
-    from public.employees
-    where active = true
-    order by display_name
+    select public.sch_resolve_employee_ref('${esc(rawName)}') as data
   `);
+  const resolved = Array.isArray(rows) && rows.length ? rows[0].data : null;
 
-  const list = Array.isArray(rows) ? rows : [];
-  let best = null;
-  let bestScore = 0;
+  if (!resolved?.ok || !resolved.employee_id) return null;
 
-  for (const employee of list) {
-    const score = scoreEmployeeNameMatch(rawName, employee.display_name);
-    if (score > bestScore) {
-      best = employee;
-      bestScore = score;
-    }
-  }
-
-  return bestScore >= 70 ? best : null;
+  return {
+    id: resolved.employee_id,
+    display_name: resolved.employee_name,
+    employee_code: resolved.employee_code,
+    role: resolved.role,
+    match_source: resolved.match_source,
+    matched_text: resolved.matched_text,
+    score: resolved.score,
+  };
 }
 
 async function fetchStaticEmployeeShift(runReadOnlySql, employeeName = "", serviceDate = "") {
