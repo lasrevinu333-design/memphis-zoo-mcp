@@ -1029,7 +1029,6 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
         order by group_name asc, segment_number asc
       `);
       rows = Array.isArray(rows) ? rows : [];
-      if (!rows.length) rows = await fetchFallbackEmployeeAssignments(employeeName, serviceDate);
       return { service_date: serviceDate, assignments: rows || [] };
     }
 
