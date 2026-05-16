@@ -17,3 +17,13 @@ export { generateDailyStaffScheduleReply, summarizeDailyAssignments, summarizeDa
 export { answerInternalContactQuestion } from "./memphis-ai-contacts.js";
 export { answerEmployeeWeeklyScheduleQuestion } from "./memphis-ai-employee-week.js";
 export { answerOpsManagerScheduleQuestion } from "./memphis-ai-ops-schedule.js";
+export {
+  DEFAULT_WEATHER_LOCATION,
+  augmentWeatherPrompt,
+  fetchWeatherForMemphisTn,
+  inferWeatherLocation,
+  isWeatherQuestion,
+  mentionsMemphisPlace,
+  summarizeWeatherPayload,
+} from "./memphis-ai-weather.js";
+export { summarizeEmployeeWorkStatus, weekdayNameForIsoDate } from "./memphis-ai-work-status.js";
