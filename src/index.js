@@ -202,20 +202,6 @@ async function runRpc(functionName, args = {}) {
       p_force: args?.p_force === true,
     });
     if (error) throw new Error(error.message || "RPC failed: sch_generate_daily_schedule_privileged");
-    const serviceDate = String(args?.p_service_date || "").trim();
-    if (/^\d{4}-\d{2}-\d{2}$/.test(serviceDate)) {
-      const { data: ptoRows, error: ptoError } = await client.rpc("run_sql_readonly", {
-        p_sql: `select distinct employee_id from public.employee_planned_time_off where active = true and start_date <= '${serviceDate.replace(/'/g, "''")}'::date and end_date >= '${serviceDate.replace(/'/g, "''")}'::date order by employee_id`,
-      });
-      if (!ptoError && Array.isArray(ptoRows) && ptoRows.length) {
-        const ptoIds = ptoRows.map((row) => String(row.employee_id || "").trim()).filter(Boolean);
-        const publish = await client.rpc("sch_absence_publish", {
-          p_service_date: serviceDate,
-          p_absent_employee_ids: ptoIds,
-        });
-        if (publish?.error) throw new Error(publish.error.message || "RPC failed: sch_absence_publish");
-      }
-    }
     return data;
   }
   const client = getSupabaseConfig();
