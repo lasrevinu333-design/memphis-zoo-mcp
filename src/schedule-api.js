@@ -1830,6 +1830,57 @@ export function createScheduleRouter({
     }
   });
 
+  router.post("/manual-absences/publish", requireSchedulePin, async (req, res) => {
+    try {
+      const serviceDate = requireDate(req.body?.service_date || req.body?.date || (await getServiceDate()));
+      const explicit = normalizeUuidList(req.body?.absent_employee_ids || []);
+      const idsSql = uuidArrayLiteral(explicit);
+
+      await runWriteSql("manual_absence_publish", `
+        update public.daily_absence_overrides
+           set active = false,
+               updated_at = now(),
+               notes = coalesce(notes, 'Cleared by simplified absence scheduler')
+         where absence_date = '${esc(serviceDate)}'::date
+           and active = true
+           and absence_type = 'manual_override';
+
+        insert into public.daily_absence_overrides (
+          id, absence_date, employee_id, absence_type, active, notes, created_at, updated_at
+        )
+        select gen_random_uuid(), '${esc(serviceDate)}'::date, x.employee_id, 'manual_override', true,
+               'Published from simplified absence scheduler', now(), now()
+        from (select distinct unnest(${idsSql}) as employee_id) x
+        where not exists (
+          select 1
+          from public.daily_absence_overrides y
+          where y.absence_date = '${esc(serviceDate)}'::date
+            and y.employee_id = x.employee_id
+            and y.active = true
+        );
+      `);
+
+      const generateResult = await runRpc("sch_generate_daily_schedule", { p_service_date: serviceDate, p_force: true });
+      const activeRows = await listPtoRows({ startDate: serviceDate, endDate: serviceDate });
+      const manualRows = activeRows.filter((row) => String(row.pto_type || "").toLowerCase() === "manual_override");
+
+      res.status(200).json({
+        ok: true,
+        data: {
+          service_date: serviceDate,
+          selected_absent_count: explicit.length,
+          manual_absence_count: manualRows.length,
+          active_absence_count: activeRows.length,
+          active_absences: activeRows,
+          generate_result: generateResult,
+        },
+        meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion },
+      });
+    } catch (error) {
+      fail(res, error, "Manual absence publish failed");
+    }
+  });
+
   router.post("/absence-preview", requireSchedulePin, async (req, res) => {
     try {
       const serviceDate = requireDate(req.body?.service_date || req.body?.date || (await getServiceDate()));
