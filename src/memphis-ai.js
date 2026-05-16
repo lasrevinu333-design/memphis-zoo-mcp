@@ -304,7 +304,7 @@ function mergeAssignmentRows(assignments = []) {
 
 function summarizeAssignments(assignments = [], emptyText) {
   if (!assignments.length) return emptyText;
-  return assignments.slice(0, 12).map((row) => {
+  return mergeAssignmentRows(assignments).slice(0, 12).map((row) => {
     const employee = row.employee_name || row.assigned_employee_name || "Open";
     const group = row.group_name || row.group_code || "Unknown area";
     const start = row.coverage_start || "—";
