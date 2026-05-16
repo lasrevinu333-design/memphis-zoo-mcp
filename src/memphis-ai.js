@@ -149,7 +149,7 @@ function isEmployeeAreaQuestion(text = "") {
 }
 
 function mentionsMemphisPlace(text = "") {
-  return /\bmemphis\b/i.test(String(text || ""));
+  return sharedMentionsMemphisPlace(text);
 }
 
 function hasDateReference(text = "") {
