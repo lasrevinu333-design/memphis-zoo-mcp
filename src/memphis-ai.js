@@ -339,6 +339,7 @@ function summarizeAssignments(assignments = [], emptyText) {
 }
 
 function summarizeEmployeeWorkStatus(status = {}) {
+  return sharedSummarizeEmployeeWorkStatus(status);
   if (!status?.ok) return "I could not resolve that employee's work status.";
 
   const name = status.employee_name || "That employee";
