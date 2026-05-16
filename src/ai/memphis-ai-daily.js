@@ -91,7 +91,7 @@ export function summarizeDailyRoster(roster = [], serviceDate = "", opsRows = []
   const sections = [];
   sections.push(`Ops managers: ${opsPeople.length ? opsPeople.join("; ") : "none listed"}`);
   sections.push(`Custodians: ${custodianPeople.length ? custodianPeople.join("; ") : "none listed"}`);
-  return `${serviceDate}: ${sections.join(". ")}. Ask who is where if you want area assignments.`;
+  return `${serviceDate}: ${sections.join(". ")}. Ask who is where if you want area assignments.${absenceSuffix}`;
 }
 
 export function summarizeDailyAssignments(assignments = [], serviceDate = "") {
