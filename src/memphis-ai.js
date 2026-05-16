@@ -212,20 +212,7 @@ function levenshteinDistance(a = "", b = "") {
 }
 
 function employeeTokenMatchScore(queryToken = "", nameToken = "") {
-  const query = normalizeEmployeeMatchText(queryToken);
-  const name = normalizeEmployeeMatchText(nameToken);
-  if (!query || !name) return 0;
-  if (query === name) return 40;
-  if (query.length >= 3 && name.startsWith(query)) return 30;
-  if (name.length >= 3 && query.startsWith(name)) return 28;
-  if (query.length >= 4 && name.includes(query)) return 24;
-  if (name.length >= 4 && query.includes(name)) return 22;
-
-  const distance = levenshteinDistance(query, name);
-  const maxLength = Math.max(query.length, name.length);
-  if (maxLength >= 5 && distance <= 1) return 25;
-  if (maxLength >= 7 && distance <= 2) return 18;
-  return 0;
+  return sharedEmployeeTokenMatchScore(queryToken, nameToken);
 }
 
 function scoreEmployeeNameMatch(userText = "", displayName = "") {
