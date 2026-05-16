@@ -1060,6 +1060,25 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       return { service_date: serviceDate, assignments: rows || [], group_name: target.group_name || target.group_code };
     }
 
+    if (name === "get_employee_work_status") {
+      const employeeName = String(args.employee_name || "").trim();
+      const serviceDate = normalizeDate(args.service_date) || await getDefaultServiceDate(runReadOnlySql);
+      if (!employeeName) return { ok: false, service_date: serviceDate, work_status: "unknown_employee", reason: "employee_name_required" };
+
+      const employee = await resolveEmployeeByLooseName(runReadOnlySql, employeeName);
+      if (!employee?.id) {
+        return { ok: false, service_date: serviceDate, employee_name: employeeName, work_status: "unknown_employee", reason: "employee_not_resolved" };
+      }
+
+      const rows = await runReadOnlySql(`
+        select public.sch_get_employee_work_status(
+          '${esc(serviceDate)}'::date,
+          '${esc(employee.id)}'::uuid
+        ) as data
+      `);
+      return Array.isArray(rows) && rows.length ? rows[0].data : { ok: false, service_date: serviceDate, employee_name: employee.display_name, work_status: "unknown", reason: "status_lookup_failed" };
+    }
+
     if (name === "get_employee_schedule") {
       const employeeName = String(args.employee_name || "").trim();
       const serviceDate = normalizeDate(args.service_date) || await getDefaultServiceDate(runReadOnlySql);
