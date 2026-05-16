@@ -78,7 +78,7 @@ export function summarizeDailyRoster(roster = [], serviceDate = "", opsRows = []
 
   if (audience === "ops") {
     if (!opsPeople.length) return `I couldn't find any ops managers scheduled to work on ${serviceDate}.`;
-    return `${serviceDate}: Ops managers: ${opsPeople.join("; ")}.`;
+    return `${serviceDate}: Ops managers: ${opsPeople.join("; ")}.${absenceSuffix}`;
   }
 
   if (audience === "custodians") {
