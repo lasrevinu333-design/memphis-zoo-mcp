@@ -1448,6 +1448,86 @@ export function createScheduleRouter({
     }
   });
 
+  router.get("/employee-aliases", async (req, res) => {
+    try {
+      const employeeRef = String(req.query.employee || req.query.employee_name || req.query.employee_code || "").trim();
+      const includeInactive = String(req.query.include_inactive || "").trim() === "1";
+      let employeeFilterSql = "";
+
+      if (employeeRef) {
+        const resolvedRows = await runReadOnlySql(`
+          select public.sch_resolve_employee_ref('${esc(employeeRef)}') as data
+        `);
+        const resolved = Array.isArray(resolvedRows) && resolvedRows.length ? resolvedRows[0].data : null;
+        if (!resolved?.ok || !resolved.employee_id) {
+          res.status(404).json({ ok: false, error: "Employee alias lookup could not resolve that employee." });
+          return;
+        }
+        employeeFilterSql = `and e.id = '${esc(resolved.employee_id)}'::uuid`;
+      }
+
+      const rows = await runReadOnlySql(`
+        select
+          a.id as alias_id,
+          a.employee_id,
+          e.display_name as employee_name,
+          e.employee_code,
+          a.alias_text,
+          a.active,
+          a.notes,
+          a.created_at,
+          a.updated_at
+        from public.employee_aliases a
+        join public.employees e on e.id = a.employee_id
+        where (${includeInactive ? "true" : "a.active = true"})
+          ${employeeFilterSql}
+        order by e.display_name, a.alias_text
+      `);
+
+      res.status(200).json({ ok: true, data: rows || [], meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+    } catch (error) {
+      fail(res, error, "Employee aliases failed");
+    }
+  });
+
+  router.post("/employee-aliases", requireSchedulePin, async (req, res) => {
+    try {
+      const employeeRef = String(req.body?.employee || req.body?.employee_ref || req.body?.employee_name || req.body?.employee_code || "").trim();
+      const aliasText = String(req.body?.alias_text || req.body?.alias || "").trim();
+      const notes = req.body?.notes == null ? null : String(req.body.notes);
+
+      if (!employeeRef) throw new Error("employee or employee_ref is required.");
+      if (!aliasText) throw new Error("alias_text is required.");
+
+      const data = await runRpc("sch_upsert_employee_alias", {
+        p_employee_ref: employeeRef,
+        p_alias_text: aliasText,
+        p_notes: notes,
+      });
+
+      res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+    } catch (error) {
+      fail(res, error, "Employee alias upsert failed");
+    }
+  });
+
+  router.patch("/employee-aliases/:aliasId", requireSchedulePin, async (req, res) => {
+    try {
+      const aliasId = String(req.params.aliasId || "").trim();
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(aliasId)) {
+        throw new Error("aliasId must be a valid UUID.");
+      }
+      const active = req.body?.active !== false;
+      const data = await runRpc("sch_set_employee_alias_active", {
+        p_alias_id: aliasId,
+        p_active: active,
+      });
+      res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+    } catch (error) {
+      fail(res, error, "Employee alias update failed");
+    }
+  });
+
   router.get("/pto", async (req, res) => {
     try {
       const startDate = requireDate(req.query.start_date || req.query.service_date || req.query.date || (await getServiceDate()));
