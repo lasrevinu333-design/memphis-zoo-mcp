@@ -87,7 +87,7 @@ function isConversationalOpener(text = "") {
 }
 
 function isWeatherQuestion(text = "") {
-  return /\b(weather|forecast|temperature|rain|storm|sunny|cloudy|wind|humid|humidity)\b/i.test(String(text || ""));
+  return sharedIsWeatherQuestion(text);
 }
 
 function isRecipeQuestion(text = "") {
