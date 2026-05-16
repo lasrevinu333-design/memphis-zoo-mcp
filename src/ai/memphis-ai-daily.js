@@ -83,7 +83,7 @@ export function summarizeDailyRoster(roster = [], serviceDate = "", opsRows = []
 
   if (audience === "custodians") {
     if (!custodianPeople.length) return `I couldn't find any custodians scheduled to work on ${serviceDate}.`;
-    return `${serviceDate}: Custodians: ${custodianPeople.join("; ")}. Ask who is where if you want area assignments.`;
+    return `${serviceDate}: Custodians: ${custodianPeople.join("; ")}. Ask who is where if you want area assignments.${absenceSuffix}`;
   }
 
   if (!custodianPeople.length && !opsPeople.length) return `I couldn't find anyone scheduled to work on ${serviceDate}.`;
