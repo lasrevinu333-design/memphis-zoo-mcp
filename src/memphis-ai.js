@@ -27,6 +27,17 @@ import {
   summarizeEmployeeWorkStatus as sharedSummarizeEmployeeWorkStatus,
   summarizeWeatherPayload as sharedSummarizeWeatherPayload,
   weekdayNameForIsoDate as sharedWeekdayNameForIsoDate,
+  employeeTokenMatchScore as sharedEmployeeTokenMatchScore,
+  fetchRecentThreadMessages as sharedFetchRecentThreadMessages,
+  fetchThreadContext as sharedFetchThreadContext,
+  formatRecentThreadMessages as sharedFormatRecentThreadMessages,
+  guessEmployeeName as sharedGuessEmployeeName,
+  levenshteinDistance as sharedLevenshteinDistance,
+  mergeContextJson as sharedMergeContextJson,
+  normalizeEmployeeMatchText as sharedNormalizeEmployeeMatchText,
+  resolveEmployeeByLooseName as sharedResolveEmployeeByLooseName,
+  saveThreadContext as sharedSaveThreadContext,
+  scoreEmployeeNameMatch as sharedScoreEmployeeNameMatch,
 } from "./ai/index.js";
 
 const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
