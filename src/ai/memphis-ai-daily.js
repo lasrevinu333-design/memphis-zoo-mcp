@@ -69,6 +69,16 @@ function summarizeRosterPeople(rows = [], includeRole = false) {
   });
 }
 
+function displayAbsenceType(type = "") {
+  const normalized = String(type || "").trim().toLowerCase();
+  if (!normalized) return "";
+  if (normalized === "manual_override") return "absent";
+  if (normalized === "pto") return "PTO";
+  if (normalized === "sick") return "sick";
+  if (normalized === "callout" || normalized === "call_out") return "absent";
+  return normalized.replace(/_/g, " " );
+}
+
 export function summarizeDailyRoster(roster = [], serviceDate = "", opsRows = [], queryText = "", absenceRows = []) {
   const audience = detectStaffAudience(queryText);
   const custodianPeople = summarizeRosterPeople(roster, false);
