@@ -27,3 +27,18 @@ export {
   summarizeWeatherPayload,
 } from "./memphis-ai-weather.js";
 export { summarizeEmployeeWorkStatus, weekdayNameForIsoDate } from "./memphis-ai-work-status.js";
+export {
+  employeeTokenMatchScore,
+  guessEmployeeName,
+  levenshteinDistance,
+  normalizeEmployeeMatchText,
+  resolveEmployeeByLooseName,
+  scoreEmployeeNameMatch,
+} from "./memphis-ai-employee-resolver.js";
+export {
+  fetchRecentThreadMessages,
+  fetchThreadContext,
+  formatRecentThreadMessages,
+  mergeContextJson,
+  saveThreadContext,
+} from "./memphis-ai-thread-context.js";
