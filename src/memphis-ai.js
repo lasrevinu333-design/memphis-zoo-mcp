@@ -929,22 +929,7 @@ function mergeContextDate(text, threadContext = {}, explicitServiceDate = null) 
 }
 
 async function fetchWeatherForMemphisTn(location = DEFAULT_WEATHER_LOCATION) {
-  const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=1&language=en&format=json`);
-  const geo = await geoRes.json().catch(() => null);
-  const first = geo?.results?.[0];
-  if (!first?.latitude || !first?.longitude) throw new Error("Weather geocoding failed");
-  const forecastRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(first.latitude)}&longitude=${encodeURIComponent(first.longitude)}&current=temperature_2m,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=1`);
-  const forecast = await forecastRes.json().catch(() => null);
-  if (!forecast?.current || !forecast?.daily) throw new Error("Weather forecast failed");
-  return {
-    location,
-    temperature_c: forecast.current.temperature_2m,
-    wind_kmh: forecast.current.wind_speed_10m,
-    high_c: forecast.daily.temperature_2m_max?.[0],
-    low_c: forecast.daily.temperature_2m_min?.[0],
-    precipitation_probability: forecast.daily.precipitation_probability_max?.[0],
-    condition: weatherCodeToText(forecast.current.weather_code),
-  };
+  return await sharedFetchWeatherForMemphisTn(location);
 }
 
 function weatherCodeToText(code) {
