@@ -158,10 +158,7 @@ function hasDateReference(text = "") {
 }
 
 function inferWeatherLocation(text = "", threadContext = {}) {
-  if (!isWeatherQuestion(text) && threadContext?.last_subject_type !== "weather") return "";
-  if (mentionsMemphisPlace(text)) return DEFAULT_WEATHER_LOCATION;
-  if (threadContext?.context_json?.weather_location) return String(threadContext.context_json.weather_location || "");
-  return DEFAULT_WEATHER_LOCATION;
+  return sharedInferWeatherLocation(text, threadContext);
 }
 
 function augmentWeatherPrompt(userMessage = "", threadContext = {}) {
