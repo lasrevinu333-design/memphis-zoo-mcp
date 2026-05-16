@@ -342,15 +342,25 @@ function summarizeAssignments(assignments = [], emptyText) {
 }
 
 function summarizeEmployeeAssignments(assignments = [], employeeName, serviceDate, staticShift = null) {
+  const resolvedName = staticShift?.employee_name || employeeName || "That employee";
+  const weekday = weekdayNameForIsoDate(serviceDate);
+
   if (!assignments.length) {
+    if (staticShift?.scheduled_off) {
+      return `${resolvedName} is off on ${weekday}, ${serviceDate}.`;
+    }
+
     if (staticShift?.employee_name) {
       const start = String(staticShift.shift_start || "—").slice(0, 5);
       const end = String(staticShift.shift_end || "—").slice(0, 5);
-      return `${staticShift.employee_name} is scheduled to work on ${serviceDate} from ${start} to ${end}, but area assignments have not been generated yet.`;
+      const lunch = String(staticShift.notes || "").match(/Lunch\s+([^\.]+)\./i)?.[1];
+      return `${resolvedName} is scheduled to work on ${weekday}, ${serviceDate} from ${start} to ${end}${lunch ? `, lunch ${lunch}` : ""}, but area assignments have not been generated yet.`;
     }
-    return `I couldn't find schedule assignments for ${employeeName} on ${serviceDate}.`;
+
+    return `I couldn't find schedule assignments for ${resolvedName} on ${weekday}, ${serviceDate}.`;
   }
-  return `${employeeName} on ${serviceDate}: ` + assignments.slice(0, 12).map((row) => `${row.group_name || row.group_code || "Unknown area"} from ${row.coverage_start || "—"} to ${row.coverage_end || "—"}`).join("; ") + ".";
+
+  return `${resolvedName} on ${weekday}, ${serviceDate}: ` + assignments.slice(0, 12).map((row) => `${row.group_name || row.group_code || "Unknown area"} from ${row.coverage_start || "—"} to ${row.coverage_end || "—"}`).join("; ") + ".";
 }
 
 function summarizeTickets(tickets = [], location = "") {
