@@ -15,7 +15,7 @@ function contactWhereClause(text = "") {
   const lower = normalizeLoose(text);
   const terms = [];
 
-  if (/\bmckenney\b|\bmckinney\b/.test(lower)) terms.push("McKenney", "Facilities");
+  if (/\bmckenneys?\b|\bmckinneys?\b/.test(lower)) terms.push("McKenney", "Facilities");
   else if (/\beric\b|\boperle\b/.test(lower)) terms.push("Eric");
   if (/\bbrandy\b|\bgull\b/.test(lower)) terms.push("Brandy", "Gull");
   if (/\bhaley\b|\blejman\b/.test(lower)) terms.push("Haley", "Lejman");
