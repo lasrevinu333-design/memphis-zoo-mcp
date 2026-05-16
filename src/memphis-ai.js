@@ -1506,6 +1506,13 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
   }
 
   async function generateReply({ deviceId = "", userMessage = "", threadId = "" }) {
+    if (/\b(phone|number|contact|call|text|reach)\b/i.test(String(userMessage || ""))) {
+      const directContactReply = await answerInternalContactQuestion(runReadOnlySql, userMessage);
+      if (directContactReply) {
+        await saveThreadContext(runRpc, threadId, { last_intent: "internal_contact_lookup", last_subject_type: "contact", context_json: { last_question_shape: "internal_contact_lookup", last_subject_kind: "contact" } });
+        return { text: directContactReply, meta: { fallback: true, mode: "local_internal_contact_direct" } };
+      }
+    }
     const apiKey = getGeminiApiKey();
     const identity = await fetchDeviceIdentity(runReadOnlySql, deviceId);
     const webEnabled = allowWebSearch({ deviceId, identityRole: identity?.role || "" });
