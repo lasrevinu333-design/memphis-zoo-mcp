@@ -284,6 +284,19 @@ function compactTime(value = "") {
   return String(value || "—").slice(0, 5) || "—";
 }
 
+function lunchTextForAssignment(row = {}) {
+  const lunchStart = compactTime(row.lunch_start || "");
+  const lunchEnd = compactTime(row.lunch_end || "");
+  if (lunchStart === "—" || lunchEnd === "—") return "";
+  const start = timeToMinutes(row.coverage_start);
+  const end = timeToMinutes(row.coverage_end);
+  const lunchS = timeToMinutes(lunchStart);
+  const lunchE = timeToMinutes(lunchEnd);
+  if ([start, end, lunchS, lunchE].some((x) => x == null)) return "";
+  if (lunchS < end && lunchE > start) return `, lunch ${lunchStart}-${lunchEnd}`;
+  return "";
+}
+
 function mergeAssignmentRows(assignments = []) {
   const byKey = new Map();
   for (const row of assignments || []) {
