@@ -69,10 +69,12 @@ function summarizeRosterPeople(rows = [], includeRole = false) {
   });
 }
 
-export function summarizeDailyRoster(roster = [], serviceDate = "", opsRows = [], queryText = "") {
+export function summarizeDailyRoster(roster = [], serviceDate = "", opsRows = [], queryText = "", absenceRows = []) {
   const audience = detectStaffAudience(queryText);
   const custodianPeople = summarizeRosterPeople(roster, false);
   const opsPeople = summarizeRosterPeople(opsRows, true);
+  const absentPeople = Array.isArray(absenceRows) ? absenceRows.map((row) => `${row.employee_name}${row.absence_type ? ` (${row.absence_type})` : ""}`).filter(Boolean) : [];
+  const absenceSuffix = absentPeople.length ? ` Out today: ${absentPeople.join("; ")}.` : "";
 
   if (audience === "ops") {
     if (!opsPeople.length) return `I couldn't find any ops managers scheduled to work on ${serviceDate}.`;
