@@ -299,7 +299,25 @@ function mergeAssignmentRows(assignments = []) {
     if (rowStart != null && (curStart == null || rowStart < curStart)) current.coverage_start = row.coverage_start;
     if (rowEnd != null && (curEnd == null || rowEnd > curEnd)) current.coverage_end = row.coverage_end;
   }
-  return Array.from(byKey.values()).sort((a, b) => String(a.coverage_start || "").localeCompare(String(b.coverage_start || "")) || String(a.employee_name || "").localeCompare(String(b.employee_name || "")));
+  const rows = Array.from(byKey.values()).sort((a, b) =>
+    String(a.group_name || "").localeCompare(String(b.group_name || "")) ||
+    String(a.coverage_start || "").localeCompare(String(b.coverage_start || "")) ||
+    String(a.employee_name || "").localeCompare(String(b.employee_name || ""))
+  );
+
+  for (let i = 0; i < rows.length - 1; i += 1) {
+    const current = rows[i];
+    const next = rows[i + 1];
+    if (String(current.group_name || "") !== String(next.group_name || "")) continue;
+    if (String(current.employee_name || "") === String(next.employee_name || "")) continue;
+    const currentEnd = timeToMinutes(current.coverage_end);
+    const nextStart = timeToMinutes(next.coverage_start);
+    if (currentEnd != null && nextStart != null && nextStart > timeToMinutes(current.coverage_start) && nextStart < currentEnd) {
+      current.coverage_end = next.coverage_start;
+    }
+  }
+
+  return rows.sort((a, b) => String(a.coverage_start || "").localeCompare(String(b.coverage_start || "")) || String(a.employee_name || "").localeCompare(String(b.employee_name || "")));
 }
 
 function summarizeAssignments(assignments = [], emptyText) {
