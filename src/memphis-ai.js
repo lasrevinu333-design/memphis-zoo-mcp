@@ -18,6 +18,15 @@ import {
   normalizeLoose,
   sqlLikeLiteral,
   toSafeInt,
+  DEFAULT_WEATHER_LOCATION as SHARED_DEFAULT_WEATHER_LOCATION,
+  augmentWeatherPrompt as sharedAugmentWeatherPrompt,
+  fetchWeatherForMemphisTn as sharedFetchWeatherForMemphisTn,
+  inferWeatherLocation as sharedInferWeatherLocation,
+  isWeatherQuestion as sharedIsWeatherQuestion,
+  mentionsMemphisPlace as sharedMentionsMemphisPlace,
+  summarizeEmployeeWorkStatus as sharedSummarizeEmployeeWorkStatus,
+  summarizeWeatherPayload as sharedSummarizeWeatherPayload,
+  weekdayNameForIsoDate as sharedWeekdayNameForIsoDate,
 } from "./ai/index.js";
 
 const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
