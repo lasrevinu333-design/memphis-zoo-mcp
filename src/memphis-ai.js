@@ -810,22 +810,58 @@ async function fetchDeviceIdentity(runReadOnlySql, deviceId) {
   return Array.isArray(rows) && rows.length ? rows[0] : null;
 }
 
-async function fetchStaticEmployeeShift(runReadOnlySql, employeeName = "", serviceDate = "") {
+async function resolveEmployeeByLooseName(runReadOnlySql, employeeName = "") {
   const rawName = String(employeeName || "").trim();
+  if (!rawName) return null;
+
+  const rows = await runReadOnlySql(`
+    select id, display_name, employee_code, role
+    from public.employees
+    where active = true
+    order by display_name
+  `);
+
+  const list = Array.isArray(rows) ? rows : [];
+  let best = null;
+  let bestScore = 0;
+
+  for (const employee of list) {
+    const score = scoreEmployeeNameMatch(rawName, employee.display_name);
+    if (score > bestScore) {
+      best = employee;
+      bestScore = score;
+    }
+  }
+
+  return bestScore >= 70 ? best : null;
+}
+
+async function fetchStaticEmployeeShift(runReadOnlySql, employeeName = "", serviceDate = "") {
   const rawDate = String(serviceDate || "").trim();
-  if (!rawName || !rawDate) return null;
+  if (!String(employeeName || "").trim() || !rawDate) return null;
+
+  const employee = await resolveEmployeeByLooseName(runReadOnlySql, employeeName);
+  if (!employee?.id) return null;
+
   const rows = await runReadOnlySql(`
     select e.display_name as employee_name, est.shift_start, est.shift_end, est.notes
     from public.employee_shift_templates est
     join public.employees e on e.id = est.employee_id
     where est.active = true
       and e.active = true
-      and e.display_name ilike ${sqlLikeLiteral(rawName)}
+      and e.id = '${esc(employee.id)}'::uuid
       and est.day_of_week = extract(dow from '${esc(rawDate)}'::date)::int
-    order by length(e.display_name), est.shift_start
+    order by est.shift_start
     limit 1
   `);
-  return Array.isArray(rows) && rows.length ? rows[0] : null;
+
+  if (Array.isArray(rows) && rows.length) return rows[0];
+
+  return {
+    employee_name: employee.display_name,
+    scheduled_off: true,
+    service_date: rawDate,
+  };
 }
 
 async function guessEmployeeName(runRpc, text) {
@@ -833,26 +869,20 @@ async function guessEmployeeName(runRpc, text) {
   if (!raw) return "";
   const employees = await runRpc("tool_list_active_employees", {});
   const list = Array.isArray(employees) ? employees : [];
-  const lowered = raw.toLowerCase();
   let best = null;
+  let bestScore = 0;
+
   for (const employee of list) {
     const name = String(employee.display_name || employee.employee_name || "").trim();
     if (!name) continue;
-    const nameLower = name.toLowerCase();
-    if (lowered.includes(nameLower)) {
-      if (!best || name.length > best.length) best = name;
-      continue;
-    }
-    const parts = nameLower.split(/\s+/).filter(Boolean);
-    if (parts.length >= 2 && parts.every((part) => lowered.includes(part))) {
-      if (!best || name.length > best.length) best = name;
-      continue;
-    }
-    if (parts.length && parts.some((part) => part.length >= 4 && lowered.includes(part))) {
-      if (!best || name.length > best.length) best = name;
+    const score = scoreEmployeeNameMatch(raw, name);
+    if (score > bestScore) {
+      best = name;
+      bestScore = score;
     }
   }
-  return best || "";
+
+  return bestScore >= 70 ? best : "";
 }
 
 function mergeContextDate(text, threadContext = {}, explicitServiceDate = null) {
