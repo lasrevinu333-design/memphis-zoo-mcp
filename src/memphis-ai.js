@@ -208,29 +208,7 @@ function normalizeEmployeeMatchText(value = "") {
 }
 
 function levenshteinDistance(a = "", b = "") {
-  const left = String(a || "");
-  const right = String(b || "");
-  if (left === right) return 0;
-  if (!left) return right.length;
-  if (!right) return left.length;
-
-  const previous = Array.from({ length: right.length + 1 }, (_value, index) => index);
-  const current = Array(right.length + 1).fill(0);
-
-  for (let i = 1; i <= left.length; i += 1) {
-    current[0] = i;
-    for (let j = 1; j <= right.length; j += 1) {
-      const cost = left[i - 1] === right[j - 1] ? 0 : 1;
-      current[j] = Math.min(
-        previous[j] + 1,
-        current[j - 1] + 1,
-        previous[j - 1] + cost
-      );
-    }
-    for (let j = 0; j <= right.length; j += 1) previous[j] = current[j];
-  }
-
-  return previous[right.length];
+  return sharedLevenshteinDistance(a, b);
 }
 
 function employeeTokenMatchScore(queryToken = "", nameToken = "") {
