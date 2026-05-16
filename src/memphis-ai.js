@@ -272,7 +272,7 @@ function scoreEmployeeNameMatch(userText = "", displayName = "") {
 function weekdayNameForIsoDate(serviceDate = "") {
   const date = new Date(`${serviceDate}T12:00:00`);
   if (Number.isNaN(date.getTime())) return "that day";
-  return ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][date.getDay()] || "that day";
+  return sharedWeekdayNameForIsoDate(serviceDate);
 }
 
 function openerReply(text = "") {
