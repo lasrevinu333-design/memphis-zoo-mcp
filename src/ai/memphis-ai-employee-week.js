@@ -118,13 +118,20 @@ export async function answerEmployeeWeeklyScheduleQuestion(runReadOnlySql, text 
     select id, display_name, role
     from public.employees
     where active = true
-      and display_name ilike '%${esc(nameCandidate)}%'
-    order by length(display_name), display_name
-    limit 1
+    order by display_name
   `);
 
-  const employee = Array.isArray(employeeRows) && employeeRows.length ? employeeRows[0] : null;
-  if (!employee?.id) return null;
+  let employee = null;
+  let bestScore = 0;
+  for (const row of Array.isArray(employeeRows) ? employeeRows : []) {
+    const score = scoreEmployeeMatch(nameCandidate, row.display_name);
+    if (score > bestScore) {
+      employee = row;
+      bestScore = score;
+    }
+  }
+
+  if (!employee?.id || bestScore < 70) return null;
 
   const templateRows = await runReadOnlySql(`
     select est.day_of_week, est.shift_start, est.shift_end, est.notes, est.active
