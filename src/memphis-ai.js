@@ -115,7 +115,7 @@ function isContactLookupPrompt(text = "") {
   if (findLocationCode(text) || hasLocationKeyword(text)) return false;
 
   if (/\b(phone|number|contact|call|text|reach|boss|director|supervisor)\b/.test(lower)) return true;
-  if (/\b(eric|operle|brandy|gull|haley|lejman|jennifer|sheffield)\b/.test(lower)) return true;
+  if (/\b(eric|operle|mckenneys?|mckinneys?|brandy|gull|haley|lejman|jennifer|sheffield)\b/.test(lower)) return true;
   if (/\b(who is|who are|who s|whos|who's)\b/.test(lower) && /\b(ops manager|operations manager|manager|managers|custodial manager|horticulture manager|water quality manager|facilities manager)\b/.test(lower)) return true;
 
   return false;
