@@ -316,14 +316,7 @@ function joinBullets(lines = []) {
 }
 
 function summarizeWeatherPayload(weather) {
-  if (!weather) return `I could not pull weather for ${DEFAULT_WEATHER_LOCATION} right now.`;
-  const temp = weather.temperature_c == null ? "temperature unavailable" : `${Math.round(Number(weather.temperature_c))}°C`;
-  const wind = weather.wind_kmh == null ? "wind unavailable" : `${Math.round(Number(weather.wind_kmh))} km/h wind`;
-  const high = weather.high_c == null ? "high unavailable" : `high ${Math.round(Number(weather.high_c))}°C`;
-  const low = weather.low_c == null ? "low unavailable" : `low ${Math.round(Number(weather.low_c))}°C`;
-  const precip = weather.precipitation_probability == null ? "precipitation unknown" : `${Math.round(Number(weather.precipitation_probability))}% chance of precipitation`;
-  const condition = weather.condition || "conditions unavailable";
-  return `${weather.location || DEFAULT_WEATHER_LOCATION} today: ${condition}, ${temp}, ${high}, ${low}, ${wind}, ${precip}.`;
+  return sharedSummarizeWeatherPayload(weather, DEFAULT_WEATHER_LOCATION);
 }
 
 function summarizeEvents(events = []) {
