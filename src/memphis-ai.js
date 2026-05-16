@@ -1266,6 +1266,19 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     }
     const assignedEmployee = await fetchAssignedEmployeeForDevice(runReadOnlySql, deviceId);
 
+    if (isContactLookupPrompt(text)) {
+      const contactReply = await answerInternalContactQuestion(runReadOnlySql, text);
+      if (contactReply) {
+        await saveThreadContext(runRpc, threadId, {
+          last_intent: "internal_contact_lookup",
+          last_service_date: relativeServiceDate,
+          last_subject_type: "contact",
+          context_json: mergeContextJson(threadContext, { last_question_shape: "internal_contact_lookup", last_subject_kind: "contact" })
+        });
+        return { text: contactReply, meta: { fallback: true, mode: "local_internal_contact" } };
+      }
+    }
+
     if (/(schedule|assigned|assignment|assignments|area|areas|works|working|scheduled|staff|staffing|teton|aquarium|restroom|zambezi|expo|cleans|cover|coverage|open segment|uncovered|unassigned)/i.test(text)) {
       await ensureDailySchedule(runRpc, relativeServiceDate);
     }
