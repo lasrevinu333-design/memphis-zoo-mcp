@@ -1564,10 +1564,20 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     if (lower.includes("schedule") || lower.includes("assigned") || lower.includes("assignment") || lower.includes("areas") || lower.includes("area") || lower.includes("works") || lower.includes("working") || lower.includes("scheduled") || lower.includes("staff") || lower.includes("aquarium") || lower.includes("restroom") || lower.includes("zambezi") || lower.includes("teton") || lower.includes("expo") || lower.includes("cleans") || hasLocationKeyword(text) || ((/^(how about|what about)\b/i.test(text) || hasDateReference(text)) && threadContext?.last_subject_type === "group" && threadContext?.last_group_name) || ((/^(how about|what about)\b/i.test(text) || hasDateReference(text)) && threadContext?.last_subject_type === "employee" && threadContext?.last_employee_name) || ((/^(how about|what about)\b/i.test(text) || hasDateReference(text)) && threadContext?.context_json?.last_question_shape === "my_schedule")) {
       const employeeName = await guessEmployeeName(runRpc, text) || (shouldUseEmployeeContext(text) ? threadContext?.last_employee_name : "") || "";
       if (employeeName) {
-        const data = await executeTool("get_employee_schedule", { employee_name: employeeName, service_date: relativeServiceDate });
-        const staticShift = data.assignments?.length ? null : await fetchStaticEmployeeShift(runReadOnlySql, employeeName, data.service_date);
-        await saveThreadContext(runRpc, threadId, { last_intent: "employee_schedule", last_employee_name: employeeName, last_service_date: relativeServiceDate, last_subject_type: "employee", context_json: mergeContextJson(threadContext, { last_question_shape: "employee_schedule", last_subject_kind: "employee", last_subject_label: employeeName }) });
-        return { text: summarizeEmployeeAssignments(data.assignments, employeeName, data.service_date, staticShift), meta: { fallback: true, mode: staticShift && !data.assignments?.length ? "local_employee_static_shift_no_assignments" : "local_employee_schedule" } };
+        const workStatus = await executeTool("get_employee_work_status", { employee_name: employeeName, service_date: relativeServiceDate });
+        await saveThreadContext(runRpc, threadId, {
+          last_intent: "employee_work_status",
+          last_employee_name: workStatus?.employee_name || employeeName,
+          last_service_date: relativeServiceDate,
+          last_subject_type: "employee",
+          context_json: mergeContextJson(threadContext, {
+            last_question_shape: "employee_work_status",
+            last_subject_kind: "employee",
+            last_subject_label: workStatus?.employee_name || employeeName,
+            work_status: workStatus?.work_status || null,
+          })
+        });
+        return { text: summarizeEmployeeWorkStatus(workStatus), meta: { fallback: true, mode: "local_employee_work_status" } };
       }
       const areaRow = await resolveAreaRow(runReadOnlySql, relativeServiceDate, text, threadContext);
       let data = await executeTool("get_area_schedule", { area: areaRow?.group_name || text, service_date: relativeServiceDate });
