@@ -204,11 +204,7 @@ function shouldUseEmployeeContext(text = "") {
 }
 
 function normalizeEmployeeMatchText(value = "") {
-  return String(value || "")
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
+  return sharedNormalizeEmployeeMatchText(value);
 }
 
 function levenshteinDistance(a = "", b = "") {
