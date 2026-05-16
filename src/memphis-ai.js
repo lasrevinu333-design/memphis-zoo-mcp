@@ -425,10 +425,7 @@ function summarizeCoverageCandidates(rows = [], groupName = "") {
 }
 
 async function fetchThreadContext(runReadOnlySql, threadId) {
-  const normalized = String(threadId || "").trim();
-  if (!normalized) return {};
-  const rows = await runReadOnlySql(`select public.msg_get_memphis_thread_context('${esc(normalized)}'::uuid) as data`);
-  return Array.isArray(rows) && rows.length && rows[0].data ? rows[0].data : {};
+  return await sharedFetchThreadContext(runReadOnlySql, threadId);
 }
 
 async function fetchRecentThreadMessages(runReadOnlySql, threadId, limit = 10) {
