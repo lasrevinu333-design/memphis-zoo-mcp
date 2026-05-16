@@ -929,11 +929,17 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       const target = await resolveAreaRow(runReadOnlySql, serviceDate, String(args.area || "").trim(), {});
       if (!target?.location_group_id) return { service_date: serviceDate, assignments: [] };
       let rows = await runReadOnlySql(`
-        select *
-        from public.v_memphis_area_schedule
-        where service_date = '${esc(serviceDate)}'::date
-          and location_group_id = '${esc(target.location_group_id)}'::uuid
-        order by group_name asc, segment_number asc
+        select vas.*,
+          public.sch_extract_lunch_start(dwr.notes)::text as lunch_start,
+          public.sch_extract_lunch_end(dwr.notes)::text as lunch_end
+        from public.v_memphis_area_schedule vas
+        left join public.daily_work_roster dwr
+          on dwr.service_date = vas.service_date
+         and dwr.employee_id = vas.assigned_employee_id
+         and dwr.active = true
+        where vas.service_date = '${esc(serviceDate)}'::date
+          and vas.location_group_id = '${esc(target.location_group_id)}'::uuid
+        order by vas.group_name asc, vas.segment_number asc
       `);
       rows = Array.isArray(rows) ? rows : [];
       if (!rows.length) rows = await fetchFallbackAreaAssignments(target.location_group_id, serviceDate);
