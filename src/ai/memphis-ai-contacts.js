@@ -5,7 +5,7 @@ function isContactQuestion(text = "") {
   if (!lower) return false;
 
   const explicitContactIntent = /\b(contact|phone|number|call|text|reach|how do i reach|how can i reach)\b/.test(lower);
-  const namedLookup = /\b(eric|operle|mckenney|mckinney|brandy|gull|haley|lejman|jennifer|sheffield)\b/.test(lower);
+  const namedLookup = /\b(eric|operle|mckenneys?|mckinneys?|brandy|gull|haley|lejman|jennifer|sheffield)\b/.test(lower);
   const titledLookup = /\b(ops manager|operations manager|custodial manager|horticulture manager|water quality manager|facilities manager)\b/.test(lower) && /\b(who is|who's|contact|phone|number)\b/.test(lower);
 
   return explicitContactIntent || namedLookup || titledLookup;
