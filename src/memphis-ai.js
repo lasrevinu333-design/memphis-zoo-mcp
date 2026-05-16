@@ -274,6 +274,34 @@ function summarizeEvents(events = []) {
   }).join(" ");
 }
 
+function timeToMinutes(value = "") {
+  const match = String(value || "").match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+function compactTime(value = "") {
+  return String(value || "—").slice(0, 5) || "—";
+}
+
+function mergeAssignmentRows(assignments = []) {
+  const byKey = new Map();
+  for (const row of assignments || []) {
+    const employee = row.employee_name || row.assigned_employee_name || "Open";
+    const group = row.group_name || row.group_code || "Unknown area";
+    const key = `${employee}||${group}`;
+    if (!byKey.has(key)) byKey.set(key, { ...row, employee_name: employee, group_name: group });
+    const current = byKey.get(key);
+    const curStart = timeToMinutes(current.coverage_start);
+    const curEnd = timeToMinutes(current.coverage_end);
+    const rowStart = timeToMinutes(row.coverage_start);
+    const rowEnd = timeToMinutes(row.coverage_end);
+    if (rowStart != null && (curStart == null || rowStart < curStart)) current.coverage_start = row.coverage_start;
+    if (rowEnd != null && (curEnd == null || rowEnd > curEnd)) current.coverage_end = row.coverage_end;
+  }
+  return Array.from(byKey.values()).sort((a, b) => String(a.coverage_start || "").localeCompare(String(b.coverage_start || "")) || String(a.employee_name || "").localeCompare(String(b.employee_name || "")));
+}
+
 function summarizeAssignments(assignments = [], emptyText) {
   if (!assignments.length) return emptyText;
   return assignments.slice(0, 12).map((row) => {
