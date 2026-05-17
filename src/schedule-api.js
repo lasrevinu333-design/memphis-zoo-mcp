@@ -2126,6 +2126,7 @@ export function createScheduleRouter({
         p_service_date: serviceDate,
         p_absent_employee_ids: absenceSet.merged,
       });
+      coverallPlan = await applyCoverAllPlan(serviceDate, coverallPlan);
       if (data && typeof data === "object") {
         const diff = summarizeAssignmentDiff({
           removed_assignments: data.removed_assignments || data.generate_result?.removed_assignments,
