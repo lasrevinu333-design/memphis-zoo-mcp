@@ -2067,6 +2067,8 @@ export function createScheduleRouter({
           active_absence_count: activeRows.length,
           active_absences: activeRows,
           generate_result: generateResult,
+          coverall: coverallPlan,
+          manager_notification: coverallPlan?.manager_notification || null,
         },
         meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion },
       });
