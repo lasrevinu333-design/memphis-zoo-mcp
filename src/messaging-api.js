@@ -266,7 +266,10 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
 
       let reply;
       try {
-        if (isCapabilityPrompt(body)) {
+        const directContact = await directContactReply(body);
+        if (directContact) {
+          reply = { text: directContact, meta: { fallback: true, mode: "direct_internal_contact" } };
+        } else if (isCapabilityPrompt(body)) {
           reply = { text: buildCapabilityReply(), meta: { fallback: true, mode: "local_capability_reply" } };
         } else {
           const routedBody = normalizeMemphisPromptForLocalRouting(body);
