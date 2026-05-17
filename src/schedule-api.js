@@ -425,7 +425,11 @@ export function createScheduleRouter({
                'Call CoverAll: 3+ custodial absences detected. CoverAll fills the 3rd and later absence workload.', true, now(), now()
         from bounds b
         where b.shift_start is not null and b.shift_end is not null
-        on conflict do nothing
+          and not exists (
+            select 1 from public.daily_work_roster existing
+            where existing.service_date = '${esc(serviceDate)}'::date
+              and existing.employee_id = '${esc(coverAll.employee_id)}'::uuid
+          )
         returning employee_id
       )
       update public.daily_work_roster dwr
