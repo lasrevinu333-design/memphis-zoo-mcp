@@ -2054,6 +2054,7 @@ export function createScheduleRouter({
       `);
 
       const generateResult = await runRpc("sch_generate_daily_schedule", { p_service_date: serviceDate, p_force: true });
+      coverallPlan = await applyCoverAllPlan(serviceDate, coverallPlan);
       const activeRows = await listPtoRows({ startDate: serviceDate, endDate: serviceDate });
       const manualRows = activeRows.filter((row) => String(row.pto_type || "").toLowerCase() === "manual_override");
 
