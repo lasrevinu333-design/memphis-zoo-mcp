@@ -291,6 +291,194 @@ export function createScheduleRouter({
     };
   }
 
+  async function getCoverAllEmployee() {
+    let rows = await runReadOnlySql(`
+      select id as employee_id, display_name, employee_code
+      from public.employees
+      where active = true
+        and (employee_code ilike 'COVERALL' or display_name ilike 'CoverAll')
+      order by case when employee_code ilike 'COVERALL' then 0 else 1 end, display_name
+      limit 1
+    `);
+    if (Array.isArray(rows) && rows.length && rows[0].employee_id) return rows[0];
+
+    if (typeof runWriteSql !== "function") throw new Error("CoverAll write path is not configured.");
+    await runWriteSql("coverall_employee_seed", `
+      insert into public.employees (employee_code, display_name, active, role, notes)
+      select 'COVERALL', 'CoverAll', true, 'contractor', 'Third-party custodial contractor used when 3+ custodial absences trigger Call CoverAll.'
+      where not exists (
+        select 1 from public.employees
+        where employee_code ilike 'COVERALL' or display_name ilike 'CoverAll'
+      );
+    `);
+
+    rows = await runReadOnlySql(`
+      select id as employee_id, display_name, employee_code
+      from public.employees
+      where active = true
+        and (employee_code ilike 'COVERALL' or display_name ilike 'CoverAll')
+      order by case when employee_code ilike 'COVERALL' then 0 else 1 end, display_name
+      limit 1
+    `);
+    if (!Array.isArray(rows) || !rows.length || !rows[0].employee_id) throw new Error("Could not create or find CoverAll employee.");
+    return rows[0];
+  }
+
+  function normalizeAssignmentCapture(row = {}, source = "baseline") {
+    const locationGroupId = String(row.location_group_id || "").trim();
+    const start = String(row.original_coverage_start || row.coverage_start || "").slice(0, 8);
+    const end = String(row.original_coverage_end || row.coverage_end || "").slice(0, 8);
+    if (!locationGroupId || !start || !end) return null;
+    return {
+      location_group_id: locationGroupId,
+      coverage_start: start,
+      coverage_end: end,
+      group_name: String(row.group_name || row.location_name || row.group_code || "Area").trim(),
+      group_code: String(row.group_code || "").trim(),
+      source,
+      original_employee_id: String(row.assigned_employee_id || row.employee_id || "").trim(),
+      original_employee_name: String(row.assigned_employee_name || row.employee_name || "").trim(),
+    };
+  }
+
+  async function buildCoverAllPlan(serviceDate, explicitIds = []) {
+    const explicit = normalizeUuidList(explicitIds);
+    const activeRows = await listPtoRows({ startDate: serviceDate, endDate: serviceDate });
+    const nonManualActiveIds = [];
+    for (const row of activeRows) {
+      const id = String(row.employee_id || "").trim();
+      const type = String(row.pto_type || "").toLowerCase();
+      if (!id || type === "manual_override") continue;
+      if (!nonManualActiveIds.includes(id)) nonManualActiveIds.push(id);
+    }
+
+    const orderedAbsentIds = Array.from(new Set([...nonManualActiveIds, ...explicit]));
+    if (orderedAbsentIds.length < 3) {
+      return { triggered: false, absent_count: orderedAbsentIds.length, ordered_absent_employee_ids: orderedAbsentIds, coverall_employee_ids: [], assignments: [] };
+    }
+
+    const coverallAbsentIds = orderedAbsentIds.slice(2);
+    const coverallSet = new Set(coverallAbsentIds);
+    const captured = new Map();
+    const addCapture = (row, source) => {
+      const item = normalizeAssignmentCapture(row, source);
+      if (!item) return;
+      captured.set(`${item.location_group_id}|${item.coverage_start}|${item.coverage_end}`, item);
+    };
+
+    const baselineRows = await runReadOnlySql(`
+      select *
+      from public.sch_get_daily_schedule_with_purpose('${esc(serviceDate)}'::date)
+      where assigned_employee_id = any(${uuidArrayLiteral(coverallAbsentIds)})
+      order by group_name, coverage_start, coverage_end
+    `);
+    for (const row of Array.isArray(baselineRows) ? baselineRows : []) addCapture(row, "current_assignment");
+
+    const firstTwoIds = orderedAbsentIds.slice(0, 2);
+    if (firstTwoIds.length) {
+      try {
+        const previewRows = await runReadOnlySql(`select public.sch_absence_preview('${esc(serviceDate)}'::date, ${uuidArrayLiteral(firstTwoIds)}) as data`);
+        const preview = Array.isArray(previewRows) && previewRows.length ? previewRows[0].data : null;
+        const reassigned = Array.isArray(preview?.reassigned_assignments) ? preview.reassigned_assignments : [];
+        for (const row of reassigned) {
+          const assignedId = String(row.assigned_employee_id || "").trim();
+          if (coverallSet.has(assignedId)) addCapture(row, "would_have_inherited_from_first_two_absences");
+        }
+      } catch (error) {
+        console.warn("CoverAll preview capture failed:", error?.message || error);
+      }
+    }
+
+    return {
+      triggered: true,
+      absent_count: orderedAbsentIds.length,
+      ordered_absent_employee_ids: orderedAbsentIds,
+      coverall_employee_ids: coverallAbsentIds,
+      first_two_employee_ids: firstTwoIds,
+      assignments: Array.from(captured.values()),
+      manager_notification: `Call CoverAll: ${orderedAbsentIds.length} custodial absences for ${serviceDate}. CoverAll should cover the 3rd absence and any later absences.`,
+    };
+  }
+
+  async function applyCoverAllPlan(serviceDate, plan = {}) {
+    if (!plan?.triggered || !Array.isArray(plan.assignments) || !plan.assignments.length) {
+      return { ...(plan || {}), applied: false, assigned_count: 0, assigned_assignments: [] };
+    }
+    if (typeof runWriteSql !== "function") throw new Error("CoverAll write path is not configured.");
+    const coverAll = await getCoverAllEmployee();
+    const valuesSql = plan.assignments.map((row) => `(
+      '${esc(row.location_group_id)}'::uuid,
+      '${esc(row.coverage_start)}'::time,
+      '${esc(row.coverage_end)}'::time,
+      '${esc(row.group_name)}',
+      '${esc(row.source)}'
+    )`).join(",\n");
+
+    await runWriteSql("coverall_assignment_apply", `
+      with target(location_group_id, coverage_start, coverage_end, group_name, coverall_source) as (
+        values ${valuesSql}
+      ), bounds as (
+        select min(coverage_start) as shift_start, max(coverage_end) as shift_end from target
+      ), upsert_roster as (
+        insert into public.daily_work_roster (service_date, employee_id, shift_start, shift_end, source_type, notes, active, created_at, updated_at)
+        select '${esc(serviceDate)}'::date, '${esc(coverAll.employee_id)}'::uuid, b.shift_start, b.shift_end, 'coverall',
+               'Call CoverAll: 3+ custodial absences detected. CoverAll fills the 3rd and later absence workload.', true, now(), now()
+        from bounds b
+        where b.shift_start is not null and b.shift_end is not null
+        on conflict do nothing
+        returning employee_id
+      )
+      update public.daily_work_roster dwr
+         set shift_start = least(dwr.shift_start, b.shift_start),
+             shift_end = greatest(dwr.shift_end, b.shift_end),
+             notes = 'Call CoverAll: 3+ custodial absences detected. CoverAll fills the 3rd and later absence workload.',
+             active = true,
+             updated_at = now()
+      from bounds b
+      where dwr.service_date = '${esc(serviceDate)}'::date
+        and dwr.employee_id = '${esc(coverAll.employee_id)}'::uuid
+        and b.shift_start is not null
+        and b.shift_end is not null;
+
+      with target(location_group_id, coverage_start, coverage_end, group_name, coverall_source) as (
+        values ${valuesSql}
+      )
+      update public.daily_schedule_assignments dsa
+         set assigned_employee_id = '${esc(coverAll.employee_id)}'::uuid,
+             owner_type = 'EMPLOYEE',
+             status = 'ASSIGNED',
+             source_type = 'coverall_escalation',
+             notes = trim(concat_ws(' ', nullif(dsa.notes, ''), 'Call CoverAll: assigned due to 3+ custodial absences.')),
+             updated_at = now()
+      from target t
+      where dsa.service_date = '${esc(serviceDate)}'::date
+        and dsa.location_group_id = t.location_group_id
+        and dsa.coverage_start = t.coverage_start
+        and dsa.coverage_end = t.coverage_end;
+    `);
+
+    const assignedRows = await runReadOnlySql(`
+      select dsa.location_group_id, lg.group_code, lg.group_name,
+             to_char(dsa.coverage_start, 'HH24:MI:SS') as coverage_start,
+             to_char(dsa.coverage_end, 'HH24:MI:SS') as coverage_end,
+             dsa.notes
+      from public.daily_schedule_assignments dsa
+      join public.location_groups lg on lg.id = dsa.location_group_id
+      where dsa.service_date = '${esc(serviceDate)}'::date
+        and dsa.assigned_employee_id = '${esc(coverAll.employee_id)}'::uuid
+      order by dsa.coverage_start, lg.group_name
+    `);
+
+    return {
+      ...plan,
+      applied: true,
+      coverall_employee_id: coverAll.employee_id,
+      coverall_employee_name: coverAll.display_name || "CoverAll",
+      assigned_count: Array.isArray(assignedRows) ? assignedRows.length : 0,
+      assigned_assignments: Array.isArray(assignedRows) ? assignedRows : [],
+    };
+  }
+
   async function ensurePtoTable() {
     if (typeof runWriteSql !== "function") throw new Error("PTO write path is not configured.");
     await runWriteSql("pto_schema", `
