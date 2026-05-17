@@ -871,6 +871,9 @@ function createMcpServer() {
       app_version: APP_VERSION,
       release_id: RELEASE_ID,
       node_version: process.version,
+      added_tools: [
+        "github_restore_file_from_ref"
+      ],
     });
   });
 
@@ -1214,6 +1217,132 @@ function createMcpServer() {
         branch: targetBranch,
         path: resolvedPath,
         previous_sha: existing.sha,
+        new_sha: response.data.content?.sha || null,
+        commit_url: response.data.commit?.html_url || null,
+        file_url: response.data.content?.html_url || null,
+      });
+    }
+  );
+
+  server.tool(
+    "github_restore_file_from_ref",
+    {
+      repo: z.string().optional(),
+      path: z.string().min(1),
+      source_ref: z.string().min(1),
+      commit_message: z.string().min(1),
+      branch: z.string().optional(),
+      expected_sha: z.string().optional(),
+      dry_run: z.boolean().optional(),
+    },
+    async ({
+      repo,
+      path,
+      source_ref,
+      commit_message,
+      branch,
+      expected_sha,
+      dry_run = false,
+    }) => {
+      const { owner, repo: resolvedRepo } = getGithubToolConfig(repo);
+      const resolvedPath = normalizeGithubToolPath(path, { requireFilePath: true });
+      const targetBranch = getGithubRef(branch);
+      const sourceRef = String(source_ref || "").trim();
+
+      if (!sourceRef) {
+        throw new Error("source_ref is required.");
+      }
+
+      const currentFile = await getGithubContentOrNull({
+        repo: resolvedRepo,
+        path: resolvedPath,
+        ref: targetBranch,
+      });
+
+      assertGithubFile(currentFile, resolvedPath);
+
+      if (expected_sha && currentFile.sha !== expected_sha) {
+        throw new Error(
+          [
+            "Refusing to restore because expected_sha does not match current file SHA.",
+            `Path: ${resolvedPath}`,
+            `Expected: ${expected_sha}`,
+            `Current:  ${currentFile.sha}`,
+            "Read the file again, inspect the current content, then retry with the current SHA.",
+          ].join("\n")
+        );
+      }
+
+      const sourceFile = await getGithubContentOrNull({
+        repo: resolvedRepo,
+        path: resolvedPath,
+        ref: sourceRef,
+      });
+
+      assertGithubFile(sourceFile, resolvedPath);
+
+      const currentBuffer = decodeGithubContent(currentFile.content);
+      const sourceBuffer = decodeGithubContent(sourceFile.content);
+
+      if (looksBinary(currentBuffer) || looksBinary(sourceBuffer)) {
+        throw new Error("Refusing to restore binary file through text restore tool.");
+      }
+
+      const currentText = currentBuffer.toString("utf8");
+      const sourceText = sourceBuffer.toString("utf8");
+
+      if (currentText === sourceText) {
+        return jsonToolResponse({
+          ok: true,
+          message: "No restore needed. Target already matches source ref.",
+          repo: `${owner}/${resolvedRepo}`,
+          branch: targetBranch,
+          path: resolvedPath,
+          source_ref: sourceRef,
+          sha: currentFile.sha,
+          file_url: currentFile.html_url,
+        });
+      }
+
+      if (dry_run) {
+        return jsonToolResponse({
+          ok: true,
+          dry_run: true,
+          action: "would_restore_file_from_ref",
+          repo: `${owner}/${resolvedRepo}`,
+          branch: targetBranch,
+          path: resolvedPath,
+          source_ref: sourceRef,
+          current_sha: currentFile.sha,
+          source_sha: sourceFile.sha,
+          current_content_bytes: Buffer.byteLength(currentText, "utf8"),
+          restored_content_bytes: Buffer.byteLength(sourceText, "utf8"),
+          current_line_count: currentText.split("\n").length,
+          restored_line_count: sourceText.split("\n").length,
+          commit_message,
+        });
+      }
+
+      const response = await octokit.rest.repos.createOrUpdateFileContents({
+        owner,
+        repo: resolvedRepo,
+        path: resolvedPath,
+        message: commit_message,
+        content: encodeGithubContent(sourceText),
+        sha: currentFile.sha,
+        branch: targetBranch,
+      });
+
+      return jsonToolResponse({
+        ok: true,
+        message: "File restored from source ref.",
+        action: "restore_file_from_ref",
+        repo: `${owner}/${resolvedRepo}`,
+        branch: targetBranch,
+        path: resolvedPath,
+        source_ref: sourceRef,
+        previous_sha: currentFile.sha,
+        source_sha: sourceFile.sha,
         new_sha: response.data.content?.sha || null,
         commit_url: response.data.commit?.html_url || null,
         file_url: response.data.content?.html_url || null,
