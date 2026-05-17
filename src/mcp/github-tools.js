@@ -6,11 +6,18 @@ import {
   githubReadFileInputSchema,
   githubReplaceTextInputSchema,
   githubRepoTreeInputSchema,
+  githubRestoreFileFromRefInputSchema,
   githubUpdateFileInputSchema,
   githubWriteFileInputSchema,
 } from "./schemas.js";
 import { batchReadFiles, listDirectory, readFile } from "../github/read.js";
-import { writeFile, updateFile, replaceTextInFile, replaceManyInFile } from "../github/write.js";
+import {
+  replaceManyInFile,
+  replaceTextInFile,
+  restoreFileFromRef,
+  updateFile,
+  writeFile,
+} from "../github/write.js";
 import { createBranch, openPullRequest } from "../github/branch.js";
 import { registerMcpTool } from "./register.js";
 import { jsonResponse, textResponse } from "./responses.js";
@@ -95,9 +102,17 @@ export function registerGithubTools(server) {
         compatibility_aliases: {
           github_read_file: ["single_file_read", "batch_read_when_paths_is_supplied"],
           github_list_directory: ["directory_list", "repo_tree_when_recursive_true"],
-          github_update_file: ["full_file_update", "replace_text_when_find_and_replace_are_supplied"],
+          github_update_file: [
+            "full_file_update",
+            "replace_text_when_find_and_replace_are_supplied",
+            "restore_file_from_ref_when_json_command_is_supplied",
+          ],
           github_write_file: ["create_file", "overwrite_when_overwrite_true", "dry_run_preview"],
+          github_restore_file_from_ref: ["restore_file_from_ref", "emergency_file_restore"],
         },
+        added_tools: [
+          "github_restore_file_from_ref",
+        ],
         tool_manifest: include_manifest ? getToolManifest({ includePlanned: true }) : undefined,
       });
     }
@@ -155,6 +170,11 @@ export function registerGithubTools(server) {
         return jsonResponse(getToolManifest({ includePlanned: true }));
       }
 
+      const searchPath = parseSearchPath(path);
+      if (searchPath) {
+        throw new Error("Search path commands are not enabled in this connector build.");
+      }
+
       const batchPaths = hasBatchPaths(paths) ? paths : parseBatchPath(path);
 
       if (hasBatchPaths(batchPaths)) {
@@ -181,6 +201,7 @@ export function registerGithubTools(server) {
         format,
         maxBytes: max_bytes,
       });
+
       return format === "text" ? textResponse(result) : jsonResponse(result);
     }
   );
@@ -251,6 +272,7 @@ export function registerGithubTools(server) {
         overwrite,
         dryRun: dry_run,
       });
+
       return jsonResponse(result);
     }
   );
@@ -259,7 +281,7 @@ export function registerGithubTools(server) {
     server,
     "github_update_file",
     {
-      description: "Update an existing file, or replace exact text when find and replace are supplied. Requires expected_sha.",
+      description: "Update an existing file, replace exact text when find and replace are supplied, or restore from ref using a JSON command.",
       inputSchema: githubUpdateFileInputSchema,
     },
     async ({
@@ -277,6 +299,20 @@ export function registerGithubTools(server) {
     }) => {
       const command = parseJsonCommand(content);
 
+      if (command?.op === "restore_file_from_ref" || command?.op === "restore_from_ref") {
+        const result = await restoreFileFromRef({
+          github: github(),
+          repo,
+          path,
+          sourceRef: command.source_ref || command.sourceRef,
+          commitMessage: commitMessage(commit_message, "Restore file from ref via MCP"),
+          branch,
+          expectedSha: command.expected_sha || command.expectedSha || expected_sha,
+          dryRun: command.dry_run ?? command.dryRun ?? dry_run,
+        });
+        return jsonResponse(result);
+      }
+
       if (command?.op === "replace_many") {
         const result = await replaceManyInFile({
           github: github(),
@@ -285,8 +321,8 @@ export function registerGithubTools(server) {
           replacements: command.replacements,
           commitMessage: commitMessage(commit_message, "Replace multiple text blocks via MCP"),
           branch,
-          expectedSha: command.expected_sha || expected_sha,
-          dryRun: command.dry_run ?? dry_run,
+          expectedSha: command.expected_sha || command.expectedSha || expected_sha,
+          dryRun: command.dry_run ?? command.dryRun ?? dry_run,
         });
         return jsonResponse(result);
       }
@@ -294,10 +330,10 @@ export function registerGithubTools(server) {
       if (command?.op === "replace_text") {
         find = command.find;
         replace = command.replace;
-        expected_sha = command.expected_sha || expected_sha;
+        expected_sha = command.expected_sha || command.expectedSha || expected_sha;
         occurrence = command.occurrence || occurrence;
-        expected_matches = command.expected_matches || expected_matches;
-        dry_run = command.dry_run ?? dry_run;
+        expected_matches = command.expected_matches || command.expectedMatches || expected_matches;
+        dry_run = command.dry_run ?? command.dryRun ?? dry_run;
       }
 
       if (find != null) {
@@ -335,6 +371,7 @@ export function registerGithubTools(server) {
         expectedSha: expected_sha,
         dryRun: dry_run,
       });
+
       return jsonResponse(result);
     }
   );
@@ -343,7 +380,7 @@ export function registerGithubTools(server) {
     server,
     "github_replace_text",
     {
-      description: "Replace exact text in an existing file with SHA protection and diff preview.",
+      description: "Replace exact text in an existing file with optional SHA protection and diff preview.",
       inputSchema: githubReplaceTextInputSchema,
     },
     async ({
@@ -371,6 +408,37 @@ export function registerGithubTools(server) {
         expectedMatches: expected_matches,
         dryRun: dry_run,
       });
+      return jsonResponse(result);
+    }
+  );
+
+  registerMcpTool(
+    server,
+    "github_restore_file_from_ref",
+    {
+      description: "Restore a file on the target branch from the same file path at a commit, branch, or tag.",
+      inputSchema: githubRestoreFileFromRefInputSchema,
+    },
+    async ({
+      repo,
+      path,
+      source_ref,
+      commit_message,
+      branch,
+      expected_sha,
+      dry_run = true,
+    }) => {
+      const result = await restoreFileFromRef({
+        github: github(),
+        repo,
+        path,
+        sourceRef: source_ref,
+        commitMessage: commitMessage(commit_message, "Restore file from ref via MCP"),
+        branch,
+        expectedSha: expected_sha,
+        dryRun: dry_run,
+      });
+
       return jsonResponse(result);
     }
   );
