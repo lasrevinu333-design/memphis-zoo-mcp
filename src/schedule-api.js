@@ -2027,6 +2027,7 @@ export function createScheduleRouter({
       const serviceDate = requireDate(req.body?.service_date || req.body?.date || (await getServiceDate()));
       const explicit = normalizeUuidList(req.body?.absent_employee_ids || []);
       const idsSql = uuidArrayLiteral(explicit);
+      let coverallPlan = await buildCoverAllPlan(serviceDate, explicit);
 
       await runWriteSql("manual_absence_publish", `
         update public.daily_absence_overrides
