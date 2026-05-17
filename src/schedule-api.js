@@ -2119,7 +2119,9 @@ export function createScheduleRouter({
   router.post("/absence-publish", requireSchedulePin, async (req, res) => {
     try {
       const serviceDate = requireDate(req.body?.service_date || req.body?.date || (await getServiceDate()));
-      const absenceSet = await mergeExplicitAndPtoAbsences(serviceDate, req.body?.absent_employee_ids || []);
+      const explicitIds = normalizeUuidList(req.body?.absent_employee_ids || []);
+      let coverallPlan = await buildCoverAllPlan(serviceDate, explicitIds);
+      const absenceSet = await mergeExplicitAndPtoAbsences(serviceDate, explicitIds);
       const data = await runRpc("sch_absence_publish", {
         p_service_date: serviceDate,
         p_absent_employee_ids: absenceSet.merged,
