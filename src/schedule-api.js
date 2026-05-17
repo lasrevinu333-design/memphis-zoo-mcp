@@ -2138,6 +2138,8 @@ export function createScheduleRouter({
         data.explicit_absent_employee_ids = absenceSet.explicit;
         data.pto_absent_employee_ids = absenceSet.pto_ids;
         data.effective_absent_employee_ids = absenceSet.merged;
+        data.coverall = coverallPlan;
+        data.manager_notification = coverallPlan?.manager_notification || null;
       }
       res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
