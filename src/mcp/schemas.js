@@ -90,9 +90,19 @@ export const githubReplaceTextInputSchema = {
   replace: z.string(),
   commit_message: z.string().min(1),
   branch: optionalString,
-  expected_sha: z.string().min(1),
+  expected_sha: optionalString,
   occurrence: z.enum(["first", "all"]).optional(),
   expected_matches: positiveInt.optional(),
+  dry_run: dryRun,
+};
+
+export const githubRestoreFileFromRefInputSchema = {
+  repo: optionalString,
+  path: z.string().min(1),
+  source_ref: z.string().min(1),
+  commit_message: z.string().min(1),
+  branch: optionalString,
+  expected_sha: optionalString,
   dry_run: dryRun,
 };
 
