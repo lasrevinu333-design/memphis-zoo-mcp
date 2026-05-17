@@ -2189,6 +2189,7 @@ export function createScheduleRouter({
   return router;
 }
 
+/* malformed duplicate tail disabled
     `);
     const count = Number(Array.isArray(rows) && rows.length ? rows[0].count : 0);
     return Math.max(1, Math.min(4, Number.isFinite(count) && count > 0 ? count : 1));
