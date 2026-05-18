@@ -51,6 +51,14 @@ export const githubReadFileInputSchema = {
   max_bytes: positiveInt.max(GITHUB_CONTENT_API_MAX_BYTES).optional(),
 };
 
+export const githubReadFileAtRefInputSchema = {
+  repo: optionalString,
+  path: z.string().min(1),
+  ref: z.string().min(1),
+  format: z.enum(["text", "json", "base64"]).optional(),
+  max_bytes: positiveInt.max(GITHUB_CONTENT_API_MAX_BYTES).optional(),
+};
+
 export const githubBatchReadInputSchema = {
   repo: optionalString,
   paths: z.array(z.string().min(1)).min(1).max(GITHUB_STABLE_BATCH_MAX_FILES),
@@ -104,6 +112,22 @@ export const githubRestoreFileFromRefInputSchema = {
   branch: optionalString,
   expected_sha: optionalString,
   dry_run: dryRun,
+};
+
+export const githubDeleteFileInputSchema = {
+  repo: optionalString,
+  path: z.string().min(1),
+  commit_message: z.string().min(1),
+  branch: optionalString,
+  expected_sha: optionalString,
+  dry_run: dryRun,
+};
+
+export const githubCommitStatusSummaryInputSchema = {
+  repo: optionalString,
+  path: optionalString,
+  ref: optionalString,
+  compare_ref: optionalString,
 };
 
 export const supabaseSqlReadInputSchema = {
