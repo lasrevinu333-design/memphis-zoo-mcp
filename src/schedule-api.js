@@ -479,7 +479,20 @@ export function createScheduleRouter({
              dsa.location_group_id, lg.group_name, lg.group_code, dsa.segment_number,
              to_char(dsa.coverage_start, 'HH24:MI:SS') as coverage_start,
              to_char(dsa.coverage_end, 'HH24:MI:SS') as coverage_end,
-             greatest(coalesce(dsa.load_points, 1), 1)::numeric as load_points
+             greatest(coalesce(dsa.load_points, 1), 1)::numeric as load_points,
+             exists (
+               select 1
+               from public.location_group_memberships m
+               join public.locations l on l.id = m.location_id and l.active = true
+               where m.location_group_id = dsa.location_group_id
+                 and m.active = true
+                 and (
+                   lower(coalesce(l.location_type, '')) like '%restroom%'
+                   or lower(coalesce(l.form_type, '')) like '%restroom%'
+                   or lower(coalesce(l.location_name, '')) like '%restroom%'
+                   or lower(coalesce(l.location_name, '')) like '%bathroom%'
+                 )
+             ) or lower(coalesce(lg.group_name, '')) like '%restroom%' as is_restroom
       from public.daily_schedule_assignments dsa
       join public.location_groups lg on lg.id = dsa.location_group_id
       join public.employees e on e.id = dsa.assigned_employee_id
@@ -487,6 +500,39 @@ export function createScheduleRouter({
         and dsa.status = 'ASSIGNED'
         and dsa.assigned_employee_id is not null
         and (dsa.service_date <> public.sch_service_date(now())::date or dsa.coverage_end > now()::time)
+        and (
+          (dsa.coverage_start < '09:45:00'::time and not (
+            exists (
+              select 1
+              from public.location_group_memberships m
+              join public.locations l on l.id = m.location_id and l.active = true
+              where m.location_group_id = dsa.location_group_id
+                and m.active = true
+                and (
+                  lower(coalesce(l.location_type, '')) like '%restroom%'
+                  or lower(coalesce(l.form_type, '')) like '%restroom%'
+                  or lower(coalesce(l.location_name, '')) like '%restroom%'
+                  or lower(coalesce(l.location_name, '')) like '%bathroom%'
+                )
+            ) or lower(coalesce(lg.group_name, '')) like '%restroom%'
+          ))
+          or
+          (dsa.coverage_start >= '09:45:00'::time and (
+            exists (
+              select 1
+              from public.location_group_memberships m
+              join public.locations l on l.id = m.location_id and l.active = true
+              where m.location_group_id = dsa.location_group_id
+                and m.active = true
+                and (
+                  lower(coalesce(l.location_type, '')) like '%restroom%'
+                  or lower(coalesce(l.form_type, '')) like '%restroom%'
+                  or lower(coalesce(l.location_name, '')) like '%restroom%'
+                  or lower(coalesce(l.location_name, '')) like '%bathroom%'
+                )
+            ) or lower(coalesce(lg.group_name, '')) like '%restroom%'
+          ))
+        )
       order by dsa.coverage_start, lg.group_name, dsa.segment_number
     `);
     const assignments = (Array.isArray(assignmentRows) ? assignmentRows : [])
