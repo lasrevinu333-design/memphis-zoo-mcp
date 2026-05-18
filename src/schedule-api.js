@@ -510,7 +510,7 @@ export function createScheduleRouter({
             ) or lower(coalesce(lg.group_name, '')) like '%restroom%'
           ))
           or
-          (dsa.coverage_start >= '09:45:00'::time and (
+          (dsa.coverage_end > '09:45:00'::time and (
             exists (
               select 1
               from public.location_group_memberships m
