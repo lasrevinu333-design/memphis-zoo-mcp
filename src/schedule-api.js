@@ -2173,15 +2173,47 @@ export function createScheduleRouter({
       const slotCode = normalizeCoverAllSlotCode(req.query.slot || req.query.slot_code || req.query.employee_code || "COVERALL_01");
       const lang = String(req.query.lang || "en").trim().toLowerCase() === "es" ? "es" : "en";
       const slot = await getCoverAllSlotByCode(slotCode);
-      const rows = await runReadOnlySql(`
-        select public.sch_employee_my_schedule_page(
-          '${esc(serviceDate)}'::date,
-          '${esc(slot.employee_id)}'::uuid,
-          now()
-        ) as data
+      const shiftRows = await runReadOnlySql(`
+        select to_char(shift_start, 'HH24:MI') as shift_start, to_char(shift_end, 'HH24:MI') as shift_end
+        from public.daily_work_roster
+        where service_date = '${esc(serviceDate)}'::date
+          and employee_id = '${esc(slot.employee_id)}'::uuid
+          and active = true
+        limit 1
       `);
-      const data = Array.isArray(rows) && rows.length ? rows[0].data : null;
-      const items = Array.isArray(data?.items) ? data.items : [];
+      const assignmentRows = await runReadOnlySql(`
+        select
+          dsa.id as assignment_id,
+          lg.group_name,
+          lg.group_code,
+          to_char(dsa.coverage_start, 'HH24:MI') as coverage_start,
+          to_char(dsa.coverage_end, 'HH24:MI') as coverage_end,
+          dsa.notes,
+          coalesce(array_agg(l.location_name order by l.sort_order nulls last, l.location_name)
+            filter (where l.id is not null), array[]::text[]) as included_locations
+        from public.daily_schedule_assignments dsa
+        join public.location_groups lg on lg.id = dsa.location_group_id
+        left join public.location_group_memberships m on m.location_group_id = lg.id and m.active = true
+        left join public.locations l on l.id = m.location_id and l.active = true
+        where dsa.service_date = '${esc(serviceDate)}'::date
+          and dsa.assigned_employee_id = '${esc(slot.employee_id)}'::uuid
+          and dsa.status = 'ASSIGNED'
+        group by dsa.id, lg.group_name, lg.group_code, dsa.coverage_start, dsa.coverage_end, dsa.notes
+        order by dsa.coverage_start, lg.group_name, dsa.segment_number
+      `);
+      const shiftRow = Array.isArray(shiftRows) && shiftRows.length ? shiftRows[0] : null;
+      const data = { shift: { start: shiftRow?.shift_start || "—", end: shiftRow?.shift_end || "—" } };
+      const items = (Array.isArray(assignmentRows) ? assignmentRows : []).map((row) => {
+        const included = Array.isArray(row.included_locations) ? row.included_locations : [];
+        const haystack = [row.group_name, row.group_code, ...included].join(" ").toLowerCase();
+        return {
+          name: `${row.coverage_start || "—"}-${row.coverage_end || "—"} • ${row.group_name || row.group_code || "Area"}`,
+          group_name: row.group_name,
+          group_code: row.group_code,
+          location_name: included.join(", "),
+          is_public_restroom: haystack.includes("restroom") || haystack.includes("bathroom") || haystack.includes("toilet"),
+        };
+      });
       const enUrl = coverAllPublicPath(serviceDate, slot.employee_code, "en");
       const esUrl = coverAllPublicPath(serviceDate, slot.employee_code, "es");
       const t = lang === "es"
