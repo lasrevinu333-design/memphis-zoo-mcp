@@ -1965,6 +1965,87 @@ export function createScheduleRouter({
     }
   });
 
+  router.get("/coverall/slots", async (req, res) => {
+    try {
+      const serviceDate = requireDate(req.query.service_date || req.query.date || (await getServiceDate()));
+      const slots = await listCoverAllSlotsForDate(serviceDate);
+      res.status(200).json({
+        ok: true,
+        data: { service_date: serviceDate, slots },
+        meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion },
+      });
+    } catch (error) {
+      fail(res, error, "CoverAll slot lookup failed");
+    }
+  });
+
+  router.post("/coverall/slots", requireSchedulePin, async (req, res) => {
+    try {
+      const serviceDate = requireDate(req.body?.service_date || req.body?.date || (await getServiceDate()));
+      const slots = Array.isArray(req.body?.slots) ? req.body.slots : [];
+      const data = await publishCoverAllSlotsForDate(serviceDate, slots);
+      res.status(200).json({
+        ok: true,
+        data,
+        meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion },
+      });
+    } catch (error) {
+      fail(res, error, "CoverAll slot publish failed");
+    }
+  });
+
+  router.get("/coverall/assignment", async (req, res) => {
+    try {
+      const serviceDate = requireDate(req.query.service_date || req.query.date || (await getServiceDate()));
+      const slotCode = normalizeCoverAllSlotCode(req.query.slot || req.query.slot_code || req.query.employee_code || "COVERALL_01");
+      const lang = String(req.query.lang || "en").trim().toLowerCase() === "es" ? "es" : "en";
+      const slot = await getCoverAllSlotByCode(slotCode);
+      const rows = await runReadOnlySql(`
+        select public.sch_employee_my_schedule_page(
+          '${esc(serviceDate)}'::date,
+          '${esc(slot.employee_id)}'::uuid,
+          now()
+        ) as data
+      `);
+      const data = Array.isArray(rows) && rows.length ? rows[0].data : null;
+      const items = Array.isArray(data?.items) ? data.items : [];
+      const enUrl = coverAllPublicPath(serviceDate, slot.employee_code, "en");
+      const esUrl = coverAllPublicPath(serviceDate, slot.employee_code, "es");
+      const t = lang === "es"
+        ? { title: "Asignaciones de CoverAll", shift: "Turno", areas: "Áreas asignadas", restrooms: "Baños públicos", other: "Otras áreas", none: "No hay asignaciones publicadas todavía.", language: "English", notice: "Revise sus áreas asignadas. No hay acceso a otras herramientas." }
+        : { title: "CoverAll Assignments", shift: "Shift", areas: "Assigned areas", restrooms: "Public restrooms", other: "Other areas", none: "No assignments posted yet.", language: "Español", notice: "Review your assigned areas. No access to other tools is provided." };
+      const restroomItems = items.filter((item) => item?.is_public_restroom);
+      const otherItems = items.filter((item) => !item?.is_public_restroom);
+      const renderItems = (list) => list.length
+        ? list.map((item) => `<li>${htmlEscape(item.name || item.group_name || item.location_name || item.group_code || "Area")}</li>`).join("")
+        : `<li class="muted">${htmlEscape(t.none)}</li>`;
+      const switchUrl = lang === "es" ? enUrl : esUrl;
+      const html = `<!doctype html>
+<html lang="${lang}">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>${htmlEscape(t.title)}</title>
+<style>
+  :root{--teal:#0f4d57;--teal2:#0b3b43;--mint:#e8f4ef;--line:#cfe1db;--text:#173238;--muted:#63787d;--warn:#fff3cd;--warnline:#f0d98a}
+  *{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#eef5f3;color:var(--text)}
+  .top{background:linear-gradient(135deg,var(--teal),var(--teal2));color:white;padding:22px 18px 26px;border-bottom-left-radius:24px;border-bottom-right-radius:24px;box-shadow:0 4px 16px rgba(0,0,0,.18)}
+  .eyebrow{font-size:13px;opacity:.84;letter-spacing:.03em;text-transform:uppercase}.lang{float:right;color:white;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.24);border-radius:999px;padding:7px 10px;text-decoration:none;font-weight:800;font-size:13px}
+  h1{margin:8px 0 3px;font-size:30px;line-height:1.08}.shift{font-size:17px;opacity:.95}.wrap{max-width:720px;margin:0 auto;padding:16px}.notice{background:var(--warn);border:1px solid var(--warnline);border-radius:16px;padding:12px 14px;margin-bottom:14px;font-weight:650}.card{background:white;border:1px solid var(--line);border-radius:20px;padding:16px;margin:14px 0;box-shadow:0 2px 10px rgba(20,60,70,.07)}.card h2{margin:0 0 10px;font-size:20px;color:var(--teal)}ul{list-style:none;padding:0;margin:0;display:grid;gap:8px}li{padding:11px 12px;background:#f8fbfa;border:1px solid #e1ece8;border-radius:13px;font-weight:620}li.muted{color:var(--muted);font-weight:500}.meta{margin-top:14px;color:var(--muted);font-size:13px;text-align:center}.pill{display:inline-block;padding:5px 9px;border-radius:999px;background:rgba(255,255,255,.16);font-size:13px;margin-top:8px}
+</style>
+</head>
+<body>
+  <header class="top"><a class="lang" href="${htmlEscape(switchUrl)}">${htmlEscape(t.language)}</a><div class="eyebrow">${htmlEscape(t.title)}</div><h1>${htmlEscape(slot.display_name || slot.employee_code)}</h1><div class="shift">${htmlEscape(t.shift)}: ${htmlEscape(data?.shift?.start || "—")} - ${htmlEscape(data?.shift?.end || "—")}</div><div class="pill">${htmlEscape(serviceDate)}</div></header>
+  <main class="wrap"><div class="notice">${htmlEscape(t.notice)}</div><section class="card"><h2>${htmlEscape(t.restrooms)}</h2><ul>${renderItems(restroomItems)}</ul></section><section class="card"><h2>${htmlEscape(t.other)}</h2><ul>${renderItems(otherItems)}</ul></section><div class="meta">${htmlEscape(slot.employee_code)} • ${htmlEscape(serviceDate)}</div></main>
+</body>
+</html>`;
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.status(200).send(html);
+    } catch (error) {
+      res.status(400).send(`<!doctype html><html><body style="font-family:system-ui;padding:20px"><h1>CoverAll schedule unavailable</h1><p>${htmlEscape(error?.message || "Schedule unavailable")}</p></body></html>`);
+    }
+  });
+
   router.get("/location-groups", async (_req, res) => {
     try {
       const rows = await listLocationGroups();
