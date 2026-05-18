@@ -43,14 +43,50 @@ export async function fetchDailyOpsManagerRows(runReadOnlySql, serviceDate) {
 
 export async function fetchDailyAbsenceRows(runReadOnlySql, serviceDate) {
   const rows = await runReadOnlySql(`
-    select e.display_name as employee_name, dao.absence_type, dao.notes
-    from public.daily_absence_overrides dao
-    join public.employees e on e.id = dao.employee_id
-    where dao.absence_date = '${esc(serviceDate)}'::date
-      and dao.active = true
-    order by e.display_name
+    select distinct on (employee_id) employee_name, absence_type, notes
+    from (
+      select
+        e.id as employee_id,
+        e.display_name as employee_name,
+        lower(coalesce(dao.absence_type, 'absent')) as absence_type,
+        dao.notes,
+        case lower(coalesce(dao.absence_type, '')) when 'manual_override' then 3 when 'pto' then 2 else 1 end as priority
+      from public.daily_absence_overrides dao
+      join public.employees e on e.id = dao.employee_id
+      where dao.absence_date = '${esc(serviceDate)}'::date
+        and dao.active = true
+
+      union all
+
+      select
+        e.id as employee_id,
+        e.display_name as employee_name,
+        'pto' as absence_type,
+        p.notes,
+        2 as priority
+      from public.employee_planned_time_off p
+      join public.employees e on e.id = p.employee_id
+      where p.active = true
+        and p.start_date <= '${esc(serviceDate)}'::date
+        and p.end_date >= '${esc(serviceDate)}'::date
+
+      union all
+
+      select
+        e.id as employee_id,
+        e.display_name as employee_name,
+        lower(coalesce(ep.absence_type, 'pto')) as absence_type,
+        ep.notes,
+        2 as priority
+      from public.employee_pto ep
+      join public.employees e on e.id = ep.employee_id
+      where ep.active = true
+        and ep.start_date <= '${esc(serviceDate)}'::date
+        and ep.end_date >= '${esc(serviceDate)}'::date
+    ) absences
+    order by employee_id, priority desc, employee_name
   `);
-  return Array.isArray(rows) ? rows : [];
+  return Array.isArray(rows) ? rows.sort((a, b) => String(a.employee_name || '').localeCompare(String(b.employee_name || ''))) : [];
 }
 
 function detectStaffAudience(queryText = "") {
