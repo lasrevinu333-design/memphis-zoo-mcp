@@ -2077,6 +2077,94 @@ export function createScheduleRouter({
     }
   });
 
+  router.post("/manual-absences/return", requireSchedulePin, async (req, res) => {
+    try {
+      const serviceDate = requireDate(req.body?.service_date || req.body?.date || (await getServiceDate()));
+      const employeeRef = String(
+        req.body?.employee_id ||
+        req.body?.employee ||
+        req.body?.employee_ref ||
+        req.body?.employee_name ||
+        req.body?.employee_code ||
+        ""
+      ).trim();
+
+      if (!employeeRef) throw new Error("employee_id, employee_name, employee_code, or employee_ref is required.");
+
+      let employeeId = "";
+      let employeeName = "";
+
+      if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(employeeRef)) {
+        employeeId = employeeRef;
+      } else {
+        const resolvedRows = await runReadOnlySql(`
+          select public.sch_resolve_employee_ref('${esc(employeeRef)}') as data
+        `);
+        const resolved = Array.isArray(resolvedRows) && resolvedRows.length ? resolvedRows[0].data : null;
+        if (resolved?.ok && resolved.employee_id) employeeId = String(resolved.employee_id);
+      }
+
+      if (!employeeId) {
+        const fallbackRows = await runReadOnlySql(`
+          select id as employee_id, display_name as employee_name
+          from public.employees
+          where active = true
+            and (display_name ilike '${esc(employeeRef)}' or employee_code ilike '${esc(employeeRef)}')
+          order by display_name
+          limit 1
+        `);
+        if (Array.isArray(fallbackRows) && fallbackRows.length) {
+          employeeId = String(fallbackRows[0].employee_id || "");
+          employeeName = String(fallbackRows[0].employee_name || "");
+        }
+      }
+
+      if (!employeeId) throw new Error("Could not resolve employee to return to schedule.");
+
+      if (!employeeName) {
+        const employeeRows = await runReadOnlySql(`
+          select display_name as employee_name
+          from public.employees
+          where id = '${esc(employeeId)}'::uuid
+          limit 1
+        `);
+        employeeName = Array.isArray(employeeRows) && employeeRows.length ? String(employeeRows[0].employee_name || "") : "";
+      }
+
+      await runWriteSql("manual_absence_return", `
+        update public.daily_absence_overrides
+           set active = false,
+               updated_at = now(),
+               notes = trim(concat_ws(' ', nullif(notes, ''), 'Cleared: employee returned to schedule.'))
+         where absence_date = '${esc(serviceDate)}'::date
+           and employee_id = '${esc(employeeId)}'::uuid
+           and absence_type = 'manual_override'
+           and active = true;
+      `);
+
+      const generateResult = await runRpc("sch_generate_daily_schedule", { p_service_date: serviceDate, p_force: true });
+      const activeRows = await listPtoRows({ startDate: serviceDate, endDate: serviceDate });
+      const stillAbsentRows = activeRows.filter((row) => String(row.employee_id || "") === employeeId);
+
+      res.status(200).json({
+        ok: true,
+        data: {
+          service_date: serviceDate,
+          returned_employee_id: employeeId,
+          returned_employee_name: employeeName || null,
+          still_absent: stillAbsentRows.length > 0,
+          still_absent_reasons: stillAbsentRows,
+          active_absence_count: activeRows.length,
+          active_absences: activeRows,
+          generate_result: generateResult,
+        },
+        meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion },
+      });
+    } catch (error) {
+      fail(res, error, "Return employee to schedule failed");
+    }
+  });
+
   router.post("/absence-preview", requireSchedulePin, async (req, res) => {
     try {
       const serviceDate = requireDate(req.body?.service_date || req.body?.date || (await getServiceDate()));
