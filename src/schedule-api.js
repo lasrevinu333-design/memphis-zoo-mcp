@@ -442,8 +442,8 @@ export function createScheduleRouter({
       `;
     }
 
-    await runWriteSql("coverall_slots_publish", sql);
     const generateResult = await runRpc("sch_generate_daily_schedule", { p_service_date: serviceDate, p_force: true });
+    await runWriteSql("coverall_slots_publish", sql);
     const currentSlots = await listCoverAllSlotsForDate(serviceDate);
     return { service_date: serviceDate, slots: currentSlots, generate_result: generateResult };
   }
