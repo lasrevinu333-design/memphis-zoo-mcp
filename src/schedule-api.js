@@ -2403,6 +2403,7 @@ export function createScheduleRouter({
     try {
       const serviceDate = requireDate(req.body?.service_date || req.body?.date || (await getServiceDate()));
       const explicit = normalizeUuidList(req.body?.absent_employee_ids || []);
+      const requestedCoverAllSlots = Array.isArray(req.body?.coverall_slots) ? req.body.coverall_slots : [];
       const idsSql = uuidArrayLiteral(explicit);
       let coverallPlan = await buildCoverAllPlan(serviceDate, explicit);
 
@@ -2431,6 +2432,10 @@ export function createScheduleRouter({
       `);
 
       const generateResult = await runRpc("sch_generate_daily_schedule", { p_service_date: serviceDate, p_force: true });
+      let coverallManual = null;
+      if (requestedCoverAllSlots.length) {
+        coverallManual = await publishCoverAllSlotsForDate(serviceDate, requestedCoverAllSlots);
+      }
       coverallPlan = await applyCoverAllPlan(serviceDate, coverallPlan);
       const activeRows = await listPtoRows({ startDate: serviceDate, endDate: serviceDate });
       const manualRows = activeRows.filter((row) => String(row.pto_type || "").toLowerCase() === "manual_override");
@@ -2445,6 +2450,7 @@ export function createScheduleRouter({
           active_absences: activeRows,
           generate_result: generateResult,
           coverall: coverallPlan,
+          coverall_manual: coverallManual,
           manager_notification: coverallPlan?.manager_notification || null,
         },
         meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion },
