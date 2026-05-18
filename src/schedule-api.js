@@ -2260,8 +2260,9 @@ export function createScheduleRouter({
           is_public_restroom: haystack.includes("restroom") || haystack.includes("bathroom") || haystack.includes("toilet"),
         };
       });
-      const enUrl = coverAllPublicPath(serviceDate, slot.employee_code, "en");
-      const esUrl = coverAllPublicPath(serviceDate, slot.employee_code, "es");
+      const publicOrigin = String(process.env.SCHEDULE_PUBLIC_BASE_URL || process.env.PUBLIC_BASE_URL || "https://memphis-zoo-mcp.onrender.com").replace(/\/+$/, "");
+      const enUrl = `${publicOrigin}${coverAllPublicPath(serviceDate, slot.employee_code, "en")}`;
+      const esUrl = `${publicOrigin}${coverAllPublicPath(serviceDate, slot.employee_code, "es")}`;
       const t = lang === "es"
         ? { title: "Asignaciones de CoverAll", shift: "Turno", areas: "Áreas asignadas", restrooms: "Baños públicos", other: "Otras áreas", none: "No hay asignaciones publicadas todavía.", language: "English", notice: "Revise sus áreas asignadas. No hay acceso a otras herramientas." }
         : { title: "CoverAll Assignments", shift: "Shift", areas: "Assigned areas", restrooms: "Public restrooms", other: "Other areas", none: "No assignments posted yet.", language: "Español", notice: "Review your assigned areas. No access to other tools is provided." };
