@@ -291,37 +291,161 @@ export function createScheduleRouter({
     };
   }
 
-  async function getCoverAllEmployee() {
-    let rows = await runReadOnlySql(`
-      select id as employee_id, display_name, employee_code
-      from public.employees
-      where active = true
-        and (employee_code ilike 'COVERALL' or display_name ilike 'CoverAll')
-      order by case when employee_code ilike 'COVERALL' then 0 else 1 end, display_name
-      limit 1
-    `);
-    if (Array.isArray(rows) && rows.length && rows[0].employee_id) return rows[0];
+  const COVERALL_SLOT_CODES = ["COVERALL_01", "COVERALL_02", "COVERALL_03", "COVERALL_04"];
 
+  function normalizeCoverAllSlotCode(value) {
+    const raw = String(value || "").trim().toUpperCase().replace(/[\s-]+/g, "_");
+    const numberMatch = raw.match(/(?:COVERALL_?)?(\d{1,2})$/);
+    if (numberMatch) {
+      const slot = `COVERALL_${String(Number(numberMatch[1])).padStart(2, "0")}`;
+      return COVERALL_SLOT_CODES.includes(slot) ? slot : "";
+    }
+    return COVERALL_SLOT_CODES.includes(raw) ? raw : "";
+  }
+
+  function coverAllDisplayName(slotCode) {
+    return `CoverAll_${String(slotCode || "").split("_").pop() || "01"}`;
+  }
+
+  function coverAllPublicPath(serviceDate, slotCode, lang = "en") {
+    return `/schedule-api/coverall/assignment?service_date=${encodeURIComponent(serviceDate)}&slot=${encodeURIComponent(slotCode)}&lang=${encodeURIComponent(lang)}`;
+  }
+
+  async function ensureCoverAllSlots() {
     if (typeof runWriteSql !== "function") throw new Error("CoverAll write path is not configured.");
-    await runWriteSql("coverall_employee_seed", `
+    const valuesSql = COVERALL_SLOT_CODES.map((slotCode) => `(
+      '${esc(slotCode)}',
+      '${esc(coverAllDisplayName(slotCode))}',
+      true,
+      'staff',
+      'Third-party CoverAll custodial slot. Used for extra event/traffic help or 3+ absence escalation.'
+    )`).join(",\n");
+
+    await runWriteSql("coverall_slots_seed", `
       insert into public.employees (employee_code, display_name, active, role, notes)
-      select 'COVERALL', 'CoverAll', true, 'contractor', 'Third-party custodial contractor used when 3+ custodial absences trigger Call CoverAll.'
-      where not exists (
-        select 1 from public.employees
-        where employee_code ilike 'COVERALL' or display_name ilike 'CoverAll'
-      );
+      values ${valuesSql}
+      on conflict (employee_code) do update set
+        display_name = excluded.display_name,
+        active = true,
+        role = 'staff',
+        notes = excluded.notes,
+        updated_at = now();
     `);
 
-    rows = await runReadOnlySql(`
+    const rows = await runReadOnlySql(`
       select id as employee_id, display_name, employee_code
       from public.employees
-      where active = true
-        and (employee_code ilike 'COVERALL' or display_name ilike 'CoverAll')
-      order by case when employee_code ilike 'COVERALL' then 0 else 1 end, display_name
-      limit 1
+      where employee_code in (${COVERALL_SLOT_CODES.map((slotCode) => `'${esc(slotCode)}'`).join(",")})
+      order by employee_code
     `);
-    if (!Array.isArray(rows) || !rows.length || !rows[0].employee_id) throw new Error("Could not create or find CoverAll employee.");
-    return rows[0];
+    if (!Array.isArray(rows) || rows.length < COVERALL_SLOT_CODES.length) throw new Error("Could not create or find all CoverAll employee slots.");
+    return rows;
+  }
+
+  async function getCoverAllEmployee() {
+    const slots = await ensureCoverAllSlots();
+    return slots[0];
+  }
+
+  async function getCoverAllSlotByCode(slotCode) {
+    const normalized = normalizeCoverAllSlotCode(slotCode);
+    if (!normalized) throw new Error("slot must be COVERALL_01, COVERALL_02, COVERALL_03, or COVERALL_04.");
+    const slots = await ensureCoverAllSlots();
+    const slot = slots.find((row) => String(row.employee_code || "").toUpperCase() === normalized);
+    if (!slot) throw new Error(`CoverAll slot not found: ${normalized}`);
+    return slot;
+  }
+
+  async function listCoverAllSlotsForDate(serviceDate) {
+    const slots = await ensureCoverAllSlots();
+    const rosterRows = await runReadOnlySql(`
+      select r.employee_id, r.active, to_char(r.shift_start, 'HH24:MI:SS') as shift_start,
+             to_char(r.shift_end, 'HH24:MI:SS') as shift_end, r.source_type, r.notes
+      from public.daily_work_roster r
+      where r.service_date = '${esc(serviceDate)}'::date
+        and r.employee_id in (${slots.map((slot) => `'${esc(slot.employee_id)}'::uuid`).join(",")})
+    `);
+    const byEmployee = new Map((Array.isArray(rosterRows) ? rosterRows : []).map((row) => [String(row.employee_id), row]));
+    return slots.map((slot) => {
+      const roster = byEmployee.get(String(slot.employee_id)) || null;
+      const slotCode = String(slot.employee_code || "");
+      return {
+        slot_code: slotCode,
+        employee_id: slot.employee_id,
+        employee_name: slot.display_name,
+        active_today: Boolean(roster?.active),
+        shift_start: roster?.shift_start || null,
+        shift_end: roster?.shift_end || null,
+        source_type: roster?.source_type || null,
+        notes: roster?.notes || null,
+        assignment_url_en: coverAllPublicPath(serviceDate, slotCode, "en"),
+        assignment_url_es: coverAllPublicPath(serviceDate, slotCode, "es"),
+      };
+    });
+  }
+
+  async function publishCoverAllSlotsForDate(serviceDate, inputSlots = []) {
+    if (!Array.isArray(inputSlots)) throw new Error("slots must be an array.");
+    const slots = await ensureCoverAllSlots();
+    const byCode = new Map(slots.map((slot) => [String(slot.employee_code || "").toUpperCase(), slot]));
+    const operations = [];
+
+    for (const input of inputSlots) {
+      const slotCode = normalizeCoverAllSlotCode(input?.slot_code || input?.slot || input?.employee_code || input?.number);
+      if (!slotCode) throw new Error("Each CoverAll slot must be COVERALL_01 through COVERALL_04.");
+      const slot = byCode.get(slotCode);
+      if (!slot) throw new Error(`CoverAll slot not found: ${slotCode}`);
+      const active = input?.active !== false;
+      const shiftStart = requireTime(input?.shift_start || "07:00:00");
+      const shiftEnd = requireTime(input?.shift_end || "16:00:00");
+      const notes = String(input?.notes || "Extra CoverAll help added from scheduler.").trim();
+      operations.push({ slotCode, slot, active, shiftStart, shiftEnd, notes });
+    }
+
+    if (!operations.length) throw new Error("At least one CoverAll slot operation is required.");
+
+    const activeOps = operations.filter((op) => op.active);
+    const inactiveOps = operations.filter((op) => !op.active);
+
+    let sql = "";
+    if (activeOps.length) {
+      const valuesSql = activeOps.map((op) => `(
+        '${esc(serviceDate)}'::date,
+        '${esc(op.slot.employee_id)}'::uuid,
+        '${esc(op.shiftStart)}'::time,
+        '${esc(op.shiftEnd)}'::time,
+        'coverall_manual',
+        '${esc(op.notes)}',
+        true
+      )`).join(",\n");
+      sql += `
+        insert into public.daily_work_roster (service_date, employee_id, shift_start, shift_end, source_type, notes, active, created_at, updated_at)
+        values ${valuesSql}
+        on conflict (service_date, employee_id) do update set
+          shift_start = excluded.shift_start,
+          shift_end = excluded.shift_end,
+          source_type = excluded.source_type,
+          notes = excluded.notes,
+          active = true,
+          updated_at = now();
+      `;
+    }
+
+    if (inactiveOps.length) {
+      sql += `
+        update public.daily_work_roster
+           set active = false,
+               updated_at = now(),
+               notes = trim(concat_ws(' ', nullif(notes, ''), 'CoverAll slot removed from scheduler.'))
+         where service_date = '${esc(serviceDate)}'::date
+           and employee_id in (${inactiveOps.map((op) => `'${esc(op.slot.employee_id)}'::uuid`).join(",")});
+      `;
+    }
+
+    await runWriteSql("coverall_slots_publish", sql);
+    const generateResult = await runRpc("sch_generate_daily_schedule", { p_service_date: serviceDate, p_force: true });
+    const currentSlots = await listCoverAllSlotsForDate(serviceDate);
+    return { service_date: serviceDate, slots: currentSlots, generate_result: generateResult };
   }
 
   function normalizeAssignmentCapture(row = {}, source = "baseline") {
