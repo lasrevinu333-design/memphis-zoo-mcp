@@ -5,7 +5,7 @@ export const TOOL_SAFETY = Object.freeze({
   ADMIN: "admin",
 });
 
-export const MCP_TOOL_MANIFEST_VERSION = "mcp-tools.v2";
+export const MCP_TOOL_MANIFEST_VERSION = "mcp-tools.v3";
 
 export const MCP_TOOL_MANIFEST = Object.freeze([
   {
@@ -38,7 +38,7 @@ export const MCP_TOOL_MANIFEST = Object.freeze([
     name: "github_debug_config",
     safety: TOOL_SAFETY.READ,
     status: "current",
-    description: "Return redacted GitHub runtime configuration and modular MCP status.",
+    description: "Return redacted GitHub runtime configuration, compatibility aliases, and modular MCP status.",
     requires: ["github"],
     inputs: ["include_manifest"],
   },
@@ -46,10 +46,9 @@ export const MCP_TOOL_MANIFEST = Object.freeze([
     name: "github_list_directory",
     safety: TOOL_SAFETY.READ,
     status: "current",
-    description: "List files and directories in an allowed GitHub repository. Supports high-entry recursive listing and search path commands.",
+    description: "List files and directories in an allowed GitHub repository. Supports recursive listing.",
     requires: ["github"],
     inputs: ["repo", "path", "ref", "recursive", "max_entries"],
-    compatibility_commands: ["path=search:term", "path=search-content:term"],
   },
   {
     name: "github_repo_tree",
@@ -69,12 +68,28 @@ export const MCP_TOOL_MANIFEST = Object.freeze([
     compatibility_commands: ["path=__manifest__", "path=manifest:tools", "path=batch:file1,file2"],
   },
   {
+    name: "github_read_file_at_ref",
+    safety: TOOL_SAFETY.READ,
+    status: "current",
+    description: "Read one file from an explicit commit, branch, or tag ref.",
+    requires: ["github"],
+    inputs: ["repo", "path", "ref", "format", "max_bytes"],
+  },
+  {
     name: "github_batch_read",
     safety: TOOL_SAFETY.READ,
     status: "current",
     description: "Read several files from an allowed GitHub repository in one request with stable file-count and byte caps.",
     requires: ["github"],
     inputs: ["repo", "paths", "ref", "format", "max_bytes"],
+  },
+  {
+    name: "github_commit_status_summary",
+    safety: TOOL_SAFETY.READ,
+    status: "current",
+    description: "Return latest commit metadata plus optional path SHA and compare-ref path SHA.",
+    requires: ["github"],
+    inputs: ["repo", "path", "ref", "compare_ref"],
   },
   {
     name: "github_write_file",
@@ -89,18 +104,34 @@ export const MCP_TOOL_MANIFEST = Object.freeze([
     name: "github_update_file",
     safety: TOOL_SAFETY.SAFE_WRITE,
     status: "current",
-    description: "Update an existing file, or replace exact text when find and replace are supplied. Uses SHA protection and compact previews.",
+    description: "Update an existing file, replace exact text when find and replace are supplied, or restore from ref using a JSON command.",
     requires: ["github"],
     inputs: ["repo", "path", "content", "find", "replace", "commit_message", "branch", "expected_sha", "occurrence", "expected_matches", "dry_run"],
-    compatibility_commands: ["content.op=replace_text", "content.op=replace_many"],
+    compatibility_commands: ["content.op=replace_text", "content.op=replace_many", "content.op=restore_file_from_ref"],
   },
   {
     name: "github_replace_text",
     safety: TOOL_SAFETY.SAFE_WRITE,
     status: "current",
-    description: "Replace exact text in an existing file with SHA protection and compact diff preview.",
+    description: "Replace exact text in an existing file with optional SHA protection and compact diff preview.",
     requires: ["github"],
     inputs: ["repo", "path", "find", "replace", "commit_message", "branch", "expected_sha", "occurrence", "expected_matches", "dry_run"],
+  },
+  {
+    name: "github_restore_file_from_ref",
+    safety: TOOL_SAFETY.SAFE_WRITE,
+    status: "current",
+    description: "Restore a file on the target branch from the same file path at a commit, branch, or tag.",
+    requires: ["github"],
+    inputs: ["repo", "path", "source_ref", "commit_message", "branch", "expected_sha", "dry_run"],
+  },
+  {
+    name: "github_delete_file",
+    safety: TOOL_SAFETY.SAFE_WRITE,
+    status: "current",
+    description: "Delete a file with optional SHA protection and dry-run preview.",
+    requires: ["github"],
+    inputs: ["repo", "path", "commit_message", "branch", "expected_sha", "dry_run"],
   },
   {
     name: "supabase_sql_read",
@@ -122,7 +153,7 @@ export const MCP_TOOL_MANIFEST = Object.freeze([
     name: "github_search_files",
     safety: TOOL_SAFETY.READ,
     status: "current-via-compatibility-command",
-    description: "Search repository file paths or searchable text contents through github_list_directory path commands.",
+    description: "Search repository file paths or searchable text contents through github_list_directory path commands when enabled.",
     requires: ["github"],
     alias_tool: "github_list_directory",
     inputs: ["path=search:term", "path=search-content:term", "max_entries"],
@@ -139,7 +170,7 @@ export const MCP_TOOL_MANIFEST = Object.freeze([
     name: "github_apply_patch",
     safety: TOOL_SAFETY.SAFE_WRITE,
     status: "current-via-compatibility-command",
-    description: "Apply SHA-protected exact text replacement through github_update_file or github_replace_text with dry_run:false.",
+    description: "Apply exact text replacement through github_update_file or github_replace_text with dry_run:false.",
     requires: ["github"],
     alias_tool: "github_update_file",
   },
