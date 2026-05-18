@@ -486,6 +486,7 @@ export function createScheduleRouter({
       where dsa.service_date = '${esc(serviceDate)}'::date
         and dsa.status = 'ASSIGNED'
         and dsa.assigned_employee_id is not null
+        and (dsa.service_date <> public.sch_service_date(now())::date or dsa.coverage_end > now()::time)
       order by dsa.coverage_start, lg.group_name, dsa.segment_number
     `);
     const assignments = (Array.isArray(assignmentRows) ? assignmentRows : [])
