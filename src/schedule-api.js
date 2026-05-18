@@ -2251,21 +2251,21 @@ export function createScheduleRouter({
       const data = { shift: { start: shiftRow?.shift_start || "—", end: shiftRow?.shift_end || "—" } };
       const items = (Array.isArray(assignmentRows) ? assignmentRows : []).map((row) => {
         const included = Array.isArray(row.included_locations) ? row.included_locations : [];
-        const haystack = [row.group_name, row.group_code, ...included].join(" ").toLowerCase();
+        const groupText = [row.group_name, row.group_code].join(" " ).toLowerCase();
         return {
           name: `${row.coverage_start || "—"}-${row.coverage_end || "—"} • ${row.group_name || row.group_code || "Area"}`,
           group_name: row.group_name,
           group_code: row.group_code,
           location_name: included.join(", "),
-          is_public_restroom: haystack.includes("restroom") || haystack.includes("bathroom") || haystack.includes("toilet"),
+          is_public_restroom: groupText.includes("restroom") || groupText.includes("bathroom") || groupText.includes("toilet"),
         };
       });
       const publicOrigin = String(process.env.SCHEDULE_PUBLIC_BASE_URL || process.env.PUBLIC_BASE_URL || "https://memphis-zoo-mcp.onrender.com").replace(/\/+$/, "");
       const enUrl = `${publicOrigin}${coverAllPublicPath(serviceDate, slot.employee_code, "en")}`;
       const esUrl = `${publicOrigin}${coverAllPublicPath(serviceDate, slot.employee_code, "es")}`;
       const t = lang === "es"
-        ? { title: "Asignaciones de CoverAll", shift: "Turno", areas: "Áreas asignadas", restrooms: "Baños públicos", other: "Otras áreas", none: "No hay asignaciones publicadas todavía.", language: "English", notice: "Revise sus áreas asignadas. No hay acceso a otras herramientas." }
-        : { title: "CoverAll Assignments", shift: "Shift", areas: "Assigned areas", restrooms: "Public restrooms", other: "Other areas", none: "No assignments posted yet.", language: "Español", notice: "Review your assigned areas. No access to other tools is provided." };
+        ? { title: "Asignaciones de CoverAll", shift: "Turno", areas: "Áreas asignadas", restrooms: "Baños públicos", other: "Exhibiciones", none: "No hay asignaciones publicadas todavía.", language: "English", notice: "Revise sus áreas asignadas. No hay acceso a otras herramientas." }
+        : { title: "CoverAll Assignments", shift: "Shift", areas: "Assigned areas", restrooms: "Public restrooms", other: "Exhibits", none: "No assignments posted yet.", language: "Español", notice: "Review your assigned areas. No access to other tools is provided." };
       const restroomItems = items.filter((item) => item?.is_public_restroom);
       const otherItems = items.filter((item) => !item?.is_public_restroom);
       const renderItems = (list) => list.length
