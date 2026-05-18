@@ -419,7 +419,7 @@ export function createScheduleRouter({
         true
       )`).join(",\n");
       sql += `
-        insert into public.daily_work_roster (service_date, employee_id, shift_start, shift_end, source_type, notes, active, created_at, updated_at)
+        insert into public.daily_work_roster (service_date, employee_id, shift_start, shift_end, source_type, notes, active)
         values ${valuesSql}
         on conflict (service_date, employee_id) do update set
           shift_start = excluded.shift_start,
