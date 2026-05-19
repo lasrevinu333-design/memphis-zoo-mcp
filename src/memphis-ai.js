@@ -1303,7 +1303,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     }
     const futureWindowOffset = daysBetweenIsoDates(todayServiceDate, relativeServiceDate);
     if (futureWindowOffset != null && futureWindowOffset >= 0 && futureWindowOffset < 7) {
-      await ensureScheduleRange(runRpc, buildScheduleDateRange(todayServiceDate, 7), { force: true });
+      await ensureScheduleRange(runRpc, buildScheduleDateRange(todayServiceDate, 7), { force: false });
     }
     const assignedEmployee = await fetchAssignedEmployeeForDevice(runReadOnlySql, deviceId);
 
