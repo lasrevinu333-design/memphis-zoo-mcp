@@ -596,14 +596,22 @@ function parseOneEventText(rawText, locationGroups, index = 0) {
 }
 
 function shouldUseGemini(localRow) {
-  if (!localRow || !Array.isArray(localRow.warnings) || !localRow.warnings.length) return false;
-  return localRow.warnings.some((warning) => [
+  if (!localRow) return false;
+  const warnings = Array.isArray(localRow.warnings) ? localRow.warnings : [];
+  if (warnings.some((warning) => [
     "missing_event_name",
     "missing_area",
     "missing_date",
     "missing_time",
     "end_not_after_start",
-  ].includes(warning));
+    "ambiguous_area",
+    "ambiguous_date",
+    "ambiguous_time",
+    "suspicious_time",
+  ].includes(warning))) return true;
+
+  const fieldConfidence = localRow.field_confidence || {};
+  return Object.values(fieldConfidence).some((value) => String(value || "") === "medium" || String(value || "") === "low");
 }
 
 function buildGeminiPrompt(rows, locationGroups) {
@@ -619,7 +627,7 @@ function buildGeminiPrompt(rows, locationGroups) {
     "Return JSON only. No markdown. No explanation.",
     "Output shape: {\"rows\":[{...}]}",
     "Each row must include:",
-    "source_index, event_name, location_group_id, location_group_name, event_date, start_time, end_time, attendee_count, notes, confidence, review_notes, warnings",
+    "source_index, event_name, location_group_id, location_group_name, event_date, start_time, end_time, attendee_count, notes, confidence, review_notes, warnings, event_type, custodial_impact, restroom_pressure, cleanup_pressure, requires_followup",
     "Rules:",
     "- event_date must be YYYY-MM-DD when known, else empty string.",
     "- start_time and end_time must be HH:MM:SS 24-hour when known, else empty string.",
@@ -631,6 +639,9 @@ function buildGeminiPrompt(rows, locationGroups) {
     "- review_notes should be short plain text or null.",
     "- Do not invent facts. Leave fields blank if unknown.",
     "- Preserve each source_index exactly as provided in the input rows.",
+    "- Use event_type values like school_group, formal_event, party, corporate_event, member_event, public_event, or general_event.",
+    "- custodial_impact, restroom_pressure, and cleanup_pressure must be low, medium, or high.",
+    "- requires_followup must be true when setup, breakdown, cleanup, restroom pressure, vendors, food, trash, or high attendance appears likely.",
     "Location groups:",
     JSON.stringify(groups),
     "Input rows:",
