@@ -403,7 +403,7 @@ function normalizeTimePair(startValue, endValue) {
 
 function detectTimeRange(text) {
   const raw = String(text || "").replace(/\s+/g, " ");
-  const token = "(noon|midnight|\\d{3,4}\\s*(?:a\\.?m\\.?|p\\.?m\\.?|am|pm|a|p)?|\\d{1,2}(?::?\\d{2})?\\s*(?:a\\.?m\\.?|p\\.?m\\.?|am|pm|a|p)?)";
+  const token = "(noon|midnight|(?<![-\\d])\\d{3,4}\\s*(?:a\\.?m\\.?|p\\.?m\\.?|am|pm|a|p)?|\\d{1,2}(?::?\\d{2})?\\s*(?:a\\.?m\\.?|p\\.?m\\.?|am|pm|a|p)?)";
   const slashMatch = raw.match(new RegExp(`${token}\\s*(?:to|until|thru|through|\\-|–|—)\\s*${token}\\s*/\\s*${token}`, "i"));
   if (slashMatch) {
     const meridiemMatch = slashMatch[0].match(/(a\.?m\.?|p\.?m\.?|am|pm|a|p)\b/i);
@@ -411,6 +411,11 @@ function detectTimeRange(text) {
     const lastEndRaw = slashMatch[3] + (meridiemMatch && !/(a\.?m\.?|p\.?m\.?|am|pm|a|p)\b/i.test(slashMatch[3]) ? ` ${meridiemMatch[1]}` : "");
     const slashPair = normalizeTimePair(startRaw, lastEndRaw);
     if (slashPair.start_time && slashPair.end_time) return { ...slashPair, matched_text: slashMatch[0] };
+  }
+  const compactRange = raw.match(/\b(\d{3,4})\s*(?:to|until|thru|through|\-|–|—)\s*(\d{3,4})\b/i);
+  if (compactRange) {
+    const pair = normalizeTimePair(compactRange[1], compactRange[2]);
+    if (pair.start_time && pair.end_time) return { ...pair, matched_text: compactRange[0] };
   }
   const match = raw.match(new RegExp(`${token}\\s*(?:to|until|thru|through|\\-|–|—)\\s*${token}`, "i"));
   if (!match) return null;
@@ -560,6 +565,8 @@ function inferSpecialEventTitle(value = "") {
     ["windsor prom", "Windsor Prom"],
   ];
   for (const [needle, title] of known) if (lower.includes(needle)) return title;
+  const tourCalled = raw.match(/\b(?:tour|event|program|party|meeting|game|training)\s+called\s+([A-Za-z0-9'& -]{3,80}?)(?:\s+at\s+|\s+on\s+|\s+from\s+|\.|,)/i);
+  if (tourCalled?.[1]) return cleanupLooseText(tourCalled[1]);
   const chinaTheater = raw.match(/china\s+theater\s+(.+?)\s*(?:-|–|—)\s*(?:jan|feb|mar|apr|may|jun|june|jul|aug|sep|oct|nov|dec|\d{1,2}\/)/i);
   if (chinaTheater?.[1]) return cleanupLooseText(chinaTheater[1]);
   return "";
@@ -716,7 +723,7 @@ function buildNotesFromNarrative(rawText = "", baseNotes = "", eventName = "", m
   for (let sentence of sentences) {
     const lower = sentence.toLowerCase();
     const isPureSchedule = /\bevent\s+will\s+run\b/.test(lower) || /\brun\s+from\b/.test(lower);
-    const hasOperationalNeed = /\b(request|remain open|open|clean|cleaned|trash|boxes|restrooms?|bathrooms?|arrive|arrive,|guests|race crowd|prior to|before)\b/.test(lower);
+    const hasOperationalNeed = /\b(request|remain open|open|clean|cleaned|trash|boxes|restrooms?|bathrooms?|arrive|arrive,|arrival|guests|race crowd|prior to|before|pulled?|after)\b/.test(lower);
     if (isPureSchedule && !/\b(arrive|guests|trash|clean|open|restrooms?)\b/.test(lower)) continue;
     if (!hasOperationalNeed) continue;
 
@@ -805,7 +812,7 @@ function parseOneEventText(rawText, locationGroups, index = 0) {
       : detectTimeRange(normalizedText))
     || detectApproxTimeRange(normalizedText);
   const eventDate = normalizePossibleDate(dateFromLabel) || detectEventDateFromText(normalizedText) || detectRelativeWeekdayDate(normalizedText) || normalizePossibleDate(endFromLabel) || normalizePossibleDate(normalizedText);
-  const attendeeValue = detectAttendeeCount(attendeesFromLabel) ?? detectAttendeeCount(normalizedText);
+  const attendeeValue = detectAttendeeCount(attendeesFromLabel) ?? detectAttendeeCount(rawText) ?? detectAttendeeCount(normalizedText);
   const attendeeCount = Number.isFinite(attendeeValue) ? String(attendeeValue) : null;
   const ambiguousAreaName = extractAmbiguousAreaEventName(normalizedText);
   const specialName = inferSpecialEventTitle(normalizedText);
