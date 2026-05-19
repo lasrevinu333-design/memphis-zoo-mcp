@@ -693,12 +693,12 @@ function parseOneEventText(rawText, locationGroups, index = 0) {
     || (startFromLabel && endFromLabel
       ? { ...normalizeTimePair(startFromLabel, endFromLabel), matched_text: `${startFromLabel} ${endFromLabel}` }
       : detectTimeRange(normalizedText));
-  const eventDate = normalizePossibleDate(dateFromLabel) || normalizePossibleDate(endFromLabel) || normalizePossibleDate(normalizedText);
+  const eventDate = normalizePossibleDate(dateFromLabel) || detectEventDateFromText(normalizedText) || normalizePossibleDate(endFromLabel) || normalizePossibleDate(normalizedText);
   const attendeeValue = detectAttendeeCount(attendeesFromLabel) ?? detectAttendeeCount(normalizedText);
   const attendeeCount = Number.isFinite(attendeeValue) ? String(attendeeValue) : null;
   const narrativeName = extractNarrativeEventName(normalizedText);
   const eventName = cleanEventName(eventNameFromLabel || narrativeName || extractFallbackTitle(normalizedText, matchedGroup, timeRange), matchedGroup);
-  const baseNotes = buildNotesFromNarrative(normalizedText, notesFromLabel || "", eventName, matchedGroup);
+  const baseNotes = notesFromLabel ? buildNotesFromNarrative(normalizedText, notesFromLabel, eventName, matchedGroup) : compactNarrativeNotes(normalizedText, eventName, matchedGroup);
   const startTime = timeRange?.start_time || "";
   const endTime = timeRange?.end_time || "";
   const warnings = buildParseWarnings({ eventName, locationGroupId: matchedGroup?.location_group_id || "", eventDate, startTime, endTime, areaCandidates });
