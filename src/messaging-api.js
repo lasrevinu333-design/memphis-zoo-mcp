@@ -242,6 +242,25 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   });
 
+  router.post("/memphis/diagnose", async (req, res) => {
+    try {
+      const body = String(req.body?.body || req.body?.message || "").trim();
+      const deviceId = String(req.body?.device_id || "").trim();
+      const threadId = String(req.body?.thread_id || "").trim();
+      const userId = String(req.body?.user_id || "").trim();
+      let resolvedThreadId = threadId;
+      if (!resolvedThreadId && userId) {
+        const thread = await runRpc("msg_get_or_create_memphis_thread", { p_user_id: userId });
+        resolvedThreadId = String(thread?.id || "").trim();
+      }
+      if (!body) throw new Error("body is required.");
+      const data = await memphisResponder.diagnoseMessage({ deviceId, threadId: resolvedThreadId, userMessage: body });
+      res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+    } catch (error) {
+      fail(res, error, "Diagnose Memphis message failed");
+    }
+  });
+
   router.post("/memphis/message", async (req, res) => {
     try {
       const userId = String(req.body?.user_id || "").trim();
