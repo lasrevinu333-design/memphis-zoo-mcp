@@ -1640,6 +1640,10 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     const webEnabled = allowWebSearch({ deviceId, identityRole: identity?.role || "" });
     const threadContext = await fetchThreadContext(runReadOnlySql, threadId);
     const recentMessages = await fetchRecentThreadMessages(runReadOnlySql, threadId, 10);
+    const route = classifyMemphisIntentLocal(userMessage, threadContext);
+    if (route.clarification && route.confidence < 0.35) {
+      return annotateMemphisReply({ text: route.clarification, meta: { fallback: true, mode: "local_clarification" } }, route, [], ["low_intent_confidence"]);
+    }
 
     if (isMemphisIdentityQuestion(userMessage)) {
       await saveThreadContext(runRpc, threadId, {
@@ -1691,7 +1695,8 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       (isSystemSpecificQuestion(userMessage, threadContext) || isEmployeeAreaQuestion(userMessage));
 
     if (!apiKey || explicitSystem) {
-      return await generateSystemReply(userMessage, { deviceId, threadId });
+      const reply = await generateSystemReply(userMessage, { deviceId, threadId });
+      return annotateMemphisReply(reply, route, reply?.meta?.sources || []);
     }
 
     if (isWeatherQuestion(userMessage)) {
@@ -1711,14 +1716,40 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
         const subjectType = isWeatherQuestion(userMessage) ? "weather" : (isGeneralKnowledgeQuestion(userMessage) ? "general_knowledge" : "conversation");
         const weatherLocation = inferWeatherLocation(userMessage, threadContext);
         await saveThreadContext(runRpc, threadId, { last_intent: "conversation", last_subject_type: subjectType, context_json: mergeContextJson(threadContext, weatherLocation ? { weather_location: weatherLocation, last_question_shape: "conversation", last_subject_kind: subjectType, last_subject_label: weatherLocation } : { last_question_shape: "conversation", last_subject_kind: subjectType }) });
-        return { text, meta: { fallback: false, provider: "gemini", model: DEFAULT_MODEL, mode: "conversation_first" } };
+        return annotateMemphisReply({ text, meta: { fallback: false, provider: "gemini", model: DEFAULT_MODEL, mode: "conversation_first" } }, route, ["gemini_conversation"]);
       }
     } catch (error) {
       console.error("memphis conversation gemini path failed:", error);
     }
 
-    return await generateSystemReply(userMessage, { deviceId, threadId });
+    const reply = await generateSystemReply(userMessage, { deviceId, threadId });
+    return annotateMemphisReply(reply, route, reply?.meta?.sources || []);
   }
 
-  return { generateReply };
+  async function diagnoseMessage({ deviceId = "", userMessage = "", threadId = "" } = {}) {
+    const threadContext = await fetchThreadContext(runReadOnlySql, threadId);
+    const recentMessages = await fetchRecentThreadMessages(runReadOnlySql, threadId, 6);
+    const rewritten_message = rewriteFollowUpWithContext(userMessage, threadContext);
+    const route = classifyMemphisIntentLocal(rewritten_message, threadContext);
+    const todayServiceDate = await getDefaultServiceDate(runReadOnlySql);
+    const explicitDate = extractExplicitDate(rewritten_message);
+    const weekdayRef = extractWeekdayReference(rewritten_message);
+    let serviceDate = explicitDate || threadContext?.last_service_date || todayServiceDate;
+    if (!explicitDate && weekdayRef && todayServiceDate) {
+      serviceDate = computeWeekdayDate(todayServiceDate, weekdayRef.weekday, weekdayRef.modifier) || serviceDate;
+    }
+    return {
+      ok: true,
+      original_message: userMessage,
+      rewritten_message,
+      route,
+      service_date: serviceDate,
+      thread_context: threadContext || {},
+      recent_messages: recentMessages || [],
+      likely_tool: route.intent,
+      diagnostics_version: "memphis-diagnostics.v1",
+    };
+  }
+
+  return { generateReply, diagnoseMessage };
 }
