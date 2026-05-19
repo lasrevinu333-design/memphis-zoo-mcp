@@ -428,7 +428,7 @@ function detectInlineLabeledTimeRange(text) {
 
 function detectAttendeeCount(text) {
   const raw = String(text || "");
-  let match = raw.match(/\b(\d{1,5})\s*(attendees|guests|people|students|pax|persons)\b/i);
+  let match = raw.match(/\b(\d{1,5})\s*(attendees|guests|people|students|kids|children|children's|pax|persons)\b/i);
   if (match) return Number.parseInt(match[1], 10);
   match = raw.match(/\b(?:attendance|count|projected|expected|guests?)\s*[:\-]?\s*(\d{1,5})\b/i);
   if (match) return Number.parseInt(match[1], 10);
@@ -507,7 +507,7 @@ function stripTimeDateNoise(text) {
     .replace(/\b(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\.?\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s*\d{2,4})?\b/gi, " ")
     .replace(/\b\d{1,2}(?:\:?\d{2})?\s*(?:a|p|am|pm)\b/gi, " ")
     .replace(/\b\d{2}:\d{2}(?::\d{2})?\b/gi, " ")
-    .replace(/\b\d{1,5}\s*(?:attendees|guests|people|students|pax|persons)\b/gi, " ");
+    .replace(/\b\d{1,5}\s*(?:attendees|guests|people|students|kids|children|children's|pax|persons)\b/gi, " ");
 }
 
 function removeAreaText(text, group) {
@@ -527,7 +527,7 @@ function cleanEventNameBase(eventName, matchedGroup) {
   let result = String(eventName || "");
   result = removeAreaText(result, matchedGroup);
   result = stripTimeDateNoise(result);
-  result = result.replace(/\b(?:need|needs|requires|required|setup|cleanup|attendees|guests|people|students|notes?|details?)\b.*$/i, " ");
+  result = result.replace(/\b(?:need|needs|requires|required|setup|cleanup|attendees|guests|people|students|kids|children|notes?|details?|trash|restrooms?|bathrooms?|cans|boxes|wipe|pull|pulled|mop|checked?|stocked|lodge only|keep)\b.*$/i, " ");
   result = result.replace(/\b(?:start time|begin time|end time|stop time|event date|event area|location group|location|venue|area|projected|attendance|attendees)\b.*$/i, " ");
   return cleanupLooseText(result);
 }
