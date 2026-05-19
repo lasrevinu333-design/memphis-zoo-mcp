@@ -661,6 +661,10 @@ function rewriteFollowUpWithContext(text = "", threadContext = {}) {
     return `my schedule ${raw}`;
   }
 
+  if (lastIntent === "daily_staff_schedule" || lastQuestionShape === "daily_staff_schedule") {
+    return `who is working ${raw}`;
+  }
+
   if ((lastIntent === "location_details" || lastQuestionShape === "location_details") && lastLocationCode) {
     return `tell me about ${lastLocationCode} ${raw}`;
   }
