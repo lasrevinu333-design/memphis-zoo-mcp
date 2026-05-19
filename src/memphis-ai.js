@@ -1013,17 +1013,57 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
         ${employee ? `and absent_employee_id = '${esc(employee.id)}'::uuid` : ""}
         order by absent_employee_name asc, group_name asc, segment_number asc
       `);
+      const absenceRows = await runReadOnlySql(`
+        select distinct on (employee_id) employee_id, employee_name, absence_type, notes
+        from (
+          select e.id as employee_id, e.display_name as employee_name, lower(coalesce(dao.absence_type, 'absent')) as absence_type, dao.notes,
+                 case lower(coalesce(dao.absence_type, '')) when 'manual_override' then 3 when 'pto' then 2 else 1 end as priority
+          from public.daily_absence_overrides dao
+          join public.employees e on e.id = dao.employee_id
+          where dao.active = true
+            and dao.absence_date = '${esc(serviceDate)}'::date
+            ${employee ? `and dao.employee_id = '${esc(employee.id)}'::uuid` : ""}
+
+          union all
+
+          select e.id as employee_id, e.display_name as employee_name, lower(coalesce(p.pto_type, 'pto')) as absence_type, p.notes, 2 as priority
+          from public.employee_planned_time_off p
+          join public.employees e on e.id = p.employee_id
+          where p.active = true
+            and p.start_date <= '${esc(serviceDate)}'::date
+            and p.end_date >= '${esc(serviceDate)}'::date
+            ${employee ? `and p.employee_id = '${esc(employee.id)}'::uuid` : ""}
+
+          union all
+
+          select e.id as employee_id, e.display_name as employee_name, lower(coalesce(ep.absence_type, 'pto')) as absence_type, ep.notes, 2 as priority
+          from public.employee_pto ep
+          join public.employees e on e.id = ep.employee_id
+          where ep.active = true
+            and ep.start_date <= '${esc(serviceDate)}'::date
+            and ep.end_date >= '${esc(serviceDate)}'::date
+            ${employee ? `and ep.employee_id = '${esc(employee.id)}'::uuid` : ""}
+        ) x
+        order by employee_id, priority desc, employee_name
+      `);
       const noteRows = await runReadOnlySql(`
         select distinct notes
         from public.v_memphis_open_segments
         where service_date = '${esc(serviceDate)}'::date
           and notes is not null and notes <> '' and notes ilike '%off%'
       `);
-      const absenceNotes = (noteRows || []).map((row) => row.notes).filter(Boolean);
+      const absenceNotes = [
+        ...(Array.isArray(absenceRows) ? absenceRows.map((row) => `${row.employee_name} (${String(row.absence_type || 'absent').replace(/_/g, ' ')})${row.notes ? `: ${row.notes}` : ''}`) : []),
+        ...(noteRows || []).map((row) => row.notes).filter(Boolean),
+      ];
       return {
         service_date: serviceDate,
         employee_name: employee?.display_name || employeeName || null,
-        absent_employees: Array.from(new Set((coverageRows || []).map((row) => row.absent_employee_name).filter(Boolean))),
+        absent_employees: Array.from(new Set([
+          ...(Array.isArray(absenceRows) ? absenceRows.map((row) => row.employee_name).filter(Boolean) : []),
+          ...((coverageRows || []).map((row) => row.absent_employee_name).filter(Boolean)),
+        ])),
+        absence_rows: absenceRows || [],
         absence_notes: absenceNotes,
         coverage_rows: coverageRows || [],
       };
