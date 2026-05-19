@@ -944,13 +944,34 @@ function decorateLocalRow(row, { providerFallback = false } = {}) {
 
 function chooseBestRow(localRow, geminiRow) {
   if (!geminiRow) return localRow;
-  const localWarnings = Array.isArray(localRow?.warnings) ? localRow.warnings.length : 99;
-  const geminiWarnings = Array.isArray(geminiRow?.warnings) ? geminiRow.warnings.length : 99;
-  if (geminiWarnings < localWarnings) return geminiRow;
-  if (geminiWarnings > localWarnings) return localRow;
+
+  const localWarnings = Array.isArray(localRow?.warnings) ? localRow.warnings : [];
+  const geminiWarnings = Array.isArray(geminiRow?.warnings) ? geminiRow.warnings : [];
+  const localCriticalMissing = localWarnings.filter((w) => ["missing_event_name", "missing_area", "missing_date", "missing_time", "end_not_after_start"].includes(w));
+  const geminiCriticalMissing = geminiWarnings.filter((w) => ["missing_event_name", "missing_area", "missing_date", "missing_time", "end_not_after_start"].includes(w));
+
+  if (geminiCriticalMissing.length < localCriticalMissing.length) {
+    return {
+      ...localRow,
+      event_name: localRow.event_name || geminiRow.event_name || "",
+      location_group_id: localRow.location_group_id || geminiRow.location_group_id || "",
+      location_group_name: localRow.location_group_name || geminiRow.location_group_name || "",
+      event_date: localRow.event_date || geminiRow.event_date || "",
+      start_time: localRow.start_time || geminiRow.start_time || "",
+      end_time: localRow.end_time || geminiRow.end_time || "",
+      attendee_count: localRow.attendee_count ?? geminiRow.attendee_count ?? null,
+      notes: localRow.notes || geminiRow.notes || "",
+      warnings: geminiCriticalMissing.length ? geminiWarnings : [],
+      review_notes: geminiRow.review_notes || localRow.review_notes || null,
+      provider_used: "local-parser+gemini-fill",
+      provider_fallback: false,
+      gemini_candidate: geminiRow,
+    };
+  }
+
   const localFilled = [localRow.event_name, localRow.location_group_id, localRow.event_date, localRow.start_time, localRow.end_time].filter(Boolean).length;
   const geminiFilled = [geminiRow.event_name, geminiRow.location_group_id, geminiRow.event_date, geminiRow.start_time, geminiRow.end_time].filter(Boolean).length;
-  if (geminiFilled > localFilled) return geminiRow;
+  if (localFilled < 3 && geminiFilled > localFilled) return geminiRow;
   return localRow;
 }
 
