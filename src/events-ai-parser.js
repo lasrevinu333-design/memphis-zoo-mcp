@@ -706,10 +706,24 @@ function normalizeGeminiRow(raw = {}, locationGroups = [], fallbackText = "", in
   const attendeeCount = Number.isFinite(attendeeRaw) ? String(attendeeRaw) : null;
   const eventName = cleanEventName(raw.event_name || "", matchedGroup);
   const notes = cleanNotes(raw.notes || "", eventName, matchedGroup);
+  const areaCandidates = rankLocationGroups(locationGroups, raw.location_group_name || fallbackText, 3);
   const warnings = mergeWarnings(
     Array.isArray(raw.warnings) ? raw.warnings.map((x) => String(x || "").trim()).filter(Boolean) : [],
-    buildParseWarnings({ eventName, locationGroupId, eventDate, startTime: timePair.start_time, endTime: timePair.end_time })
+    buildParseWarnings({ eventName, locationGroupId, eventDate, startTime: timePair.start_time, endTime: timePair.end_time, areaCandidates })
   );
+  const aiProfile = {
+    event_type: String(raw.event_type || "").trim(),
+    custodial_impact: String(raw.custodial_impact || "").trim(),
+    restroom_pressure: String(raw.restroom_pressure || "").trim(),
+    cleanup_pressure: String(raw.cleanup_pressure || "").trim(),
+    requires_followup: raw.requires_followup === true,
+  };
+  const fallbackProfile = inferEventProfile({ eventName, notes: notes || fallbackText, attendeeCount, startTime: timePair.start_time, endTime: timePair.end_time });
+  const operational_profile = {
+    ...fallbackProfile,
+    ...Object.fromEntries(Object.entries(aiProfile).filter(([, value]) => value !== "" && value != null)),
+  };
+  const field_confidence = buildFieldConfidence({ eventName, locationGroupId, eventDate, startTime: timePair.start_time, endTime: timePair.end_time, attendeeCount, areaCandidates, warnings });
 
   return {
     raw_text: normalizeIntakeText(fallbackText),
@@ -721,11 +735,14 @@ function normalizeGeminiRow(raw = {}, locationGroups = [], fallbackText = "", in
     start_time: timePair.start_time || "",
     end_time: timePair.end_time || "",
     attendee_count: attendeeCount,
-    notes,
+    notes: appendOperationalNotes(notes, operational_profile),
     created_by: "Input Console Parse",
     confidence: ["high", "medium", "low"].includes(String(raw.confidence || "").toLowerCase()) ? String(raw.confidence).toLowerCase() : (warnings.length ? "medium" : "high"),
     review_notes: raw.review_notes == null ? (warnings.length ? warnings.join(", ") : null) : String(raw.review_notes || "").trim() || null,
     warnings,
+    area_candidates: compactAreaCandidates(areaCandidates),
+    field_confidence,
+    operational_profile,
     provider: "gemini",
     provider_used: "gemini",
     provider_fallback: false,
