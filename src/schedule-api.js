@@ -1234,11 +1234,22 @@ export function createScheduleRouter({
         and ct.segment_number = dsa.segment_number
         and ct.assigned_employee_id is not null
         and not exists (
-          select 1
-          from public.daily_absence_overrides dao
+          select 1 from public.daily_absence_overrides dao
           where dao.absence_date = '${esc(serviceDate)}'::date
             and dao.employee_id = ct.assigned_employee_id
             and dao.active = true
+          union all
+          select 1 from public.employee_planned_time_off pto
+          where pto.start_date <= '${esc(serviceDate)}'::date
+            and pto.end_date >= '${esc(serviceDate)}'::date
+            and pto.employee_id = ct.assigned_employee_id
+            and pto.active = true
+          union all
+          select 1 from public.employee_pto ep
+          where ep.start_date <= '${esc(serviceDate)}'::date
+            and ep.end_date >= '${esc(serviceDate)}'::date
+            and ep.employee_id = ct.assigned_employee_id
+            and ep.active = true
         )
         and coalesce(dsa.source_type, '') not like 'coverall%';
     `);
