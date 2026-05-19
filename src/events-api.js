@@ -174,6 +174,75 @@ async function listUpcomingEvents(runReadOnlySql) {
   return Array.isArray(rows) ? rows : [];
 }
 
+function normalizeParserComparable(value) {
+  return String(value == null ? "" : value).trim().toLowerCase();
+}
+
+function normalizeParserTime(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  return text.slice(0, 5);
+}
+
+function parserExpectationFailures(row = {}, expect = {}) {
+  const failures = [];
+  if (expect.event_name && normalizeParserComparable(row.event_name) !== normalizeParserComparable(expect.event_name)) {
+    failures.push(`event_name expected ${expect.event_name}, got ${row.event_name || "blank"}`);
+  }
+  if (expect.area_contains && !normalizeParserComparable(row.location_group_name).includes(normalizeParserComparable(expect.area_contains))) {
+    failures.push(`area expected to contain ${expect.area_contains}, got ${row.location_group_name || "blank"}`);
+  }
+  if (expect.event_date && String(row.event_date || "") !== String(expect.event_date)) {
+    failures.push(`event_date expected ${expect.event_date}, got ${row.event_date || "blank"}`);
+  }
+  if (expect.start_time && normalizeParserTime(row.start_time) !== String(expect.start_time)) {
+    failures.push(`start_time expected ${expect.start_time}, got ${normalizeParserTime(row.start_time) || "blank"}`);
+  }
+  if (expect.end_time && normalizeParserTime(row.end_time) !== String(expect.end_time)) {
+    failures.push(`end_time expected ${expect.end_time}, got ${normalizeParserTime(row.end_time) || "blank"}`);
+  }
+  if (expect.attendee_count && String(row.attendee_count ?? "") !== String(expect.attendee_count)) {
+    failures.push(`attendee_count expected ${expect.attendee_count}, got ${row.attendee_count ?? "blank"}`);
+  }
+  const notes = normalizeParserComparable(row.notes);
+  for (const required of Array.isArray(expect.notes_include) ? expect.notes_include : []) {
+    if (!notes.includes(normalizeParserComparable(required))) failures.push(`notes missing ${required}`);
+  }
+  for (const banned of Array.isArray(expect.notes_exclude) ? expect.notes_exclude : []) {
+    if (notes.includes(normalizeParserComparable(banned))) failures.push(`notes should not include ${banned}`);
+  }
+  return failures;
+}
+
+async function runParserRegressionTests({ runReadOnlySql, fixtures = EVENT_PARSER_TEST_FIXTURES, includeRows = true } = {}) {
+  const groups = await listLocationGroups(runReadOnlySql);
+  const results = [];
+  let passed = 0;
+  let failed = 0;
+  for (const fixture of fixtures) {
+    const parsedRows = await aiParseEventTexts({ texts: [fixture.text], locationGroups: groups });
+    const row = Array.isArray(parsedRows) ? parsedRows[0] || {} : {};
+    const failures = parserExpectationFailures(row, fixture.expect || {});
+    const ok = failures.length === 0;
+    if (ok) passed += 1;
+    else failed += 1;
+    results.push({
+      id: fixture.id,
+      ok,
+      failures,
+      expected: fixture.expect,
+      parsed: includeRows ? row : undefined,
+    });
+  }
+  return {
+    ok: failed === 0,
+    total: results.length,
+    passed,
+    failed,
+    results,
+  };
+}
+
 async function listLocationGroups(runReadOnlySql) {
   const rows = await runReadOnlySql(`
     select
