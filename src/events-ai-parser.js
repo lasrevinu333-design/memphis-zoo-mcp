@@ -290,13 +290,13 @@ function compactNarrativeNotes(rawText = "", eventName = "", matchedGroup = null
   for (let sentence of sentences) {
     const lower = normalizeLoose(sentence);
     if (!lower) continue;
-    if (/\bevent will run\b|\brun from\b/.test(lower)) continue;
+    if (/\bevent will run\b|\brun from\b|\bevent window\b|\bactual event\b/.test(lower)) continue;
     sentence = sentence.replace(/^I would (also )?like to request that\s+/i, "");
     sentence = sentence.replace(/^I would (also )?like to request\s+/i, "");
     sentence = sentence.replace(/^please\s+/i, "");
     if (eventName) sentence = sentence.replace(new RegExp(`\\b${escapeRegex(eventName)}\\b`, "ig"), "the event");
     sentence = sentence.replace(/\bon\s+(?:Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday),?\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t|tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s*\d{2,4})?/ig, "");
-    sentence = removeAreaText(sentence, matchedGroup).replace(/\s+/g, " " ).trim();
+    sentence = sentence.replace(/\s+/g, " " ).trim();
     sentence = sentence.replace(/^[,.;:\-\s]+|[,.;:\-\s]+$/g, "").trim();
     if (sentence) kept.push(sentence.charAt(0).toUpperCase() + sentence.slice(1));
   }
@@ -398,7 +398,7 @@ function normalizeTimePair(startValue, endValue) {
 
 function detectTimeRange(text) {
   const raw = String(text || "").replace(/\s+/g, " ");
-  const token = "(\\d{1,2}(?::?\\d{2})?\\s*(?:a\\.?m\\.?|p\\.?m\\.?|am|pm|a|p)?|\\d{3,4}\\s*(?:a\\.?m\\.?|p\\.?m\\.?|am|pm|a|p)?)";
+  const token = "(noon|midnight|\\d{1,2}(?::?\\d{2})?\\s*(?:a\\.?m\\.?|p\\.?m\\.?|am|pm|a|p)?|\\d{3,4}\\s*(?:a\\.?m\\.?|p\\.?m\\.?|am|pm|a|p)?)";
   const slashMatch = raw.match(new RegExp(`${token}\\s*(?:to|until|thru|through|\\-|–|—)\\s*${token}\\s*/\\s*${token}`, "i"));
   if (slashMatch) {
     const meridiemMatch = slashMatch[0].match(/(a\.?m\.?|p\.?m\.?|am|pm|a|p)\b/i);
@@ -703,6 +703,29 @@ function buildParseWarnings({ eventName, locationGroupId, eventDate, startTime, 
   return Array.from(new Set(warnings));
 }
 
+function detectRelativeWeekdayDate(text = "") {
+  const raw = String(text || "").toLowerCase();
+  const match = raw.match(/\b(next\s+)?(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/i);
+  if (!match) return "";
+  const names = ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"];
+  const target = names.indexOf(String(match[2] || "").toLowerCase());
+  if (target < 0) return "";
+  const now = new Date();
+  const base = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0);
+  let delta = (target - base.getDay() + 7) % 7;
+  if (delta === 0 || match[1]) delta = delta || 7;
+  base.setDate(base.getDate() + delta);
+  return `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, "0")}-${String(base.getDate()).padStart(2, "0")}`;
+}
+
+function detectApproxTimeRange(text = "") {
+  const lower = normalizeLoose(text);
+  if (/\baround lunch\b|\bat lunch\b|\blunch time\b|\blunchtime\b/.test(lower)) {
+    return { start_time: "12:00:00", end_time: "13:00:00", matched_text: "around lunch" };
+  }
+  return null;
+}
+
 function parseOneEventText(rawText, locationGroups, index = 0) {
   const normalizedText = normalizeIntakeText(rawText);
   const labels = parseLabelMap(normalizedText);
@@ -720,8 +743,9 @@ function parseOneEventText(rawText, locationGroups, index = 0) {
   const timeRange = labeledTimeRange
     || (startFromLabel && endFromLabel
       ? { ...normalizeTimePair(startFromLabel, endFromLabel), matched_text: `${startFromLabel} ${endFromLabel}` }
-      : detectTimeRange(normalizedText));
-  const eventDate = normalizePossibleDate(dateFromLabel) || detectEventDateFromText(normalizedText) || normalizePossibleDate(endFromLabel) || normalizePossibleDate(normalizedText);
+      : detectTimeRange(normalizedText))
+    || detectApproxTimeRange(normalizedText);
+  const eventDate = normalizePossibleDate(dateFromLabel) || detectEventDateFromText(normalizedText) || detectRelativeWeekdayDate(normalizedText) || normalizePossibleDate(endFromLabel) || normalizePossibleDate(normalizedText);
   const attendeeValue = detectAttendeeCount(attendeesFromLabel) ?? detectAttendeeCount(normalizedText);
   const attendeeCount = Number.isFinite(attendeeValue) ? String(attendeeValue) : null;
   const narrativeName = extractNarrativeEventName(normalizedText);
