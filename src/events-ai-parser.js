@@ -181,11 +181,29 @@ function inferEventYear() {
   return new Date().getFullYear();
 }
 
+function isoDateFor(year, month, day) {
+  if (!isValidCalendarDate(year, month, day)) return "";
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
 function buildDate(year, month, day) {
-  const normalizedYear = Number.isFinite(year) ? year : inferEventYear();
   if (!Number.isFinite(month) || !Number.isFinite(day)) return "";
-  if (!isValidCalendarDate(normalizedYear, month, day)) return "";
-  return `${String(normalizedYear).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  if (Number.isFinite(year)) return isoDateFor(year, month, day);
+
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const todayUtc = Date.UTC(currentYear, now.getMonth(), now.getDate());
+  const thisYear = isoDateFor(currentYear, month, day);
+  const nextYear = isoDateFor(currentYear + 1, month, day);
+
+  if (!thisYear && !nextYear) return "";
+  if (!thisYear) return nextYear;
+
+  const thisDate = new Date(`${thisYear}T12:00:00Z`);
+  const deltaDays = Math.round((thisDate.getTime() - todayUtc) / 86400000);
+  if (deltaDays >= -1 && deltaDays <= 35) return thisYear;
+  if (deltaDays < -1 && nextYear) return nextYear;
+  return thisYear;
 }
 
 function normalizePossibleDate(value) {
