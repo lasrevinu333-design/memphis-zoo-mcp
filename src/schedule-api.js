@@ -1207,6 +1207,43 @@ export function createScheduleRouter({
       : { roster_count: 0, assignment_count: 0 };
   }
 
+  async function restoreStaticOwnersForDate(serviceDate) {
+    if (typeof runWriteSql !== "function") return { applied: false, reason: "write_path_unavailable" };
+    await runWriteSql("restore_static_schedule_owners", `
+      update public.daily_schedule_assignments dsa
+         set assigned_employee_id = ct.assigned_employee_id,
+             owner_type = 'EMPLOYEE',
+             status = 'ASSIGNED',
+             source_type = case
+               when dsa.source_type is null or dsa.source_type = '' then 'coverage_template_static_owner'
+               when dsa.source_type like '%static_owner%' then dsa.source_type
+               else dsa.source_type || ':static_owner_restored'
+             end,
+             notes = trim(concat_ws(' | ', nullif(dsa.notes, ''), 'Static owner restored because owner is working and not absent.')),
+             updated_at = now()
+      from public.coverage_templates ct
+      join public.daily_work_roster dwr
+        on dwr.service_date = '${esc(serviceDate)}'::date
+       and dwr.employee_id = ct.assigned_employee_id
+       and dwr.active = true
+      where dsa.service_date = '${esc(serviceDate)}'::date
+        and ct.active = true
+        and ct.day_of_week = extract(dow from '${esc(serviceDate)}'::date)::int
+        and ct.location_group_id = dsa.location_group_id
+        and ct.segment_number = dsa.segment_number
+        and ct.assigned_employee_id is not null
+        and not exists (
+          select 1
+          from public.daily_absence_overrides dao
+          where dao.absence_date = '${esc(serviceDate)}'::date
+            and dao.employee_id = ct.assigned_employee_id
+            and dao.active = true
+        )
+        and coalesce(dsa.source_type, '') not like 'coverall%';
+    `);
+    return { applied: true };
+  }
+
   function addDaysToIsoDate(serviceDate, daysToAdd = 0) {
     const base = new Date(`${serviceDate}T12:00:00`);
     if (Number.isNaN(base.getTime())) return serviceDate;
