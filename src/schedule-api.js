@@ -1848,9 +1848,20 @@ export function createScheduleRouter({
     try {
       const serviceDate = requireDate(req.query.service_date || req.query.date);
       const rows = await runReadOnlySql(`select * from public.sch_get_daily_schedule_with_purpose('${esc(serviceDate)}'::date)`);
+      const rosterRows = await runReadOnlySql(`
+        select r.employee_id, e.display_name as employee_name, e.employee_code,
+               to_char(r.shift_start, 'HH24:MI:SS') as shift_start,
+               to_char(r.shift_end, 'HH24:MI:SS') as shift_end,
+               r.active, r.source_type, r.notes
+        from public.daily_work_roster r
+        join public.employees e on e.id = r.employee_id
+        where r.service_date = '${esc(serviceDate)}'::date
+          and r.active = true
+        order by r.shift_start asc, e.display_name asc
+      `);
       res.status(200).json({
         ok: true,
-        data: { service_date: serviceDate, groups: groupScheduleRows(rows) },
+        data: { service_date: serviceDate, roster: rosterRows || [], groups: groupScheduleRows(rows) },
         meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion },
       });
     } catch (error) {
