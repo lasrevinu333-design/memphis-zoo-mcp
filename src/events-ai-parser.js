@@ -547,13 +547,40 @@ function extractNarrativeEventName(text = "") {
 }
 
 function buildNotesFromNarrative(rawText = "", baseNotes = "", eventName = "", matchedGroup = null) {
-  const raw = cleanupLooseText(String(baseNotes || rawText || ""));
-  if (!raw) return "";
-  let note = raw;
-  if (eventName) note = note.replace(new RegExp(`\\b${escapeRegex(eventName)}\\b`, "ig"), eventName);
-  note = removeAreaText(note, matchedGroup);
-  note = note.replace(/^event\s*name\s*[:\-]?\s*/i, "").trim();
-  return cleanupLooseText(note);
+  const source = String(baseNotes || rawText || "").replace(/\s+/g, " " ).trim();
+  if (!source) return "";
+
+  const sentences = source
+    .split(/(?<=[.!?])\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  const operational = [];
+  for (let sentence of sentences) {
+    const lower = sentence.toLowerCase();
+    const isPureSchedule = /\bevent\s+will\s+run\b/.test(lower) || /\brun\s+from\b/.test(lower);
+    const hasOperationalNeed = /\b(request|remain open|open|clean|cleaned|trash|boxes|restrooms?|bathrooms?|arrive|arrive,|guests|race crowd|prior to|before)\b/.test(lower);
+    if (isPureSchedule && !/\b(arrive|guests|trash|clean|open|restrooms?)\b/.test(lower)) continue;
+    if (!hasOperationalNeed) continue;
+
+    if (eventName) sentence = sentence.replace(new RegExp(`\\b${escapeRegex(eventName)}\\b`, "ig"), "the event");
+    sentence = sentence.replace(/\b(?:on\s+)?(?:Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday),?\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t|tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s*\d{2,4})?\b/ig, " " );
+    sentence = sentence.replace(/\bthe\s+event\s+will\s+run\s+from\s+[^.]+\.?/ig, " " );
+    sentence = sentence.replace(/\bI\s+would\s+(?:also\s+)?like\s+to\s+request\s+(?:that\s+)?/ig, "" );
+    sentence = sentence.replace(/\bplease\s+/ig, "" );
+    sentence = cleanupLooseText(sentence);
+    if (sentence) operational.push(sentence.charAt(0).toUpperCase() + sentence.slice(1));
+  }
+
+  if (!operational.length) {
+    let fallback = source;
+    if (eventName) fallback = fallback.replace(new RegExp(`\\b${escapeRegex(eventName)}\\b`, "ig"), "the event");
+    fallback = fallback.replace(/\bthe\s+event\s+will\s+run\s+from\s+[^.]+\.?/ig, " " );
+    fallback = removeAreaText(fallback, matchedGroup);
+    return cleanupLooseText(fallback);
+  }
+
+  return operational.join(" ");
 }
 
 function buildFieldConfidence({ eventName, locationGroupId, eventDate, startTime, endTime, attendeeCount, areaCandidates = [], warnings = [] } = {}) {
