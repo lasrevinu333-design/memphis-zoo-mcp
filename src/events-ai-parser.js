@@ -211,13 +211,21 @@ function normalizePossibleDate(value) {
   if (!raw) return "";
   if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
 
-  let match = raw.match(/\b(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?\b/);
+  const monthNames = Object.keys(MONTH_LOOKUP).sort((a, b) => b.length - a.length).join("|");
+
+  let match = raw.match(new RegExp(`\\b(?:Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday),?\\s+(${monthNames})\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s*(\\d{2,4}))?\\b`, "i"));
   if (match) {
     const year = match[3] ? Number(String(match[3]).length === 2 ? `20${match[3]}` : match[3]) : NaN;
-    return buildDate(year, Number(match[1]), Number(match[2]));
+    const built = buildDate(year, MONTH_LOOKUP[String(match[1]).toLowerCase()], Number(match[2]));
+    if (built) return built;
   }
 
-  const monthNames = Object.keys(MONTH_LOOKUP).sort((a, b) => b.length - a.length).join("|");
+  match = raw.match(/\b(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?\b/);
+  if (match) {
+    const year = match[3] ? Number(String(match[3]).length === 2 ? `20${match[3]}` : match[3]) : NaN;
+    const built = buildDate(year, Number(match[1]), Number(match[2]));
+    if (built) return built;
+  }
   match = raw.match(new RegExp(`\\b(${monthNames})\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s*(\\d{2,4}))?\\b`, "i"));
   if (match) {
     const year = match[3] ? Number(String(match[3]).length === 2 ? `20${match[3]}` : match[3]) : NaN;
