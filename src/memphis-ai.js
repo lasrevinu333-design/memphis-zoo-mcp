@@ -438,8 +438,9 @@ function summarizeAbsenceCoverage(data = {}, employeeName = "") {
     }
     return `${employeeName} on ${serviceDate}: ` + coverage.slice(0, 12).map((row) => `${row.group_name || row.group_code || "Unknown area"} is covered by ${row.assigned_employee_name || "Open"} from ${row.coverage_start || "—"} to ${row.coverage_end || "—"}`).join("; ") + ".";
   }
-  if (!absentPeople.length && !notes.length) return `I don't see any absence notes or replacement coverage for ${serviceDate}.`;
-  const absentLine = absentPeople.length ? `Absent on ${serviceDate}: ${absentPeople.join(", ")}.` : `Absence notes exist for ${serviceDate}.`;
+  const absenceRows = Array.isArray(data.absence_rows) ? data.absence_rows : [];
+  if (!absentPeople.length && !notes.length && !absenceRows.length) return `I don't see any PTO, absence notes, or replacement coverage for ${serviceDate}.`;
+  const absentLine = absentPeople.length ? `Out/PTO on ${serviceDate}: ${absentPeople.join(", ")}.` : `Absence notes exist for ${serviceDate}.`;
   const coverageLine = coverage.length ? ` Coverage examples: ${coverage.slice(0, 10).map((row) => `${row.group_name || row.group_code} covered by ${row.assigned_employee_name || "Open"} ${row.coverage_start || "—"}-${row.coverage_end || "—"}`).join("; ")}.` : "";
   return `${absentLine}${coverageLine}`.trim();
 }
