@@ -2329,7 +2329,7 @@ export function createScheduleRouter({
 </style>
 </head>
 <body>
-  <header class="top"><a class="lang" href="${htmlEscape(switchUrl)}">${htmlEscape(t.language)}</a><div class="eyebrow">${htmlEscape(t.title)}</div><h1>${htmlEscape(slot.display_name || slot.employee_code)}</h1><div class="shift">${htmlEscape(t.shift)}: ${htmlEscape(data?.shift?.start || "—")} - ${htmlEscape(data?.shift?.end || "—")}</div><div class="pill">${htmlEscape(serviceDate)}</div></header>
+  <header class="top"><a class="lang" href="${htmlEscape(switchUrl)}" onclick="window.location.href=this.href; return false;">${htmlEscape(t.language)}</a><div class="eyebrow">${htmlEscape(t.title)}</div><h1>${htmlEscape(slot.display_name || slot.employee_code)}</h1><div class="shift">${htmlEscape(t.shift)}: ${htmlEscape(data?.shift?.start || "—")} - ${htmlEscape(data?.shift?.end || "—")}</div><div class="pill">${htmlEscape(serviceDate)}</div></header>
   <main class="wrap"><div class="notice">${htmlEscape(t.notice)}</div><section class="card"><h2>${htmlEscape(t.restrooms)}</h2><ul>${renderItems(restroomItems)}</ul></section><section class="card"><h2>${htmlEscape(t.other)}</h2><ul>${renderItems(otherItems)}</ul></section><div class="meta">${htmlEscape(slot.employee_code)} • ${htmlEscape(serviceDate)}</div></main>
 </body>
 </html>`;
