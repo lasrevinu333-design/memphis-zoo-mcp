@@ -457,14 +457,92 @@ function extractFallbackTitle(text, matchedGroup, timeRange) {
   return cleanEventName(result, matchedGroup);
 }
 
-function buildParseWarnings({ eventName, locationGroupId, eventDate, startTime, endTime }) {
+function minutesFromTime(value) {
+  const match = String(value || "").match(/^(\d{2}):(\d{2})/);
+  if (!match) return null;
+  return (Number(match[1]) * 60) + Number(match[2]);
+}
+
+function buildTimeWarnings(startTime, endTime) {
+  const warnings = [];
+  const start = minutesFromTime(startTime);
+  const end = minutesFromTime(endTime);
+  if (start == null || end == null) return warnings;
+  if (end <= start) warnings.push("end_not_after_start");
+  const duration = end - start;
+  if (duration > 12 * 60) warnings.push("suspicious_time");
+  if (start < 5 * 60 || end > 23 * 60) warnings.push("suspicious_time");
+  return warnings;
+}
+
+function inferEventProfile({ eventName = "", notes = "", attendeeCount = null, startTime = "" } = {}) {
+  const text = normalizeLoose(`${eventName} ${notes}`);
+  const count = Number.parseInt(String(attendeeCount ?? ""), 10);
+  let eventType = "general_event";
+  if (/\b(prom|wedding|reception|gala|fundraiser|banquet|dinner)\b/.test(text)) eventType = "formal_event";
+  else if (/\b(school|students|field trip|class|camp|youth)\b/.test(text)) eventType = "school_group";
+  else if (/\b(birthday|party)\b/.test(text)) eventType = "party";
+  else if (/\b(corporate|meeting|conference|training)\b/.test(text)) eventType = "corporate_event";
+  else if (/\b(member|members|donor|preview)\b/.test(text)) eventType = "member_event";
+  else if (/\b(public|festival|concert|run|race)\b/.test(text)) eventType = "public_event";
+
+  const start = minutesFromTime(startTime);
+  const afterHours = start != null && start >= 17 * 60;
+  let restroomPressure = "low";
+  if (Number.isFinite(count) && count >= 150) restroomPressure = "high";
+  else if (Number.isFinite(count) && count >= 60) restroomPressure = "medium";
+  if (/\b(bar|alcohol|dinner|reception|prom|gala|festival|public)\b/.test(text) && restroomPressure !== "high") restroomPressure = "medium";
+
+  let cleanupPressure = "low";
+  if (/\b(food|dinner|reception|party|cake|catering|vendors?|setup|breakdown|cleanup|trash)\b/.test(text)) cleanupPressure = "medium";
+  if ((Number.isFinite(count) && count >= 150) || /\b(festival|public|concert|prom|gala)\b/.test(text)) cleanupPressure = "high";
+
+  let custodialImpact = "low";
+  if (restroomPressure === "high" || cleanupPressure === "high") custodialImpact = "high";
+  else if (restroomPressure === "medium" || cleanupPressure === "medium" || afterHours) custodialImpact = "medium";
+
+  return {
+    event_type: eventType,
+    restroom_pressure: restroomPressure,
+    cleanup_pressure: cleanupPressure,
+    custodial_impact: custodialImpact,
+    after_hours: afterHours,
+    requires_followup: custodialImpact !== "low" || /\b(setup|breakdown|cleanup|trash|restroom|bathroom|security|vendors?)\b/.test(text),
+  };
+}
+
+function appendOperationalNotes(notes = "", profile = {}) {
+  const flags = [
+    profile.event_type ? `type=${profile.event_type}` : "",
+    profile.custodial_impact ? `custodial=${profile.custodial_impact}` : "",
+    profile.restroom_pressure ? `restrooms=${profile.restroom_pressure}` : "",
+    profile.cleanup_pressure ? `cleanup=${profile.cleanup_pressure}` : "",
+    profile.after_hours ? "after_hours=yes" : "",
+    profile.requires_followup ? "followup=yes" : "",
+  ].filter(Boolean).join("; " );
+  return cleanupLooseText([notes, flags ? `Operational flags: ${flags}.` : ""].filter(Boolean).join(" "));
+}
+
+function buildFieldConfidence({ eventName, locationGroupId, eventDate, startTime, endTime, attendeeCount, areaCandidates = [], warnings = [] } = {}) {
+  const warningSet = new Set(warnings || []);
+  return {
+    event_name: eventName ? (warningSet.has("missing_event_name") ? "low" : "high") : "low",
+    area: locationGroupId ? (warningSet.has("ambiguous_area") || areaIsAmbiguous(areaCandidates) ? "medium" : "high") : "low",
+    date: eventDate ? (warningSet.has("ambiguous_date") ? "medium" : "high") : "low",
+    time: startTime && endTime ? (warningSet.has("suspicious_time") || warningSet.has("ambiguous_time") ? "medium" : "high") : "low",
+    attendees: attendeeCount == null || attendeeCount === "" ? "medium" : "high",
+  };
+}
+
+function buildParseWarnings({ eventName, locationGroupId, eventDate, startTime, endTime, areaCandidates = [] }) {
   const warnings = [];
   if (!eventName) warnings.push("missing_event_name");
   if (!locationGroupId) warnings.push("missing_area");
+  if (locationGroupId && areaIsAmbiguous(areaCandidates)) warnings.push("ambiguous_area");
   if (!eventDate) warnings.push("missing_date");
   if (!startTime || !endTime) warnings.push("missing_time");
-  if (startTime && endTime && endTime <= startTime) warnings.push("end_not_after_start");
-  return warnings;
+  warnings.push(...buildTimeWarnings(startTime, endTime));
+  return Array.from(new Set(warnings));
 }
 
 function parseOneEventText(rawText, locationGroups, index = 0) {
