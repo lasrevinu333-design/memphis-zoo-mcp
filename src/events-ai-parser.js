@@ -438,7 +438,7 @@ function detectInlineLabeledTimeRange(text) {
 
 function detectAttendeeCount(text) {
   const raw = String(text || "");
-  let match = raw.match(/\b(\d{1,5})\s*(attendees|guests|people|students|kids|children|children's|pax|persons)\b/i);
+  let match = raw.match(/\b(\d{1,5})\s+(?:(?:school|expected|projected|estimated|about|approx(?:imately)?)\s+){0,3}(attendees|guests|people|students|kids|children|children's|pax|persons)\b/i);
   if (match) return Number.parseInt(match[1], 10);
   match = raw.match(/\b(?:attendance|count|projected|expected|guests?)\s*[:\-]?\s*(\d{1,5})\b/i);
   if (match) return Number.parseInt(match[1], 10);
@@ -549,6 +549,7 @@ function inferSpecialEventTitle(value = "") {
   const raw = String(value || "").replace(/\s+/g, " " ).trim();
   const lower = raw.toLowerCase();
   const known = [
+    ["donor dinner", "Donor Dinner"],
     ["birthday party", "Birthday party"],
     ["member preview", "Member Preview"],
     ["corporate picnic", "Corporate Picnic"],
@@ -579,6 +580,7 @@ function cleanEventName(eventName, matchedGroup) {
   if (specialTitle) return specialTitle;
   result = result.replace(/\|+/g, " " );
   result = result.replace(/^the\s+/i, "");
+  result = result.replace(/^name\s*:?\s*/i, "");
   result = result.replace(/^theater\s+/i, "");
   result = result.replace(/\bat\s+[A-Za-z0-9'& -]{3,80}?\s+only\s+on\b/i, " on");
   result = result.replace(/\bat\s+[A-Za-z0-9'& -]{3,80}?\s+on\b/i, " on");
