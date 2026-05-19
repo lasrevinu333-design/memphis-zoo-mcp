@@ -205,7 +205,7 @@ function buildDate(year, month, day) {
 
   const thisDate = new Date(`${thisYear}T12:00:00Z`);
   const deltaDays = Math.round((thisDate.getTime() - todayUtc) / 86400000);
-  if (deltaDays >= -1 && deltaDays <= 35) return thisYear;
+  if (deltaDays >= -60 && deltaDays <= 370) return thisYear;
   if (deltaDays < -1 && nextYear) return nextYear;
   return thisYear;
 }
@@ -464,6 +464,9 @@ function rankLocationGroups(locationGroups, nameOrCode, limit = 3) {
         const overlap = needleParts.filter((part) => nameParts.includes(part)).length;
         if (overlap) score = (overlap * 80) + normalized.length;
       }
+      if (normalized === "event center" && score < 900 && !/\b(ec|event center)\b/.test(needle)) score = -1;
+      if (normalized === "event center" && /\b(splash pad|cat house|cathouse|teton trek|china theater|primate pavilion|primate pavillion)\b/.test(needle)) score -= 250;
+      if (needle === "pavilion" && normalized !== "pavilion") score = -1;
       if (score < 0) continue;
       const key = String(group.location_group_id || group.group_code || group.group_name || "");
       const current = byGroup.get(key);
