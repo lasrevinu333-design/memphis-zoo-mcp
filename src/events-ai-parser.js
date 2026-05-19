@@ -241,6 +241,68 @@ function normalizePossibleDate(value) {
   return "";
 }
 
+function detectEventDateFromText(text = "") {
+  const raw = String(text || "").trim();
+  if (!raw) return "";
+  const monthNames = Object.keys(MONTH_LOOKUP).sort((a, b) => b.length - a.length).join("|");
+
+  const weekdayMonthPattern = new RegExp(`\\b(?:Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday),?\\s+(${monthNames})\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s*(\\d{2,4}))?\\b`, "i");
+  let match = raw.match(weekdayMonthPattern);
+  if (match) {
+    const year = match[3] ? Number(String(match[3]).length === 2 ? `20${match[3]}` : match[3]) : NaN;
+    const built = buildDate(year, MONTH_LOOKUP[String(match[1]).toLowerCase()], Number(match[2]));
+    if (built) return built;
+  }
+
+  const monthDayPattern = new RegExp(`\\b(${monthNames})\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s*(\\d{2,4}))?\\b`, "i");
+  match = raw.match(monthDayPattern);
+  if (match) {
+    const year = match[3] ? Number(String(match[3]).length === 2 ? `20${match[3]}` : match[3]) : NaN;
+    const built = buildDate(year, MONTH_LOOKUP[String(match[1]).toLowerCase()], Number(match[2]));
+    if (built) return built;
+  }
+
+  const dayMonthPattern = new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+(${monthNames})\\.?(?:,?\\s*(\\d{2,4}))?\\b`, "i");
+  match = raw.match(dayMonthPattern);
+  if (match) {
+    const year = match[3] ? Number(String(match[3]).length === 2 ? `20${match[3]}` : match[3]) : NaN;
+    const built = buildDate(year, MONTH_LOOKUP[String(match[2]).toLowerCase()], Number(match[1]));
+    if (built) return built;
+  }
+
+  const numericMatches = [...raw.matchAll(/\b(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?\b/g)];
+  for (const item of numericMatches) {
+    const before = raw.slice(Math.max(0, item.index - 3), item.index);
+    const after = raw.slice(item.index + item[0].length, item.index + item[0].length + 3);
+    if (/[:.]$/.test(before) || /^[:.]/.test(after)) continue;
+    const year = item[3] ? Number(String(item[3]).length === 2 ? `20${item[3]}` : item[3]) : NaN;
+    const built = buildDate(year, Number(item[1]), Number(item[2]));
+    if (built) return built;
+  }
+  return "";
+}
+
+function compactNarrativeNotes(rawText = "", eventName = "", matchedGroup = null) {
+  const raw = String(rawText || "").replace(/\s+/g, " " ).trim();
+  if (!raw) return "";
+  const sentences = raw.split(/(?<=[.!?])\s+/).map((part) => part.trim()).filter(Boolean);
+  const kept = [];
+  for (let sentence of sentences) {
+    const lower = normalizeLoose(sentence);
+    if (!lower) continue;
+    if (/\bevent will run\b|\brun from\b/.test(lower)) continue;
+    sentence = sentence.replace(/^I would (also )?like to request that\s+/i, "");
+    sentence = sentence.replace(/^I would (also )?like to request\s+/i, "");
+    sentence = sentence.replace(/^please\s+/i, "");
+    if (eventName) sentence = sentence.replace(new RegExp(`\\b${escapeRegex(eventName)}\\b`, "ig"), "the event");
+    sentence = sentence.replace(/\bon\s+(?:Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday),?\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t|tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s*\d{2,4})?/ig, "");
+    sentence = removeAreaText(sentence, matchedGroup).replace(/\s+/g, " " ).trim();
+    sentence = sentence.replace(/^[,.;:\-\s]+|[,.;:\-\s]+$/g, "").trim();
+    if (sentence) kept.push(sentence.charAt(0).toUpperCase() + sentence.slice(1));
+  }
+  return cleanupLooseText(kept.join(" "));
+}
+
 function extractTimeParts(value) {
   const raw = String(value || "")
     .toLowerCase()
