@@ -350,10 +350,10 @@ function detectAttendeeCount(text) {
   return null;
 }
 
-function matchLocationGroup(locationGroups, nameOrCode) {
+function rankLocationGroups(locationGroups, nameOrCode, limit = 3) {
   const needle = normalizeLoose(nameOrCode);
-  if (!needle) return null;
-  let best = null;
+  if (!needle) return [];
+  const byGroup = new Map();
   for (const group of locationGroups || []) {
     const names = [group.group_name, group.group_code].concat(group.included_locations || []).filter(Boolean);
     for (const name of names) {
@@ -369,10 +369,45 @@ function matchLocationGroup(locationGroups, nameOrCode) {
         const overlap = needleParts.filter((part) => nameParts.includes(part)).length;
         if (overlap) score = (overlap * 80) + normalized.length;
       }
-      if (score >= 0 && (!best || score > best.score)) best = { group, score };
+      if (score < 0) continue;
+      const key = String(group.location_group_id || group.group_code || group.group_name || "");
+      const current = byGroup.get(key);
+      if (!current || score > current.score) {
+        byGroup.set(key, {
+          location_group_id: group.location_group_id || "",
+          group_name: group.group_name || "",
+          group_code: group.group_code || "",
+          matched_text: String(name || ""),
+          score,
+          group,
+        });
+      }
     }
   }
-  return best?.group || null;
+  return Array.from(byGroup.values())
+    .sort((a, b) => b.score - a.score || String(a.group_name).localeCompare(String(b.group_name)))
+    .slice(0, Math.max(1, limit));
+}
+
+function matchLocationGroup(locationGroups, nameOrCode) {
+  return rankLocationGroups(locationGroups, nameOrCode, 1)[0]?.group || null;
+}
+
+function areaIsAmbiguous(candidates = []) {
+  if (!Array.isArray(candidates) || candidates.length < 2) return false;
+  const [first, second] = candidates;
+  if (!first?.score || !second?.score) return false;
+  return first.score < 900 && (first.score - second.score) < 90;
+}
+
+function compactAreaCandidates(candidates = []) {
+  return (Array.isArray(candidates) ? candidates : []).map((candidate) => ({
+    location_group_id: candidate.location_group_id || "",
+    group_name: candidate.group_name || "",
+    group_code: candidate.group_code || "",
+    matched_text: candidate.matched_text || "",
+    score: Number(candidate.score || 0),
+  }));
 }
 
 function stripTimeDateNoise(text) {
