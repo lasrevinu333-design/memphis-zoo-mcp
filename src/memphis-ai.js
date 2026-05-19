@@ -417,7 +417,7 @@ function summarizeAssignments(assignments = [], emptyText) {
     const group = row.group_name || row.group_code || "Unknown area";
     const start = row.coverage_start || "—";
     const end = row.coverage_end || "—";
-    return `${employee} covers ${group} from ${start} to ${end}${lunchTextForAssignment(row)}.`;
+    return `${employee} is assigned to ${group} for the shift.`;
   }).join(" ");
 }
 
@@ -444,7 +444,8 @@ function summarizeEmployeeAssignments(assignments = [], employeeName, serviceDat
     return `I couldn't find schedule assignments for ${resolvedName} on ${weekday}, ${serviceDate}.`;
   }
 
-  return `${resolvedName} on ${weekday}, ${serviceDate}: ` + assignments.slice(0, 12).map((row) => `${row.group_name || row.group_code || "Unknown area"} from ${row.coverage_start || "—"} to ${row.coverage_end || "—"}`).join("; ") + ".";
+  const groups = Array.from(new Set(assignments.slice(0, 24).map((row) => row.group_name || row.group_code || "Unknown area").filter(Boolean)));
+  return `${resolvedName} on ${weekday}, ${serviceDate}: assigned to ${groups.join(", ")} for the shift.`;
 }
 
 function summarizeTickets(tickets = [], location = "") {
@@ -656,7 +657,7 @@ function summarizeWeeklyAssignments(days = []) {
       const group = row.group_name || row.group_code || "Unknown area";
       const start = row.coverage_start || "—";
       const end = row.coverage_end || "—";
-      return `${employee} — ${group} ${start}-${end}`;
+      return `${employee} — ${group}`;
     });
     return `${day.service_date}: ${lines.join("; ")}.`;
   });
@@ -850,9 +851,9 @@ async function summarizeOwnerQuestion(runReadOnlySql, runRpc, serviceDate, today
     if (futureOffset != null && futureOffset > 0) return `I do not see generated schedule assignments for ${areaRow.group_name} on ${serviceDate} yet.`;
     return `I could not find an assignment for ${areaRow.group_name} on ${serviceDate}.`;
   }
-  const lines = assignments.slice(0, 4).map((row) => `${row.employee_name || row.assigned_employee_name} ${row.coverage_start || '—'}-${row.coverage_end || '—'}`);
+  const names = Array.from(new Set(assignments.slice(0, 8).map((row) => row.employee_name || row.assigned_employee_name).filter(Boolean)));
   const label = areaRow.group_name || location?.location_name || "that area";
-  return `${label}: ${lines.join('; ')}.`;
+  return `${label}: ${names.length ? names.join('; ') : 'assigned owner not listed'}.`;
 }
 
 async function fetchAssignedEmployeeForDevice(runReadOnlySql, deviceId) {
