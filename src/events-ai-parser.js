@@ -764,7 +764,9 @@ function parseOneEventText(rawText, locationGroups, index = 0) {
   const attendeeCount = Number.isFinite(attendeeValue) ? String(attendeeValue) : null;
   const ambiguousAreaName = extractAmbiguousAreaEventName(normalizedText);
   const narrativeName = extractNarrativeEventName(normalizedText);
-  const eventName = cleanEventName(eventNameFromLabel || ambiguousAreaName || narrativeName || extractFallbackTitle(normalizedText, matchedGroup, timeRange), matchedGroup);
+  const eventName = eventNameFromLabel
+    ? cleanEventName(eventNameFromLabel, matchedGroup)
+    : (ambiguousAreaName || cleanEventName(narrativeName || extractFallbackTitle(normalizedText, matchedGroup, timeRange), matchedGroup));
   const baseNotes = notesFromLabel ? buildNotesFromNarrative(normalizedText, notesFromLabel, eventName, matchedGroup) : compactNarrativeNotes(normalizedText, eventName, matchedGroup);
   const startTime = timeRange?.start_time || "";
   const endTime = timeRange?.end_time || "";
