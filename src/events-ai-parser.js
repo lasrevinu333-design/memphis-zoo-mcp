@@ -446,8 +446,14 @@ function rankLocationGroups(locationGroups, nameOrCode, limit = 3) {
       if (!normalized) continue;
       let score = -1;
       if (needle === normalized) score = 1000 + normalized.length;
-      else if (needle.includes(normalized)) score = 700 + normalized.length;
-      else if (normalized.includes(needle)) score = 500 + needle.length;
+      else if (needle.includes(normalized)) {
+        if (normalized.length <= 2 && !(new RegExp(`\\b${escapeRegex(normalized)}\\b`).test(needle))) score = -1;
+        else score = 700 + normalized.length;
+      }
+      else if (normalized.includes(needle)) {
+        if (needle.length <= 2 && !(new RegExp(`\\b${escapeRegex(needle)}\\b`).test(normalized))) score = -1;
+        else score = 500 + needle.length;
+      }
       else {
         const needleParts = needle.split(/\s+/).filter(Boolean);
         const nameParts = normalized.split(/\s+/).filter(Boolean);
