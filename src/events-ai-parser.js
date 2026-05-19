@@ -550,6 +550,14 @@ function inferSpecialEventTitle(value = "") {
   const lower = raw.toLowerCase();
   const known = [
     ["donor dinner", "Donor Dinner"],
+    ["donor reception", "Donor Reception"],
+    ["corporate meeting", "Corporate Meeting"],
+    ["school visit", "School Visit"],
+    ["field trip", "Field Trip"],
+    ["member night", "Member Night"],
+    ["private tour", "Private Tour"],
+    ["staff training", "Staff Training"],
+    ["stingrays preview", "StingRays Preview"],
     ["birthday party", "Birthday party"],
     ["member preview", "Member Preview"],
     ["corporate picnic", "Corporate Picnic"],
