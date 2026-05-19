@@ -443,10 +443,11 @@ export function createScheduleRouter({
     }
 
     const generateResult = await runRpc("sch_generate_daily_schedule", { p_service_date: serviceDate, p_force: true });
+    const staticRestoreResult = await restoreStaticOwnersForDate(serviceDate);
     await runWriteSql("coverall_slots_publish", sql);
     const balanceResult = await rebalanceCoverAllAssignments(serviceDate);
     const currentSlots = await listCoverAllSlotsForDate(serviceDate);
-    return { service_date: serviceDate, slots: currentSlots, generate_result: generateResult, balance_result: balanceResult };
+    return { service_date: serviceDate, slots: currentSlots, generate_result: generateResult, static_restore_result: staticRestoreResult, balance_result: balanceResult };
   }
 
   async function rebalanceCoverAllAssignments(serviceDate) {
@@ -2476,7 +2477,8 @@ export function createScheduleRouter({
       const serviceDate = requireDate(req.body?.service_date || req.body?.date || (await getServiceDate()));
       const force = req.body?.force !== false;
       const data = await runRpc("sch_generate_daily_schedule", { p_service_date: serviceDate, p_force: force });
-      res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+      const static_restore_result = await restoreStaticOwnersForDate(serviceDate);
+      res.status(200).json({ ok: true, data: { generate_result: data, static_restore_result }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Generate daily schedule failed");
     }
@@ -2542,6 +2544,7 @@ export function createScheduleRouter({
       `);
 
       const generateResult = await runRpc("sch_generate_daily_schedule", { p_service_date: serviceDate, p_force: true });
+      const staticRestoreResult = await restoreStaticOwnersForDate(serviceDate);
       let coverallManual = null;
       if (requestedCoverAllSlots.length) {
         coverallManual = await publishCoverAllSlotsForDate(serviceDate, requestedCoverAllSlots);
@@ -2559,6 +2562,7 @@ export function createScheduleRouter({
           active_absence_count: activeRows.length,
           active_absences: activeRows,
           generate_result: generateResult,
+          static_restore_result: staticRestoreResult,
           coverall: coverallPlan,
           coverall_manual: coverallManual,
           manager_notification: coverallPlan?.manager_notification || null,
@@ -2636,6 +2640,7 @@ export function createScheduleRouter({
       `);
 
       const generateResult = await runRpc("sch_generate_daily_schedule", { p_service_date: serviceDate, p_force: true });
+      const staticRestoreResult = await restoreStaticOwnersForDate(serviceDate);
       const activeRows = await listPtoRows({ startDate: serviceDate, endDate: serviceDate });
       const stillAbsentRows = activeRows.filter((row) => String(row.employee_id || "") === employeeId);
 
@@ -2650,6 +2655,7 @@ export function createScheduleRouter({
           active_absence_count: activeRows.length,
           active_absences: activeRows,
           generate_result: generateResult,
+          static_restore_result: staticRestoreResult,
         },
         meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion },
       });
