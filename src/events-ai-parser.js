@@ -304,7 +304,10 @@ function compactNarrativeNotes(rawText = "", eventName = "", matchedGroup = null
 }
 
 function extractTimeParts(value) {
-  const raw = String(value || "")
+  const original = String(value || "").toLowerCase().trim();
+  if (original === "noon") return { hour: 12, minute: 0, second: 0, meridiem: "", explicit: true };
+  if (original === "midnight") return { hour: 0, minute: 0, second: 0, meridiem: "", explicit: true };
+  const raw = original
     .toLowerCase()
     .replace(/\b\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?\b/g, " ")
     .replace(/\b20\d{2}-\d{1,2}-\d{1,2}\b/g, " ")
@@ -375,6 +378,10 @@ function normalizeTimePair(startValue, endValue) {
   const endParts = extractTimeParts(endValue);
   let start = materializeTime(startParts);
   let end = materializeTime(endParts);
+
+  if (startParts && endParts && !startParts.explicit && endParts.explicit && endParts.meridiem) {
+    start = materializeTime({ ...startParts, meridiem: endParts.meridiem });
+  }
 
   if (startParts && endParts && !endParts.explicit) {
     const startMinutes = timeToMinutes(start);
@@ -510,13 +517,34 @@ function removeAreaText(text, group) {
   return result;
 }
 
-function cleanEventName(eventName, matchedGroup) {
+function cleanEventNameBase(eventName, matchedGroup) {
   let result = String(eventName || "");
   result = removeAreaText(result, matchedGroup);
   result = stripTimeDateNoise(result);
   result = result.replace(/\b(?:need|needs|requires|required|setup|cleanup|attendees|guests|people|students|notes?|details?)\b.*$/i, " ");
   result = result.replace(/\b(?:start time|begin time|end time|stop time|event date|event area|location group|location|venue|area|projected|attendance|attendees)\b.*$/i, " ");
   return cleanupLooseText(result);
+}
+
+function cleanEventName(eventName, matchedGroup) {
+  const original = String(eventName || "");
+  let result = original;
+  result = result.replace(/\|+/g, " " );
+  result = result.replace(/\b(?:host department|manager on duty)\b\s*:?\s*[^|,;]+/ig, " " );
+  result = result.replace(/\b(?:event|event name|title)\b\s*:?\s*/ig, " " );
+  result = removeAreaText(result, matchedGroup);
+  result = stripTimeDateNoise(result);
+  result = result.replace(/\b(?:will be over by|over by|near the|near|at|in|on|is thursday|is friday|is saturday|is sunday|is monday|is tuesday|is wednesday)\b.*$/i, " " );
+  result = result.replace(/\b(?:need|needs|requires|required|setup|cleanup|attendees|guests|people|students|notes?|details?)\b.*$/i, " " );
+  result = result.replace(/\b(?:start time|begin time|end time|stop time|event date|event area|location group|location|venue|area|projected|attendance|attendees)\b.*$/i, " " );
+  result = cleanupLooseText(result);
+  if (/\bbig group\b/i.test(original) || /\blarge group\b/i.test(original)) return "Large Group";
+  if (/school kids|students|school group/i.test(original)) return "School Group";
+  if (/member preview/i.test(original) && (!result || result.length > 30)) return "Member Preview";
+  if (/training games/i.test(original)) return "Training Games";
+  if (/run wild/i.test(original)) return "Run Wild";
+  if (/zoo brew/i.test(original)) return "Zoo Brew";
+  return result;
 }
 
 function cleanNotes(notes, eventName, matchedGroup) {
