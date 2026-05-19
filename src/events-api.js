@@ -886,6 +886,33 @@ export function createEventsAdminRouter({
     }
   });
 
+  router.post("/parse-test", async (req, res) => {
+    try {
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const includeRows = body.include_rows !== false;
+      const customFixtures = Array.isArray(body.fixtures)
+        ? body.fixtures.filter((fixture) => fixture && fixture.text && fixture.expect)
+        : null;
+      const data = await runParserRegressionTests({
+        runReadOnlySql,
+        fixtures: customFixtures && customFixtures.length ? customFixtures : EVENT_PARSER_TEST_FIXTURES,
+        includeRows,
+      });
+      res.status(200).json({
+        ok: true,
+        data,
+        meta: {
+          version: appVersion,
+          release_id: releaseId,
+          contract_version: EVENTS_CONTRACT_VERSION,
+          fixture_count: data.total,
+        },
+      });
+    } catch (error) {
+      fail(res, error, "Parser regression test failed", 400);
+    }
+  });
+
   router.post("/", async (req, res) => {
     try {
       maintenanceController?.kick("events_admin_create_before");
