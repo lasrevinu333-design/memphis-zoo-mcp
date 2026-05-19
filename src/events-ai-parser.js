@@ -330,6 +330,14 @@ function normalizeTimePair(startValue, endValue) {
 function detectTimeRange(text) {
   const raw = String(text || "").replace(/\s+/g, " ");
   const token = "(\\d{1,2}(?::?\\d{2})?\\s*(?:a\\.?m\\.?|p\\.?m\\.?|am|pm|a|p)?|\\d{3,4}\\s*(?:a\\.?m\\.?|p\\.?m\\.?|am|pm|a|p)?)";
+  const slashMatch = raw.match(new RegExp(`${token}\\s*(?:to|until|thru|through|\\-|–|—)\\s*${token}\\s*/\\s*${token}`, "i"));
+  if (slashMatch) {
+    const meridiemMatch = slashMatch[0].match(/(a\.?m\.?|p\.?m\.?|am|pm|a|p)\b/i);
+    const startRaw = slashMatch[1];
+    const lastEndRaw = slashMatch[3] + (meridiemMatch && !/(a\.?m\.?|p\.?m\.?|am|pm|a|p)\b/i.test(slashMatch[3]) ? ` ${meridiemMatch[1]}` : "");
+    const slashPair = normalizeTimePair(startRaw, lastEndRaw);
+    if (slashPair.start_time && slashPair.end_time) return { ...slashPair, matched_text: slashMatch[0] };
+  }
   const match = raw.match(new RegExp(`${token}\\s*(?:to|until|thru|through|\\-|–|—)\\s*${token}`, "i"));
   if (!match) return null;
   const pair = normalizeTimePair(match[1], match[2]);
