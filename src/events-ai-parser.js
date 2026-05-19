@@ -556,7 +556,8 @@ function parseOneEventText(rawText, locationGroups, index = 0) {
   const attendeesFromLabel = firstLabelValue(labels, ["Attendees", "Attendance", "Projected", "Guests", "People", "Count"]);
   const notesFromLabel = firstLabelValue(labels, ["Notes", "Details", "Comments", "Comment", "Needs"]);
 
-  const matchedGroup = matchLocationGroup(locationGroups, areaFromLabel) || matchLocationGroup(locationGroups, normalizedText);
+  const areaCandidates = rankLocationGroups(locationGroups, areaFromLabel || normalizedText, 3);
+  const matchedGroup = areaCandidates[0]?.group || null;
   const labeledTimeRange = detectInlineLabeledTimeRange(normalizedText);
   const timeRange = labeledTimeRange
     || (startFromLabel && endFromLabel
@@ -564,11 +565,14 @@ function parseOneEventText(rawText, locationGroups, index = 0) {
       : detectTimeRange(normalizedText));
   const eventDate = normalizePossibleDate(dateFromLabel) || normalizePossibleDate(endFromLabel) || normalizePossibleDate(normalizedText);
   const attendeeValue = detectAttendeeCount(attendeesFromLabel) ?? detectAttendeeCount(normalizedText);
+  const attendeeCount = Number.isFinite(attendeeValue) ? String(attendeeValue) : null;
   const eventName = cleanEventName(eventNameFromLabel || extractFallbackTitle(normalizedText, matchedGroup, timeRange), matchedGroup);
-  const notes = cleanNotes(notesFromLabel || "", eventName, matchedGroup);
+  const baseNotes = cleanNotes(notesFromLabel || "", eventName, matchedGroup);
   const startTime = timeRange?.start_time || "";
   const endTime = timeRange?.end_time || "";
-  const warnings = buildParseWarnings({ eventName, locationGroupId: matchedGroup?.location_group_id || "", eventDate, startTime, endTime });
+  const warnings = buildParseWarnings({ eventName, locationGroupId: matchedGroup?.location_group_id || "", eventDate, startTime, endTime, areaCandidates });
+  const operational_profile = inferEventProfile({ eventName, notes: baseNotes || normalizedText, attendeeCount, startTime, endTime });
+  const field_confidence = buildFieldConfidence({ eventName, locationGroupId: matchedGroup?.location_group_id || "", eventDate, startTime, endTime, attendeeCount, areaCandidates, warnings });
 
   return {
     raw_text: normalizedText,
@@ -579,12 +583,15 @@ function parseOneEventText(rawText, locationGroups, index = 0) {
     event_date: eventDate,
     start_time: startTime,
     end_time: endTime,
-    attendee_count: Number.isFinite(attendeeValue) ? String(attendeeValue) : null,
-    notes,
+    attendee_count: attendeeCount,
+    notes: appendOperationalNotes(baseNotes, operational_profile),
     created_by: "Input Console Parse",
-    confidence: warnings.length ? "medium" : "high",
+    confidence: warnings.length ? (warnings.includes("missing_event_name") || warnings.includes("missing_area") || warnings.includes("missing_date") || warnings.includes("missing_time") ? "medium" : "high") : "high",
     review_notes: warnings.length ? warnings.join(", ") : null,
     warnings,
+    area_candidates: compactAreaCandidates(areaCandidates),
+    field_confidence,
+    operational_profile,
   };
 }
 
