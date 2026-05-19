@@ -385,7 +385,11 @@ function normalizeTimePair(startValue, endValue) {
   let end = materializeTime(endParts);
 
   if (startParts && endParts && !startParts.explicit && endParts.explicit && endParts.meridiem) {
-    start = materializeTime({ ...startParts, meridiem: endParts.meridiem });
+    if (endParts.meridiem === "pm" && startParts.hour > endParts.hour && startParts.hour >= 7 && startParts.hour <= 11) {
+      start = materializeTime({ ...startParts, meridiem: "am" });
+    } else {
+      start = materializeTime({ ...startParts, meridiem: endParts.meridiem });
+    }
   }
 
   if (startParts && endParts && !endParts.explicit) {
@@ -404,6 +408,17 @@ function normalizeTimePair(startValue, endValue) {
 function detectTimeRange(text) {
   const raw = String(text || "").replace(/\s+/g, " ");
   const token = "(noon|midnight|(?<![-\\d])\\d{3,4}\\s*(?:a\\.?m\\.?|p\\.?m\\.?|am|pm|a|p)?|\\d{1,2}(?::?\\d{2})?\\s*(?:a\\.?m\\.?|p\\.?m\\.?|am|pm|a|p)?)";
+  const compactRange = raw.match(/\b(\d{3,4})\s*(?:to|until|thru|through|\-|–|—)\s*(\d{3,4})\b/i);
+  if (compactRange) {
+    const pair = normalizeTimePair(compactRange[1], compactRange[2]);
+    if (pair.start_time && pair.end_time) return { ...pair, matched_text: compactRange[0] };
+  }
+  const explicitConnector = [...raw.matchAll(new RegExp(`${token}\\s*(?:to|until|thru|through)\\s*${token}`, "ig"))].filter((m) => /(a\.?m\.?|p\.?m\.?|am|pm|a|p|noon|midnight)/i.test(m[0]));
+  if (explicitConnector.length) {
+    const picked = explicitConnector[explicitConnector.length - 1];
+    const pair = normalizeTimePair(picked[1], picked[2]);
+    if (pair.start_time && pair.end_time) return { ...pair, matched_text: picked[0] };
+  }
   const slashMatch = raw.match(new RegExp(`${token}\\s*(?:to|until|thru|through|\\-|–|—)\\s*${token}\\s*/\\s*${token}`, "i"));
   if (slashMatch) {
     const meridiemMatch = slashMatch[0].match(/(a\.?m\.?|p\.?m\.?|am|pm|a|p)\b/i);
@@ -411,11 +426,6 @@ function detectTimeRange(text) {
     const lastEndRaw = slashMatch[3] + (meridiemMatch && !/(a\.?m\.?|p\.?m\.?|am|pm|a|p)\b/i.test(slashMatch[3]) ? ` ${meridiemMatch[1]}` : "");
     const slashPair = normalizeTimePair(startRaw, lastEndRaw);
     if (slashPair.start_time && slashPair.end_time) return { ...slashPair, matched_text: slashMatch[0] };
-  }
-  const compactRange = raw.match(/\b(\d{3,4})\s*(?:to|until|thru|through|\-|–|—)\s*(\d{3,4})\b/i);
-  if (compactRange) {
-    const pair = normalizeTimePair(compactRange[1], compactRange[2]);
-    if (pair.start_time && pair.end_time) return { ...pair, matched_text: compactRange[0] };
   }
   const match = raw.match(new RegExp(`${token}\\s*(?:to|until|thru|through|\\-|–|—)\\s*${token}`, "i"));
   if (!match) return null;
@@ -438,9 +448,9 @@ function detectInlineLabeledTimeRange(text) {
 
 function detectAttendeeCount(text) {
   const raw = String(text || "");
-  let match = raw.match(/\b(\d{1,5})\s+(?:(?:school|expected|projected|estimated|about|approx(?:imately)?)\s+){0,3}(attendees|guests|people|students|kids|children|children's|pax|persons)\b/i);
+  let match = raw.match(/\b(\d{1,5})\s+(?:(?:school|media|staff|volunteer|expected|projected|estimated|about|around|approx(?:imately)?)\s+){0,4}(attendees|guests|people|students|kids|children|children's|volunteers?|staff|media|pax|persons)\b/i);
   if (match) return Number.parseInt(match[1], 10);
-  match = raw.match(/\b(?:attendance|count|projected|expected|guests?)\s*[:\-]?\s*(\d{1,5})\b/i);
+  match = raw.match(/\b(?:attendance|attendees|count|projected|expected|guests?)\s*[:\-]?\s*(\d{1,5})\b/i);
   if (match) return Number.parseInt(match[1], 10);
   return null;
 }
@@ -583,6 +593,8 @@ function inferSpecialEventTitle(value = "") {
     ["training games", "Training Games"],
     ["windsor prom", "Windsor Prom"],
   ];
+  const tourCalledFirst = raw.match(/\b(?:tour|event|program|party|meeting|game|training)\s+called\s+([A-Za-z0-9'& -]{3,80}?)(?:\s+at\s+|\s+on\s+|\s+from\s+|\.|,)/i);
+  if (tourCalledFirst?.[1]) return cleanupLooseText(tourCalledFirst[1]);
   for (const [needle, title] of known) if (lower.includes(needle)) return title;
   const tourCalled = raw.match(/\b(?:tour|event|program|party|meeting|game|training)\s+called\s+([A-Za-z0-9'& -]{3,80}?)(?:\s+at\s+|\s+on\s+|\s+from\s+|\.|,)/i);
   if (tourCalled?.[1]) return cleanupLooseText(tourCalled[1]);
