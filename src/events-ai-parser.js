@@ -808,10 +808,11 @@ function parseOneEventText(rawText, locationGroups, index = 0) {
   const attendeeValue = detectAttendeeCount(attendeesFromLabel) ?? detectAttendeeCount(normalizedText);
   const attendeeCount = Number.isFinite(attendeeValue) ? String(attendeeValue) : null;
   const ambiguousAreaName = extractAmbiguousAreaEventName(normalizedText);
+  const specialName = inferSpecialEventTitle(normalizedText);
   const narrativeName = extractNarrativeEventName(normalizedText);
   const eventName = eventNameFromLabel
     ? cleanEventName(eventNameFromLabel, matchedGroup)
-    : (ambiguousAreaName || cleanEventName(narrativeName || extractFallbackTitle(normalizedText, matchedGroup, timeRange), matchedGroup));
+    : (ambiguousAreaName || specialName || cleanEventName(narrativeName || extractFallbackTitle(normalizedText, matchedGroup, timeRange), matchedGroup));
   const baseNotes = notesFromLabel ? buildNotesFromNarrative(normalizedText, notesFromLabel, eventName, matchedGroup) : compactNarrativeNotes(normalizedText, eventName, matchedGroup);
   const startTime = timeRange?.start_time || "";
   const endTime = timeRange?.end_time || "";
