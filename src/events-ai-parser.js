@@ -188,7 +188,11 @@ function isoDateFor(year, month, day) {
 
 function buildDate(year, month, day) {
   if (!Number.isFinite(month) || !Number.isFinite(day)) return "";
-  if (Number.isFinite(year)) return isoDateFor(year, month, day);
+  if (Number.isFinite(year)) {
+    const nowYear = new Date().getFullYear();
+    if (year < nowYear - 1 || year > nowYear + 2) return buildDate(NaN, month, day);
+    return isoDateFor(year, month, day);
+  }
 
   const now = new Date();
   const currentYear = now.getFullYear();
