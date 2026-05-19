@@ -1470,26 +1470,26 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       const eventArea = areaRow?.group_name === "Event Center" && !/\b(event center|event centre|ec)\b/i.test(text) ? "" : (areaRow?.group_name || "");
       const data = await executeTool("get_upcoming_events", { days: 14, area: eventArea });
       await saveThreadContext(runRpc, threadId, { last_intent: "upcoming_events", last_group_name: areaRow?.group_name || null, last_service_date: relativeServiceDate, last_subject_type: "group", context_json: mergeContextJson(threadContext, { last_question_shape: "upcoming_events", last_subject_kind: "group", last_subject_label: areaRow?.group_name || null }) });
-      return { text: summarizeEvents(data.events), meta: { fallback: true, mode: "local_events" } };
+      return { text: summarizeEvents(data.events), meta: { fallback: true, mode: "local_events", sources: ["events_app_events", "location_groups"] } };
     }
 
     if (lower.includes("ticket")) {
       const data = await executeTool("get_open_tickets", { location: findLocationCode(text) || text });
       await saveThreadContext(runRpc, threadId, { last_intent: "open_tickets", last_location_code: findLocationCode(text) || null, last_service_date: relativeServiceDate, last_subject_type: "location" });
-      return { text: summarizeTickets(data.tickets, findLocationCode(text)), meta: { fallback: true, mode: "local_tickets" } };
+      return { text: summarizeTickets(data.tickets, findLocationCode(text)), meta: { fallback: true, mode: "local_tickets", sources: ["v_open_maintenance_tickets"] } };
     }
 
     if (/(pto|p\s*t\s*o|time off|callout|call out|sick|vacation|absent|absence|absences|off|out on|out today|out tomorrow|who is out|who's out|cover|covering|fill|filling)/i.test(lower) && !isContradictionFollowUp(text)) {
       const employeeName = await guessEmployeeName(runRpc, text) || (shouldUseEmployeeContext(text) ? threadContext?.last_employee_name : "") || "";
       const data = await executeTool("get_absence_coverage", { employee_name: employeeName, service_date: relativeServiceDate });
       await saveThreadContext(runRpc, threadId, { last_intent: "absence_coverage", last_employee_name: employeeName || null, last_service_date: relativeServiceDate, last_subject_type: "employee" });
-      return { text: summarizeAbsenceCoverage(data, employeeName), meta: { fallback: true, mode: "local_absence_coverage" } };
+      return { text: summarizeAbsenceCoverage(data, employeeName), meta: { fallback: true, mode: "local_absence_coverage", sources: ["daily_absence_overrides", "employee_planned_time_off", "employee_pto", "v_memphis_absence_coverage"] } };
     }
 
     if ((lower.includes("my schedule") || lower === "schedule" || lower.includes("what am i assigned") || lower.includes("what am i doing today")) && assignedEmployee?.assigned_employee_name) {
       const data = await executeTool("get_my_schedule", { device_id: deviceId, service_date: relativeServiceDate });
       await saveThreadContext(runRpc, threadId, { last_intent: "my_schedule", last_employee_name: data.employee_name || assignedEmployee.assigned_employee_name, last_service_date: relativeServiceDate, last_subject_type: "employee", context_json: mergeContextJson(threadContext, { last_question_shape: "my_schedule", last_subject_kind: "employee", last_subject_label: data.employee_name || assignedEmployee.assigned_employee_name }) });
-      return { text: summarizeEmployeeAssignments(data.assignments, data.employee_name || assignedEmployee.assigned_employee_name, data.service_date), meta: { fallback: true, mode: "local_my_schedule" } };
+      return { text: summarizeEmployeeAssignments(data.assignments, data.employee_name || assignedEmployee.assigned_employee_name, data.service_date), meta: { fallback: true, mode: "local_my_schedule", sources: ["devices", "v_memphis_employee_schedule"] } };
     }
 
     if (/(who can cover|who should cover|best backup|best person to cover|coverage candidate)/i.test(lower)) {
@@ -1497,21 +1497,21 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       const timeWindow = extractTimeWindow(text) || {};
       const data = await executeTool("get_coverage_candidates", { service_date: relativeServiceDate, area: areaRow?.group_name || text, coverage_start: timeWindow.start, coverage_end: timeWindow.end });
       await saveThreadContext(runRpc, threadId, { last_intent: "coverage_candidates", last_group_name: areaRow?.group_name || null, last_service_date: relativeServiceDate, last_subject_type: "group", context_json: { coverage_start: data.coverage_start || null, coverage_end: data.coverage_end || null } });
-      return { text: summarizeCoverageCandidates(data.candidates, data.group_name || areaRow?.group_name || text), meta: { fallback: true, mode: "local_coverage_candidates" } };
+      return { text: summarizeCoverageCandidates(data.candidates, data.group_name || areaRow?.group_name || text), meta: { fallback: true, mode: "local_coverage_candidates", sources: ["sch_get_coverage_candidates", "v_memphis_open_segments"] } };
     }
 
     if (/(open segments|what is open|what's open|uncovered|unassigned)/i.test(lower)) {
       const areaRow = await resolveAreaRow(runReadOnlySql, relativeServiceDate, text, threadContext);
       const data = await executeTool("get_open_segments", { service_date: relativeServiceDate, area: areaRow?.group_name || "" });
       await saveThreadContext(runRpc, threadId, { last_intent: "open_segments", last_group_name: areaRow?.group_name || null, last_service_date: relativeServiceDate, last_subject_type: "group" });
-      return { text: summarizeOpenSegments(data.open_segments, data.service_date), meta: { fallback: true, mode: "local_open_segments" } };
+      return { text: summarizeOpenSegments(data.open_segments, data.service_date), meta: { fallback: true, mode: "local_open_segments", sources: ["v_memphis_open_segments"] } };
     }
 
     if (/(load|workload|heaviest|busy)/i.test(lower)) {
       const employeeName = await guessEmployeeName(runRpc, text) || (shouldUseEmployeeContext(text) ? threadContext?.last_employee_name : "") || "";
       const data = await executeTool("get_employee_load_summary", { service_date: relativeServiceDate, employee_name: employeeName });
       await saveThreadContext(runRpc, threadId, { last_intent: "employee_load_summary", last_employee_name: employeeName || null, last_service_date: relativeServiceDate, last_subject_type: employeeName ? "employee" : "summary" });
-      return { text: summarizeLoadSummary(data.load_rows, data.service_date), meta: { fallback: true, mode: "local_load_summary" } };
+      return { text: summarizeLoadSummary(data.load_rows, data.service_date), meta: { fallback: true, mode: "local_load_summary", sources: ["v_memphis_employee_load_summary"] } };
     }
 
     if (/(why is .* open|why is .* uncovered|why open)/i.test(lower)) {
@@ -1537,7 +1537,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       const data = await executeTool("get_location_details", { location: query });
       if (data?.location) {
         await saveThreadContext(runRpc, threadId, { last_intent: "location_details", last_group_name: data.location.location_name || null, last_location_code: data.location.location_code || null, last_service_date: relativeServiceDate, last_subject_type: "location" });
-        return { text: summarizeLocationDetails(data), meta: { fallback: true, mode: "local_location_details" } };
+        return { text: summarizeLocationDetails(data), meta: { fallback: true, mode: "local_location_details", sources: ["locations", "location_groups", "sch_get_current_owner"] } };
       }
     }
 
@@ -1561,7 +1561,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
             : (areaRow?.group_name || locationRow?.group_names?.[0] || threadContext?.last_group_name || null),
         })
       });
-      if (ownerText) return { text: ownerText, meta: { fallback: true, mode: "local_owner" } };
+      if (ownerText) return { text: ownerText, meta: { fallback: true, mode: "local_owner", sources: ["v_memphis_area_schedule", "sch_get_current_owner"] } };
     }
 
     if (lower.includes("scan") || lower.includes("state")) {
@@ -1573,7 +1573,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
           formatLead("Scan state", stateValue.suggested_action || stateValue.status || "available"),
           stateValue.location_name || stateValue.location_code ? `Location: ${stateValue.location_name || stateValue.location_code}.` : "",
           stateValue.open_session_status ? `Session: ${stateValue.open_session_status}.` : "",
-        ]), meta: { fallback: true, mode: "local_scan" } };
+        ]), meta: { fallback: true, mode: "local_scan", sources: ["tool_get_location_scan_state"] } };
       }
     }
 
@@ -1612,14 +1612,14 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       const noAssignmentsText = data.service_date && data.service_date > todayServiceDate
         ? `I do not see generated schedule assignments for ${areaRow?.group_name || text} on ${data.service_date} yet.`
         : `I couldn't find schedule assignments for ${areaRow?.group_name || text} on ${data.service_date}.`;
-      return { text: summarizeAssignments(data.assignments, noAssignmentsText), meta: { fallback: true, mode: "local_area_schedule" } };
+      return { text: summarizeAssignments(data.assignments, noAssignmentsText), meta: { fallback: true, mode: "local_area_schedule", sources: ["v_memphis_area_schedule", "daily_schedule_assignments"] } };
     }
 
     if (lower.includes("dashboard") || lower.includes("summary") || lower.includes("status") || lower.includes("metrics") || lower.includes("attendance") || lower.includes("guest") || lower.includes("guests") || lower.includes("visitor") || lower.includes("visitors")) {
       const data = await executeTool("get_dashboard_summary", {});
       await saveThreadContext(runRpc, threadId, { last_intent: "dashboard_summary", last_service_date: relativeServiceDate, last_subject_type: "summary" });
       const attendanceOnly = /\b(attendance|guest|guests|visitor|visitors)\b/i.test(text);
-      return { text: attendanceOnly ? summarizeAttendance(data.attendance, text) : summarizeDashboard(data.snapshot, data.attention_locations, data.attendance), meta: { fallback: true, mode: attendanceOnly ? "local_attendance" : "local_dashboard" } };
+      return { text: attendanceOnly ? summarizeAttendance(data.attendance, text) : summarizeDashboard(data.snapshot, data.attention_locations, data.attendance), meta: { fallback: true, mode: attendanceOnly ? "local_attendance" : "local_dashboard", sources: attendanceOnly ? ["current_attendance_state"] : ["v_admin_health_snapshot", "v_location_dashboard_status", "current_attendance_state"] } };
     }
 
     const weatherLocation = inferWeatherLocation(text, threadContext);
