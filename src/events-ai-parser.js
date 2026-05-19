@@ -523,6 +523,31 @@ function appendOperationalNotes(notes = "", profile = {}) {
   return cleanupLooseText([notes, flags ? `Operational flags: ${flags}.` : ""].filter(Boolean).join(" "));
 }
 
+function extractNarrativeEventName(text = "") {
+  const raw = String(text || "").replace(/\s+/g, " " ).trim();
+  if (!raw) return "";
+  const patterns = [
+    /\b(?:prior to|before|for|during)\s+(?:the\s+)?([A-Z][A-Za-z0-9'& -]{3,80}?)(?:\s+on\s+(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)|\s+from\s+|\s+at\s+|\.|,)/i,
+    /\b(?:event|program|party|meeting|game|training|tour)\s+(?:called|named|for)?\s*[:\-]?\s*([A-Z][A-Za-z0-9'& -]{3,80}?)(?:\s+on\s+|\s+from\s+|\.|,)/i,
+  ];
+  for (const pattern of patterns) {
+    const match = raw.match(pattern);
+    const candidate = String(match?.[1] || "").trim().replace(/^(?:the|a|an)\s+/i, "").replace(/[\s,.;:-]+$/g, "");
+    if (candidate && !/^(restrooms?|bathrooms?|courtyard|remain open|be cleaned|request)$/i.test(candidate)) return candidate;
+  }
+  return "";
+}
+
+function buildNotesFromNarrative(rawText = "", baseNotes = "", eventName = "", matchedGroup = null) {
+  const raw = cleanupLooseText(String(baseNotes || rawText || ""));
+  if (!raw) return "";
+  let note = raw;
+  if (eventName) note = note.replace(new RegExp(`\\b${escapeRegex(eventName)}\\b`, "ig"), eventName);
+  note = removeAreaText(note, matchedGroup);
+  note = note.replace(/^event\s*name\s*[:\-]?\s*/i, "").trim();
+  return cleanupLooseText(note);
+}
+
 function buildFieldConfidence({ eventName, locationGroupId, eventDate, startTime, endTime, attendeeCount, areaCandidates = [], warnings = [] } = {}) {
   const warningSet = new Set(warnings || []);
   return {
