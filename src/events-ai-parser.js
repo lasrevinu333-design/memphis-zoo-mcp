@@ -629,6 +629,20 @@ function appendOperationalNotes(notes = "", profile = {}) {
   return cleanupLooseText([notes, flags ? `Operational flags: ${flags}.` : ""].filter(Boolean).join(" "));
 }
 
+function extractAmbiguousAreaEventName(text = "") {
+  const raw = String(text || "").replace(/\s+/g, " " ).trim();
+  if (!raw) return "";
+  const match = raw.match(/^([A-Z][A-Za-z0-9'& -]{2,40}?)\s+at\s+([A-Z][A-Za-z0-9'& -]{3,80}?)(?:\s+on\s+|\s+from\s+|\s+for\s+|\.|,|$)/i);
+  if (!match) return "";
+  const left = cleanupLooseText(match[1]);
+  const right = cleanupLooseText(match[2]);
+  const leftNorm = normalizeLoose(left);
+  const rightNorm = normalizeLoose(right);
+  if (!leftNorm || !rightNorm) return "";
+  if (rightNorm.includes(leftNorm) && leftNorm.split(/\s+/).length <= 2 && rightNorm !== leftNorm) return right;
+  return "";
+}
+
 function extractNarrativeEventName(text = "") {
   const raw = String(text || "").replace(/\s+/g, " " ).trim();
   if (!raw) return "";
