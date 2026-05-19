@@ -15,6 +15,7 @@ const MONTH_LOOKUP = {
 
 const FIELD_LABELS = [
   "Event Name",
+  "Event",
   "Event Area",
   "Location Group",
   "Location",
@@ -402,7 +403,7 @@ function normalizeTimePair(startValue, endValue) {
 
 function detectTimeRange(text) {
   const raw = String(text || "").replace(/\s+/g, " ");
-  const token = "(noon|midnight|\\d{1,2}(?::?\\d{2})?\\s*(?:a\\.?m\\.?|p\\.?m\\.?|am|pm|a|p)?|\\d{3,4}\\s*(?:a\\.?m\\.?|p\\.?m\\.?|am|pm|a|p)?)";
+  const token = "(noon|midnight|\\d{3,4}\\s*(?:a\\.?m\\.?|p\\.?m\\.?|am|pm|a|p)?|\\d{1,2}(?::?\\d{2})?\\s*(?:a\\.?m\\.?|p\\.?m\\.?|am|pm|a|p)?)";
   const slashMatch = raw.match(new RegExp(`${token}\\s*(?:to|until|thru|through|\\-|–|—)\\s*${token}\\s*/\\s*${token}`, "i"));
   if (slashMatch) {
     const meridiemMatch = slashMatch[0].match(/(a\.?m\.?|p\.?m\.?|am|pm|a|p)\b/i);
@@ -539,10 +540,41 @@ function cleanEventNameBase(eventName, matchedGroup) {
   return cleanupLooseText(result);
 }
 
+function inferSpecialEventTitle(value = "") {
+  const raw = String(value || "").replace(/\s+/g, " " ).trim();
+  const lower = raw.toLowerCase();
+  const known = [
+    ["birthday party", "Birthday party"],
+    ["member preview", "Member Preview"],
+    ["corporate picnic", "Corporate Picnic"],
+    ["baby day", "Baby Day"],
+    ["lebonheur walmart day", "LeBonheur Walmart Day"],
+    ["keeper chat madness", "Keeper Chat Madness"],
+    ["twilight safari", "Twilight Safari"],
+    ["after hours rental", "After hours rental"],
+    ["public event", "Public event"],
+    ["farm event", "Farm event"],
+    ["zoo brew", "Zoo Brew"],
+    ["run wild", "Run Wild"],
+    ["training games", "Training Games"],
+    ["windsor prom", "Windsor Prom"],
+  ];
+  for (const [needle, title] of known) if (lower.includes(needle)) return title;
+  const chinaTheater = raw.match(/china\s+theater\s+(.+?)\s*(?:-|–|—)\s*(?:jan|feb|mar|apr|may|jun|june|jul|aug|sep|oct|nov|dec|\d{1,2}\/)/i);
+  if (chinaTheater?.[1]) return cleanupLooseText(chinaTheater[1]);
+  return "";
+}
+
 function cleanEventName(eventName, matchedGroup) {
   const original = String(eventName || "");
   let result = original;
+  const specialTitle = inferSpecialEventTitle(original);
+  if (specialTitle) return specialTitle;
   result = result.replace(/\|+/g, " " );
+  result = result.replace(/^the\s+/i, "");
+  result = result.replace(/^theater\s+/i, "");
+  result = result.replace(/\bat\s+[A-Za-z0-9'& -]{3,80}?\s+only\s+on\b/i, " on");
+  result = result.replace(/\bat\s+[A-Za-z0-9'& -]{3,80}?\s+on\b/i, " on");
   result = result.replace(/\b(?:host department|manager on duty)\b\s*:?\s*[^|,;]+/ig, " " );
   result = result.replace(/\b(?:event|event name|title)\b\s*:?\s*/ig, " " );
   result = removeAreaText(result, matchedGroup);
