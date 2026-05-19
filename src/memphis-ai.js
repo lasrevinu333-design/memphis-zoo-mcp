@@ -47,6 +47,83 @@ const DEFAULT_WEATHER_LOCATION = SHARED_DEFAULT_WEATHER_LOCATION;
 const GEMINI_TIMEOUT_MS = Number.parseInt(String(process.env.MEMPHIS_GEMINI_TIMEOUT_MS || "12000"), 10);
 const GEMINI_MAX_OUTPUT_TOKENS = Number.parseInt(String(process.env.MEMPHIS_GEMINI_MAX_OUTPUT_TOKENS || "900"), 10);
 
+const MEMPHIS_INTENT_KEYWORDS = {
+  daily_staff_schedule: ["who works", "who is working", "who's working", "staffing", "staff", "custodians", "scheduled", "who all works"],
+  area_schedule: ["who has", "who covers", "who owns", "assigned", "assignment", "area", "areas", "cleans", "cleaning"],
+  employee_work_status: ["where is", "where's", "is working", "does work", "work status", "employee status"],
+  my_schedule: ["my schedule", "my shift", "where am i", "what am i assigned", "what am i doing"],
+  absence_coverage: ["pto", "time off", "absent", "absence", "call out", "callout", "sick", "vacation", "who is out", "who's out"],
+  coverage_candidates: ["who can cover", "who should cover", "best backup", "coverage candidate", "cover this"],
+  open_segments: ["open segment", "open segments", "uncovered", "unassigned", "what is open", "what's open"],
+  events: ["event", "events", "upcoming", "coming up"],
+  tickets: ["ticket", "tickets", "maintenance", "broken", "out of order"],
+  dashboard: ["dashboard", "summary", "status", "metrics", "attendance", "guests", "visitors"],
+  contacts: ["phone", "number", "contact", "call", "text", "reach", "boss", "director", "manager"],
+  weather: ["weather", "rain", "storm", "temperature", "forecast"],
+  scan_state: ["scan", "nfc", "checked in", "session"],
+};
+
+function scoreMemphisIntent(lower, intent, terms) {
+  let score = 0;
+  for (const term of terms) {
+    if (lower.includes(term)) score += term.includes(" ") ? 24 + term.length : 12 + term.length;
+  }
+  if (intent === "daily_staff_schedule" && /\b(who|which)\b/.test(lower) && /\b(work|working|scheduled|staff|custodian|custodians)\b/.test(lower)) score += 38;
+  if (intent === "area_schedule" && /\b(who|where)\b/.test(lower) && /\b(has|covers|cleans|assigned|area|restroom|teton|aquarium|zambezi|primate)\b/.test(lower)) score += 32;
+  if (intent === "absence_coverage" && /\b(out|pto|absent|off|sick|vacation)\b/.test(lower)) score += 34;
+  return score;
+}
+
+function classifyMemphisIntentLocal(text = "", threadContext = {}) {
+  const raw = String(text || "").trim();
+  const lower = normalizeLoose(raw);
+  const scores = Object.entries(MEMPHIS_INTENT_KEYWORDS).map(([intent, terms]) => ({ intent, score: scoreMemphisIntent(lower, intent, terms) }));
+  if (/^(what about|how about|and|same|next|this|tomorrow|today|yesterday|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/.test(lower)) {
+    const lastIntent = String(threadContext?.last_intent || threadContext?.context_json?.last_question_shape || "").trim();
+    if (lastIntent) scores.push({ intent: lastIntent, score: 70 });
+  }
+  scores.sort((a, b) => b.score - a.score || a.intent.localeCompare(b.intent));
+  const top = scores[0] || { intent: "generic", score: 0 };
+  const second = scores[1] || { intent: "generic", score: 0 };
+  const dateRef = extractWeekdayReference(raw);
+  const route = {
+    intent: top.score > 0 ? top.intent : "generic",
+    confidence: Number(Math.max(0, Math.min(0.99, top.score / 100)).toFixed(2)),
+    score: top.score,
+    ambiguous: top.score > 0 && second.score > 0 && (top.score - second.score) < 12,
+    fallback_intents: scores.filter((item) => item.score > 0 && item.intent !== top.intent).slice(0, 3).map((item) => item.intent),
+    entities: {
+      audience: /\bops|operations|manager|managers\b/.test(lower) ? "ops" : (/\bcustodian|custodians|custodial\b/.test(lower) ? "custodians" : "all"),
+      date: {
+        explicit_date: extractExplicitDate(raw),
+        weekday: dateRef?.weekday || null,
+        weekday_modifier: dateRef?.modifier || null,
+        relative_offset: inferRelativeDateOffset(raw),
+        inherited_service_date: threadContext?.last_service_date || null,
+      },
+    },
+  };
+  if (route.confidence < 0.35 && /\b(what about|how about|same|that one|them|him|her)\b/.test(lower) && !threadContext?.last_intent) {
+    route.clarification = "Do you mean schedule, assignment, PTO, workload, tickets, or events?";
+  }
+  return route;
+}
+
+function annotateMemphisReply(reply = {}, route = {}, sources = [], warnings = []) {
+  return {
+    ...(reply || {}),
+    meta: {
+      ...(reply?.meta && typeof reply.meta === "object" ? reply.meta : {}),
+      intent: route.intent || reply?.meta?.intent || "unknown",
+      intent_confidence: route.confidence ?? reply?.meta?.intent_confidence ?? null,
+      intent_ambiguous: Boolean(route.ambiguous),
+      entities: route.entities || reply?.meta?.entities || {},
+      sources: Array.from(new Set([...(Array.isArray(sources) ? sources : []), ...((Array.isArray(reply?.meta?.sources) ? reply.meta.sources : []))].filter(Boolean))),
+      warnings: Array.from(new Set([...(Array.isArray(warnings) ? warnings : []), ...((Array.isArray(reply?.meta?.warnings) ? reply.meta.warnings : []))].filter(Boolean))),
+    },
+  };
+}
+
 
 
 function getGeminiApiKey() {
