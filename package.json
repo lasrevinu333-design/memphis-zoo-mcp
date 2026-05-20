@@ -1,0 +1,24 @@
+{
+  "name": "memphis-zoo-mcp",
+  "version": "1.0.0",
+  "description": "Memphis Zoo MCP backend. Package version is semantic; runtime deploy identity is defined by RELEASE_ID in src/index.js.",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/mcp-schema-bootstrap.js",
+    "start:bootstrap": "node src/mcp-schema-bootstrap.js",
+    "start:direct": "node src/index.js",
+    "smoke": "node scripts/smoke.mjs",
+    "test:events-parser": "node scripts/events-parser-tests.mjs",
+    "test:schedule-ai": "node scripts/schedule-ai-tests.mjs",
+    "test:ai-intent": "node scripts/smoke-ai-intent.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.18.0",
+    "@supabase/supabase-js": "^2.103.2",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "octokit": "^5.0.3",
+    "zod": "^4.1.12"
+  }
+}
