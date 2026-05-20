@@ -1,4 +1,6 @@
-export const DEFAULT_WEATHER_LOCATION = "Memphis, Tennessee";
+export const DEFAULT_WEATHER_LOCATION = "Memphis Zoo, Memphis, Tennessee";
+const MEMPHIS_ZOO_LATITUDE = 35.1506;
+const MEMPHIS_ZOO_LONGITUDE = -89.9944;
 
 export function isWeatherQuestion(text = "") {
   return /\b(weather|forecast|temperature|rain|storm|sunny|cloudy|wind|humid|humidity)\b/i.test(String(text || ""));
