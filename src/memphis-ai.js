@@ -1705,9 +1705,11 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       try {
         const weather = await fetchWeatherForMemphisTn(location);
         await saveThreadContext(runRpc, threadId, { last_intent: "weather", last_subject_type: "weather", context_json: mergeContextJson(threadContext, { weather_location: location, last_question_shape: "weather", last_subject_kind: "weather", last_subject_label: location }) });
-        return { text: summarizeWeatherPayload(weather), meta: { fallback: false, provider: "weather_direct", mode: "conversation_weather_direct" } };
+        return { text: summarizeWeatherPayload(weather), meta: { fallback: false, provider: "weather_direct", mode: "conversation_weather_direct", source: "open_meteo", location } };
       } catch (error) {
         console.error("memphis direct weather path failed:", error);
+        await saveThreadContext(runRpc, threadId, { last_intent: "weather", last_subject_type: "weather", context_json: mergeContextJson(threadContext, { weather_location: location, last_question_shape: "weather", last_subject_kind: "weather", last_subject_label: location }) });
+        return { text: `I could not pull live weather for ${location} right now. I am not going to guess.`, meta: { fallback: true, provider: "weather_direct", mode: "conversation_weather_failed", source: "open_meteo", location, error: error?.message || "weather_failed" } };
       }
     }
 
