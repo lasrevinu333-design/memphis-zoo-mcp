@@ -23,32 +23,48 @@ export function augmentWeatherPrompt(userMessage = "", threadContext = {}) {
   return `${String(userMessage || "").trim()}\n\nWeather location context: ${location}. If the user says \"here\" or asks weather without another city, use ${location}.`;
 }
 
+function cToF(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  return Math.round((n * 9 / 5) + 32);
+}
+
+function kmhToMph(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  return Math.round(n * 0.621371);
+}
+
 export function summarizeWeatherPayload(weather, defaultLocation = DEFAULT_WEATHER_LOCATION) {
-  if (!weather) return `I could not pull weather for ${defaultLocation} right now.`;
-  const temp = weather.temperature_c == null ? "temperature unavailable" : `${Math.round(Number(weather.temperature_c))}°C`;
-  const wind = weather.wind_kmh == null ? "wind unavailable" : `${Math.round(Number(weather.wind_kmh))} km/h wind`;
-  const high = weather.high_c == null ? "high unavailable" : `high ${Math.round(Number(weather.high_c))}°C`;
-  const low = weather.low_c == null ? "low unavailable" : `low ${Math.round(Number(weather.low_c))}°C`;
+  if (!weather) return `I could not pull live weather for ${defaultLocation} right now.`;
+  const tempF = cToF(weather.temperature_c);
+  const highF = cToF(weather.high_c);
+  const lowF = cToF(weather.low_c);
+  const windMph = kmhToMph(weather.wind_kmh);
+  const temp = tempF == null ? "temperature unavailable" : `${tempF}°F`;
+  const wind = windMph == null ? "wind unavailable" : `${windMph} mph wind`;
+  const high = highF == null ? "high unavailable" : `high ${highF}°F`;
+  const low = lowF == null ? "low unavailable" : `low ${lowF}°F`;
   const precip = weather.precipitation_probability == null ? "precipitation unknown" : `${Math.round(Number(weather.precipitation_probability))}% chance of precipitation`;
   const condition = weather.condition || "conditions unavailable";
-  return `${weather.location || defaultLocation} today: ${condition}, ${temp}, ${high}, ${low}, ${wind}, ${precip}.`;
+  const observed = weather.observation_time ? ` Source: Open-Meteo, updated ${weather.observation_time}.` : " Source: Open-Meteo.";
+  return `${weather.location || defaultLocation}: ${condition}, ${temp}. Today: ${high}, ${low}, ${wind}, ${precip}.${observed}`;
 }
 
 export async function fetchWeatherForMemphisTn(location = DEFAULT_WEATHER_LOCATION) {
-  const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=1&language=en&format=json`);
-  const geo = await geoRes.json().catch(() => null);
-  const first = geo?.results?.[0];
-  if (!first?.latitude || !first?.longitude) throw new Error("Weather geocoding failed");
-  const forecastRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(first.latitude)}&longitude=${encodeURIComponent(first.longitude)}&current=temperature_2m,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=1`);
+  const forecastRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(MEMPHIS_ZOO_LATITUDE)}&longitude=${encodeURIComponent(MEMPHIS_ZOO_LONGITUDE)}&current=temperature_2m,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=America%2FChicago&forecast_days=1`);
   const forecast = await forecastRes.json().catch(() => null);
-  if (!forecast?.current || !forecast?.daily) throw new Error("Weather forecast failed");
+  if (!forecastRes.ok || !forecast?.current || !forecast?.daily) throw new Error("Weather forecast failed");
   return {
     location,
+    latitude: MEMPHIS_ZOO_LATITUDE,
+    longitude: MEMPHIS_ZOO_LONGITUDE,
     temperature_c: forecast.current.temperature_2m,
     wind_kmh: forecast.current.wind_speed_10m,
     high_c: forecast.daily.temperature_2m_max?.[0],
     low_c: forecast.daily.temperature_2m_min?.[0],
     precipitation_probability: forecast.daily.precipitation_probability_max?.[0],
+    observation_time: forecast.current.time || "",
     condition: weatherCodeToText(forecast.current.weather_code),
   };
 }
