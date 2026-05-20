@@ -10,8 +10,28 @@ export function mentionsMemphisPlace(text = "") {
   return /\bmemphis\b/i.test(String(text || ""));
 }
 
+function extractExplicitWeatherLocation(text = "") {
+  const raw = String(text || "").trim();
+  if (!raw) return "";
+  const match = raw.match(/\b(?:weather|forecast|temperature|rain|storm|wind|humidity)\b[^.?!]*?\b(?:in|for|at|near)\s+([a-zA-Z][a-zA-Z .'-]{2,80})/i)
+    || raw.match(/\b(?:in|for|at|near)\s+([a-zA-Z][a-zA-Z .'-]{2,80})\s+(?:weather|forecast|temperature|rain|storm|wind|humidity)\b/i);
+  if (!match?.[1]) return "";
+  let location = match[1].replace(/\b(today|tomorrow|tonight|right now|now|please|dude|bro|man)\b.*$/i, "").trim();
+  location = location.replace(/[?.!,;:]+$/g, "").trim();
+  if (!location || /^(here|local|outside|there)$/i.test(location)) return "";
+  if (/^st\.?\s*louis$/i.test(location)) return "St. Louis, Missouri";
+  return location;
+}
+
+function isDefaultMemphisZooLocation(location = "") {
+  const value = String(location || "").toLowerCase();
+  return !value || value.includes("memphis zoo") || value === "memphis, tennessee" || value === "memphis";
+}
+
 export function inferWeatherLocation(text = "", threadContext = {}) {
   if (!isWeatherQuestion(text) && threadContext?.last_subject_type !== "weather") return "";
+  const explicit = extractExplicitWeatherLocation(text);
+  if (explicit) return mentionsMemphisPlace(explicit) ? DEFAULT_WEATHER_LOCATION : explicit;
   if (mentionsMemphisPlace(text)) return DEFAULT_WEATHER_LOCATION;
   if (threadContext?.context_json?.weather_location) return String(threadContext.context_json.weather_location || "");
   return DEFAULT_WEATHER_LOCATION;
@@ -52,13 +72,29 @@ export function summarizeWeatherPayload(weather, defaultLocation = DEFAULT_WEATH
 }
 
 export async function fetchWeatherForMemphisTn(location = DEFAULT_WEATHER_LOCATION) {
-  const forecastRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(MEMPHIS_ZOO_LATITUDE)}&longitude=${encodeURIComponent(MEMPHIS_ZOO_LONGITUDE)}&current=temperature_2m,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=America%2FChicago&forecast_days=1`);
+  let resolvedLocation = location || DEFAULT_WEATHER_LOCATION;
+  let latitude = MEMPHIS_ZOO_LATITUDE;
+  let longitude = MEMPHIS_ZOO_LONGITUDE;
+  let timezone = "America%2FChicago";
+
+  if (!isDefaultMemphisZooLocation(resolvedLocation)) {
+    const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(resolvedLocation)}&count=1&language=en&format=json`);
+    const geo = await geoRes.json().catch(() => null);
+    const first = geo?.results?.[0];
+    if (!geoRes.ok || !first?.latitude || !first?.longitude) throw new Error("Weather geocoding failed");
+    latitude = first.latitude;
+    longitude = first.longitude;
+    timezone = encodeURIComponent(first.timezone || "auto");
+    resolvedLocation = [first.name, first.admin1, first.country].filter(Boolean).join(", ");
+  }
+
+  const forecastRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(latitude)}&longitude=${encodeURIComponent(longitude)}&current=temperature_2m,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=${timezone}&forecast_days=1`);
   const forecast = await forecastRes.json().catch(() => null);
   if (!forecastRes.ok || !forecast?.current || !forecast?.daily) throw new Error("Weather forecast failed");
   return {
-    location,
-    latitude: MEMPHIS_ZOO_LATITUDE,
-    longitude: MEMPHIS_ZOO_LONGITUDE,
+    location: resolvedLocation,
+    latitude,
+    longitude,
     temperature_c: forecast.current.temperature_2m,
     wind_kmh: forecast.current.wind_speed_10m,
     high_c: forecast.daily.temperature_2m_max?.[0],
