@@ -324,7 +324,8 @@ function genericConversationalFallback(text = "", threadContext = {}) {
   if (/weather/.test(lower)) return `I could not land a clean weather answer for ${weatherLocation || DEFAULT_WEATHER_LOCATION} right now.`;
   if (/recipe|ingredients|cook|bake|pumpkin pie|creme brulee|pretzel|pretzels/.test(lower)) return "I did not get a clean general-answer response for that recipe question. Check the Gemini/API setup and try again.";
   if (/hello|hey|hi/.test(lower)) return "Hey. What do you need?";
-  return "I am here and ready. Ask me a schedule, area, contact, ticket, scan, or events question.";
+  if (/wrong|lying|bad answer|not right|incorrect|made up|guess/.test(lower)) return "Fair. That answer was wrong. I will re-check the specific source instead of guessing.";
+  return "I do not have a clean answer for that yet. Ask me again with the specific thing to check, and I will use the matching source instead of guessing.";
 }
 
 function mergeContextJson(threadContext = {}, patch = {}) {
