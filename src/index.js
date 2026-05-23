@@ -44,6 +44,7 @@ const DASHBOARD_CONTRACT_VERSION = "dashboard.v1";
 const MESSAGING_CONTRACT_VERSION = "messaging.v1";
 const SCHEDULE_CONTRACT_VERSION = "schedule.v1";
 const GUEST_REPORTS_CONTRACT_VERSION = "guest-reports.v1";
+const FEEDBACK_CONTRACT_VERSION = "feedback.v1";
 const CANARY_RESTROOM_CODE = "TETM";
 const CANARY_EXHIBIT_CODE = "TETX";
 const CANARY_DEVICE_ID = "canary-check";
