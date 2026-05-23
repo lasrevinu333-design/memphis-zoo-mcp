@@ -43,6 +43,14 @@ Route factories for messaging, schedule, and events are re-exported from `src/ro
 | `POST` | `/dashboard-api/close-ticket` | Dashboard maintenance ticket close. |
 | Various | `/dashboard-api/events` | Public event routes. |
 
+## Feedback API
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/feedback-api/health` | Program feedback API health. |
+| `POST` | `/feedback-api/submit` | Submit implementation feedback from manager or employee hubs. |
+| `GET` | `/dashboard-api/system-feedback` | List submitted program feedback for dashboard/triage display. |
+
 ## Guest API
 
 | Method | Path | Purpose |
