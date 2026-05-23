@@ -1638,6 +1638,7 @@ app.listen(port, () => {
   console.log("Dashboard events endpoint: /dashboard-api/events");
   console.log("Admin events endpoint: /admin-api/events");
   console.log("Schedule API endpoint: /schedule-api");
+  console.log("Feedback API endpoint: /feedback-api");
   console.log("MCP endpoint: /mcp");
   console.log("Legacy SSE endpoint: /sse");
   console.log("Legacy messages endpoint: /messages");
