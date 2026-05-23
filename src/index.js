@@ -67,6 +67,7 @@ function buildHealthPayload(area, extra = {}) {
       messaging: MESSAGING_CONTRACT_VERSION,
       schedule: SCHEDULE_CONTRACT_VERSION,
       events: EVENTS_CONTRACT_VERSION,
+      feedback: FEEDBACK_CONTRACT_VERSION,
     },
     ...extra,
   };
