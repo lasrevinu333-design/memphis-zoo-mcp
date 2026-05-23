@@ -1533,6 +1533,20 @@ app.get("/dashboard-api/guest-cleanliness-issues", async (req, res) => {
     res.status(500).json({ ok: false, error: error?.message || "Guest cleanliness issue list failed" });
   }
 });
+app.get("/dashboard-api/system-feedback", async (req, res) => {
+  try {
+    await ensureSystemFeedbackSchema();
+    const status = req.query.status ? String(req.query.status) : "";
+    const priority = req.query.priority ? String(req.query.priority) : "";
+    const hubContext = req.query.hub_context ? String(req.query.hub_context) : "";
+    const limit = req.query.limit ? Number(req.query.limit) : 100;
+    const rows = await listSystemFeedbackItems({ status, priority, hubContext, limit });
+    res.status(200).json({ ok: true, data: rows, meta: { version: APP_VERSION, release_id: RELEASE_ID, contract_version: FEEDBACK_CONTRACT_VERSION } });
+  } catch (error) {
+    console.error("system feedback list failed:", error);
+    res.status(500).json({ ok: false, error: error?.message || "System feedback list failed" });
+  }
+});
 app.get("/dashboard-api/canary", async (_req, res) => {
   try { const result = await runCanaryChecks(); res.status(result.ok ? 200 : 503).json(buildHealthPayload("dashboard_canary", result)); }
   catch (error) { console.error("dashboard canary failed:", error); res.status(500).json({ ok: false, area: "dashboard_canary", version: APP_VERSION, release_id: RELEASE_ID, error: error.message || "Dashboard canary failed" }); }
