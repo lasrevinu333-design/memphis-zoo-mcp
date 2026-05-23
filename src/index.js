@@ -1444,6 +1444,27 @@ app.get("/admin-api/health", requireAdminApiAuth, (_req, res) => { res.status(20
 app.get("/dashboard-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("dashboard")); });
 app.get("/schedule-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("schedule", { contract_version: SCHEDULE_CONTRACT_VERSION })); });
 app.get("/guest-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("guest_reports", { contract_version: GUEST_REPORTS_CONTRACT_VERSION })); });
+app.get("/feedback-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("feedback", { contract_version: FEEDBACK_CONTRACT_VERSION })); });
+app.post("/feedback-api/submit", async (req, res) => {
+  try {
+    await ensureSystemFeedbackSchema();
+    const item = await createSystemFeedbackItem({
+      ...(req.body && typeof req.body === "object" ? req.body : {}),
+      user_agent: String(req.get("user-agent") || "").slice(0, 500),
+    });
+    const opsRecipients = await resolveOpsManagerRecipients();
+    const memphisRows = await runReadOnlySql("select public.msg_get_memphis_user_id() as memphis_user_id");
+    const memphisUserId = Array.isArray(memphisRows) && memphisRows.length ? memphisRows[0].memphis_user_id : null;
+    let notification = { ops_count: 0, errors: [{ error: "Memphis bot identity not found." }] };
+    if (isUuid(memphisUserId)) {
+      notification = await notifySystemFeedbackRecipients({ item, opsRecipients, memphisUserId });
+    }
+    res.status(200).json({ ok: true, data: { item, notification }, meta: { version: APP_VERSION, release_id: RELEASE_ID, contract_version: FEEDBACK_CONTRACT_VERSION } });
+  } catch (error) {
+    console.error("system feedback submit failed:", error);
+    res.status(500).json({ ok: false, error: error?.message || "System feedback submit failed" });
+  }
+});
 app.get("/guest-api/locations/:locationCode", async (req, res) => {
   try {
     const location = await resolveGuestReportLocation(req.params.locationCode);
