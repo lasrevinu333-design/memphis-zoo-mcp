@@ -620,6 +620,151 @@ async function listGuestCleanlinessReports({ status, locationCode, limit = 100 }
   return Array.isArray(rows) ? rows : [];
 }
 
+async function ensureSystemFeedbackSchema() {
+  await runWriteSql(
+    "system_feedback_schema",
+    `create table if not exists public.system_feedback_items (
+       id uuid primary key default gen_random_uuid(),
+       category text not null default 'other',
+       priority text not null default 'normal',
+       message text not null,
+       submitted_by text null,
+       hub_context text not null default 'unknown',
+       device_id text null,
+       page_url text null,
+       status text not null default 'new',
+       summary text null,
+       notification_status text not null default 'pending',
+       notified_ops_count integer not null default 0,
+       metadata_json jsonb not null default '{}'::jsonb,
+       created_at timestamptz not null default now(),
+       updated_at timestamptz not null default now()
+     );
+     create index if not exists idx_system_feedback_items_created_at on public.system_feedback_items (created_at desc);
+     create index if not exists idx_system_feedback_items_status on public.system_feedback_items (status);
+     create index if not exists idx_system_feedback_items_priority on public.system_feedback_items (priority);
+     create index if not exists idx_system_feedback_items_hub_context on public.system_feedback_items (hub_context);`
+  );
+}
+
+function normalizeFeedbackCategory(value) {
+  const category = String(value || "other").trim().toLowerCase().replace(/[^a-z0-9_ -]/g, "").replace(/\s+/g, "_");
+  return category || "other";
+}
+
+function normalizeFeedbackPriority(value) {
+  const priority = String(value || "normal").trim().toLowerCase();
+  if (["low", "normal", "high", "urgent"].includes(priority)) return priority;
+  return "normal";
+}
+
+function summarizeSystemFeedback({ category, priority, message, hubContext, submittedBy }) {
+  const cleanMessage = String(message || "").replace(/\s+/g, " ").trim();
+  const clipped = cleanMessage.length > 220 ? `${cleanMessage.slice(0, 217)}...` : cleanMessage;
+  const who = submittedBy ? ` from ${submittedBy}` : "";
+  return `${priority.toUpperCase()} ${category.replace(/_/g, " ")} feedback${who} via ${hubContext}: ${clipped}`;
+}
+
+async function createSystemFeedbackItem(payload = {}) {
+  const category = normalizeFeedbackCategory(payload.category);
+  const priority = normalizeFeedbackPriority(payload.priority);
+  const message = String(payload.message || payload.body || "").trim();
+  const submittedBy = String(payload.submitted_by || payload.name || "").trim() || null;
+  const hubContext = String(payload.hub_context || payload.hub || "unknown").trim().toLowerCase() || "unknown";
+  const deviceId = String(payload.device_id || payload.device || "").trim() || null;
+  const pageUrl = String(payload.page_url || payload.url || "").trim().slice(0, 1000) || null;
+  const metadata = {
+    submitted_via: "system_feedback",
+    user_agent: String(payload.user_agent || "").slice(0, 500) || null,
+    page_title: String(payload.page_title || "").slice(0, 200) || null,
+  };
+  if (!message) throw new Error("message is required.");
+
+  const summary = summarizeSystemFeedback({ category, priority, message, hubContext, submittedBy });
+  const rows = await runWriteSql(
+    "system_feedback_insert",
+    `insert into public.system_feedback_items (
+       category, priority, message, submitted_by, hub_context, device_id, page_url, summary, metadata_json
+     ) values (
+       ${sqlLiteral(category)},
+       ${sqlLiteral(priority)},
+       ${sqlLiteral(message)},
+       ${sqlLiteral(submittedBy)},
+       ${sqlLiteral(hubContext)},
+       ${sqlLiteral(deviceId)},
+       ${sqlLiteral(pageUrl)},
+       ${sqlLiteral(summary)},
+       ${sqlLiteral(JSON.stringify(metadata))}::jsonb
+     )
+     returning id, category, priority, message, submitted_by, hub_context, device_id, page_url, status, summary, notification_status, notified_ops_count, metadata_json, created_at, updated_at`
+  );
+  if (!Array.isArray(rows) || !rows.length) throw new Error("System feedback could not be created.");
+  return rows[0];
+}
+
+function buildSystemFeedbackNotificationBody(item) {
+  const category = String(item.category || "feedback").replace(/_/g, " ");
+  const who = item.submitted_by ? ` Submitted by: ${item.submitted_by}.` : "";
+  const device = item.device_id ? ` Device: ${item.device_id}.` : "";
+  return `Program feedback submitted. Priority: ${String(item.priority || "normal").toUpperCase()}. Category: ${category}. Hub: ${item.hub_context || "unknown"}.${who}${device} Message: ${item.message}`.trim();
+}
+
+async function notifySystemFeedbackRecipients({ item, opsRecipients, memphisUserId }) {
+  const notified = { ops_count: 0, errors: [] };
+  const body = buildSystemFeedbackNotificationBody(item);
+  for (const ops of opsRecipients || []) {
+    if (!isUuid(ops.user_id)) continue;
+    try {
+      const thread = await runRpc("msg_get_or_create_direct_thread", { p_user_a: memphisUserId, p_user_b: ops.user_id });
+      await runRpc("msg_send_message", {
+        p_thread_id: thread.id,
+        p_sender_user_id: memphisUserId,
+        p_body: body,
+        p_message_type: "bot_response",
+        p_metadata_json: {
+          channel: "memphis",
+          source: "system_feedback",
+          feedback_id: item.id,
+          priority: item.priority,
+          category: item.category,
+        },
+      });
+      notified.ops_count += 1;
+    } catch (error) {
+      notified.errors.push({ user_id: ops.user_id, error: error?.message || "notification_failed" });
+    }
+  }
+
+  await runWriteSql(
+    "system_feedback_notification_status",
+    `update public.system_feedback_items
+       set notification_status = ${sqlLiteral(notified.errors.length ? (notified.ops_count ? "partial" : "failed") : "sent")},
+           notified_ops_count = ${Number(notified.ops_count || 0)},
+           updated_at = now(),
+           metadata_json = coalesce(metadata_json, '{}'::jsonb) || ${sqlLiteral(JSON.stringify({ notification_errors: notified.errors }))}::jsonb
+     where id = ${sqlLiteral(item.id)}::uuid`
+  );
+
+  return notified;
+}
+
+async function listSystemFeedbackItems({ status, priority, hubContext, limit = 100 } = {}) {
+  const filters = [];
+  if (status) filters.push(`status = ${sqlLiteral(String(status).trim().toLowerCase())}`);
+  if (priority) filters.push(`priority = ${sqlLiteral(normalizeFeedbackPriority(priority))}`);
+  if (hubContext) filters.push(`hub_context = ${sqlLiteral(String(hubContext).trim().toLowerCase())}`);
+  const where = filters.length ? `where ${filters.join(" and ")}` : "";
+  const rows = await runReadOnlySql(`
+    select id, category, priority, message, submitted_by, hub_context, device_id, page_url,
+           status, summary, notification_status, notified_ops_count, metadata_json, created_at, updated_at
+    from public.system_feedback_items
+    ${where}
+    order by created_at desc
+    limit ${Math.max(1, Math.min(500, Number(limit) || 100))}
+  `);
+  return Array.isArray(rows) ? rows : [];
+}
+
 async function runPublicDashboardSummary() {
   const [snapshotRows, locationRows, ticketRows] = await Promise.all([
     runReadOnlySql(`
