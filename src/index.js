@@ -682,11 +682,13 @@ async function createSystemFeedbackItem(payload = {}) {
   if (!message) throw new Error("message is required.");
 
   const summary = summarizeSystemFeedback({ category, priority, message, hubContext, submittedBy });
-  const rows = await runWriteSql(
+  const feedbackId = randomUUID();
+  await runWriteSql(
     "system_feedback_insert",
     `insert into public.system_feedback_items (
-       category, priority, message, submitted_by, hub_context, device_id, page_url, summary, metadata_json
+       id, category, priority, message, submitted_by, hub_context, device_id, page_url, summary, metadata_json
      ) values (
+       ${sqlLiteral(feedbackId)}::uuid,
        ${sqlLiteral(category)},
        ${sqlLiteral(priority)},
        ${sqlLiteral(message)},
@@ -696,9 +698,16 @@ async function createSystemFeedbackItem(payload = {}) {
        ${sqlLiteral(pageUrl)},
        ${sqlLiteral(summary)},
        ${sqlLiteral(JSON.stringify(metadata))}::jsonb
-     )
-     returning id, category, priority, message, submitted_by, hub_context, device_id, page_url, status, summary, notification_status, notified_ops_count, metadata_json, created_at, updated_at`
+     )`
   );
+
+  const rows = await runReadOnlySql(`
+    select id, category, priority, message, submitted_by, hub_context, device_id, page_url,
+           status, summary, notification_status, notified_ops_count, metadata_json, created_at, updated_at
+    from public.system_feedback_items
+    where id = ${sqlLiteral(feedbackId)}::uuid
+    limit 1
+  `);
   if (!Array.isArray(rows) || !rows.length) throw new Error("System feedback could not be created.");
   return rows[0];
 }
