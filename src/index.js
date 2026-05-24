@@ -498,9 +498,9 @@ async function resolveGuestReportLocation(locationCode) {
 
 async function resolveOpsManagerRecipients() {
   const rows = await runReadOnlySql(`
-    select distinct mu.user_id, mu.display_name, mu.role
+    select distinct mu.id as user_id, mu.display_name, mu.role
     from public.msg_users mu
-    where coalesce(mu.active, true) = true
+    where coalesce(mu.is_active, true) = true
       and (
         lower(coalesce(mu.role, '')) like '%ops manager%'
         or lower(coalesce(mu.role, '')) like '%operations manager%'
