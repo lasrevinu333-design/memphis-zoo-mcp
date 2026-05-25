@@ -304,10 +304,20 @@ function compactNarrativeNotes(rawText = "", eventName = "", matchedGroup = null
     sentence = sentence.replace(/\b(?:on\s+)?(?:Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday),?\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t|tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s*\d{2,4})?/ig, " ");
     sentence = sentence.replace(/\b(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\.?\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s*\d{2,4})?/ig, " ");
     sentence = sentence.replace(/\bfrom\s+(?:noon|midnight|\d{1,2}(?::?\d{2})?\s*(?:a\.?m\.?|p\.?m\.?|am|pm|a|p)?)\s*(?:to|until|thru|through|-|–|—)\s*(?:noon|midnight|\d{1,2}(?::?\d{2})?\s*(?:a\.?m\.?|p\.?m\.?|am|pm|a|p)?)/ig, " ");
-    sentence = stripTimeDateNoise(sentence);
+    const hasOperationalTime = /\b(?:ceremony|cleanup|clean\s*up|after|before|arriv(?:e|al))\b/i.test(sentence);
+    if (hasOperationalTime) {
+      sentence = sentence
+        .replace(/\b\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?\b/gi, " ")
+        .replace(/\b(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\.?\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s*\d{2,4})?\b/gi, " ")
+        .replace(/\b\d{1,5}\s*(?:attendees|guests|people|ppl|students|kids|children|children's|pax|persons)\b/gi, " ");
+    } else {
+      sentence = stripTimeDateNoise(sentence);
+    }
+    sentence = sentence.replace(/\b(?:approx(?:imately)?|about|around)\b/ig, " ");
     sentence = sentence.replace(/\b(?:at|in|on|from|for)\b\s*(?=\.|,|;|$)/ig, " ");
     sentence = sentence.replace(/\s+/g, " " ).trim();
     sentence = sentence.replace(/^[,.;:\-\s]+|[,.;:\-\s]+$/g, "").trim();
+    if (/^(?:the\s+)?event$/i.test(sentence)) continue;
     if (sentence) kept.push(sentence.charAt(0).toUpperCase() + sentence.slice(1));
   }
   return cleanupLooseText(kept.join(" "));
@@ -400,7 +410,9 @@ function normalizeTimePair(startValue, endValue) {
   if (startParts && endParts && !endParts.explicit) {
     const startMinutes = timeToMinutes(start);
     const rawEndMinutes = (endParts.hour * 60) + (endParts.minute || 0);
-    if (startParts.meridiem === "am" && endParts.hour >= 1 && endParts.hour <= 11 && rawEndMinutes <= startMinutes) {
+    if (!startParts.explicit && endParts.hour >= 1 && endParts.hour <= 6 && rawEndMinutes <= startMinutes && startParts.hour >= 7 && startParts.hour <= 11) {
+      end = materializeTime({ ...endParts, meridiem: "pm" });
+    } else if (startParts.meridiem === "am" && endParts.hour >= 1 && endParts.hour <= 11 && rawEndMinutes <= startMinutes) {
       end = materializeTime({ ...endParts, meridiem: "pm" });
     } else if (startParts.meridiem === "pm" && endParts.hour >= 1 && endParts.hour <= 11) {
       end = materializeTime({ ...endParts, meridiem: "pm" });
@@ -453,7 +465,7 @@ function detectInlineLabeledTimeRange(text) {
 
 function detectAttendeeCount(text) {
   const raw = String(text || "");
-  let match = raw.match(/\b(\d{1,5})\s+(?:(?:school|media|staff|volunteer|expected|projected|estimated|about|around|approx(?:imately)?)\s+){0,4}(attendees|guests|people|students|kids|children|children's|volunteers?|staff|media|pax|persons)\b/i);
+  let match = raw.match(/\b(\d{1,5})\s+(?:(?:school|media|staff|volunteer|expected|projected|estimated|about|around|approx(?:imately)?)\s+){0,4}(attendees|guests|people|ppl|students|kids|children|children's|volunteers?|staff|media|pax|persons)\b/i);
   if (match) return Number.parseInt(match[1], 10);
   match = raw.match(/\b(?:attendance|attendees|count|projected|expected|guests?)\s*[:\-]?\s*(\d{1,5})\b/i);
   if (match) return Number.parseInt(match[1], 10);
@@ -532,10 +544,11 @@ function compactAreaCandidates(candidates = []) {
 function stripTimeDateNoise(text) {
   return String(text || "")
     .replace(/\b\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?\b/gi, " ")
+    .replace(/\b\d{1,2}\s*(?:-|–|—)\s*\d{1,2}\b/gi, " ")
     .replace(/\b(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\.?\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s*\d{2,4})?\b/gi, " ")
     .replace(/\b\d{1,2}(?:\:?\d{2})?\s*(?:a|p|am|pm)\b/gi, " ")
     .replace(/\b\d{2}:\d{2}(?::\d{2})?\b/gi, " ")
-    .replace(/\b\d{1,5}\s*(?:attendees|guests|people|students|kids|children|children's|pax|persons)\b/gi, " ");
+    .replace(/\b\d{1,5}\s*(?:attendees|guests|people|ppl|students|kids|children|children's|pax|persons)\b/gi, " ");
 }
 
 function removeAreaText(text, group) {
@@ -581,6 +594,7 @@ function inferSpecialEventTitle(value = "") {
     ["homeschool day", "Homeschool Day"],
     ["summer camp", "Summer Camp"],
     ["corporate rental", "Corporate Rental"],
+    ["wedding setup", "Wedding setup"],
     ["wedding reception", "Wedding Reception"],
     ["stingrays preview", "StingRays Preview"],
     ["birthday party", "Birthday party"],

@@ -88,6 +88,29 @@ assert.equal(labeledNotes.event_name, "Donor Dinner");
 assert.equal(labeledNotes.notes, "Catering, extra trash, restroom check before dinner and after dessert");
 assert.doesNotMatch(labeledNotes.notes, /Event:|Location:|Date:|Start:|End:|Guests:/i);
 
+const weddingSetup = await aiParseEventTexts({
+  texts: ["Wedding setup - Cat House Cafe - June 14th - 10-2 - approx 75 ppl. Actually ceremony is 11am, cleanup after 2:30. Put dumpsters by back gate."],
+  locationGroups: [
+    ...locationGroups,
+    {
+      location_group_id: "00000000-0000-4000-8000-000000000003",
+      group_code: "CATHOUSE_CAFE_RESTROOMS",
+      group_name: "Cathouse Cafe Restrooms",
+      included_locations: ["Cat House Cafe", "Cathouse Cafe", "Cafe"],
+    },
+  ],
+});
+assert.equal(weddingSetup[0].event_name, "Wedding setup");
+assert.equal(weddingSetup[0].location_group_name, "Cathouse Cafe Restrooms");
+assert.match(weddingSetup[0].event_date, /^\d{4}-06-14$/);
+assertTime(weddingSetup[0], "10:00:00", "14:00:00");
+assert.equal(weddingSetup[0].attendee_count, "75");
+assert.match(weddingSetup[0].notes, /Ceremony is 11am/i);
+assert.match(weddingSetup[0].notes, /cleanup after 2:30/i);
+assert.match(weddingSetup[0].notes, /Put dumpsters by back gate/i);
+assert.doesNotMatch(weddingSetup[0].notes, /Cat House Cafe|approx 75 ppl|10-2/i);
+assert.doesNotMatch(weddingSetup[0].warnings.join(","), /end_not_after_start/);
+
 const originalFetch = global.fetch;
 const originalGeminiApiKey = process.env.EVENTS_GEMINI_API_KEY;
 
