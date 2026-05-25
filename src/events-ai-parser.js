@@ -299,20 +299,8 @@ function compactNarrativeNotes(rawText = "", eventName = "", matchedGroup = null
     sentence = sentence.replace(/^I would (also )?like to request that\s+/i, "");
     sentence = sentence.replace(/^I would (also )?like to request\s+/i, "");
     sentence = sentence.replace(/^please\s+/i, "");
-    if (eventName) sentence = sentence.replace(new RegExp(`\\b${escapeRegex(eventName)}\\b`, "ig"), "the event");
-    sentence = removeAreaText(sentence, matchedGroup);
-    sentence = sentence.replace(/\b(?:on\s+)?(?:Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday),?\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t|tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s*\d{2,4})?/ig, " ");
-    sentence = sentence.replace(/\b(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\.?\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s*\d{2,4})?/ig, " ");
-    sentence = sentence.replace(/\bfrom\s+(?:noon|midnight|\d{1,2}(?::?\d{2})?\s*(?:a\.?m\.?|p\.?m\.?|am|pm|a|p)?)\s*(?:to|until|thru|through|-|–|—)\s*(?:noon|midnight|\d{1,2}(?::?\d{2})?\s*(?:a\.?m\.?|p\.?m\.?|am|pm|a|p)?)/ig, " ");
-    const hasOperationalTime = /\b(?:ceremony|cleanup|clean\s*up|after|before|arriv(?:e|al))\b/i.test(sentence);
-    if (hasOperationalTime) {
-      sentence = sentence
-        .replace(/\b\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?\b/gi, " ")
-        .replace(/\b(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\.?\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s*\d{2,4})?\b/gi, " ")
-        .replace(/\b\d{1,5}\s*(?:attendees|guests|people|ppl|students|kids|children|children's|pax|persons)\b/gi, " ");
-    } else {
-      sentence = stripTimeDateNoise(sentence);
-    }
+    const preserveOperationalTimes = /\b(?:ceremony|cleanup|clean\s*up|after|before|arriv(?:e|al))\b/i.test(sentence);
+    sentence = stripAccountedEventDetails(sentence, eventName, matchedGroup, { preserveOperationalTimes });
     sentence = sentence.replace(/\b(?:approx(?:imately)?|about|around)\b/ig, " ");
     sentence = sentence.replace(/\b(?:at|in|on|from|for)\b\s*(?=\.|,|;|$)/ig, " ");
     sentence = sentence.replace(/\s+/g, " " ).trim();
@@ -551,6 +539,24 @@ function stripTimeDateNoise(text) {
     .replace(/\b\d{1,5}\s*(?:attendees|guests|people|ppl|students|kids|children|children's|pax|persons)\b/gi, " ");
 }
 
+function stripAccountedEventDetails(text, eventName = "", matchedGroup = null, { preserveOperationalTimes = false } = {}) {
+  let result = String(text || "");
+  if (eventName) result = result.replace(new RegExp(`\\b(?:the\\s+)?${escapeRegex(eventName)}\\b`, "ig"), " ");
+  result = result.replace(/\bthe\s+event\b/ig, " ");
+  result = removeAreaText(result, matchedGroup);
+  result = result
+    .replace(/\b(?:on\s+)?(?:Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday),?\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t|tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s*\d{2,4})?\b/ig, " ")
+    .replace(/\b(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\.?\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s*\d{2,4})?\b/gi, " ")
+    .replace(/\b\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?\b/gi, " ")
+    .replace(/\b(?:attendance|attendees|count|projected|expected|guests?)\s*[:\-]?\s*\d{1,5}\b/gi, " ")
+    .replace(/\b\d{1,5}\s*(?:attendees|guests|people|ppl|students|kids|children|children's|pax|persons)\b/gi, " ");
+  const timeToken = "(?:noon|midnight|\\d{1,2}(?::?\\d{2})?\\s*(?:a\\.?m\\.?|p\\.?m\\.?|am|pm|a|p)?)";
+  result = result.replace(new RegExp(`\\b(?:from\\s+)?${timeToken}\\s*(?:to|until|thru|through|-|–|—)\\s*${timeToken}\\b`, "ig"), " ");
+  result = result.replace(/\b\d{1,2}\s*(?:-|–|—)\s*\d{1,2}\b/gi, " ");
+  if (!preserveOperationalTimes) result = stripTimeDateNoise(result);
+  return cleanupLooseText(result);
+}
+
 function removeAreaText(text, group) {
   let result = String(text || "");
   if (!group) return result;
@@ -651,10 +657,9 @@ function cleanEventName(eventName, matchedGroup) {
 }
 
 function cleanNotes(notes, eventName, matchedGroup) {
-  let result = stripSpreadsheetGarbage(notes);
-  if (eventName) result = result.replace(new RegExp(`\\b${escapeRegex(eventName)}\\b`, "ig"), " ");
-  result = removeAreaText(result, matchedGroup);
-  return cleanupLooseText(result);
+  const raw = stripSpreadsheetGarbage(notes);
+  const preserveOperationalTimes = /\b(?:ceremony|cleanup|clean\s*up|after|before|arriv(?:e|al))\b/i.test(raw);
+  return stripAccountedEventDetails(raw, eventName, matchedGroup, { preserveOperationalTimes });
 }
 
 function extractFallbackTitle(text, matchedGroup, timeRange) {
@@ -774,12 +779,12 @@ function buildNotesFromNarrative(rawText = "", baseNotes = "", eventName = "", m
   for (let sentence of sentences) {
     const lower = sentence.toLowerCase();
     const isPureSchedule = /\bevent\s+will\s+run\b/.test(lower) || /\brun\s+from\b/.test(lower);
-    const hasOperationalNeed = /\b(request|remain open|open|clean|cleaned|trash|boxes|restrooms?|bathrooms?|arrive|arrive,|arrival|guests|race crowd|prior to|before|pulled?|after)\b/.test(lower);
-    if (isPureSchedule && !/\b(arrive|guests|trash|clean|open|restrooms?)\b/.test(lower)) continue;
+    const hasOperationalNeed = /\b(request|remain open|open|clean|cleaned|trash|dumpsters?|boxes|restrooms?|bathrooms?|arrive|arrive,|arrival|guests|race crowd|prior to|before|pulled?|after)\b/.test(lower);
+    if (isPureSchedule && !/\b(arrive|guests|trash|dumpsters?|clean|open|restrooms?)\b/.test(lower)) continue;
     if (!hasOperationalNeed) continue;
 
-    if (eventName) sentence = sentence.replace(new RegExp(`\\b${escapeRegex(eventName)}\\b`, "ig"), "the event");
-    sentence = sentence.replace(/\b(?:on\s+)?(?:Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday),?\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t|tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s*\d{2,4})?\b/ig, " " );
+    const preserveOperationalTimes = /\b(?:ceremony|cleanup|clean\s*up|after|before|arriv(?:e|al))\b/i.test(sentence);
+    sentence = stripAccountedEventDetails(sentence, eventName, matchedGroup, { preserveOperationalTimes });
     sentence = sentence.replace(/\bthe\s+event\s+will\s+run\s+from\s+[^.]+\.?/ig, " " );
     sentence = sentence.replace(/\bI\s+would\s+(?:also\s+)?like\s+to\s+request\s+(?:that\s+)?/ig, "" );
     sentence = sentence.replace(/\bplease\s+/ig, "" );
@@ -788,10 +793,8 @@ function buildNotesFromNarrative(rawText = "", baseNotes = "", eventName = "", m
   }
 
   if (!operational.length) {
-    let fallback = source;
-    if (eventName) fallback = fallback.replace(new RegExp(`\\b${escapeRegex(eventName)}\\b`, "ig"), "the event");
-    fallback = fallback.replace(/\bthe\s+event\s+will\s+run\s+from\s+[^.]+\.?/ig, " " );
-    fallback = removeAreaText(fallback, matchedGroup);
+    const fallback = stripAccountedEventDetails(source, eventName, matchedGroup, { preserveOperationalTimes: false })
+      .replace(/\bthe\s+event\s+will\s+run\s+from\s+[^.]+\.?/ig, " " );
     return cleanupLooseText(fallback);
   }
 
