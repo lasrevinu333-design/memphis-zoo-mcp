@@ -88,8 +88,18 @@ assert.equal(labeledNotes.event_name, "Donor Dinner");
 assert.equal(labeledNotes.notes, "Catering, extra trash, restroom check before dinner and after dessert");
 assert.doesNotMatch(labeledNotes.notes, /Event:|Location:|Date:|Start:|End:|Guests:/i);
 
+const repeatedFieldsInNotes = await parseOne("Event Name: Donor Dinner | Event Area: Event Center | Event Date: 6/12 | Start: 5:30 pm | End: 8:00 pm | Guests: 85 | Notes: Donor Dinner Event Center 6/12 5:30 pm to 8:00 pm 85 guests catering, extra trash");
+assert.equal(repeatedFieldsInNotes.event_name, "Donor Dinner");
+assert.equal(repeatedFieldsInNotes.location_group_name, "Event Center");
+assert.equal(repeatedFieldsInNotes.attendee_count, "85");
+assert.equal(repeatedFieldsInNotes.notes, "Catering, extra trash");
+assert.doesNotMatch(repeatedFieldsInNotes.notes, /Donor Dinner|Event Center|6\/12|5:30|8:00|85 guests/i);
+
 const weddingSetup = await aiParseEventTexts({
-  texts: ["Wedding setup - Cat House Cafe - June 14th - 10-2 - approx 75 ppl. Actually ceremony is 11am, cleanup after 2:30. Put dumpsters by back gate."],
+  texts: [
+    "Wedding setup - Cat House Cafe - June 14th - 10-2 - approx 75 ppl. Actually ceremony is 11am, cleanup after 2:30. Put dumpsters by back gate.",
+    "Event Name: Wedding setup | Location: Cat House Cafe | Date: June 14 | Start Time: 10 | End Time: 2 | Guests: 75 | Notes: Wedding setup at Cat House Cafe on June 14 from 10-2 for 75 ppl. Actually ceremony is 11am, cleanup after 2:30. Put dumpsters by back gate.",
+  ],
   locationGroups: [
     ...locationGroups,
     {
@@ -105,10 +115,12 @@ assert.equal(weddingSetup[0].location_group_name, "Cathouse Cafe Restrooms");
 assert.match(weddingSetup[0].event_date, /^\d{4}-06-14$/);
 assertTime(weddingSetup[0], "10:00:00", "14:00:00");
 assert.equal(weddingSetup[0].attendee_count, "75");
-assert.match(weddingSetup[0].notes, /Ceremony is 11am/i);
-assert.match(weddingSetup[0].notes, /cleanup after 2:30/i);
-assert.match(weddingSetup[0].notes, /Put dumpsters by back gate/i);
-assert.doesNotMatch(weddingSetup[0].notes, /Cat House Cafe|approx 75 ppl|10-2/i);
+for (const row of weddingSetup) {
+  assert.match(row.notes, /Ceremony is 11am/i);
+  assert.match(row.notes, /cleanup after 2:30/i);
+  assert.match(row.notes, /Put dumpsters by back gate/i);
+  assert.doesNotMatch(row.notes, /Wedding setup|Cat House Cafe|June 14|approx 75 ppl|75 guests|10-2/i);
+}
 assert.doesNotMatch(weddingSetup[0].warnings.join(","), /end_not_after_start/);
 
 const originalFetch = global.fetch;
