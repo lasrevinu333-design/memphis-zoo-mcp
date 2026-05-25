@@ -91,6 +91,14 @@ function cleanEventName(value) {
   return text;
 }
 
+function eventAreaDisplaySql(column = "lg.group_name") {
+  return `case
+      when ${column} ~* '^splash\\s*pad\\s+restrooms?$' then 'Splash Pad'
+      when ${column} ~* '^courtyard\\s+restrooms?$' then 'Courtyard'
+      else ${column}
+    end`;
+}
+
 function normalizeEventPayload(payload = {}) {
   const eventName = cleanEventName(payload.event_name);
   const locationGroupId = String(payload.location_group_id || "").trim();
@@ -134,7 +142,7 @@ async function listUpcomingEvents(runReadOnlySql) {
       e.event_name,
       e.location_group_id,
       lg.group_code,
-      lg.group_name,
+      ${eventAreaDisplaySql("lg.group_name")} as group_name,
       e.event_date,
       to_char(e.start_time, 'HH24:MI:SS') as start_time,
       to_char(e.end_time, 'HH24:MI:SS') as end_time,
@@ -156,7 +164,7 @@ async function listLocationGroups(runReadOnlySql) {
     select
       lg.id as location_group_id,
       lg.group_code,
-      lg.group_name,
+      ${eventAreaDisplaySql("lg.group_name")} as group_name,
       coalesce(
         array_agg(distinct item.name order by item.name)
           filter (where item.name is not null),
