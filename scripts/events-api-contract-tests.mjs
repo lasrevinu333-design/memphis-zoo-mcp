@@ -4,18 +4,21 @@ import { createEventsAdminRouter } from "../src/events-api.js";
 
 const TEST_GROUP_ID = "00000000-0000-4000-8000-000000000001";
 
-function buildApp({ writeCalls = [] } = {}) {
+function buildApp({ writeCalls = [], readCalls = [] } = {}) {
   const app = express();
   app.use(express.json());
   app.use("/admin-api/events", createEventsAdminRouter({
-    runReadOnlySql: async () => [
-      {
-        location_group_id: TEST_GROUP_ID,
-        group_code: "EC",
-        group_name: "Event Center",
-        included_locations: ["Event Center", "EC"],
-      },
-    ],
+    runReadOnlySql: async (sql) => {
+      readCalls.push(String(sql || ""));
+      return [
+        {
+          location_group_id: TEST_GROUP_ID,
+          group_code: "EC",
+          group_name: "Event Center",
+          included_locations: ["Event Center", "EC"],
+        },
+      ];
+    },
     runWriteSql: async (name, sql) => {
       writeCalls.push({ name, sql });
       return [];
@@ -77,5 +80,17 @@ assert.ok(createCall, "event creation SQL should run");
 assert.match(createCall.sql, /insert into public\.events_app_events/i);
 assert.match(createCall.sql, /Catering, extra trash, restroom check before dinner and after dessert/);
 assert.doesNotMatch(createCall.sql, /Operational flags/i);
+
+const listReadCalls = [];
+await withServer(buildApp({ readCalls: listReadCalls }), async (baseUrl) => {
+  const response = await fetch(`${baseUrl}/admin-api/events/`);
+  assert.equal(response.status, 200);
+});
+const listSql = listReadCalls.find((sql) => /from public\.events_app_events/i.test(sql));
+assert.ok(listSql, "published event list SQL should run");
+assert.match(listSql, /then 'SPLASH_PAD'/, "published event group_code should omit restroom suffix for Splash Pad");
+assert.match(listSql, /then 'COURTYARD'/, "published event group_code should omit restroom suffix for Courtyard");
+assert.match(listSql, /then 'Splash Pad'/, "published event group_name should omit restroom suffix for Splash Pad");
+assert.match(listSql, /then 'Courtyard'/, "published event group_name should omit restroom suffix for Courtyard");
 
 console.log("events api contract tests passed");
