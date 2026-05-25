@@ -11,6 +11,7 @@
     "smoke": "node scripts/smoke.mjs",
     "test:events-parser": "node scripts/events-parser-tests.mjs",
     "test:events-api": "node scripts/events-api-contract-tests.mjs",
+    "test:feedback": "node scripts/feedback-contract-tests.mjs",
     "test:schedule-ai": "node scripts/schedule-ai-tests.mjs",
     "test:ai-intent": "node scripts/smoke-ai-intent.mjs"
   },
