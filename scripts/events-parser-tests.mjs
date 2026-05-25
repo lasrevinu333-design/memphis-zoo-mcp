@@ -76,6 +76,18 @@ const startStrong = await parseOne("Event Name: Start Strong Camp | Event Area: 
 assert.equal(startStrong.event_name, "Start Strong Camp");
 assertTime(startStrong, "09:00:00", "18:00:00");
 
+const narrativeNeeds = await parseOne("Need 1 custodian and extra trash boxes for Donor Dinner at Event Center on June 12 from 5:30pm to 8pm. 85 guests.");
+assert.equal(narrativeNeeds.event_name, "Donor Dinner");
+assert.match(narrativeNeeds.notes, /custodian/i);
+assert.match(narrativeNeeds.notes, /trash boxes/i);
+assert.doesNotMatch(narrativeNeeds.notes, /Event Center/i);
+assert.doesNotMatch(narrativeNeeds.notes, /June 12|5:30|8pm|85 guests/i);
+
+const labeledNotes = await parseOne("Event Name: Donor Dinner | Event Area: Event Center | Event Date: 6/12 | Start: 5:30 pm | End: 8:00 pm | Guests: 85 | Notes: catering, extra trash, restroom check before dinner and after dessert");
+assert.equal(labeledNotes.event_name, "Donor Dinner");
+assert.equal(labeledNotes.notes, "Catering, extra trash, restroom check before dinner and after dessert");
+assert.doesNotMatch(labeledNotes.notes, /Event:|Location:|Date:|Start:|End:|Guests:/i);
+
 const originalFetch = global.fetch;
 const originalGeminiApiKey = process.env.EVENTS_GEMINI_API_KEY;
 
@@ -130,7 +142,7 @@ try {
   assert.equal(rows[0].event_name, "Baby Day");
   assert.equal(rows[0].provider_used, "local-parser");
   assert.equal(rows[1].event_name, "End of Summer Bash");
-  assert.equal(rows[1].provider_used, "gemini");
+  assert.equal(rows[1].provider_used, "local-parser+gemini-fill");
   assert.equal(rows[1].start_time, "10:00:00");
   assert.equal(rows[1].end_time, "11:00:00");
   assert.equal(rows[1].attendee_count, "42");

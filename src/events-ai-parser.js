@@ -121,7 +121,7 @@ function normalizeIntakeText(raw) {
   let text = String(raw || "").replace(/\r/g, "\n").replace(/\t/g, " | ");
   const labels = [...FIELD_LABELS].sort((a, b) => b.length - a.length);
   for (const label of labels) {
-    const after = label.includes(" ") ? "" : "(?!\\s+(?:Time))";
+    const after = label.includes(" ") ? "" : "(?!\\s+(?:Name|Area|Date|Time))";
     text = text.replace(new RegExp(`(^|[|\\n;])\\s*${escapeRegex(label)}${after}\\s*:?`, "ig"), (_m, p) => `${p} ${label}: `);
   }
   return text.replace(/\n+/g, " | ").replace(/\s*\|\s*/g, " | ").replace(/(?:^\s*\|\s*)+|(?:\s*\|\s*)+$/g, "").replace(/\s+/g, " ").trim();
@@ -145,10 +145,10 @@ function parseLabelMap(text) {
       }
     }
     for (const label of labels) {
-      const labelGuard = label.includes(" ") ? "" : "(?!\\s+time)";
+      const labelGuard = label.includes(" ") ? "" : "(?!\\s+(?:name|area|date|time))";
       const otherLabels = labels
         .filter((candidate) => candidate !== label)
-        .map((candidate) => candidate.includes(" ") ? escapeRegex(candidate) : `${escapeRegex(candidate)}(?!\\s+time)`)
+        .map((candidate) => candidate.includes(" ") ? escapeRegex(candidate) : `${escapeRegex(candidate)}(?!\\s+(?:name|area|date|time))`)
         .join("|");
       const pattern = otherLabels
         ? new RegExp(`(^|\\s)${escapeRegex(label)}${labelGuard}\\s+(.+?)(?=\\s+(?:${otherLabels})(?:\\s|:|$)|$)`, "i")
@@ -300,7 +300,12 @@ function compactNarrativeNotes(rawText = "", eventName = "", matchedGroup = null
     sentence = sentence.replace(/^I would (also )?like to request\s+/i, "");
     sentence = sentence.replace(/^please\s+/i, "");
     if (eventName) sentence = sentence.replace(new RegExp(`\\b${escapeRegex(eventName)}\\b`, "ig"), "the event");
-    sentence = sentence.replace(/\bon\s+(?:Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday),?\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t|tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s*\d{2,4})?/ig, "");
+    sentence = removeAreaText(sentence, matchedGroup);
+    sentence = sentence.replace(/\b(?:on\s+)?(?:Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday),?\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t|tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s*\d{2,4})?/ig, " ");
+    sentence = sentence.replace(/\b(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\.?\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s*\d{2,4})?/ig, " ");
+    sentence = sentence.replace(/\bfrom\s+(?:noon|midnight|\d{1,2}(?::?\d{2})?\s*(?:a\.?m\.?|p\.?m\.?|am|pm|a|p)?)\s*(?:to|until|thru|through|-|–|—)\s*(?:noon|midnight|\d{1,2}(?::?\d{2})?\s*(?:a\.?m\.?|p\.?m\.?|am|pm|a|p)?)/ig, " ");
+    sentence = stripTimeDateNoise(sentence);
+    sentence = sentence.replace(/\b(?:at|in|on|from|for)\b\s*(?=\.|,|;|$)/ig, " ");
     sentence = sentence.replace(/\s+/g, " " ).trim();
     sentence = sentence.replace(/^[,.;:\-\s]+|[,.;:\-\s]+$/g, "").trim();
     if (sentence) kept.push(sentence.charAt(0).toUpperCase() + sentence.slice(1));

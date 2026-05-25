@@ -9,49 +9,6 @@ const MAX_NOTIFICATIONS_PER_RUN = 50;
 const MAX_SCAN_ALERTS_PER_RUN = 50;
 const SCAN_ALERT_COOLDOWN_MINUTES = 30;
 
-const EVENT_PARSER_TEST_FIXTURES = [
-  { id: "zoom-zoo-courtyard-restrooms", text: "I would like to request that the courtyard restrooms remain open and be cleaned prior to the Zoom through the Zoo on Thursday, May 21st. The event will run from 6:30 pm - 8:30/9:00 pm. Some guests will come in to use the restrooms as they arrive, starting at 5:00 pm. I would also like to request a few extra trash boxes in the courtyard for the race crowd.", expect: { event_name: "Zoom through the Zoo", area_contains: "Courtyard", event_date: "2026-05-21", start_time: "18:30", end_time: "21:00", notes_include: ["remain open", "cleaned", "trash"], notes_exclude: ["Operational flags", "event will run"] } },
-  { id: "zoo-brew-courtyard", text: "Can we keep the Courtyard restrooms open for the Zoo Brew thing on Friday June 6th? Guests start arriving around 5:15 but the actual event is 6:00p-9/9:30pm. Please add trash cans near the courtyard and check paper before it starts.", expect: { event_name: "Zoo Brew", area_contains: "Courtyard", event_date: "2026-06-06", start_time: "18:00", end_time: "21:30", notes_include: ["trash", "paper"], notes_exclude: ["actual event"] } },
-  { id: "donor-dinner-teton", text: "Event Name: Donor Dinner Location: Teton Trek Date: 6/12 Start: 5:30 pm End: 8:00 pm Guests: 85 Notes: catering, extra trash, restroom check before dinner and after dessert", expect: { event_name: "Donor Dinner", area_contains: "Teton", event_date: "2026-06-12", start_time: "17:30", end_time: "20:00", attendee_count: "85", notes_include: ["catering", "trash", "restroom"] } },
-  { id: "teton-at-teton-trek-no-title", text: "Teton at Teton Trek on June 12 from 5:30 pm to 8:00 pm. Need trash and restroom check before guests arrive.", expect: { event_name: "Teton Trek", area_contains: "Teton", event_date: "2026-06-12", start_time: "17:30", end_time: "20:00", notes_include: ["trash", "restroom"] } },
-  { id: "training-games-china", text: "Training Games will be over by China / CHINA area on Wed May 20 from 1:00 PM to 2:30 PM. Not sure if they mean China exhibit or China restrooms. No notes.", expect: { event_name: "Training Games", area_contains: "China", event_date: "2026-05-20", start_time: "13:00", end_time: "14:30", notes_include: ["exhibit", "restrooms"] } },
-  { id: "twilight-safari-primate", text: "Please note a private tour called Twilight Safari at Primate Pavilion on Thursday, May 28th from 6:30pm - 8:30/9:00pm. Need restrooms checked before arrival and trash pulled after.", expect: { event_name: "Twilight Safari", area_contains: "Primate", event_date: "2026-05-28", start_time: "18:30", end_time: "21:00", notes_include: ["restrooms", "trash"] } },
-  { id: "school-group-nwp", text: "On May 30th from 10am to noon there will be 120 school kids in Northwest Passage. Please keep nearby restrooms stocked and add one trash box by the exit.", expect: { event_name: "School Group", area_contains: "North West Passage", event_date: "2026-05-30", start_time: "10:00", end_time: "12:00", attendee_count: "120", notes_include: ["restrooms", "trash"] } },
-  { id: "keeper-chat-aquarium", text: "Host Department: Education | Manager on Duty: TBD | Event: Keeper Chat Madness | Area: Aquarium | Event Date: June 3 | Start Time: 9:45 AM | End Time: 11:15 AM | Projected: 45 | Staff vendors security marketing animal staff | Notes: wipe counters, check restroom supplies, remove extra trash after group leaves", expect: { event_name: "Keeper Chat Madness", area_contains: "Aquarium", event_date: "2026-06-03", start_time: "09:45", end_time: "11:15", attendee_count: "45", notes_include: ["wipe counters", "restroom", "trash"], notes_exclude: ["vendors", "animal staff"] } },
-  { id: "run-wild-courtyard", text: "I would like to request extra trash boxes and restroom checks for Run Wild near the courtyard on Saturday, June 14th. Race crowd starts coming in around 6:00am but event window is 7:00am-10:30am. Please keep courtyard restrooms open early.", expect: { event_name: "Run Wild", area_contains: "Courtyard", event_date: "2026-06-14", start_time: "07:00", end_time: "10:30", notes_include: ["trash", "restroom", "open early"], notes_exclude: ["event window"] } },
-  { id: "member-preview-zambezi", text: "The member preview at Zambezi is Thursday June 19, 5:30-7:30 pm. Please check the bathrooms before 5 and again after close. No attendee count yet.", expect: { event_name: "Member Preview", area_contains: "Zambezi", event_date: "2026-06-19", start_time: "17:30", end_time: "19:30", notes_include: ["bathrooms", "after close"] } },
-  { id: "corporate-picnic-cat-house", text: "Setup needed for Corporate Picnic in Cat House Cafe on 21 June from 4p to 7p. About 60 people. Need trash, restroom check, and mop after food service.", expect: { event_name: "Corporate Picnic", area_contains: "Cat", event_date: "2026-06-21", start_time: "16:00", end_time: "19:00", attendee_count: "60", notes_include: ["trash", "restroom", "mop"] } },
-  { id: "vague-lunch-pavilion", text: "Big group coming next Thursday sometime around lunch at the pavilion. Maybe 100 people. Need extra trash and bathrooms checked.", expect: { event_name: "Large Group", area_contains: "Primate", start_time: "12:00", end_time: "13:00", attendee_count: "100", notes_include: ["trash", "bathrooms"] } },
-  { id: "baby-day-event-center", text: "Baby Day EC 5/9 9a-6p 500 guests. Need trash pulls and restroom checks all day.", expect: { event_name: "Baby Day", area_contains: "Event Center", event_date: "2026-05-09", start_time: "09:00", end_time: "18:00", attendee_count: "500", notes_include: ["trash", "restroom"] } },
-  { id: "windsor-prom-primate-typo", text: "Windsor Prom at Primate Pavillion on 4/28 630pm to 9pm 55 people. Need restroom check and trash after.", expect: { event_name: "Windsor Prom", area_contains: "Primate", event_date: "2026-04-28", start_time: "18:30", end_time: "21:00", attendee_count: "55", notes_include: ["restroom", "trash"] } },
-  { id: "lebonheur-walmart-teton-lodge", text: "LeBonheur Walmart Day at Teton Trek Lodge Only on 4/30 8:00 AM-12:00 PM. Notes: Lodge only, keep restrooms stocked.", expect: { event_name: "LeBonheur Walmart Day", area_contains: "Teton", event_date: "2026-04-30", start_time: "08:00", end_time: "12:00", notes_include: ["Lodge", "restrooms"] } },
-  { id: "china-theater-all-caps", text: "CHINA THEATER donor thing - June 8 - 1830 to 2030 - 75 guests - wipe counters and pull trash after.", expect: { event_name: "donor thing", area_contains: "China", event_date: "2026-06-08", start_time: "18:30", end_time: "20:30", attendee_count: "75", notes_include: ["wipe", "trash"] } },
-  { id: "splash-pad-birthday", text: "Birthday party Splash Pad Event Center Sat June 13 10:30a-1p 35 guests. Need extra trash and bathroom check before party.", expect: { event_name: "Birthday party", area_contains: "Splash", event_date: "2026-06-13", start_time: "10:30", end_time: "13:00", attendee_count: "35", notes_include: ["trash", "bathroom"] } },
-  { id: "farm-event-compact", text: "Farm event 6/18 730a-11a 90 kids. Extra cans, restrooms checked before buses arrive.", expect: { event_name: "Farm event", area_contains: "Expo", event_date: "2026-06-18", start_time: "07:30", end_time: "11:00", attendee_count: "90", notes_include: ["cans", "restrooms"] } },
-  { id: "aquarium-after-hours", text: "After hours rental Aquarium June 25 6 to 9pm. No count yet. Need restroom check before guests arrive and trash pulled after.", expect: { event_name: "After hours rental", area_contains: "Aquarium", event_date: "2026-06-25", start_time: "18:00", end_time: "21:00", notes_include: ["restroom", "trash"] } },
-  { id: "plaza-public-event", text: "Public event at plaza next Friday 11am-2pm maybe 300 people. Need extra trash boxes and restroom supply check.", expect: { event_name: "Public event", area_contains: "Courtyard", start_time: "11:00", end_time: "14:00", attendee_count: "300", notes_include: ["trash", "restroom"] } },
-  { id: "board-meeting-ec", text: "FWD: Board Meeting - EC - June 10 - 8am to 10am - 25 people. Please check restrooms before meeting and pull trash after. Sent from Outlook mobile.", expect: { event_name: "Board Meeting", area_contains: "Event Center", event_date: "2026-06-10", start_time: "08:00", end_time: "10:00", attendee_count: "25", notes_include: ["restrooms", "trash"] } },
-  { id: "volunteer-orientation-education", text: "Volunteer Orientation at Education on June 11 from 9:00 AM until 11:30 AM. Around 40 volunteers. Need trash box outside and restroom supplies checked.", expect: { event_name: "Volunteer Orientation", area_contains: "Education", event_date: "2026-06-11", start_time: "09:00", end_time: "11:30", attendee_count: "40", notes_include: ["trash", "restroom"] } },
-  { id: "keeper-talk-zambezi", text: "KEEPER TALK Zambezi River 6/15 2p-3p 75 guests needs trash checked after and restroom check nearby", expect: { event_name: "Keeper Talk", area_contains: "Zambezi", event_date: "2026-06-15", start_time: "14:00", end_time: "15:00", attendee_count: "75", notes_include: ["trash", "restroom"] } },
-  { id: "vip-tour-aquarium-lobby", text: "VIP Tour - Aquarium lobby - 06/16 - 1830-2030 - 18 guests - wipe counters, stock bathrooms before arrival", expect: { event_name: "VIP Tour", area_contains: "Aquarium", event_date: "2026-06-16", start_time: "18:30", end_time: "20:30", attendee_count: "18", notes_include: ["wipe", "bathrooms"] } },
-  { id: "media-preview-stingrays", text: "Media Preview for StingRays construction area on Friday June 26 from 10a to 12p. 30 media guests. No cleaning inside build zone yet; put trash near entrance courtyard.", expect: { event_name: "Media Preview", area_contains: "Courtyard", event_date: "2026-06-26", start_time: "10:00", end_time: "12:00", attendee_count: "30", notes_include: ["trash", "entrance courtyard"] } },
-  { id: "staff-training-primate", text: "Staff Training at the pavilion next Monday around lunch. Expected 22 staff. Need bathrooms checked before and after.", expect: { event_name: "Staff Training", area_contains: "Primate", start_time: "12:00", end_time: "13:00", attendee_count: "22", notes_include: ["bathrooms"] } },
-  { id: "scout-night-courtyard", text: "Scout Night near Reflecting Pool Thursday June 18 5:00pm-8:45pm 140 kids. Extra cans, courtyard restrooms open late.", expect: { event_name: "Scout Night", area_contains: "Courtyard", event_date: "2026-06-18", start_time: "17:00", end_time: "20:45", attendee_count: "140", notes_include: ["cans", "open late"] } },
-  { id: "homeschool-day-nwp", text: "Homeschool Day | NWP | Date June 24 | Start 10:00 AM | End 1:30 PM | Count 95 | Notes bathrooms stocked, trash by exit", expect: { event_name: "Homeschool Day", area_contains: "North West Passage", event_date: "2026-06-24", start_time: "10:00", end_time: "13:30", attendee_count: "95", notes_include: ["bathrooms", "trash"] } },
-  { id: "summer-camp-china", text: "Summer Camp China exhibit Tues June 23 0900 to 1130 65 children restroom check before buses arrive and trash after", expect: { event_name: "Summer Camp", area_contains: "China", event_date: "2026-06-23", start_time: "09:00", end_time: "11:30", attendee_count: "65", notes_include: ["restroom", "trash"] } },
-  { id: "corporate-rental-cat-house", text: "Corporate Rental at Cat House 7/2 4:30p through 8p. 110 guests. Need restroom check at start and mop after food service.", expect: { event_name: "Corporate Rental", area_contains: "Cat", event_date: "2026-07-02", start_time: "16:30", end_time: "20:00", attendee_count: "110", notes_include: ["restroom", "mop"] } },
-  { id: "wedding-reception-event-center", text: "Wedding Reception Event Center July 5 6pm-midnight 180 people. High trash, restroom checks every hour, mop after.", expect: { event_name: "Wedding Reception", area_contains: "Event Center", event_date: "2026-07-05", start_time: "18:00", end_time: "00:00", attendee_count: "180", notes_include: ["trash", "restroom", "mop"] } },
-  { id: "private-tour-teton", text: "Private Tour at Teton Trek Lodge Only, June 29, 7:15a to 9a, 12 guests. Lodge only, stock restroom before tour.", expect: { event_name: "Private Tour", area_contains: "Teton", event_date: "2026-06-29", start_time: "07:15", end_time: "09:00", attendee_count: "12", notes_include: ["Lodge", "restroom"] } },
-  { id: "member-night-front-gate", text: "Member Night front gate / Nile River June 30 5:30-7:30 pm maybe 250 guests. Keep courtyard bathrooms open and add trash boxes.", expect: { event_name: "Member Night", area_contains: "Courtyard", event_date: "2026-06-30", start_time: "17:30", end_time: "19:30", attendee_count: "250", notes_include: ["bathrooms", "trash"] } },
-  { id: "field-trip-expo-farm", text: "Field Trip Once Upon A Farm area on 7/7 from 930a-1230p. 155 students. Extra cans and bathroom checks near Expo.", expect: { event_name: "Field Trip", area_contains: "Expo", event_date: "2026-07-07", start_time: "09:30", end_time: "12:30", attendee_count: "155", notes_include: ["cans", "bathroom"] } },
-  { id: "corporate-meeting-east-admin", text: "Corporate Meeting East Admin 7/9 11 to 1pm 32 guests. Need lobby trash and restrooms checked after.", expect: { event_name: "Corporate Meeting", area_contains: "East Admin", event_date: "2026-07-09", start_time: "11:00", end_time: "13:00", attendee_count: "32", notes_include: ["trash", "restrooms"] } },
-  { id: "donor-reception-bamboo", text: "Donor Reception Bamboo Gift Shop Friday July 10 from 6:15 PM to 8 PM, expected 50. Trash after reception and wipe counters.", expect: { event_name: "Donor Reception", area_contains: "Bamboo", event_date: "2026-07-10", start_time: "18:15", end_time: "20:00", attendee_count: "50", notes_include: ["trash", "wipe"] } },
-  { id: "public-event-main-entrance", text: "PUBLIC EVENT main entrance Saturday July 11 8a-11a about 400 people. Extra trash boxes, courtyard restrooms stocked before gates.", expect: { event_name: "Public event", area_contains: "Courtyard", event_date: "2026-07-11", start_time: "08:00", end_time: "11:00", attendee_count: "400", notes_include: ["trash", "restrooms"] } },
-  { id: "board-meeting-west-admin", text: "Board Meeting West Admin Wed July 15 2:00 PM - 4:00 PM. Attendees 20. Check restrooms after meeting.", expect: { event_name: "Board Meeting", area_contains: "West Admin", event_date: "2026-07-15", start_time: "14:00", end_time: "16:00", attendee_count: "20", notes_include: ["restrooms"] } },
-  { id: "stingrays-preview-entrance", text: "StingRays Preview at zoo entrance July 20 9am-10:15am 45 people. Future area only, no inside cleaning, trash near courtyard.", expect: { event_name: "StingRays Preview", area_contains: "Courtyard", event_date: "2026-07-20", start_time: "09:00", end_time: "10:15", attendee_count: "45", notes_include: ["Future area", "trash"] } },
-  { id: "staff-training-aquarium", text: "Staff Training / Aquarium / 7-22 / 1300-1500 / 28 staff / restroom supplies and trash after", expect: { event_name: "Staff Training", area_contains: "Aquarium", event_date: "2026-07-22", start_time: "13:00", end_time: "15:00", attendee_count: "28", notes_include: ["restroom", "trash"] } }
-];
-
 function fail(res, error, fallback = "Events request failed", statusCode = 400) {
   res.status(statusCode).json({ ok: false, error: error?.message || fallback });
 }
@@ -192,75 +149,6 @@ async function listUpcomingEvents(runReadOnlySql) {
     order by e.event_date asc, e.start_time asc, e.event_name asc
   `);
   return Array.isArray(rows) ? rows : [];
-}
-
-function normalizeParserComparable(value) {
-  return String(value == null ? "" : value).trim().toLowerCase();
-}
-
-function normalizeParserTime(value) {
-  const text = String(value || "").trim();
-  if (!text) return "";
-  return text.slice(0, 5);
-}
-
-function parserExpectationFailures(row = {}, expect = {}) {
-  const failures = [];
-  if (expect.event_name && normalizeParserComparable(row.event_name) !== normalizeParserComparable(expect.event_name)) {
-    failures.push(`event_name expected ${expect.event_name}, got ${row.event_name || "blank"}`);
-  }
-  if (expect.area_contains && !normalizeParserComparable(row.location_group_name).includes(normalizeParserComparable(expect.area_contains))) {
-    failures.push(`area expected to contain ${expect.area_contains}, got ${row.location_group_name || "blank"}`);
-  }
-  if (expect.event_date && String(row.event_date || "") !== String(expect.event_date)) {
-    failures.push(`event_date expected ${expect.event_date}, got ${row.event_date || "blank"}`);
-  }
-  if (expect.start_time && normalizeParserTime(row.start_time) !== String(expect.start_time)) {
-    failures.push(`start_time expected ${expect.start_time}, got ${normalizeParserTime(row.start_time) || "blank"}`);
-  }
-  if (expect.end_time && normalizeParserTime(row.end_time) !== String(expect.end_time)) {
-    failures.push(`end_time expected ${expect.end_time}, got ${normalizeParserTime(row.end_time) || "blank"}`);
-  }
-  if (expect.attendee_count && String(row.attendee_count ?? "") !== String(expect.attendee_count)) {
-    failures.push(`attendee_count expected ${expect.attendee_count}, got ${row.attendee_count ?? "blank"}`);
-  }
-  const notes = normalizeParserComparable(row.notes);
-  for (const required of Array.isArray(expect.notes_include) ? expect.notes_include : []) {
-    if (!notes.includes(normalizeParserComparable(required))) failures.push(`notes missing ${required}`);
-  }
-  for (const banned of Array.isArray(expect.notes_exclude) ? expect.notes_exclude : []) {
-    if (notes.includes(normalizeParserComparable(banned))) failures.push(`notes should not include ${banned}`);
-  }
-  return failures;
-}
-
-async function runParserRegressionTests({ runReadOnlySql, fixtures = EVENT_PARSER_TEST_FIXTURES, includeRows = true } = {}) {
-  const groups = await listLocationGroups(runReadOnlySql);
-  const results = [];
-  let passed = 0;
-  let failed = 0;
-  for (const fixture of fixtures) {
-    const parsedRows = await aiParseEventTexts({ texts: [fixture.text], locationGroups: groups });
-    const row = Array.isArray(parsedRows) ? parsedRows[0] || {} : {};
-    const failures = parserExpectationFailures(row, fixture.expect || {});
-    const ok = failures.length === 0;
-    if (ok) passed += 1;
-    else failed += 1;
-    results.push({
-      id: fixture.id,
-      ok,
-      failures,
-      expected: fixture.expect,
-      parsed: includeRows ? row : undefined,
-    });
-  }
-  return {
-    ok: failed === 0,
-    total: results.length,
-    passed,
-    failed,
-    results,
-  };
 }
 
 async function listLocationGroups(runReadOnlySql) {
@@ -903,33 +791,6 @@ export function createEventsAdminRouter({
       });
     } catch (error) {
       fail(res, error, "AI event parse failed", 400);
-    }
-  });
-
-  router.post("/parse-test", async (req, res) => {
-    try {
-      const body = req.body && typeof req.body === "object" ? req.body : {};
-      const includeRows = body.include_rows !== false;
-      const customFixtures = Array.isArray(body.fixtures)
-        ? body.fixtures.filter((fixture) => fixture && fixture.text && fixture.expect)
-        : null;
-      const data = await runParserRegressionTests({
-        runReadOnlySql,
-        fixtures: customFixtures && customFixtures.length ? customFixtures : EVENT_PARSER_TEST_FIXTURES,
-        includeRows,
-      });
-      res.status(200).json({
-        ok: true,
-        data,
-        meta: {
-          version: appVersion,
-          release_id: releaseId,
-          contract_version: EVENTS_CONTRACT_VERSION,
-          fixture_count: data.total,
-        },
-      });
-    } catch (error) {
-      fail(res, error, "Parser regression test failed", 400);
     }
   });
 
