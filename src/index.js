@@ -53,7 +53,10 @@ const ATTENDANCE_SOURCE_URL = String(process.env.ND_MEMZOO_ATTENDANCE_URL || "ht
 const ATTENDANCE_TIMEOUT_MS = toSafeInt(process.env.ND_MEMZOO_ATTENDANCE_TIMEOUT_MS, 8000);
 const ATTENDANCE_CACHE_MS = toSafeInt(process.env.ND_MEMZOO_ATTENDANCE_CACHE_MS, 60000);
 const ATTENDANCE_CF_CLEARANCE = String(process.env.ND_MEMZOO_CF_CLEARANCE || "").trim();
+const FEEDBACK_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+const FEEDBACK_REMINDER_SWEEP_MS = toSafeInt(process.env.FEEDBACK_REMINDER_SWEEP_MS, 60000);
 let attendanceCache = { data: null, fetched_at_ms: 0 };
+let feedbackReminderSweepInFlight = false;
 
 function buildHealthPayload(area, extra = {}) {
   return {
@@ -637,14 +640,23 @@ async function ensureSystemFeedbackSchema() {
        summary text null,
        notification_status text not null default 'pending',
        notified_ops_count integer not null default 0,
+       last_feedback_reminder_at timestamptz null,
+       feedback_reminder_count integer not null default 0,
+       acknowledged_at timestamptz null,
+       acknowledged_by text null,
        metadata_json jsonb not null default '{}'::jsonb,
        created_at timestamptz not null default now(),
        updated_at timestamptz not null default now()
      );
+     alter table public.system_feedback_items add column if not exists last_feedback_reminder_at timestamptz null;
+     alter table public.system_feedback_items add column if not exists feedback_reminder_count integer not null default 0;
+     alter table public.system_feedback_items add column if not exists acknowledged_at timestamptz null;
+     alter table public.system_feedback_items add column if not exists acknowledged_by text null;
      create index if not exists idx_system_feedback_items_created_at on public.system_feedback_items (created_at desc);
      create index if not exists idx_system_feedback_items_status on public.system_feedback_items (status);
      create index if not exists idx_system_feedback_items_priority on public.system_feedback_items (priority);
-     create index if not exists idx_system_feedback_items_hub_context on public.system_feedback_items (hub_context);`
+     create index if not exists idx_system_feedback_items_hub_context on public.system_feedback_items (hub_context);
+     create index if not exists idx_system_feedback_items_reminder_due on public.system_feedback_items (status, last_feedback_reminder_at);`
   );
 }
 
@@ -657,6 +669,52 @@ function normalizeFeedbackPriority(value) {
   const priority = String(value || "normal").trim().toLowerCase();
   if (["low", "normal", "high", "urgent"].includes(priority)) return priority;
   return "normal";
+}
+
+function getFeedbackPublicOrigin() {
+  return String(process.env.FEEDBACK_PUBLIC_BASE_URL || process.env.PUBLIC_BASE_URL || process.env.SCHEDULE_PUBLIC_BASE_URL || "https://memphis-zoo-mcp.onrender.com").replace(/\/+$/, "");
+}
+
+function buildSystemFeedbackAckUrl(feedbackId) {
+  return `${getFeedbackPublicOrigin()}/feedback-api/acknowledge/${encodeURIComponent(String(feedbackId || ""))}`;
+}
+
+function buildSystemFeedbackImageUrl(feedbackId) {
+  return `${getFeedbackPublicOrigin()}/feedback-api/image/${encodeURIComponent(String(feedbackId || ""))}`;
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>'"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[ch]));
+}
+
+function getSystemFeedbackMetadata(item) {
+  const value = item?.metadata_json;
+  if (value && typeof value === "object") return value;
+  if (typeof value === "string") {
+    try { return JSON.parse(value); } catch { return {}; }
+  }
+  return {};
+}
+
+function validateSystemFeedbackImageAttachment(input) {
+  if (!input) return null;
+  if (typeof input !== "object" || Array.isArray(input)) throw new Error("image_attachment must be an object.");
+  const dataUrl = String(input.data_url || input.dataUrl || "").trim();
+  const type = String(input.type || input.mime_type || "").trim().toLowerCase();
+  const name = String(input.name || input.filename || "feedback-image").replace(/[\r\n]/g, " ").trim().slice(0, 180) || "feedback-image";
+  const dataUrlMatch = dataUrl.match(/^data:(image\/(?:png|jpeg|jpg|webp|gif));base64,([a-z0-9+/=\s]+)$/i);
+  if (!dataUrlMatch) throw new Error("image_attachment must be a base64 data URL for png, jpg, webp, or gif.");
+  const mimeType = (type && type.startsWith("image/") ? type : dataUrlMatch[1]).replace("image/jpg", "image/jpeg");
+  const base64 = dataUrlMatch[2].replace(/\s+/g, "");
+  const size = Number(input.size || Math.floor((base64.length * 3) / 4)) || 0;
+  if (size > FEEDBACK_IMAGE_MAX_BYTES) throw new Error("image_attachment is too large. Maximum size is 5 MB.");
+  return {
+    name,
+    type: mimeType,
+    size,
+    data_url: `data:${mimeType};base64,${base64}`,
+    uploaded_at: new Date().toISOString(),
+  };
 }
 
 function summarizeSystemFeedback({ category, priority, message, hubContext, submittedBy }) {
@@ -674,10 +732,12 @@ async function createSystemFeedbackItem(payload = {}) {
   const hubContext = String(payload.hub_context || payload.hub || "unknown").trim().toLowerCase() || "unknown";
   const deviceId = String(payload.device_id || payload.device || "").trim() || null;
   const pageUrl = String(payload.page_url || payload.url || "").trim().slice(0, 1000) || null;
+  const imageAttachment = validateSystemFeedbackImageAttachment(payload.image_attachment || payload.image || null);
   const metadata = {
     submitted_via: "system_feedback",
     user_agent: String(payload.user_agent || "").slice(0, 500) || null,
     page_title: String(payload.page_title || "").slice(0, 200) || null,
+    image_attachment: imageAttachment,
   };
   if (!message) throw new Error("message is required.");
 
@@ -703,7 +763,8 @@ async function createSystemFeedbackItem(payload = {}) {
 
   const rows = await runReadOnlySql(`
     select id, category, priority, message, submitted_by, hub_context, device_id, page_url,
-           status, summary, notification_status, notified_ops_count, metadata_json, created_at, updated_at
+           status, summary, notification_status, notified_ops_count, last_feedback_reminder_at,
+           feedback_reminder_count, acknowledged_at, acknowledged_by, metadata_json, created_at, updated_at
     from public.system_feedback_items
     where id = ${sqlLiteral(feedbackId)}::uuid
     limit 1
@@ -712,16 +773,19 @@ async function createSystemFeedbackItem(payload = {}) {
   return rows[0];
 }
 
-function buildSystemFeedbackNotificationBody(item) {
+function buildSystemFeedbackNotificationBody(item, { reminder = false } = {}) {
   const category = String(item.category || "feedback").replace(/_/g, " ");
   const who = item.submitted_by ? ` Submitted by: ${item.submitted_by}.` : "";
   const device = item.device_id ? ` Device: ${item.device_id}.` : "";
-  return `Program feedback submitted. Priority: ${String(item.priority || "normal").toUpperCase()}. Category: ${category}. Hub: ${item.hub_context || "unknown"}.${who}${device} Message: ${item.message}`.trim();
+  const image = getSystemFeedbackMetadata(item).image_attachment ? ` Image: ${buildSystemFeedbackImageUrl(item.id)}.` : "";
+  const ack = item.id ? ` Acknowledge: ${buildSystemFeedbackAckUrl(item.id)}.` : "";
+  const prefix = reminder ? "Reminder: unacknowledged program feedback is still open." : "Program feedback submitted.";
+  return `${prefix} Priority: ${String(item.priority || "normal").toUpperCase()}. Category: ${category}. Hub: ${item.hub_context || "unknown"}.${who}${device}${image}${ack} Message: ${item.message}`.trim();
 }
 
-async function notifySystemFeedbackRecipients({ item, opsRecipients, memphisUserId }) {
+async function notifySystemFeedbackRecipients({ item, opsRecipients, memphisUserId, reminder = false }) {
   const notified = { ops_count: 0, errors: [] };
-  const body = buildSystemFeedbackNotificationBody(item);
+  const body = buildSystemFeedbackNotificationBody(item, { reminder });
   for (const ops of opsRecipients || []) {
     if (!isUuid(ops.user_id)) continue;
     try {
@@ -737,6 +801,7 @@ async function notifySystemFeedbackRecipients({ item, opsRecipients, memphisUser
           feedback_id: item.id,
           priority: item.priority,
           category: item.category,
+          reminder,
         },
       });
       notified.ops_count += 1;
@@ -746,10 +811,12 @@ async function notifySystemFeedbackRecipients({ item, opsRecipients, memphisUser
   }
 
   await runWriteSql(
-    "system_feedback_notification_status",
+      "system_feedback_notification_status",
     `update public.system_feedback_items
        set notification_status = ${sqlLiteral(notified.errors.length ? (notified.ops_count ? "partial" : "failed") : "sent")},
-           notified_ops_count = ${Number(notified.ops_count || 0)},
+           notified_ops_count = coalesce(notified_ops_count, 0) + ${Number(notified.ops_count || 0)},
+           last_feedback_reminder_at = now(),
+           feedback_reminder_count = coalesce(feedback_reminder_count, 0) + ${reminder ? 1 : 0},
            updated_at = now(),
            metadata_json = coalesce(metadata_json, '{}'::jsonb) || ${sqlLiteral(JSON.stringify({ notification_errors: notified.errors }))}::jsonb
      where id = ${sqlLiteral(item.id)}::uuid`
@@ -766,13 +833,86 @@ async function listSystemFeedbackItems({ status, priority, hubContext, limit = 1
   const where = filters.length ? `where ${filters.join(" and ")}` : "";
   const rows = await runReadOnlySql(`
     select id, category, priority, message, submitted_by, hub_context, device_id, page_url,
-           status, summary, notification_status, notified_ops_count, metadata_json, created_at, updated_at
+           status, summary, notification_status, notified_ops_count, last_feedback_reminder_at,
+           feedback_reminder_count, acknowledged_at, acknowledged_by, metadata_json, created_at, updated_at
     from public.system_feedback_items
     ${where}
     order by created_at desc
     limit ${Math.max(1, Math.min(500, Number(limit) || 100))}
   `);
   return Array.isArray(rows) ? rows : [];
+}
+
+async function getSystemFeedbackItemById(feedbackId) {
+  if (!isUuid(feedbackId)) throw new Error("feedback id is invalid.");
+  const rows = await runReadOnlySql(`
+    select id, category, priority, message, submitted_by, hub_context, device_id, page_url,
+           status, summary, notification_status, notified_ops_count, last_feedback_reminder_at,
+           feedback_reminder_count, acknowledged_at, acknowledged_by, metadata_json, created_at, updated_at
+    from public.system_feedback_items
+    where id = ${sqlLiteral(feedbackId)}::uuid
+    limit 1
+  `);
+  if (!Array.isArray(rows) || !rows.length) throw new Error("System feedback item not found.");
+  return rows[0];
+}
+
+async function acknowledgeSystemFeedbackItem(feedbackId, acknowledgedBy = "ops_manager") {
+  if (!isUuid(feedbackId)) throw new Error("feedback id is invalid.");
+  const actor = String(acknowledgedBy || "ops_manager").trim().slice(0, 120) || "ops_manager";
+  await runWriteSql(
+    "system_feedback_acknowledge",
+    `update public.system_feedback_items
+       set status = 'acknowledged',
+           acknowledged_at = now(),
+           acknowledged_by = ${sqlLiteral(actor)},
+           updated_at = now(),
+           metadata_json = coalesce(metadata_json, '{}'::jsonb) || ${sqlLiteral(JSON.stringify({ acknowledged_via: "feedback-api" }))}::jsonb
+     where id = ${sqlLiteral(feedbackId)}::uuid`
+  );
+  return getSystemFeedbackItemById(feedbackId);
+}
+
+async function listSystemFeedbackReminderDueItems({ limit = 25 } = {}) {
+  const rows = await runReadOnlySql(`
+    select id, category, priority, message, submitted_by, hub_context, device_id, page_url,
+           status, summary, notification_status, notified_ops_count, last_feedback_reminder_at,
+           feedback_reminder_count, acknowledged_at, acknowledged_by, metadata_json, created_at, updated_at
+    from public.system_feedback_items
+    where status not in ('acknowledged', 'resolved', 'closed')
+      and (last_feedback_reminder_at is null or last_feedback_reminder_at <= now() - interval '10 minutes')
+    order by coalesce(last_feedback_reminder_at, created_at) asc
+    limit ${Math.max(1, Math.min(100, Number(limit) || 25))}
+  `);
+  return Array.isArray(rows) ? rows : [];
+}
+
+async function runSystemFeedbackReminderSweep() {
+  if (feedbackReminderSweepInFlight) return { ok: true, skipped: "in_flight" };
+  feedbackReminderSweepInFlight = true;
+  try {
+    await ensureSystemFeedbackSchema();
+    const dueItems = await listSystemFeedbackReminderDueItems();
+    if (!dueItems.length) return { ok: true, checked: 0, reminded: 0 };
+    const opsRecipients = await resolveOpsManagerRecipients();
+    const memphisRows = await runReadOnlySql("select public.msg_get_memphis_user_id() as memphis_user_id");
+    const memphisUserId = Array.isArray(memphisRows) && memphisRows.length ? memphisRows[0].memphis_user_id : null;
+    if (!isUuid(memphisUserId)) return { ok: false, checked: dueItems.length, reminded: 0, error: "Memphis bot identity not found." };
+    let reminded = 0;
+    const errors = [];
+    for (const item of dueItems) {
+      try {
+        const result = await notifySystemFeedbackRecipients({ item, opsRecipients, memphisUserId, reminder: true });
+        if (result.ops_count) reminded += 1;
+        if (result.errors?.length) errors.push(...result.errors.map((error) => ({ feedback_id: item.id, ...error })));
+      } catch (error) {
+        errors.push({ feedback_id: item.id, error: error?.message || "reminder_failed" });
+      }
+    }
+    return { ok: !errors.length, checked: dueItems.length, reminded, errors };
+  } finally {
+    feedbackReminderSweepInFlight = false;
+  }
 }
 
 async function runPublicDashboardSummary() {
@@ -1455,6 +1595,51 @@ app.get("/dashboard-api/health", (_req, res) => { res.status(200).json(buildHeal
 app.get("/schedule-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("schedule", { contract_version: SCHEDULE_CONTRACT_VERSION })); });
 app.get("/guest-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("guest_reports", { contract_version: GUEST_REPORTS_CONTRACT_VERSION })); });
 app.get("/feedback-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("feedback", { contract_version: FEEDBACK_CONTRACT_VERSION })); });
+app.get("/feedback-api/image/:feedbackId", async (req, res) => {
+  try {
+    await ensureSystemFeedbackSchema();
+    const item = await getSystemFeedbackItemById(String(req.params.feedbackId || ""));
+    const image = getSystemFeedbackMetadata(item).image_attachment;
+    const dataUrl = String(image?.data_url || "");
+    const match = dataUrl.match(/^data:(image\/(?:png|jpeg|jpg|webp|gif));base64,([a-z0-9+/=\s]+)$/i);
+    if (!match) {
+      res.status(404).send("No feedback image found.");
+      return;
+    }
+    const body = Buffer.from(match[2].replace(/\s+/g, ""), "base64");
+    res.setHeader("Content-Type", match[1].replace("image/jpg", "image/jpeg"));
+    res.setHeader("Cache-Control", "private, max-age=3600");
+    res.status(200).send(body);
+  } catch (error) {
+    res.status(404).send(error?.message || "Feedback image lookup failed");
+  }
+});
+app.get("/feedback-api/acknowledge/:feedbackId", async (req, res) => {
+  try {
+    await ensureSystemFeedbackSchema();
+    const item = await acknowledgeSystemFeedbackItem(String(req.params.feedbackId || ""), req.query.by || "ops_manager");
+    res.status(200).send(`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Feedback acknowledged</title><style>body{font-family:Arial,sans-serif;background:#111827;color:#f8fafc;display:grid;place-items:center;min-height:100vh;margin:0}.card{max-width:620px;padding:28px;border-radius:24px;background:rgba(8,17,29,.92);border:1px solid rgba(255,255,255,.14)}.ok{color:#84c341;font-weight:900}</style></head><body><main class="card"><div class="ok">Acknowledged</div><h1>Program feedback will stop reminding you.</h1><p>${escapeHtml(item.summary || item.message || item.id)}</p></main></body></html>`);
+  } catch (error) {
+    res.status(404).send(error?.message || "Feedback acknowledgement failed");
+  }
+});
+app.post("/feedback-api/acknowledge/:feedbackId", async (req, res) => {
+  try {
+    await ensureSystemFeedbackSchema();
+    const item = await acknowledgeSystemFeedbackItem(String(req.params.feedbackId || ""), req.body?.acknowledged_by || req.body?.by || "ops_manager");
+    res.status(200).json({ ok: true, data: item, meta: { version: APP_VERSION, release_id: RELEASE_ID, contract_version: FEEDBACK_CONTRACT_VERSION } });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error?.message || "Feedback acknowledgement failed" });
+  }
+});
+app.post("/feedback-api/reminders/run", async (_req, res) => {
+  try {
+    const result = await runSystemFeedbackReminderSweep();
+    res.status(200).json({ ok: true, data: result, meta: { version: APP_VERSION, release_id: RELEASE_ID, contract_version: FEEDBACK_CONTRACT_VERSION } });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error?.message || "Feedback reminder sweep failed" });
+  }
+});
 app.post("/feedback-api/submit", async (req, res) => {
   try {
     await ensureSystemFeedbackSchema();
@@ -1636,6 +1821,11 @@ app.post("/messages", async (req, res) => {
   catch (error) { console.error("SSE post message failed:", error); if (!res.headersSent) res.status(500).send("SSE post message failed"); }
 });
 const port = Number(process.env.PORT || 3000);
+if (FEEDBACK_REMINDER_SWEEP_MS > 0) {
+  setInterval(() => {
+    runSystemFeedbackReminderSweep().catch((error) => console.error("system feedback reminder sweep failed:", error));
+  }, FEEDBACK_REMINDER_SWEEP_MS).unref?.();
+}
 app.listen(port, () => {
   console.log("Memphis Zoo MCP server initialized.");
   console.log(`App version: ${APP_VERSION}`);
