@@ -89,7 +89,7 @@ assert.equal(migrationDryRun.migration.name, "test_migration");
 
 const manifest = getToolManifest();
 assert.equal(manifest.ok, true);
-assert.equal(manifest.version, "mcp-tools.v2");
+assert.equal(manifest.version, "mcp-tools.v3");
 const toolByName = new Map(manifest.tools.map((tool) => [tool.name, tool]));
 for (const toolName of [
   "server_tool_manifest",
