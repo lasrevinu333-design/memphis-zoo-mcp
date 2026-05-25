@@ -508,6 +508,13 @@ function rankLocationGroups(locationGroups, nameOrCode, limit = 3) {
     .slice(0, Math.max(1, limit));
 }
 
+function eventAreaDisplayName(value = "") {
+  const raw = String(value || "").replace(/\s+/g, " ").trim();
+  if (/^splash\s*pad\s+restrooms?$/i.test(raw)) return "Splash Pad";
+  if (/^courtyard\s+restrooms?$/i.test(raw)) return "Courtyard";
+  return raw;
+}
+
 function matchLocationGroup(locationGroups, nameOrCode) {
   return rankLocationGroups(locationGroups, nameOrCode, 1)[0]?.group || null;
 }
@@ -886,7 +893,7 @@ function parseOneEventText(rawText, locationGroups, index = 0) {
     source_index: index,
     event_name: eventName,
     location_group_id: matchedGroup?.location_group_id || "",
-    location_group_name: matchedGroup?.group_name || areaFromLabel || "",
+    location_group_name: eventAreaDisplayName(matchedGroup?.group_name || areaFromLabel || ""),
     event_date: eventDate,
     start_time: startTime,
     end_time: endTime,
@@ -940,7 +947,7 @@ function buildGeminiPrompt(rows, locationGroups) {
     "- start_time and end_time must be HH:MM:SS 24-hour when known, else empty string.",
     "- attendee_count must be a string integer or null.",
     "- location_group_id must match one of the provided location groups when you can infer it, else empty string.",
-    "- location_group_name should be the canonical group name when matched, else your best short area text.",
+    "- location_group_name should be the canonical event area name when matched. For event rows, call Splash Pad Restrooms 'Splash Pad' and Courtyard Restrooms 'Courtyard' because the events happen in those areas, not inside the restrooms.",
     "- warnings must be an array using these values when applicable: missing_event_name, missing_area, missing_date, missing_time, end_not_after_start, ambiguous_area, ambiguous_date, ambiguous_time.",
     "- confidence must be one of high, medium, low.",
     "- review_notes should be short plain text or null.",
@@ -1006,7 +1013,7 @@ function normalizeGeminiRow(raw = {}, locationGroups = [], fallbackText = "", in
     ? (locationGroups || []).find((group) => String(group.location_group_id || "") === String(raw.location_group_id || "")) || null
     : matchLocationGroup(locationGroups, raw.location_group_name || fallbackText);
   const locationGroupId = matchedGroup?.location_group_id || String(raw.location_group_id || "").trim();
-  const locationGroupName = matchedGroup?.group_name || String(raw.location_group_name || "").trim();
+  const locationGroupName = eventAreaDisplayName(matchedGroup?.group_name || String(raw.location_group_name || "").trim());
   const eventDate = normalizePossibleDate(raw.event_date);
   const timePair = normalizeTimePair(raw.start_time, raw.end_time);
   const attendeeRaw = raw.attendee_count == null || raw.attendee_count === "" ? null : Number.parseInt(String(raw.attendee_count), 10);

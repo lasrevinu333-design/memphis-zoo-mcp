@@ -62,6 +62,36 @@ assertTime(pavilionTypo, "18:30:00", "21:00:00");
 assert.equal(pavilionTypo.attendee_count, "55");
 assert.ok(pavilionTypo.event_name.includes("Windsor Prom"));
 
+const eventAreaGroups = [
+  ...locationGroups,
+  {
+    location_group_id: "00000000-0000-4000-8000-000000000010",
+    group_code: "SPLASH_PAD_RESTROOMS",
+    group_name: "Splash Pad Restrooms",
+    included_locations: ["Splash Pad", "Splashpad", "Splash Pad Restrooms"],
+  },
+  {
+    location_group_id: "00000000-0000-4000-8000-000000000011",
+    group_code: "COURTYARD_RESTROOMS",
+    group_name: "Courtyard Restrooms",
+    included_locations: ["Courtyard", "Courtyard Restrooms"],
+  },
+];
+const splashPadEvent = await aiParseEventTexts({
+  texts: ["Event Name: Splash Pad Birthday | Event Area: Splash Pad | Event Date: 7/11 | Start Time: 10am | End Time: 12pm | Guests: 45"],
+  locationGroups: eventAreaGroups,
+});
+assert.equal(splashPadEvent[0].location_group_id, "00000000-0000-4000-8000-000000000010");
+assert.equal(splashPadEvent[0].location_group_name, "Splash Pad");
+assert.doesNotMatch(splashPadEvent[0].location_group_name, /Restrooms/i);
+const courtyardEvent = await aiParseEventTexts({
+  texts: ["Donor mixer at Courtyard on 7/12 from 5pm to 7pm. 80 guests."],
+  locationGroups: eventAreaGroups,
+});
+assert.equal(courtyardEvent[0].location_group_id, "00000000-0000-4000-8000-000000000011");
+assert.equal(courtyardEvent[0].location_group_name, "Courtyard");
+assert.doesNotMatch(courtyardEvent[0].location_group_name, /Restrooms/i);
+
 const labeledInline = await parseOne("Event Name: Baby Day | Event Area: Event Center | Event Date: 5-9 | Start Time: 9 | End Time: 6p | Guests: 1000");
 assert.equal(labeledInline.event_name, "Baby Day");
 assert.match(labeledInline.event_date, /^\d{4}-05-09$/);
