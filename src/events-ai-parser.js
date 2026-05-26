@@ -214,17 +214,16 @@ function buildDate(year, month, day) {
 
   const now = new Date();
   const currentYear = now.getFullYear();
-  const todayUtc = Date.UTC(currentYear, now.getMonth(), now.getDate());
   const thisYear = isoDateFor(currentYear, month, day);
+  if (!thisYear) return "";
+
+  // Memphis event intake should stay in the current calendar year by default.
+  // Only roll an undated event into next year during the last ~two weeks of the
+  // year, when January/early-next-year bookings are operationally plausible.
   const nextYear = isoDateFor(currentYear + 1, month, day);
-
-  if (!thisYear && !nextYear) return "";
-  if (!thisYear) return nextYear;
-
-  const thisDate = new Date(`${thisYear}T12:00:00Z`);
-  const deltaDays = Math.round((thisDate.getTime() - todayUtc) / 86400000);
-  if (deltaDays >= -60 && deltaDays <= 370) return thisYear;
-  if (deltaDays < -1 && nextYear) return nextYear;
+  const yearEndRolloverStarts = new Date(currentYear, 11, 17, 0, 0, 0, 0);
+  const thisDate = new Date(currentYear, month - 1, day, 12, 0, 0, 0);
+  if (nextYear && now >= yearEndRolloverStarts && thisDate < now) return nextYear;
   return thisYear;
 }
 

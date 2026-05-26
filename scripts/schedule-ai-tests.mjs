@@ -124,6 +124,9 @@ const absenceSummaryText = context.buildAbsenceSummaryText({
 }, { generated_before_preview: true }, "2026-05-14");
 assert.match(absenceSummaryText, /auto-generated before previewing absences/i);
 assert.match(absenceSummaryText, /1 assignments would be removed/i);
+assert.match(source, /source_type, ''\) not ilike '%manual%'/i, "manager/manual overrides must survive static owner restore");
+assert.match(source, /source_type, ''\) not ilike '%override%'/i, "explicit override assignments must not be overwritten by static restore");
+assert.match(source, /source_type, ''\) not ilike '%manager%'/i, "manager overrides must not be overwritten by static restore");
 
 const matchedGroup = context.matchLocationGroup([
   { group_name: "Primate", group_code: "PRI", included_locations: ["Primate House"] },

@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { randomUUID } from "crypto";
+import { createHmac, randomUUID, timingSafeEqual } from "crypto";
 import express from "express";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -16,6 +16,7 @@ import {
   createScheduleRouter,
 } from "./routes/index.js";
 import { APP_VERSION, RELEASE_ID } from "./app-version.js";
+import { authenticateDailyPinRequest, installDailyPinAuthRoutes, makeDailyPinMiddleware } from "./auth/daily-pin-auth.js";
 
 const app = express();
 app.use(express.json({ limit: "10mb" }));
@@ -59,6 +60,12 @@ const FEEDBACK_REMINDER_MAX_COUNT = toSafeInt(process.env.FEEDBACK_REMINDER_MAX_
 let attendanceCache = { data: null, fetched_at_ms: 0 };
 let feedbackReminderSweepInFlight = false;
 let feedbackSchemaEnsured = false;
+
+const requireOpsManagerAuth = makeDailyPinMiddleware({ allowedRoles: ["ops_manager"] });
+
+function isHealthPath(req) {
+  return String(req.path || "") === "/health";
+}
 
 function buildHealthPayload(area, extra = {}) {
   return {
@@ -133,84 +140,116 @@ function sanitizeReadOnlySql(sql) {
   return { sql: withoutTrailingSemicolons, normalized };
 }
 
-function getAdminApiKey() {
-  return String(process.env.ADMIN_API_KEY || "").trim();
-}
-
 function normalizeDashboardCloser(value) {
   const normalized = String(value || "").trim();
   return normalized || "Dashboard";
 }
 
-function allowWithoutPin(_req, _res, next) {
-  next();
-}
-
 function setAdminApiCors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Admin-Key");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id");
   res.setHeader("Vary", "Origin");
 }
 
 function setPublicDashboardCors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id");
   res.setHeader("Vary", "Origin");
 }
 
 function setScanApiCors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id");
   res.setHeader("Vary", "Origin");
 }
 
 function setMessagingApiCors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id");
   res.setHeader("Vary", "Origin");
 }
 
 function setScheduleApiCors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS,PATCH,DELETE");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id");
   res.setHeader("Vary", "Origin");
 }
 
 function setGuestApiCors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id");
   res.setHeader("Vary", "Origin");
 }
 
 function setFeedbackApiCors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Feedback-Reminder-Secret, X-Admin-Key");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id, X-Feedback-Reminder-Secret");
   res.setHeader("Vary", "Origin");
 }
 
-function requireAdminApiAuth(req, res, next) {
-  const configuredKey = getAdminApiKey();
-  if (!configuredKey) {
-    res.status(503).json({ ok: false, error: "ADMIN_API_KEY is not configured on the server." });
-    return;
-  }
-  const providedKey = String(req.header("x-admin-key") || "").trim();
-  if (!providedKey || providedKey !== configuredKey) {
-    res.status(401).json({ ok: false, error: "Unauthorized" });
-    return;
-  }
-  next();
-}
 
 function getFeedbackReminderSecret() {
-  return String(process.env.FEEDBACK_REMINDER_SECRET || process.env.ADMIN_API_KEY || "").trim();
+  return String(process.env.FEEDBACK_REMINDER_SECRET || "").trim();
+}
+
+function safeStringEqual(left, right) {
+  const a = Buffer.from(String(left || ""));
+  const b = Buffer.from(String(right || ""));
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
+
+function getFeedbackLinkSecret() {
+  return String(process.env.FEEDBACK_LINK_SECRET || process.env.PIN_SESSION_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+}
+
+function signFeedbackLinkToken(feedbackId, purpose = "ack") {
+  const id = String(feedbackId || "").trim();
+  const secret = getFeedbackLinkSecret();
+  if (!id || !secret) return "";
+  const payload = Buffer.from(JSON.stringify({ v: 1, purpose, feedback_id: id }), "utf8").toString("base64url");
+  const signature = createHmac("sha256", secret).update(payload).digest("base64url");
+  return `${payload}.${signature}`;
+}
+
+function verifyFeedbackLinkToken(token, feedbackId, purpose = "ack") {
+  const secret = getFeedbackLinkSecret();
+  const raw = String(token || "").trim();
+  const [payload, signature, extra] = raw.split(".");
+  if (!secret || !payload || !signature || extra !== undefined) return false;
+  const expected = createHmac("sha256", secret).update(payload).digest("base64url");
+  if (!safeStringEqual(signature, expected)) return false;
+  try {
+    const decoded = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    return decoded?.v === 1 && decoded?.purpose === purpose && String(decoded?.feedback_id || "") === String(feedbackId || "");
+  } catch {
+    return false;
+  }
+}
+
+function requireFeedbackSignedLinkOrOps(purpose) {
+  return (req, res, next) => {
+    const feedbackId = String(req.params.feedbackId || "").trim();
+    if (verifyFeedbackLinkToken(req.query.token || req.body?.token, feedbackId, purpose)) {
+      req.feedbackSignedLink = { purpose, feedback_id: feedbackId };
+      next();
+      return;
+    }
+    const result = authenticateDailyPinRequest(req, { allowedRoles: ["ops_manager"] });
+    if (!result.ok) {
+      res.status(result.status || 401).json({ ok: false, error: result.error || "Unauthorized" });
+      return;
+    }
+    req.memphisAuth = result.session;
+    next();
+  };
 }
 
 function requireFeedbackReminderSecret(req, res) {
@@ -219,7 +258,7 @@ function requireFeedbackReminderSecret(req, res) {
     res.status(503).json({ ok: false, error: "FEEDBACK_REMINDER_SECRET is not configured on the server." });
     return false;
   }
-  const providedSecret = String(req.header("x-feedback-reminder-secret") || req.header("x-admin-key") || req.body?.secret || "").trim();
+  const providedSecret = String(req.header("x-feedback-reminder-secret") || req.body?.secret || "").trim();
   if (!providedSecret || providedSecret !== configuredSecret) {
     res.status(401).json({ ok: false, error: "Unauthorized" });
     return false;
@@ -698,11 +737,17 @@ function getFeedbackPublicOrigin() {
 }
 
 function buildSystemFeedbackAckUrl(feedbackId) {
-  return `${getFeedbackPublicOrigin()}/feedback-api/acknowledge/${encodeURIComponent(String(feedbackId || ""))}`;
+  const id = String(feedbackId || "");
+  const token = signFeedbackLinkToken(id, "ack");
+  const suffix = token ? `?token=${encodeURIComponent(token)}` : "";
+  return `${getFeedbackPublicOrigin()}/feedback-api/acknowledge/${encodeURIComponent(id)}${suffix}`;
 }
 
 function buildSystemFeedbackImageUrl(feedbackId) {
-  return `${getFeedbackPublicOrigin()}/feedback-api/image/${encodeURIComponent(String(feedbackId || ""))}`;
+  const id = String(feedbackId || "");
+  const token = signFeedbackLinkToken(id, "image");
+  const suffix = token ? `?token=${encodeURIComponent(token)}` : "";
+  return `${getFeedbackPublicOrigin()}/feedback-api/image/${encodeURIComponent(id)}${suffix}`;
 }
 
 function escapeHtml(value) {
@@ -1600,22 +1645,24 @@ function createMcpServer() {
   return server;
 }
 
+installDailyPinAuthRoutes(app, { setCors: setAdminApiCors });
+
 app.use("/admin-api", (req, res, next) => { setAdminApiCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/dashboard-api", (req, res, next) => { setPublicDashboardCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/scan-api", (req, res, next) => { setScanApiCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
-app.use("/messaging-api", (req, res, next) => { setMessagingApiCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } eventMaintenanceController.kick("messaging_api_request"); next(); }, createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: MESSAGING_CONTRACT_VERSION }));
-app.use("/schedule-api", (req, res, next) => { setScheduleApiCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } eventMaintenanceController.kick("schedule_api_request"); next(); }, createScheduleRouter({ runReadOnlySql, runRpc, runWriteSql, buildHealthPayload, requireAdminApiAuth: allowWithoutPin, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: SCHEDULE_CONTRACT_VERSION }));
+app.use("/messaging-api", (req, res, next) => { setMessagingApiCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); }, (req, res, next) => { eventMaintenanceController.kick("messaging_api_request"); next(); }, createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: MESSAGING_CONTRACT_VERSION }));
+app.use("/schedule-api", (req, res, next) => { setScheduleApiCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); }, (req, res, next) => { eventMaintenanceController.kick("schedule_api_request"); next(); }, createScheduleRouter({ runReadOnlySql, runRpc, runWriteSql, buildHealthPayload, requireAdminApiAuth: requireOpsManagerAuth, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: SCHEDULE_CONTRACT_VERSION }));
 app.use("/guest-api", (req, res, next) => { setGuestApiCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/feedback-api", (req, res, next) => { setFeedbackApiCors(res); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/dashboard-api/events", createEventsPublicRouter({ runReadOnlySql, runWriteSql, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController }));
-app.use("/admin-api/events", createEventsAdminRouter({ runReadOnlySql, runWriteSql, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController, requireAdminApiAuth: allowWithoutPin }));
+app.use("/admin-api/events", createEventsAdminRouter({ runReadOnlySql, runWriteSql, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController, requireAdminApiAuth: requireOpsManagerAuth }));
 app.get("/version", (_req, res) => { setPublicDashboardCors(res); eventMaintenanceController.kick("version_ping"); res.status(200).json(buildHealthPayload("version")); });
-app.get("/admin-api/health", requireAdminApiAuth, (_req, res) => { res.status(200).json(buildHealthPayload("admin", { authenticated: true })); });
+app.get("/admin-api/health", requireOpsManagerAuth, (_req, res) => { res.status(200).json(buildHealthPayload("admin", { authenticated: true })); });
 app.get("/dashboard-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("dashboard")); });
 app.get("/schedule-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("schedule", { contract_version: SCHEDULE_CONTRACT_VERSION })); });
 app.get("/guest-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("guest_reports", { contract_version: GUEST_REPORTS_CONTRACT_VERSION })); });
 app.get("/feedback-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("feedback", { contract_version: FEEDBACK_CONTRACT_VERSION })); });
-app.get("/feedback-api/image/:feedbackId", async (req, res) => {
+app.get("/feedback-api/image/:feedbackId", requireFeedbackSignedLinkOrOps("image"), async (req, res) => {
   try {
     await ensureSystemFeedbackSchema();
     const item = await getSystemFeedbackItemById(String(req.params.feedbackId || ""));
@@ -1634,7 +1681,7 @@ app.get("/feedback-api/image/:feedbackId", async (req, res) => {
     res.status(404).send(error?.message || "Feedback image lookup failed");
   }
 });
-app.get("/feedback-api/acknowledge/:feedbackId", async (req, res) => {
+app.get("/feedback-api/acknowledge/:feedbackId", requireFeedbackSignedLinkOrOps("ack"), async (req, res) => {
   try {
     await ensureSystemFeedbackSchema();
     const item = await acknowledgeSystemFeedbackItem(String(req.params.feedbackId || ""), req.query.by || "ops_manager");
@@ -1643,7 +1690,7 @@ app.get("/feedback-api/acknowledge/:feedbackId", async (req, res) => {
     res.status(404).send(error?.message || "Feedback acknowledgement failed");
   }
 });
-app.post("/feedback-api/acknowledge/:feedbackId", async (req, res) => {
+app.post("/feedback-api/acknowledge/:feedbackId", requireFeedbackSignedLinkOrOps("ack"), async (req, res) => {
   try {
     await ensureSystemFeedbackSchema();
     const item = await acknowledgeSystemFeedbackItem(String(req.params.feedbackId || ""), req.body?.acknowledged_by || req.body?.by || "ops_manager");
@@ -1784,7 +1831,7 @@ app.get("/dashboard-api/current-attendance", async (_req, res) => {
   }
   catch (error) { console.error("current attendance fetch failed:", error); res.status(502).json({ ok: false, error: error.message || "Current attendance fetch failed", source_url: ATTENDANCE_SOURCE_URL }); }
 });
-app.post("/admin-api/attendance-update", requireAdminApiAuth, async (req, res) => {
+app.post("/admin-api/attendance-update", requireOpsManagerAuth, async (req, res) => {
   try {
     const payload = req.body && typeof req.body === "object" ? req.body : {};
     const data = await persistAttendanceState(payload);
@@ -1795,15 +1842,15 @@ app.post("/admin-api/attendance-update", requireAdminApiAuth, async (req, res) =
     res.status(400).json({ ok: false, error: error.message || "Attendance update failed" });
   }
 });
-app.post("/admin-api/bundle", requireAdminApiAuth, async (req, res) => {
+app.post("/admin-api/bundle", requireOpsManagerAuth, async (req, res) => {
   try { const payload = req.body && typeof req.body === "object" ? req.body : {}; const data = await runAdminBundleViaSqlRead(payload); res.status(200).json({ ok: true, data }); }
   catch (error) { console.error("admin bundle failed:", error); res.status(500).json({ ok: false, error: error.message || "Admin bundle failed" }); }
 });
-app.post("/admin-api/close-ticket", requireAdminApiAuth, async (req, res) => {
+app.post("/admin-api/close-ticket", requireOpsManagerAuth, async (req, res) => {
   try { const ticketId = String(req.body?.ticket_id || "").trim(); const closedBy = String(req.body?.closed_by || "").trim(); const closeNotes = req.body?.close_notes == null ? null : String(req.body.close_notes); if (!ticketId || !closedBy) { res.status(400).json({ ok: false, error: "ticket_id and closed_by are required." }); return; } await runWriteSql("admin_close_ticket", `select public.close_maintenance_ticket(${sqlLiteral(ticketId)}::uuid, ${sqlLiteral(closedBy)}, ${sqlLiteral(closeNotes)});`); res.status(200).json({ ok: true, ticket_id: ticketId, status: "closed" }); }
   catch (error) { console.error("close ticket failed:", error); res.status(500).json({ ok: false, error: error.message || "Close ticket failed" }); }
 });
-app.post("/admin-api/force-close-session", requireAdminApiAuth, async (req, res) => {
+app.post("/admin-api/force-close-session", requireOpsManagerAuth, async (req, res) => {
   try { const sessionUuid = String(req.body?.session_uuid || "").trim(); const closedBy = String(req.body?.closed_by || "").trim(); const reason = req.body?.reason == null ? null : String(req.body.reason); if (!sessionUuid || !closedBy) { res.status(400).json({ ok: false, error: "session_uuid and closed_by are required." }); return; } await runWriteSql("admin_force_close_session", `select public.force_close_session(${sqlLiteral(sessionUuid)}, ${sqlLiteral(closedBy)}, ${sqlLiteral(reason)});`); res.status(200).json({ ok: true, session_uuid: sessionUuid, status: "closed" }); }
   catch (error) { console.error("force close session failed:", error); res.status(500).json({ ok: false, error: error.message || "Force close session failed" }); }
 });
@@ -1811,7 +1858,7 @@ app.get("/dashboard-api/summary", async (_req, res) => {
   try { const data = await runPublicDashboardSummary(); res.status(200).json({ ok: true, data }); }
   catch (error) { console.error("dashboard summary failed:", error); res.status(500).json({ ok: false, error: error.message || "Dashboard summary failed" }); }
 });
-app.post("/dashboard-api/close-ticket", async (req, res) => {
+app.post("/dashboard-api/close-ticket", requireOpsManagerAuth, async (req, res) => {
   try {
     const ticketId = String(req.body?.ticket_id || "").trim();
     const closedBy = normalizeDashboardCloser(req.body?.closed_by);
@@ -1830,19 +1877,19 @@ app.post("/scan-api/rpc", async (req, res) => {
   catch (error) { console.error("scan rpc failed:", error); res.status(500).json({ ok: false, error: error.message || "Scan RPC failed" }); }
 });
 app.get("/", (_req, res) => { res.status(200).send("Memphis Zoo MCP server is running."); });
-app.get("/mcp", (_req, res) => { res.status(405).send("GET not supported on /mcp for this server."); });
+app.get("/mcp", requireOpsManagerAuth, (_req, res) => { res.status(405).send("GET not supported on /mcp for this server."); });
 app.options("/mcp", (_req, res) => { res.sendStatus(200); });
-app.post("/mcp", async (req, res) => {
+app.post("/mcp", requireOpsManagerAuth, async (req, res) => {
   try { const server = createMcpServer(); const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined }); res.on("close", () => { transport.close(); }); await server.connect(transport); await transport.handleRequest(req, res, req.body); }
   catch (error) { console.error("MCP request failed:", error); if (!res.headersSent) { res.status(500).json({ jsonrpc: "2.0", error: { code: -32603, message: "Internal server error" }, id: null }); } }
 });
 let sseTransport = null;
 let sseServer = null;
-app.get("/sse", async (_req, res) => {
+app.get("/sse", requireOpsManagerAuth, async (_req, res) => {
   try { sseServer = createMcpServer(); sseTransport = new SSEServerTransport("/messages", res); await sseServer.connect(sseTransport); }
   catch (error) { console.error("SSE connection failed:", error); if (!res.headersSent) res.status(500).send("SSE connection failed"); }
 });
-app.post("/messages", async (req, res) => {
+app.post("/messages", requireOpsManagerAuth, async (req, res) => {
   try { if (!sseTransport) { res.status(400).send("No active SSE transport"); return; } await sseTransport.handlePostMessage(req, res, req.body); }
   catch (error) { console.error("SSE post message failed:", error); if (!res.headersSent) res.status(500).send("SSE post message failed"); }
 });

@@ -14,7 +14,8 @@
     "test:feedback": "node scripts/feedback-contract-tests.mjs",
     "test:schedule-ai": "node scripts/schedule-ai-tests.mjs",
     "test:ai-intent": "node scripts/smoke-ai-intent.mjs",
-    "test:messaging": "node scripts/memphis-messaging-regression-tests.mjs"
+    "test:messaging": "node scripts/memphis-messaging-regression-tests.mjs",
+    "test:auth": "node scripts/daily-pin-auth-tests.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.18.0",

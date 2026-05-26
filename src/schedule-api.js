@@ -1251,7 +1251,10 @@ export function createScheduleRouter({
             and ep.employee_id = ct.assigned_employee_id
             and ep.active = true
         )
-        and coalesce(dsa.source_type, '') not like 'coverall%';
+        and coalesce(dsa.source_type, '') not like 'coverall%'
+        and coalesce(dsa.source_type, '') not ilike '%manual%'
+        and coalesce(dsa.source_type, '') not ilike '%override%'
+        and coalesce(dsa.source_type, '') not ilike '%manager%';
     `);
     return { applied: true };
   }

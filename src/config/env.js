@@ -42,9 +42,6 @@ export function getRuntimeEnv() {
       service_role_key_present: present("SUPABASE_SERVICE_ROLE_KEY"),
       configured: present("SUPABASE_URL") && present("SUPABASE_SERVICE_ROLE_KEY"),
     },
-    admin: {
-      api_key_present: present("ADMIN_API_KEY"),
-    },
     ai: {
       gemini_configured: Boolean(geminiKeySource),
       gemini_key_source: geminiKeySource,
@@ -63,10 +60,6 @@ export function validateRuntimeEnv({ strict = false } = {}) {
   if (!env.github.token_present) errors.push("GITHUB_TOKEN or GH_TOKEN is missing.");
   if (!env.supabase.url_present) errors.push("SUPABASE_URL is missing.");
   if (!env.supabase.service_role_key_present) errors.push("SUPABASE_SERVICE_ROLE_KEY is missing.");
-
-  if (!env.admin.api_key_present) {
-    warnings.push("ADMIN_API_KEY is missing. Admin API routes will reject protected requests.");
-  }
 
   if (!env.ai.gemini_configured) {
     warnings.push("GEMINI_API_KEY or GOOGLE_API_KEY is missing. Memphis AI will use fallback replies.");

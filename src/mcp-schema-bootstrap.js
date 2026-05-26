@@ -10,6 +10,7 @@ import { validateRuntimeEnv } from "./config/env.js";
 import { getToolManifest } from "./mcp/tool-manifest.js";
 import { normalizeMcpServerName } from "./mcp/create-mcp-server.js";
 import { RELEASE_ID } from "./app-version.js";
+import { makeDailyPinMiddleware } from "./auth/daily-pin-auth.js";
 
 /**
  * Compatibility/bootstrap layer for the Memphis Zoo MCP server.
@@ -50,17 +51,19 @@ function getAppInfo() {
 function installHttpDiagnostics(app) {
   if (!app || app.__memphisHttpDiagnosticsInstalled) return;
 
+  const requireOpsManagerAuth = makeDailyPinMiddleware({ allowedRoles: ["ops_manager"] });
+
   Object.defineProperty(app, "__memphisHttpDiagnosticsInstalled", {
     value: true,
     enumerable: false,
     configurable: false,
   });
 
-  app.get("/mcp-tools.json", (_req, res) => {
+  app.get("/mcp-tools.json", requireOpsManagerAuth, (_req, res) => {
     res.status(200).json(getToolManifest({ includePlanned: true }));
   });
 
-  app.get("/status/deep", (_req, res) => {
+  app.get("/status/deep", requireOpsManagerAuth, (_req, res) => {
     const env = validateRuntimeEnv({ strict: false });
     res.status(env.ok ? 200 : 503).json({
       ok: env.ok,
