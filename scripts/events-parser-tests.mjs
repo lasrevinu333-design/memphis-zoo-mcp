@@ -51,6 +51,9 @@ assert.match(compact.event_date, /^\d{4}-05-09$/);
 assertTime(compact, "09:00:00", "18:00:00");
 assert.equal(compact.attendee_count, "500");
 
+const undatedPastMonthStaysThisYear = await parseOne("Test event at Event Center on January 10 from 9am to 10am");
+assert.equal(undatedPastMonthStaysThisYear.event_date, `${new Date().getFullYear()}-01-10`, "undated test/normal events stay in the current year unless it is within the year-end rollover window");
+
 const compactHyphenDateOnly = await parseOne("Baby Day EC 5-9 500 guests");
 assert.equal(compactHyphenDateOnly.event_name, "Baby Day");
 assert.equal(compactHyphenDateOnly.location_group_name, "Event Center");
