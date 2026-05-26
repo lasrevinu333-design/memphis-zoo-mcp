@@ -55,8 +55,10 @@ const ATTENDANCE_CACHE_MS = toSafeInt(process.env.ND_MEMZOO_ATTENDANCE_CACHE_MS,
 const ATTENDANCE_CF_CLEARANCE = String(process.env.ND_MEMZOO_CF_CLEARANCE || "").trim();
 const FEEDBACK_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 const FEEDBACK_REMINDER_SWEEP_MS = toSafeInt(process.env.FEEDBACK_REMINDER_SWEEP_MS, 60000);
+const FEEDBACK_REMINDER_MAX_COUNT = toSafeInt(process.env.FEEDBACK_REMINDER_MAX_COUNT, 3);
 let attendanceCache = { data: null, fetched_at_ms: 0 };
 let feedbackReminderSweepInFlight = false;
+let feedbackSchemaEnsured = false;
 
 function buildHealthPayload(area, extra = {}) {
   return {
@@ -189,7 +191,7 @@ function setGuestApiCors(res) {
 function setFeedbackApiCors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Feedback-Reminder-Secret, X-Admin-Key");
   res.setHeader("Vary", "Origin");
 }
 
@@ -205,6 +207,24 @@ function requireAdminApiAuth(req, res, next) {
     return;
   }
   next();
+}
+
+function getFeedbackReminderSecret() {
+  return String(process.env.FEEDBACK_REMINDER_SECRET || process.env.ADMIN_API_KEY || "").trim();
+}
+
+function requireFeedbackReminderSecret(req, res) {
+  const configuredSecret = getFeedbackReminderSecret();
+  if (!configuredSecret) {
+    res.status(503).json({ ok: false, error: "FEEDBACK_REMINDER_SECRET is not configured on the server." });
+    return false;
+  }
+  const providedSecret = String(req.header("x-feedback-reminder-secret") || req.header("x-admin-key") || req.body?.secret || "").trim();
+  if (!providedSecret || providedSecret !== configuredSecret) {
+    res.status(401).json({ ok: false, error: "Unauthorized" });
+    return false;
+  }
+  return true;
 }
 
 async function runRpc(functionName, args = {}) {
@@ -625,6 +645,7 @@ async function listGuestCleanlinessReports({ status, locationCode, limit = 100 }
 }
 
 async function ensureSystemFeedbackSchema() {
+  if (feedbackSchemaEnsured) return;
   await runWriteSql(
     "system_feedback_schema",
     `create table if not exists public.system_feedback_items (
@@ -658,6 +679,7 @@ async function ensureSystemFeedbackSchema() {
      create index if not exists idx_system_feedback_items_hub_context on public.system_feedback_items (hub_context);
      create index if not exists idx_system_feedback_items_reminder_due on public.system_feedback_items (status, last_feedback_reminder_at);`
   );
+  feedbackSchemaEnsured = true;
 }
 
 function normalizeFeedbackCategory(value) {
@@ -879,12 +901,27 @@ async function listSystemFeedbackReminderDueItems({ limit = 25 } = {}) {
            status, summary, notification_status, notified_ops_count, last_feedback_reminder_at,
            feedback_reminder_count, acknowledged_at, acknowledged_by, metadata_json, created_at, updated_at
     from public.system_feedback_items
-    where status not in ('acknowledged', 'resolved', 'closed')
+    where status not in ('acknowledged', 'resolved', 'closed', 'reminder_exhausted')
+      and feedback_reminder_count < ${Number(FEEDBACK_REMINDER_MAX_COUNT)}
       and (last_feedback_reminder_at is null or last_feedback_reminder_at <= now() - interval '10 minutes')
     order by coalesce(last_feedback_reminder_at, created_at) asc
     limit ${Math.max(1, Math.min(100, Number(limit) || 25))}
   `);
   return Array.isArray(rows) ? rows : [];
+}
+
+async function markSystemFeedbackReminderExhausted(item, reason = "max_reminders_reached") {
+  if (!item?.id) return null;
+  await runWriteSql(
+    "system_feedback_reminder_exhausted",
+    `update public.system_feedback_items
+       set status = 'reminder_exhausted',
+           updated_at = now(),
+           metadata_json = coalesce(metadata_json, '{}'::jsonb) || ${sqlLiteral(JSON.stringify({ reminder_exhausted_reason: reason }))}::jsonb
+     where id = ${sqlLiteral(item.id)}::uuid
+       and status not in ('acknowledged', 'resolved', 'closed')`
+  );
+  return { ...item, status: "reminder_exhausted" };
 }
 
 async function runSystemFeedbackReminderSweep() {
@@ -904,6 +941,9 @@ async function runSystemFeedbackReminderSweep() {
       try {
         const result = await notifySystemFeedbackRecipients({ item, opsRecipients, memphisUserId, reminder: true });
         if (result.ops_count) reminded += 1;
+        if (Number(item.feedback_reminder_count || 0) + 1 >= FEEDBACK_REMINDER_MAX_COUNT) {
+          await markSystemFeedbackReminderExhausted(item);
+        }
         if (result.errors?.length) errors.push(...result.errors.map((error) => ({ feedback_id: item.id, ...error })));
       } catch (error) {
         errors.push({ feedback_id: item.id, error: error?.message || "reminder_failed" });
@@ -1632,8 +1672,9 @@ app.post("/feedback-api/acknowledge/:feedbackId", async (req, res) => {
     res.status(500).json({ ok: false, error: error?.message || "Feedback acknowledgement failed" });
   }
 });
-app.post("/feedback-api/reminders/run", async (_req, res) => {
+app.post("/feedback-api/reminders/run", async (req, res) => {
   try {
+    if (!requireFeedbackReminderSecret(req, res)) return;
     const result = await runSystemFeedbackReminderSweep();
     res.status(200).json({ ok: true, data: result, meta: { version: APP_VERSION, release_id: RELEASE_ID, contract_version: FEEDBACK_CONTRACT_VERSION } });
   } catch (error) {

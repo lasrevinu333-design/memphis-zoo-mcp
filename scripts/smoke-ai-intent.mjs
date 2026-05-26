@@ -4,6 +4,9 @@ import { findLocationCode, isSystemSpecificQuestion } from "../src/ai/memphis-ai
 assert.equal(findLocationCode("TETX"), "TETX");
 assert.equal(findLocationCode("TET-10"), "TET10");
 assert.equal(findLocationCode("schedule today"), "");
+assert.equal(findLocationCode("What is Haley's number?"), "");
+assert.equal(findLocationCode("Who is the water quality manager?"), "");
+assert.equal(findLocationCode("Which ops managers work today?"), "");
 
 assert.equal(isSystemSpecificQuestion("TETX"), true);
 assert.equal(isSystemSpecificQuestion("schedule today"), true);
