@@ -51,6 +51,40 @@ assert.match(compact.event_date, /^\d{4}-05-09$/);
 assertTime(compact, "09:00:00", "18:00:00");
 assert.equal(compact.attendee_count, "500");
 
+const compactHyphenDateOnly = await parseOne("Baby Day EC 5-9 500 guests");
+assert.equal(compactHyphenDateOnly.event_name, "Baby Day");
+assert.equal(compactHyphenDateOnly.location_group_name, "Event Center");
+assert.match(compactHyphenDateOnly.event_date, /^\d{4}-05-09$/);
+assert.equal(compactHyphenDateOnly.start_time, "", "date-only 5-9 must not become 5am start time");
+assert.equal(compactHyphenDateOnly.end_time, "", "date-only 5-9 must not become 9am end time");
+assert.match(compactHyphenDateOnly.warnings.join(","), /missing_time/);
+
+const compactHyphenTimeWithSeparateDate = await parseOne("Baby Day EC 5/9 5-9 500 guests");
+assert.equal(compactHyphenTimeWithSeparateDate.event_name, "Baby Day");
+assert.match(compactHyphenTimeWithSeparateDate.event_date, /^\d{4}-05-09$/);
+assertTime(compactHyphenTimeWithSeparateDate, "17:00:00", "21:00:00");
+
+const endMeridiemOnly = await parseOne("Baby Day at Event Center on 5/9 from 6:30 to 9pm 500 guests");
+assertTime(endMeridiemOnly, "18:30:00", "21:00:00");
+
+const impossibleIsoDate = await parseOne("Event Date: 2026-99-99 | Event Name: Bad Date | Event Area: Event Center | Start Time: 9am | End Time: 10am");
+assert.equal(impossibleIsoDate.event_date, "");
+assert.match(impossibleIsoDate.warnings.join(","), /missing_date/);
+assert.doesNotMatch(impossibleIsoDate.notes, /Event Date:|Event Name:|Event Area:|Start Time:|End Time/i);
+
+const farFutureDate = await parseOne("Event Date: 12/31/2030 | Event Name: Future Party | Event Area: Event Center | Start Time: 9am | End Time: 10am");
+assert.equal(farFutureDate.event_date, "");
+assert.match(farFutureDate.warnings.join(","), /missing_date/);
+
+const eventWillRun = await parseOne("Event will run from 9am to 6pm at Event Center on 5/9. 500 guests.");
+assert.notEqual(eventWillRun.event_name, "Center");
+assert.match(eventWillRun.warnings.join(","), /missing_event_name/);
+
+const labeledWithoutNotes = await parseOne("Event: Baby Day | Event Area: Event Center | Date: 5/9 | Start: 9am | End: 6pm");
+assert.equal(labeledWithoutNotes.event_name, "Baby Day");
+assert.equal(labeledWithoutNotes.notes, "");
+assert.doesNotMatch(labeledWithoutNotes.notes, /Event:|Event Area:|Date:|Start:|End/i);
+
 const noMeridiemEnd = await parseOne("Baby Day at Event Ctr 5/9 start 9am end 630");
 assert.equal(noMeridiemEnd.location_group_name, "Event Center");
 assertTime(noMeridiemEnd, "09:00:00", "18:30:00");
