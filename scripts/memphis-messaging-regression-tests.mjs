@@ -110,6 +110,54 @@ for (const testCase of replyCases) {
   );
 }
 
+const eventCenterThreadId = "00000000-0000-0000-0000-000000000002";
+const eventCenterResponder = createMemphisResponder({
+  runReadOnlySql: async (sql) => {
+    const query = String(sql || "");
+    if (query.includes("msg_get_memphis_thread_context")) return [];
+    if (query.includes("from public.msg_messages")) return [];
+    if (query.includes("sch_service_date")) return [{ service_date: SERVICE_DATE }];
+    if (query.includes("from public.location_groups")) {
+      return [
+        { location_group_id: "11111111-1111-1111-1111-111111111111", group_name: "Aquarium", group_code: "AQU", aliases: ["aquarium"] },
+        { location_group_id: "22222222-2222-2222-2222-222222222222", group_name: "Event Center", group_code: "EC", aliases: ["event center", "ec"] },
+      ];
+    }
+    if (query.includes("from public.v_memphis_area_schedule")) {
+      const dateMatch = query.match(/service_date = '([^']+)'::date/);
+      const serviceDate = dateMatch?.[1] || SERVICE_DATE;
+      const eventCenterOnly = query.includes("22222222-2222-2222-2222-222222222222") || query.includes("Event Center") || query.includes("EC");
+      const rows = [
+        { service_date: serviceDate, location_group_id: "11111111-1111-1111-1111-111111111111", employee_name: "Aquarium Keeper", group_name: "Aquarium", group_code: "AQU", coverage_start: "07:00:00", coverage_end: "15:00:00", segment_number: 1 },
+        { service_date: serviceDate, location_group_id: "22222222-2222-2222-2222-222222222222", employee_name: "Karen Robinson", group_name: "Event Center", group_code: "EC", coverage_start: "07:00:00", coverage_end: "15:00:00", segment_number: 1 },
+        { service_date: serviceDate, location_group_id: "22222222-2222-2222-2222-222222222222", employee_name: "Michael McWright", group_name: "Event Center", group_code: "EC", coverage_start: "15:00:00", coverage_end: "21:00:00", segment_number: 2 },
+      ];
+      return eventCenterOnly ? rows.filter((row) => row.group_name === "Event Center") : rows;
+    }
+    if (query.includes("from public.events_app_events")) return [];
+    return [];
+  },
+  runRpc: async () => null,
+});
+
+const eventCenterWeekly = await eventCenterResponder.generateReply({
+  userMessage: "What custodians are assigned to event center each week?",
+  threadId: eventCenterThreadId,
+});
+assert.equal(eventCenterWeekly.meta?.mode, "local_weekly_area_schedule", "Event Center weekly assignment questions should use area-filtered weekly schedule mode");
+assert.ok(eventCenterWeekly.text.includes("Event Center"), "Event Center weekly answer should name Event Center");
+assert.ok(eventCenterWeekly.text.includes("Karen Robinson"), "Event Center weekly answer should include assigned custodians");
+assert.ok(!eventCenterWeekly.text.includes("Aquarium Keeper"), "Event Center weekly answer should not include unrelated areas");
+assert.ok(eventCenterWeekly.text.length <= 1900, `Event Center weekly answer should fit message body limits, got ${eventCenterWeekly.text.length}`);
+assert.match(eventCenterWeekly.text, /unless absence, PTO, or Coverall/i, "Event Center weekly answer should state normal schedule exception policy");
+
+const eventCenterToday = await eventCenterResponder.generateReply({
+  userMessage: "What custodians are assigned to event center today?",
+  threadId: eventCenterThreadId,
+});
+assert.equal(eventCenterToday.meta?.mode, "local_area_schedule", "Event Center assignment questions should not be routed to upcoming events");
+assert.ok(eventCenterToday.text.includes("Karen Robinson") || eventCenterToday.text.includes("Michael McWright"), "Event Center daily answer should include assignments");
+
 const falseLocationCodeCases = [
   "What is Haley's number?",
   "Who is the water quality manager?",
