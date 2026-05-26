@@ -16,6 +16,9 @@ const MONTH_LOOKUP = {
 const FIELD_LABELS = [
   "Event Name",
   "Event",
+  "Event Title",
+  "Name",
+  "Title",
   "Event Area",
   "Location Group",
   "Location",
@@ -232,9 +235,10 @@ function normalizePossibleDate(value) {
 
   const monthNames = Object.keys(MONTH_LOOKUP).sort((a, b) => b.length - a.length).join("|");
 
-  let match = raw.match(new RegExp(`\\b(?:Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday),?\\s+(${monthNames})\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s*(\\d{2,4}))?\\b`, "i"));
+  let match = raw.match(new RegExp(`\\b(?:Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday),?\\s+(${monthNames})\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:(?:,\\s*(\\d{2,4}))|(?:\\s+(\\d{4})))?\\b`, "i"));
   if (match) {
-    const year = match[3] ? Number(String(match[3]).length === 2 ? `20${match[3]}` : match[3]) : NaN;
+    const rawYear = match[3] || match[4];
+    const year = rawYear ? Number(String(rawYear).length === 2 ? `20${rawYear}` : rawYear) : NaN;
     const built = buildDate(year, MONTH_LOOKUP[String(match[1]).toLowerCase()], Number(match[2]));
     if (built) return built;
   }
@@ -245,15 +249,17 @@ function normalizePossibleDate(value) {
     const built = buildDate(year, Number(match[1]), Number(match[2]));
     if (built) return built;
   }
-  match = raw.match(new RegExp(`\\b(${monthNames})\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s*(\\d{2,4}))?\\b`, "i"));
+  match = raw.match(new RegExp(`\\b(${monthNames})\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:(?:,\\s*(\\d{2,4}))|(?:\\s+(\\d{4})))?\\b`, "i"));
   if (match) {
-    const year = match[3] ? Number(String(match[3]).length === 2 ? `20${match[3]}` : match[3]) : NaN;
+    const rawYear = match[3] || match[4];
+    const year = rawYear ? Number(String(rawYear).length === 2 ? `20${rawYear}` : rawYear) : NaN;
     return buildDate(year, MONTH_LOOKUP[String(match[1]).toLowerCase()], Number(match[2]));
   }
 
-  match = raw.match(new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+(${monthNames})\\.?(?:,?\\s*(\\d{2,4}))?\\b`, "i"));
+  match = raw.match(new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+(${monthNames})\\.?(?:(?:,\\s*(\\d{2,4}))|(?:\\s+(\\d{4})))?\\b`, "i"));
   if (match) {
-    const year = match[3] ? Number(String(match[3]).length === 2 ? `20${match[3]}` : match[3]) : NaN;
+    const rawYear = match[3] || match[4];
+    const year = rawYear ? Number(String(rawYear).length === 2 ? `20${rawYear}` : rawYear) : NaN;
     return buildDate(year, MONTH_LOOKUP[String(match[2]).toLowerCase()], Number(match[1]));
   }
 
@@ -265,26 +271,29 @@ function detectEventDateFromText(text = "") {
   if (!raw) return "";
   const monthNames = Object.keys(MONTH_LOOKUP).sort((a, b) => b.length - a.length).join("|");
 
-  const weekdayMonthPattern = new RegExp(`\\b(?:Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday),?\\s+(${monthNames})\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s*(\\d{2,4}))?\\b`, "i");
+  const weekdayMonthPattern = new RegExp(`\\b(?:Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday),?\\s+(${monthNames})\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:(?:,\\s*(\\d{2,4}))|(?:\\s+(\\d{4})))?\\b`, "i");
   let match = raw.match(weekdayMonthPattern);
   if (match) {
-    const year = match[3] ? Number(String(match[3]).length === 2 ? `20${match[3]}` : match[3]) : NaN;
+    const rawYear = match[3] || match[4];
+    const year = rawYear ? Number(String(rawYear).length === 2 ? `20${rawYear}` : rawYear) : NaN;
     const built = buildDate(year, MONTH_LOOKUP[String(match[1]).toLowerCase()], Number(match[2]));
     if (built) return built;
   }
 
-  const monthDayPattern = new RegExp(`\\b(${monthNames})\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s*(\\d{2,4}))?\\b`, "i");
+  const monthDayPattern = new RegExp(`\\b(${monthNames})\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:(?:,\\s*(\\d{2,4}))|(?:\\s+(\\d{4})))?\\b`, "i");
   match = raw.match(monthDayPattern);
   if (match) {
-    const year = match[3] ? Number(String(match[3]).length === 2 ? `20${match[3]}` : match[3]) : NaN;
+    const rawYear = match[3] || match[4];
+    const year = rawYear ? Number(String(rawYear).length === 2 ? `20${rawYear}` : rawYear) : NaN;
     const built = buildDate(year, MONTH_LOOKUP[String(match[1]).toLowerCase()], Number(match[2]));
     if (built) return built;
   }
 
-  const dayMonthPattern = new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+(${monthNames})\\.?(?:,?\\s*(\\d{2,4}))?\\b`, "i");
+  const dayMonthPattern = new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+(${monthNames})\\.?(?:(?:,\\s*(\\d{2,4}))|(?:\\s+(\\d{4})))?\\b`, "i");
   match = raw.match(dayMonthPattern);
   if (match) {
-    const year = match[3] ? Number(String(match[3]).length === 2 ? `20${match[3]}` : match[3]) : NaN;
+    const rawYear = match[3] || match[4];
+    const year = rawYear ? Number(String(rawYear).length === 2 ? `20${rawYear}` : rawYear) : NaN;
     const built = buildDate(year, MONTH_LOOKUP[String(match[2]).toLowerCase()], Number(match[1]));
     if (built) return built;
   }
@@ -329,7 +338,7 @@ function compactNarrativeNotes(rawText = "", eventName = "", matchedGroup = null
 function stripEmptyFieldLabels(text = "") {
   let result = String(text || "");
   const labels = FIELD_LABELS.map(escapeRegex).sort((a, b) => b.length - a.length).join("|");
-  const structuredLabels = ["Event Name", "Event", "Event Area", "Location Group", "Location", "Area", "Venue", "Event Date", "Date", "Start Time", "Begin Time", "End Time", "Stop Time", "Start", "Begin", "End", "Stop", "Projected", "Attendees", "Attendance", "Guests", "People", "Count", "Host Department", "Manager on Duty"].map(escapeRegex).sort((a, b) => b.length - a.length).join("|");
+  const structuredLabels = ["Event Name", "Event", "Event Title", "Name", "Title", "Event Area", "Location Group", "Location", "Area", "Venue", "Event Date", "Date", "Start Time", "Begin Time", "End Time", "Stop Time", "Start", "Begin", "End", "Stop", "Projected", "Attendees", "Attendance", "Guests", "People", "Count", "Host Department", "Manager on Duty"].map(escapeRegex).sort((a, b) => b.length - a.length).join("|");
   result = result.replace(new RegExp(`(?:^|[|,;])\\s*(?:${structuredLabels})\\s*:\\s*[^|,;]*(?=$|[|,;])`, "ig"), " ");
   result = result.replace(new RegExp(`(?:^|[|,;])\\s*(?:${labels})\\s*:\\s*(?=$|[|,;])`, "ig"), " ");
   result = result.replace(new RegExp(`\\b(?:${labels})\\s*:\\s*(?=$|[|,;])`, "ig"), " ");
@@ -450,8 +459,19 @@ function hasKnownDateFormatOutsideBareRange(text = "") {
   const monthNames = Object.keys(MONTH_LOOKUP).sort((a, b) => b.length - a.length).join("|");
   return /^\d{4}-\d{2}-\d{2}$/.test(raw)
     || /\b\d{1,2}\/\d{1,2}(?:\/\d{2,4})?\b/.test(raw)
-    || new RegExp(`\\b(${monthNames})\\.?\\s+\\d{1,2}(?:st|nd|rd|th)?(?:,?\\s*\\d{2,4})?\\b`, "i").test(raw)
-    || new RegExp(`\\b\\d{1,2}(?:st|nd|rd|th)?\\s+(${monthNames})\\.?(?:,?\\s*\\d{2,4})?\\b`, "i").test(raw);
+    || new RegExp(`\\b(${monthNames})\\.?\\s+\\d{1,2}(?:st|nd|rd|th)?(?:(?:,\\s*\\d{2,4})|(?:\\s+\\d{4}))?\\b`, "i").test(raw)
+    || new RegExp(`\\b\\d{1,2}(?:st|nd|rd|th)?\\s+(${monthNames})\\.?(?:(?:,\\s*\\d{2,4})|(?:\\s+\\d{4}))?\\b`, "i").test(raw);
+}
+
+function stripDatePhrasesForTimeDetection(text = "") {
+  const monthNames = Object.keys(MONTH_LOOKUP).sort((a, b) => b.length - a.length).join("|");
+  return String(text || "")
+    .replace(new RegExp(`\\b(?:Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday),?\\s+(?:${monthNames})\\.?\\s+\\d{1,2}(?:st|nd|rd|th)?(?:(?:,\\s*\\d{2,4})|(?:\\s+\\d{4}))?\\b`, "ig"), " ")
+    .replace(new RegExp(`\\b(?:${monthNames})\\.?\\s+\\d{1,2}(?:st|nd|rd|th)?(?:(?:,\\s*\\d{2,4})|(?:\\s+\\d{4}))?\\b`, "ig"), " ")
+    .replace(new RegExp(`\\b\\d{1,2}(?:st|nd|rd|th)?\\s+(?:${monthNames})\\.?(?:(?:,\\s*\\d{2,4})|(?:\\s+\\d{4}))?\\b`, "ig"), " ")
+    .replace(/\b\d{4}-\d{1,2}-\d{1,2}\b/g, " ")
+    .replace(/\b\d{1,2}\/\d{1,2}(?:\/\d{2,4})?\b/g, " ")
+    .replace(/\s+/g, " ");
 }
 
 function isBareHyphenHourRange(matchText = "") {
@@ -459,7 +479,7 @@ function isBareHyphenHourRange(matchText = "") {
 }
 
 function detectTimeRange(text, { hasSeparateKnownDate = false } = {}) {
-  const raw = String(text || "").replace(/\s+/g, " ");
+  const raw = stripDatePhrasesForTimeDetection(String(text || "").replace(/\s+/g, " "));
   const token = "(noon|midnight|(?<![-\\d])\\d{3,4}\\s*(?:a\\.?m\\.?|p\\.?m\\.?|am|pm|a|p)?|\\d{1,2}(?::?\\d{2})?\\s*(?:a\\.?m\\.?|p\\.?m\\.?|am|pm|a|p)?)";
   const compactRange = raw.match(/\b(\d{3,4})\s*(?:to|until|thru|through|\-|–|—)\s*(\d{3,4})\b/i);
   if (compactRange) {
@@ -504,7 +524,7 @@ function detectInlineLabeledTimeRange(text) {
 
 function detectAttendeeCount(text) {
   const raw = String(text || "");
-  let match = raw.match(/\b(\d{1,5})\s+(?:(?:school|media|staff|volunteer|expected|projected|estimated|about|around|approx(?:imately)?)\s+){0,4}(attendees|guests|people|ppl|students|kids|children|children's|volunteers?|staff|media|pax|persons)\b/i);
+  let match = raw.match(/\b(\d{1,5})\s+(?:(?:school|expected|projected|estimated|about|around|approx(?:imately)?)\s+){0,4}(attendees|guests|people|ppl|students|kids|children|children's|volunteers?|media|pax|persons)\b/i);
   if (match) return Number.parseInt(match[1], 10);
   match = raw.match(/\b(?:attendance|attendees|count|projected|expected|guests?)\s*[:\-]?\s*(\d{1,5})\b/i);
   if (match) return Number.parseInt(match[1], 10);
@@ -589,12 +609,12 @@ function compactAreaCandidates(candidates = []) {
 
 function stripTimeDateNoise(text) {
   return String(text || "")
-    .replace(/\b\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?\b/gi, " ")
-    .replace(/\b\d{1,2}\s*(?:-|–|—)\s*\d{1,2}\b/gi, " ")
-    .replace(/\b(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\.?\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s*\d{2,4})?\b/gi, " ")
+    .replace(/\b(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\.?\s+\d{1,2}(?:st|nd|rd|th)?(?:(?:,\s*\d{2,4})|(?:\s+\d{4}))?\b/gi, " ")
+    .replace(/\b\d{1,2}[\/]\d{1,2}(?:[\/]\d{2,4})?\b/gi, " ")
+    .replace(/\b\d{1,5}\s*(?:attendees|guests|people|ppl|students|kids|children|children's|pax|persons)\b/gi, " ")
     .replace(/\b\d{1,2}(?:\:?\d{2})?\s*(?:a|p|am|pm)\b/gi, " ")
     .replace(/\b\d{2}:\d{2}(?::\d{2})?\b/gi, " ")
-    .replace(/\b\d{1,5}\s*(?:attendees|guests|people|ppl|students|kids|children|children's|pax|persons)\b/gi, " ");
+    .replace(/\b\d{1,2}\s*(?:-|–|—)\s*\d{1,2}\b/gi, " ");
 }
 
 function stripAccountedEventDetails(text, eventName = "", matchedGroup = null, { preserveOperationalTimes = false } = {}) {
@@ -603,9 +623,10 @@ function stripAccountedEventDetails(text, eventName = "", matchedGroup = null, {
   result = result.replace(/\bthe\s+event\b/ig, " ");
   result = removeAreaText(result, matchedGroup);
   result = result
-    .replace(/\b(?:on\s+)?(?:Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday),?\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t|tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s*\d{2,4})?\b/ig, " ")
-    .replace(/\b(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\.?\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s*\d{2,4})?\b/gi, " ")
+    .replace(/\b(?:on\s+)?(?:Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday),?\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t|tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+\d{1,2}(?:st|nd|rd|th)?(?:(?:,\s*\d{2,4})|(?:\s+\d{4}))?\b/ig, " ")
+    .replace(/\b(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\.?\s+\d{1,2}(?:st|nd|rd|th)?(?:(?:,\s*\d{2,4})|(?:\s+\d{4}))?\b/gi, " ")
     .replace(/\b\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?\b/gi, " ")
+    .replace(/\b(?:with\s+)?\d{1,5}\s+staff\b/gi, " ")
     .replace(/\b(?:attendance|attendees|count|projected|expected|guests?)\s*[:\-]?\s*\d{1,5}\b/gi, " ")
     .replace(/\b\d{1,5}\s*(?:attendees|guests|people|ppl|students|kids|children|children's|pax|persons)\b/gi, " ");
   const timeToken = "(?:noon|midnight|\\d{1,2}(?::?\\d{2})?\\s*(?:a\\.?m\\.?|p\\.?m\\.?|am|pm|a|p)?)";
@@ -723,7 +744,7 @@ function cleanNotes(notes, eventName, matchedGroup) {
 
 function extractFallbackTitle(text, matchedGroup, timeRange) {
   let result = normalizeIntakeText(text);
-  result = result.replace(/\b(Event Name|Event Area|Location Group|Location|Venue|Area|Event Date|Date|Start Time|Begin Time|End Time|Stop Time|Projected|Attendees|Attendance|Guests|People|Notes|Details|Host Department|Manager on Duty)\s*:/gi, " ");
+  result = result.replace(/\b(Event Name|Event|Event Title|Name|Title|Event Area|Location Group|Location|Venue|Area|Event Date|Date|Start Time|Begin Time|End Time|Stop Time|Projected|Attendees|Attendance|Guests|People|Notes|Details|Host Department|Manager on Duty)\s*:/gi, " ");
   if (timeRange?.matched_text) result = result.replace(timeRange.matched_text, " ");
   result = removeAreaText(result, matchedGroup);
   result = stripTimeDateNoise(result);
@@ -866,7 +887,7 @@ function buildFieldConfidence({ eventName, locationGroupId, eventDate, startTime
     event_name: eventName ? (warningSet.has("missing_event_name") ? "low" : "high") : "low",
     area: locationGroupId ? (warningSet.has("ambiguous_area") || areaIsAmbiguous(areaCandidates) ? "medium" : "high") : "low",
     date: eventDate ? (warningSet.has("ambiguous_date") ? "medium" : "high") : "low",
-    time: startTime && endTime ? (warningSet.has("suspicious_time") || warningSet.has("ambiguous_time") ? "medium" : "high") : "low",
+    time: startTime && endTime ? (warningSet.has("end_not_after_start") ? "low" : (warningSet.has("suspicious_time") || warningSet.has("ambiguous_time") ? "medium" : "high")) : "low",
     attendees: "high",
   };
 }
@@ -953,7 +974,7 @@ function parseOneEventText(rawText, locationGroups, index = 0) {
     attendee_count: attendeeCount,
     notes: baseNotes,
     created_by: "Input Console Parse",
-    confidence: warnings.length ? (warnings.includes("missing_event_name") || warnings.includes("missing_area") || warnings.includes("missing_date") || warnings.includes("missing_time") ? "medium" : "high") : "high",
+    confidence: warnings.length ? (warnings.some((warning) => ["missing_event_name", "missing_area", "missing_date", "missing_time", "end_not_after_start"].includes(warning)) ? "medium" : "high") : "high",
     review_notes: warnings.length ? warnings.join(", ") : null,
     warnings,
     area_candidates: compactAreaCandidates(areaCandidates),
