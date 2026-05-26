@@ -25,14 +25,18 @@ assertContains(apiSource, "validateSystemFeedbackImageAttachment", "backend shou
 assertContains(apiSource, "image_attachment", "backend should persist image attachment metadata/data");
 assertMatches(apiSource, /feedback-api\/image\/:feedbackId/, "backend should expose a feedback image retrieval endpoint");
 
-// Backend: feedback should remind ops without creating unbounded message spam.
-assertContains(apiSource, "last_feedback_reminder_at", "schema should track the last feedback reminder timestamp");
-assertContains(apiSource, "feedback_reminder_count", "schema should track repeated feedback reminder count");
-assertContains(apiSource, "FEEDBACK_REMINDER_MAX_COUNT", "reminder sweep should cap repeated feedback reminders");
-assertContains(apiSource, "markSystemFeedbackReminderExhausted", "reminder sweep should stop noisy exhausted feedback reminders");
-assertMatches(apiSource, /feedback_reminder_count\s*<\s*\$\{Number\(FEEDBACK_REMINDER_MAX_COUNT\)\}/, "due query should exclude reminder-exhausted feedback items");
+// Backend: feedback should be dashboard-only and must not DM ops managers in Messenger.
+assertContains(apiSource, "last_feedback_reminder_at", "schema may retain legacy reminder timestamp for compatibility");
+assertContains(apiSource, "feedback_reminder_count", "schema may retain legacy reminder count for compatibility");
 assertMatches(apiSource, /feedback-api\/acknowledge\/:feedbackId/, "backend should expose an acknowledgement endpoint");
 assertMatches(apiSource, /status\s*=\s*'acknowledged'/i, "acknowledgement should mark the feedback item as acknowledged");
-assertMatches(apiSource, /requireFeedbackReminderSecret\(req, res\)/, "manual reminder endpoint should require a secret before sending messages");
+const feedbackSubmitBlock = apiSource.slice(apiSource.indexOf('app.post("/feedback-api/submit"'), apiSource.indexOf('app.get("/guest-api/locations'));
+assert.ok(feedbackSubmitBlock.includes("dashboard_only"), "feedback submit should report dashboard-only notification handling");
+assert.ok(!/notifySystemFeedbackRecipients\s*\(/.test(feedbackSubmitBlock), "feedback submit must not notify ops managers in Messenger");
+assert.ok(!/msg_send_message/.test(feedbackSubmitBlock), "feedback submit must not send Messenger messages");
+const feedbackReminderBlock = apiSource.slice(apiSource.indexOf("async function runSystemFeedbackReminderSweep"), apiSource.indexOf("async function runPublicDashboardSummary"));
+assert.ok(feedbackReminderBlock.includes("dashboard_only"), "feedback reminder sweep should be dashboard-only");
+assert.ok(!/notifySystemFeedbackRecipients\s*\(/.test(feedbackReminderBlock), "feedback reminder sweep must not notify ops managers in Messenger");
+assert.ok(!/msg_send_message/.test(feedbackReminderBlock), "feedback reminder sweep must not send Messenger messages");
 
 console.log("feedback contract tests passed");

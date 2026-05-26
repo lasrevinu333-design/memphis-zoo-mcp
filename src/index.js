@@ -929,27 +929,7 @@ async function runSystemFeedbackReminderSweep() {
   feedbackReminderSweepInFlight = true;
   try {
     await ensureSystemFeedbackSchema();
-    const dueItems = await listSystemFeedbackReminderDueItems();
-    if (!dueItems.length) return { ok: true, checked: 0, reminded: 0 };
-    const opsRecipients = await resolveOpsManagerRecipients();
-    const memphisRows = await runReadOnlySql("select public.msg_get_memphis_user_id() as memphis_user_id");
-    const memphisUserId = Array.isArray(memphisRows) && memphisRows.length ? memphisRows[0].memphis_user_id : null;
-    if (!isUuid(memphisUserId)) return { ok: false, checked: dueItems.length, reminded: 0, error: "Memphis bot identity not found." };
-    let reminded = 0;
-    const errors = [];
-    for (const item of dueItems) {
-      try {
-        const result = await notifySystemFeedbackRecipients({ item, opsRecipients, memphisUserId, reminder: true });
-        if (result.ops_count) reminded += 1;
-        if (Number(item.feedback_reminder_count || 0) + 1 >= FEEDBACK_REMINDER_MAX_COUNT) {
-          await markSystemFeedbackReminderExhausted(item);
-        }
-        if (result.errors?.length) errors.push(...result.errors.map((error) => ({ feedback_id: item.id, ...error })));
-      } catch (error) {
-        errors.push({ feedback_id: item.id, error: error?.message || "reminder_failed" });
-      }
-    }
-    return { ok: !errors.length, checked: dueItems.length, reminded, errors };
+    return { ok: true, checked: 0, reminded: 0, skipped: "dashboard_only" };
   } finally {
     feedbackReminderSweepInFlight = false;
   }
@@ -1688,13 +1668,18 @@ app.post("/feedback-api/submit", async (req, res) => {
       ...(req.body && typeof req.body === "object" ? req.body : {}),
       user_agent: String(req.get("user-agent") || "").slice(0, 500),
     });
-    const opsRecipients = await resolveOpsManagerRecipients();
-    const memphisRows = await runReadOnlySql("select public.msg_get_memphis_user_id() as memphis_user_id");
-    const memphisUserId = Array.isArray(memphisRows) && memphisRows.length ? memphisRows[0].memphis_user_id : null;
-    let notification = { ops_count: 0, errors: [{ error: "Memphis bot identity not found." }] };
-    if (isUuid(memphisUserId)) {
-      notification = await notifySystemFeedbackRecipients({ item, opsRecipients, memphisUserId });
-    }
+    await runWriteSql(
+      "system_feedback_dashboard_only",
+      `update public.system_feedback_items
+         set notification_status = 'dashboard_only',
+             notified_ops_count = 0,
+             updated_at = now(),
+             metadata_json = coalesce(metadata_json, '{}'::jsonb) || ${sqlLiteral(JSON.stringify({ notification_delivery: "dashboard_only" }))}::jsonb
+       where id = ${sqlLiteral(item.id)}::uuid`
+    );
+    item.notification_status = "dashboard_only";
+    item.notified_ops_count = 0;
+    const notification = { ops_count: 0, errors: [], skipped: "dashboard_only" };
     res.status(200).json({ ok: true, data: { item, notification }, meta: { version: APP_VERSION, release_id: RELEASE_ID, contract_version: FEEDBACK_CONTRACT_VERSION } });
   } catch (error) {
     console.error("system feedback submit failed:", error);
