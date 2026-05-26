@@ -78,12 +78,14 @@ function summarizeWeeklyAreaAssignments(days = [], areaTarget = {}) {
   const sections = days.map((day) => {
     const rows = Array.isArray(day.assignments) ? day.assignments : [];
     if (!rows.length) return `${weekdayShort(day.service_date)}: no generated assignment`;
-    const people = rows
+    const people = Array.from(new Map(rows
       .map((row) => {
         const employee = row.employee_name || row.assigned_employee_name || "Open";
-        return `${employee} ${compactTime(row.coverage_start)}-${compactTime(row.coverage_end)}`;
+        const start = compactTime(row.coverage_start);
+        const end = compactTime(row.coverage_end);
+        return [`${employee}|${start}|${end}`, `${employee} ${start}-${end}`];
       })
-      .filter(Boolean);
+      .filter((entry) => Boolean(entry[1]))).values());
     return `${weekdayShort(day.service_date)}: ${people.join("; ")}`;
   });
 
