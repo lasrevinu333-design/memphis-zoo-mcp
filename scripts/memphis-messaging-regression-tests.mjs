@@ -130,7 +130,8 @@ const eventCenterResponder = createMemphisResponder({
       const rows = [
         { service_date: serviceDate, location_group_id: "11111111-1111-1111-1111-111111111111", employee_name: "Aquarium Keeper", group_name: "Aquarium", group_code: "AQU", coverage_start: "07:00:00", coverage_end: "15:00:00", segment_number: 1 },
         { service_date: serviceDate, location_group_id: "22222222-2222-2222-2222-222222222222", employee_name: "Karen Robinson", group_name: "Event Center", group_code: "EC", coverage_start: "07:00:00", coverage_end: "15:00:00", segment_number: 1 },
-        { service_date: serviceDate, location_group_id: "22222222-2222-2222-2222-222222222222", employee_name: "Michael McWright", group_name: "Event Center", group_code: "EC", coverage_start: "15:00:00", coverage_end: "21:00:00", segment_number: 2 },
+        { service_date: serviceDate, location_group_id: "22222222-2222-2222-2222-222222222222", employee_name: "Karen Robinson", group_name: "Event Center", group_code: "EC", coverage_start: "07:00:00", coverage_end: "15:00:00", segment_number: 2 },
+        { service_date: serviceDate, location_group_id: "22222222-2222-2222-2222-222222222222", employee_name: "Michael McWright", group_name: "Event Center", group_code: "EC", coverage_start: "15:00:00", coverage_end: "21:00:00", segment_number: 3 },
       ];
       return eventCenterOnly ? rows.filter((row) => row.group_name === "Event Center") : rows;
     }
@@ -148,6 +149,7 @@ assert.equal(eventCenterWeekly.meta?.mode, "local_weekly_area_schedule", "Event 
 assert.ok(eventCenterWeekly.text.includes("Event Center"), "Event Center weekly answer should name Event Center");
 assert.ok(eventCenterWeekly.text.includes("Karen Robinson"), "Event Center weekly answer should include assigned custodians");
 assert.ok(!eventCenterWeekly.text.includes("Aquarium Keeper"), "Event Center weekly answer should not include unrelated areas");
+assert.equal((eventCenterWeekly.text.match(/Karen Robinson/g) || []).length, 7, "Event Center weekly answer should collapse duplicate segments for the same person/time per day");
 assert.ok(eventCenterWeekly.text.length <= 1900, `Event Center weekly answer should fit message body limits, got ${eventCenterWeekly.text.length}`);
 assert.match(eventCenterWeekly.text, /unless absence, PTO, or Coverall/i, "Event Center weekly answer should state normal schedule exception policy");
 
