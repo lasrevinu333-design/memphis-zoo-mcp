@@ -187,6 +187,35 @@ for (const row of weddingSetup) {
 }
 assert.doesNotMatch(weddingSetup[0].warnings.join(","), /end_not_after_start/);
 
+const monthNameBareRange = await parseOne("Test at Event Center June 14 10-2 75 ppl");
+assert.equal(monthNameBareRange.event_name, "Test");
+assert.equal(monthNameBareRange.location_group_name, "Event Center");
+assert.match(monthNameBareRange.event_date, /^\d{4}-06-14$/, "month-name date must not be overwritten by bare 10-2 time range");
+assertTime(monthNameBareRange, "10:00:00", "14:00:00");
+assert.equal(monthNameBareRange.attendee_count, "75");
+assert.doesNotMatch(monthNameBareRange.warnings.join(","), /end_not_after_start/);
+
+const monthNameSeparatedRange = await parseOne("Test EC June 14 - 10-2 75 ppl");
+assert.match(monthNameSeparatedRange.event_date, /^\d{4}-06-14$/);
+assert.equal(monthNameSeparatedRange.event_name, "Test");
+assertTime(monthNameSeparatedRange, "10:00:00", "14:00:00");
+assert.doesNotMatch(monthNameSeparatedRange.warnings.join(","), /end_not_after_start/);
+assert.equal(monthNameSeparatedRange.confidence, "high");
+
+const invalidChronology = await parseOne("Event Name: Board Meeting | Event Area: EC | Event Date: 6/12 | Start Time: 12 | End Time: 1");
+assert.match(invalidChronology.warnings.join(","), /end_not_after_start/);
+assert.notEqual(invalidChronology.confidence, "high", "invalid start/end chronology must not remain high confidence");
+assert.equal(invalidChronology.field_confidence.time, "low", "invalid chronology should lower time field confidence");
+
+const nameLabel = await parseOne("Name: Baby Day | Event Area: Event Center | Date: 5/9 | Start: 9am | End: 6pm");
+assert.equal(nameLabel.event_name, "Baby Day");
+assert.equal(nameLabel.notes, "");
+assert.doesNotMatch(nameLabel.notes, /Name/i);
+
+const staffOnlyCount = await parseOne("Board Meeting at Event Center on June 14 from 10am to 2pm with 25 staff");
+assert.equal(staffOnlyCount.attendee_count, null, "staff counts should not be treated as attendee/guest counts");
+assert.equal(staffOnlyCount.notes, "", "staff-only counts should not pollute residual notes");
+
 const originalFetch = global.fetch;
 const originalGeminiApiKey = process.env.EVENTS_GEMINI_API_KEY;
 
