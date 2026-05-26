@@ -709,17 +709,19 @@ function inferSpecialEventTitle(value = "") {
 function cleanEventName(eventName, matchedGroup) {
   const original = String(eventName || "");
   let result = original;
+  if (/^\s*(?:the\s+)?event\s+will\s+run\b/i.test(original)) return "";
   const specialTitle = inferSpecialEventTitle(original);
   if (specialTitle) return specialTitle;
   result = result.replace(/\|+/g, " " );
   result = result.replace(/^the\s+/i, "");
   result = result.replace(/^name\s*:?\s*/i, "");
   result = result.replace(/^theater\s+/i, "");
+  result = removeAreaText(result, matchedGroup);
   result = result.replace(/\bat\s+[A-Za-z0-9'& -]{3,80}?\s+only\s+on\b/i, " on");
   result = result.replace(/\bat\s+[A-Za-z0-9'& -]{3,80}?\s+on\b/i, " on");
   result = result.replace(/\b(?:host department|manager on duty)\b\s*:?\s*[^|,;]+/ig, " " );
-  result = result.replace(/\b(?:event|event name|title)\b\s*:?\s*/ig, " " );
-  result = removeAreaText(result, matchedGroup);
+  result = result.replace(/\b(?:event\s+name|event\s+title|title)\b\s*:?\s*/ig, " " );
+  result = result.replace(/^\s*event\s*:\s*/i, " " );
   result = stripTimeDateNoise(result);
   result = result.replace(/\b(?:will be over by|over by|near the|near|at|in|on|is thursday|is friday|is saturday|is sunday|is monday|is tuesday|is wednesday)\b.*$/i, " " );
   result = result.replace(/\b(?:need|needs|requires|required|setup|cleanup|attendees|guests|people|students|notes?|details?)\b.*$/i, " " );
@@ -835,7 +837,9 @@ function extractNarrativeEventName(text = "") {
   if (!raw) return "";
   const patterns = [
     /\b(?:prior to|before|for|during)\s+(?:the\s+)?([A-Z][A-Za-z0-9'& -]{3,80}?)(?:\s+on\s+(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)|\s+from\s+|\s+at\s+|\.|,)/i,
-    /\b(?:event|program|party|meeting|game|training|tour)\s+(?:called|named|for)?\s*[:\-]?\s*([A-Z][A-Za-z0-9'& -]{3,80}?)(?:\s+on\s+|\s+from\s+|\.|,)/i,
+    /\b(?:event|program)\s+(?:called|named|for)\s*[:\-]?\s*([A-Z][A-Za-z0-9'& -]{3,80}?)(?:\s+on\s+|\s+from\s+|\.|,)/i,
+    /\b(?:event|program)\s*[:\-]\s*([A-Z][A-Za-z0-9'& -]{3,80}?)(?:\s+on\s+|\s+from\s+|\.|,)/i,
+    /\b(?:party|meeting|game|training|tour)\s+(?:called|named|for)?\s*[:\-]?\s*([A-Z][A-Za-z0-9'& -]{3,80}?)(?:\s+on\s+|\s+from\s+|\.|,)/i,
   ];
   for (const pattern of patterns) {
     const match = raw.match(pattern);
