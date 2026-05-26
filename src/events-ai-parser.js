@@ -121,6 +121,10 @@ function normalizeIntakeText(raw) {
   let text = String(raw || "").replace(/\r/g, "\n").replace(/\t/g, " | ");
   const labels = [...FIELD_LABELS].sort((a, b) => b.length - a.length);
   for (const label of labels) {
+    if (label === "Event") {
+      text = text.replace(new RegExp(`(^|[|\\n;])\\s*${escapeRegex(label)}\\s*:`, "ig"), (_m, p) => `${p} ${label}: `);
+      continue;
+    }
     const after = label.includes(" ") ? "" : "(?!\\s+(?:Name|Area|Date|Time))";
     text = text.replace(new RegExp(`(^|[|\\n;])\\s*${escapeRegex(label)}${after}\\s*:?`, "ig"), (_m, p) => `${p} ${label}: `);
   }
@@ -145,6 +149,7 @@ function parseLabelMap(text) {
       }
     }
     for (const label of labels) {
+      if (label === "Event") continue;
       const labelGuard = label.includes(" ") ? "" : "(?!\\s+(?:name|area|date|time))";
       const otherLabels = labels
         .filter((candidate) => candidate !== label)
@@ -178,6 +183,15 @@ function isValidCalendarDate(year, month, day) {
   return candidate.getFullYear() === year && candidate.getMonth() === month - 1 && candidate.getDate() === day;
 }
 
+function parseIsoCalendarDate(value) {
+  const match = String(value || "").trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return "";
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  return isValidCalendarDate(year, month, day) ? `${match[1]}-${match[2]}-${match[3]}` : "";
+}
+
 function inferEventYear() {
   return new Date().getFullYear();
 }
@@ -191,7 +205,7 @@ function buildDate(year, month, day) {
   if (!Number.isFinite(month) || !Number.isFinite(day)) return "";
   if (Number.isFinite(year)) {
     const nowYear = new Date().getFullYear();
-    if (year < nowYear - 1 || year > nowYear + 2) return buildDate(NaN, month, day);
+    if (year < nowYear - 1 || year > nowYear + 2) return "";
     return isoDateFor(year, month, day);
   }
 
@@ -214,7 +228,7 @@ function buildDate(year, month, day) {
 function normalizePossibleDate(value) {
   const raw = String(value || "").trim();
   if (!raw) return "";
-  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return parseIsoCalendarDate(raw);
 
   const monthNames = Object.keys(MONTH_LOOKUP).sort((a, b) => b.length - a.length).join("|");
 
@@ -301,6 +315,7 @@ function compactNarrativeNotes(rawText = "", eventName = "", matchedGroup = null
     sentence = sentence.replace(/^please\s+/i, "");
     const preserveOperationalTimes = /\b(?:ceremony|cleanup|clean\s*up|after|before|arriv(?:e|al))\b/i.test(sentence);
     sentence = stripAccountedEventDetails(sentence, eventName, matchedGroup, { preserveOperationalTimes });
+    sentence = stripEmptyFieldLabels(sentence);
     sentence = sentence.replace(/\b(?:approx(?:imately)?|about|around)\b/ig, " ");
     sentence = sentence.replace(/\b(?:at|in|on|from|for)\b\s*(?=\.|,|;|$)/ig, " ");
     sentence = sentence.replace(/\s+/g, " " ).trim();
@@ -308,7 +323,18 @@ function compactNarrativeNotes(rawText = "", eventName = "", matchedGroup = null
     if (/^(?:the\s+)?event$/i.test(sentence)) continue;
     if (sentence) kept.push(sentence.charAt(0).toUpperCase() + sentence.slice(1));
   }
-  return cleanupLooseText(kept.join(" "));
+  return cleanupLooseText(stripEmptyFieldLabels(kept.join(" ")));
+}
+
+function stripEmptyFieldLabels(text = "") {
+  let result = String(text || "");
+  const labels = FIELD_LABELS.map(escapeRegex).sort((a, b) => b.length - a.length).join("|");
+  const structuredLabels = ["Event Name", "Event", "Event Area", "Location Group", "Location", "Area", "Venue", "Event Date", "Date", "Start Time", "Begin Time", "End Time", "Stop Time", "Start", "Begin", "End", "Stop", "Projected", "Attendees", "Attendance", "Guests", "People", "Count", "Host Department", "Manager on Duty"].map(escapeRegex).sort((a, b) => b.length - a.length).join("|");
+  result = result.replace(new RegExp(`(?:^|[|,;])\\s*(?:${structuredLabels})\\s*:\\s*[^|,;]*(?=$|[|,;])`, "ig"), " ");
+  result = result.replace(new RegExp(`(?:^|[|,;])\\s*(?:${labels})\\s*:\\s*(?=$|[|,;])`, "ig"), " ");
+  result = result.replace(new RegExp(`\\b(?:${labels})\\s*:\\s*(?=$|[|,;])`, "ig"), " ");
+  result = result.replace(/(?:^|[|,;])\s*(?:Start|End|Date|Event|Event Area|Location|Guests|Attendees)\s*(?=$|[|,;])/ig, " ");
+  return result.replace(/\s*\|\s*/g, " ").replace(/\s+/g, " ").trim();
 }
 
 function extractTimeParts(value) {
@@ -410,7 +436,29 @@ function normalizeTimePair(startValue, endValue) {
   return { start_time: start, end_time: end };
 }
 
-function detectTimeRange(text) {
+function normalizeLikelyEventTimePair(startValue, endValue) {
+  const startParts = extractTimeParts(startValue);
+  const endParts = extractTimeParts(endValue);
+  if (startParts && endParts && !startParts.explicit && !endParts.explicit && startParts.hour >= 1 && startParts.hour <= 6 && endParts.hour > startParts.hour && endParts.hour <= 11) {
+    return normalizeTimePair(`${startValue}pm`, `${endValue}pm`);
+  }
+  return normalizeTimePair(startValue, endValue);
+}
+
+function hasKnownDateFormatOutsideBareRange(text = "") {
+  const raw = String(text || "");
+  const monthNames = Object.keys(MONTH_LOOKUP).sort((a, b) => b.length - a.length).join("|");
+  return /^\d{4}-\d{2}-\d{2}$/.test(raw)
+    || /\b\d{1,2}\/\d{1,2}(?:\/\d{2,4})?\b/.test(raw)
+    || new RegExp(`\\b(${monthNames})\\.?\\s+\\d{1,2}(?:st|nd|rd|th)?(?:,?\\s*\\d{2,4})?\\b`, "i").test(raw)
+    || new RegExp(`\\b\\d{1,2}(?:st|nd|rd|th)?\\s+(${monthNames})\\.?(?:,?\\s*\\d{2,4})?\\b`, "i").test(raw);
+}
+
+function isBareHyphenHourRange(matchText = "") {
+  return /^\s*\d{1,2}\s*(?:-|–|—)\s*\d{1,2}\s*$/.test(String(matchText || ""));
+}
+
+function detectTimeRange(text, { hasSeparateKnownDate = false } = {}) {
   const raw = String(text || "").replace(/\s+/g, " ");
   const token = "(noon|midnight|(?<![-\\d])\\d{3,4}\\s*(?:a\\.?m\\.?|p\\.?m\\.?|am|pm|a|p)?|\\d{1,2}(?::?\\d{2})?\\s*(?:a\\.?m\\.?|p\\.?m\\.?|am|pm|a|p)?)";
   const compactRange = raw.match(/\b(\d{3,4})\s*(?:to|until|thru|through|\-|–|—)\s*(\d{3,4})\b/i);
@@ -434,7 +482,10 @@ function detectTimeRange(text) {
   }
   const match = raw.match(new RegExp(`${token}\\s*(?:to|until|thru|through|\\-|–|—)\\s*${token}`, "i"));
   if (!match) return null;
-  const pair = normalizeTimePair(match[1], match[2]);
+  if (isBareHyphenHourRange(match[0]) && !hasSeparateKnownDate) return null;
+  const pair = isBareHyphenHourRange(match[0]) && hasSeparateKnownDate
+    ? normalizeLikelyEventTimePair(match[1], match[2])
+    : normalizeTimePair(match[1], match[2]);
   if (!pair.start_time || !pair.end_time) return null;
   return { ...pair, matched_text: match[0] };
 }
@@ -561,7 +612,7 @@ function stripAccountedEventDetails(text, eventName = "", matchedGroup = null, {
   result = result.replace(new RegExp(`\\b(?:from\\s+)?${timeToken}\\s*(?:to|until|thru|through|-|–|—)\\s*${timeToken}\\b`, "ig"), " ");
   result = result.replace(/\b\d{1,2}\s*(?:-|–|—)\s*\d{1,2}\b/gi, " ");
   if (!preserveOperationalTimes) result = stripTimeDateNoise(result);
-  return cleanupLooseText(result);
+  return cleanupLooseText(stripEmptyFieldLabels(result));
 }
 
 function removeAreaText(text, group) {
@@ -654,6 +705,7 @@ function cleanEventName(eventName, matchedGroup) {
   result = result.replace(/\b(?:need|needs|requires|required|setup|cleanup|attendees|guests|people|students|notes?|details?)\b.*$/i, " " );
   result = result.replace(/\b(?:start time|begin time|end time|stop time|event date|event area|location group|location|venue|area|projected|attendance|attendees)\b.*$/i, " " );
   result = cleanupLooseText(result);
+  if (/^(?:will\s+)?run(?:\s+from|\s+to)?(?:\s+from|\s+to)?$/i.test(result) || /^will\s+run\b/i.test(result)) return "";
   if (/\bbig group\b/i.test(original) || /\blarge group\b/i.test(original)) return "Large Group";
   if (/school kids|students|school group/i.test(original)) return "School Group";
   if (/member preview/i.test(original) && (!result || result.length > 30)) return "Member Preview";
@@ -815,7 +867,7 @@ function buildFieldConfidence({ eventName, locationGroupId, eventDate, startTime
     area: locationGroupId ? (warningSet.has("ambiguous_area") || areaIsAmbiguous(areaCandidates) ? "medium" : "high") : "low",
     date: eventDate ? (warningSet.has("ambiguous_date") ? "medium" : "high") : "low",
     time: startTime && endTime ? (warningSet.has("suspicious_time") || warningSet.has("ambiguous_time") ? "medium" : "high") : "low",
-    attendees: attendeeCount == null || attendeeCount === "" ? "medium" : "high",
+    attendees: "high",
   };
 }
 
@@ -856,7 +908,7 @@ function detectApproxTimeRange(text = "") {
 function parseOneEventText(rawText, locationGroups, index = 0) {
   const normalizedText = normalizeIntakeText(rawText);
   const labels = parseLabelMap(normalizedText);
-  const eventNameFromLabel = firstLabelValue(labels, ["Event Name", "Name", "Title", "Event Title"]);
+  const eventNameFromLabel = firstLabelValue(labels, ["Event Name", "Event", "Name", "Title", "Event Title"]);
   const areaFromLabel = firstLabelValue(labels, ["Event Area", "Location Group", "Area", "Location", "Venue"]);
   const dateFromLabel = firstLabelValue(labels, ["Event Date", "Date"]);
   const startFromLabel = firstLabelValue(labels, ["Start Time", "Start", "Begin Time", "Begin"]);
@@ -866,11 +918,12 @@ function parseOneEventText(rawText, locationGroups, index = 0) {
 
   const areaCandidates = rankLocationGroups(locationGroups, areaFromLabel || normalizedText, 3);
   const matchedGroup = areaCandidates[0]?.group || null;
+  const hasSeparateKnownDate = hasKnownDateFormatOutsideBareRange(normalizedText);
   const labeledTimeRange = detectInlineLabeledTimeRange(normalizedText);
   const timeRange = labeledTimeRange
     || (startFromLabel && endFromLabel
       ? { ...normalizeTimePair(startFromLabel, endFromLabel), matched_text: `${startFromLabel} ${endFromLabel}` }
-      : detectTimeRange(normalizedText))
+      : detectTimeRange(normalizedText, { hasSeparateKnownDate }))
     || detectApproxTimeRange(normalizedText);
   const eventDate = normalizePossibleDate(dateFromLabel) || detectEventDateFromText(normalizedText) || detectRelativeWeekdayDate(normalizedText) || normalizePossibleDate(endFromLabel) || normalizePossibleDate(normalizedText);
   const attendeeValue = detectAttendeeCount(attendeesFromLabel) ?? detectAttendeeCount(rawText) ?? detectAttendeeCount(normalizedText);
@@ -1005,15 +1058,50 @@ async function tryGeminiParseTexts({ rows, locationGroups }) {
 }
 
 function mergeWarnings(...warningLists) {
-  return Array.from(new Set(warningLists.flat().filter(Boolean)));
+  const allowed = new Set(["missing_event_name", "missing_area", "missing_date", "missing_time", "end_not_after_start", "ambiguous_area", "ambiguous_date", "ambiguous_time", "suspicious_time"]);
+  return Array.from(new Set(warningLists.flat().map((warning) => String(warning || "").trim()).filter((warning) => allowed.has(warning))));
+}
+
+function normalizedEnum(value, allowed, fallback = "") {
+  const raw = String(value || "").trim().toLowerCase();
+  return allowed.includes(raw) ? raw : fallback;
+}
+
+function recomputeRowMetadata(row = {}, locationGroups = []) {
+  const areaCandidates = rankLocationGroups(locationGroups, row.location_group_name || row.raw_text || "", 3);
+  const warnings = buildParseWarnings({
+    eventName: row.event_name || "",
+    locationGroupId: row.location_group_id || "",
+    eventDate: row.event_date || "",
+    startTime: row.start_time || "",
+    endTime: row.end_time || "",
+    areaCandidates,
+  });
+  return {
+    ...row,
+    warnings,
+    review_notes: warnings.length ? warnings.join(", ") : null,
+    confidence: warnings.length ? (warnings.some((warning) => ["missing_event_name", "missing_area", "missing_date", "missing_time", "end_not_after_start"].includes(warning)) ? "medium" : "high") : "high",
+    field_confidence: buildFieldConfidence({
+      eventName: row.event_name || "",
+      locationGroupId: row.location_group_id || "",
+      eventDate: row.event_date || "",
+      startTime: row.start_time || "",
+      endTime: row.end_time || "",
+      attendeeCount: row.attendee_count,
+      areaCandidates,
+      warnings,
+    }),
+  };
 }
 
 function normalizeGeminiRow(raw = {}, locationGroups = [], fallbackText = "", index = 0) {
-  const matchedGroup = raw.location_group_id
+  const matchedById = raw.location_group_id
     ? (locationGroups || []).find((group) => String(group.location_group_id || "") === String(raw.location_group_id || "")) || null
-    : matchLocationGroup(locationGroups, raw.location_group_name || fallbackText);
-  const locationGroupId = matchedGroup?.location_group_id || String(raw.location_group_id || "").trim();
-  const locationGroupName = eventAreaDisplayName(matchedGroup?.group_name || String(raw.location_group_name || "").trim());
+    : null;
+  const matchedGroup = matchedById || matchLocationGroup(locationGroups, raw.location_group_name || fallbackText);
+  const locationGroupId = matchedGroup?.location_group_id || "";
+  const locationGroupName = eventAreaDisplayName(matchedGroup?.group_name || (locationGroupId ? String(raw.location_group_name || "").trim() : ""));
   const eventDate = normalizePossibleDate(raw.event_date);
   const timePair = normalizeTimePair(raw.start_time, raw.end_time);
   const attendeeRaw = raw.attendee_count == null || raw.attendee_count === "" ? null : Number.parseInt(String(raw.attendee_count), 10);
@@ -1026,10 +1114,10 @@ function normalizeGeminiRow(raw = {}, locationGroups = [], fallbackText = "", in
     buildParseWarnings({ eventName, locationGroupId, eventDate, startTime: timePair.start_time, endTime: timePair.end_time, areaCandidates })
   );
   const aiProfile = {
-    event_type: String(raw.event_type || "").trim(),
-    custodial_impact: String(raw.custodial_impact || "").trim(),
-    restroom_pressure: String(raw.restroom_pressure || "").trim(),
-    cleanup_pressure: String(raw.cleanup_pressure || "").trim(),
+    event_type: normalizedEnum(raw.event_type, ["school_group", "formal_event", "party", "corporate_event", "member_event", "public_event", "general_event"]),
+    custodial_impact: normalizedEnum(raw.custodial_impact, ["low", "medium", "high"]),
+    restroom_pressure: normalizedEnum(raw.restroom_pressure, ["low", "medium", "high"]),
+    cleanup_pressure: normalizedEnum(raw.cleanup_pressure, ["low", "medium", "high"]),
     requires_followup: raw.requires_followup === true,
   };
   const fallbackProfile = inferEventProfile({ eventName, notes: notes || fallbackText, attendeeCount, startTime: timePair.start_time, endTime: timePair.end_time });
@@ -1073,7 +1161,7 @@ function decorateLocalRow(row, { providerFallback = false } = {}) {
   };
 }
 
-function chooseBestRow(localRow, geminiRow) {
+function chooseBestRow(localRow, geminiRow, locationGroups = []) {
   if (!geminiRow) return localRow;
 
   const localWarnings = Array.isArray(localRow?.warnings) ? localRow.warnings : [];
@@ -1082,7 +1170,7 @@ function chooseBestRow(localRow, geminiRow) {
   const geminiCriticalMissing = geminiWarnings.filter((w) => ["missing_event_name", "missing_area", "missing_date", "missing_time", "end_not_after_start"].includes(w));
 
   if (geminiCriticalMissing.length < localCriticalMissing.length) {
-    return {
+    const merged = recomputeRowMetadata({
       ...localRow,
       event_name: localRow.event_name || geminiRow.event_name || "",
       location_group_id: localRow.location_group_id || geminiRow.location_group_id || "",
@@ -1092,12 +1180,11 @@ function chooseBestRow(localRow, geminiRow) {
       end_time: localRow.end_time || geminiRow.end_time || "",
       attendee_count: localRow.attendee_count ?? geminiRow.attendee_count ?? null,
       notes: localRow.notes || geminiRow.notes || "",
-      warnings: geminiCriticalMissing.length ? geminiWarnings : [],
-      review_notes: geminiRow.review_notes || localRow.review_notes || null,
       provider_used: "local-parser+gemini-fill",
       provider_fallback: false,
       gemini_candidate: geminiRow,
-    };
+    }, locationGroups);
+    return merged;
   }
 
   const localFilled = [localRow.event_name, localRow.location_group_id, localRow.event_date, localRow.start_time, localRow.end_time].filter(Boolean).length;
@@ -1138,7 +1225,7 @@ export async function aiParseEventTexts({ texts, locationGroups }) {
       );
     });
     const bySourceIndex = new Map(geminiRows.map((row) => [row.source_index, row]));
-    return localRows.map((localRow) => chooseBestRow(localRow, bySourceIndex.get(localRow.source_index)));
+    return localRows.map((localRow) => chooseBestRow(localRow, bySourceIndex.get(localRow.source_index), locationGroups || []));
   } catch {
     return localRows.map((row) => decorateLocalRow(row, { providerFallback: shouldUseGemini(row) }));
   }

@@ -19,7 +19,13 @@ function sqlLiteral(value) {
 }
 
 function isIsoDate(value) {
-  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || "").trim());
+  const match = String(value || "").trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const candidate = new Date(year, month - 1, day);
+  return candidate.getFullYear() === year && candidate.getMonth() === month - 1 && candidate.getDate() === day;
 }
 
 function isUuid(value) {

@@ -81,6 +81,27 @@ assert.match(createCall.sql, /insert into public\.events_app_events/i);
 assert.match(createCall.sql, /Catering, extra trash, restroom check before dinner and after dessert/);
 assert.doesNotMatch(createCall.sql, /Operational flags/i);
 
+await withServer(buildApp(), async (baseUrl) => {
+  const response = await fetch(`${baseUrl}/admin-api/events/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      event_name: "Bad Date",
+      location_group_id: TEST_GROUP_ID,
+      event_date: "2026-99-99",
+      start_time: "09:00",
+      end_time: "10:00",
+      attendee_count: "10",
+      notes: "invalid date should fail",
+      created_by: "contract test",
+    }),
+  });
+  assert.equal(response.status, 400, "invalid calendar dates must be rejected before SQL insert");
+  const payload = await response.json();
+  assert.equal(payload.ok, false);
+  assert.match(payload.error, /event_date/i);
+});
+
 const listReadCalls = [];
 await withServer(buildApp({ readCalls: listReadCalls }), async (baseUrl) => {
   const response = await fetch(`${baseUrl}/admin-api/events/`);
