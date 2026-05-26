@@ -49,9 +49,10 @@ const GEMINI_MAX_OUTPUT_TOKENS = Number.parseInt(String(process.env.MEMPHIS_GEMI
 
 const MEMPHIS_INTENT_KEYWORDS = {
   daily_staff_schedule: ["who works", "who is working", "who's working", "staffing", "staff", "custodians", "scheduled", "who all works"],
+  ops_manager_schedule: ["ops manager", "ops managers", "operations manager", "operations managers", "manager on", "managers on", "manager work", "managers work"],
   area_schedule: ["who has", "who covers", "who owns", "assigned", "assignment", "area", "areas", "cleans", "cleaning"],
-  employee_work_status: ["where is", "where's", "is working", "does work", "work status", "employee status"],
-  my_schedule: ["my schedule", "my shift", "where am i", "what am i assigned", "what am i doing"],
+  employee_work_status: ["where is", "where's", "is working", "does work", "what does", "who does", "work status", "employee status"],
+  my_schedule: ["my schedule", "my shift", "where am i", "what am i assigned", "what am i doing", "what do i have", "who do i have"],
   absence_coverage: ["pto", "time off", "absent", "absence", "call out", "callout", "sick", "vacation", "who is out", "who's out"],
   coverage_candidates: ["who can cover", "who should cover", "best backup", "coverage candidate", "cover this"],
   open_segments: ["open segment", "open segments", "uncovered", "unassigned", "what is open", "what's open"],
@@ -69,7 +70,10 @@ function scoreMemphisIntent(lower, intent, terms) {
     if (lower.includes(term)) score += term.includes(" ") ? 24 + term.length : 12 + term.length;
   }
   if (intent === "daily_staff_schedule" && /\b(who|which)\b/.test(lower) && /\b(work|working|scheduled|staff|custodian|custodians)\b/.test(lower)) score += 38;
-  if (intent === "area_schedule" && /\b(who|where)\b/.test(lower) && /\b(has|covers|cleans|assigned|area|restroom|teton|aquarium|zambezi|primate)\b/.test(lower)) score += 32;
+  if (intent === "ops_manager_schedule" && /\b(ops|operations|manager|managers|boss|director|eric|operle|brandy|gull|haley|lejman|jennifer|sheffield)\b/.test(lower) && /\b(work|works|working|schedule|shift|shifts|on duty|on today|on tomorrow|today|tomorrow|sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/.test(lower)) score += 72;
+  if (intent === "area_schedule" && /\b(who|where|what)\b/.test(lower) && /\b(has|covers|cleans|assigned|area|restroom|teton|aquarium|zambezi|primate)\b/.test(lower)) score += 32;
+  if (intent === "employee_work_status" && /\b(where is|where s|what does|who does|is [a-z]+ working|does [a-z]+ work)\b/.test(lower)) score += 50;
+  if (intent === "contacts" && /\b(phone|number|contact|call|text|reach)\b/.test(lower)) score += 55;
   if (intent === "absence_coverage" && /\b(out|pto|absent|off|sick|vacation)\b/.test(lower)) score += 34;
   return score;
 }
@@ -78,6 +82,21 @@ function classifyMemphisIntentLocal(text = "", threadContext = {}) {
   const raw = String(text || "").trim();
   const lower = normalizeLoose(raw);
   const scores = Object.entries(MEMPHIS_INTENT_KEYWORDS).map(([intent, terms]) => ({ intent, score: scoreMemphisIntent(lower, intent, terms) }));
+  const locationHint = findLocationCode(raw) || hasLocationKeyword(raw);
+  const coverageQuestion = /\b(who can cover|who should cover|best backup|best person to cover|coverage candidate|coverage candidates)\b/i.test(raw);
+  const ticketQuestion = /\b(ticket|tickets|maintenance|broken|out of order)\b/i.test(raw);
+  const openSegmentQuestion = !ticketQuestion && /\b(open segments?|what is open|what's open|anything open|any open segments?|uncovered|unassigned|why is .* open|why .* uncovered|why open)\b/i.test(raw);
+  const eventQuestion = !openSegmentQuestion && /\b(events?|upcoming|coming up|happening)\b/i.test(raw) && !/\b(who has|who covers|who owns|assigned|assignment|clean|cleans)\b/i.test(raw);
+  const eventCenterAnythingQuestion = !openSegmentQuestion && /\banything\b/i.test(raw) && /\b(event center|events? center|event area|events?)\b/i.test(raw) && !/\b(who has|who covers|who owns|assigned|assignment|clean|cleans|open|ticket|tickets|maintenance)\b/i.test(raw);
+  if (eventQuestion || eventCenterAnythingQuestion) scores.push({ intent: "events", score: 86 });
+  if (coverageQuestion) scores.push({ intent: "coverage_candidates", score: 86 });
+  if (openSegmentQuestion) scores.push({ intent: "open_segments", score: 84 });
+  if (locationHint && !eventQuestion && !coverageQuestion && !openSegmentQuestion && !/\b(ticket|tickets|maintenance|broken|out of order)\b/i.test(raw) && /\b(today|tomorrow|this afternoon|tonight|tonite|who|what|where|owner|owns|has|covers|assigned|clean|cleans|area|schedule)\b/i.test(raw)) {
+    scores.push({ intent: "area_schedule", score: 76 });
+  }
+  if (isOpsManagerSchedulePrompt(raw)) scores.push({ intent: "ops_manager_schedule", score: 88 });
+  if (isEmployeeScheduleLookupPrompt(raw)) scores.push({ intent: "employee_work_status", score: 82 });
+  if (isContactLookupPrompt(raw) && !isOpsManagerSchedulePrompt(raw)) scores.push({ intent: "contacts", score: 84 });
   if (/^(what about|how about|and|same|next|this|tomorrow|today|yesterday|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/.test(lower)) {
     const lastIntent = String(threadContext?.last_intent || threadContext?.context_json?.last_question_shape || "").trim();
     if (lastIntent) scores.push({ intent: lastIntent, score: 70 });
@@ -233,7 +252,16 @@ function isOpsManagerSchedulePrompt(text = "") {
 function isEmployeeAreaQuestion(text = "") {
   const lower = normalizeLoose(text);
   if (!lower) return false;
-  return /\b(area|areas|assignment|assignments|assigned|where|who has|who covers|who owns|current owner|clean|cleans|cleaning|who cleans)\b/.test(lower);
+  return isEmployeeScheduleLookupPrompt(text) || /\b(area|areas|assignment|assignments|assigned|where|who has|who covers|who owns|current owner|clean|cleans|cleaning|who cleans)\b/.test(lower);
+}
+
+function isEmployeeScheduleLookupPrompt(text = "") {
+  const lower = normalizeLoose(text);
+  if (!lower) return false;
+  if (findLocationCode(text) || hasLocationKeyword(text)) return false;
+  if (/\b(i|me|my)\b/.test(lower)) return false;
+  return /\b(where is|where s|where are|what does|who does|is [a-z][a-z]+|does [a-z][a-z]+)\b/.test(lower)
+    && /\b(assigned|assignment|have|has|cover|covers|working|work|works|schedule|shift|area|areas)\b/.test(lower);
 }
 
 function mentionsMemphisPlace(text = "") {
@@ -1403,7 +1431,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       }
     }
 
-    if (/(schedule|assigned|assignment|assignments|area|areas|works|working|scheduled|staff|staffing|teton|aquarium|restroom|zambezi|expo|cleans|cover|coverage|open segment|uncovered|unassigned)/i.test(text)) {
+    if (/(schedule|assigned|assignment|assignments|area|areas|works|working|scheduled|staff|staffing|teton|aquarium|restroom|zambezi|expo|cleans|cover|coverage|open segment|anything open|any open segments|uncovered|unassigned)/i.test(text)) {
       await ensureDailySchedule(runRpc, relativeServiceDate);
     }
 
@@ -1501,7 +1529,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       return { text: summarizeCoverageCandidates(data.candidates, data.group_name || areaRow?.group_name || text), meta: { fallback: true, mode: "local_coverage_candidates", sources: ["sch_get_coverage_candidates", "v_memphis_open_segments"] } };
     }
 
-    if (/(open segments|what is open|what's open|uncovered|unassigned)/i.test(lower)) {
+    if (/(open segments|what is open|what's open|anything open|any open segments|uncovered|unassigned)/i.test(lower)) {
       const areaRow = await resolveAreaRow(runReadOnlySql, relativeServiceDate, text, threadContext);
       const data = await executeTool("get_open_segments", { service_date: relativeServiceDate, area: areaRow?.group_name || "" });
       await saveThreadContext(runRpc, threadId, { last_intent: "open_segments", last_group_name: areaRow?.group_name || null, last_service_date: relativeServiceDate, last_subject_type: "group" });
@@ -1584,7 +1612,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       return daily;
     }
 
-    if (lower.includes("schedule") || lower.includes("assigned") || lower.includes("assignment") || lower.includes("areas") || lower.includes("area") || lower.includes("works") || lower.includes("working") || lower.includes("scheduled") || lower.includes("staff") || lower.includes("aquarium") || lower.includes("restroom") || lower.includes("zambezi") || lower.includes("teton") || lower.includes("expo") || lower.includes("cleans") || hasLocationKeyword(text) || ((/^(how about|what about)\b/i.test(text) || hasDateReference(text)) && threadContext?.last_subject_type === "group" && threadContext?.last_group_name) || ((/^(how about|what about)\b/i.test(text) || hasDateReference(text)) && threadContext?.last_subject_type === "employee" && threadContext?.last_employee_name) || ((/^(how about|what about)\b/i.test(text) || hasDateReference(text)) && threadContext?.context_json?.last_question_shape === "my_schedule")) {
+    if (lower.includes("schedule") || lower.includes("assigned") || lower.includes("assignment") || lower.includes("areas") || lower.includes("area") || lower.includes("works") || lower.includes("working") || lower.includes("scheduled") || lower.includes("staff") || lower.includes("aquarium") || lower.includes("restroom") || lower.includes("zambezi") || lower.includes("teton") || lower.includes("expo") || lower.includes("cleans") || isEmployeeScheduleLookupPrompt(text) || hasLocationKeyword(text) || ((/^(how about|what about)\b/i.test(text) || hasDateReference(text)) && threadContext?.last_subject_type === "group" && threadContext?.last_group_name) || ((/^(how about|what about)\b/i.test(text) || hasDateReference(text)) && threadContext?.last_subject_type === "employee" && threadContext?.last_employee_name) || ((/^(how about|what about)\b/i.test(text) || hasDateReference(text)) && threadContext?.context_json?.last_question_shape === "my_schedule")) {
       const employeeName = await guessEmployeeName(runRpc, text) || (shouldUseEmployeeContext(text) ? threadContext?.last_employee_name : "") || "";
       if (employeeName) {
         const workStatus = await executeTool("get_employee_work_status", { employee_name: employeeName, service_date: relativeServiceDate });

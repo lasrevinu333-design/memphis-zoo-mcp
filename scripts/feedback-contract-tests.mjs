@@ -25,12 +25,14 @@ assertContains(apiSource, "validateSystemFeedbackImageAttachment", "backend shou
 assertContains(apiSource, "image_attachment", "backend should persist image attachment metadata/data");
 assertMatches(apiSource, /feedback-api\/image\/:feedbackId/, "backend should expose a feedback image retrieval endpoint");
 
-// Backend: feedback should keep reminding ops every 10 minutes until acknowledgement.
+// Backend: feedback should remind ops without creating unbounded message spam.
 assertContains(apiSource, "last_feedback_reminder_at", "schema should track the last feedback reminder timestamp");
 assertContains(apiSource, "feedback_reminder_count", "schema should track repeated feedback reminder count");
-assertMatches(apiSource, /interval\s+'10 minutes'/i, "reminder sweep should use a 10 minute cadence per unacknowledged item");
-assertContains(apiSource, "runSystemFeedbackReminderSweep", "backend should run a reminder sweep for unacknowledged feedback");
+assertContains(apiSource, "FEEDBACK_REMINDER_MAX_COUNT", "reminder sweep should cap repeated feedback reminders");
+assertContains(apiSource, "markSystemFeedbackReminderExhausted", "reminder sweep should stop noisy exhausted feedback reminders");
+assertMatches(apiSource, /feedback_reminder_count\s*<\s*\$\{Number\(FEEDBACK_REMINDER_MAX_COUNT\)\}/, "due query should exclude reminder-exhausted feedback items");
 assertMatches(apiSource, /feedback-api\/acknowledge\/:feedbackId/, "backend should expose an acknowledgement endpoint");
 assertMatches(apiSource, /status\s*=\s*'acknowledged'/i, "acknowledgement should mark the feedback item as acknowledged");
+assertMatches(apiSource, /requireFeedbackReminderSecret\(req, res\)/, "manual reminder endpoint should require a secret before sending messages");
 
 console.log("feedback contract tests passed");

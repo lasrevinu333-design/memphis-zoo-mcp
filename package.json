@@ -13,7 +13,8 @@
     "test:events-api": "node scripts/events-api-contract-tests.mjs",
     "test:feedback": "node scripts/feedback-contract-tests.mjs",
     "test:schedule-ai": "node scripts/schedule-ai-tests.mjs",
-    "test:ai-intent": "node scripts/smoke-ai-intent.mjs"
+    "test:ai-intent": "node scripts/smoke-ai-intent.mjs",
+    "test:messaging": "node scripts/memphis-messaging-regression-tests.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.18.0",
