@@ -1436,8 +1436,11 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
     }
 
     if (isWeeklyScheduleQuestion(text)) {
-      const weekly = await generateWeeklyScheduleReply({ runReadOnlySql, runRpc, text, todayServiceDate, relativeServiceDate });
-      await saveThreadContext(runRpc, threadId, { last_intent: "weekly_staff_schedule", last_service_date: weekly.meta?.dates?.[0] || relativeServiceDate, last_subject_type: "summary", context_json: { dates: weekly.meta?.dates || [] } });
+      const areaTarget = hasLocationKeyword(text) || findLocationCode(text)
+        ? await resolveAreaRow(runReadOnlySql, relativeServiceDate, text, threadContext)
+        : null;
+      const weekly = await generateWeeklyScheduleReply({ runReadOnlySql, runRpc, text, todayServiceDate, relativeServiceDate, areaTarget });
+      await saveThreadContext(runRpc, threadId, { last_intent: areaTarget ? "weekly_area_schedule" : "weekly_staff_schedule", last_group_name: areaTarget?.group_name || null, last_service_date: weekly.meta?.dates?.[0] || relativeServiceDate, last_subject_type: areaTarget ? "group" : "summary", context_json: { dates: weekly.meta?.dates || [], last_question_shape: areaTarget ? "weekly_area_schedule" : "weekly_staff_schedule", last_subject_kind: areaTarget ? "group" : "staffing", last_subject_label: areaTarget?.group_name || null } });
       return weekly;
     }
 
@@ -1494,7 +1497,9 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       };
     }
 
-    if (lower.includes("event") || lower.includes("upcoming") || lower.includes("coming up")) {
+    const asksEventListing = /\b(events?|upcoming|coming up|happening)\b/i.test(text)
+      && !/\b(custodian|custodians|custodial|who has|who covers|who owns|assigned|assignment|assignments|clean|cleans|cleaning|schedule|weekly|each week|work|working|staff|staffing)\b/i.test(text);
+    if (asksEventListing) {
       const areaRow = await resolveAreaRow(runReadOnlySql, relativeServiceDate, text, threadContext);
       const eventArea = areaRow?.group_name === "Event Center" && !/\b(event center|event centre|ec)\b/i.test(text) ? "" : (areaRow?.group_name || "");
       const data = await executeTool("get_upcoming_events", { days: 14, area: eventArea });
@@ -1606,7 +1611,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       }
     }
 
-    if (/\b(who works|who work|who is working|who's working|who all works|which custodians work|which ops managers work|would is working|staff|staffing|custodian|custodians|scheduled)\b/i.test(text)) {
+    if (!hasLocationKeyword(text) && !findLocationCode(text) && /\b(who works|who work|who is working|who's working|who all works|which custodians work|which ops managers work|would is working|staff|staffing|custodian|custodians|scheduled)\b/i.test(text)) {
       const daily = await generateDailyStaffScheduleReply({ runReadOnlySql, runRpc, serviceDate: relativeServiceDate, queryText: text });
       await saveThreadContext(runRpc, threadId, { last_intent: "daily_staff_schedule", last_service_date: relativeServiceDate, last_subject_type: "summary", context_json: mergeContextJson(threadContext, { last_question_shape: "daily_staff_schedule", last_subject_kind: "staffing" }) });
       return daily;
