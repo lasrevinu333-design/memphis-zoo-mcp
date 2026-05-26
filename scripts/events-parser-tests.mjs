@@ -83,6 +83,21 @@ const eventWillRun = await parseOne("Event will run from 9am to 6pm at Event Cen
 assert.notEqual(eventWillRun.event_name, "Center");
 assert.match(eventWillRun.warnings.join(","), /missing_event_name/);
 
+const personNamedEvent = await parseOne("Lisa Horton at Event Center on June 14 from 10am to 2pm 75 guests");
+assert.equal(personNamedEvent.event_name, "Lisa Horton", "person-name event titles must not be eaten by the Event Center area name");
+assert.equal(personNamedEvent.location_group_name, "Event Center");
+assert.match(personNamedEvent.event_date, /^\d{4}-06-14$/);
+assertTime(personNamedEvent, "10:00:00", "14:00:00");
+assert.equal(personNamedEvent.attendee_count, "75");
+assert.equal(personNamedEvent.notes, "", "fully parsed event-name/location/date/time/count text should not become notes");
+
+const personBirthdayEvent = await parseOne("Lisa Horton Birthday at Event Center on June 14 from 10am to 2pm 75 guests");
+assert.equal(personBirthdayEvent.event_name, "Lisa Horton Birthday", "birthday/party-style person names can be event titles");
+assert.equal(personBirthdayEvent.location_group_name, "Event Center");
+assert.match(personBirthdayEvent.event_date, /^\d{4}-06-14$/);
+assertTime(personBirthdayEvent, "10:00:00", "14:00:00");
+assert.equal(personBirthdayEvent.notes, "");
+
 const labeledWithoutNotes = await parseOne("Event: Baby Day | Event Area: Event Center | Date: 5/9 | Start: 9am | End: 6pm");
 assert.equal(labeledWithoutNotes.event_name, "Baby Day");
 assert.equal(labeledWithoutNotes.notes, "");
