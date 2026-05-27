@@ -1,3 +1,4 @@
+import { getGeminiApiKey } from "./utils/gemini-config.js";
 import {
   addMinutesToTime,
   answerEmployeeWeeklyScheduleQuestion,
@@ -145,16 +146,6 @@ function annotateMemphisReply(reply = {}, route = {}, sources = [], warnings = [
 
 
 
-function getGeminiApiKey() {
-  return String(
-    process.env.GEMINI_API_KEY ||
-    process.env.MEMPHIS_GEMINI_API_KEY ||
-    process.env.GOOGLE_API_KEY ||
-    process.env.GOOGLE_GENAI_API_KEY ||
-    process.env.EVENTS_GEMINI_API_KEY ||
-    ""
-  ).trim();
-}
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = GEMINI_TIMEOUT_MS) {
   const controller = new AbortController();
@@ -1670,7 +1661,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
         return { text: directContactReply, meta: { fallback: true, mode: "local_internal_contact_direct" } };
       }
     }
-    const apiKey = getGeminiApiKey();
+    const apiKey = getGeminiApiKey(["MEMPHIS_GEMINI_API_KEY"]);
     const identity = await fetchDeviceIdentity(runReadOnlySql, deviceId);
     const webEnabled = allowWebSearch({ deviceId, identityRole: identity?.role || "" });
     const threadContext = await fetchThreadContext(runReadOnlySql, threadId);
