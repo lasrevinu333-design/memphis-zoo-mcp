@@ -61,7 +61,7 @@ let attendanceCache = { data: null, fetched_at_ms: 0 };
 let feedbackReminderSweepInFlight = false;
 let feedbackSchemaEnsured = false;
 
-const requireOpsManagerAuth = makeDailyPinMiddleware({ allowedRoles: ["ops_manager"] });
+const requireOpsManagerAuth = makeDailyPinMiddleware({ allowedRoles: ["ops_manager"], openWhenDisabled: true });
 
 function isHealthPath(req) {
   return String(req.path || "") === "/health";
