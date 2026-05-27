@@ -1,4 +1,5 @@
 import express from "express";
+import { getGeminiApiKey } from "./utils/gemini-config.js";
 
 const MONTH_LOOKUP = {
   january: 1, jan: 1,
@@ -21,14 +22,7 @@ const PTO_GEMINI_TIMEOUT_MS = Math.max(1000, Number.parseInt(String(process.env.
 const PTO_GEMINI_MAX_OUTPUT_TOKENS = Math.max(256, Number.parseInt(String(process.env.SCHEDULE_GEMINI_MAX_OUTPUT_TOKENS || "1200"), 10) || 1200);
 
 function getScheduleGeminiApiKey() {
-  return String(
-    process.env.SCHEDULE_GEMINI_API_KEY ||
-    process.env.GEMINI_API_KEY ||
-    process.env.MEMPHIS_GEMINI_API_KEY ||
-    process.env.GOOGLE_API_KEY ||
-    process.env.GOOGLE_GENAI_API_KEY ||
-    ""
-  ).trim();
+  return getGeminiApiKey(["SCHEDULE_GEMINI_API_KEY"]);
 }
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = PTO_GEMINI_TIMEOUT_MS) {

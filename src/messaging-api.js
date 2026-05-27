@@ -1,9 +1,12 @@
 import express from "express";
+import { makeDailyPinMiddleware } from "./auth/daily-pin-auth.js";
+import { getGeminiDiagnostics } from "./utils/gemini-config.js";
 import { createMemphisResponder } from "./services/index.js";
 
 export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPayload, appVersion, releaseId, contractVersion }) {
   const router = express.Router();
   const memphisResponder = createMemphisResponder({ runReadOnlySql, runRpc });
+  const requireOpsManagerAuth = makeDailyPinMiddleware({ allowedRoles: ["ops_manager"], openWhenDisabled: true });
 
   function fail(res, error, fallback = "Messaging request failed") {
     res.status(400).json({ ok: false, error: error?.message || fallback });
@@ -13,15 +16,9 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     return String(value || "").replace(/'/g, "''");
   }
 
-  function getGeminiDiagnostics() {
-    const geminiApiKey = String(process.env.GEMINI_API_KEY || "").trim();
-    const googleApiKey = String(process.env.GOOGLE_API_KEY || "").trim();
+  function getGeminiDiagnosticsForMessaging() {
     const model = String(process.env.MEMPHIS_GEMINI_MODEL || process.env.GEMINI_MODEL || "gemini-2.5-flash").trim();
-    return {
-      gemini_configured: Boolean(geminiApiKey || googleApiKey),
-      gemini_key_source: geminiApiKey ? "GEMINI_API_KEY" : (googleApiKey ? "GOOGLE_API_KEY" : null),
-      memphis_model: model || null,
-    };
+    return getGeminiDiagnostics({ preferred: ["MEMPHIS_GEMINI_API_KEY"], model });
   }
 
   function isDirectContactPrompt(body = "") {
@@ -114,8 +111,73 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     return raw;
   }
 
+  async function buildMemphisReply({ userId = "", deviceId = "", threadId = "", body = "" } = {}) {
+    try {
+      const directContact = await directContactReply(body);
+      if (directContact) {
+        return {
+          reply: { text: directContact, meta: { fallback: true, mode: "direct_internal_contact" } },
+          routedBody: body,
+        };
+      }
+      if (isCapabilityPrompt(body)) {
+        return {
+          reply: { text: buildCapabilityReply(), meta: { fallback: true, mode: "local_capability_reply" } },
+          routedBody: body,
+        };
+      }
+      const routedBody = normalizeMemphisPromptForLocalRouting(body);
+      let reply = await memphisResponder.generateReply({ userId, deviceId, threadId, userMessage: routedBody });
+      if (routedBody !== body) {
+        reply = {
+          ...reply,
+          meta: {
+            ...(reply?.meta && typeof reply.meta === "object" ? reply.meta : {}),
+            routed_from: body,
+            routing_hint: "self_schedule",
+          },
+        };
+      }
+      return { reply, routedBody };
+    } catch (error) {
+      console.error("memphis ai reply failed:", error);
+      return {
+        reply: {
+          text: `Memphis hit an internal error while answering that. ${error?.message || "Unknown error."}`,
+          meta: { fallback: true, error: error?.message || "unknown_error", diagnostics: getGeminiDiagnosticsForMessaging() },
+        },
+        routedBody: body,
+      };
+    }
+  }
+
   router.get("/health", (_req, res) => {
-    res.status(200).json(buildHealthPayload("messaging", { contract_version: contractVersion, memphis: getGeminiDiagnostics() }));
+    res.status(200).json(buildHealthPayload("messaging", { contract_version: contractVersion, memphis: getGeminiDiagnosticsForMessaging() }));
+  });
+
+  router.get("/memphis/admin/runtime", requireOpsManagerAuth, async (req, res) => {
+    try {
+      res.status(200).json({
+        ok: true,
+        data: {
+          runtime: buildHealthPayload("messaging_admin_runtime", {
+            authenticated: true,
+            contract_version: contractVersion,
+            memphis: getGeminiDiagnosticsForMessaging(),
+          }),
+          auth: req.memphisAuth || null,
+          admin_route: {
+            path: "/messaging-api/memphis/admin/run",
+            available: true,
+            auth_required: true,
+            fallback_routes: ["/messaging-api/memphis/message", "/messaging-api/memphis/diagnose"],
+          },
+        },
+        meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion },
+      });
+    } catch (error) {
+      fail(res, error, "Memphis admin runtime failed");
+    }
   });
 
   router.get("/me/by-device", async (req, res) => {
@@ -261,6 +323,35 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   });
 
+  router.post("/memphis/admin/run", requireOpsManagerAuth, async (req, res) => {
+    try {
+      const body = String(req.body?.body || req.body?.message || "").trim();
+      const deviceId = String(req.body?.device_id || req.memphisAuth?.device_id || "").trim();
+      const threadId = String(req.body?.thread_id || "").trim();
+      const userId = String(req.body?.user_id || "").trim();
+      if (!body) throw new Error("body is required.");
+      let resolvedThreadId = threadId;
+      if (!resolvedThreadId && userId) {
+        const thread = await runRpc("msg_get_or_create_memphis_thread", { p_user_id: userId });
+        resolvedThreadId = String(thread?.id || "").trim();
+      }
+      const { reply, routedBody } = await buildMemphisReply({ userId, deviceId, threadId: resolvedThreadId, body });
+      const diagnostics = await memphisResponder.diagnoseMessage({ deviceId, threadId: resolvedThreadId, userMessage: routedBody });
+      res.status(200).json({
+        ok: true,
+        data: {
+          reply,
+          diagnostics,
+          thread_id: resolvedThreadId || null,
+          auth: req.memphisAuth || null,
+        },
+        meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion },
+      });
+    } catch (error) {
+      fail(res, error, "Run Memphis admin console failed");
+    }
+  });
+
   router.post("/memphis/message", async (req, res) => {
     try {
       const userId = String(req.body?.user_id || "").trim();
@@ -284,33 +375,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       if (!memphisUserId) throw new Error("Memphis bot identity not found.");
 
       let reply;
-      try {
-        const directContact = await directContactReply(body);
-        if (directContact) {
-          reply = { text: directContact, meta: { fallback: true, mode: "direct_internal_contact" } };
-        } else if (isCapabilityPrompt(body)) {
-          reply = { text: buildCapabilityReply(), meta: { fallback: true, mode: "local_capability_reply" } };
-        } else {
-          const routedBody = normalizeMemphisPromptForLocalRouting(body);
-          reply = await memphisResponder.generateReply({ userId, deviceId, threadId: thread.id, userMessage: routedBody });
-          if (routedBody !== body) {
-            reply = {
-              ...reply,
-              meta: {
-                ...(reply?.meta && typeof reply.meta === "object" ? reply.meta : {}),
-                routed_from: body,
-                routing_hint: "self_schedule",
-              },
-            };
-          }
-        }
-      } catch (error) {
-        console.error("memphis ai reply failed:", error);
-        reply = {
-          text: `Memphis hit an internal error while answering that. ${error?.message || "Unknown error."}`,
-          meta: { fallback: true, error: error?.message || "unknown_error", diagnostics: getGeminiDiagnostics() }
-        };
-      }
+      ({ reply } = await buildMemphisReply({ userId, deviceId, threadId: thread.id, body }));
 
       const botMessage = await runRpc("msg_send_message", {
         p_thread_id: thread.id,

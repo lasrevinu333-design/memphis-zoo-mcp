@@ -1,3 +1,4 @@
+import { getGeminiDiagnostics } from "../utils/gemini-config.js";
 import { redactSecrets } from "../utils/redact-secrets.js";
 
 function read(name, fallback = "") {
@@ -18,11 +19,7 @@ function present(name) {
 export function getRuntimeEnv() {
   const githubRepo = read("GITHUB_REPO");
   const githubAllowedRepos = readCsv("GITHUB_ALLOWED_REPOS", githubRepo);
-  const geminiKeySource = present("GEMINI_API_KEY")
-    ? "GEMINI_API_KEY"
-    : present("GOOGLE_API_KEY")
-      ? "GOOGLE_API_KEY"
-      : null;
+  const gemini = getGeminiDiagnostics({ preferred: ["MEMPHIS_GEMINI_API_KEY"], model: read("MEMPHIS_GEMINI_MODEL", read("GEMINI_MODEL", "gemini-2.5-flash")) });
 
   return {
     app: {
@@ -43,9 +40,9 @@ export function getRuntimeEnv() {
       configured: present("SUPABASE_URL") && present("SUPABASE_SERVICE_ROLE_KEY"),
     },
     ai: {
-      gemini_configured: Boolean(geminiKeySource),
-      gemini_key_source: geminiKeySource,
-      model: read("MEMPHIS_GEMINI_MODEL", read("GEMINI_MODEL", "gemini-2.5-flash")),
+      gemini_configured: gemini.gemini_configured,
+      gemini_key_source: gemini.gemini_key_source,
+      model: gemini.memphis_model,
     },
   };
 }
