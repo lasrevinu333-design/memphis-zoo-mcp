@@ -4,9 +4,11 @@ import { resolve } from "node:path";
 import express from "express";
 import {
   createDailyPinSession,
+  createOpenOpsManagerSession,
   getNextDailyReset,
   getOperationalDayKey,
   installDailyPinAuthRoutes,
+  isOpsManagerAuthDisabled,
   makeDailyPinMiddleware,
   verifyDailyPinToken,
 } from "../src/auth/daily-pin-auth.js";
@@ -18,27 +20,35 @@ const env = {
   PIN_MAX_ATTEMPTS: "3",
   MEMPHIS_OPERATIONAL_TIME_ZONE: "America/Chicago",
 };
+const strictEnv = { ...env, MEMPHIS_DISABLE_OPS_MANAGER_AUTH: "false" };
+
+assert.equal(isOpsManagerAuthDisabled(env), true);
+assert.equal(isOpsManagerAuthDisabled(strictEnv), true);
+const openSession = createOpenOpsManagerSession({ deviceId: "ops-ipad-1", now: new Date("2026-05-26T15:00:00.000Z"), env });
+assert.equal(openSession.role, "ops_manager");
+assert.equal(openSession.auth_mode, "open");
+assert.equal(openSession.device_id, "ops-ipad-1");
 
 assert.equal(getOperationalDayKey(new Date("2026-05-26T08:59:00.000Z"), "America/Chicago"), "2026-05-25");
 assert.equal(getOperationalDayKey(new Date("2026-05-26T09:00:00.000Z"), "America/Chicago"), "2026-05-26");
 assert.equal(getNextDailyReset(new Date("2026-05-26T08:59:00.000Z"), "America/Chicago").toISOString(), "2026-05-26T09:00:00.000Z");
 assert.equal(getNextDailyReset(new Date("2026-05-26T09:00:00.000Z"), "America/Chicago").toISOString(), "2026-05-27T09:00:00.000Z");
 
-const opsSession = createDailyPinSession({ pin: env.OPS_MANAGER_DAILY_PIN, deviceId: "ops-ipad-1", now: new Date("2026-05-26T15:00:00.000Z"), env });
+const opsSession = createDailyPinSession({ pin: strictEnv.OPS_MANAGER_DAILY_PIN, deviceId: "ops-ipad-1", now: new Date("2026-05-26T15:00:00.000Z"), env: strictEnv });
 assert.equal(opsSession.role, "ops_manager");
 assert.equal(opsSession.device_id, "ops-ipad-1");
 assert.equal(opsSession.operational_day, "2026-05-26");
-assert.equal(verifyDailyPinToken(opsSession.token, { allowedRoles: ["ops_manager"], deviceId: "ops-ipad-1", now: new Date("2026-05-26T15:01:00.000Z"), env }).ok, true);
-assert.equal(verifyDailyPinToken(opsSession.token, { allowedRoles: ["ops_manager"], now: new Date("2026-05-26T15:01:00.000Z"), env }).status, 401);
-assert.equal(verifyDailyPinToken(opsSession.token, { allowedRoles: ["ops_manager"], deviceId: "other-device", now: new Date("2026-05-26T15:01:00.000Z"), env }).status, 401);
-assert.equal(verifyDailyPinToken(opsSession.token, { allowedRoles: ["custodian"], deviceId: "ops-ipad-1", now: new Date("2026-05-26T15:01:00.000Z"), env }).status, 403);
-assert.equal(verifyDailyPinToken(opsSession.token, { allowedRoles: ["ops_manager"], deviceId: "ops-ipad-1", now: new Date("2026-05-27T09:00:01.000Z"), env }).status, 401);
+assert.equal(verifyDailyPinToken(opsSession.token, { allowedRoles: ["ops_manager"], deviceId: "ops-ipad-1", now: new Date("2026-05-26T15:01:00.000Z"), env: strictEnv }).ok, true);
+assert.equal(verifyDailyPinToken(opsSession.token, { allowedRoles: ["ops_manager"], now: new Date("2026-05-26T15:01:00.000Z"), env: strictEnv }).status, 401);
+assert.equal(verifyDailyPinToken(opsSession.token, { allowedRoles: ["ops_manager"], deviceId: "other-device", now: new Date("2026-05-26T15:01:00.000Z"), env: strictEnv }).status, 401);
+assert.equal(verifyDailyPinToken(opsSession.token, { allowedRoles: ["custodian"], deviceId: "ops-ipad-1", now: new Date("2026-05-26T15:01:00.000Z"), env: strictEnv }).status, 403);
+assert.equal(verifyDailyPinToken(opsSession.token, { allowedRoles: ["ops_manager"], deviceId: "ops-ipad-1", now: new Date("2026-05-27T09:00:01.000Z"), env: strictEnv }).status, 401);
 
-const custodianSession = createDailyPinSession({ pin: env.CUSTODIAN_DAILY_PIN, deviceId: "custodian-tablet-a", now: new Date("2026-05-26T15:00:00.000Z"), env });
+const custodianSession = createDailyPinSession({ pin: strictEnv.CUSTODIAN_DAILY_PIN, deviceId: "custodian-tablet-a", now: new Date("2026-05-26T15:00:00.000Z"), env: strictEnv });
 assert.equal(custodianSession.role, "custodian");
-assert.equal(verifyDailyPinToken(`${custodianSession.token}tampered`, { now: new Date("2026-05-26T15:01:00.000Z"), env }).ok, false);
-assert.throws(() => createDailyPinSession({ pin: "9999", deviceId: "bad", env }), /Invalid daily PIN/);
-assert.throws(() => createDailyPinSession({ pin: env.CUSTODIAN_DAILY_PIN, deviceId: "bad", env, requiredRole: "ops_manager" }), /Ops manager PIN required/);
+assert.equal(verifyDailyPinToken(`${custodianSession.token}tampered`, { now: new Date("2026-05-26T15:01:00.000Z"), env: strictEnv }).ok, false);
+assert.throws(() => createDailyPinSession({ pin: "9999", deviceId: "bad", env: strictEnv }), /Invalid daily PIN/);
+assert.throws(() => createDailyPinSession({ pin: strictEnv.CUSTODIAN_DAILY_PIN, deviceId: "bad", env: strictEnv, requiredRole: "ops_manager" }), /Ops manager PIN required/);
 
 async function withServer(app, fn) {
   const server = await new Promise((resolve) => {
@@ -55,7 +65,8 @@ async function withServer(app, fn) {
 const app = express();
 app.use(express.json());
 installDailyPinAuthRoutes(app, { setCors: (res) => res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id"), env, attempts: new Map() });
-app.get("/ops-only", makeDailyPinMiddleware({ allowedRoles: ["ops_manager"], env }), (_req, res) => res.json({ ok: true }));
+app.get("/ops-only", makeDailyPinMiddleware({ allowedRoles: ["ops_manager"], env, openWhenDisabled: true }), (_req, res) => res.json({ ok: true }));
+app.get("/mixed-role", makeDailyPinMiddleware({ allowedRoles: ["ops_manager", "custodian"], env }), (_req, res) => res.json({ ok: true }));
 app.get("/public-feedback", (_req, res) => res.json({ ok: true }));
 
 await withServer(app, async (baseUrl) => {
@@ -69,21 +80,28 @@ await withServer(app, async (baseUrl) => {
   assert.equal(login.ok, true);
   assert.equal(login.data.role, "ops_manager");
   assert.ok(login.data.token);
+  assert.equal(login.data.auth_mode, "open");
 
   response = await fetch(`${baseUrl}/ops-only`);
-  assert.equal(response.status, 401);
+  assert.equal(response.status, 200, "ops manager routes should stay open when manager PIN auth is disabled");
+
+  response = await fetch(`${baseUrl}/auth-api/session`);
+  assert.equal(response.status, 401, "generic session endpoint should stay protected unless a caller presents a real session");
+
+  response = await fetch(`${baseUrl}/mixed-role`);
+  assert.equal(response.status, 401, "open manager mode must not silently bypass mixed-role routes unless they explicitly opt in");
 
   response = await fetch(`${baseUrl}/ops-only`, { headers: { Authorization: `Bearer ${login.data.token}`, "X-Device-Id": "ops-ipad-1" } });
   assert.equal(response.status, 200);
 
   response = await fetch(`${baseUrl}/ops-only`, { headers: { Authorization: `Bearer ${login.data.token}` } });
-  assert.equal(response.status, 401, "manager token must be rejected when X-Device-Id is missing");
+  assert.equal(response.status, 200, "device binding is intentionally bypassed when ops-manager auth is open");
 
   response = await fetch(`${baseUrl}/ops-only`, { headers: { Authorization: `Bearer ${login.data.token}`, "X-Device-Id": "other-device" } });
-  assert.equal(response.status, 401, "manager token must be bound to its device id");
+  assert.equal(response.status, 200, "open ops-manager mode should not reject device changes");
 
   response = await fetch(`${baseUrl}/ops-only`, { headers: { "X-Admin-Key": "deprecated-key" } });
-  assert.equal(response.status, 401, "admin-key bypass must not work; daily PIN session is required for manager operations");
+  assert.equal(response.status, 200, "open ops-manager mode should not require any specific manager credential headers");
 
   response = await fetch(`${baseUrl}/public-feedback`);
   assert.equal(response.status, 200, "guest/system feedback style public routes must not require PIN");
@@ -92,16 +110,16 @@ await withServer(app, async (baseUrl) => {
     response = await fetch(`${baseUrl}/auth-api/pin/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pin: "wrong-pin", device_id: "locked-device", role: "ops_manager" }),
+      body: JSON.stringify({ pin: "wrong-pin", device_id: "locked-device", role: "custodian" }),
     });
   }
-  assert.equal(response.status, 429, "third bad PIN attempt locks the device/IP until reset");
+  assert.equal(response.status, 429, "third bad custodian PIN attempt locks the device/IP until reset");
   response = await fetch(`${baseUrl}/auth-api/pin/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ pin: env.OPS_MANAGER_DAILY_PIN, device_id: "locked-device", role: "ops_manager" }),
+    body: JSON.stringify({ pin: env.CUSTODIAN_DAILY_PIN, device_id: "locked-device", role: "custodian" }),
   });
-  assert.equal(response.status, 429, "lockout blocks even the right PIN until reset");
+  assert.equal(response.status, 429, "custodian lockout blocks even the right PIN until reset");
 });
 
 const backendIndex = readFileSync(resolve("src/index.js"), "utf8");
@@ -126,20 +144,23 @@ assert.match(backendIndex, /app\.use\("\/feedback-api"[\s\S]*next\(\); \}\);/);
 assert.match(backendIndex, /createScheduleRouter\([\s\S]*requireAdminApiAuth:\s*requireOpsManagerAuth/);
 assert.match(backendIndex, /createEventsAdminRouter\([\s\S]*requireAdminApiAuth:\s*requireOpsManagerAuth/);
 assert.match(backendIndex, /app\.post\("\/dashboard-api\/close-ticket",\s*requireOpsManagerAuth/);
+assert.match(backendIndex, /makeDailyPinMiddleware\(\{ allowedRoles: \["ops_manager"\], openWhenDisabled: true \}\)/);
 assert.match(backendIndex, /app\.post\("\/mcp",\s*requireOpsManagerAuth/);
 assert.match(backendIndex, /app\.get\("\/sse",\s*requireOpsManagerAuth/);
 assert.match(backendIndex, /app\.post\("\/messages",\s*requireOpsManagerAuth/);
 assert.doesNotMatch(backendIndex, /X-Admin-Key|ADMIN_API_KEY|admin-api-key|x-admin-key/i);
+assert.match(diagnostics, /makeDailyPinMiddleware\(\{ allowedRoles: \["ops_manager"\], openWhenDisabled: true \}\)/);
 assert.match(diagnostics, /\/mcp-tools\.json",\s*requireOpsManagerAuth/);
 assert.match(diagnostics, /\/status\/deep",\s*requireOpsManagerAuth/);
 
 assert.match(authHelper, /requireOpsManagerSession/);
-assert.match(authHelper, /Three wrong tries locks this device/);
+assert.match(authHelper, /OPS_MANAGER_OPEN_PAGES=new Set/);
+assert.doesNotMatch(authHelper, /hub==='manager'/);
 assert.match(authHelper, /DEFAULT_MANAGER_HUB='\.\/start_page1\.html'/);
 assert.doesNotMatch(authHelper, /protectedPrefixes|window\.fetch\s*=/);
 assert.match(opsManagerHubHtml, /requireOpsManagerSession\(\{interactive:true\}\)/);
 assert.match(opsManagerHubHtml, /URLSearchParams\(window\.location\.search\)\.get\('return'\)/);
-assert.match(managerHubHtml, /Ops Manager PIN/);
+assert.doesNotMatch(managerHubHtml, /Ops Manager PIN/);
 assert.doesNotMatch(managerHubHtml, /X-Admin-Key|Admin access key|Use Admin Key|mz_admin_api_key/i);
 assert.match(eventsAdminHtml, /requireOpsManagerSession\(\{interactive:false,redirect:true\}\)/);
 assert.match(eventsAdminHtml, /Redirecting to Manager Hub/);
