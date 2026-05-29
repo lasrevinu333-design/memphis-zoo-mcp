@@ -15,7 +15,8 @@
     "test:schedule-ai": "node scripts/schedule-ai-tests.mjs",
     "test:ai-intent": "node scripts/smoke-ai-intent.mjs",
     "test:messaging": "node scripts/memphis-messaging-regression-tests.mjs",
-    "test:auth": "node scripts/daily-pin-auth-tests.mjs"
+    "test:auth": "node scripts/daily-pin-auth-tests.mjs",
+    "audit:location-groups": "node scripts/location-group-audit-reminder-aware.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.18.0",

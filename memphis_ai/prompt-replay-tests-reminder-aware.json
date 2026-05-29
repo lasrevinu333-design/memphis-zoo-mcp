@@ -1,0 +1,85 @@
+{
+  "version": "2026-05-29",
+  "suite": "reminder-aware-location-policy",
+  "description": "Prompt replay expectations for Memphis AI answers about reminder-only locations versus NFC/dashboard tracked locations.",
+  "test_cases": [
+    {
+      "id": "elephant-trunk-restrooms-reminder-only",
+      "prompt": "Are Elephant Trunk Restrooms overdue public restroom scans?",
+      "expected_answer_contains": [
+        "Elephant Trunk Restrooms are reminder-only employee restrooms",
+        "in/around Elephant Trunk Gift Shop",
+        "not NFC scan locations",
+        "not dashboard tracked public restrooms",
+        "should not be described as overdue scan failures"
+      ],
+      "must_not_contain": [
+        "public restroom NFC location",
+        "overdue scan failure",
+        "requires NFC scan"
+      ]
+    },
+    {
+      "id": "gift-shops-monday-reminder-only",
+      "prompt": "Are the gift shops supposed to be NFC scan locations or Monday reminders?",
+      "expected_answer_contains": [
+        "gift shops are Monday reminder-only schedule assignments",
+        "Bamboo Gift Shop",
+        "Elephant Trunk Gift Shop",
+        "North West Passage Gift Shop",
+        "not NFC scan locations",
+        "do not drive dashboard overdue status"
+      ],
+      "must_not_contain": [
+        "daily NFC scan",
+        "overdue scan failure",
+        "seed fake NFC locations"
+      ]
+    },
+    {
+      "id": "primate-canyon-includes-cat-country",
+      "prompt": "What is Primate Canyon and does it include Cat Country?",
+      "expected_answer_contains": [
+        "Primate Canyon includes Cat Country",
+        "weekly evening exterior glass",
+        "Michael",
+        "outdoor Windex",
+        "hose",
+        "reminder-only"
+      ],
+      "must_not_contain": [
+        "daily NFC scan",
+        "overdue scan failure"
+      ]
+    },
+    {
+      "id": "primate-pavillion-daily-nfc",
+      "prompt": "Is Primate Pavillion supposed to be NFC/dashboard tracked?",
+      "expected_answer_contains": [
+        "Primate Pavillion",
+        "PRIMATE_PAVILLION",
+        "daily NFC scan",
+        "dashboard tracked",
+        "preserve the current spelling"
+      ],
+      "must_not_contain": [
+        "reminder-only",
+        "rename"
+      ]
+    },
+    {
+      "id": "reminder-only-not-overdue",
+      "prompt": "Should empty gift shop, Cat Country, or Primate Canyon groups be listed as overdue scan failures?",
+      "expected_answer_contains": [
+        "reminder-only locations should not be described as overdue scan failures",
+        "empty included_locations can be valid",
+        "do not require NFC scans",
+        "do not drive dashboard overdue status"
+      ],
+      "must_not_contain": [
+        "seed fake NFC locations",
+        "missing scan-location mappings"
+      ]
+    }
+  ]
+}
