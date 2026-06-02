@@ -53,6 +53,7 @@ const needed = [
   "isProtectedRestroomSource",
   "sqlQuote",
   "normalizeRestroomRebalanceRow",
+  "isRestroomRebalanceRosterEligible",
   "loadSpread",
   "buildRestroomRebalancePlan",
   "normalizeRestroomRebalanceCompletionRow",
@@ -99,6 +100,9 @@ assert.equal(context.normalizePossibleDate("05/14/2026"), "2026-05-14");
 assert.equal(context.timeToMinutes("09:45:00"), 585);
 assert.equal(context.isRestroomRebalanceDue(new Date("2026-06-02T14:44:00Z")), false, "9:44am Central is before the rebalance");
 assert.equal(context.isRestroomRebalanceDue(new Date("2026-06-02T14:45:00Z")), true, "9:45am Central is due");
+assert.equal(context.isRestroomRebalanceRosterEligible({ shift_start: "05:00:00", shift_end: "14:00:00", employee_code: "EMP007" }), true);
+assert.equal(context.isRestroomRebalanceRosterEligible({ shift_start: "15:00:00", shift_end: "23:59:59", employee_code: "EMP002" }), false, "afternoon call coverage must not receive normal 9:45 restroom ownership");
+assert.equal(context.isRestroomRebalanceRosterEligible({ shift_start: "10:00:00", shift_end: "18:00:00", employee_code: "EMP010" }), false, "employees not working at 9:45 are not active rebalance owners");
 
 const activeRoster = [
   { employee_id: "employee-a", employee_name: "Alex" },
