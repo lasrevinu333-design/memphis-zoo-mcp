@@ -51,9 +51,13 @@ const needed = [
   "getMemphisClockParts",
   "isRestroomRebalanceDue",
   "isProtectedRestroomSource",
+  "sqlQuote",
   "normalizeRestroomRebalanceRow",
   "loadSpread",
   "buildRestroomRebalancePlan",
+  "normalizeRestroomRebalanceCompletionRow",
+  "buildRestroomRebalanceCompletionSelectSql",
+  "buildRestroomRebalanceCompletionUpsertSql",
   "summarizeAssignmentDiff",
   "summarizeWeekWindow",
   "buildWeekSummaryText",
@@ -65,6 +69,7 @@ const needed = [
 
 const context = {
   RESTROOM_REBALANCE_TIME: "09:45:00",
+  RESTROOM_REBALANCE_SOURCE: "restroom_rebalance_0945",
   RESTROOM_REBALANCE_TZ: "America/Chicago",
   MONTH_LOOKUP: {
     january: 1, jan: 1,
@@ -123,6 +128,18 @@ const protectedRestroomPlan = context.buildRestroomRebalancePlan([
 ], activeRoster);
 assert.equal(protectedRestroomPlan.applied, false);
 assert.equal(protectedRestroomPlan.reason, "no_safe_restroom_moves");
+
+assert.equal(context.normalizeRestroomRebalanceCompletionRow({ status: "completed" })?.completed, true);
+assert.equal(context.normalizeRestroomRebalanceCompletionRow({ status: "failed" })?.completed, false);
+assert.equal(context.normalizeRestroomRebalanceCompletionRow(null), null);
+const completionSelectSql = context.buildRestroomRebalanceCompletionSelectSql("2026-06-02");
+assert.match(completionSelectSql, /schedule_automation_runs/);
+assert.match(completionSelectSql, /restroom_rebalance_0945/);
+assert.match(completionSelectSql, /2026-06-02/);
+const completionUpsertSql = context.buildRestroomRebalanceCompletionUpsertSql("2026-06-02", { ok: true, moved_count: 2 });
+assert.match(completionUpsertSql, /create table if not exists public\.schedule_automation_runs/);
+assert.match(completionUpsertSql, /on conflict \(automation_key, service_date\)/);
+assert.match(completionUpsertSql, /completed/);
 
 const weekSummary = context.summarizeWeekWindow([
   { service_date: "2026-05-14", ready: true, assignment_count: 10, roster_count: 11 },
