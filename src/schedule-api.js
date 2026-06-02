@@ -932,6 +932,7 @@ export function createScheduleRouter({
       where dsa.service_date = '${esc(serviceDate)}'::date
         and dsa.status = 'ASSIGNED'
         and dsa.assigned_employee_id is not null
+        and coalesce(dsa.coverage_purpose, '') <> 'lunch_coverage'
         and dsa.coverage_end > '${esc(RESTROOM_REBALANCE_TIME)}'::time
         and (
           lower(coalesce(lg.group_name, '')) like '%restroom%'
@@ -993,6 +994,14 @@ export function createScheduleRouter({
     return { service_date: serviceDate, scheduled_time: RESTROOM_REBALANCE_TIME, ...plan };
   }
 
+  async function applyLunchCoverageAfterRestroomRebalance(serviceDate) {
+    try {
+      return await runRpc("sch_apply_lunch_coverage", { p_service_date: serviceDate });
+    } catch (error) {
+      return { ok: false, error: error?.message || String(error || "lunch coverage failed") };
+    }
+  }
+
   async function ensureScheduleReadyForRestroomRebalance(serviceDate) {
     const state = await getDailyGenerationState(serviceDate);
     if (state.assignment_count > 0 && state.roster_count > 0) return { generated: false, state };
@@ -1046,7 +1055,8 @@ export function createScheduleRouter({
     try {
       const readiness = await ensureScheduleReadyForRestroomRebalance(serviceDate);
       const balance = await rebalanceRestroomAssignments(serviceDate);
-      const result = { service_date: serviceDate, reason, readiness, balance };
+      const lunch_coverage = await applyLunchCoverageAfterRestroomRebalance(serviceDate);
+      const result = { service_date: serviceDate, reason, readiness, balance, lunch_coverage };
       const persistent_completion = await markRestroomRebalanceCompletion(serviceDate, result, "completed");
       restroomRebalanceState = {
         running: false,
@@ -3180,7 +3190,8 @@ export function createScheduleRouter({
       const serviceDate = requireDate(req.body?.service_date || req.body?.date || (await getServiceDate()));
       const readiness = await ensureScheduleReadyForRestroomRebalance(serviceDate);
       const balance = await rebalanceRestroomAssignments(serviceDate);
-      const result = { service_date: serviceDate, reason: "manual_endpoint", readiness, balance };
+      const lunch_coverage = await applyLunchCoverageAfterRestroomRebalance(serviceDate);
+      const result = { service_date: serviceDate, reason: "manual_endpoint", readiness, balance, lunch_coverage };
       const persistent_completion = await markRestroomRebalanceCompletion(serviceDate, result, "completed");
       restroomRebalanceState = {
         running: false,
@@ -3189,7 +3200,7 @@ export function createScheduleRouter({
         lastServiceDate: serviceDate,
         lastResult: { ...result, persistent_completion },
       };
-      res.status(200).json({ ok: true, data: { service_date: serviceDate, readiness, balance, persistent_completion, state: restroomRebalanceState }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+      res.status(200).json({ ok: true, data: { service_date: serviceDate, readiness, balance, lunch_coverage, persistent_completion, state: restroomRebalanceState }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Restroom rebalance failed");
     }
