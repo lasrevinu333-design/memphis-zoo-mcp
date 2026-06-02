@@ -35,6 +35,14 @@ function timeToMinutes(value) {
   return (hours % 24) * 60 + minutes;
 }
 
+function isRestroomRebalanceRosterEligible(row) {
+  const start = timeToMinutes(row?.shift_start);
+  const end = timeToMinutes(row?.shift_end);
+  const rebalance = timeToMinutes(RESTROOM_REBALANCE_TIME);
+  if (start == null || end == null || rebalance == null) return false;
+  return start <= rebalance && end > rebalance;
+}
+
 function getMemphisClockParts(now = new Date()) {
   const formatter = new Intl.DateTimeFormat("en-US", {
     timeZone: RESTROOM_REBALANCE_TZ,
@@ -914,9 +922,11 @@ export function createScheduleRouter({
       join public.employees e on e.id = r.employee_id
       where r.service_date = '${esc(serviceDate)}'::date
         and r.active = true
+        and r.shift_start <= '${esc(RESTROOM_REBALANCE_TIME)}'::time
+        and r.shift_end > '${esc(RESTROOM_REBALANCE_TIME)}'::time
       order by e.display_name
     `);
-    return Array.isArray(rows) ? rows : [];
+    return Array.isArray(rows) ? rows.filter(isRestroomRebalanceRosterEligible) : [];
   }
 
   async function listRestroomAssignmentsForRebalance(serviceDate) {
