@@ -47,6 +47,13 @@ const needed = [
   "buildDate",
   "normalizeLoose",
   "normalizePossibleDate",
+  "timeToMinutes",
+  "getMemphisClockParts",
+  "isRestroomRebalanceDue",
+  "isProtectedRestroomSource",
+  "normalizeRestroomRebalanceRow",
+  "loadSpread",
+  "buildRestroomRebalancePlan",
   "summarizeAssignmentDiff",
   "summarizeWeekWindow",
   "buildWeekSummaryText",
@@ -57,6 +64,8 @@ const needed = [
 ];
 
 const context = {
+  RESTROOM_REBALANCE_TIME: "09:45:00",
+  RESTROOM_REBALANCE_TZ: "America/Chicago",
   MONTH_LOOKUP: {
     january: 1, jan: 1,
     february: 2, feb: 2,
@@ -81,6 +90,39 @@ assert.equal(context.normalizePossibleDate("May 14, 2026"), "2026-05-14");
 assert.equal(context.normalizePossibleDate("May 14 2026"), "2026-05-14");
 assert.equal(context.normalizePossibleDate("14 May 2026"), "2026-05-14");
 assert.equal(context.normalizePossibleDate("05/14/2026"), "2026-05-14");
+
+assert.equal(context.timeToMinutes("09:45:00"), 585);
+assert.equal(context.isRestroomRebalanceDue(new Date("2026-06-02T14:44:00Z")), false, "9:44am Central is before the rebalance");
+assert.equal(context.isRestroomRebalanceDue(new Date("2026-06-02T14:45:00Z")), true, "9:45am Central is due");
+
+const activeRoster = [
+  { employee_id: "employee-a", employee_name: "Alex" },
+  { employee_id: "employee-b", employee_name: "Blair" },
+  { employee_id: "employee-c", employee_name: "Casey" },
+];
+const restroomPlan = context.buildRestroomRebalancePlan([
+  { assignment_id: "restroom-1", assigned_employee_id: "employee-a", assigned_employee_name: "Alex", group_name: "North Restroom", load_points: 1, source_type: "coverage_template" },
+  { assignment_id: "restroom-2", assigned_employee_id: "employee-a", assigned_employee_name: "Alex", group_name: "South Restroom", load_points: 1, source_type: "coverage_template" },
+  { assignment_id: "restroom-3", assigned_employee_id: "employee-a", assigned_employee_name: "Alex", group_name: "East Restroom", load_points: 1, source_type: "coverage_template" },
+], activeRoster);
+assert.equal(restroomPlan.applied, true);
+assert.equal(restroomPlan.moved_count, 2);
+assert.deepEqual(Object.values(restroomPlan.loads).sort((a, b) => a - b), [1, 1, 1]);
+
+const balancedRestroomPlan = context.buildRestroomRebalancePlan([
+  { assignment_id: "restroom-1", assigned_employee_id: "employee-a", group_name: "North Restroom", load_points: 1, source_type: "coverage_template" },
+  { assignment_id: "restroom-2", assigned_employee_id: "employee-b", group_name: "South Restroom", load_points: 1, source_type: "coverage_template" },
+  { assignment_id: "restroom-3", assigned_employee_id: "employee-c", group_name: "East Restroom", load_points: 1, source_type: "coverage_template" },
+], activeRoster);
+assert.equal(balancedRestroomPlan.applied, false);
+assert.equal(balancedRestroomPlan.reason, "already_balanced");
+
+const protectedRestroomPlan = context.buildRestroomRebalancePlan([
+  { assignment_id: "restroom-1", assigned_employee_id: "employee-a", group_name: "North Restroom", load_points: 1, source_type: "manager_override" },
+  { assignment_id: "restroom-2", assigned_employee_id: "employee-a", group_name: "South Restroom", load_points: 1, source_type: "manager_override" },
+], activeRoster);
+assert.equal(protectedRestroomPlan.applied, false);
+assert.equal(protectedRestroomPlan.reason, "no_safe_restroom_moves");
 
 const weekSummary = context.summarizeWeekWindow([
   { service_date: "2026-05-14", ready: true, assignment_count: 10, roster_count: 11 },

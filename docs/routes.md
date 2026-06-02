@@ -98,6 +98,8 @@ Routes are mounted under:
 | `POST` | `/schedule-api/generate-daily` | Generate one day of schedule data. |
 | `GET` | `/schedule-api/generation-window` | Show readiness for a forward schedule window. |
 | `POST` | `/schedule-api/generate-range` | Ensure a forward schedule window exists, defaulting to 7 days. |
+| `POST` | `/schedule-api/restroom-rebalance/run` | Ops-only manual trigger for the 9:45am restroom rebalance. |
+| `GET` | `/schedule-api/restroom-rebalance/status` | Ops-only status for the automatic 9:45am restroom rebalance. |
 | `POST` | `/schedule-api/absence-preview` | Preview absence impact against the stored day schedule. |
 | `POST` | `/schedule-api/absence-publish` | Publish absence changes against the stored day schedule. |
 | `GET` | `/schedule-api/locations/workload-settings` | List workload settings used by balancing. |

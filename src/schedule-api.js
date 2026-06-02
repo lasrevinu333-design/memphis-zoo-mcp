@@ -21,6 +21,199 @@ const PTO_GEMINI_MODEL = String(process.env.SCHEDULE_GEMINI_MODEL || process.env
 const PTO_GEMINI_TIMEOUT_MS = Math.max(1000, Number.parseInt(String(process.env.SCHEDULE_GEMINI_TIMEOUT_MS || process.env.MEMPHIS_GEMINI_TIMEOUT_MS || "12000"), 10) || 12000);
 const PTO_GEMINI_MAX_OUTPUT_TOKENS = Math.max(256, Number.parseInt(String(process.env.SCHEDULE_GEMINI_MAX_OUTPUT_TOKENS || "1200"), 10) || 1200);
 
+const RESTROOM_REBALANCE_TIME = "09:45:00";
+const RESTROOM_REBALANCE_SOURCE = "restroom_rebalance_0945";
+const RESTROOM_REBALANCE_NOTE = "9:45 restroom rebalance: moved only as needed to spread restroom load evenly.";
+const RESTROOM_REBALANCE_TZ = "America/Chicago";
+
+function timeToMinutes(value) {
+  const match = String(value || "").match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (!match) return null;
+  const hours = Number.parseInt(match[1], 10);
+  const minutes = Number.parseInt(match[2], 10);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes) || hours < 0 || hours > 24 || minutes < 0 || minutes > 59) return null;
+  return (hours % 24) * 60 + minutes;
+}
+
+function getMemphisClockParts(now = new Date()) {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: RESTROOM_REBALANCE_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+  const parts = Object.fromEntries(formatter.formatToParts(now).map((part) => [part.type, part.value]));
+  const hour = Number.parseInt(parts.hour || "0", 10) % 24;
+  const minute = Number.parseInt(parts.minute || "0", 10);
+  const second = Number.parseInt(parts.second || "0", 10);
+  return {
+    date: `${parts.year}-${parts.month}-${parts.day}`,
+    hour,
+    minute,
+    second,
+    minutes_since_midnight: hour * 60 + minute,
+  };
+}
+
+function isRestroomRebalanceDue(now = new Date()) {
+  const clock = getMemphisClockParts(now);
+  const threshold = timeToMinutes(RESTROOM_REBALANCE_TIME);
+  return threshold != null && clock.minutes_since_midnight >= threshold;
+}
+
+function isProtectedRestroomSource(sourceType = "") {
+  return /manual|override|manager/i.test(String(sourceType || ""));
+}
+
+function normalizeRestroomRebalanceRow(row = {}) {
+  const assignmentId = String(row.assignment_id || row.id || "").trim();
+  const employeeId = String(row.assigned_employee_id || row.employee_id || "").trim();
+  if (!assignmentId || !employeeId) return null;
+  return {
+    assignment_id: assignmentId,
+    assigned_employee_id: employeeId,
+    assigned_employee_name: String(row.assigned_employee_name || row.employee_name || "").trim(),
+    employee_code: String(row.employee_code || "").trim(),
+    group_name: String(row.group_name || row.group_code || "Restroom").trim(),
+    group_code: String(row.group_code || "").trim(),
+    segment_number: Number(row.segment_number || 0),
+    coverage_start: String(row.coverage_start || "").slice(0, 8),
+    coverage_end: String(row.coverage_end || "").slice(0, 8),
+    source_type: String(row.source_type || "").trim(),
+    load_points: Math.max(1, Number(row.load_points || 1)),
+  };
+}
+
+function loadSpread(loadByEmployee) {
+  const values = Array.from(loadByEmployee.values()).map((value) => Number(value || 0));
+  if (!values.length) return 0;
+  return Math.max(...values) - Math.min(...values);
+}
+
+function buildRestroomRebalancePlan(assignments = [], activeRoster = []) {
+  const employeeMeta = new Map();
+  const loadByEmployee = new Map();
+  for (const row of Array.isArray(activeRoster) ? activeRoster : []) {
+    const employeeId = String(row.employee_id || row.id || "").trim();
+    if (!employeeId) continue;
+    employeeMeta.set(employeeId, {
+      employee_id: employeeId,
+      employee_name: String(row.employee_name || row.display_name || "").trim(),
+      employee_code: String(row.employee_code || "").trim(),
+    });
+    loadByEmployee.set(employeeId, 0);
+  }
+
+  if (!loadByEmployee.size) {
+    return { applied: false, reason: "no_active_employees", moved_count: 0, moves: [] };
+  }
+
+  const activeEmployeeIds = new Set(loadByEmployee.keys());
+  const normalizedAssignments = (Array.isArray(assignments) ? assignments : [])
+    .map((row) => normalizeRestroomRebalanceRow(row))
+    .filter((row) => row && activeEmployeeIds.has(row.assigned_employee_id));
+
+  if (!normalizedAssignments.length) {
+    return { applied: false, reason: "no_restroom_assignments", moved_count: 0, moves: [] };
+  }
+
+  for (const assignment of normalizedAssignments) {
+    loadByEmployee.set(assignment.assigned_employee_id, (loadByEmployee.get(assignment.assigned_employee_id) || 0) + assignment.load_points);
+  }
+
+  const initialLoads = new Map(loadByEmployee);
+  const totalLoad = Array.from(loadByEmployee.values()).reduce((sum, value) => sum + Number(value || 0), 0);
+  const targetLoad = totalLoad / Math.max(1, loadByEmployee.size);
+  const movableAssignments = normalizedAssignments.filter((row) => !isProtectedRestroomSource(row.source_type));
+  const movedAssignmentIds = new Set();
+  const moves = [];
+  const maxMoves = movableAssignments.length;
+
+  for (let guard = 0; guard < maxMoves; guard += 1) {
+    const sortedLoads = Array.from(loadByEmployee.entries()).sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0));
+    const donorId = sortedLoads[0]?.[0];
+    const receiverId = sortedLoads[sortedLoads.length - 1]?.[0];
+    if (!donorId || !receiverId || donorId === receiverId) break;
+
+    const beforeSpread = loadSpread(loadByEmployee);
+    if (beforeSpread <= 1) break;
+
+    const donorLoad = loadByEmployee.get(donorId) || 0;
+    const receiverLoad = loadByEmployee.get(receiverId) || 0;
+    const donorAssignments = movableAssignments
+      .filter((assignment) => assignment.assigned_employee_id === donorId && !movedAssignmentIds.has(assignment.assignment_id))
+      .sort((a, b) => {
+        const aAfter = new Map(loadByEmployee);
+        aAfter.set(donorId, donorLoad - a.load_points);
+        aAfter.set(receiverId, receiverLoad + a.load_points);
+        const bAfter = new Map(loadByEmployee);
+        bAfter.set(donorId, donorLoad - b.load_points);
+        bAfter.set(receiverId, receiverLoad + b.load_points);
+        const aSpread = loadSpread(aAfter);
+        const bSpread = loadSpread(bAfter);
+        return aSpread - bSpread || a.load_points - b.load_points || String(a.group_name).localeCompare(String(b.group_name));
+      });
+
+    const chosen = donorAssignments.find((assignment) => {
+      const after = new Map(loadByEmployee);
+      after.set(donorId, donorLoad - assignment.load_points);
+      after.set(receiverId, receiverLoad + assignment.load_points);
+      return loadSpread(after) < beforeSpread;
+    });
+
+    if (!chosen) break;
+
+    movedAssignmentIds.add(chosen.assignment_id);
+    loadByEmployee.set(donorId, donorLoad - chosen.load_points);
+    loadByEmployee.set(receiverId, receiverLoad + chosen.load_points);
+
+    const donorMeta = employeeMeta.get(donorId) || {};
+    const receiverMeta = employeeMeta.get(receiverId) || {};
+    moves.push({
+      assignment_id: chosen.assignment_id,
+      from_employee_id: donorId,
+      from_employee_name: donorMeta.employee_name || chosen.assigned_employee_name,
+      to_employee_id: receiverId,
+      to_employee_name: receiverMeta.employee_name || "Employee",
+      group_name: chosen.group_name,
+      group_code: chosen.group_code,
+      segment_number: chosen.segment_number,
+      coverage_start: chosen.coverage_start,
+      coverage_end: chosen.coverage_end,
+      load_points: chosen.load_points,
+    });
+  }
+
+  const loadsObject = Object.fromEntries(Array.from(loadByEmployee.entries()).map(([key, value]) => [key, Number(Number(value || 0).toFixed(2))]));
+  const initialLoadsObject = Object.fromEntries(Array.from(initialLoads.entries()).map(([key, value]) => [key, Number(Number(value || 0).toFixed(2))]));
+
+  if (!moves.length) {
+    return {
+      applied: false,
+      reason: loadSpread(initialLoads) <= 1 ? "already_balanced" : "no_safe_restroom_moves",
+      moved_count: 0,
+      target_load: Number(targetLoad.toFixed(2)),
+      initial_loads: initialLoadsObject,
+      loads: loadsObject,
+      moves: [],
+    };
+  }
+
+  return {
+    applied: true,
+    reason: "restrooms_rebalanced",
+    moved_count: moves.length,
+    target_load: Number(targetLoad.toFixed(2)),
+    initial_loads: initialLoadsObject,
+    loads: loadsObject,
+    moves,
+  };
+}
+
 function getScheduleGeminiApiKey() {
   return getGeminiApiKey(["SCHEDULE_GEMINI_API_KEY"]);
 }
@@ -106,7 +299,9 @@ export function createScheduleRouter({
   const requireSchedulePin = requireAdminApiAuth;
   const AUTO_GENERATE_WINDOW_DAYS = 7;
   const AUTO_GENERATE_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+  const RESTROOM_REBALANCE_SWEEP_MS = Math.max(0, Number.parseInt(String(process.env.RESTROOM_REBALANCE_SWEEP_MS || "60000"), 10) || 60000);
   let autoGenerateState = { lastStartedAt: 0, running: false, lastCompletedAt: 0, lastWindowStart: null, lastResult: [] };
+  let restroomRebalanceState = { lastStartedAt: 0, running: false, lastCompletedAt: 0, lastServiceDate: null, lastResult: null };
 
   function fail(res, error, fallback = "Schedule request failed", status = 400) {
     res.status(status).json({ ok: false, error: error?.message || fallback });
@@ -653,6 +848,131 @@ export function createScheduleRouter({
       loads: Object.fromEntries(Array.from(loadByEmployee.entries()).map(([key, value]) => [key, Number(Number(value || 0).toFixed(2))])),
       moves,
     };
+  }
+
+  async function listActiveRosterForRestroomRebalance(serviceDate) {
+    const rows = await runReadOnlySql(`
+      select r.employee_id, e.display_name as employee_name, e.employee_code,
+             to_char(r.shift_start, 'HH24:MI:SS') as shift_start,
+             to_char(r.shift_end, 'HH24:MI:SS') as shift_end
+      from public.daily_work_roster r
+      join public.employees e on e.id = r.employee_id
+      where r.service_date = '${esc(serviceDate)}'::date
+        and r.active = true
+      order by e.display_name
+    `);
+    return Array.isArray(rows) ? rows : [];
+  }
+
+  async function listRestroomAssignmentsForRebalance(serviceDate) {
+    const rows = await runReadOnlySql(`
+      select dsa.id as assignment_id, dsa.assigned_employee_id, e.display_name as assigned_employee_name, e.employee_code,
+             dsa.location_group_id, lg.group_name, lg.group_code, dsa.segment_number, dsa.source_type,
+             to_char(dsa.coverage_start, 'HH24:MI:SS') as coverage_start,
+             to_char(dsa.coverage_end, 'HH24:MI:SS') as coverage_end,
+             greatest(coalesce(dsa.load_points, 1), 1)::numeric as load_points
+      from public.daily_schedule_assignments dsa
+      join public.location_groups lg on lg.id = dsa.location_group_id
+      join public.employees e on e.id = dsa.assigned_employee_id
+      where dsa.service_date = '${esc(serviceDate)}'::date
+        and dsa.status = 'ASSIGNED'
+        and dsa.assigned_employee_id is not null
+        and dsa.coverage_end > '${esc(RESTROOM_REBALANCE_TIME)}'::time
+        and (
+          lower(coalesce(lg.group_name, '')) like '%restroom%'
+          or lower(coalesce(lg.group_code, '')) like '%restroom%'
+          or lower(coalesce(lg.group_name, '')) like '%bathroom%'
+          or lower(coalesce(lg.group_code, '')) like '%bathroom%'
+          or exists (
+            select 1
+            from public.location_group_memberships m
+            join public.locations l on l.id = m.location_id and l.active = true
+            where m.location_group_id = dsa.location_group_id
+              and m.active = true
+              and (
+                lower(coalesce(l.location_type, '')) like '%restroom%'
+                or lower(coalesce(l.form_type, '')) like '%restroom%'
+                or lower(coalesce(l.location_name, '')) like '%restroom%'
+                or lower(coalesce(l.location_name, '')) like '%bathroom%'
+              )
+          )
+        )
+      order by dsa.coverage_start, lg.group_name, dsa.segment_number
+    `);
+    return Array.isArray(rows) ? rows : [];
+  }
+
+  async function rebalanceRestroomAssignments(serviceDate) {
+    if (typeof runWriteSql !== "function") return { applied: false, reason: "write_path_unavailable", moved_count: 0, moves: [] };
+
+    const activeRoster = await listActiveRosterForRestroomRebalance(serviceDate);
+    const assignments = await listRestroomAssignmentsForRebalance(serviceDate);
+    const plan = buildRestroomRebalancePlan(assignments, activeRoster);
+
+    if (!plan.applied || !plan.moves?.length) {
+      return { service_date: serviceDate, scheduled_time: RESTROOM_REBALANCE_TIME, ...plan };
+    }
+
+    const valuesSql = plan.moves.map((move) => `(
+      '${esc(move.assignment_id)}'::uuid,
+      '${esc(move.to_employee_id)}'::uuid,
+      '${esc(move.to_employee_name)}',
+      '${esc(move.from_employee_name)}'
+    )`).join(",\n");
+
+    await runWriteSql("restroom_rebalance_0945", `
+      with moved(assignment_id, to_employee_id, to_employee_name, from_employee_name) as (
+        values ${valuesSql}
+      )
+      update public.daily_schedule_assignments dsa
+         set assigned_employee_id = moved.to_employee_id,
+             owner_type = 'EMPLOYEE',
+             status = 'ASSIGNED',
+             source_type = '${esc(RESTROOM_REBALANCE_SOURCE)}',
+             notes = trim(concat_ws(' ', nullif(dsa.notes, ''), '${esc(RESTROOM_REBALANCE_NOTE)}' || ' From ' || moved.from_employee_name || ' to ' || moved.to_employee_name || '.')),
+             updated_at = now()
+      from moved
+      where dsa.id = moved.assignment_id;
+    `);
+
+    return { service_date: serviceDate, scheduled_time: RESTROOM_REBALANCE_TIME, ...plan };
+  }
+
+  async function ensureScheduleReadyForRestroomRebalance(serviceDate) {
+    const state = await getDailyGenerationState(serviceDate);
+    if (state.assignment_count > 0 && state.roster_count > 0) return { generated: false, state };
+    const generate_result = await runRpc("sch_generate_daily_schedule", { p_service_date: serviceDate, p_force: false });
+    const static_restore_result = await restoreStaticOwnersForDate(serviceDate);
+    const after = await getDailyGenerationState(serviceDate);
+    return { generated: true, state: after, generate_result, static_restore_result };
+  }
+
+  async function maybeAutoRestroomRebalance({ force = false, reason = "scheduled_interval" } = {}) {
+    if (restroomRebalanceState.running) return { ...restroomRebalanceState, skipped: true, reason: "already_running" };
+    if (!force && !isRestroomRebalanceDue()) return { ...restroomRebalanceState, skipped: true, reason: "before_0945_memphis_time" };
+
+    const serviceDate = requireDate(await getServiceDate());
+    if (!force && restroomRebalanceState.lastServiceDate === serviceDate) {
+      return { ...restroomRebalanceState, skipped: true, reason: "already_checked_today" };
+    }
+
+    restroomRebalanceState = { ...restroomRebalanceState, running: true, lastStartedAt: Date.now() };
+    try {
+      const readiness = await ensureScheduleReadyForRestroomRebalance(serviceDate);
+      const balance = await rebalanceRestroomAssignments(serviceDate);
+      const result = { service_date: serviceDate, reason, readiness, balance };
+      restroomRebalanceState = {
+        running: false,
+        lastStartedAt: restroomRebalanceState.lastStartedAt,
+        lastCompletedAt: Date.now(),
+        lastServiceDate: serviceDate,
+        lastResult: result,
+      };
+      return result;
+    } catch (error) {
+      restroomRebalanceState = { ...restroomRebalanceState, running: false, lastResult: { ok: false, error: error?.message || String(error || "restroom rebalance failed") } };
+      throw error;
+    }
   }
 
   function normalizeAssignmentCapture(row = {}, source = "baseline") {
@@ -2765,6 +3085,48 @@ export function createScheduleRouter({
       fail(res, error, "Absence publish failed");
     }
   });
+
+  router.post("/restroom-rebalance/run", requireSchedulePin, async (req, res) => {
+    try {
+      const serviceDate = requireDate(req.body?.service_date || req.body?.date || (await getServiceDate()));
+      const readiness = await ensureScheduleReadyForRestroomRebalance(serviceDate);
+      const balance = await rebalanceRestroomAssignments(serviceDate);
+      restroomRebalanceState = {
+        running: false,
+        lastStartedAt: Date.now(),
+        lastCompletedAt: Date.now(),
+        lastServiceDate: serviceDate,
+        lastResult: { service_date: serviceDate, reason: "manual_endpoint", readiness, balance },
+      };
+      res.status(200).json({ ok: true, data: { service_date: serviceDate, readiness, balance, state: restroomRebalanceState }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+    } catch (error) {
+      fail(res, error, "Restroom rebalance failed");
+    }
+  });
+
+  router.get("/restroom-rebalance/status", requireSchedulePin, async (_req, res) => {
+    try {
+      res.status(200).json({
+        ok: true,
+        data: {
+          scheduled_time: RESTROOM_REBALANCE_TIME,
+          timezone: RESTROOM_REBALANCE_TZ,
+          due_now: isRestroomRebalanceDue(),
+          state: restroomRebalanceState,
+        },
+        meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion },
+      });
+    } catch (error) {
+      fail(res, error, "Restroom rebalance status failed");
+    }
+  });
+
+  if (RESTROOM_REBALANCE_SWEEP_MS > 0 && typeof runWriteSql === "function") {
+    setInterval(() => {
+      maybeAutoRestroomRebalance({ reason: "scheduled_interval" })
+        .catch((error) => console.error("9:45 restroom rebalance failed:", error));
+    }, RESTROOM_REBALANCE_SWEEP_MS).unref?.();
+  }
 
   return router;
 }
