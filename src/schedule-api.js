@@ -69,6 +69,61 @@ function isProtectedRestroomSource(sourceType = "") {
   return /manual|override|manager/i.test(String(sourceType || ""));
 }
 
+function sqlQuote(value) {
+  return String(value ?? "").replace(/'/g, "''");
+}
+
+function normalizeRestroomRebalanceCompletionRow(row = {}) {
+  if (!row || typeof row !== "object") return null;
+  const status = String(row.status || "").trim().toLowerCase();
+  if (!status) return null;
+  return {
+    automation_key: String(row.automation_key || RESTROOM_REBALANCE_SOURCE).trim(),
+    service_date: String(row.service_date || "").slice(0, 10),
+    status,
+    completed: status === "completed",
+    result: row.result_json || row.result || null,
+    completed_at: row.completed_at || row.updated_at || null,
+  };
+}
+
+function buildRestroomRebalanceCompletionSelectSql(serviceDate) {
+  return `
+    select automation_key,
+           service_date::text as service_date,
+           status,
+           result_json,
+           updated_at as completed_at
+    from public.schedule_automation_runs
+    where automation_key = '${sqlQuote(RESTROOM_REBALANCE_SOURCE)}'
+      and service_date = '${sqlQuote(serviceDate)}'::date
+      and status = 'completed'
+    limit 1
+  `;
+}
+
+function buildRestroomRebalanceCompletionUpsertSql(serviceDate, result = {}, status = "completed") {
+  const resultJson = JSON.stringify(result || {});
+  return `
+    create table if not exists public.schedule_automation_runs (
+      automation_key text not null,
+      service_date date not null,
+      status text not null default 'completed',
+      result_json jsonb not null default '{}'::jsonb,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now(),
+      primary key (automation_key, service_date)
+    );
+
+    insert into public.schedule_automation_runs (automation_key, service_date, status, result_json, updated_at)
+    values ('${sqlQuote(RESTROOM_REBALANCE_SOURCE)}', '${sqlQuote(serviceDate)}'::date, '${sqlQuote(status)}', '${sqlQuote(resultJson)}'::jsonb, now())
+    on conflict (automation_key, service_date)
+    do update set status = excluded.status,
+                  result_json = excluded.result_json,
+                  updated_at = now();
+  `;
+}
+
 function normalizeRestroomRebalanceRow(row = {}) {
   const assignmentId = String(row.assignment_id || row.id || "").trim();
   const employeeId = String(row.assigned_employee_id || row.employee_id || "").trim();
@@ -947,6 +1002,22 @@ export function createScheduleRouter({
     return { generated: true, state: after, generate_result, static_restore_result };
   }
 
+  async function getRestroomRebalanceCompletion(serviceDate) {
+    try {
+      const rows = await runReadOnlySql(buildRestroomRebalanceCompletionSelectSql(serviceDate));
+      return normalizeRestroomRebalanceCompletionRow(Array.isArray(rows) && rows.length ? rows[0] : null);
+    } catch (error) {
+      if (/schedule_automation_runs|does not exist|relation .* does not exist/i.test(String(error?.message || error || ""))) return null;
+      throw error;
+    }
+  }
+
+  async function markRestroomRebalanceCompletion(serviceDate, result, status = "completed") {
+    if (typeof runWriteSql !== "function") return null;
+    await runWriteSql("restroom_rebalance_completion", buildRestroomRebalanceCompletionUpsertSql(serviceDate, result, status));
+    return { automation_key: RESTROOM_REBALANCE_SOURCE, service_date: serviceDate, status, completed: status === "completed", result };
+  }
+
   async function maybeAutoRestroomRebalance({ force = false, reason = "scheduled_interval" } = {}) {
     if (restroomRebalanceState.running) return { ...restroomRebalanceState, skipped: true, reason: "already_running" };
     if (!force && !isRestroomRebalanceDue()) return { ...restroomRebalanceState, skipped: true, reason: "before_0945_memphis_time" };
@@ -956,21 +1027,39 @@ export function createScheduleRouter({
       return { ...restroomRebalanceState, skipped: true, reason: "already_checked_today" };
     }
 
+    if (!force) {
+      const persistentCompletion = await getRestroomRebalanceCompletion(serviceDate);
+      if (persistentCompletion?.completed) {
+        const result = { service_date: serviceDate, reason: "already_completed_persistently", persistent_completion: persistentCompletion };
+        restroomRebalanceState = {
+          ...restroomRebalanceState,
+          running: false,
+          lastServiceDate: serviceDate,
+          lastCompletedAt: restroomRebalanceState.lastCompletedAt || Date.now(),
+          lastResult: result,
+        };
+        return { ...restroomRebalanceState, skipped: true, reason: "already_completed_persistently" };
+      }
+    }
+
     restroomRebalanceState = { ...restroomRebalanceState, running: true, lastStartedAt: Date.now() };
     try {
       const readiness = await ensureScheduleReadyForRestroomRebalance(serviceDate);
       const balance = await rebalanceRestroomAssignments(serviceDate);
       const result = { service_date: serviceDate, reason, readiness, balance };
+      const persistent_completion = await markRestroomRebalanceCompletion(serviceDate, result, "completed");
       restroomRebalanceState = {
         running: false,
         lastStartedAt: restroomRebalanceState.lastStartedAt,
         lastCompletedAt: Date.now(),
         lastServiceDate: serviceDate,
-        lastResult: result,
+        lastResult: { ...result, persistent_completion },
       };
-      return result;
+      return restroomRebalanceState.lastResult;
     } catch (error) {
-      restroomRebalanceState = { ...restroomRebalanceState, running: false, lastResult: { ok: false, error: error?.message || String(error || "restroom rebalance failed") } };
+      const failure = { ok: false, service_date: serviceDate, reason, error: error?.message || String(error || "restroom rebalance failed") };
+      try { await markRestroomRebalanceCompletion(serviceDate, failure, "failed"); } catch {}
+      restroomRebalanceState = { ...restroomRebalanceState, running: false, lastResult: failure };
       throw error;
     }
   }
@@ -3091,14 +3180,16 @@ export function createScheduleRouter({
       const serviceDate = requireDate(req.body?.service_date || req.body?.date || (await getServiceDate()));
       const readiness = await ensureScheduleReadyForRestroomRebalance(serviceDate);
       const balance = await rebalanceRestroomAssignments(serviceDate);
+      const result = { service_date: serviceDate, reason: "manual_endpoint", readiness, balance };
+      const persistent_completion = await markRestroomRebalanceCompletion(serviceDate, result, "completed");
       restroomRebalanceState = {
         running: false,
         lastStartedAt: Date.now(),
         lastCompletedAt: Date.now(),
         lastServiceDate: serviceDate,
-        lastResult: { service_date: serviceDate, reason: "manual_endpoint", readiness, balance },
+        lastResult: { ...result, persistent_completion },
       };
-      res.status(200).json({ ok: true, data: { service_date: serviceDate, readiness, balance, state: restroomRebalanceState }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+      res.status(200).json({ ok: true, data: { service_date: serviceDate, readiness, balance, persistent_completion, state: restroomRebalanceState }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Restroom rebalance failed");
     }
@@ -3106,13 +3197,17 @@ export function createScheduleRouter({
 
   router.get("/restroom-rebalance/status", requireSchedulePin, async (_req, res) => {
     try {
+      const serviceDate = requireDate(await getServiceDate());
+      const persistent_completion = await getRestroomRebalanceCompletion(serviceDate);
       res.status(200).json({
         ok: true,
         data: {
           scheduled_time: RESTROOM_REBALANCE_TIME,
           timezone: RESTROOM_REBALANCE_TZ,
+          service_date: serviceDate,
           due_now: isRestroomRebalanceDue(),
           state: restroomRebalanceState,
+          persistent_completion,
         },
         meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion },
       });
