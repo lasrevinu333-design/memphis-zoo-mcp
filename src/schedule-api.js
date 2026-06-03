@@ -2012,6 +2012,332 @@ export function createScheduleRouter({
     };
   }
 
+
+  function minutesFromTime(value = "") {
+    const match = String(value || "").match(/^(\d{1,2}):(\d{2})/);
+    if (!match) return null;
+    const hours = Number.parseInt(match[1], 10);
+    const minutes = Number.parseInt(match[2], 10);
+    if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+    return (hours * 60) + minutes;
+  }
+
+  function isRealWorkAssignment(row = {}) {
+    const purpose = String(row.coverage_purpose || "").toLowerCase();
+    const sourceType = String(row.source_type || "").toLowerCase();
+    const status = String(row.status || "").toUpperCase();
+    if (status !== "ASSIGNED") return false;
+    if (!row.assigned_employee_id) return false;
+    if (["lunch_coverage", "reminder"].includes(purpose)) return false;
+    if (sourceType.includes("gift_shop") || sourceType.includes("reminder_only")) return false;
+    return true;
+  }
+
+  function summarizeScheduleAuditIssues(issues = []) {
+    const counts = { critical: 0, error: 0, warning: 0, info: 0 };
+    for (const issue of issues || []) {
+      const severity = String(issue?.severity || "warning").toLowerCase();
+      counts[severity] = (counts[severity] || 0) + 1;
+    }
+    if (counts.critical || counts.error) return `Schedule audit found ${counts.critical} critical and ${counts.error} error issue(s).`;
+    if (counts.warning) return `Schedule audit passed hard rules but found ${counts.warning} warning(s) to review.`;
+    return "Schedule audit passed: no open coverage, hard-rule, shift-window, or balance warnings detected.";
+  }
+
+  function buildScheduleAuditPrompt({ serviceDate, audit = {}, assignments = [], roster = [], userPrompt = "" }) {
+    const compactAssignments = (assignments || []).slice(0, 160).map((row) => ({
+      group_name: row.group_name,
+      group_code: row.group_code,
+      employee_name: row.assigned_employee_name,
+      coverage_start: row.coverage_start,
+      coverage_end: row.coverage_end,
+      purpose: row.coverage_purpose,
+      source_type: row.source_type,
+      load_points: Number(row.load_points || 0),
+      is_restroom: Boolean(row.is_restroom),
+      status: row.status,
+    }));
+    const compactRoster = (roster || []).map((row) => ({
+      employee_name: row.employee_name,
+      shift_start: row.shift_start,
+      shift_end: row.shift_end,
+      source_type: row.source_type,
+    }));
+    return [
+      "You are the final Memphis Zoo custodial schedule reviewer.",
+      "Return JSON only. No markdown. No explanation.",
+      "Output shape: {\"summary\": string, \"logic_status\": \"pass\"|\"review\"|\"fail\", \"additional_watchouts\": [string], \"recommended_next_action\": string}",
+      "Double-check whether the schedule is balanced, logical, and physically possible in the real world.",
+      "Do not invent employees, locations, rules, or fixes. Use only the supplied schedule/audit data.",
+      "Treat deterministic hard-rule/open-coverage/shift-window errors as real blockers.",
+      "Treat route/load imbalance as review-needed unless the data proves it is impossible.",
+      `Service date: ${serviceDate}`,
+      userPrompt ? `Operator request: ${userPrompt}` : "Operator request: final schedule sanity check.",
+      "Deterministic audit:",
+      JSON.stringify(audit),
+      "Roster:",
+      JSON.stringify(compactRoster),
+      "Assignments:",
+      JSON.stringify(compactAssignments),
+    ].join("\n");
+  }
+
+  async function tryGeminiScheduleAudit({ serviceDate, audit = {}, assignments = [], roster = [], userPrompt = "" }) {
+    const apiKey = getScheduleGeminiApiKey();
+    if (!apiKey) return { ok: false, reason: "gemini_not_configured" };
+    const prompt = buildScheduleAuditPrompt({ serviceDate, audit, assignments, roster, userPrompt });
+    const response = await fetchWithTimeout(`${PTO_GEMINI_BASE_URL}/${encodeURIComponent(PTO_GEMINI_MODEL)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.1, maxOutputTokens: PTO_GEMINI_MAX_OUTPUT_TOKENS, responseMimeType: "application/json" },
+      }),
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(payload?.error?.message || payload?.message || `Gemini HTTP ${response.status}`);
+    const text = (payload?.candidates?.[0]?.content?.parts || [])
+      .filter((part) => typeof part?.text === "string" && part.text.trim())
+      .map((part) => part.text.trim())
+      .join("\n\n");
+    const parsed = safeJsonParse(text);
+    if (!parsed || typeof parsed !== "object") throw new Error("Gemini returned invalid schedule audit JSON.");
+    return { ok: true, provider: "gemini", model: PTO_GEMINI_MODEL, data: parsed };
+  }
+
+  async function auditScheduleForDate(serviceDate, { includeAi = false, userPrompt = "" } = {}) {
+    const [assignmentRowsRaw, rosterRowsRaw] = await Promise.all([
+      runReadOnlySql(`
+        select dsa.id as assignment_id,
+               dsa.service_date,
+               dsa.location_group_id,
+               lg.group_code,
+               lg.group_name,
+               dsa.segment_number,
+               dsa.assigned_employee_id,
+               e.display_name as assigned_employee_name,
+               e.employee_code,
+               to_char(dsa.coverage_start, 'HH24:MI:SS') as coverage_start,
+               to_char(dsa.coverage_end, 'HH24:MI:SS') as coverage_end,
+               dsa.status,
+               dsa.owner_type,
+               greatest(coalesce(dsa.load_points, 1), 0)::numeric as load_points,
+               coalesce(dsa.coverage_purpose, 'area_owner') as coverage_purpose,
+               coalesce(dsa.source_type, '') as source_type,
+               coalesce(dsa.notes, '') as notes,
+               to_char(dwr.shift_start, 'HH24:MI:SS') as shift_start,
+               to_char(dwr.shift_end, 'HH24:MI:SS') as shift_end,
+               dwr.employee_id is not null as active_roster_employee,
+               (
+                 lower(coalesce(lg.group_name, '')) like '%restroom%'
+                 or lower(coalesce(lg.group_code, '')) like '%restroom%'
+                 or exists (
+                   select 1
+                   from public.location_group_memberships m
+                   join public.locations l on l.id = m.location_id and l.active = true
+                   where m.location_group_id = dsa.location_group_id
+                     and m.active = true
+                     and (
+                       lower(coalesce(l.location_type, '')) like '%restroom%'
+                       or lower(coalesce(l.form_type, '')) like '%restroom%'
+                       or lower(coalesce(l.location_name, '')) like '%restroom%'
+                       or lower(coalesce(l.location_name, '')) like '%bathroom%'
+                     )
+                 )
+               ) as is_restroom
+        from public.daily_schedule_assignments dsa
+        join public.location_groups lg on lg.id = dsa.location_group_id
+        left join public.employees e on e.id = dsa.assigned_employee_id
+        left join public.daily_work_roster dwr
+          on dwr.service_date = dsa.service_date
+         and dwr.employee_id = dsa.assigned_employee_id
+         and dwr.active = true
+        where dsa.service_date = '${esc(serviceDate)}'::date
+        order by dsa.coverage_start, lg.group_name, dsa.segment_number
+      `),
+      runReadOnlySql(`
+        select r.employee_id, e.display_name as employee_name, e.employee_code,
+               to_char(r.shift_start, 'HH24:MI:SS') as shift_start,
+               to_char(r.shift_end, 'HH24:MI:SS') as shift_end,
+               coalesce(r.source_type, '') as source_type,
+               coalesce(r.notes, '') as notes
+        from public.daily_work_roster r
+        join public.employees e on e.id = r.employee_id
+        where r.service_date = '${esc(serviceDate)}'::date
+          and r.active = true
+        order by e.display_name
+      `),
+    ]);
+
+    const assignments = Array.isArray(assignmentRowsRaw) ? assignmentRowsRaw : [];
+    const roster = Array.isArray(rosterRowsRaw) ? rosterRowsRaw : [];
+    let hardRuleRows = [];
+    try {
+      const rows = await runReadOnlySql(`select * from public.sch_validate_operational_schedule_rules('${esc(serviceDate)}'::date, '${esc(serviceDate)}'::date)`);
+      hardRuleRows = Array.isArray(rows) ? rows : [];
+    } catch (error) {
+      hardRuleRows = [{ violation_type: "validator_unavailable", notes: error?.message || "Hard-rule validator failed." }];
+    }
+
+    const issues = [];
+    for (const row of hardRuleRows) {
+      issues.push({
+        severity: String(row.violation_type || "").includes("validator_unavailable") ? "warning" : "error",
+        type: String(row.violation_type || "hard_rule_violation"),
+        message: row.notes || `${row.group_name || row.group_code || "Schedule row"} violates operational schedule rules.`,
+        employee_name: row.employee_name || null,
+        group_name: row.group_name || null,
+        details: row,
+      });
+    }
+
+    const openRows = assignments.filter((row) => {
+      const purpose = String(row.coverage_purpose || "").toLowerCase();
+      const status = String(row.status || "").toUpperCase();
+      return purpose !== "reminder" && (!row.assigned_employee_id || status === "OPEN");
+    });
+    for (const row of openRows) {
+      issues.push({
+        severity: "error",
+        type: "open_coverage",
+        message: `${row.group_name || row.group_code || "Location"} has open coverage ${row.coverage_start || ""}-${row.coverage_end || ""}.`,
+        group_name: row.group_name || null,
+        details: row,
+      });
+    }
+
+    for (const row of assignments.filter(isRealWorkAssignment)) {
+      if (!row.active_roster_employee) {
+        issues.push({
+          severity: "critical",
+          type: "assigned_employee_not_on_active_roster",
+          message: `${row.assigned_employee_name || "Assigned employee"} is assigned to ${row.group_name || row.group_code || "a location"} but is not active on the daily roster.`,
+          employee_name: row.assigned_employee_name || null,
+          group_name: row.group_name || null,
+          details: row,
+        });
+        continue;
+      }
+      const start = minutesFromTime(row.coverage_start);
+      const end = minutesFromTime(row.coverage_end);
+      const shiftStart = minutesFromTime(row.shift_start);
+      const shiftEnd = minutesFromTime(row.shift_end);
+      if (start != null && end != null && shiftStart != null && shiftEnd != null && (start < shiftStart || end > shiftEnd)) {
+        issues.push({
+          severity: "error",
+          type: "coverage_outside_shift_window",
+          message: `${row.assigned_employee_name || "Employee"} has ${row.group_name || row.group_code || "coverage"} ${row.coverage_start}-${row.coverage_end} outside shift ${row.shift_start}-${row.shift_end}.`,
+          employee_name: row.assigned_employee_name || null,
+          group_name: row.group_name || null,
+          details: row,
+        });
+      }
+    }
+
+    const loadByEmployee = new Map(roster.map((row) => [String(row.employee_id), {
+      employee_id: String(row.employee_id),
+      employee_name: String(row.employee_name || ""),
+      work_load: 0,
+      work_segments: 0,
+      restroom_segments: 0,
+    }]));
+    for (const row of assignments.filter(isRealWorkAssignment)) {
+      const key = String(row.assigned_employee_id || "");
+      if (!key) continue;
+      if (!loadByEmployee.has(key)) {
+        loadByEmployee.set(key, {
+          employee_id: key,
+          employee_name: String(row.assigned_employee_name || "Unknown"),
+          work_load: 0,
+          work_segments: 0,
+          restroom_segments: 0,
+        });
+      }
+      const entry = loadByEmployee.get(key);
+      entry.work_load += Number(row.load_points || 0);
+      entry.work_segments += 1;
+      if (row.is_restroom) entry.restroom_segments += 1;
+    }
+    const employeeLoads = Array.from(loadByEmployee.values()).map((entry) => ({
+      ...entry,
+      work_load: Number(Number(entry.work_load || 0).toFixed(2)),
+    }));
+    const nonZeroOrAssigned = employeeLoads.filter((entry) => entry.work_segments > 0 || roster.some((row) => String(row.employee_id) === entry.employee_id));
+    const loadValues = nonZeroOrAssigned.map((entry) => Number(entry.work_load || 0));
+    const restroomValues = nonZeroOrAssigned.map((entry) => Number(entry.restroom_segments || 0));
+    const totalLoad = loadValues.reduce((sum, value) => sum + value, 0);
+    const avgLoad = loadValues.length ? totalLoad / loadValues.length : 0;
+    const minLoad = loadValues.length ? Math.min(...loadValues) : 0;
+    const maxLoad = loadValues.length ? Math.max(...loadValues) : 0;
+    const minRestrooms = restroomValues.length ? Math.min(...restroomValues) : 0;
+    const maxRestrooms = restroomValues.length ? Math.max(...restroomValues) : 0;
+    const loadSpread = maxLoad - minLoad;
+    const restroomSpread = maxRestrooms - minRestrooms;
+
+    if (loadValues.length >= 3 && avgLoad > 0 && loadSpread > Math.max(2, avgLoad * 0.75)) {
+      issues.push({
+        severity: "warning",
+        type: "workload_imbalance",
+        message: `Workload spread is ${Number(loadSpread.toFixed(2))} points across ${loadValues.length} active employees (avg ${Number(avgLoad.toFixed(2))}).`,
+        details: { min_load: Number(minLoad.toFixed(2)), max_load: Number(maxLoad.toFixed(2)), avg_load: Number(avgLoad.toFixed(2)), employee_loads: employeeLoads },
+      });
+    }
+    if (restroomValues.length >= 3 && restroomSpread > 2) {
+      issues.push({
+        severity: "warning",
+        type: "restroom_balance_review",
+        message: `Restroom assignment spread is ${restroomSpread} across active employees.`,
+        details: { min_restrooms: minRestrooms, max_restrooms: maxRestrooms, employee_loads: employeeLoads },
+      });
+    }
+
+    const deterministic = {
+      provider: "rule-based",
+      service_date: serviceDate,
+      summary: summarizeScheduleAuditIssues(issues),
+      issue_counts: issues.reduce((acc, issue) => {
+        const severity = String(issue.severity || "warning").toLowerCase();
+        acc[severity] = (acc[severity] || 0) + 1;
+        acc.total += 1;
+        return acc;
+      }, { total: 0, critical: 0, error: 0, warning: 0, info: 0 }),
+      balance: {
+        employee_count: loadValues.length,
+        total_work_load: Number(totalLoad.toFixed(2)),
+        avg_work_load: Number(avgLoad.toFixed(2)),
+        min_work_load: Number(minLoad.toFixed(2)),
+        max_work_load: Number(maxLoad.toFixed(2)),
+        work_load_spread: Number(loadSpread.toFixed(2)),
+        restroom_spread: restroomSpread,
+        employee_loads: employeeLoads.sort((a, b) => Number(b.work_load || 0) - Number(a.work_load || 0)),
+      },
+      issues,
+    };
+
+    let ai = null;
+    if (includeAi) {
+      try {
+        ai = await tryGeminiScheduleAudit({ serviceDate, audit: deterministic, assignments, roster, userPrompt });
+      } catch (error) {
+        ai = { ok: false, provider: "gemini", reason: error?.message || "gemini_audit_failed" };
+      }
+    }
+
+    return {
+      ...deterministic,
+      ai_review: ai?.ok && ai.data
+        ? {
+            provider: ai.provider,
+            model: ai.model,
+            summary: String(ai.data.summary || "").trim() || deterministic.summary,
+            logic_status: ["pass", "review", "fail"].includes(String(ai.data.logic_status || "").toLowerCase()) ? String(ai.data.logic_status).toLowerCase() : (deterministic.issue_counts.critical || deterministic.issue_counts.error ? "fail" : (deterministic.issue_counts.warning ? "review" : "pass")),
+            additional_watchouts: Array.isArray(ai.data.additional_watchouts) ? ai.data.additional_watchouts : [],
+            recommended_next_action: String(ai.data.recommended_next_action || "").trim() || (deterministic.issue_counts.total ? "Review the listed audit issues before publishing." : "No action needed."),
+          }
+        : (includeAi ? { provider: "rule-based", reason: ai?.reason || "gemini_not_used", summary: deterministic.summary, logic_status: deterministic.issue_counts.critical || deterministic.issue_counts.error ? "fail" : (deterministic.issue_counts.warning ? "review" : "pass"), additional_watchouts: [], recommended_next_action: deterministic.issue_counts.total ? "Review the listed audit issues before publishing." : "No action needed." } : null),
+    };
+  }
+
   async function getAssignedEmployeeForDevice(deviceId) {
     const rows = await runReadOnlySql(`
       select
@@ -2839,6 +3165,30 @@ export function createScheduleRouter({
     }
   });
 
+  router.get("/audit", requireSchedulePin, async (req, res) => {
+    try {
+      const serviceDate = requireDate(req.query.service_date || req.query.date || (await getServiceDate()));
+      const includeAi = String(req.query.ai || req.query.include_ai || "1").trim() !== "0";
+      const prompt = String(req.query.prompt || "").trim();
+      const data = await auditScheduleForDate(serviceDate, { includeAi, userPrompt: prompt || "Double-check that the schedule is balanced, logical, and physically possible." });
+      res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+    } catch (error) {
+      fail(res, error, "Schedule audit failed");
+    }
+  });
+
+  router.post("/ai/audit", requireSchedulePin, async (req, res) => {
+    try {
+      const serviceDate = requireDate(req.body?.service_date || req.body?.date || (await getServiceDate()));
+      const prompt = String(req.body?.prompt || "").trim();
+      const includeAi = req.body?.ai !== false && req.body?.include_ai !== false;
+      const data = await auditScheduleForDate(serviceDate, { includeAi, userPrompt: prompt || "Double-check that the schedule is balanced, logical, and physically possible." });
+      res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+    } catch (error) {
+      fail(res, error, "Schedule AI audit failed");
+    }
+  });
+
   router.get("/coverage-templates/export.csv", async (_req, res) => {
     try {
       const rows = await runReadOnlySql(`
@@ -2946,7 +3296,8 @@ export function createScheduleRouter({
       const force = req.body?.force !== false;
       const data = await runRpc("sch_generate_daily_schedule", { p_service_date: serviceDate, p_force: force });
       const static_restore_result = await restoreStaticOwnersForDate(serviceDate);
-      res.status(200).json({ ok: true, data: { generate_result: data, static_restore_result }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+      const schedule_audit = await auditScheduleForDate(serviceDate, { includeAi: true, userPrompt: "Final check after daily schedule generation: balanced, logical, and physically possible." });
+      res.status(200).json({ ok: true, data: { generate_result: data, static_restore_result, schedule_audit }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Generate daily schedule failed");
     }
@@ -2973,7 +3324,11 @@ export function createScheduleRouter({
       const days = Math.max(1, Math.min(14, Number.parseInt(String(req.body?.days || 7), 10) || 7));
       const force = req.body?.force === true;
       const generated_days = await ensureScheduleRange(serviceDate, days, { force });
-      res.status(200).json({ ok: true, data: { service_date: serviceDate, days, generated_days }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+      const schedule_audits = [];
+      for (const row of generated_days || []) {
+        schedule_audits.push(await auditScheduleForDate(row.service_date, { includeAi: false, userPrompt: "Range generation deterministic schedule sanity check." }));
+      }
+      res.status(200).json({ ok: true, data: { service_date: serviceDate, days, generated_days, schedule_audits }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Generate schedule range failed");
     }
@@ -3020,6 +3375,7 @@ export function createScheduleRouter({
       coverallPlan = await applyCoverAllPlan(serviceDate, coverallPlan);
       const activeRows = await listPtoRows({ startDate: serviceDate, endDate: serviceDate });
       const manualRows = activeRows.filter((row) => String(row.pto_type || "").toLowerCase() === "manual_override");
+      const scheduleAudit = await auditScheduleForDate(serviceDate, { includeAi: true, userPrompt: "Final check after manual absence publish: balanced, logical, and physically possible." });
 
       res.status(200).json({
         ok: true,
@@ -3031,6 +3387,7 @@ export function createScheduleRouter({
           active_absences: activeRows,
           generate_result: generateResult,
           static_restore_result: staticRestoreResult,
+          schedule_audit: scheduleAudit,
           coverall: coverallPlan,
           coverall_manual: coverallManual,
           manager_notification: coverallPlan?.manager_notification || null,
@@ -3111,6 +3468,7 @@ export function createScheduleRouter({
       const staticRestoreResult = await restoreStaticOwnersForDate(serviceDate);
       const activeRows = await listPtoRows({ startDate: serviceDate, endDate: serviceDate });
       const stillAbsentRows = activeRows.filter((row) => String(row.employee_id || "") === employeeId);
+      const scheduleAudit = await auditScheduleForDate(serviceDate, { includeAi: true, userPrompt: "Final check after returning employee to schedule: balanced, logical, and physically possible." });
 
       res.status(200).json({
         ok: true,
@@ -3124,6 +3482,7 @@ export function createScheduleRouter({
           active_absences: activeRows,
           generate_result: generateResult,
           static_restore_result: staticRestoreResult,
+          schedule_audit: scheduleAudit,
         },
         meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion },
       });
@@ -3196,6 +3555,8 @@ export function createScheduleRouter({
         data.coverall = coverallPlan;
         data.manager_notification = coverallPlan?.manager_notification || null;
       }
+      const scheduleAudit = await auditScheduleForDate(serviceDate, { includeAi: true, userPrompt: "Final check after absence publish: balanced, logical, and physically possible." });
+      if (data && typeof data === "object") data.schedule_audit = scheduleAudit;
       res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Absence publish failed");
