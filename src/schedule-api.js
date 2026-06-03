@@ -157,6 +157,15 @@ function loadSpread(loadByEmployee) {
   return Math.max(...values) - Math.min(...values);
 }
 
+function canRosterEmployeeCoverAssignment(employee = {}, assignment = {}) {
+  const shiftStart = timeToMinutes(employee.shift_start);
+  const shiftEnd = timeToMinutes(employee.shift_end);
+  const coverageStart = timeToMinutes(assignment.coverage_start);
+  const coverageEnd = timeToMinutes(assignment.coverage_end);
+  if (shiftStart == null || shiftEnd == null || coverageStart == null || coverageEnd == null) return false;
+  return shiftStart <= coverageStart && shiftEnd >= coverageEnd;
+}
+
 function buildRestroomRebalancePlan(assignments = [], activeRoster = []) {
   const employeeMeta = new Map();
   const loadByEmployee = new Map();
@@ -167,6 +176,8 @@ function buildRestroomRebalancePlan(assignments = [], activeRoster = []) {
       employee_id: employeeId,
       employee_name: String(row.employee_name || row.display_name || "").trim(),
       employee_code: String(row.employee_code || "").trim(),
+      shift_start: String(row.shift_start || "").trim(),
+      shift_end: String(row.shift_end || "").trim(),
     });
     loadByEmployee.set(employeeId, 0);
   }
@@ -198,38 +209,46 @@ function buildRestroomRebalancePlan(assignments = [], activeRoster = []) {
 
   for (let guard = 0; guard < maxMoves; guard += 1) {
     const sortedLoads = Array.from(loadByEmployee.entries()).sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0));
-    const donorId = sortedLoads[0]?.[0];
-    const receiverId = sortedLoads[sortedLoads.length - 1]?.[0];
-    if (!donorId || !receiverId || donorId === receiverId) break;
-
     const beforeSpread = loadSpread(loadByEmployee);
     if (beforeSpread <= 1) break;
 
+    let bestCandidate = null;
+
+    for (const [donorId, donorLoad] of sortedLoads) {
+      const donorAssignments = movableAssignments
+        .filter((assignment) => assignment.assigned_employee_id === donorId && !movedAssignmentIds.has(assignment.assignment_id))
+        .sort((a, b) => a.load_points - b.load_points || String(a.group_name).localeCompare(String(b.group_name)));
+
+      for (const assignment of donorAssignments) {
+        const receiverCandidates = Array.from(loadByEmployee.entries())
+          .filter(([receiverId]) => receiverId !== donorId && canRosterEmployeeCoverAssignment(employeeMeta.get(receiverId) || {}, assignment))
+          .sort((a, b) => Number(a[1] || 0) - Number(b[1] || 0));
+
+        for (const [receiverId, receiverLoad] of receiverCandidates) {
+          const after = new Map(loadByEmployee);
+          after.set(donorId, Number(donorLoad || 0) - assignment.load_points);
+          after.set(receiverId, Number(receiverLoad || 0) + assignment.load_points);
+          const afterSpread = loadSpread(after);
+          if (afterSpread >= beforeSpread) continue;
+
+          const candidate = { donorId, receiverId, assignment, afterSpread };
+          if (!bestCandidate
+            || candidate.afterSpread < bestCandidate.afterSpread
+            || (candidate.afterSpread === bestCandidate.afterSpread && assignment.load_points < bestCandidate.assignment.load_points)
+            || (candidate.afterSpread === bestCandidate.afterSpread
+              && assignment.load_points === bestCandidate.assignment.load_points
+              && String(assignment.group_name).localeCompare(String(bestCandidate.assignment.group_name)) < 0)) {
+            bestCandidate = candidate;
+          }
+        }
+      }
+    }
+
+    if (!bestCandidate) break;
+
+    const { donorId, receiverId, assignment: chosen } = bestCandidate;
     const donorLoad = loadByEmployee.get(donorId) || 0;
     const receiverLoad = loadByEmployee.get(receiverId) || 0;
-    const donorAssignments = movableAssignments
-      .filter((assignment) => assignment.assigned_employee_id === donorId && !movedAssignmentIds.has(assignment.assignment_id))
-      .sort((a, b) => {
-        const aAfter = new Map(loadByEmployee);
-        aAfter.set(donorId, donorLoad - a.load_points);
-        aAfter.set(receiverId, receiverLoad + a.load_points);
-        const bAfter = new Map(loadByEmployee);
-        bAfter.set(donorId, donorLoad - b.load_points);
-        bAfter.set(receiverId, receiverLoad + b.load_points);
-        const aSpread = loadSpread(aAfter);
-        const bSpread = loadSpread(bAfter);
-        return aSpread - bSpread || a.load_points - b.load_points || String(a.group_name).localeCompare(String(b.group_name));
-      });
-
-    const chosen = donorAssignments.find((assignment) => {
-      const after = new Map(loadByEmployee);
-      after.set(donorId, donorLoad - assignment.load_points);
-      after.set(receiverId, receiverLoad + assignment.load_points);
-      return loadSpread(after) < beforeSpread;
-    });
-
-    if (!chosen) break;
-
     movedAssignmentIds.add(chosen.assignment_id);
     loadByEmployee.set(donorId, donorLoad - chosen.load_points);
     loadByEmployee.set(receiverId, receiverLoad + chosen.load_points);

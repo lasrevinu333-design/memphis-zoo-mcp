@@ -55,6 +55,7 @@ const needed = [
   "normalizeRestroomRebalanceRow",
   "isRestroomRebalanceRosterEligible",
   "loadSpread",
+  "canRosterEmployeeCoverAssignment",
   "buildRestroomRebalancePlan",
   "normalizeRestroomRebalanceCompletionRow",
   "buildRestroomRebalanceCompletionSelectSql",
@@ -112,33 +113,45 @@ assert.match(staticRestoreSql, /dwr\.shift_start <= dsa\.coverage_start/, "stati
 assert.match(staticRestoreSql, /ct\.coverage_start = dsa\.coverage_start/, "static owner restore must only touch unsplit original template rows");
 
 const activeRoster = [
-  { employee_id: "employee-a", employee_name: "Alex" },
-  { employee_id: "employee-b", employee_name: "Blair" },
-  { employee_id: "employee-c", employee_name: "Casey" },
+  { employee_id: "employee-a", employee_name: "Alex", shift_start: "05:00:00", shift_end: "15:00:00" },
+  { employee_id: "employee-b", employee_name: "Blair", shift_start: "05:00:00", shift_end: "15:00:00" },
+  { employee_id: "employee-c", employee_name: "Casey", shift_start: "05:00:00", shift_end: "15:00:00" },
 ];
 const restroomPlan = context.buildRestroomRebalancePlan([
-  { assignment_id: "restroom-1", assigned_employee_id: "employee-a", assigned_employee_name: "Alex", group_name: "North Restroom", load_points: 1, source_type: "coverage_template" },
-  { assignment_id: "restroom-2", assigned_employee_id: "employee-a", assigned_employee_name: "Alex", group_name: "South Restroom", load_points: 1, source_type: "coverage_template" },
-  { assignment_id: "restroom-3", assigned_employee_id: "employee-a", assigned_employee_name: "Alex", group_name: "East Restroom", load_points: 1, source_type: "coverage_template" },
+  { assignment_id: "restroom-1", assigned_employee_id: "employee-a", assigned_employee_name: "Alex", group_name: "North Restroom", coverage_start: "09:45:00", coverage_end: "15:00:00", load_points: 1, source_type: "coverage_template" },
+  { assignment_id: "restroom-2", assigned_employee_id: "employee-a", assigned_employee_name: "Alex", group_name: "South Restroom", coverage_start: "09:45:00", coverage_end: "15:00:00", load_points: 1, source_type: "coverage_template" },
+  { assignment_id: "restroom-3", assigned_employee_id: "employee-a", assigned_employee_name: "Alex", group_name: "East Restroom", coverage_start: "09:45:00", coverage_end: "15:00:00", load_points: 1, source_type: "coverage_template" },
 ], activeRoster);
 assert.equal(restroomPlan.applied, true);
 assert.equal(restroomPlan.moved_count, 2);
 assert.deepEqual(Object.values(restroomPlan.loads).sort((a, b) => a - b), [1, 1, 1]);
 
 const balancedRestroomPlan = context.buildRestroomRebalancePlan([
-  { assignment_id: "restroom-1", assigned_employee_id: "employee-a", group_name: "North Restroom", load_points: 1, source_type: "coverage_template" },
-  { assignment_id: "restroom-2", assigned_employee_id: "employee-b", group_name: "South Restroom", load_points: 1, source_type: "coverage_template" },
-  { assignment_id: "restroom-3", assigned_employee_id: "employee-c", group_name: "East Restroom", load_points: 1, source_type: "coverage_template" },
+  { assignment_id: "restroom-1", assigned_employee_id: "employee-a", group_name: "North Restroom", coverage_start: "09:45:00", coverage_end: "15:00:00", load_points: 1, source_type: "coverage_template" },
+  { assignment_id: "restroom-2", assigned_employee_id: "employee-b", group_name: "South Restroom", coverage_start: "09:45:00", coverage_end: "15:00:00", load_points: 1, source_type: "coverage_template" },
+  { assignment_id: "restroom-3", assigned_employee_id: "employee-c", group_name: "East Restroom", coverage_start: "09:45:00", coverage_end: "15:00:00", load_points: 1, source_type: "coverage_template" },
 ], activeRoster);
 assert.equal(balancedRestroomPlan.applied, false);
 assert.equal(balancedRestroomPlan.reason, "already_balanced");
 
 const protectedRestroomPlan = context.buildRestroomRebalancePlan([
-  { assignment_id: "restroom-1", assigned_employee_id: "employee-a", group_name: "North Restroom", load_points: 1, source_type: "manager_override" },
-  { assignment_id: "restroom-2", assigned_employee_id: "employee-a", group_name: "South Restroom", load_points: 1, source_type: "manager_override" },
+  { assignment_id: "restroom-1", assigned_employee_id: "employee-a", group_name: "North Restroom", coverage_start: "09:45:00", coverage_end: "15:00:00", load_points: 1, source_type: "manager_override" },
+  { assignment_id: "restroom-2", assigned_employee_id: "employee-a", group_name: "South Restroom", coverage_start: "09:45:00", coverage_end: "15:00:00", load_points: 1, source_type: "manager_override" },
 ], activeRoster);
 assert.equal(protectedRestroomPlan.applied, false);
 assert.equal(protectedRestroomPlan.reason, "no_safe_restroom_moves");
+
+const shiftWindowRestroomPlan = context.buildRestroomRebalancePlan([
+  { assignment_id: "restroom-1", assigned_employee_id: "employee-a", assigned_employee_name: "Alex", group_name: "North Restroom", coverage_start: "09:45:00", coverage_end: "15:00:00", load_points: 1, source_type: "coverage_template" },
+  { assignment_id: "restroom-2", assigned_employee_id: "employee-a", assigned_employee_name: "Alex", group_name: "South Restroom", coverage_start: "09:45:00", coverage_end: "15:00:00", load_points: 1, source_type: "coverage_template" },
+], [
+  { employee_id: "employee-a", employee_name: "Alex", shift_start: "05:00:00", shift_end: "15:00:00" },
+  { employee_id: "tammy", employee_name: "Tammy", shift_start: "05:00:00", shift_end: "14:00:00" },
+  { employee_id: "casey", employee_name: "Casey", shift_start: "05:00:00", shift_end: "15:00:00" },
+]);
+assert.equal(shiftWindowRestroomPlan.applied, true);
+assert.equal(shiftWindowRestroomPlan.moves.length, 1);
+assert.equal(shiftWindowRestroomPlan.moves[0].to_employee_id, "casey", "restroom rebalance must not move 3pm coverage to a 2pm employee");
 
 assert.equal(context.normalizeRestroomRebalanceCompletionRow({ status: "completed" })?.completed, true);
 assert.equal(context.normalizeRestroomRebalanceCompletionRow({ status: "failed" })?.completed, false);
