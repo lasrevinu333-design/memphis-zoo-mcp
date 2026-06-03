@@ -104,6 +104,13 @@ assert.equal(context.isRestroomRebalanceRosterEligible({ shift_start: "05:00:00"
 assert.equal(context.isRestroomRebalanceRosterEligible({ shift_start: "15:00:00", shift_end: "23:59:59", employee_code: "EMP002" }), false, "afternoon call coverage must not receive normal 9:45 restroom ownership");
 assert.equal(context.isRestroomRebalanceRosterEligible({ shift_start: "10:00:00", shift_end: "18:00:00", employee_code: "EMP010" }), false, "employees not working at 9:45 are not active rebalance owners");
 
+const staticRestoreSqlStart = source.indexOf("async function restoreStaticOwnersForDate");
+const staticRestoreSqlEnd = source.indexOf("function addDaysToIsoDate", staticRestoreSqlStart);
+const staticRestoreSql = source.slice(staticRestoreSqlStart, staticRestoreSqlEnd);
+assert.match(staticRestoreSql, /coalesce\(dsa\.coverage_purpose, ''\) <> 'lunch_coverage'/, "static owner restore must never overwrite generated lunch coverage rows");
+assert.match(staticRestoreSql, /dwr\.shift_start <= dsa\.coverage_start/, "static owner restore must verify the owner is on shift at the row start");
+assert.match(staticRestoreSql, /ct\.coverage_start = dsa\.coverage_start/, "static owner restore must only touch unsplit original template rows");
+
 const activeRoster = [
   { employee_id: "employee-a", employee_name: "Alex" },
   { employee_id: "employee-b", employee_name: "Blair" },

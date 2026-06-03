@@ -1650,11 +1650,18 @@ export function createScheduleRouter({
         on dwr.service_date = '${esc(serviceDate)}'::date
        and dwr.employee_id = ct.assigned_employee_id
        and dwr.active = true
+       and dwr.shift_start <= dsa.coverage_start
+       and dwr.shift_end >= least(dsa.coverage_end, public.sch_get_schedule_close_time('${esc(serviceDate)}'::date))
       where dsa.service_date = '${esc(serviceDate)}'::date
         and ct.active = true
         and ct.day_of_week = extract(dow from '${esc(serviceDate)}'::date)::int
         and ct.location_group_id = dsa.location_group_id
         and ct.segment_number = dsa.segment_number
+        and ct.coverage_start = dsa.coverage_start
+        and least(ct.coverage_end, public.sch_get_schedule_close_time('${esc(serviceDate)}'::date)) = dsa.coverage_end
+        and coalesce(ct.coverage_purpose, 'area_owner') = coalesce(dsa.coverage_purpose, 'area_owner')
+        and coalesce(dsa.coverage_purpose, '') <> 'lunch_coverage'
+        and coalesce(dsa.source_type, '') not ilike '%lunch%'
         and ct.assigned_employee_id is not null
         and not exists (
           select 1 from public.daily_absence_overrides dao
