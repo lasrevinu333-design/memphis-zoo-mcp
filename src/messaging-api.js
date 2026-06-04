@@ -222,43 +222,46 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const limit = Math.min(Math.max(Number.parseInt(String(req.query.limit || 5), 10) || 5, 1), 20);
       if (!deviceId) throw new Error("device_id is required.");
       const rows = await runReadOnlySql(`
-        with device_user as (
-          select mu.id as msg_user_id, mu.display_name, mda.device_identifier
-          from public.msg_device_assignments mda
-          join public.msg_users mu on mu.id = mda.msg_user_id
-          where mda.device_identifier = '${esc(deviceId)}'
-            and mda.is_active = true
-            and mu.is_active = true
-          limit 1
-        )
-        select
-          m.id as message_id,
-          m.thread_id,
-          du.msg_user_id,
-          du.display_name,
-          m.body,
-          m.message_type,
-          m.metadata_json,
-          m.sent_at,
-          m.created_at,
-          r.delivered_at,
-          r.read_at
-        from device_user du
-        join public.msg_thread_participants tp
-          on tp.user_id = du.msg_user_id
-         and tp.left_at is null
-        join public.msg_messages m
-          on m.thread_id = tp.thread_id
-         and m.is_deleted = false
-        left join public.msg_receipts r
-          on r.message_id = m.id
-         and r.user_id = du.msg_user_id
-        where coalesce(m.metadata_json->>'source', '') = 'events_app'
-          and coalesce(m.metadata_json->>'notification_kind', '') in ('two_days_before', 'day_before', 'morning_of')
-          and r.read_at is null
-          and m.sent_at >= now() - interval '4 days'
-        order by m.sent_at desc, m.created_at desc
-        limit ${limit}
+        select *
+        from (
+          with device_user as (
+            select mu.id as msg_user_id, mu.display_name, mda.device_identifier
+            from public.msg_device_assignments mda
+            join public.msg_users mu on mu.id = mda.msg_user_id
+            where mda.device_identifier = '${esc(deviceId)}'
+              and mda.is_active = true
+              and mu.is_active = true
+            limit 1
+          )
+          select
+            m.id as message_id,
+            m.thread_id,
+            du.msg_user_id,
+            du.display_name,
+            m.body,
+            m.message_type,
+            m.metadata_json,
+            m.sent_at,
+            m.created_at,
+            r.delivered_at,
+            r.read_at
+          from device_user du
+          join public.msg_thread_participants tp
+            on tp.user_id = du.msg_user_id
+           and tp.left_at is null
+          join public.msg_messages m
+            on m.thread_id = tp.thread_id
+           and m.is_deleted = false
+          left join public.msg_receipts r
+            on r.message_id = m.id
+           and r.user_id = du.msg_user_id
+          where coalesce(m.metadata_json->>'source', '') = 'events_app'
+            and coalesce(m.metadata_json->>'notification_kind', '') in ('two_days_before', 'day_before', 'morning_of')
+            and r.read_at is null
+            and m.sent_at >= now() - interval '4 days'
+          order by m.sent_at desc, m.created_at desc
+          limit ${limit}
+        ) event_reminders
       `);
       res.status(200).json({ ok: true, data: rows || [], meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
