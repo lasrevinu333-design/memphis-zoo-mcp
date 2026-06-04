@@ -1,0 +1,16 @@
+{
+  "password": "REMOTE_ADMIN_PASSWORD_USED_BY_ALL_DEVICES_IF_SAME",
+  "devices": [
+    {
+      "device_id": "KIOSK_02",
+      "name": "Alijah Collins",
+      "host": "192.168.1.42",
+      "password": "optional per-device override"
+    },
+    {
+      "device_id": "KIOSK_03",
+      "name": "Michael McWright",
+      "host": "192.168.1.43"
+    }
+  ]
+}
