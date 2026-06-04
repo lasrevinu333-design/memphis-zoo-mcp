@@ -297,10 +297,10 @@ function buildNotificationBody(eventRow, assignmentRow, kind) {
   const notes = eventRow.notes ? ` Notes: ${eventRow.notes}` : "";
   const clockIn = assignmentRow.coverage_start || DEFAULT_EVENT_OWNER_CLOCK_IN_TIME;
   const when = kind === "two_days_before"
-    ? `Two-day event reminder. You are the scheduled owner for ${area}; this notice is sent 15 minutes after your ${clockIn} clock-in time.`
+    ? `Two-day event reminder. You are the scheduled owner for ${area}; this notice is sent 15 minutes after your ${clockIn} clock-in time`
     : kind === "day_before"
-      ? `Tomorrow event reminder. You are the scheduled owner for ${area}; this notice is sent 15 minutes after your ${clockIn} clock-in time.`
-      : `Morning-of event reminder. You are the scheduled owner for ${area}; this notice is sent 15 minutes after your ${clockIn} clock-in time.`;
+      ? `Tomorrow event reminder. You are the scheduled owner for ${area}; this notice is sent 15 minutes after your ${clockIn} clock-in time`
+      : `Morning-of event reminder. You are the scheduled owner for ${area}; this notice is sent 15 minutes after your ${clockIn} clock-in time`;
   return `${when}: ${eventRow.event_name} is scheduled in ${area} on ${eventRow.event_date} from ${eventRow.start_time} to ${eventRow.end_time}. Expected attendees: ${attendees}.${notes}`.trim();
 }
 
