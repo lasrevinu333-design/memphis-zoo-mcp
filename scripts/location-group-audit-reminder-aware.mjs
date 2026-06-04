@@ -8,6 +8,8 @@ const DEFAULT_BASE_URL = "https://memphis-zoo-mcp.onrender.com";
 const SCAN_TRACKED_EMPTY = "ERROR_SCAN_TRACKED_EMPTY";
 const OK_REMINDER_ONLY_EMPTY = "OK_REMINDER_ONLY_EMPTY";
 const OK_REMINDER_ONLY_PRESENT = "OK_REMINDER_ONLY_PRESENT";
+const OK_RESPONSE_ONLY_EMPTY = "OK_RESPONSE_ONLY_EMPTY";
+const OK_RESPONSE_ONLY_PRESENT = "OK_RESPONSE_ONLY_PRESENT";
 const OK_SCAN_TRACKED = "OK_SCAN_TRACKED";
 const WARN_EMPTY_UNCLASSIFIED = "WARN_EMPTY_UNCLASSIFIED";
 const OK_UNCLASSIFIED_PRESENT = "OK_UNCLASSIFIED_PRESENT";
@@ -63,9 +65,15 @@ function isScanTracked(classification) {
     || classification?.kind === "nfc_scan_location";
 }
 
+function isResponseOnlyNoClean(classification) {
+  return classification?.classification === "response_only_no_clean"
+    || classification?.kind === "calls_to_location_only";
+}
+
 function classifyGroup(group, classification) {
   const included = includedLocations(group);
   const isEmpty = included.length === 0;
+  if (isResponseOnlyNoClean(classification)) return isEmpty ? OK_RESPONSE_ONLY_EMPTY : OK_RESPONSE_ONLY_PRESENT;
   if (isEmpty && classification?.also_valid_empty === true) return OK_REMINDER_ONLY_EMPTY;
   if (isEmpty && classification?.nfc_scan_required === true) return SCAN_TRACKED_EMPTY;
   if (isEmpty && !classification) return WARN_EMPTY_UNCLASSIFIED;
@@ -119,6 +127,15 @@ async function main() {
     if (isScanTracked(classification) && !seenClassifiedKeys.has(key)) {
       rows.push({
         status: SCAN_TRACKED_EMPTY,
+        key,
+        group_code: "",
+        group_name: "",
+        included_count: 0,
+        classification: classification.classification,
+      });
+    } else if (isResponseOnlyNoClean(classification) && !seenClassifiedKeys.has(key)) {
+      rows.push({
+        status: OK_RESPONSE_ONLY_EMPTY,
         key,
         group_code: "",
         group_name: "",

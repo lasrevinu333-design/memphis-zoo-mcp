@@ -25,9 +25,16 @@
       "kind": "schedule_assignment_reminder",
       "dashboard_status": false,
       "nfc_scan_required": false,
-      "frequency": "monday",
-      "notes": "Monday gift shop reminder-only schedule assignment; not an NFC scan location.",
-      "also_valid_empty": true
+      "frequency": "monday_8am_only",
+      "notes": "Monday 8:00 AM gift shop reminder-only schedule assignment; not an NFC scan location, not scan-system work, not after 9:45 AM, and not lunch coverage.",
+      "also_valid_empty": true,
+      "metadata": {
+        "assigned_employee": "Sherita Wilbon",
+        "display_window": "Monday 8:00 AM only",
+        "not_after": "09:45",
+        "scan_system_work": false,
+        "lunch_coverage": false
+      }
     },
     "EAST_END_BREAK_ROOM": {
       "classification": "schedule_reminder_only",
@@ -43,9 +50,16 @@
       "kind": "schedule_assignment_reminder",
       "dashboard_status": false,
       "nfc_scan_required": false,
-      "frequency": "monday",
-      "notes": "Monday gift shop reminder-only schedule assignment; not an NFC scan location.",
-      "also_valid_empty": true
+      "frequency": "monday_8am_only",
+      "notes": "Monday 8:00 AM gift shop reminder-only schedule assignment; not an NFC scan location, not scan-system work, not after 9:45 AM, and not lunch coverage.",
+      "also_valid_empty": true,
+      "metadata": {
+        "assigned_employee": "Kinnaye Peete",
+        "display_window": "Monday 8:00 AM only",
+        "not_after": "09:45",
+        "scan_system_work": false,
+        "lunch_coverage": false
+      }
     },
     "ELEPHANT_TRUNK_RESTROOMS": {
       "classification": "schedule_reminder_only",
@@ -65,36 +79,60 @@
       "kind": "schedule_assignment_reminder",
       "dashboard_status": false,
       "nfc_scan_required": false,
-      "frequency": "monday",
-      "notes": "Monday gift shop reminder-only schedule assignment; not an NFC scan location.",
+      "frequency": "monday_8am_only",
+      "notes": "Monday 8:00 AM gift shop reminder-only schedule assignment when active; not an NFC scan location, not scan-system work, not after 9:45 AM, and not lunch coverage.",
+      "also_valid_empty": true,
+      "metadata": {
+        "display_window": "Monday 8:00 AM only",
+        "not_after": "09:45",
+        "scan_system_work": false,
+        "lunch_coverage": false
+      }
+    },
+    "TRADING_POST_GIFT_SHOP": {
+      "classification": "schedule_reminder_only",
+      "kind": "schedule_assignment_reminder",
+      "dashboard_status": false,
+      "nfc_scan_required": false,
+      "frequency": "monday_8am_only",
+      "metadata": {
+        "assigned_employee": "Markiesha Warren",
+        "display_window": "Monday 8:00 AM only",
+        "not_after": "09:45",
+        "scan_system_work": false,
+        "lunch_coverage": false
+      },
+      "notes": "Monday 8:00 AM gift shop reminder-only schedule assignment; not an NFC scan location, not scan-system work, not after 9:45 AM, and not lunch coverage.",
       "also_valid_empty": true
     },
     "PRIMATE_CANYON": {
-      "classification": "schedule_reminder_only",
-      "kind": "weekly_evening_exterior_glass_reminder",
+      "classification": "response_only_no_clean",
+      "kind": "calls_to_location_only",
       "dashboard_status": false,
       "nfc_scan_required": false,
-      "frequency": "weekly_evening",
+      "frequency": "response_only",
       "metadata": {
         "includes": [
           "CAT_COUNTRY"
         ],
-        "handled_by": "Michael",
-        "work": "Exterior glass cleaning with outdoor Windex and a hose"
+        "label": "No Clean / Calls to Location Only",
+        "normal_deep_clean_schedule_work": false
       },
-      "notes": "Reminder-only weekly evening exterior glass work; not routine scan tracking after 6 PM.",
+      "notes": "No Clean / Calls to Location Only. Response-only ownership; not normal deep-clean schedule work and not an NFC scan location.",
       "also_valid_empty": true
     },
     "CAT_COUNTRY": {
-      "classification": "schedule_reminder_only",
-      "kind": "weekly_evening_exterior_glass_reminder",
+      "classification": "response_only_no_clean",
+      "kind": "calls_to_location_only",
       "dashboard_status": false,
       "nfc_scan_required": false,
-      "frequency": "included_with_primate_canyon_weekly_evening",
+      "frequency": "response_only",
       "metadata": {
-        "included_with": "PRIMATE_CANYON"
+        "included_with": "PRIMATE_CANYON",
+        "label": "No Clean / Calls to Location Only",
+        "normal_deep_clean_schedule_work": false
       },
-      "notes": "Included with Primate Canyon weekly evening exterior glass reminder; not an NFC scan location.",
+      "notes": "No Clean / Calls to Location Only. Response-only ownership; not normal deep-clean schedule work and not an NFC scan location.",
       "also_valid_empty": true
     }
   }
