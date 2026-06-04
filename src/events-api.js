@@ -377,7 +377,9 @@ async function sendEventNotification({ runRpc, runWriteSql, eventRow, assignment
 
 async function getPendingNotifications(runReadOnlySql) {
   const rows = await runReadOnlySql(`
-    with owner_assignments as (
+    select *
+    from (
+      with owner_assignments as (
       select
         dga.assignment_date,
         dga.location_group_id,
@@ -489,6 +491,7 @@ async function getPendingNotifications(runReadOnlySql) {
     from candidate_notifications
     order by scheduled_for_local asc, event_date asc, event_name asc
     limit ${MAX_NOTIFICATIONS_PER_RUN}
+    ) pending_notifications
   `);
   return Array.isArray(rows) ? rows : [];
 }
