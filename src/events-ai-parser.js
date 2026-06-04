@@ -27,8 +27,10 @@ const FIELD_LABELS = [
   "Event Date",
   "Date",
   "Start Time",
+  "Time",
   "Begin Time",
   "End Time",
+  "Ends",
   "Stop Time",
   "Start",
   "Begin",
@@ -62,21 +64,13 @@ const GARBAGE_PHRASES = [
   "tbd",
 ];
 
+import { getGeminiApiKey } from "./utils/gemini-config.js";
+
 const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 const GEMINI_MODEL = String(process.env.EVENTS_GEMINI_MODEL || process.env.MEMPHIS_GEMINI_MODEL || process.env.GEMINI_MODEL || "gemini-2.5-flash").trim();
 const GEMINI_TIMEOUT_MS = Math.max(1000, Number.parseInt(String(process.env.EVENTS_GEMINI_TIMEOUT_MS || process.env.MEMPHIS_GEMINI_TIMEOUT_MS || "12000"), 10) || 12000);
 const GEMINI_MAX_OUTPUT_TOKENS = Math.max(256, Number.parseInt(String(process.env.EVENTS_GEMINI_MAX_OUTPUT_TOKENS || "1200"), 10) || 1200);
 
-function getGeminiApiKey() {
-  return String(
-    process.env.EVENTS_GEMINI_API_KEY ||
-    process.env.GEMINI_API_KEY ||
-    process.env.MEMPHIS_GEMINI_API_KEY ||
-    process.env.GOOGLE_API_KEY ||
-    process.env.GOOGLE_GENAI_API_KEY ||
-    ""
-  ).trim();
-}
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = GEMINI_TIMEOUT_MS) {
   const controller = new AbortController();
@@ -112,8 +106,37 @@ function stripSpreadsheetGarbage(text) {
     .trim();
 }
 
+function stripParserArtifacts(text) {
+  return String(text || "")
+    .replace(/\b(?:also\s+)?event\s+name\s*:\s*test parser\b[^|.;]*/ig, " ")
+    .replace(/\bevent date event area event name labels accidentally pasted here\b/ig, " ")
+    .replace(/\blabels accidentally pasted here\b/ig, " ")
+    .replace(/\bplease ignore this\b/ig, " ")
+    .replace(/\btest parser\b/ig, " ");
+}
+
+function dedupeDelimitedNotes(text) {
+  const raw = String(text || "").trim();
+  if (!raw) return "";
+  const parts = raw
+    .split(/\s*(?:,|;)\s*/)
+    .map((part) => cleanupLooseText(String(part || "").replace(/^(?:notes?\s*)+/i, "").replace(/^event\s+/i, "")))
+    .filter(Boolean);
+  if (!parts.length) return "";
+  const seen = new Set();
+  const unique = [];
+  for (const part of parts) {
+    const key = normalizeLoose(part);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    unique.push(part);
+  }
+  const joined = unique.join(", ");
+  return joined ? joined.charAt(0).toUpperCase() + joined.slice(1) : "";
+}
+
 function cleanupLooseText(text) {
-  return stripSpreadsheetGarbage(text)
+  return stripParserArtifacts(stripSpreadsheetGarbage(text))
     .replace(/\b(on|at|for)\b\s*(?=,|\.|$)/gi, " ")
     .replace(/^[,;:\-\s|]+|[,;:\-\s|]+$/g, " ")
     .replace(/\s+/g, " ")
@@ -121,7 +144,7 @@ function cleanupLooseText(text) {
 }
 
 function normalizeIntakeText(raw) {
-  let text = String(raw || "").replace(/\r/g, "\n").replace(/\t/g, " | ");
+  let text = stripParserArtifacts(String(raw || "")).replace(/\r/g, "\n").replace(/\t/g, " | ");
   const labels = [...FIELD_LABELS].sort((a, b) => b.length - a.length);
   for (const label of labels) {
     if (label === "Event") {
@@ -179,6 +202,22 @@ function firstLabelValue(map, candidates = []) {
     if (exact) return exact;
   }
   return "";
+}
+
+function extractLooseLabelValue(text, candidates = []) {
+  const raw = String(text || "").replace(/\s+/g, " ").trim();
+  if (!raw || !Array.isArray(candidates) || !candidates.length) return "";
+  const labelPattern = candidates.map(escapeRegex).sort((a, b) => b.length - a.length).join("|");
+  const stopPattern = FIELD_LABELS.map(escapeRegex).sort((a, b) => b.length - a.length).join("|");
+  const match = raw.match(new RegExp(`\\b(?:${labelPattern})\\b\\s*:?\\s*([\\s\\S]*?)(?=(?:\\s*[|.;]\\s*\\b(?:${stopPattern})\\b\\s*:?)|(?:\\s+\\b(?:${stopPattern})\\b\\s*:?)|$)`, "i"));
+  return cleanupLooseText(match?.[1] || "");
+}
+
+function extractExplicitNotesValue(text = "") {
+  const raw = String(text || "").replace(/\s+/g, " ").trim();
+  if (!raw) return "";
+  const match = raw.match(/\b(?:notes?|details?|comments?|needs?)\b(?:\s+(?:notes?|details?|comments?|needs?))?\s*:\s*([\s\S]+)$/i);
+  return cleanupLooseText(match?.[1] || "");
 }
 
 function isValidCalendarDate(year, month, day) {
@@ -326,6 +365,7 @@ function compactNarrativeNotes(rawText = "", eventName = "", matchedGroup = null
     sentence = stripEmptyFieldLabels(sentence);
     sentence = sentence.replace(/\b(?:approx(?:imately)?|about|around)\b/ig, " ");
     sentence = sentence.replace(/\b(?:at|in|on|from|for)\b\s*(?=\.|,|;|$)/ig, " ");
+    sentence = sentence.replace(/^(?:on|for|from)\s+(?=(?:need|needs|request|requires|keep|put|extra|trash|dumpsters?|boxes?)\b)/i, "");
     sentence = sentence.replace(/\s+/g, " " ).trim();
     sentence = sentence.replace(/^[,.;:\-\s]+|[,.;:\-\s]+$/g, "").trim();
     if (/^(?:the\s+)?event$/i.test(sentence)) continue;
@@ -337,7 +377,7 @@ function compactNarrativeNotes(rawText = "", eventName = "", matchedGroup = null
 function stripEmptyFieldLabels(text = "") {
   let result = String(text || "");
   const labels = FIELD_LABELS.map(escapeRegex).sort((a, b) => b.length - a.length).join("|");
-  const structuredLabels = ["Event Name", "Event", "Event Title", "Name", "Title", "Event Area", "Location Group", "Location", "Area", "Venue", "Event Date", "Date", "Start Time", "Begin Time", "End Time", "Stop Time", "Start", "Begin", "End", "Stop", "Projected", "Attendees", "Attendance", "Guests", "People", "Count", "Host Department", "Manager on Duty"].map(escapeRegex).sort((a, b) => b.length - a.length).join("|");
+  const structuredLabels = ["Event Name", "Event", "Event Title", "Name", "Title", "Event Area", "Location Group", "Location", "Area", "Venue", "Event Date", "Date", "Start Time", "Time", "Begin Time", "End Time", "Ends", "Stop Time", "Start", "Begin", "End", "Stop", "Projected", "Attendees", "Attendance", "Guests", "People", "Count", "Host Department", "Manager on Duty"].map(escapeRegex).sort((a, b) => b.length - a.length).join("|");
   result = result.replace(new RegExp(`(?:^|[|,;])\\s*(?:${structuredLabels})\\s*:\\s*[^|,;]*(?=$|[|,;])`, "ig"), " ");
   result = result.replace(new RegExp(`(?:^|[|,;])\\s*(?:${labels})\\s*:\\s*(?=$|[|,;])`, "ig"), " ");
   result = result.replace(new RegExp(`\\b(?:${labels})\\s*:\\s*(?=$|[|,;])`, "ig"), " ");
@@ -499,14 +539,15 @@ function detectTimeRange(text, { hasSeparateKnownDate = false } = {}) {
     const slashPair = normalizeTimePair(startRaw, lastEndRaw);
     if (slashPair.start_time && slashPair.end_time) return { ...slashPair, matched_text: slashMatch[0] };
   }
-  const match = raw.match(new RegExp(`${token}\\s*(?:to|until|thru|through|\\-|–|—)\\s*${token}`, "i"));
-  if (!match) return null;
-  if (isBareHyphenHourRange(match[0]) && !hasSeparateKnownDate) return null;
-  const pair = isBareHyphenHourRange(match[0]) && hasSeparateKnownDate
-    ? normalizeLikelyEventTimePair(match[1], match[2])
-    : normalizeTimePair(match[1], match[2]);
-  if (!pair.start_time || !pair.end_time) return null;
-  return { ...pair, matched_text: match[0] };
+  const generalMatches = [...raw.matchAll(new RegExp(`${token}\\s*(?:to|until|thru|through|\\-|–|—)\\s*${token}`, "ig"))];
+  for (const match of generalMatches) {
+    if (isBareHyphenHourRange(match[0]) && !hasSeparateKnownDate) continue;
+    const pair = isBareHyphenHourRange(match[0]) && hasSeparateKnownDate
+      ? normalizeLikelyEventTimePair(match[1], match[2])
+      : normalizeTimePair(match[1], match[2]);
+    if (pair.start_time && pair.end_time) return { ...pair, matched_text: match[0] };
+  }
+  return null;
 }
 
 function detectInlineLabeledTimeRange(text) {
@@ -632,18 +673,27 @@ function stripAccountedEventDetails(text, eventName = "", matchedGroup = null, {
   result = result.replace(new RegExp(`\\b(?:from\\s+)?${timeToken}\\s*(?:to|until|thru|through|-|–|—)\\s*${timeToken}\\b`, "ig"), " ");
   result = result.replace(/\b\d{1,2}\s*(?:-|–|—)\s*\d{1,2}\b/gi, " ");
   if (!preserveOperationalTimes) result = stripTimeDateNoise(result);
-  return cleanupLooseText(stripEmptyFieldLabels(result));
+  result = stripEmptyFieldLabels(result);
+  result = removeAreaText(result, matchedGroup);
+  return cleanupLooseText(result);
 }
 
-function removeAreaText(text, group) {
+function removeAreaText(text, group, { stripBare = true } = {}) {
   let result = String(text || "");
   if (!group) return result;
   const names = [group.group_name, group.group_code].concat(group.included_locations || []).filter(Boolean);
   for (const name of names) {
     const escaped = escapeRegex(name);
+    result = result.replace(new RegExp(`\\bat\\s+the\\s+${escaped}\\b`, "ig"), " ");
     result = result.replace(new RegExp(`\\bat\\s+${escaped}\\b`, "ig"), " ");
+    result = result.replace(new RegExp(`\\bin\\s+the\\s+${escaped}\\b`, "ig"), " ");
     result = result.replace(new RegExp(`\\bin\\s+${escaped}\\b`, "ig"), " ");
-    result = result.replace(new RegExp(`\\b${escaped}\\b`, "ig"), " ");
+    if (normalizeLoose(name) === "event center") {
+      result = result.replace(/\bat\s+center\b/ig, " ");
+      result = result.replace(/\bin\s+center\b/ig, " ");
+      if (stripBare) result = result.replace(/\bcenter\b/ig, " ");
+    }
+    if (stripBare) result = result.replace(new RegExp(`\\b${escaped}\\b`, "ig"), " ");
   }
   return result;
 }
@@ -681,9 +731,14 @@ function inferSpecialEventTitle(value = "") {
     ["wedding setup", "Wedding setup"],
     ["wedding reception", "Wedding Reception"],
     ["stingrays preview", "StingRays Preview"],
-    ["birthday party", "Birthday party"],
+    ["memphis zoo member morning", "Memphis Zoo Member Morning"],
+    ["member morning", "Memphis Zoo Member Morning"],
+    ["happy birthday party", "Happy Birthday Party"],
+    ["graduation party", "Graduation Party"],
+    ["birthday party", "Birthday Party"],
     ["member preview", "Member Preview"],
     ["corporate picnic", "Corporate Picnic"],
+    ["private rental", "Private Rental"],
     ["baby day", "Baby Day"],
     ["lebonheur walmart day", "LeBonheur Walmart Day"],
     ["keeper chat madness", "Keeper Chat Madness"],
@@ -706,7 +761,7 @@ function inferSpecialEventTitle(value = "") {
   return "";
 }
 
-function cleanEventName(eventName, matchedGroup) {
+function cleanEventName(eventName, matchedGroup, { stripBareArea = true } = {}) {
   const original = String(eventName || "");
   let result = original;
   if (/^\s*(?:the\s+)?event\s+will\s+run\b/i.test(original)) return "";
@@ -716,7 +771,7 @@ function cleanEventName(eventName, matchedGroup) {
   result = result.replace(/^the\s+/i, "");
   result = result.replace(/^name\s*:?\s*/i, "");
   result = result.replace(/^theater\s+/i, "");
-  result = removeAreaText(result, matchedGroup);
+  result = removeAreaText(result, matchedGroup, { stripBare: stripBareArea });
   result = result.replace(/\bat\s+[A-Za-z0-9'& -]{3,80}?\s+only\s+on\b/i, " on");
   result = result.replace(/\bat\s+[A-Za-z0-9'& -]{3,80}?\s+on\b/i, " on");
   result = result.replace(/\b(?:host department|manager on duty)\b\s*:?\s*[^|,;]+/ig, " " );
@@ -727,6 +782,7 @@ function cleanEventName(eventName, matchedGroup) {
   result = result.replace(/\b(?:need|needs|requires|required|setup|cleanup|attendees|guests|people|students|notes?|details?)\b.*$/i, " " );
   result = result.replace(/\b(?:start time|begin time|end time|stop time|event date|event area|location group|location|venue|area|projected|attendance|attendees)\b.*$/i, " " );
   result = cleanupLooseText(result);
+  if (/^(?:the\s+)?event$/i.test(result)) return "";
   if (/^(?:will\s+)?run(?:\s+from|\s+to)?(?:\s+from|\s+to)?$/i.test(result) || /^will\s+run\b/i.test(result)) return "";
   if (/\bbig group\b/i.test(original) || /\blarge group\b/i.test(original)) return "Large Group";
   if (/school kids|students|school group/i.test(original)) return "School Group";
@@ -740,12 +796,12 @@ function cleanEventName(eventName, matchedGroup) {
 function cleanNotes(notes, eventName, matchedGroup) {
   const raw = stripSpreadsheetGarbage(notes);
   const preserveOperationalTimes = /\b(?:ceremony|cleanup|clean\s*up|after|before|arriv(?:e|al))\b/i.test(raw);
-  return stripAccountedEventDetails(raw, eventName, matchedGroup, { preserveOperationalTimes });
+  return dedupeDelimitedNotes(stripAccountedEventDetails(raw, eventName, matchedGroup, { preserveOperationalTimes }));
 }
 
 function extractFallbackTitle(text, matchedGroup, timeRange) {
   let result = normalizeIntakeText(text);
-  result = result.replace(/\b(Event Name|Event|Event Title|Name|Title|Event Area|Location Group|Location|Venue|Area|Event Date|Date|Start Time|Begin Time|End Time|Stop Time|Projected|Attendees|Attendance|Guests|People|Notes|Details|Host Department|Manager on Duty)\s*:/gi, " ");
+  result = result.replace(/\b(Event Name|Event|Event Title|Name|Title|Event Area|Location Group|Location|Venue|Area|Event Date|Date|Start Time|Time|Begin Time|End Time|Ends|Stop Time|Projected|Attendees|Attendance|Guests|People|Notes|Details|Host Department|Manager on Duty)\s*:/gi, " ");
   if (timeRange?.matched_text) result = result.replace(timeRange.matched_text, " ");
   result = removeAreaText(result, matchedGroup);
   result = stripTimeDateNoise(result);
@@ -832,6 +888,17 @@ function extractAmbiguousAreaEventName(text = "") {
   return "";
 }
 
+function extractLeadingDashTitle(text = "") {
+  const raw = String(text || "").replace(/\s+/g, " " ).trim();
+  if (!raw) return "";
+  const match = raw.match(/^([A-Z][A-Za-z0-9'&/() -]{2,80}?)\s*(?:-|–|—)\s+(?=[A-Z0-9])/);
+  if (!match) return "";
+  const candidate = cleanupLooseText(match[1]);
+  const normalized = normalizeLoose(candidate);
+  if (!normalized || /^(?:notes?|location|event area|date|time|two events?)$/.test(normalized)) return "";
+  return candidate;
+}
+
 function extractNarrativeEventName(text = "") {
   const raw = String(text || "").replace(/\s+/g, " " ).trim();
   if (!raw) return "";
@@ -844,7 +911,8 @@ function extractNarrativeEventName(text = "") {
   for (const pattern of patterns) {
     const match = raw.match(pattern);
     const candidate = String(match?.[1] || "").trim().replace(/^(?:the|a|an)\s+/i, "").replace(/[\s,.;:-]+$/g, "");
-    if (candidate && !/^(restrooms?|bathrooms?|courtyard|remain open|be cleaned|request)$/i.test(candidate)) return candidate;
+    const candidateIsOperationalPurpose = /\b(?:bus\s*pickup|pickup|drop\s*off|dropoff|gate|trash|dumpsters?|restrooms?|bathrooms?|cleanup|clean\s*up|setup|arrival|parking|delivery)\b/i.test(candidate);
+    if (candidate && !candidateIsOperationalPurpose && !/^(?:restrooms?|bathrooms?|courtyard|remain open|be cleaned|request)$/i.test(candidate)) return candidate;
   }
   return "";
 }
@@ -881,7 +949,7 @@ function buildNotesFromNarrative(rawText = "", baseNotes = "", eventName = "", m
     return cleanupLooseText(fallback);
   }
 
-  return operational.join(" ");
+  return dedupeDelimitedNotes(operational.join(" "));
 }
 
 function buildFieldConfidence({ eventName, locationGroupId, eventDate, startTime, endTime, attendeeCount, areaCandidates = [], warnings = [] } = {}) {
@@ -934,11 +1002,11 @@ function parseOneEventText(rawText, locationGroups, index = 0) {
   const labels = parseLabelMap(normalizedText);
   const eventNameFromLabel = firstLabelValue(labels, ["Event Name", "Event", "Name", "Title", "Event Title"]);
   const areaFromLabel = firstLabelValue(labels, ["Event Area", "Location Group", "Area", "Location", "Venue"]);
-  const dateFromLabel = firstLabelValue(labels, ["Event Date", "Date"]);
-  const startFromLabel = firstLabelValue(labels, ["Start Time", "Start", "Begin Time", "Begin"]);
-  const endFromLabel = firstLabelValue(labels, ["End Time", "End", "Stop Time", "Stop"]);
-  const attendeesFromLabel = firstLabelValue(labels, ["Attendees", "Attendance", "Projected", "Guests", "People", "Count"]);
-  const notesFromLabel = firstLabelValue(labels, ["Notes", "Details", "Comments", "Comment", "Needs"]);
+  const dateFromLabel = firstLabelValue(labels, ["Event Date", "Date"]) || extractLooseLabelValue(normalizedText, ["Event Date", "Date"]);
+  const startFromLabel = firstLabelValue(labels, ["Start Time", "Time", "Start", "Begin Time", "Begin"]) || extractLooseLabelValue(normalizedText, ["Start Time", "Time", "Start", "Begin Time", "Begin"]);
+  const endFromLabel = firstLabelValue(labels, ["End Time", "Ends", "End", "Stop Time", "Stop"]) || extractLooseLabelValue(normalizedText, ["End Time", "Ends", "End", "Stop Time", "Stop"]);
+  const attendeesFromLabel = firstLabelValue(labels, ["Attendees", "Attendance", "Projected", "Guests", "People", "Count"]) || extractLooseLabelValue(normalizedText, ["Attendees", "Attendance", "Projected", "Guests", "People", "Count"]);
+  const notesFromLabel = firstLabelValue(labels, ["Notes", "Details", "Comments", "Comment", "Needs"]) || extractExplicitNotesValue(normalizedText) || extractLooseLabelValue(normalizedText, ["Notes", "Details", "Comments", "Comment", "Needs"]);
 
   const areaCandidates = rankLocationGroups(locationGroups, areaFromLabel || normalizedText, 3);
   const matchedGroup = areaCandidates[0]?.group || null;
@@ -953,11 +1021,12 @@ function parseOneEventText(rawText, locationGroups, index = 0) {
   const attendeeValue = detectAttendeeCount(attendeesFromLabel) ?? detectAttendeeCount(rawText) ?? detectAttendeeCount(normalizedText);
   const attendeeCount = Number.isFinite(attendeeValue) ? String(attendeeValue) : null;
   const ambiguousAreaName = extractAmbiguousAreaEventName(normalizedText);
+  const leadingDashTitle = extractLeadingDashTitle(normalizedText);
   const specialName = inferSpecialEventTitle(normalizedText);
   const narrativeName = extractNarrativeEventName(normalizedText);
   const eventName = eventNameFromLabel
-    ? cleanEventName(eventNameFromLabel, matchedGroup)
-    : (ambiguousAreaName || specialName || cleanEventName(narrativeName || extractFallbackTitle(normalizedText, matchedGroup, timeRange), matchedGroup));
+    ? cleanEventName(eventNameFromLabel, matchedGroup, { stripBareArea: false })
+    : (ambiguousAreaName || specialName || cleanEventName(leadingDashTitle || narrativeName || extractFallbackTitle(normalizedText, matchedGroup, timeRange), matchedGroup));
   const baseNotes = notesFromLabel ? buildNotesFromNarrative(normalizedText, notesFromLabel, eventName, matchedGroup) : compactNarrativeNotes(normalizedText, eventName, matchedGroup);
   const startTime = timeRange?.start_time || "";
   const endTime = timeRange?.end_time || "";
@@ -1058,7 +1127,7 @@ function safeJsonParse(text) {
 }
 
 async function tryGeminiParseTexts({ rows, locationGroups }) {
-  const apiKey = getGeminiApiKey();
+  const apiKey = getGeminiApiKey(["EVENTS_GEMINI_API_KEY"]);
   if (!apiKey) return { ok: false, reason: "gemini_not_configured" };
   const prompt = buildGeminiPrompt(rows, locationGroups);
   const response = await fetchWithTimeout(`${GEMINI_BASE_URL}/${encodeURIComponent(GEMINI_MODEL)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
