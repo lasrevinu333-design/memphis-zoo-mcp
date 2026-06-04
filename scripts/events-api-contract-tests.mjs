@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import express from "express";
-import { createEventsAdminRouter } from "../src/events-api.js";
+import { createEventMaintenanceController, createEventsAdminRouter } from "../src/events-api.js";
 
 const TEST_GROUP_ID = "00000000-0000-4000-8000-000000000001";
 
@@ -113,5 +113,27 @@ assert.match(listSql, /then 'SPLASH_PAD'/, "published event group_code should om
 assert.match(listSql, /then 'COURTYARD'/, "published event group_code should omit restroom suffix for Courtyard");
 assert.match(listSql, /then 'Splash Pad'/, "published event group_name should omit restroom suffix for Splash Pad");
 assert.match(listSql, /then 'Courtyard'/, "published event group_name should omit restroom suffix for Courtyard");
+
+const notificationReadCalls = [];
+const notificationWriteCalls = [];
+const maintenance = createEventMaintenanceController({
+  runReadOnlySql: async (sql) => {
+    notificationReadCalls.push(String(sql || ""));
+    return [];
+  },
+  runWriteSql: async (name, sql) => {
+    notificationWriteCalls.push({ name, sql: String(sql || "") });
+    return [];
+  },
+  runRpc: async () => null,
+});
+await maintenance.runMaintenance("contract_test");
+const notificationSql = notificationReadCalls.find((sql) => /candidate_notifications/i.test(sql));
+assert.ok(notificationSql, "event maintenance should query pending event reminders");
+assert.match(notificationSql, /two_days_before/, "event reminders should include two-days-before notices");
+assert.match(notificationSql, /day_before/, "event reminders should include one-day-before notices");
+assert.match(notificationSql, /morning_of/, "event reminders should include morning-of notices");
+assert.match(notificationSql, /interval '15 minutes'/, "event reminders should be scheduled 15 minutes after owner clock-in/coverage start");
+assert.match(notificationSql, /coalesce\(oa\.coverage_start, time '08:00:00'\)/, "event reminders should use owner coverage start with 8 AM fallback");
 
 console.log("events api contract tests passed");

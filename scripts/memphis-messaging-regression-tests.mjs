@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import express from "express";
 import { createMemphisResponder } from "../src/memphis-ai.js";
+import { createMessagingRouter } from "../src/messaging-api.js";
 import { findLocationCode, hasLocationKeyword } from "../src/ai/memphis-ai-intent.js";
 
 process.env.GEMINI_API_KEY = "";
@@ -174,4 +176,61 @@ for (const prompt of falseLocationCodeCases) {
   assert.equal(hasLocationKeyword(prompt), false, `${prompt} should not match a location keyword`);
 }
 
-console.log(JSON.stringify({ ok: true, route_cases: routeCases.length, reply_cases: replyCases.length, false_location_code_cases: falseLocationCodeCases.length }, null, 2));
+async function withServer(app, fn) {
+  const server = await new Promise((resolve) => {
+    const listener = app.listen(0, () => resolve(listener));
+  });
+  try {
+    const { port } = server.address();
+    return await fn(`http://127.0.0.1:${port}`);
+  } finally {
+    await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  }
+}
+
+const reminderReadCalls = [];
+const reminderApp = express();
+reminderApp.use(express.json());
+reminderApp.use('/messaging-api', createMessagingRouter({
+  runReadOnlySql: async (sql) => {
+    reminderReadCalls.push(String(sql || ''));
+    if (/from public\.msg_device_assignments/i.test(String(sql || '')) && /metadata_json->>'source'/i.test(String(sql || ''))) {
+      return [{
+        message_id: '00000000-0000-0000-0000-000000000099',
+        thread_id: THREAD_ID,
+        msg_user_id: '00000000-0000-0000-0000-000000000088',
+        display_name: 'Event Owner',
+        body: 'Two-day event reminder: Donor Dinner is scheduled in Event Center.',
+        message_type: 'bot_response',
+        metadata_json: { source: 'events_app', notification_kind: 'two_days_before' },
+        sent_at: '2026-06-04T13:15:00Z',
+        created_at: '2026-06-04T13:15:00Z',
+        delivered_at: null,
+        read_at: null,
+      }];
+    }
+    return [];
+  },
+  runRpc: async () => null,
+  buildHealthPayload: (area, extra) => ({ ok: true, area, ...extra }),
+  appVersion: 'test',
+  releaseId: 'test',
+  contractVersion: 'messaging.v1',
+}));
+
+await withServer(reminderApp, async (baseUrl) => {
+  const response = await fetch(`${baseUrl}/messaging-api/device-event-reminders?device_id=device-123&limit=2`);
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.ok, true);
+  assert.equal(payload.data.length, 1);
+  assert.equal(payload.data[0].metadata_json.notification_kind, 'two_days_before');
+});
+const reminderSql = reminderReadCalls.find((sql) => /device_user/i.test(sql));
+assert.ok(reminderSql, 'device event reminder route should query reminders by mapped device');
+assert.match(reminderSql, /msg_device_assignments/, 'device reminder route should resolve the active device assignment');
+assert.match(reminderSql, /metadata_json->>'source'.*= 'events_app'/s, 'device reminder route should only return event-app messages');
+assert.match(reminderSql, /metadata_json->>'notification_kind'.*two_days_before.*day_before.*morning_of/s, 'device reminder route should only return the three event reminder kinds');
+assert.match(reminderSql, /r\.read_at is null/, 'device reminder route should only return unread reminders');
+
+console.log(JSON.stringify({ ok: true, route_cases: routeCases.length, reply_cases: replyCases.length, false_location_code_cases: falseLocationCodeCases.length, device_event_reminder_contract: true }, null, 2));

@@ -3,11 +3,12 @@ import { aiParseEventTexts } from "./events-ai-parser.js";
 
 const EVENTS_TIME_ZONE = "America/Chicago";
 const EVENTS_CONTRACT_VERSION = "events.v1";
-const DAY_BEFORE_NOTIFICATION_TIME = "08:00:00";
+const DEFAULT_EVENT_OWNER_CLOCK_IN_TIME = "08:00:00";
 const EVENT_MAINTENANCE_COOLDOWN_MS = 20 * 1000;
 const MAX_NOTIFICATIONS_PER_RUN = 50;
 const MAX_SCAN_ALERTS_PER_RUN = 50;
 const SCAN_ALERT_COOLDOWN_MINUTES = 30;
+const EVENT_REMINDER_KINDS = ["two_days_before", "day_before", "morning_of"];
 
 function fail(res, error, fallback = "Events request failed", statusCode = 400) {
   res.status(statusCode).json({ ok: false, error: error?.message || fallback });
@@ -294,10 +295,12 @@ function buildNotificationBody(eventRow, assignmentRow, kind) {
   const area = eventRow.group_name || eventRow.group_code || "Assigned area";
   const attendees = eventRow.attendee_count == null ? "unknown" : String(eventRow.attendee_count);
   const notes = eventRow.notes ? ` Notes: ${eventRow.notes}` : "";
-  const when =
-    kind === "day_before"
-      ? "Reminder for tomorrow"
-      : `Reminder for today. Your scheduled shift in ${area} began at ${assignmentRow.coverage_start || "the scheduled time"}.`;
+  const clockIn = assignmentRow.coverage_start || DEFAULT_EVENT_OWNER_CLOCK_IN_TIME;
+  const when = kind === "two_days_before"
+    ? `Two-day event reminder. You are the scheduled owner for ${area}; this notice is sent 15 minutes after your ${clockIn} clock-in time.`
+    : kind === "day_before"
+      ? `Tomorrow event reminder. You are the scheduled owner for ${area}; this notice is sent 15 minutes after your ${clockIn} clock-in time.`
+      : `Morning-of event reminder. You are the scheduled owner for ${area}; this notice is sent 15 minutes after your ${clockIn} clock-in time.`;
   return `${when}: ${eventRow.event_name} is scheduled in ${area} on ${eventRow.event_date} from ${eventRow.start_time} to ${eventRow.end_time}. Expected attendees: ${attendees}.${notes}`.trim();
 }
 
@@ -343,13 +346,7 @@ async function sendEventNotification({ runRpc, runWriteSql, eventRow, assignment
        ${sqlLiteral(msgUserId)}::uuid,
        ${sqlLiteral(thread.id)}::uuid,
        ${sqlLiteral(kind)},
-       ${
-         kind === "day_before"
-           ? `(${sqlLiteral(eventRow.event_date)}::date - interval '1 day' + time '${DAY_BEFORE_NOTIFICATION_TIME}')`
-           : `(${sqlLiteral(eventRow.event_date)}::date + ${sqlLiteral(
-               assignmentRow.coverage_start || "00:00:00"
-             )}::time + interval '15 minutes')`
-       },
+       (${sqlLiteral(eventRow.scheduled_for_local)}::timestamp),
        now(),
        'sent',
        ${sqlLiteral(message?.id || null)}::uuid,
@@ -444,25 +441,31 @@ async function getPendingNotifications(runReadOnlySql) {
         min(oa.coverage_start) as coverage_start,
         max(oa.coverage_end) as coverage_end,
         min(oa.assignment_source) as assignment_source,
-        'day_before'::text as notification_kind,
-        ((e.event_date::timestamp - interval '1 day') + time '${DAY_BEFORE_NOTIFICATION_TIME}') as scheduled_for_local,
+        reminder.notification_kind,
+        (e.event_date::timestamp + (reminder.day_offset * interval '1 day') + coalesce(min(oa.coverage_start), time '${DEFAULT_EVENT_OWNER_CLOCK_IN_TIME}') + interval '15 minutes') as scheduled_for_local,
         public.msg_get_memphis_user_id() as memphis_user_id
       from public.events_app_events e
       join public.location_groups lg on lg.id = e.location_group_id
+      cross join lateral (
+        values
+          ('${EVENT_REMINDER_KINDS[0]}'::text, -2),
+          ('${EVENT_REMINDER_KINDS[1]}'::text, -1),
+          ('${EVENT_REMINDER_KINDS[2]}'::text, 0)
+      ) reminder(notification_kind, day_offset)
       join owner_assignments oa
         on oa.location_group_id = e.location_group_id
        and oa.assignment_date = e.event_date
       join public.employees emp on emp.id = oa.employee_id and emp.active = true
       join public.msg_users mu on mu.employee_id = emp.id and mu.is_active = true
       left join msg_devices md on md.msg_user_id = mu.id
-      where (now() at time zone '${EVENTS_TIME_ZONE}')::date = (e.event_date - interval '1 day')::date
-        and (now() at time zone '${EVENTS_TIME_ZONE}') >= ((e.event_date::timestamp - interval '1 day') + time '${DAY_BEFORE_NOTIFICATION_TIME}')
+      where (now() at time zone '${EVENTS_TIME_ZONE}')::date = (e.event_date + (reminder.day_offset * interval '1 day'))::date
+        and (now() at time zone '${EVENTS_TIME_ZONE}') >= (e.event_date::timestamp + (reminder.day_offset * interval '1 day') + coalesce(oa.coverage_start, time '${DEFAULT_EVENT_OWNER_CLOCK_IN_TIME}') + interval '15 minutes')
         and not exists (
           select 1
           from public.events_app_notification_log log
           where log.event_id = e.id
             and log.employee_id = emp.id
-            and log.notification_kind = 'day_before'
+            and log.notification_kind = reminder.notification_kind
         )
       group by
         e.id,
@@ -478,64 +481,9 @@ async function getPendingNotifications(runReadOnlySql) {
         emp.id,
         emp.display_name,
         mu.id,
-        md.device_identifiers
-
-      union all
-
-      select
-        e.id,
-        e.event_name,
-        e.location_group_id,
-        e.event_date,
-        e.start_time,
-        e.end_time,
-        e.attendee_count,
-        e.notes,
-        lg.group_code,
-        lg.group_name,
-        emp.id as employee_id,
-        emp.display_name as employee_name,
-        mu.id as msg_user_id,
-        coalesce(md.device_identifiers, array[]::text[]) as device_identifiers,
-        min(oa.coverage_start) as coverage_start,
-        max(oa.coverage_end) as coverage_end,
-        min(oa.assignment_source) as assignment_source,
-        'shift_plus_fifteen'::text as notification_kind,
-        (e.event_date::timestamp + min(oa.coverage_start) + interval '15 minutes') as scheduled_for_local,
-        public.msg_get_memphis_user_id() as memphis_user_id
-      from public.events_app_events e
-      join public.location_groups lg on lg.id = e.location_group_id
-      join owner_assignments oa
-        on oa.location_group_id = e.location_group_id
-       and oa.assignment_date = e.event_date
-       and oa.coverage_start is not null
-      join public.employees emp on emp.id = oa.employee_id and emp.active = true
-      join public.msg_users mu on mu.employee_id = emp.id and mu.is_active = true
-      left join msg_devices md on md.msg_user_id = mu.id
-      where (now() at time zone '${EVENTS_TIME_ZONE}')::date = e.event_date
-        and (now() at time zone '${EVENTS_TIME_ZONE}') >= (e.event_date::timestamp + oa.coverage_start + interval '15 minutes')
-        and not exists (
-          select 1
-          from public.events_app_notification_log log
-          where log.event_id = e.id
-            and log.employee_id = emp.id
-            and log.notification_kind = 'shift_plus_fifteen'
-        )
-      group by
-        e.id,
-        e.event_name,
-        e.location_group_id,
-        e.event_date,
-        e.start_time,
-        e.end_time,
-        e.attendee_count,
-        e.notes,
-        lg.group_code,
-        lg.group_name,
-        emp.id,
-        emp.display_name,
-        mu.id,
-        md.device_identifiers
+        md.device_identifiers,
+        reminder.notification_kind,
+        reminder.day_offset
     )
     select *
     from candidate_notifications
