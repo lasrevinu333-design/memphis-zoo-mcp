@@ -114,6 +114,12 @@ assert.match(staticRestoreSql, /where dsa\.service_date = '[^']+'::date\s+and dw
 assert.doesNotMatch(dwrJoinBlock, /on[\s\S]*?dsa\./, "Postgres UPDATE target alias dsa must not be referenced inside FROM JOIN ON clauses");
 assert.match(staticRestoreSql, /ct\.coverage_start = dsa\.coverage_start/, "static owner restore must only touch unsplit original template rows");
 
+const manualAbsencePublishStart = source.indexOf('router.post("/manual-absences/publish"');
+const manualAbsencePublishEnd = source.indexOf('router.post("/manual-absences/return"', manualAbsencePublishStart);
+const manualAbsencePublishSource = source.slice(manualAbsencePublishStart, manualAbsencePublishEnd);
+assert.match(manualAbsencePublishSource, /set active = \(dao\.employee_id = any\(\$\{idsSql\}::uuid\[\]\)\)/, "manual absence publish must reactivate existing selected rows instead of inserting duplicates");
+assert.doesNotMatch(manualAbsencePublishSource, /and y\.active = true/, "manual absence insert existence check must include inactive rows to avoid unique-key retries");
+
 const activeRoster = [
   { employee_id: "employee-a", employee_name: "Alex", shift_start: "05:00:00", shift_end: "15:00:00" },
   { employee_id: "employee-b", employee_name: "Blair", shift_start: "05:00:00", shift_end: "15:00:00" },

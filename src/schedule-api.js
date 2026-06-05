@@ -3362,13 +3362,15 @@ export function createScheduleRouter({
       let coverallPlan = await buildCoverAllPlan(serviceDate, explicit);
 
       await runWriteSql("manual_absence_publish", `
-        update public.daily_absence_overrides
-           set active = false,
+        update public.daily_absence_overrides dao
+           set active = (dao.employee_id = any(${idsSql}::uuid[])),
                updated_at = now(),
-               notes = coalesce(notes, 'Cleared by simplified absence scheduler')
-         where absence_date = '${esc(serviceDate)}'::date
-           and active = true
-           and absence_type = 'manual_override';
+               notes = case
+                 when dao.employee_id = any(${idsSql}::uuid[]) then 'Published from simplified absence scheduler'
+                 else coalesce(dao.notes, 'Cleared by simplified absence scheduler')
+               end
+         where dao.absence_date = '${esc(serviceDate)}'::date
+           and dao.absence_type = 'manual_override';
 
         insert into public.daily_absence_overrides (
           id, absence_date, employee_id, absence_type, active, notes, created_at, updated_at
@@ -3381,7 +3383,6 @@ export function createScheduleRouter({
           from public.daily_absence_overrides y
           where y.absence_date = '${esc(serviceDate)}'::date
             and y.employee_id = x.employee_id
-            and y.active = true
         );
       `);
 
