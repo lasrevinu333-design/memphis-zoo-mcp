@@ -1669,9 +1669,9 @@ export function createScheduleRouter({
         on dwr.service_date = '${esc(serviceDate)}'::date
        and dwr.employee_id = ct.assigned_employee_id
        and dwr.active = true
-       and dwr.shift_start <= dsa.coverage_start
-       and dwr.shift_end >= least(dsa.coverage_end, public.sch_get_schedule_close_time('${esc(serviceDate)}'::date))
       where dsa.service_date = '${esc(serviceDate)}'::date
+        and dwr.shift_start <= dsa.coverage_start
+        and dwr.shift_end >= least(dsa.coverage_end, public.sch_get_schedule_close_time('${esc(serviceDate)}'::date))
         and ct.active = true
         and ct.day_of_week = extract(dow from '${esc(serviceDate)}'::date)::int
         and ct.location_group_id = dsa.location_group_id
