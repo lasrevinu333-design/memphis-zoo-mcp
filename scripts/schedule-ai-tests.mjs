@@ -109,7 +109,9 @@ const staticRestoreSqlStart = source.indexOf("async function restoreStaticOwners
 const staticRestoreSqlEnd = source.indexOf("function addDaysToIsoDate", staticRestoreSqlStart);
 const staticRestoreSql = source.slice(staticRestoreSqlStart, staticRestoreSqlEnd);
 assert.match(staticRestoreSql, /coalesce\(dsa\.coverage_purpose, ''\) <> 'lunch_coverage'/, "static owner restore must never overwrite generated lunch coverage rows");
-assert.match(staticRestoreSql, /dwr\.shift_start <= dsa\.coverage_start/, "static owner restore must verify the owner is on shift at the row start");
+const dwrJoinBlock = (staticRestoreSql.match(/join public\.daily_work_roster dwr[\s\S]*?(?=\n\s+where dsa\.service_date)/) || [""])[0];
+assert.match(staticRestoreSql, /where dsa\.service_date = '[^']+'::date\s+and dwr\.shift_start <= dsa\.coverage_start/, "static owner restore must verify the owner is on shift at the row start in WHERE, not JOIN ON");
+assert.doesNotMatch(dwrJoinBlock, /on[\s\S]*?dsa\./, "Postgres UPDATE target alias dsa must not be referenced inside FROM JOIN ON clauses");
 assert.match(staticRestoreSql, /ct\.coverage_start = dsa\.coverage_start/, "static owner restore must only touch unsplit original template rows");
 
 const activeRoster = [
