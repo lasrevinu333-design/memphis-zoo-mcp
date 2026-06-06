@@ -59,6 +59,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       ? "case when tp.viewer_is_participant then coalesce(u.unread_count, 0) else 0 end"
       : "coalesce(u.unread_count, 0)";
     return `
+      select * from (
       with thread_participants as (
         select
           tp.thread_id,
@@ -120,6 +121,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       where t.is_active = true
         and ${visibilityClause}
       order by coalesce(lm.last_message_at, t.last_message_at, t.updated_at, t.created_at) desc nulls last, t.created_at desc
+      ) thread_rows
     `;
   }
 
@@ -131,6 +133,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       ? "true"
       : "exists (select 1 from public.msg_thread_participants tp where tp.thread_id = t.id and tp.user_id = '" + viewer + "'::uuid and tp.left_at is null) and t.thread_type in ('direct', 'bot')";
     return `
+      select * from (
       select
         m.id,
         m.thread_id,
@@ -151,6 +154,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         ${beforeSql}
       order by coalesce(m.sent_at, m.created_at) asc, m.id asc
       limit ${Math.min(Math.max(Number(limit) || 50, 1), 200)}
+      ) thread_messages
     `;
   }
 
