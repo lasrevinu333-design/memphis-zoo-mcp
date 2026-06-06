@@ -233,4 +233,130 @@ assert.match(reminderSql, /metadata_json->>'source'.*= 'events_app'/s, 'device r
 assert.match(reminderSql, /metadata_json->>'notification_kind'.*two_days_before.*day_before.*morning_of/s, 'device reminder route should only return the three event reminder kinds');
 assert.match(reminderSql, /r\.read_at is null/, 'device reminder route should only return unread reminders');
 
-console.log(JSON.stringify({ ok: true, route_cases: routeCases.length, reply_cases: replyCases.length, false_location_code_cases: falseLocationCodeCases.length, device_event_reminder_contract: true }, null, 2));
+const EMPLOYEE_USER_ID = '10000000-0000-0000-0000-000000000001';
+const MANAGER_USER_ID = '10000000-0000-0000-0000-000000000002';
+const DIRECT_THREAD_ID = '20000000-0000-0000-0000-000000000001';
+const GROUP_THREAD_ID = '20000000-0000-0000-0000-000000000002';
+const FOREIGN_DIRECT_THREAD_ID = '20000000-0000-0000-0000-000000000003';
+const visibilityReadCalls = [];
+let unexpectedGroupRpc = false;
+const visibilityApp = express();
+visibilityApp.use(express.json());
+visibilityApp.use('/messaging-api', createMessagingRouter({
+  runReadOnlySql: async (sql) => {
+    const query = String(sql || '');
+    visibilityReadCalls.push(query);
+    if (query.includes("msg_get_user_by_device('KIOSK_04')")) {
+      return [{ msg_user_id: EMPLOYEE_USER_ID, display_name: 'Tammy Miller', role: 'employee' }];
+    }
+    if (query.includes("msg_get_user_by_device('KIOSK_01')")) {
+      return [{ msg_user_id: MANAGER_USER_ID, display_name: 'Ops Manager', role: 'manager' }];
+    }
+    if (query.includes('from public.msg_threads t') && query.includes("t.thread_type in ('direct', 'bot')")) {
+      return [{
+        thread_id: DIRECT_THREAD_ID,
+        updated_at: '2026-06-06T18:00:00Z',
+        thread_type: 'direct',
+        thread_title: 'Sherita Wilbon',
+        unread_count: 1,
+        last_message_at: '2026-06-06T18:00:00Z',
+        last_message_id: '30000000-0000-0000-0000-000000000001',
+        last_sender_name: 'Sherita Wilbon',
+        last_message_body: 'Need cover at Aquarium?',
+        last_message_type: 'text',
+        participant_names: 'Sherita Wilbon, Tammy Miller',
+        viewer_can_send: true,
+      }];
+    }
+    if (query.includes('from public.msg_threads t')) {
+      return [{
+        thread_id: GROUP_THREAD_ID,
+        updated_at: '2026-06-06T18:01:00Z',
+        thread_type: 'group',
+        thread_title: 'Everyone',
+        unread_count: 0,
+        last_message_at: '2026-06-06T18:01:00Z',
+        last_message_id: '30000000-0000-0000-0000-000000000002',
+        last_sender_name: 'Ops Manager',
+        last_message_body: 'Broadcast test',
+        last_message_type: 'text',
+        participant_names: 'Kinnaye Peete, Sherita Wilbon, Tammy Miller',
+        viewer_can_send: true,
+      }, {
+        thread_id: FOREIGN_DIRECT_THREAD_ID,
+        updated_at: '2026-06-06T18:02:00Z',
+        thread_type: 'direct',
+        thread_title: 'Sherita Wilbon, Kinnaye Peete',
+        unread_count: 0,
+        last_message_at: '2026-06-06T18:02:00Z',
+        last_message_id: '30000000-0000-0000-0000-000000000003',
+        last_sender_name: 'Sherita Wilbon',
+        last_message_body: 'Between Sherita and Kinnaye only',
+        last_message_type: 'text',
+        participant_names: 'Kinnaye Peete, Sherita Wilbon',
+        viewer_can_send: false,
+      }];
+    }
+    if (query.includes('from public.msg_messages m') && query.includes(FOREIGN_DIRECT_THREAD_ID)) {
+      return [{
+        id: '40000000-0000-0000-0000-000000000001',
+        thread_id: FOREIGN_DIRECT_THREAD_ID,
+        sender_user_id: '50000000-0000-0000-0000-000000000001',
+        sender_display_name: 'Sherita Wilbon',
+        message_type: 'text',
+        body: 'Manager can audit this thread.',
+        metadata_json: {},
+        sent_at: '2026-06-06T18:02:00Z',
+        created_at: '2026-06-06T18:02:00Z',
+      }];
+    }
+    return [];
+  },
+  runRpc: async (name) => {
+    if (name === 'msg_create_group_thread') unexpectedGroupRpc = true;
+    return null;
+  },
+  buildHealthPayload: (area, extra) => ({ ok: true, area, ...extra }),
+  appVersion: 'test',
+  releaseId: 'test',
+  contractVersion: 'messaging.v1',
+}));
+
+await withServer(visibilityApp, async (baseUrl) => {
+  const employeeThreads = await fetch(`${baseUrl}/messaging-api/threads?user_id=${EMPLOYEE_USER_ID}&device_id=KIOSK_04`).then((r) => r.json());
+  assert.equal(employeeThreads.ok, true);
+  assert.equal(employeeThreads.data.length, 1, 'Employee devices should only receive direct/bot threads for their assigned user');
+  assert.equal(employeeThreads.data[0].thread_type, 'direct');
+  assert.equal(employeeThreads.data[0].thread_title, 'Sherita Wilbon');
+
+  const managerThreads = await fetch(`${baseUrl}/messaging-api/threads?user_id=${MANAGER_USER_ID}&device_id=KIOSK_01`).then((r) => r.json());
+  assert.equal(managerThreads.ok, true);
+  assert.equal(managerThreads.data.length, 2, 'Manager overview devices should receive all visible threads');
+  assert.equal(managerThreads.data[1].viewer_can_send, false, 'Foreign manager-audit threads must be read-only');
+
+  const foreignMessages = await fetch(`${baseUrl}/messaging-api/thread/${FOREIGN_DIRECT_THREAD_ID}/messages?user_id=${MANAGER_USER_ID}&device_id=KIOSK_01&limit=50`).then((r) => r.json());
+  assert.equal(foreignMessages.ok, true);
+  assert.equal(foreignMessages.data.length, 1, 'Manager overview devices should be able to inspect foreign threads');
+
+  const blockedGroup = await fetch(`${baseUrl}/messaging-api/thread/group`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      created_by_user_id: EMPLOYEE_USER_ID,
+      device_id: 'KIOSK_04',
+      title: 'Everyone',
+      member_user_ids: ['50000000-0000-0000-0000-000000000001', '50000000-0000-0000-0000-000000000002'],
+    }),
+  });
+  assert.equal(blockedGroup.status, 400, 'Employee devices must be blocked from creating multi-person group threads');
+});
+
+assert.equal(unexpectedGroupRpc, false, 'Blocked employee group-thread attempts must not hit the create-group RPC');
+const employeeThreadSql = visibilityReadCalls.find((sql) => sql.includes("t.thread_type in ('direct', 'bot')"));
+assert.ok(employeeThreadSql, 'Employee thread list should filter to direct and Memphis bot threads');
+const managerThreadSql = visibilityReadCalls.find((sql) => sql.includes('from public.msg_threads t') && !sql.includes("t.thread_type in ('direct', 'bot')"));
+assert.ok(managerThreadSql, 'Manager overview thread list should be allowed to inspect all threads');
+const managerMessageSql = visibilityReadCalls.find((sql) => sql.includes(FOREIGN_DIRECT_THREAD_ID) && sql.includes('from public.msg_messages m'));
+assert.ok(managerMessageSql, 'Manager overview message fetch should use the raw thread message visibility query');
+
+console.log(JSON.stringify({ ok: true, route_cases: routeCases.length, reply_cases: replyCases.length, false_location_code_cases: falseLocationCodeCases.length, device_event_reminder_contract: true, thread_visibility_contract: true }, null, 2));

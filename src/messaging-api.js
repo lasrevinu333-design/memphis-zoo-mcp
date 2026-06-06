@@ -7,6 +7,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
   const router = express.Router();
   const memphisResponder = createMemphisResponder({ runReadOnlySql, runRpc });
   const requireOpsManagerAuth = makeDailyPinMiddleware({ allowedRoles: ["ops_manager"], openWhenDisabled: true });
+  const MANAGER_OVERVIEW_DEVICE_IDS = new Set(["1e74fe4c-dc20b3b9", "KIOSK_01", "KIOSK_1"]);
 
   function fail(res, error, fallback = "Messaging request failed") {
     res.status(400).json({ ok: false, error: error?.message || fallback });
@@ -19,6 +20,138 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
   function getGeminiDiagnosticsForMessaging() {
     const model = String(process.env.MEMPHIS_GEMINI_MODEL || process.env.GEMINI_MODEL || "gemini-2.5-flash").trim();
     return getGeminiDiagnostics({ preferred: ["MEMPHIS_GEMINI_API_KEY"], model });
+  }
+
+  function isManagerOverviewDevice(deviceId = "") {
+    return MANAGER_OVERVIEW_DEVICE_IDS.has(String(deviceId || "").trim());
+  }
+
+  async function getViewerIdentity(deviceId = "") {
+    const normalizedDeviceId = String(deviceId || "").trim();
+    if (!normalizedDeviceId) return null;
+    const rows = await runReadOnlySql(`select * from public.msg_get_user_by_device('${esc(normalizedDeviceId)}')`);
+    return Array.isArray(rows) && rows.length ? rows[0] : null;
+  }
+
+  async function resolveViewerContext({ userId = "", deviceId = "" } = {}) {
+    const normalizedUserId = String(userId || "").trim();
+    const normalizedDeviceId = String(deviceId || "").trim();
+    const identity = await getViewerIdentity(normalizedDeviceId);
+    const effectiveUserId = String(identity?.msg_user_id || normalizedUserId || "").trim();
+    const isManagerOverview = Boolean(
+      identity
+      && String(identity.role || "").trim().toLowerCase() === "manager"
+      && isManagerOverviewDevice(normalizedDeviceId)
+    );
+    if (!effectiveUserId) throw new Error("user_id or a mapped device is required.");
+    if (identity?.msg_user_id && normalizedUserId && normalizedUserId !== effectiveUserId && !isManagerOverview) {
+      throw new Error("This device can only access its assigned messenger account.");
+    }
+    return { identity, effectiveUserId, deviceId: normalizedDeviceId, isManagerOverview };
+  }
+
+  function buildThreadListSql({ viewerUserId = "", managerOverview = false }) {
+    const viewer = esc(viewerUserId);
+    const visibilityClause = managerOverview
+      ? "true"
+      : "tp.viewer_is_participant = true and t.thread_type in ('direct', 'bot')";
+    const unreadSelect = managerOverview
+      ? "case when tp.viewer_is_participant then coalesce(u.unread_count, 0) else 0 end"
+      : "coalesce(u.unread_count, 0)";
+    return `
+      with thread_participants as (
+        select
+          tp.thread_id,
+          count(*) filter (where tp.left_at is null) as participant_count,
+          string_agg(mu.display_name, ', ' order by mu.display_name)
+            filter (where tp.left_at is null) as participant_names,
+          string_agg(case when tp.user_id <> '${viewer}'::uuid then mu.display_name end, ', ' order by mu.display_name)
+            filter (where tp.left_at is null and tp.user_id <> '${viewer}'::uuid) as other_participant_names,
+          bool_or(tp.user_id = '${viewer}'::uuid and tp.left_at is null) as viewer_is_participant
+        from public.msg_thread_participants tp
+        join public.msg_users mu on mu.id = tp.user_id and mu.is_active = true
+        group by tp.thread_id
+      ),
+      last_messages as (
+        select distinct on (m.thread_id)
+          m.thread_id,
+          m.id as last_message_id,
+          coalesce(m.sent_at, m.created_at) as last_message_at,
+          m.body as last_message_body,
+          m.message_type as last_message_type,
+          sender.display_name as last_sender_name
+        from public.msg_messages m
+        left join public.msg_users sender on sender.id = m.sender_user_id
+        where m.is_deleted = false
+        order by m.thread_id, coalesce(m.sent_at, m.created_at) desc, m.created_at desc, m.id desc
+      ),
+      unread as (
+        select
+          m.thread_id,
+          count(*)::int as unread_count
+        from public.msg_messages m
+        left join public.msg_receipts r on r.message_id = m.id and r.user_id = '${viewer}'::uuid
+        where m.is_deleted = false
+          and m.sender_user_id is distinct from '${viewer}'::uuid
+          and r.read_at is null
+        group by m.thread_id
+      )
+      select
+        t.id as thread_id,
+        t.updated_at,
+        t.thread_type,
+        case
+          when t.thread_type = 'bot' then coalesce(nullif(t.title, ''), 'Memphis')
+          when t.thread_type = 'direct' then coalesce(nullif(tp.other_participant_names, ''), nullif(tp.participant_names, ''), 'Direct')
+          else coalesce(nullif(t.title, ''), nullif(tp.participant_names, ''), 'Group')
+        end as thread_title,
+        ${unreadSelect} as unread_count,
+        lm.last_message_at,
+        lm.last_message_id,
+        lm.last_sender_name,
+        lm.last_message_body,
+        lm.last_message_type,
+        coalesce(tp.participant_names, '') as participant_names,
+        tp.viewer_is_participant as viewer_can_send
+      from public.msg_threads t
+      join thread_participants tp on tp.thread_id = t.id
+      left join last_messages lm on lm.thread_id = t.id
+      left join unread u on u.thread_id = t.id
+      where t.is_active = true
+        and ${visibilityClause}
+      order by coalesce(lm.last_message_at, t.last_message_at, t.updated_at, t.created_at) desc nulls last, t.created_at desc
+    `;
+  }
+
+  function buildThreadMessagesSql({ threadId = "", viewerUserId = "", managerOverview = false, before = null, limit = 50 }) {
+    const viewer = esc(viewerUserId);
+    const thread = esc(threadId);
+    const beforeSql = before ? `and coalesce(m.sent_at, m.created_at) < '${esc(String(before).trim())}'::timestamptz` : "";
+    const visibilityClause = managerOverview
+      ? "true"
+      : "exists (select 1 from public.msg_thread_participants tp where tp.thread_id = t.id and tp.user_id = '" + viewer + "'::uuid and tp.left_at is null) and t.thread_type in ('direct', 'bot')";
+    return `
+      select
+        m.id,
+        m.thread_id,
+        m.sender_user_id,
+        sender.display_name as sender_display_name,
+        m.message_type,
+        m.body,
+        m.metadata_json,
+        m.sent_at,
+        m.created_at
+      from public.msg_messages m
+      join public.msg_threads t on t.id = m.thread_id
+      left join public.msg_users sender on sender.id = m.sender_user_id
+      where m.thread_id = '${thread}'::uuid
+        and t.is_active = true
+        and ${visibilityClause}
+        and m.is_deleted = false
+        ${beforeSql}
+      order by coalesce(m.sent_at, m.created_at) asc, m.id asc
+      limit ${Math.min(Math.max(Number(limit) || 50, 1), 200)}
+    `;
   }
 
   function isDirectContactPrompt(body = "") {
@@ -206,9 +339,8 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     try {
       const userId = String(req.query.user_id || "").trim();
       const deviceId = String(req.query.device_id || "").trim();
-      const sql = deviceId
-        ? `select * from public.msg_list_threads_for_device('${esc(userId)}'::uuid, '${esc(deviceId)}')`
-        : `select * from public.msg_list_threads('${esc(userId)}'::uuid)`;
+      const viewer = await resolveViewerContext({ userId, deviceId });
+      const sql = buildThreadListSql({ viewerUserId: viewer.effectiveUserId, managerOverview: viewer.isManagerOverview });
       const rows = await runReadOnlySql(sql);
       res.status(200).json({ ok: true, data: rows || [], meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
@@ -273,9 +405,11 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     try {
       const threadId = String(req.params.threadId || "").trim();
       const userId = String(req.query.user_id || "").trim();
+      const deviceId = String(req.query.device_id || "").trim();
       const limit = Number.parseInt(String(req.query.limit || 50), 10) || 50;
-      const before = req.query.before ? `'${esc(String(req.query.before).trim())}'::timestamptz` : "null::timestamptz";
-      const rows = await runReadOnlySql(`select * from public.msg_list_thread_messages('${esc(threadId)}'::uuid, '${esc(userId)}'::uuid, ${Math.min(Math.max(limit, 1), 200)}, ${before})`);
+      const before = req.query.before ? String(req.query.before).trim() : "";
+      const viewer = await resolveViewerContext({ userId, deviceId });
+      const rows = await runReadOnlySql(buildThreadMessagesSql({ threadId, viewerUserId: viewer.effectiveUserId, managerOverview: viewer.isManagerOverview, before, limit }));
       res.status(200).json({ ok: true, data: rows || [], meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Thread messages failed");
@@ -286,7 +420,11 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     try {
       const createdByUserId = String(req.body?.created_by_user_id || "").trim();
       const otherUserId = String(req.body?.other_user_id || "").trim();
-      const data = await runRpc("msg_get_or_create_direct_thread", { p_user_a: createdByUserId, p_user_b: otherUserId });
+      const deviceId = String(req.body?.device_id || "").trim();
+      const viewer = await resolveViewerContext({ userId: createdByUserId, deviceId });
+      if (!otherUserId) throw new Error("other_user_id is required.");
+      if (viewer.effectiveUserId === otherUserId) throw new Error("Pick someone else to message.");
+      const data = await runRpc("msg_get_or_create_direct_thread", { p_user_a: viewer.effectiveUserId, p_user_b: otherUserId });
       res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Create direct thread failed");
@@ -296,12 +434,15 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
   router.post("/thread/group", async (req, res) => {
     try {
       const createdByUserId = String(req.body?.created_by_user_id || "").trim();
+      const deviceId = String(req.body?.device_id || "").trim();
       const title = req.body?.title == null ? null : String(req.body.title);
       const memberUserIds = Array.isArray(req.body?.member_user_ids)
         ? req.body.member_user_ids.map((x) => String(x || "").trim()).filter(Boolean)
         : [];
+      const viewer = await resolveViewerContext({ userId: createdByUserId, deviceId });
+      if (!viewer.isManagerOverview) throw new Error("Employee devices can only start one-person direct conversations.");
       const data = await runRpc("msg_create_group_thread", {
-        p_created_by_user_id: createdByUserId,
+        p_created_by_user_id: viewer.effectiveUserId,
         p_title: title,
         p_member_user_ids: memberUserIds
       });
