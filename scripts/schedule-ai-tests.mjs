@@ -57,6 +57,7 @@ const needed = [
   "loadSpread",
   "canRosterEmployeeCoverAssignment",
   "buildRestroomRebalancePlan",
+  "buildCoverAllRebalancePlan",
   "normalizeRestroomRebalanceCompletionRow",
   "buildRestroomRebalanceCompletionSelectSql",
   "buildRestroomRebalanceCompletionUpsertSql",
@@ -160,6 +161,50 @@ const shiftWindowRestroomPlan = context.buildRestroomRebalancePlan([
 assert.equal(shiftWindowRestroomPlan.applied, true);
 assert.equal(shiftWindowRestroomPlan.moves.length, 1);
 assert.equal(shiftWindowRestroomPlan.moves[0].to_employee_id, "casey", "restroom rebalance must not move 3pm coverage to a 2pm employee");
+
+const coverAllPlan = context.buildCoverAllRebalancePlan([
+  { assignment_id: "early-west", assigned_employee_id: "employee-a", assigned_employee_name: "Alex", group_name: "West Entry", coverage_start: "08:00:00", coverage_end: "09:45:00", load_points: 4, source_type: "coverage_template" },
+  { assignment_id: "mid-primate", assigned_employee_id: "employee-a", assigned_employee_name: "Alex", group_name: "Primate", coverage_start: "10:00:00", coverage_end: "12:00:00", load_points: 4, source_type: "coverage_template" },
+  { assignment_id: "late-route", assigned_employee_id: "employee-a", assigned_employee_name: "Alex", group_name: "South Route", coverage_start: "12:00:00", coverage_end: "15:00:00", load_points: 6, source_type: "coverage_template" },
+  { assignment_id: "late-east", assigned_employee_id: "employee-b", assigned_employee_name: "Blair", group_name: "East End", coverage_start: "12:00:00", coverage_end: "15:00:00", load_points: 4, source_type: "coverage_template" },
+], [
+  { employee_id: "employee-a", employee_name: "Alex", shift_start: "05:00:00", shift_end: "15:00:00" },
+  { employee_id: "employee-b", employee_name: "Blair", shift_start: "05:00:00", shift_end: "15:00:00" },
+  { employee_id: "coverall-1", employee_name: "CoverAll 1", employee_code: "COVERALL_01", shift_start: "08:00:00", shift_end: "16:00:00" },
+  { employee_id: "coverall-2", employee_name: "CoverAll 2", employee_code: "COVERALL_02", shift_start: "08:00:00", shift_end: "16:00:00" },
+], ["coverall-1", "coverall-2"]);
+assert.equal(coverAllPlan.applied, true);
+assert.equal(coverAllPlan.reason, "coverall_rebalanced");
+assert.equal(coverAllPlan.initial_loads["employee-a"], 14);
+assert.equal(coverAllPlan.initial_loads["coverall-1"], 0);
+assert.equal(coverAllPlan.moves.length, 2, "coverall rebalance should distribute work across added CoverAll helpers");
+assert.deepEqual(Object.values(coverAllPlan.loads).sort((a, b) => a - b), [4, 4, 4, 6]);
+
+const pre0945CoverAllPlan = context.buildCoverAllRebalancePlan([
+  { assignment_id: "early-west", assigned_employee_id: "employee-a", assigned_employee_name: "Alex", group_name: "West Entry", coverage_start: "08:00:00", coverage_end: "09:45:00", load_points: 4, source_type: "coverage_template" },
+  { assignment_id: "late-route", assigned_employee_id: "employee-a", assigned_employee_name: "Alex", group_name: "South Route", coverage_start: "12:00:00", coverage_end: "15:00:00", load_points: 6, source_type: "coverage_template" },
+  { assignment_id: "late-east", assigned_employee_id: "employee-b", assigned_employee_name: "Blair", group_name: "East End", coverage_start: "12:00:00", coverage_end: "15:00:00", load_points: 4, source_type: "coverage_template" },
+], [
+  { employee_id: "employee-a", employee_name: "Alex", shift_start: "05:00:00", shift_end: "15:00:00" },
+  { employee_id: "employee-b", employee_name: "Blair", shift_start: "05:00:00", shift_end: "15:00:00" },
+  { employee_id: "coverall-early", employee_name: "CoverAll Early", employee_code: "COVERALL_01", shift_start: "08:00:00", shift_end: "10:00:00" },
+], ["coverall-early"]);
+assert.equal(pre0945CoverAllPlan.applied, true);
+assert.equal(pre0945CoverAllPlan.moves.length, 1);
+assert.equal(pre0945CoverAllPlan.moves[0].assignment_id, "early-west", "coverall rebalance must consider pre-09:45 non-restroom work when it fits the added helper's shift");
+
+const protectedCoverAllPlan = context.buildCoverAllRebalancePlan([
+  { assignment_id: "manager-fixed", assigned_employee_id: "employee-a", assigned_employee_name: "Alex", group_name: "VIP Route", coverage_start: "09:00:00", coverage_end: "11:00:00", load_points: 8, source_type: "manager_override" },
+  { assignment_id: "regular", assigned_employee_id: "employee-a", assigned_employee_name: "Alex", group_name: "General Route", coverage_start: "11:00:00", coverage_end: "13:00:00", load_points: 4, source_type: "coverage_template" },
+  { assignment_id: "support", assigned_employee_id: "employee-b", assigned_employee_name: "Blair", group_name: "Support Route", coverage_start: "11:00:00", coverage_end: "13:00:00", load_points: 2, source_type: "coverage_template" },
+], [
+  { employee_id: "employee-a", employee_name: "Alex", shift_start: "05:00:00", shift_end: "15:00:00" },
+  { employee_id: "employee-b", employee_name: "Blair", shift_start: "05:00:00", shift_end: "15:00:00" },
+  { employee_id: "coverall-1", employee_name: "CoverAll 1", employee_code: "COVERALL_01", shift_start: "08:00:00", shift_end: "16:00:00" },
+], ["coverall-1"]);
+assert.equal(protectedCoverAllPlan.applied, true);
+assert.equal(protectedCoverAllPlan.moves.length, 1);
+assert.equal(protectedCoverAllPlan.moves[0].assignment_id, "regular", "coverall rebalance must preserve manager/manual override assignments");
 
 assert.equal(context.normalizeRestroomRebalanceCompletionRow({ status: "completed" })?.completed, true);
 assert.equal(context.normalizeRestroomRebalanceCompletionRow({ status: "failed" })?.completed, false);
