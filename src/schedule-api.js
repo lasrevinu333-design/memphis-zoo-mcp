@@ -713,12 +713,200 @@ export function createScheduleRouter({
       `;
     }
 
+    await runWriteSql("coverall_slots_publish", sql);
     const generateResult = await runRpc("sch_generate_daily_schedule", { p_service_date: serviceDate, p_force: true });
     const staticRestoreResult = await restoreStaticOwnersForDate(serviceDate);
-    await runWriteSql("coverall_slots_publish", sql);
     const balanceResult = await rebalanceCoverAllAssignments(serviceDate);
     const currentSlots = await listCoverAllSlotsForDate(serviceDate);
     return { service_date: serviceDate, slots: currentSlots, generate_result: generateResult, static_restore_result: staticRestoreResult, balance_result: balanceResult };
+  }
+
+  function buildCoverAllRebalancePlan(assignments = [], activeRoster = [], activeCoverAllIds = []) {
+    const employeeMeta = new Map();
+    const loadByEmployee = new Map();
+    for (const row of Array.isArray(activeRoster) ? activeRoster : []) {
+      const employeeId = String(row.employee_id || row.id || "").trim();
+      if (!employeeId) continue;
+      employeeMeta.set(employeeId, {
+        employee_id: employeeId,
+        employee_name: String(row.employee_name || row.display_name || "").trim(),
+        employee_code: String(row.employee_code || "").trim(),
+        shift_start: String(row.shift_start || "").trim(),
+        shift_end: String(row.shift_end || "").trim(),
+      });
+      loadByEmployee.set(employeeId, 0);
+    }
+
+    const coverAllEmployeeIds = Array.from(new Set((Array.isArray(activeCoverAllIds) ? activeCoverAllIds : []).map((value) => String(value || "").trim()).filter(Boolean)));
+    if (!coverAllEmployeeIds.length) {
+      return { applied: false, reason: "no_active_coverall_slots", moved_count: 0, moves: [] };
+    }
+    if (!loadByEmployee.size) {
+      return { applied: false, reason: "no_active_employees", moved_count: 0, moves: [] };
+    }
+
+    const activeEmployeeIds = new Set(loadByEmployee.keys());
+    const regularEmployeeIds = Array.from(activeEmployeeIds).filter((id) => !coverAllEmployeeIds.includes(id));
+    if (!regularEmployeeIds.length) {
+      return { applied: false, reason: "no_regular_employees_to_balance_from", moved_count: 0, moves: [] };
+    }
+
+    const normalizedAssignments = (Array.isArray(assignments) ? assignments : [])
+      .map((row) => ({
+        assignment_id: String(row.assignment_id || row.id || "").trim(),
+        assigned_employee_id: String(row.assigned_employee_id || "").trim(),
+        assigned_employee_name: String(row.assigned_employee_name || row.employee_name || "").trim(),
+        group_name: String(row.group_name || row.group_code || "Area").trim(),
+        group_code: String(row.group_code || "").trim(),
+        segment_number: Number(row.segment_number || 0),
+        coverage_start: String(row.coverage_start || "").trim(),
+        coverage_end: String(row.coverage_end || "").trim(),
+        load_points: Math.max(1, Number(row.load_points || 1)),
+        source_type: String(row.source_type || "").trim(),
+      }))
+      .filter((row) => row.assignment_id && activeEmployeeIds.has(row.assigned_employee_id));
+
+    if (!normalizedAssignments.length) {
+      return { applied: false, reason: "no_assignments_to_balance", moved_count: 0, moves: [] };
+    }
+
+    for (const assignment of normalizedAssignments) {
+      loadByEmployee.set(assignment.assigned_employee_id, (loadByEmployee.get(assignment.assigned_employee_id) || 0) + assignment.load_points);
+    }
+
+    const initialLoads = new Map(loadByEmployee);
+    const totalLoad = Array.from(loadByEmployee.values()).reduce((sum, value) => sum + Number(value || 0), 0);
+    const targetLoad = totalLoad / Math.max(1, loadByEmployee.size);
+    const movableAssignments = normalizedAssignments.filter((assignment) => !isProtectedRestroomSource(assignment.source_type));
+    if (!movableAssignments.length) {
+      return {
+        applied: false,
+        reason: loadSpread(initialLoads) <= 1 ? "already_balanced" : "no_safe_coverall_moves",
+        moved_count: 0,
+        target_load: Number(targetLoad.toFixed(2)),
+        initial_loads: Object.fromEntries(Array.from(initialLoads.entries()).map(([key, value]) => [key, Number(Number(value || 0).toFixed(2))])),
+        loads: Object.fromEntries(Array.from(loadByEmployee.entries()).map(([key, value]) => [key, Number(Number(value || 0).toFixed(2))])),
+        moves: [],
+      };
+    }
+
+    const movedAssignmentIds = new Set();
+    const moves = [];
+    const maxMoves = movableAssignments.length;
+
+    function employeeExcess(employeeId) {
+      return (loadByEmployee.get(employeeId) || 0) - targetLoad;
+    }
+
+    for (let guard = 0; guard < maxMoves; guard += 1) {
+      const beforeSpread = loadSpread(loadByEmployee);
+      if (beforeSpread <= 1) break;
+
+      const donorIds = Array.from(activeEmployeeIds)
+        .slice()
+        .sort((a, b) => employeeExcess(b) - employeeExcess(a) || String(a).localeCompare(String(b)));
+      const receiverIds = coverAllEmployeeIds
+        .slice()
+        .sort((a, b) => employeeExcess(a) - employeeExcess(b) || String(a).localeCompare(String(b)));
+
+      let bestCandidate = null;
+
+      for (const donorId of donorIds) {
+        if (employeeExcess(donorId) <= 0.25) continue;
+        const donorAssignments = movableAssignments
+          .filter((assignment) => assignment.assigned_employee_id === donorId && !movedAssignmentIds.has(assignment.assignment_id))
+          .sort((a, b) => a.load_points - b.load_points || String(a.group_name).localeCompare(String(b.group_name)));
+        if (!donorAssignments.length) continue;
+
+        for (const receiverId of receiverIds) {
+          if (receiverId === donorId) continue;
+          if (employeeExcess(receiverId) >= -0.25) continue;
+          const receiverMeta = employeeMeta.get(receiverId) || {};
+
+          for (const assignment of donorAssignments) {
+            if (!canRosterEmployeeCoverAssignment(receiverMeta, assignment)) continue;
+            const donorLoad = loadByEmployee.get(donorId) || 0;
+            const receiverLoad = loadByEmployee.get(receiverId) || 0;
+            const after = new Map(loadByEmployee);
+            after.set(donorId, donorLoad - assignment.load_points);
+            after.set(receiverId, receiverLoad + assignment.load_points);
+            const afterSpread = loadSpread(after);
+            if (afterSpread >= beforeSpread) continue;
+
+            const beforeDistance = Math.abs(donorLoad - targetLoad) + Math.abs(receiverLoad - targetLoad);
+            const afterDistance = Math.abs((donorLoad - assignment.load_points) - targetLoad) + Math.abs((receiverLoad + assignment.load_points) - targetLoad);
+            const candidate = {
+              donorId,
+              receiverId,
+              assignment,
+              afterSpread,
+              distanceImprovement: beforeDistance - afterDistance,
+            };
+
+            if (!bestCandidate
+              || candidate.afterSpread < bestCandidate.afterSpread
+              || (candidate.afterSpread === bestCandidate.afterSpread && candidate.distanceImprovement > bestCandidate.distanceImprovement)
+              || (candidate.afterSpread === bestCandidate.afterSpread && candidate.distanceImprovement === bestCandidate.distanceImprovement && assignment.load_points < bestCandidate.assignment.load_points)
+              || (candidate.afterSpread === bestCandidate.afterSpread
+                && candidate.distanceImprovement === bestCandidate.distanceImprovement
+                && assignment.load_points === bestCandidate.assignment.load_points
+                && String(assignment.group_name).localeCompare(String(bestCandidate.assignment.group_name)) < 0)) {
+              bestCandidate = candidate;
+            }
+          }
+        }
+      }
+
+      if (!bestCandidate) break;
+
+      const { donorId, receiverId, assignment: chosen } = bestCandidate;
+      const donorLoad = loadByEmployee.get(donorId) || 0;
+      const receiverLoad = loadByEmployee.get(receiverId) || 0;
+      movedAssignmentIds.add(chosen.assignment_id);
+      loadByEmployee.set(donorId, donorLoad - chosen.load_points);
+      loadByEmployee.set(receiverId, receiverLoad + chosen.load_points);
+
+      const donorMeta = employeeMeta.get(donorId) || {};
+      const receiverMeta = employeeMeta.get(receiverId) || {};
+      moves.push({
+        assignment_id: chosen.assignment_id,
+        from_employee_id: donorId,
+        from_employee_name: donorMeta.employee_name || chosen.assigned_employee_name,
+        to_employee_id: receiverId,
+        to_employee_name: receiverMeta.employee_name || "CoverAll",
+        group_name: chosen.group_name,
+        group_code: chosen.group_code,
+        segment_number: chosen.segment_number,
+        coverage_start: chosen.coverage_start,
+        coverage_end: chosen.coverage_end,
+        load_points: chosen.load_points,
+      });
+    }
+
+    const loadsObject = Object.fromEntries(Array.from(loadByEmployee.entries()).map(([key, value]) => [key, Number(Number(value || 0).toFixed(2))]));
+    const initialLoadsObject = Object.fromEntries(Array.from(initialLoads.entries()).map(([key, value]) => [key, Number(Number(value || 0).toFixed(2))]));
+
+    if (!moves.length) {
+      return {
+        applied: false,
+        reason: loadSpread(initialLoads) <= 1 ? "already_balanced" : "no_safe_coverall_moves",
+        moved_count: 0,
+        target_load: Number(targetLoad.toFixed(2)),
+        initial_loads: initialLoadsObject,
+        loads: loadsObject,
+        moves: [],
+      };
+    }
+
+    return {
+      applied: true,
+      reason: "coverall_rebalanced",
+      moved_count: moves.length,
+      target_load: Number(targetLoad.toFixed(2)),
+      initial_loads: initialLoadsObject,
+      loads: loadsObject,
+      moves,
+    };
   }
 
   async function rebalanceCoverAllAssignments(serviceDate) {
@@ -739,169 +927,32 @@ export function createScheduleRouter({
       order by e.display_name
     `);
     const activeRoster = Array.isArray(activeRosterRows) ? activeRosterRows : [];
-    const activeEmployeeIds = new Set(activeRoster.map((row) => String(row.employee_id || "")).filter(Boolean));
-    const activeCoverAllIds = new Set(activeCoverAllSlots.map((slot) => String(slot.employee_id || "")).filter(Boolean));
-
-    if (activeEmployeeIds.size <= activeCoverAllIds.size) {
-      return { applied: false, reason: "no_regular_employees_to_balance_from", moved_count: 0, moves: [] };
-    }
+    const activeCoverAllIds = activeCoverAllSlots.map((slot) => String(slot.employee_id || "")).filter(Boolean);
 
     const assignmentRows = await runReadOnlySql(`
       select dsa.id as assignment_id, dsa.assigned_employee_id, e.display_name as assigned_employee_name, e.employee_code,
-             dsa.location_group_id, lg.group_name, lg.group_code, dsa.segment_number,
+             dsa.location_group_id, lg.group_name, lg.group_code, dsa.segment_number, dsa.source_type,
              to_char(dsa.coverage_start, 'HH24:MI:SS') as coverage_start,
              to_char(dsa.coverage_end, 'HH24:MI:SS') as coverage_end,
-             greatest(coalesce(dsa.load_points, 1), 1)::numeric as load_points,
-             (
-               lower(coalesce(lg.group_name, '')) like '%restroom%'
-               or lower(coalesce(lg.group_code, '')) like '%restroom%'
-               or lower(coalesce(lg.group_name, '')) like '%bathroom%'
-               or lower(coalesce(lg.group_code, '')) like '%bathroom%'
-             ) as is_restroom
+             greatest(coalesce(dsa.load_points, 1), 1)::numeric as load_points
       from public.daily_schedule_assignments dsa
       join public.location_groups lg on lg.id = dsa.location_group_id
       join public.employees e on e.id = dsa.assigned_employee_id
       where dsa.service_date = '${esc(serviceDate)}'::date
         and dsa.status = 'ASSIGNED'
         and dsa.assigned_employee_id is not null
+        and coalesce(dsa.coverage_purpose, '') <> 'lunch_coverage'
         and (dsa.service_date <> public.sch_service_date(now())::date or dsa.coverage_end > now()::time)
-        and (
-          (dsa.coverage_start < '09:45:00'::time and not (
-            exists (
-              select 1
-              from public.location_group_memberships m
-              join public.locations l on l.id = m.location_id and l.active = true
-              where m.location_group_id = dsa.location_group_id
-                and m.active = true
-                and (
-                  lower(coalesce(l.location_type, '')) like '%restroom%'
-                  or lower(coalesce(l.form_type, '')) like '%restroom%'
-                  or lower(coalesce(l.location_name, '')) like '%restroom%'
-                  or lower(coalesce(l.location_name, '')) like '%bathroom%'
-                )
-            ) or lower(coalesce(lg.group_name, '')) like '%restroom%'
-          ))
-          or
-          (dsa.coverage_end > '09:45:00'::time and (
-            exists (
-              select 1
-              from public.location_group_memberships m
-              join public.locations l on l.id = m.location_id and l.active = true
-              where m.location_group_id = dsa.location_group_id
-                and m.active = true
-                and (
-                  lower(coalesce(l.location_type, '')) like '%restroom%'
-                  or lower(coalesce(l.form_type, '')) like '%restroom%'
-                  or lower(coalesce(l.location_name, '')) like '%restroom%'
-                  or lower(coalesce(l.location_name, '')) like '%bathroom%'
-                )
-            ) or lower(coalesce(lg.group_name, '')) like '%restroom%'
-          ))
-        )
       order by dsa.coverage_start, lg.group_name, dsa.segment_number
     `);
-    const assignments = (Array.isArray(assignmentRows) ? assignmentRows : [])
-      .filter((row) => activeEmployeeIds.has(String(row.assigned_employee_id || "")))
-      .map((row) => ({
-        assignment_id: String(row.assignment_id || ""),
-        assigned_employee_id: String(row.assigned_employee_id || ""),
-        assigned_employee_name: String(row.assigned_employee_name || ""),
-        employee_code: String(row.employee_code || ""),
-        group_name: String(row.group_name || row.group_code || "Area"),
-        group_code: String(row.group_code || ""),
-        segment_number: Number(row.segment_number || 0),
-        coverage_start: String(row.coverage_start || ""),
-        coverage_end: String(row.coverage_end || ""),
-        load_points: Math.max(1, Number(row.load_points || 1)),
-      }))
-      .filter((row) => row.assignment_id && row.assigned_employee_id);
+    const assignments = Array.isArray(assignmentRows) ? assignmentRows : [];
+    const plan = buildCoverAllRebalancePlan(assignments, activeRoster, activeCoverAllIds);
 
-    if (!assignments.length) {
-      return { applied: false, reason: "no_assignments_to_balance", moved_count: 0, moves: [] };
+    if (!plan.applied || !plan.moves?.length) {
+      return { service_date: serviceDate, ...plan };
     }
 
-    const employeeMeta = new Map(activeRoster.map((row) => [String(row.employee_id), {
-      employee_id: String(row.employee_id),
-      employee_name: String(row.employee_name || ""),
-      employee_code: String(row.employee_code || ""),
-    }]));
-    const loadByEmployee = new Map(activeRoster.map((row) => [String(row.employee_id), 0]));
-    for (const assignment of assignments) {
-      loadByEmployee.set(assignment.assigned_employee_id, (loadByEmployee.get(assignment.assigned_employee_id) || 0) + assignment.load_points);
-    }
-
-    const totalLoad = Array.from(loadByEmployee.values()).reduce((sum, value) => sum + Number(value || 0), 0);
-    const targetLoad = totalLoad / Math.max(1, activeEmployeeIds.size);
-    const regularEmployeeIds = Array.from(activeEmployeeIds).filter((id) => !activeCoverAllIds.has(id));
-    const coverAllEmployeeIds = Array.from(activeCoverAllIds);
-    const availableAssignments = assignments.filter((row) => !activeCoverAllIds.has(row.assigned_employee_id));
-    const movedAssignmentIds = new Set();
-    const moves = [];
-    const maxMoves = Math.min(availableAssignments.length, Math.max(1, coverAllEmployeeIds.length * 12));
-
-    function donorExcess(employeeId) {
-      return (loadByEmployee.get(employeeId) || 0) - targetLoad;
-    }
-
-    for (let guard = 0; guard < maxMoves; guard += 1) {
-      const donorId = regularEmployeeIds
-        .slice()
-        .sort((a, b) => donorExcess(b) - donorExcess(a))[0];
-      const receiverId = coverAllEmployeeIds
-        .slice()
-        .sort((a, b) => (loadByEmployee.get(a) || 0) - (loadByEmployee.get(b) || 0))[0];
-
-      if (!donorId || !receiverId) break;
-      const excess = donorExcess(donorId);
-      const receiverLoad = loadByEmployee.get(receiverId) || 0;
-      if (excess <= 0.25 || receiverLoad >= targetLoad * 0.95) break;
-
-      const donorAssignments = availableAssignments
-        .filter((assignment) => assignment.assigned_employee_id === donorId && !movedAssignmentIds.has(assignment.assignment_id))
-        .sort((a, b) => {
-          const aFit = Math.abs((receiverLoad + a.load_points) - targetLoad);
-          const bFit = Math.abs((receiverLoad + b.load_points) - targetLoad);
-          if (a.load_points <= excess && b.load_points > excess) return -1;
-          if (b.load_points <= excess && a.load_points > excess) return 1;
-          return aFit - bFit || b.load_points - a.load_points;
-        });
-
-      const chosen = donorAssignments[0];
-      if (!chosen) break;
-
-      movedAssignmentIds.add(chosen.assignment_id);
-      loadByEmployee.set(donorId, (loadByEmployee.get(donorId) || 0) - chosen.load_points);
-      loadByEmployee.set(receiverId, (loadByEmployee.get(receiverId) || 0) + chosen.load_points);
-
-      const donorMeta = employeeMeta.get(donorId) || {};
-      const receiverMeta = employeeMeta.get(receiverId) || {};
-      moves.push({
-        assignment_id: chosen.assignment_id,
-        from_employee_id: donorId,
-        from_employee_name: donorMeta.employee_name || chosen.assigned_employee_name,
-        to_employee_id: receiverId,
-        to_employee_name: receiverMeta.employee_name || "CoverAll",
-        group_name: chosen.group_name,
-        group_code: chosen.group_code,
-        segment_number: chosen.segment_number,
-        coverage_start: chosen.coverage_start,
-        coverage_end: chosen.coverage_end,
-        load_points: chosen.load_points,
-      });
-    }
-
-    if (!moves.length) {
-      return {
-        applied: false,
-        reason: "already_balanced_or_no_safe_moves",
-        moved_count: 0,
-        target_load: Number(targetLoad.toFixed(2)),
-        loads: Object.fromEntries(Array.from(loadByEmployee.entries()).map(([key, value]) => [key, Number(Number(value || 0).toFixed(2))])),
-        moves: [],
-      };
-    }
-
-    const valuesSql = moves.map((move) => `(
+    const valuesSql = plan.moves.map((move) => `(
       '${esc(move.assignment_id)}'::uuid,
       '${esc(move.to_employee_id)}'::uuid,
       '${esc(move.to_employee_name)}',
@@ -923,13 +974,7 @@ export function createScheduleRouter({
       where dsa.id = moved.assignment_id;
     `);
 
-    return {
-      applied: true,
-      moved_count: moves.length,
-      target_load: Number(targetLoad.toFixed(2)),
-      loads: Object.fromEntries(Array.from(loadByEmployee.entries()).map(([key, value]) => [key, Number(Number(value || 0).toFixed(2))])),
-      moves,
-    };
+    return { service_date: serviceDate, ...plan };
   }
 
   async function listActiveRosterForRestroomRebalance(serviceDate) {
