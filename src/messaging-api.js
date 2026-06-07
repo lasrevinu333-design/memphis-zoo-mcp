@@ -50,11 +50,37 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     return { identity, effectiveUserId, deviceId: normalizedDeviceId, isManagerOverview };
   }
 
+  async function getServiceDate() {
+    const rows = await runReadOnlySql("select public.sch_service_date(now()) as service_date");
+    return Array.isArray(rows) && rows.length ? rows[0].service_date : null;
+  }
+
+  async function getAssignedEmployeeForDevice(deviceId = "") {
+    const normalizedDeviceId = String(deviceId || "").trim();
+    if (!normalizedDeviceId) return null;
+    const rows = await runReadOnlySql(`
+      select
+        d.device_id,
+        d.device_name,
+        d.assigned_employee_id,
+        e.display_name as assigned_employee_name,
+        e.employee_code,
+        e.role,
+        d.active as device_active,
+        coalesce(e.active, false) as employee_active
+      from public.devices d
+      left join public.employees e on e.id = d.assigned_employee_id
+      where d.device_id = '${esc(normalizedDeviceId)}'
+      limit 1
+    `);
+    return Array.isArray(rows) && rows.length ? rows[0] : null;
+  }
+
   function buildThreadListSql({ viewerUserId = "", managerOverview = false }) {
     const viewer = esc(viewerUserId);
     const visibilityClause = managerOverview
       ? "true"
-      : "tp.viewer_is_participant = true and t.thread_type in ('direct', 'bot')";
+      : "tp.viewer_is_participant = true";
     const unreadSelect = managerOverview
       ? "case when tp.viewer_is_participant then coalesce(u.unread_count, 0) else 0 end"
       : "coalesce(u.unread_count, 0)";
@@ -104,7 +130,11 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         case
           when t.thread_type = 'bot' then coalesce(nullif(t.title, ''), 'Memphis')
           when t.thread_type = 'direct' then coalesce(nullif(tp.other_participant_names, ''), nullif(tp.participant_names, ''), 'Direct')
-          else coalesce(nullif(t.title, ''), nullif(tp.participant_names, ''), 'Group')
+          else case
+            when nullif(t.title, '') is not null then t.title
+            when tp.participant_count >= 8 then 'Custodial Team'
+            else coalesce(nullif(tp.participant_names, ''), 'Group')
+          end
         end as thread_title,
         ${unreadSelect} as unread_count,
         lm.last_message_at,
@@ -131,7 +161,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     const beforeSql = before ? `and coalesce(m.sent_at, m.created_at) < '${esc(String(before).trim())}'::timestamptz` : "";
     const visibilityClause = managerOverview
       ? "true"
-      : "exists (select 1 from public.msg_thread_participants tp where tp.thread_id = t.id and tp.user_id = '" + viewer + "'::uuid and tp.left_at is null) and t.thread_type in ('direct', 'bot')";
+      : "exists (select 1 from public.msg_thread_participants tp where tp.thread_id = t.id and tp.user_id = '" + viewer + "'::uuid and tp.left_at is null)";
     return `
       select * from (
       select
@@ -402,6 +432,94 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       res.status(200).json({ ok: true, data: rows || [], meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Device event reminders failed");
+    }
+  });
+
+  router.get("/device-location-status-reminders", async (req, res) => {
+    try {
+      const deviceId = String(req.query.device_id || "").trim();
+      const limit = Math.min(Math.max(Number.parseInt(String(req.query.limit || 5), 10) || 5, 1), 20);
+      if (!deviceId) throw new Error("device_id is required.");
+
+      const assignment = await getAssignedEmployeeForDevice(deviceId);
+      if (!assignment || !assignment.device_active) {
+        res.status(404).json({ ok: false, error: "Active device assignment not found." });
+        return;
+      }
+      if (!assignment.assigned_employee_id || !assignment.employee_active) {
+        res.status(404).json({ ok: false, error: "This device is not assigned to an active employee." });
+        return;
+      }
+
+      const serviceDate = String(req.query.service_date || req.query.date || "").trim() || await getServiceDate();
+      if (!serviceDate) throw new Error("service_date could not be resolved.");
+
+      const rows = await runReadOnlySql(`
+        with assigned_groups as (
+          select distinct
+            s.location_group_id,
+            s.group_code,
+            s.group_name,
+            coalesce(s.coverage_purpose, 'area_owner') as coverage_purpose
+          from public.sch_get_daily_schedule_with_purpose('${esc(serviceDate)}'::date) s
+          where s.assigned_employee_id = '${esc(assignment.assigned_employee_id)}'::uuid
+            and coalesce(s.coverage_purpose, 'area_owner') <> 'reminder'
+        ),
+        assigned_locations as (
+          select distinct on (l.id)
+            ag.location_group_id,
+            ag.group_code,
+            ag.group_name,
+            ag.coverage_purpose,
+            l.id as location_id,
+            l.location_code,
+            l.location_name,
+            l.form_type
+          from assigned_groups ag
+          join public.location_group_memberships lgm
+            on lgm.location_group_id = ag.location_group_id
+           and lgm.active = true
+          join public.locations l
+            on l.id = lgm.location_id
+           and l.active = true
+          order by l.id, ag.group_name, ag.group_code
+        )
+        select
+          '${esc(serviceDate)}'::date as service_date,
+          '${esc(assignment.device_id || deviceId)}'::text as device_id,
+          ${assignment.device_name ? `'${esc(assignment.device_name)}'::text` : 'null::text'} as device_name,
+          '${esc(assignment.assigned_employee_id)}'::uuid as employee_id,
+          ${assignment.assigned_employee_name ? `'${esc(assignment.assigned_employee_name)}'::text` : 'null::text'} as employee_name,
+          ${assignment.employee_code ? `'${esc(assignment.employee_code)}'::text` : 'null::text'} as employee_code,
+          al.location_group_id,
+          al.group_code,
+          al.group_name,
+          al.coverage_purpose,
+          al.location_id,
+          al.location_code,
+          al.location_name,
+          al.form_type,
+          v.status_code,
+          v.status_color,
+          v.latest_completed_at,
+          v.latest_completed_at_display,
+          v.open_session_status,
+          v.open_session_started_at,
+          v.open_session_started_at_display,
+          v.last_scan_at,
+          v.last_scan_at_display
+        from assigned_locations al
+        join public.v_location_dashboard_status v on v.location_id = al.location_id
+        where v.status_code in ('overdue', 'due_soon')
+        order by
+          case when v.status_code = 'overdue' then 0 else 1 end,
+          case when al.form_type = 'restroom' then 0 else 1 end,
+          al.location_name asc
+        limit ${limit}
+      `);
+      res.status(200).json({ ok: true, data: rows || [], meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+    } catch (error) {
+      fail(res, error, "Device location status reminders failed");
     }
   });
 

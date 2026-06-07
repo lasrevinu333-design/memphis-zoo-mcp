@@ -233,6 +233,80 @@ assert.match(reminderSql, /metadata_json->>'source'.*= 'events_app'/s, 'device r
 assert.match(reminderSql, /metadata_json->>'notification_kind'.*two_days_before.*day_before.*morning_of/s, 'device reminder route should only return the three event reminder kinds');
 assert.match(reminderSql, /r\.read_at is null/, 'device reminder route should only return unread reminders');
 
+const locationStatusReadCalls = [];
+const locationStatusApp = express();
+locationStatusApp.use(express.json());
+locationStatusApp.use('/messaging-api', createMessagingRouter({
+  runReadOnlySql: async (sql) => {
+    const query = String(sql || '');
+    locationStatusReadCalls.push(query);
+    if (/select public\.sch_service_date\(now\(\)\) as service_date/i.test(query)) {
+      return [{ service_date: SERVICE_DATE }];
+    }
+    if (/from public\.devices d/i.test(query) && /where d\.device_id = 'KIOSK_02'/i.test(query)) {
+      return [{
+        device_id: 'KIOSK_02',
+        device_name: 'Alijah Collins phone',
+        assigned_employee_id: '30000000-0000-0000-0000-000000000001',
+        assigned_employee_name: 'Alijah Collins',
+        employee_code: 'EMP001',
+        role: 'employee',
+        device_active: true,
+        employee_active: true,
+      }];
+    }
+    if (/with assigned_groups as/i.test(query) && /v_location_dashboard_status/i.test(query)) {
+      return [{
+        service_date: SERVICE_DATE,
+        device_id: 'KIOSK_02',
+        device_name: 'Alijah Collins phone',
+        employee_id: '30000000-0000-0000-0000-000000000001',
+        employee_name: 'Alijah Collins',
+        employee_code: 'EMP001',
+        location_group_id: '40000000-0000-0000-0000-000000000001',
+        group_code: 'AQUARIUM',
+        group_name: 'Aquarium',
+        coverage_purpose: 'area_owner',
+        location_id: '50000000-0000-0000-0000-000000000001',
+        location_code: 'AQUA1',
+        location_name: 'Aquarium Restroom',
+        form_type: 'restroom',
+        status_code: 'overdue',
+        status_color: 'red',
+        latest_completed_at: '2026-04-25T12:00:00Z',
+        latest_completed_at_display: '04/25/2026 07:00 AM Central',
+        open_session_status: null,
+        open_session_started_at: null,
+        open_session_started_at_display: null,
+        last_scan_at: '2026-04-25T12:00:00Z',
+        last_scan_at_display: '04/25/2026 07:00 AM Central',
+      }];
+    }
+    return [];
+  },
+  runRpc: async () => null,
+  buildHealthPayload: (area, extra) => ({ ok: true, area, ...extra }),
+  appVersion: 'test',
+  releaseId: 'test',
+  contractVersion: 'messaging.v1',
+}));
+
+await withServer(locationStatusApp, async (baseUrl) => {
+  const response = await fetch(`${baseUrl}/messaging-api/device-location-status-reminders?device_id=KIOSK_02&limit=2`);
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.ok, true);
+  assert.equal(payload.data.length, 1);
+  assert.equal(payload.data[0].status_code, 'overdue');
+  assert.equal(payload.data[0].location_code, 'AQUA1');
+});
+const locationStatusSql = locationStatusReadCalls.find((sql) => /with assigned_groups as/i.test(sql));
+assert.ok(locationStatusSql, 'device location status reminder route should query assigned group location statuses');
+assert.match(locationStatusSql, /sch_get_daily_schedule_with_purpose\('2026-04-25'::date\)/, 'location status reminder route should resolve the active service date');
+assert.match(locationStatusSql, /coalesce\(s\.coverage_purpose, 'area_owner'\) <> 'reminder'/, 'location status reminder route should exclude reminder-only schedule groups');
+assert.match(locationStatusSql, /location_group_memberships/, 'device location status reminder route should resolve real locations from group memberships');
+assert.match(locationStatusSql, /status_code in \('overdue', 'due_soon'\)/, 'device location status reminder route should only return due soon or overdue locations');
+
 const EMPLOYEE_USER_ID = '10000000-0000-0000-0000-000000000001';
 const MANAGER_USER_ID = '10000000-0000-0000-0000-000000000002';
 const DIRECT_THREAD_ID = '20000000-0000-0000-0000-000000000001';
@@ -252,7 +326,7 @@ visibilityApp.use('/messaging-api', createMessagingRouter({
     if (query.includes("msg_get_user_by_device('KIOSK_01')")) {
       return [{ msg_user_id: MANAGER_USER_ID, display_name: 'Ops Manager', role: 'manager' }];
     }
-    if (query.includes('from public.msg_threads t') && query.includes("t.thread_type in ('direct', 'bot')")) {
+    if (query.includes('from public.msg_threads t') && query.includes('and tp.viewer_is_participant = true')) {
       return [{
         thread_id: DIRECT_THREAD_ID,
         updated_at: '2026-06-06T18:00:00Z',
@@ -265,6 +339,19 @@ visibilityApp.use('/messaging-api', createMessagingRouter({
         last_message_body: 'Need cover at Aquarium?',
         last_message_type: 'text',
         participant_names: 'Sherita Wilbon, Tammy Miller',
+        viewer_can_send: true,
+      }, {
+        thread_id: GROUP_THREAD_ID,
+        updated_at: '2026-06-06T18:01:00Z',
+        thread_type: 'group',
+        thread_title: 'Custodial Team',
+        unread_count: 1,
+        last_message_at: '2026-06-06T18:01:00Z',
+        last_message_id: '30000000-0000-0000-0000-000000000002',
+        last_sender_name: 'Ops Manager',
+        last_message_body: 'Broadcast test',
+        last_message_type: 'text',
+        participant_names: 'Kinnaye Peete, Sherita Wilbon, Tammy Miller',
         viewer_can_send: true,
       }];
     }
@@ -297,6 +384,19 @@ visibilityApp.use('/messaging-api', createMessagingRouter({
         viewer_can_send: false,
       }];
     }
+    if (query.includes('from public.msg_messages m') && query.includes(GROUP_THREAD_ID)) {
+      return [{
+        id: '40000000-0000-0000-0000-000000000002',
+        thread_id: GROUP_THREAD_ID,
+        sender_user_id: MANAGER_USER_ID,
+        sender_display_name: 'Ops Manager',
+        message_type: 'text',
+        body: 'Broadcast test',
+        metadata_json: {},
+        sent_at: '2026-06-06T18:01:00Z',
+        created_at: '2026-06-06T18:01:00Z',
+      }];
+    }
     if (query.includes('from public.msg_messages m') && query.includes(FOREIGN_DIRECT_THREAD_ID)) {
       return [{
         id: '40000000-0000-0000-0000-000000000001',
@@ -325,9 +425,15 @@ visibilityApp.use('/messaging-api', createMessagingRouter({
 await withServer(visibilityApp, async (baseUrl) => {
   const employeeThreads = await fetch(`${baseUrl}/messaging-api/threads?user_id=${EMPLOYEE_USER_ID}&device_id=KIOSK_04`).then((r) => r.json());
   assert.equal(employeeThreads.ok, true);
-  assert.equal(employeeThreads.data.length, 1, 'Employee devices should only receive direct/bot threads for their assigned user');
+  assert.equal(employeeThreads.data.length, 2, 'Employee devices should receive every thread they actually participate in, including group chats');
   assert.equal(employeeThreads.data[0].thread_type, 'direct');
   assert.equal(employeeThreads.data[0].thread_title, 'Sherita Wilbon');
+  assert.equal(employeeThreads.data[1].thread_type, 'group');
+  assert.equal(employeeThreads.data[1].thread_title, 'Custodial Team');
+
+  const employeeGroupMessages = await fetch(`${baseUrl}/messaging-api/thread/${GROUP_THREAD_ID}/messages?user_id=${EMPLOYEE_USER_ID}&device_id=KIOSK_04&limit=50`).then((r) => r.json());
+  assert.equal(employeeGroupMessages.ok, true);
+  assert.equal(employeeGroupMessages.data.length, 1, 'Employee participants should be able to open their group thread messages');
 
   const managerThreads = await fetch(`${baseUrl}/messaging-api/threads?user_id=${MANAGER_USER_ID}&device_id=KIOSK_01`).then((r) => r.json());
   assert.equal(managerThreads.ok, true);
@@ -352,11 +458,15 @@ await withServer(visibilityApp, async (baseUrl) => {
 });
 
 assert.equal(unexpectedGroupRpc, false, 'Blocked employee group-thread attempts must not hit the create-group RPC');
-const employeeThreadSql = visibilityReadCalls.find((sql) => sql.includes("t.thread_type in ('direct', 'bot')"));
-assert.ok(employeeThreadSql, 'Employee thread list should filter to direct and Memphis bot threads');
-const managerThreadSql = visibilityReadCalls.find((sql) => sql.includes('from public.msg_threads t') && !sql.includes("t.thread_type in ('direct', 'bot')"));
+const employeeThreadSql = visibilityReadCalls.find((sql) => sql.includes('from public.msg_threads t') && sql.includes('and tp.viewer_is_participant = true'));
+assert.ok(employeeThreadSql, 'Employee thread list should stay participant-scoped at the API layer');
+assert.doesNotMatch(employeeThreadSql, /t\.thread_type in \('direct', 'bot'\)/, 'Employee thread list must not hide participant group threads anymore');
+const managerThreadSql = visibilityReadCalls.find((sql) => sql.includes('from public.msg_threads t') && !sql.includes('and tp.viewer_is_participant = true'));
 assert.ok(managerThreadSql, 'Manager overview thread list should be allowed to inspect all threads');
+const employeeGroupMessageSql = visibilityReadCalls.find((sql) => sql.includes(GROUP_THREAD_ID) && sql.includes('from public.msg_messages m'));
+assert.ok(employeeGroupMessageSql, 'Employee participant group-message fetch should use the shared participant visibility query');
+assert.doesNotMatch(employeeGroupMessageSql, /t\.thread_type in \('direct', 'bot'\)/, 'Employee participant message fetch must not hide group threads anymore');
 const managerMessageSql = visibilityReadCalls.find((sql) => sql.includes(FOREIGN_DIRECT_THREAD_ID) && sql.includes('from public.msg_messages m'));
 assert.ok(managerMessageSql, 'Manager overview message fetch should use the raw thread message visibility query');
 
-console.log(JSON.stringify({ ok: true, route_cases: routeCases.length, reply_cases: replyCases.length, false_location_code_cases: falseLocationCodeCases.length, device_event_reminder_contract: true, thread_visibility_contract: true }, null, 2));
+console.log(JSON.stringify({ ok: true, route_cases: routeCases.length, reply_cases: replyCases.length, false_location_code_cases: falseLocationCodeCases.length, device_event_reminder_contract: true, device_location_status_reminder_contract: true, thread_visibility_contract: true }, null, 2));
