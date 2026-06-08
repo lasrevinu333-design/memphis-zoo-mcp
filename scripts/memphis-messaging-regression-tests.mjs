@@ -302,6 +302,7 @@ await withServer(locationStatusApp, async (baseUrl) => {
 });
 const locationStatusSql = locationStatusReadCalls.find((sql) => /with assigned_groups as/i.test(sql));
 assert.ok(locationStatusSql, 'device location status reminder route should query assigned group location statuses');
+assert.match(locationStatusSql.trimStart(), /^select\s+\*/i, 'device location status reminder SQL must begin with SELECT because the live read-only RPC rejects top-level WITH queries');
 assert.match(locationStatusSql, /sch_get_daily_schedule_with_purpose\('2026-04-25'::date\)/, 'location status reminder route should resolve the active service date');
 assert.match(locationStatusSql, /coalesce\(s\.coverage_purpose, 'area_owner'\) <> 'reminder'/, 'location status reminder route should exclude reminder-only schedule groups');
 assert.match(locationStatusSql, /location_group_memberships/, 'device location status reminder route should resolve real locations from group memberships');

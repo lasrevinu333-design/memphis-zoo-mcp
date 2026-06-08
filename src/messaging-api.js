@@ -455,67 +455,73 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       if (!serviceDate) throw new Error("service_date could not be resolved.");
 
       const rows = await runReadOnlySql(`
-        with assigned_groups as (
-          select distinct
-            s.location_group_id,
-            s.group_code,
-            s.group_name,
-            coalesce(s.coverage_purpose, 'area_owner') as coverage_purpose
-          from public.sch_get_daily_schedule_with_purpose('${esc(serviceDate)}'::date) s
-          where s.assigned_employee_id = '${esc(assignment.assigned_employee_id)}'::uuid
-            and coalesce(s.coverage_purpose, 'area_owner') <> 'reminder'
-        ),
-        assigned_locations as (
-          select distinct on (l.id)
-            ag.location_group_id,
-            ag.group_code,
-            ag.group_name,
-            ag.coverage_purpose,
-            l.id as location_id,
-            l.location_code,
-            l.location_name,
-            l.form_type
-          from assigned_groups ag
-          join public.location_group_memberships lgm
-            on lgm.location_group_id = ag.location_group_id
-           and lgm.active = true
-          join public.locations l
-            on l.id = lgm.location_id
-           and l.active = true
-          order by l.id, ag.group_name, ag.group_code
-        )
-        select
-          '${esc(serviceDate)}'::date as service_date,
-          '${esc(assignment.device_id || deviceId)}'::text as device_id,
-          ${assignment.device_name ? `'${esc(assignment.device_name)}'::text` : 'null::text'} as device_name,
-          '${esc(assignment.assigned_employee_id)}'::uuid as employee_id,
-          ${assignment.assigned_employee_name ? `'${esc(assignment.assigned_employee_name)}'::text` : 'null::text'} as employee_name,
-          ${assignment.employee_code ? `'${esc(assignment.employee_code)}'::text` : 'null::text'} as employee_code,
-          al.location_group_id,
-          al.group_code,
-          al.group_name,
-          al.coverage_purpose,
-          al.location_id,
-          al.location_code,
-          al.location_name,
-          al.form_type,
-          v.status_code,
-          v.status_color,
-          v.latest_completed_at,
-          v.latest_completed_at_display,
-          v.open_session_status,
-          v.open_session_started_at,
-          v.open_session_started_at_display,
-          v.last_scan_at,
-          v.last_scan_at_display
-        from assigned_locations al
-        join public.v_location_dashboard_status v on v.location_id = al.location_id
-        where v.status_code in ('overdue', 'due_soon')
-        order by
-          case when v.status_code = 'overdue' then 0 else 1 end,
-          case when al.form_type = 'restroom' then 0 else 1 end,
-          al.location_name asc
-        limit ${limit}
+        select * from (
+          with assigned_groups as (
+            select distinct
+              s.location_group_id,
+              s.group_code,
+              s.group_name,
+              coalesce(s.coverage_purpose, 'area_owner') as coverage_purpose
+            from public.sch_get_daily_schedule_with_purpose('${esc(serviceDate)}'::date) s
+            where s.assigned_employee_id = '${esc(assignment.assigned_employee_id)}'::uuid
+              and coalesce(s.coverage_purpose, 'area_owner') <> 'reminder'
+          ),
+          assigned_locations as (
+            select distinct on (l.id)
+              ag.location_group_id,
+              ag.group_code,
+              ag.group_name,
+              ag.coverage_purpose,
+              l.id as location_id,
+              l.location_code,
+              l.location_name,
+              l.form_type
+            from assigned_groups ag
+            join public.location_group_memberships lgm
+              on lgm.location_group_id = ag.location_group_id
+             and lgm.active = true
+            join public.locations l
+              on l.id = lgm.location_id
+             and l.active = true
+            order by l.id, ag.group_name, ag.group_code
+          )
+          select
+            '${esc(serviceDate)}'::date as service_date,
+            '${esc(assignment.device_id || deviceId)}'::text as device_id,
+            ${assignment.device_name ? `'${esc(assignment.device_name)}'::text` : 'null::text'} as device_name,
+            '${esc(assignment.assigned_employee_id)}'::uuid as employee_id,
+            ${assignment.assigned_employee_name ? `'${esc(assignment.assigned_employee_name)}'::text` : 'null::text'} as employee_name,
+            ${assignment.employee_code ? `'${esc(assignment.employee_code)}'::text` : 'null::text'} as employee_code,
+            al.location_group_id,
+            al.group_code,
+            al.group_name,
+            al.coverage_purpose,
+            al.location_id,
+            al.location_code,
+            al.location_name,
+            al.form_type,
+            v.status_code,
+            v.status_color,
+            v.latest_completed_at,
+            v.latest_completed_at_display,
+            v.open_session_status,
+            v.open_session_started_at,
+            v.open_session_started_at_display,
+            v.open_session_employee_name,
+            v.duration_display,
+            v.services_performed,
+            v.open_ticket_count,
+            v.last_scan_at,
+            v.last_scan_at_display
+          from assigned_locations al
+          join public.v_location_dashboard_status v on v.location_id = al.location_id
+          where v.status_code in ('overdue', 'due_soon')
+          order by
+            case when v.status_code = 'overdue' then 0 else 1 end,
+            case when al.form_type = 'restroom' then 0 else 1 end,
+            al.location_name asc
+          limit ${limit}
+        ) reminder_rows
       `);
       res.status(200).json({ ok: true, data: rows || [], meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
