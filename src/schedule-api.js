@@ -2517,9 +2517,16 @@ export function createScheduleRouter({
     const items = Array.isArray(data?.items) ? data.items : [];
     const restroomItems = items.filter((item) => item?.is_public_restroom);
     const otherItems = items.filter((item) => !item?.is_public_restroom);
-    const renderItems = (list) => list.length
-      ? list.map((item) => `<li>${htmlEscape(item.name)}</li>`).join("")
-      : `<li class="muted">None listed</li>`;
+    const renderItems = (list) => list.map((item) => `<li>${htmlEscape(item.name)}</li>`).join("");
+    const renderSection = (title, list) => list.length ? `
+    <section class="card">
+      <h2>${htmlEscape(title)}</h2>
+      <ul>${renderItems(list)}</ul>
+    </section>` : "";
+    const sectionsHtml = [
+      renderSection("Public Restrooms", restroomItems),
+      renderSection("Other Assigned Areas", otherItems),
+    ].join("") || `<section class="card"><div class="empty">No assignments are currently listed.</div></section>`;
 
     return `<!doctype html>
 <html lang="en">
@@ -2541,7 +2548,7 @@ export function createScheduleRouter({
   .card h2 { margin:0 0 10px; font-size:20px; color:var(--teal); }
   ul { list-style:none; padding:0; margin:0; display:grid; gap:8px; }
   li { padding:11px 12px; background:#f8fbfa; border:1px solid #e1ece8; border-radius:13px; font-weight:620; }
-  li.muted { color:var(--muted); font-weight:500; }
+  .empty { color:var(--muted); font-weight:650; text-align:center; padding:8px; }
   .meta { margin-top:14px; color:var(--muted); font-size:13px; text-align:center; }
   .pill { display:inline-block; padding:5px 9px; border-radius:999px; background:rgba(255,255,255,.16); font-size:13px; margin-top:8px; }
 </style>
@@ -2555,14 +2562,7 @@ export function createScheduleRouter({
   </header>
   <main class="wrap">
     ${data?.notice ? `<div class="notice">${htmlEscape(data.notice)}</div>` : ""}
-    <section class="card">
-      <h2>Public Restrooms</h2>
-      <ul>${renderItems(restroomItems)}</ul>
-    </section>
-    <section class="card">
-      <h2>Other Assigned Areas</h2>
-      <ul>${renderItems(otherItems)}</ul>
-    </section>
+    ${sectionsHtml}
     <div class="meta">${htmlEscape(data?.service_date || "")} • Employee code: ${htmlEscape(employee.employee_code || "")}</div>
   </main>
 </body>
