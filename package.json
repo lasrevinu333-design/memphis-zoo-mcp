@@ -17,6 +17,7 @@
     "test:messaging": "node scripts/memphis-messaging-regression-tests.mjs",
     "test:auth": "node scripts/daily-pin-auth-tests.mjs",
     "test:device-popups": "node scripts/device-popup-fully-kiosk-test.mjs",
+    "test:thursday-demo": "node scripts/thursday-notification-presentation-tests.mjs",
     "audit:location-groups": "node scripts/location-group-audit-reminder-aware.mjs"
   },
   "dependencies": {
