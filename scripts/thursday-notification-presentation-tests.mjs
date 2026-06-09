@@ -5,7 +5,8 @@ import { DEMO_PLAN, buildRunPlan } from './thursday-notification-presentation.mj
 const plan = buildRunPlan({ skip: [] });
 const ids = plan.map((item) => item.device_id);
 
-assert.deepEqual(ids, ['KIOSK_02', 'KIOSK_04', 'KIOSK_05', 'KIOSK_06', 'KIOSK_07', 'KIOSK_09', 'KIOSK_10']);
+assert.deepEqual(ids, ['KIOSK_02', 'KIOSK_04', 'KIOSK_06', 'KIOSK_07', 'KIOSK_09', 'KIOSK_10', 'KIOSK_05']);
+assert.equal(ids.at(-1), 'KIOSK_05', 'Daniel must stay included, but his notification must run last in case he is absent and Eric does not have the phone at the meeting');
 assert(!ids.includes('KIOSK_01'), 'Ops Manager phone must not receive presentation notifications');
 assert(!ids.includes('KIOSK_03'), 'Michael must not receive presentation notifications');
 assert(!ids.includes('KIOSK_08'), 'Karen must not receive presentation notifications');
@@ -20,4 +21,4 @@ assert.equal(DEMO_PLAN.find((item) => item.device_id === 'KIOSK_05')?.employee_n
 const skippedDaniel = buildRunPlan({ skip: ['KIOSK_05'] });
 assert(!skippedDaniel.some((item) => item.device_id === 'KIOSK_05'), 'Daniel can be skipped if Thursday PTO/attendance changes');
 
-console.log(JSON.stringify({ ok: true, plan_count: plan.length, checked: ['target_exclusions', 'notification_mix', 'daniel_optional_skip'] }, null, 2));
+console.log(JSON.stringify({ ok: true, plan_count: plan.length, checked: ['target_exclusions', 'notification_mix', 'daniel_optional_skip', 'daniel_runs_last'] }, null, 2));
