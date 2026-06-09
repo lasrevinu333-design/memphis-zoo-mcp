@@ -8,6 +8,7 @@ const EVENT_MAINTENANCE_COOLDOWN_MS = 20 * 1000;
 const MAX_NOTIFICATIONS_PER_RUN = 50;
 const MAX_SCAN_ALERTS_PER_RUN = 50;
 const SCAN_ALERT_COOLDOWN_MINUTES = 30;
+const SCAN_ALERT_MANAGER_ESCALATION_GRACE_MINUTES = 30;
 const EVENT_REMINDER_KINDS = ["two_days_before", "day_before", "morning_of"];
 
 function fail(res, error, fallback = "Events request failed", statusCode = 400) {
@@ -537,6 +538,7 @@ async function queueDueScanAlerts(runRpc) {
       p_limit: MAX_SCAN_ALERTS_PER_RUN,
       p_dry_run: false,
       p_cooldown_minutes: SCAN_ALERT_COOLDOWN_MINUTES,
+      p_manager_escalation_grace_minutes: SCAN_ALERT_MANAGER_ESCALATION_GRACE_MINUTES,
     });
     return result || { ok: true, result_count: 0 };
   } catch (error) {

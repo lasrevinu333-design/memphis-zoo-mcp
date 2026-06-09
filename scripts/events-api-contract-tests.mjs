@@ -116,6 +116,7 @@ assert.match(listSql, /then 'Courtyard'/, "published event group_name should omi
 
 const notificationReadCalls = [];
 const notificationWriteCalls = [];
+const rpcCalls = [];
 const maintenance = createEventMaintenanceController({
   runReadOnlySql: async (sql) => {
     notificationReadCalls.push(String(sql || ""));
@@ -125,7 +126,10 @@ const maintenance = createEventMaintenanceController({
     notificationWriteCalls.push({ name, sql: String(sql || "") });
     return [];
   },
-  runRpc: async () => null,
+  runRpc: async (name, params) => {
+    rpcCalls.push({ name, params });
+    return null;
+  },
 });
 await maintenance.runMaintenance("contract_test");
 const notificationSql = notificationReadCalls.find((sql) => /candidate_notifications/i.test(sql));
@@ -141,5 +145,13 @@ assert.match(notificationSql, /coalesce\(dsa\.coverage_purpose, 'area_owner'\) i
 assert.match(notificationSql, /when coalesce\(dsa\.coverage_purpose, 'area_owner'\) = 'late_coverage' then 2/s, "late coverage rows should outrank ordinary daytime area owners when they overlap an event");
 assert.match(notificationSql, /min\(eoc\.assignment_priority\) over \(partition by eoc\.id, eoc\.notification_kind\)/s, "event reminders should choose the highest-priority overlapping owner per event/reminder kind");
 assert.doesNotMatch(notificationSql, /not exists \(\s*select 1\s*from public\.daily_group_assignments dga\s*where dga\.assignment_date = dsa\.service_date\s*and dga\.location_group_id = dsa\.location_group_id\s*and dga\.active = true\s*and dga\.assigned_employee_id is not null\s*\)/s, "manual/takeover rows must not suppress generated schedule owners for the whole day without event-time overlap");
+const scanAlertRpc = rpcCalls.find((call) => call.name === "sch_queue_due_scan_alerts");
+assert.ok(scanAlertRpc, "event maintenance should queue due scan alerts");
+assert.deepEqual(scanAlertRpc.params, {
+  p_limit: 50,
+  p_dry_run: false,
+  p_cooldown_minutes: 30,
+  p_manager_escalation_grace_minutes: 30,
+}, "scan alert RPC should pass the manager escalation argument to avoid overloaded Supabase RPC ambiguity");
 
 console.log("events api contract tests passed");
