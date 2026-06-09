@@ -134,6 +134,12 @@ assert.match(notificationSql, /two_days_before/, "event reminders should include
 assert.match(notificationSql, /day_before/, "event reminders should include one-day-before notices");
 assert.match(notificationSql, /morning_of/, "event reminders should include morning-of notices");
 assert.match(notificationSql, /interval '15 minutes'/, "event reminders should be scheduled 15 minutes after owner clock-in/coverage start");
-assert.match(notificationSql, /coalesce\(oa\.coverage_start, time '08:00:00'\)/, "event reminders should use owner coverage start with 8 AM fallback");
+assert.match(notificationSql, /coalesce\(eoc\.coverage_start, time '08:00:00'\)/, "event reminders should use chosen owner coverage start with 8 AM fallback");
+assert.match(notificationSql, /coalesce\(oa\.coverage_start, time '00:00:00'\)\s*<\s*e\.end_time/s, "event owner candidates should only include coverage windows that overlap event end time");
+assert.match(notificationSql, /coalesce\(oa\.coverage_end, time '23:59:59'\)\s*>\s*e\.start_time/s, "event owner candidates should only include coverage windows that overlap event start time");
+assert.match(notificationSql, /coalesce\(dsa\.coverage_purpose, 'area_owner'\) in \('area_owner', 'late_coverage'\)/, "event reminders should consider Michael-style late coverage rows as valid owners");
+assert.match(notificationSql, /when coalesce\(dsa\.coverage_purpose, 'area_owner'\) = 'late_coverage' then 2/s, "late coverage rows should outrank ordinary daytime area owners when they overlap an event");
+assert.match(notificationSql, /min\(eoc\.assignment_priority\) over \(partition by eoc\.id, eoc\.notification_kind\)/s, "event reminders should choose the highest-priority overlapping owner per event/reminder kind");
+assert.doesNotMatch(notificationSql, /not exists \(\s*select 1\s*from public\.daily_group_assignments dga\s*where dga\.assignment_date = dsa\.service_date\s*and dga\.location_group_id = dsa\.location_group_id\s*and dga\.active = true\s*and dga\.assigned_employee_id is not null\s*\)/s, "manual/takeover rows must not suppress generated schedule owners for the whole day without event-time overlap");
 
 console.log("events api contract tests passed");

@@ -386,7 +386,8 @@ async function getPendingNotifications(runReadOnlySql) {
         dga.assigned_employee_id as employee_id,
         dga.coverage_start,
         dga.coverage_end,
-        'daily_group_assignments'::text as assignment_source
+        'daily_group_assignments'::text as assignment_source,
+        1::int as assignment_priority
       from public.daily_group_assignments dga
       where dga.active = true
         and dga.assigned_employee_id is not null
@@ -399,18 +400,18 @@ async function getPendingNotifications(runReadOnlySql) {
         dsa.assigned_employee_id as employee_id,
         dsa.coverage_start,
         dsa.coverage_end,
-        'daily_schedule_assignments'::text as assignment_source
+        case
+          when coalesce(dsa.coverage_purpose, 'area_owner') = 'late_coverage' then 'daily_schedule_assignments:late_coverage'
+          else 'daily_schedule_assignments'
+        end as assignment_source,
+        case
+          when coalesce(dsa.coverage_purpose, 'area_owner') = 'late_coverage' then 2
+          else 3
+        end::int as assignment_priority
       from public.daily_schedule_assignments dsa
       where dsa.assigned_employee_id is not null
-        and coalesce(dsa.coverage_purpose, 'area_owner') = 'area_owner'
-        and not exists (
-          select 1
-          from public.daily_group_assignments dga
-          where dga.assignment_date = dsa.service_date
-            and dga.location_group_id = dsa.location_group_id
-            and dga.active = true
-            and dga.assigned_employee_id is not null
-        )
+        and coalesce(dsa.status, 'ASSIGNED') = 'ASSIGNED'
+        and coalesce(dsa.coverage_purpose, 'area_owner') in ('area_owner', 'late_coverage')
     ),
     msg_devices as (
       select
@@ -424,7 +425,7 @@ async function getPendingNotifications(runReadOnlySql) {
       where mda.is_active = true
       group by mda.msg_user_id
     ),
-    candidate_notifications as (
+    event_owner_candidates as (
       select
         e.id,
         e.event_name,
@@ -436,16 +437,13 @@ async function getPendingNotifications(runReadOnlySql) {
         e.notes,
         lg.group_code,
         lg.group_name,
-        emp.id as employee_id,
-        emp.display_name as employee_name,
-        mu.id as msg_user_id,
-        coalesce(md.device_identifiers, array[]::text[]) as device_identifiers,
-        min(oa.coverage_start) as coverage_start,
-        max(oa.coverage_end) as coverage_end,
-        min(oa.assignment_source) as assignment_source,
+        oa.employee_id,
+        oa.coverage_start,
+        oa.coverage_end,
+        oa.assignment_source,
+        oa.assignment_priority,
         reminder.notification_kind,
-        (e.event_date::timestamp + (reminder.day_offset * interval '1 day') + coalesce(min(oa.coverage_start), time '${DEFAULT_EVENT_OWNER_CLOCK_IN_TIME}') + interval '15 minutes') as scheduled_for_local,
-        public.msg_get_memphis_user_id() as memphis_user_id
+        reminder.day_offset
       from public.events_app_events e
       join public.location_groups lg on lg.id = e.location_group_id
       cross join lateral (
@@ -457,35 +455,68 @@ async function getPendingNotifications(runReadOnlySql) {
       join owner_assignments oa
         on oa.location_group_id = e.location_group_id
        and oa.assignment_date = e.event_date
-      join public.employees emp on emp.id = oa.employee_id and emp.active = true
+       and coalesce(oa.coverage_start, time '00:00:00') < e.end_time
+       and coalesce(oa.coverage_end, time '23:59:59') > e.start_time
+    ),
+    ranked_event_owner_candidates as (
+      select
+        eoc.*,
+        min(eoc.assignment_priority) over (partition by eoc.id, eoc.notification_kind) as winning_assignment_priority
+      from event_owner_candidates eoc
+    ),
+    candidate_notifications as (
+      select
+        eoc.id,
+        eoc.event_name,
+        eoc.location_group_id,
+        eoc.event_date,
+        eoc.start_time,
+        eoc.end_time,
+        eoc.attendee_count,
+        eoc.notes,
+        eoc.group_code,
+        eoc.group_name,
+        emp.id as employee_id,
+        emp.display_name as employee_name,
+        mu.id as msg_user_id,
+        coalesce(md.device_identifiers, array[]::text[]) as device_identifiers,
+        min(eoc.coverage_start) as coverage_start,
+        max(eoc.coverage_end) as coverage_end,
+        min(eoc.assignment_source) as assignment_source,
+        eoc.notification_kind,
+        (eoc.event_date::timestamp + (eoc.day_offset * interval '1 day') + coalesce(min(eoc.coverage_start), time '${DEFAULT_EVENT_OWNER_CLOCK_IN_TIME}') + interval '15 minutes') as scheduled_for_local,
+        public.msg_get_memphis_user_id() as memphis_user_id
+      from ranked_event_owner_candidates eoc
+      join public.employees emp on emp.id = eoc.employee_id and emp.active = true
       join public.msg_users mu on mu.employee_id = emp.id and mu.is_active = true
       left join msg_devices md on md.msg_user_id = mu.id
-      where (now() at time zone '${EVENTS_TIME_ZONE}')::date = (e.event_date + (reminder.day_offset * interval '1 day'))::date
-        and (now() at time zone '${EVENTS_TIME_ZONE}') >= (e.event_date::timestamp + (reminder.day_offset * interval '1 day') + coalesce(oa.coverage_start, time '${DEFAULT_EVENT_OWNER_CLOCK_IN_TIME}') + interval '15 minutes')
+      where eoc.assignment_priority = eoc.winning_assignment_priority
+        and (now() at time zone '${EVENTS_TIME_ZONE}')::date = (eoc.event_date + (eoc.day_offset * interval '1 day'))::date
+        and (now() at time zone '${EVENTS_TIME_ZONE}') >= (eoc.event_date::timestamp + (eoc.day_offset * interval '1 day') + coalesce(eoc.coverage_start, time '${DEFAULT_EVENT_OWNER_CLOCK_IN_TIME}') + interval '15 minutes')
         and not exists (
           select 1
           from public.events_app_notification_log log
-          where log.event_id = e.id
+          where log.event_id = eoc.id
             and log.employee_id = emp.id
-            and log.notification_kind = reminder.notification_kind
+            and log.notification_kind = eoc.notification_kind
         )
       group by
-        e.id,
-        e.event_name,
-        e.location_group_id,
-        e.event_date,
-        e.start_time,
-        e.end_time,
-        e.attendee_count,
-        e.notes,
-        lg.group_code,
-        lg.group_name,
+        eoc.id,
+        eoc.event_name,
+        eoc.location_group_id,
+        eoc.event_date,
+        eoc.start_time,
+        eoc.end_time,
+        eoc.attendee_count,
+        eoc.notes,
+        eoc.group_code,
+        eoc.group_name,
         emp.id,
         emp.display_name,
         mu.id,
         md.device_identifiers,
-        reminder.notification_kind,
-        reminder.day_offset
+        eoc.notification_kind,
+        eoc.day_offset
     )
     select *
     from candidate_notifications
