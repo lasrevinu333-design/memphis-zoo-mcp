@@ -29,20 +29,6 @@ export const DEMO_PLAN = [
   },
   {
     sequence: 3,
-    device_id: 'KIOSK_05',
-    employee_name: 'Daniel Morgan',
-    kind: 'location_status',
-    label: 'restroom due soon notification',
-    status_code: 'due_soon',
-    form_type: 'restroom',
-    group_code: 'SPLASH_PAD_RESTROOMS',
-    group_name: 'Splash Pad Restrooms',
-    location_code: 'SPLASH_PAD_RESTROOMS',
-    location_name: 'Splash Pad Restrooms',
-    body: 'Daniel, demo assigned location alert: Splash Pad Restrooms are due soon on your route.'
-  },
-  {
-    sequence: 4,
     device_id: 'KIOSK_06',
     employee_name: 'Kinnaye Peete',
     kind: 'location_status',
@@ -56,7 +42,7 @@ export const DEMO_PLAN = [
     body: 'Kinnaye, demo assigned location alert: Courtyard Restrooms are overdue on your route.'
   },
   {
-    sequence: 5,
+    sequence: 4,
     device_id: 'KIOSK_07',
     employee_name: 'Kathy Phelps',
     kind: 'location_status',
@@ -70,7 +56,7 @@ export const DEMO_PLAN = [
     body: 'Kathy, demo assigned area alert: Expo is due soon on your route.'
   },
   {
-    sequence: 6,
+    sequence: 5,
     device_id: 'KIOSK_09',
     employee_name: 'Markiesha Warren',
     kind: 'location_status',
@@ -84,7 +70,7 @@ export const DEMO_PLAN = [
     body: 'Markiesha, demo assigned area alert: Teton is overdue on your route.'
   },
   {
-    sequence: 7,
+    sequence: 6,
     device_id: 'KIOSK_10',
     employee_name: 'Sherita Wilbon',
     kind: 'location_status',
@@ -96,6 +82,20 @@ export const DEMO_PLAN = [
     location_code: 'ZAMBEZI',
     location_name: 'Zambezi',
     body: 'Sherita, demo assigned area alert: Zambezi is due soon on your route.'
+  },
+  {
+    sequence: 7,
+    device_id: 'KIOSK_05',
+    employee_name: 'Daniel Morgan',
+    kind: 'location_status',
+    label: 'restroom due soon notification',
+    status_code: 'due_soon',
+    form_type: 'restroom',
+    group_code: 'SPLASH_PAD_RESTROOMS',
+    group_name: 'Splash Pad Restrooms',
+    location_code: 'SPLASH_PAD_RESTROOMS',
+    location_name: 'Splash Pad Restrooms',
+    body: 'Daniel, demo assigned location alert: Splash Pad Restrooms are due soon on your route.'
   }
 ];
 
@@ -163,7 +163,7 @@ Live run, one phone per minute:
 Morning test with shorter spacing:
   node scripts/thursday-notification-presentation.mjs --send --interval-seconds 15
 
-Skip Daniel if PTO/attendance changes:
+Skip Daniel if PTO/attendance changes, or leave him last by default:
   node scripts/thursday-notification-presentation.mjs --send --skip-daniel
 
 Targets are intentionally limited to KIOSK_02, KIOSK_04, KIOSK_05, KIOSK_06, KIOSK_07, KIOSK_09, KIOSK_10.
