@@ -5,6 +5,9 @@ import vm from "node:vm";
 
 const scheduleApiPath = path.resolve("src/schedule-api.js");
 const source = fs.readFileSync(scheduleApiPath, "utf8");
+const openOwnerContractSqlPath = path.resolve("scripts/sql/check-scheduler-open-owner-contract.sql");
+const exceptionContractSqlPath = path.resolve("scripts/sql/check-scheduler-exception-contract.sql");
+const dailyMyScheduleMigrationPath = path.resolve("sql/2026-06-09_daily_assignment_my_schedule_page.sql");
 
 function extractFunction(name) {
   const startToken = `function ${name}(`;
@@ -52,10 +55,12 @@ const needed = [
   "isRestroomRebalanceDue",
   "isProtectedRestroomSource",
   "sqlQuote",
+  "normalizeIdList",
   "normalizeRestroomRebalanceRow",
   "isRestroomRebalanceRosterEligible",
   "loadSpread",
   "canRosterEmployeeCoverAssignment",
+  "canEmployeeReceiveRestroomAssignment",
   "buildRestroomRebalancePlan",
   "buildCoverAllRebalancePlan",
   "normalizeRestroomRebalanceCompletionRow",
@@ -104,6 +109,7 @@ assert.equal(context.isRestroomRebalanceDue(new Date("2026-06-02T14:44:00Z")), f
 assert.equal(context.isRestroomRebalanceDue(new Date("2026-06-02T14:45:00Z")), true, "9:45am Central is due");
 assert.equal(context.isRestroomRebalanceRosterEligible({ shift_start: "05:00:00", shift_end: "14:00:00", employee_code: "EMP007" }), true);
 assert.equal(context.isRestroomRebalanceRosterEligible({ shift_start: "15:00:00", shift_end: "23:59:59", employee_code: "EMP002" }), false, "afternoon call coverage must not receive normal 9:45 restroom ownership");
+assert.equal(context.isRestroomRebalanceRosterEligible({ shift_start: "05:00:00", shift_end: "15:00:00", employee_code: "EMP002", employee_name: "Michael McWright" }), false, "Michael must stay out of normal 9:45 restroom balancing even if a roster row overlaps 9:45");
 assert.equal(context.isRestroomRebalanceRosterEligible({ shift_start: "10:00:00", shift_end: "18:00:00", employee_code: "EMP010" }), false, "employees not working at 9:45 are not active rebalance owners");
 
 const staticRestoreSqlStart = source.indexOf("async function restoreStaticOwnersForDate");
@@ -114,6 +120,47 @@ const dwrJoinBlock = (staticRestoreSql.match(/join public\.daily_work_roster dwr
 assert.match(staticRestoreSql, /where dsa\.service_date = '[^']+'::date\s+and dwr\.shift_start <= dsa\.coverage_start/, "static owner restore must verify the owner is on shift at the row start in WHERE, not JOIN ON");
 assert.doesNotMatch(dwrJoinBlock, /on[\s\S]*?dsa\./, "Postgres UPDATE target alias dsa must not be referenced inside FROM JOIN ON clauses");
 assert.match(staticRestoreSql, /ct\.coverage_start = dsa\.coverage_start/, "static owner restore must only touch unsplit original template rows");
+
+const restroomAssignmentSqlStart = source.indexOf("async function listRestroomAssignmentsForRebalance");
+const restroomAssignmentSqlEnd = source.indexOf("async function rebalanceRestroomAssignments", restroomAssignmentSqlStart);
+const restroomAssignmentSql = source.slice(restroomAssignmentSqlStart, restroomAssignmentSqlEnd);
+assert.match(restroomAssignmentSql, /restricted_employee_ids/, "restroom rebalance assignment query must expose restricted_employee_ids");
+assert.match(restroomAssignmentSql, /sch_is_employee_location_group_restricted/, "restroom rebalance assignment query must use the DB restriction function");
+assert.match(restroomAssignmentSql, /dsa\.location_group_id/, "restroom rebalance assignment query must carry location_group_id");
+assert.match(restroomAssignmentSql, /coalesce\(dsa\.coverage_purpose, ''\) <> 'lunch_coverage'/, "restroom rebalance assignment query must continue excluding lunch coverage");
+
+const restroomUpdateSqlStart = source.indexOf("async function rebalanceRestroomAssignments");
+const restroomUpdateSqlEnd = source.indexOf("async function applyLunchCoverageAfterRestroomRebalance", restroomUpdateSqlStart);
+const restroomUpdateSql = source.slice(restroomUpdateSqlStart, restroomUpdateSqlEnd);
+assert.match(restroomUpdateSql, /not\s+public\.sch_is_employee_location_group_restricted/i, "restroom rebalance write must have a DB-side restriction guard");
+assert.match(restroomUpdateSql, /dsa\.assigned_employee_id\s*=\s*moved\.from_employee_id/, "restroom rebalance write must not overwrite a row whose owner changed after planning");
+assert.match(restroomUpdateSql, /coalesce\(dsa\.coverage_purpose, ''\) <> 'lunch_coverage'/, "restroom rebalance write must not touch lunch rows");
+assert.match(restroomUpdateSql, /r\.shift_start\s*<=\s*dsa\.coverage_start/, "restroom rebalance write must verify receiver shift covers row start");
+assert.match(restroomUpdateSql, /r\.shift_end\s*>=\s*dsa\.coverage_end/, "restroom rebalance write must verify receiver shift covers row end");
+
+assert.equal(fs.existsSync(openOwnerContractSqlPath), true, "open-owner SQL contract probe must exist");
+const openOwnerContractSql = fs.readFileSync(openOwnerContractSqlPath, "utf8");
+assert.match(openOwnerContractSql.trimStart(), /^select\s+\*/i, "open-owner contract must start with SELECT for the Memphis read-only SQL layer");
+assert.match(openOwnerContractSql, /daily_schedule_assignments/i, "open-owner contract must inspect daily assignments");
+assert.match(openOwnerContractSql, /status\s*=\s*'OPEN'/i, "open-owner contract must catch OPEN rows");
+assert.match(openOwnerContractSql, /assigned_employee_id\s+is\s+null/i, "open-owner contract must catch missing owners");
+assert.match(openOwnerContractSql, /deep_clean/i, "open-owner contract must cover normal deep-clean work");
+assert.match(openOwnerContractSql, /late_coverage/i, "open-owner contract must cover active late coverage rows");
+
+assert.equal(fs.existsSync(exceptionContractSqlPath), true, "exception SQL contract probe must exist");
+const exceptionContractSql = fs.readFileSync(exceptionContractSqlPath, "utf8");
+assert.match(exceptionContractSql.trimStart(), /^select\s+\*/i, "exception contract must start with SELECT for the Memphis read-only SQL layer");
+assert.match(exceptionContractSql, /PRIMATE_CANYON/, "exception contract must cover Primate Canyon response-only rule");
+assert.match(exceptionContractSql, /CAT_COUNTRY/, "exception contract must cover Cat Country response-only rule");
+assert.match(exceptionContractSql, /GIFT_SHOP/, "exception contract must cover gift shop reminder-only rules");
+assert.match(exceptionContractSql, /HERPETARIUM/, "exception contract must cover Herpetarium Wednesday rule");
+
+assert.equal(fs.existsSync(dailyMyScheduleMigrationPath), true, "daily-assignment-backed My Schedule migration must exist");
+const dailyMyScheduleMigrationSql = fs.readFileSync(dailyMyScheduleMigrationPath, "utf8");
+assert.match(dailyMyScheduleMigrationSql, /CREATE\s+OR\s+REPLACE\s+FUNCTION\s+public\.sch_employee_my_schedule_page/i, "My Schedule migration must replace sch_employee_my_schedule_page");
+assert.match(dailyMyScheduleMigrationSql, /daily_schedule_assignments|sch_get_daily_schedule_with_purpose/i, "My Schedule migration must use daily assignments as source of truth");
+assert.doesNotMatch(dailyMyScheduleMigrationSql, /from\s+public\.coverage_templates/i, "My Schedule page must not be template-backed");
+assert.match(dailyMyScheduleMigrationSql, /late_coverage/i, "My Schedule migration must include Michael afternoon-call late coverage rows");
 
 const manualAbsencePublishStart = source.indexOf('router.post("/manual-absences/publish"');
 const manualAbsencePublishEnd = source.indexOf('router.post("/manual-absences/return"', manualAbsencePublishStart);
@@ -161,6 +208,29 @@ const shiftWindowRestroomPlan = context.buildRestroomRebalancePlan([
 assert.equal(shiftWindowRestroomPlan.applied, true);
 assert.equal(shiftWindowRestroomPlan.moves.length, 1);
 assert.equal(shiftWindowRestroomPlan.moves[0].to_employee_id, "casey", "restroom rebalance must not move 3pm coverage to a 2pm employee");
+
+const normalizedRestrictedRestroomRow = context.normalizeRestroomRebalanceRow({
+  assignment_id: "restricted-normalize",
+  assigned_employee_id: "employee-a",
+  group_name: "China",
+  coverage_start: "09:45:00",
+  coverage_end: "12:00:00",
+  restricted_employee_ids: '["kathy", "casey"]',
+});
+assert.deepEqual(Array.from(normalizedRestrictedRestroomRow.restricted_employee_ids), ["kathy", "casey"], "restroom rebalance rows must preserve restricted receiver metadata");
+
+const restrictedReceiverRestroomPlan = context.buildRestroomRebalancePlan([
+  { assignment_id: "restricted-1", assigned_employee_id: "donor", assigned_employee_name: "Donor", group_name: "China", group_code: "CHINA", coverage_start: "09:45:00", coverage_end: "12:00:00", load_points: 1, source_type: "coverage_template", restricted_employee_ids: ["kathy"] },
+  { assignment_id: "restricted-2", assigned_employee_id: "donor", assigned_employee_name: "Donor", group_name: "Event Center", group_code: "EVENT_CENTER", coverage_start: "09:45:00", coverage_end: "12:00:00", load_points: 1, source_type: "coverage_template", restricted_employee_ids: ["kathy"] },
+  { assignment_id: "restricted-3", assigned_employee_id: "donor", assigned_employee_name: "Donor", group_name: "West Admin", group_code: "WEST_ADMIN", coverage_start: "09:45:00", coverage_end: "12:00:00", load_points: 1, source_type: "coverage_template", restricted_employee_ids: ["kathy"] },
+], [
+  { employee_id: "donor", employee_name: "Donor", shift_start: "05:00:00", shift_end: "15:00:00" },
+  { employee_id: "kathy", employee_name: "Kathy Phelps", shift_start: "05:00:00", shift_end: "15:00:00" },
+  { employee_id: "alternate", employee_name: "Alternate", shift_start: "05:00:00", shift_end: "15:00:00" },
+]);
+assert.equal(restrictedReceiverRestroomPlan.applied, true);
+assert.equal(restrictedReceiverRestroomPlan.moves.some((move) => move.to_employee_id === "kathy"), false, "restroom rebalance must not move a row to a restricted receiver");
+assert.equal(restrictedReceiverRestroomPlan.moves[0]?.to_employee_id, "alternate", "restroom rebalance should use the unrestricted alternate when one is available");
 
 const coverAllPlan = context.buildCoverAllRebalancePlan([
   { assignment_id: "early-west", assigned_employee_id: "employee-a", assigned_employee_name: "Alex", group_name: "West Entry", coverage_start: "08:00:00", coverage_end: "09:45:00", load_points: 4, source_type: "coverage_template" },
