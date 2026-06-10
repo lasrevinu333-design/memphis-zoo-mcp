@@ -7,6 +7,7 @@ const scheduleApiPath = path.resolve("src/schedule-api.js");
 const source = fs.readFileSync(scheduleApiPath, "utf8");
 const openOwnerContractSqlPath = path.resolve("scripts/sql/check-scheduler-open-owner-contract.sql");
 const exceptionContractSqlPath = path.resolve("scripts/sql/check-scheduler-exception-contract.sql");
+const myScheduleSourceContractSqlPath = path.resolve("scripts/sql/check-my-schedule-source-contract.sql");
 const dailyMyScheduleMigrationPath = path.resolve("sql/2026-06-09_daily_assignment_my_schedule_page.sql");
 
 function extractFunction(name) {
@@ -133,8 +134,14 @@ const restroomUpdateSqlStart = source.indexOf("async function rebalanceRestroomA
 const restroomUpdateSqlEnd = source.indexOf("async function applyLunchCoverageAfterRestroomRebalance", restroomUpdateSqlStart);
 const restroomUpdateSql = source.slice(restroomUpdateSqlStart, restroomUpdateSqlEnd);
 assert.match(restroomUpdateSql, /not\s+public\.sch_is_employee_location_group_restricted/i, "restroom rebalance write must have a DB-side restriction guard");
+assert.match(restroomUpdateSql, /dsa\.service_date\s*=\s*'\$\{esc\(serviceDate\)\}'::date/, "restroom rebalance write must be scoped to the requested service date");
+assert.match(restroomUpdateSql, /dsa\.status\s*=\s*'ASSIGNED'/, "restroom rebalance write must only update currently assigned rows");
+assert.match(restroomUpdateSql, /dsa\.owner_type\s*=\s*'EMPLOYEE'/, "restroom rebalance write must only update employee-owned rows");
 assert.match(restroomUpdateSql, /dsa\.assigned_employee_id\s*=\s*moved\.from_employee_id/, "restroom rebalance write must not overwrite a row whose owner changed after planning");
 assert.match(restroomUpdateSql, /coalesce\(dsa\.coverage_purpose, ''\) <> 'lunch_coverage'/, "restroom rebalance write must not touch lunch rows");
+assert.match(restroomUpdateSql, /coalesce\(dsa\.source_type, ''\) not ilike '%manual%'/, "restroom rebalance write must not touch manual source rows");
+assert.match(restroomUpdateSql, /coalesce\(dsa\.source_type, ''\) not ilike '%override%'/, "restroom rebalance write must not touch override source rows");
+assert.match(restroomUpdateSql, /coalesce\(dsa\.source_type, ''\) not ilike '%manager%'/, "restroom rebalance write must not touch manager source rows");
 assert.match(restroomUpdateSql, /r\.shift_start\s*<=\s*dsa\.coverage_start/, "restroom rebalance write must verify receiver shift covers row start");
 assert.match(restroomUpdateSql, /r\.shift_end\s*>=\s*dsa\.coverage_end/, "restroom rebalance write must verify receiver shift covers row end");
 
@@ -160,7 +167,24 @@ const dailyMyScheduleMigrationSql = fs.readFileSync(dailyMyScheduleMigrationPath
 assert.match(dailyMyScheduleMigrationSql, /CREATE\s+OR\s+REPLACE\s+FUNCTION\s+public\.sch_employee_my_schedule_page/i, "My Schedule migration must replace sch_employee_my_schedule_page");
 assert.match(dailyMyScheduleMigrationSql, /daily_schedule_assignments|sch_get_daily_schedule_with_purpose/i, "My Schedule migration must use daily assignments as source of truth");
 assert.doesNotMatch(dailyMyScheduleMigrationSql, /from\s+public\.coverage_templates/i, "My Schedule page must not be template-backed");
+assert.match(dailyMyScheduleMigrationSql, /assigned_employee_id\s*=\s*p_employee_id/i, "My Schedule migration must filter daily rows to the requested employee only");
+assert.match(dailyMyScheduleMigrationSql, /lunch_coverage/i, "My Schedule migration must include lunch coverage rows");
 assert.match(dailyMyScheduleMigrationSql, /late_coverage/i, "My Schedule migration must include Michael afternoon-call late coverage rows");
+const myDaySummaryRouteStart = source.indexOf('router.get("/my-day-summary"');
+const myDaySummaryRouteEnd = source.indexOf('router.get("/my-schedule"', myDaySummaryRouteStart);
+const myDaySummaryRouteSource = source.slice(myDaySummaryRouteStart, myDaySummaryRouteEnd);
+assert.match(myDaySummaryRouteSource, /sch_employee_my_schedule_page/, "/my-day-summary must use sch_employee_my_schedule_page as its source");
+const myScheduleRouteStart = source.indexOf('router.get("/my-schedule"');
+const myScheduleRouteEnd = source.indexOf('router.get("/settings\/close-time"', myScheduleRouteStart);
+const myScheduleRouteSource = source.slice(myScheduleRouteStart, myScheduleRouteEnd);
+assert.match(myScheduleRouteSource, /sch_employee_my_schedule_page/, "/my-schedule must use sch_employee_my_schedule_page as its source");
+assert.equal(fs.existsSync(myScheduleSourceContractSqlPath), true, "My Schedule source-of-truth SQL contract probe must exist");
+const myScheduleSourceContractSql = fs.readFileSync(myScheduleSourceContractSqlPath, "utf8");
+assert.match(myScheduleSourceContractSql.trimStart(), /^select\s+\*/i, "My Schedule source contract must start with SELECT for the Memphis read-only SQL layer");
+assert.match(myScheduleSourceContractSql, /sch_employee_my_schedule_page/i, "My Schedule source contract must exercise sch_employee_my_schedule_page");
+assert.match(myScheduleSourceContractSql, /daily_schedule_assignments/i, "My Schedule source contract must compare against daily assignments");
+assert.match(myScheduleSourceContractSql, /my_schedule_missing_michael_late_coverage/i, "My Schedule source contract must catch missing Michael late coverage");
+assert.match(myScheduleSourceContractSql, /my_schedule_leaked_unowned_morning_item/i, "My Schedule source contract must catch unowned item leakage");
 
 const manualAbsencePublishStart = source.indexOf('router.post("/manual-absences/publish"');
 const manualAbsencePublishEnd = source.indexOf('router.post("/manual-absences/return"', manualAbsencePublishStart);
