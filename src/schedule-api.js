@@ -1847,6 +1847,11 @@ export function createScheduleRouter({
         and coalesce(dsa.coverage_purpose, '') <> 'lunch_coverage'
         and coalesce(dsa.source_type, '') not ilike '%lunch%'
         and ct.assigned_employee_id is not null
+        and not public.sch_is_employee_location_group_restricted(
+          ct.assigned_employee_id,
+          ct.location_group_id,
+          extract(dow from '${esc(serviceDate)}'::date)::int
+        )
         and not exists (
           select 1 from public.daily_absence_overrides dao
           where dao.absence_date = '${esc(serviceDate)}'::date

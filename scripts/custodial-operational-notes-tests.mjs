@@ -2,8 +2,13 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 
-const migrationPath = path.resolve("sql/2026-06-03_custodial_operational_notes_policy.sql");
-const sql = fs.readFileSync(migrationPath, "utf8");
+const migrationDir = path.resolve("sql");
+const sql = fs
+  .readdirSync(migrationDir)
+  .filter((file) => file.endsWith(".sql"))
+  .sort()
+  .map((file) => fs.readFileSync(path.join(migrationDir, file), "utf8"))
+  .join("\n\n");
 
 const requiredRuleCodes = [
   "balance_primary",
@@ -19,6 +24,7 @@ const requiredRuleCodes = [
   "karen_route",
   "tammy_route",
   "kathy_route",
+  "kathy_east_boundary",
   "preserve_primate_pavillion_key",
 ];
 for (const ruleCode of requiredRuleCodes) {
@@ -39,6 +45,10 @@ assert.match(sql, /Karen Robinson[\s\S]*ZAMBEZI[\s\S]*PRIMATE_PAVILLION/i, "Kare
 assert.match(sql, /Tammy Miller[\s\S]*TETON[\s\S]*NORTH_WEST_PASSAGE/i, "Tammy route preferences must be seeded");
 assert.match(sql, /Kinnaye Peete[\s\S]*ELEPHANT_TRUNK_GIFT_SHOP/i, "Kinnaye Monday gift-shop reminder preference must be seeded");
 assert.match(sql, /Kathy Phelps[\s\S]*MEMMEX_RESTROOMS/i, "Kathy west route preferences must be seeded");
-assert.match(sql, /last_resort/i, "last-resort preference type must be represented");
+assert.match(sql, /kathy_east_boundary/i, "Kathy east-boundary policy must be represented");
+assert.match(sql, /Kathy Phelps[\s\S]*HERPETARIUM[\s\S]*restricted/i, "Kathy Herpetarium/east-boundary restriction must be seeded");
+assert.match(sql, /sch_validate_kathy_east_boundary/i, "Kathy east-boundary validation function must be included");
+assert.match(sql, /TROPICAL_BIRDS[\s\S]*avoid/i, "Tropical Birds must be Kathy's farthest allowed stretch/avoid area, not an east-side assignment pass-through");
+assert.doesNotMatch(sql, /sch_upsert_employee_area_preference_by_code\([^;]*'last_resort'/i, "seeded employee preference rows must use the live prefer/avoid/restricted type contract, not last_resort as a preference_type");
 
 console.log(JSON.stringify({ ok: true, custodial_operational_notes_policy_tests: "passed" }, null, 2));
