@@ -9,6 +9,9 @@ const openOwnerContractSqlPath = path.resolve("scripts/sql/check-scheduler-open-
 const exceptionContractSqlPath = path.resolve("scripts/sql/check-scheduler-exception-contract.sql");
 const myScheduleSourceContractSqlPath = path.resolve("scripts/sql/check-my-schedule-source-contract.sql");
 const dailyMyScheduleMigrationPath = path.resolve("sql/2026-06-09_daily_assignment_my_schedule_page.sql");
+const exceptionLunchGuardMigrationPath = path.resolve("sql/2026-06-10_scheduler_exception_lunch_guards.sql");
+const responseOnlyStaleLunchRepairPath = path.resolve("sql/2026-06-10_repair_response_only_stale_lunch_rows.sql");
+const restoreOpenOwnerRowsPath = path.resolve("sql/2026-06-10_restore_scheduler_open_owner_rows.sql");
 
 function extractFunction(name) {
   const startToken = `function ${name}(`;
@@ -161,6 +164,40 @@ assert.match(exceptionContractSql, /PRIMATE_CANYON/, "exception contract must co
 assert.match(exceptionContractSql, /CAT_COUNTRY/, "exception contract must cover Cat Country response-only rule");
 assert.match(exceptionContractSql, /GIFT_SHOP/, "exception contract must cover gift shop reminder-only rules");
 assert.match(exceptionContractSql, /HERPETARIUM/, "exception contract must cover Herpetarium Wednesday rule");
+assert.match(exceptionContractSql, /coalesce\(dsa\.coverage_purpose,\s*'area_owner'\)/i, "exception contract must treat null coverage_purpose as area_owner normal work");
+
+assert.equal(fs.existsSync(exceptionLunchGuardMigrationPath), true, "exception lunch guard migration must exist");
+const exceptionLunchGuardMigrationSql = fs.readFileSync(exceptionLunchGuardMigrationPath, "utf8");
+assert.match(exceptionLunchGuardMigrationSql, /CREATE\s+OR\s+REPLACE\s+FUNCTION\s+public\.sch_apply_lunch_coverage/i, "exception lunch guard migration must replace sch_apply_lunch_coverage");
+assert.match(exceptionLunchGuardMigrationSql, /coverage_purpose,\s*''\)\s+not\s+in\s*\(\s*'lunch_coverage'\s*,\s*'reminder'\s*,\s*'response_only'\s*\)/i, "lunch coverage must exclude lunch, reminder, and response-only rows before splitting");
+assert.match(exceptionLunchGuardMigrationSql, /group_code\s+not\s+in\s*\(\s*'PRIMATE_CANYON'\s*,\s*'CAT_COUNTRY'\s*\)/i, "lunch coverage must exclude response-only/no-clean groups before splitting");
+assert.match(exceptionLunchGuardMigrationSql, /group_code\s+not\s+like\s+'%GIFT_SHOP%'/i, "lunch coverage must exclude gift shop reminder groups before splitting");
+assert.doesNotMatch(exceptionLunchGuardMigrationSql, /^\s*begin\s*;/im, "function migration must not use explicit transaction control inside run_sql_migration");
+assert.doesNotMatch(exceptionLunchGuardMigrationSql, /^\s*commit\s*;/im, "function migration must not use explicit transaction control inside run_sql_migration");
+
+assert.equal(fs.existsSync(responseOnlyStaleLunchRepairPath), true, "exact response-only stale lunch repair SQL must exist");
+const responseOnlyStaleLunchRepairSql = fs.readFileSync(responseOnlyStaleLunchRepairPath, "utf8");
+assert.match(responseOnlyStaleLunchRepairSql, /target\(assignment_id, service_date, group_code, segment_number, coverage_start, coverage_end, coverage_purpose, source_type, keep_row\)/i, "response-only repair must be exact-row targeted");
+assert.match(responseOnlyStaleLunchRepairSql, /g\.target_count\s*=\s*12[\s\S]*g\.eligible_count\s*=\s*12[\s\S]*g\.eligible_keeper_count\s*=\s*4[\s\S]*g\.valid_group_count\s*=\s*4/i, "response-only repair must gate updates/deletes on exact expected counts");
+assert.match(responseOnlyStaleLunchRepairSql, /normalized_count\s*=\s*4[\s\S]*deleted_count\s*=\s*8[\s\S]*deleted_lunch_count\s*=\s*4/i, "response-only repair must error unless exact update/delete counts match");
+assert.match(responseOnlyStaleLunchRepairSql, /coverage_purpose\s*=\s*'response_only'/i, "response-only repair must normalize kept rows to response_only");
+assert.doesNotMatch(responseOnlyStaleLunchRepairSql, /'late_coverage'/, "response-only repair must not target late_coverage rows");
+assert.match(responseOnlyStaleLunchRepairSql, /dsa\.source_type\s+not\s+ilike\s+'%manual%'[\s\S]*dsa\.source_type\s+not\s+ilike\s+'%manager%'[\s\S]*dsa\.source_type\s+not\s+ilike\s+'%override%'/i, "response-only repair must avoid manual/manager/override rows");
+
+for (const [label, sql] of [
+  ["exception lunch guard migration", exceptionLunchGuardMigrationSql],
+  ["response-only stale lunch repair", responseOnlyStaleLunchRepairSql],
+]) {
+  assert.doesNotMatch(sql, /^\s*begin\s*;/im, `${label} must not use explicit BEGIN inside run_sql_migration`);
+  assert.doesNotMatch(sql, /^\s*commit\s*;/im, `${label} must not use explicit COMMIT inside run_sql_migration`);
+}
+
+assert.equal(fs.existsSync(restoreOpenOwnerRowsPath), true, "open-owner restore SQL must exist");
+const restoreOpenOwnerRowsSql = fs.readFileSync(restoreOpenOwnerRowsPath, "utf8");
+assert.match(restoreOpenOwnerRowsSql, /exact assignment IDs only/i, "open-owner restore must document exact-ID scope");
+assert.match(restoreOpenOwnerRowsSql, /and \(select n from eligible_count\) = 3/i, "open-owner restore update must require exactly 3 eligible targets");
+assert.match(restoreOpenOwnerRowsSql, /not public\.sch_is_employee_location_group_restricted/i, "open-owner restore must verify desired owners are not restricted");
+assert.match(restoreOpenOwnerRowsSql, /else 1 \/ \(\(select n from updated_count\) - \(select n from updated_count\)\)/i, "open-owner restore must error and roll back if exactly 3 rows are not updated");
 
 assert.equal(fs.existsSync(dailyMyScheduleMigrationPath), true, "daily-assignment-backed My Schedule migration must exist");
 const dailyMyScheduleMigrationSql = fs.readFileSync(dailyMyScheduleMigrationPath, "utf8");
