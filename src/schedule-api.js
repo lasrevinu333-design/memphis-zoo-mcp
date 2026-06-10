@@ -36,6 +36,9 @@ function timeToMinutes(value) {
 }
 
 function isRestroomRebalanceRosterEligible(row) {
+  const employeeCode = String(row?.employee_code || "").trim().toUpperCase();
+  const employeeName = String(row?.employee_name || row?.display_name || "").trim().toLowerCase();
+  if (employeeCode === "EMP002" || employeeName === "michael mcwright") return false;
   const start = timeToMinutes(row?.shift_start);
   const end = timeToMinutes(row?.shift_end);
   const rebalance = timeToMinutes(RESTROOM_REBALANCE_TIME);
@@ -132,6 +135,26 @@ function buildRestroomRebalanceCompletionUpsertSql(serviceDate, result = {}, sta
   `;
 }
 
+function normalizeIdList(value) {
+  if (Array.isArray(value)) {
+    return Array.from(new Set(value.map((item) => String(item || "").trim()).filter(Boolean)));
+  }
+  if (value == null) return [];
+  const text = String(value || "").trim();
+  if (!text) return [];
+  try {
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed)) return normalizeIdList(parsed);
+  } catch (_error) {
+    // Fall through to Postgres text-array parsing.
+  }
+  return Array.from(new Set(text
+    .replace(/[{}\"]/g, "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)));
+}
+
 function normalizeRestroomRebalanceRow(row = {}) {
   const assignmentId = String(row.assignment_id || row.id || "").trim();
   const employeeId = String(row.assigned_employee_id || row.employee_id || "").trim();
@@ -141,6 +164,7 @@ function normalizeRestroomRebalanceRow(row = {}) {
     assigned_employee_id: employeeId,
     assigned_employee_name: String(row.assigned_employee_name || row.employee_name || "").trim(),
     employee_code: String(row.employee_code || "").trim(),
+    location_group_id: String(row.location_group_id || "").trim(),
     group_name: String(row.group_name || row.group_code || "Restroom").trim(),
     group_code: String(row.group_code || "").trim(),
     segment_number: Number(row.segment_number || 0),
@@ -148,6 +172,7 @@ function normalizeRestroomRebalanceRow(row = {}) {
     coverage_end: String(row.coverage_end || "").slice(0, 8),
     source_type: String(row.source_type || "").trim(),
     load_points: Math.max(1, Number(row.load_points || 1)),
+    restricted_employee_ids: normalizeIdList(row.restricted_employee_ids),
   };
 }
 
@@ -164,6 +189,19 @@ function canRosterEmployeeCoverAssignment(employee = {}, assignment = {}) {
   const coverageEnd = timeToMinutes(assignment.coverage_end);
   if (shiftStart == null || shiftEnd == null || coverageStart == null || coverageEnd == null) return false;
   return shiftStart <= coverageStart && shiftEnd >= coverageEnd;
+}
+
+function canEmployeeReceiveRestroomAssignment(receiverId, donorId, employee = {}, assignment = {}) {
+  const normalizedReceiverId = String(receiverId || "").trim();
+  const normalizedDonorId = String(donorId || "").trim();
+  if (!normalizedReceiverId) return false;
+  if (normalizedReceiverId === normalizedDonorId) return false;
+  if (isProtectedRestroomSource(assignment.source_type)) return false;
+  if (!canRosterEmployeeCoverAssignment(employee, assignment)) return false;
+  const restrictedEmployeeIds = Array.isArray(assignment.restricted_employee_ids)
+    ? assignment.restricted_employee_ids
+    : [];
+  return !restrictedEmployeeIds.includes(normalizedReceiverId);
 }
 
 function buildRestroomRebalancePlan(assignments = [], activeRoster = []) {
@@ -221,7 +259,12 @@ function buildRestroomRebalancePlan(assignments = [], activeRoster = []) {
 
       for (const assignment of donorAssignments) {
         const receiverCandidates = Array.from(loadByEmployee.entries())
-          .filter(([receiverId]) => receiverId !== donorId && canRosterEmployeeCoverAssignment(employeeMeta.get(receiverId) || {}, assignment))
+          .filter(([receiverId]) => canEmployeeReceiveRestroomAssignment(
+            receiverId,
+            donorId,
+            employeeMeta.get(receiverId) || {},
+            assignment,
+          ))
           .sort((a, b) => Number(a[1] || 0) - Number(b[1] || 0));
 
         for (const [receiverId, receiverLoad] of receiverCandidates) {
@@ -999,10 +1042,26 @@ export function createScheduleRouter({
              dsa.location_group_id, lg.group_name, lg.group_code, dsa.segment_number, dsa.source_type,
              to_char(dsa.coverage_start, 'HH24:MI:SS') as coverage_start,
              to_char(dsa.coverage_end, 'HH24:MI:SS') as coverage_end,
-             greatest(coalesce(dsa.load_points, 1), 1)::numeric as load_points
+             greatest(coalesce(dsa.load_points, 1), 1)::numeric as load_points,
+             coalesce(restricted.restricted_employee_ids, '[]'::jsonb) as restricted_employee_ids
       from public.daily_schedule_assignments dsa
       join public.location_groups lg on lg.id = dsa.location_group_id
       join public.employees e on e.id = dsa.assigned_employee_id
+      left join lateral (
+        select jsonb_agg(r.employee_id::text order by r.employee_id::text) as restricted_employee_ids
+        from public.daily_work_roster r
+        join public.employees re on re.id = r.employee_id
+        where r.service_date = dsa.service_date
+          and r.active = true
+          and r.shift_start <= '${esc(RESTROOM_REBALANCE_TIME)}'::time
+          and r.shift_end > '${esc(RESTROOM_REBALANCE_TIME)}'::time
+          and coalesce(re.employee_code, '') <> 'EMP002'
+          and public.sch_is_employee_location_group_restricted(
+            r.employee_id,
+            dsa.location_group_id,
+            extract(dow from dsa.service_date)::integer
+          )
+      ) restricted on true
       where dsa.service_date = '${esc(serviceDate)}'::date
         and dsa.status = 'ASSIGNED'
         and dsa.assigned_employee_id is not null
@@ -1045,27 +1104,88 @@ export function createScheduleRouter({
 
     const valuesSql = plan.moves.map((move) => `(
       '${esc(move.assignment_id)}'::uuid,
+      '${esc(move.from_employee_id)}'::uuid,
       '${esc(move.to_employee_id)}'::uuid,
       '${esc(move.to_employee_name)}',
       '${esc(move.from_employee_name)}'
     )`).join(",\n");
 
     await runWriteSql("restroom_rebalance_0945", `
-      with moved(assignment_id, to_employee_id, to_employee_name, from_employee_name) as (
+      with moved(assignment_id, from_employee_id, to_employee_id, to_employee_name, from_employee_name) as (
         values ${valuesSql}
+      ), eligible as (
+        select moved.*
+        from moved
+        join public.daily_schedule_assignments dsa on dsa.id = moved.assignment_id
+        join public.daily_work_roster r on r.service_date = dsa.service_date
+          and r.employee_id = moved.to_employee_id
+          and r.active = true
+        where dsa.service_date = '${esc(serviceDate)}'::date
+          and dsa.status = 'ASSIGNED'
+          and dsa.owner_type = 'EMPLOYEE'
+          and dsa.assigned_employee_id = moved.from_employee_id
+          and dsa.assigned_employee_id is not null
+          and coalesce(dsa.coverage_purpose, '') <> 'lunch_coverage'
+          and coalesce(dsa.source_type, '') not ilike '%manual%'
+          and coalesce(dsa.source_type, '') not ilike '%override%'
+          and coalesce(dsa.source_type, '') not ilike '%manager%'
+          and r.shift_start <= dsa.coverage_start
+          and r.shift_end >= dsa.coverage_end
+          and not public.sch_is_employee_location_group_restricted(
+            moved.to_employee_id,
+            dsa.location_group_id,
+            extract(dow from dsa.service_date)::integer
+          )
       )
       update public.daily_schedule_assignments dsa
-         set assigned_employee_id = moved.to_employee_id,
+         set assigned_employee_id = eligible.to_employee_id,
              owner_type = 'EMPLOYEE',
              status = 'ASSIGNED',
              source_type = '${esc(RESTROOM_REBALANCE_SOURCE)}',
-             notes = trim(concat_ws(' ', nullif(dsa.notes, ''), '${esc(RESTROOM_REBALANCE_NOTE)}' || ' From ' || moved.from_employee_name || ' to ' || moved.to_employee_name || '.')),
+             notes = trim(concat_ws(' ', nullif(dsa.notes, ''), '${esc(RESTROOM_REBALANCE_NOTE)}' || ' From ' || eligible.from_employee_name || ' to ' || eligible.to_employee_name || '.')),
              updated_at = now()
-      from moved
-      where dsa.id = moved.assignment_id;
+      from eligible
+      where dsa.id = eligible.assignment_id;
     `);
 
-    return { service_date: serviceDate, scheduled_time: RESTROOM_REBALANCE_TIME, ...plan };
+    const movedIdSql = plan.moves.map((move) => `'${esc(move.assignment_id)}'::uuid`).join(", ");
+    const postRows = await runReadOnlySql(`
+      select dsa.id::text as assignment_id,
+             dsa.assigned_employee_id::text as assigned_employee_id,
+             dsa.status,
+             dsa.owner_type,
+             dsa.source_type
+      from public.daily_schedule_assignments dsa
+      where dsa.service_date = '${esc(serviceDate)}'::date
+        and dsa.id in (${movedIdSql})
+    `);
+    const postById = new Map((Array.isArray(postRows) ? postRows : []).map((row) => [String(row.assignment_id || ""), row]));
+    const appliedMoves = [];
+    const skippedMoves = [];
+    for (const move of plan.moves) {
+      const persisted = postById.get(String(move.assignment_id || ""));
+      const applied = persisted
+        && String(persisted.assigned_employee_id || "") === String(move.to_employee_id || "")
+        && String(persisted.status || "") === "ASSIGNED"
+        && String(persisted.owner_type || "") === "EMPLOYEE";
+      if (applied) appliedMoves.push(move);
+      else skippedMoves.push({ ...move, persisted_row: persisted || null });
+    }
+
+    return {
+      service_date: serviceDate,
+      scheduled_time: RESTROOM_REBALANCE_TIME,
+      ...plan,
+      planned_moved_count: plan.moves.length,
+      moved_count: appliedMoves.length,
+      moves: appliedMoves,
+      skipped_moves: skippedMoves,
+      skipped_restricted_moves: skippedMoves.length,
+      partial: skippedMoves.length > 0,
+      reason: skippedMoves.length
+        ? (appliedMoves.length ? "restrooms_rebalanced_partial" : "no_safe_restroom_moves_db_guard")
+        : plan.reason,
+    };
   }
 
   async function applyLunchCoverageAfterRestroomRebalance(serviceDate) {
