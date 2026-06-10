@@ -226,12 +226,119 @@ await withServer(reminderApp, async (baseUrl) => {
   assert.equal(payload.data.length, 1);
   assert.equal(payload.data[0].metadata_json.notification_kind, 'two_days_before');
 });
-const reminderSql = reminderReadCalls.find((sql) => /device_user/i.test(sql));
-assert.ok(reminderSql, 'device event reminder route should query reminders by mapped device');
+const reminderSql = reminderReadCalls.find((sql) => /metadata_json->>'source'/i.test(sql));
+assert.ok(reminderSql, 'device event reminder route should query reminders by mapped device after notification-state check');
 assert.match(reminderSql, /msg_device_assignments/, 'device reminder route should resolve the active device assignment');
 assert.match(reminderSql, /metadata_json->>'source'.*= 'events_app'/s, 'device reminder route should only return event-app messages');
 assert.match(reminderSql, /metadata_json->>'notification_kind'.*two_days_before.*day_before.*morning_of/s, 'device reminder route should only return the three event reminder kinds');
 assert.match(reminderSql, /r\.read_at is null/, 'device reminder route should only return unread reminders');
+
+const notificationGuardReadCalls = [];
+let notificationGuardQueriedMessages = false;
+const notificationGuardApp = express();
+notificationGuardApp.use(express.json());
+notificationGuardApp.use('/messaging-api', createMessagingRouter({
+  runReadOnlySql: async (sql) => {
+    const query = String(sql || '');
+    notificationGuardReadCalls.push(query);
+    if (/notification_state/i.test(query)) {
+      return [{
+        requested_device_id: 'KIOSK_99',
+        device_id: 'KIOSK_99',
+        device_name: 'Off Shift Employee',
+        msg_user_id: '00000000-0000-0000-0000-000000000077',
+        display_name: 'Off Shift Employee',
+        role: 'employee',
+        employee_id: '30000000-0000-0000-0000-000000000099',
+        employee_name: 'Off Shift Employee',
+        service_date: SERVICE_DATE,
+        local_now: `${SERVICE_DATE}T07:30:00`,
+        shift_start: '08:30:00',
+        shift_end: '17:30:00',
+        shift_start_local: `${SERVICE_DATE}T08:30:00`,
+        shift_end_local: `${SERVICE_DATE}T17:30:00`,
+        is_employee_device: true,
+        override_enabled: false,
+        notifications_silent: true,
+        silent_reason: 'scheduled_shift_not_started',
+      }];
+    }
+    if (/metadata_json->>'source'/i.test(query) || /v_location_dashboard_status/i.test(query)) {
+      notificationGuardQueriedMessages = true;
+    }
+    return [];
+  },
+  runRpc: async () => null,
+  buildHealthPayload: (area, extra) => ({ ok: true, area, ...extra }),
+  appVersion: 'test',
+  releaseId: 'test',
+  contractVersion: 'messaging.v1',
+}));
+
+await withServer(notificationGuardApp, async (baseUrl) => {
+  const response = await fetch(`${baseUrl}/messaging-api/device-event-reminders?device_id=KIOSK_99&limit=2`);
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.ok, true);
+  assert.deepEqual(payload.data, [], 'Off-shift employee devices should receive no event reminder payloads');
+  assert.equal(payload.meta.notification_state.notifications_silent, true);
+  assert.equal(payload.meta.notification_state.silent_reason, 'scheduled_shift_not_started');
+  assert.equal(Object.prototype.hasOwnProperty.call(payload.meta.notification_state, 'employee_name'), false, 'Public reminder metadata must not expose employee identity');
+  assert.equal(Object.prototype.hasOwnProperty.call(payload.meta.notification_state, 'shift_start'), false, 'Public reminder metadata must not expose shift times');
+
+  const publicStateResponse = await fetch(`${baseUrl}/messaging-api/device-notification-state?device_id=KIOSK_99&local_now=${encodeURIComponent(`${SERVICE_DATE}T07:30:00`)}`);
+  assert.equal(publicStateResponse.status, 404, 'Raw device notification state must not be exposed as a public unauthenticated route');
+});
+assert.equal(notificationGuardQueriedMessages, false, 'Off-shift notification guard must stop before querying reminder payloads');
+const notificationStateSql = notificationGuardReadCalls.find((sql) => /notification_state/i.test(sql));
+assert.ok(notificationStateSql, 'Notification guard should query device notification state');
+assert.match(notificationStateSql, /p\.local_now < \(p\.service_date \+ r\.shift_start\)/, 'Notification guard should silence employee devices before shift start');
+assert.match(notificationStateSql, /p\.local_now >= \(p\.service_date \+ r\.shift_end\)/, 'Notification guard should silence employee devices after shift end');
+assert.match(notificationStateSql, /when r\.id is null then true/, 'Notification guard should silence employee devices with no active roster shift');
+assert.match(notificationStateSql, /when r\.shift_start is null or r\.shift_end is null then true/, 'Notification guard should silence employee devices with invalid roster shift windows');
+assert.match(notificationStateSql, /invalid_roster_shift_window/, 'Notification guard should report invalid roster shift windows');
+assert.match(notificationStateSql, /when i\.employee_id is null then true/, 'Notification guard should fail closed for employee devices with no employee mapping');
+assert.match(notificationStateSql, /not in \('manager', 'bot', 'ops', 'ops_manager', 'operations_manager'\)/, 'Notification guard should not silence manager/bot/ops devices by shift state');
+assert.match(notificationStateSql, /scheduled_shift_not_started/, 'Notification guard should report before-shift silence reason');
+
+const missingEmployeeMappingReadCalls = [];
+let missingEmployeeMappingQueriedMessages = false;
+const missingEmployeeMappingApp = express();
+missingEmployeeMappingApp.use(express.json());
+missingEmployeeMappingApp.use('/messaging-api', createMessagingRouter({
+  runReadOnlySql: async (sql) => {
+    const query = String(sql || '');
+    missingEmployeeMappingReadCalls.push(query);
+    if (/notification_state/i.test(query)) {
+      return [{
+        requested_device_id: 'KIOSK_UNMAPPED',
+        device_id: 'KIOSK_UNMAPPED',
+        role: 'employee',
+        employee_id: null,
+        is_employee_device: true,
+        notifications_silent: true,
+        silent_reason: 'no_employee_mapping',
+      }];
+    }
+    if (/metadata_json->>'source'/i.test(query)) missingEmployeeMappingQueriedMessages = true;
+    return [];
+  },
+  runRpc: async () => null,
+  buildHealthPayload: (area, extra) => ({ ok: true, area, ...extra }),
+  appVersion: 'test',
+  releaseId: 'test',
+  contractVersion: 'messaging.v1',
+}));
+
+await withServer(missingEmployeeMappingApp, async (baseUrl) => {
+  const response = await fetch(`${baseUrl}/messaging-api/device-event-reminders?device_id=KIOSK_UNMAPPED&limit=2`);
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.deepEqual(payload.data, [], 'Employee devices with no employee mapping should fail closed');
+  assert.equal(payload.meta.notification_state.notifications_silent, true);
+  assert.equal(payload.meta.notification_state.silent_reason, 'no_employee_mapping');
+});
+assert.equal(missingEmployeeMappingQueriedMessages, false, 'Unmapped employee devices must not query reminder payloads');
 
 const locationStatusReadCalls = [];
 const locationStatusApp = express();
@@ -242,6 +349,17 @@ locationStatusApp.use('/messaging-api', createMessagingRouter({
     locationStatusReadCalls.push(query);
     if (/select public\.sch_service_date\(now\(\)\) as service_date/i.test(query)) {
       return [{ service_date: SERVICE_DATE }];
+    }
+    if (/notification_state/i.test(query)) {
+      return [{
+        requested_device_id: 'KIOSK_02',
+        device_id: 'KIOSK_02',
+        role: 'employee',
+        employee_id: '30000000-0000-0000-0000-000000000001',
+        is_employee_device: true,
+        notifications_silent: false,
+        silent_reason: 'on_shift',
+      }];
     }
     if (/from public\.devices d/i.test(query) && /where d\.device_id = 'KIOSK_02'/i.test(query)) {
       return [{
@@ -299,6 +417,9 @@ await withServer(locationStatusApp, async (baseUrl) => {
   assert.equal(payload.data.length, 1);
   assert.equal(payload.data[0].status_code, 'overdue');
   assert.equal(payload.data[0].location_code, 'AQUA1');
+  assert.equal(payload.meta.notification_state.notifications_silent, false);
+  assert.equal(Object.prototype.hasOwnProperty.call(payload.meta.notification_state, 'employee_name'), false, 'Location reminder metadata must not expose employee identity');
+  assert.equal(Object.prototype.hasOwnProperty.call(payload.meta.notification_state, 'shift_start'), false, 'Location reminder metadata must not expose shift times');
 });
 const locationStatusSql = locationStatusReadCalls.find((sql) => /with assigned_groups as/i.test(sql));
 assert.ok(locationStatusSql, 'device location status reminder route should query assigned group location statuses');
@@ -307,6 +428,113 @@ assert.match(locationStatusSql, /sch_get_daily_schedule_with_purpose\('2026-04-2
 assert.match(locationStatusSql, /coalesce\(s\.coverage_purpose, 'area_owner'\) <> 'reminder'/, 'location status reminder route should exclude reminder-only schedule groups');
 assert.match(locationStatusSql, /location_group_memberships/, 'device location status reminder route should resolve real locations from group memberships');
 assert.match(locationStatusSql, /status_code in \('overdue', 'due_soon'\)/, 'device location status reminder route should only return due soon or overdue locations');
+const locationNotificationStateSql = locationStatusReadCalls.find((sql) => /notification_state/i.test(sql));
+assert.ok(locationNotificationStateSql, 'location status reminder route should query notification state before payload rows');
+assert.match(locationNotificationStateSql, /'30000000-0000-0000-0000-000000000001'::uuid as employee_id/, 'location notification guard must be scoped to the same device-assigned employee used for payload rows');
+
+const locationGuardReadCalls = [];
+let locationGuardQueriedStatuses = false;
+const locationGuardApp = express();
+locationGuardApp.use(express.json());
+locationGuardApp.use('/messaging-api', createMessagingRouter({
+  runReadOnlySql: async (sql) => {
+    const query = String(sql || '');
+    locationGuardReadCalls.push(query);
+    if (/from public\.devices d/i.test(query) && /where d\.device_id = 'KIOSK_99'/i.test(query) && !/notification_state/i.test(query)) {
+      return [{
+        device_id: 'KIOSK_99',
+        device_name: 'Off Shift Employee phone',
+        assigned_employee_id: '30000000-0000-0000-0000-000000000099',
+        assigned_employee_name: 'Off Shift Employee',
+        employee_code: 'EMP099',
+        role: 'employee',
+        device_active: true,
+        employee_active: true,
+      }];
+    }
+    if (/notification_state/i.test(query)) {
+      return [{
+        requested_device_id: 'KIOSK_99',
+        device_id: 'KIOSK_99',
+        role: 'employee',
+        employee_id: '30000000-0000-0000-0000-000000000099',
+        is_employee_device: true,
+        notifications_silent: true,
+        silent_reason: 'scheduled_shift_ended',
+      }];
+    }
+    if (/v_location_dashboard_status/i.test(query)) locationGuardQueriedStatuses = true;
+    return [];
+  },
+  runRpc: async () => null,
+  buildHealthPayload: (area, extra) => ({ ok: true, area, ...extra }),
+  appVersion: 'test',
+  releaseId: 'test',
+  contractVersion: 'messaging.v1',
+}));
+
+await withServer(locationGuardApp, async (baseUrl) => {
+  const response = await fetch(`${baseUrl}/messaging-api/device-location-status-reminders?device_id=KIOSK_99&service_date=${SERVICE_DATE}&limit=2`);
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.deepEqual(payload.data, [], 'Off-shift employee devices should receive no location reminder payloads');
+  assert.equal(payload.meta.notification_state.notifications_silent, true);
+  assert.equal(payload.meta.notification_state.silent_reason, 'scheduled_shift_ended');
+});
+assert.equal(locationGuardQueriedStatuses, false, 'Off-shift location reminder guard must stop before querying location statuses');
+assert.ok(locationGuardReadCalls.find((sql) => /notification_state/i.test(sql)), 'Location reminder guard should query notification state');
+
+const locationMismatchReadCalls = [];
+let locationMismatchQueriedStatuses = false;
+const locationMismatchApp = express();
+locationMismatchApp.use(express.json());
+locationMismatchApp.use('/messaging-api', createMessagingRouter({
+  runReadOnlySql: async (sql) => {
+    const query = String(sql || '');
+    locationMismatchReadCalls.push(query);
+    if (/from public\.devices d/i.test(query) && /where d\.device_id = 'KIOSK_MISMATCH'/i.test(query) && !/notification_state/i.test(query)) {
+      return [{
+        device_id: 'KIOSK_MISMATCH',
+        device_name: 'Mismatched Employee phone',
+        assigned_employee_id: '30000000-0000-0000-0000-000000000010',
+        assigned_employee_name: 'Payload Employee',
+        employee_code: 'EMP010',
+        role: 'employee',
+        device_active: true,
+        employee_active: true,
+      }];
+    }
+    if (/notification_state/i.test(query)) {
+      return [{
+        requested_device_id: 'KIOSK_MISMATCH',
+        device_id: 'KIOSK_MISMATCH',
+        role: 'employee',
+        employee_id: '30000000-0000-0000-0000-000000000099',
+        is_employee_device: true,
+        notifications_silent: false,
+        silent_reason: 'on_shift',
+      }];
+    }
+    if (/v_location_dashboard_status/i.test(query)) locationMismatchQueriedStatuses = true;
+    return [];
+  },
+  runRpc: async () => null,
+  buildHealthPayload: (area, extra) => ({ ok: true, area, ...extra }),
+  appVersion: 'test',
+  releaseId: 'test',
+  contractVersion: 'messaging.v1',
+}));
+
+await withServer(locationMismatchApp, async (baseUrl) => {
+  const response = await fetch(`${baseUrl}/messaging-api/device-location-status-reminders?device_id=KIOSK_MISMATCH&service_date=${SERVICE_DATE}&limit=2`);
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.deepEqual(payload.data, [], 'Location reminders should fail closed if notification-state employee differs from payload employee');
+  assert.equal(payload.meta.notification_state.notifications_silent, true);
+  assert.equal(payload.meta.notification_state.silent_reason, 'device_assignment_mismatch');
+});
+assert.equal(locationMismatchQueriedStatuses, false, 'Mismatched location reminder guard must stop before querying location statuses');
+assert.ok(locationMismatchReadCalls.find((sql) => /'30000000-0000-0000-0000-000000000010'::uuid as employee_id/i.test(sql)), 'Mismatch guard should ask notification state for the payload employee id');
 
 const EMPLOYEE_USER_ID = '10000000-0000-0000-0000-000000000001';
 const MANAGER_USER_ID = '10000000-0000-0000-0000-000000000002';
@@ -470,4 +698,4 @@ assert.doesNotMatch(employeeGroupMessageSql, /t\.thread_type in \('direct', 'bot
 const managerMessageSql = visibilityReadCalls.find((sql) => sql.includes(FOREIGN_DIRECT_THREAD_ID) && sql.includes('from public.msg_messages m'));
 assert.ok(managerMessageSql, 'Manager overview message fetch should use the raw thread message visibility query');
 
-console.log(JSON.stringify({ ok: true, route_cases: routeCases.length, reply_cases: replyCases.length, false_location_code_cases: falseLocationCodeCases.length, device_event_reminder_contract: true, device_location_status_reminder_contract: true, thread_visibility_contract: true }, null, 2));
+console.log(JSON.stringify({ ok: true, route_cases: routeCases.length, reply_cases: replyCases.length, false_location_code_cases: falseLocationCodeCases.length, device_event_reminder_contract: true, off_shift_notification_guard_contract: true, off_shift_location_notification_guard_contract: true, location_identity_mismatch_guard_contract: true, device_location_status_reminder_contract: true, thread_visibility_contract: true }, null, 2));
