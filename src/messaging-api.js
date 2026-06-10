@@ -8,6 +8,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
   const memphisResponder = createMemphisResponder({ runReadOnlySql, runRpc });
   const requireOpsManagerAuth = makeDailyPinMiddleware({ allowedRoles: ["ops_manager"], openWhenDisabled: true });
   const MANAGER_OVERVIEW_DEVICE_IDS = new Set(["1e74fe4c-dc20b3b9", "KIOSK_01", "KIOSK_1"]);
+  const OFF_SHIFT_NOTIFICATION_OVERRIDE_SETTING_KEY = "off_shift_employee_notifications_override_enabled";
 
   function fail(res, error, fallback = "Messaging request failed") {
     res.status(400).json({ ok: false, error: error?.message || fallback });
@@ -53,6 +54,211 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
   async function getServiceDate() {
     const rows = await runReadOnlySql("select public.sch_service_date(now()) as service_date");
     return Array.isArray(rows) && rows.length ? rows[0].service_date : null;
+  }
+
+  function messagingMeta(extra = {}) {
+    return { version: appVersion, release_id: releaseId, contract_version: contractVersion, ...extra };
+  }
+
+  function normalizeNotificationState(row, deviceId = "") {
+    const data = row && typeof row === "object" ? row : {};
+    return {
+      requested_device_id: String(data.requested_device_id || deviceId || "").trim(),
+      device_id: String(data.device_id || data.requested_device_id || deviceId || "").trim(),
+      device_name: data.device_name || null,
+      msg_user_id: data.msg_user_id || null,
+      display_name: data.display_name || data.employee_name || null,
+      role: data.role || null,
+      employee_id: data.employee_id || null,
+      employee_name: data.employee_name || null,
+      service_date: data.service_date || null,
+      local_now: data.local_now || null,
+      shift_start: data.shift_start || null,
+      shift_end: data.shift_end || null,
+      shift_start_local: data.shift_start_local || null,
+      shift_end_local: data.shift_end_local || null,
+      is_employee_device: data.is_employee_device === true,
+      override_enabled: data.override_enabled === true,
+      notifications_silent: data.notifications_silent === true,
+      silent_reason: String(data.silent_reason || "notifications_allowed"),
+    };
+  }
+
+  function notificationStateMeta(notificationState) {
+    return {
+      notification_state: {
+        notifications_silent: notificationState?.notifications_silent === true,
+        silent_reason: String(notificationState?.silent_reason || "notifications_allowed"),
+      },
+    };
+  }
+
+  async function getDeviceNotificationState(deviceId = "", options = {}) {
+    const normalizedDeviceId = String(deviceId || "").trim();
+    if (!normalizedDeviceId) {
+      return normalizeNotificationState({
+        requested_device_id: "",
+        notifications_silent: false,
+        silent_reason: "missing_device_id",
+      });
+    }
+
+    const requestedServiceDate = String(options.serviceDate || "").trim();
+    const requestedEmployeeId = String(options.employeeId || "").trim();
+    const serviceDateSql = requestedServiceDate
+      ? `'${esc(requestedServiceDate)}'::date`
+      : "public.sch_service_date(now())";
+    const scopedEmployeeIdSql = requestedEmployeeId
+      ? `'${esc(requestedEmployeeId)}'::uuid`
+      : "coalesce(du.msg_employee_id, dr.assigned_employee_id)";
+    const localNowSql = "(now() at time zone 'America/Chicago')";
+
+    const rows = await runReadOnlySql(`
+      select * from (
+        with params as (
+          select
+            ${serviceDateSql} as service_date,
+            ${localNowSql} as local_now
+        ),
+        device_user as (
+          select
+            mda.device_identifier,
+            mu.id as msg_user_id,
+            mu.employee_id as msg_employee_id,
+            mu.display_name as msg_display_name,
+            lower(coalesce(mu.role, '')) as msg_role
+          from public.msg_device_assignments mda
+          join public.msg_users mu on mu.id = mda.msg_user_id
+          where mda.device_identifier = '${esc(normalizedDeviceId)}'
+            and mda.is_active = true
+            and mu.is_active = true
+          order by mda.updated_at desc nulls last, mda.created_at desc nulls last
+          limit 1
+        ),
+        device_row as (
+          select
+            d.device_id,
+            d.device_name,
+            d.assigned_employee_id,
+            d.active as device_active
+          from public.devices d
+          where d.device_id = '${esc(normalizedDeviceId)}'
+          order by d.updated_at desc nulls last, d.created_at desc nulls last
+          limit 1
+        ),
+        identity as (
+          select
+            '${esc(normalizedDeviceId)}'::text as requested_device_id,
+            coalesce(du.device_identifier, dr.device_id, '${esc(normalizedDeviceId)}') as device_id,
+            dr.device_name,
+            du.msg_user_id,
+            du.msg_display_name,
+            du.msg_role,
+            ${scopedEmployeeIdSql} as employee_id,
+            coalesce(dr.device_active, true) as device_active
+          from params p
+          left join device_user du on true
+          left join device_row dr on true
+        )
+        select
+          i.requested_device_id,
+          i.device_id,
+          i.device_name,
+          i.msg_user_id,
+          coalesce(i.msg_display_name, e.display_name) as display_name,
+          i.msg_role as role,
+          i.employee_id,
+          e.display_name as employee_name,
+          p.service_date,
+          p.local_now,
+          r.shift_start,
+          r.shift_end,
+          case when r.id is null then null else (p.service_date + r.shift_start) end as shift_start_local,
+          case when r.id is null then null else (p.service_date + r.shift_end) end as shift_end_local,
+          (
+            coalesce(i.msg_role, '') = 'employee'
+            or (
+              i.employee_id is not null
+              and coalesce(i.msg_role, '') not in ('manager', 'bot', 'ops', 'ops_manager', 'operations_manager')
+            )
+          ) as is_employee_device,
+          coalesce(ss.setting_value = 'true'::jsonb, false) as override_enabled,
+          case
+            when not (
+              coalesce(i.msg_role, '') = 'employee'
+              or (
+                i.employee_id is not null
+                and coalesce(i.msg_role, '') not in ('manager', 'bot', 'ops', 'ops_manager', 'operations_manager')
+              )
+            ) then false
+            when coalesce(ss.setting_value = 'true'::jsonb, false) then false
+            when i.employee_id is null then true
+            when r.id is null then true
+            when r.shift_start is null or r.shift_end is null then true
+            when p.local_now < (p.service_date + r.shift_start) then true
+            when p.local_now >= (p.service_date + r.shift_end) then true
+            else false
+          end as notifications_silent,
+          case
+            when not (
+              coalesce(i.msg_role, '') = 'employee'
+              or (
+                i.employee_id is not null
+                and coalesce(i.msg_role, '') not in ('manager', 'bot', 'ops', 'ops_manager', 'operations_manager')
+              )
+            ) then 'not_employee_device'
+            when coalesce(ss.setting_value = 'true'::jsonb, false) then 'admin_overtime_override_enabled'
+            when i.employee_id is null then 'no_employee_mapping'
+            when r.id is null then 'no_active_roster_shift'
+            when r.shift_start is null or r.shift_end is null then 'invalid_roster_shift_window'
+            when p.local_now < (p.service_date + r.shift_start) then 'scheduled_shift_not_started'
+            when p.local_now >= (p.service_date + r.shift_end) then 'scheduled_shift_ended'
+            else 'on_shift'
+          end as silent_reason
+        from params p
+        left join identity i on true
+        left join public.employees e on e.id = i.employee_id
+        left join lateral (
+          select r.*
+          from public.daily_work_roster r
+          where r.service_date = p.service_date
+            and r.employee_id = i.employee_id
+            and r.active = true
+          order by r.updated_at desc nulls last, r.created_at desc nulls last
+          limit 1
+        ) r on true
+        left join public.system_settings ss
+          on ss.setting_key = '${esc(OFF_SHIFT_NOTIFICATION_OVERRIDE_SETTING_KEY)}'
+        limit 1
+      ) notification_state
+    `);
+    if (!Array.isArray(rows) || !rows.length) {
+      return normalizeNotificationState({
+        requested_device_id: normalizedDeviceId,
+        device_id: normalizedDeviceId,
+        notifications_silent: false,
+        silent_reason: "state_unavailable",
+      }, normalizedDeviceId);
+    }
+    return normalizeNotificationState(rows[0], normalizedDeviceId);
+  }
+
+  function shouldSilenceDeviceNotifications(notificationState) {
+    return notificationState?.notifications_silent === true;
+  }
+
+  function idsDiffer(a, b) {
+    const left = String(a || "").trim().toLowerCase();
+    const right = String(b || "").trim().toLowerCase();
+    return Boolean(left && right && left !== right);
+  }
+
+  function forceSilentNotificationState(notificationState, reason) {
+    return {
+      ...(notificationState || {}),
+      notifications_silent: true,
+      silent_reason: String(reason || "notifications_silenced"),
+    };
   }
 
   async function getAssignedEmployeeForDevice(deviceId = "") {
@@ -353,7 +559,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       if (!deviceId) throw new Error("device_id is required.");
       const rows = await runReadOnlySql(`select * from public.msg_get_user_by_device('${esc(deviceId)}')`);
       const data = Array.isArray(rows) && rows.length ? rows[0] : null;
-      res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+      res.status(200).json({ ok: true, data, meta: messagingMeta() });
     } catch (error) {
       fail(res, error, "Device identity lookup failed");
     }
@@ -387,6 +593,11 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const deviceId = String(req.query.device_id || "").trim();
       const limit = Math.min(Math.max(Number.parseInt(String(req.query.limit || 5), 10) || 5, 1), 20);
       if (!deviceId) throw new Error("device_id is required.");
+      const notificationState = await getDeviceNotificationState(deviceId);
+      if (shouldSilenceDeviceNotifications(notificationState)) {
+        res.status(200).json({ ok: true, data: [], meta: messagingMeta(notificationStateMeta(notificationState)) });
+        return;
+      }
       const rows = await runReadOnlySql(`
         select *
         from (
@@ -429,7 +640,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
           limit ${limit}
         ) event_reminders
       `);
-      res.status(200).json({ ok: true, data: rows || [], meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+      res.status(200).json({ ok: true, data: rows || [], meta: messagingMeta(notificationStateMeta(notificationState)) });
     } catch (error) {
       fail(res, error, "Device event reminders failed");
     }
@@ -453,6 +664,16 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
 
       const serviceDate = String(req.query.service_date || req.query.date || "").trim() || await getServiceDate();
       if (!serviceDate) throw new Error("service_date could not be resolved.");
+      const notificationState = await getDeviceNotificationState(deviceId, { serviceDate, employeeId: assignment.assigned_employee_id });
+      if (idsDiffer(notificationState?.employee_id, assignment.assigned_employee_id)) {
+        const mismatchState = forceSilentNotificationState(notificationState, "device_assignment_mismatch");
+        res.status(200).json({ ok: true, data: [], meta: messagingMeta(notificationStateMeta(mismatchState)) });
+        return;
+      }
+      if (shouldSilenceDeviceNotifications(notificationState)) {
+        res.status(200).json({ ok: true, data: [], meta: messagingMeta(notificationStateMeta(notificationState)) });
+        return;
+      }
 
       const rows = await runReadOnlySql(`
         select * from (
@@ -523,7 +744,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
           limit ${limit}
         ) reminder_rows
       `);
-      res.status(200).json({ ok: true, data: rows || [], meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+      res.status(200).json({ ok: true, data: rows || [], meta: messagingMeta(notificationStateMeta(notificationState)) });
     } catch (error) {
       fail(res, error, "Device location status reminders failed");
     }
