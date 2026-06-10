@@ -100,19 +100,18 @@ await withServer(buildApp({ writeCalls: overnightWriteCalls }), async (baseUrl) 
   assert.equal(response.status, 200, "overnight Zoo Snooze should not be rejected by start/end chronology validation");
   const payload = await response.json();
   assert.equal(payload.ok, true);
-  assert.equal(payload.data.overnight_split, true);
-  assert.equal(payload.data.created_records.length, 2);
-  assert.equal(payload.data.created_records[0].event_date, "2026-06-19");
-  assert.equal(payload.data.created_records[0].start_time, "22:00:00");
-  assert.equal(payload.data.created_records[0].end_time, "23:59:00");
-  assert.equal(payload.data.created_records[1].event_date, "2026-06-20");
-  assert.equal(payload.data.created_records[1].start_time, "00:00:00");
-  assert.equal(payload.data.created_records[1].end_time, "08:00:00");
+  assert.equal(payload.data.event_date, "2026-06-19");
+  assert.equal(payload.data.end_date, "2026-06-20");
+  assert.equal(payload.data.start_time, "22:00:00");
+  assert.equal(payload.data.end_time, "08:00:00");
+  assert.equal(payload.data.spans_overnight, true);
+  assert.equal(payload.data.overnight_split, undefined, "overnight events must remain one logical event, not split into fake day rows");
 });
 const overnightCreateCall = overnightWriteCalls.find((call) => call.name === "events_app_create");
 assert.ok(overnightCreateCall, "overnight event creation SQL should run");
-assert.match(overnightCreateCall.sql, /'2026-06-19'::date[\s\S]*'22:00:00'::time[\s\S]*'23:59:00'::time/);
-assert.match(overnightCreateCall.sql, /'2026-06-20'::date[\s\S]*'00:00:00'::time[\s\S]*'08:00:00'::time/);
+assert.match(overnightCreateCall.sql, /event_date,[\s\S]*end_date,[\s\S]*start_time,[\s\S]*end_time/i, "creation SQL should persist both start date and end date");
+assert.match(overnightCreateCall.sql, /'2026-06-19'::date[\s\S]*'2026-06-20'::date[\s\S]*'22:00:00'::time[\s\S]*'08:00:00'::time/, "overnight event should be inserted as one row with next-day end_date");
+assert.doesNotMatch(overnightCreateCall.sql, /'23:59:00'::time|\('ARP Zoo Snooze'[\s\S]*'2026-06-20'::date[\s\S]*'00:00:00'::time/, "overnight insert should not use the old two-row split workaround");
 
 await withServer(buildApp(), async (baseUrl) => {
   const response = await fetch(`${baseUrl}/admin-api/events/`, {
@@ -172,11 +171,13 @@ assert.match(notificationSql, /day_before/, "event reminders should include one-
 assert.match(notificationSql, /morning_of/, "event reminders should include morning-of notices");
 assert.match(notificationSql, /interval '15 minutes'/, "event reminders should be scheduled 15 minutes after owner clock-in/coverage start");
 assert.match(notificationSql, /coalesce\(eoc\.coverage_start, time '08:00:00'\)/, "event reminders should use chosen owner coverage start with 8 AM fallback");
-assert.match(notificationSql, /coalesce\(oa\.coverage_start, time '00:00:00'\)\s*<\s*e\.end_time/s, "event owner candidates should only include coverage windows that overlap event end time");
-assert.match(notificationSql, /coalesce\(oa\.coverage_end, time '23:59:59'\)\s*>\s*e\.start_time/s, "event owner candidates should only include coverage windows that overlap event start time");
+assert.match(notificationSql, /oa\.assignment_date between e\.event_date and coalesce\(e\.end_date, e\.event_date\)/, "event owner candidates should include every assignment date spanned by an overnight event");
+assert.match(notificationSql, /\(oa\.assignment_date::timestamp \+ coalesce\(oa\.coverage_start, time '00:00:00'\)\)\s*<\s*\(coalesce\(e\.end_date, e\.event_date\)::timestamp \+ e\.end_time\)/s, "event owner candidates should only include coverage windows before the real event end timestamp");
+assert.match(notificationSql, /\(oa\.assignment_date::timestamp \+ coalesce\(oa\.coverage_end, time '23:59:59'\)\)\s*>\s*\(e\.event_date::timestamp \+ e\.start_time\)/s, "event owner candidates should only include coverage windows after the real event start timestamp");
+assert.match(notificationSql, /eoc\.assignment_date::timestamp \+ \(eoc\.day_offset \* interval '1 day'\)/, "event reminders for overnight end-day owners should schedule relative to the owner assignment date");
 assert.match(notificationSql, /coalesce\(dsa\.coverage_purpose, 'area_owner'\) in \('area_owner', 'late_coverage'\)/, "event reminders should consider Michael-style late coverage rows as valid owners");
 assert.match(notificationSql, /when coalesce\(dsa\.coverage_purpose, 'area_owner'\) = 'late_coverage' then 2/s, "late coverage rows should outrank ordinary daytime area owners when they overlap an event");
-assert.match(notificationSql, /min\(eoc\.assignment_priority\) over \(partition by eoc\.id, eoc\.notification_kind\)/s, "event reminders should choose the highest-priority overlapping owner per event/reminder kind");
+assert.match(notificationSql, /min\(eoc\.assignment_priority\) over \(partition by eoc\.id, eoc\.notification_kind, eoc\.assignment_date\)/s, "event reminders should choose the highest-priority overlapping owner per event/reminder kind/date");
 assert.doesNotMatch(notificationSql, /not exists \(\s*select 1\s*from public\.daily_group_assignments dga\s*where dga\.assignment_date = dsa\.service_date\s*and dga\.location_group_id = dsa\.location_group_id\s*and dga\.active = true\s*and dga\.assigned_employee_id is not null\s*\)/s, "manual/takeover rows must not suppress generated schedule owners for the whole day without event-time overlap");
 const scanAlertRpc = rpcCalls.find((call) => call.name === "sch_queue_due_scan_alerts");
 assert.ok(scanAlertRpc, "event maintenance should queue due scan alerts");
