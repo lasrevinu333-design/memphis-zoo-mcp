@@ -99,6 +99,55 @@ function cleanEventName(value) {
   return text;
 }
 
+function normalizeLoose(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/pavillion/g, "pavilion")
+    .replace(/\band\b/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function isOvernightEventContext(record = {}) {
+  const text = normalizeLoose([
+    record.event_name,
+    record.notes,
+    record.raw_text,
+    record.created_by,
+  ].filter(Boolean).join(" "));
+  return /(?:^|\s)(?:zoo snooze|overnight|sleepover|campout|camp out|lock in|lockin)(?:\s|$)/.test(text);
+}
+
+function addLocalDays(isoDate, days = 1) {
+  const [year, month, day] = String(isoDate || "").split("-").map(Number);
+  const candidate = new Date(Date.UTC(year, month - 1, day + days, 12, 0, 0));
+  return `${candidate.getUTCFullYear()}-${String(candidate.getUTCMonth() + 1).padStart(2, "0")}-${String(candidate.getUTCDate()).padStart(2, "0")}`;
+}
+
+function isOvernightRecord(record = {}) {
+  return String(record.end_time || "") <= String(record.start_time || "") && isOvernightEventContext(record);
+}
+
+function expandEventRecordForStorage(record = {}) {
+  if (!isOvernightRecord(record)) return [record];
+  return [
+    {
+      ...record,
+      event_date: record.event_date,
+      start_time: record.start_time,
+      end_time: "23:59:00",
+      overnight_segment: "start_day",
+    },
+    {
+      ...record,
+      event_date: addLocalDays(record.event_date, 1),
+      start_time: "00:00:00",
+      end_time: record.end_time,
+      overnight_segment: "end_day",
+    },
+  ];
+}
+
 function eventAreaDisplaySql(column = "lg.group_name") {
   return `case
       when ${column} ~* '^splash\\s*pad\\s+restrooms?$' then 'Splash Pad'
@@ -128,7 +177,9 @@ function normalizeEventPayload(payload = {}) {
   if (!eventName) throw new Error("event_name is required.");
   if (!isUuid(locationGroupId)) throw new Error("location_group_id must be a valid UUID.");
   if (!isIsoDate(eventDate)) throw new Error("event_date must be YYYY-MM-DD.");
-  if (endTime <= startTime) throw new Error("end_time must be later than start_time.");
+  if (endTime <= startTime && !isOvernightEventContext({ ...payload, event_name: eventName, notes, created_by: createdBy })) {
+    throw new Error("end_time must be later than start_time unless this is an overnight event such as Zoo Snooze.");
+  }
 
   return {
     event_name: eventName,
@@ -255,6 +306,18 @@ async function ensureUpcomingEventScheduleState({ runReadOnlySql, runRpc }) {
 
 async function createEventRecord(runWriteSql, payload) {
   const record = normalizeEventPayload(payload);
+  const records = expandEventRecordForStorage(record);
+  const valuesSql = records.map((item) => `(
+       ${sqlLiteral(item.event_name)},
+       ${sqlLiteral(item.location_group_id)}::uuid,
+       ${sqlLiteral(item.event_date)}::date,
+       ${sqlLiteral(item.start_time)}::time,
+       ${sqlLiteral(item.end_time)}::time,
+       ${item.attendee_count == null ? "null" : item.attendee_count},
+       ${sqlLiteral(item.notes)},
+       ${sqlLiteral(item.created_by)},
+       now()
+     )`).join(",\n     ");
   await runWriteSql(
     "events_app_create",
     `insert into public.events_app_events (
@@ -267,19 +330,10 @@ async function createEventRecord(runWriteSql, payload) {
        notes,
        created_by,
        updated_at
-     ) values (
-       ${sqlLiteral(record.event_name)},
-       ${sqlLiteral(record.location_group_id)}::uuid,
-       ${sqlLiteral(record.event_date)}::date,
-       ${sqlLiteral(record.start_time)}::time,
-       ${sqlLiteral(record.end_time)}::time,
-       ${record.attendee_count == null ? "null" : record.attendee_count},
-       ${sqlLiteral(record.notes)},
-       ${sqlLiteral(record.created_by)},
-       now()
-     );`
+     ) values ${valuesSql};`
   );
-  return record;
+  if (records.length === 1) return record;
+  return { ...record, overnight_split: true, created_records: records };
 }
 
 async function deleteEventRecord(runWriteSql, eventId) {

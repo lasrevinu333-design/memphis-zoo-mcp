@@ -95,6 +95,11 @@ function normalizeLoose(value) {
     .trim();
 }
 
+function isOvernightEventContext(...values) {
+  const text = normalizeLoose(values.filter(Boolean).join(" "));
+  return /(?:^|\s)(?:zoo snooze|overnight|sleepover|campout|camp out|lock in|lockin)(?:\s|$)/.test(text);
+}
+
 function stripSpreadsheetGarbage(text) {
   let result = String(text || "");
   for (const phrase of GARBAGE_PHRASES) {
@@ -814,15 +819,16 @@ function minutesFromTime(value) {
   return (Number(match[1]) * 60) + Number(match[2]);
 }
 
-function buildTimeWarnings(startTime, endTime) {
+function buildTimeWarnings(startTime, endTime, { allowOvernight = false } = {}) {
   const warnings = [];
   const start = minutesFromTime(startTime);
   const end = minutesFromTime(endTime);
   if (start == null || end == null) return warnings;
-  if (end <= start) warnings.push("end_not_after_start");
-  const duration = end - start;
+  const crossesMidnight = end <= start;
+  if (crossesMidnight && !allowOvernight) warnings.push("end_not_after_start");
+  const duration = crossesMidnight ? ((24 * 60) - start) + end : end - start;
   if (duration > 12 * 60) warnings.push("suspicious_time");
-  if (start < 5 * 60 || end > 23 * 60) warnings.push("suspicious_time");
+  if (start < 5 * 60 || (!crossesMidnight && end > 23 * 60)) warnings.push("suspicious_time");
   return warnings;
 }
 
@@ -963,14 +969,14 @@ function buildFieldConfidence({ eventName, locationGroupId, eventDate, startTime
   };
 }
 
-function buildParseWarnings({ eventName, locationGroupId, eventDate, startTime, endTime, areaCandidates = [] }) {
+function buildParseWarnings({ eventName, locationGroupId, eventDate, startTime, endTime, areaCandidates = [], rawText = "", notes = "" }) {
   const warnings = [];
   if (!eventName) warnings.push("missing_event_name");
   if (!locationGroupId) warnings.push("missing_area");
   if (locationGroupId && areaIsAmbiguous(areaCandidates)) warnings.push("ambiguous_area");
   if (!eventDate) warnings.push("missing_date");
   if (!startTime || !endTime) warnings.push("missing_time");
-  warnings.push(...buildTimeWarnings(startTime, endTime));
+  warnings.push(...buildTimeWarnings(startTime, endTime, { allowOvernight: isOvernightEventContext(eventName, rawText, notes) }));
   return Array.from(new Set(warnings));
 }
 
@@ -1030,7 +1036,7 @@ function parseOneEventText(rawText, locationGroups, index = 0) {
   const baseNotes = notesFromLabel ? buildNotesFromNarrative(normalizedText, notesFromLabel, eventName, matchedGroup) : compactNarrativeNotes(normalizedText, eventName, matchedGroup);
   const startTime = timeRange?.start_time || "";
   const endTime = timeRange?.end_time || "";
-  const warnings = buildParseWarnings({ eventName, locationGroupId: matchedGroup?.location_group_id || "", eventDate, startTime, endTime, areaCandidates });
+  const warnings = buildParseWarnings({ eventName, locationGroupId: matchedGroup?.location_group_id || "", eventDate, startTime, endTime, areaCandidates, rawText: normalizedText, notes: baseNotes });
   const operational_profile = inferEventProfile({ eventName, notes: baseNotes || normalizedText, attendeeCount, startTime, endTime });
   const field_confidence = buildFieldConfidence({ eventName, locationGroupId: matchedGroup?.location_group_id || "", eventDate, startTime, endTime, attendeeCount, areaCandidates, warnings });
 
@@ -1091,6 +1097,7 @@ function buildGeminiPrompt(rows, locationGroups) {
     "Rules:",
     "- event_date must be YYYY-MM-DD when known, else empty string.",
     "- start_time and end_time must be HH:MM:SS 24-hour when known, else empty string.",
+    "- Overnight Zoo Snooze/sleepover/campout/lock-in events may end after midnight; for those, keep the real next-morning end_time even when it is earlier than start_time and do not use end_not_after_start just because the event crosses midnight.",
     "- attendee_count must be a string integer or null.",
     "- location_group_id must match one of the provided location groups when you can infer it, else empty string.",
     "- location_group_name should be the canonical event area name when matched. For event rows, call Splash Pad Restrooms 'Splash Pad' and Courtyard Restrooms 'Courtyard' because the events happen in those areas, not inside the restrooms.",
@@ -1169,6 +1176,8 @@ function recomputeRowMetadata(row = {}, locationGroups = []) {
     startTime: row.start_time || "",
     endTime: row.end_time || "",
     areaCandidates,
+    rawText: row.raw_text || "",
+    notes: row.notes || "",
   });
   return {
     ...row,
@@ -1204,8 +1213,8 @@ function normalizeGeminiRow(raw = {}, locationGroups = [], fallbackText = "", in
   const areaCandidates = rankLocationGroups(locationGroups, raw.location_group_name || fallbackText, 3);
   const warnings = mergeWarnings(
     Array.isArray(raw.warnings) ? raw.warnings.map((x) => String(x || "").trim()).filter(Boolean) : [],
-    buildParseWarnings({ eventName, locationGroupId, eventDate, startTime: timePair.start_time, endTime: timePair.end_time, areaCandidates })
-  );
+    buildParseWarnings({ eventName, locationGroupId, eventDate, startTime: timePair.start_time, endTime: timePair.end_time, areaCandidates, rawText: fallbackText, notes })
+  ).filter((warning) => !(warning === "end_not_after_start" && isOvernightEventContext(eventName, fallbackText, notes)));
   const aiProfile = {
     event_type: normalizedEnum(raw.event_type, ["school_group", "formal_event", "party", "corporate_event", "member_event", "public_event", "general_event"]),
     custodial_impact: normalizedEnum(raw.custodial_impact, ["low", "medium", "high"]),
