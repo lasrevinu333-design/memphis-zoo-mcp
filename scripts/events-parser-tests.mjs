@@ -14,6 +14,12 @@ const locationGroups = [
     group_name: "Primate Pavilion",
     included_locations: ["Primate Pavilion", "Primate Pavillion", "PP"],
   },
+  {
+    location_group_id: "00000000-0000-4000-8000-000000000009",
+    group_code: "NWP",
+    group_name: "Northwest Passage",
+    included_locations: ["Northwest Passage", "North West Passage", "NWP"],
+  },
 ];
 
 async function parseOne(text) {
@@ -224,6 +230,14 @@ const invalidChronology = await parseOne("Event Name: Board Meeting | Event Area
 assert.match(invalidChronology.warnings.join(","), /end_not_after_start/);
 assert.notEqual(invalidChronology.confidence, "high", "invalid start/end chronology must not remain high confidence");
 assert.equal(invalidChronology.field_confidence.time, "low", "invalid chronology should lower time field confidence");
+
+const arpZooSnooze = await parseOne("Event Name: ARP Zoo Snooze | Event Area: North West Passage | Event Date: 6/19/2026 | Start Time: 10pm | End Time: 8am | Guests: 75 | Notes: overnight event ends the next morning");
+assert.equal(arpZooSnooze.event_name, "ARP Zoo Snooze");
+assert.equal(arpZooSnooze.location_group_name, "Northwest Passage");
+assert.equal(arpZooSnooze.event_date, "2026-06-19");
+assertTime(arpZooSnooze, "22:00:00", "08:00:00");
+assert.doesNotMatch(arpZooSnooze.warnings.join(","), /end_not_after_start/);
+assert.equal(arpZooSnooze.field_confidence.time, "high", "overnight Zoo Snooze should keep high time confidence");
 
 const nameLabel = await parseOne("Name: Baby Day | Event Area: Event Center | Date: 5/9 | Start: 9am | End: 6pm");
 assert.equal(nameLabel.event_name, "Baby Day");

@@ -81,6 +81,39 @@ assert.match(createCall.sql, /insert into public\.events_app_events/i);
 assert.match(createCall.sql, /Catering, extra trash, restroom check before dinner and after dessert/);
 assert.doesNotMatch(createCall.sql, /Operational flags/i);
 
+const overnightWriteCalls = [];
+await withServer(buildApp({ writeCalls: overnightWriteCalls }), async (baseUrl) => {
+  const response = await fetch(`${baseUrl}/admin-api/events/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      event_name: "ARP Zoo Snooze",
+      location_group_id: TEST_GROUP_ID,
+      event_date: "2026-06-19",
+      start_time: "22:00",
+      end_time: "08:00",
+      attendee_count: "75",
+      notes: "Overnight event ends on June 20.",
+      created_by: "contract test",
+    }),
+  });
+  assert.equal(response.status, 200, "overnight Zoo Snooze should not be rejected by start/end chronology validation");
+  const payload = await response.json();
+  assert.equal(payload.ok, true);
+  assert.equal(payload.data.overnight_split, true);
+  assert.equal(payload.data.created_records.length, 2);
+  assert.equal(payload.data.created_records[0].event_date, "2026-06-19");
+  assert.equal(payload.data.created_records[0].start_time, "22:00:00");
+  assert.equal(payload.data.created_records[0].end_time, "23:59:00");
+  assert.equal(payload.data.created_records[1].event_date, "2026-06-20");
+  assert.equal(payload.data.created_records[1].start_time, "00:00:00");
+  assert.equal(payload.data.created_records[1].end_time, "08:00:00");
+});
+const overnightCreateCall = overnightWriteCalls.find((call) => call.name === "events_app_create");
+assert.ok(overnightCreateCall, "overnight event creation SQL should run");
+assert.match(overnightCreateCall.sql, /'2026-06-19'::date[\s\S]*'22:00:00'::time[\s\S]*'23:59:00'::time/);
+assert.match(overnightCreateCall.sql, /'2026-06-20'::date[\s\S]*'00:00:00'::time[\s\S]*'08:00:00'::time/);
+
 await withServer(buildApp(), async (baseUrl) => {
   const response = await fetch(`${baseUrl}/admin-api/events/`, {
     method: "POST",
