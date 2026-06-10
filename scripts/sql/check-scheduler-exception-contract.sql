@@ -15,7 +15,7 @@ with params as (
     lg.group_name,
     to_char(dsa.coverage_start, 'HH24:MI') as coverage_start,
     to_char(dsa.coverage_end, 'HH24:MI') as coverage_end,
-    coalesce(dsa.coverage_purpose, '') as coverage_purpose,
+    coalesce(dsa.coverage_purpose, 'area_owner') as coverage_purpose,
     dsa.status,
     dsa.owner_type,
     e.display_name as assigned_employee_name,
