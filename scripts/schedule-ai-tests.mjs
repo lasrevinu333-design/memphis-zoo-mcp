@@ -124,6 +124,7 @@ const dwrJoinBlock = (staticRestoreSql.match(/join public\.daily_work_roster dwr
 assert.match(staticRestoreSql, /where dsa\.service_date = '[^']+'::date\s+and dwr\.shift_start <= dsa\.coverage_start/, "static owner restore must verify the owner is on shift at the row start in WHERE, not JOIN ON");
 assert.doesNotMatch(dwrJoinBlock, /on[\s\S]*?dsa\./, "Postgres UPDATE target alias dsa must not be referenced inside FROM JOIN ON clauses");
 assert.match(staticRestoreSql, /ct\.coverage_start = dsa\.coverage_start/, "static owner restore must only touch unsplit original template rows");
+assert.match(staticRestoreSql, /not\s+public\.sch_is_employee_location_group_restricted\(\s*ct\.assigned_employee_id,\s*ct\.location_group_id,/i, "static owner restore must not restore restricted employee/location pairings such as Kathy east of Tropical Birds");
 
 const restroomAssignmentSqlStart = source.indexOf("async function listRestroomAssignmentsForRebalance");
 const restroomAssignmentSqlEnd = source.indexOf("async function rebalanceRestroomAssignments", restroomAssignmentSqlStart);

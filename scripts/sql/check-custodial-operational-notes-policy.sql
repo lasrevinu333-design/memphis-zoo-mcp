@@ -5,6 +5,9 @@
 select *
 from public.sch_validate_operational_schedule_rules(current_date, current_date + 60);
 
+select *
+from public.sch_validate_kathy_east_boundary(current_date, current_date + 60);
+
 select rule_code, category, active
 from public.schedule_operational_notes
 where rule_code in (
@@ -18,6 +21,7 @@ where rule_code in (
   'karen_route',
   'tammy_route',
   'kathy_route',
+  'kathy_east_boundary',
   'preserve_primate_pavillion_key'
 )
 order by rule_code;

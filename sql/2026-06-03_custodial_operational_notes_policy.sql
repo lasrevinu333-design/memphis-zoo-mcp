@@ -128,7 +128,7 @@ from (values
   ('ZAMBEZI'), ('PRIMATE_PAVILLION'), ('BREEZEWAY_RESTROOMS'),
   ('CATHOUSE_CAFE_RESTROOMS'), ('TROPICAL_BIRDS'), ('NOCTURNAL')
 ) as x(group_code);
-select public.sch_upsert_employee_area_preference_by_code('Karen Robinson', x.group_code, 'last_resort', 'Karen last-resort far-west area; use only when business needs/load balance require.', true, false)
+select public.sch_upsert_employee_area_preference_by_code('Karen Robinson', x.group_code, 'avoid', 'Karen last-resort far-west area; use only when business needs/load balance require.', true, false)
 from (values
   ('EXPO'), ('AQUARIUM'), ('KOMODOS'), ('MEMMEX_RESTROOMS')
 ) as x(group_code);
@@ -141,7 +141,7 @@ select public.sch_upsert_employee_area_preference_by_code('Tammy Miller', x.grou
 from (values
   ('CHINA'), ('PRIMATE_PAVILLION')
 ) as x(group_code);
-select public.sch_upsert_employee_area_preference_by_code('Tammy Miller', x.group_code, 'last_resort', 'Tammy west/central-west last-resort area; use only when business needs/load balance require.', true, false)
+select public.sch_upsert_employee_area_preference_by_code('Tammy Miller', x.group_code, 'avoid', 'Tammy west/central-west last-resort area; use only when business needs/load balance require.', true, false)
 from (values
   ('AQUARIUM'), ('EXPO'), ('KOMODOS'), ('MEMMEX_RESTROOMS')
 ) as x(group_code);
@@ -150,7 +150,7 @@ select public.sch_upsert_employee_area_preference_by_code('Kathy Phelps', x.grou
 from (values
   ('EXPO'), ('AQUARIUM'), ('KOMODOS'), ('MEMMEX_RESTROOMS')
 ) as x(group_code);
-select public.sch_upsert_employee_area_preference_by_code('Kathy Phelps', x.group_code, 'last_resort', 'Kathy farthest/least-preferred stretch area. Keep west when possible; use only when balancing/business needs require. Existing route-limit restrictions still prevent lunch relief outside assigned route.', true, false)
+select public.sch_upsert_employee_area_preference_by_code('Kathy Phelps', x.group_code, 'avoid', 'Kathy farthest/least-preferred stretch area. Keep west when possible; use only when balancing/business needs require. Existing route-limit restrictions still prevent lunch relief outside assigned route.', true, false)
 from (values
   ('TROPICAL_BIRDS'), ('CATHOUSE_CAFE_RESTROOMS'), ('EVENT_CENTER'), ('HERPETARIUM')
 ) as x(group_code);
@@ -380,7 +380,7 @@ preferences as (
     eap.employee_id,
     string_agg(eap.preference_type, ',' order by eap.preference_type) as preference_type,
     bool_or(lower(coalesce(eap.preference_type, '')) = 'restricted') as is_restricted,
-    bool_or(lower(coalesce(eap.preference_type, '')) in ('avoid', 'last_resort', 'fallback')) as is_avoid,
+    bool_or(lower(coalesce(eap.preference_type, '')) in ('avoid', 'fallback')) as is_avoid,
     bool_or(lower(coalesce(eap.preference_type, '')) = 'last_resort') as is_last_resort,
     bool_or(lower(coalesce(eap.preference_type, '')) in ('prefer', 'preferred')) as is_prefer
   from public.employee_area_preferences eap
