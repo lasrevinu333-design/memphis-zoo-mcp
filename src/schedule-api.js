@@ -2515,17 +2515,25 @@ export function createScheduleRouter({
     const employee = data?.employee || {};
     const shift = data?.shift || {};
     const items = Array.isArray(data?.items) ? data.items : [];
-    const restroomItems = items.filter((item) => item?.is_public_restroom);
-    const otherItems = items.filter((item) => !item?.is_public_restroom);
-    const renderItems = (list) => list.map((item) => `<li>${htmlEscape(item.name)}</li>`).join("");
-    const renderSection = (title, list) => list.length ? `
+    const itemPurpose = (item) => String(item?.coverage_purpose || item?.purpose || item?.kind || "area_owner").trim().toLowerCase();
+    const primaryItems = items.filter((item) => !["lunch_coverage", "late_coverage"].includes(itemPurpose(item)));
+    const lunchItems = items.filter((item) => itemPurpose(item) === "lunch_coverage");
+    const lateItems = items.filter((item) => itemPurpose(item) === "late_coverage");
+    const renderItems = (list) => list.map((item) => `
+      <li>
+        <span class="item-name">${htmlEscape(item.name || item.location_name || "Assigned Area")}</span>
+        ${item.group_code || item.location_code ? `<span class="item-code">${htmlEscape(item.group_code || item.location_code)}</span>` : ""}
+      </li>`).join("");
+    const renderSection = (title, list, note = "") => list.length ? `
     <section class="card">
       <h2>${htmlEscape(title)}</h2>
+      ${note ? `<p class="section-note">${htmlEscape(note)}</p>` : ""}
       <ul>${renderItems(list)}</ul>
     </section>` : "";
     const sectionsHtml = [
-      renderSection("Public Restrooms", restroomItems),
-      renderSection("Other Assigned Areas", otherItems),
+      renderSection("Primary Ownership", primaryItems, data?.has_945_change ? "Includes today's 9:45 AM restroom ownership update." : "Assigned ownership areas for today."),
+      renderSection("Lunch Coverage", lunchItems),
+      renderSection("Afternoon Call Coverage", lateItems),
     ].join("") || `<section class="card"><div class="empty">No assignments are currently listed.</div></section>`;
 
     return `<!doctype html>
@@ -2546,8 +2554,11 @@ export function createScheduleRouter({
   .notice { background:var(--warn); border:1px solid var(--warnline); border-radius:16px; padding:12px 14px; margin-bottom:14px; font-weight:650; }
   .card { background:white; border:1px solid var(--line); border-radius:20px; padding:16px; margin:14px 0; box-shadow:0 2px 10px rgba(20,60,70,.07); }
   .card h2 { margin:0 0 10px; font-size:20px; color:var(--teal); }
+  .section-note { margin:0 0 12px; color:var(--muted); font-weight:650; line-height:1.35; }
   ul { list-style:none; padding:0; margin:0; display:grid; gap:8px; }
   li { padding:11px 12px; background:#f8fbfa; border:1px solid #e1ece8; border-radius:13px; font-weight:620; }
+  .item-name, .item-code { display:block; }
+  .item-code { margin-top:3px; color:var(--muted); font-size:12px; letter-spacing:.03em; text-transform:uppercase; }
   .empty { color:var(--muted); font-weight:650; text-align:center; padding:8px; }
   .meta { margin-top:14px; color:var(--muted); font-size:13px; text-align:center; }
   .pill { display:inline-block; padding:5px 9px; border-radius:999px; background:rgba(255,255,255,.16); font-size:13px; margin-top:8px; }
