@@ -38,7 +38,7 @@ with params as (
       or dsa.owner_type = 'OPEN'
       or dsa.assigned_employee_id is null
     )
-    and coalesce(dsa.coverage_purpose, '') in (
+    and coalesce(dsa.coverage_purpose, 'area_owner') in (
       'deep_clean',
       'area_owner',
       'restroom_upkeep',
