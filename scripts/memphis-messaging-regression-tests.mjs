@@ -247,8 +247,22 @@ const reminderApp = express();
 reminderApp.use(express.json());
 reminderApp.use('/messaging-api', createMessagingRouter({
   runReadOnlySql: async (sql) => {
-    reminderReadCalls.push(String(sql || ''));
-    if (/from public\.msg_device_assignments/i.test(String(sql || '')) && /metadata_json->>'source'/i.test(String(sql || ''))) {
+    const query = String(sql || '');
+    reminderReadCalls.push(query);
+    if (/notification_state/i.test(query)) {
+      return [{
+        requested_device_id: 'device-123',
+        device_id: 'device-123',
+        msg_user_id: '00000000-0000-0000-0000-000000000088',
+        display_name: 'Event Owner',
+        role: 'employee',
+        employee_id: '30000000-0000-0000-0000-000000000088',
+        is_employee_device: true,
+        notifications_silent: false,
+        silent_reason: 'on_shift',
+      }];
+    }
+    if (/from public\.msg_device_assignments/i.test(query) && /metadata_json->>'source'/i.test(query)) {
       return [{
         message_id: '00000000-0000-0000-0000-000000000099',
         thread_id: THREAD_ID,
@@ -358,6 +372,64 @@ assert.match(notificationStateSql, /invalid_roster_shift_window/, 'Notification 
 assert.match(notificationStateSql, /when i\.employee_id is null then true/, 'Notification guard should fail closed for employee devices with no employee mapping');
 assert.match(notificationStateSql, /not in \('manager', 'bot', 'ops', 'ops_manager', 'operations_manager'\)/, 'Notification guard should not silence manager/bot/ops devices by shift state');
 assert.match(notificationStateSql, /scheduled_shift_not_started/, 'Notification guard should report before-shift silence reason');
+
+const managerDeviceReminderReadCalls = [];
+let managerDeviceReminderQueriedMessages = false;
+const managerDeviceReminderApp = express();
+managerDeviceReminderApp.use(express.json());
+managerDeviceReminderApp.use('/messaging-api', createMessagingRouter({
+  runReadOnlySql: async (sql) => {
+    const query = String(sql || '');
+    managerDeviceReminderReadCalls.push(query);
+    if (/notification_state/i.test(query)) {
+      return [{
+        requested_device_id: 'KIOSK_01',
+        device_id: 'KIOSK_01',
+        device_name: 'Ops Manager phone',
+        msg_user_id: '00000000-0000-0000-0000-000000000001',
+        display_name: 'Ops Manager',
+        role: 'manager',
+        employee_id: null,
+        is_employee_device: false,
+        notifications_silent: false,
+        silent_reason: 'not_employee_device',
+      }];
+    }
+    if (/metadata_json->>'source'/i.test(query)) {
+      managerDeviceReminderQueriedMessages = true;
+      return [{
+        message_id: '00000000-0000-0000-0000-000000000099',
+        thread_id: THREAD_ID,
+        msg_user_id: '00000000-0000-0000-0000-000000000001',
+        display_name: 'Ops Manager',
+        body: 'Demo event reminder should not ring the manager overview phone.',
+        message_type: 'bot_response',
+        metadata_json: { source: 'events_app', notification_kind: 'morning_of', presentation_demo: true },
+        sent_at: '2026-06-11T03:55:00Z',
+        created_at: '2026-06-11T03:55:00Z',
+        delivered_at: null,
+        read_at: null,
+      }];
+    }
+    return [];
+  },
+  runRpc: async () => null,
+  buildHealthPayload: (area, extra) => ({ ok: true, area, ...extra }),
+  appVersion: 'test',
+  releaseId: 'test',
+  contractVersion: 'messaging.v1',
+}));
+
+await withServer(managerDeviceReminderApp, async (baseUrl) => {
+  const response = await fetch(`${baseUrl}/messaging-api/device-event-reminders?device_id=KIOSK_01&limit=5`);
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.ok, true);
+  assert.deepEqual(payload.data, [], 'Manager/ops overview devices should never receive phone event-reminder payloads');
+  assert.equal(payload.meta.notification_state.silent_reason, 'not_employee_device');
+});
+assert.equal(managerDeviceReminderQueriedMessages, false, 'Manager/ops overview reminder guard must stop before querying reminder payloads');
+assert.ok(managerDeviceReminderReadCalls.find((sql) => /notification_state/i.test(sql)), 'Manager/ops reminder guard should query notification state');
 
 const presentationDemoOffShiftReadCalls = [];
 const presentationDemoOffShiftApp = express();
@@ -661,6 +733,108 @@ await withServer(locationMismatchApp, async (baseUrl) => {
 });
 assert.equal(locationMismatchQueriedStatuses, false, 'Mismatched location reminder guard must stop before querying location statuses');
 assert.ok(locationMismatchReadCalls.find((sql) => /'30000000-0000-0000-0000-000000000010'::uuid as employee_id/i.test(sql)), 'Mismatch guard should ask notification state for the payload employee id');
+
+const offShiftThreadReadCalls = [];
+const offShiftThreadsApp = express();
+offShiftThreadsApp.use(express.json());
+offShiftThreadsApp.use('/messaging-api', createMessagingRouter({
+  runReadOnlySql: async (sql) => {
+    const query = String(sql || '');
+    offShiftThreadReadCalls.push(query);
+    if (/msg_get_user_by_device\('KIOSK_99'\)/i.test(query)) {
+      return [{ msg_user_id: '10000000-0000-0000-0000-000000009999', display_name: 'Off Shift Employee', role: 'employee' }];
+    }
+    if (/msg_get_user_by_device\('KIOSK_ON'\)/i.test(query)) {
+      return [{ msg_user_id: '10000000-0000-0000-0000-000000009998', display_name: 'On Shift Employee', role: 'employee' }];
+    }
+    if (/msg_get_user_by_device\('KIOSK_01'\)/i.test(query)) {
+      return [{ msg_user_id: '10000000-0000-0000-0000-000000000002', display_name: 'Ops Manager', role: 'manager' }];
+    }
+    if (/notification_state/i.test(query)) {
+      if (/KIOSK_ON/i.test(query)) {
+        return [{
+          requested_device_id: 'KIOSK_ON',
+          device_id: 'KIOSK_ON',
+          role: 'employee',
+          employee_id: '30000000-0000-0000-0000-000000000098',
+          is_employee_device: true,
+          notifications_silent: false,
+          silent_reason: 'on_shift',
+        }];
+      }
+      if (/KIOSK_01/i.test(query)) {
+        return [{
+          requested_device_id: 'KIOSK_01',
+          device_id: 'KIOSK_01',
+          role: 'manager',
+          employee_id: null,
+          is_employee_device: false,
+          notifications_silent: false,
+          silent_reason: 'not_employee_device',
+        }];
+      }
+      return [{
+        requested_device_id: 'KIOSK_99',
+        device_id: 'KIOSK_99',
+        role: 'employee',
+        employee_id: '30000000-0000-0000-0000-000000000099',
+        is_employee_device: true,
+        notifications_silent: true,
+        silent_reason: 'scheduled_shift_ended',
+      }];
+    }
+    if (/from public\.msg_threads t/i.test(query)) {
+      return [{
+        thread_id: '20000000-0000-0000-0000-000000009999',
+        updated_at: '2026-06-11T04:00:00Z',
+        thread_type: 'group',
+        thread_title: 'Custodial Team',
+        unread_count: 2,
+        last_message_at: '2026-06-11T04:00:00Z',
+        last_message_id: '30000000-0000-0000-0000-000000009999',
+        last_sender_name: 'Ops Manager',
+        last_message_body: 'Test',
+        last_message_type: 'text',
+        participant_names: 'Custodial Team',
+        viewer_can_send: true,
+      }];
+    }
+    return [];
+  },
+  runRpc: async () => null,
+  buildHealthPayload: (area, extra) => ({ ok: true, area, ...extra }),
+  appVersion: 'test',
+  releaseId: 'test',
+  contractVersion: 'messaging.v1',
+}));
+
+await withServer(offShiftThreadsApp, async (baseUrl) => {
+  const onShiftResponse = await fetch(`${baseUrl}/messaging-api/threads?user_id=10000000-0000-0000-0000-000000009998&device_id=KIOSK_ON`);
+  assert.equal(onShiftResponse.status, 200);
+  const onShiftPayload = await onShiftResponse.json();
+  assert.equal(onShiftPayload.ok, true);
+  assert.equal(onShiftPayload.data[0].unread_count, 2, 'On-shift employee devices should preserve unread counts so live phone alerts can work');
+  assert.equal(onShiftPayload.meta.notification_state.notifications_silent, false);
+
+  const response = await fetch(`${baseUrl}/messaging-api/threads?user_id=10000000-0000-0000-0000-000000009999&device_id=KIOSK_99`);
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.ok, true);
+  assert.equal(payload.data.length, 1, 'Off-shift devices should still be able to load their thread list');
+  assert.equal(payload.data[0].thread_title, 'Custodial Team');
+  assert.equal(payload.data[0].unread_count, 0, 'Off-shift phone notification polling must not expose unread counts that trigger TTS alerts');
+  assert.equal(payload.meta.notification_state.notifications_silent, true);
+  assert.equal(payload.meta.notification_state.silent_reason, 'scheduled_shift_ended');
+
+  const managerResponse = await fetch(`${baseUrl}/messaging-api/threads?user_id=10000000-0000-0000-0000-000000000002&device_id=KIOSK_01`);
+  assert.equal(managerResponse.status, 200);
+  const managerPayload = await managerResponse.json();
+  assert.equal(managerPayload.ok, true);
+  assert.equal(managerPayload.data[0].unread_count, 0, 'Manager/ops overview devices should not expose phone-alert unread counts through the polling thread route');
+  assert.equal(managerPayload.meta.notification_state.notifications_silent, true);
+  assert.equal(managerPayload.meta.notification_state.silent_reason, 'not_employee_device');
+});
+assert.ok(offShiftThreadReadCalls.find((sql) => /notification_state/i.test(sql)), 'Thread list should query notification state before returning unread counts to device pollers');
 
 const EMPLOYEE_USER_ID = '10000000-0000-0000-0000-000000000001';
 const MANAGER_USER_ID = '10000000-0000-0000-0000-000000000002';
