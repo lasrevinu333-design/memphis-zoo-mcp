@@ -247,6 +247,15 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     return notificationState?.notifications_silent === true;
   }
 
+  function shouldSuppressPhoneNotificationPayloads(notificationState) {
+    return notificationState?.is_employee_device !== true || shouldSilenceDeviceNotifications(notificationState);
+  }
+
+  function phoneSuppressedNotificationState(notificationState) {
+    if (notificationState?.is_employee_device === true) return notificationState;
+    return forceSilentNotificationState(notificationState, String(notificationState?.silent_reason || "not_employee_device"));
+  }
+
   function shouldQueryPresentationDemosWhenSilent(notificationState) {
     if (!shouldSilenceDeviceNotifications(notificationState)) return false;
     const reason = String(notificationState?.silent_reason || "").trim().toLowerCase();
@@ -588,11 +597,17 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const userId = String(req.query.user_id || "").trim();
       const deviceId = String(req.query.device_id || "").trim();
       const viewer = await resolveViewerContext({ userId, deviceId });
+      const notificationState = deviceId ? await getDeviceNotificationState(deviceId) : null;
+      const suppressedNotificationState = notificationState ? phoneSuppressedNotificationState(notificationState) : null;
+      const suppressUnreadForPhone = deviceId && shouldSuppressPhoneNotificationPayloads(notificationState);
       const sql = buildThreadListSql({ viewerUserId: viewer.effectiveUserId, managerOverview: viewer.isManagerOverview });
       const rows = await runReadOnlySql(sql);
-      res.status(200).json({ ok: true, data: rows || [], meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+      const data = (Array.isArray(rows) ? rows : []).map((row) => suppressUnreadForPhone
+        ? { ...row, unread_count: 0 }
+        : row);
+      res.status(200).json({ ok: true, data, meta: messagingMeta(suppressedNotificationState ? notificationStateMeta(suppressedNotificationState) : {}) });
     } catch (error) {
-      fail(res, error, "Messaging threads failed");
+      fail(res, error, "Thread list failed");
     }
   });
 
@@ -602,6 +617,11 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const limit = Math.min(Math.max(Number.parseInt(String(req.query.limit || 5), 10) || 5, 1), 20);
       if (!deviceId) throw new Error("device_id is required.");
       const notificationState = await getDeviceNotificationState(deviceId);
+      const suppressedNotificationState = phoneSuppressedNotificationState(notificationState);
+      if (notificationState?.is_employee_device !== true) {
+        res.status(200).json({ ok: true, data: [], meta: messagingMeta(notificationStateMeta(suppressedNotificationState)) });
+        return;
+      }
       const silent = shouldSilenceDeviceNotifications(notificationState);
       const presentationDemoOnly = shouldQueryPresentationDemosWhenSilent(notificationState);
       if (silent && !presentationDemoOnly) {
