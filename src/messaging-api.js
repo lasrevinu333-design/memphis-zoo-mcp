@@ -247,6 +247,12 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     return notificationState?.notifications_silent === true;
   }
 
+  function shouldQueryPresentationDemosWhenSilent(notificationState) {
+    if (!shouldSilenceDeviceNotifications(notificationState)) return false;
+    const reason = String(notificationState?.silent_reason || "").trim().toLowerCase();
+    return !["missing_device_id", "no_employee_mapping", "device_assignment_mismatch"].includes(reason);
+  }
+
   function idsDiffer(a, b) {
     const left = String(a || "").trim().toLowerCase();
     const right = String(b || "").trim().toLowerCase();
@@ -312,6 +318,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
           coalesce(m.sent_at, m.created_at) as last_message_at,
           m.body as last_message_body,
           m.message_type as last_message_type,
+          m.metadata_json as last_message_metadata_json,
           sender.display_name as last_sender_name
         from public.msg_messages m
         left join public.msg_users sender on sender.id = m.sender_user_id
@@ -348,6 +355,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         lm.last_sender_name,
         lm.last_message_body,
         lm.last_message_type,
+        lm.last_message_metadata_json,
         coalesce(tp.participant_names, '') as participant_names,
         tp.viewer_is_participant as viewer_can_send
       from public.msg_threads t
@@ -594,10 +602,16 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const limit = Math.min(Math.max(Number.parseInt(String(req.query.limit || 5), 10) || 5, 1), 20);
       if (!deviceId) throw new Error("device_id is required.");
       const notificationState = await getDeviceNotificationState(deviceId);
-      if (shouldSilenceDeviceNotifications(notificationState)) {
+      const silent = shouldSilenceDeviceNotifications(notificationState);
+      const presentationDemoOnly = shouldQueryPresentationDemosWhenSilent(notificationState);
+      if (silent && !presentationDemoOnly) {
         res.status(200).json({ ok: true, data: [], meta: messagingMeta(notificationStateMeta(notificationState)) });
         return;
       }
+      const presentationDemoClause = presentationDemoOnly
+        ? `and coalesce(m.metadata_json->>'presentation_demo', '') = 'true'
+            and coalesce(nullif(m.metadata_json->>'target_device_id', ''), '${esc(deviceId)}') = '${esc(deviceId)}'`
+        : "";
       const rows = await runReadOnlySql(`
         select *
         from (
@@ -634,6 +648,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
            and r.user_id = du.msg_user_id
           where coalesce(m.metadata_json->>'source', '') = 'events_app'
             and coalesce(m.metadata_json->>'notification_kind', '') in ('two_days_before', 'day_before', 'morning_of')
+            ${presentationDemoClause}
             and r.read_at is null
             and m.sent_at >= now() - interval '4 days'
           order by m.sent_at desc, m.created_at desc

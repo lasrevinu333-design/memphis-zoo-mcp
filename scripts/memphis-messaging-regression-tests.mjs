@@ -188,6 +188,60 @@ async function withServer(app, fn) {
   }
 }
 
+const threadMetadataReadCalls = [];
+const threadMetadataApp = express();
+threadMetadataApp.use(express.json());
+threadMetadataApp.use('/messaging-api', createMessagingRouter({
+  runReadOnlySql: async (sql) => {
+    const query = String(sql || '');
+    threadMetadataReadCalls.push(query);
+    if (/msg_get_user_by_device/i.test(query)) {
+      return [{
+        msg_user_id: '00000000-0000-0000-0000-000000000088',
+        display_name: 'Event Owner',
+        role: 'employee'
+      }];
+    }
+    if (/thread_rows/i.test(query)) {
+      assert.match(query, /last_message_metadata_json/, 'Thread list SQL must select last-message metadata for notification presentation fallback');
+      return [{
+        thread_id: THREAD_ID,
+        thread_type: 'direct',
+        thread_title: 'Ops Manager',
+        unread_count: 1,
+        last_message_id: '00000000-0000-0000-0000-000000000099',
+        last_sender_name: 'Ops Manager',
+        last_message_body: "Jennifer, demo assigned location alert: East Admin Women's Restroom is overdue on your route.",
+        last_message_type: 'bot_response',
+        last_message_metadata_json: {
+          source: 'events_app',
+          notification_kind: 'morning_of',
+          presentation_demo: true,
+          demo_alert_kind: 'location_status',
+        },
+        participant_names: 'Event Owner, Ops Manager',
+        viewer_can_send: true,
+      }];
+    }
+    return [];
+  },
+  runRpc: async () => null,
+  buildHealthPayload: (area, extra) => ({ ok: true, area, ...extra }),
+  appVersion: 'test',
+  releaseId: 'test',
+  contractVersion: 'messaging.v1',
+}));
+
+await withServer(threadMetadataApp, async (baseUrl) => {
+  const response = await fetch(`${baseUrl}/messaging-api/threads?device_id=device-123`);
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.ok, true);
+  assert.equal(payload.data.length, 1);
+  assert.equal(payload.data[0].last_message_metadata_json.presentation_demo, true, 'Thread summary must expose presentation metadata so the phone can avoid generic Ops Manager TTS');
+});
+assert.ok(threadMetadataReadCalls.some((sql) => /last_message_metadata_json/i.test(sql)), 'Thread metadata fallback should be covered by thread SQL');
+
 const reminderReadCalls = [];
 const reminderApp = express();
 reminderApp.use(express.json());
@@ -289,7 +343,11 @@ await withServer(notificationGuardApp, async (baseUrl) => {
   const publicStateResponse = await fetch(`${baseUrl}/messaging-api/device-notification-state?device_id=KIOSK_99&local_now=${encodeURIComponent(`${SERVICE_DATE}T07:30:00`)}`);
   assert.equal(publicStateResponse.status, 404, 'Raw device notification state must not be exposed as a public unauthenticated route');
 });
-assert.equal(notificationGuardQueriedMessages, false, 'Off-shift notification guard must stop before querying reminder payloads');
+assert.equal(notificationGuardQueriedMessages, true, 'Off-shift notification guard may query only presentation-demo reminders so staged tests still play after hours');
+const offShiftReminderSql = notificationGuardReadCalls.find((sql) => /metadata_json->>'source'/i.test(sql));
+assert.ok(offShiftReminderSql, 'Off-shift devices should still check for explicitly targeted presentation demo payloads');
+assert.match(offShiftReminderSql, /metadata_json->>'presentation_demo'/, 'Off-shift reminder query must be constrained to presentation demo payloads');
+assert.match(offShiftReminderSql, /metadata_json->>'target_device_id'/, 'Presentation demo bypass must stay scoped to the target device');
 const notificationStateSql = notificationGuardReadCalls.find((sql) => /notification_state/i.test(sql));
 assert.ok(notificationStateSql, 'Notification guard should query device notification state');
 assert.match(notificationStateSql, /p\.local_now < \(p\.service_date \+ r\.shift_start\)/, 'Notification guard should silence employee devices before shift start');
@@ -300,6 +358,74 @@ assert.match(notificationStateSql, /invalid_roster_shift_window/, 'Notification 
 assert.match(notificationStateSql, /when i\.employee_id is null then true/, 'Notification guard should fail closed for employee devices with no employee mapping');
 assert.match(notificationStateSql, /not in \('manager', 'bot', 'ops', 'ops_manager', 'operations_manager'\)/, 'Notification guard should not silence manager/bot/ops devices by shift state');
 assert.match(notificationStateSql, /scheduled_shift_not_started/, 'Notification guard should report before-shift silence reason');
+
+const presentationDemoOffShiftReadCalls = [];
+const presentationDemoOffShiftApp = express();
+presentationDemoOffShiftApp.use(express.json());
+presentationDemoOffShiftApp.use('/messaging-api', createMessagingRouter({
+  runReadOnlySql: async (sql) => {
+    const query = String(sql || '');
+    presentationDemoOffShiftReadCalls.push(query);
+    if (/notification_state/i.test(query)) {
+      return [{
+        requested_device_id: 'KIOSK_03',
+        device_id: 'KIOSK_03',
+        device_name: 'Leadership demo phone',
+        msg_user_id: '00000000-0000-0000-0000-000000000033',
+        display_name: 'Jennifer Sheffield',
+        role: 'admin',
+        employee_id: '30000000-0000-0000-0000-000000000033',
+        employee_name: 'Jennifer Sheffield',
+        is_employee_device: true,
+        notifications_silent: true,
+        silent_reason: 'no_active_roster_shift',
+      }];
+    }
+    if (/metadata_json->>'source'/i.test(query)) {
+      assert.match(query, /metadata_json->>'presentation_demo'/, 'Silent demo query must only fetch presentation demos');
+      return [{
+        message_id: '00000000-0000-0000-0000-000000000033',
+        thread_id: THREAD_ID,
+        msg_user_id: '00000000-0000-0000-0000-000000000033',
+        display_name: 'Jennifer Sheffield',
+        body: "Jennifer, demo assigned location alert: East Admin Women's Restroom is overdue on your route.",
+        message_type: 'bot_response',
+        metadata_json: {
+          source: 'events_app',
+          notification_kind: 'morning_of',
+          presentation_demo: true,
+          demo_alert_kind: 'location_status',
+          target_device_id: 'KIOSK_03',
+          location_name: "East Admin Women's Restroom",
+          status_code: 'overdue'
+        },
+        sent_at: '2026-06-11T03:37:45Z',
+        created_at: '2026-06-11T03:37:45Z',
+        delivered_at: null,
+        read_at: null,
+      }];
+    }
+    return [];
+  },
+  runRpc: async () => null,
+  buildHealthPayload: (area, extra) => ({ ok: true, area, ...extra }),
+  appVersion: 'test',
+  releaseId: 'test',
+  contractVersion: 'messaging.v1',
+}));
+
+await withServer(presentationDemoOffShiftApp, async (baseUrl) => {
+  const response = await fetch(`${baseUrl}/messaging-api/device-event-reminders?device_id=KIOSK_03&limit=2`);
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.ok, true);
+  assert.equal(payload.meta.notification_state.notifications_silent, true);
+  assert.equal(payload.meta.notification_state.silent_reason, 'no_active_roster_shift');
+  assert.equal(payload.data.length, 1, 'Explicit presentation demo reminders must still be returned after hours/no roster so demo phones play the real alert body');
+  assert.equal(payload.data[0].metadata_json.presentation_demo, true);
+  assert.equal(payload.data[0].metadata_json.demo_alert_kind, 'location_status');
+});
+assert.ok(presentationDemoOffShiftReadCalls.some((sql) => /metadata_json->>'presentation_demo'/i.test(sql)), 'Presentation demo bypass should be covered by SQL guard');
 
 const missingEmployeeMappingReadCalls = [];
 let missingEmployeeMappingQueriedMessages = false;
