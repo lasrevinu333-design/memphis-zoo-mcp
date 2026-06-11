@@ -19,6 +19,7 @@
     "test:device-popups": "node scripts/device-popup-fully-kiosk-test.mjs",
     "test:thursday-demo": "node scripts/thursday-notification-presentation-tests.mjs",
     "test:leadership-demo": "node scripts/demo-leadership-blank-schedule-tests.mjs",
+    "test:dashboard": "node scripts/dashboard-recent-activity-contract-tests.mjs",
     "audit:location-groups": "node scripts/location-group-audit-reminder-aware.mjs"
   },
   "dependencies": {

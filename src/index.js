@@ -981,7 +981,7 @@ async function runSystemFeedbackReminderSweep() {
 }
 
 async function runPublicDashboardSummary() {
-  const [snapshotRows, locationRows, ticketRows] = await Promise.all([
+  const [snapshotRows, locationRows, ticketRows, recentActivityRows] = await Promise.all([
     runReadOnlySql(`
       select snapshot_at, operational_day_start, active_sessions, pending_submit_sessions, closed_sessions_today, open_ticket_count,
              overdue_locations, due_soon_locations, in_progress_locations, active_locations, operational_day_start::text as operational_day_start_text
@@ -1003,11 +1003,20 @@ async function runPublicDashboardSummary() {
       from public.v_open_maintenance_tickets
       order by date_submitted desc nulls last, created_at desc nulls last, location_code
     `),
+    runReadOnlySql(`
+      select session_uuid, location_code, location_name, form_type, employee_name, device_identifier, device_name, status,
+             started_at, started_at_display, ended_at, ended_at_display, submitted_at, submitted_at_display,
+             duration_minutes, duration_display, services_performed, notes, open_ticket_count
+      from public.v_recent_scan_activity
+      order by coalesce(submitted_at, ended_at, started_at) desc nulls last, started_at desc nulls last
+      limit 24
+    `),
   ]);
 
   const snapshot = Array.isArray(snapshotRows) && snapshotRows.length ? snapshotRows[0] : {};
   const locations = Array.isArray(locationRows) ? locationRows : [];
   const tickets = Array.isArray(ticketRows) ? ticketRows : [];
+  const recentActivity = Array.isArray(recentActivityRows) ? recentActivityRows : [];
 
   return {
     snapshot,
@@ -1027,6 +1036,7 @@ async function runPublicDashboardSummary() {
     restrooms: locations.filter((row) => String(row.location_type || row.form_type || "").toLowerCase() === "restroom"),
     exhibits: locations.filter((row) => String(row.location_type || row.form_type || "").toLowerCase() !== "restroom"),
     open_tickets: tickets,
+    recent_activity: recentActivity,
   };
 }
 
@@ -1070,12 +1080,12 @@ async function runCanaryChecks() {
   await safeCheck("dashboard_summary", async () => {
     const summary = await runPublicDashboardSummary();
     if (!summary || !summary.meta || summary.meta.version !== APP_VERSION) throw new Error("dashboard summary missing expected meta version");
-    if (!Array.isArray(summary.restrooms) || !Array.isArray(summary.exhibits) || !Array.isArray(summary.open_tickets)) throw new Error("dashboard summary missing expected arrays");
+    if (!Array.isArray(summary.restrooms) || !Array.isArray(summary.exhibits) || !Array.isArray(summary.open_tickets) || !Array.isArray(summary.recent_activity)) throw new Error("dashboard summary missing expected arrays");
     const restroomFound = summary.restrooms.some((row) => row.location_code === CANARY_RESTROOM_CODE);
     const exhibitFound = summary.exhibits.some((row) => row.location_code === CANARY_EXHIBIT_CODE);
     if (!restroomFound) throw new Error(`restroom canary ${CANARY_RESTROOM_CODE} not found in restroom rows`);
     if (!exhibitFound) throw new Error(`exhibit canary ${CANARY_EXHIBIT_CODE} not found in exhibit rows`);
-    return { restrooms_count: summary.restrooms.length, exhibits_count: summary.exhibits.length, open_tickets_count: summary.open_tickets.length };
+    return { restrooms_count: summary.restrooms.length, exhibits_count: summary.exhibits.length, open_tickets_count: summary.open_tickets.length, recent_activity_count: summary.recent_activity.length };
   });
 
   await safeCheck("open_session_consistency", async () => {
