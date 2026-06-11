@@ -8,6 +8,37 @@ const DEFAULT_MANAGER_DEVICE = 'KIOSK_01';
 const DEFAULT_INTERVAL_SECONDS = 60;
 const SERVICE_DATE = '2026-06-11';
 
+export const LEADERSHIP_DEMO_PLAN = [
+  {
+    sequence: 1,
+    device_id: 'KIOSK_03',
+    employee_name: 'Jennifer Sheffield',
+    kind: 'location_status',
+    label: 'leadership restroom overdue notification',
+    status_code: 'overdue',
+    form_type: 'restroom',
+    group_code: 'EAST_ADMIN',
+    group_name: 'East Admin',
+    location_code: 'EADW',
+    location_name: "East Admin Women's Restroom",
+    body: "Jennifer, demo assigned location alert: East Admin Women's Restroom is overdue on your route."
+  },
+  {
+    sequence: 2,
+    device_id: 'KIOSK_08',
+    employee_name: 'Clayton Jones',
+    kind: 'location_status',
+    label: 'leadership restroom due soon notification',
+    status_code: 'due_soon',
+    form_type: 'restroom',
+    group_code: 'WEST_ADMIN',
+    group_name: 'West Admin',
+    location_code: 'WAUM',
+    location_name: "West Admin Upstairs Men's Restroom",
+    body: "Clayton, demo assigned location alert: West Admin Upstairs Men's Restroom is due soon on your route."
+  }
+];
+
 export const DEMO_PLAN = [
   {
     sequence: 1,
@@ -103,9 +134,10 @@ function uniqueList(values = []) {
   return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))];
 }
 
-export function buildRunPlan({ skip = [] } = {}) {
+export function buildRunPlan({ skip = [], includeLeadershipDemo = false } = {}) {
   const skipSet = new Set(uniqueList(skip));
-  return DEMO_PLAN
+  const sourcePlan = includeLeadershipDemo ? [...LEADERSHIP_DEMO_PLAN, ...DEMO_PLAN] : DEMO_PLAN;
+  return sourcePlan
     .filter((item) => !skipSet.has(item.device_id) && !skipSet.has(item.employee_name))
     .map((item, index) => ({ ...item, sequence: index + 1 }));
 }
@@ -120,6 +152,7 @@ function parseArgs(argv) {
     verifyTargets: false,
     json: false,
     skip: [],
+    includeLeadershipDemo: false,
     runId: `custodial-demo-${new Date().toISOString().replace(/[:.]/g, '-')}`,
     help: false
   };
@@ -134,6 +167,7 @@ function parseArgs(argv) {
     else if (arg === '--interval-seconds') args.intervalSeconds = Number(next());
     else if (arg === '--skip') args.skip.push(...String(next() || '').split(','));
     else if (arg === '--skip-daniel') args.skip.push('KIOSK_05');
+    else if (arg === '--include-leadership-demo') args.includeLeadershipDemo = true;
     else if (arg === '--run-id') args.runId = next();
     else if (arg === '--verify-targets') args.verifyTargets = true;
     else if (arg === '--send' || arg === '--live' || arg === '--start') { args.send = true; args.dryRun = false; }
@@ -163,11 +197,15 @@ Live run, one phone per minute:
 Morning test with shorter spacing:
   node scripts/thursday-notification-presentation.mjs --send --interval-seconds 15
 
+Leadership demo with Jennifer/Clayton included, still dry-run unless --send is added:
+  node scripts/thursday-notification-presentation.mjs --include-leadership-demo --verify-targets --json
+
 Skip Daniel if PTO/attendance changes, or leave him last by default:
   node scripts/thursday-notification-presentation.mjs --send --skip-daniel
 
-Targets are intentionally limited to KIOSK_02, KIOSK_04, KIOSK_05, KIOSK_06, KIOSK_07, KIOSK_09, KIOSK_10.
-Excluded: Ops Manager/KIOSK_01, Michael/KIOSK_03, Karen/KIOSK_08.
+Default targets are intentionally limited to KIOSK_02, KIOSK_04, KIOSK_05, KIOSK_06, KIOSK_07, KIOSK_09, KIOSK_10.
+Default excluded: Ops Manager/KIOSK_01, Michael/KIOSK_03, Karen/KIOSK_08.
+Leadership demo adds KIOSK_03 as Jennifer Sheffield and KIOSK_08 as Clayton Jones; Ops Manager/KIOSK_01 remains excluded.
 `);
 }
 
@@ -312,7 +350,10 @@ async function main() {
     return;
   }
 
-  const plan = buildRunPlan({ skip: args.skip });
+  const plan = buildRunPlan({ skip: args.skip, includeLeadershipDemo: args.includeLeadershipDemo });
+  const excluded = args.includeLeadershipDemo
+    ? ['Ops Manager/KIOSK_01']
+    : ['Ops Manager/KIOSK_01', 'Michael McWright/KIOSK_03', 'Karen Robinson/KIOSK_08'];
   const output = {
     ok: true,
     dry_run: args.dryRun,
@@ -321,7 +362,8 @@ async function main() {
     manager_device: args.managerDevice,
     interval_seconds: args.intervalSeconds,
     run_id: args.runId,
-    excluded: ['Ops Manager/KIOSK_01', 'Michael McWright/KIOSK_03', 'Karen Robinson/KIOSK_08'],
+    leadership_demo_included: args.includeLeadershipDemo,
+    excluded,
     skipped: args.skip,
     plan
   };
