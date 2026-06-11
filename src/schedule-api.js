@@ -2624,12 +2624,12 @@ export function createScheduleRouter({
 
     const predicate = employeeCode
       ? `employee_code ilike '${esc(employeeCode)}'`
-      : `display_name ilike '${esc(employeeName)}'`;
+      : `display_name ilike '${esc(employeeName)}%'`;
     const employeeRows = await runReadOnlySql(`
       select id as employee_id
       from public.employees
       where active = true and ${predicate}
-      order by display_name
+      order by case when display_name ilike '${esc(employeeName)}' then 0 else 1 end, display_name
       limit 1
     `);
     if (!Array.isArray(employeeRows) || !employeeRows.length) throw new Error("Active employee not found.");
@@ -2897,8 +2897,8 @@ export function createScheduleRouter({
           select id as employee_id
           from public.employees
           where active = true
-            and display_name ilike '${esc(employeeName)}'
-          order by display_name
+            and display_name ilike '${esc(employeeName)}%'
+          order by case when display_name ilike '${esc(employeeName)}' then 0 else 1 end, display_name
           limit 1
         `);
         if (!Array.isArray(employeeRows) || !employeeRows.length) {
