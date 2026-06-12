@@ -498,6 +498,221 @@ export function createScheduleRouter({
     return Boolean(value);
   }
 
+
+  function isSch2PublishPrivilegeError(error) {
+    const message = String(error?.message || error || "");
+    return /permission denied for function sch2_publish_solution/i.test(message)
+      || /SCH2 publish confirm requires service_role backend execution/i.test(message);
+  }
+
+  function buildSch2GuardedPublishSql(runId) {
+    const id = esc(runId);
+    return `select pg_advisory_xact_lock(hashtext('memphis_sch2_publish'));
+
+drop table if exists pg_temp.sch2_publish_candidate;
+create temporary table sch2_publish_candidate (run_id uuid primary key);
+insert into sch2_publish_candidate (run_id) values ('${id}'::uuid);
+
+drop table if exists pg_temp.sch2_publish_valid;
+create temporary table sch2_publish_valid as
+select q.*
+from (
+  select
+    r.id as run_id,
+    r.service_date,
+    r.status,
+    r.input_hash,
+    public.sch2_input_hash(r.service_date) as current_input_hash,
+    public.sch2_audit_solution(r.id) as audit,
+    public.sch2_compare_current_vs_preview(r.id) as diff,
+    (select count(*) from public.schedule_solution_assignments sa where sa.run_id = r.id) as preview_rows
+  from public.schedule_generation_runs r
+  join sch2_publish_candidate c on c.run_id = r.id
+) q
+where q.status = 'preview_ready'
+  and q.input_hash = q.current_input_hash
+  and coalesce((q.audit->>'hard_violation_count')::integer, 0) = 0
+  and coalesce((q.audit->>'open_required_count')::integer, 0) = 0
+  and coalesce((q.audit->>'work_item_count')::integer, 0) > 0
+  and coalesce((q.audit->>'solution_assignment_count')::integer, 0) = coalesce((q.audit->>'work_item_count')::integer, 0)
+  and q.preview_rows = coalesce((q.audit->>'work_item_count')::integer, 0);
+
+select 1 / case when (select count(*) from sch2_publish_valid) = 1 then 1 else 0 end as guard_candidate_valid;
+
+drop table if exists pg_temp.sch2_publish_audit_row;
+create temporary table sch2_publish_audit_row (id uuid primary key, run_id uuid not null, service_date date not null);
+with inserted as (
+  insert into public.schedule_publish_audit (
+    run_id,
+    service_date,
+    previous_rows,
+    published_rows,
+    diff_summary,
+    published_by,
+    status,
+    published_at
+  )
+  select
+    v.run_id,
+    v.service_date,
+    (
+      select coalesce(jsonb_agg(to_jsonb(dsa) order by dsa.coverage_start, dsa.location_group_id, dsa.segment_number), '[]'::jsonb)
+      from public.daily_schedule_assignments dsa
+      where dsa.service_date = v.service_date
+    ),
+    '[]'::jsonb,
+    v.diff,
+    'schedule_api_guarded_sql_publish',
+    'publishing',
+    now()
+  from sch2_publish_valid v
+  returning id, run_id, service_date
+)
+insert into sch2_publish_audit_row (id, run_id, service_date)
+select id, run_id, service_date from inserted;
+
+select 1 / case when (select count(*) from sch2_publish_audit_row) = 1 then 1 else 0 end as guard_audit_created;
+
+delete from public.daily_schedule_assignments dsa
+using sch2_publish_valid v
+where dsa.service_date = v.service_date;
+
+insert into public.daily_schedule_assignments (
+  service_date,
+  location_group_id,
+  segment_number,
+  assigned_employee_id,
+  owner_type,
+  coverage_start,
+  coverage_end,
+  status,
+  load_points,
+  notes,
+  source_type,
+  coverage_purpose
+)
+select
+  sa.service_date,
+  sa.location_group_id,
+  sa.segment_number,
+  sa.assigned_employee_id,
+  sa.owner_type,
+  sa.coverage_start,
+  sa.coverage_end,
+  sa.status,
+  sa.load_points,
+  concat_ws(' | ', nullif(sa.notes, ''), 'Published by SCH2 guarded SQL run ' || sa.run_id::text),
+  'sch2_published',
+  sa.coverage_purpose
+from public.schedule_solution_assignments sa
+join sch2_publish_valid v on v.run_id = sa.run_id
+order by sa.service_date, sa.coverage_start, sa.location_group_id, sa.segment_number;
+
+select 1 / case when not exists (
+  select 1
+  from sch2_publish_valid v
+  left join lateral (
+    select count(*)::integer as inserted_rows
+    from public.daily_schedule_assignments dsa
+    where dsa.service_date = v.service_date
+  ) c on true
+  where c.inserted_rows <> (v.audit->>'work_item_count')::integer
+) then 1 else 0 end as guard_inserted_rows_match;
+
+update public.schedule_publish_audit spa
+   set published_rows = (
+         select coalesce(jsonb_agg(to_jsonb(dsa) order by dsa.coverage_start, dsa.location_group_id, dsa.segment_number), '[]'::jsonb)
+         from public.daily_schedule_assignments dsa
+         where dsa.service_date = spa.service_date
+       ),
+       status = 'published',
+       published_at = now()
+from sch2_publish_audit_row a
+where spa.id = a.id;
+
+update public.schedule_generation_runs r
+   set status = 'published',
+       published_at = now(),
+       published_by = 'schedule_api_guarded_sql_publish',
+       updated_at = now()
+from sch2_publish_valid v
+where r.id = v.run_id;
+
+drop table if exists pg_temp.sch2_publish_audit_row;
+drop table if exists pg_temp.sch2_publish_valid;
+drop table if exists pg_temp.sch2_publish_candidate;`;
+  }
+
+  async function runSch2PublishWithFallback(runId, confirm) {
+    try {
+      return await runRpc("sch2_publish_solution", { p_run_id: runId, p_confirm: confirm });
+    } catch (error) {
+      if (!isSch2PublishPrivilegeError(error)) throw error;
+      if (!confirm) {
+        const rows = await runReadOnlySql(`
+          select
+            r.id as run_id,
+            r.service_date,
+            public.sch2_audit_solution(r.id) as audit,
+            public.sch2_compare_current_vs_preview(r.id) as diff
+          from public.schedule_generation_runs r
+          where r.id = '${esc(runId)}'::uuid
+          limit 1
+        `);
+        const row = Array.isArray(rows) && rows.length ? rows[0] : null;
+        if (!row) throw error;
+        return {
+          ok: true,
+          dry_run: true,
+          fallback: "read_only_guarded_sql",
+          publish_audit_id: null,
+          run_id: runId,
+          service_date: row.service_date,
+          audit: row.audit,
+          diff: row.diff,
+        };
+      }
+      if (typeof runWriteSql !== "function") throw error;
+      await runWriteSql("sch2_guarded_publish", buildSch2GuardedPublishSql(runId));
+      const rows = await runReadOnlySql(`
+        select
+          r.id as run_id,
+          r.service_date,
+          r.status,
+          r.published_at,
+          r.published_by,
+          spa.id as publish_audit_id,
+          jsonb_array_length(coalesce(spa.published_rows, '[]'::jsonb)) as inserted_rows,
+          public.sch2_audit_solution(r.id) as audit,
+          spa.diff_summary as diff
+        from public.schedule_generation_runs r
+        left join public.schedule_publish_audit spa
+          on spa.run_id = r.id
+         and spa.status = 'published'
+        where r.id = '${esc(runId)}'::uuid
+        order by spa.published_at desc nulls last
+        limit 1
+      `);
+      const row = Array.isArray(rows) && rows.length ? rows[0] : null;
+      if (!row || row.status !== "published" || !row.publish_audit_id) {
+        throw new Error("SCH2 guarded publish fallback did not produce a verified published audit row.");
+      }
+      return {
+        ok: true,
+        dry_run: false,
+        fallback: "guarded_sql",
+        publish_audit_id: row.publish_audit_id,
+        run_id: row.run_id,
+        service_date: row.service_date,
+        inserted_rows: row.inserted_rows,
+        audit: row.audit,
+        diff: row.diff,
+        published_at: row.published_at,
+        published_by: row.published_by,
+      };
+    }
+  }
+
   async function listPtoRows({ startDate, endDate = startDate } = {}) {
     const rows = await runReadOnlySql(`
       select *
@@ -3554,7 +3769,7 @@ export function createScheduleRouter({
     try {
       const runId = requireUuid(req.body?.run_id || req.body?.id, "run_id");
       const confirm = optionalBoolean(req.body?.confirm, false);
-      const data = await runRpc("sch2_publish_solution", { p_run_id: runId, p_confirm: confirm });
+      const data = await runSch2PublishWithFallback(runId, confirm);
       res.status(200).json({
         ok: true,
         data: { run_id: runId, confirm, publish_result: data },
