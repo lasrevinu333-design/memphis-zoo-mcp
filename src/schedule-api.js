@@ -483,6 +483,21 @@ export function createScheduleRouter({
     return Array.from(new Set(cleaned));
   }
 
+  function requireUuid(value, fieldName = "id") {
+    const raw = String(value || "").trim();
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i.test(raw)) {
+      throw new Error(`${fieldName} must be a valid UUID.`);
+    }
+    return raw;
+  }
+
+  function optionalBoolean(value, fallback = false) {
+    if (value === undefined || value === null || value === "") return fallback;
+    if (value === true || value === "true" || value === "1" || value === 1) return true;
+    if (value === false || value === "false" || value === "0" || value === 0) return false;
+    return Boolean(value);
+  }
+
   async function listPtoRows({ startDate, endDate = startDate } = {}) {
     const rows = await runReadOnlySql(`
       select *
@@ -3500,6 +3515,98 @@ export function createScheduleRouter({
       res.status(200).json({ ok: true, data: { generate_result: data, static_restore_result, schedule_audit }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Generate daily schedule failed");
+    }
+  });
+
+  router.post("/sch2/preview", requireSchedulePin, async (req, res) => {
+    try {
+      const serviceDate = requireDate(req.body?.service_date || req.body?.date || (await getServiceDate()));
+      const force = optionalBoolean(req.body?.force, false);
+      const preview = await runRpc("sch2_generate_preview", { p_service_date: serviceDate, p_force: force });
+      const runId = preview?.run_id || preview?.data?.run_id;
+      const audit = runId
+        ? await runRpc("sch2_audit_solution", { p_run_id: runId })
+        : (preview?.audit || null);
+      const diffRows = runId
+        ? await runReadOnlySql(`select public.sch2_compare_current_vs_preview('${esc(runId)}'::uuid) as data`)
+        : [];
+      const diff = Array.isArray(diffRows) && diffRows.length ? diffRows[0].data : (preview?.diff || null);
+      const violationRows = runId
+        ? await runReadOnlySql(`
+            select violation_type, severity, detail, location_group_id, assigned_employee_id
+            from public.v_sch2_constraint_violations
+            where run_id = '${esc(runId)}'::uuid
+            order by severity desc, violation_type asc, detail asc
+            limit 200
+          `)
+        : [];
+      res.status(200).json({
+        ok: true,
+        data: { service_date: serviceDate, force, preview, run_id: runId || null, audit, diff, violations: violationRows || [] },
+        meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion },
+      });
+    } catch (error) {
+      fail(res, error, "SCH2 preview generation failed");
+    }
+  });
+
+  router.post("/sch2/publish", requireSchedulePin, async (req, res) => {
+    try {
+      const runId = requireUuid(req.body?.run_id || req.body?.id, "run_id");
+      const confirm = optionalBoolean(req.body?.confirm, false);
+      const data = await runRpc("sch2_publish_solution", { p_run_id: runId, p_confirm: confirm });
+      res.status(200).json({
+        ok: true,
+        data: { run_id: runId, confirm, publish_result: data },
+        meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion },
+      });
+    } catch (error) {
+      fail(res, error, "SCH2 publish failed");
+    }
+  });
+
+  router.post("/sch2/rollback", requireSchedulePin, async (req, res) => {
+    try {
+      const publishAuditId = requireUuid(req.body?.publish_audit_id || req.body?.audit_id || req.body?.id, "publish_audit_id");
+      const data = await runRpc("sch2_rollback_publish", { p_publish_audit_id: publishAuditId });
+      res.status(200).json({
+        ok: true,
+        data: { publish_audit_id: publishAuditId, rollback_result: data },
+        meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion },
+      });
+    } catch (error) {
+      fail(res, error, "SCH2 rollback failed");
+    }
+  });
+
+  router.get("/sch2/runs", async (req, res) => {
+    try {
+      const serviceDate = req.query.service_date || req.query.date ? requireDate(req.query.service_date || req.query.date) : "";
+      const limit = Math.max(1, Math.min(50, Number.parseInt(String(req.query.limit || 10), 10) || 10));
+      const rows = await runReadOnlySql(`
+        select id, service_date, generator_version, input_hash, status, mode, force,
+               hard_violation_count, open_required_count, score_total, audit_summary,
+               diff_summary, created_at, updated_at, published_at, published_by
+        from public.schedule_generation_runs
+        where (${serviceDate ? `'${esc(serviceDate)}'::date` : "null::date"} is null or service_date = '${esc(serviceDate || "1900-01-01")}'::date)
+        order by created_at desc
+        limit ${limit}
+      `);
+      res.status(200).json({ ok: true, data: { runs: rows || [] }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+    } catch (error) {
+      fail(res, error, "SCH2 run listing failed");
+    }
+  });
+
+  router.get("/sch2/explain", async (req, res) => {
+    try {
+      const runId = requireUuid(req.query.run_id || req.query.id, "run_id");
+      const workItemId = requireUuid(req.query.work_item_id || req.query.item_id, "work_item_id");
+      const rows = await runReadOnlySql(`select public.sch2_explain_assignment('${esc(runId)}'::uuid, '${esc(workItemId)}'::uuid) as data`);
+      const data = Array.isArray(rows) && rows.length ? rows[0].data : null;
+      res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+    } catch (error) {
+      fail(res, error, "SCH2 assignment explanation failed");
     }
   });
 
