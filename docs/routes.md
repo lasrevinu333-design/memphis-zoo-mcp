@@ -96,6 +96,11 @@ Routes are mounted under:
 |---|---|---|
 | `GET` | `/schedule-api/current-owner` | Resolve the active owner for a location code. |
 | `POST` | `/schedule-api/generate-daily` | Generate one day of schedule data. |
+| `POST` | `/schedule-api/sch2/preview` | Generate an SCH2 preview run without changing staff-facing schedule rows. |
+| `POST` | `/schedule-api/sch2/publish` | Dry-run or confirmed SCH2 publish; confirmed publish is additionally guarded by service-role backend execution in SQL. |
+| `POST` | `/schedule-api/sch2/rollback` | Roll back a confirmed SCH2 publish from the audited previous-row snapshot. |
+| `GET` | `/schedule-api/sch2/runs` | List recent SCH2 preview/publish runs. |
+| `GET` | `/schedule-api/sch2/explain` | Explain one SCH2 work-item assignment for a run. |
 | `GET` | `/schedule-api/generation-window` | Show readiness for a forward schedule window. |
 | `POST` | `/schedule-api/generate-range` | Ensure a forward schedule window exists, defaulting to 7 days. |
 | `POST` | `/schedule-api/restroom-rebalance/run` | Ops-only manual trigger for the 9:45am restroom rebalance; records a persistent daily completion marker after success and reapplies lunch coverage to fill any lunch-window gaps caused by restroom moves. |

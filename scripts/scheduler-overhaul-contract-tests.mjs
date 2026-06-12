@@ -8,6 +8,7 @@ const baselineDocPath = path.resolve(repoRoot, "docs/scheduler-overhaul/baseline
 const packageJsonPath = path.resolve(repoRoot, "package.json");
 const scheduleApiPath = path.resolve(repoRoot, "src/schedule-api.js");
 const sch2MigrationPath = "sql/2026-06-11_sch2_preview_scheduler.sql";
+const sch2HardeningMigrationPath = "sql/2026-06-12_sch2_api_security_and_zero_guard.sql";
 const mandatoryReadOnlySqlFiles = [
   "scripts/sql/check-scheduler-open-owner-contract.sql",
   "scripts/sql/check-scheduler-exception-contract.sql",
@@ -155,7 +156,30 @@ assert.doesNotMatch(
   "SCH2 migration must not call non-existent sch_group_adjusted_load_points(uuid, text)"
 );
 
+const sch2HardeningSql = readRequired(sch2HardeningMigrationPath);
+for (const pattern of [
+  /security\s+definer/i,
+  /set\s+search_path\s*=\s*public\s*,\s*pg_temp/i,
+  /zero\s+work\s+items/i,
+  /work_item_count/i,
+  /solution_assignment_count/i,
+  /current_setting\s*\(\s*['"]request\.jwt\.claim\.role['"]/i,
+  /service_role\s+backend\s+execution/i,
+  /revoke\s+execute\s+on\s+function\s+public\.sch2_build_work_items/i,
+  /revoke\s+execute\s+on\s+function\s+public\.sch2_publish_solution/i,
+  /grant\s+execute\s+on\s+function\s+public\.sch2_publish_solution\(uuid,\s*boolean\)\s+to\s+service_role/i,
+]) {
+  assert.match(sch2HardeningSql, pattern, `${sch2HardeningMigrationPath} must include ${pattern}`);
+}
+assert.doesNotMatch(sch2HardeningSql, /drop\s+table\s+public\.daily_schedule_assignments/i, "SCH2 hardening migration must not drop live schedule table");
+assert.doesNotMatch(sch2HardeningSql, /truncate\s+public\.daily_schedule_assignments/i, "SCH2 hardening migration must not truncate live schedule table");
+
 const scheduleApiSource = fs.readFileSync(scheduleApiPath, "utf8");
+assert.match(
+  scheduleApiSource,
+  /function\s+requireUuid[\s\S]*\[89ab\]\[0-9a-f\]\{3\}-\[0-9a-f\]\{12\}/i,
+  "requireUuid must validate RFC-style UUIDs with the variant-group hyphen before the final 12 hex chars"
+);
 assert.match(scheduleApiSource, /router\.post\(\s*["']\/sch2\/preview["']\s*,\s*requireSchedulePin/s, "SCH2 preview route must be protected");
 assert.match(scheduleApiSource, /router\.post\(\s*["']\/sch2\/publish["']\s*,\s*requireSchedulePin/s, "SCH2 publish route must be protected");
 assert.match(scheduleApiSource, /router\.post\(\s*["']\/sch2\/rollback["']\s*,\s*requireSchedulePin/s, "SCH2 rollback route must be protected");
