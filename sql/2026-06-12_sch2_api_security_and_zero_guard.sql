@@ -281,6 +281,21 @@ declare
   v_work_item_count integer := 0;
   v_candidate_count integer := 0;
   v_solution_count integer := 0;
+  v_item record;
+  v_choice record;
+  v_target_required_load numeric := 0;
+  v_target_required_location_count numeric := 0;
+  v_final_employee_id uuid;
+  v_final_total_score numeric := 0;
+  v_final_proximity_score numeric := 0;
+  v_final_route_fit_score numeric := 0;
+  v_final_workload_score numeric := 0;
+  v_final_hard_reject_reasons text[] := array[]::text[];
+  v_final_current_solution_load numeric := 0;
+  v_final_required_location_count integer := 0;
+  v_final_target_load_gap_after numeric := 0;
+  v_final_balanced_rank integer := null;
+  v_assignment_reason text;
 begin
   v_input_hash := public.sch2_input_hash(p_service_date);
 
@@ -342,15 +357,6 @@ begin
     where r.service_date = p_service_date
       and r.active = true
       and dao.id is null
-  ), load_summary as (
-    select
-      dsa.assigned_employee_id as employee_id,
-      count(*) filter (where dsa.status = 'ASSIGNED')::numeric as assigned_segments,
-      coalesce(sum(dsa.load_points) filter (where dsa.status = 'ASSIGNED'), 0)::numeric as assigned_load_points
-    from public.daily_schedule_assignments dsa
-    where dsa.service_date = p_service_date
-      and dsa.assigned_employee_id is not null
-    group by dsa.assigned_employee_id
   ), base as materialized (
     select
       wi.id as work_item_id,
@@ -364,8 +370,8 @@ begin
       wi.coverage_purpose,
       wi.original_assigned_employee_id,
       wi.required,
-      coalesce(ls.assigned_load_points, 0) as assigned_load_points,
-      coalesce(ls.assigned_segments, 0) as assigned_segments,
+      0::numeric as assigned_load_points,
+      0::numeric as assigned_segments,
       public.sch_is_employee_location_group_restricted(r.employee_id, wi.location_group_id, extract(dow from p_service_date)::integer) as is_restricted,
       (r.shift_start < wi.coverage_end and r.shift_end > wi.coverage_start) as shift_overlaps,
       lw.lunch_start,
@@ -373,7 +379,6 @@ begin
       coalesce(public.sch_employee_route_fit_score(r.employee_id, extract(dow from p_service_date)::integer, wi.location_group_id, wi.coverage_purpose), 0)::numeric as route_penalty
     from public.schedule_work_items wi
     cross join roster r
-    left join load_summary ls on ls.employee_id = r.employee_id
     left join lateral public.sch_lunch_window_for_employee(p_service_date, r.employee_id) lw on true
     where wi.run_id = v_run_id
   ), scored as materialized (
@@ -439,39 +444,181 @@ begin
      set status = 'building_solution', updated_at = now()
    where id = v_run_id;
 
-  with ranked as (
+  with regular_roster as (
+    select distinct r.employee_id
+    from public.daily_work_roster r
+    join public.employees e on e.id = r.employee_id and e.active = true
+    left join public.daily_absence_overrides dao
+      on dao.absence_date = r.service_date
+     and dao.employee_id = r.employee_id
+     and dao.active = true
+    where r.service_date = p_service_date
+      and r.active = true
+      and dao.id is null
+      and coalesce(e.employee_code, '') <> 'EMP002'
+  ), employee_count as (
+    select count(*)::numeric as n from regular_roster
+  ), work_totals as (
     select
-      c.*,
-      wi.original_assigned_employee_id,
-      row_number() over (
-        partition by c.work_item_id
-        order by
-          case when c.employee_id = wi.original_assigned_employee_id then 1 else 0 end desc,
-          c.total_score desc,
-          c.employee_id
-      ) as rn
-    from public.schedule_candidate_scores c
-    join public.schedule_work_items wi on wi.id = c.work_item_id
-    where c.run_id = v_run_id
-      and c.eligible = true
-  ), chosen as (
-    select * from ranked where rn = 1
-  ), final_rows as (
-    select
-      wi.*,
-      case
-        when wi.required then ch.employee_id
-        else wi.original_assigned_employee_id
-      end as final_employee_id,
-      ch.total_score,
-      ch.proximity_score,
-      ch.route_fit_score,
-      ch.workload_score,
-      ch.hard_reject_reasons
+      coalesce(sum(wi.load_points) filter (where wi.required), 0)::numeric as required_load,
+      count(distinct wi.location_group_id) filter (where wi.required)::numeric as required_locations
     from public.schedule_work_items wi
-    left join chosen ch on ch.work_item_id = wi.id
     where wi.run_id = v_run_id
   )
+  select
+    coalesce(wt.required_load / nullif(ec.n, 0), 0)::numeric,
+    coalesce(wt.required_locations / nullif(ec.n, 0), 0)::numeric
+  into v_target_required_load, v_target_required_location_count
+  from work_totals wt
+  cross join employee_count ec;
+
+  for v_item in
+    select wi.*
+    from public.schedule_work_items wi
+    where wi.run_id = v_run_id
+      and wi.required = true
+    order by
+      wi.load_points desc,
+      wi.is_public_restroom desc,
+      wi.coverage_start,
+      wi.bundle_key,
+      wi.id
+  loop
+    with current_solution_load as (
+      select
+        c.employee_id,
+        coalesce(sum(sa.load_points) filter (where sa.status = 'ASSIGNED' and assigned_wi.required = true), 0)::numeric as assigned_load_points,
+        count(distinct sa.location_group_id) filter (where sa.status = 'ASSIGNED' and assigned_wi.required = true)::integer as required_location_count
+      from public.schedule_candidate_scores c
+      left join public.schedule_solution_assignments sa
+        on sa.run_id = c.run_id
+       and sa.assigned_employee_id = c.employee_id
+      left join public.schedule_work_items assigned_wi
+        on assigned_wi.id = sa.work_item_id
+      where c.run_id = v_run_id
+        and c.work_item_id = v_item.id
+        and c.eligible = true
+      group by c.employee_id
+    ), candidate_balance as (
+      select
+        c.*,
+        coalesce(csl.assigned_load_points, 0)::numeric as current_solution_load,
+        coalesce(csl.required_location_count, 0)::integer as current_required_location_count,
+        abs((coalesce(csl.assigned_load_points, 0) + coalesce(v_item.load_points, 0)) - v_target_required_load)::numeric as target_load_gap_after,
+        greatest(
+          0,
+          100
+            - (abs((coalesce(csl.assigned_load_points, 0) + coalesce(v_item.load_points, 0)) - v_target_required_load) * 8)
+            - (greatest(0, coalesce(csl.required_location_count, 0) - floor(v_target_required_location_count)::integer) * 4)
+        )::numeric as dynamic_workload_score
+      from public.schedule_candidate_scores c
+      join current_solution_load csl on csl.employee_id = c.employee_id
+      where c.run_id = v_run_id
+        and c.work_item_id = v_item.id
+        and c.eligible = true
+    ), candidate_ranked as (
+      select
+        cb.*,
+        round(((cb.route_fit_score * 0.75) + (cb.dynamic_workload_score * 0.25))::numeric, 2) as balanced_total_score,
+        row_number() over (
+          order by
+            round(((cb.route_fit_score * 0.75) + (cb.dynamic_workload_score * 0.25))::numeric, 2) desc,
+            cb.target_load_gap_after asc,
+            cb.current_required_location_count asc,
+            cb.current_solution_load asc,
+            case when cb.employee_id = v_item.original_assigned_employee_id then 0 else 1 end,
+            cb.employee_id
+        )::integer as balanced_rank
+      from candidate_balance cb
+    )
+    select * into v_choice
+    from candidate_ranked
+    order by balanced_rank asc
+    limit 1;
+
+    if not found then
+      v_final_employee_id := null;
+      v_final_total_score := 0;
+      v_final_proximity_score := 0;
+      v_final_route_fit_score := 0;
+      v_final_workload_score := 0;
+      v_final_hard_reject_reasons := array['no_eligible_candidate']::text[];
+      v_final_current_solution_load := 0;
+      v_final_required_location_count := 0;
+      v_final_target_load_gap_after := 0;
+      v_final_balanced_rank := null;
+      v_assignment_reason := 'no_eligible_candidate_required_open';
+    else
+      v_final_employee_id := v_choice.employee_id;
+      v_final_total_score := coalesce(v_choice.total_score, 0);
+      v_final_proximity_score := coalesce(v_choice.proximity_score, 0);
+      v_final_route_fit_score := coalesce(v_choice.route_fit_score, 0);
+      v_final_workload_score := coalesce(v_choice.dynamic_workload_score, v_choice.workload_score, 0);
+      v_final_hard_reject_reasons := coalesce(v_choice.hard_reject_reasons, array[]::text[]);
+      v_final_current_solution_load := coalesce(v_choice.current_solution_load, 0);
+      v_final_required_location_count := coalesce(v_choice.current_required_location_count, 0);
+      v_final_target_load_gap_after := coalesce(v_choice.target_load_gap_after, 0);
+      v_final_total_score := coalesce(v_choice.balanced_total_score, v_final_total_score);
+      v_final_balanced_rank := v_choice.balanced_rank;
+      v_assignment_reason := case
+        when v_final_employee_id = v_item.original_assigned_employee_id then 'kept_existing_owner_after_fairness'
+        else 'selected_fair_balanced_candidate'
+      end;
+    end if;
+
+    insert into public.schedule_solution_assignments (
+      run_id,
+      work_item_id,
+      service_date,
+      location_group_id,
+      segment_number,
+      assigned_employee_id,
+      owner_type,
+      coverage_start,
+      coverage_end,
+      coverage_purpose,
+      status,
+      source_type,
+      source_daily_assignment_id,
+      load_points,
+      assignment_reason,
+      score_total,
+      score_breakdown,
+      notes
+    ) values (
+      v_item.run_id,
+      v_item.id,
+      v_item.service_date,
+      v_item.location_group_id,
+      v_item.segment_number,
+      v_final_employee_id,
+      case when v_final_employee_id is null then 'OPEN' else 'EMPLOYEE' end,
+      v_item.coverage_start,
+      v_item.coverage_end,
+      v_item.coverage_purpose,
+      case when v_final_employee_id is null then 'OPEN' else 'ASSIGNED' end,
+      'sch2_preview',
+      v_item.source_daily_assignment_id,
+      v_item.load_points,
+      v_assignment_reason,
+      v_final_total_score,
+      jsonb_build_object(
+        'total_score', v_final_total_score,
+        'proximity_score', v_final_proximity_score,
+        'route_fit_score', v_final_route_fit_score,
+        'workload_score', v_final_workload_score,
+        'target_required_load', v_target_required_load,
+        'target_required_location_count', v_target_required_location_count,
+        'current_solution_load', v_final_current_solution_load,
+        'current_required_location_count', v_final_required_location_count,
+        'target_load_gap_after', v_final_target_load_gap_after,
+        'balanced_rank', v_final_balanced_rank,
+        'hard_reject_reasons', coalesce(to_jsonb(v_final_hard_reject_reasons), '[]'::jsonb)
+      ),
+      concat_ws(' | ', nullif(v_item.notes, ''), 'SCH2 preview')
+    );
+  end loop;
+
   insert into public.schedule_solution_assignments (
     run_id,
     work_item_id,
@@ -493,38 +640,35 @@ begin
     notes
   )
   select
-    fr.run_id,
-    fr.id,
-    fr.service_date,
-    fr.location_group_id,
-    fr.segment_number,
-    fr.final_employee_id,
-    case when fr.final_employee_id is null then 'OPEN' else 'EMPLOYEE' end,
-    fr.coverage_start,
-    fr.coverage_end,
-    fr.coverage_purpose,
-    case when fr.final_employee_id is null then 'OPEN' else 'ASSIGNED' end,
+    wi.run_id,
+    wi.id,
+    wi.service_date,
+    wi.location_group_id,
+    wi.segment_number,
+    wi.original_assigned_employee_id,
+    case when wi.original_assigned_employee_id is null then 'OPEN' else 'EMPLOYEE' end,
+    wi.coverage_start,
+    wi.coverage_end,
+    wi.coverage_purpose,
+    case when wi.original_assigned_employee_id is null then 'OPEN' else 'ASSIGNED' end,
     'sch2_preview',
-    fr.source_daily_assignment_id,
-    fr.load_points,
-    case
-      when fr.required and fr.final_employee_id is null then 'no_eligible_candidate_required_open'
-      when fr.required and fr.final_employee_id = fr.original_assigned_employee_id then 'kept_existing_owner'
-      when fr.required then 'selected_best_candidate'
-      else 'preserved_non_required_preview_item'
-    end,
-    coalesce(fr.total_score, 0),
+    wi.source_daily_assignment_id,
+    wi.load_points,
+    'preserved_non_required_preview_item',
+    0,
     jsonb_build_object(
-      'total_score', coalesce(fr.total_score, 0),
-      'proximity_score', coalesce(fr.proximity_score, 0),
-      'route_fit_score', coalesce(fr.route_fit_score, 0),
-      'workload_score', coalesce(fr.workload_score, 0),
-      'hard_reject_reasons', coalesce(to_jsonb(fr.hard_reject_reasons), '[]'::jsonb)
+      'target_required_load', v_target_required_load,
+      'target_required_location_count', v_target_required_location_count,
+      'hard_reject_reasons', '[]'::jsonb
     ),
-    concat_ws(' | ', nullif(fr.notes, ''), 'SCH2 preview')
-  from final_rows fr;
+    concat_ws(' | ', nullif(wi.notes, ''), 'SCH2 preview')
+  from public.schedule_work_items wi
+  where wi.run_id = v_run_id
+    and wi.required = false;
 
-  get diagnostics v_solution_count = row_count;
+  select count(*)::integer into v_solution_count
+  from public.schedule_solution_assignments
+  where run_id = v_run_id;
 
   if v_solution_count <> v_work_item_count then
     update public.schedule_generation_runs

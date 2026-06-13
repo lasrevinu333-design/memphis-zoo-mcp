@@ -229,6 +229,9 @@ const manualAbsencePublishEnd = source.indexOf('router.post("/manual-absences/re
 const manualAbsencePublishSource = source.slice(manualAbsencePublishStart, manualAbsencePublishEnd);
 assert.match(manualAbsencePublishSource, /set active = \(dao\.employee_id = any\(\$\{idsSql\}::uuid\[\]\)\)/, "manual absence publish must reactivate existing selected rows instead of inserting duplicates");
 assert.doesNotMatch(manualAbsencePublishSource, /and y\.active = true/, "manual absence insert existence check must include inactive rows to avoid unique-key retries");
+assert.match(manualAbsencePublishSource, /publishCoverAllSlotsForDate\(serviceDate, requestedCoverAllSlots, \{ regenerate: false, restoreStatic: false, rebalance: false \}\)/, "manual absence publish must add CoverAll roster slots without a second full regeneration before final absence application");
+assert.match(manualAbsencePublishSource, /coverallPlan = await applyCoverAllPlan\(serviceDate, coverallPlan\);[\s\S]*coverallBalanceResult[\s\S]*await rebalanceCoverAllAssignments\(serviceDate\)/, "manual absence publish must run final CoverAll rebalance after applying 3+ absence CoverAll workload");
+assert.match(manualAbsencePublishSource, /coverall_balance_result: coverallBalanceResult/, "manual absence publish response must expose the final CoverAll rebalance proof");
 
 const activeRoster = [
   { employee_id: "employee-a", employee_name: "Alex", shift_start: "05:00:00", shift_end: "15:00:00" },

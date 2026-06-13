@@ -20,6 +20,7 @@ const mandatoryReadOnlySqlFiles = [
   "scripts/sql/check-sch2-route-span.sql",
   "scripts/sql/check-sch2-lunch-coverage.sql",
   "scripts/sql/check-sch2-restroom-rebalance.sql",
+  "scripts/sql/check-sch2-monday-balanced-preview.sql",
 ];
 
 const mutatingSqlPattern = /\b(insert|update|delete|drop|alter|create|truncate|grant|revoke|comment|vacuum|analyze|call|do|execute|merge)\b/i;
@@ -63,6 +64,46 @@ function assertReadOnlySql(relativePath) {
   return sql;
 }
 
+function extractSqlFunction(sql, functionName) {
+  const marker = new RegExp(`create\\s+or\\s+replace\\s+function\\s+public\\.${functionName}\\s*\\(`, "i");
+  const match = marker.exec(sql);
+  assert.ok(match, `SQL must define public.${functionName}`);
+  const start = match.index;
+  const endMarker = "$function$;";
+  const end = sql.indexOf(endMarker, start);
+  assert.notEqual(end, -1, `public.${functionName} must close with ${endMarker}`);
+  return sql.slice(start, end + endMarker.length);
+}
+
+function assertSch2PreviewUsesDynamicSolutionLoadOnly(sql, label) {
+  const previewFunction = extractSqlFunction(sql, "sch2_generate_preview");
+  assert.doesNotMatch(
+    previewFunction,
+    /load_summary\s+as\s*\([\s\S]*?public\.daily_schedule_assignments/i,
+    `${label} must not seed candidate workload from stale published daily_schedule_assignments`
+  );
+  assert.match(
+    previewFunction,
+    /current_solution_load\s+as\s*\([\s\S]*?public\.schedule_solution_assignments/i,
+    `${label} must compute candidate workload from assignments already placed in the in-progress SCH2 preview solution`
+  );
+  assert.match(
+    previewFunction,
+    /score_breakdown[\s\S]*'current_solution_load'[\s\S]*v_final_current_solution_load/i,
+    `${label} must persist dynamic preview-load evidence in each solution assignment score_breakdown`
+  );
+  assert.match(
+    previewFunction,
+    /row_number\(\)\s+over\s*\([\s\S]*?order\s+by[\s\S]*?route_fit_score\s*\*\s*0\.75[\s\S]*?dynamic_workload_score\s*\*\s*0\.25[\s\S]*?target_load_gap_after[\s\S]*?current_required_location_count[\s\S]*?current_solution_load[\s\S]*?case\s+when\s+cb\.employee_id\s*=\s*v_item\.original_assigned_employee_id\s+then\s+0\s+else\s+1\s+end/i,
+    `${label} must rank by balanced fairness first and use original/static owner only after dynamic workload tie-breaks`
+  );
+  assert.doesNotMatch(
+    previewFunction,
+    /order\s+by[\s\S]{0,600}?original_assigned_employee_id[\s\S]{0,600}?balanced_total_score/i,
+    `${label} must not order by original/static owner before the balanced 75/25 score`
+  );
+}
+
 assert.equal(fs.existsSync(baselineDocPath), true, "scheduler overhaul baseline doc must exist before DB writes");
 const baselineDoc = fs.readFileSync(baselineDocPath, "utf8");
 assert.match(baselineDoc, /preview-first/i, "baseline doc must state preview-first behavior");
@@ -84,10 +125,11 @@ for (const relativePath of mandatoryReadOnlySqlFiles) {
 const sch2SqlExpectations = new Map([
   ["scripts/sql/check-sch2-hard-constraints.sql", [/schedule_generation_runs/i, /schedule_work_items/i, /schedule_candidate_scores/i, /schedule_solution_assignments/i, /sch2_build_work_items/i, /sch2_generate_preview/i]],
   ["scripts/sql/check-sch2-publish-compatibility.sql", [/schedule_publish_audit/i, /sch2_publish_solution/i, /sch2_rollback_publish/i, /v_sch2_publish_diff/i, /daily_schedule_assignments/i]],
-  ["scripts/sql/check-sch2-workload-fairness.sql", [/v_sch2_workload_audit/i, /load_points/i, /hard_violation_count/i]],
+  ["scripts/sql/check-sch2-workload-fairness.sql", [/v_sch2_workload_audit/i, /load_points/i, /hard_violation_count/i, /recent_runs/i, /target_required_location_count/i, /location_count_spread/i]],
   ["scripts/sql/check-sch2-route-span.sql", [/v_sch2_route_audit/i, /route_zone/i, /route_spread/i]],
   ["scripts/sql/check-sch2-lunch-coverage.sql", [/lunch/i, /same_lunch/i, /overlap/i]],
   ["scripts/sql/check-sch2-restroom-rebalance.sql", [/09:45|0945|restroom/i, /Michael|EMP002/i, /lunch_coverage/i]],
+  ["scripts/sql/check-sch2-monday-balanced-preview.sql", [/Markiesha\s+Warren/i, /TRADING_POST|GIFT_SHOP/i, /location_count_spread/i, /target_required_location_count/i, /v_sch2_workload_audit/i, /lower\(trim\([^)]*employee_name[^)]*\)\)\s*=\s*'markiesha warren'/i]],
 ]);
 
 for (const [relativePath, patterns] of sch2SqlExpectations.entries()) {
@@ -98,6 +140,11 @@ for (const [relativePath, patterns] of sch2SqlExpectations.entries()) {
 }
 
 const openOwnerContractSql = readRequired("scripts/sql/check-scheduler-open-owner-contract.sql");
+const mondayBalancedPreviewSql = readRequired("scripts/sql/check-sch2-monday-balanced-preview.sql");
+assert.match(mondayBalancedPreviewSql, /lower\(trim\([^)]*employee_name[^)]*\)\)\s*=\s*'markiesha warren'/i, "Monday balanced-preview guard must match Markiesha Warren by normalized exact name");
+assert.doesNotMatch(mondayBalancedPreviewSql, /ilike\s+'Mark%i(?:e)?sha Warren'/i, "Monday balanced-preview guard must not use fragile wildcard Markiesha patterns");
+assert.match(mondayBalancedPreviewSql, /markiesha_only_gift_shop/i, "Monday balanced-preview guard must flag Markiesha when she only has reminder/gift-shop work");
+assert.match(mondayBalancedPreviewSql, /markiesha_under_target_required_locations/i, "Monday balanced-preview guard must flag Markiesha below required-location target");
 assert.match(openOwnerContractSql, /public\.daily_schedule_assignments/i, "open-owner gate must inspect published daily assignments");
 assert.match(openOwnerContractSql, /PRIMATE_CANYON.*CAT_COUNTRY|CAT_COUNTRY.*PRIMATE_CANYON/s, "open-owner gate must exempt response-only groups");
 assert.match(openOwnerContractSql, /GIFT_SHOP/i, "open-owner gate must preserve Monday gift-shop reminder exception");
@@ -155,6 +202,45 @@ assert.doesNotMatch(
   /sch_group_adjusted_load_points\s*\(\s*ct\.location_group_id\s*,/i,
   "SCH2 migration must not call non-existent sch_group_adjusted_load_points(uuid, text)"
 );
+assert.match(
+  sch2MigrationSql,
+  /target_required_load/i,
+  "SCH2 selector must compute a per-day target_required_load from required work and active regular employees"
+);
+assert.match(
+  sch2MigrationSql,
+  /current_solution_load/i,
+  "SCH2 selector must rank candidates against load already assigned in the preview solution, not only stale template load"
+);
+assert.match(
+  sch2MigrationSql,
+  /balanced_total_score/i,
+  "SCH2 selector must compute a dynamic 75/25 route/workload balanced score from current preview load before original-owner tie-breaks"
+);
+assert.match(
+  sch2MigrationSql,
+  /route_fit_score\s*\*\s*0\.75[\s\S]*dynamic_workload_score\s*\*\s*0\.25/i,
+  "SCH2 selector must preserve the 75% route/proximity + 25% workload balancing rule"
+);
+assert.doesNotMatch(
+  sch2MigrationSql,
+  /case\s+when\s+c\.employee_id\s*=\s*wi\.original_assigned_employee_id\s+then\s+1\s+else\s+0\s+end\s+desc\s*,\s*c\.total_score\s+desc/i,
+  "SCH2 selector must not keep the original owner ahead of workload fairness; static owners are tie-breakers only"
+);
+assert.match(
+  sch2MigrationSql,
+  /required_location_count/i,
+  "SCH2 workload audit must count distinct required locations per employee, not duplicated segments only"
+);
+assert.match(
+  sch2MigrationSql,
+  /location_count_spread/i,
+  "SCH2 workload audit must expose location_count_spread so uneven location distribution is visible"
+);
+assertSch2PreviewUsesDynamicSolutionLoadOnly(
+  sch2MigrationSql,
+  "SCH2 base migration preview function"
+);
 
 const sch2HardeningSql = readRequired(sch2HardeningMigrationPath);
 for (const pattern of [
@@ -173,6 +259,31 @@ for (const pattern of [
 }
 assert.doesNotMatch(sch2HardeningSql, /drop\s+table\s+public\.daily_schedule_assignments/i, "SCH2 hardening migration must not drop live schedule table");
 assert.doesNotMatch(sch2HardeningSql, /truncate\s+public\.daily_schedule_assignments/i, "SCH2 hardening migration must not truncate live schedule table");
+assert.match(
+  sch2HardeningSql,
+  /target_required_load/i,
+  "Final effective SCH2 preview function must preserve fairness-first target_required_load after API hardening overrides"
+);
+assert.match(
+  sch2HardeningSql,
+  /current_solution_load/i,
+  "Final effective SCH2 preview function must rank against the preview solution's live assigned load, not stale template load"
+);
+assert.match(
+  sch2HardeningSql,
+  /balanced_total_score/i,
+  "Final effective SCH2 preview function must compute a dynamic 75/25 route/workload balanced score before original-owner tie-breaks"
+);
+assert.match(
+  sch2HardeningSql,
+  /route_fit_score\s*\*\s*0\.75[\s\S]*dynamic_workload_score\s*\*\s*0\.25/i,
+  "Final effective SCH2 preview function must preserve the 75% route/proximity + 25% workload balancing rule"
+);
+assert.doesNotMatch(
+  sch2HardeningSql,
+  /case\s+when\s+c\.employee_id\s*=\s*wi\.original_assigned_employee_id\s+then\s+1\s+else\s+0\s+end\s+desc\s*,\s*c\.total_score\s+desc/i,
+  "Final effective SCH2 preview function must not restore original-owner-first ranking after API hardening"
+);
 
 const scheduleApiSource = fs.readFileSync(scheduleApiPath, "utf8");
 assert.match(

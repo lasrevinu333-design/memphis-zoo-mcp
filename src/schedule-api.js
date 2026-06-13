@@ -928,7 +928,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
     });
   }
 
-  async function publishCoverAllSlotsForDate(serviceDate, inputSlots = []) {
+  async function publishCoverAllSlotsForDate(serviceDate, inputSlots = [], { regenerate = true, restoreStatic = true, rebalance = true } = {}) {
     if (!Array.isArray(inputSlots)) throw new Error("slots must be an array.");
     const slots = await ensureCoverAllSlots();
     const byCode = new Map(slots.map((slot) => [String(slot.employee_code || "").toUpperCase(), slot]));
@@ -987,9 +987,14 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
     }
 
     await runWriteSql("coverall_slots_publish", sql);
-    const generateResult = await runRpc("sch_generate_daily_schedule", { p_service_date: serviceDate, p_force: true });
-    const staticRestoreResult = await restoreStaticOwnersForDate(serviceDate);
-    const balanceResult = await rebalanceCoverAllAssignments(serviceDate);
+    let generateResult = null;
+    let staticRestoreResult = null;
+    let balanceResult = null;
+    if (regenerate) {
+      generateResult = await runRpc("sch_generate_daily_schedule", { p_service_date: serviceDate, p_force: true });
+      if (restoreStatic) staticRestoreResult = await restoreStaticOwnersForDate(serviceDate);
+    }
+    if (rebalance) balanceResult = await rebalanceCoverAllAssignments(serviceDate);
     const currentSlots = await listCoverAllSlotsForDate(serviceDate);
     return { service_date: serviceDate, slots: currentSlots, generate_result: generateResult, static_restore_result: staticRestoreResult, balance_result: balanceResult };
   }
@@ -3893,12 +3898,15 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
       const staticRestoreResult = await restoreStaticOwnersForDate(serviceDate);
       let coverallManual = null;
       if (requestedCoverAllSlots.length) {
-        coverallManual = await publishCoverAllSlotsForDate(serviceDate, requestedCoverAllSlots);
+        coverallManual = await publishCoverAllSlotsForDate(serviceDate, requestedCoverAllSlots, { regenerate: false, restoreStatic: false, rebalance: false });
       }
       coverallPlan = await applyCoverAllPlan(serviceDate, coverallPlan);
+      const coverallBalanceResult = requestedCoverAllSlots.length || coverallPlan?.triggered
+        ? await rebalanceCoverAllAssignments(serviceDate)
+        : null;
       const activeRows = await listPtoRows({ startDate: serviceDate, endDate: serviceDate });
       const manualRows = activeRows.filter((row) => String(row.pto_type || "").toLowerCase() === "manual_override");
-      const scheduleAudit = await auditScheduleForDate(serviceDate, { includeAi: true, userPrompt: "Final check after manual absence publish: balanced, logical, and physically possible." });
+      const scheduleAudit = await auditScheduleForDate(serviceDate, { includeAi: true, userPrompt: "Final check after manual absence publish and CoverAll rebalance: balanced, logical, and physically possible." });
 
       res.status(200).json({
         ok: true,
@@ -3913,6 +3921,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
           schedule_audit: scheduleAudit,
           coverall: coverallPlan,
           coverall_manual: coverallManual,
+          coverall_balance_result: coverallBalanceResult,
           manager_notification: coverallPlan?.manager_notification || null,
         },
         meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion },
