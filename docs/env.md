@@ -43,6 +43,20 @@ This document lists the environment variables used by the Memphis Zoo MCP backen
 | `MEMPHIS_GEMINI_MODEL` | No | Model override for Memphis AI. |
 | `GEMINI_MODEL` | No | General model fallback. |
 
+## Moxie — Annie's Private Assistant
+
+| Name | Required | Purpose |
+|---|---:|---|
+| `MOXIE_WEB_PASSWORD` | **Yes** | Sign-in password for Moxie web UI. |
+| `MOXIE_WEB_COOKIE_SECRET` | **Yes** | HMAC secret for session cookies. Generate with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. |
+| `MOXIE_WEB_USER` | No | Username. Defaults to `annie`. |
+| `MOXIE_PREFIX` | No | URL prefix. Defaults to `/moxie`. |
+| `MOXIE_PUBLIC_URL` | No | Public base URL for Moxie (used in links). |
+| `MOXIE_GEMINI_API_KEY` | No | Dedicated Gemini key for Moxie. Falls back to `GEMINI_API_KEY` / `MEMPHIS_GEMINI_API_KEY` / `GOOGLE_API_KEY`. |
+| `MOXIE_GEMINI_MODEL` | No | Model override. Falls back to `MEMPHIS_GEMINI_MODEL` / `GEMINI_MODEL` / `gemini-2.5-flash`. |
+| `MOXIE_GEMINI_TIMEOUT_MS` | No | Request timeout. Defaults to 30000. |
+| `MOXIE_GEMINI_MAX_OUTPUT_TOKENS` | No | Max output tokens. Defaults to 4096. |
+
 ## Attendance scraping
 
 | Name | Required | Purpose |

@@ -6,3 +6,4 @@ export {
   createEventsAdminRouter,
   createEventsPublicRouter,
 } from "../events-api.js";
+export { createMoxieRouter } from "./moxie.js";

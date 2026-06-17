@@ -112,6 +112,42 @@ Routes are mounted under:
 
 See `src/schedule-api.js` for remaining route-level details.
 
+## Moxie — Annie's Private Assistant
+
+Routes are mounted under:
+
+```text
+/moxie
+```
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/moxie/health` | Moxie health check. |
+| `GET` | `/moxie/login` | Login page. |
+| `POST` | `/moxie/login` | Submit password. |
+| `GET` | `/moxie/logout` | Clear session. |
+| `GET` | `/moxie/` | Chat UI (main page). |
+| `POST` | `/moxie/chat` | Send chat message to Gemini. |
+| `GET` | `/moxie/chat/state` | Get saved chat history. |
+| `PUT` | `/moxie/chat/state` | Save chat history. |
+| `GET` | `/moxie/log` | Annie's Log page (notes + reminders). |
+| `POST` | `/moxie/log/note` | Add a note. |
+| `DELETE` | `/moxie/log/note/:id` | Delete a note. |
+| `POST` | `/moxie/log/reminder` | Add a reminder. |
+| `POST` | `/moxie/log/reminder/:id/complete` | Mark reminder done. |
+| `DELETE` | `/moxie/log/reminder/:id` | Delete a reminder. |
+| `POST` | `/moxie/log/suggested/:id/confirm` | Confirm suggested reminder. |
+| `POST` | `/moxie/log/suggested/:id/dismiss` | Dismiss suggested reminder. |
+| `GET` | `/moxie/reminders` | Reminders page. |
+| `GET` | `/moxie/contacts` | Contacts page. |
+| `POST` | `/moxie/contacts` | Add a contact. |
+| `PUT` | `/moxie/contacts/:id` | Update a contact. |
+| `DELETE` | `/moxie/contacts/:id` | Delete a contact. |
+| `POST` | `/moxie/contacts/suggested/:id/confirm` | Confirm suggested contact. |
+| `POST` | `/moxie/contacts/suggested/:id/dismiss` | Dismiss suggested contact. |
+| `GET` | `/moxie/password` | Settings page. |
+| `POST` | `/moxie/password` | Change password. |
+
 ## Diagnostic routes
 
 These are installed by the compatibility bootstrap before Express starts listening.
