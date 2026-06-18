@@ -1643,7 +1643,20 @@ app.use("/admin-api/events", createEventsAdminRouter({ runReadOnlySql, runWriteS
 
 // Moxie — Annie's private work assistant
 const moxieStaticDir = new URL("public/moxie-assets", import.meta.url).pathname;
-app.use("/moxie", (req, res, next) => { if (!setMoxieCors(req, res)) { res.status(403).json({ ok: false, error: "Origin not allowed" }); return; } if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); }, createMoxieRouter({ supabase: supabaseAdmin, staticDir: moxieStaticDir }));
+app.use("/moxie", (req, res, next) => {
+  const origin = resolveOrigin(req);
+  // Allow same-origin requests (no Origin header) and allowed cross-origin
+  if (origin === null && (req.header("Origin") || req.header("origin"))) {
+    // Has Origin header but not in allowlist — reject
+    res.status(403).json({ ok: false, error: "Origin not allowed" });
+    return;
+  }
+  if (origin) {
+    applyCors(res, origin, "GET,POST,PUT,DELETE,OPTIONS");
+  }
+  if (req.method === "OPTIONS") { res.sendStatus(200); return; }
+  next();
+}, createMoxieRouter({ supabase: supabaseAdmin, staticDir: moxieStaticDir }));
 
 app.get("/version", (req, res) => { if (!setPublicDashboardCors(req, res)) { res.status(403).json({ ok: false, error: "Origin not allowed" }); return; } eventMaintenanceController.kick("version_ping"); res.status(200).json(buildHealthPayload("version")); });
 app.get("/admin-api/health", adminLimiter, requireAdminApiAuth, (_req, res) => { res.status(200).json(buildHealthPayload("admin", { authenticated: true })); });
