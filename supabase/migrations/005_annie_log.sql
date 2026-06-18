@@ -92,10 +92,10 @@ ALTER TABLE annie_deliverables ENABLE ROW LEVEL SECURITY;
 
 -- RLS policies: service role bypasses RLS, so these are for future anon/key use
 -- For now, all access goes through the service role in the Express app
-CREATE POLICY service_role_all_annie_log_notes ON annie_log_notes FOR ALL USING (true);
-CREATE POLICY service_role_all_annie_log_reminders ON annie_log_reminders FOR ALL USING (true);
-CREATE POLICY service_role_all_annie_log_suggested ON annie_log_suggested_reminders FOR ALL USING (true);
-CREATE POLICY service_role_all_annie_contacts ON annie_contacts FOR ALL USING (true);
-CREATE POLICY service_role_all_annie_suggested_contacts ON annie_suggested_contacts FOR ALL USING (true);
-CREATE POLICY service_role_all_annie_chat_state ON annie_chat_state FOR ALL USING (true);
-CREATE POLICY service_role_all_annie_deliverables ON annie_deliverables FOR ALL USING (true);
+CREATE POLICY "service_role_all_annie_log_notes ON annie_log_notes FOR ALL USING (true);
+CREATE POLICY "service_role_all_annie_log_reminders ON annie_log_reminders FOR ALL USING (true);
+CREATE POLICY "service_role_all_annie_log_suggested ON annie_log_suggested_reminders FOR ALL USING (true);
+CREATE POLICY "service_role_all_annie_contacts ON annie_contacts FOR ALL USING (true);
+CREATE POLICY "service_role_all_annie_suggested_contacts ON annie_suggested_contacts FOR ALL USING (true);
+CREATE POLICY "service_role_all_annie_chat_state ON annie_chat_state FOR ALL USING (true);
+CREATE POLICY "service_role_all_annie_deliverables ON annie_deliverables FOR ALL USING (true);
