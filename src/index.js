@@ -1642,7 +1642,7 @@ app.use("/dashboard-api/events", createEventsPublicRouter({ runReadOnlySql, runW
 app.use("/admin-api/events", createEventsAdminRouter({ runReadOnlySql, runWriteSql, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController, requireAdminApiAuth: allowWithoutPin }));
 
 // Moxie — Annie's private work assistant
-const moxieStaticDir = new URL("public/moxie-assets", import.meta.url).pathname;
+const moxieStaticDir = new URL("../public/moxie-assets", import.meta.url).pathname;
 app.use("/moxie", (req, res, next) => {
   const origin = resolveOrigin(req);
   // Allow same-origin requests (no Origin header) and allowed cross-origin
