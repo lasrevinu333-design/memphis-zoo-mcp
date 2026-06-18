@@ -175,13 +175,14 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || "")
 function resolveOrigin(req) {
   const origin = req.header("Origin") || req.header("origin");
   if (!origin) return null;
-  if (ALLOWED_ORIGINS.length === 0) return "*";
+  if (ALLOWED_ORIGINS.length === 0) return origin;
   return ALLOWED_ORIGINS.includes(origin) ? origin : null;
 }
 
 function applyCors(res, origin, methods, extraHeaders = "") {
   if (origin && origin !== "*") {
     res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
   } else if (origin === "*") {
     res.setHeader("Access-Control-Allow-Origin", "*");
   }
