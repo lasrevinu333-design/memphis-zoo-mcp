@@ -916,7 +916,8 @@ begin
       select
         c.employee_id,
         coalesce(sum(sa.load_points) filter (where sa.status = 'ASSIGNED' and assigned_wi.required = true), 0)::numeric as assigned_load_points,
-        count(distinct sa.location_group_id) filter (where sa.status = 'ASSIGNED' and assigned_wi.required = true)::integer as required_location_count
+        count(distinct sa.location_group_id) filter (where sa.status = 'ASSIGNED' and assigned_wi.required = true)::integer as required_location_count,
+        coalesce(bool_or(sa.location_group_id = v_item.location_group_id) filter (where sa.status = 'ASSIGNED' and assigned_wi.required = true), false)::boolean as has_current_location_group
       from public.schedule_candidate_scores c
       left join public.schedule_solution_assignments sa
         on sa.run_id = c.run_id
@@ -932,32 +933,54 @@ begin
         c.*,
         coalesce(csl.assigned_load_points, 0)::numeric as current_solution_load,
         coalesce(csl.required_location_count, 0)::integer as current_required_location_count,
+        (coalesce(csl.assigned_load_points, 0) + coalesce(v_item.load_points, 0))::numeric as projected_solution_load,
+        (coalesce(csl.required_location_count, 0) + case when coalesce(csl.has_current_location_group, false) then 0 else 1 end)::integer as projected_required_location_count,
         abs((coalesce(csl.assigned_load_points, 0) + coalesce(v_item.load_points, 0)) - v_target_required_load)::numeric as target_load_gap_after,
+        abs((coalesce(csl.required_location_count, 0) + case when coalesce(csl.has_current_location_group, false) then 0 else 1 end) - v_target_required_location_count)::numeric as target_location_gap_after,
         greatest(
           0,
           100
-            - (abs((coalesce(csl.assigned_load_points, 0) + coalesce(v_item.load_points, 0)) - v_target_required_load) * 8)
-            - (greatest(0, coalesce(csl.required_location_count, 0) - floor(v_target_required_location_count)::integer) * 4)
+            - ((abs((coalesce(csl.assigned_load_points, 0) + coalesce(v_item.load_points, 0)) - v_target_required_load) / greatest(v_target_required_load, 1)) * 80)
+            - ((abs((coalesce(csl.required_location_count, 0) + case when coalesce(csl.has_current_location_group, false) then 0 else 1 end) - v_target_required_location_count) / greatest(v_target_required_location_count, 1)) * 20)
+            - ((greatest(0, (coalesce(csl.assigned_load_points, 0) + coalesce(v_item.load_points, 0)) - (v_target_required_load * 1.20)) / greatest(v_target_required_load, 1)) * 100)
+            - (greatest(0, (coalesce(csl.required_location_count, 0) + case when coalesce(csl.has_current_location_group, false) then 0 else 1 end) - (ceil(v_target_required_location_count)::integer + 1)) * 10)
         )::numeric as dynamic_workload_score
       from public.schedule_candidate_scores c
       join current_solution_load csl on csl.employee_id = c.employee_id
       where c.run_id = v_run_id
         and c.work_item_id = v_item.id
         and c.eligible = true
+    ), candidate_rank_base as (
+      select
+        cb.*,
+        min(cb.projected_solution_load) over () as min_projected_solution_load,
+        min(cb.projected_required_location_count) over () as min_projected_required_location_count,
+        round(((cb.route_fit_score * 0.75) + (cb.dynamic_workload_score * 0.25))::numeric, 2) as balanced_total_score
+      from candidate_balance cb
     ), candidate_ranked as (
       select
         cb.*,
-        round(((cb.route_fit_score * 0.75) + (cb.dynamic_workload_score * 0.25))::numeric, 2) as balanced_total_score,
         row_number() over (
           order by
-            round(((cb.route_fit_score * 0.75) + (cb.dynamic_workload_score * 0.25))::numeric, 2) desc,
+            case
+              when cb.projected_solution_load > greatest(v_target_required_load * 1.20, coalesce(v_item.load_points, 0))
+               and cb.min_projected_solution_load <= greatest(v_target_required_load * 1.20, coalesce(v_item.load_points, 0)) then 1
+              else 0
+            end asc,
+            case
+              when cb.projected_required_location_count > (ceil(v_target_required_location_count)::integer + 1)
+               and cb.min_projected_required_location_count <= (ceil(v_target_required_location_count)::integer + 1) then 1
+              else 0
+            end asc,
+            cb.balanced_total_score desc,
             cb.target_load_gap_after asc,
+            cb.target_location_gap_after asc,
             cb.current_required_location_count asc,
             cb.current_solution_load asc,
             case when cb.employee_id = v_item.original_assigned_employee_id then 0 else 1 end,
             cb.employee_id
         )::integer as balanced_rank
-      from candidate_balance cb
+      from candidate_rank_base cb
     )
     select * into v_choice
     from candidate_ranked

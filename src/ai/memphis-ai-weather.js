@@ -1,6 +1,20 @@
 export const DEFAULT_WEATHER_LOCATION = "Memphis Zoo, Memphis, Tennessee";
-const MEMPHIS_ZOO_LATITUDE = 35.1506;
-const MEMPHIS_ZOO_LONGITUDE = -89.9944;
+// LOW #6: Make Memphis Zoo coordinates configurable via env var instead of hardcoded.
+const MEMPHIS_ZOO_LATITUDE = Number.parseFloat(String(process.env.MEMPHIS_ZOO_LATITUDE || "35.1506"));
+const MEMPHIS_ZOO_LONGITUDE = Number.parseFloat(String(process.env.MEMPHIS_ZOO_LONGITUDE || "-89.9944"));
+// MEDIUM #10: Timeout for weather API calls.
+const WEATHER_API_TIMEOUT_MS = Number.parseInt(String(process.env.MEMPHIS_WEATHER_API_TIMEOUT_MS || "8000"), 10);
+
+// MEDIUM #10: Shared fetchWithTimeout for weather API calls.
+async function weatherFetchWithTimeout(url, options = {}, timeoutMs = WEATHER_API_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), Math.max(1000, Number(timeoutMs) || 8000));
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 export function isWeatherQuestion(text = "") {
   return /\b(weather|forecast|temperature|rain|storm|sunny|cloudy|wind|humid|humidity)\b/i.test(String(text || ""));
@@ -55,6 +69,9 @@ function kmhToMph(value) {
   return Math.round(n * 0.621371);
 }
 
+// LOW #7: Weather attribution text is configurable via env var.
+const WEATHER_ATTRIBUTION_ENABLED = String(process.env.MEMPHIS_WEATHER_ATTRIBUTION || "true").trim().toLowerCase() !== "false";
+
 export function summarizeWeatherPayload(weather, defaultLocation = DEFAULT_WEATHER_LOCATION) {
   if (!weather) return `I could not pull live weather for ${defaultLocation} right now.`;
   const tempF = cToF(weather.temperature_c);
@@ -67,8 +84,11 @@ export function summarizeWeatherPayload(weather, defaultLocation = DEFAULT_WEATH
   const low = lowF == null ? "low unavailable" : `low ${lowF}°F`;
   const precip = weather.precipitation_probability == null ? "precipitation unknown" : `${Math.round(Number(weather.precipitation_probability))}% chance of precipitation`;
   const condition = weather.condition || "conditions unavailable";
-  const observed = weather.observation_time ? ` Source: Open-Meteo, updated ${weather.observation_time}.` : " Source: Open-Meteo.";
-  return `${weather.location || defaultLocation}: ${condition}, ${temp}. Today: ${high}, ${low}, ${wind}, ${precip}.${observed}`;
+  // LOW #7: Attribution text only included when enabled.
+  const attribution = WEATHER_ATTRIBUTION_ENABLED
+    ? (weather.observation_time ? ` Source: Open-Meteo, updated ${weather.observation_time}.` : " Source: Open-Meteo.")
+    : "";
+  return `${weather.location || defaultLocation}: ${condition}, ${temp}. Today: ${high}, ${low}, ${wind}, ${precip}.${attribution}`;
 }
 
 export async function fetchWeatherForMemphisTn(location = DEFAULT_WEATHER_LOCATION) {
@@ -78,17 +98,23 @@ export async function fetchWeatherForMemphisTn(location = DEFAULT_WEATHER_LOCATI
   let timezone = "America%2FChicago";
 
   if (!isDefaultMemphisZooLocation(resolvedLocation)) {
-    const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(resolvedLocation)}&count=1&language=en&format=json`);
+    // MEDIUM #11: Add country filter to geocoding to verify results are in the US.
+    const geoRes = await weatherFetchWithTimeout(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(resolvedLocation)}&count=1&language=en&format=json&countryCode=US`);
     const geo = await geoRes.json().catch(() => null);
     const first = geo?.results?.[0];
     if (!geoRes.ok || !first?.latitude || !first?.longitude) throw new Error("Weather geocoding failed");
+    // MEDIUM #11: Verify result is in the US.
+    if (first.country_code && String(first.country_code).toUpperCase() !== "US") {
+      throw new Error(`Weather geocoding returned a non-US result: ${first.name}, ${first.country || first.country_code}`);
+    }
     latitude = first.latitude;
     longitude = first.longitude;
     timezone = encodeURIComponent(first.timezone || "auto");
     resolvedLocation = [first.name, first.admin1, first.country].filter(Boolean).join(", ");
   }
 
-  const forecastRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(latitude)}&longitude=${encodeURIComponent(longitude)}&current=temperature_2m,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=${timezone}&forecast_days=1`);
+  // MEDIUM #10: Use weatherFetchWithTimeout for forecast API calls.
+  const forecastRes = await weatherFetchWithTimeout(`https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(latitude)}&longitude=${encodeURIComponent(longitude)}&current=temperature_2m,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=${timezone}&forecast_days=1`);
   const forecast = await forecastRes.json().catch(() => null);
   if (!forecastRes.ok || !forecast?.current || !forecast?.daily) throw new Error("Weather forecast failed");
   return {

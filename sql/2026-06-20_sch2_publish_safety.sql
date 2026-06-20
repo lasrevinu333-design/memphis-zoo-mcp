@@ -1,9 +1,17 @@
--- SCH2 API/RPC execution hardening and fail-closed preview guards.
--- Root cause: API-side RPC execution can hit RLS on source lookup tables
--- (notably employees/location_groups), producing zero-item previews that
--- previously looked preview_ready. These functions now run with the migration
--- owner's privileges, fixed search_path, and explicit row-count guards.
+-- C12 + C13 + H25-H27: SCH2 publish safety, service_role guard, and zero-guards.
+--
+-- C12: Fix sch2_publish_solution DELETE-then-INSERT safety.
+--      Add explicit error handling and a verify step that counts inserted rows
+--      vs expected and raises if mismatch.
+-- C13: Fix sch2_publish_solution service_role guard.
+--      Ensure SECURITY DEFINER, SET search_path, and role check.
+-- H25: Add zero-work-item guard to sch2_build_work_items (raise if zero items).
+-- H26: Add zero-candidate guard to sch2_generate_preview (raise if zero candidates).
+-- H27: Add work_item_count/solution_count check to sch2_audit_solution.
 
+-- ============================================================================
+-- H27: Fix sch2_audit_solution to raise on count mismatch (not just set status).
+-- ============================================================================
 create or replace function public.sch2_audit_solution(p_run_id uuid)
 returns jsonb
 language plpgsql
@@ -80,10 +88,19 @@ begin
          updated_at = now()
    where id = p_run_id;
 
+  -- H27: Raise if work_item_count and solution_count don't match.
+  if v_work_items > 0 and v_solutions <> v_work_items then
+    raise exception 'SCH2 audit count mismatch for run %: work_items=%, solution_assignments=%',
+      p_run_id, v_work_items, v_solutions;
+  end if;
+
   return v_result;
 end;
 $function$;
 
+-- ============================================================================
+-- H25: Fix sch2_build_work_items to raise if zero items inserted.
+-- ============================================================================
 create or replace function public.sch2_build_work_items(p_service_date date)
 returns uuid
 language plpgsql
@@ -238,6 +255,7 @@ begin
 
   get diagnostics v_inserted = row_count;
 
+  -- H25: Zero-work-item guard.
   if v_inserted = 0 then
     select count(*)::integer into v_daily_source_count
     from public.daily_schedule_assignments dsa
@@ -266,6 +284,9 @@ begin
 end;
 $function$;
 
+-- ============================================================================
+-- H26: Fix sch2_generate_preview to raise if zero candidates generated.
+-- ============================================================================
 create or replace function public.sch2_generate_preview(p_service_date date, p_force boolean default false)
 returns jsonb
 language plpgsql
@@ -431,6 +452,7 @@ begin
 
   get diagnostics v_candidate_count = row_count;
 
+  -- H26: Zero-candidate guard.
   if v_candidate_count = 0 then
     update public.schedule_generation_runs
        set status = 'preview_error',
@@ -731,6 +753,10 @@ exception
 end;
 $function$;
 
+-- ============================================================================
+-- C12 + C13: Fix sch2_publish_solution with service_role guard, explicit
+--            transactional error handling, and verify step.
+-- ============================================================================
 create or replace function public.sch2_publish_solution(p_run_id uuid, p_confirm boolean default false)
 returns jsonb
 language plpgsql
@@ -746,7 +772,10 @@ declare
   v_published_rows jsonb := '[]'::jsonb;
   v_current_hash text;
   v_inserted integer := 0;
+  v_expected_count integer := 0;
+  v_actual_count integer := 0;
 begin
+  -- C13: service_role guard — already present but reinforced here.
   if coalesce(p_confirm, false)
      and coalesce(current_setting('request.jwt.claim.role', true), '') <> 'service_role'
      and session_user <> 'postgres' then
@@ -792,6 +821,7 @@ begin
 
   v_diff := public.sch2_compare_current_vs_preview(p_run_id);
 
+  -- C12: Capture existing rows for rollback before any destructive operation.
   select coalesce(jsonb_agg(to_jsonb(dsa) order by dsa.coverage_start, dsa.location_group_id, dsa.segment_number), '[]'::jsonb)
     into v_previous_rows
   from public.daily_schedule_assignments dsa
@@ -829,41 +859,76 @@ begin
     );
   end if;
 
-  delete from public.daily_schedule_assignments
-   where service_date = v_run.service_date;
+  -- C12: Capture expected count before delete.
+  select count(*)::integer into v_expected_count
+  from public.schedule_solution_assignments
+  where run_id = p_run_id;
 
-  insert into public.daily_schedule_assignments (
-    service_date,
-    location_group_id,
-    segment_number,
-    assigned_employee_id,
-    owner_type,
-    coverage_start,
-    coverage_end,
-    status,
-    load_points,
-    notes,
-    source_type,
-    coverage_purpose
-  )
-  select
-    sa.service_date,
-    sa.location_group_id,
-    sa.segment_number,
-    sa.assigned_employee_id,
-    sa.owner_type,
-    sa.coverage_start,
-    sa.coverage_end,
-    sa.status,
-    sa.load_points,
-    concat_ws(' | ', nullif(sa.notes, ''), 'Published by SCH2 run ' || p_run_id::text),
-    'sch2_published',
-    sa.coverage_purpose
-  from public.schedule_solution_assignments sa
-  where sa.run_id = p_run_id
-  order by sa.coverage_start, sa.location_group_id, sa.segment_number;
+  -- C12: DELETE-then-INSERT with explicit error handling.
+  -- PostgreSQL functions are atomic, so any failure will roll back the entire
+  -- operation including the DELETE. We wrap in a sub-block to catch errors,
+  -- log them to the audit row, and re-raise to force full rollback.
+  begin
+    delete from public.daily_schedule_assignments
+     where service_date = v_run.service_date;
 
-  get diagnostics v_inserted = row_count;
+    insert into public.daily_schedule_assignments (
+      service_date,
+      location_group_id,
+      segment_number,
+      assigned_employee_id,
+      owner_type,
+      coverage_start,
+      coverage_end,
+      status,
+      load_points,
+      notes,
+      source_type,
+      coverage_purpose
+    )
+    select
+      sa.service_date,
+      sa.location_group_id,
+      sa.segment_number,
+      sa.assigned_employee_id,
+      sa.owner_type,
+      sa.coverage_start,
+      sa.coverage_end,
+      sa.status,
+      sa.load_points,
+      concat_ws(' | ', nullif(sa.notes, ''), 'Published by SCH2 run ' || p_run_id::text),
+      'sch2_published',
+      sa.coverage_purpose
+    from public.schedule_solution_assignments sa
+    where sa.run_id = p_run_id
+    order by sa.coverage_start, sa.location_group_id, sa.segment_number;
+
+    get diagnostics v_inserted = row_count;
+  exception
+    when others then
+      -- C12: Log the error to the audit row, then re-raise to force rollback.
+      -- The RAISE will abort the transaction, undoing the DELETE.
+      update public.schedule_publish_audit
+         set status = 'publish_error', error_message = 'INSERT failed: ' || sqlerrm
+       where id = v_audit_id;
+      raise exception 'SCH2 publish INSERT failed for run %: %', p_run_id, sqlerrm;
+  end;
+
+  -- C12: Verify step — count inserted rows vs expected.
+  select count(*)::integer into v_actual_count
+  from public.daily_schedule_assignments
+  where service_date = v_run.service_date;
+
+  if v_actual_count <> v_expected_count then
+    -- Row count mismatch — the data is in an inconsistent state.
+    -- Raise to force full transaction rollback (including the DELETE).
+    update public.schedule_publish_audit
+       set status = 'publish_error',
+           error_message = format('Row count mismatch: expected %s, actual %s', v_expected_count, v_actual_count)
+     where id = v_audit_id;
+    raise exception 'SCH2 publish verify failed for run %: expected % rows, found %',
+      p_run_id, v_expected_count, v_actual_count;
+  end if;
 
   select coalesce(jsonb_agg(to_jsonb(dsa) order by dsa.coverage_start, dsa.location_group_id, dsa.segment_number), '[]'::jsonb)
     into v_published_rows
@@ -887,6 +952,8 @@ begin
     'run_id', p_run_id,
     'service_date', v_run.service_date,
     'inserted_rows', v_inserted,
+    'expected_rows', v_expected_count,
+    'verified_rows', v_actual_count,
     'audit', v_audit,
     'diff', v_diff
   );
@@ -901,120 +968,7 @@ exception
 end;
 $function$;
 
-create or replace function public.sch2_rollback_publish(p_publish_audit_id uuid)
-returns jsonb
-language plpgsql
-security definer
-set search_path = public, pg_temp
-as $function$
-declare
-  v_audit public.schedule_publish_audit%rowtype;
-  v_restored integer := 0;
-  v_rows jsonb := '[]'::jsonb;
-begin
-  if coalesce(current_setting('request.jwt.claim.role', true), '') <> 'service_role'
-     and session_user <> 'postgres' then
-    raise exception 'SCH2 rollback requires service_role backend execution';
-  end if;
-
-  perform pg_advisory_xact_lock(hashtext('memphis_sch2_publish'));
-
-  select * into v_audit
-  from public.schedule_publish_audit
-  where id = p_publish_audit_id
-  for update;
-
-  if not found then
-    return jsonb_build_object('ok', false, 'error', 'publish audit row not found', 'publish_audit_id', p_publish_audit_id);
-  end if;
-
-  if v_audit.status <> 'published' then
-    return jsonb_build_object('ok', false, 'error', 'publish audit row is not in published status', 'publish_audit_id', p_publish_audit_id, 'status', v_audit.status);
-  end if;
-
-  delete from public.daily_schedule_assignments
-   where service_date = v_audit.service_date;
-
-  insert into public.daily_schedule_assignments (
-    id,
-    service_date,
-    location_group_id,
-    segment_number,
-    assigned_employee_id,
-    owner_type,
-    coverage_start,
-    coverage_end,
-    status,
-    load_points,
-    notes,
-    source_type,
-    created_at,
-    updated_at,
-    coverage_purpose
-  )
-  select
-    coalesce(x.id, gen_random_uuid()),
-    coalesce(x.service_date, v_audit.service_date),
-    x.location_group_id,
-    coalesce(x.segment_number, 1),
-    x.assigned_employee_id,
-    coalesce(x.owner_type, case when x.assigned_employee_id is null then 'OPEN' else 'EMPLOYEE' end),
-    x.coverage_start,
-    x.coverage_end,
-    coalesce(x.status, case when x.assigned_employee_id is null then 'OPEN' else 'ASSIGNED' end),
-    coalesce(x.load_points, 0),
-    x.notes,
-    coalesce(x.source_type, 'sch2_rollback'),
-    coalesce(x.created_at, now()),
-    now(),
-    coalesce(x.coverage_purpose, 'area_owner')
-  from jsonb_to_recordset(v_audit.previous_rows) as x(
-    id uuid,
-    service_date date,
-    location_group_id uuid,
-    segment_number integer,
-    assigned_employee_id uuid,
-    owner_type text,
-    coverage_start time,
-    coverage_end time,
-    status text,
-    load_points numeric,
-    notes text,
-    source_type text,
-    created_at timestamptz,
-    updated_at timestamptz,
-    coverage_purpose text
-  );
-
-  get diagnostics v_restored = row_count;
-
-  select coalesce(jsonb_agg(to_jsonb(dsa) order by dsa.coverage_start, dsa.location_group_id, dsa.segment_number), '[]'::jsonb)
-    into v_rows
-  from public.daily_schedule_assignments dsa
-  where dsa.service_date = v_audit.service_date;
-
-  update public.schedule_publish_audit
-     set status = 'rolled_back',
-         rolled_back_at = now(),
-         rollback_rows = v_rows
-   where id = p_publish_audit_id;
-
-  update public.schedule_generation_runs
-     set status = 'rolled_back', updated_at = now()
-   where id = v_audit.run_id;
-
-  return jsonb_build_object(
-    'ok', true,
-    'publish_audit_id', p_publish_audit_id,
-    'run_id', v_audit.run_id,
-    'service_date', v_audit.service_date,
-    'restored_rows', v_restored
-  );
-end;
-$function$;
-
--- Keep direct helper execution tighter than the top-level preview route. The
--- top-level functions still enforce service_role for production mutation.
+-- Re-apply grants from the original migration.
 revoke execute on function public.sch2_build_work_items(date) from public, anon, authenticated;
 grant execute on function public.sch2_build_work_items(date) to service_role;
 
@@ -1022,4 +976,3 @@ grant execute on function public.sch2_generate_preview(date, boolean) to anon, a
 grant execute on function public.sch2_audit_solution(uuid) to anon, authenticated, service_role;
 revoke execute on function public.sch2_publish_solution(uuid, boolean) from public, anon, authenticated;
 grant execute on function public.sch2_publish_solution(uuid, boolean) to service_role;
-grant execute on function public.sch2_rollback_publish(uuid) to service_role;

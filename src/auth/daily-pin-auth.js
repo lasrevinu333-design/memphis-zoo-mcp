@@ -6,7 +6,8 @@ const MEMPHIS_TIME_ZONE = "America/Chicago";
 const DEFAULT_MAX_PIN_ATTEMPTS = 3;
 
 export function isOpsManagerAuthDisabled(env = process.env) {
-  return true;
+  // Auth is disabled by default. Only enabled when OPS_MANAGER_AUTH_DISABLED is explicitly set to 'false'.
+  return String(env.OPS_MANAGER_AUTH_DISABLED || 'true').toLowerCase() !== 'false';
 }
 
 function base64UrlEncode(value) {
@@ -234,10 +235,20 @@ function lockoutResponse(res, resetAt) {
   res.status(429).json({ ok: false, error: "Too many invalid PIN attempts. Try again after the 4 AM reset.", locked: true, reset_at: resetAt.toISOString() });
 }
 
+function cleanupOldAttempts(attempts, todayKey) {
+  const todayDate = todayKey.split(":")[0];
+  for (const key of attempts.keys()) {
+    const keyDate = key.split(":")[0];
+    if (keyDate !== todayDate) {
+      attempts.delete(key);
+    }
+  }
+}
+
 export function installDailyPinAuthRoutes(app, { setCors, env = process.env, attempts = new Map() } = {}) {
   const applyCors = typeof setCors === "function" ? setCors : (_res) => {};
   app.use("/auth-api", (req, res, next) => {
-    applyCors(res);
+    applyCors(res, req);
     if (req.method === "OPTIONS") {
       res.sendStatus(200);
       return;
@@ -253,6 +264,7 @@ export function installDailyPinAuthRoutes(app, { setCors, env = process.env, att
     }
     const config = getDailyPinConfig(env);
     const key = pinAttemptKey(req, env);
+    cleanupOldAttempts(attempts, key);
     const resetAt = getNextDailyReset(new Date(), config.timeZone);
     const record = attempts.get(key);
     if (record?.locked && Number(record.reset_ms || 0) > Date.now()) {

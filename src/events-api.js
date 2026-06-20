@@ -246,7 +246,7 @@ async function ensureUpcomingEventScheduleState({ runReadOnlySql, runRpc }) {
 
 async function createEventRecord(runWriteSql, payload) {
   const record = normalizeEventPayload(payload);
-  await runWriteSql(
+  const rows = await runWriteSql(
     "events_app_create",
     `insert into public.events_app_events (
        event_name,
@@ -268,8 +268,10 @@ async function createEventRecord(runWriteSql, payload) {
        ${sqlLiteral(record.notes)},
        ${sqlLiteral(record.created_by)},
        now()
-     );`
+     )
+     returning *;`
   );
+  if (Array.isArray(rows) && rows.length) return { ...record, ...rows[0] };
   return record;
 }
 
@@ -581,7 +583,6 @@ export function createEventMaintenanceController({ runReadOnlySql, runWriteSql, 
     lastRunAt = now;
     lastStartedAt = new Date(now).toISOString();
     try {
-      await purgeExpiredEvents(runWriteSql);
       const scheduleSync = await ensureUpcomingEventScheduleState({ runReadOnlySql, runRpc });
       const pending = await getPendingNotifications(runReadOnlySql);
       const notificationResults = [];
@@ -625,6 +626,17 @@ export function createEventMaintenanceController({ runReadOnlySql, runWriteSql, 
     }
   }
 
+  // Purge expired events on a timer instead of on every GET request
+  const PURGE_INTERVAL_MS = Math.max(60_000, Number.parseInt(String(process.env.EVENTS_PURGE_INTERVAL_MS || "300000"), 10) || 300000);
+  if (typeof runWriteSql === "function") {
+    const purgeTimer = setInterval(() => {
+      purgeExpiredEvents(runWriteSql).catch((error) => {
+        console.error("events purge timer failed:", error);
+      });
+    }, PURGE_INTERVAL_MS);
+    purgeTimer.unref?.();
+  }
+
   return {
     kick(reason = "kick") {
       runMaintenance(reason).catch((error) => {
@@ -654,9 +666,6 @@ export function createEventsPublicRouter({
   router.get("/", async (_req, res) => {
     try {
       maintenanceController?.kick("events_public_list");
-      if (typeof runWriteSql === "function") {
-        await purgeExpiredEvents(runWriteSql);
-      }
       const events = await listUpcomingEvents(runReadOnlySql);
       res.status(200).json({
         ok: true,
@@ -729,7 +738,6 @@ export function createEventsAdminRouter({
   router.get("/", async (_req, res) => {
     try {
       maintenanceController?.kick("events_admin_list");
-      await purgeExpiredEvents(runWriteSql);
       const events = await listUpcomingEvents(runReadOnlySql);
       res.status(200).json({
         ok: true,
@@ -803,7 +811,6 @@ export function createEventsAdminRouter({
   router.post("/", async (req, res) => {
     try {
       maintenanceController?.kick("events_admin_create_before");
-      await purgeExpiredEvents(runWriteSql);
       const record = await createEventRecord(
         runWriteSql,
         req.body && typeof req.body === "object" ? req.body : {}

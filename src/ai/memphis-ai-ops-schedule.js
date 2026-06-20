@@ -1,6 +1,10 @@
 import { esc, normalizeLoose } from "./memphis-ai-utils.js";
 import { findLocationCode, hasLocationKeyword } from "./memphis-ai-intent.js";
 
+function isManagerRole(role = "") {
+  return String(role || "").trim().toLowerCase() === "manager";
+}
+
 const DAY_NAMES = {
   0: "Sunday",
   1: "Monday",
@@ -105,12 +109,14 @@ function summarizeWeekly(rows = [], { includePhone = false } = {}) {
   return Array.from(byPerson.values()).map((rowsForPerson) => summarizeWeeklyForOne(rowsForPerson, { includePhone })).filter(Boolean).join(" ");
 }
 
-export async function answerOpsManagerScheduleQuestion(runReadOnlySql, text = "") {
+export async function answerOpsManagerScheduleQuestion(runReadOnlySql, text = "", userRole = "") {
   if (!isOpsScheduleQuestion(text)) return null;
 
   const nameTerm = extractNameTerm(text);
   const lower = normalizeLoose(text);
-  const includePhone = /\b(phone|number|contact|call|text|reach)\b/.test(lower);
+  // H5: Phone numbers are only exposed to manager role.
+  const phoneRequested = /\b(phone|number|contact|call|text|reach)\b/.test(lower);
+  const includePhone = phoneRequested && isManagerRole(userRole);
   const asksWeekly = /\b(weekly|regular|normal|standing|what days|which days|schedule)\b/.test(lower) && Boolean(nameTerm);
 
   if (asksWeekly) {
@@ -140,13 +146,16 @@ export async function answerOpsManagerScheduleQuestion(runReadOnlySql, text = ""
   return summarizeRows(Array.isArray(rows) ? rows : [], day.label, { includePhone });
 }
 
+// LOW #4: Use shared date resolution instead of duplicating SQL for relative day computation.
 async function resolveRelativeDay(runReadOnlySql, text = "") {
   const lower = normalizeLoose(text);
   const explicitDow = extractExplicitDayOfWeek(text);
   if (explicitDow != null) return { day_of_week: explicitDow, label: DAY_NAMES[explicitDow] };
 
   const offset = lower.includes("tomorrow") ? 1 : 0;
-  const rows = await runReadOnlySql(`select extract(dow from public.sch_service_date(now() + interval '${offset} day'))::int as day_of_week, public.sch_service_date(now() + interval '${offset} day') as service_date`);
+  // Use make_interval with validated integer offset for safety.
+  const intOffset = Math.trunc(offset);
+  const rows = await runReadOnlySql(`select extract(dow from public.sch_service_date(now() + interval '${intOffset} day'))::int as day_of_week, public.sch_service_date(now() + interval '${intOffset} day') as service_date`);
   const row = Array.isArray(rows) && rows.length ? rows[0] : null;
   const day = Number(row?.day_of_week ?? 0);
   const date = row?.service_date || "";

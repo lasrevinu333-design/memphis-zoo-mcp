@@ -1,4 +1,5 @@
 import express from "express";
+import { getGeminiApiKey } from "./utils/gemini-config.js";
 
 const MONTH_LOOKUP = {
   january: 1, jan: 1,
@@ -20,15 +21,331 @@ const PTO_GEMINI_MODEL = String(process.env.SCHEDULE_GEMINI_MODEL || process.env
 const PTO_GEMINI_TIMEOUT_MS = Math.max(1000, Number.parseInt(String(process.env.SCHEDULE_GEMINI_TIMEOUT_MS || process.env.MEMPHIS_GEMINI_TIMEOUT_MS || "12000"), 10) || 12000);
 const PTO_GEMINI_MAX_OUTPUT_TOKENS = Math.max(256, Number.parseInt(String(process.env.SCHEDULE_GEMINI_MAX_OUTPUT_TOKENS || "1200"), 10) || 1200);
 
+const RESTROOM_REBALANCE_TIME = String(process.env.RESTROOM_REBALANCE_TIME || "09:45:00").trim() || "09:45:00";
+const RESTROOM_REBALANCE_SOURCE = "restroom_rebalance_0945";
+const RESTROOM_REBALANCE_NOTE = "9:45 restroom rebalance: moved only as needed to spread restroom load evenly.";
+const RESTROOM_REBALANCE_TZ = "America/Chicago";
+
+function timeToMinutes(value) {
+  const match = String(value || "").match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (!match) return null;
+  const hours = Number.parseInt(match[1], 10);
+  const minutes = Number.parseInt(match[2], 10);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes) || hours < 0 || hours > 24 || minutes < 0 || minutes > 59) return null;
+  return (hours % 24) * 60 + minutes;
+}
+
+const RESTROOM_REBALANCE_EXCLUDED_EMPLOYEES = String(process.env.RESTROOM_REBALANCE_EXCLUDED_EMPLOYEE_CODES || "EMP002")
+  .split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
+const RESTROOM_REBALANCE_EXCLUDED_NAMES = String(process.env.RESTROOM_REBALANCE_EXCLUDED_EMPLOYEE_NAMES || "michael mcwright")
+  .split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+
+function isRestroomRebalanceRosterEligible(row) {
+  const employeeCode = String(row?.employee_code || "").trim().toUpperCase();
+  const employeeName = String(row?.employee_name || row?.display_name || "").trim().toLowerCase();
+  if (RESTROOM_REBALANCE_EXCLUDED_EMPLOYEES.includes(employeeCode) || RESTROOM_REBALANCE_EXCLUDED_NAMES.includes(employeeName)) return false;
+  const start = timeToMinutes(row?.shift_start);
+  const end = timeToMinutes(row?.shift_end);
+  const rebalance = timeToMinutes(RESTROOM_REBALANCE_TIME);
+  if (start == null || end == null || rebalance == null) return false;
+  return start <= rebalance && end > rebalance;
+}
+
+function getMemphisClockParts(now = new Date()) {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: RESTROOM_REBALANCE_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+  const parts = Object.fromEntries(formatter.formatToParts(now).map((part) => [part.type, part.value]));
+  const hour = Number.parseInt(parts.hour || "0", 10) % 24;
+  const minute = Number.parseInt(parts.minute || "0", 10);
+  const second = Number.parseInt(parts.second || "0", 10);
+  return {
+    date: `${parts.year}-${parts.month}-${parts.day}`,
+    hour,
+    minute,
+    second,
+    minutes_since_midnight: hour * 60 + minute,
+  };
+}
+
+function isRestroomRebalanceDue(now = new Date()) {
+  const clock = getMemphisClockParts(now);
+  const threshold = timeToMinutes(RESTROOM_REBALANCE_TIME);
+  return threshold != null && clock.minutes_since_midnight >= threshold;
+}
+
+function isProtectedRestroomSource(sourceType = "") {
+  return /manual|override|manager/i.test(String(sourceType || ""));
+}
+
+function sqlQuote(value) {
+  return String(value ?? "").replace(/'/g, "''");
+}
+
+function normalizeRestroomRebalanceCompletionRow(row = {}) {
+  if (!row || typeof row !== "object") return null;
+  const status = String(row.status || "").trim().toLowerCase();
+  if (!status) return null;
+  return {
+    automation_key: String(row.automation_key || RESTROOM_REBALANCE_SOURCE).trim(),
+    service_date: String(row.service_date || "").slice(0, 10),
+    status,
+    completed: status === "completed",
+    result: row.result_json || row.result || null,
+    completed_at: row.completed_at || row.updated_at || null,
+  };
+}
+
+function buildRestroomRebalanceCompletionSelectSql(serviceDate) {
+  return `
+    select automation_key,
+           service_date::text as service_date,
+           status,
+           result_json,
+           updated_at as completed_at
+    from public.schedule_automation_runs
+    where automation_key = '${sqlQuote(RESTROOM_REBALANCE_SOURCE)}'
+      and service_date = '${sqlQuote(serviceDate)}'::date
+      and status = 'completed'
+    limit 1
+  `;
+}
+
+function buildRestroomRebalanceCompletionUpsertSql(serviceDate, result = {}, status = "completed") {
+  const resultJson = JSON.stringify(result || {});
+  return `
+    create table if not exists public.schedule_automation_runs (
+      automation_key text not null,
+      service_date date not null,
+      status text not null default 'completed',
+      result_json jsonb not null default '{}'::jsonb,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now(),
+      primary key (automation_key, service_date)
+    );
+
+    insert into public.schedule_automation_runs (automation_key, service_date, status, result_json, updated_at)
+    values ('${sqlQuote(RESTROOM_REBALANCE_SOURCE)}', '${sqlQuote(serviceDate)}'::date, '${sqlQuote(status)}', '${sqlQuote(resultJson)}'::jsonb, now())
+    on conflict (automation_key, service_date)
+    do update set status = excluded.status,
+                  result_json = excluded.result_json,
+                  updated_at = now();
+  `;
+}
+
+function normalizeIdList(value) {
+  if (Array.isArray(value)) {
+    return Array.from(new Set(value.map((item) => String(item || "").trim()).filter(Boolean)));
+  }
+  if (value == null) return [];
+  const text = String(value || "").trim();
+  if (!text) return [];
+  try {
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed)) return normalizeIdList(parsed);
+  } catch (_error) {
+    // Fall through to Postgres text-array parsing.
+  }
+  return Array.from(new Set(text
+    .replace(/[{}\"]/g, "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)));
+}
+
+function normalizeRestroomRebalanceRow(row = {}) {
+  const assignmentId = String(row.assignment_id || row.id || "").trim();
+  const employeeId = String(row.assigned_employee_id || row.employee_id || "").trim();
+  if (!assignmentId || !employeeId) return null;
+  return {
+    assignment_id: assignmentId,
+    assigned_employee_id: employeeId,
+    assigned_employee_name: String(row.assigned_employee_name || row.employee_name || "").trim(),
+    employee_code: String(row.employee_code || "").trim(),
+    location_group_id: String(row.location_group_id || "").trim(),
+    group_name: String(row.group_name || row.group_code || "Restroom").trim(),
+    group_code: String(row.group_code || "").trim(),
+    segment_number: Number(row.segment_number || 0),
+    coverage_start: String(row.coverage_start || "").slice(0, 8),
+    coverage_end: String(row.coverage_end || "").slice(0, 8),
+    source_type: String(row.source_type || "").trim(),
+    load_points: Math.max(1, Number(row.load_points || 1)),
+    restricted_employee_ids: normalizeIdList(row.restricted_employee_ids),
+  };
+}
+
+function loadSpread(loadByEmployee) {
+  const values = Array.from(loadByEmployee.values()).map((value) => Number(value || 0));
+  if (!values.length) return 0;
+  return Math.max(...values) - Math.min(...values);
+}
+
+function canRosterEmployeeCoverAssignment(employee = {}, assignment = {}) {
+  const shiftStart = timeToMinutes(employee.shift_start);
+  const shiftEnd = timeToMinutes(employee.shift_end);
+  const coverageStart = timeToMinutes(assignment.coverage_start);
+  const coverageEnd = timeToMinutes(assignment.coverage_end);
+  if (shiftStart == null || shiftEnd == null || coverageStart == null || coverageEnd == null) return false;
+  return shiftStart <= coverageStart && shiftEnd >= coverageEnd;
+}
+
+function canEmployeeReceiveRestroomAssignment(receiverId, donorId, employee = {}, assignment = {}) {
+  const normalizedReceiverId = String(receiverId || "").trim();
+  const normalizedDonorId = String(donorId || "").trim();
+  if (!normalizedReceiverId) return false;
+  if (normalizedReceiverId === normalizedDonorId) return false;
+  if (isProtectedRestroomSource(assignment.source_type)) return false;
+  if (!canRosterEmployeeCoverAssignment(employee, assignment)) return false;
+  const restrictedEmployeeIds = Array.isArray(assignment.restricted_employee_ids)
+    ? assignment.restricted_employee_ids
+    : [];
+  return !restrictedEmployeeIds.includes(normalizedReceiverId);
+}
+
+function buildRestroomRebalancePlan(assignments = [], activeRoster = []) {
+  const employeeMeta = new Map();
+  const loadByEmployee = new Map();
+  for (const row of Array.isArray(activeRoster) ? activeRoster : []) {
+    const employeeId = String(row.employee_id || row.id || "").trim();
+    if (!employeeId) continue;
+    employeeMeta.set(employeeId, {
+      employee_id: employeeId,
+      employee_name: String(row.employee_name || row.display_name || "").trim(),
+      employee_code: String(row.employee_code || "").trim(),
+      shift_start: String(row.shift_start || "").trim(),
+      shift_end: String(row.shift_end || "").trim(),
+    });
+    loadByEmployee.set(employeeId, 0);
+  }
+
+  if (!loadByEmployee.size) {
+    return { applied: false, reason: "no_active_employees", moved_count: 0, moves: [] };
+  }
+
+  const activeEmployeeIds = new Set(loadByEmployee.keys());
+  const normalizedAssignments = (Array.isArray(assignments) ? assignments : [])
+    .map((row) => normalizeRestroomRebalanceRow(row))
+    .filter((row) => row && activeEmployeeIds.has(row.assigned_employee_id));
+
+  if (!normalizedAssignments.length) {
+    return { applied: false, reason: "no_restroom_assignments", moved_count: 0, moves: [] };
+  }
+
+  for (const assignment of normalizedAssignments) {
+    loadByEmployee.set(assignment.assigned_employee_id, (loadByEmployee.get(assignment.assigned_employee_id) || 0) + assignment.load_points);
+  }
+
+  const initialLoads = new Map(loadByEmployee);
+  const totalLoad = Array.from(loadByEmployee.values()).reduce((sum, value) => sum + Number(value || 0), 0);
+  const targetLoad = totalLoad / Math.max(1, loadByEmployee.size);
+  const movableAssignments = normalizedAssignments.filter((row) => !isProtectedRestroomSource(row.source_type));
+  const movedAssignmentIds = new Set();
+  const moves = [];
+  const maxMoves = movableAssignments.length;
+
+  for (let guard = 0; guard < maxMoves; guard += 1) {
+    const sortedLoads = Array.from(loadByEmployee.entries()).sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0));
+    const beforeSpread = loadSpread(loadByEmployee);
+    if (beforeSpread <= 1) break;
+
+    let bestCandidate = null;
+
+    for (const [donorId, donorLoad] of sortedLoads) {
+      const donorAssignments = movableAssignments
+        .filter((assignment) => assignment.assigned_employee_id === donorId && !movedAssignmentIds.has(assignment.assignment_id))
+        .sort((a, b) => a.load_points - b.load_points || String(a.group_name).localeCompare(String(b.group_name)));
+
+      for (const assignment of donorAssignments) {
+        const receiverCandidates = Array.from(loadByEmployee.entries())
+          .filter(([receiverId]) => canEmployeeReceiveRestroomAssignment(
+            receiverId,
+            donorId,
+            employeeMeta.get(receiverId) || {},
+            assignment,
+          ))
+          .sort((a, b) => Number(a[1] || 0) - Number(b[1] || 0));
+
+        for (const [receiverId, receiverLoad] of receiverCandidates) {
+          const after = new Map(loadByEmployee);
+          after.set(donorId, Number(donorLoad || 0) - assignment.load_points);
+          after.set(receiverId, Number(receiverLoad || 0) + assignment.load_points);
+          const afterSpread = loadSpread(after);
+          if (afterSpread >= beforeSpread) continue;
+
+          const candidate = { donorId, receiverId, assignment, afterSpread };
+          if (!bestCandidate
+            || candidate.afterSpread < bestCandidate.afterSpread
+            || (candidate.afterSpread === bestCandidate.afterSpread && assignment.load_points < bestCandidate.assignment.load_points)
+            || (candidate.afterSpread === bestCandidate.afterSpread
+              && assignment.load_points === bestCandidate.assignment.load_points
+              && String(assignment.group_name).localeCompare(String(bestCandidate.assignment.group_name)) < 0)) {
+            bestCandidate = candidate;
+          }
+        }
+      }
+    }
+
+    if (!bestCandidate) break;
+
+    const { donorId, receiverId, assignment: chosen } = bestCandidate;
+    const donorLoad = loadByEmployee.get(donorId) || 0;
+    const receiverLoad = loadByEmployee.get(receiverId) || 0;
+    movedAssignmentIds.add(chosen.assignment_id);
+    loadByEmployee.set(donorId, donorLoad - chosen.load_points);
+    loadByEmployee.set(receiverId, receiverLoad + chosen.load_points);
+
+    const donorMeta = employeeMeta.get(donorId) || {};
+    const receiverMeta = employeeMeta.get(receiverId) || {};
+    moves.push({
+      assignment_id: chosen.assignment_id,
+      from_employee_id: donorId,
+      from_employee_name: donorMeta.employee_name || chosen.assigned_employee_name,
+      to_employee_id: receiverId,
+      to_employee_name: receiverMeta.employee_name || "Employee",
+      group_name: chosen.group_name,
+      group_code: chosen.group_code,
+      segment_number: chosen.segment_number,
+      coverage_start: chosen.coverage_start,
+      coverage_end: chosen.coverage_end,
+      load_points: chosen.load_points,
+    });
+  }
+
+  const loadsObject = Object.fromEntries(Array.from(loadByEmployee.entries()).map(([key, value]) => [key, Number(Number(value || 0).toFixed(2))]));
+  const initialLoadsObject = Object.fromEntries(Array.from(initialLoads.entries()).map(([key, value]) => [key, Number(Number(value || 0).toFixed(2))]));
+
+  if (!moves.length) {
+    return {
+      applied: false,
+      reason: loadSpread(initialLoads) <= 1 ? "already_balanced" : "no_safe_restroom_moves",
+      moved_count: 0,
+      target_load: Number(targetLoad.toFixed(2)),
+      initial_loads: initialLoadsObject,
+      loads: loadsObject,
+      moves: [],
+    };
+  }
+
+  return {
+    applied: true,
+    reason: "restrooms_rebalanced",
+    moved_count: moves.length,
+    target_load: Number(targetLoad.toFixed(2)),
+    initial_loads: initialLoadsObject,
+    loads: loadsObject,
+    moves,
+  };
+}
+
 function getScheduleGeminiApiKey() {
-  return String(
-    process.env.SCHEDULE_GEMINI_API_KEY ||
-    process.env.GEMINI_API_KEY ||
-    process.env.MEMPHIS_GEMINI_API_KEY ||
-    process.env.GOOGLE_API_KEY ||
-    process.env.GOOGLE_GENAI_API_KEY ||
-    ""
-  ).trim();
+  return getGeminiApiKey(["SCHEDULE_GEMINI_API_KEY"]);
 }
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = PTO_GEMINI_TIMEOUT_MS) {
@@ -85,16 +402,22 @@ function normalizePossibleDate(value) {
 }
 
 function safeJsonParse(text) {
+  const raw = String(text || "").trim();
+  if (!raw) return null;
   try {
-    return JSON.parse(text);
+    return JSON.parse(raw);
   } catch {
-    const match = String(text || "").match(/\{[\s\S]*\}/);
-    if (!match) return null;
-    try {
-      return JSON.parse(match[0]);
-    } catch {
-      return null;
+    // Try to extract the first JSON object from a string that may contain multiple
+    const matches = raw.match(/\{[\s\S]*?\}/g);
+    if (!matches) return null;
+    for (const candidate of matches) {
+      try {
+        return JSON.parse(candidate);
+      } catch {
+        continue;
+      }
     }
+    return null;
   }
 }
 
@@ -112,42 +435,17 @@ export function createScheduleRouter({
   const requireSchedulePin = requireAdminApiAuth;
   const AUTO_GENERATE_WINDOW_DAYS = 7;
   const AUTO_GENERATE_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+  const RESTROOM_REBALANCE_SWEEP_MS = Math.max(0, Number.parseInt(String(process.env.RESTROOM_REBALANCE_SWEEP_MS || "60000"), 10) || 60000);
   let autoGenerateState = { lastStartedAt: 0, running: false, lastCompletedAt: 0, lastWindowStart: null, lastResult: [] };
+  let restroomRebalanceState = { lastStartedAt: 0, running: false, lastCompletedAt: 0, lastServiceDate: null, lastResult: null };
 
   function fail(res, error, fallback = "Schedule request failed", status = 400) {
     res.status(status).json({ ok: false, error: error?.message || fallback });
   }
 
   function esc(value) {
-    return String(value ?? "").replace(/'/g, "''");
-  }
-
-  // --- Input validation helpers for SQL-interpolated values ---
-
-  const MAX_TEXT_LEN = 500;
-  const MAX_CODE_LEN = 120;
-  const SAFE_TEXT_RE = /^[\w\s.,;:'"()\-\/#&@+!?*]{0,500}$/;
-  const SAFE_CODE_RE = /^[A-Za-z0-9_\-\.]{1,120}$/;
-
-  function safeText(value, fieldName = "text", maxLen = MAX_TEXT_LEN) {
-    const raw = String(value ?? "").trim();
-    if (raw.length > maxLen) throw new Error(`${fieldName} exceeds maximum length of ${maxLen} characters.`);
-    if (raw && !SAFE_TEXT_RE.test(raw)) throw new Error(`${fieldName} contains invalid characters.`);
-    return raw;
-  }
-
-  function safeCode(value, fieldName = "code") {
-    const raw = String(value ?? "").trim();
-    if (!raw) throw new Error(`${fieldName} is required.`);
-    if (!SAFE_CODE_RE.test(raw)) throw new Error(`${fieldName} contains invalid characters.`);
-    return raw;
-  }
-
-  function safeIlike(value, fieldName = "search") {
-    // Escape PostgreSQL ilike wildcards (% _) in user input, then wrap for ilike
-    const raw = String(value ?? "").trim();
-    if (raw.length > MAX_TEXT_LEN) throw new Error(`${fieldName} exceeds maximum length.`);
-    return raw.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+    if (value == null) return "null";
+    return String(value).replace(/'/g, "''");
   }
 
   function requireDate(value, fallback = null) {
@@ -195,6 +493,236 @@ export function createScheduleRouter({
       }
     }
     return Array.from(new Set(cleaned));
+  }
+
+  function requireUuid(value, fieldName = "id") {
+    const raw = String(value || "").trim();
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(raw)) {
+      throw new Error(`${fieldName} must be a valid UUID.`);
+    }
+    return raw;
+  }
+
+  function optionalBoolean(value, fallback = false) {
+    if (value === undefined || value === null || value === "") return fallback;
+    if (value === true || value === "true" || value === "1" || value === 1) return true;
+    if (value === false || value === "false" || value === "0" || value === 0) return false;
+    return Boolean(value);
+  }
+
+
+  function isSch2PublishPrivilegeError(error) {
+    const message = String(error?.message || error || "");
+    return /permission denied for function sch2_publish_solution/i.test(message)
+      || /SCH2 publish confirm requires service_role backend execution/i.test(message);
+  }
+
+  function buildSch2GuardedPublishSql(runId) {
+    const id = esc(runId);
+    return `select pg_advisory_xact_lock(hashtext('memphis_sch2_publish'));
+
+drop table if exists pg_temp.sch2_publish_candidate;
+create temporary table sch2_publish_candidate (run_id uuid primary key);
+insert into sch2_publish_candidate (run_id) values ('${id}'::uuid);
+
+drop table if exists pg_temp.sch2_publish_valid;
+create temporary table sch2_publish_valid as
+select q.*
+from (
+  select
+    r.id as run_id,
+    r.service_date,
+    r.status,
+    r.input_hash,
+    public.sch2_input_hash(r.service_date) as current_input_hash,
+    public.sch2_audit_solution(r.id) as audit,
+    public.sch2_compare_current_vs_preview(r.id) as diff,
+    (select count(*) from public.schedule_solution_assignments sa where sa.run_id = r.id) as preview_rows
+  from public.schedule_generation_runs r
+  join sch2_publish_candidate c on c.run_id = r.id
+) q
+where q.status = 'preview_ready'
+  and q.input_hash = q.current_input_hash
+  and coalesce((q.audit->>'hard_violation_count')::integer, 0) = 0
+  and coalesce((q.audit->>'open_required_count')::integer, 0) = 0
+  and coalesce((q.audit->>'work_item_count')::integer, 0) > 0
+  and coalesce((q.audit->>'solution_assignment_count')::integer, 0) = coalesce((q.audit->>'work_item_count')::integer, 0)
+  and q.preview_rows = coalesce((q.audit->>'work_item_count')::integer, 0);
+
+select 1 / case when (select count(*) from sch2_publish_valid) = 1 then 1 else 0 end as guard_candidate_valid;
+
+drop table if exists pg_temp.sch2_publish_audit_row;
+create temporary table sch2_publish_audit_row (id uuid primary key, run_id uuid not null, service_date date not null);
+with inserted as (
+  insert into public.schedule_publish_audit (
+    run_id,
+    service_date,
+    previous_rows,
+    published_rows,
+    diff_summary,
+    published_by,
+    status,
+    published_at
+  )
+  select
+    v.run_id,
+    v.service_date,
+    (
+      select coalesce(jsonb_agg(to_jsonb(dsa) order by dsa.coverage_start, dsa.location_group_id, dsa.segment_number), '[]'::jsonb)
+      from public.daily_schedule_assignments dsa
+      where dsa.service_date = v.service_date
+    ),
+    '[]'::jsonb,
+    v.diff,
+    'schedule_api_guarded_sql_publish',
+    'publishing',
+    now()
+  from sch2_publish_valid v
+  returning id, run_id, service_date
+)
+insert into sch2_publish_audit_row (id, run_id, service_date)
+select id, run_id, service_date from inserted;
+
+select 1 / case when (select count(*) from sch2_publish_audit_row) = 1 then 1 else 0 end as guard_audit_created;
+
+delete from public.daily_schedule_assignments dsa
+using sch2_publish_valid v
+where dsa.service_date = v.service_date;
+
+insert into public.daily_schedule_assignments (
+  service_date,
+  location_group_id,
+  segment_number,
+  assigned_employee_id,
+  owner_type,
+  coverage_start,
+  coverage_end,
+  status,
+  load_points,
+  notes,
+  source_type,
+  coverage_purpose
+)
+select
+  sa.service_date,
+  sa.location_group_id,
+  sa.segment_number,
+  sa.assigned_employee_id,
+  sa.owner_type,
+  sa.coverage_start,
+  sa.coverage_end,
+  sa.status,
+  sa.load_points,
+  concat_ws(' | ', nullif(sa.notes, ''), 'Published by SCH2 guarded SQL run ' || sa.run_id::text),
+  'sch2_published',
+  sa.coverage_purpose
+from public.schedule_solution_assignments sa
+join sch2_publish_valid v on v.run_id = sa.run_id
+order by sa.service_date, sa.coverage_start, sa.location_group_id, sa.segment_number;
+
+select 1 / case when not exists (
+  select 1
+  from sch2_publish_valid v
+  left join lateral (
+    select count(*)::integer as inserted_rows
+    from public.daily_schedule_assignments dsa
+    where dsa.service_date = v.service_date
+  ) c on true
+  where c.inserted_rows <> (v.audit->>'work_item_count')::integer
+) then 1 else 0 end as guard_inserted_rows_match;
+
+update public.schedule_publish_audit spa
+   set published_rows = (
+         select coalesce(jsonb_agg(to_jsonb(dsa) order by dsa.coverage_start, dsa.location_group_id, dsa.segment_number), '[]'::jsonb)
+         from public.daily_schedule_assignments dsa
+         where dsa.service_date = spa.service_date
+       ),
+       status = 'published',
+       published_at = now()
+from sch2_publish_audit_row a
+where spa.id = a.id;
+
+update public.schedule_generation_runs r
+   set status = 'published',
+       published_at = now(),
+       published_by = 'schedule_api_guarded_sql_publish',
+       updated_at = now()
+from sch2_publish_valid v
+where r.id = v.run_id;
+
+drop table if exists pg_temp.sch2_publish_audit_row;
+drop table if exists pg_temp.sch2_publish_valid;
+drop table if exists pg_temp.sch2_publish_candidate;`;
+  }
+
+  async function runSch2PublishWithFallback(runId, confirm) {
+    try {
+      return await runRpc("sch2_publish_solution", { p_run_id: runId, p_confirm: confirm });
+    } catch (error) {
+      if (!isSch2PublishPrivilegeError(error)) throw error;
+      if (!confirm) {
+        const rows = await runReadOnlySql(`
+          select
+            r.id as run_id,
+            r.service_date,
+            public.sch2_audit_solution(r.id) as audit,
+            public.sch2_compare_current_vs_preview(r.id) as diff
+          from public.schedule_generation_runs r
+          where r.id = '${esc(runId)}'::uuid
+          limit 1
+        `);
+        const row = Array.isArray(rows) && rows.length ? rows[0] : null;
+        if (!row) throw error;
+        return {
+          ok: true,
+          dry_run: true,
+          fallback: "read_only_guarded_sql",
+          publish_audit_id: null,
+          run_id: runId,
+          service_date: row.service_date,
+          audit: row.audit,
+          diff: row.diff,
+        };
+      }
+      if (typeof runWriteSql !== "function") throw error;
+      await runWriteSql("sch2_guarded_publish", buildSch2GuardedPublishSql(runId));
+      const rows = await runReadOnlySql(`
+        select
+          r.id as run_id,
+          r.service_date,
+          r.status,
+          r.published_at,
+          r.published_by,
+          spa.id as publish_audit_id,
+          jsonb_array_length(coalesce(spa.published_rows, '[]'::jsonb)) as inserted_rows,
+          public.sch2_audit_solution(r.id) as audit,
+          spa.diff_summary as diff
+        from public.schedule_generation_runs r
+        left join public.schedule_publish_audit spa
+          on spa.run_id = r.id
+         and spa.status = 'published'
+        where r.id = '${esc(runId)}'::uuid
+        order by spa.published_at desc nulls last
+        limit 1
+      `);
+      const row = Array.isArray(rows) && rows.length ? rows[0] : null;
+      if (!row || row.status !== "published" || !row.publish_audit_id) {
+        throw new Error("SCH2 guarded publish fallback did not produce a verified published audit row.");
+      }
+      return {
+        ok: true,
+        dry_run: false,
+        fallback: "guarded_sql",
+        publish_audit_id: row.publish_audit_id,
+        run_id: row.run_id,
+        service_date: row.service_date,
+        inserted_rows: row.inserted_rows,
+        audit: row.audit,
+        diff: row.diff,
+        published_at: row.published_at,
+        published_by: row.published_by,
+      };
+    }
   }
 
   async function listPtoRows({ startDate, endDate = startDate } = {}) {
@@ -412,7 +940,7 @@ export function createScheduleRouter({
     });
   }
 
-  async function publishCoverAllSlotsForDate(serviceDate, inputSlots = []) {
+  async function publishCoverAllSlotsForDate(serviceDate, inputSlots = [], { regenerate = true, restoreStatic = true, rebalance = true } = {}) {
     if (!Array.isArray(inputSlots)) throw new Error("slots must be an array.");
     const slots = await ensureCoverAllSlots();
     const byCode = new Map(slots.map((slot) => [String(slot.employee_code || "").toUpperCase(), slot]));
@@ -470,12 +998,205 @@ export function createScheduleRouter({
       `;
     }
 
-    const generateResult = await runRpc("sch_generate_daily_schedule", { p_service_date: serviceDate, p_force: true });
-    const staticRestoreResult = await restoreStaticOwnersForDate(serviceDate);
     await runWriteSql("coverall_slots_publish", sql);
-    const balanceResult = await rebalanceCoverAllAssignments(serviceDate);
+    let generateResult = null;
+    let staticRestoreResult = null;
+    let balanceResult = null;
+    if (regenerate) {
+      generateResult = await runRpc("sch_generate_daily_schedule", { p_service_date: serviceDate, p_force: true });
+      if (restoreStatic) staticRestoreResult = await restoreStaticOwnersForDate(serviceDate);
+    }
+    if (rebalance) balanceResult = await rebalanceCoverAllAssignments(serviceDate);
     const currentSlots = await listCoverAllSlotsForDate(serviceDate);
     return { service_date: serviceDate, slots: currentSlots, generate_result: generateResult, static_restore_result: staticRestoreResult, balance_result: balanceResult };
+  }
+
+  function buildCoverAllRebalancePlan(assignments = [], activeRoster = [], activeCoverAllIds = []) {
+    const employeeMeta = new Map();
+    const loadByEmployee = new Map();
+    for (const row of Array.isArray(activeRoster) ? activeRoster : []) {
+      const employeeId = String(row.employee_id || row.id || "").trim();
+      if (!employeeId) continue;
+      employeeMeta.set(employeeId, {
+        employee_id: employeeId,
+        employee_name: String(row.employee_name || row.display_name || "").trim(),
+        employee_code: String(row.employee_code || "").trim(),
+        shift_start: String(row.shift_start || "").trim(),
+        shift_end: String(row.shift_end || "").trim(),
+      });
+      loadByEmployee.set(employeeId, 0);
+    }
+
+    const coverAllEmployeeIds = Array.from(new Set((Array.isArray(activeCoverAllIds) ? activeCoverAllIds : []).map((value) => String(value || "").trim()).filter(Boolean)));
+    if (!coverAllEmployeeIds.length) {
+      return { applied: false, reason: "no_active_coverall_slots", moved_count: 0, moves: [] };
+    }
+    if (!loadByEmployee.size) {
+      return { applied: false, reason: "no_active_employees", moved_count: 0, moves: [] };
+    }
+
+    const activeEmployeeIds = new Set(loadByEmployee.keys());
+    const regularEmployeeIds = Array.from(activeEmployeeIds).filter((id) => !coverAllEmployeeIds.includes(id));
+    if (!regularEmployeeIds.length) {
+      return { applied: false, reason: "no_regular_employees_to_balance_from", moved_count: 0, moves: [] };
+    }
+
+    const normalizedAssignments = (Array.isArray(assignments) ? assignments : [])
+      .map((row) => ({
+        assignment_id: String(row.assignment_id || row.id || "").trim(),
+        assigned_employee_id: String(row.assigned_employee_id || "").trim(),
+        assigned_employee_name: String(row.assigned_employee_name || row.employee_name || "").trim(),
+        group_name: String(row.group_name || row.group_code || "Area").trim(),
+        group_code: String(row.group_code || "").trim(),
+        segment_number: Number(row.segment_number || 0),
+        coverage_start: String(row.coverage_start || "").trim(),
+        coverage_end: String(row.coverage_end || "").trim(),
+        load_points: Math.max(1, Number(row.load_points || 1)),
+        source_type: String(row.source_type || "").trim(),
+      }))
+      .filter((row) => row.assignment_id && activeEmployeeIds.has(row.assigned_employee_id));
+
+    if (!normalizedAssignments.length) {
+      return { applied: false, reason: "no_assignments_to_balance", moved_count: 0, moves: [] };
+    }
+
+    for (const assignment of normalizedAssignments) {
+      loadByEmployee.set(assignment.assigned_employee_id, (loadByEmployee.get(assignment.assigned_employee_id) || 0) + assignment.load_points);
+    }
+
+    const initialLoads = new Map(loadByEmployee);
+    const totalLoad = Array.from(loadByEmployee.values()).reduce((sum, value) => sum + Number(value || 0), 0);
+    const targetLoad = totalLoad / Math.max(1, loadByEmployee.size);
+    const movableAssignments = normalizedAssignments.filter((assignment) => !isProtectedRestroomSource(assignment.source_type));
+    if (!movableAssignments.length) {
+      return {
+        applied: false,
+        reason: loadSpread(initialLoads) <= 1 ? "already_balanced" : "no_safe_coverall_moves",
+        moved_count: 0,
+        target_load: Number(targetLoad.toFixed(2)),
+        initial_loads: Object.fromEntries(Array.from(initialLoads.entries()).map(([key, value]) => [key, Number(Number(value || 0).toFixed(2))])),
+        loads: Object.fromEntries(Array.from(loadByEmployee.entries()).map(([key, value]) => [key, Number(Number(value || 0).toFixed(2))])),
+        moves: [],
+      };
+    }
+
+    const movedAssignmentIds = new Set();
+    const moves = [];
+    const maxMoves = movableAssignments.length;
+
+    function employeeExcess(employeeId) {
+      return (loadByEmployee.get(employeeId) || 0) - targetLoad;
+    }
+
+    for (let guard = 0; guard < maxMoves; guard += 1) {
+      const beforeSpread = loadSpread(loadByEmployee);
+      if (beforeSpread <= 1) break;
+
+      const donorIds = Array.from(activeEmployeeIds)
+        .slice()
+        .sort((a, b) => employeeExcess(b) - employeeExcess(a) || String(a).localeCompare(String(b)));
+      const receiverIds = coverAllEmployeeIds
+        .slice()
+        .sort((a, b) => employeeExcess(a) - employeeExcess(b) || String(a).localeCompare(String(b)));
+
+      let bestCandidate = null;
+
+      for (const donorId of donorIds) {
+        if (employeeExcess(donorId) <= 0.25) continue;
+        const donorAssignments = movableAssignments
+          .filter((assignment) => assignment.assigned_employee_id === donorId && !movedAssignmentIds.has(assignment.assignment_id))
+          .sort((a, b) => a.load_points - b.load_points || String(a.group_name).localeCompare(String(b.group_name)));
+        if (!donorAssignments.length) continue;
+
+        for (const receiverId of receiverIds) {
+          if (receiverId === donorId) continue;
+          if (employeeExcess(receiverId) >= -0.25) continue;
+          const receiverMeta = employeeMeta.get(receiverId) || {};
+
+          for (const assignment of donorAssignments) {
+            if (!canRosterEmployeeCoverAssignment(receiverMeta, assignment)) continue;
+            const donorLoad = loadByEmployee.get(donorId) || 0;
+            const receiverLoad = loadByEmployee.get(receiverId) || 0;
+            const after = new Map(loadByEmployee);
+            after.set(donorId, donorLoad - assignment.load_points);
+            after.set(receiverId, receiverLoad + assignment.load_points);
+            const afterSpread = loadSpread(after);
+            if (afterSpread >= beforeSpread) continue;
+
+            const beforeDistance = Math.abs(donorLoad - targetLoad) + Math.abs(receiverLoad - targetLoad);
+            const afterDistance = Math.abs((donorLoad - assignment.load_points) - targetLoad) + Math.abs((receiverLoad + assignment.load_points) - targetLoad);
+            const candidate = {
+              donorId,
+              receiverId,
+              assignment,
+              afterSpread,
+              distanceImprovement: beforeDistance - afterDistance,
+            };
+
+            if (!bestCandidate
+              || candidate.afterSpread < bestCandidate.afterSpread
+              || (candidate.afterSpread === bestCandidate.afterSpread && candidate.distanceImprovement > bestCandidate.distanceImprovement)
+              || (candidate.afterSpread === bestCandidate.afterSpread && candidate.distanceImprovement === bestCandidate.distanceImprovement && assignment.load_points < bestCandidate.assignment.load_points)
+              || (candidate.afterSpread === bestCandidate.afterSpread
+                && candidate.distanceImprovement === bestCandidate.distanceImprovement
+                && assignment.load_points === bestCandidate.assignment.load_points
+                && String(assignment.group_name).localeCompare(String(bestCandidate.assignment.group_name)) < 0)) {
+              bestCandidate = candidate;
+            }
+          }
+        }
+      }
+
+      if (!bestCandidate) break;
+
+      const { donorId, receiverId, assignment: chosen } = bestCandidate;
+      const donorLoad = loadByEmployee.get(donorId) || 0;
+      const receiverLoad = loadByEmployee.get(receiverId) || 0;
+      movedAssignmentIds.add(chosen.assignment_id);
+      loadByEmployee.set(donorId, donorLoad - chosen.load_points);
+      loadByEmployee.set(receiverId, receiverLoad + chosen.load_points);
+
+      const donorMeta = employeeMeta.get(donorId) || {};
+      const receiverMeta = employeeMeta.get(receiverId) || {};
+      moves.push({
+        assignment_id: chosen.assignment_id,
+        from_employee_id: donorId,
+        from_employee_name: donorMeta.employee_name || chosen.assigned_employee_name,
+        to_employee_id: receiverId,
+        to_employee_name: receiverMeta.employee_name || "CoverAll",
+        group_name: chosen.group_name,
+        group_code: chosen.group_code,
+        segment_number: chosen.segment_number,
+        coverage_start: chosen.coverage_start,
+        coverage_end: chosen.coverage_end,
+        load_points: chosen.load_points,
+      });
+    }
+
+    const loadsObject = Object.fromEntries(Array.from(loadByEmployee.entries()).map(([key, value]) => [key, Number(Number(value || 0).toFixed(2))]));
+    const initialLoadsObject = Object.fromEntries(Array.from(initialLoads.entries()).map(([key, value]) => [key, Number(Number(value || 0).toFixed(2))]));
+
+    if (!moves.length) {
+      return {
+        applied: false,
+        reason: loadSpread(initialLoads) <= 1 ? "already_balanced" : "no_safe_coverall_moves",
+        moved_count: 0,
+        target_load: Number(targetLoad.toFixed(2)),
+        initial_loads: initialLoadsObject,
+        loads: loadsObject,
+        moves: [],
+      };
+    }
+
+    return {
+      applied: true,
+      reason: "coverall_rebalanced",
+      moved_count: moves.length,
+      target_load: Number(targetLoad.toFixed(2)),
+      initial_loads: initialLoadsObject,
+      loads: loadsObject,
+      moves,
+    };
   }
 
   async function rebalanceCoverAllAssignments(serviceDate) {
@@ -496,169 +1217,32 @@ export function createScheduleRouter({
       order by e.display_name
     `);
     const activeRoster = Array.isArray(activeRosterRows) ? activeRosterRows : [];
-    const activeEmployeeIds = new Set(activeRoster.map((row) => String(row.employee_id || "")).filter(Boolean));
-    const activeCoverAllIds = new Set(activeCoverAllSlots.map((slot) => String(slot.employee_id || "")).filter(Boolean));
-
-    if (activeEmployeeIds.size <= activeCoverAllIds.size) {
-      return { applied: false, reason: "no_regular_employees_to_balance_from", moved_count: 0, moves: [] };
-    }
+    const activeCoverAllIds = activeCoverAllSlots.map((slot) => String(slot.employee_id || "")).filter(Boolean);
 
     const assignmentRows = await runReadOnlySql(`
       select dsa.id as assignment_id, dsa.assigned_employee_id, e.display_name as assigned_employee_name, e.employee_code,
-             dsa.location_group_id, lg.group_name, lg.group_code, dsa.segment_number,
+             dsa.location_group_id, lg.group_name, lg.group_code, dsa.segment_number, dsa.source_type,
              to_char(dsa.coverage_start, 'HH24:MI:SS') as coverage_start,
              to_char(dsa.coverage_end, 'HH24:MI:SS') as coverage_end,
-             greatest(coalesce(dsa.load_points, 1), 1)::numeric as load_points,
-             (
-               lower(coalesce(lg.group_name, '')) like '%restroom%'
-               or lower(coalesce(lg.group_code, '')) like '%restroom%'
-               or lower(coalesce(lg.group_name, '')) like '%bathroom%'
-               or lower(coalesce(lg.group_code, '')) like '%bathroom%'
-             ) as is_restroom
+             greatest(coalesce(dsa.load_points, 1), 1)::numeric as load_points
       from public.daily_schedule_assignments dsa
       join public.location_groups lg on lg.id = dsa.location_group_id
       join public.employees e on e.id = dsa.assigned_employee_id
       where dsa.service_date = '${esc(serviceDate)}'::date
         and dsa.status = 'ASSIGNED'
         and dsa.assigned_employee_id is not null
+        and coalesce(dsa.coverage_purpose, '') <> 'lunch_coverage'
         and (dsa.service_date <> public.sch_service_date(now())::date or dsa.coverage_end > now()::time)
-        and (
-          (dsa.coverage_start < '09:45:00'::time and not (
-            exists (
-              select 1
-              from public.location_group_memberships m
-              join public.locations l on l.id = m.location_id and l.active = true
-              where m.location_group_id = dsa.location_group_id
-                and m.active = true
-                and (
-                  lower(coalesce(l.location_type, '')) like '%restroom%'
-                  or lower(coalesce(l.form_type, '')) like '%restroom%'
-                  or lower(coalesce(l.location_name, '')) like '%restroom%'
-                  or lower(coalesce(l.location_name, '')) like '%bathroom%'
-                )
-            ) or lower(coalesce(lg.group_name, '')) like '%restroom%'
-          ))
-          or
-          (dsa.coverage_end > '09:45:00'::time and (
-            exists (
-              select 1
-              from public.location_group_memberships m
-              join public.locations l on l.id = m.location_id and l.active = true
-              where m.location_group_id = dsa.location_group_id
-                and m.active = true
-                and (
-                  lower(coalesce(l.location_type, '')) like '%restroom%'
-                  or lower(coalesce(l.form_type, '')) like '%restroom%'
-                  or lower(coalesce(l.location_name, '')) like '%restroom%'
-                  or lower(coalesce(l.location_name, '')) like '%bathroom%'
-                )
-            ) or lower(coalesce(lg.group_name, '')) like '%restroom%'
-          ))
-        )
       order by dsa.coverage_start, lg.group_name, dsa.segment_number
     `);
-    const assignments = (Array.isArray(assignmentRows) ? assignmentRows : [])
-      .filter((row) => activeEmployeeIds.has(String(row.assigned_employee_id || "")))
-      .map((row) => ({
-        assignment_id: String(row.assignment_id || ""),
-        assigned_employee_id: String(row.assigned_employee_id || ""),
-        assigned_employee_name: String(row.assigned_employee_name || ""),
-        employee_code: String(row.employee_code || ""),
-        group_name: String(row.group_name || row.group_code || "Area"),
-        group_code: String(row.group_code || ""),
-        segment_number: Number(row.segment_number || 0),
-        coverage_start: String(row.coverage_start || ""),
-        coverage_end: String(row.coverage_end || ""),
-        load_points: Math.max(1, Number(row.load_points || 1)),
-      }))
-      .filter((row) => row.assignment_id && row.assigned_employee_id);
+    const assignments = Array.isArray(assignmentRows) ? assignmentRows : [];
+    const plan = buildCoverAllRebalancePlan(assignments, activeRoster, activeCoverAllIds);
 
-    if (!assignments.length) {
-      return { applied: false, reason: "no_assignments_to_balance", moved_count: 0, moves: [] };
+    if (!plan.applied || !plan.moves?.length) {
+      return { service_date: serviceDate, ...plan };
     }
 
-    const employeeMeta = new Map(activeRoster.map((row) => [String(row.employee_id), {
-      employee_id: String(row.employee_id),
-      employee_name: String(row.employee_name || ""),
-      employee_code: String(row.employee_code || ""),
-    }]));
-    const loadByEmployee = new Map(activeRoster.map((row) => [String(row.employee_id), 0]));
-    for (const assignment of assignments) {
-      loadByEmployee.set(assignment.assigned_employee_id, (loadByEmployee.get(assignment.assigned_employee_id) || 0) + assignment.load_points);
-    }
-
-    const totalLoad = Array.from(loadByEmployee.values()).reduce((sum, value) => sum + Number(value || 0), 0);
-    const targetLoad = totalLoad / Math.max(1, activeEmployeeIds.size);
-    const regularEmployeeIds = Array.from(activeEmployeeIds).filter((id) => !activeCoverAllIds.has(id));
-    const coverAllEmployeeIds = Array.from(activeCoverAllIds);
-    const availableAssignments = assignments.filter((row) => !activeCoverAllIds.has(row.assigned_employee_id));
-    const movedAssignmentIds = new Set();
-    const moves = [];
-    const maxMoves = Math.min(availableAssignments.length, Math.max(1, coverAllEmployeeIds.length * 12));
-
-    function donorExcess(employeeId) {
-      return (loadByEmployee.get(employeeId) || 0) - targetLoad;
-    }
-
-    for (let guard = 0; guard < maxMoves; guard += 1) {
-      const donorId = regularEmployeeIds
-        .slice()
-        .sort((a, b) => donorExcess(b) - donorExcess(a))[0];
-      const receiverId = coverAllEmployeeIds
-        .slice()
-        .sort((a, b) => (loadByEmployee.get(a) || 0) - (loadByEmployee.get(b) || 0))[0];
-
-      if (!donorId || !receiverId) break;
-      const excess = donorExcess(donorId);
-      const receiverLoad = loadByEmployee.get(receiverId) || 0;
-      if (excess <= 0.25 || receiverLoad >= targetLoad * 0.95) break;
-
-      const donorAssignments = availableAssignments
-        .filter((assignment) => assignment.assigned_employee_id === donorId && !movedAssignmentIds.has(assignment.assignment_id))
-        .sort((a, b) => {
-          const aFit = Math.abs((receiverLoad + a.load_points) - targetLoad);
-          const bFit = Math.abs((receiverLoad + b.load_points) - targetLoad);
-          if (a.load_points <= excess && b.load_points > excess) return -1;
-          if (b.load_points <= excess && a.load_points > excess) return 1;
-          return aFit - bFit || b.load_points - a.load_points;
-        });
-
-      const chosen = donorAssignments[0];
-      if (!chosen) break;
-
-      movedAssignmentIds.add(chosen.assignment_id);
-      loadByEmployee.set(donorId, (loadByEmployee.get(donorId) || 0) - chosen.load_points);
-      loadByEmployee.set(receiverId, (loadByEmployee.get(receiverId) || 0) + chosen.load_points);
-
-      const donorMeta = employeeMeta.get(donorId) || {};
-      const receiverMeta = employeeMeta.get(receiverId) || {};
-      moves.push({
-        assignment_id: chosen.assignment_id,
-        from_employee_id: donorId,
-        from_employee_name: donorMeta.employee_name || chosen.assigned_employee_name,
-        to_employee_id: receiverId,
-        to_employee_name: receiverMeta.employee_name || "CoverAll",
-        group_name: chosen.group_name,
-        group_code: chosen.group_code,
-        segment_number: chosen.segment_number,
-        coverage_start: chosen.coverage_start,
-        coverage_end: chosen.coverage_end,
-        load_points: chosen.load_points,
-      });
-    }
-
-    if (!moves.length) {
-      return {
-        applied: false,
-        reason: "already_balanced_or_no_safe_moves",
-        moved_count: 0,
-        target_load: Number(targetLoad.toFixed(2)),
-        loads: Object.fromEntries(Array.from(loadByEmployee.entries()).map(([key, value]) => [key, Number(Number(value || 0).toFixed(2))])),
-        moves: [],
-      };
-    }
-
-    const valuesSql = moves.map((move) => `(
+    const valuesSql = plan.moves.map((move) => `(
       '${esc(move.assignment_id)}'::uuid,
       '${esc(move.to_employee_id)}'::uuid,
       '${esc(move.to_employee_name)}',
@@ -680,13 +1264,249 @@ export function createScheduleRouter({
       where dsa.id = moved.assignment_id;
     `);
 
+    return { service_date: serviceDate, ...plan };
+  }
+
+  async function listActiveRosterForRestroomRebalance(serviceDate) {
+    const rows = await runReadOnlySql(`
+      select r.employee_id, e.display_name as employee_name, e.employee_code,
+             to_char(r.shift_start, 'HH24:MI:SS') as shift_start,
+             to_char(r.shift_end, 'HH24:MI:SS') as shift_end
+      from public.daily_work_roster r
+      join public.employees e on e.id = r.employee_id
+      where r.service_date = '${esc(serviceDate)}'::date
+        and r.active = true
+        and r.shift_start <= '${esc(RESTROOM_REBALANCE_TIME)}'::time
+        and r.shift_end > '${esc(RESTROOM_REBALANCE_TIME)}'::time
+      order by e.display_name
+    `);
+    return Array.isArray(rows) ? rows.filter(isRestroomRebalanceRosterEligible) : [];
+  }
+
+  async function listRestroomAssignmentsForRebalance(serviceDate) {
+    const rows = await runReadOnlySql(`
+      select dsa.id as assignment_id, dsa.assigned_employee_id, e.display_name as assigned_employee_name, e.employee_code,
+             dsa.location_group_id, lg.group_name, lg.group_code, dsa.segment_number, dsa.source_type,
+             to_char(dsa.coverage_start, 'HH24:MI:SS') as coverage_start,
+             to_char(dsa.coverage_end, 'HH24:MI:SS') as coverage_end,
+             greatest(coalesce(dsa.load_points, 1), 1)::numeric as load_points,
+             coalesce(restricted.restricted_employee_ids, '[]'::jsonb) as restricted_employee_ids
+      from public.daily_schedule_assignments dsa
+      join public.location_groups lg on lg.id = dsa.location_group_id
+      join public.employees e on e.id = dsa.assigned_employee_id
+      left join lateral (
+        select jsonb_agg(r.employee_id::text order by r.employee_id::text) as restricted_employee_ids
+        from public.daily_work_roster r
+        join public.employees re on re.id = r.employee_id
+        where r.service_date = dsa.service_date
+          and r.active = true
+          and r.shift_start <= '${esc(RESTROOM_REBALANCE_TIME)}'::time
+          and r.shift_end > '${esc(RESTROOM_REBALANCE_TIME)}'::time
+          and coalesce(re.employee_code, '') not in ('${RESTROOM_REBALANCE_EXCLUDED_EMPLOYEES.join("','")}')
+          and public.sch_is_employee_location_group_restricted(
+            r.employee_id,
+            dsa.location_group_id,
+            extract(dow from dsa.service_date)::integer
+          )
+      ) restricted on true
+      where dsa.service_date = '${esc(serviceDate)}'::date
+        and dsa.status = 'ASSIGNED'
+        and dsa.assigned_employee_id is not null
+        and coalesce(dsa.coverage_purpose, '') <> 'lunch_coverage'
+        and dsa.coverage_end > '${esc(RESTROOM_REBALANCE_TIME)}'::time
+        and (
+          lower(coalesce(lg.group_name, '')) like '%restroom%'
+          or lower(coalesce(lg.group_code, '')) like '%restroom%'
+          or lower(coalesce(lg.group_name, '')) like '%bathroom%'
+          or lower(coalesce(lg.group_code, '')) like '%bathroom%'
+          or exists (
+            select 1
+            from public.location_group_memberships m
+            join public.locations l on l.id = m.location_id and l.active = true
+            where m.location_group_id = dsa.location_group_id
+              and m.active = true
+              and (
+                lower(coalesce(l.location_type, '')) like '%restroom%'
+                or lower(coalesce(l.form_type, '')) like '%restroom%'
+                or lower(coalesce(l.location_name, '')) like '%restroom%'
+                or lower(coalesce(l.location_name, '')) like '%bathroom%'
+              )
+          )
+        )
+      order by dsa.coverage_start, lg.group_name, dsa.segment_number
+    `);
+    return Array.isArray(rows) ? rows : [];
+  }
+
+  async function rebalanceRestroomAssignments(serviceDate) {
+    if (typeof runWriteSql !== "function") return { applied: false, reason: "write_path_unavailable", moved_count: 0, moves: [] };
+
+    const activeRoster = await listActiveRosterForRestroomRebalance(serviceDate);
+    const assignments = await listRestroomAssignmentsForRebalance(serviceDate);
+    const plan = buildRestroomRebalancePlan(assignments, activeRoster);
+
+    if (!plan.applied || !plan.moves?.length) {
+      return { service_date: serviceDate, scheduled_time: RESTROOM_REBALANCE_TIME, ...plan };
+    }
+
+    const valuesSql = plan.moves.map((move) => `(
+      '${esc(move.assignment_id)}'::uuid,
+      '${esc(move.from_employee_id)}'::uuid,
+      '${esc(move.to_employee_id)}'::uuid,
+      '${esc(move.to_employee_name)}',
+      '${esc(move.from_employee_name)}'
+    )`).join(",\n");
+
+    const writeResult = await runWriteSql("restroom_rebalance_0945", `
+      with moved(assignment_id, from_employee_id, to_employee_id, to_employee_name, from_employee_name) as (
+        values ${valuesSql}
+      ), eligible as (
+        select moved.*
+        from moved
+        join public.daily_schedule_assignments dsa on dsa.id = moved.assignment_id
+        join public.daily_work_roster r on r.service_date = dsa.service_date
+          and r.employee_id = moved.to_employee_id
+          and r.active = true
+        where dsa.service_date = '${esc(serviceDate)}'::date
+          and dsa.status = 'ASSIGNED'
+          and dsa.owner_type = 'EMPLOYEE'
+          and dsa.assigned_employee_id = moved.from_employee_id
+          and dsa.assigned_employee_id is not null
+          and coalesce(dsa.coverage_purpose, '') <> 'lunch_coverage'
+          and coalesce(dsa.source_type, '') not ilike '%manual%'
+          and coalesce(dsa.source_type, '') not ilike '%override%'
+          and coalesce(dsa.source_type, '') not ilike '%manager%'
+          and r.shift_start <= dsa.coverage_start
+          and r.shift_end >= dsa.coverage_end
+          and not public.sch_is_employee_location_group_restricted(
+            moved.to_employee_id,
+            dsa.location_group_id,
+            extract(dow from dsa.service_date)::integer
+          )
+      ),
+      updated as (
+        update public.daily_schedule_assignments dsa
+           set assigned_employee_id = eligible.to_employee_id,
+               owner_type = 'EMPLOYEE',
+               status = 'ASSIGNED',
+               source_type = '${esc(RESTROOM_REBALANCE_SOURCE)}',
+               notes = trim(concat_ws(' ', nullif(dsa.notes, ''), '${esc(RESTROOM_REBALANCE_NOTE)}' || ' From ' || eligible.from_employee_name || ' to ' || eligible.to_employee_name || '.')),
+               updated_at = now()
+        from eligible
+        where dsa.id = eligible.assignment_id
+        returning dsa.id::text as assignment_id, dsa.assigned_employee_id::text as assigned_employee_id, dsa.status, dsa.owner_type, dsa.source_type
+      )
+      select * from updated;
+    `);
+
+    const postRows = Array.isArray(writeResult) ? writeResult : [];
+    const postById = new Map((Array.isArray(postRows) ? postRows : []).map((row) => [String(row.assignment_id || ""), row]));
+    const appliedMoves = [];
+    const skippedMoves = [];
+    for (const move of plan.moves) {
+      const persisted = postById.get(String(move.assignment_id || ""));
+      const applied = persisted
+        && String(persisted.assigned_employee_id || "") === String(move.to_employee_id || "")
+        && String(persisted.status || "") === "ASSIGNED"
+        && String(persisted.owner_type || "") === "EMPLOYEE";
+      if (applied) appliedMoves.push(move);
+      else skippedMoves.push({ ...move, persisted_row: persisted || null });
+    }
+
     return {
-      applied: true,
-      moved_count: moves.length,
-      target_load: Number(targetLoad.toFixed(2)),
-      loads: Object.fromEntries(Array.from(loadByEmployee.entries()).map(([key, value]) => [key, Number(Number(value || 0).toFixed(2))])),
-      moves,
+      service_date: serviceDate,
+      scheduled_time: RESTROOM_REBALANCE_TIME,
+      ...plan,
+      planned_moved_count: plan.moves.length,
+      moved_count: appliedMoves.length,
+      moves: appliedMoves,
+      skipped_moves: skippedMoves,
+      skipped_restricted_moves: skippedMoves.length,
+      partial: skippedMoves.length > 0,
+      reason: skippedMoves.length
+        ? (appliedMoves.length ? "restrooms_rebalanced_partial" : "no_safe_restroom_moves_db_guard")
+        : plan.reason,
     };
+  }
+
+  async function applyLunchCoverageAfterRestroomRebalance(serviceDate) {
+    try {
+      return await runRpc("sch_apply_lunch_coverage", { p_service_date: serviceDate });
+    } catch (error) {
+      return { ok: false, error: error?.message || String(error || "lunch coverage failed") };
+    }
+  }
+
+  async function ensureScheduleReadyForRestroomRebalance(serviceDate) {
+    const state = await getDailyGenerationState(serviceDate);
+    if (state.assignment_count > 0 && state.roster_count > 0) return { generated: false, state };
+    const generate_result = await runRpc("sch_generate_daily_schedule", { p_service_date: serviceDate, p_force: false });
+    const static_restore_result = await restoreStaticOwnersForDate(serviceDate);
+    const after = await getDailyGenerationState(serviceDate);
+    return { generated: true, state: after, generate_result, static_restore_result };
+  }
+
+  async function getRestroomRebalanceCompletion(serviceDate) {
+    try {
+      const rows = await runReadOnlySql(buildRestroomRebalanceCompletionSelectSql(serviceDate));
+      return normalizeRestroomRebalanceCompletionRow(Array.isArray(rows) && rows.length ? rows[0] : null);
+    } catch (error) {
+      if (/schedule_automation_runs|does not exist|relation .* does not exist/i.test(String(error?.message || error || ""))) return null;
+      throw error;
+    }
+  }
+
+  async function markRestroomRebalanceCompletion(serviceDate, result, status = "completed") {
+    if (typeof runWriteSql !== "function") return null;
+    await runWriteSql("restroom_rebalance_completion", buildRestroomRebalanceCompletionUpsertSql(serviceDate, result, status));
+    return { automation_key: RESTROOM_REBALANCE_SOURCE, service_date: serviceDate, status, completed: status === "completed", result };
+  }
+
+  async function maybeAutoRestroomRebalance({ force = false, reason = "scheduled_interval" } = {}) {
+    if (restroomRebalanceState.running) return { ...restroomRebalanceState, skipped: true, reason: "already_running" };
+    if (!force && !isRestroomRebalanceDue()) return { ...restroomRebalanceState, skipped: true, reason: "before_0945_memphis_time" };
+
+    const serviceDate = requireDate(await getServiceDate());
+    if (!force && restroomRebalanceState.lastServiceDate === serviceDate) {
+      return { ...restroomRebalanceState, skipped: true, reason: "already_checked_today" };
+    }
+
+    if (!force) {
+      const persistentCompletion = await getRestroomRebalanceCompletion(serviceDate);
+      if (persistentCompletion?.completed) {
+        const result = { service_date: serviceDate, reason: "already_completed_persistently", persistent_completion: persistentCompletion };
+        restroomRebalanceState = {
+          ...restroomRebalanceState,
+          running: false,
+          lastServiceDate: serviceDate,
+          lastCompletedAt: restroomRebalanceState.lastCompletedAt || Date.now(),
+          lastResult: result,
+        };
+        return { ...restroomRebalanceState, skipped: true, reason: "already_completed_persistently" };
+      }
+    }
+
+    restroomRebalanceState = { ...restroomRebalanceState, running: true, lastStartedAt: Date.now() };
+    try {
+      const readiness = await ensureScheduleReadyForRestroomRebalance(serviceDate);
+      const balance = await rebalanceRestroomAssignments(serviceDate);
+      const lunch_coverage = await applyLunchCoverageAfterRestroomRebalance(serviceDate);
+      const result = { service_date: serviceDate, reason, readiness, balance, lunch_coverage };
+      const persistent_completion = await markRestroomRebalanceCompletion(serviceDate, result, "completed");
+      restroomRebalanceState = {
+        running: false,
+        lastStartedAt: restroomRebalanceState.lastStartedAt,
+        lastCompletedAt: Date.now(),
+        lastServiceDate: serviceDate,
+        lastResult: { ...result, persistent_completion },
+      };
+      return restroomRebalanceState.lastResult;
+    } catch (error) {
+      const failure = { ok: false, service_date: serviceDate, reason, error: error?.message || String(error || "restroom rebalance failed") };
+      try { await markRestroomRebalanceCompletion(serviceDate, failure, "failed"); } catch {}
+      restroomRebalanceState = { ...restroomRebalanceState, running: false, lastResult: failure };
+      throw error;
+    }
   }
 
   function normalizeAssignmentCapture(row = {}, source = "baseline") {
@@ -775,8 +1595,8 @@ export function createScheduleRouter({
       '${esc(row.location_group_id)}'::uuid,
       '${esc(row.coverage_start)}'::time,
       '${esc(row.coverage_end)}'::time,
-      '${esc(safeText(row.group_name, "group_name"))}',
-      '${esc(safeText(row.source, "source"))}'
+      '${esc(row.group_name)}',
+      '${esc(row.source)}'
     )`).join(",\n");
 
     await runWriteSql("coverall_assignment_apply", `
@@ -960,9 +1780,9 @@ export function createScheduleRouter({
         employee_name: String(employee.display_name || employeeName || "").trim(),
         start_date: requireDate(rawRow?.start_date || rawRow?.service_date),
         end_date: requireDate(rawRow?.end_date || rawRow?.return_date || rawRow?.start_date || rawRow?.service_date),
-        pto_type: safeText(rawRow?.pto_type || rawRow?.type || "PTO", "pto_type") || "PTO",
-        source: safeText(rawRow?.source || "import", "source") || "import",
-        notes: rawRow?.notes == null ? null : safeText(rawRow.notes, "notes"),
+        pto_type: String(rawRow?.pto_type || rawRow?.type || "PTO").trim() || "PTO",
+        source: String(rawRow?.source || "import").trim() || "import",
+        notes: rawRow?.notes == null ? null : String(rawRow.notes),
       });
     }
 
@@ -1111,9 +1931,9 @@ export function createScheduleRouter({
     const apiKey = getScheduleGeminiApiKey();
     if (!apiKey) return { ok: false, reason: "gemini_not_configured" };
     const prompt = buildPtoGeminiPrompt(reportText, localResult);
-    const response = await fetchWithTimeout(`${PTO_GEMINI_BASE_URL}/${encodeURIComponent(PTO_GEMINI_MODEL)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+    const response = await fetchWithTimeout(`${PTO_GEMINI_BASE_URL}/${encodeURIComponent(PTO_GEMINI_MODEL)}:generateContent`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
       body: JSON.stringify({
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         generationConfig: { temperature: 0.1, maxOutputTokens: PTO_GEMINI_MAX_OUTPUT_TOKENS, responseMimeType: "application/json" },
@@ -1256,11 +2076,23 @@ export function createScheduleRouter({
        and dwr.employee_id = ct.assigned_employee_id
        and dwr.active = true
       where dsa.service_date = '${esc(serviceDate)}'::date
+        and dwr.shift_start <= dsa.coverage_start
+        and dwr.shift_end >= least(dsa.coverage_end, public.sch_get_schedule_close_time('${esc(serviceDate)}'::date))
         and ct.active = true
         and ct.day_of_week = extract(dow from '${esc(serviceDate)}'::date)::int
         and ct.location_group_id = dsa.location_group_id
         and ct.segment_number = dsa.segment_number
+        and ct.coverage_start = dsa.coverage_start
+        and least(ct.coverage_end, public.sch_get_schedule_close_time('${esc(serviceDate)}'::date)) = dsa.coverage_end
+        and coalesce(ct.coverage_purpose, 'area_owner') = coalesce(dsa.coverage_purpose, 'area_owner')
+        and coalesce(dsa.coverage_purpose, '') <> 'lunch_coverage'
+        and coalesce(dsa.source_type, '') not ilike '%lunch%'
         and ct.assigned_employee_id is not null
+        and not public.sch_is_employee_location_group_restricted(
+          ct.assigned_employee_id,
+          ct.location_group_id,
+          extract(dow from '${esc(serviceDate)}'::date)::int
+        )
         and not exists (
           select 1 from public.daily_absence_overrides dao
           where dao.absence_date = '${esc(serviceDate)}'::date
@@ -1279,7 +2111,10 @@ export function createScheduleRouter({
             and ep.employee_id = ct.assigned_employee_id
             and ep.active = true
         )
-        and coalesce(dsa.source_type, '') not like 'coverall%';
+        and coalesce(dsa.source_type, '') not like 'coverall%'
+        and coalesce(dsa.source_type, '') not ilike '%manual%'
+        and coalesce(dsa.source_type, '') not ilike '%override%'
+        and coalesce(dsa.source_type, '') not ilike '%manager%';
     `);
     return { applied: true };
   }
@@ -1556,9 +2391,9 @@ export function createScheduleRouter({
     const apiKey = getScheduleGeminiApiKey();
     if (!apiKey) return { ok: false, reason: "gemini_not_configured" };
     const prompt = buildSchedulerRecommendationPrompt({ serviceDate, groupSummaries, locationGroups, userPrompt });
-    const response = await fetchWithTimeout(`${PTO_GEMINI_BASE_URL}/${encodeURIComponent(PTO_GEMINI_MODEL)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+    const response = await fetchWithTimeout(`${PTO_GEMINI_BASE_URL}/${encodeURIComponent(PTO_GEMINI_MODEL)}:generateContent`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
       body: JSON.stringify({
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         generationConfig: { temperature: 0.2, maxOutputTokens: PTO_GEMINI_MAX_OUTPUT_TOKENS, responseMimeType: "application/json" },
@@ -1607,8 +2442,333 @@ export function createScheduleRouter({
     };
   }
 
+
+  function minutesFromTime(value = "") {
+    const match = String(value || "").match(/^(\d{1,2}):(\d{2})/);
+    if (!match) return null;
+    const hours = Number.parseInt(match[1], 10);
+    const minutes = Number.parseInt(match[2], 10);
+    if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+    return (hours * 60) + minutes;
+  }
+
+  function isRealWorkAssignment(row = {}) {
+    const purpose = String(row.coverage_purpose || "").toLowerCase();
+    const sourceType = String(row.source_type || "").toLowerCase();
+    const status = String(row.status || "").toUpperCase();
+    if (status !== "ASSIGNED") return false;
+    if (!row.assigned_employee_id) return false;
+    if (["lunch_coverage", "reminder"].includes(purpose)) return false;
+    if (sourceType.includes("gift_shop") || sourceType.includes("reminder_only")) return false;
+    return true;
+  }
+
+  function summarizeScheduleAuditIssues(issues = []) {
+    const counts = { critical: 0, error: 0, warning: 0, info: 0 };
+    for (const issue of issues || []) {
+      const severity = String(issue?.severity || "warning").toLowerCase();
+      counts[severity] = (counts[severity] || 0) + 1;
+    }
+    if (counts.critical || counts.error) return `Schedule audit found ${counts.critical} critical and ${counts.error} error issue(s).`;
+    if (counts.warning) return `Schedule audit passed hard rules but found ${counts.warning} warning(s) to review.`;
+    return "Schedule audit passed: no open coverage, hard-rule, shift-window, or balance warnings detected.";
+  }
+
+  function buildScheduleAuditPrompt({ serviceDate, audit = {}, assignments = [], roster = [], userPrompt = "" }) {
+    const compactAssignments = (assignments || []).slice(0, 160).map((row) => ({
+      group_name: row.group_name,
+      group_code: row.group_code,
+      employee_name: row.assigned_employee_name,
+      coverage_start: row.coverage_start,
+      coverage_end: row.coverage_end,
+      purpose: row.coverage_purpose,
+      source_type: row.source_type,
+      load_points: Number(row.load_points || 0),
+      is_restroom: Boolean(row.is_restroom),
+      status: row.status,
+    }));
+    const compactRoster = (roster || []).map((row) => ({
+      employee_name: row.employee_name,
+      shift_start: row.shift_start,
+      shift_end: row.shift_end,
+      source_type: row.source_type,
+    }));
+    return [
+      "You are the final Memphis Zoo custodial schedule reviewer.",
+      "Return JSON only. No markdown. No explanation.",
+      "Output shape: {\"summary\": string, \"logic_status\": \"pass\"|\"review\"|\"fail\", \"additional_watchouts\": [string], \"recommended_next_action\": string}",
+      "Double-check whether the schedule is balanced, logical, and physically possible in the real world.",
+      "Do not invent employees, locations, rules, or fixes. Use only the supplied schedule/audit data.",
+      "Treat deterministic hard-rule/open-coverage/shift-window errors as real blockers.",
+      "Treat route/load imbalance as review-needed unless the data proves it is impossible.",
+      `Service date: ${serviceDate}`,
+      userPrompt ? `Operator request: ${userPrompt}` : "Operator request: final schedule sanity check.",
+      "Deterministic audit:",
+      JSON.stringify(audit),
+      "Roster:",
+      JSON.stringify(compactRoster),
+      "Assignments:",
+      JSON.stringify(compactAssignments),
+    ].join("\n");
+  }
+
+  async function tryGeminiScheduleAudit({ serviceDate, audit = {}, assignments = [], roster = [], userPrompt = "" }) {
+    const apiKey = getScheduleGeminiApiKey();
+    if (!apiKey) return { ok: false, reason: "gemini_not_configured" };
+    const prompt = buildScheduleAuditPrompt({ serviceDate, audit, assignments, roster, userPrompt });
+    const response = await fetchWithTimeout(`${PTO_GEMINI_BASE_URL}/${encodeURIComponent(PTO_GEMINI_MODEL)}:generateContent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.1, maxOutputTokens: PTO_GEMINI_MAX_OUTPUT_TOKENS, responseMimeType: "application/json" },
+      }),
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(payload?.error?.message || payload?.message || `Gemini HTTP ${response.status}`);
+    const text = (payload?.candidates?.[0]?.content?.parts || [])
+      .filter((part) => typeof part?.text === "string" && part.text.trim())
+      .map((part) => part.text.trim())
+      .join("\n\n");
+    const parsed = safeJsonParse(text);
+    if (!parsed || typeof parsed !== "object") throw new Error("Gemini returned invalid schedule audit JSON.");
+    return { ok: true, provider: "gemini", model: PTO_GEMINI_MODEL, data: parsed };
+  }
+
+  async function auditScheduleForDate(serviceDate, { includeAi = false, userPrompt = "" } = {}) {
+    const [assignmentRowsRaw, rosterRowsRaw] = await Promise.all([
+      runReadOnlySql(`
+        select dsa.id as assignment_id,
+               dsa.service_date,
+               dsa.location_group_id,
+               lg.group_code,
+               lg.group_name,
+               dsa.segment_number,
+               dsa.assigned_employee_id,
+               e.display_name as assigned_employee_name,
+               e.employee_code,
+               to_char(dsa.coverage_start, 'HH24:MI:SS') as coverage_start,
+               to_char(dsa.coverage_end, 'HH24:MI:SS') as coverage_end,
+               dsa.status,
+               dsa.owner_type,
+               greatest(coalesce(dsa.load_points, 1), 0)::numeric as load_points,
+               coalesce(dsa.coverage_purpose, 'area_owner') as coverage_purpose,
+               coalesce(dsa.source_type, '') as source_type,
+               coalesce(dsa.notes, '') as notes,
+               to_char(dwr.shift_start, 'HH24:MI:SS') as shift_start,
+               to_char(dwr.shift_end, 'HH24:MI:SS') as shift_end,
+               dwr.employee_id is not null as active_roster_employee,
+               (
+                 lower(coalesce(lg.group_name, '')) like '%restroom%'
+                 or lower(coalesce(lg.group_code, '')) like '%restroom%'
+                 or exists (
+                   select 1
+                   from public.location_group_memberships m
+                   join public.locations l on l.id = m.location_id and l.active = true
+                   where m.location_group_id = dsa.location_group_id
+                     and m.active = true
+                     and (
+                       lower(coalesce(l.location_type, '')) like '%restroom%'
+                       or lower(coalesce(l.form_type, '')) like '%restroom%'
+                       or lower(coalesce(l.location_name, '')) like '%restroom%'
+                       or lower(coalesce(l.location_name, '')) like '%bathroom%'
+                     )
+                 )
+               ) as is_restroom
+        from public.daily_schedule_assignments dsa
+        join public.location_groups lg on lg.id = dsa.location_group_id
+        left join public.employees e on e.id = dsa.assigned_employee_id
+        left join public.daily_work_roster dwr
+          on dwr.service_date = dsa.service_date
+         and dwr.employee_id = dsa.assigned_employee_id
+         and dwr.active = true
+        where dsa.service_date = '${esc(serviceDate)}'::date
+        order by dsa.coverage_start, lg.group_name, dsa.segment_number
+      `),
+      runReadOnlySql(`
+        select r.employee_id, e.display_name as employee_name, e.employee_code,
+               to_char(r.shift_start, 'HH24:MI:SS') as shift_start,
+               to_char(r.shift_end, 'HH24:MI:SS') as shift_end,
+               coalesce(r.source_type, '') as source_type,
+               coalesce(r.notes, '') as notes
+        from public.daily_work_roster r
+        join public.employees e on e.id = r.employee_id
+        where r.service_date = '${esc(serviceDate)}'::date
+          and r.active = true
+        order by e.display_name
+      `),
+    ]);
+
+    const assignments = Array.isArray(assignmentRowsRaw) ? assignmentRowsRaw : [];
+    const roster = Array.isArray(rosterRowsRaw) ? rosterRowsRaw : [];
+    let hardRuleRows = [];
+    try {
+      const rows = await runReadOnlySql(`select * from public.sch_validate_operational_schedule_rules('${esc(serviceDate)}'::date, '${esc(serviceDate)}'::date)`);
+      hardRuleRows = Array.isArray(rows) ? rows : [];
+    } catch (error) {
+      hardRuleRows = [{ violation_type: "validator_unavailable", notes: error?.message || "Hard-rule validator failed." }];
+    }
+
+    const issues = [];
+    for (const row of hardRuleRows) {
+      issues.push({
+        severity: String(row.violation_type || "").includes("validator_unavailable") ? "warning" : "error",
+        type: String(row.violation_type || "hard_rule_violation"),
+        message: row.notes || `${row.group_name || row.group_code || "Schedule row"} violates operational schedule rules.`,
+        employee_name: row.employee_name || null,
+        group_name: row.group_name || null,
+        details: row,
+      });
+    }
+
+    const openRows = assignments.filter((row) => {
+      const purpose = String(row.coverage_purpose || "").toLowerCase();
+      const status = String(row.status || "").toUpperCase();
+      return purpose !== "reminder" && (!row.assigned_employee_id || status === "OPEN");
+    });
+    for (const row of openRows) {
+      issues.push({
+        severity: "error",
+        type: "open_coverage",
+        message: `${row.group_name || row.group_code || "Location"} has open coverage ${row.coverage_start || ""}-${row.coverage_end || ""}.`,
+        group_name: row.group_name || null,
+        details: row,
+      });
+    }
+
+    for (const row of assignments.filter(isRealWorkAssignment)) {
+      if (!row.active_roster_employee) {
+        issues.push({
+          severity: "critical",
+          type: "assigned_employee_not_on_active_roster",
+          message: `${row.assigned_employee_name || "Assigned employee"} is assigned to ${row.group_name || row.group_code || "a location"} but is not active on the daily roster.`,
+          employee_name: row.assigned_employee_name || null,
+          group_name: row.group_name || null,
+          details: row,
+        });
+        continue;
+      }
+      const start = minutesFromTime(row.coverage_start);
+      const end = minutesFromTime(row.coverage_end);
+      const shiftStart = minutesFromTime(row.shift_start);
+      const shiftEnd = minutesFromTime(row.shift_end);
+      if (start != null && end != null && shiftStart != null && shiftEnd != null && (start < shiftStart || end > shiftEnd)) {
+        issues.push({
+          severity: "error",
+          type: "coverage_outside_shift_window",
+          message: `${row.assigned_employee_name || "Employee"} has ${row.group_name || row.group_code || "coverage"} ${row.coverage_start}-${row.coverage_end} outside shift ${row.shift_start}-${row.shift_end}.`,
+          employee_name: row.assigned_employee_name || null,
+          group_name: row.group_name || null,
+          details: row,
+        });
+      }
+    }
+
+    const loadByEmployee = new Map(roster.map((row) => [String(row.employee_id), {
+      employee_id: String(row.employee_id),
+      employee_name: String(row.employee_name || ""),
+      work_load: 0,
+      work_segments: 0,
+      restroom_segments: 0,
+    }]));
+    for (const row of assignments.filter(isRealWorkAssignment)) {
+      const key = String(row.assigned_employee_id || "");
+      if (!key) continue;
+      if (!loadByEmployee.has(key)) {
+        loadByEmployee.set(key, {
+          employee_id: key,
+          employee_name: String(row.assigned_employee_name || "Unknown"),
+          work_load: 0,
+          work_segments: 0,
+          restroom_segments: 0,
+        });
+      }
+      const entry = loadByEmployee.get(key);
+      entry.work_load += Number(row.load_points || 0);
+      entry.work_segments += 1;
+      if (row.is_restroom) entry.restroom_segments += 1;
+    }
+    const employeeLoads = Array.from(loadByEmployee.values()).map((entry) => ({
+      ...entry,
+      work_load: Number(Number(entry.work_load || 0).toFixed(2)),
+    }));
+    const nonZeroOrAssigned = employeeLoads.filter((entry) => entry.work_segments > 0 || roster.some((row) => String(row.employee_id) === entry.employee_id));
+    const loadValues = nonZeroOrAssigned.map((entry) => Number(entry.work_load || 0));
+    const restroomValues = nonZeroOrAssigned.map((entry) => Number(entry.restroom_segments || 0));
+    const totalLoad = loadValues.reduce((sum, value) => sum + value, 0);
+    const avgLoad = loadValues.length ? totalLoad / loadValues.length : 0;
+    const minLoad = loadValues.length ? Math.min(...loadValues) : 0;
+    const maxLoad = loadValues.length ? Math.max(...loadValues) : 0;
+    const minRestrooms = restroomValues.length ? Math.min(...restroomValues) : 0;
+    const maxRestrooms = restroomValues.length ? Math.max(...restroomValues) : 0;
+    const loadSpread = maxLoad - minLoad;
+    const restroomSpread = maxRestrooms - minRestrooms;
+
+    if (loadValues.length >= 3 && avgLoad > 0 && loadSpread > Math.max(2, avgLoad * 0.75)) {
+      issues.push({
+        severity: "warning",
+        type: "workload_imbalance",
+        message: `Workload spread is ${Number(loadSpread.toFixed(2))} points across ${loadValues.length} active employees (avg ${Number(avgLoad.toFixed(2))}).`,
+        details: { min_load: Number(minLoad.toFixed(2)), max_load: Number(maxLoad.toFixed(2)), avg_load: Number(avgLoad.toFixed(2)), employee_loads: employeeLoads },
+      });
+    }
+    if (restroomValues.length >= 3 && restroomSpread > 2) {
+      issues.push({
+        severity: "warning",
+        type: "restroom_balance_review",
+        message: `Restroom assignment spread is ${restroomSpread} across active employees.`,
+        details: { min_restrooms: minRestrooms, max_restrooms: maxRestrooms, employee_loads: employeeLoads },
+      });
+    }
+
+    const deterministic = {
+      provider: "rule-based",
+      service_date: serviceDate,
+      summary: summarizeScheduleAuditIssues(issues),
+      issue_counts: issues.reduce((acc, issue) => {
+        const severity = String(issue.severity || "warning").toLowerCase();
+        acc[severity] = (acc[severity] || 0) + 1;
+        acc.total += 1;
+        return acc;
+      }, { total: 0, critical: 0, error: 0, warning: 0, info: 0 }),
+      balance: {
+        employee_count: loadValues.length,
+        total_work_load: Number(totalLoad.toFixed(2)),
+        avg_work_load: Number(avgLoad.toFixed(2)),
+        min_work_load: Number(minLoad.toFixed(2)),
+        max_work_load: Number(maxLoad.toFixed(2)),
+        work_load_spread: Number(loadSpread.toFixed(2)),
+        restroom_spread: restroomSpread,
+        employee_loads: employeeLoads.sort((a, b) => Number(b.work_load || 0) - Number(a.work_load || 0)),
+      },
+      issues,
+    };
+
+    let ai = null;
+    if (includeAi) {
+      try {
+        ai = await tryGeminiScheduleAudit({ serviceDate, audit: deterministic, assignments, roster, userPrompt });
+      } catch (error) {
+        ai = { ok: false, provider: "gemini", reason: error?.message || "gemini_audit_failed" };
+      }
+    }
+
+    return {
+      ...deterministic,
+      ai_review: ai?.ok && ai.data
+        ? {
+            provider: ai.provider,
+            model: ai.model,
+            summary: String(ai.data.summary || "").trim() || deterministic.summary,
+            logic_status: ["pass", "review", "fail"].includes(String(ai.data.logic_status || "").toLowerCase()) ? String(ai.data.logic_status).toLowerCase() : (deterministic.issue_counts.critical || deterministic.issue_counts.error ? "fail" : (deterministic.issue_counts.warning ? "review" : "pass")),
+            additional_watchouts: Array.isArray(ai.data.additional_watchouts) ? ai.data.additional_watchouts : [],
+            recommended_next_action: String(ai.data.recommended_next_action || "").trim() || (deterministic.issue_counts.total ? "Review the listed audit issues before publishing." : "No action needed."),
+          }
+        : (includeAi ? { provider: "rule-based", reason: ai?.reason || "gemini_not_used", summary: deterministic.summary, logic_status: deterministic.issue_counts.critical || deterministic.issue_counts.error ? "fail" : (deterministic.issue_counts.warning ? "review" : "pass"), additional_watchouts: [], recommended_next_action: deterministic.issue_counts.total ? "Review the listed audit issues before publishing." : "No action needed." } : null),
+    };
+  }
+
   async function getAssignedEmployeeForDevice(deviceId) {
-    const safeDeviceId = safeCode(deviceId, "device_id");
     const rows = await runReadOnlySql(`
       select
         d.device_id,
@@ -1621,7 +2781,7 @@ export function createScheduleRouter({
         coalesce(e.active, false) as employee_active
       from public.devices d
       left join public.employees e on e.id = d.assigned_employee_id
-      where d.device_id = '${esc(safeDeviceId)}'
+      where d.device_id = '${esc(deviceId)}'
       limit 1
     `);
     return Array.isArray(rows) && rows.length ? rows[0] : null;
@@ -1704,13 +2864,13 @@ export function createScheduleRouter({
     }
 
     const predicate = employeeCode
-      ? `employee_code ilike '${esc(safeIlike(employeeCode, "employee_code"))}'`
-      : `display_name ilike '${esc(safeIlike(employeeName, "employee_name"))}'`;
+      ? `employee_code ilike '${esc(employeeCode)}'`
+      : `display_name ilike '${esc(employeeName)}%'`;
     const employeeRows = await runReadOnlySql(`
       select id as employee_id
       from public.employees
       where active = true and ${predicate}
-      order by display_name
+      order by case when display_name ilike '${esc(employeeName)}' then 0 else 1 end, display_name
       limit 1
     `);
     if (!Array.isArray(employeeRows) || !employeeRows.length) throw new Error("Active employee not found.");
@@ -1721,11 +2881,26 @@ export function createScheduleRouter({
     const employee = data?.employee || {};
     const shift = data?.shift || {};
     const items = Array.isArray(data?.items) ? data.items : [];
-    const restroomItems = items.filter((item) => item?.is_public_restroom);
-    const otherItems = items.filter((item) => !item?.is_public_restroom);
-    const renderItems = (list) => list.length
-      ? list.map((item) => `<li>${htmlEscape(item.name)}</li>`).join("")
-      : `<li class="muted">None listed</li>`;
+    const itemPurpose = (item) => String(item?.coverage_purpose || item?.purpose || item?.kind || "area_owner").trim().toLowerCase();
+    const primaryItems = items.filter((item) => !["lunch_coverage", "late_coverage"].includes(itemPurpose(item)));
+    const lunchItems = items.filter((item) => itemPurpose(item) === "lunch_coverage");
+    const lateItems = items.filter((item) => itemPurpose(item) === "late_coverage");
+    const renderItems = (list) => list.map((item) => `
+      <li>
+        <span class="item-name">${htmlEscape(item.name || item.location_name || "Assigned Area")}</span>
+        ${item.group_code || item.location_code ? `<span class="item-code">${htmlEscape(item.group_code || item.location_code)}</span>` : ""}
+      </li>`).join("");
+    const renderSection = (title, list, note = "") => list.length ? `
+    <section class="card">
+      <h2>${htmlEscape(title)}</h2>
+      ${note ? `<p class="section-note">${htmlEscape(note)}</p>` : ""}
+      <ul>${renderItems(list)}</ul>
+    </section>` : "";
+    const sectionsHtml = [
+      renderSection("Primary Ownership", primaryItems, data?.has_945_change ? "Includes today's 9:45 AM restroom ownership update." : "Assigned ownership areas for today."),
+      renderSection("Lunch Coverage", lunchItems),
+      renderSection("Afternoon Call Coverage", lateItems),
+    ].join("") || `<section class="card"><div class="empty">No assignments are currently listed.</div></section>`;
 
     return `<!doctype html>
 <html lang="en">
@@ -1745,9 +2920,12 @@ export function createScheduleRouter({
   .notice { background:var(--warn); border:1px solid var(--warnline); border-radius:16px; padding:12px 14px; margin-bottom:14px; font-weight:650; }
   .card { background:white; border:1px solid var(--line); border-radius:20px; padding:16px; margin:14px 0; box-shadow:0 2px 10px rgba(20,60,70,.07); }
   .card h2 { margin:0 0 10px; font-size:20px; color:var(--teal); }
+  .section-note { margin:0 0 12px; color:var(--muted); font-weight:650; line-height:1.35; }
   ul { list-style:none; padding:0; margin:0; display:grid; gap:8px; }
   li { padding:11px 12px; background:#f8fbfa; border:1px solid #e1ece8; border-radius:13px; font-weight:620; }
-  li.muted { color:var(--muted); font-weight:500; }
+  .item-name, .item-code { display:block; }
+  .item-code { margin-top:3px; color:var(--muted); font-size:12px; letter-spacing:.03em; text-transform:uppercase; }
+  .empty { color:var(--muted); font-weight:650; text-align:center; padding:8px; }
   .meta { margin-top:14px; color:var(--muted); font-size:13px; text-align:center; }
   .pill { display:inline-block; padding:5px 9px; border-radius:999px; background:rgba(255,255,255,.16); font-size:13px; margin-top:8px; }
 </style>
@@ -1761,14 +2939,7 @@ export function createScheduleRouter({
   </header>
   <main class="wrap">
     ${data?.notice ? `<div class="notice">${htmlEscape(data.notice)}</div>` : ""}
-    <section class="card">
-      <h2>Public Restrooms</h2>
-      <ul>${renderItems(restroomItems)}</ul>
-    </section>
-    <section class="card">
-      <h2>Other Assigned Areas</h2>
-      <ul>${renderItems(otherItems)}</ul>
-    </section>
+    ${sectionsHtml}
     <div class="meta">${htmlEscape(data?.service_date || "")} • Employee code: ${htmlEscape(employee.employee_code || "")}</div>
   </main>
 </body>
@@ -1813,7 +2984,7 @@ export function createScheduleRouter({
           select id as employee_id
           from public.employees
           where active = true
-            and employee_code ilike '${esc(safeIlike(employeeCode, "employee_code"))}'
+            and employee_code ilike '${esc(employeeCode)}'
           order by display_name
           limit 1
         `);
@@ -1822,7 +2993,7 @@ export function createScheduleRouter({
 
       if (!resolvedEmployeeId && employeeName) {
         const resolvedRows = await runReadOnlySql(`
-          select public.sch_resolve_employee_ref('${esc(safeText(employeeName, "employee_name"))}') as data
+          select public.sch_resolve_employee_ref('${esc(employeeName)}') as data
         `);
         const resolved = Array.isArray(resolvedRows) && resolvedRows.length ? resolvedRows[0].data : null;
         if (resolved?.ok && resolved.employee_id) resolvedEmployeeId = resolved.employee_id;
@@ -1967,8 +3138,8 @@ export function createScheduleRouter({
           select id as employee_id
           from public.employees
           where active = true
-            and display_name ilike '${esc(safeIlike(employeeName, "employee_name"))}'
-          order by display_name
+            and display_name ilike '${esc(employeeName)}%'
+          order by case when display_name ilike '${esc(employeeName)}' then 0 else 1 end, display_name
           limit 1
         `);
         if (!Array.isArray(employeeRows) || !employeeRows.length) {
@@ -2085,7 +3256,7 @@ export function createScheduleRouter({
 
       if (employeeRef) {
         const resolvedRows = await runReadOnlySql(`
-          select public.sch_resolve_employee_ref('${esc(safeText(employeeRef, "employee_ref"))}') as data
+          select public.sch_resolve_employee_ref('${esc(employeeRef)}') as data
         `);
         const resolved = Array.isArray(resolvedRows) && resolvedRows.length ? resolvedRows[0].data : null;
         if (!resolved?.ok || !resolved.employee_id) {
@@ -2165,7 +3336,7 @@ export function createScheduleRouter({
 
       if (employeeRef) {
         const resolvedRows = await runReadOnlySql(`
-          select public.sch_resolve_employee_ref('${esc(safeText(employeeRef, "employee_ref"))}') as data
+          select public.sch_resolve_employee_ref('${esc(employeeRef)}') as data
         `);
         const resolved = Array.isArray(resolvedRows) && resolvedRows.length ? resolvedRows[0].data : null;
         if (!resolved?.ok || !resolved.employee_id) {
@@ -2269,7 +3440,7 @@ export function createScheduleRouter({
     }
   });
 
-  router.post("/pto/parse-report", async (req, res) => {
+  router.post("/pto/parse-report", requireSchedulePin, async (req, res) => {
     try {
       const parsed = await aiParsePtoReportText(req.body?.report_text || "");
       res.status(200).json({ ok: true, data: { detected_count: parsed.detected_rows.length, kept_count: parsed.kept_rows.length, rows: parsed.import_rows, provider: parsed.provider, providers_used: parsed.providers_used, fallback_count: parsed.fallback_count }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
@@ -2435,6 +3606,30 @@ export function createScheduleRouter({
     }
   });
 
+  router.get("/audit", requireSchedulePin, async (req, res) => {
+    try {
+      const serviceDate = requireDate(req.query.service_date || req.query.date || (await getServiceDate()));
+      const includeAi = String(req.query.ai || req.query.include_ai || "1").trim() !== "0";
+      const prompt = String(req.query.prompt || "").trim();
+      const data = await auditScheduleForDate(serviceDate, { includeAi, userPrompt: prompt || "Double-check that the schedule is balanced, logical, and physically possible." });
+      res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+    } catch (error) {
+      fail(res, error, "Schedule audit failed");
+    }
+  });
+
+  router.post("/ai/audit", requireSchedulePin, async (req, res) => {
+    try {
+      const serviceDate = requireDate(req.body?.service_date || req.body?.date || (await getServiceDate()));
+      const prompt = String(req.body?.prompt || "").trim();
+      const includeAi = req.body?.ai !== false && req.body?.include_ai !== false;
+      const data = await auditScheduleForDate(serviceDate, { includeAi, userPrompt: prompt || "Double-check that the schedule is balanced, logical, and physically possible." });
+      res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+    } catch (error) {
+      fail(res, error, "Schedule AI audit failed");
+    }
+  });
+
   router.get("/coverage-templates/export.csv", async (_req, res) => {
     try {
       const rows = await runReadOnlySql(`
@@ -2525,7 +3720,8 @@ export function createScheduleRouter({
 
   router.get("/current-owner", async (req, res) => {
     try {
-      const locationCode = safeCode(req.query.location_code || req.query.code, "location_code");
+      const locationCode = String(req.query.location_code || req.query.code || "").trim();
+      if (!locationCode) throw new Error("location_code is required.");
       const atSql = optionalTimestampLiteral(req.query.at);
       const rows = await runReadOnlySql(`select * from public.sch_get_current_owner('${esc(locationCode)}', ${atSql})`);
       const data = Array.isArray(rows) && rows.length ? rows[0] : null;
@@ -2541,9 +3737,102 @@ export function createScheduleRouter({
       const force = req.body?.force !== false;
       const data = await runRpc("sch_generate_daily_schedule", { p_service_date: serviceDate, p_force: force });
       const static_restore_result = await restoreStaticOwnersForDate(serviceDate);
-      res.status(200).json({ ok: true, data: { generate_result: data, static_restore_result }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+      const schedule_audit = await auditScheduleForDate(serviceDate, { includeAi: true, userPrompt: "Final check after daily schedule generation: balanced, logical, and physically possible." });
+      res.status(200).json({ ok: true, data: { generate_result: data, static_restore_result, schedule_audit }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Generate daily schedule failed");
+    }
+  });
+
+  router.post("/sch2/preview", requireSchedulePin, async (req, res) => {
+    try {
+      const serviceDate = requireDate(req.body?.service_date || req.body?.date || (await getServiceDate()));
+      const force = optionalBoolean(req.body?.force, false);
+      const preview = await runRpc("sch2_generate_preview", { p_service_date: serviceDate, p_force: force });
+      const runId = preview?.run_id || preview?.data?.run_id;
+      const audit = runId
+        ? await runRpc("sch2_audit_solution", { p_run_id: runId })
+        : (preview?.audit || null);
+      const diffRows = runId
+        ? await runReadOnlySql(`select public.sch2_compare_current_vs_preview('${esc(runId)}'::uuid) as data`)
+        : [];
+      const diff = Array.isArray(diffRows) && diffRows.length ? diffRows[0].data : (preview?.diff || null);
+      const violationRows = runId
+        ? await runReadOnlySql(`
+            select violation_type, severity, detail, location_group_id, assigned_employee_id
+            from public.v_sch2_constraint_violations
+            where run_id = '${esc(runId)}'::uuid
+            order by severity desc, violation_type asc, detail asc
+            limit 200
+          `)
+        : [];
+      res.status(200).json({
+        ok: true,
+        data: { service_date: serviceDate, force, preview, run_id: runId || null, audit, diff, violations: violationRows || [] },
+        meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion },
+      });
+    } catch (error) {
+      fail(res, error, "SCH2 preview generation failed");
+    }
+  });
+
+  router.post("/sch2/publish", requireSchedulePin, async (req, res) => {
+    try {
+      const runId = requireUuid(req.body?.run_id || req.body?.id, "run_id");
+      const confirm = optionalBoolean(req.body?.confirm, false);
+      const data = await runSch2PublishWithFallback(runId, confirm);
+      res.status(200).json({
+        ok: true,
+        data: { run_id: runId, confirm, publish_result: data },
+        meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion },
+      });
+    } catch (error) {
+      fail(res, error, "SCH2 publish failed");
+    }
+  });
+
+  router.post("/sch2/rollback", requireSchedulePin, async (req, res) => {
+    try {
+      const publishAuditId = requireUuid(req.body?.publish_audit_id || req.body?.audit_id || req.body?.id, "publish_audit_id");
+      const data = await runRpc("sch2_rollback_publish", { p_publish_audit_id: publishAuditId });
+      res.status(200).json({
+        ok: true,
+        data: { publish_audit_id: publishAuditId, rollback_result: data },
+        meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion },
+      });
+    } catch (error) {
+      fail(res, error, "SCH2 rollback failed");
+    }
+  });
+
+  router.get("/sch2/runs", async (req, res) => {
+    try {
+      const serviceDate = req.query.service_date || req.query.date ? requireDate(req.query.service_date || req.query.date) : "";
+      const limit = Math.max(1, Math.min(50, Number.parseInt(String(req.query.limit || 10), 10) || 10));
+      const rows = await runReadOnlySql(`
+        select id, service_date, generator_version, input_hash, status, mode, force,
+               hard_violation_count, open_required_count, score_total, audit_summary,
+               diff_summary, created_at, updated_at, published_at, published_by
+        from public.schedule_generation_runs
+        where (${serviceDate ? `'${esc(serviceDate)}'::date` : "null::date"} is null or service_date = '${esc(serviceDate || "1900-01-01")}'::date)
+        order by created_at desc
+        limit ${limit}
+      `);
+      res.status(200).json({ ok: true, data: { runs: rows || [] }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+    } catch (error) {
+      fail(res, error, "SCH2 run listing failed");
+    }
+  });
+
+  router.get("/sch2/explain", async (req, res) => {
+    try {
+      const runId = requireUuid(req.query.run_id || req.query.id, "run_id");
+      const workItemId = requireUuid(req.query.work_item_id || req.query.item_id, "work_item_id");
+      const rows = await runReadOnlySql(`select public.sch2_explain_assignment('${esc(runId)}'::uuid, '${esc(workItemId)}'::uuid) as data`);
+      const data = Array.isArray(rows) && rows.length ? rows[0].data : null;
+      res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+    } catch (error) {
+      fail(res, error, "SCH2 assignment explanation failed");
     }
   });
 
@@ -2568,7 +3857,11 @@ export function createScheduleRouter({
       const days = Math.max(1, Math.min(14, Number.parseInt(String(req.body?.days || 7), 10) || 7));
       const force = req.body?.force === true;
       const generated_days = await ensureScheduleRange(serviceDate, days, { force });
-      res.status(200).json({ ok: true, data: { service_date: serviceDate, days, generated_days }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+      const schedule_audits = [];
+      for (const row of generated_days || []) {
+        schedule_audits.push(await auditScheduleForDate(row.service_date, { includeAi: false, userPrompt: "Range generation deterministic schedule sanity check." }));
+      }
+      res.status(200).json({ ok: true, data: { service_date: serviceDate, days, generated_days, schedule_audits }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Generate schedule range failed");
     }
@@ -2583,13 +3876,15 @@ export function createScheduleRouter({
       let coverallPlan = await buildCoverAllPlan(serviceDate, explicit);
 
       await runWriteSql("manual_absence_publish", `
-        update public.daily_absence_overrides
-           set active = false,
+        update public.daily_absence_overrides dao
+           set active = (dao.employee_id = any(${idsSql}::uuid[])),
                updated_at = now(),
-               notes = coalesce(notes, 'Cleared by simplified absence scheduler')
-         where absence_date = '${esc(serviceDate)}'::date
-           and active = true
-           and absence_type = 'manual_override';
+               notes = case
+                 when dao.employee_id = any(${idsSql}::uuid[]) then 'Published from simplified absence scheduler'
+                 else coalesce(dao.notes, 'Cleared by simplified absence scheduler')
+               end
+         where dao.absence_date = '${esc(serviceDate)}'::date
+           and dao.absence_type = 'manual_override';
 
         insert into public.daily_absence_overrides (
           id, absence_date, employee_id, absence_type, active, notes, created_at, updated_at
@@ -2602,7 +3897,6 @@ export function createScheduleRouter({
           from public.daily_absence_overrides y
           where y.absence_date = '${esc(serviceDate)}'::date
             and y.employee_id = x.employee_id
-            and y.active = true
         );
       `);
 
@@ -2610,11 +3904,15 @@ export function createScheduleRouter({
       const staticRestoreResult = await restoreStaticOwnersForDate(serviceDate);
       let coverallManual = null;
       if (requestedCoverAllSlots.length) {
-        coverallManual = await publishCoverAllSlotsForDate(serviceDate, requestedCoverAllSlots);
+        coverallManual = await publishCoverAllSlotsForDate(serviceDate, requestedCoverAllSlots, { regenerate: false, restoreStatic: false, rebalance: false });
       }
       coverallPlan = await applyCoverAllPlan(serviceDate, coverallPlan);
+      const coverallBalanceResult = requestedCoverAllSlots.length || coverallPlan?.triggered
+        ? await rebalanceCoverAllAssignments(serviceDate)
+        : null;
       const activeRows = await listPtoRows({ startDate: serviceDate, endDate: serviceDate });
       const manualRows = activeRows.filter((row) => String(row.pto_type || "").toLowerCase() === "manual_override");
+      const scheduleAudit = await auditScheduleForDate(serviceDate, { includeAi: true, userPrompt: "Final check after manual absence publish and CoverAll rebalance: balanced, logical, and physically possible." });
 
       res.status(200).json({
         ok: true,
@@ -2626,8 +3924,10 @@ export function createScheduleRouter({
           active_absences: activeRows,
           generate_result: generateResult,
           static_restore_result: staticRestoreResult,
+          schedule_audit: scheduleAudit,
           coverall: coverallPlan,
           coverall_manual: coverallManual,
+          coverall_balance_result: coverallBalanceResult,
           manager_notification: coverallPlan?.manager_notification || null,
         },
         meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion },
@@ -2658,7 +3958,7 @@ export function createScheduleRouter({
         employeeId = employeeRef;
       } else {
         const resolvedRows = await runReadOnlySql(`
-          select public.sch_resolve_employee_ref('${esc(safeText(employeeRef, "employee_ref"))}') as data
+          select public.sch_resolve_employee_ref('${esc(employeeRef)}') as data
         `);
         const resolved = Array.isArray(resolvedRows) && resolvedRows.length ? resolvedRows[0].data : null;
         if (resolved?.ok && resolved.employee_id) employeeId = String(resolved.employee_id);
@@ -2669,7 +3969,7 @@ export function createScheduleRouter({
           select id as employee_id, display_name as employee_name
           from public.employees
           where active = true
-            and (display_name ilike '${esc(safeIlike(employeeRef, "employee_ref"))}' or employee_code ilike '${esc(safeIlike(employeeRef, "employee_ref"))}')
+            and (display_name ilike '${esc(employeeRef)}' or employee_code ilike '${esc(employeeRef)}')
           order by display_name
           limit 1
         `);
@@ -2706,6 +4006,7 @@ export function createScheduleRouter({
       const staticRestoreResult = await restoreStaticOwnersForDate(serviceDate);
       const activeRows = await listPtoRows({ startDate: serviceDate, endDate: serviceDate });
       const stillAbsentRows = activeRows.filter((row) => String(row.employee_id || "") === employeeId);
+      const scheduleAudit = await auditScheduleForDate(serviceDate, { includeAi: true, userPrompt: "Final check after returning employee to schedule: balanced, logical, and physically possible." });
 
       res.status(200).json({
         ok: true,
@@ -2719,6 +4020,7 @@ export function createScheduleRouter({
           active_absences: activeRows,
           generate_result: generateResult,
           static_restore_result: staticRestoreResult,
+          schedule_audit: scheduleAudit,
         },
         meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion },
       });
@@ -2791,11 +4093,62 @@ export function createScheduleRouter({
         data.coverall = coverallPlan;
         data.manager_notification = coverallPlan?.manager_notification || null;
       }
+      const scheduleAudit = await auditScheduleForDate(serviceDate, { includeAi: true, userPrompt: "Final check after absence publish: balanced, logical, and physically possible." });
+      if (data && typeof data === "object") data.schedule_audit = scheduleAudit;
       res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Absence publish failed");
     }
   });
+
+  router.post("/restroom-rebalance/run", requireSchedulePin, async (req, res) => {
+    try {
+      const serviceDate = requireDate(req.body?.service_date || req.body?.date || (await getServiceDate()));
+      const readiness = await ensureScheduleReadyForRestroomRebalance(serviceDate);
+      const balance = await rebalanceRestroomAssignments(serviceDate);
+      const lunch_coverage = await applyLunchCoverageAfterRestroomRebalance(serviceDate);
+      const result = { service_date: serviceDate, reason: "manual_endpoint", readiness, balance, lunch_coverage };
+      const persistent_completion = await markRestroomRebalanceCompletion(serviceDate, result, "completed");
+      restroomRebalanceState = {
+        running: false,
+        lastStartedAt: Date.now(),
+        lastCompletedAt: Date.now(),
+        lastServiceDate: serviceDate,
+        lastResult: { ...result, persistent_completion },
+      };
+      res.status(200).json({ ok: true, data: { service_date: serviceDate, readiness, balance, lunch_coverage, persistent_completion, state: restroomRebalanceState }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+    } catch (error) {
+      fail(res, error, "Restroom rebalance failed");
+    }
+  });
+
+  router.get("/restroom-rebalance/status", requireSchedulePin, async (_req, res) => {
+    try {
+      const serviceDate = requireDate(await getServiceDate());
+      const persistent_completion = await getRestroomRebalanceCompletion(serviceDate);
+      res.status(200).json({
+        ok: true,
+        data: {
+          scheduled_time: RESTROOM_REBALANCE_TIME,
+          timezone: RESTROOM_REBALANCE_TZ,
+          service_date: serviceDate,
+          due_now: isRestroomRebalanceDue(),
+          state: restroomRebalanceState,
+          persistent_completion,
+        },
+        meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion },
+      });
+    } catch (error) {
+      fail(res, error, "Restroom rebalance status failed");
+    }
+  });
+
+  if (RESTROOM_REBALANCE_SWEEP_MS > 0 && typeof runWriteSql === "function") {
+    setInterval(() => {
+      maybeAutoRestroomRebalance({ reason: "scheduled_interval" })
+        .catch((error) => console.error("9:45 restroom rebalance failed:", error));
+    }, RESTROOM_REBALANCE_SWEEP_MS).unref?.();
+  }
 
   return router;
 }

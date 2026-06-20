@@ -9,7 +9,8 @@ const WEEKDAY_INDEX = {
 };
 
 export function esc(value) {
-  return String(value || "").replace(/'/g, "''");
+  if (value == null) return "null";
+  return String(value).replace(/'/g, "''");
 }
 
 export function sqlLikeLiteral(value) {
@@ -120,4 +121,19 @@ export function toSafeInt(value, fallback, min = 1, max = 90) {
   const parsed = Number.parseInt(String(value ?? fallback), 10);
   if (!Number.isFinite(parsed)) return fallback;
   return Math.min(Math.max(parsed, min), max);
+}
+
+/**
+ * LOW #2: Shared normalizeTime() function for consistent time slicing.
+ * Strips seconds, pads to HH:MM, and handles edge cases uniformly.
+ */
+export function normalizeTime(value = "") {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+  // Match HH:MM:SS or HH:MM or H:MM
+  const match = raw.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (!match) return raw.slice(0, 5);
+  const hour = String(match[1]).padStart(2, "0");
+  const minute = String(match[2]).padStart(2, "0");
+  return `${hour}:${minute}`;
 }

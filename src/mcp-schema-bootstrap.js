@@ -123,6 +123,9 @@ function ensureModularTools(server) {
   registerSupabaseTools(server);
 }
 
+// M14: Monkey-patching McpServer.prototype.tool — this is intentional and guarded.
+// The patch intercepts tool registration to automatically wire up modular schema/bootstrap tools.
+// Guard: __memphisSchemaBootstrapApplied prevents double-patching if module is imported multiple times.
 const originalTool = McpServer.prototype.tool;
 
 if (typeof originalTool === "function" && !McpServer.prototype.__memphisSchemaBootstrapApplied) {

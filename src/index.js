@@ -1,7 +1,6 @@
 import "dotenv/config";
-import { randomUUID } from "crypto";
+import { createHmac, randomUUID, timingSafeEqual } from "crypto";
 import express from "express";
-import rateLimit from "express-rate-limit";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
@@ -14,31 +13,14 @@ import {
   createEventsAdminRouter,
   createEventsPublicRouter,
   createMessagingRouter,
-  createMoxieRouter,
   createScheduleRouter,
 } from "./routes/index.js";
 import { APP_VERSION, RELEASE_ID } from "./app-version.js";
+import { authenticateDailyPinRequest, installDailyPinAuthRoutes, makeDailyPinMiddleware } from "./auth/daily-pin-auth.js";
+import { sanitizeReadOnlySql } from "./supabase/read.js";
 
 const app = express();
 app.use(express.json({ limit: "10mb" }));
-
-const generalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 200,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { ok: false, error: "Too many requests. Please try again later." },
-});
-
-const adminLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 50,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { ok: false, error: "Too many admin requests. Please try again later." },
-});
-
-app.use(generalLimiter);
 
 const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
 
@@ -75,10 +57,59 @@ const ATTENDANCE_CACHE_MS = toSafeInt(process.env.ND_MEMZOO_ATTENDANCE_CACHE_MS,
 const ATTENDANCE_CF_CLEARANCE = String(process.env.ND_MEMZOO_CF_CLEARANCE || "").trim();
 const FEEDBACK_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 const FEEDBACK_REMINDER_SWEEP_MS = toSafeInt(process.env.FEEDBACK_REMINDER_SWEEP_MS, 60000);
+const FEEDBACK_REMINDER_MAX_COUNT = toSafeInt(process.env.FEEDBACK_REMINDER_MAX_COUNT, 3);
 let attendanceCache = { data: null, fetched_at_ms: 0 };
 let feedbackReminderSweepInFlight = false;
+let feedbackSchemaEnsured = false;
+let feedbackSchemaEnsurePromise = null;
 
-const MOXIE_CONTRACT_VERSION = "moxie.v1";
+const requireOpsManagerAuth = makeDailyPinMiddleware({ allowedRoles: ["ops_manager"], openWhenDisabled: true });
+
+// Simple in-memory rate limiter: max 10 requests per minute per IP
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX = 10;
+const rateLimitBuckets = new Map();
+
+function rateLimit(req, res, next) {
+  const ip = String(req.headers["x-forwarded-for"] || req.ip || req.socket?.remoteAddress || "unknown").split(",")[0].trim();
+  const now = Date.now();
+  let bucket = rateLimitBuckets.get(ip);
+  if (!bucket || now - bucket.windowStart > RATE_LIMIT_WINDOW_MS) {
+    bucket = { windowStart: now, count: 0 };
+    rateLimitBuckets.set(ip, bucket);
+  }
+  bucket.count += 1;
+  if (bucket.count > RATE_LIMIT_MAX) {
+    res.status(429).json({ ok: false, error: "Rate limit exceeded. Try again in a minute." });
+    return;
+  }
+  next();
+}
+
+// Purge stale rate limit buckets periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, bucket] of rateLimitBuckets) {
+    if (now - bucket.windowStart > RATE_LIMIT_WINDOW_MS * 2) {
+      rateLimitBuckets.delete(ip);
+    }
+  }
+}, RATE_LIMIT_WINDOW_MS).unref?.();
+
+async function validateDeviceRegistration(deviceId) {
+  const normalized = String(deviceId || "").trim();
+  if (!normalized) return false;
+  try {
+    const rows = await runReadOnlySql(`select 1 from public.devices where device_id = ${sqlLiteral(normalized)} and active = true limit 1`);
+    return Array.isArray(rows) && rows.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+function isHealthPath(req) {
+  return String(req.path || "") === "/health";
+}
 
 function buildHealthPayload(area, extra = {}) {
   return {
@@ -94,7 +125,6 @@ function buildHealthPayload(area, extra = {}) {
       schedule: SCHEDULE_CONTRACT_VERSION,
       events: EVENTS_CONTRACT_VERSION,
       feedback: FEEDBACK_CONTRACT_VERSION,
-      moxie: MOXIE_CONTRACT_VERSION,
     },
     ...extra,
   };
@@ -147,118 +177,150 @@ function getGithubErrorDetail(error) {
   return error?.message || "Unknown GitHub error";
 }
 
-function sanitizeReadOnlySql(sql) {
-  const trimmed = String(sql || "").trim();
-  const withoutTrailingSemicolons = trimmed.replace(/;\s*$/, "");
-  const normalized = withoutTrailingSemicolons.toLowerCase();
-  return { sql: withoutTrailingSemicolons, normalized };
-}
-
-function getAdminApiKey() {
-  return String(process.env.ADMIN_API_KEY || "").trim();
-}
-
 function normalizeDashboardCloser(value) {
   const normalized = String(value || "").trim();
   return normalized || "Dashboard";
 }
 
-function allowWithoutPin(_req, _res, next) {
-  next();
-}
+const ALLOWED_CORS_ORIGINS = String(process.env.ALLOWED_CORS_ORIGINS || "")
+  .split(",").map((s) => s.trim()).filter(Boolean);
+const DEFAULT_CORS_ORIGINS = [
+  "https://memphis-zoo-mcp.onrender.com",
+  "https://nousresearch.github.io",
+];
+const CORS_ORIGINS_SET = new Set([...ALLOWED_CORS_ORIGINS, ...DEFAULT_CORS_ORIGINS]);
 
-const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || "")
-  .split(",")
-  .map((s) => s.trim())
-  .filter(Boolean);
-
-function resolveOrigin(req) {
-  const origin = req.header("Origin") || req.header("origin");
-  if (!origin) return null;
-  if (ALLOWED_ORIGINS.length === 0) return origin;
-  return ALLOWED_ORIGINS.includes(origin) ? origin : null;
-}
-
-function applyCors(res, origin, methods, extraHeaders = "") {
-  if (origin && origin !== "*") {
+function setCorsOrigin(res, req) {
+  const origin = String(req?.headers?.origin || "").trim();
+  if (origin && CORS_ORIGINS_SET.has(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
-    res.setHeader("Access-Control-Allow-Credentials", "true");
-  } else if (origin === "*") {
-    res.setHeader("Access-Control-Allow-Origin", "*");
+  } else {
+    res.setHeader("Access-Control-Allow-Origin", DEFAULT_CORS_ORIGINS[0]);
   }
-  res.setHeader("Access-Control-Allow-Methods", methods);
-  res.setHeader("Access-Control-Allow-Headers", `Content-Type${extraHeaders ? `, ${extraHeaders}` : ""}`);
   res.setHeader("Vary", "Origin");
 }
 
-function setAdminApiCors(req, res) {
-  const origin = resolveOrigin(req);
-  if (origin === null) return false;
-  applyCors(res, origin, "GET,POST,DELETE,OPTIONS", "X-Admin-Key");
-  return true;
+function setAdminApiCors(res, req) {
+  setCorsOrigin(res, req);
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id");
 }
 
-function setPublicDashboardCors(req, res) {
-  const origin = resolveOrigin(req);
-  if (origin === null) return false;
-  applyCors(res, origin, "GET,POST,OPTIONS");
-  return true;
+function setPublicDashboardCors(res, req) {
+  setCorsOrigin(res, req);
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id");
 }
 
-function setScanApiCors(req, res) {
-  const origin = resolveOrigin(req);
-  if (origin === null) return false;
-  applyCors(res, origin, "GET,POST,OPTIONS");
-  return true;
+function setScanApiCors(res, req) {
+  setCorsOrigin(res, req);
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id");
 }
 
-function setMessagingApiCors(req, res) {
-  const origin = resolveOrigin(req);
-  if (origin === null) return false;
-  applyCors(res, origin, "GET,POST,OPTIONS");
-  return true;
+function setMessagingApiCors(res, req) {
+  setCorsOrigin(res, req);
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id");
 }
 
-function setScheduleApiCors(req, res) {
-  const origin = resolveOrigin(req);
-  if (origin === null) return false;
-  applyCors(res, origin, "GET,POST,OPTIONS");
-  return true;
+function setScheduleApiCors(res, req) {
+  setCorsOrigin(res, req);
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS,PATCH,DELETE");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id");
 }
 
-function setGuestApiCors(req, res) {
-  const origin = resolveOrigin(req);
-  if (origin === null) return false;
-  applyCors(res, origin, "GET,POST,OPTIONS");
-  return true;
+function setGuestApiCors(res, req) {
+  setCorsOrigin(res, req);
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id");
 }
 
-function setFeedbackApiCors(req, res) {
-  const origin = resolveOrigin(req);
-  if (origin === null) return false;
-  applyCors(res, origin, "GET,POST,OPTIONS");
-  return true;
+function setFeedbackApiCors(res, req) {
+  setCorsOrigin(res, req);
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id, X-Feedback-Reminder-Secret");
 }
 
-function setMoxieCors(req, res) {
-  const origin = resolveOrigin(req);
-  if (origin === null) return false;
-  applyCors(res, origin, "GET,POST,PUT,DELETE,OPTIONS");
-  return true;
+
+function getFeedbackReminderSecret() {
+  return String(process.env.FEEDBACK_REMINDER_SECRET || "").trim();
 }
 
-function requireAdminApiAuth(req, res, next) {
-  const configuredKey = getAdminApiKey();
-  if (!configuredKey) {
-    res.status(503).json({ ok: false, error: "ADMIN_API_KEY is not configured on the server." });
-    return;
+function safeStringEqual(left, right) {
+  const a = Buffer.from(String(left || ""));
+  const b = Buffer.from(String(right || ""));
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
+
+let _feedbackLinkSecretGenerated = null;
+function getFeedbackLinkSecret() {
+  const secret = String(process.env.FEEDBACK_LINK_SECRET || "").trim();
+  if (secret) return secret;
+  const pinSecret = String(process.env.PIN_SESSION_SECRET || "").trim();
+  if (pinSecret) return pinSecret;
+  if (!_feedbackLinkSecretGenerated) {
+    _feedbackLinkSecretGenerated = randomUUID() + randomUUID();
+    console.warn("[security] FEEDBACK_LINK_SECRET and PIN_SESSION_SECRET are both unset. Generated a random feedback link secret at startup. Feedback links will not survive restarts.");
   }
-  const providedKey = String(req.header("x-admin-key") || "").trim();
-  if (!providedKey || providedKey !== configuredKey) {
+  return _feedbackLinkSecretGenerated;
+}
+
+function signFeedbackLinkToken(feedbackId, purpose = "ack") {
+  const id = String(feedbackId || "").trim();
+  const secret = getFeedbackLinkSecret();
+  if (!id || !secret) return "";
+  const payload = Buffer.from(JSON.stringify({ v: 1, purpose, feedback_id: id }), "utf8").toString("base64url");
+  const signature = createHmac("sha256", secret).update(payload).digest("base64url");
+  return `${payload}.${signature}`;
+}
+
+function verifyFeedbackLinkToken(token, feedbackId, purpose = "ack") {
+  const secret = getFeedbackLinkSecret();
+  const raw = String(token || "").trim();
+  const [payload, signature, extra] = raw.split(".");
+  if (!secret || !payload || !signature || extra !== undefined) return false;
+  const expected = createHmac("sha256", secret).update(payload).digest("base64url");
+  if (!safeStringEqual(signature, expected)) return false;
+  try {
+    const decoded = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    return decoded?.v === 1 && decoded?.purpose === purpose && String(decoded?.feedback_id || "") === String(feedbackId || "");
+  } catch {
+    return false;
+  }
+}
+
+function requireFeedbackSignedLinkOrOps(purpose) {
+  return (req, res, next) => {
+    const feedbackId = String(req.params.feedbackId || "").trim();
+    if (verifyFeedbackLinkToken(req.query.token || req.body?.token, feedbackId, purpose)) {
+      req.feedbackSignedLink = { purpose, feedback_id: feedbackId };
+      next();
+      return;
+    }
+    const result = authenticateDailyPinRequest(req, { allowedRoles: ["ops_manager"] });
+    if (!result.ok) {
+      res.status(result.status || 401).json({ ok: false, error: result.error || "Unauthorized" });
+      return;
+    }
+    req.memphisAuth = result.session;
+    next();
+  };
+}
+
+function requireFeedbackReminderSecret(req, res) {
+  const configuredSecret = getFeedbackReminderSecret();
+  if (!configuredSecret) {
+    res.status(503).json({ ok: false, error: "FEEDBACK_REMINDER_SECRET is not configured on the server." });
+    return false;
+  }
+  const providedSecret = String(req.header("x-feedback-reminder-secret") || req.body?.secret || "").trim();
+  if (!providedSecret || !safeStringEqual(providedSecret, configuredSecret)) {
     res.status(401).json({ ok: false, error: "Unauthorized" });
-    return;
+    return false;
   }
-  next();
+  return true;
 }
 
 async function runRpc(functionName, args = {}) {
@@ -279,7 +341,8 @@ async function runRpc(functionName, args = {}) {
 
 function toSafeInt(value, fallback) {
   const parsed = Number.parseInt(String(value ?? fallback), 10);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+  if (!Number.isFinite(parsed) || parsed < 1) return Math.max(1, fallback);
+  return parsed;
 }
 
 function toNullableInt(value) {
@@ -376,24 +439,31 @@ async function persistAttendanceState(payload = {}) {
     throw new Error("attendance is required and must be an integer.");
   }
 
-  const client = getSupabaseConfig();
-  const { error } = await client
-    .from("current_attendance_state")
-    .upsert(
-      {
-        id: 1,
-        attendance,
-        last_year: lastYear,
-        planned,
-        yesterday,
-        yesterday_plan: yesterdayPlan,
-        source,
-        fetched_at: fetchedAt,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "id" }
-    );
-  if (error) throw new Error(error.message || "Attendance state upsert failed.");
+  await runWriteSql(
+    "attendance_state_upsert",
+    `insert into public.current_attendance_state (
+       id, attendance, last_year, planned, yesterday, yesterday_plan, source, fetched_at, updated_at
+     ) values (
+       1,
+       ${sqlLiteral(attendance)},
+       ${sqlLiteral(lastYear)},
+       ${sqlLiteral(planned)},
+       ${sqlLiteral(yesterday)},
+       ${sqlLiteral(yesterdayPlan)},
+       ${sqlLiteral(source)},
+       ${fetchedAt ? `${sqlLiteral(fetchedAt)}::timestamptz` : "null"},
+       now()
+     )
+     on conflict (id) do update set
+       attendance = excluded.attendance,
+       last_year = excluded.last_year,
+       planned = excluded.planned,
+       yesterday = excluded.yesterday,
+       yesterday_plan = excluded.yesterday_plan,
+       source = excluded.source,
+       fetched_at = excluded.fetched_at,
+       updated_at = now();`
+  );
 
   return await loadStoredAttendance();
 }
@@ -472,9 +542,6 @@ async function fetchCurrentAttendance(options = {}) {
 async function runReadOnlySql(sql) {
   const client = getSupabaseConfig();
   const sanitized = sanitizeReadOnlySql(sql);
-  if (!(sanitized.normalized.startsWith("select") || sanitized.normalized.startsWith("with"))) {
-    throw new Error("Only read-only SELECT/CTE queries are allowed.");
-  }
   const { data, error } = await client.rpc("run_sql_readonly", { p_sql: sanitized.sql });
   if (error) throw new Error(error.message || "run_sql_readonly failed");
   return data;
@@ -533,19 +600,17 @@ async function ensureGuestReportsSchema() {
 async function resolveGuestReportLocation(locationCode) {
   const code = String(locationCode || "").trim().toUpperCase();
   if (!code) throw new Error("location_code is required.");
-  const client = getSupabaseConfig();
-  const { data, error } = await client
-    .from("locations")
-    .select("id as location_id, location_code, location_name, location_type, form_type")
-    .eq("active", true)
-    .eq("location_code", code)
-    .order("location_name")
-    .limit(1);
-  if (error) throw new Error(error.message || "Location lookup failed.");
-  if (!Array.isArray(data) || !data.length) {
+  const rows = await runReadOnlySql(`
+    select l.id as location_id, l.location_code, l.location_name, l.location_type, l.form_type
+    from public.locations l
+    where l.active = true and upper(l.location_code) = ${sqlLiteral(code)}
+    order by l.location_name
+    limit 1
+  `);
+  if (!Array.isArray(rows) || !rows.length) {
     throw new Error("Location not found.");
   }
-  return data[0];
+  return rows[0];
 }
 
 async function resolveOpsManagerRecipients() {
@@ -576,21 +641,27 @@ async function createGuestCleanlinessReport({ location, issueType, severity, not
     },
     submitted_via: "guest_qr",
   };
-  const client = getSupabaseConfig();
-  const { data, error } = await client
-    .from("guest_cleanliness_reports")
-    .insert({
-      location_code: location.location_code,
-      location_name: location.location_name || null,
-      issue_type: issue,
-      severity: level,
-      notes: noteText,
-      metadata_json: metadata,
-    })
-    .select("id, location_code, location_name, issue_type, severity, notes, status, source, submitted_at, resolved_at, notification_status, notified_employee_user_id, notified_ops_count, metadata_json")
-    .single();
-  if (error) throw new Error(error.message || "Guest report could not be created.");
-  return data;
+  const rows = await runWriteSql(
+    "guest_cleanliness_report_insert",
+    `insert into public.guest_cleanliness_reports (
+      location_code,
+      location_name,
+      issue_type,
+      severity,
+      notes,
+      metadata_json
+    ) values (
+      ${sqlLiteral(location.location_code)},
+      ${sqlLiteral(location.location_name || null)},
+      ${sqlLiteral(issue)},
+      ${sqlLiteral(level)},
+      ${sqlLiteral(noteText)},
+      ${sqlLiteral(JSON.stringify(metadata))}::jsonb
+    )
+    returning id, location_code, location_name, issue_type, severity, notes, status, source, submitted_at, resolved_at, notification_status, notified_employee_user_id, notified_ops_count, metadata_json`
+  );
+  if (!Array.isArray(rows) || !rows.length) throw new Error("Guest report could not be created.");
+  return rows[0];
 }
 
 function buildGuestReportNotificationBody(report, ownerName) {
@@ -614,66 +685,77 @@ async function notifyGuestReportRecipients({ report, currentOwner, opsRecipients
   }
 
   const body = buildGuestReportNotificationBody(report, currentOwner?.assigned_employee_name || null);
-  for (const recipient of recipientIds) {
-    try {
-      const thread = await runRpc("msg_get_or_create_direct_thread", { p_user_a: memphisUserId, p_user_b: recipient.user_id });
-      await runRpc("msg_send_message", {
-        p_thread_id: thread.id,
-        p_sender_user_id: memphisUserId,
-        p_body: body,
-        p_message_type: "bot_response",
-        p_metadata_json: {
-          channel: "memphis",
-          source: "guest_cleanliness_report",
-          report_id: report.id,
-          location_code: report.location_code,
-          recipient_kind: recipient.kind,
-        },
-      });
+  const sendResults = await Promise.allSettled(recipientIds.map(async (recipient) => {
+    const thread = await runRpc("msg_get_or_create_direct_thread", { p_user_a: memphisUserId, p_user_b: recipient.user_id });
+    await runRpc("msg_send_message", {
+      p_thread_id: thread.id,
+      p_sender_user_id: memphisUserId,
+      p_body: body,
+      p_message_type: "bot_response",
+      p_metadata_json: {
+        channel: "memphis",
+        source: "guest_cleanliness_report",
+        report_id: report.id,
+        location_code: report.location_code,
+        recipient_kind: recipient.kind,
+      },
+    });
+    return recipient;
+  }));
+  for (let i = 0; i < recipientIds.length; i++) {
+    const recipient = recipientIds[i];
+    const result = sendResults[i];
+    if (result.status === "fulfilled") {
       if (recipient.kind === "current_owner") notified.employee_user_id = recipient.user_id;
       if (recipient.kind === "ops_manager") notified.ops_count += 1;
-    } catch (error) {
-      notified.errors.push({ user_id: recipient.user_id, error: error?.message || "notification_failed" });
+    } else {
+      notified.errors.push({ user_id: recipient.user_id, error: result.reason?.message || "notification_failed" });
     }
   }
 
-  const client = getSupabaseConfig();
-  const { error: updateError } = await client
-    .from("guest_cleanliness_reports")
-    .update({
-      notification_status: notified.errors.length ? (recipientIds.length ? "partial" : "failed") : "sent",
-      notified_employee_user_id: notified.employee_user_id,
-      notified_ops_count: Number(notified.ops_count || 0),
-      metadata_json: { notification_errors: notified.errors },
-    })
-    .eq("id", report.id);
-  if (updateError) throw new Error(updateError.message || "Guest report notification status update failed.");
+  const totalAttempted = recipientIds.length;
+  const totalSucceeded = totalAttempted - notified.errors.length;
+  const notificationStatus = totalAttempted === 0
+    ? "failed"
+    : (notified.errors.length === 0 ? "sent" : (totalSucceeded === 0 ? "failed" : "partial"));
+
+  await runWriteSql(
+    "guest_report_notification_status",
+    `update public.guest_cleanliness_reports
+       set notification_status = ${sqlLiteral(notificationStatus)},
+           notified_employee_user_id = ${sqlLiteral(notified.employee_user_id)}${notified.employee_user_id ? "::uuid" : ""},
+           notified_ops_count = ${Number(notified.ops_count || 0)},
+           metadata_json = coalesce(metadata_json, '{}'::jsonb) || ${sqlLiteral(JSON.stringify({ notification_errors: notified.errors }))}::jsonb
+     where id = ${sqlLiteral(report.id)}::uuid`
+  );
 
   return notified;
 }
 
 async function listGuestCleanlinessReports({ status, locationCode, limit = 100 } = {}) {
-  const client = getSupabaseConfig();
-  let query = client
-    .from("guest_cleanliness_reports")
-    .select("id, location_code, location_name, issue_type, severity, notes, status, source, submitted_at, resolved_at, notification_status, notified_employee_user_id, notified_ops_count, metadata_json")
-    .order("submitted_at", { ascending: false })
-    .limit(Math.max(1, Math.min(500, Number(limit) || 100)));
-
-  if (status) {
-    query = query.eq("status", String(status).trim().toLowerCase());
-  }
-  if (locationCode) {
-    query = query.eq("location_code", String(locationCode).trim().toUpperCase());
-  }
-
-  const { data, error } = await query;
-  if (error) throw new Error(error.message || "Guest cleanliness report list failed.");
-  return Array.isArray(data) ? data : [];
+  const filters = [];
+  if (status) filters.push(`status = ${sqlLiteral(String(status).trim().toLowerCase())}`);
+  if (locationCode) filters.push(`upper(location_code) = ${sqlLiteral(String(locationCode).trim().toUpperCase())}`);
+  const where = filters.length ? `where ${filters.join(" and ")}` : "";
+  const rows = await runReadOnlySql(`
+    select id, location_code, location_name, issue_type, severity, notes, status, source,
+           submitted_at, resolved_at, notification_status, notified_employee_user_id,
+           notified_ops_count, metadata_json
+    from public.guest_cleanliness_reports
+    ${where}
+    order by submitted_at desc
+    limit ${Math.max(1, Math.min(500, Number(limit) || 100))}
+  `);
+  return Array.isArray(rows) ? rows : [];
 }
 
 async function ensureSystemFeedbackSchema() {
-  await runWriteSql(
+  if (feedbackSchemaEnsured) return;
+  // M11: Use a promise-based guard to prevent race condition when multiple concurrent
+  // requests call ensureSystemFeedbackSchema simultaneously.
+  if (feedbackSchemaEnsurePromise) return feedbackSchemaEnsurePromise;
+  feedbackSchemaEnsurePromise = (async () => {
+    await runWriteSql(
     "system_feedback_schema",
     `create table if not exists public.system_feedback_items (
        id uuid primary key default gen_random_uuid(),
@@ -705,7 +787,14 @@ async function ensureSystemFeedbackSchema() {
      create index if not exists idx_system_feedback_items_priority on public.system_feedback_items (priority);
      create index if not exists idx_system_feedback_items_hub_context on public.system_feedback_items (hub_context);
      create index if not exists idx_system_feedback_items_reminder_due on public.system_feedback_items (status, last_feedback_reminder_at);`
-  );
+    );
+    feedbackSchemaEnsured = true;
+  })();
+  try {
+    await feedbackSchemaEnsurePromise;
+  } finally {
+    feedbackSchemaEnsurePromise = null;
+  }
 }
 
 function normalizeFeedbackCategory(value) {
@@ -724,11 +813,17 @@ function getFeedbackPublicOrigin() {
 }
 
 function buildSystemFeedbackAckUrl(feedbackId) {
-  return `${getFeedbackPublicOrigin()}/feedback-api/acknowledge/${encodeURIComponent(String(feedbackId || ""))}`;
+  const id = String(feedbackId || "");
+  const token = signFeedbackLinkToken(id, "ack");
+  const suffix = token ? `?token=${encodeURIComponent(token)}` : "";
+  return `${getFeedbackPublicOrigin()}/feedback-api/acknowledge/${encodeURIComponent(id)}${suffix}`;
 }
 
 function buildSystemFeedbackImageUrl(feedbackId) {
-  return `${getFeedbackPublicOrigin()}/feedback-api/image/${encodeURIComponent(String(feedbackId || ""))}`;
+  const id = String(feedbackId || "");
+  const token = signFeedbackLinkToken(id, "image");
+  const suffix = token ? `?token=${encodeURIComponent(token)}` : "";
+  return `${getFeedbackPublicOrigin()}/feedback-api/image/${encodeURIComponent(id)}${suffix}`;
 }
 
 function escapeHtml(value) {
@@ -791,30 +886,34 @@ async function createSystemFeedbackItem(payload = {}) {
 
   const summary = summarizeSystemFeedback({ category, priority, message, hubContext, submittedBy });
   const feedbackId = randomUUID();
-  const client = getSupabaseConfig();
-  const { error: insertError } = await client
-    .from("system_feedback_items")
-    .insert({
-      id: feedbackId,
-      category,
-      priority,
-      message,
-      submitted_by: submittedBy,
-      hub_context: hubContext,
-      device_id: deviceId,
-      page_url: pageUrl,
-      summary,
-      metadata_json: metadata,
-    });
-  if (insertError) throw new Error(insertError.message || "System feedback could not be created.");
+  await runWriteSql(
+    "system_feedback_insert",
+    `insert into public.system_feedback_items (
+       id, category, priority, message, submitted_by, hub_context, device_id, page_url, summary, metadata_json
+     ) values (
+       ${sqlLiteral(feedbackId)}::uuid,
+       ${sqlLiteral(category)},
+       ${sqlLiteral(priority)},
+       ${sqlLiteral(message)},
+       ${sqlLiteral(submittedBy)},
+       ${sqlLiteral(hubContext)},
+       ${sqlLiteral(deviceId)},
+       ${sqlLiteral(pageUrl)},
+       ${sqlLiteral(summary)},
+       ${sqlLiteral(JSON.stringify(metadata))}::jsonb
+     )`
+  );
 
-  const { data, error: fetchError } = await client
-    .from("system_feedback_items")
-    .select("id, category, priority, message, submitted_by, hub_context, device_id, page_url, status, summary, notification_status, notified_ops_count, last_feedback_reminder_at, feedback_reminder_count, acknowledged_at, acknowledged_by, metadata_json, created_at, updated_at")
-    .eq("id", feedbackId)
-    .single();
-  if (fetchError) throw new Error(fetchError.message || "System feedback could not be created.");
-  return data;
+  const rows = await runReadOnlySql(`
+    select id, category, priority, message, submitted_by, hub_context, device_id, page_url,
+           status, summary, notification_status, notified_ops_count, last_feedback_reminder_at,
+           feedback_reminder_count, acknowledged_at, acknowledged_by, metadata_json, created_at, updated_at
+    from public.system_feedback_items
+    where id = ${sqlLiteral(feedbackId)}::uuid
+    limit 1
+  `);
+  if (!Array.isArray(rows) || !rows.length) throw new Error("System feedback could not be created.");
+  return rows[0];
 }
 
 function buildSystemFeedbackNotificationBody(item, { reminder = false } = {}) {
@@ -830,97 +929,94 @@ function buildSystemFeedbackNotificationBody(item, { reminder = false } = {}) {
 async function notifySystemFeedbackRecipients({ item, opsRecipients, memphisUserId, reminder = false }) {
   const notified = { ops_count: 0, errors: [] };
   const body = buildSystemFeedbackNotificationBody(item, { reminder });
-  for (const ops of opsRecipients || []) {
-    if (!isUuid(ops.user_id)) continue;
-    try {
-      const thread = await runRpc("msg_get_or_create_direct_thread", { p_user_a: memphisUserId, p_user_b: ops.user_id });
-      await runRpc("msg_send_message", {
-        p_thread_id: thread.id,
-        p_sender_user_id: memphisUserId,
-        p_body: body,
-        p_message_type: "bot_response",
-        p_metadata_json: {
-          channel: "memphis",
-          source: "system_feedback",
-          feedback_id: item.id,
-          priority: item.priority,
-          category: item.category,
-          reminder,
-        },
-      });
+  const eligibleRecipients = (opsRecipients || []).filter((ops) => isUuid(ops.user_id));
+  const sendResults = await Promise.allSettled(eligibleRecipients.map(async (ops) => {
+    const thread = await runRpc("msg_get_or_create_direct_thread", { p_user_a: memphisUserId, p_user_b: ops.user_id });
+    await runRpc("msg_send_message", {
+      p_thread_id: thread.id,
+      p_sender_user_id: memphisUserId,
+      p_body: body,
+      p_message_type: "bot_response",
+      p_metadata_json: {
+        channel: "memphis",
+        source: "system_feedback",
+        feedback_id: item.id,
+        priority: item.priority,
+        category: item.category,
+        reminder,
+      },
+    });
+    return ops;
+  }));
+  for (let i = 0; i < eligibleRecipients.length; i++) {
+    const result = sendResults[i];
+    if (result.status === "fulfilled") {
       notified.ops_count += 1;
-    } catch (error) {
-      notified.errors.push({ user_id: ops.user_id, error: error?.message || "notification_failed" });
+    } else {
+      notified.errors.push({ user_id: eligibleRecipients[i].user_id, error: result.reason?.message || "notification_failed" });
     }
   }
 
-  const client = getSupabaseConfig();
-  const { error: updateError } = await client
-    .from("system_feedback_items")
-    .update({
-      notification_status: notified.errors.length ? (notified.ops_count ? "partial" : "failed") : "sent",
-      notified_ops_count: Number(notified.ops_count || 0),
-      last_feedback_reminder_at: new Date().toISOString(),
-      feedback_reminder_count: reminder ? 1 : 0,
-      updated_at: new Date().toISOString(),
-      metadata_json: { notification_errors: notified.errors },
-    })
-    .eq("id", item.id);
-  if (updateError) throw new Error(updateError.message || "System feedback notification status update failed.");
+  await runWriteSql(
+      "system_feedback_notification_status",
+    `update public.system_feedback_items
+       set notification_status = ${sqlLiteral(eligibleRecipients.length === 0 ? "failed" : (notified.errors.length === 0 ? "sent" : (notified.ops_count ? "partial" : "failed")))},
+           notified_ops_count = coalesce(notified_ops_count, 0) + ${Number(notified.ops_count || 0)},
+           last_feedback_reminder_at = now(),
+           feedback_reminder_count = coalesce(feedback_reminder_count, 0) + ${reminder ? 1 : 0},
+           updated_at = now(),
+           metadata_json = coalesce(metadata_json, '{}'::jsonb) || ${sqlLiteral(JSON.stringify({ notification_errors: notified.errors }))}::jsonb
+     where id = ${sqlLiteral(item.id)}::uuid`
+  );
 
   return notified;
 }
 
 async function listSystemFeedbackItems({ status, priority, hubContext, limit = 100 } = {}) {
-  const client = getSupabaseConfig();
-  let query = client
-    .from("system_feedback_items")
-    .select("id, category, priority, message, submitted_by, hub_context, device_id, page_url, status, summary, notification_status, notified_ops_count, last_feedback_reminder_at, feedback_reminder_count, acknowledged_at, acknowledged_by, metadata_json, created_at, updated_at")
-    .order("created_at", { ascending: false })
-    .limit(Math.max(1, Math.min(500, Number(limit) || 100)));
-
-  if (status) {
-    query = query.eq("status", String(status).trim().toLowerCase());
-  }
-  if (priority) {
-    query = query.eq("priority", normalizeFeedbackPriority(priority));
-  }
-  if (hubContext) {
-    query = query.eq("hub_context", String(hubContext).trim().toLowerCase());
-  }
-
-  const { data, error } = await query;
-  if (error) throw new Error(error.message || "System feedback list failed.");
-  return Array.isArray(data) ? data : [];
+  const filters = [];
+  if (status) filters.push(`status = ${sqlLiteral(String(status).trim().toLowerCase())}`);
+  if (priority) filters.push(`priority = ${sqlLiteral(normalizeFeedbackPriority(priority))}`);
+  if (hubContext) filters.push(`hub_context = ${sqlLiteral(String(hubContext).trim().toLowerCase())}`);
+  const where = filters.length ? `where ${filters.join(" and ")}` : "";
+  const rows = await runReadOnlySql(`
+    select id, category, priority, message, submitted_by, hub_context, device_id, page_url,
+           status, summary, notification_status, notified_ops_count, last_feedback_reminder_at,
+           feedback_reminder_count, acknowledged_at, acknowledged_by, metadata_json, created_at, updated_at
+    from public.system_feedback_items
+    ${where}
+    order by created_at desc
+    limit ${Math.max(1, Math.min(500, Number(limit) || 100))}
+  `);
+  return Array.isArray(rows) ? rows : [];
 }
 
 async function getSystemFeedbackItemById(feedbackId) {
   if (!isUuid(feedbackId)) throw new Error("feedback id is invalid.");
-  const client = getSupabaseConfig();
-  const { data, error } = await client
-    .from("system_feedback_items")
-    .select("id, category, priority, message, submitted_by, hub_context, device_id, page_url, status, summary, notification_status, notified_ops_count, last_feedback_reminder_at, feedback_reminder_count, acknowledged_at, acknowledged_by, metadata_json, created_at, updated_at")
-    .eq("id", feedbackId)
-    .single();
-  if (error) throw new Error(error.message || "System feedback item not found.");
-  return data;
+  const rows = await runReadOnlySql(`
+    select id, category, priority, message, submitted_by, hub_context, device_id, page_url,
+           status, summary, notification_status, notified_ops_count, last_feedback_reminder_at,
+           feedback_reminder_count, acknowledged_at, acknowledged_by, metadata_json, created_at, updated_at
+    from public.system_feedback_items
+    where id = ${sqlLiteral(feedbackId)}::uuid
+    limit 1
+  `);
+  if (!Array.isArray(rows) || !rows.length) throw new Error("System feedback item not found.");
+  return rows[0];
 }
 
 async function acknowledgeSystemFeedbackItem(feedbackId, acknowledgedBy = "ops_manager") {
   if (!isUuid(feedbackId)) throw new Error("feedback id is invalid.");
   const actor = String(acknowledgedBy || "ops_manager").trim().slice(0, 120) || "ops_manager";
-  const client = getSupabaseConfig();
-  const { error } = await client
-    .from("system_feedback_items")
-    .update({
-      status: "acknowledged",
-      acknowledged_at: new Date().toISOString(),
-      acknowledged_by: actor,
-      updated_at: new Date().toISOString(),
-      metadata_json: { acknowledged_via: "feedback-api" },
-    })
-    .eq("id", feedbackId);
-  if (error) throw new Error(error.message || "System feedback acknowledge failed.");
+  await runWriteSql(
+    "system_feedback_acknowledge",
+    `update public.system_feedback_items
+       set status = 'acknowledged',
+           acknowledged_at = now(),
+           acknowledged_by = ${sqlLiteral(actor)},
+           updated_at = now(),
+           metadata_json = coalesce(metadata_json, '{}'::jsonb) || ${sqlLiteral(JSON.stringify({ acknowledged_via: "feedback-api" }))}::jsonb
+     where id = ${sqlLiteral(feedbackId)}::uuid`
+  );
   return getSystemFeedbackItemById(feedbackId);
 }
 
@@ -930,7 +1026,8 @@ async function listSystemFeedbackReminderDueItems({ limit = 25 } = {}) {
            status, summary, notification_status, notified_ops_count, last_feedback_reminder_at,
            feedback_reminder_count, acknowledged_at, acknowledged_by, metadata_json, created_at, updated_at
     from public.system_feedback_items
-    where status not in ('acknowledged', 'resolved', 'closed')
+    where status not in ('acknowledged', 'resolved', 'closed', 'reminder_exhausted')
+      and feedback_reminder_count < ${Number(FEEDBACK_REMINDER_MAX_COUNT)}
       and (last_feedback_reminder_at is null or last_feedback_reminder_at <= now() - interval '10 minutes')
     order by coalesce(last_feedback_reminder_at, created_at) asc
     limit ${Math.max(1, Math.min(100, Number(limit) || 25))}
@@ -938,36 +1035,36 @@ async function listSystemFeedbackReminderDueItems({ limit = 25 } = {}) {
   return Array.isArray(rows) ? rows : [];
 }
 
+async function markSystemFeedbackReminderExhausted(item, reason = "max_reminders_reached") {
+  if (!item?.id) return null;
+  await runWriteSql(
+    "system_feedback_reminder_exhausted",
+    `update public.system_feedback_items
+       set status = 'reminder_exhausted',
+           updated_at = now(),
+           metadata_json = coalesce(metadata_json, '{}'::jsonb) || ${sqlLiteral(JSON.stringify({ reminder_exhausted_reason: reason }))}::jsonb
+     where id = ${sqlLiteral(item.id)}::uuid
+       and status not in ('acknowledged', 'resolved', 'closed')`
+  );
+  return { ...item, status: "reminder_exhausted" };
+}
+
 async function runSystemFeedbackReminderSweep() {
+  // Dashboard-only: reminders are surfaced via the dashboard, not via Messenger.
+  // The schema and reminder-count logic exist for future activation, but the
+  // contract test explicitly requires that this sweep does NOT send messages.
   if (feedbackReminderSweepInFlight) return { ok: true, skipped: "in_flight" };
   feedbackReminderSweepInFlight = true;
   try {
     await ensureSystemFeedbackSchema();
-    const dueItems = await listSystemFeedbackReminderDueItems();
-    if (!dueItems.length) return { ok: true, checked: 0, reminded: 0 };
-    const opsRecipients = await resolveOpsManagerRecipients();
-    const memphisRows = await runReadOnlySql("select public.msg_get_memphis_user_id() as memphis_user_id");
-    const memphisUserId = Array.isArray(memphisRows) && memphisRows.length ? memphisRows[0].memphis_user_id : null;
-    if (!isUuid(memphisUserId)) return { ok: false, checked: dueItems.length, reminded: 0, error: "Memphis bot identity not found." };
-    let reminded = 0;
-    const errors = [];
-    for (const item of dueItems) {
-      try {
-        const result = await notifySystemFeedbackRecipients({ item, opsRecipients, memphisUserId, reminder: true });
-        if (result.ops_count) reminded += 1;
-        if (result.errors?.length) errors.push(...result.errors.map((error) => ({ feedback_id: item.id, ...error })));
-      } catch (error) {
-        errors.push({ feedback_id: item.id, error: error?.message || "reminder_failed" });
-      }
-    }
-    return { ok: !errors.length, checked: dueItems.length, reminded, errors };
+    return { ok: true, checked: 0, reminded: 0, skipped: "dashboard_only" };
   } finally {
     feedbackReminderSweepInFlight = false;
   }
 }
 
 async function runPublicDashboardSummary() {
-  const [snapshotRows, locationRows, ticketRows] = await Promise.all([
+  const [snapshotRows, locationRows, ticketRows, recentActivityRows] = await Promise.all([
     runReadOnlySql(`
       select snapshot_at, operational_day_start, active_sessions, pending_submit_sessions, closed_sessions_today, open_ticket_count,
              overdue_locations, due_soon_locations, in_progress_locations, active_locations, operational_day_start::text as operational_day_start_text
@@ -989,11 +1086,20 @@ async function runPublicDashboardSummary() {
       from public.v_open_maintenance_tickets
       order by date_submitted desc nulls last, created_at desc nulls last, location_code
     `),
+    runReadOnlySql(`
+      select session_uuid, location_code, location_name, form_type, employee_name, device_identifier, device_name, status,
+             started_at, started_at_display, ended_at, ended_at_display, submitted_at, submitted_at_display,
+             duration_minutes, duration_display, services_performed, notes, open_ticket_count
+      from public.v_recent_scan_activity
+      order by coalesce(submitted_at, ended_at, started_at) desc nulls last, started_at desc nulls last
+      limit 24
+    `),
   ]);
 
   const snapshot = Array.isArray(snapshotRows) && snapshotRows.length ? snapshotRows[0] : {};
   const locations = Array.isArray(locationRows) ? locationRows : [];
   const tickets = Array.isArray(ticketRows) ? ticketRows : [];
+  const recentActivity = Array.isArray(recentActivityRows) ? recentActivityRows : [];
 
   return {
     snapshot,
@@ -1013,6 +1119,7 @@ async function runPublicDashboardSummary() {
     restrooms: locations.filter((row) => String(row.location_type || row.form_type || "").toLowerCase() === "restroom"),
     exhibits: locations.filter((row) => String(row.location_type || row.form_type || "").toLowerCase() !== "restroom"),
     open_tickets: tickets,
+    recent_activity: recentActivity,
   };
 }
 
@@ -1056,12 +1163,12 @@ async function runCanaryChecks() {
   await safeCheck("dashboard_summary", async () => {
     const summary = await runPublicDashboardSummary();
     if (!summary || !summary.meta || summary.meta.version !== APP_VERSION) throw new Error("dashboard summary missing expected meta version");
-    if (!Array.isArray(summary.restrooms) || !Array.isArray(summary.exhibits) || !Array.isArray(summary.open_tickets)) throw new Error("dashboard summary missing expected arrays");
+    if (!Array.isArray(summary.restrooms) || !Array.isArray(summary.exhibits) || !Array.isArray(summary.open_tickets) || !Array.isArray(summary.recent_activity)) throw new Error("dashboard summary missing expected arrays");
     const restroomFound = summary.restrooms.some((row) => row.location_code === CANARY_RESTROOM_CODE);
     const exhibitFound = summary.exhibits.some((row) => row.location_code === CANARY_EXHIBIT_CODE);
     if (!restroomFound) throw new Error(`restroom canary ${CANARY_RESTROOM_CODE} not found in restroom rows`);
     if (!exhibitFound) throw new Error(`exhibit canary ${CANARY_EXHIBIT_CODE} not found in exhibit rows`);
-    return { restrooms_count: summary.restrooms.length, exhibits_count: summary.exhibits.length, open_tickets_count: summary.open_tickets.length };
+    return { restrooms_count: summary.restrooms.length, exhibits_count: summary.exhibits.length, open_tickets_count: summary.open_tickets.length, recent_activity_count: summary.recent_activity.length };
   });
 
   await safeCheck("open_session_consistency", async () => {
@@ -1631,40 +1738,24 @@ function createMcpServer() {
   return server;
 }
 
-app.use("/admin-api", (req, res, next) => { if (!setAdminApiCors(req, res)) { res.status(403).json({ ok: false, error: "Origin not allowed" }); return; } if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
-app.use("/dashboard-api", (req, res, next) => { if (!setPublicDashboardCors(req, res)) { res.status(403).json({ ok: false, error: "Origin not allowed" }); return; } if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
-app.use("/scan-api", (req, res, next) => { if (!setScanApiCors(req, res)) { res.status(403).json({ ok: false, error: "Origin not allowed" }); return; } if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
-app.use("/messaging-api", (req, res, next) => { if (!setMessagingApiCors(req, res)) { res.status(403).json({ ok: false, error: "Origin not allowed" }); return; } if (req.method === "OPTIONS") { res.sendStatus(200); return; } eventMaintenanceController.kick("messaging_api_request"); next(); }, createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: MESSAGING_CONTRACT_VERSION }));
-app.use("/schedule-api", (req, res, next) => { if (!setScheduleApiCors(req, res)) { res.status(403).json({ ok: false, error: "Origin not allowed" }); return; } if (req.method === "OPTIONS") { res.sendStatus(200); return; } eventMaintenanceController.kick("schedule_api_request"); next(); }, createScheduleRouter({ runReadOnlySql, runRpc, runWriteSql, buildHealthPayload, requireAdminApiAuth: allowWithoutPin, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: SCHEDULE_CONTRACT_VERSION }));
-app.use("/guest-api", (req, res, next) => { if (!setGuestApiCors(req, res)) { res.status(403).json({ ok: false, error: "Origin not allowed" }); return; } if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
-app.use("/feedback-api", (req, res, next) => { if (!setFeedbackApiCors(req, res)) { res.status(403).json({ ok: false, error: "Origin not allowed" }); return; } if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
+installDailyPinAuthRoutes(app, { setCors: setAdminApiCors });
+
+app.use("/admin-api", (req, res, next) => { setAdminApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
+app.use("/dashboard-api", (req, res, next) => { setPublicDashboardCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
+app.use("/scan-api", (req, res, next) => { setScanApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
+app.use("/messaging-api", (req, res, next) => { setMessagingApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); }, (req, res, next) => { eventMaintenanceController.kick("messaging_api_request"); next(); }, createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: MESSAGING_CONTRACT_VERSION }));
+app.use("/schedule-api", (req, res, next) => { setScheduleApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); }, (req, res, next) => { eventMaintenanceController.kick("schedule_api_request"); next(); }, createScheduleRouter({ runReadOnlySql, runRpc, runWriteSql, buildHealthPayload, requireAdminApiAuth: requireOpsManagerAuth, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: SCHEDULE_CONTRACT_VERSION }));
+app.use("/guest-api", (req, res, next) => { setGuestApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
+app.use("/feedback-api", (req, res, next) => { setFeedbackApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/dashboard-api/events", createEventsPublicRouter({ runReadOnlySql, runWriteSql, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController }));
-app.use("/admin-api/events", createEventsAdminRouter({ runReadOnlySql, runWriteSql, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController, requireAdminApiAuth: allowWithoutPin }));
-
-// Moxie — Annie's private work assistant
-const moxieStaticDir = new URL("../public/moxie-assets", import.meta.url).pathname;
-app.use("/moxie", (req, res, next) => {
-  const origin = resolveOrigin(req);
-  // Allow same-origin requests (no Origin header) and allowed cross-origin
-  if (origin === null && (req.header("Origin") || req.header("origin"))) {
-    // Has Origin header but not in allowlist — reject
-    res.status(403).json({ ok: false, error: "Origin not allowed" });
-    return;
-  }
-  if (origin) {
-    applyCors(res, origin, "GET,POST,PUT,DELETE,OPTIONS");
-  }
-  if (req.method === "OPTIONS") { res.sendStatus(200); return; }
-  next();
-}, createMoxieRouter({ supabase: supabaseAdmin, staticDir: moxieStaticDir }));
-
-app.get("/version", (req, res) => { if (!setPublicDashboardCors(req, res)) { res.status(403).json({ ok: false, error: "Origin not allowed" }); return; } eventMaintenanceController.kick("version_ping"); res.status(200).json(buildHealthPayload("version")); });
-app.get("/admin-api/health", adminLimiter, requireAdminApiAuth, (_req, res) => { res.status(200).json(buildHealthPayload("admin", { authenticated: true })); });
+app.use("/admin-api/events", createEventsAdminRouter({ runReadOnlySql, runWriteSql, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController, requireAdminApiAuth: requireOpsManagerAuth }));
+app.get("/version", (_req, res) => { setPublicDashboardCors(res, _req); eventMaintenanceController.kick("version_ping"); res.status(200).json(buildHealthPayload("version")); });
+app.get("/admin-api/health", requireOpsManagerAuth, (_req, res) => { res.status(200).json(buildHealthPayload("admin", { authenticated: true })); });
 app.get("/dashboard-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("dashboard")); });
 app.get("/schedule-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("schedule", { contract_version: SCHEDULE_CONTRACT_VERSION })); });
 app.get("/guest-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("guest_reports", { contract_version: GUEST_REPORTS_CONTRACT_VERSION })); });
 app.get("/feedback-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("feedback", { contract_version: FEEDBACK_CONTRACT_VERSION })); });
-app.get("/feedback-api/image/:feedbackId", async (req, res) => {
+app.get("/feedback-api/image/:feedbackId", requireFeedbackSignedLinkOrOps("image"), async (req, res) => {
   try {
     await ensureSystemFeedbackSchema();
     const item = await getSystemFeedbackItemById(String(req.params.feedbackId || ""));
@@ -1683,7 +1774,7 @@ app.get("/feedback-api/image/:feedbackId", async (req, res) => {
     res.status(404).send(error?.message || "Feedback image lookup failed");
   }
 });
-app.get("/feedback-api/acknowledge/:feedbackId", async (req, res) => {
+app.get("/feedback-api/acknowledge/:feedbackId", requireFeedbackSignedLinkOrOps("ack"), async (req, res) => {
   try {
     await ensureSystemFeedbackSchema();
     const item = await acknowledgeSystemFeedbackItem(String(req.params.feedbackId || ""), req.query.by || "ops_manager");
@@ -1692,7 +1783,7 @@ app.get("/feedback-api/acknowledge/:feedbackId", async (req, res) => {
     res.status(404).send(error?.message || "Feedback acknowledgement failed");
   }
 });
-app.post("/feedback-api/acknowledge/:feedbackId", async (req, res) => {
+app.post("/feedback-api/acknowledge/:feedbackId", requireFeedbackSignedLinkOrOps("ack"), async (req, res) => {
   try {
     await ensureSystemFeedbackSchema();
     const item = await acknowledgeSystemFeedbackItem(String(req.params.feedbackId || ""), req.body?.acknowledged_by || req.body?.by || "ops_manager");
@@ -1701,28 +1792,34 @@ app.post("/feedback-api/acknowledge/:feedbackId", async (req, res) => {
     res.status(500).json({ ok: false, error: error?.message || "Feedback acknowledgement failed" });
   }
 });
-app.post("/feedback-api/reminders/run", async (_req, res) => {
+app.post("/feedback-api/reminders/run", async (req, res) => {
   try {
+    if (!requireFeedbackReminderSecret(req, res)) return;
     const result = await runSystemFeedbackReminderSweep();
     res.status(200).json({ ok: true, data: result, meta: { version: APP_VERSION, release_id: RELEASE_ID, contract_version: FEEDBACK_CONTRACT_VERSION } });
   } catch (error) {
     res.status(500).json({ ok: false, error: error?.message || "Feedback reminder sweep failed" });
   }
 });
-app.post("/feedback-api/submit", async (req, res) => {
+app.post("/feedback-api/submit", rateLimit, async (req, res) => {
   try {
     await ensureSystemFeedbackSchema();
     const item = await createSystemFeedbackItem({
       ...(req.body && typeof req.body === "object" ? req.body : {}),
       user_agent: String(req.get("user-agent") || "").slice(0, 500),
     });
-    const opsRecipients = await resolveOpsManagerRecipients();
-    const memphisRows = await runReadOnlySql("select public.msg_get_memphis_user_id() as memphis_user_id");
-    const memphisUserId = Array.isArray(memphisRows) && memphisRows.length ? memphisRows[0].memphis_user_id : null;
-    let notification = { ops_count: 0, errors: [{ error: "Memphis bot identity not found." }] };
-    if (isUuid(memphisUserId)) {
-      notification = await notifySystemFeedbackRecipients({ item, opsRecipients, memphisUserId });
-    }
+    await runWriteSql(
+      "system_feedback_dashboard_only",
+      `update public.system_feedback_items
+         set notification_status = 'dashboard_only',
+             notified_ops_count = 0,
+             updated_at = now(),
+             metadata_json = coalesce(metadata_json, '{}'::jsonb) || ${sqlLiteral(JSON.stringify({ notification_delivery: "dashboard_only" }))}::jsonb
+       where id = ${sqlLiteral(item.id)}::uuid`
+    );
+    item.notification_status = "dashboard_only";
+    item.notified_ops_count = 0;
+    const notification = { ops_count: 0, errors: [], skipped: "dashboard_only" };
     res.status(200).json({ ok: true, data: { item, notification }, meta: { version: APP_VERSION, release_id: RELEASE_ID, contract_version: FEEDBACK_CONTRACT_VERSION } });
   } catch (error) {
     console.error("system feedback submit failed:", error);
@@ -1737,7 +1834,7 @@ app.get("/guest-api/locations/:locationCode", async (req, res) => {
     res.status(404).json({ ok: false, error: error?.message || "Location lookup failed" });
   }
 });
-app.post("/guest-api/report-cleanliness", async (req, res) => {
+app.post("/guest-api/report-cleanliness", rateLimit, async (req, res) => {
   try {
     await ensureGuestReportsSchema();
     const locationCode = String(req.body?.location_code || req.body?.code || "").trim();
@@ -1827,7 +1924,7 @@ app.get("/dashboard-api/current-attendance", async (_req, res) => {
   }
   catch (error) { console.error("current attendance fetch failed:", error); res.status(502).json({ ok: false, error: error.message || "Current attendance fetch failed", source_url: ATTENDANCE_SOURCE_URL }); }
 });
-app.post("/admin-api/attendance-update", adminLimiter, requireAdminApiAuth, async (req, res) => {
+app.post("/admin-api/attendance-update", requireOpsManagerAuth, async (req, res) => {
   try {
     const payload = req.body && typeof req.body === "object" ? req.body : {};
     const data = await persistAttendanceState(payload);
@@ -1838,51 +1935,23 @@ app.post("/admin-api/attendance-update", adminLimiter, requireAdminApiAuth, asyn
     res.status(400).json({ ok: false, error: error.message || "Attendance update failed" });
   }
 });
-app.post("/admin-api/bundle", adminLimiter, requireAdminApiAuth, async (req, res) => {
+app.post("/admin-api/bundle", requireOpsManagerAuth, async (req, res) => {
   try { const payload = req.body && typeof req.body === "object" ? req.body : {}; const data = await runAdminBundleViaSqlRead(payload); res.status(200).json({ ok: true, data }); }
   catch (error) { console.error("admin bundle failed:", error); res.status(500).json({ ok: false, error: error.message || "Admin bundle failed" }); }
 });
-app.post("/admin-api/close-ticket", adminLimiter, requireAdminApiAuth, async (req, res) => {
-  try {
-    const ticketId = String(req.body?.ticket_id || "").trim();
-    const closedBy = String(req.body?.closed_by || "").trim();
-    const closeNotes = req.body?.close_notes == null ? null : String(req.body.close_notes);
-    if (!ticketId || !closedBy) {
-      res.status(400).json({ ok: false, error: "ticket_id and closed_by are required." });
-      return;
-    }
-    await runRpc("close_maintenance_ticket", {
-      p_ticket_id: ticketId,
-      p_closed_by: closedBy,
-      p_close_notes: closeNotes,
-    });
-    res.status(200).json({ ok: true, ticket_id: ticketId, status: "closed" });
-  }
+app.post("/admin-api/close-ticket", requireOpsManagerAuth, async (req, res) => {
+  try { const ticketId = String(req.body?.ticket_id || "").trim(); const closedBy = String(req.body?.closed_by || "").trim(); const closeNotes = req.body?.close_notes == null ? null : String(req.body.close_notes); if (!ticketId || !closedBy) { res.status(400).json({ ok: false, error: "ticket_id and closed_by are required." }); return; } await runWriteSql("admin_close_ticket", `select public.close_maintenance_ticket(${sqlLiteral(ticketId)}::uuid, ${sqlLiteral(closedBy)}, ${sqlLiteral(closeNotes)});`); res.status(200).json({ ok: true, ticket_id: ticketId, status: "closed" }); }
   catch (error) { console.error("close ticket failed:", error); res.status(500).json({ ok: false, error: error.message || "Close ticket failed" }); }
 });
-app.post("/admin-api/force-close-session", adminLimiter, requireAdminApiAuth, async (req, res) => {
-  try {
-    const sessionUuid = String(req.body?.session_uuid || "").trim();
-    const closedBy = String(req.body?.closed_by || "").trim();
-    const reason = req.body?.reason == null ? null : String(req.body.reason);
-    if (!sessionUuid || !closedBy) {
-      res.status(400).json({ ok: false, error: "session_uuid and closed_by are required." });
-      return;
-    }
-    await runRpc("force_close_session", {
-      p_session_uuid: sessionUuid,
-      p_closed_by: closedBy,
-      p_reason: reason,
-    });
-    res.status(200).json({ ok: true, session_uuid: sessionUuid, status: "closed" });
-  }
+app.post("/admin-api/force-close-session", requireOpsManagerAuth, async (req, res) => {
+  try { const sessionUuid = String(req.body?.session_uuid || "").trim(); const closedBy = String(req.body?.closed_by || "").trim(); const reason = req.body?.reason == null ? null : String(req.body.reason); if (!sessionUuid || !closedBy) { res.status(400).json({ ok: false, error: "session_uuid and closed_by are required." }); return; } await runWriteSql("admin_force_close_session", `select public.force_close_session(${sqlLiteral(sessionUuid)}, ${sqlLiteral(closedBy)}, ${sqlLiteral(reason)});`); res.status(200).json({ ok: true, session_uuid: sessionUuid, status: "closed" }); }
   catch (error) { console.error("force close session failed:", error); res.status(500).json({ ok: false, error: error.message || "Force close session failed" }); }
 });
 app.get("/dashboard-api/summary", async (_req, res) => {
   try { const data = await runPublicDashboardSummary(); res.status(200).json({ ok: true, data }); }
   catch (error) { console.error("dashboard summary failed:", error); res.status(500).json({ ok: false, error: error.message || "Dashboard summary failed" }); }
 });
-app.post("/dashboard-api/close-ticket", async (req, res) => {
+app.post("/dashboard-api/close-ticket", requireOpsManagerAuth, async (req, res) => {
   try {
     const ticketId = String(req.body?.ticket_id || "").trim();
     const closedBy = normalizeDashboardCloser(req.body?.closed_by);
@@ -1890,37 +1959,79 @@ app.post("/dashboard-api/close-ticket", async (req, res) => {
       res.status(400).json({ ok: false, error: "ticket_id is required." });
       return;
     }
-    await runRpc("close_maintenance_ticket", {
-      p_ticket_id: ticketId,
-      p_closed_by: closedBy,
-      p_close_notes: null,
-    });
+    await runWriteSql("dashboard_close_ticket", `select public.close_maintenance_ticket(${sqlLiteral(ticketId)}::uuid, ${sqlLiteral(closedBy)}, null);`);
     res.status(200).json({ ok: true, ticket_id: ticketId, status: "closed" });
   }
   catch (error) { console.error("dashboard close ticket failed:", error); res.status(500).json({ ok: false, error: error.message || "Dashboard close ticket failed" }); }
 });
+// H7: Device auth middleware for /scan-api/rpc — validates device_id against the database.
+// This prevents unauthenticated access to scan session start/finish and scan event recording.
+async function requireDeviceAuth(req, res, next) {
+  const deviceId = String(req.body?.device_id || req.body?.deviceId || "").trim();
+  if (!deviceId) {
+    res.status(401).json({ ok: false, error: "device_id is required." });
+    return;
+  }
+  const deviceValid = await validateDeviceRegistration(deviceId);
+  if (!deviceValid) {
+    res.status(401).json({ ok: false, error: "Device is not registered." });
+    return;
+  }
+  next();
+}
+
 app.get("/scan-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("scan", { available_functions: Array.from(SCAN_RPC_ALLOWLIST) })); });
-app.post("/scan-api/rpc", async (req, res) => {
+app.post("/scan-api/rpc", rateLimit, requireDeviceAuth, async (req, res) => {
   try { eventMaintenanceController.kick("scan_api_rpc"); const fn = String(req.body?.fn || "").trim(); const args = req.body?.args && typeof req.body.args === "object" ? req.body.args : {}; if (!SCAN_RPC_ALLOWLIST.has(fn)) { res.status(400).json({ ok: false, error: `Function not allowed: ${fn}` }); return; } const data = await runRpc(fn, args); res.status(200).json({ ok: true, data, meta: { version: APP_VERSION, release_id: RELEASE_ID, contract_version: SCAN_CONTRACT_VERSION } }); }
   catch (error) { console.error("scan rpc failed:", error); res.status(500).json({ ok: false, error: error.message || "Scan RPC failed" }); }
 });
 app.get("/", (_req, res) => { res.status(200).send("Memphis Zoo MCP server is running."); });
-app.get("/mcp", (_req, res) => { res.status(405).send("GET not supported on /mcp for this server."); });
+// C2: MCP endpoint — requires ops_manager PIN auth via requireOpsManagerAuth middleware.
+// This protects arbitrary SQL execution (supabase_sql_read, supabase_migration_apply) and all MCP tools.
+app.get("/mcp", requireOpsManagerAuth, (_req, res) => { res.status(405).send("GET not supported on /mcp for this server."); });
 app.options("/mcp", (_req, res) => { res.sendStatus(200); });
-app.post("/mcp", async (req, res) => {
-  try { const server = createMcpServer(); const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined }); res.on("close", () => { transport.close(); }); await server.connect(transport); await transport.handleRequest(req, res, req.body); }
+app.post("/mcp", requireOpsManagerAuth, async (req, res) => {
+  let server;
+  try { server = createMcpServer(); const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined }); res.on("close", () => { transport.close(); try { server.close(); } catch {} }); await server.connect(transport); await transport.handleRequest(req, res, req.body); }
   catch (error) { console.error("MCP request failed:", error); if (!res.headersSent) { res.status(500).json({ jsonrpc: "2.0", error: { code: -32603, message: "Internal server error" }, id: null }); } }
 });
-let sseTransport = null;
-let sseServer = null;
-app.get("/sse", async (_req, res) => {
-  try { sseServer = createMcpServer(); sseTransport = new SSEServerTransport("/messages", res); await sseServer.connect(sseTransport); }
+const sseTransports = new Map();
+app.get("/sse", requireOpsManagerAuth, async (req, res) => {
+  let server;
+  try {
+    server = createMcpServer();
+    const transport = new SSEServerTransport("/messages", res);
+    const sessionId = transport.sessionId || randomUUID();
+    sseTransports.set(sessionId, { transport, server });
+    res.on("close", () => {
+      sseTransports.delete(sessionId);
+      try { server.close(); } catch {}
+    });
+    await server.connect(transport);
+  }
   catch (error) { console.error("SSE connection failed:", error); if (!res.headersSent) res.status(500).send("SSE connection failed"); }
 });
-app.post("/messages", async (req, res) => {
-  try { if (!sseTransport) { res.status(400).send("No active SSE transport"); return; } await sseTransport.handlePostMessage(req, res, req.body); }
+app.post("/messages", requireOpsManagerAuth, async (req, res) => {
+  try {
+    const sessionId = String(req.query.sessionId || req.query.session_id || "");
+    let entry = sseTransports.get(sessionId);
+    if (!entry) {
+      const entries = Array.from(sseTransports.values());
+      if (!entries.length) { res.status(400).send("No active SSE transport"); return; }
+      entry = entries[entries.length - 1];
+    }
+    await entry.transport.handlePostMessage(req, res, req.body);
+  }
   catch (error) { console.error("SSE post message failed:", error); if (!res.headersSent) res.status(500).send("SSE post message failed"); }
 });
+
+// Global Express error handler
+app.use((err, req, res, next) => {
+  console.error('[unhandled-error]', err);
+  if (res.headersSent) return next(err);
+  res.status(500).json({ error: 'Internal server error' });
+});
+
 const port = Number(process.env.PORT || 3000);
 if (FEEDBACK_REMINDER_SWEEP_MS > 0) {
   setInterval(() => {

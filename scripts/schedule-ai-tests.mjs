@@ -83,6 +83,8 @@ const context = {
   RESTROOM_REBALANCE_TIME: "09:45:00",
   RESTROOM_REBALANCE_SOURCE: "restroom_rebalance_0945",
   RESTROOM_REBALANCE_TZ: "America/Chicago",
+  RESTROOM_REBALANCE_EXCLUDED_EMPLOYEES: ["EMP002"],
+  RESTROOM_REBALANCE_EXCLUDED_NAMES: ["michael mcwright"],
   MONTH_LOOKUP: {
     january: 1, jan: 1,
     february: 2, feb: 2,

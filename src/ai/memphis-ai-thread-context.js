@@ -47,17 +47,20 @@ export function formatRecentThreadMessages(messages = []) {
   return lines.length ? `Recent thread context:\n${lines.join("\n")}` : "";
 }
 
-export async function saveThreadContext(runRpc, threadId, context = {}) {
+export async function saveThreadContext(runRpc, threadId, context = {}, existingContext = {}) {
   const normalized = String(threadId || "").trim();
   if (!normalized) return null;
+  // S3.1: Preserve previously saved fields — use existingContext values as defaults
+  // for fields not explicitly provided in the current context patch. This prevents
+  // one code path from nulling out fields saved by a different code path.
   return await runRpc("msg_set_memphis_thread_context", {
     p_thread_id: normalized,
-    p_last_intent: context.last_intent ?? null,
-    p_last_employee_name: context.last_employee_name ?? null,
-    p_last_group_name: context.last_group_name ?? null,
-    p_last_location_code: context.last_location_code ?? null,
-    p_last_service_date: context.last_service_date ?? null,
-    p_last_subject_type: context.last_subject_type ?? null,
-    p_context_json: context.context_json ?? {},
+    p_last_intent: context.last_intent ?? existingContext.last_intent ?? null,
+    p_last_employee_name: context.last_employee_name ?? existingContext.last_employee_name ?? null,
+    p_last_group_name: context.last_group_name ?? existingContext.last_group_name ?? null,
+    p_last_location_code: context.last_location_code ?? existingContext.last_location_code ?? null,
+    p_last_service_date: context.last_service_date ?? existingContext.last_service_date ?? null,
+    p_last_subject_type: context.last_subject_type ?? existingContext.last_subject_type ?? null,
+    p_context_json: context.context_json ?? existingContext.context_json ?? {},
   });
 }

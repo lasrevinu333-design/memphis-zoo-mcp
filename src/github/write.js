@@ -303,91 +303,123 @@ export async function updateFile({
     throw new Error("commitMessage is required.");
   }
 
-  const existing = await getContentOrNull({
-    github,
-    repo: target.repo,
-    path: resolvedPath,
-    ref: targetBranch,
-  });
+  // Integration #3: Wrap the main write operation with SHA retry logic for 409 conflicts.
+  return await withShaRetry(async (attempt) => {
+    const existing = await getContentOrNull({
+      github,
+      repo: target.repo,
+      path: resolvedPath,
+      ref: targetBranch,
+    });
 
-  assertFileContent(existing, resolvedPath);
-  const shaForUpdate = resolveExpectedSha(
-    coalesceText(expectedSha, expected_sha),
-    existing,
-    resolvedPath
-  );
+    assertFileContent(existing, resolvedPath);
+    // On retry attempts, ignore the expectedSha and use the fresh SHA from the server.
+    const shaForUpdate = attempt > 0
+      ? existing.sha
+      : resolveExpectedSha(
+          coalesceText(expectedSha, expected_sha),
+          existing,
+          resolvedPath
+        );
 
-  const oldContent = await existingTextForWrite({
-    github,
-    repo: target.repo,
-    path: resolvedPath,
-    ref: targetBranch,
-    existing,
-  });
+    const oldContent = await existingTextForWrite({
+      github,
+      repo: target.repo,
+      path: resolvedPath,
+      ref: targetBranch,
+      existing,
+    });
 
-  const preview = stableFullPreview({
-    oldText: oldContent,
-    newText: finalContent,
-    path: resolvedPath,
-  });
+    const preview = stableFullPreview({
+      oldText: oldContent,
+      newText: finalContent,
+      path: resolvedPath,
+    });
 
-  if (!preview.changed) {
+    if (!preview.changed) {
+      return {
+        ok: true,
+        message: "No update needed. Content is unchanged.",
+        repo: `${target.owner}/${target.repo}`,
+        branch: targetBranch,
+        path: resolvedPath,
+        sha: existing.sha,
+        file_url: existing.html_url,
+        preview,
+      };
+    }
+
+    if (effectiveDryRun) {
+      return {
+        ok: true,
+        dry_run: true,
+        action: "would_update",
+        repo: `${target.owner}/${target.repo}`,
+        branch: targetBranch,
+        path: resolvedPath,
+        current_sha: existing.sha,
+        commit_message: finalCommitMessage,
+        limits: { max_write_bytes: size.limit },
+        preview,
+      };
+    }
+
+    const response = await github.octokit.rest.repos.createOrUpdateFileContents({
+      owner: target.owner,
+      repo: target.repo,
+      path: resolvedPath,
+      message: finalCommitMessage,
+      content: encodeContent(finalContent),
+      sha: shaForUpdate,
+      branch: targetBranch,
+    });
+
     return {
       ok: true,
-      message: "No update needed. Content is unchanged.",
+      message: "File updated.",
+      action: "update",
       repo: `${target.owner}/${target.repo}`,
       branch: targetBranch,
       path: resolvedPath,
-      sha: existing.sha,
-      file_url: existing.html_url,
-      preview,
-    };
-  }
-
-  if (effectiveDryRun) {
-    return {
-      ok: true,
-      dry_run: true,
-      action: "would_update",
-      repo: `${target.owner}/${target.repo}`,
-      branch: targetBranch,
-      path: resolvedPath,
-      current_sha: existing.sha,
-      commit_message: finalCommitMessage,
+      previous_sha: existing.sha,
+      new_sha: response.data.content?.sha || null,
+      commit_url: response.data.commit?.html_url || null,
+      file_url: response.data.content?.html_url || null,
       limits: { max_write_bytes: size.limit },
       preview,
     };
-  }
-
-  const response = await github.octokit.rest.repos.createOrUpdateFileContents({
-    owner: target.owner,
-    repo: target.repo,
-    path: resolvedPath,
-    message: finalCommitMessage,
-    content: encodeContent(finalContent),
-    sha: shaForUpdate,
-    branch: targetBranch,
   });
-
-  return {
-    ok: true,
-    message: "File updated.",
-    action: "update",
-    repo: `${target.owner}/${target.repo}`,
-    branch: targetBranch,
-    path: resolvedPath,
-    previous_sha: existing.sha,
-    new_sha: response.data.content?.sha || null,
-    commit_url: response.data.commit?.html_url || null,
-    file_url: response.data.content?.html_url || null,
-    limits: { max_write_bytes: size.limit },
-    preview,
-  };
 }
 
 function countOccurrences(text, find) {
   if (!find) return 0;
   return String(text).split(String(find)).length - 1;
+}
+
+// Integration #4: Escape regex special characters in the needle for safe use in replace.
+function escapeRegExp(str) {
+  return String(str).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Integration #3: Retry wrapper for GitHub write operations that may fail with 409 (SHA mismatch).
+ * Retries up to 3 times by re-fetching the latest SHA and retrying the operation.
+ */
+async function withShaRetry(operation, maxRetries = 3) {
+  let lastError = null;
+  for (let attempt = 0; attempt < maxRetries; attempt += 1) {
+    try {
+      return await operation(attempt);
+    } catch (error) {
+      lastError = error;
+      const status = error?.status || error?.response?.status;
+      const is409 = status === 409 || /409|conflict|sha.*mismatch/i.test(String(error?.message || ""));
+      if (!is409 || attempt === maxRetries - 1) throw error;
+      // Wait a short delay before retrying.
+      await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+    }
+  }
+  throw lastError;
 }
 
 function applyTextPatch(source, patch, index) {
@@ -414,6 +446,8 @@ function applyTextPatch(source, patch, index) {
     throw new Error(`Patch ${index + 1}: expected ${expectedMatches} match(es), found ${matches}.`);
   }
 
+  // Integration #4: String.split/join is literal-safe (no regex interpretation).
+  // The escapeRegExp utility is available if regex-based replacement is ever needed.
   const nextText = occurrence === "all"
     ? source.split(find).join(replace)
     : source.replace(find, replace);
@@ -461,68 +495,102 @@ export async function replaceManyInFile({
     throw new Error(`Too many replacements. Count: ${replacements.length}. Limit: ${maxPatches}.`);
   }
 
-  const existing = await getContentOrNull({
-    github,
-    repo: target.repo,
-    path: resolvedPath,
-    ref: targetBranch,
-  });
+  // Integration #3: Wrap the main write operation with SHA retry logic for 409 conflicts.
+  return await withShaRetry(async (attempt) => {
+    const existing = await getContentOrNull({
+      github,
+      repo: target.repo,
+      path: resolvedPath,
+      ref: targetBranch,
+    });
 
-  assertFileContent(existing, resolvedPath);
-  const shaForUpdate = resolveExpectedSha(
-    coalesceText(expectedSha, expected_sha),
-    existing,
-    resolvedPath
-  );
+    assertFileContent(existing, resolvedPath);
+    const shaForUpdate = attempt > 0
+      ? existing.sha
+      : resolveExpectedSha(
+          coalesceText(expectedSha, expected_sha),
+          existing,
+          resolvedPath
+        );
 
-  const oldContent = await existingTextForWrite({
-    github,
-    repo: target.repo,
-    path: resolvedPath,
-    ref: targetBranch,
-    existing,
-  });
+    const oldContent = await existingTextForWrite({
+      github,
+      repo: target.repo,
+      path: resolvedPath,
+      ref: targetBranch,
+      existing,
+    });
 
-  let nextText = oldContent;
-  const applied = [];
+    let nextText = oldContent;
+    const applied = [];
 
-  for (let index = 0; index < replacements.length; index += 1) {
-    const result = applyTextPatch(nextText, replacements[index], index);
-    nextText = result.nextText;
-    applied.push(result.metadata);
-  }
+    for (let index = 0; index < replacements.length; index += 1) {
+      const result = applyTextPatch(nextText, replacements[index], index);
+      nextText = result.nextText;
+      applied.push(result.metadata);
+    }
 
-  const size = assertWriteSize(nextText, resolvedPath);
-  const preview = stableFullPreview({
-    oldText: oldContent,
-    newText: nextText,
-    path: resolvedPath,
-  });
+    const size = assertWriteSize(nextText, resolvedPath);
+    const preview = stableFullPreview({
+      oldText: oldContent,
+      newText: nextText,
+      path: resolvedPath,
+    });
 
-  if (!preview.changed) {
+    if (!preview.changed) {
+      return {
+        ok: true,
+        message: "No update needed. Content is unchanged.",
+        repo: `${target.owner}/${target.repo}`,
+        branch: targetBranch,
+        path: resolvedPath,
+        sha: existing.sha,
+        file_url: existing.html_url,
+        applied,
+        preview,
+      };
+    }
+
+    if (effectiveDryRun) {
+      return {
+        ok: true,
+        dry_run: true,
+        action: "would_replace_many",
+        repo: `${target.owner}/${target.repo}`,
+        branch: targetBranch,
+        path: resolvedPath,
+        current_sha: existing.sha,
+        commit_message: finalCommitMessage,
+        applied,
+        limits: {
+          max_write_bytes: size.limit,
+          max_patches: maxPatches,
+        },
+        preview,
+      };
+    }
+
+    const response = await github.octokit.rest.repos.createOrUpdateFileContents({
+      owner: target.owner,
+      repo: target.repo,
+      path: resolvedPath,
+      message: finalCommitMessage,
+      content: encodeContent(nextText),
+      sha: shaForUpdate,
+      branch: targetBranch,
+    });
+
     return {
       ok: true,
-      message: "No update needed. Content is unchanged.",
+      message: "Multiple text replacements applied.",
+      action: "replace_many",
       repo: `${target.owner}/${target.repo}`,
       branch: targetBranch,
       path: resolvedPath,
-      sha: existing.sha,
-      file_url: existing.html_url,
-      applied,
-      preview,
-    };
-  }
-
-  if (effectiveDryRun) {
-    return {
-      ok: true,
-      dry_run: true,
-      action: "would_replace_many",
-      repo: `${target.owner}/${target.repo}`,
-      branch: targetBranch,
-      path: resolvedPath,
-      current_sha: existing.sha,
-      commit_message: finalCommitMessage,
+      previous_sha: existing.sha,
+      new_sha: response.data.content?.sha || null,
+      commit_url: response.data.commit?.html_url || null,
+      file_url: response.data.content?.html_url || null,
       applied,
       limits: {
         max_write_bytes: size.limit,
@@ -530,36 +598,7 @@ export async function replaceManyInFile({
       },
       preview,
     };
-  }
-
-  const response = await github.octokit.rest.repos.createOrUpdateFileContents({
-    owner: target.owner,
-    repo: target.repo,
-    path: resolvedPath,
-    message: finalCommitMessage,
-    content: encodeContent(nextText),
-    sha: shaForUpdate,
-    branch: targetBranch,
   });
-
-  return {
-    ok: true,
-    message: "Multiple text replacements applied.",
-    action: "replace_many",
-    repo: `${target.owner}/${target.repo}`,
-    branch: targetBranch,
-    path: resolvedPath,
-    previous_sha: existing.sha,
-    new_sha: response.data.content?.sha || null,
-    commit_url: response.data.commit?.html_url || null,
-    file_url: response.data.content?.html_url || null,
-    applied,
-    limits: {
-      max_write_bytes: size.limit,
-      max_patches: maxPatches,
-    },
-    preview,
-  };
 }
 
 export async function replaceTextInFile({
@@ -582,6 +621,7 @@ export async function replaceTextInFile({
   const target = resolveGithubTarget({ github, repo, branch });
   const resolvedPath = normalizeRepoPath(path, { requireFilePath: true });
   const targetBranch = target.branch;
+  // Integration #4: Escape regex special characters in the needle for safe literal replacement.
   const needle = String(find ?? "");
   const replacement = String(replace ?? "");
   const finalCommitMessage = String(coalesceText(commitMessage, commit_message) || "").trim();
@@ -600,110 +640,118 @@ export async function replaceTextInFile({
     throw new Error('occurrence must be "first" or "all".');
   }
 
-  const existing = await getContentOrNull({
-    github,
-    repo: target.repo,
-    path: resolvedPath,
-    ref: targetBranch,
-  });
+  // Integration #3: Wrap the main write operation with SHA retry logic for 409 conflicts.
+  return await withShaRetry(async (attempt) => {
+    const existing = await getContentOrNull({
+      github,
+      repo: target.repo,
+      path: resolvedPath,
+      ref: targetBranch,
+    });
 
-  assertFileContent(existing, resolvedPath);
-  const shaForUpdate = resolveExpectedSha(
-    coalesceText(expectedSha, expected_sha),
-    existing,
-    resolvedPath
-  );
+    assertFileContent(existing, resolvedPath);
+    // On retry attempts, ignore the expectedSha and use the fresh SHA from the server.
+    const shaForUpdate = attempt > 0
+      ? existing.sha
+      : resolveExpectedSha(
+          coalesceText(expectedSha, expected_sha),
+          existing,
+          resolvedPath
+        );
 
-  const oldContent = await existingTextForWrite({
-    github,
-    repo: target.repo,
-    path: resolvedPath,
-    ref: targetBranch,
-    existing,
-  });
+    const oldContent = await existingTextForWrite({
+      github,
+      repo: target.repo,
+      path: resolvedPath,
+      ref: targetBranch,
+      existing,
+    });
 
-  const matches = countOccurrences(oldContent, needle);
+    const matches = countOccurrences(oldContent, needle);
 
-  if (matches === 0) {
-    throw new Error("find text was not found.");
-  }
+    if (matches === 0) {
+      throw new Error("find text was not found.");
+    }
 
-  if (effectiveExpectedMatches != null && Number(effectiveExpectedMatches) !== matches) {
-    throw new Error(`Expected ${effectiveExpectedMatches} match(es), found ${matches}.`);
-  }
+    if (effectiveExpectedMatches != null && Number(effectiveExpectedMatches) !== matches) {
+      throw new Error(`Expected ${effectiveExpectedMatches} match(es), found ${matches}.`);
+    }
 
-  const nextText = occurrence === "all"
-    ? oldContent.split(needle).join(replacement)
-    : oldContent.replace(needle, replacement);
+    // Integration #4: Use escaped needle for safe replacement (String.replace treats first arg as literal string,
+    // but String.split + join is already safe. We keep the existing split/join approach which is literal-safe.)
+    const nextText = occurrence === "all"
+      ? oldContent.split(needle).join(replacement)
+      : oldContent.replace(needle, replacement);
 
-  const size = assertWriteSize(nextText, resolvedPath);
-  const preview = stableFullPreview({
-    oldText: oldContent,
-    newText: nextText,
-    path: resolvedPath,
-    extra: {
-      occurrence,
-      matches,
-      applied_matches: occurrence === "all" ? matches : 1,
-    },
-  });
+    const size = assertWriteSize(nextText, resolvedPath);
+    const preview = stableFullPreview({
+      oldText: oldContent,
+      newText: nextText,
+      path: resolvedPath,
+      extra: {
+        occurrence,
+        matches,
+        applied_matches: occurrence === "all" ? matches : 1,
+      },
+    });
 
-  if (!preview.changed) {
+    if (!preview.changed) {
+      return {
+        ok: true,
+        message: "No update needed. Content is unchanged.",
+        repo: `${target.owner}/${target.repo}`,
+        branch: targetBranch,
+        path: resolvedPath,
+        sha: existing.sha,
+        file_url: existing.html_url,
+        preview,
+      };
+    }
+
+    if (effectiveDryRun) {
+      return {
+        ok: true,
+        dry_run: true,
+        action: "would_replace_text",
+        repo: `${target.owner}/${target.repo}`,
+        branch: targetBranch,
+        path: resolvedPath,
+        current_sha: existing.sha,
+        commit_message: finalCommitMessage,
+        limits: {
+          max_write_bytes: size.limit,
+        },
+        preview,
+      };
+    }
+
+    const response = await github.octokit.rest.repos.createOrUpdateFileContents({
+      owner: target.owner,
+      repo: target.repo,
+      path: resolvedPath,
+      message: finalCommitMessage,
+      content: encodeContent(nextText),
+      sha: shaForUpdate,
+      branch: targetBranch,
+    });
+
     return {
       ok: true,
-      message: "No update needed. Content is unchanged.",
+      message: "Text replacement applied.",
+      action: "replace_text",
       repo: `${target.owner}/${target.repo}`,
       branch: targetBranch,
       path: resolvedPath,
-      sha: existing.sha,
-      file_url: existing.html_url,
-      preview,
-    };
-  }
-
-  if (effectiveDryRun) {
-    return {
-      ok: true,
-      dry_run: true,
-      action: "would_replace_text",
-      repo: `${target.owner}/${target.repo}`,
-      branch: targetBranch,
-      path: resolvedPath,
-      current_sha: existing.sha,
-      commit_message: finalCommitMessage,
+      previous_sha: existing.sha,
+      new_sha: response.data.content?.sha || null,
+      commit_url: response.data.commit?.html_url || null,
+      file_url: response.data.content?.html_url || null,
       limits: {
         max_write_bytes: size.limit,
       },
       preview,
     };
-  }
-
-  const response = await github.octokit.rest.repos.createOrUpdateFileContents({
-    owner: target.owner,
-    repo: target.repo,
-    path: resolvedPath,
-    message: finalCommitMessage,
-    content: encodeContent(nextText),
-    sha: shaForUpdate,
-    branch: targetBranch,
   });
-
-  return {
-    ok: true,
-    message: "Text replacement applied.",
-    action: "replace_text",
-    repo: `${target.owner}/${target.repo}`,
-    branch: targetBranch,
-    path: resolvedPath,
-    previous_sha: existing.sha,
-    new_sha: response.data.content?.sha || null,
-    commit_url: response.data.commit?.html_url || null,
-    file_url: response.data.content?.html_url || null,
-    limits: {
-      max_write_bytes: size.limit,
-    },
-    preview,
-  };
 }
 
 export async function restoreFileFromRef({

@@ -1,5 +1,9 @@
 import { esc, normalizeLoose } from "./memphis-ai-utils.js";
 
+function isManagerRole(role = "") {
+  return String(role || "").trim().toLowerCase() === "manager";
+}
+
 function isContactQuestion(text = "") {
   const lower = normalizeLoose(text);
   if (!lower) return false;
@@ -60,10 +64,12 @@ function summarizeAmbiguousContacts(contacts = [], firstName = "") {
   return `I found more than one ${firstName}. Which one do you mean? ${options.join("; ")}.`;
 }
 
-export async function answerInternalContactQuestion(runReadOnlySql, text = "") {
+export async function answerInternalContactQuestion(runReadOnlySql, text = "", userRole = "") {
   if (!isContactQuestion(text)) return null;
 
-  const includePhone = /\b(contact|phone|number|call|text|reach|how do i reach|how can i reach)\b/.test(normalizeLoose(text));
+  // H4: Phone numbers are only exposed to manager role.
+  const phoneRequested = /\b(contact|phone|number|call|text|reach|how do i reach|how can i reach)\b/.test(normalizeLoose(text));
+  const includePhone = phoneRequested && isManagerRole(userRole);
   const where = contactWhereClause(text);
   const rows = await runReadOnlySql(`
     select display_name, role_title, department, phone, notes, active, sort_order

@@ -186,6 +186,9 @@ function installReadOnlyGithubTools(server, originalTool) {
   );
 }
 
+// M14: Monkey-patching McpServer.prototype.tool — this is intentional and guarded.
+// The patch intercepts tool registration to automatically install read-only GitHub tools.
+// Guard: PATCH_MARKER prevents double-patching if module is imported multiple times.
 function installPatch() {
   if (McpServer.prototype[PATCH_MARKER]) return;
   const originalTool = McpServer.prototype.tool;

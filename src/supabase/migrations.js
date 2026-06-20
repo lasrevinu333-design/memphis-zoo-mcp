@@ -96,6 +96,13 @@ export function normalizeMigrationInput({ name, sql } = {}) {
   if (!/^[a-zA-Z0-9_.-]+$/.test(migrationName)) {
     throw new Error("Migration name may only contain letters, numbers, underscores, dots, and hyphens.");
   }
+  // Prevent names that could collide with auto-generated names (prefix_number_random)
+  if (/^\d+/.test(migrationName)) {
+    throw new Error("Migration name must not start with a digit to avoid collision with auto-generated names.");
+  }
+  if (/_(\d{10,})_/.test(migrationName)) {
+    throw new Error("Migration name must not contain a timestamp-like pattern that could collide with auto-generated names.");
+  }
   if (!migrationSql) throw new Error("Migration SQL is required.");
 
   return {

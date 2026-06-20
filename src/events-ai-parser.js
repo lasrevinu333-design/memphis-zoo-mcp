@@ -1120,16 +1120,21 @@ function buildGeminiPrompt(rows, locationGroups) {
 }
 
 function safeJsonParse(text) {
+  const raw = String(text || "").trim();
+  if (!raw) return null;
   try {
-    return JSON.parse(text);
+    return JSON.parse(raw);
   } catch {
-    const match = String(text || "").match(/\{[\s\S]*\}/);
-    if (!match) return null;
-    try {
-      return JSON.parse(match[0]);
-    } catch {
-      return null;
+    const matches = raw.match(/\{[\s\S]*?\}/g);
+    if (!matches) return null;
+    for (const candidate of matches) {
+      try {
+        return JSON.parse(candidate);
+      } catch {
+        continue;
+      }
     }
+    return null;
   }
 }
 
@@ -1137,9 +1142,9 @@ async function tryGeminiParseTexts({ rows, locationGroups }) {
   const apiKey = getGeminiApiKey(["EVENTS_GEMINI_API_KEY"]);
   if (!apiKey) return { ok: false, reason: "gemini_not_configured" };
   const prompt = buildGeminiPrompt(rows, locationGroups);
-  const response = await fetchWithTimeout(`${GEMINI_BASE_URL}/${encodeURIComponent(GEMINI_MODEL)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+  const response = await fetchWithTimeout(`${GEMINI_BASE_URL}/${encodeURIComponent(GEMINI_MODEL)}:generateContent`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
     body: JSON.stringify({
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       generationConfig: { temperature: 0.15, maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS, responseMimeType: "application/json" },
