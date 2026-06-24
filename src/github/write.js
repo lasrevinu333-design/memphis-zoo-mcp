@@ -313,11 +313,11 @@ export async function updateFile({
     });
 
     assertFileContent(existing, resolvedPath);
-    // On retry attempts, ignore the expectedSha and use the fresh SHA from the server.
+    const suppliedExpectedSha = coalesceText(expectedSha, expected_sha);
     const shaForUpdate = attempt > 0
       ? existing.sha
       : resolveExpectedSha(
-          coalesceText(expectedSha, expected_sha),
+          suppliedExpectedSha,
           existing,
           resolvedPath
         );
@@ -388,7 +388,7 @@ export async function updateFile({
       limits: { max_write_bytes: size.limit },
       preview,
     };
-  });
+  }, 3, { expectedSha: coalesceText(expectedSha, expected_sha) });
 }
 
 function countOccurrences(text, find) {
@@ -602,7 +602,7 @@ export async function replaceManyInFile({
       },
       preview,
     };
-  });
+  }, 3, { expectedSha: coalesceText(expectedSha, expected_sha) });
 }
 
 export async function replaceTextInFile({
@@ -654,11 +654,11 @@ export async function replaceTextInFile({
     });
 
     assertFileContent(existing, resolvedPath);
-    // On retry attempts, ignore the expectedSha and use the fresh SHA from the server.
+    const suppliedExpectedSha = coalesceText(expectedSha, expected_sha);
     const shaForUpdate = attempt > 0
       ? existing.sha
       : resolveExpectedSha(
-          coalesceText(expectedSha, expected_sha),
+          suppliedExpectedSha,
           existing,
           resolvedPath
         );
@@ -755,7 +755,7 @@ export async function replaceTextInFile({
       },
       preview,
     };
-  });
+  }, 3, { expectedSha: coalesceText(expectedSha, expected_sha) });
 }
 
 export async function restoreFileFromRef({
