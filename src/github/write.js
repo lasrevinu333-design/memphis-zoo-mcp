@@ -405,8 +405,9 @@ function escapeRegExp(str) {
  * Integration #3: Retry wrapper for GitHub write operations that may fail with 409 (SHA mismatch).
  * Retries up to 3 times by re-fetching the latest SHA and retrying the operation.
  */
-async function withShaRetry(operation, maxRetries = 3) {
+async function withShaRetry(operation, maxRetries = 3, options = {}) {
   let lastError = null;
+  const expectedShaWasProvided = Boolean(String(options.expectedSha || "").trim());
   for (let attempt = 0; attempt < maxRetries; attempt += 1) {
     try {
       return await operation(attempt);
@@ -415,7 +416,10 @@ async function withShaRetry(operation, maxRetries = 3) {
       const status = error?.status || error?.response?.status;
       const is409 = status === 409 || /409|conflict|sha.*mismatch/i.test(String(error?.message || ""));
       if (!is409 || attempt === maxRetries - 1) throw error;
-      // Wait a short delay before retrying.
+      if (expectedShaWasProvided) {
+        throw new Error("Refusing automatic retry because expected_sha was supplied and the remote file changed. Re-read the file, inspect the current content, then retry with the new SHA.");
+      }
+      // Wait a short delay before retrying when the caller did not request SHA pinning.
       await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
     }
   }
