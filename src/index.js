@@ -63,7 +63,7 @@ let feedbackReminderSweepInFlight = false;
 let feedbackSchemaEnsured = false;
 let feedbackSchemaEnsurePromise = null;
 
-const requireOpsManagerAuth = makeDailyPinMiddleware({ allowedRoles: ["ops_manager"], openWhenDisabled: true });
+const requireOpsManagerAuth = makeDailyPinMiddleware({ allowedRoles: ["ops_manager"], openWhenDisabled: false });
 
 // Simple in-memory rate limiter: max 10 requests per minute per IP
 const RATE_LIMIT_WINDOW_MS = 60_000;
