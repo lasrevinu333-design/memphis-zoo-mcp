@@ -1996,7 +1996,7 @@ app.get("/", (_req, res) => { res.status(200).send("Memphis Zoo MCP server is ru
 app.get("/mcp", requireMcpAuth, (_req, res) => { res.status(405).send("GET not supported on /mcp for this server."); });
 app.options("/mcp", (_req, res) => {
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id, X-Memphis-Connector-Token");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id, X-Memphis-Connector-Token, X-Mcp-Connector-Token");
   res.sendStatus(200);
 });
 app.post("/mcp", requireMcpAuth, async (req, res) => {
