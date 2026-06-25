@@ -12,6 +12,7 @@ import {
   makeDailyPinMiddleware,
   verifyDailyPinToken,
 } from "../src/auth/daily-pin-auth.js";
+import { makeMcpConnectorMiddleware } from "../src/auth/mcp-connector-auth.js";
 
 const env = {
   PIN_SESSION_SECRET: "test-pin-session-secret",
@@ -122,6 +123,68 @@ await withServer(app, async (baseUrl) => {
   assert.equal(response.status, 429, "custodian lockout blocks even the right PIN until reset");
 });
 
+const mcpEnv = {
+  ...strictEnv,
+  MEMPHIS_DISABLE_OPS_MANAGER_AUTH: "false",
+  MCP_CONNECTOR_TOKEN: "connector-secret-token",
+};
+const mcpApp = express();
+mcpApp.use(express.json());
+mcpApp.post("/mcp-protected", makeMcpConnectorMiddleware({ env: mcpEnv }), (_req, res) => res.json({ ok: true }));
+
+await withServer(mcpApp, async (baseUrl) => {
+  let response = await fetch(`${baseUrl}/mcp-protected`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ping: true }),
+  });
+  assert.equal(response.status, 401, "MCP routes should reject anonymous requests once MCP_CONNECTOR_TOKEN is configured");
+
+  response = await fetch(`${baseUrl}/mcp-protected`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Memphis-Connector-Token": mcpEnv.MCP_CONNECTOR_TOKEN },
+    body: JSON.stringify({ ping: true }),
+  });
+  assert.equal(response.status, 200, "MCP connector token should authorize /mcp requests");
+
+  response = await fetch(`${baseUrl}/mcp-protected`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Memphis-Connector-Token": "wrong-token" },
+    body: JSON.stringify({ ping: true }),
+  });
+  assert.equal(response.status, 401, "Wrong MCP connector token must be rejected");
+
+  const strictSession = createDailyPinSession({
+    pin: strictEnv.OPS_MANAGER_DAILY_PIN,
+    deviceId: "ops-ipad-1",
+    now: new Date(),
+    env: strictEnv,
+  });
+  response = await fetch(`${baseUrl}/mcp-protected`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${strictSession.token}`,
+      "X-Device-Id": "ops-ipad-1",
+    },
+    body: JSON.stringify({ ping: true }),
+  });
+  assert.equal(response.status, 200, "A real ops-manager PIN session should remain a valid MCP fallback when connector token rollout is enabled");
+});
+
+const fallbackMcpApp = express();
+fallbackMcpApp.use(express.json());
+fallbackMcpApp.post("/mcp-protected", makeMcpConnectorMiddleware({ env }), (_req, res) => res.json({ ok: true }));
+
+await withServer(fallbackMcpApp, async (baseUrl) => {
+  const response = await fetch(`${baseUrl}/mcp-protected`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ping: true }),
+  });
+  assert.equal(response.status, 200, "Without MCP_CONNECTOR_TOKEN, legacy open ops-manager rollout behavior must remain intact until the connector secret is configured");
+});
+
 const backendIndex = readFileSync(resolve("src/index.js"), "utf8");
 const diagnostics = readFileSync(resolve("src/mcp-schema-bootstrap.js"), "utf8");
 const eventsAdminHtml = readFileSync(resolve("../Engine/events-admin.html"), "utf8");
@@ -145,9 +208,12 @@ assert.match(backendIndex, /createScheduleRouter\([\s\S]*requireAdminApiAuth:\s*
 assert.match(backendIndex, /createEventsAdminRouter\([\s\S]*requireAdminApiAuth:\s*requireOpsManagerAuth/);
 assert.match(backendIndex, /app\.post\("\/dashboard-api\/close-ticket",\s*requireOpsManagerAuth/);
 assert.match(backendIndex, /makeDailyPinMiddleware\(\{ allowedRoles: \["ops_manager"\], openWhenDisabled: true \}\)/);
-assert.match(backendIndex, /app\.post\("\/mcp",\s*requireOpsManagerAuth/);
-assert.match(backendIndex, /app\.get\("\/sse",\s*requireOpsManagerAuth/);
-assert.match(backendIndex, /app\.post\("\/messages",\s*requireOpsManagerAuth/);
+assert.match(backendIndex, /makeMcpConnectorMiddleware/);
+assert.match(backendIndex, /const requireMcpAuth = makeMcpConnectorMiddleware\(\)/);
+assert.match(backendIndex, /MCP_CONNECTOR_TOKEN/);
+assert.match(backendIndex, /app\.post\("\/mcp",\s*requireMcpAuth/);
+assert.match(backendIndex, /app\.get\("\/sse",\s*requireMcpAuth/);
+assert.match(backendIndex, /app\.post\("\/messages",\s*requireMcpAuth/);
 assert.doesNotMatch(backendIndex, /X-Admin-Key|ADMIN_API_KEY|admin-api-key|x-admin-key/i);
 assert.match(diagnostics, /makeDailyPinMiddleware\(\{ allowedRoles: \["ops_manager"\], openWhenDisabled: true \}\)/);
 assert.match(diagnostics, /\/mcp-tools\.json",\s*requireOpsManagerAuth/);

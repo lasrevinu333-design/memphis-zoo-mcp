@@ -17,6 +17,7 @@ import {
 } from "./routes/index.js";
 import { APP_VERSION, RELEASE_ID } from "./app-version.js";
 import { authenticateDailyPinRequest, installDailyPinAuthRoutes, makeDailyPinMiddleware } from "./auth/daily-pin-auth.js";
+import { makeMcpConnectorMiddleware } from "./auth/mcp-connector-auth.js";
 import { sanitizeReadOnlySql } from "./supabase/read.js";
 
 const app = express();
@@ -64,6 +65,7 @@ let feedbackSchemaEnsured = false;
 let feedbackSchemaEnsurePromise = null;
 
 const requireOpsManagerAuth = makeDailyPinMiddleware({ allowedRoles: ["ops_manager"], openWhenDisabled: false });
+const requireMcpAuth = makeMcpConnectorMiddleware();
 
 // Simple in-memory rate limiter: max 10 requests per minute per IP
 const RATE_LIMIT_WINDOW_MS = 60_000;
@@ -1987,17 +1989,23 @@ app.post("/scan-api/rpc", rateLimit, requireDeviceAuth, async (req, res) => {
   catch (error) { console.error("scan rpc failed:", error); res.status(500).json({ ok: false, error: error.message || "Scan RPC failed" }); }
 });
 app.get("/", (_req, res) => { res.status(200).send("Memphis Zoo MCP server is running."); });
-// C2: MCP endpoint — requires ops_manager PIN auth via requireOpsManagerAuth middleware.
-// This protects arbitrary SQL execution (supabase_sql_read, supabase_migration_apply) and all MCP tools.
-app.get("/mcp", requireOpsManagerAuth, (_req, res) => { res.status(405).send("GET not supported on /mcp for this server."); });
-app.options("/mcp", (_req, res) => { res.sendStatus(200); });
-app.post("/mcp", requireOpsManagerAuth, async (req, res) => {
+// C2: MCP endpoint — prefers a dedicated connector token via X-Memphis-Connector-Token.
+// If MCP_CONNECTOR_TOKEN is configured, anonymous/open manager access is disabled and callers must
+// present that token or a real ops-manager PIN session. If it is not configured yet, legacy
+// ops-manager behavior remains in place so the transport does not break during rollout.
+app.get("/mcp", requireMcpAuth, (_req, res) => { res.status(405).send("GET not supported on /mcp for this server."); });
+app.options("/mcp", (_req, res) => {
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id, X-Memphis-Connector-Token");
+  res.sendStatus(200);
+});
+app.post("/mcp", requireMcpAuth, async (req, res) => {
   let server;
   try { server = createMcpServer(); const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined }); res.on("close", () => { transport.close(); try { server.close(); } catch {} }); await server.connect(transport); await transport.handleRequest(req, res, req.body); }
   catch (error) { console.error("MCP request failed:", error); if (!res.headersSent) { res.status(500).json({ jsonrpc: "2.0", error: { code: -32603, message: "Internal server error" }, id: null }); } }
 });
 const sseTransports = new Map();
-app.get("/sse", requireOpsManagerAuth, async (req, res) => {
+app.get("/sse", requireMcpAuth, async (req, res) => {
   let server;
   try {
     server = createMcpServer();
@@ -2012,7 +2020,7 @@ app.get("/sse", requireOpsManagerAuth, async (req, res) => {
   }
   catch (error) { console.error("SSE connection failed:", error); if (!res.headersSent) res.status(500).send("SSE connection failed"); }
 });
-app.post("/messages", requireOpsManagerAuth, async (req, res) => {
+app.post("/messages", requireMcpAuth, async (req, res) => {
   try {
     const sessionId = String(req.query.sessionId || req.query.session_id || "");
     let entry = sseTransports.get(sessionId);
