@@ -13,11 +13,21 @@ export function getMcpConnectorToken(env = process.env) {
 }
 
 export function requestMcpConnectorToken(req) {
-  return String(
+  // Check custom connector token headers first
+  const fromCustomHeader =
     req?.header?.("x-memphis-connector-token")
-      || req?.header?.("x-mcp-connector-token")
-      || ""
-  ).trim();
+    || req?.header?.("x-mcp-connector-token");
+
+  if (fromCustomHeader) return String(fromCustomHeader).trim();
+
+  // Fall back to Authorization: Bearer <token> (standard HTTP auth).
+  // ChatGPT MCP connectors send this via service_http auth type.
+  const authHeader = String(req?.header?.("authorization") || "").trim();
+  if (authHeader.toLowerCase().startsWith("bearer ")) {
+    return authHeader.slice(7).trim();
+  }
+
+  return "";
 }
 
 function createConnectorSession({ now = new Date() } = {}) {
