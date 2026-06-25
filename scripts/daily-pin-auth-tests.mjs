@@ -20,11 +20,12 @@ const env = {
   CUSTODIAN_DAILY_PIN: "7007",
   PIN_MAX_ATTEMPTS: "3",
   MEMPHIS_OPERATIONAL_TIME_ZONE: "America/Chicago",
+  OPS_MANAGER_AUTH_DISABLED: "true",
 };
-const strictEnv = { ...env, MEMPHIS_DISABLE_OPS_MANAGER_AUTH: "false" };
+const strictEnv = { ...env, OPS_MANAGER_AUTH_DISABLED: "false" };
 
 assert.equal(isOpsManagerAuthDisabled(env), true);
-assert.equal(isOpsManagerAuthDisabled(strictEnv), true);
+assert.equal(isOpsManagerAuthDisabled(strictEnv), false);
 const openSession = createOpenOpsManagerSession({ deviceId: "ops-ipad-1", now: new Date("2026-05-26T15:00:00.000Z"), env });
 assert.equal(openSession.role, "ops_manager");
 assert.equal(openSession.auth_mode, "open");
@@ -125,7 +126,7 @@ await withServer(app, async (baseUrl) => {
 
 const mcpEnv = {
   ...strictEnv,
-  MEMPHIS_DISABLE_OPS_MANAGER_AUTH: "false",
+  OPS_MANAGER_AUTH_DISABLED: "false",
   MCP_CONNECTOR_TOKEN: "connector-secret-token",
 };
 const mcpApp = express();
@@ -207,7 +208,7 @@ assert.match(backendIndex, /app\.use\("\/feedback-api"[\s\S]*next\(\); \}\);/);
 assert.match(backendIndex, /createScheduleRouter\([\s\S]*requireAdminApiAuth:\s*requireOpsManagerAuth/);
 assert.match(backendIndex, /createEventsAdminRouter\([\s\S]*requireAdminApiAuth:\s*requireOpsManagerAuth/);
 assert.match(backendIndex, /app\.post\("\/dashboard-api\/close-ticket",\s*requireOpsManagerAuth/);
-assert.match(backendIndex, /makeDailyPinMiddleware\(\{ allowedRoles: \["ops_manager"\], openWhenDisabled: true \}\)/);
+assert.match(backendIndex, /makeDailyPinMiddleware\(\{ allowedRoles: \["ops_manager"\], openWhenDisabled: false \}\)/);
 assert.match(backendIndex, /makeMcpConnectorMiddleware/);
 assert.match(backendIndex, /const requireMcpAuth = makeMcpConnectorMiddleware\(\)/);
 assert.match(backendIndex, /MCP_CONNECTOR_TOKEN/);
@@ -215,7 +216,7 @@ assert.match(backendIndex, /app\.post\("\/mcp",\s*requireMcpAuth/);
 assert.match(backendIndex, /app\.get\("\/sse",\s*requireMcpAuth/);
 assert.match(backendIndex, /app\.post\("\/messages",\s*requireMcpAuth/);
 assert.doesNotMatch(backendIndex, /X-Admin-Key|ADMIN_API_KEY|admin-api-key|x-admin-key/i);
-assert.match(diagnostics, /makeDailyPinMiddleware\(\{ allowedRoles: \["ops_manager"\], openWhenDisabled: true \}\)/);
+assert.match(diagnostics, /makeDailyPinMiddleware\(\{ allowedRoles: \["ops_manager"\], openWhenDisabled: false \}\)/);
 assert.match(diagnostics, /\/mcp-tools\.json",\s*requireOpsManagerAuth/);
 assert.match(diagnostics, /\/status\/deep",\s*requireOpsManagerAuth/);
 
