@@ -6,8 +6,8 @@ const MEMPHIS_TIME_ZONE = "America/Chicago";
 const DEFAULT_MAX_PIN_ATTEMPTS = 3;
 
 export function isOpsManagerAuthDisabled(env = process.env) {
-  // Auth is disabled by default. Only enabled when OPS_MANAGER_AUTH_DISABLED is explicitly set to 'false'.
-  return String(env.OPS_MANAGER_AUTH_DISABLED || 'true').toLowerCase() !== 'false';
+  // Auth is enabled by default. Only disabled when OPS_MANAGER_AUTH_DISABLED is explicitly set to 'true'.
+  return String(env.OPS_MANAGER_AUTH_DISABLED || "false").toLowerCase() === "true";
 }
 
 function base64UrlEncode(value) {
