@@ -78,6 +78,8 @@ export function makeMcpConnectorMiddleware({ env = process.env } = {}) {
   return function requireMcpConnectorOrOps(req, res, next) {
     const result = authenticateMcpConnectorRequest(req, { env });
     if (!result.ok) {
+      res.setHeader("WWW-Authenticate", 'Bearer realm="Memphis Zoo MCP"');
+      res.setHeader("Cache-Control", "no-store");
       res.status(result.status || 401).json({ ok: false, error: result.error || "Unauthorized" });
       return;
     }
