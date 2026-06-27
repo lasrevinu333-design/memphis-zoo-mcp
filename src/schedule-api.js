@@ -4380,6 +4380,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
         : null;
       const restroomRebalanceResult = await rebalanceRestroomAssignments(serviceDate);
       const lunchCoverageResult = await applyLunchCoverageAfterRestroomRebalance(serviceDate);
+      const restroomRebalanceCompletion = await markRestroomRebalanceCompletion(serviceDate, { reason: "absence_publish", balance: restroomRebalanceResult, lunch_coverage: lunchCoverageResult }, "completed");
       if (data && typeof data === "object") {
         const diff = summarizeAssignmentDiff({
           removed_assignments: data.removed_assignments || data.generate_result?.removed_assignments,
