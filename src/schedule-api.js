@@ -1495,6 +1495,110 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
     return Array.isArray(rows) ? rows : [];
   }
 
+  async function listRestroomRouteFitRows(serviceDate, assignments = []) {
+    const targetGroupIds = Array.from(new Set((Array.isArray(assignments) ? assignments : [])
+      .map((row) => String(row.location_group_id || "").trim())
+      .filter(Boolean)));
+    if (!targetGroupIds.length) return [];
+    const valuesSql = targetGroupIds.map((id) => `('${esc(requireUuid(id, "location_group_id"))}'::uuid)`).join(",\n");
+    const rows = await runReadOnlySql(`
+      with target(location_group_id) as (
+        values ${valuesSql}
+      ), roster as (
+        select r.employee_id
+        from public.daily_work_roster r
+        where r.service_date = '${esc(serviceDate)}'::date
+          and r.active = true
+          and r.shift_start <= '${esc(RESTROOM_REBALANCE_TIME)}'::time
+          and r.shift_end > '${esc(RESTROOM_REBALANCE_TIME)}'::time
+      ), current_groups as (
+        select r.employee_id, dsa.location_group_id
+        from roster r
+        join public.daily_schedule_assignments dsa
+          on dsa.service_date = '${esc(serviceDate)}'::date
+         and dsa.assigned_employee_id = r.employee_id
+         and dsa.status = 'ASSIGNED'
+         and coalesce(dsa.coverage_purpose, '') not in ('lunch_coverage', 'reminder')
+         and dsa.coverage_end > '${esc(RESTROOM_REBALANCE_TIME)}'::time
+      ), target_zones as (
+        select t.location_group_id, z.zone_code
+        from target t
+        left join public.v_schedule_location_group_zones z
+          on z.location_group_id = t.location_group_id
+         and z.zone_assignment_active is distinct from false
+      ), current_zones as (
+        select cg.employee_id, cg.location_group_id, z.zone_code
+        from current_groups cg
+        left join public.v_schedule_location_group_zones z
+          on z.location_group_id = cg.location_group_id
+         and z.zone_assignment_active is distinct from false
+      ), anchors as (
+        select employee_id, zone_code as route_anchor_zone_code
+        from (
+          select employee_id, zone_code, count(*) as zone_count,
+                 row_number() over (partition by employee_id order by count(*) desc, zone_code asc) as rn
+          from current_zones
+          where zone_code is not null
+          group by employee_id, zone_code
+        ) ranked
+        where rn = 1
+      ), fit as (
+        select
+          r.employee_id,
+          t.location_group_id,
+          count(distinct cg.location_group_id)::int as current_group_count,
+          coalesce(bool_or(cg.location_group_id = t.location_group_id), false) as same_group,
+          coalesce(bool_or(cz.zone_code is not null and tz.zone_code is not null and cz.zone_code = tz.zone_code), false) as same_zone,
+          min(
+            case
+              when cg.location_group_id = t.location_group_id then 0
+              when adj.walking_minutes is not null then adj.walking_minutes
+              when cz.zone_code is not null and tz.zone_code is not null and cz.zone_code = tz.zone_code then 4
+              else null
+            end
+          ) as direct_walk_minutes,
+          max(a.route_anchor_zone_code) as route_anchor_zone_code,
+          max(tz.zone_code) as target_zone_code
+        from roster r
+        cross join target t
+        left join current_groups cg on cg.employee_id = r.employee_id
+        left join current_zones cz on cz.employee_id = r.employee_id and cz.location_group_id = cg.location_group_id
+        left join target_zones tz on tz.location_group_id = t.location_group_id
+        left join public.location_group_adjacency adj
+          on adj.active = true
+         and (
+           (adj.from_location_group_id = cg.location_group_id and adj.to_location_group_id = t.location_group_id)
+           or (adj.to_location_group_id = cg.location_group_id and adj.from_location_group_id = t.location_group_id)
+         )
+        left join anchors a on a.employee_id = r.employee_id
+        group by r.employee_id, t.location_group_id
+      )
+      select
+        employee_id,
+        location_group_id,
+        current_group_count,
+        same_group,
+        same_zone,
+        case
+          when current_group_count = 0 then ${RESTROOM_REBALANCE_FLEX_HELPER_WALK_MINUTES}
+          when direct_walk_minutes is not null then direct_walk_minutes
+          else 999
+        end as walking_minutes,
+        route_anchor_zone_code,
+        target_zone_code,
+        case
+          when current_group_count = 0 then 'flex_helper_no_current_route'
+          when same_group then 'same_group'
+          when same_zone then 'same_zone'
+          when direct_walk_minutes is not null then 'adjacent_group'
+          else 'far_or_unknown'
+        end as route_context
+      from fit
+      order by employee_id, location_group_id
+    `);
+    return Array.isArray(rows) ? rows : [];
+  }
+
   async function rebalanceRestroomAssignments(serviceDate) {
     if (typeof runWriteSql !== "function") return { applied: false, reason: "write_path_unavailable", moved_count: 0, moves: [] };
 
