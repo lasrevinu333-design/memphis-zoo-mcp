@@ -372,17 +372,36 @@ function buildRestroomRebalancePlan(assignments = [], activeRoster = [], routeFi
           .sort((a, b) => Number(a[1] || 0) - Number(b[1] || 0));
 
         for (const [receiverId, receiverLoad] of receiverCandidates) {
+          const receiverMeta = employeeMeta.get(receiverId) || {};
+          const routeFit = getRouteFitForRestroomMove(receiverMeta, assignment, routeFitMap);
+          if (!canUseRouteFitForRestroomMove(routeFit, beforeSpread)) continue;
+
           const after = new Map(loadByEmployee);
           after.set(donorId, Number(donorLoad || 0) - assignment.load_points);
           after.set(receiverId, Number(receiverLoad || 0) + assignment.load_points);
           const afterSpread = loadSpread(after);
           if (afterSpread >= beforeSpread) continue;
 
-          const candidate = { donorId, receiverId, assignment, afterSpread };
+          const beforeDistance = Math.abs(Number(donorLoad || 0) - targetLoad) + Math.abs(Number(receiverLoad || 0) - targetLoad);
+          const afterDistance = Math.abs((Number(donorLoad || 0) - assignment.load_points) - targetLoad) + Math.abs((Number(receiverLoad || 0) + assignment.load_points) - targetLoad);
+          const routeScore = restroomMoveRouteScore(routeFit);
+          const candidate = {
+            donorId,
+            receiverId,
+            assignment,
+            afterSpread,
+            distanceImprovement: beforeDistance - afterDistance,
+            routeScore,
+            routeFit,
+          };
           if (!bestCandidate
             || candidate.afterSpread < bestCandidate.afterSpread
-            || (candidate.afterSpread === bestCandidate.afterSpread && assignment.load_points < bestCandidate.assignment.load_points)
+            || (candidate.afterSpread === bestCandidate.afterSpread && candidate.routeScore < bestCandidate.routeScore)
+            || (candidate.afterSpread === bestCandidate.afterSpread && candidate.routeScore === bestCandidate.routeScore && candidate.distanceImprovement > bestCandidate.distanceImprovement)
+            || (candidate.afterSpread === bestCandidate.afterSpread && candidate.routeScore === bestCandidate.routeScore && candidate.distanceImprovement === bestCandidate.distanceImprovement && assignment.load_points < bestCandidate.assignment.load_points)
             || (candidate.afterSpread === bestCandidate.afterSpread
+              && candidate.routeScore === bestCandidate.routeScore
+              && candidate.distanceImprovement === bestCandidate.distanceImprovement
               && assignment.load_points === bestCandidate.assignment.load_points
               && String(assignment.group_name).localeCompare(String(bestCandidate.assignment.group_name)) < 0)) {
             bestCandidate = candidate;
