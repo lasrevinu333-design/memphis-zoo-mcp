@@ -1128,7 +1128,14 @@ async function runPublicDashboardSummary() {
       from public.v_location_dashboard_status v
       left join public.locations l on upper(l.location_code) = upper(v.location_code)
       where (select day_assignment_count from assignment_state) = 0
-         or l.id in (select location_id from visible_locations)
+         or (
+           (select active_location_count from assignment_state) > 0
+           and l.id in (select location_id from active_locations)
+         )
+         or (
+           (select active_location_count from assignment_state) = 0
+           and l.id in (select location_id from day_locations)
+         )
          or coalesce(v.open_session_status, '') in ('active', 'pending_submit')
       order by case v.status_color when 'red' then 1 when 'yellow' then 2 when 'blue' then 3 when 'green' then 4 when 'black' then 5 else 9 end,
                v.open_ticket_count desc, v.location_name
