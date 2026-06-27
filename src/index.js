@@ -1076,12 +1076,47 @@ async function runPublicDashboardSummary() {
       limit 1
     `),
     runReadOnlySql(`
-      select location_code, location_name, location_type, form_type, latest_employee_name, latest_completed_at,
-             latest_completed_at_display, services_performed, open_ticket_count, status_code, status_color, duration_display,
-             open_session_status, open_session_employee_name
-      from public.v_location_dashboard_status
-      order by case status_color when 'red' then 1 when 'yellow' then 2 when 'blue' then 3 when 'green' then 4 when 'black' then 5 else 9 end,
-               open_ticket_count desc, location_name
+      with scope as (
+        select public.sch_service_date(now()) as service_date,
+               (now() at time zone 'America/Chicago')::time as local_time
+      ), day_assignments as (
+        select dsa.location_group_id
+        from scope s
+        join public.daily_schedule_assignments dsa on dsa.service_date = s.service_date
+        join public.location_groups lg on lg.id = dsa.location_group_id and lg.active = true
+        where dsa.status = 'ASSIGNED'
+          and dsa.assigned_employee_id is not null
+          and coalesce(dsa.coverage_purpose, '') not in ('reminder', 'response_only', 'lunch_coverage')
+          and lower(coalesce(lg.group_name, '')) not like '%gift shop%'
+          and lower(coalesce(lg.group_code, '')) not like '%gift_shop%'
+      ), visible_locations as (
+        select distinct l.id as location_id
+        from scope s
+        join public.daily_schedule_assignments dsa on dsa.service_date = s.service_date
+        join public.location_groups lg on lg.id = dsa.location_group_id and lg.active = true
+        join public.location_group_memberships m on m.location_group_id = lg.id and m.active = true
+        join public.locations l on l.id = m.location_id and l.active = true
+        where dsa.status = 'ASSIGNED'
+          and dsa.assigned_employee_id is not null
+          and coalesce(dsa.coverage_purpose, '') not in ('reminder', 'response_only', 'lunch_coverage')
+          and lower(coalesce(lg.group_name, '')) not like '%gift shop%'
+          and lower(coalesce(lg.group_code, '')) not like '%gift_shop%'
+          and lower(coalesce(l.location_name, '')) not like '%gift shop%'
+          and s.local_time >= dsa.coverage_start
+          and s.local_time < dsa.coverage_end
+      ), assignment_state as (
+        select count(*)::int as day_assignment_count from day_assignments
+      )
+      select v.location_code, v.location_name, v.location_type, v.form_type, v.latest_employee_name, v.latest_completed_at,
+             v.latest_completed_at_display, v.services_performed, v.open_ticket_count, v.status_code, v.status_color, v.duration_display,
+             v.open_session_status, v.open_session_employee_name
+      from public.v_location_dashboard_status v
+      left join public.locations l on upper(l.location_code) = upper(v.location_code)
+      where (select day_assignment_count from assignment_state) = 0
+         or l.id in (select location_id from visible_locations)
+         or coalesce(v.open_session_status, '') in ('active', 'pending_submit')
+      order by case v.status_color when 'red' then 1 when 'yellow' then 2 when 'blue' then 3 when 'green' then 4 when 'black' then 5 else 9 end,
+               v.open_ticket_count desc, v.location_name
     `),
     runReadOnlySql(`
       select ticket_id, location_code, location_name, maintenance_issue, reported_by, fixture_type, fixture_identifier,
