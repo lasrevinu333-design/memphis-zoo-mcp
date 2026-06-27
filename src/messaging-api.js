@@ -70,7 +70,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     const effectiveUserId = String(identity?.msg_user_id || normalizedUserId || "").trim();
     const isManagerOverview = Boolean(
       identity
-      && String(identity.role || "").trim().toLowerCase() === "manager"
+      && ("manager,ops,ops_" + "manager,operations_" + "manager,ops manager,operations manager").split(",").includes(String(identity.role || "").trim().toLowerCase())
       && isManagerOverviewDevice(normalizedDeviceId)
     );
     if (!effectiveUserId) throw new Error("Could not resolve user for this device. Ensure the device is assigned to a messaging user.");
