@@ -163,6 +163,96 @@ function normalizeIdList(value) {
     .filter(Boolean)));
 }
 
+function normalizeTextList(value) {
+  if (Array.isArray(value)) {
+    return Array.from(new Set(value.map((item) => String(item || "").trim()).filter(Boolean)));
+  }
+  if (value == null) return [];
+  if (typeof value === "object") return normalizeTextList(Object.values(value));
+  const text = String(value || "").trim();
+  if (!text) return [];
+  try {
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed)) return normalizeTextList(parsed);
+  } catch (_error) {
+    // Fall through to comma/text-array parsing.
+  }
+  return Array.from(new Set(text
+    .replace(/[{}\"]/g, "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)));
+}
+
+function normalizeRouteFitRows(rows = []) {
+  const map = new Map();
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const employeeId = String(row.employee_id || "").trim();
+    const locationGroupId = String(row.location_group_id || "").trim();
+    if (!employeeId || !locationGroupId) continue;
+    const currentGroupCount = Number(row.current_group_count || 0);
+    const sameZone = row.same_zone === true || String(row.same_zone || "").toLowerCase() === "true";
+    const sameGroup = row.same_group === true || String(row.same_group || "").toLowerCase() === "true";
+    const rawWalk = Number(row.walking_minutes);
+    const walkingMinutes = Number.isFinite(rawWalk)
+      ? rawWalk
+      : (currentGroupCount > 0 ? (sameZone ? 4 : 999) : RESTROOM_REBALANCE_FLEX_HELPER_WALK_MINUTES);
+    map.set(`${employeeId}|${locationGroupId}`, {
+      employee_id: employeeId,
+      location_group_id: locationGroupId,
+      walking_minutes: walkingMinutes,
+      same_zone: sameZone,
+      same_group: sameGroup,
+      route_anchor_zone_code: String(row.route_anchor_zone_code || "").trim(),
+      target_zone_code: String(row.target_zone_code || "").trim(),
+      current_group_count: currentGroupCount,
+      route_context: String(row.route_context || "").trim(),
+    });
+  }
+  return map;
+}
+
+function getRouteFitForRestroomMove(employee = {}, assignment = {}, routeFitMap = new Map()) {
+  const employeeId = String(employee?.employee_id || "").trim();
+  const groupId = String(assignment?.location_group_id || "").trim();
+  const direct = routeFitMap.get(`${employeeId}|${groupId}`);
+  if (direct) return direct;
+
+  const employeeZones = normalizeTextList(employee?.zone_codes);
+  const targetZone = String(assignment?.zone_code || "").trim();
+  const sameZone = Boolean(targetZone && employeeZones.includes(targetZone));
+  const currentGroupCount = Number(employee?.current_group_count || 0);
+  return {
+    employee_id: employeeId,
+    location_group_id: groupId,
+    walking_minutes: currentGroupCount > 0 ? (sameZone ? 4 : 999) : RESTROOM_REBALANCE_FLEX_HELPER_WALK_MINUTES,
+    same_zone: sameZone,
+    same_group: false,
+    route_anchor_zone_code: String(employee?.route_anchor_zone_code || "").trim(),
+    target_zone_code: targetZone,
+    current_group_count: currentGroupCount,
+    route_context: currentGroupCount > 0 ? (sameZone ? "same_zone_fallback" : "far_or_unknown") : "flex_helper_no_current_route",
+  };
+}
+
+function canUseRouteFitForRestroomMove(routeFit = {}, beforeSpread = 0) {
+  const currentGroupCount = Number(routeFit?.current_group_count || 0);
+  if (currentGroupCount <= 0) return true;
+  if (routeFit?.same_group || routeFit?.same_zone) return true;
+  const walkingMinutes = Number(routeFit?.walking_minutes || 999);
+  if (walkingMinutes <= RESTROOM_REBALANCE_MAX_WALK_MINUTES) return true;
+  return Number(beforeSpread || 0) >= RESTROOM_REBALANCE_SEVERE_SPREAD;
+}
+
+function restroomMoveRouteScore(routeFit = {}) {
+  const walkingMinutes = Number(routeFit?.walking_minutes || 999);
+  const currentGroupCount = Number(routeFit?.current_group_count || 0);
+  if (currentGroupCount <= 0) return RESTROOM_REBALANCE_FLEX_HELPER_WALK_MINUTES + 4;
+  if (routeFit?.same_group) return 0;
+  if (routeFit?.same_zone) return Math.min(walkingMinutes, 4);
+  return walkingMinutes + 12;
+}
+
 function normalizeRestroomRebalanceRow(row = {}) {
   const assignmentId = String(row.assignment_id || row.id || "").trim();
   const employeeId = String(row.assigned_employee_id || row.employee_id || "").trim();
