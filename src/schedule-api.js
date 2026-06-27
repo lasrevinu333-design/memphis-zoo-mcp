@@ -35,9 +35,9 @@ function timeToMinutes(value) {
   return (hours % 24) * 60 + minutes;
 }
 
-const RESTROOM_REBALANCE_EXCLUDED_EMPLOYEES = String(process.env.RESTROOM_REBALANCE_EXCLUDED_EMPLOYEE_CODES || "EMP002")
+const RESTROOM_REBALANCE_EXCLUDED_EMPLOYEES = String(process.env.RESTROOM_REBALANCE_EXCLUDED_EMPLOYEE_CODES || "")
   .split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
-const RESTROOM_REBALANCE_EXCLUDED_NAMES = String(process.env.RESTROOM_REBALANCE_EXCLUDED_EMPLOYEE_NAMES || "michael mcwright")
+const RESTROOM_REBALANCE_EXCLUDED_NAMES = String(process.env.RESTROOM_REBALANCE_EXCLUDED_EMPLOYEE_NAMES || "")
   .split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
 
 function isRestroomRebalanceRosterEligible(row) {
