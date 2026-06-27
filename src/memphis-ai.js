@@ -697,13 +697,14 @@ function getWeekStartDate(text = "", todayServiceDate, relativeServiceDate) {
   return relativeServiceDate || todayServiceDate;
 }
 
-async function ensureDailySchedule(runRpc, serviceDate, { force = false } = {}) {
-  try {
-    return await runRpc("sch_generate_daily_schedule", { p_service_date: serviceDate, p_force: force });
-  } catch (error) {
-    console.error("memphis schedule generation failed:", serviceDate, error);
-    return null;
-  }
+async function ensureDailySchedule(_runRpc, serviceDate, { force = false } = {}) {
+  return {
+    ok: true,
+    skipped: true,
+    reason: "memphis_ai_read_only_no_schedule_generation",
+    service_date: serviceDate,
+    force_requested: Boolean(force),
+  };
 }
 
 async function ensureScheduleRange(runRpc, dates = [], { force = false } = {}) {
