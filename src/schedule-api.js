@@ -3989,10 +3989,8 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
     }
   });
 
-  router.use(async (req, _res, next) => {
-    if (req.method === "GET" && !req.path.startsWith("/generation-window") && !req.path.startsWith("/health")) {
-      maybeAutoGenerateWindow().catch((error) => console.error("schedule auto-generate trigger failed:", error));
-    }
+  router.use((_req, _res, next) => {
+    // Schedule reads are intentionally read-only. Use explicit generate endpoints to create or rebuild schedules.
     next();
   });
 
