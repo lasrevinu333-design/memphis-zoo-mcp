@@ -304,7 +304,8 @@ function canEmployeeReceiveRestroomAssignment(receiverId, donorId, employee = {}
   return !restrictedEmployeeIds.includes(normalizedReceiverId);
 }
 
-function buildRestroomRebalancePlan(assignments = [], activeRoster = []) {
+function buildRestroomRebalancePlan(assignments = [], activeRoster = [], routeFitRows = []) {
+  const routeFitMap = normalizeRouteFitRows(routeFitRows);
   const employeeMeta = new Map();
   const loadByEmployee = new Map();
   for (const row of Array.isArray(activeRoster) ? activeRoster : []) {
