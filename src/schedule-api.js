@@ -4386,6 +4386,9 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
         data.pto_absent_employee_ids = absenceSet.pto_ids;
         data.effective_absent_employee_ids = absenceSet.merged;
         data.coverall = coverallPlan;
+        data.coverall_balance_result = coverallBalanceResult;
+        data.restroom_rebalance_result = restroomRebalanceResult;
+        data.lunch_coverage_result = lunchCoverageResult;
         data.manager_notification = coverallPlan?.manager_notification || null;
       }
       const scheduleAudit = await auditScheduleForDate(serviceDate, { includeAi: true, userPrompt: "Final check after absence publish: balanced, logical, and physically possible." });
