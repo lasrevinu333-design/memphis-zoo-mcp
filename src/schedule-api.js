@@ -4017,8 +4017,9 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
       const coverall_balance_result = await rebalanceCoverAllAssignments(serviceDate);
       const restroom_rebalance_result = await rebalanceRestroomAssignments(serviceDate);
       const lunch_coverage_result = await applyLunchCoverageAfterRestroomRebalance(serviceDate);
+      const restroom_rebalance_completion = await markRestroomRebalanceCompletion(serviceDate, { reason: "generate_daily", balance: restroom_rebalance_result, lunch_coverage: lunch_coverage_result }, "completed");
       const schedule_audit = await auditScheduleForDate(serviceDate, { includeAi: true, userPrompt: "Final check after daily schedule generation, CoverAll balancing, and restroom rebalance: balanced, logical, and physically possible." });
-      res.status(200).json({ ok: true, data: { generate_result: data, static_restore_result, coverall_balance_result, restroom_rebalance_result, lunch_coverage_result, schedule_audit }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+      res.status(200).json({ ok: true, data: { generate_result: data, static_restore_result, coverall_balance_result, restroom_rebalance_result, lunch_coverage_result, restroom_rebalance_completion, schedule_audit }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Generate daily schedule failed");
     }
