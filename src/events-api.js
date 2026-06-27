@@ -226,6 +226,15 @@ async function getUpcomingEventScheduleStates(runReadOnlySql) {
 }
 
 async function ensureUpcomingEventScheduleState({ runReadOnlySql, runRpc }) {
+  const eventScheduleStates = await getUpcomingEventScheduleStates(runReadOnlySql);
+  return {
+    ok: true,
+    skipped: true,
+    reason: "events_are_reminders_only",
+    checked_dates: eventScheduleStates.length,
+    generated_dates: [],
+  };
+
   if (typeof runRpc !== "function") {
     return { ok: true, skipped: true, reason: "runRpc_missing", generated_dates: [] };
   }
