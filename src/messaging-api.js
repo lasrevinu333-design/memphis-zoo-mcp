@@ -648,7 +648,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     try {
       const deviceId = String(req.query.device_id || "").trim();
       if (!deviceId) throw new Error("device_id is required.");
-      const rows = await runReadOnlySql(`select * from public.msg_get_user_by_device('${esc(deviceId)}')`);
+      const rows = [await getViewerIdentity(deviceId)].filter(Boolean);
       const data = Array.isArray(rows) && rows.length ? rows[0] : null;
       res.status(200).json({ ok: true, data, meta: messagingMeta() });
     } catch (error) {
