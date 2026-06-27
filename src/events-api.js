@@ -592,7 +592,7 @@ export function createEventMaintenanceController({ runReadOnlySql, runWriteSql, 
     lastRunAt = now;
     lastStartedAt = new Date(now).toISOString();
     try {
-      const scheduleSync = await ensureUpcomingEventScheduleState({ runReadOnlySql, runRpc });
+      const scheduleSync = { ok: true, skipped: true, reason: "events_are_reminders_only" };
       const pending = await getPendingNotifications(runReadOnlySql);
       const notificationResults = [];
       if (pending.length) {
