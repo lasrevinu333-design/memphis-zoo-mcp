@@ -2418,8 +2418,14 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
     const generated = [];
     for (const row of statuses) {
       const shouldGenerate = force || !row.ready;
+      let operational_balance = null;
       if (shouldGenerate) {
-        await runRpc("sch_generate_daily_schedule", { p_service_date: row.service_date, p_force: force });
+        const generate_result = await runRpc("sch_generate_daily_schedule", { p_service_date: row.service_date, p_force: force });
+        const static_restore_result = await restoreStaticOwnersForDate(row.service_date);
+        const coverall_balance_result = await rebalanceCoverAllAssignments(row.service_date);
+        const restroom_rebalance_result = await rebalanceRestroomAssignments(row.service_date);
+        const lunch_coverage_result = await applyLunchCoverageAfterRestroomRebalance(row.service_date);
+        operational_balance = { generate_result, static_restore_result, coverall_balance_result, restroom_rebalance_result, lunch_coverage_result };
       }
       const after = await getDailyGenerationState(row.service_date);
       generated.push({
@@ -2428,6 +2434,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
         roster_count: after.roster_count,
         assignment_count: after.assignment_count,
         ready: after.roster_count > 0 && after.assignment_count > 0,
+        operational_balance,
       });
     }
     return generated;
