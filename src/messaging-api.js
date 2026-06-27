@@ -1015,15 +1015,17 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   });
 
-  router.post("/memphis/message", async (req, res) => {
+  router.post("/memphis/message", requireDeviceOrOpsAuth, async (req, res) => {
     try {
       const userId = String(req.body?.user_id || "").trim();
       const body = String(req.body?.body || "").trim();
-      const deviceId = String(req.body?.device_id || "").trim();
+      const deviceId = String(req.body?.device_id || req.body?.deviceId || "").trim();
       if (!userId) throw new Error("user_id is required.");
       if (!body) throw new Error("body is required.");
+      const viewer = await resolveViewerContext({ userId, deviceId });
+      const effectiveUserId = viewer.effectiveUserId;
 
-      const thread = await runRpc("msg_get_or_create_memphis_thread", { p_user_id: userId });
+      const thread = await runRpc("msg_get_or_create_memphis_thread", { p_user_id: effectiveUserId });
 
       const userMessage = await runRpc("msg_send_message", {
         p_thread_id: thread.id,
