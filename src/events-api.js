@@ -665,7 +665,6 @@ export function createEventsPublicRouter({
 
   router.get("/", async (_req, res) => {
     try {
-      maintenanceController?.kick("events_public_list");
       const events = await listUpcomingEvents(runReadOnlySql);
       res.status(200).json({
         ok: true,
