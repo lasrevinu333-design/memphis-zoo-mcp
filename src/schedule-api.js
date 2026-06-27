@@ -4015,6 +4015,9 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
 
       const generateResult = await runRpc("sch_generate_daily_schedule", { p_service_date: serviceDate, p_force: true });
       const staticRestoreResult = await restoreStaticOwnersForDate(serviceDate);
+      const coverallBalanceResult = await rebalanceCoverAllAssignments(serviceDate);
+      const restroomRebalanceResult = await rebalanceRestroomAssignments(serviceDate);
+      const lunchCoverageResult = await applyLunchCoverageAfterRestroomRebalance(serviceDate);
       const activeRows = await listPtoRows({ startDate: serviceDate, endDate: serviceDate });
       const stillAbsentRows = activeRows.filter((row) => String(row.employee_id || "") === employeeId);
       const scheduleAudit = await auditScheduleForDate(serviceDate, { includeAi: true, userPrompt: "Final check after returning employee to schedule: balanced, logical, and physically possible." });
