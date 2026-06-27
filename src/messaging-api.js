@@ -1040,7 +1040,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       if (!memphisUserId) throw new Error("Memphis bot identity not found.");
 
       let reply;
-      ({ reply } = await buildMemphisReply({ userId, deviceId, threadId: thread.id, body }));
+      ({ reply } = await buildMemphisReply({ userId: effectiveUserId, deviceId, threadId: thread.id, body }));
 
       const botMessage = await runRpc("msg_send_message", {
         p_thread_id: thread.id,
