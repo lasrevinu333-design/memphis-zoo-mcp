@@ -954,10 +954,12 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   });
 
-  router.post("/memphis/thread", async (req, res) => {
+  router.post("/memphis/thread", requireDeviceOrOpsAuth, async (req, res) => {
     try {
       const userId = String(req.body?.user_id || "").trim();
-      const data = await runRpc("msg_get_or_create_memphis_thread", { p_user_id: userId });
+      const deviceId = String(req.body?.device_id || req.body?.deviceId || "").trim();
+      const viewer = await resolveViewerContext({ userId, deviceId });
+      const data = await runRpc("msg_get_or_create_memphis_thread", { p_user_id: viewer.effectiveUserId });
       res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Get Memphis thread failed");
