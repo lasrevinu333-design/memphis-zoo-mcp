@@ -1755,6 +1755,22 @@ app.use("/admin-api/events", createEventsAdminRouter({ runReadOnlySql, runWriteS
 app.get("/version", (_req, res) => { setPublicDashboardCors(res, _req); eventMaintenanceController.kick("version_ping"); res.status(200).json(buildHealthPayload("version")); });
 app.get("/admin-api/health", requireOpsManagerAuth, (_req, res) => { res.status(200).json(buildHealthPayload("admin", { authenticated: true })); });
 app.get("/dashboard-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("dashboard")); });
+app.get("/dashboard-api/work-session-alerts", async (_req, res) => {
+  try {
+    const rows = await runReadOnlySql(`
+      select scanned_at, location_code, device_identifier, result, notes, payload_json
+      from public.scan_events
+      where event_type = 'work_position_check'
+        and result in ('away_from_scanned_session','gps_low_accuracy','gps_unavailable')
+        and scanned_at >= now() - interval '4 hours'
+      order by scanned_at desc
+      limit 100
+    `);
+    res.status(200).json({ ok: true, data: Array.isArray(rows) ? rows : [] });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message || "Work session alerts failed" });
+  }
+});
 app.get("/schedule-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("schedule", { contract_version: SCHEDULE_CONTRACT_VERSION })); });
 app.get("/guest-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("guest_reports", { contract_version: GUEST_REPORTS_CONTRACT_VERSION })); });
 app.get("/feedback-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("feedback", { contract_version: FEEDBACK_CONTRACT_VERSION })); });
