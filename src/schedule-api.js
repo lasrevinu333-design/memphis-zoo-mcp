@@ -23,7 +23,7 @@ const PTO_GEMINI_MAX_OUTPUT_TOKENS = Math.max(256, Number.parseInt(String(proces
 
 const RESTROOM_REBALANCE_TIME = String(process.env.RESTROOM_REBALANCE_TIME || "09:45:00").trim() || "09:45:00";
 const RESTROOM_REBALANCE_SOURCE = "restroom_rebalance_0945";
-const RESTROOM_REBALANCE_NOTE = "9:45 restroom rebalance: moved only as needed to spread restroom load evenly.";
+const RESTROOM_REBALANCE_NOTE = "9:45 restroom rebalance: moved only as needed to spread restroom load evenly while staying near the current route.";
 const RESTROOM_REBALANCE_TZ = "America/Chicago";
 const RESTROOM_REBALANCE_MAX_WALK_MINUTES = Math.max(4, Number.parseInt(String(process.env.RESTROOM_REBALANCE_MAX_WALK_MINUTES || "12"), 10) || 12);
 const RESTROOM_REBALANCE_SEVERE_SPREAD = Math.max(2, Number.parseInt(String(process.env.RESTROOM_REBALANCE_SEVERE_SPREAD || "4"), 10) || 4);
