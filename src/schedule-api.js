@@ -1141,6 +1141,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
       balanceResult = await rebalanceCoverAllAssignments(serviceDate);
       restroomBalanceResult = await rebalanceRestroomAssignments(serviceDate);
       lunchCoverageResult = await applyLunchCoverageAfterRestroomRebalance(serviceDate);
+      restroomBalanceCompletion = await markRestroomRebalanceCompletion(serviceDate, { reason: "coverall_slots_publish", balance: restroomBalanceResult, lunch_coverage: lunchCoverageResult }, "completed");
     }
     const currentSlots = await listCoverAllSlotsForDate(serviceDate);
     return { service_date: serviceDate, slots: currentSlots, generate_result: generateResult, static_restore_result: staticRestoreResult, balance_result: balanceResult, restroom_rebalance_result: restroomBalanceResult, lunch_coverage_result: lunchCoverageResult };
