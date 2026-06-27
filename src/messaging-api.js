@@ -638,10 +638,12 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   });
 
-  router.get("/users", async (req, res) => {
+  router.get("/users", requireDeviceOrOpsAuth, async (req, res) => {
     try {
       const userId = String(req.query.user_id || "").trim() || null;
-      const rows = await runReadOnlySql(`select * from public.msg_list_users(${userId ? `'${esc(userId)}'::uuid` : "null::uuid"})`);
+      const deviceId = String(req.query.device_id || "").trim();
+      const viewer = await resolveViewerContext({ userId, deviceId });
+      const rows = await runReadOnlySql(`select * from public.msg_list_users('${esc(viewer.effectiveUserId)}'::uuid)`);
       res.status(200).json({ ok: true, data: rows || [], meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Messaging users failed");
