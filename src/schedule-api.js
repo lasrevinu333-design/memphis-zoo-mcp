@@ -4209,6 +4209,8 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
           coverall: coverallPlan,
           coverall_manual: coverallManual,
           coverall_balance_result: coverallBalanceResult,
+          restroom_rebalance_result: restroomRebalanceResult,
+          lunch_coverage_result: lunchCoverageResult,
           manager_notification: coverallPlan?.manager_notification || null,
         },
         meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion },
