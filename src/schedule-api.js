@@ -563,7 +563,7 @@ export function createScheduleRouter({
   const requireSchedulePin = requireAdminApiAuth;
   const AUTO_GENERATE_WINDOW_DAYS = 7;
   const AUTO_GENERATE_COOLDOWN_MS = 6 * 60 * 60 * 1000;
-  const RESTROOM_REBALANCE_SWEEP_MS = Math.max(0, Number.parseInt(String(process.env.RESTROOM_REBALANCE_SWEEP_MS || "60000"), 10) || 60000);
+  const RESTROOM_REBALANCE_SWEEP_MS = Math.max(0, Number.parseInt(String(process.env.RESTROOM_REBALANCE_SWEEP_MS || "0"), 10) || 60000);
   let autoGenerateState = { lastStartedAt: 0, running: false, lastCompletedAt: 0, lastWindowStart: null, lastResult: [] };
   let restroomRebalanceState = { lastStartedAt: 0, running: false, lastCompletedAt: 0, lastServiceDate: null, lastResult: null };
 
