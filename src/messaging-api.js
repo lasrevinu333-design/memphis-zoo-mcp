@@ -1029,7 +1029,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
 
       const userMessage = await runRpc("msg_send_message", {
         p_thread_id: thread.id,
-        p_sender_user_id: userId,
+        p_sender_user_id: effectiveUserId,
         p_body: body,
         p_message_type: "text",
         p_metadata_json: { channel: "memphis" }
