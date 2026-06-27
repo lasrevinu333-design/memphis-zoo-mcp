@@ -1449,7 +1449,14 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
              coalesce(restricted.restricted_employee_ids, '[]'::jsonb) as restricted_employee_ids
       from public.daily_schedule_assignments dsa
       join public.location_groups lg on lg.id = dsa.location_group_id
-      left join public.v_schedule_location_group_zones z on z.location_group_id = dsa.location_group_id and z.zone_assignment_active is distinct from false
+      left join lateral (
+        select zone_code, zone_name
+        from public.v_schedule_location_group_zones
+        where location_group_id = dsa.location_group_id
+          and zone_assignment_active is distinct from false
+        order by zone_code
+        limit 1
+      ) z on true
       join public.employees e on e.id = dsa.assigned_employee_id
       left join lateral (
         select jsonb_agg(r.employee_id::text order by r.employee_id::text) as restricted_employee_ids
