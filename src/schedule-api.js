@@ -2425,7 +2425,8 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
         const coverall_balance_result = await rebalanceCoverAllAssignments(row.service_date);
         const restroom_rebalance_result = await rebalanceRestroomAssignments(row.service_date);
         const lunch_coverage_result = await applyLunchCoverageAfterRestroomRebalance(row.service_date);
-        operational_balance = { generate_result, static_restore_result, coverall_balance_result, restroom_rebalance_result, lunch_coverage_result };
+        const restroom_rebalance_completion = await markRestroomRebalanceCompletion(row.service_date, { reason: "generate_range", balance: restroom_rebalance_result, lunch_coverage: lunch_coverage_result }, "completed");
+        operational_balance = { generate_result, static_restore_result, coverall_balance_result, restroom_rebalance_result, lunch_coverage_result, restroom_rebalance_completion };
       }
       const after = await getDailyGenerationState(row.service_date);
       generated.push({
