@@ -52,7 +52,9 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
   }
 
   function isManagerOverviewDevice(deviceId = "") {
-    return MANAGER_OVERVIEW_DEVICE_IDS.has(String(deviceId || "").trim());
+    const normalized = String(deviceId || "").trim().toLowerCase();
+    if (!normalized) return false;
+    return Array.from(MANAGER_OVERVIEW_DEVICE_IDS).some((id) => String(id || "").trim().toLowerCase() === normalized);
   }
 
   async function getViewerIdentity(deviceId = "") {
