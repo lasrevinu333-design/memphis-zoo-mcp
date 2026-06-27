@@ -317,6 +317,9 @@ function buildRestroomRebalancePlan(assignments = [], activeRoster = [], routeFi
       employee_code: String(row.employee_code || "").trim(),
       shift_start: String(row.shift_start || "").trim(),
       shift_end: String(row.shift_end || "").trim(),
+      zone_codes: normalizeTextList(row.zone_codes),
+      route_anchor_zone_code: String(row.route_anchor_zone_code || "").trim(),
+      current_group_count: Number(row.current_group_count || 0),
     });
     loadByEmployee.set(employeeId, 0);
   }
