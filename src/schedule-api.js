@@ -434,6 +434,13 @@ function buildRestroomRebalancePlan(assignments = [], activeRoster = [], routeFi
       coverage_start: chosen.coverage_start,
       coverage_end: chosen.coverage_end,
       load_points: chosen.load_points,
+      route_score: bestCandidate.routeScore,
+      walking_minutes: routeFit.walking_minutes,
+      same_zone: routeFit.same_zone === true,
+      same_group: routeFit.same_group === true,
+      route_anchor_zone_code: routeFit.route_anchor_zone_code || null,
+      target_zone_code: routeFit.target_zone_code || chosen.zone_code || null,
+      route_context: routeFit.route_context || null,
     });
   }
 
