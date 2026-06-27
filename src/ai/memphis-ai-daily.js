@@ -1,12 +1,13 @@
 import { esc } from "./memphis-ai-utils.js";
 
-export async function ensureDailySchedule(runRpc, serviceDate, { force = false } = {}) {
-  try {
-    return await runRpc("sch_generate_daily_schedule", { p_service_date: serviceDate, p_force: force });
-  } catch (error) {
-    console.error("memphis daily schedule generation failed:", serviceDate, error);
-    return null;
-  }
+export async function ensureDailySchedule(_runRpc, serviceDate, { force = false } = {}) {
+  return {
+    ok: true,
+    skipped: true,
+    reason: "memphis_ai_read_only_no_schedule_generation",
+    service_date: serviceDate,
+    force_requested: Boolean(force),
+  };
 }
 
 export async function fetchDailyAreaScheduleRows(runReadOnlySql, serviceDate) {
