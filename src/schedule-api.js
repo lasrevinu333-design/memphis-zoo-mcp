@@ -4193,6 +4193,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
         : null;
       const restroomRebalanceResult = await rebalanceRestroomAssignments(serviceDate);
       const lunchCoverageResult = await applyLunchCoverageAfterRestroomRebalance(serviceDate);
+      const restroomRebalanceCompletion = await markRestroomRebalanceCompletion(serviceDate, { reason: "manual_absence_publish", balance: restroomRebalanceResult, lunch_coverage: lunchCoverageResult }, "completed");
       const activeRows = await listPtoRows({ startDate: serviceDate, endDate: serviceDate });
       const manualRows = activeRows.filter((row) => String(row.pto_type || "").toLowerCase() === "manual_override");
       const scheduleAudit = await auditScheduleForDate(serviceDate, { includeAi: true, userPrompt: "Final check after manual absence publish and CoverAll rebalance: balanced, logical, and physically possible." });
