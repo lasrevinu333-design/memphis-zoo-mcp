@@ -3737,8 +3737,11 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
       const force = req.body?.force !== false;
       const data = await runRpc("sch_generate_daily_schedule", { p_service_date: serviceDate, p_force: force });
       const static_restore_result = await restoreStaticOwnersForDate(serviceDate);
-      const schedule_audit = await auditScheduleForDate(serviceDate, { includeAi: true, userPrompt: "Final check after daily schedule generation: balanced, logical, and physically possible." });
-      res.status(200).json({ ok: true, data: { generate_result: data, static_restore_result, schedule_audit }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+      const coverall_balance_result = await rebalanceCoverAllAssignments(serviceDate);
+      const restroom_rebalance_result = await rebalanceRestroomAssignments(serviceDate);
+      const lunch_coverage_result = await applyLunchCoverageAfterRestroomRebalance(serviceDate);
+      const schedule_audit = await auditScheduleForDate(serviceDate, { includeAi: true, userPrompt: "Final check after daily schedule generation, CoverAll balancing, and restroom rebalance: balanced, logical, and physically possible." });
+      res.status(200).json({ ok: true, data: { generate_result: data, static_restore_result, coverall_balance_result, restroom_rebalance_result, lunch_coverage_result, schedule_audit }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Generate daily schedule failed");
     }
