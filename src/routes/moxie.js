@@ -354,6 +354,15 @@ import {
 
 export function createMoxieRouter({ supabase, staticDir }) {
   const router = Router();
+  if (!MOXIE_PASSWORD || !MOXIE_COOKIE_SECRET || !supabase) {
+    const missing = [];
+    if (!MOXIE_PASSWORD) missing.push("MOXIE_WEB_PASSWORD");
+    if (!MOXIE_COOKIE_SECRET) missing.push("MOXIE_WEB_COOKIE_SECRET");
+    if (!supabase) missing.push("SUPABASE_CLIENT");
+    router.get("/health", (_req, res) => res.status(503).json({ ok: false, area: "moxie", configured: false, missing }));
+    router.use((_req, res) => res.status(503).send("Moxie is not configured on this deployment."));
+    return router;
+  }
 
   // Serve static assets
   if (staticDir) {
