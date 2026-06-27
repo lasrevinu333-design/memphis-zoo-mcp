@@ -413,6 +413,7 @@ function buildRestroomRebalancePlan(assignments = [], activeRoster = [], routeFi
     if (!bestCandidate) break;
 
     const { donorId, receiverId, assignment: chosen } = bestCandidate;
+    const routeFit = bestCandidate.routeFit || {};
     const donorLoad = loadByEmployee.get(donorId) || 0;
     const receiverLoad = loadByEmployee.get(receiverId) || 0;
     movedAssignmentIds.add(chosen.assignment_id);
