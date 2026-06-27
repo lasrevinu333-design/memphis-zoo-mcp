@@ -41,7 +41,7 @@ const GEMINI_API_KEY = String(
 const GEMINI_TIMEOUT_MS = Math.max(1000, Number.parseInt(String(process.env.MOXIE_GEMINI_TIMEOUT_MS || process.env.MEMPHIS_GEMINI_TIMEOUT_MS || "30000"), 10) || 30000);
 const GEMINI_MAX_OUTPUT_TOKENS = Math.max(256, Number.parseInt(String(process.env.MOXIE_GEMINI_MAX_OUTPUT_TOKENS || "4096"), 10) || 4096);
 
-if (!MOXIE_PASSWORD) throw new Error("MOXIE_WEB_PASSWORD is required");
+// Configuration is checked inside createMoxieRouter so imports stay nonfatal.
 if (!MOXIE_COOKIE_SECRET) throw new Error("MOXIE_WEB_COOKIE_SECRET is required");
 
 // ---------------------------------------------------------------------------
