@@ -1604,7 +1604,8 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
 
     const activeRoster = await listActiveRosterForRestroomRebalance(serviceDate);
     const assignments = await listRestroomAssignmentsForRebalance(serviceDate);
-    const plan = buildRestroomRebalancePlan(assignments, activeRoster);
+    const routeFitRows = await listRestroomRouteFitRows(serviceDate, assignments);
+    const plan = buildRestroomRebalancePlan(assignments, activeRoster, routeFitRows);
 
     if (!plan.applied || !plan.moves?.length) {
       return { service_date: serviceDate, scheduled_time: RESTROOM_REBALANCE_TIME, ...plan };
