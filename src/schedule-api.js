@@ -85,7 +85,7 @@ function isRestroomRebalanceDue(now = new Date()) {
 }
 
 function isProtectedRestroomSource(sourceType = "") {
-  return /manual|override|manager/i.test(String(sourceType || ""));
+  return /manual|override|manager|restroom_rebalance_0945/i.test(String(sourceType || ""));
 }
 
 function sqlQuote(value) {
