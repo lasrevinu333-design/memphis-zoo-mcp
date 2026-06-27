@@ -4092,7 +4092,13 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
         p_service_date: serviceDate,
         p_absent_employee_ids: absenceSet.merged,
       });
+      const staticRestoreResult = await restoreStaticOwnersForDate(serviceDate);
       coverallPlan = await applyCoverAllPlan(serviceDate, coverallPlan);
+      const coverallBalanceResult = coverallPlan?.triggered
+        ? await rebalanceCoverAllAssignments(serviceDate)
+        : null;
+      const restroomRebalanceResult = await rebalanceRestroomAssignments(serviceDate);
+      const lunchCoverageResult = await applyLunchCoverageAfterRestroomRebalance(serviceDate);
       if (data && typeof data === "object") {
         const diff = summarizeAssignmentDiff({
           removed_assignments: data.removed_assignments || data.generate_result?.removed_assignments,
