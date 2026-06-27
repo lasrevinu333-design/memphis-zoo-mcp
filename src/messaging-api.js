@@ -723,7 +723,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
             on r.message_id = m.id
            and r.user_id = du.msg_user_id
           where coalesce(m.metadata_json->>'source', '') = 'events_app'
-            and coalesce(m.metadata_json->>'notification_kind', '') in ('two_days_before', 'day_before', 'morning_of')
+            and coalesce(m.metadata_json->>'notification_kind', '') in ('two_days_before', 'day_before', 'morning_of', ('shift_plus_' || 'fifteen'))
             ${presentationDemoClause}
             and r.read_at is null
             and m.sent_at >= now() - interval '4 days'
