@@ -237,7 +237,7 @@ async function ensureUpcomingEventScheduleState({ runReadOnlySql, runRpc }) {
     if (Number(state?.schedule_assignment_count || 0) > 0) continue;
     const eventDate = String(state?.event_date || "").trim();
     if (!eventDate) continue;
-    await runRpc("sch_generate_daily_schedule", { p_service_date: eventDate, p_force: true });
+    await runRpc("sch_generate_daily_schedule", { p_service_date: eventDate, p_force: false });
     generatedDates.push(eventDate);
   }
 
