@@ -1118,7 +1118,9 @@ async function runPublicDashboardSummary() {
           and s.local_time >= dsa.coverage_start
           and s.local_time < dsa.coverage_end
       ), assignment_state as (
-        select count(*)::int as day_assignment_count from day_assignments
+        select
+          (select count(*)::int from day_assignments) as day_assignment_count,
+          (select count(*)::int from active_locations) as active_location_count
       )
       select v.location_code, v.location_name, v.location_type, v.form_type, v.latest_employee_name, v.latest_completed_at,
              v.latest_completed_at_display, v.services_performed, v.open_ticket_count, v.status_code, v.status_color, v.duration_display,
