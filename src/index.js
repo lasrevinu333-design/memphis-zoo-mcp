@@ -1984,7 +1984,7 @@ async function requireDeviceAuth(req, res, next) {
 }
 
 app.get("/scan-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("scan", { available_functions: Array.from(SCAN_RPC_ALLOWLIST) })); });
-app.post("/scan-api/rpc", rateLimit, requireDeviceAuth, async (req, res) => {
+app.post("/scan-api/rpc", requireDeviceAuth, async (req, res) => {
   try { eventMaintenanceController.kick("scan_api_rpc"); const fn = String(req.body?.fn || "").trim(); const args = req.body?.args && typeof req.body.args === "object" ? req.body.args : {}; if (!SCAN_RPC_ALLOWLIST.has(fn)) { res.status(400).json({ ok: false, error: `Function not allowed: ${fn}` }); return; } const data = await runRpc(fn, args); res.status(200).json({ ok: true, data, meta: { version: APP_VERSION, release_id: RELEASE_ID, contract_version: SCAN_CONTRACT_VERSION } }); }
   catch (error) { console.error("scan rpc failed:", error); res.status(500).json({ ok: false, error: error.message || "Scan RPC failed" }); }
 });
