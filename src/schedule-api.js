@@ -1442,7 +1442,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
   async function listRestroomAssignmentsForRebalance(serviceDate) {
     const rows = await runReadOnlySql(`
       select dsa.id as assignment_id, dsa.assigned_employee_id, e.display_name as assigned_employee_name, e.employee_code,
-             dsa.location_group_id, lg.group_name, lg.group_code, dsa.segment_number, dsa.source_type,
+             dsa.location_group_id, lg.group_name, lg.group_code, z.zone_code, z.zone_name, dsa.segment_number, dsa.source_type,
              to_char(dsa.coverage_start, 'HH24:MI:SS') as coverage_start,
              to_char(dsa.coverage_end, 'HH24:MI:SS') as coverage_end,
              greatest(coalesce(dsa.load_points, 1), 1)::numeric as load_points,
