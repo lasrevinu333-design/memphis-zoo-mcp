@@ -1002,13 +1002,19 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
     let generateResult = null;
     let staticRestoreResult = null;
     let balanceResult = null;
+    let restroomBalanceResult = null;
+    let lunchCoverageResult = null;
     if (regenerate) {
       generateResult = await runRpc("sch_generate_daily_schedule", { p_service_date: serviceDate, p_force: true });
       if (restoreStatic) staticRestoreResult = await restoreStaticOwnersForDate(serviceDate);
     }
-    if (rebalance) balanceResult = await rebalanceCoverAllAssignments(serviceDate);
+    if (rebalance) {
+      balanceResult = await rebalanceCoverAllAssignments(serviceDate);
+      restroomBalanceResult = await rebalanceRestroomAssignments(serviceDate);
+      lunchCoverageResult = await applyLunchCoverageAfterRestroomRebalance(serviceDate);
+    }
     const currentSlots = await listCoverAllSlotsForDate(serviceDate);
-    return { service_date: serviceDate, slots: currentSlots, generate_result: generateResult, static_restore_result: staticRestoreResult, balance_result: balanceResult };
+    return { service_date: serviceDate, slots: currentSlots, generate_result: generateResult, static_restore_result: staticRestoreResult, balance_result: balanceResult, restroom_rebalance_result: restroomBalanceResult, lunch_coverage_result: lunchCoverageResult };
   }
 
   function buildCoverAllRebalancePlan(assignments = [], activeRoster = [], activeCoverAllIds = []) {
