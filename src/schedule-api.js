@@ -1132,6 +1132,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
     let balanceResult = null;
     let restroomBalanceResult = null;
     let lunchCoverageResult = null;
+    let restroomBalanceCompletion = null;
     if (regenerate) {
       generateResult = await runRpc("sch_generate_daily_schedule", { p_service_date: serviceDate, p_force: true });
       if (restoreStatic) staticRestoreResult = await restoreStaticOwnersForDate(serviceDate);
