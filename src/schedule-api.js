@@ -4138,7 +4138,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
     try {
       const serviceDate = requireDate(req.body?.service_date || req.body?.date || (await getServiceDate()));
       const days = Math.max(1, Math.min(14, Number.parseInt(String(req.body?.days || 7), 10) || 7));
-      const force = req.body?.force === true;
+      const force = req.body?.force !== false;
       const generated_days = await ensureScheduleRange(serviceDate, days, { force });
       const schedule_audits = [];
       for (const row of generated_days || []) {
