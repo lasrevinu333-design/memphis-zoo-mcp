@@ -25,6 +25,9 @@ const RESTROOM_REBALANCE_TIME = String(process.env.RESTROOM_REBALANCE_TIME || "0
 const RESTROOM_REBALANCE_SOURCE = "restroom_rebalance_0945";
 const RESTROOM_REBALANCE_NOTE = "9:45 restroom rebalance: moved only as needed to spread restroom load evenly.";
 const RESTROOM_REBALANCE_TZ = "America/Chicago";
+const RESTROOM_REBALANCE_MAX_WALK_MINUTES = Math.max(4, Number.parseInt(String(process.env.RESTROOM_REBALANCE_MAX_WALK_MINUTES || "12"), 10) || 12);
+const RESTROOM_REBALANCE_SEVERE_SPREAD = Math.max(2, Number.parseInt(String(process.env.RESTROOM_REBALANCE_SEVERE_SPREAD || "4"), 10) || 4);
+const RESTROOM_REBALANCE_FLEX_HELPER_WALK_MINUTES = Math.max(1, Number.parseInt(String(process.env.RESTROOM_REBALANCE_FLEX_HELPER_WALK_MINUTES || "6"), 10) || 6);
 
 function timeToMinutes(value) {
   const match = String(value || "").match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
