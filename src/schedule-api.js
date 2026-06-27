@@ -265,6 +265,8 @@ function normalizeRestroomRebalanceRow(row = {}) {
     location_group_id: String(row.location_group_id || "").trim(),
     group_name: String(row.group_name || row.group_code || "Restroom").trim(),
     group_code: String(row.group_code || "").trim(),
+    zone_code: String(row.zone_code || "").trim(),
+    zone_name: String(row.zone_name || "").trim(),
     segment_number: Number(row.segment_number || 0),
     coverage_start: String(row.coverage_start || "").slice(0, 8),
     coverage_end: String(row.coverage_end || "").slice(0, 8),
