@@ -59,7 +59,25 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     const normalizedDeviceId = String(deviceId || "").trim();
     if (!normalizedDeviceId) return null;
     const rows = await runReadOnlySql(`select * from public.msg_get_user_by_device('${esc(normalizedDeviceId)}')`);
-    return Array.isArray(rows) && rows.length ? rows[0] : null;
+    if (Array.isArray(rows) && rows.length) return rows[0];
+    if (!isManagerOverviewDevice(normalizedDeviceId)) return null;
+    const fallbackRows = await runReadOnlySql(`
+      select
+        id as msg_user_id,
+        id as user_id,
+        employee_id,
+        display_name,
+        role,
+        true as is_active,
+        '${esc(normalizedDeviceId)}'::text as device_identifier
+      from public.msg_users
+      where coalesce(is_active, active, true) = true
+        and lower(coalesce(role, '')) in ('manager', 'ops', 'ops_manager', 'operations_manager')
+      order by case when lower(coalesce(display_name, '')) like '%eric%' or lower(coalesce(display_name, '')) like '%erich%' then 0 else 1 end,
+               display_name
+      limit 1
+    `);
+    return Array.isArray(fallbackRows) && fallbackRows.length ? fallbackRows[0] : null;
   }
 
   async function resolveViewerContext({ userId = "", deviceId = "" } = {}) {
