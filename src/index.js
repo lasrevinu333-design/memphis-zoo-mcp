@@ -1761,7 +1761,7 @@ app.get("/dashboard-api/work-session-alerts", async (_req, res) => {
       select scanned_at, location_code, device_identifier, result, notes, payload_json
       from public.scan_events
       where event_type = 'work_position_check'
-        and result in ('away_from_scanned_session','gps_low_accuracy','gps_unavailable')
+        and result is not null
         and scanned_at >= now() - interval '4 hours'
       order by scanned_at desc
       limit 100
