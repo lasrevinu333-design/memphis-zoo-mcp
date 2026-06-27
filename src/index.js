@@ -1089,7 +1089,20 @@ async function runPublicDashboardSummary() {
           and coalesce(dsa.coverage_purpose, '') not in ('reminder', 'response_only', 'lunch_coverage')
           and lower(coalesce(lg.group_name, '')) not like '%gift shop%'
           and lower(coalesce(lg.group_code, '')) not like '%gift_shop%'
-      ), visible_locations as (
+      ), day_locations as (
+        select distinct l.id as location_id
+        from scope s
+        join public.daily_schedule_assignments dsa on dsa.service_date = s.service_date
+        join public.location_groups lg on lg.id = dsa.location_group_id and lg.active = true
+        join public.location_group_memberships m on m.location_group_id = lg.id and m.active = true
+        join public.locations l on l.id = m.location_id and l.active = true
+        where dsa.status = 'ASSIGNED'
+          and dsa.assigned_employee_id is not null
+          and coalesce(dsa.coverage_purpose, '') not in ('reminder', 'response_only', 'lunch_coverage')
+          and lower(coalesce(lg.group_name, '')) not like '%gift shop%'
+          and lower(coalesce(lg.group_code, '')) not like '%gift_shop%'
+          and lower(coalesce(l.location_name, '')) not like '%gift shop%'
+      ), active_locations as (
         select distinct l.id as location_id
         from scope s
         join public.daily_schedule_assignments dsa on dsa.service_date = s.service_date
