@@ -32,7 +32,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       });
   }
   const MANAGER_OVERVIEW_DEVICE_IDS = new Set(
-    String(process.env.MANAGER_OVERVIEW_DEVICE_IDS || "1e74fe4c-dc20b3b9,KIOSK_01,KIOSK_1,ERICH_PC,ERICH_DESKTOP,MANAGER_PC,eric-Precision-Tower-3620,4a70537b06dd45bb9297fe2b790d3777,007f0101")
+    String((process.env.MANAGER_OVERVIEW_DEVICE_IDS || "") + ",1e74fe4c-dc20b3b9,KIOSK_01,KIOSK_1,ERICH_PC,ERICH_DESKTOP,MANAGER_PC,eric-Precision-Tower-3620,4a70537b06dd45bb9297fe2b790d3777,007f0101")
       .split(",").map((s) => s.trim()).filter(Boolean)
   );
   const OFF_SHIFT_NOTIFICATION_OVERRIDE_SETTING_KEY = "off_shift_employee_notifications_override_enabled";
