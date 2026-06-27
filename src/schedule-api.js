@@ -1403,9 +1403,33 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
     const rows = await runReadOnlySql(`
       select r.employee_id, e.display_name as employee_name, e.employee_code,
              to_char(r.shift_start, 'HH24:MI:SS') as shift_start,
-             to_char(r.shift_end, 'HH24:MI:SS') as shift_end
+             to_char(r.shift_end, 'HH24:MI:SS') as shift_end,
+             coalesce(route.zone_codes, '[]'::jsonb) as zone_codes,
+             route.route_anchor_zone_code,
+             coalesce(route.current_group_count, 0)::int as current_group_count
       from public.daily_work_roster r
       join public.employees e on e.id = r.employee_id
+      left join lateral (
+        with current_groups as (
+          select dsa.location_group_id
+          from public.daily_schedule_assignments dsa
+          where dsa.service_date = r.service_date
+            and dsa.assigned_employee_id = r.employee_id
+            and dsa.status = 'ASSIGNED'
+            and coalesce(dsa.coverage_purpose, '') not in ('lunch_coverage', 'reminder')
+            and dsa.coverage_end > '${esc(RESTROOM_REBALANCE_TIME)}'::time
+        ), current_zones as (
+          select z.zone_code
+          from current_groups cg
+          join public.v_schedule_location_group_zones z on z.location_group_id = cg.location_group_id
+          where z.zone_assignment_active is distinct from false
+            and z.zone_code is not null
+        )
+        select
+          (select count(*) from current_groups) as current_group_count,
+          (select coalesce(jsonb_agg(distinct zone_code), '[]'::jsonb) from current_zones) as zone_codes,
+          (select zone_code from current_zones group by zone_code order by count(*) desc, zone_code asc limit 1) as route_anchor_zone_code
+      ) route on true
       where r.service_date = '${esc(serviceDate)}'::date
         and r.active = true
         and r.shift_start <= '${esc(RESTROOM_REBALANCE_TIME)}'::time
