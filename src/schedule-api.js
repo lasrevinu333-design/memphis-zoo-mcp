@@ -240,8 +240,10 @@ function canUseRouteFitForRestroomMove(routeFit = {}, beforeSpread = 0) {
   if (currentGroupCount <= 0) return true;
   if (routeFit?.same_group || routeFit?.same_zone) return true;
   const walkingMinutes = Number(routeFit?.walking_minutes || 999);
+  if (walkingMinutes >= 999) return false;
   if (walkingMinutes <= RESTROOM_REBALANCE_MAX_WALK_MINUTES) return true;
-  return Number(beforeSpread || 0) >= RESTROOM_REBALANCE_SEVERE_SPREAD;
+  return Number(beforeSpread || 0) >= RESTROOM_REBALANCE_SEVERE_SPREAD
+    && walkingMinutes <= (RESTROOM_REBALANCE_MAX_WALK_MINUTES * 2);
 }
 
 function restroomMoveRouteScore(routeFit = {}) {
