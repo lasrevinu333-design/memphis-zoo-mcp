@@ -1611,6 +1611,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
   }
 
   async function rebalanceRestroomAssignments(serviceDate) {
+    return { service_date: serviceDate, scheduled_time: RESTROOM_REBALANCE_TIME, applied: false, reason: "static_pdf_templates_control_0945_phase", moved_count: 0, moves: [] };
     if (typeof runWriteSql !== "function") return { applied: false, reason: "write_path_unavailable", moved_count: 0, moves: [] };
 
     const activeRoster = await listActiveRosterForRestroomRebalance(serviceDate);
