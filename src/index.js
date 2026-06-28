@@ -1828,6 +1828,28 @@ app.get("/dashboard-api/work-session-alerts", async (_req, res) => {
     res.status(500).json({ ok: false, error: error.message || "Work session alerts failed" });
   }
 });
+app.get("/dashboard-api/coverall-printable", async (req, res) => {
+  try {
+    const rawDate = String(req.query.date || "").trim();
+    const serviceDateSql = /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? `${sqlLiteral(rawDate)}::date` : "public.sch_service_date(now())::date";
+    const rows = await runReadOnlySql(`
+      select *
+      from public.sch_coverall_printable_schedule(${serviceDateSql})
+      order by coverall_employee_code, print_order
+    `);
+    const data = Array.isArray(rows) ? rows : [];
+    const grouped = data.reduce((acc, row) => {
+      const key = row.coverall_employee_code || row.coverall_employee_name || "CoverAll";
+      if (!acc[key]) acc[key] = { employee_code: row.coverall_employee_code, employee_name: row.coverall_employee_name, assignments: [] };
+      acc[key].assignments.push(row);
+      return acc;
+    }, {});
+    res.status(200).json({ ok: true, data, grouped: Object.values(grouped), meta: { version: APP_VERSION, release_id: RELEASE_ID, generated_at: new Date().toISOString(), contract_version: SCHEDULE_CONTRACT_VERSION } });
+  } catch (error) {
+    console.error("coverall printable schedule failed:", error);
+    res.status(500).json({ ok: false, error: error.message || "CoverAll printable schedule failed" });
+  }
+});
 app.get("/schedule-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("schedule", { contract_version: SCHEDULE_CONTRACT_VERSION })); });
 app.get("/guest-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("guest_reports", { contract_version: GUEST_REPORTS_CONTRACT_VERSION })); });
 app.get("/feedback-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("feedback", { contract_version: FEEDBACK_CONTRACT_VERSION })); });
