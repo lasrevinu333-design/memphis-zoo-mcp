@@ -133,13 +133,25 @@ function normalizeEventPayload(payload = {}) {
   };
 }
 
-async function purgeExpiredEvents(runWriteSql) {
-  if (typeof runWriteSql !== "function") return;
-  await runWriteSql(
-    "events_app_purge",
-    `delete from public.events_app_events
-     where event_date < (now() at time zone '${EVENTS_TIME_ZONE}')::date;`
-  );
+function getEventsLocalIsoDate() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: EVENTS_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${byType.year}-${byType.month}-${byType.day}`;
+}
+
+async function purgeExpiredEvents() {
+  const client = getEventsSupabaseClient();
+  const today = getEventsLocalIsoDate();
+  const { error } = await client
+    .from("events_app_events")
+    .delete()
+    .lt("event_date", today);
+  if (error) throw new Error(error.message || "Event purge failed.");
 }
 
 async function listUpcomingEvents(runReadOnlySql) {
