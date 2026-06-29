@@ -90,6 +90,7 @@ export function getNextDailyReset(now = new Date(), timeZone = MEMPHIS_TIME_ZONE
 
 export function getDailyPinConfig(env = process.env) {
   return {
+    adminApiKey: String(env.ADMIN_API_KEY || "").trim(),
     opsManagerPin: String(env.OPS_MANAGER_DAILY_PIN || env.MEMPHIS_OPS_MANAGER_PIN || "").trim(),
     custodianPin: String(env.CUSTODIAN_DAILY_PIN || env.MEMPHIS_CUSTODIAN_PIN || "").trim(),
     sessionSecret: String(env.PIN_SESSION_SECRET || env.SUPABASE_SERVICE_ROLE_KEY || "").trim(),
@@ -125,6 +126,14 @@ export function createOpenOpsManagerSession({ deviceId, now = new Date(), env = 
     reset_hour_local: RESET_HOUR_LOCAL,
     time_zone: config.timeZone,
     auth_mode: "open",
+  };
+}
+
+export function createAdminApiKeySession({ deviceId, now = new Date(), env = process.env } = {}) {
+  return {
+    ...createOpenOpsManagerSession({ deviceId: deviceId || "admin-api-key", now, env }),
+    token: "admin-api-key",
+    auth_mode: "admin_api_key",
   };
 }
 
@@ -199,6 +208,10 @@ function bearerToken(req) {
   return String(req?.header?.("x-memphis-auth") || "").trim();
 }
 
+function adminApiKey(req) {
+  return String(req?.header?.("x-admin-key") || req?.header?.("x-api-key") || "").trim();
+}
+
 function requestDeviceId(req) {
   return req?.body?.device_id || req?.body?.deviceId || req?.query?.device_id || req?.header?.("x-device-id") || "";
 }
@@ -206,6 +219,12 @@ function requestDeviceId(req) {
 export function authenticateDailyPinRequest(req, { allowedRoles = ["ops_manager", "custodian"], env = process.env, openWhenDisabled = false } = {}) {
   if (allowOpenOpsManagerAccess(openWhenDisabled, env)) {
     return { ok: true, session: createOpenOpsManagerSession({ deviceId: requestDeviceId(req), env }) };
+  }
+  const config = getDailyPinConfig(env);
+  const providedAdminApiKey = adminApiKey(req);
+  if (config.adminApiKey && providedAdminApiKey && safeEqual(providedAdminApiKey, config.adminApiKey)) {
+    if (!allowedRoles.includes("ops_manager")) return { ok: false, status: 403, error: "Forbidden" };
+    return { ok: true, session: createAdminApiKeySession({ deviceId: requestDeviceId(req), env }) };
   }
   return verifyDailyPinToken(bearerToken(req), { allowedRoles, env, deviceId: requestDeviceId(req) });
 }
