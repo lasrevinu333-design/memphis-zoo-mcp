@@ -324,7 +324,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
   }
 
   function shouldSuppressPhoneNotificationPayloads(notificationState) {
-    return notificationState?.is_employee_device !== true || shouldSilenceDeviceNotifications(notificationState);
+    return notificationState?.is_employee_device !== true;
   }
 
   function phoneSuppressedNotificationState(notificationState) {

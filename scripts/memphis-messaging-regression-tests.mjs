@@ -822,7 +822,7 @@ await withServer(offShiftThreadsApp, async (baseUrl) => {
   assert.equal(payload.ok, true);
   assert.equal(payload.data.length, 1, 'Off-shift devices should still be able to load their thread list');
   assert.equal(payload.data[0].thread_title, 'Custodial Team');
-  assert.equal(payload.data[0].unread_count, 0, 'Off-shift phone notification polling must not expose unread counts that trigger TTS alerts');
+  assert.equal(payload.data[0].unread_count, 2, 'Off-shift devices should still expose real messenger unread counts so direct messages can alert after hours');
   assert.equal(payload.meta.notification_state.notifications_silent, true);
   assert.equal(payload.meta.notification_state.silent_reason, 'scheduled_shift_ended');
 
