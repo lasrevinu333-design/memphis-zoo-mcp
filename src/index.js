@@ -18,7 +18,7 @@ import {
 import { APP_VERSION, RELEASE_ID } from "./app-version.js";
 import { authenticateDailyPinRequest, installDailyPinAuthRoutes, makeDailyPinMiddleware } from "./auth/daily-pin-auth.js";
 import { makeMcpConnectorMiddleware } from "./auth/mcp-connector-auth.js";
-import { sanitizeReadOnlySql } from "./supabase/read.js";
+import { runReadOnlySql as runSupabaseReadOnlySql } from "./supabase/read.js";
 
 const app = express();
 app.use(express.json({ limit: "10mb" }));
@@ -546,10 +546,8 @@ async function fetchCurrentAttendance(options = {}) {
 
 async function runReadOnlySql(sql) {
   const client = getSupabaseConfig();
-  const sanitized = sanitizeReadOnlySql(sql);
-  const { data, error } = await client.rpc("run_sql_readonly", { p_sql: sanitized.sql });
-  if (error) throw new Error(error.message || "run_sql_readonly failed");
-  return data;
+  const result = await runSupabaseReadOnlySql({ client, sql });
+  return result.rows;
 }
 
 async function runWriteSql(namePrefix, sql) {
