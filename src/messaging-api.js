@@ -508,6 +508,10 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     return score;
   }
 
+  function isPrivilegedContactViewer(role = "") {
+    return ["manager", "admin", "ops", "ops_manager", "operations_manager"].includes(String(role || "").trim().toLowerCase());
+  }
+
   function summarizeDirectContact(contact = {}, includePhone = true) {
     const parts = [`${contact.display_name}: ${contact.role_title}`];
     if (contact.department) parts.push(contact.department);
@@ -516,8 +520,9 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     return parts.join(". " ) + ".";
   }
 
-  async function directContactReply(body = "") {
+  async function directContactReply(body = "", viewerRole = "") {
     if (!isDirectContactPrompt(body)) return null;
+    const includePhone = isPrivilegedContactViewer(viewerRole);
     const contacts = await runReadOnlySql(`
       select display_name, role_title, department, phone, active, sort_order
       from public.internal_ops_contacts
@@ -528,9 +533,9 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       .map((contact) => ({ contact, score: scoreContactPrompt(body, contact) }))
       .sort((a, b) => b.score - a.score || Number(a.contact.sort_order || 999) - Number(b.contact.sort_order || 999));
     const best = ranked[0];
-    if (best && best.score >= 70) return summarizeDirectContact(best.contact, true);
+    if (best && best.score >= 70) return summarizeDirectContact(best.contact, includePhone);
     if (/\b(manager|managers|director|contact|phone|number)\b/i.test(String(body || ""))) {
-      return ranked.slice(0, 6).map((row) => summarizeDirectContact(row.contact, true)).join(" " );
+      return ranked.slice(0, 6).map((row) => summarizeDirectContact(row.contact, includePhone)).join(" " );
     }
     return null;
   }
@@ -577,9 +582,9 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     return raw;
   }
 
-  async function buildMemphisReply({ userId = "", deviceId = "", threadId = "", body = "" } = {}) {
+  async function buildMemphisReply({ userId = "", deviceId = "", threadId = "", body = "", userRole = "" } = {}) {
     try {
-      const directContact = await directContactReply(body);
+      const directContact = await directContactReply(body, userRole);
       if (directContact) {
         return {
           reply: { text: directContact, meta: { fallback: true, mode: "direct_internal_contact" } },
@@ -1020,7 +1025,8 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         const thread = await runRpc("msg_get_or_create_memphis_thread", { p_user_id: userId });
         resolvedThreadId = String(thread?.id || "").trim();
       }
-      const { reply, routedBody } = await buildMemphisReply({ userId, deviceId, threadId: resolvedThreadId, body });
+      const viewer = await resolveViewerContext({ userId, deviceId });
+      const { reply, routedBody } = await buildMemphisReply({ userId: viewer.effectiveUserId, deviceId, threadId: resolvedThreadId, body, userRole: viewer.identity?.role || "" });
       const diagnostics = await memphisResponder.diagnoseMessage({ deviceId, threadId: resolvedThreadId, userMessage: routedBody });
       res.status(200).json({
         ok: true,
@@ -1062,7 +1068,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       if (!memphisUserId) throw new Error("Memphis bot identity not found.");
 
       let reply;
-      ({ reply } = await buildMemphisReply({ userId: effectiveUserId, deviceId, threadId: thread.id, body }));
+      ({ reply } = await buildMemphisReply({ userId: effectiveUserId, deviceId, threadId: thread.id, body, userRole: viewer.identity?.role || "" }));
 
       const botMessage = await runRpc("msg_send_message", {
         p_thread_id: thread.id,

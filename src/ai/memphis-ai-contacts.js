@@ -1,7 +1,7 @@
 import { esc, normalizeLoose } from "./memphis-ai-utils.js";
 
 function isManagerRole(role = "") {
-  return String(role || "").trim().toLowerCase() === "manager";
+  return ["manager", "admin", "ops", "ops_manager", "operations_manager"].includes(String(role || "").trim().toLowerCase());
 }
 
 function isContactQuestion(text = "") {

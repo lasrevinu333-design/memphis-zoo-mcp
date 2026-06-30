@@ -22,6 +22,7 @@ const PTO_GEMINI_TIMEOUT_MS = Math.max(1000, Number.parseInt(String(process.env.
 const PTO_GEMINI_MAX_OUTPUT_TOKENS = Math.max(256, Number.parseInt(String(process.env.SCHEDULE_GEMINI_MAX_OUTPUT_TOKENS || "1200"), 10) || 1200);
 
 const RESTROOM_REBALANCE_TIME = String(process.env.RESTROOM_REBALANCE_TIME || "09:45:00").trim() || "09:45:00";
+const RESTROOM_REBALANCE_IMPLEMENTATION_MODE = "static_template_controlled";
 const RESTROOM_REBALANCE_SOURCE = "restroom_rebalance_0945";
 const RESTROOM_REBALANCE_NOTE = "9:45 restroom rebalance: moved only as needed to spread restroom load evenly while staying near the current route.";
 const RESTROOM_REBALANCE_TZ = "America/Chicago";
@@ -1611,7 +1612,15 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
   }
 
   async function rebalanceRestroomAssignments(serviceDate) {
-    return { service_date: serviceDate, scheduled_time: RESTROOM_REBALANCE_TIME, applied: false, reason: "static_pdf_templates_control_0945_phase", moved_count: 0, moves: [] };
+    return {
+      service_date: serviceDate,
+      scheduled_time: RESTROOM_REBALANCE_TIME,
+      implementation_mode: RESTROOM_REBALANCE_IMPLEMENTATION_MODE,
+      applied: false,
+      reason: "static_pdf_templates_control_0945_phase",
+      moved_count: 0,
+      moves: [],
+    };
     if (typeof runWriteSql !== "function") return { applied: false, reason: "write_path_unavailable", moved_count: 0, moves: [] };
 
     const activeRoster = await listActiveRosterForRestroomRebalance(serviceDate);
@@ -4425,7 +4434,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
         lastServiceDate: serviceDate,
         lastResult: { ...result, persistent_completion },
       };
-      res.status(200).json({ ok: true, data: { service_date: serviceDate, readiness, balance, lunch_coverage, persistent_completion, state: restroomRebalanceState }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+      res.status(200).json({ ok: true, data: { service_date: serviceDate, readiness, balance, lunch_coverage, implementation_mode: RESTROOM_REBALANCE_IMPLEMENTATION_MODE, persistent_completion, state: restroomRebalanceState }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Restroom rebalance failed");
     }
@@ -4442,6 +4451,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
           timezone: RESTROOM_REBALANCE_TZ,
           service_date: serviceDate,
           due_now: isRestroomRebalanceDue(),
+          implementation_mode: RESTROOM_REBALANCE_IMPLEMENTATION_MODE,
           state: restroomRebalanceState,
           persistent_completion,
         },

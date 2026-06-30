@@ -406,7 +406,10 @@ function summarizeEvents(events = []) {
   if (!events.length) return "I don't see any upcoming events in the system right now.";
   return events.slice(0, 6).map((event) => {
     const attendees = event.attendee_count == null ? "attendees not listed" : `${event.attendee_count} attendees`;
-    return `${event.event_name} in ${event.group_name || event.group_code} on ${event.event_date} from ${event.start_time} to ${event.end_time}, ${attendees}.`;
+    const spansOvernight = Boolean(event.spans_overnight) || (event.end_date && event.end_date > event.event_date);
+    const dateText = spansOvernight ? `${event.event_date} to ${event.end_date}` : event.event_date;
+    const timeText = spansOvernight ? `${event.start_time} to ${event.end_time} next day` : `${event.start_time} to ${event.end_time}`;
+    return `${event.event_name} in ${event.group_name || event.group_code} on ${dateText} from ${timeText}, ${attendees}.`;
   }).join(" ");
 }
 
@@ -1086,7 +1089,24 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       const days = toSafeInt(args.days, 14, 1, 60);
       const area = String(args.area || "").trim();
       const rows = await runReadOnlySql(`
-        select e.event_name, lg.group_name, lg.group_code, e.event_date, to_char(e.start_time, 'HH24:MI:SS') as start_time, to_char(e.end_time, 'HH24:MI:SS') as end_time, e.attendee_count, e.notes
+        select e.event_name,
+          case
+            when lg.group_code = 'SPLASH_PAD_RESTROOMS' then 'Splash Pad'
+            when lg.group_code = 'COURTYARD_RESTROOMS' then 'Courtyard'
+            else lg.group_name
+          end as group_name,
+          case
+            when lg.group_code = 'SPLASH_PAD_RESTROOMS' then 'SPLASH_PAD'
+            when lg.group_code = 'COURTYARD_RESTROOMS' then 'COURTYARD'
+            else lg.group_code
+          end as group_code,
+          e.event_date,
+          e.end_date,
+          to_char(e.start_time, 'HH24:MI:SS') as start_time,
+          to_char(e.end_time, 'HH24:MI:SS') as end_time,
+          (coalesce(e.end_date, e.event_date) > e.event_date) as spans_overnight,
+          e.attendee_count,
+          e.notes
         from public.events_app_events e
         join public.location_groups lg on lg.id = e.location_group_id
         where e.event_date >= current_date

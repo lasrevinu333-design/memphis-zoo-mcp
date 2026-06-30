@@ -166,19 +166,15 @@ const maintenance = createEventMaintenanceController({
 await maintenance.runMaintenance("contract_test");
 const notificationSql = notificationReadCalls.find((sql) => /candidate_notifications/i.test(sql));
 assert.ok(notificationSql, "event maintenance should query pending event reminders");
-assert.match(notificationSql, /two_days_before/, "event reminders should include two-days-before notices");
-assert.match(notificationSql, /day_before/, "event reminders should include one-day-before notices");
-assert.match(notificationSql, /morning_of/, "event reminders should include morning-of notices");
-assert.match(notificationSql, /interval '15 minutes'/, "event reminders should be scheduled 15 minutes after owner clock-in/coverage start");
-assert.match(notificationSql, /coalesce\(eoc\.coverage_start, time '08:00:00'\)/, "event reminders should use chosen owner coverage start with 8 AM fallback");
-assert.match(notificationSql, /oa\.assignment_date between e\.event_date and coalesce\(e\.end_date, e\.event_date\)/, "event owner candidates should include every assignment date spanned by an overnight event");
-assert.match(notificationSql, /\(oa\.assignment_date::timestamp \+ coalesce\(oa\.coverage_start, time '00:00:00'\)\)\s*<\s*\(coalesce\(e\.end_date, e\.event_date\)::timestamp \+ e\.end_time\)/s, "event owner candidates should only include coverage windows before the real event end timestamp");
-assert.match(notificationSql, /\(oa\.assignment_date::timestamp \+ coalesce\(oa\.coverage_end, time '23:59:59'\)\)\s*>\s*\(e\.event_date::timestamp \+ e\.start_time\)/s, "event owner candidates should only include coverage windows after the real event start timestamp");
-assert.match(notificationSql, /eoc\.assignment_date::timestamp \+ \(eoc\.day_offset \* interval '1 day'\)/, "event reminders for overnight end-day owners should schedule relative to the owner assignment date");
-assert.match(notificationSql, /coalesce\(dsa\.coverage_purpose, 'area_owner'\) in \('area_owner', 'late_coverage'\)/, "event reminders should consider Michael-style late coverage rows as valid owners");
-assert.match(notificationSql, /when coalesce\(dsa\.coverage_purpose, 'area_owner'\) = 'late_coverage' then 2/s, "late coverage rows should outrank ordinary daytime area owners when they overlap an event");
-assert.match(notificationSql, /min\(eoc\.assignment_priority\) over \(partition by eoc\.id, eoc\.notification_kind, eoc\.assignment_date\)/s, "event reminders should choose the highest-priority overlapping owner per event/reminder kind/date");
-assert.doesNotMatch(notificationSql, /not exists \(\s*select 1\s*from public\.daily_group_assignments dga\s*where dga\.assignment_date = dsa\.service_date\s*and dga\.location_group_id = dsa\.location_group_id\s*and dga\.active = true\s*and dga\.assigned_employee_id is not null\s*\)/s, "manual/takeover rows must not suppress generated schedule owners for the whole day without event-time overlap");
+assert.match(notificationSql, /three_days_out/, "event reminders should include three-days-out notices");
+assert.match(notificationSql, /two_days_out/, "event reminders should include two-days-out notices");
+assert.match(notificationSql, /day_of_event/, "event reminders should include day-of notices");
+assert.doesNotMatch(notificationSql, /day_before|morning_of|shift_plus_fifteen/, "legacy reminder kinds should not remain in the reminder query");
+assert.match(notificationSql, /interval '15 minutes'/, "event reminders should be scheduled 15 minutes after owner clock-in\/coverage start");
+assert.match(notificationSql, /oa\.assignment_date = p\.local_now::date/, "event reminders should use the final owner assignment for today, not the future event date owner");
+assert.match(notificationSql, /e\.event_date = \(p\.local_now::date \+ \(td\.day_offset \* interval '1 day'\)\)::date/, "event reminders should target events that are today, two days out, or three days out from the current workday");
+assert.match(notificationSql, /log\.notification_kind = td\.notification_kind/, "notification dedupe should be keyed to the transcript-approved reminder cadence");
+assert.match(notificationSql, /coalesce\(dsa\.coverage_purpose, 'area_owner'\) = 'area_owner'/, "event reminders should stay tied to area-owner rows after PTO\/absence\/CoverAll adjustments");
 const scanAlertRpc = rpcCalls.find((call) => call.name === "sch_queue_due_scan_alerts");
 assert.ok(scanAlertRpc, "event maintenance should queue due scan alerts");
 assert.deepEqual(scanAlertRpc.params, {

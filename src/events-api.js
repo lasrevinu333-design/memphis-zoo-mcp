@@ -17,12 +17,13 @@ function getEventsSupabaseClient() {
 }
 
 const EVENTS_TIME_ZONE = "America/Chicago";
-const EVENTS_CONTRACT_VERSION = "events.v1";
+const EVENTS_CONTRACT_VERSION = "events.v2";
 const DAY_BEFORE_NOTIFICATION_TIME = "08:00:00";
 const EVENT_MAINTENANCE_COOLDOWN_MS = 20 * 1000;
 const MAX_NOTIFICATIONS_PER_RUN = 50;
 const MAX_SCAN_ALERTS_PER_RUN = 50;
 const SCAN_ALERT_COOLDOWN_MINUTES = 30;
+const SCAN_ALERT_MANAGER_ESCALATION_GRACE_MINUTES = 30;
 
 function fail(res, error, fallback = "Events request failed", statusCode = 400) {
   res.status(statusCode).json({ ok: false, error: error?.message || fallback });
@@ -34,7 +35,13 @@ function sqlLiteral(value) {
 }
 
 function isIsoDate(value) {
-  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || "").trim());
+  const match = String(value || "").trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return false;
+  const year = Number.parseInt(match[1], 10);
+  const month = Number.parseInt(match[2], 10);
+  const day = Number.parseInt(match[3], 10);
+  const date = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+  return date.getUTCFullYear() === year && (date.getUTCMonth() + 1) === month && date.getUTCDate() === day;
 }
 
 function isUuid(value) {
@@ -106,6 +113,13 @@ function cleanEventName(value) {
   return text;
 }
 
+function addDaysToIsoDate(value, days = 0) {
+  const [year, month, day] = String(value || "").split("-").map((part) => Number.parseInt(part, 10));
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() + Number(days || 0));
+  return date.toISOString().slice(0, 10);
+}
+
 function normalizeEventPayload(payload = {}) {
   const eventName = cleanEventName(payload.event_name);
   const locationGroupId = String(payload.location_group_id || "").trim();
@@ -119,17 +133,22 @@ function normalizeEventPayload(payload = {}) {
   if (!eventName) throw new Error("event_name is required.");
   if (!isUuid(locationGroupId)) throw new Error("location_group_id must be a valid UUID.");
   if (!isIsoDate(eventDate)) throw new Error("event_date must be YYYY-MM-DD.");
-  if (endTime <= startTime) throw new Error("end_time must be later than start_time.");
+  if (endTime === startTime) throw new Error("end_time must differ from start_time.");
+
+  const spansOvernight = endTime < startTime;
+  const endDate = spansOvernight ? addDaysToIsoDate(eventDate, 1) : eventDate;
 
   return {
     event_name: eventName,
     location_group_id: locationGroupId,
     event_date: eventDate,
+    end_date: endDate,
     start_time: startTime,
     end_time: endTime,
     attendee_count: attendeeCount,
     notes,
     created_by: createdBy,
+    spans_overnight: spansOvernight,
   };
 }
 
@@ -150,7 +169,7 @@ async function purgeExpiredEvents() {
   const { error } = await client
     .from("events_app_events")
     .delete()
-    .lt("event_date", today);
+    .lt("end_date", today);
   if (error) throw new Error(error.message || "Event purge failed.");
 }
 
@@ -160,11 +179,21 @@ async function listUpcomingEvents(runReadOnlySql) {
       e.id,
       e.event_name,
       e.location_group_id,
-      lg.group_code,
-      lg.group_name,
+      case
+        when lg.group_code = 'SPLASH_PAD_RESTROOMS' then 'SPLASH_PAD'
+        when lg.group_code = 'COURTYARD_RESTROOMS' then 'COURTYARD'
+        else lg.group_code
+      end as group_code,
+      case
+        when lg.group_code = 'SPLASH_PAD_RESTROOMS' then 'Splash Pad'
+        when lg.group_code = 'COURTYARD_RESTROOMS' then 'Courtyard'
+        else lg.group_name
+      end as group_name,
       e.event_date,
+      e.end_date,
       to_char(e.start_time, 'HH24:MI:SS') as start_time,
       to_char(e.end_time, 'HH24:MI:SS') as end_time,
+      (e.end_date > e.event_date) as spans_overnight,
       e.attendee_count,
       e.notes,
       e.created_by,
@@ -172,7 +201,7 @@ async function listUpcomingEvents(runReadOnlySql) {
       e.updated_at
     from public.events_app_events e
     join public.location_groups lg on lg.id = e.location_group_id
-    where e.event_date >= (now() at time zone '${EVENTS_TIME_ZONE}')::date
+    where coalesce(e.end_date, e.event_date) >= (now() at time zone '${EVENTS_TIME_ZONE}')::date
     order by e.event_date asc, e.start_time asc, e.event_name asc
   `);
   return Array.isArray(rows) ? rows : [];
@@ -229,8 +258,8 @@ async function getUpcomingEventScheduleStates(runReadOnlySql) {
           and dga.assigned_employee_id is not null
       ) as group_assignment_count
     from public.events_app_events e
-    where e.event_date between (now() at time zone '${EVENTS_TIME_ZONE}')::date
-      and ((now() at time zone '${EVENTS_TIME_ZONE}')::date + 1)
+    where e.event_date <= ((now() at time zone '${EVENTS_TIME_ZONE}')::date + 1)
+      and coalesce(e.end_date, e.event_date) >= (now() at time zone '${EVENTS_TIME_ZONE}')::date
     group by e.event_date
     order by e.event_date asc
   `);
@@ -273,6 +302,7 @@ async function createEventRecord(runWriteSql, payload) {
        event_name,
        location_group_id,
        event_date,
+       end_date,
        start_time,
        end_time,
        attendee_count,
@@ -283,6 +313,7 @@ async function createEventRecord(runWriteSql, payload) {
        ${sqlLiteral(record.event_name)},
        ${sqlLiteral(record.location_group_id)}::uuid,
        ${sqlLiteral(record.event_date)}::date,
+       ${sqlLiteral(record.end_date)}::date,
        ${sqlLiteral(record.start_time)}::time,
        ${sqlLiteral(record.end_time)}::time,
        ${record.attendee_count == null ? "null" : record.attendee_count},
@@ -308,15 +339,41 @@ async function deleteEventRecord(runWriteSql, eventId) {
   return { id: normalizedId, deleted: true };
 }
 
-function buildNotificationBody(eventRow, assignmentRow, kind) {
+function formatEventTimeRange(eventRow) {
+  const start = String(eventRow?.start_time || "").slice(0, 5) || "unknown";
+  const end = String(eventRow?.end_time || "").slice(0, 5) || "unknown";
+  const spansOvernight = String(eventRow?.end_date || eventRow?.event_date || "") > String(eventRow?.event_date || "");
+  return spansOvernight ? `${start} – ${end} next day` : `${start} – ${end}`;
+}
+
+function extractCustodialNotes(notes = "") {
+  const raw = String(notes || "").trim();
+  if (!raw) return "";
+  const chunks = raw
+    .split(/(?:\r?\n)+|[;•]+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const custodialChunks = chunks.filter((part) => /trash|garbage|can\b|cans\b|box\b|boxes\b|restroom|bathroom|clean|custod|liner|supply|sweep|mop|sanitize/i.test(part));
+  return (custodialChunks.length ? custodialChunks : []).join("; ");
+}
+
+function buildNotificationBody(eventRow) {
   const area = eventRow.group_name || eventRow.group_code || "Assigned area";
   const attendees = eventRow.attendee_count == null ? "unknown" : String(eventRow.attendee_count);
-  const notes = eventRow.notes ? ` Notes: ${eventRow.notes}` : "";
-  const when =
-    kind === "day_before"
-      ? "Reminder for tomorrow"
-      : `Reminder for today. Your scheduled shift in ${area} began at ${assignmentRow.coverage_start || "the scheduled time"}.`;
-  return `${when}: ${eventRow.event_name} is scheduled in ${area} on ${eventRow.event_date} from ${eventRow.start_time} to ${eventRow.end_time}. Expected attendees: ${attendees}.${notes}`.trim();
+  const custodialNotes = extractCustodialNotes(eventRow.notes);
+  const dateLabel = String(eventRow?.end_date || eventRow?.event_date || "") > String(eventRow?.event_date || "")
+    ? `${eventRow.event_date} to ${eventRow.end_date}`
+    : eventRow.event_date;
+  const lines = [
+    `Event reminder: ${eventRow.event_name}`,
+    "",
+    `Location: ${area}`,
+    `Date: ${dateLabel}`,
+    `Time: ${formatEventTimeRange(eventRow)}`,
+    `Expected attendance: ${attendees}`,
+  ];
+  if (custodialNotes) lines.push("", `Custodial notes: ${custodialNotes}`);
+  return lines.join("\n").trim();
 }
 
 async function sendEventNotification({ runRpc, runWriteSql, eventRow, assignmentRow, memphisUserId, kind }) {
@@ -326,7 +383,7 @@ async function sendEventNotification({ runRpc, runWriteSql, eventRow, assignment
   }
 
   const thread = await runRpc("msg_get_or_create_memphis_thread", { p_user_id: msgUserId });
-  const body = buildNotificationBody(eventRow, assignmentRow, kind);
+  const body = buildNotificationBody(eventRow);
   const message = await runRpc("msg_send_message", {
     p_thread_id: thread.id,
     p_sender_user_id: memphisUserId,
@@ -341,10 +398,7 @@ async function sendEventNotification({ runRpc, runWriteSql, eventRow, assignment
     },
   });
 
-  const scheduledForLocal =
-    kind === "day_before"
-      ? `${eventRow.event_date} ${DAY_BEFORE_NOTIFICATION_TIME}`
-      : `${eventRow.event_date} ${assignmentRow.coverage_start || "00:00:00"}`;
+  const scheduledForLocal = `${assignmentRow.assignment_date || eventRow.event_date} ${assignmentRow.coverage_start || "00:00:00"}`;
 
   const client = getEventsSupabaseClient();
   const { error: logError } = await client
@@ -387,7 +441,17 @@ async function sendEventNotification({ runRpc, runWriteSql, eventRow, assignment
 
 async function getPendingNotifications(runReadOnlySql) {
   const rows = await runReadOnlySql(`
-    with owner_assignments as (
+    with params as (
+      select (now() at time zone '${EVENTS_TIME_ZONE}') as local_now
+    ),
+    target_days as (
+      select 0::int as day_offset, 'day_of_event'::text as notification_kind
+      union all
+      select 2::int as day_offset, 'two_days_out'::text as notification_kind
+      union all
+      select 3::int as day_offset, 'three_days_out'::text as notification_kind
+    ),
+    owner_assignments as (
       select
         dga.assignment_date,
         dga.location_group_id,
@@ -438,6 +502,7 @@ async function getPendingNotifications(runReadOnlySql) {
         e.event_name,
         e.location_group_id,
         e.event_date,
+        e.end_date,
         e.start_time,
         e.end_time,
         e.attendee_count,
@@ -448,107 +513,40 @@ async function getPendingNotifications(runReadOnlySql) {
         emp.display_name as employee_name,
         mu.id as msg_user_id,
         coalesce(md.device_identifiers, array[]::text[]) as device_identifiers,
-        min(oa.coverage_start) as coverage_start,
-        max(oa.coverage_end) as coverage_end,
-        min(oa.assignment_source) as assignment_source,
-        'day_before'::text as notification_kind,
-        ((e.event_date::timestamp - interval '1 day') + time '${DAY_BEFORE_NOTIFICATION_TIME}') as scheduled_for_local,
+        oa.assignment_date,
+        oa.coverage_start,
+        oa.coverage_end,
+        oa.assignment_source,
+        td.notification_kind,
+        (oa.assignment_date::timestamp + coalesce(oa.coverage_start, time '00:00:00') + interval '15 minutes') as scheduled_for_local,
         public.msg_get_memphis_user_id() as memphis_user_id
-      from public.events_app_events e
+      from params p
+      join target_days td on true
+      join public.events_app_events e
+        on e.event_date = (p.local_now::date + (td.day_offset * interval '1 day'))::date
       join public.location_groups lg on lg.id = e.location_group_id
       join owner_assignments oa
         on oa.location_group_id = e.location_group_id
-       and oa.assignment_date = e.event_date
+       and oa.assignment_date = p.local_now::date
       join public.employees emp on emp.id = oa.employee_id and emp.active = true
       join public.msg_users mu on mu.employee_id = emp.id and mu.is_active = true
       left join msg_devices md on md.msg_user_id = mu.id
-      where (now() at time zone '${EVENTS_TIME_ZONE}')::date = (e.event_date - interval '1 day')::date
-        and (now() at time zone '${EVENTS_TIME_ZONE}') >= ((e.event_date::timestamp - interval '1 day') + time '${DAY_BEFORE_NOTIFICATION_TIME}')
+      where p.local_now::date = oa.assignment_date
+        and p.local_now >= (oa.assignment_date::timestamp + coalesce(oa.coverage_start, time '00:00:00') + interval '15 minutes')
         and not exists (
           select 1
           from public.events_app_notification_log log
           where log.event_id = e.id
             and log.employee_id = emp.id
-            and log.notification_kind = 'day_before'
+            and log.notification_kind = td.notification_kind
         )
-      group by
-        e.id,
-        e.event_name,
-        e.location_group_id,
-        e.event_date,
-        e.start_time,
-        e.end_time,
-        e.attendee_count,
-        e.notes,
-        lg.group_code,
-        lg.group_name,
-        emp.id,
-        emp.display_name,
-        mu.id,
-        md.device_identifiers
-
-      union all
-
-      select
-        e.id,
-        e.event_name,
-        e.location_group_id,
-        e.event_date,
-        e.start_time,
-        e.end_time,
-        e.attendee_count,
-        e.notes,
-        lg.group_code,
-        lg.group_name,
-        emp.id as employee_id,
-        emp.display_name as employee_name,
-        mu.id as msg_user_id,
-        coalesce(md.device_identifiers, array[]::text[]) as device_identifiers,
-        min(oa.coverage_start) as coverage_start,
-        max(oa.coverage_end) as coverage_end,
-        min(oa.assignment_source) as assignment_source,
-        'shift_plus_fifteen'::text as notification_kind,
-        (e.event_date::timestamp + min(oa.coverage_start) + interval '15 minutes') as scheduled_for_local,
-        public.msg_get_memphis_user_id() as memphis_user_id
-      from public.events_app_events e
-      join public.location_groups lg on lg.id = e.location_group_id
-      join owner_assignments oa
-        on oa.location_group_id = e.location_group_id
-       and oa.assignment_date = e.event_date
-       and oa.coverage_start is not null
-      join public.employees emp on emp.id = oa.employee_id and emp.active = true
-      join public.msg_users mu on mu.employee_id = emp.id and mu.is_active = true
-      left join msg_devices md on md.msg_user_id = mu.id
-      where (now() at time zone '${EVENTS_TIME_ZONE}')::date = e.event_date
-        and (now() at time zone '${EVENTS_TIME_ZONE}') >= (e.event_date::timestamp + oa.coverage_start + interval '15 minutes')
-        and not exists (
-          select 1
-          from public.events_app_notification_log log
-          where log.event_id = e.id
-            and log.employee_id = emp.id
-            and log.notification_kind = 'shift_plus_fifteen'
-        )
-      group by
-        e.id,
-        e.event_name,
-        e.location_group_id,
-        e.event_date,
-        e.start_time,
-        e.end_time,
-        e.attendee_count,
-        e.notes,
-        lg.group_code,
-        lg.group_name,
-        emp.id,
-        emp.display_name,
-        mu.id,
-        md.device_identifiers
     )
     select *
     from candidate_notifications
     order by scheduled_for_local asc, event_date asc, event_name asc
     limit ${MAX_NOTIFICATIONS_PER_RUN}
   `);
+
   return Array.isArray(rows) ? rows : [];
 }
 
@@ -562,6 +560,7 @@ async function queueDueScanAlerts(runRpc) {
       p_limit: MAX_SCAN_ALERTS_PER_RUN,
       p_dry_run: false,
       p_cooldown_minutes: SCAN_ALERT_COOLDOWN_MINUTES,
+      p_manager_escalation_grace_minutes: SCAN_ALERT_MANAGER_ESCALATION_GRACE_MINUTES,
     });
     return result || { ok: true, result_count: 0 };
   } catch (error) {

@@ -972,7 +972,7 @@ begin
                and cb.min_projected_required_location_count <= (ceil(v_target_required_location_count)::integer + 1) then 1
               else 0
             end asc,
-            cb.balanced_total_score desc,
+            round(((cb.route_fit_score * 0.75) + (cb.dynamic_workload_score * 0.25))::numeric, 2) desc,
             cb.target_load_gap_after asc,
             cb.target_location_gap_after asc,
             cb.current_required_location_count asc,
