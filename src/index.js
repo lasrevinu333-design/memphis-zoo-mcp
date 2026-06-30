@@ -65,6 +65,8 @@ let feedbackSchemaEnsured = false;
 let feedbackSchemaEnsurePromise = null;
 
 const requireOpsManagerAuth = makeDailyPinMiddleware({ allowedRoles: ["ops_manager"], openWhenDisabled: false });
+// MCP transport auth: require MCP_CONNECTOR_TOKEN when configured, otherwise preserve
+// legacy open ops-manager rollout behavior until the connector secret is set.
 const requireMcpAuth = makeMcpConnectorMiddleware();
 
 // Simple in-memory rate limiter: max 10 requests per minute per IP
@@ -2084,9 +2086,8 @@ app.post("/scan-api/rpc", requireDeviceAuth, async (req, res) => {
   catch (error) { console.error("scan rpc failed:", error); res.status(500).json({ ok: false, error: error.message || "Scan RPC failed" }); }
 });
 app.get("/", (_req, res) => { res.status(200).send("Memphis Zoo MCP server is running."); });
-// C2: MCP endpoint — intentionally open/no-auth for external connectors.
-// The transport is public by explicit operator choice; keep higher-risk admin and dashboard
-// surfaces behind their own auth layers.
+// C2: MCP endpoint — connector-token protected when MCP_CONNECTOR_TOKEN is configured,
+// with legacy ops-manager fallback preserved until the connector secret is rolled out.
 app.get("/mcp", requireMcpAuth, (_req, res) => { res.status(405).send("GET not supported on /mcp for this server."); });
 app.options("/mcp", (_req, res) => {
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");

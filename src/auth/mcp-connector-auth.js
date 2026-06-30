@@ -20,7 +20,7 @@ export function requestMcpConnectorToken(req) {
 
   if (fromCustomHeader) return String(fromCustomHeader).trim();
 
-  // Fall back to Authorization: Bearer <token> (standard HTTP auth).
+  // Fall back to Authorization: Bearer *** (standard HTTP auth).
   // ChatGPT MCP connectors send this via service_http auth type.
   const authHeader = String(req?.header?.("authorization") || "").trim();
   if (authHeader.toLowerCase().startsWith("bearer ")) {
@@ -75,14 +75,14 @@ export function authenticateMcpConnectorRequest(req, { env = process.env, now = 
 }
 
 export function makeMcpConnectorMiddleware({ env = process.env } = {}) {
-  return function allowOpenMcp(req, _res, next) {
-    req.memphisAuth = {
-      role: "connector_service",
-      auth_mode: "open",
-      token_name: null,
-      issued_at: new Date().toISOString(),
-    };
-    req.memphisMcpAuth = { source: "open" };
+  return function requireMcpConnectorAuth(req, res, next) {
+    const result = authenticateMcpConnectorRequest(req, { env });
+    if (!result.ok) {
+      res.status(result.status || 401).json({ ok: false, error: result.error || "Unauthorized" });
+      return;
+    }
+    req.memphisAuth = result.session;
+    req.memphisMcpAuth = { source: result.auth_source || result.session?.auth_mode || "unknown" };
     next();
   };
 }
