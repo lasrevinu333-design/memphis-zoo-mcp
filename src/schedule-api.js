@@ -3170,28 +3170,77 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
 
   function renderMyScheduleHtml(data) {
     const employee = data?.employee || {};
-    const shift = data?.shift || {};
     const items = Array.isArray(data?.items) ? data.items : [];
-    const itemPurpose = (item) => String(item?.coverage_purpose || item?.purpose || item?.kind || "area_owner").trim().toLowerCase();
-    const primaryItems = items.filter((item) => !["lunch_coverage", "late_coverage"].includes(itemPurpose(item)));
-    const lunchItems = items.filter((item) => itemPurpose(item) === "lunch_coverage");
-    const lateItems = items.filter((item) => itemPurpose(item) === "late_coverage");
-    const renderItems = (list) => list.map((item) => `
-      <li>
-        <span class="item-name">${htmlEscape(item.name || item.location_name || "Assigned Area")}</span>
-        ${item.group_code || item.location_code ? `<span class="item-code">${htmlEscape(item.group_code || item.location_code)}</span>` : ""}
-      </li>`).join("");
-    const renderSection = (title, list, note = "") => list.length ? `
-    <section class="card">
-      <h2>${htmlEscape(title)}</h2>
-      ${note ? `<p class="section-note">${htmlEscape(note)}</p>` : ""}
-      <ul>${renderItems(list)}</ul>
-    </section>` : "";
-    const sectionsHtml = [
-      renderSection("Primary Ownership", primaryItems, data?.has_945_change ? "Includes today's 9:45 AM restroom ownership update." : "Assigned ownership areas for today."),
-      renderSection("Lunch Coverage", lunchItems),
-      renderSection("Afternoon Call Coverage", lateItems),
-    ].join("") || `<section class="card"><div class="empty">No assignments are currently listed.</div></section>`;
+    const KNOWN_RESTROOM_EXHIBIT_BASES = new Set(["teton", "china", "expo", "zambezi", "memmex", "bonobos"]);
+    const ALWAYS_LAST_LOCATION_RANKS = [["cat country", 0], ["primate canyon", 1], ["primate pavilion", 2], ["primate pavillion", 2]];
+    const normalizePurpose = (value) => String(value || "area_owner").trim().toLowerCase();
+    const normalizeLocationName = (value) => String(value || "").toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
+    const isRestroomLocationName = (value) => /\b(restroom|restrooms|bathroom|bathrooms|toilet|toilets)\b/.test(normalizeLocationName(value));
+    const stripRestroomSuffix = (value) => normalizeLocationName(value).replace(/\b(restroom|restrooms|bathroom|bathrooms|toilet|toilets)\b/g, "").replace(/\s+/g, " ").trim();
+    const alwaysLastLocationRank = (value) => { const normalized = normalizeLocationName(value); for (const [needle, rank] of ALWAYS_LAST_LOCATION_RANKS) { if (normalized.includes(needle)) return rank; } return -1; };
+    const isPrivateAdminLocation = (value) => { const normalized = normalizeLocationName(value); return normalized.includes("east admin") || normalized.includes("west admin"); };
+    const itemDisplayName = (item = {}) => String(item?.name || item?.location_name || "Assigned Area").trim();
+    const buildRestroomPairBases = (list = []) => {
+      const bases = new Set();
+      const plainBases = new Set();
+      const restroomBases = new Set();
+      for (const item of list) {
+        const name = itemDisplayName(item);
+        const base = stripRestroomSuffix(name);
+        if (!base) continue;
+        if (KNOWN_RESTROOM_EXHIBIT_BASES.has(base)) bases.add(base);
+        if (isRestroomLocationName(name)) restroomBases.add(base); else plainBases.add(base);
+      }
+      for (const base of plainBases) if (restroomBases.has(base)) bases.add(base);
+      return bases;
+    };
+    const itemSortMeta = (name, pairBases) => {
+      const base = stripRestroomSuffix(name) || normalizeLocationName(name);
+      const lastRank = alwaysLastLocationRank(name);
+      if (lastRank >= 0) return { category: 5, base, lastRank, restroomRank: isRestroomLocationName(name) ? 1 : 0, display: String(name || "") };
+      if (isPrivateAdminLocation(name)) return { category: 4, base, lastRank: -1, restroomRank: isRestroomLocationName(name) ? 1 : 0, display: String(name || "") };
+      if (pairBases.has(base)) return { category: 2, base, lastRank: -1, restroomRank: isRestroomLocationName(name) ? 1 : 0, display: String(name || "") };
+      if (isRestroomLocationName(name)) return { category: 1, base, lastRank: -1, restroomRank: 0, display: String(name || "") };
+      return { category: 3, base, lastRank: -1, restroomRank: 0, display: String(name || "") };
+    };
+    const compareScheduleItemNames = (aName, bName, pairBases) => {
+      const a = itemSortMeta(aName, pairBases);
+      const b = itemSortMeta(bName, pairBases);
+      if (a.category !== b.category) return a.category - b.category;
+      if (a.category === 5 && a.lastRank !== b.lastRank) return a.lastRank - b.lastRank;
+      if (a.base !== b.base) return a.base.localeCompare(b.base);
+      if (a.restroomRank !== b.restroomRank) return a.restroomRank - b.restroomRank;
+      return a.display.localeCompare(b.display);
+    };
+    const pairBases = buildRestroomPairBases(items);
+    const sortedItems = [...items].sort((a, b) => compareScheduleItemNames(itemDisplayName(a), itemDisplayName(b), pairBases));
+    const toMinutes = (value) => {
+      const match = String(value || "").trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+      if (!match) return -1;
+      let hours = Number(match[1]);
+      const minutes = Number(match[2]);
+      const meridiem = String(match[3] || "").toUpperCase();
+      if (meridiem === "PM" && hours !== 12) hours += 12;
+      if (meridiem === "AM" && hours === 12) hours = 0;
+      return hours * 60 + minutes;
+    };
+    const scheduleTitle = (() => {
+      const purposes = sortedItems.map((item) => normalizePurpose(item?.coverage_purpose || item?.purpose || item?.kind));
+      if (purposes.some((purpose) => purpose === "lunch_coverage")) return "Lunch Coverage";
+      if (purposes.some((purpose) => purpose === "late_coverage")) return "Afternoon Call Coverage";
+      if (purposes.some((purpose) => purpose === "restroom_upkeep")) return "Restroom Rebalance";
+      if (sortedItems.some((item) => toMinutes(item?.coverage_start) >= 585)) return "Restroom Rebalance";
+      if (data?.phase === "morning" || purposes.some((purpose) => purpose === "deep_clean")) return "Morning Full Clean Schedule";
+      return "Restroom Rebalance";
+    })();
+    const formatDate = (value) => {
+      if (!value) return "Unknown date";
+      const date = new Date(`${value}T12:00:00`);
+      return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+    };
+    const locationsHtml = sortedItems.length
+      ? `<section class="card"><h2>${htmlEscape(scheduleTitle)}</h2><ul>${sortedItems.map((item) => `<li>${htmlEscape(itemDisplayName(item))}</li>`).join("")}</ul></section>`
+      : `<section class="card"><div class="empty">${htmlEscape(data?.notice || "No assignments are currently listed.")}</div></section>`;
 
     return `<!doctype html>
 <html lang="en">
@@ -3200,38 +3249,29 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>My Schedule</title>
 <style>
-  :root { --teal:#0f4d57; --teal2:#0b3b43; --mint:#e8f4ef; --line:#cfe1db; --text:#173238; --muted:#63787d; --warn:#fff3cd; --warnline:#f0d98a; }
+  :root { --teal:#0f4d57; --teal2:#0b3b43; --line:#cfe1db; --text:#173238; --muted:#63787d; }
   * { box-sizing: border-box; }
   body { margin:0; font-family: system-ui, -apple-system, Segoe UI, sans-serif; background:#eef5f3; color:var(--text); }
   .top { background:linear-gradient(135deg,var(--teal),var(--teal2)); color:white; padding:22px 18px 26px; border-bottom-left-radius:24px; border-bottom-right-radius:24px; box-shadow:0 4px 16px rgba(0,0,0,.18); }
   .eyebrow { font-size:13px; opacity:.84; letter-spacing:.03em; text-transform:uppercase; }
   h1 { margin:6px 0 3px; font-size:30px; line-height:1.08; }
-  .shift { font-size:17px; opacity:.95; }
+  .date { font-size:17px; opacity:.95; }
   .wrap { max-width:720px; margin:0 auto; padding:16px; }
-  .notice { background:var(--warn); border:1px solid var(--warnline); border-radius:16px; padding:12px 14px; margin-bottom:14px; font-weight:650; }
   .card { background:white; border:1px solid var(--line); border-radius:20px; padding:16px; margin:14px 0; box-shadow:0 2px 10px rgba(20,60,70,.07); }
-  .card h2 { margin:0 0 10px; font-size:20px; color:var(--teal); }
-  .section-note { margin:0 0 12px; color:var(--muted); font-weight:650; line-height:1.35; }
+  .card h2 { margin:0 0 12px; font-size:20px; color:var(--teal); }
   ul { list-style:none; padding:0; margin:0; display:grid; gap:8px; }
-  li { padding:11px 12px; background:#f8fbfa; border:1px solid #e1ece8; border-radius:13px; font-weight:620; }
-  .item-name, .item-code { display:block; }
-  .item-code { margin-top:3px; color:var(--muted); font-size:12px; letter-spacing:.03em; text-transform:uppercase; }
+  li { padding:12px 14px; background:#f8fbfa; border:1px solid #e1ece8; border-radius:13px; font-weight:700; }
   .empty { color:var(--muted); font-weight:650; text-align:center; padding:8px; }
-  .meta { margin-top:14px; color:var(--muted); font-size:13px; text-align:center; }
-  .pill { display:inline-block; padding:5px 9px; border-radius:999px; background:rgba(255,255,255,.16); font-size:13px; margin-top:8px; }
 </style>
 </head>
 <body>
   <header class="top">
-    <div class="eyebrow">Custodial Scheduler</div>
-    <h1>${htmlEscape(employee.display_name || "My Schedule")}</h1>
-    <div class="shift">${htmlEscape(shift.start || "")} - ${htmlEscape(shift.end || "")}</div>
-    <div class="pill">${htmlEscape(data?.phase || "current")} • ${htmlEscape(data?.as_of_time || "")}</div>
+    <div class="eyebrow">Custodial Schedule</div>
+    <h1>${htmlEscape(data?.employee_name || employee.display_name || "My Schedule")}</h1>
+    <div class="date">${htmlEscape(formatDate(data?.service_date))}</div>
   </header>
   <main class="wrap">
-    ${data?.notice ? `<div class="notice">${htmlEscape(data.notice)}</div>` : ""}
-    ${sectionsHtml}
-    <div class="meta">${htmlEscape(data?.service_date || "")} • Employee code: ${htmlEscape(employee.employee_code || "")}</div>
+    ${locationsHtml}
   </main>
 </body>
 </html>`;

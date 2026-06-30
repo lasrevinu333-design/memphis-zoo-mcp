@@ -8,7 +8,9 @@ const source = fs.readFileSync(scheduleApiPath, "utf8");
 const openOwnerContractSqlPath = path.resolve("scripts/sql/check-scheduler-open-owner-contract.sql");
 const exceptionContractSqlPath = path.resolve("scripts/sql/check-scheduler-exception-contract.sql");
 const myScheduleSourceContractSqlPath = path.resolve("scripts/sql/check-my-schedule-source-contract.sql");
+const myScheduleLiveRebalanceContractSqlPath = path.resolve("scripts/sql/check-my-schedule-live-rebalance-contract.sql");
 const dailyMyScheduleMigrationPath = path.resolve("sql/2026-06-09_daily_assignment_my_schedule_page.sql");
+const liveMyScheduleRebalancePath = path.resolve("sql/2026-06-30_my_schedule_live_rebalance_handoff_start_fix.sql");
 const exceptionLunchGuardMigrationPath = path.resolve("sql/2026-06-10_scheduler_exception_lunch_guards.sql");
 const responseOnlyStaleLunchRepairPath = path.resolve("sql/2026-06-10_repair_response_only_stale_lunch_rows.sql");
 const restoreOpenOwnerRowsPath = path.resolve("sql/2026-06-10_restore_scheduler_open_owner_rows.sql");
@@ -60,6 +62,11 @@ const needed = [
   "isProtectedRestroomSource",
   "sqlQuote",
   "normalizeIdList",
+  "normalizeTextList",
+  "normalizeRouteFitRows",
+  "getRouteFitForRestroomMove",
+  "canUseRouteFitForRestroomMove",
+  "restroomMoveRouteScore",
   "normalizeRestroomRebalanceRow",
   "isRestroomRebalanceRosterEligible",
   "loadSpread",
@@ -85,6 +92,9 @@ const context = {
   RESTROOM_REBALANCE_TZ: "America/Chicago",
   RESTROOM_REBALANCE_EXCLUDED_EMPLOYEES: ["EMP002"],
   RESTROOM_REBALANCE_EXCLUDED_NAMES: ["michael mcwright"],
+  RESTROOM_REBALANCE_MAX_WALK_MINUTES: 12,
+  RESTROOM_REBALANCE_SEVERE_SPREAD: 4,
+  RESTROOM_REBALANCE_FLEX_HELPER_WALK_MINUTES: 6,
   MONTH_LOOKUP: {
     january: 1, jan: 1,
     february: 2, feb: 2,
@@ -225,6 +235,29 @@ assert.match(myScheduleSourceContractSql, /sch_employee_my_schedule_page/i, "My 
 assert.match(myScheduleSourceContractSql, /daily_schedule_assignments/i, "My Schedule source contract must compare against daily assignments");
 assert.match(myScheduleSourceContractSql, /my_schedule_missing_michael_late_coverage/i, "My Schedule source contract must catch missing Michael late coverage");
 assert.match(myScheduleSourceContractSql, /my_schedule_leaked_unowned_morning_item/i, "My Schedule source contract must catch unowned item leakage");
+assert.equal(fs.existsSync(myScheduleLiveRebalanceContractSqlPath), true, "current-now live rebalance SQL contract probe must exist");
+const myScheduleLiveRebalanceContractSql = fs.readFileSync(myScheduleLiveRebalanceContractSqlPath, "utf8");
+assert.match(myScheduleLiveRebalanceContractSql.trimStart(), /^select\s+\*/i, "live rebalance contract must start with SELECT for the Memphis read-only SQL layer");
+assert.match(myScheduleLiveRebalanceContractSql, /first_clockout/i, "live rebalance contract must probe the first clock-out cohort");
+assert.match(myScheduleLiveRebalanceContractSql, /second_clockout/i, "live rebalance contract must probe the second clock-out cohort");
+assert.match(myScheduleLiveRebalanceContractSql, /single_remaining/i, "live rebalance contract must probe the single-remaining-employee scenario");
+assert.match(myScheduleLiveRebalanceContractSql, /after_final_clockout/i, "live rebalance contract must probe the post-shift empty-state scenario");
+assert.match(myScheduleLiveRebalanceContractSql, /my_schedule_clocked_out_employee_still_has_items/i, "live rebalance contract must catch clocked-out employees still showing items");
+assert.match(myScheduleLiveRebalanceContractSql, /my_schedule_missing_carry_forward_group/i, "live rebalance contract must catch missing carry-forward coverage");
+assert.match(myScheduleLiveRebalanceContractSql, /my_schedule_duplicate_carry_forward_group/i, "live rebalance contract must catch duplicate carry-forward ownership");
+assert.match(myScheduleLiveRebalanceContractSql, /my_schedule_after_final_clockout_still_has_items/i, "live rebalance contract must catch fabricated owners after the final shift ends");
+assert.match(myScheduleLiveRebalanceContractSql, /my_schedule_carry_forward_start_time_drift/i, "live rebalance contract must catch drifting carry-forward start times");
+assert.match(myScheduleLiveRebalanceContractSql, /owner_shift_end/i, "live rebalance contract must derive expected handoff start times from the source owner shift end");
+assert.equal(fs.existsSync(liveMyScheduleRebalancePath), true, "current-now My Schedule rebalance migration must exist");
+const liveMyScheduleRebalanceSql = fs.readFileSync(liveMyScheduleRebalancePath, "utf8");
+assert.match(liveMyScheduleRebalanceSql, /create or replace function public\.sch_employee_my_schedule_page/i, "current-now My Schedule rebalance migration must replace sch_employee_my_schedule_page");
+assert.match(liveMyScheduleRebalanceSql, /dsa\.coverage_start <= v_local_time\s+and dsa\.coverage_end > v_local_time/i, "current-now My Schedule rebalance must filter direct rows to items active right now");
+assert.match(liveMyScheduleRebalanceSql, /sch_get_coverage_candidates\(p_service_date, rec\.location_group_id, v_local_time, v_close_time\)/i, "current-now My Schedule rebalance must use coverage candidate scoring for carry-forward ownership");
+assert.match(liveMyScheduleRebalanceSql, /owns all carry-forward areas/i, "current-now My Schedule rebalance must document the single-remaining-employee fallback rule");
+assert.match(liveMyScheduleRebalanceSql, /if v_active_count = 1 then[\s\S]*v_active_employee_ids\[1\]/i, "current-now My Schedule rebalance must implement the single-remaining-employee fallback branch");
+assert.match(liveMyScheduleRebalanceSql, /if v_local_time >= v_cutover and v_local_time < v_close_time and v_active_count > 0 and v_employee_active_now then/i, "current-now My Schedule rebalance must only fabricate carry-forward ownership while someone is actually still on shift");
+assert.match(liveMyScheduleRebalanceSql, /owner_shift_end/i, "current-now My Schedule rebalance must track the source owner's shift end for stable carry-forward start times");
+assert.match(liveMyScheduleRebalanceSql, /'coverage_start',\s*to_char\(greatest\(v_cutover,\s*coalesce\(rec\.owner_shift_end,\s*v_local_time\)\),\s*'HH12:MI AM'\)/i, "current-now My Schedule rebalance must pin carry-forward start times to the clock-out handoff, not the page refresh minute");
 
 const manualAbsencePublishStart = source.indexOf('router.post("/manual-absences/publish"');
 const manualAbsencePublishEnd = source.indexOf('router.post("/manual-absences/return"', manualAbsencePublishStart);
