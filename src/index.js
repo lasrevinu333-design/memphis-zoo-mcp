@@ -189,6 +189,7 @@ const ALLOWED_CORS_ORIGINS = String(process.env.ALLOWED_CORS_ORIGINS || "")
   .split(",").map((s) => s.trim()).filter(Boolean);
 const DEFAULT_CORS_ORIGINS = [
   "https://memphis-zoo-mcp.onrender.com",
+  "https://lasrevinu333-design.github.io",
   "https://nousresearch.github.io",
 ];
 const CORS_ORIGINS_SET = new Set([...ALLOWED_CORS_ORIGINS, ...DEFAULT_CORS_ORIGINS]);
