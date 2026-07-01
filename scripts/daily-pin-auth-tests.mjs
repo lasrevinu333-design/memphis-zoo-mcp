@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import express from "express";
 import {
@@ -188,18 +188,21 @@ await withServer(fallbackMcpApp, async (baseUrl) => {
 
 const backendIndex = readFileSync(resolve("src/index.js"), "utf8");
 const diagnostics = readFileSync(resolve("src/mcp-schema-bootstrap.js"), "utf8");
-const eventsAdminHtml = readFileSync(resolve("../Engine/events-admin.html"), "utf8");
-const eventsBoardHtml = readFileSync(resolve("../Engine/events.html"), "utf8");
-const managerHubHtml = readFileSync(resolve("../Engine/admin.html"), "utf8");
-const opsManagerHubHtml = readFileSync(resolve("../Engine/start_page1.html"), "utf8");
+const engineRoot = [resolve("../Engine"), "/home/eric/Projects/memphis-zoo/Engine"].find((candidate) => existsSync(resolve(candidate, "memphis-auth.js")));
+assert.ok(engineRoot, "Engine HTML fixture directory should exist next to the repo or in the Memphis Zoo project mirror");
+const readEngineFile = (name) => readFileSync(resolve(engineRoot, name), "utf8");
+const eventsAdminHtml = readEngineFile("events-admin.html");
+const eventsBoardHtml = readEngineFile("events.html");
+const managerHubHtml = readEngineFile("admin.html");
+const opsManagerHubHtml = readEngineFile("start_page1.html");
 const managerChangePages = [
-  ["dashboard.html", readFileSync(resolve("../Engine/dashboard.html"), "utf8")],
-  ["schedule-simple.html", readFileSync(resolve("../Engine/schedule-simple.html"), "utf8")],
-  ["schedule.html", readFileSync(resolve("../Engine/schedule.html"), "utf8")],
+  ["dashboard.html", readEngineFile("dashboard.html")],
+  ["schedule-simple.html", readEngineFile("schedule-simple.html")],
+  ["schedule.html", readEngineFile("schedule.html")],
 ];
-const messagesHtml = readFileSync(resolve("../Engine/messages.html"), "utf8");
-const threadHtml = readFileSync(resolve("../Engine/thread.html"), "utf8");
-const authHelper = readFileSync(resolve("../Engine/memphis-auth.js"), "utf8");
+const messagesHtml = readEngineFile("messages.html");
+const threadHtml = readEngineFile("thread.html");
+const authHelper = readEngineFile("memphis-auth.js");
 
 assert.doesNotMatch(backendIndex, /allowWithoutPin|function\s+requireAdminApiAuth|requireAnyStaffAuth/);
 assert.match(backendIndex, /app\.use\("\/dashboard-api"[\s\S]*next\(\); \}\);/);
@@ -239,9 +242,9 @@ assert.doesNotMatch(backendIndex, /app\.use\("\/dashboard-api\/events",\s*requir
 for (const [pageName, pageHtml] of managerChangePages) {
   assert.match(pageHtml, /requireOpsManagerSession\(\{interactive:false,redirect:true\}\)/, `${pageName} should redirect to Manager Hub before operational changes`);
 }
-assert.match(readFileSync(resolve("../Engine/dashboard.html"), "utf8"), /opsManagerAuthHeaders\(\)/);
-assert.match(readFileSync(resolve("../Engine/schedule.html"), "utf8"), /opsManagerAuthHeaders\(\)/);
-assert.match(readFileSync(resolve("../Engine/schedule-simple.html"), "utf8"), /opsManagerAuthHeaders\(\)/);
+assert.match(readEngineFile("dashboard.html"), /opsManagerAuthHeaders\(\)/);
+assert.match(readEngineFile("schedule.html"), /opsManagerAuthHeaders\(\)/);
+assert.match(readEngineFile("schedule-simple.html"), /opsManagerAuthHeaders\(\)/);
 assert.doesNotMatch(messagesHtml, /requireOpsManagerSession\(\{interactive:false,redirect:true\}\)/);
 assert.doesNotMatch(threadHtml, /requireOpsManagerSession\(\{interactive:false,redirect:true\}\)/);
 assert.match(messagesHtml, /optionalManagerAuthHeaders\(\)/);

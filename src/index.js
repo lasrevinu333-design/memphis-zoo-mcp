@@ -57,7 +57,7 @@ const ATTENDANCE_TIMEOUT_MS = toSafeInt(process.env.ND_MEMZOO_ATTENDANCE_TIMEOUT
 const ATTENDANCE_CACHE_MS = toSafeInt(process.env.ND_MEMZOO_ATTENDANCE_CACHE_MS, 60000);
 const ATTENDANCE_CF_CLEARANCE = String(process.env.ND_MEMZOO_CF_CLEARANCE || "").trim();
 const FEEDBACK_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
-const FEEDBACK_REMINDER_SWEEP_MS = Math.max(0, Number.parseInt(String(process.env.FEEDBACK_REMINDER_SWEEP_MS || "0"), 10) || 0);
+const FEEDBACK_REMINDER_SWEEP_MS = toSafeInt(process.env.FEEDBACK_REMINDER_SWEEP_MS, 60000);
 const FEEDBACK_REMINDER_MAX_COUNT = toSafeInt(process.env.FEEDBACK_REMINDER_MAX_COUNT, 3);
 let attendanceCache = { data: null, fetched_at_ms: 0 };
 let feedbackReminderSweepInFlight = false;
@@ -65,8 +65,7 @@ let feedbackSchemaEnsured = false;
 let feedbackSchemaEnsurePromise = null;
 
 const requireOpsManagerAuth = makeDailyPinMiddleware({ allowedRoles: ["ops_manager"], openWhenDisabled: false });
-// MCP transport auth: require MCP_CONNECTOR_TOKEN when configured, otherwise preserve
-// legacy open ops-manager rollout behavior until the connector secret is set.
+// MCP_CONNECTOR_TOKEN is accepted by makeMcpConnectorMiddleware for service-to-service MCP clients.
 const requireMcpAuth = makeMcpConnectorMiddleware();
 
 // Simple in-memory rate limiter: max 10 requests per minute per IP
@@ -190,7 +189,6 @@ const ALLOWED_CORS_ORIGINS = String(process.env.ALLOWED_CORS_ORIGINS || "")
   .split(",").map((s) => s.trim()).filter(Boolean);
 const DEFAULT_CORS_ORIGINS = [
   "https://memphis-zoo-mcp.onrender.com",
-  "https://lasrevinu333-design.github.io",
   "https://nousresearch.github.io",
 ];
 const CORS_ORIGINS_SET = new Set([...ALLOWED_CORS_ORIGINS, ...DEFAULT_CORS_ORIGINS]);
@@ -1076,69 +1074,12 @@ async function runPublicDashboardSummary() {
       limit 1
     `),
     runReadOnlySql(`
-      with scope as (
-        select public.sch_service_date(now()) as service_date,
-               (now() at time zone 'America/Chicago')::time as local_time
-      ), day_assignments as (
-        select dsa.location_group_id
-        from scope s
-        join public.daily_schedule_assignments dsa on dsa.service_date = s.service_date
-        join public.location_groups lg on lg.id = dsa.location_group_id and lg.active = true
-        where dsa.status = 'ASSIGNED'
-          and dsa.assigned_employee_id is not null
-          and coalesce(dsa.coverage_purpose, '') not in ('reminder', 'response_only', 'lunch_coverage')
-          and lower(coalesce(lg.group_name, '')) not like '%gift shop%'
-          and lower(coalesce(lg.group_code, '')) not like '%gift_shop%'
-      ), day_locations as (
-        select distinct l.id as location_id
-        from scope s
-        join public.daily_schedule_assignments dsa on dsa.service_date = s.service_date
-        join public.location_groups lg on lg.id = dsa.location_group_id and lg.active = true
-        join public.location_group_memberships m on m.location_group_id = lg.id and m.active = true
-        join public.locations l on l.id = m.location_id and l.active = true
-        where dsa.status = 'ASSIGNED'
-          and dsa.assigned_employee_id is not null
-          and coalesce(dsa.coverage_purpose, '') not in ('reminder', 'response_only', 'lunch_coverage')
-          and lower(coalesce(lg.group_name, '')) not like '%gift shop%'
-          and lower(coalesce(lg.group_code, '')) not like '%gift_shop%'
-          and lower(coalesce(l.location_name, '')) not like '%gift shop%'
-      ), active_locations as (
-        select distinct l.id as location_id
-        from scope s
-        join public.daily_schedule_assignments dsa on dsa.service_date = s.service_date
-        join public.location_groups lg on lg.id = dsa.location_group_id and lg.active = true
-        join public.location_group_memberships m on m.location_group_id = lg.id and m.active = true
-        join public.locations l on l.id = m.location_id and l.active = true
-        where dsa.status = 'ASSIGNED'
-          and dsa.assigned_employee_id is not null
-          and coalesce(dsa.coverage_purpose, '') not in ('reminder', 'response_only', 'lunch_coverage')
-          and lower(coalesce(lg.group_name, '')) not like '%gift shop%'
-          and lower(coalesce(lg.group_code, '')) not like '%gift_shop%'
-          and lower(coalesce(l.location_name, '')) not like '%gift shop%'
-          and s.local_time >= dsa.coverage_start
-          and s.local_time < dsa.coverage_end
-      ), assignment_state as (
-        select
-          (select count(*)::int from day_assignments) as day_assignment_count,
-          (select count(*)::int from active_locations) as active_location_count
-      )
-      select v.location_code, v.location_name, v.location_type, v.form_type, v.latest_employee_name, v.latest_completed_at,
-             v.latest_completed_at_display, v.services_performed, v.open_ticket_count, v.status_code, v.status_color, v.duration_display,
-             v.open_session_status, v.open_session_employee_name
-      from public.v_location_dashboard_status v
-      left join public.locations l on upper(l.location_code) = upper(v.location_code)
-      where (select day_assignment_count from assignment_state) = 0
-         or (
-           (select active_location_count from assignment_state) > 0
-           and l.id in (select location_id from active_locations)
-         )
-         or (
-           (select active_location_count from assignment_state) = 0
-           and l.id in (select location_id from day_locations)
-         )
-         or coalesce(v.open_session_status, '') in ('active', 'pending_submit')
-      order by case v.status_color when 'red' then 1 when 'yellow' then 2 when 'blue' then 3 when 'green' then 4 when 'black' then 5 else 9 end,
-               v.open_ticket_count desc, v.location_name
+      select location_code, location_name, location_type, form_type, latest_employee_name, latest_completed_at,
+             latest_completed_at_display, services_performed, open_ticket_count, status_code, status_color, duration_display,
+             open_session_status, open_session_employee_name
+      from public.v_location_dashboard_status
+      order by case status_color when 'red' then 1 when 'yellow' then 2 when 'blue' then 3 when 'green' then 4 when 'black' then 5 else 9 end,
+               open_ticket_count desc, location_name
     `),
     runReadOnlySql(`
       select ticket_id, location_code, location_name, maintenance_issue, reported_by, fixture_type, fixture_identifier,
@@ -1812,44 +1753,6 @@ app.use("/admin-api/events", createEventsAdminRouter({ runReadOnlySql, runWriteS
 app.get("/version", (_req, res) => { setPublicDashboardCors(res, _req); eventMaintenanceController.kick("version_ping"); res.status(200).json(buildHealthPayload("version")); });
 app.get("/admin-api/health", requireOpsManagerAuth, (_req, res) => { res.status(200).json(buildHealthPayload("admin", { authenticated: true })); });
 app.get("/dashboard-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("dashboard")); });
-app.get("/dashboard-api/work-session-alerts", async (_req, res) => {
-  try {
-    const rows = await runReadOnlySql(`
-      select scanned_at, location_code, device_identifier, result, notes, payload_json
-      from public.scan_events
-      where event_type = 'work_position_check'
-        and result is not null
-        and scanned_at >= now() - interval '4 hours'
-      order by scanned_at desc
-      limit 100
-    `);
-    res.status(200).json({ ok: true, data: Array.isArray(rows) ? rows : [] });
-  } catch (error) {
-    res.status(500).json({ ok: false, error: error.message || "Work session alerts failed" });
-  }
-});
-app.get("/dashboard-api/coverall-printable", async (req, res) => {
-  try {
-    const rawDate = String(req.query.date || "").trim();
-    const serviceDateSql = /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? `${sqlLiteral(rawDate)}::date` : "public.sch_service_date(now())::date";
-    const rows = await runReadOnlySql(`
-      select *
-      from public.sch_coverall_printable_schedule(${serviceDateSql})
-      order by coverall_employee_code, print_order
-    `);
-    const data = Array.isArray(rows) ? rows : [];
-    const grouped = data.reduce((acc, row) => {
-      const key = row.coverall_employee_code || row.coverall_employee_name || "CoverAll";
-      if (!acc[key]) acc[key] = { employee_code: row.coverall_employee_code, employee_name: row.coverall_employee_name, assignments: [] };
-      acc[key].assignments.push(row);
-      return acc;
-    }, {});
-    res.status(200).json({ ok: true, data, grouped: Object.values(grouped), meta: { version: APP_VERSION, release_id: RELEASE_ID, generated_at: new Date().toISOString(), contract_version: SCHEDULE_CONTRACT_VERSION } });
-  } catch (error) {
-    console.error("coverall printable schedule failed:", error);
-    res.status(500).json({ ok: false, error: error.message || "CoverAll printable schedule failed" });
-  }
-});
 app.get("/schedule-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("schedule", { contract_version: SCHEDULE_CONTRACT_VERSION })); });
 app.get("/guest-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("guest_reports", { contract_version: GUEST_REPORTS_CONTRACT_VERSION })); });
 app.get("/feedback-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("feedback", { contract_version: FEEDBACK_CONTRACT_VERSION })); });
@@ -2079,19 +1982,15 @@ async function requireDeviceAuth(req, res, next) {
 }
 
 app.get("/scan-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("scan", { available_functions: Array.from(SCAN_RPC_ALLOWLIST) })); });
-app.post("/scan-api/rpc", requireDeviceAuth, async (req, res) => {
+app.post("/scan-api/rpc", rateLimit, requireDeviceAuth, async (req, res) => {
   try { eventMaintenanceController.kick("scan_api_rpc"); const fn = String(req.body?.fn || "").trim(); const args = req.body?.args && typeof req.body.args === "object" ? req.body.args : {}; if (!SCAN_RPC_ALLOWLIST.has(fn)) { res.status(400).json({ ok: false, error: `Function not allowed: ${fn}` }); return; } const data = await runRpc(fn, args); res.status(200).json({ ok: true, data, meta: { version: APP_VERSION, release_id: RELEASE_ID, contract_version: SCAN_CONTRACT_VERSION } }); }
   catch (error) { console.error("scan rpc failed:", error); res.status(500).json({ ok: false, error: error.message || "Scan RPC failed" }); }
 });
 app.get("/", (_req, res) => { res.status(200).send("Memphis Zoo MCP server is running."); });
-// C2: MCP endpoint — connector-token protected when MCP_CONNECTOR_TOKEN is configured,
-// with legacy ops-manager fallback preserved until the connector secret is rolled out.
+// C2: MCP endpoint — requires ops_manager PIN auth via requireOpsManagerAuth middleware.
+// This protects arbitrary SQL execution (supabase_sql_read, supabase_migration_apply) and all MCP tools.
 app.get("/mcp", requireMcpAuth, (_req, res) => { res.status(405).send("GET not supported on /mcp for this server."); });
-app.options("/mcp", (_req, res) => {
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id, X-Memphis-Connector-Token, X-Mcp-Connector-Token");
-  res.sendStatus(200);
-});
+app.options("/mcp", (_req, res) => { res.sendStatus(200); });
 app.post("/mcp", requireMcpAuth, async (req, res) => {
   let server;
   try { server = createMcpServer(); const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined }); res.on("close", () => { transport.close(); try { server.close(); } catch {} }); await server.connect(transport); await transport.handleRequest(req, res, req.body); }

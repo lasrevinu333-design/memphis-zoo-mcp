@@ -6,7 +6,7 @@ import { createMemphisResponder } from "./services/index.js";
 export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPayload, appVersion, releaseId, contractVersion }) {
   const router = express.Router();
   const memphisResponder = createMemphisResponder({ runReadOnlySql, runRpc });
-  const requireOpsManagerAuth = makeDailyPinMiddleware({ allowedRoles: ["ops_manager"], openWhenDisabled: true });
+  const requireOpsManagerAuth = makeDailyPinMiddleware({ allowedRoles: ["ops_manager"], openWhenDisabled: false });
 
   // Device-based auth is mandatory for all messaging endpoints.
   // If no device_id is provided, return 401.
@@ -32,7 +32,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       });
   }
   const MANAGER_OVERVIEW_DEVICE_IDS = new Set(
-    String((process.env.MANAGER_OVERVIEW_DEVICE_IDS || "") + ",1e74fe4c-dc20b3b9,KIOSK_01,KIOSK_1,ERICH_PC,ERICH_DESKTOP,MANAGER_PC,eric-Precision-Tower-3620,4a70537b06dd45bb9297fe2b790d3777,007f0101")
+    String(process.env.MANAGER_OVERVIEW_DEVICE_IDS || "1e74fe4c-dc20b3b9,KIOSK_01,KIOSK_1")
       .split(",").map((s) => s.trim()).filter(Boolean)
   );
   const OFF_SHIFT_NOTIFICATION_OVERRIDE_SETTING_KEY = "off_shift_employee_notifications_override_enabled";
@@ -52,34 +52,14 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
   }
 
   function isManagerOverviewDevice(deviceId = "") {
-    const normalized = String(deviceId || "").trim().toLowerCase();
-    if (!normalized) return false;
-    return Array.from(MANAGER_OVERVIEW_DEVICE_IDS).some((id) => String(id || "").trim().toLowerCase() === normalized);
+    return MANAGER_OVERVIEW_DEVICE_IDS.has(String(deviceId || "").trim());
   }
 
   async function getViewerIdentity(deviceId = "") {
     const normalizedDeviceId = String(deviceId || "").trim();
     if (!normalizedDeviceId) return null;
     const rows = await runReadOnlySql(`select * from public.msg_get_user_by_device('${esc(normalizedDeviceId)}')`);
-    if (Array.isArray(rows) && rows.length) return rows[0];
-    if (!isManagerOverviewDevice(normalizedDeviceId)) return null;
-    const fallbackRows = await runReadOnlySql(`
-      select
-        id as msg_user_id,
-        id as user_id,
-        employee_id,
-        display_name,
-        role,
-        true as is_active,
-        '${esc(normalizedDeviceId)}'::text as device_identifier
-      from public.msg_users
-      where coalesce(is_active, active, true) = true
-        and lower(coalesce(role, '')) in ('manager', 'ops', 'ops_manager', 'operations_manager')
-      order by case when lower(coalesce(display_name, '')) like '%eric%' or lower(coalesce(display_name, '')) like '%erich%' then 0 else 1 end,
-               display_name
-      limit 1
-    `);
-    return Array.isArray(fallbackRows) && fallbackRows.length ? fallbackRows[0] : null;
+    return Array.isArray(rows) && rows.length ? rows[0] : null;
   }
 
   async function resolveViewerContext({ userId = "", deviceId = "" } = {}) {
@@ -90,7 +70,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     const effectiveUserId = String(identity?.msg_user_id || normalizedUserId || "").trim();
     const isManagerOverview = Boolean(
       identity
-      && ("manager,ops,ops_" + "manager,operations_" + "manager,ops manager,operations manager").split(",").includes(String(identity.role || "").trim().toLowerCase())
+      && String(identity.role || "").trim().toLowerCase() === "manager"
       && isManagerOverviewDevice(normalizedDeviceId)
     );
     if (!effectiveUserId) throw new Error("Could not resolve user for this device. Ensure the device is assigned to a messaging user.");
@@ -134,6 +114,216 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
 
   function messagingMeta(extra = {}) {
     return { version: appVersion, release_id: releaseId, contract_version: contractVersion, ...extra };
+  }
+
+  async function auditQuery(name, sql) {
+    try {
+      const rows = await runReadOnlySql(sql);
+      return { name, ok: true, rows: Array.isArray(rows) ? rows : [] };
+    } catch (error) {
+      return { name, ok: false, error: error?.message || String(error || "Query failed"), rows: [] };
+    }
+  }
+
+  function auditFirst(result, fallback = {}) {
+    return result?.ok && Array.isArray(result.rows) && result.rows.length ? result.rows[0] : fallback;
+  }
+
+  function numberValue(value, fallback = 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+
+  function formatCount(value) {
+    return Number(numberValue(value)).toLocaleString("en-US");
+  }
+
+  function formatAgeMinutes(minutes) {
+    const value = numberValue(minutes, null);
+    if (value == null) return "unknown age";
+    if (value < 60) return `${Math.round(value)} min old`;
+    if (value < 1440) return `${(value / 60).toFixed(1)} hr old`;
+    return `${(value / 1440).toFixed(1)} days old`;
+  }
+
+  function checkStatus(condition, warnCondition = false) {
+    if (condition) return "bad";
+    if (warnCondition) return "warn";
+    return "ok";
+  }
+
+  function summarizeAdminAudit({ prompt = "", auth = {}, queries = {}, memphis = {} } = {}) {
+    const dashboard = auditFirst(queries.dashboard);
+    const attendance = auditFirst(queries.attendance);
+    const deviceDrift = auditFirst(queries.deviceDrift);
+    const messageAging = auditFirst(queries.messageAging);
+    const scheduleStats = auditFirst(queries.scheduleStats);
+    const latestRuns = queries.latestScheduleRuns?.rows || [];
+    const driftRows = queries.deviceDriftRows?.rows || [];
+    const attentionRows = queries.attentionRows?.rows || [];
+    const openSegments = queries.openSegments?.rows || [];
+
+    const checks = [
+      {
+        area: "Access gate",
+        status: auth?.role === "ops_manager" ? "ok" : "bad",
+        summary: auth?.role === "ops_manager"
+          ? "Ops Manager session verified before running the console."
+          : "Console request did not resolve an Ops Manager session.",
+      },
+      {
+        area: "Change control",
+        status: "ok",
+        summary: "This audit route is read-only: it only runs SELECT checks and returns recommendations. It does not publish schedules, write messages, clean data, or change configuration.",
+      },
+      {
+        area: "Gemini/Memphis model",
+        status: memphis.gemini_configured ? "ok" : "warn",
+        summary: memphis.gemini_configured
+          ? `${memphis.memphis_model || "Gemini"} configured via ${memphis.gemini_key_source || "configured key"}.`
+          : "Gemini API key is not configured; local/read-only audit checks still run.",
+      },
+      {
+        area: "Attendance freshness",
+        status: checkStatus(numberValue(attendance.age_minutes, 99999) > 180, numberValue(attendance.age_minutes, 99999) > 60),
+        summary: attendance.updated_at
+          ? `Attendance is ${formatAgeMinutes(attendance.age_minutes)}; current count ${formatCount(attendance.attendance)}; source ${attendance.source || "unknown"}.`
+          : "No current attendance row was found.",
+      },
+      {
+        area: "Device / employee drift",
+        status: checkStatus(numberValue(deviceDrift.employee_mismatch_count) > 0 || numberValue(deviceDrift.missing_messenger_assignment_count) > 0, numberValue(deviceDrift.inactive_or_missing_user_count) > 0),
+        summary: `${formatCount(deviceDrift.active_device_count)} active devices; ${formatCount(deviceDrift.missing_messenger_assignment_count)} missing messenger assignment; ${formatCount(deviceDrift.employee_mismatch_count)} employee mismatches; ${formatCount(deviceDrift.inactive_or_missing_user_count)} inactive/missing messenger users.`,
+      },
+      {
+        area: "Old message data",
+        status: checkStatus(false, numberValue(messageAging.older_than_90d_count) > 1000),
+        summary: `${formatCount(messageAging.total_message_count)} stored messages; ${formatCount(messageAging.older_than_90d_count)} older than 90 days; oldest ${messageAging.oldest_message_at || "unknown"}.`,
+      },
+      {
+        area: "Schedule operations",
+        status: checkStatus(numberValue(scheduleStats.error_run_count) > 0 || numberValue(scheduleStats.hard_violation_run_count) > 0, numberValue(scheduleStats.open_required_run_count) > 0),
+        summary: `${formatCount(scheduleStats.run_count_14d)} schedule runs in 14 days; ${formatCount(scheduleStats.error_run_count)} errors; ${formatCount(scheduleStats.hard_violation_run_count)} with hard violations; ${formatCount(scheduleStats.open_required_run_count)} with open required segments.`,
+      },
+      {
+        area: "Dashboard attention",
+        status: checkStatus(numberValue(dashboard.overdue_locations) > 0, numberValue(dashboard.due_soon_locations) > 0 || numberValue(dashboard.open_ticket_count) > 0),
+        summary: `Dashboard has ${formatCount(dashboard.open_ticket_count)} open tickets, ${formatCount(dashboard.overdue_locations)} overdue locations, ${formatCount(dashboard.due_soon_locations)} due soon.`,
+      },
+    ];
+
+    const worst = checks.some((item) => item.status === "bad") ? "bad" : (checks.some((item) => item.status === "warn") ? "warn" : "ok");
+    const recommendations = [];
+    if (numberValue(deviceDrift.employee_mismatch_count) > 0 || numberValue(deviceDrift.missing_messenger_assignment_count) > 0) recommendations.push("Review the listed device drift rows before changing device assignments. Employee-specific fields may differ; everything else should be uniform by fleet policy.");
+    if (numberValue(attendance.age_minutes, 0) > 60) recommendations.push("Check the attendance pusher service if the attendance row is older than one hour during operating hours.");
+    if (numberValue(messageAging.older_than_90d_count) > 1000) recommendations.push("Plan an admin-approved retention/archive job for old Messenger rows; do not delete from the console without approval.");
+    if (numberValue(scheduleStats.error_run_count) > 0) recommendations.push("Inspect the latest schedule_generation_runs errors before publishing any schedule changes.");
+    if (!recommendations.length) recommendations.push("No immediate admin action required from these read-only checks.");
+
+    const lines = [
+      `Read-only Gemini Console audit: ${worst.toUpperCase()}`,
+      prompt ? `Prompt: ${prompt}` : "Prompt: full upkeep audit",
+      "",
+      ...checks.map((item) => `${item.status.toUpperCase()} · ${item.area}: ${item.summary}`),
+      "",
+      "Top attention rows:",
+      attentionRows.length ? attentionRows.slice(0, 8).map((row) => `- ${row.location_name || row.location_code}: ${row.status_code || "status?"}, ${formatCount(row.open_ticket_count)} tickets, session ${row.open_session_status || "—"}`).join("\n") : "- None returned.",
+      "",
+      "Device drift examples:",
+      driftRows.length ? driftRows.slice(0, 8).map((row) => `- ${row.device_id}: device employee=${row.device_employee_name || "—"}; messenger user=${row.msg_display_name || "—"}; issue=${row.issue || "review"}`).join("\n") : "- No drift examples returned.",
+      "",
+      "Open schedule segments:",
+      openSegments.length ? openSegments.slice(0, 8).map((row) => `- ${row.group_name || row.group_code}: ${row.coverage_start || "—"}-${row.coverage_end || "—"} (${row.reason_open || "open"})`).join("\n") : "- None returned.",
+      "",
+      "Latest schedule runs:",
+      latestRuns.length ? latestRuns.slice(0, 5).map((row) => `- ${row.service_date}: ${row.status}; hard=${formatCount(row.hard_violation_count)} open=${formatCount(row.open_required_count)}; updated=${row.updated_at || "—"}${row.error_message ? `; error=${row.error_message}` : ""}`).join("\n") : "- None returned.",
+      "",
+      "Recommendations:",
+      ...recommendations.map((item) => `- ${item}`),
+      "",
+      "Change control: this console can recommend upkeep only. Any fix/apply/cleanup/publish path must require an Ops Manager/admin-approved action outside this read-only audit route."
+    ];
+
+    return { status: worst, checks, recommendations, report: lines.join("\n"), details: { dashboard, attendance, deviceDrift, messageAging, scheduleStats, attentionRows, driftRows, openSegments, latestScheduleRuns: latestRuns } };
+  }
+
+  async function runGeminiAdminAudit({ prompt = "", auth = null } = {}) {
+    const memphis = getGeminiDiagnosticsForMessaging();
+    const results = await Promise.all([
+      auditQuery("dashboard", `select * from public.v_admin_health_snapshot order by snapshot_at desc limit 1`),
+      auditQuery("attendance", `select attendance, planned, last_year, yesterday, yesterday_plan, source, fetched_at, updated_at, extract(epoch from (now() - coalesce(updated_at, fetched_at))) / 60 as age_minutes from public.current_attendance_state where id = 1 limit 1`),
+      auditQuery("deviceDrift", `
+        select
+          count(*) as active_device_count,
+          count(*) filter (where mda.id is null) as missing_messenger_assignment_count,
+          count(*) filter (where mda.id is not null and mu.id is null) as inactive_or_missing_user_count,
+          count(*) filter (where d.assigned_employee_id is not null and mu.employee_id is not null and d.assigned_employee_id is distinct from mu.employee_id) as employee_mismatch_count,
+          count(*) filter (where d.last_seen_at is null or d.last_seen_at < now() - interval '7 days') as stale_seen_count
+        from public.devices d
+        left join lateral (
+          select * from public.msg_device_assignments mda
+          where mda.device_identifier = d.device_id and mda.is_active = true
+          order by mda.updated_at desc nulls last, mda.created_at desc nulls last
+          limit 1
+        ) mda on true
+        left join public.msg_users mu on mu.id = mda.msg_user_id and coalesce(mu.is_active, mu.active, true) = true
+        where d.active = true
+      `),
+      auditQuery("deviceDriftRows", `
+        select * from (
+          select
+            d.device_id,
+            d.device_name,
+            de.display_name as device_employee_name,
+            mu.display_name as msg_display_name,
+            me.display_name as msg_employee_name,
+            d.last_seen_at,
+            case
+              when mda.id is null then 'missing_messenger_assignment'
+              when mu.id is null then 'inactive_or_missing_msg_user'
+              when d.assigned_employee_id is not null and mu.employee_id is not null and d.assigned_employee_id is distinct from mu.employee_id then 'employee_mismatch'
+              when d.last_seen_at is null or d.last_seen_at < now() - interval '7 days' then 'stale_last_seen'
+              else ''
+            end as issue
+          from public.devices d
+          left join public.employees de on de.id = d.assigned_employee_id
+          left join lateral (
+            select * from public.msg_device_assignments mda
+            where mda.device_identifier = d.device_id and mda.is_active = true
+            order by mda.updated_at desc nulls last, mda.created_at desc nulls last
+            limit 1
+          ) mda on true
+          left join public.msg_users mu on mu.id = mda.msg_user_id and coalesce(mu.is_active, mu.active, true) = true
+          left join public.employees me on me.id = mu.employee_id
+          where d.active = true
+        ) q
+        where issue <> ''
+        order by issue, device_id
+        limit 12
+      `),
+      auditQuery("messageAging", `select count(*) as total_message_count, count(*) filter (where created_at < now() - interval '90 days') as older_than_90d_count, count(*) filter (where is_deleted = true) as deleted_message_count, min(created_at) as oldest_message_at, max(created_at) as newest_message_at from public.msg_messages`),
+      auditQuery("scheduleStats", `select count(*) as run_count_14d, count(*) filter (where status ilike '%error%' or error_message is not null) as error_run_count, count(*) filter (where coalesce(hard_violation_count,0) > 0) as hard_violation_run_count, count(*) filter (where coalesce(open_required_count,0) > 0) as open_required_run_count from public.schedule_generation_runs where created_at >= now() - interval '14 days'`),
+      auditQuery("latestScheduleRuns", `select service_date, status, hard_violation_count, open_required_count, score_total, error_message, created_at, updated_at, published_at from public.schedule_generation_runs order by created_at desc limit 8`),
+      auditQuery("attentionRows", `select location_code, location_name, status_code, status_color, open_ticket_count, latest_employee_name, latest_completed_at_display, open_session_status from public.v_location_dashboard_status where status_code <> 'okay' or open_ticket_count > 0 order by case status_color when 'red' then 1 when 'yellow' then 2 when 'blue' then 3 else 9 end, open_ticket_count desc, location_name limit 12`),
+      auditQuery("openSegments", `select service_date, group_code, group_name, coverage_start, coverage_end, reason_open from public.v_memphis_open_segments where service_date = public.sch_service_date(now()) order by group_name, coverage_start limit 12`),
+    ]);
+    const queries = Object.fromEntries(results.map((result) => [result.name, result]));
+    const audit = summarizeAdminAudit({ prompt, auth, queries, memphis });
+    return {
+      ...audit,
+      memphis,
+      auth: auth || null,
+      query_status: Object.fromEntries(results.map((result) => [result.name, { ok: result.ok, error: result.error || null, row_count: result.rows.length }])),
+      diagnostics: {
+        ok: true,
+        original_message: prompt,
+        rewritten_message: prompt,
+        route: { intent: "admin_upkeep_audit", confidence: 0.99, ambiguous: false, fallback_intents: [] },
+        service_date: audit.details?.openSegments?.[0]?.service_date || null,
+        likely_tool: "read_only_admin_audit",
+        diagnostics_version: "gemini-admin-audit.v1",
+      },
+    };
   }
 
   function normalizeNotificationState(row, deviceId = "") {
@@ -324,7 +514,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
   }
 
   function shouldSuppressPhoneNotificationPayloads(notificationState) {
-    return notificationState?.is_employee_device !== true;
+    return notificationState?.is_employee_device !== true || shouldSilenceDeviceNotifications(notificationState);
   }
 
   function phoneSuppressedNotificationState(notificationState) {
@@ -508,10 +698,6 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     return score;
   }
 
-  function isPrivilegedContactViewer(role = "") {
-    return ["manager", "admin", "ops", "ops_manager", "operations_manager"].includes(String(role || "").trim().toLowerCase());
-  }
-
   function summarizeDirectContact(contact = {}, includePhone = true) {
     const parts = [`${contact.display_name}: ${contact.role_title}`];
     if (contact.department) parts.push(contact.department);
@@ -520,9 +706,8 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     return parts.join(". " ) + ".";
   }
 
-  async function directContactReply(body = "", viewerRole = "") {
+  async function directContactReply(body = "") {
     if (!isDirectContactPrompt(body)) return null;
-    const includePhone = isPrivilegedContactViewer(viewerRole);
     const contacts = await runReadOnlySql(`
       select display_name, role_title, department, phone, active, sort_order
       from public.internal_ops_contacts
@@ -533,9 +718,9 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       .map((contact) => ({ contact, score: scoreContactPrompt(body, contact) }))
       .sort((a, b) => b.score - a.score || Number(a.contact.sort_order || 999) - Number(b.contact.sort_order || 999));
     const best = ranked[0];
-    if (best && best.score >= 70) return summarizeDirectContact(best.contact, includePhone);
+    if (best && best.score >= 70) return summarizeDirectContact(best.contact, true);
     if (/\b(manager|managers|director|contact|phone|number)\b/i.test(String(body || ""))) {
-      return ranked.slice(0, 6).map((row) => summarizeDirectContact(row.contact, includePhone)).join(" " );
+      return ranked.slice(0, 6).map((row) => summarizeDirectContact(row.contact, true)).join(" " );
     }
     return null;
   }
@@ -582,9 +767,9 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     return raw;
   }
 
-  async function buildMemphisReply({ userId = "", deviceId = "", threadId = "", body = "", userRole = "" } = {}) {
+  async function buildMemphisReply({ userId = "", deviceId = "", threadId = "", body = "" } = {}) {
     try {
-      const directContact = await directContactReply(body, userRole);
+      const directContact = await directContactReply(body);
       if (directContact) {
         return {
           reply: { text: directContact, meta: { fallback: true, mode: "direct_internal_contact" } },
@@ -639,8 +824,11 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
           auth: req.memphisAuth || null,
           admin_route: {
             path: "/messaging-api/memphis/admin/run",
+            audit_path: "/messaging-api/memphis/admin/audit",
+            diagnose_path: "/messaging-api/memphis/admin/diagnose",
             available: true,
             auth_required: true,
+            read_only_default: true,
             fallback_routes: ["/messaging-api/memphis/message", "/messaging-api/memphis/diagnose"],
           },
         },
@@ -655,7 +843,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     try {
       const deviceId = String(req.query.device_id || "").trim();
       if (!deviceId) throw new Error("device_id is required.");
-      const rows = [await getViewerIdentity(deviceId)].filter(Boolean);
+      const rows = await runReadOnlySql(`select * from public.msg_get_user_by_device('${esc(deviceId)}')`);
       const data = Array.isArray(rows) && rows.length ? rows[0] : null;
       res.status(200).json({ ok: true, data, meta: messagingMeta() });
     } catch (error) {
@@ -663,12 +851,10 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   });
 
-  router.get("/users", requireDeviceOrOpsAuth, async (req, res) => {
+  router.get("/users", async (req, res) => {
     try {
       const userId = String(req.query.user_id || "").trim() || null;
-      const deviceId = String(req.query.device_id || "").trim();
-      const viewer = await resolveViewerContext({ userId, deviceId });
-      const rows = await runReadOnlySql(`select * from public.msg_list_users('${esc(viewer.effectiveUserId)}'::uuid)`);
+      const rows = await runReadOnlySql(`select * from public.msg_list_users(${userId ? `'${esc(userId)}'::uuid` : "null::uuid"})`);
       res.status(200).json({ ok: true, data: rows || [], meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Messaging users failed");
@@ -750,7 +936,15 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
             on r.message_id = m.id
            and r.user_id = du.msg_user_id
           where coalesce(m.metadata_json->>'source', '') = 'events_app'
-            and coalesce(m.metadata_json->>'notification_kind', '') in ('two_days_before', 'day_before', 'morning_of', ('shift_plus_' || 'fifteen'))
+            and coalesce(m.metadata_json->>'notification_kind', '') in (
+              'day_of_event',
+              'two_days_out',
+              'three_days_out',
+              'two_days_before',
+              'day_before',
+              'morning_of',
+              ('shift_plus_' || 'fifteen')
+            )
             ${presentationDemoClause}
             and r.read_at is null
             and m.sent_at >= now() - interval '4 days'
@@ -957,7 +1151,11 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
           return;
         }
       }
-      const data = await runRpc("msg_delete_thread_permanently", { p_thread_id: threadId });
+      const data = await runRpc("msg_mark_thread_deleted", {
+        p_thread_id: threadId,
+        p_user_id: viewer.effectiveUserId,
+        p_device_identifier: viewer.deviceId,
+      });
       res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Delete thread failed");
@@ -981,12 +1179,10 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   });
 
-  router.post("/memphis/thread", requireDeviceOrOpsAuth, async (req, res) => {
+  router.post("/memphis/thread", async (req, res) => {
     try {
       const userId = String(req.body?.user_id || "").trim();
-      const deviceId = String(req.body?.device_id || req.body?.deviceId || "").trim();
-      const viewer = await resolveViewerContext({ userId, deviceId });
-      const data = await runRpc("msg_get_or_create_memphis_thread", { p_user_id: viewer.effectiveUserId });
+      const data = await runRpc("msg_get_or_create_memphis_thread", { p_user_id: userId });
       res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Get Memphis thread failed");
@@ -1013,6 +1209,29 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   });
 
+  router.post("/memphis/admin/diagnose", requireOpsManagerAuth, async (req, res) => {
+    try {
+      const body = String(req.body?.body || req.body?.message || "").trim();
+      const deviceId = String(req.body?.device_id || req.memphisAuth?.device_id || "").trim();
+      const threadId = String(req.body?.thread_id || "").trim();
+      if (!body) throw new Error("body is required.");
+      const data = await memphisResponder.diagnoseMessage({ deviceId, threadId, userMessage: body });
+      res.status(200).json({ ok: true, data: { ...data, auth: req.memphisAuth || null, read_only: true }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion, read_only: true } });
+    } catch (error) {
+      fail(res, error, "Diagnose Memphis admin message failed");
+    }
+  });
+
+  router.post("/memphis/admin/audit", requireOpsManagerAuth, async (req, res) => {
+    try {
+      const body = String(req.body?.body || req.body?.message || "").trim();
+      const audit = await runGeminiAdminAudit({ prompt: body, auth: req.memphisAuth || null });
+      res.status(200).json({ ok: true, data: audit, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion, read_only: true } });
+    } catch (error) {
+      fail(res, error, "Run Gemini admin audit failed");
+    }
+  });
+
   router.post("/memphis/admin/run", requireOpsManagerAuth, async (req, res) => {
     try {
       const body = String(req.body?.body || req.body?.message || "").trim();
@@ -1025,8 +1244,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         const thread = await runRpc("msg_get_or_create_memphis_thread", { p_user_id: userId });
         resolvedThreadId = String(thread?.id || "").trim();
       }
-      const viewer = await resolveViewerContext({ userId, deviceId });
-      const { reply, routedBody } = await buildMemphisReply({ userId: viewer.effectiveUserId, deviceId, threadId: resolvedThreadId, body, userRole: viewer.identity?.role || "" });
+      const { reply, routedBody } = await buildMemphisReply({ userId, deviceId, threadId: resolvedThreadId, body });
       const diagnostics = await memphisResponder.diagnoseMessage({ deviceId, threadId: resolvedThreadId, userMessage: routedBody });
       res.status(200).json({
         ok: true,
@@ -1043,21 +1261,19 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   });
 
-  router.post("/memphis/message", requireDeviceOrOpsAuth, async (req, res) => {
+  router.post("/memphis/message", async (req, res) => {
     try {
       const userId = String(req.body?.user_id || "").trim();
       const body = String(req.body?.body || "").trim();
-      const deviceId = String(req.body?.device_id || req.body?.deviceId || "").trim();
+      const deviceId = String(req.body?.device_id || "").trim();
       if (!userId) throw new Error("user_id is required.");
       if (!body) throw new Error("body is required.");
-      const viewer = await resolveViewerContext({ userId, deviceId });
-      const effectiveUserId = viewer.effectiveUserId;
 
-      const thread = await runRpc("msg_get_or_create_memphis_thread", { p_user_id: effectiveUserId });
+      const thread = await runRpc("msg_get_or_create_memphis_thread", { p_user_id: userId });
 
       const userMessage = await runRpc("msg_send_message", {
         p_thread_id: thread.id,
-        p_sender_user_id: effectiveUserId,
+        p_sender_user_id: userId,
         p_body: body,
         p_message_type: "text",
         p_metadata_json: { channel: "memphis" }
@@ -1068,7 +1284,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       if (!memphisUserId) throw new Error("Memphis bot identity not found.");
 
       let reply;
-      ({ reply } = await buildMemphisReply({ userId: effectiveUserId, deviceId, threadId: thread.id, body, userRole: viewer.identity?.role || "" }));
+      ({ reply } = await buildMemphisReply({ userId, deviceId, threadId: thread.id, body }));
 
       const botMessage = await runRpc("msg_send_message", {
         p_thread_id: thread.id,

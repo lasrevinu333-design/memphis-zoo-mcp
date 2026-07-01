@@ -42,7 +42,6 @@ const GEMINI_TIMEOUT_MS = Math.max(1000, Number.parseInt(String(process.env.MOXI
 const GEMINI_MAX_OUTPUT_TOKENS = Math.max(256, Number.parseInt(String(process.env.MOXIE_GEMINI_MAX_OUTPUT_TOKENS || "4096"), 10) || 4096);
 
 // Configuration is checked inside createMoxieRouter so imports stay nonfatal.
-if (!MOXIE_COOKIE_SECRET) throw new Error("MOXIE_WEB_COOKIE_SECRET is required");
 
 // ---------------------------------------------------------------------------
 // Cookie signing

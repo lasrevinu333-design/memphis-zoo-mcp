@@ -3,6 +3,7 @@ import express from "express";
 import { createMemphisResponder } from "../src/memphis-ai.js";
 import { createMessagingRouter } from "../src/messaging-api.js";
 import { findLocationCode, hasLocationKeyword } from "../src/ai/memphis-ai-intent.js";
+import { createDailyPinSession } from "../src/auth/daily-pin-auth.js";
 
 process.env.GEMINI_API_KEY = "";
 process.env.MEMPHIS_GEMINI_API_KEY = "";
@@ -270,7 +271,7 @@ reminderApp.use('/messaging-api', createMessagingRouter({
         display_name: 'Event Owner',
         body: 'Two-day event reminder: Donor Dinner is scheduled in Event Center.',
         message_type: 'bot_response',
-        metadata_json: { source: 'events_app', notification_kind: 'two_days_before' },
+        metadata_json: { source: 'events_app', notification_kind: 'two_days_out' },
         sent_at: '2026-06-04T13:15:00Z',
         created_at: '2026-06-04T13:15:00Z',
         delivered_at: null,
@@ -292,13 +293,14 @@ await withServer(reminderApp, async (baseUrl) => {
   const payload = await response.json();
   assert.equal(payload.ok, true);
   assert.equal(payload.data.length, 1);
-  assert.equal(payload.data[0].metadata_json.notification_kind, 'two_days_before');
+  assert.equal(payload.data[0].metadata_json.notification_kind, 'two_days_out');
 });
 const reminderSql = reminderReadCalls.find((sql) => /metadata_json->>'source'/i.test(sql));
 assert.ok(reminderSql, 'device event reminder route should query reminders by mapped device after notification-state check');
 assert.match(reminderSql, /msg_device_assignments/, 'device reminder route should resolve the active device assignment');
 assert.match(reminderSql, /metadata_json->>'source'.*= 'events_app'/s, 'device reminder route should only return event-app messages');
-assert.match(reminderSql, /metadata_json->>'notification_kind'.*two_days_before.*day_before.*morning_of/s, 'device reminder route should only return the three event reminder kinds');
+assert.match(reminderSql, /metadata_json->>'notification_kind'.*day_of_event.*two_days_out.*three_days_out/s, 'device reminder route should return the current event reminder kinds');
+assert.match(reminderSql, /metadata_json->>'notification_kind'.*two_days_before.*day_before.*morning_of/s, 'device reminder route should still honor legacy reminder kinds until old payloads age out');
 assert.match(reminderSql, /r\.read_at is null/, 'device reminder route should only return unread reminders');
 
 const notificationGuardReadCalls = [];
@@ -822,7 +824,7 @@ await withServer(offShiftThreadsApp, async (baseUrl) => {
   assert.equal(payload.ok, true);
   assert.equal(payload.data.length, 1, 'Off-shift devices should still be able to load their thread list');
   assert.equal(payload.data[0].thread_title, 'Custodial Team');
-  assert.equal(payload.data[0].unread_count, 2, 'Off-shift devices should still expose real messenger unread counts so direct messages can alert after hours');
+  assert.equal(payload.data[0].unread_count, 0, 'Off-shift phone notification polling must not expose unread counts that trigger TTS alerts');
   assert.equal(payload.meta.notification_state.notifications_silent, true);
   assert.equal(payload.meta.notification_state.silent_reason, 'scheduled_shift_ended');
 
@@ -998,4 +1000,140 @@ assert.doesNotMatch(employeeGroupMessageSql, /t\.thread_type in \('direct', 'bot
 const managerMessageSql = visibilityReadCalls.find((sql) => sql.includes(FOREIGN_DIRECT_THREAD_ID) && sql.includes('from public.msg_messages m'));
 assert.ok(managerMessageSql, 'Manager overview message fetch should use the raw thread message visibility query');
 
-console.log(JSON.stringify({ ok: true, route_cases: routeCases.length, reply_cases: replyCases.length, false_location_code_cases: falseLocationCodeCases.length, device_event_reminder_contract: true, off_shift_notification_guard_contract: true, off_shift_location_notification_guard_contract: true, location_identity_mismatch_guard_contract: true, device_location_status_reminder_contract: true, thread_visibility_contract: true }, null, 2));
+let deleteThreadRpcCall = null;
+let permanentDeleteTriggered = false;
+const deleteThreadApp = express();
+deleteThreadApp.use(express.json());
+deleteThreadApp.use('/messaging-api', createMessagingRouter({
+  runReadOnlySql: async (sql) => {
+    const query = String(sql || '');
+    if (/msg_get_user_by_device\('KIOSK_04'\)/i.test(query)) {
+      return [{ msg_user_id: EMPLOYEE_USER_ID, display_name: 'Tammy Miller', role: 'employee' }];
+    }
+    if (/from public\.msg_thread_participants/i.test(query)) {
+      return [{ '?column?': 1 }];
+    }
+    return [];
+  },
+  runRpc: async (name, params) => {
+    if (name === 'msg_delete_thread_permanently') permanentDeleteTriggered = true;
+    if (name === 'msg_mark_thread_deleted') {
+      deleteThreadRpcCall = { name, params };
+      return { ok: true };
+    }
+    return null;
+  },
+  buildHealthPayload: (area, extra) => ({ ok: true, area, ...extra }),
+  appVersion: 'test',
+  releaseId: 'test',
+  contractVersion: 'messaging.v1',
+}));
+
+await withServer(deleteThreadApp, async (baseUrl) => {
+  const response = await fetch(`${baseUrl}/messaging-api/thread/${DIRECT_THREAD_ID}/delete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ device_id: 'KIOSK_04' }),
+  });
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.ok, true);
+});
+
+assert.equal(permanentDeleteTriggered, false, 'Device thread delete must not permanently erase shared message history');
+assert.deepEqual(deleteThreadRpcCall, {
+  name: 'msg_mark_thread_deleted',
+  params: {
+    p_thread_id: DIRECT_THREAD_ID,
+    p_user_id: EMPLOYEE_USER_ID,
+    p_device_identifier: 'KIOSK_04',
+  },
+}, 'Device thread delete should mark the thread deleted for the viewer/device only');
+
+const originalAuthEnv = {
+  OPS_MANAGER_AUTH_DISABLED: process.env.OPS_MANAGER_AUTH_DISABLED,
+  OPS_MANAGER_DAILY_PIN: process.env.OPS_MANAGER_DAILY_PIN,
+  CUSTODIAN_DAILY_PIN: process.env.CUSTODIAN_DAILY_PIN,
+  PIN_SESSION_SECRET: process.env.PIN_SESSION_SECRET,
+};
+process.env.OPS_MANAGER_AUTH_DISABLED = 'false';
+process.env.OPS_MANAGER_DAILY_PIN = '1234';
+process.env.CUSTODIAN_DAILY_PIN = '9999';
+process.env.PIN_SESSION_SECRET = 'memphis-test-secret';
+
+const adminAuditReadCalls = [];
+const adminAuditRpcCalls = [];
+const adminAuditApp = express();
+adminAuditApp.use(express.json());
+adminAuditApp.use('/messaging-api', createMessagingRouter({
+  runReadOnlySql: async (sql) => {
+    const query = String(sql || '');
+    adminAuditReadCalls.push(query);
+    if (/v_admin_health_snapshot/i.test(query)) return [{ snapshot_at: '2026-07-01T15:00:00Z', open_ticket_count: 2, overdue_locations: 1, due_soon_locations: 3, in_progress_locations: 4 }];
+    if (/current_attendance_state/i.test(query)) return [{ attendance: 1234, source: 'test', updated_at: '2026-07-01T15:00:00Z', age_minutes: 12 }];
+    if (/active_device_count/i.test(query)) return [{ active_device_count: 10, missing_messenger_assignment_count: 0, inactive_or_missing_user_count: 0, employee_mismatch_count: 1, stale_seen_count: 2 }];
+    if (/as issue/i.test(query) && /public\.devices/i.test(query)) return [{ device_id: 'KIOSK_05', device_employee_name: 'Daniel', msg_display_name: 'Someone Else', issue: 'employee_mismatch' }];
+    if (/total_message_count/i.test(query)) return [{ total_message_count: 2200, older_than_90d_count: 1300, deleted_message_count: 0, oldest_message_at: '2026-01-01T00:00:00Z', newest_message_at: '2026-07-01T15:00:00Z' }];
+    if (/run_count_14d/i.test(query)) return [{ run_count_14d: 8, error_run_count: 0, hard_violation_run_count: 0, open_required_run_count: 1 }];
+    if (/from public\.schedule_generation_runs/i.test(query)) return [{ service_date: '2026-07-01', status: 'published', hard_violation_count: 0, open_required_count: 1, updated_at: '2026-07-01T14:00:00Z' }];
+    if (/v_location_dashboard_status/i.test(query)) return [{ location_code: 'AQU', location_name: 'Aquarium', status_code: 'overdue', status_color: 'red', open_ticket_count: 2, open_session_status: 'none' }];
+    if (/v_memphis_open_segments/i.test(query)) return [{ service_date: '2026-07-01', group_code: 'TETON', group_name: 'Teton', coverage_start: '12:00', coverage_end: '15:00', reason_open: 'absence' }];
+    return [];
+  },
+  runRpc: async (name, params) => {
+    adminAuditRpcCalls.push({ name, params });
+    return null;
+  },
+  buildHealthPayload: (area, extra) => ({ ok: true, area, ...extra }),
+  appVersion: 'test',
+  releaseId: 'test',
+  contractVersion: 'messaging.v1',
+}));
+
+const opsAuditSession = createDailyPinSession({ pin: '1234', deviceId: 'OPS_DEVICE', requiredRole: 'ops_manager' });
+const custodianAuditSession = createDailyPinSession({ pin: '9999', deviceId: 'OPS_DEVICE' });
+
+await withServer(adminAuditApp, async (baseUrl) => {
+  const noAuth = await fetch(`${baseUrl}/messaging-api/memphis/admin/audit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ body: 'audit everything', device_id: 'OPS_DEVICE' }),
+  });
+  assert.equal(noAuth.status, 401, 'Gemini admin audit must require an ops-manager session when auth is enabled');
+
+  const custodianAuth = await fetch(`${baseUrl}/messaging-api/memphis/admin/audit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${custodianAuditSession.token}`, 'X-Device-Id': 'OPS_DEVICE' },
+    body: JSON.stringify({ body: 'audit everything', device_id: 'OPS_DEVICE' }),
+  });
+  assert.equal(custodianAuth.status, 403, 'Custodian daily PIN sessions must not access Gemini admin audit');
+
+  const opsAuth = await fetch(`${baseUrl}/messaging-api/memphis/admin/audit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${opsAuditSession.token}`, 'X-Device-Id': 'OPS_DEVICE' },
+    body: JSON.stringify({ body: 'Run audits, drift checks, stale-data checks, and ops-efficiency recommendations.', device_id: 'OPS_DEVICE' }),
+  });
+  assert.equal(opsAuth.status, 200, 'Ops-manager session should access read-only Gemini admin audit');
+  const payload = await opsAuth.json();
+  assert.equal(payload.ok, true);
+  assert.equal(payload.meta.read_only, true);
+  assert.equal(payload.data.diagnostics.route.intent, 'admin_upkeep_audit');
+  assert.match(payload.data.report, /Device \/ employee drift/i);
+  assert.match(payload.data.report, /Old message data/i);
+  assert.match(payload.data.report, /Schedule operations/i);
+  assert.match(payload.data.report, /Dashboard attention/i);
+  assert.match(payload.data.report, /Change control: this console can recommend upkeep only/i);
+});
+
+assert.equal(adminAuditRpcCalls.length, 0, 'Read-only Gemini admin audit must not call write-capable RPC helpers');
+assert.ok(adminAuditReadCalls.some((sql) => /v_admin_health_snapshot/i.test(sql)), 'Admin audit should inspect dashboard health snapshot');
+assert.ok(adminAuditReadCalls.some((sql) => /current_attendance_state/i.test(sql)), 'Admin audit should inspect attendance freshness');
+assert.ok(adminAuditReadCalls.some((sql) => /msg_messages/i.test(sql) && /older_than_90d/i.test(sql)), 'Admin audit should inspect stale Messenger data');
+assert.ok(adminAuditReadCalls.some((sql) => /schedule_generation_runs/i.test(sql)), 'Admin audit should inspect schedule run health');
+
+for (const [key, value] of Object.entries(originalAuthEnv)) {
+  if (value === undefined) delete process.env[key];
+  else process.env[key] = value;
+}
+
+console.log(JSON.stringify({ ok: true, route_cases: routeCases.length, reply_cases: replyCases.length, false_location_code_cases: falseLocationCodeCases.length, device_event_reminder_contract: true, off_shift_notification_guard_contract: true, off_shift_location_notification_guard_contract: true, location_identity_mismatch_guard_contract: true, device_location_status_reminder_contract: true, thread_visibility_contract: true, admin_audit_contract: true }, null, 2));
