@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "crypto";
+import { loginGeminiAdmin, verifyGeminiAdminToken } from "./gemini-admin-auth.js";
 
 const RESET_HOUR_LOCAL = 4;
 const TOKEN_VERSION = 1;
@@ -6,8 +7,8 @@ const MEMPHIS_TIME_ZONE = "America/Chicago";
 const DEFAULT_MAX_PIN_ATTEMPTS = 3;
 
 export function isOpsManagerAuthDisabled(env = process.env) {
-  // Auth is enabled by default. Only disabled when OPS_MANAGER_AUTH_DISABLED is explicitly set to 'true'.
-  return String(env.OPS_MANAGER_AUTH_DISABLED || "false").toLowerCase() === "true";
+  // Ops Manager is a shared public-link surface by default. Only require PIN auth when explicitly set false.
+  return String(env.OPS_MANAGER_AUTH_DISABLED || "true").toLowerCase() !== "false";
 }
 
 function base64UrlEncode(value) {
@@ -310,6 +311,24 @@ export function installDailyPinAuthRoutes(app, { setCors, env = process.env, att
       }
       res.status(error?.status || 500).json({ ok: false, error: error?.message || "PIN login failed", attempts_remaining: Math.max(0, config.maxAttempts - failures) });
     }
+  });
+
+  app.post("/auth-api/gemini/login", (req, res) => {
+    try {
+      const session = loginGeminiAdmin({ password: req.body?.password, env });
+      res.status(200).json({ ok: true, data: session });
+    } catch (error) {
+      res.status(error?.status || 500).json({ ok: false, error: error?.message || "Gemini login failed" });
+    }
+  });
+
+  app.get("/auth-api/gemini/session", (req, res) => {
+    const result = verifyGeminiAdminToken(bearerToken(req), { env });
+    if (!result.ok) {
+      res.status(result.status || 401).json({ ok: false, error: result.error || "Gemini password required." });
+      return;
+    }
+    res.status(200).json({ ok: true, data: { session: result.session } });
   });
 
   app.get("/auth-api/session", makeDailyPinMiddleware({ allowedRoles: ["ops_manager", "custodian"], env }), (req, res) => {

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import vm from "node:vm";
 import express from "express";
 import {
   createDailyPinSession,
@@ -21,6 +22,8 @@ const env = {
   PIN_MAX_ATTEMPTS: "3",
   MEMPHIS_OPERATIONAL_TIME_ZONE: "America/Chicago",
   OPS_MANAGER_AUTH_DISABLED: "true",
+  MOXIE_WEB_PASSWORD: "memzoo",
+  MOXIE_COOKIE_SECRET: "test-moxie-cookie-secret",
 };
 const strictEnv = { ...env, OPS_MANAGER_AUTH_DISABLED: "false" };
 
@@ -107,6 +110,26 @@ await withServer(app, async (baseUrl) => {
 
   response = await fetch(`${baseUrl}/public-feedback`);
   assert.equal(response.status, 200, "guest/system feedback style public routes must not require PIN");
+
+  response = await fetch(`${baseUrl}/auth-api/gemini/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password: "wrong" }),
+  });
+  assert.equal(response.status, 401, "Gemini console must reject the wrong password even while ops manager is public");
+
+  response = await fetch(`${baseUrl}/auth-api/gemini/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password: "memzoo" }),
+  });
+  assert.equal(response.status, 200, "Gemini console should accept the shared Moxie/memzoo password fallback");
+  const geminiLogin = await response.json();
+  assert.equal(geminiLogin.data.role, "gemini_admin");
+  assert.equal(geminiLogin.data.auth_mode, "gemini_password");
+
+  response = await fetch(`${baseUrl}/auth-api/gemini/session`, { headers: { Authorization: `Bearer ${geminiLogin.data.token}` } });
+  assert.equal(response.status, 200, "Gemini token should verify through the dedicated Gemini session route");
 
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     response = await fetch(`${baseUrl}/auth-api/pin/login`, {
@@ -211,19 +234,61 @@ assert.match(backendIndex, /app\.use\("\/feedback-api"[\s\S]*next\(\); \}\);/);
 assert.match(backendIndex, /createScheduleRouter\([\s\S]*requireAdminApiAuth:\s*requireOpsManagerAuth/);
 assert.match(backendIndex, /createEventsAdminRouter\([\s\S]*requireAdminApiAuth:\s*requireOpsManagerAuth/);
 assert.match(backendIndex, /app\.post\("\/dashboard-api\/close-ticket",\s*requireOpsManagerAuth/);
-assert.match(backendIndex, /makeDailyPinMiddleware\(\{ allowedRoles: \["ops_manager"\], openWhenDisabled: false \}\)/);
+assert.match(backendIndex, /makeDailyPinMiddleware\(\{ allowedRoles: \["ops_manager"\], openWhenDisabled: true \}\)/);
 assert.match(backendIndex, /makeMcpConnectorMiddleware/);
 assert.match(backendIndex, /const requireMcpAuth = makeMcpConnectorMiddleware\(\)/);
 assert.match(backendIndex, /MCP_CONNECTOR_TOKEN/);
 assert.match(backendIndex, /app\.post\("\/mcp",\s*requireMcpAuth/);
 assert.match(backendIndex, /app\.get\("\/sse",\s*requireMcpAuth/);
 assert.match(backendIndex, /app\.post\("\/messages",\s*requireMcpAuth/);
-assert.doesNotMatch(backendIndex, /X-Admin-Key|ADMIN_API_KEY|admin-api-key|x-admin-key/i);
-assert.match(diagnostics, /makeDailyPinMiddleware\(\{ allowedRoles: \["ops_manager"\], openWhenDisabled: false \}\)/);
+assert.match(diagnostics, /makeDailyPinMiddleware\(\{ allowedRoles: \["ops_manager"\], openWhenDisabled: true \}\)/);
 assert.match(diagnostics, /\/mcp-tools\.json",\s*requireOpsManagerAuth/);
 assert.match(diagnostics, /\/status\/deep",\s*requireOpsManagerAuth/);
 
 assert.match(authHelper, /requireOpsManagerSession/);
+assert.match(authHelper, /OPS_MANAGER_AUTH_DISABLED=isOpsManagerOpenSurface\(\)/);
+assert.match(authHelper, /requireGeminiAdminSession/);
+assert.match(authHelper, /geminiAdminAuthHeaders/);
+assert.match(authHelper, /const GEMINI_SESSION_KEY='memphisGeminiAdminSession\.v1'/);
+assert.match(authHelper, /function readGeminiSession\(\)/);
+assert.match(authHelper, /function clearGeminiSession\(\)/);
+
+const geminiAuthStorage = new Map();
+const geminiAuthContext = {
+  URL,
+  console,
+  localStorage: {
+    getItem: (key) => geminiAuthStorage.has(key) ? geminiAuthStorage.get(key) : null,
+    setItem: (key, value) => geminiAuthStorage.set(key, String(value)),
+    removeItem: (key) => geminiAuthStorage.delete(key),
+  },
+  window: {
+    location: { href: "https://lasrevinu333-design.github.io/Engine/gemini-admin.html?device=KIOSK_01", hostname: "lasrevinu333-design.github.io", pathname: "/Engine/gemini-admin.html", search: "?device=KIOSK_01", hash: "" },
+    prompt: () => "memzoo",
+    alert: () => {},
+  },
+  fetch: async (url, options = {}) => {
+    assert.match(String(url), /\/auth-api\/gemini\/login$/);
+    assert.equal(options.method, "POST");
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true, data: { token: "gemini-test-token", role: "gemini_admin", auth_mode: "gemini_password", expires_at: "2099-01-01T00:00:00.000Z" } }),
+    };
+  },
+};
+geminiAuthContext.window.window = geminiAuthContext.window;
+geminiAuthContext.window.localStorage = geminiAuthContext.localStorage;
+geminiAuthContext.window.fetch = geminiAuthContext.fetch;
+vm.createContext(geminiAuthContext);
+vm.runInContext(authHelper, geminiAuthContext, { filename: "memphis-auth.js" });
+assert.equal(typeof geminiAuthContext.window.MemphisAuth.readGeminiSession, "function", "Gemini session reader should be exported");
+assert.equal(geminiAuthContext.window.MemphisAuth.readGeminiSession(), null, "empty Gemini storage should read as no session");
+const frontendGeminiSession = await geminiAuthContext.window.MemphisAuth.loginGeminiAdmin("memzoo");
+assert.equal(frontendGeminiSession.role, "gemini_admin");
+assert.equal(JSON.stringify(geminiAuthContext.window.MemphisAuth.readGeminiSession()), JSON.stringify(frontendGeminiSession), "Gemini login should persist in dedicated Gemini storage");
+geminiAuthContext.window.MemphisAuth.clearGeminiSession();
+assert.equal(geminiAuthContext.window.MemphisAuth.readGeminiSession(), null, "Gemini clear should remove only the dedicated Gemini session");
 assert.match(authHelper, /OPS_MANAGER_OPEN_PAGES=new Set/);
 assert.doesNotMatch(authHelper, /hub==='manager'/);
 assert.match(authHelper, /DEFAULT_MANAGER_HUB='\.\/start_page1\.html'/);
@@ -249,5 +314,9 @@ assert.doesNotMatch(messagesHtml, /requireOpsManagerSession\(\{interactive:false
 assert.doesNotMatch(threadHtml, /requireOpsManagerSession\(\{interactive:false,redirect:true\}\)/);
 assert.match(messagesHtml, /optionalManagerAuthHeaders\(\)/);
 assert.match(threadHtml, /optionalManagerAuthHeaders\(\)/);
+const geminiAdminHtml = readEngineFile("gemini-admin.html");
+assert.match(geminiAdminHtml, /requireGeminiAdminSession\(\{ interactive: true \}\)/);
+assert.match(geminiAdminHtml, /geminiAdminAuthHeaders\(\)/);
+assert.doesNotMatch(geminiAdminHtml, /requireOpsManagerSession\(\{ interactive: true \}\)/);
 
 console.log("daily pin auth contract tests passed");

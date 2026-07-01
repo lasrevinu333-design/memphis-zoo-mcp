@@ -4,6 +4,7 @@ import { createMemphisResponder } from "../src/memphis-ai.js";
 import { createMessagingRouter } from "../src/messaging-api.js";
 import { findLocationCode, hasLocationKeyword } from "../src/ai/memphis-ai-intent.js";
 import { createDailyPinSession } from "../src/auth/daily-pin-auth.js";
+import { createGeminiAdminSession } from "../src/auth/gemini-admin-auth.js";
 
 process.env.GEMINI_API_KEY = "";
 process.env.MEMPHIS_GEMINI_API_KEY = "";
@@ -1055,11 +1056,15 @@ const originalAuthEnv = {
   OPS_MANAGER_DAILY_PIN: process.env.OPS_MANAGER_DAILY_PIN,
   CUSTODIAN_DAILY_PIN: process.env.CUSTODIAN_DAILY_PIN,
   PIN_SESSION_SECRET: process.env.PIN_SESSION_SECRET,
+  MOXIE_WEB_PASSWORD: process.env.MOXIE_WEB_PASSWORD,
+  MOXIE_COOKIE_SECRET: process.env.MOXIE_COOKIE_SECRET,
 };
 process.env.OPS_MANAGER_AUTH_DISABLED = 'false';
 process.env.OPS_MANAGER_DAILY_PIN = '1234';
 process.env.CUSTODIAN_DAILY_PIN = '9999';
 process.env.PIN_SESSION_SECRET = 'memphis-test-secret';
+process.env.MOXIE_WEB_PASSWORD = 'memzoo';
+process.env.MOXIE_COOKIE_SECRET = 'memphis-test-cookie-secret';
 
 const adminAuditReadCalls = [];
 const adminAuditRpcCalls = [];
@@ -1092,6 +1097,7 @@ adminAuditApp.use('/messaging-api', createMessagingRouter({
 
 const opsAuditSession = createDailyPinSession({ pin: '1234', deviceId: 'OPS_DEVICE', requiredRole: 'ops_manager' });
 const custodianAuditSession = createDailyPinSession({ pin: '9999', deviceId: 'OPS_DEVICE' });
+const geminiAuditSession = createGeminiAdminSession();
 
 await withServer(adminAuditApp, async (baseUrl) => {
   const noAuth = await fetch(`${baseUrl}/messaging-api/memphis/admin/audit`, {
@@ -1099,22 +1105,29 @@ await withServer(adminAuditApp, async (baseUrl) => {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ body: 'audit everything', device_id: 'OPS_DEVICE' }),
   });
-  assert.equal(noAuth.status, 401, 'Gemini admin audit must require an ops-manager session when auth is enabled');
+  assert.equal(noAuth.status, 401, 'Gemini admin audit must require the Gemini password token');
 
   const custodianAuth = await fetch(`${baseUrl}/messaging-api/memphis/admin/audit`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${custodianAuditSession.token}`, 'X-Device-Id': 'OPS_DEVICE' },
     body: JSON.stringify({ body: 'audit everything', device_id: 'OPS_DEVICE' }),
   });
-  assert.equal(custodianAuth.status, 403, 'Custodian daily PIN sessions must not access Gemini admin audit');
+  assert.equal(custodianAuth.status, 401, 'Custodian daily PIN sessions must not access Gemini admin audit');
 
   const opsAuth = await fetch(`${baseUrl}/messaging-api/memphis/admin/audit`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${opsAuditSession.token}`, 'X-Device-Id': 'OPS_DEVICE' },
     body: JSON.stringify({ body: 'Run audits, drift checks, stale-data checks, and ops-efficiency recommendations.', device_id: 'OPS_DEVICE' }),
   });
-  assert.equal(opsAuth.status, 200, 'Ops-manager session should access read-only Gemini admin audit');
-  const payload = await opsAuth.json();
+  assert.equal(opsAuth.status, 401, 'Ops-manager PIN sessions must not bypass the Gemini password gate');
+
+  const geminiAuth = await fetch(`${baseUrl}/messaging-api/memphis/admin/audit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${geminiAuditSession.token}`, 'X-Device-Id': 'OPS_DEVICE' },
+    body: JSON.stringify({ body: 'Run audits, drift checks, stale-data checks, and ops-efficiency recommendations.', device_id: 'OPS_DEVICE' }),
+  });
+  assert.equal(geminiAuth.status, 200, 'Gemini password session should access read-only Gemini admin audit');
+  const payload = await geminiAuth.json();
   assert.equal(payload.ok, true);
   assert.equal(payload.meta.read_only, true);
   assert.equal(payload.data.diagnostics.route.intent, 'admin_upkeep_audit');

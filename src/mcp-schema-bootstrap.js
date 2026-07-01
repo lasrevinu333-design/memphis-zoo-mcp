@@ -51,7 +51,7 @@ function getAppInfo() {
 function installHttpDiagnostics(app) {
   if (!app || app.__memphisHttpDiagnosticsInstalled) return;
 
-  const requireOpsManagerAuth = makeDailyPinMiddleware({ allowedRoles: ["ops_manager"], openWhenDisabled: false });
+  const requireOpsManagerAuth = makeDailyPinMiddleware({ allowedRoles: ["ops_manager"], openWhenDisabled: true });
 
   Object.defineProperty(app, "__memphisHttpDiagnosticsInstalled", {
     value: true,
