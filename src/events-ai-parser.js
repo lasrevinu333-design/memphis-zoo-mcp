@@ -36,6 +36,11 @@ const FIELD_LABELS = [
   "Begin",
   "End",
   "Stop",
+  "Projected Attendance",
+  "Expected Attendance",
+  "Estimated Attendance",
+  "Attendance Count",
+  "Guest Count",
   "Projected",
   "Attendees",
   "Attendance",
@@ -382,7 +387,7 @@ function compactNarrativeNotes(rawText = "", eventName = "", matchedGroup = null
 function stripEmptyFieldLabels(text = "") {
   let result = String(text || "");
   const labels = FIELD_LABELS.map(escapeRegex).sort((a, b) => b.length - a.length).join("|");
-  const structuredLabels = ["Event Name", "Event", "Event Title", "Name", "Title", "Event Area", "Location Group", "Location", "Area", "Venue", "Event Date", "Date", "Start Time", "Time", "Begin Time", "End Time", "Ends", "Stop Time", "Start", "Begin", "End", "Stop", "Projected", "Attendees", "Attendance", "Guests", "People", "Count", "Host Department", "Manager on Duty"].map(escapeRegex).sort((a, b) => b.length - a.length).join("|");
+  const structuredLabels = ["Event Name", "Event", "Event Title", "Name", "Title", "Event Area", "Location Group", "Location", "Area", "Venue", "Event Date", "Date", "Start Time", "Time", "Begin Time", "End Time", "Ends", "Stop Time", "Start", "Begin", "End", "Stop", "Projected Attendance", "Expected Attendance", "Estimated Attendance", "Attendance Count", "Guest Count", "Projected", "Attendees", "Attendance", "Guests", "People", "Count", "Host Department", "Manager on Duty"].map(escapeRegex).sort((a, b) => b.length - a.length).join("|");
   result = result.replace(new RegExp(`(?:^|[|,;])\\s*(?:${structuredLabels})\\s*:\\s*[^|,;]*(?=$|[|,;])`, "ig"), " ");
   result = result.replace(new RegExp(`(?:^|[|,;])\\s*(?:${labels})\\s*:\\s*(?=$|[|,;])`, "ig"), " ");
   result = result.replace(new RegExp(`\\b(?:${labels})\\s*:\\s*(?=$|[|,;])`, "ig"), " ");
@@ -571,7 +576,7 @@ function detectAttendeeCount(text) {
   const raw = String(text || "");
   let match = raw.match(/\b(\d{1,5})\s+(?:(?:school|expected|projected|estimated|about|around|approx(?:imately)?)\s+){0,4}(attendees|guests|people|ppl|students|kids|children|children's|volunteers?|media|pax|persons)\b/i);
   if (match) return Number.parseInt(match[1], 10);
-  match = raw.match(/\b(?:attendance|attendees|count|projected|expected|guests?)\s*[:\-]?\s*(\d{1,5})\b/i);
+  match = raw.match(/\b(?:guest\s+count|projected\s+attendance|expected\s+attendance|estimated\s+attendance|attendance\s+count|attendance|attendees|count|projected|expected|guests?)\s*[:\-]?\s*(\d{1,5})\b/i);
   if (match) return Number.parseInt(match[1], 10);
   return null;
 }
@@ -672,6 +677,7 @@ function stripAccountedEventDetails(text, eventName = "", matchedGroup = null, {
     .replace(/\b(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\.?\s+\d{1,2}(?:st|nd|rd|th)?(?:(?:,\s*\d{2,4})|(?:\s+\d{4}))?\b/gi, " ")
     .replace(/\b\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?\b/gi, " ")
     .replace(/\b(?:with\s+)?\d{1,5}\s+staff\b/gi, " ")
+    .replace(/\b(?:guest\s+count|projected\s+attendance|expected\s+attendance|estimated\s+attendance|attendance\s+count)\s*[:\-]?\s*\d{1,5}\b/gi, " ")
     .replace(/\b(?:attendance|attendees|count|projected|expected|guests?)\s*[:\-]?\s*\d{1,5}\b/gi, " ")
     .replace(/\b\d{1,5}\s*(?:attendees|guests|people|ppl|students|kids|children|children's|pax|persons)\b/gi, " ");
   const timeToken = "(?:noon|midnight|\\d{1,2}(?::?\\d{2})?\\s*(?:a\\.?m\\.?|p\\.?m\\.?|am|pm|a|p)?)";
@@ -1011,7 +1017,7 @@ function parseOneEventText(rawText, locationGroups, index = 0) {
   const dateFromLabel = firstLabelValue(labels, ["Event Date", "Date"]) || extractLooseLabelValue(normalizedText, ["Event Date", "Date"]);
   const startFromLabel = firstLabelValue(labels, ["Start Time", "Time", "Start", "Begin Time", "Begin"]) || extractLooseLabelValue(normalizedText, ["Start Time", "Time", "Start", "Begin Time", "Begin"]);
   const endFromLabel = firstLabelValue(labels, ["End Time", "Ends", "End", "Stop Time", "Stop"]) || extractLooseLabelValue(normalizedText, ["End Time", "Ends", "End", "Stop Time", "Stop"]);
-  const attendeesFromLabel = firstLabelValue(labels, ["Attendees", "Attendance", "Projected", "Guests", "People", "Count"]) || extractLooseLabelValue(normalizedText, ["Attendees", "Attendance", "Projected", "Guests", "People", "Count"]);
+  const attendeesFromLabel = firstLabelValue(labels, ["Guest Count", "Projected Attendance", "Expected Attendance", "Estimated Attendance", "Attendance Count", "Attendees", "Attendance", "Projected", "Guests", "People", "Count"]) || extractLooseLabelValue(normalizedText, ["Guest Count", "Projected Attendance", "Expected Attendance", "Estimated Attendance", "Attendance Count", "Attendees", "Attendance", "Projected", "Guests", "People", "Count"]);
   const notesFromLabel = firstLabelValue(labels, ["Notes", "Details", "Comments", "Comment", "Needs"]) || extractExplicitNotesValue(normalizedText) || extractLooseLabelValue(normalizedText, ["Notes", "Details", "Comments", "Comment", "Needs"]);
 
   const areaCandidates = rankLocationGroups(locationGroups, areaFromLabel || normalizedText, 3);

@@ -183,6 +183,15 @@ assert.equal(repeatedFieldsInNotes.attendee_count, "85");
 assert.equal(repeatedFieldsInNotes.notes, "Catering, extra trash");
 assert.doesNotMatch(repeatedFieldsInNotes.notes, /Donor Dinner|Event Center|6\/12|5:30|8:00|85 guests/i);
 
+const guestCountOnly = await parseOne("Event Name: Donor Dinner | Event Area: Event Center | Event Date: 6/12 | Start: 5:30 pm | End: 8:00 pm | Guest Count: 85");
+assert.equal(guestCountOnly.event_name, "Donor Dinner");
+assert.equal(guestCountOnly.attendee_count, "85");
+assert.equal(guestCountOnly.notes, "", "guest-count-only labels must not leak into Notes");
+
+const guestCountInsideNotes = await parseOne("Event Name: Donor Dinner | Event Area: Event Center | Event Date: 6/12 | Start: 5:30 pm | End: 8:00 pm | Notes: Guest Count: 85");
+assert.equal(guestCountInsideNotes.attendee_count, "85");
+assert.equal(guestCountInsideNotes.notes, "", "a duplicated guest count inside Notes should be stripped, not copied");
+
 const weddingSetup = await aiParseEventTexts({
   texts: [
     "Wedding setup - Cat House Cafe - June 14th - 10-2 - approx 75 ppl. Actually ceremony is 11am, cleanup after 2:30. Put dumpsters by back gate.",
