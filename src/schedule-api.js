@@ -967,8 +967,8 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
   }
 
   async function mergeExplicitAndPtoAbsences(serviceDate, explicitIds = []) {
-    const explicit = normalizeUuidList(explicitIds);
-    const ptoIds = await getPtoAbsentEmployeeIds(serviceDate);
+    const explicit = await filterAbsenceEligibleEmployeeIds(explicitIds);
+    const ptoIds = await filterAbsenceEligibleEmployeeIds(await getPtoAbsentEmployeeIds(serviceDate));
     return {
       explicit,
       pto_ids: ptoIds,
@@ -977,6 +977,25 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
   }
 
   const COVERALL_SLOT_CODES = ["COVERALL_01", "COVERALL_02", "COVERALL_03", "COVERALL_04"];
+
+  function coverAllEmployeeCodeSqlList() {
+    return COVERALL_SLOT_CODES.map((slotCode) => `'${esc(slotCode)}'`).join(",");
+  }
+
+  async function filterAbsenceEligibleEmployeeIds(ids = []) {
+    const normalized = normalizeUuidList(ids);
+    if (!normalized.length) return [];
+    const rows = await runReadOnlySql(`
+      select id::text as employee_id
+      from public.employees
+      where active = true
+        and id = any(${uuidArrayLiteral(normalized)})
+        and coalesce(employee_code, '') not in (${coverAllEmployeeCodeSqlList()})
+      order by display_name
+    `);
+    const eligible = new Set((Array.isArray(rows) ? rows : []).map((row) => String(row.employee_id || "").trim()).filter(Boolean));
+    return normalized.filter((id) => eligible.has(id));
+  }
 
   function normalizeCoverAllSlotCode(value) {
     const raw = String(value || "").trim().toUpperCase().replace(/[\s-]+/g, "_");
@@ -1810,17 +1829,17 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
   }
 
   async function buildCoverAllPlan(serviceDate, explicitIds = []) {
-    const explicit = normalizeUuidList(explicitIds);
+    const explicit = await filterAbsenceEligibleEmployeeIds(explicitIds);
     const activeRows = await listPtoRows({ startDate: serviceDate, endDate: serviceDate });
     const nonManualActiveIds = [];
     for (const row of activeRows) {
       const id = String(row.employee_id || "").trim();
       const type = String(row.pto_type || "").toLowerCase();
       if (!id || type === "manual_override") continue;
-      if (!nonManualActiveIds.includes(id)) nonManualActiveIds.push(id);
+      nonManualActiveIds.push(id);
     }
-
-    const orderedAbsentIds = Array.from(new Set([...nonManualActiveIds, ...explicit]));
+    const eligibleNonManualActiveIds = await filterAbsenceEligibleEmployeeIds(nonManualActiveIds);
+    const orderedAbsentIds = Array.from(new Set([...eligibleNonManualActiveIds, ...explicit]));
     if (orderedAbsentIds.length < 3) {
       return { triggered: false, absent_count: orderedAbsentIds.length, ordered_absent_employee_ids: orderedAbsentIds, coverall_employee_ids: [], assignments: [] };
     }
@@ -3568,7 +3587,13 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
   router.get("/employees", async (_req, res) => {
     try {
       const rows = await runReadOnlySql(`
-        select id as employee_id, employee_code, display_name, role, active
+        select
+          id as employee_id,
+          employee_code,
+          display_name,
+          role,
+          active,
+          coalesce(employee_code, '') not in (${coverAllEmployeeCodeSqlList()}) as absence_eligible
         from public.employees
         where active = true
         order by display_name

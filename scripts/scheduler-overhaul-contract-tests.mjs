@@ -112,6 +112,13 @@ assert.match(baselineDoc, /rollback/i, "baseline doc must capture rollback postu
 assert.match(baselineDoc, /read-only DB gate/i, "baseline doc must document the read-only DB gate");
 
 const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
+const scheduleApiContractSource = readRequired("src/schedule-api.js");
+assert.match(scheduleApiContractSource, /absence_eligible/i, "schedule employees route must expose absence_eligible so contractor slots can stay visible elsewhere but out of absentee pickers");
+assert.match(scheduleApiContractSource, /filterAbsenceEligibleEmployeeIds/i, "absence preview/publish paths must filter absentee IDs through an eligibility guard");
+assert.match(scheduleApiContractSource, /coalesce\(employee_code, ''\) not in \(\$\{coverAllEmployeeCodeSqlList\(\)\}\)/, "CoverAll contractor employee codes must be ineligible for absences");
+assert.match(scheduleApiContractSource, /const explicit = await filterAbsenceEligibleEmployeeIds\(explicitIds\);/, "explicit manual absence IDs must drop CoverAll contractor slots before preview/publish");
+assert.match(scheduleApiContractSource, /const eligibleNonManualActiveIds = await filterAbsenceEligibleEmployeeIds\(nonManualActiveIds\);/, "CoverAll escalation planning must ignore contractor slots when counting absent staff");
+
 assert.equal(
   packageJson.scripts?.["test:scheduler-overhaul"],
   "node scripts/scheduler-overhaul-contract-tests.mjs",
