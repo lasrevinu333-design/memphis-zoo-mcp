@@ -16,7 +16,7 @@ import {
   createScheduleRouter,
 } from "./routes/index.js";
 import { APP_VERSION, RELEASE_ID } from "./app-version.js";
-import { authenticateDailyPinRequest, installDailyPinAuthRoutes, makeDailyPinMiddleware } from "./auth/daily-pin-auth.js";
+import { authenticateOpsAccessRequest, installSharedAuthRoutes, makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
 import { makeMcpConnectorMiddleware } from "./auth/mcp-connector-auth.js";
 import { runReadOnlySql as runSupabaseReadOnlySql } from "./supabase/read.js";
 
@@ -64,7 +64,7 @@ let feedbackReminderSweepInFlight = false;
 let feedbackSchemaEnsured = false;
 let feedbackSchemaEnsurePromise = null;
 
-const requireOpsManagerAuth = makeDailyPinMiddleware({ allowedRoles: ["ops_manager"], openWhenDisabled: true });
+const requireOpsManagerAuth = makeOpsAccessMiddleware();
 // MCP_CONNECTOR_TOKEN is accepted by makeMcpConnectorMiddleware for service-to-service MCP clients.
 const requireMcpAuth = makeMcpConnectorMiddleware();
 
@@ -262,11 +262,11 @@ let _feedbackLinkSecretGenerated = null;
 function getFeedbackLinkSecret() {
   const secret = String(process.env.FEEDBACK_LINK_SECRET || "").trim();
   if (secret) return secret;
-  const pinSecret = String(process.env.PIN_SESSION_SECRET || "").trim();
-  if (pinSecret) return pinSecret;
+  const serviceSecret = String(process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+  if (serviceSecret) return serviceSecret;
   if (!_feedbackLinkSecretGenerated) {
     _feedbackLinkSecretGenerated = randomUUID() + randomUUID();
-    console.warn("[security] FEEDBACK_LINK_SECRET and PIN_SESSION_SECRET are both unset. Generated a random feedback link secret at startup. Feedback links will not survive restarts.");
+    console.warn("[security] FEEDBACK_LINK_SECRET is unset. Generated a random feedback link secret at startup. Feedback links will not survive restarts.");
   }
   return _feedbackLinkSecretGenerated;
 }
@@ -303,7 +303,7 @@ function requireFeedbackSignedLinkOrOps(purpose) {
       next();
       return;
     }
-    const result = authenticateDailyPinRequest(req, { allowedRoles: ["ops_manager"] });
+    const result = authenticateOpsAccessRequest(req);
     if (!result.ok) {
       res.status(result.status || 401).json({ ok: false, error: result.error || "Unauthorized" });
       return;
@@ -1740,7 +1740,7 @@ function createMcpServer() {
   return server;
 }
 
-installDailyPinAuthRoutes(app, { setCors: setAdminApiCors });
+installSharedAuthRoutes(app, { setCors: setAdminApiCors });
 
 app.use("/admin-api", (req, res, next) => { setAdminApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/dashboard-api", (req, res, next) => { setPublicDashboardCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
@@ -1988,7 +1988,7 @@ app.post("/scan-api/rpc", rateLimit, requireDeviceAuth, async (req, res) => {
   catch (error) { console.error("scan rpc failed:", error); res.status(500).json({ ok: false, error: error.message || "Scan RPC failed" }); }
 });
 app.get("/", (_req, res) => { res.status(200).send("Memphis Zoo MCP server is running."); });
-// C2: MCP endpoint — requires ops_manager PIN auth via requireOpsManagerAuth middleware.
+// C2: MCP endpoint — uses Ops Manager access middleware.
 // This protects arbitrary SQL execution (supabase_sql_read, supabase_migration_apply) and all MCP tools.
 app.get("/mcp", requireMcpAuth, (_req, res) => { res.status(405).send("GET not supported on /mcp for this server."); });
 app.options("/mcp", (_req, res) => { res.sendStatus(200); });

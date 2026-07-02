@@ -257,7 +257,7 @@ assert.match(liveMyScheduleRebalanceSql, /owns all carry-forward areas/i, "curre
 assert.match(liveMyScheduleRebalanceSql, /if v_active_count = 1 then[\s\S]*v_active_employee_ids\[1\]/i, "current-now My Schedule rebalance must implement the single-remaining-employee fallback branch");
 assert.match(liveMyScheduleRebalanceSql, /if v_local_time >= v_cutover and v_local_time < v_close_time and v_active_count > 0 and v_employee_active_now then/i, "current-now My Schedule rebalance must only fabricate carry-forward ownership while someone is actually still on shift");
 assert.match(liveMyScheduleRebalanceSql, /owner_shift_end/i, "current-now My Schedule rebalance must track the source owner's shift end for stable carry-forward start times");
-assert.match(liveMyScheduleRebalanceSql, /'coverage_start',\s*to_char\(greatest\(v_cutover,\s*coalesce\(rec\.owner_shift_end,\s*v_local_time\)\),\s*'HH12:MI AM'\)/i, "current-now My Schedule rebalance must pin carry-forward start times to the clock-out handoff, not the page refresh minute");
+assert.match(liveMyScheduleRebalanceSql, /'coverage_start',\s*to_char\(greatest\(v_cutover,\s*coalesce\(rec\.owner_shift_end,\s*v_local_time\)\),\s*'HH12:MI AM'\)/i, "current-now My Schedule rebalance must anchor carry-forward start times to the clock-out handoff, not the page refresh minute");
 
 const manualAbsencePublishStart = source.indexOf('router.post("/manual-absences/publish"');
 const manualAbsencePublishEnd = source.indexOf('router.post("/manual-absences/return"', manualAbsencePublishStart);

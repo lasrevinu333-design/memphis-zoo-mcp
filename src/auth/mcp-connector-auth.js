@@ -1,5 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
-import { authenticateDailyPinRequest } from "./daily-pin-auth.js";
+import { authenticateOpsAccessRequest } from "./shared-access-auth.js";
 
 function safeStringEqual(left, right) {
   const a = Buffer.from(String(left || ""));
@@ -52,24 +52,12 @@ export function authenticateMcpConnectorRequest(req, { env = process.env, now = 
       };
     }
 
-    const pinResult = authenticateDailyPinRequest(req, {
-      allowedRoles: ["ops_manager"],
-      env,
-      openWhenDisabled: false,
-    });
-    if (pinResult.ok) {
-      return { ...pinResult, auth_source: "daily_pin" };
-    }
     return { ok: false, status: 401, error: "Unauthorized" };
   }
 
-  const fallbackResult = authenticateDailyPinRequest(req, {
-    allowedRoles: ["ops_manager"],
-    env,
-    openWhenDisabled: true,
-  });
+  const fallbackResult = authenticateOpsAccessRequest(req, { env, now });
   if (fallbackResult.ok) {
-    return { ...fallbackResult, auth_source: fallbackResult.session?.auth_mode === "open" ? "open_ops_manager" : "daily_pin" };
+    return { ...fallbackResult, auth_source: "open_ops_manager" };
   }
   return fallbackResult;
 }

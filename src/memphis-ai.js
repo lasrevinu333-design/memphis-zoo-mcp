@@ -367,7 +367,7 @@ function openerReply(text = "") {
   if (/connected/.test(lower)) return "Yeah. I am connected. What do you need?";
   if (/alive/.test(lower)) return "Yeah. I am here. What are we checking?";
   if (/figured out|doing better|better/.test(lower)) return "Yeah, better than before. What do you need?";
-  if (/how are you|you good|hows it going|how s it going/.test(lower)) return "Doing alright. What are you trying to pin down?";
+  if (/how are you|you good|hows it going|how s it going/.test(lower)) return "Doing alright. What are you trying to sort out?";
   if (/what up|whats up|what s up|dude what it do/.test(lower)) return "Not much. What do you need?";
   return "Hey. What are we trying to solve?";
 }

@@ -15,7 +15,7 @@
     "test:schedule-ai": "node scripts/schedule-ai-tests.mjs",
     "test:ai-intent": "node scripts/smoke-ai-intent.mjs",
     "test:messaging": "node scripts/memphis-messaging-regression-tests.mjs",
-    "test:auth": "node scripts/daily-pin-auth-tests.mjs",
+    "test:auth": "node scripts/shared-access-auth-tests.mjs",
     "test:device-popups": "node scripts/device-popup-fully-kiosk-test.mjs",
     "test:thursday-demo": "node scripts/thursday-notification-presentation-tests.mjs",
     "test:leadership-demo": "node scripts/demo-leadership-blank-schedule-tests.mjs",

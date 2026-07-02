@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const repoRoot = resolve(import.meta.dirname, "..");
 const apiSource = readFileSync(resolve(repoRoot, "src/index.js"), "utf8");
-const feedbackHtml = readFileSync(resolve(repoRoot, "../Engine/system-feedback.html"), "utf8");
+const engineRoot = [resolve(repoRoot, "../Engine"), "/home/eric/Projects/memphis-zoo/Engine"].find((candidate) => existsSync(resolve(candidate, "system-feedback.html")));
+assert.ok(engineRoot, "Engine system-feedback.html fixture should exist");
+const feedbackHtml = readFileSync(resolve(engineRoot, "system-feedback.html"), "utf8");
 
 function assertContains(source, needle, message) {
   assert.ok(source.includes(needle), message || `Expected source to include ${needle}`);

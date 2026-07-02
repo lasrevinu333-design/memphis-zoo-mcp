@@ -1,5 +1,5 @@
 import express from "express";
-import { makeDailyPinMiddleware, authenticateDailyPinRequest } from "./auth/daily-pin-auth.js";
+import { makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
 import { makeGeminiAdminMiddleware } from "./auth/gemini-admin-auth.js";
 import { getGeminiDiagnostics } from "./utils/gemini-config.js";
 import { createMemphisResponder } from "./services/index.js";
@@ -7,7 +7,7 @@ import { createMemphisResponder } from "./services/index.js";
 export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPayload, appVersion, releaseId, contractVersion }) {
   const router = express.Router();
   const memphisResponder = createMemphisResponder({ runReadOnlySql, runRpc });
-  const requireOpsManagerAuth = makeDailyPinMiddleware({ allowedRoles: ["ops_manager"], openWhenDisabled: true });
+  const requireOpsManagerAuth = makeOpsAccessMiddleware();
   const requireGeminiAdminAuth = makeGeminiAdminMiddleware();
 
   // Device-based auth is mandatory for all messaging endpoints.
@@ -1191,7 +1191,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   });
 
-  // MEDIUM #13: Add requireOpsManagerAuth to diagnose endpoint for security.
+  // MEDIUM #13: Use requireOpsManagerAuth on diagnose endpoint.
   router.post("/memphis/diagnose", requireOpsManagerAuth, async (req, res) => {
     try {
       const body = String(req.body?.body || req.body?.message || "").trim();

@@ -25,7 +25,7 @@ function hmac(secret, value) {
 export function getGeminiAdminConfig(env = process.env) {
   return {
     password: String(env.GEMINI_ADMIN_PASSWORD || env.MOXIE_WEB_PASSWORD || "").trim(),
-    sessionSecret: String(env.GEMINI_ADMIN_SESSION_SECRET || env.MOXIE_COOKIE_SECRET || env.MOXIE_WEB_COOKIE_SECRET || env.PIN_SESSION_SECRET || env.SUPABASE_SERVICE_ROLE_KEY || "").trim(),
+    sessionSecret: String(env.GEMINI_ADMIN_SESSION_SECRET || env.MOXIE_COOKIE_SECRET || env.MOXIE_WEB_COOKIE_SECRET || env.SUPABASE_SERVICE_ROLE_KEY || "").trim(),
     ttlMs: Math.max(60_000, Number(env.GEMINI_ADMIN_SESSION_TTL_MS || SESSION_TTL_MS) || SESSION_TTL_MS),
   };
 }
