@@ -33,4 +33,10 @@ assert.match(
   'local runReadOnlySql helper must delegate to the shared wrapper and return rows so dashboard canary WITH queries do not fail with SELECT-only RPC guards'
 );
 
+assert.match(
+  source,
+  /app\.get\(["']\/dashboard-api\/work-session-alerts["'],\s*requireOpsManagerAuth[\s\S]{0,700}json\(\{\s*ok:\s*true,\s*data:\s*\[\]/,
+  'dashboard work-session alert endpoint must exist and return an empty array fallback instead of 404ing when no alert producer is configured'
+);
+
 console.log('dashboard recent activity backend contract tests passed');

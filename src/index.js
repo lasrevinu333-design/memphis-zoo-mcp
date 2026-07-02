@@ -1953,6 +1953,12 @@ app.get("/dashboard-api/summary", async (_req, res) => {
   try { const data = await runPublicDashboardSummary(); res.status(200).json({ ok: true, data }); }
   catch (error) { console.error("dashboard summary failed:", error); res.status(500).json({ ok: false, error: error.message || "Dashboard summary failed" }); }
 });
+app.get("/dashboard-api/work-session-alerts", requireOpsManagerAuth, async (_req, res) => {
+  // Frontend dashboard renders these as optional active-work signal dots. Keep the
+  // endpoint present even when no alert producer is configured so browser probes
+  // and operator dashboards do not surface a noisy 404.
+  res.status(200).json({ ok: true, data: [] });
+});
 app.post("/dashboard-api/close-ticket", requireOpsManagerAuth, async (req, res) => {
   try {
     const ticketId = String(req.body?.ticket_id || "").trim();
