@@ -3,22 +3,16 @@ import { readFileSync } from 'node:fs';
 
 const source = readFileSync(new URL('../src/index.js', import.meta.url), 'utf8');
 
-assert.match(
+assert.doesNotMatch(
   source,
   /from\s+public\.v_recent_scan_activity/i,
-  'dashboard summary must query v_recent_scan_activity so rapid same-location scans do not disappear behind the latest location row'
+  'public dashboard summary must not query v_recent_scan_activity'
 );
 
-assert.match(
+assert.doesNotMatch(
   source,
   /recent_activity\s*:/,
-  'dashboard summary response must expose a recent_activity array'
-);
-
-assert.match(
-  source,
-  /employee_name[\s\S]{0,240}device_identifier[\s\S]{0,240}submitted_at/i,
-  'recent activity payload must carry employee, device, and submitted timestamp fields for dashboard display'
+  'public dashboard summary response must not expose a recent_activity array'
 );
 
 assert.match(
@@ -39,4 +33,4 @@ assert.match(
   'dashboard work-session alert endpoint must exist and return an empty array fallback instead of 404ing when no alert producer is configured'
 );
 
-console.log('dashboard recent activity backend contract tests passed');
+console.log('dashboard backend contract tests passed');
