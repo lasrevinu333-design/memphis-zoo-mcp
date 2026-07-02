@@ -100,6 +100,14 @@ function toNullableInt(value) {
   return parsed;
 }
 
+function sanitizeEventNotes(value, attendeeCount = null) {
+  const raw = value == null ? "" : String(value).trim();
+  if (!raw) return null;
+  const compact = raw.replace(/,/g, "").trim();
+  if (attendeeCount != null && compact === String(attendeeCount)) return null;
+  return raw;
+}
+
 function cleanEventName(value) {
   let text = String(value || "").replace(/\s+/g, " " ).trim();
   const labelPattern = /\b(Start Time|End Time|Location|Area|Host Department|Projected|Attendees|Event Date|Date|Notes?)\b[:\s]*/i;
@@ -127,7 +135,7 @@ function normalizeEventPayload(payload = {}) {
   const startTime = normalizeTimeInput(payload.start_time);
   const endTime = normalizeTimeInput(payload.end_time);
   const attendeeCount = toNullableInt(payload.attendee_count);
-  const notes = payload.notes == null ? null : String(payload.notes).trim() || null;
+  const notes = sanitizeEventNotes(payload.notes, attendeeCount);
   const createdBy = payload.created_by == null ? null : String(payload.created_by).trim() || null;
 
   if (!eventName) throw new Error("event_name is required.");
@@ -195,7 +203,11 @@ async function listUpcomingEvents(runReadOnlySql) {
       to_char(e.end_time, 'HH24:MI:SS') as end_time,
       (e.end_date > e.event_date) as spans_overnight,
       e.attendee_count,
-      e.notes,
+      case
+        when nullif(btrim(e.notes), '') is null then null
+        when e.attendee_count is not null and btrim(e.notes) = e.attendee_count::text then null
+        else e.notes
+      end as notes,
       e.created_by,
       e.created_at,
       e.updated_at

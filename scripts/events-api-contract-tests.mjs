@@ -81,6 +81,32 @@ assert.match(createCall.sql, /insert into public\.events_app_events/i);
 assert.match(createCall.sql, /Catering, extra trash, restroom check before dinner and after dessert/);
 assert.doesNotMatch(createCall.sql, /Operational flags/i);
 
+const numericNotesWriteCalls = [];
+await withServer(buildApp({ writeCalls: numericNotesWriteCalls }), async (baseUrl) => {
+  const response = await fetch(`${baseUrl}/admin-api/events/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      event_name: "Camp Day",
+      location_group_id: TEST_GROUP_ID,
+      event_date: "2026-06-13",
+      start_time: "09:00",
+      end_time: "15:00",
+      attendee_count: "85",
+      notes: "85",
+      created_by: "contract test",
+    }),
+  });
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.ok, true);
+  assert.equal(payload.data.attendee_count, 85);
+  assert.equal(payload.data.notes, null, "numeric-only notes matching attendee_count should be removed before save");
+});
+const numericNotesCreateCall = numericNotesWriteCalls.find((call) => call.name === "events_app_create");
+assert.ok(numericNotesCreateCall, "numeric-notes event creation SQL should run");
+assert.match(numericNotesCreateCall.sql, /85,\s*\n\s*null,\s*\n\s*'contract test'/, "numeric-only notes matching attendee_count should be written as SQL null");
+
 const overnightWriteCalls = [];
 await withServer(buildApp({ writeCalls: overnightWriteCalls }), async (baseUrl) => {
   const response = await fetch(`${baseUrl}/admin-api/events/`, {
@@ -145,6 +171,8 @@ assert.match(listSql, /then 'SPLASH_PAD'/, "published event group_code should om
 assert.match(listSql, /then 'COURTYARD'/, "published event group_code should omit restroom suffix for Courtyard");
 assert.match(listSql, /then 'Splash Pad'/, "published event group_name should omit restroom suffix for Splash Pad");
 assert.match(listSql, /then 'Courtyard'/, "published event group_name should omit restroom suffix for Courtyard");
+assert.match(listSql, /nullif\(btrim\(e\.notes\), ''\)/i, "published event list should normalize blank notes");
+assert.match(listSql, /btrim\(e\.notes\) = e\.attendee_count::text/i, "published event list should hide legacy numeric notes that duplicate attendee_count");
 
 const notificationReadCalls = [];
 const notificationWriteCalls = [];
