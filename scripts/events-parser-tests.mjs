@@ -192,6 +192,14 @@ const guestCountInsideNotes = await parseOne("Event Name: Donor Dinner | Event A
 assert.equal(guestCountInsideNotes.attendee_count, "85");
 assert.equal(guestCountInsideNotes.notes, "", "a duplicated guest count inside Notes should be stripped, not copied");
 
+const guestCountInsideNotesWithActualNotes = await parseOne("Event Name: Donor Dinner | Event Area: Event Center | Event Date: 6/12 | Start: 5:30 pm | End: 8:00 pm | Notes: Guest Count: 85 | catering, extra trash, restroom check before dinner and after dessert");
+assert.equal(guestCountInsideNotesWithActualNotes.attendee_count, "85");
+assert.equal(guestCountInsideNotesWithActualNotes.notes, "Catering, extra trash, restroom check before dinner and after dessert", "count duplicated inside Notes should be removed while unlabeled actual notes after it survive");
+
+const notesBeforeTrailingGuestCount = await parseOne("Event Name: Donor Dinner | Event Area: Event Center | Event Date: 6/12 | Start: 5:30 pm | End: 8:00 pm | Notes: catering, extra trash | Guest Count: 85");
+assert.equal(notesBeforeTrailingGuestCount.attendee_count, "85");
+assert.equal(notesBeforeTrailingGuestCount.notes, "Catering, extra trash", "trailing Guest Count should fill attendance without polluting Notes");
+
 const weddingSetup = await aiParseEventTexts({
   texts: [
     "Wedding setup - Cat House Cafe - June 14th - 10-2 - approx 75 ppl. Actually ceremony is 11am, cleanup after 2:30. Put dumpsters by back gate.",
