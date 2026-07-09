@@ -28,11 +28,17 @@ This document lists the environment variables used by the Memphis Zoo MCP backen
 | `SUPABASE_URL` | Yes | Supabase project URL. |
 | `SUPABASE_SERVICE_ROLE_KEY` | Yes | Service role key for trusted server-side RPC calls. |
 
-## Admin API
+## Admin / Ops API
 
 | Name | Required | Purpose |
 |---|---:|---|
-| `ADMIN_API_KEY` | Recommended | Required for protected admin API routes. |
+| `ADMIN_API_KEY` | **Yes in production** | Server-to-server/admin automation key accepted via `X-Admin-Key` / `X-API-Key`. |
+| `OPS_MANAGER_FULL_ACCESS_KEY` | **Yes in production for Ops UI writes** | Full-access Ops Manager public-link key accepted via `X-Ops-Access-Key`; mints signed bearer sessions for protected read/write routes. |
+| `OPS_MANAGER_READ_ONLY_ACCESS_KEY` | Recommended | Read-only Ops Manager public-link key accepted via `X-Ops-Access-Key`; mints signed bearer sessions for protected read routes only. |
+| `OPS_MANAGER_SESSION_SECRET` | Recommended | HMAC secret used to sign Ops Manager bearer sessions. If unset, the backend falls back to existing secret material; set this explicitly on Render before public use. |
+| `OPS_AUTH_OPEN_MODE` | Local/dev only | Explicit local development open mode. Ignored on Render/production and must not be used for public deployments. |
+
+Render production must have at least one valid Ops/Admin credential before protected routes are publicly usable. If keys were missing while public routes were reachable, generate fresh keys and rotate any previously shared public-link/admin keys before enabling the deployment.
 
 ## Memphis AI / Gemini
 
