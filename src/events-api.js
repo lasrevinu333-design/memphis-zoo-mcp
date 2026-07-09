@@ -760,6 +760,7 @@ export function createEventsAdminRouter({
   releaseId,
   maintenanceController,
   requireAdminApiAuth,
+  requireAdminApiWrite,
 }) {
   const router = express.Router();
   if (typeof requireAdminApiAuth === "function") {
@@ -839,7 +840,7 @@ export function createEventsAdminRouter({
     }
   });
 
-  router.post("/", async (req, res) => {
+  router.post("/", typeof requireAdminApiWrite === "function" ? requireAdminApiWrite : (_req, _res, next) => next(), async (req, res) => {
     try {
       maintenanceController?.kick("events_admin_create_before");
       const record = await createEventRecord(
@@ -861,7 +862,7 @@ export function createEventsAdminRouter({
     }
   });
 
-  router.delete("/:eventId", async (req, res) => {
+  router.delete("/:eventId", typeof requireAdminApiWrite === "function" ? requireAdminApiWrite : (_req, _res, next) => next(), async (req, res) => {
     try {
       const result = await deleteEventRecord(runWriteSql, req.params.eventId);
       res.status(200).json({

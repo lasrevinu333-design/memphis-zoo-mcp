@@ -65,6 +65,7 @@ let feedbackSchemaEnsured = false;
 let feedbackSchemaEnsurePromise = null;
 
 const requireOpsManagerAuth = makeOpsAccessMiddleware();
+const requireOpsManagerWrite = makeOpsAccessMiddleware({ requireWrite: true });
 // MCP_CONNECTOR_TOKEN is accepted by makeMcpConnectorMiddleware for service-to-service MCP clients.
 const requireMcpAuth = makeMcpConnectorMiddleware();
 
@@ -207,43 +208,43 @@ function setCorsOrigin(res, req) {
 function setAdminApiCors(res, req) {
   setCorsOrigin(res, req);
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id, X-Admin-Key, X-Ops-Access-Key");
 }
 
 function setPublicDashboardCors(res, req) {
   setCorsOrigin(res, req);
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id, X-Admin-Key, X-Ops-Access-Key");
 }
 
 function setScanApiCors(res, req) {
   setCorsOrigin(res, req);
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id, X-Admin-Key, X-Ops-Access-Key");
 }
 
 function setMessagingApiCors(res, req) {
   setCorsOrigin(res, req);
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id, X-Admin-Key, X-Ops-Access-Key");
 }
 
 function setScheduleApiCors(res, req) {
   setCorsOrigin(res, req);
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS,PATCH,DELETE");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id, X-Admin-Key, X-Ops-Access-Key");
 }
 
 function setGuestApiCors(res, req) {
   setCorsOrigin(res, req);
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id, X-Admin-Key, X-Ops-Access-Key");
 }
 
 function setFeedbackApiCors(res, req) {
   setCorsOrigin(res, req);
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id, X-Feedback-Reminder-Secret");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id, X-Feedback-Reminder-Secret, X-Ops-Access-Key, X-Admin-Key");
 }
 
 
@@ -1735,11 +1736,11 @@ app.use("/admin-api", (req, res, next) => { setAdminApiCors(res, req); if (req.m
 app.use("/dashboard-api", (req, res, next) => { setPublicDashboardCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/scan-api", (req, res, next) => { setScanApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/messaging-api", (req, res, next) => { setMessagingApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); }, (req, res, next) => { eventMaintenanceController.kick("messaging_api_request"); next(); }, createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: MESSAGING_CONTRACT_VERSION }));
-app.use("/schedule-api", (req, res, next) => { setScheduleApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); }, (req, res, next) => { eventMaintenanceController.kick("schedule_api_request"); next(); }, createScheduleRouter({ runReadOnlySql, runRpc, runWriteSql, buildHealthPayload, requireAdminApiAuth: requireOpsManagerAuth, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: SCHEDULE_CONTRACT_VERSION }));
+app.use("/schedule-api", (req, res, next) => { setScheduleApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); }, (req, res, next) => { eventMaintenanceController.kick("schedule_api_request"); next(); }, createScheduleRouter({ runReadOnlySql, runRpc, runWriteSql, buildHealthPayload, requireAdminApiAuth: requireOpsManagerWrite, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: SCHEDULE_CONTRACT_VERSION }));
 app.use("/guest-api", (req, res, next) => { setGuestApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/feedback-api", (req, res, next) => { setFeedbackApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/dashboard-api/events", createEventsPublicRouter({ runReadOnlySql, runWriteSql, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController }));
-app.use("/admin-api/events", createEventsAdminRouter({ runReadOnlySql, runWriteSql, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController, requireAdminApiAuth: requireOpsManagerAuth }));
+app.use("/admin-api/events", createEventsAdminRouter({ runReadOnlySql, runWriteSql, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController, requireAdminApiAuth: requireOpsManagerAuth, requireAdminApiWrite: requireOpsManagerWrite }));
 app.get("/version", (_req, res) => { setPublicDashboardCors(res, _req); eventMaintenanceController.kick("version_ping"); res.status(200).json(buildHealthPayload("version")); });
 app.get("/admin-api/health", requireOpsManagerAuth, (_req, res) => { res.status(200).json(buildHealthPayload("admin", { authenticated: true })); });
 app.get("/dashboard-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("dashboard")); });
@@ -1915,7 +1916,7 @@ app.get("/dashboard-api/current-attendance", async (_req, res) => {
   }
   catch (error) { console.error("current attendance fetch failed:", error); res.status(502).json({ ok: false, error: error.message || "Current attendance fetch failed", source_url: ATTENDANCE_SOURCE_URL }); }
 });
-app.post("/admin-api/attendance-update", requireOpsManagerAuth, async (req, res) => {
+app.post("/admin-api/attendance-update", requireOpsManagerWrite, async (req, res) => {
   try {
     const payload = req.body && typeof req.body === "object" ? req.body : {};
     const data = await persistAttendanceState(payload);
@@ -1926,15 +1927,15 @@ app.post("/admin-api/attendance-update", requireOpsManagerAuth, async (req, res)
     res.status(400).json({ ok: false, error: error.message || "Attendance update failed" });
   }
 });
-app.post("/admin-api/bundle", requireOpsManagerAuth, async (req, res) => {
+app.post("/admin-api/bundle", requireOpsManagerWrite, async (req, res) => {
   try { const payload = req.body && typeof req.body === "object" ? req.body : {}; const data = await runAdminBundleViaSqlRead(payload); res.status(200).json({ ok: true, data }); }
   catch (error) { console.error("admin bundle failed:", error); res.status(500).json({ ok: false, error: error.message || "Admin bundle failed" }); }
 });
-app.post("/admin-api/close-ticket", requireOpsManagerAuth, async (req, res) => {
+app.post("/admin-api/close-ticket", requireOpsManagerWrite, async (req, res) => {
   try { const ticketId = String(req.body?.ticket_id || "").trim(); const closedBy = String(req.body?.closed_by || "").trim(); const closeNotes = req.body?.close_notes == null ? null : String(req.body.close_notes); if (!ticketId || !closedBy) { res.status(400).json({ ok: false, error: "ticket_id and closed_by are required." }); return; } await runWriteSql("admin_close_ticket", `select public.close_maintenance_ticket(${sqlLiteral(ticketId)}::uuid, ${sqlLiteral(closedBy)}, ${sqlLiteral(closeNotes)});`); res.status(200).json({ ok: true, ticket_id: ticketId, status: "closed" }); }
   catch (error) { console.error("close ticket failed:", error); res.status(500).json({ ok: false, error: error.message || "Close ticket failed" }); }
 });
-app.post("/admin-api/force-close-session", requireOpsManagerAuth, async (req, res) => {
+app.post("/admin-api/force-close-session", requireOpsManagerWrite, async (req, res) => {
   try { const sessionUuid = String(req.body?.session_uuid || "").trim(); const closedBy = String(req.body?.closed_by || "").trim(); const reason = req.body?.reason == null ? null : String(req.body.reason); if (!sessionUuid || !closedBy) { res.status(400).json({ ok: false, error: "session_uuid and closed_by are required." }); return; } await runWriteSql("admin_force_close_session", `select public.force_close_session(${sqlLiteral(sessionUuid)}, ${sqlLiteral(closedBy)}, ${sqlLiteral(reason)});`); res.status(200).json({ ok: true, session_uuid: sessionUuid, status: "closed" }); }
   catch (error) { console.error("force close session failed:", error); res.status(500).json({ ok: false, error: error.message || "Force close session failed" }); }
 });
@@ -1948,7 +1949,7 @@ app.get("/dashboard-api/work-session-alerts", requireOpsManagerAuth, async (_req
   // and operator dashboards do not surface a noisy 404.
   res.status(200).json({ ok: true, data: [] });
 });
-app.post("/dashboard-api/close-ticket", requireOpsManagerAuth, async (req, res) => {
+app.post("/dashboard-api/close-ticket", requireOpsManagerWrite, async (req, res) => {
   try {
     const ticketId = String(req.body?.ticket_id || "").trim();
     const closedBy = normalizeDashboardCloser(req.body?.closed_by);
