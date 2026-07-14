@@ -27,26 +27,6 @@ export async function resolveCanonicalDevice({ runReadOnlySql, deviceIdentifier 
     ), matches as (
       select
         0 as match_rank,
-        'canonical'::text as matched_by,
-        null::text as matched_alias,
-        d.id as canonical_device_pk,
-        d.device_id as canonical_device_id,
-        d.device_name,
-        d.active as device_active,
-        d.assigned_employee_id,
-        d.last_seen_at,
-        e.display_name as assigned_employee_name,
-        e.employee_code,
-        e.role,
-        coalesce(e.active, false) as employee_active
-      from public.devices d
-      left join public.employees e on e.id = d.assigned_employee_id
-      join requested r on upper(btrim(d.device_id)) = r.identifier
-
-      union all
-
-      select
-        1 as match_rank,
         'alias'::text as matched_by,
         da.alias_identifier as matched_alias,
         d.id as canonical_device_pk,
@@ -64,6 +44,26 @@ export async function resolveCanonicalDevice({ runReadOnlySql, deviceIdentifier 
       left join public.employees e on e.id = d.assigned_employee_id
       join requested r on upper(btrim(da.alias_identifier)) = r.identifier
       where da.active = true
+
+      union all
+
+      select
+        1 as match_rank,
+        'canonical'::text as matched_by,
+        null::text as matched_alias,
+        d.id as canonical_device_pk,
+        d.device_id as canonical_device_id,
+        d.device_name,
+        d.active as device_active,
+        d.assigned_employee_id,
+        d.last_seen_at,
+        e.display_name as assigned_employee_name,
+        e.employee_code,
+        e.role,
+        coalesce(e.active, false) as employee_active
+      from public.devices d
+      left join public.employees e on e.id = d.assigned_employee_id
+      join requested r on upper(btrim(d.device_id)) = r.identifier
     )
     select
       ${sqlLiteral(requested)}::text as requested_device_id,
