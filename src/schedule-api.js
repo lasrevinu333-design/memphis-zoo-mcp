@@ -644,36 +644,49 @@ export function createScheduleRouter({
   }
 
   function combineFullDaySchedule(pageData, fullDayItems) {
-    const page = pageData && typeof pageData === 'object' ? pageData : {};
-    const currentItems = Array.isArray(page.items) ? page.items : [];
-    const currentKeys = new Set(currentItems.map(scheduleItemKey));
-    const items = (Array.isArray(fullDayItems) ? fullDayItems : []).map((item) => ({
-      ...item,
-      is_current: currentKeys.has(scheduleItemKey(item)),
-    }));
-    const scheduled = Boolean(page?.shift?.start && page?.shift?.end);
-    let scheduleStatus = 'scheduled';
-    let notice = page.notice || null;
-    if (!scheduled) {
-      scheduleStatus = 'off';
-      notice = 'Not scheduled to work today.';
-    } else if (!items.length) {
-      scheduleStatus = 'missing_assignments';
-      notice = 'Your shift is active, but no assignments were published. Contact an Ops Manager.';
-    } else if (!currentItems.length) {
-      scheduleStatus = 'between_assignments';
-      notice = 'No assignment is active at this moment. Your full-day schedule is shown below.';
-    }
-    return {
-      ...page,
-      employee_name: page?.employee?.display_name || page.employee_name || null,
-      items,
-      current_items: currentItems,
-      full_day: true,
-      schedule_status: scheduleStatus,
-      notice,
-    };
+  const page = pageData && typeof pageData === 'object' ? pageData : {};
+  const currentItems = Array.isArray(page.current_items)
+    ? page.current_items
+    : (Array.isArray(page.items) ? page.items : []);
+  const currentKeys = new Set(currentItems.map(scheduleItemKey));
+  const items = (Array.isArray(fullDayItems) ? fullDayItems : []).map((item) => ({
+    ...item,
+    is_current: currentKeys.has(scheduleItemKey(item)),
+  }));
+  const shift = page?.shift && typeof page.shift === 'object' ? page.shift : {};
+  const shiftStart = shift.start || shift.shift_start || null;
+  const shiftEnd = shift.end || shift.shift_end || null;
+  const scheduled = shift.active === false
+    ? false
+    : Boolean(shift.active === true || (shiftStart && shiftEnd));
+  let scheduleStatus = 'scheduled';
+  let notice = page.notice || null;
+  if (!scheduled) {
+    scheduleStatus = 'off';
+    notice = 'Not scheduled to work today.';
+  } else if (!items.length) {
+    scheduleStatus = 'missing_assignments';
+    notice = 'Your shift is active, but no assignments were published. Contact an Ops Manager.';
+  } else if (page.phase === 'before_shift') {
+    scheduleStatus = 'scheduled';
+    notice = page.notice || 'Your full-day schedule is shown below.';
+  } else if (page.phase === 'after_shift') {
+    scheduleStatus = 'completed';
+    notice = page.notice || 'Your shift is complete. Today\'s full schedule remains below.';
+  } else if (!currentItems.length) {
+    scheduleStatus = 'between_assignments';
+    notice = 'No assignment is active at this moment. Your full-day schedule is shown below.';
   }
+  return {
+    ...page,
+    employee_name: page?.employee?.display_name || page.employee_name || null,
+    items,
+    current_items: currentItems,
+    full_day: true,
+    schedule_status: scheduleStatus,
+    notice,
+  };
+}
 
   let autoGenerateState = { lastStartedAt: 0, running: false, lastCompletedAt: 0, lastWindowStart: null, lastResult: [] };
   let restroomRebalanceState = { lastStartedAt: 0, running: false, lastCompletedAt: 0, lastServiceDate: null, lastResult: null };
