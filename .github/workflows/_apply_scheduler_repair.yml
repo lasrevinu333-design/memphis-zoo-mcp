@@ -1,0 +1,126 @@
+name: Apply audited scheduler repair
+
+on:
+  push:
+    branches:
+      - repair/scheduler-alerts-gps-20260714
+    paths:
+      - .repair/backend_patch_chunks/**
+      - .github/workflows/_apply_scheduler_repair.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: scheduler-repair-backend
+  cancel-in-progress: false
+
+jobs:
+  apply-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect bootstrap payload
+        id: bootstrap
+        shell: bash
+        run: |
+          if compgen -G '.repair/backend_patch_chunks/chunk_*' > /dev/null; then
+            echo 'apply=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'apply=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout frontend feedback fixture
+        if: steps.bootstrap.outputs.apply == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: lasrevinu333-design/Engine
+          ref: main
+          path: _engine_fixture
+          sparse-checkout: system-feedback.html
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@v4
+        if: steps.bootstrap.outputs.apply == 'true'
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Reconstruct and apply audited patch
+        if: steps.bootstrap.outputs.apply == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .repair/backend_patch_chunks/chunk_* | base64 --decode | gzip --decompress > /tmp/backend.patch
+          printf '%s  %s\n' '954a7ff7c2ddf2fac53cc9d7ba956ec5e22a0f030e77b7d4fb4dafa5f5cfb17c' /tmp/backend.patch | sha256sum --check
+          git apply --check /tmp/backend.patch
+          git apply /tmp/backend.patch
+          if grep -R -nE 'packages\.applied|artifactory|internal\.api\.openai' package.json package-lock.json; then
+            echo 'Internal package URL found in committed dependency metadata.' >&2
+            exit 1
+          fi
+
+      - name: Prepare cross-repository feedback fixture
+        if: steps.bootstrap.outputs.apply == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ../Engine
+          cp _engine_fixture/system-feedback.html ../Engine/system-feedback.html
+
+      - name: Install exact dependencies
+        if: steps.bootstrap.outputs.apply == 'true'
+        run: npm ci
+
+      - name: Run complete backend regression suite
+        if: steps.bootstrap.outputs.apply == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for test_script in \
+            test:foundation \
+            test:events-parser \
+            test:events-api \
+            test:feedback \
+            test:schedule-ai \
+            test:ai-intent \
+            test:messaging \
+            test:auth \
+            test:device-popups \
+            test:thursday-demo \
+            test:leadership-demo \
+            test:dashboard \
+            test:scheduler-overhaul \
+            test:sch2-publish
+          do
+            npm run --silent "$test_script"
+          done
+          for file in src/*.js scripts/*.mjs; do
+            node --check "$file"
+          done
+          npm audit --omit=dev --audit-level=high
+
+      - name: Commit tested source to repair branch
+        if: steps.bootstrap.outputs.apply == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf _engine_fixture .repair
+          rm -f .github/workflows/_apply_scheduler_repair.yml
+          git config user.name 'Memphis Zoo Repair Bot'
+          git config user.email 'lasrevinu333@users.noreply.github.com'
+          git add -A
+          if git diff --cached --quiet; then
+            echo 'No source changes were produced.' >&2
+            exit 1
+          fi
+          git commit -m 'Repair scheduler, kiosk schedules, reminders, and GPS'
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+
+      - name: No bootstrap payload remains
+        if: steps.bootstrap.outputs.apply != 'true'
+        run: echo 'Bootstrap payload already consumed; nothing to apply.'
