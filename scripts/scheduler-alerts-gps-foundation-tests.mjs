@@ -40,6 +40,12 @@ assert.equal(resolved.canonical_device_id, 'KIOSK_08');
 assert.equal(resolved.assigned_employee_name, 'Karen Robinson');
 assert.match(identityQuery, /public\.device_aliases/i);
 assert.match(identityQuery, /order by match_rank/i);
+assert.match(identityQuery, /0 as match_rank,\s*'alias'::text as matched_by/i);
+assert.match(identityQuery, /1 as match_rank,\s*'canonical'::text as matched_by/i);
+assert.ok(
+  identityQuery.indexOf("'alias'::text as matched_by") < identityQuery.indexOf("'canonical'::text as matched_by"),
+  'Alias mapping must be considered before a legacy duplicate device row.'
+);
 
 assert.match(scheduleSource, /resolveCanonicalDevice/);
 assert.match(scheduleSource, /requested_device_id/);
@@ -111,6 +117,7 @@ console.log(JSON.stringify({
   ok: true,
   checked: [
     'canonical_device_alias_resolution',
+    'alias_precedence_over_legacy_duplicate_device_rows',
     'karen_my_schedule_alias_path',
     'per_device_scan_rate_limits',
     'atomic_scan_workflow',
