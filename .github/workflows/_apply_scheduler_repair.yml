@@ -47,7 +47,7 @@ jobs:
       - uses: actions/setup-node@v4
         if: steps.bootstrap.outputs.apply == 'true'
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
 
       - name: Reconstruct and apply audited patch
