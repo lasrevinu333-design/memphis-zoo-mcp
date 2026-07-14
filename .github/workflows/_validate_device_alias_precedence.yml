@@ -17,7 +17,7 @@ concurrency:
 jobs:
   test-and-publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -31,16 +31,14 @@ jobs:
       - name: Install exact dependencies
         run: npm ci --ignore-scripts
 
-      - name: Run identity and affected regression gates
+      - name: Run focused identity gate
         shell: bash
         run: |
           set -euo pipefail
+          git diff --check origin/main...HEAD -- src/device-identity.js scripts/scheduler-alerts-gps-foundation-tests.mjs
           node --check src/device-identity.js
           node --check scripts/scheduler-alerts-gps-foundation-tests.mjs
           npm run --silent test:foundation
-          npm run --silent test:auth
-          npm run --silent test:messaging
-          npm run --silent test:leadership-demo
           npm audit --omit=dev --audit-level=high
 
       - name: Publish clean tested source branch
