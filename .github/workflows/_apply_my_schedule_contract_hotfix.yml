@@ -1,0 +1,79 @@
+name: Apply My Schedule contract hotfix
+
+on:
+  push:
+    branches:
+      - fix/my-schedule-contract-20260714
+    paths:
+      - .github/workflows/_apply_my_schedule_contract_hotfix.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: my-schedule-contract-hotfix-20260714
+  cancel-in-progress: false
+
+jobs:
+  apply-test-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Apply exact source patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git apply --check .repair/my_schedule_contract.patch
+          git apply .repair/my_schedule_contract.patch
+          git diff --check
+
+      - name: Install exact dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run focused and broad schedule gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run --silent test:foundation
+          npm run --silent test:schedule-ai
+          npm run --silent test:leadership-demo
+          npm run --silent test:scheduler-overhaul
+          node --check src/schedule-api.js
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const source = fs.readFileSync('src/schedule-api.js','utf8');
+          const required = [
+            "Array.isArray(page.current_items)",
+            "shift.shift_start",
+            "shift.shift_end",
+            "page.phase === 'after_shift'",
+            "scheduleStatus = 'completed'",
+          ];
+          for (const needle of required) {
+            if (!source.includes(needle)) throw new Error(`Missing My Schedule invariant: ${needle}`);
+          }
+          if (!source.includes("page.phase === 'before_shift'")) throw new Error('Before-shift notice invariant missing');
+          console.log('MY_SCHEDULE_CONTRACT_SOURCE_PASS');
+          NODE
+
+      - name: Publish tested source only
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .repair
+          rm -f .github/workflows/_apply_my_schedule_contract_hotfix.yml
+          git config user.name 'Memphis Zoo Repair Bot'
+          git config user.email 'lasrevinu333@users.noreply.github.com'
+          git add src/schedule-api.js supabase/migrations/20260714233000_my_schedule_contract_v3.sql
+          git diff --cached --check
+          git commit -m 'Fix My Schedule shift and current-item contract'
+          git push origin "HEAD:${GITHUB_REF_NAME}"
