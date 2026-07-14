@@ -17,11 +17,21 @@ concurrency:
 jobs:
   apply-test-publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Merge current main before testing
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'Memphis Zoo Repair Bot'
+          git config user.email 'lasrevinu333@users.noreply.github.com'
+          git fetch origin main
+          git merge --no-edit origin/main
+          git rev-parse HEAD > /tmp/base_after_merge
 
       - name: Checkout exact frontend fixtures
         uses: actions/checkout@v4
@@ -64,10 +74,16 @@ jobs:
       - name: Install exact dependencies
         run: npm ci --ignore-scripts
 
-      - name: Run complete backend regression gate
+      - name: Run complete backend gate and capture every failure
+        id: gate
         shell: bash
         run: |
-          set -euo pipefail
+          set +e
+          report=/tmp/backend_test_diagnostics.txt
+          : > "$report"
+          failed=0
+          printf 'node=%s\nnpm=%s\nworkflow_commit=%s\nbase_after_merge=%s\n\n' \
+            "$(node --version)" "$(npm --version)" "$GITHUB_SHA" "$(cat /tmp/base_after_merge)" >> "$report"
           for test_script in \
             smoke \
             test:foundation \
@@ -85,26 +101,68 @@ jobs:
             test:scheduler-overhaul \
             test:sch2-publish
           do
-            npm run --silent "$test_script"
+            safe_name="${test_script//[:\/]/_}"
+            out="/tmp/${safe_name}.log"
+            npm run --silent "$test_script" > "$out" 2>&1
+            rc=$?
+            if [ "$rc" -eq 0 ]; then
+              printf 'PASS %s\n' "$test_script" >> "$report"
+            else
+              failed=1
+              printf '\nFAIL %s rc=%s\n' "$test_script" "$rc" >> "$report"
+              tail -n 220 "$out" >> "$report"
+              printf '\n' >> "$report"
+            fi
           done
           for file in src/*.js scripts/*.mjs; do
-            node --check "$file"
+            node --check "$file" > /tmp/syntax.log 2>&1
+            rc=$?
+            if [ "$rc" -eq 0 ]; then
+              printf 'PASS syntax %s\n' "$file" >> "$report"
+            else
+              failed=1
+              printf '\nFAIL syntax %s rc=%s\n' "$file" "$rc" >> "$report"
+              cat /tmp/syntax.log >> "$report"
+            fi
           done
-          npm audit --omit=dev --audit-level=high
+          npm audit --omit=dev --audit-level=high > /tmp/audit.log 2>&1
+          rc=$?
+          if [ "$rc" -eq 0 ]; then
+            printf 'PASS npm-audit-high\n' >> "$report"
+          else
+            failed=1
+            printf '\nFAIL npm-audit-high rc=%s\n' "$rc" >> "$report"
+            tail -n 220 /tmp/audit.log >> "$report"
+          fi
+          printf '\nFAILED=%s\n' "$failed" >> "$report"
+          cat "$report"
+          echo "failed=$failed" >> "$GITHUB_OUTPUT"
 
-      - name: Commit only tested application source
+      - name: Publish tested source or preserve diagnostics
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf _engine_fixture .repair
-          rm -f .github/workflows/_apply_scheduler_repair.yml
           git config user.name 'Memphis Zoo Repair Bot'
           git config user.email 'lasrevinu333@users.noreply.github.com'
-          git add -A
-          git diff --cached --check
-          if git diff --cached --quiet; then
-            echo 'No source changes were produced.' >&2
-            exit 1
+          if [ "${{ steps.gate.outputs.failed }}" = '0' ]; then
+            rm -rf _engine_fixture .repair
+            rm -f .github/workflows/_apply_scheduler_repair.yml
+            git add -A
+            git diff --cached --check
+            if git diff --cached --quiet; then
+              echo 'No source changes were produced.' >&2
+              exit 1
+            fi
+            git commit -m 'Repair scheduler delivery, reminders, GPS, and kiosk identity'
+          else
+            git reset --hard "$(cat /tmp/base_after_merge)"
+            mkdir -p .repair
+            cp /tmp/backend_test_diagnostics.txt .repair/backend_test_diagnostics.txt
+            git add .repair/backend_test_diagnostics.txt
+            if git diff --cached --quiet; then
+              git commit --allow-empty -m 'Record exact backend repair gate diagnostics'
+            else
+              git commit -m 'Record exact backend repair gate diagnostics'
+            fi
           fi
-          git commit -m 'Repair scheduler delivery, reminders, GPS, and kiosk identity'
           git push origin "HEAD:${GITHUB_REF_NAME}"
