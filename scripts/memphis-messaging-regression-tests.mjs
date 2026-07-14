@@ -14,6 +14,54 @@ process.env.EVENTS_GEMINI_API_KEY = "";
 const THREAD_ID = "00000000-0000-0000-0000-000000000001";
 const SERVICE_DATE = "2026-04-25";
 
+function createTestMessagingRouter(options) {
+  const originalRead = options.runReadOnlySql;
+  return createMessagingRouter({
+    ...options,
+    runReadOnlySql: async (sql) => {
+      const rows = await originalRead(sql);
+      if (Array.isArray(rows) && rows.length) return rows;
+      const query = String(sql || "");
+      if (/public\.device_aliases/i.test(query) && /order by match_rank/i.test(query)) {
+        const requestedMatch = query.match(/select\s+'([^']+)'::text as requested_device_id/i)
+          || query.match(/upper\(btrim\('([^']+)'\)\)/i);
+        const deviceId = requestedMatch?.[1] || "KIOSK_TEST";
+        const mappings = {
+          "KIOSK_02": ["30000000-0000-0000-0000-000000000001", "Alijah Collins", "EMP001"],
+          "KIOSK_03": ["30000000-0000-0000-0000-000000000033", "Jennifer Sheffield", "EMP033"],
+          "KIOSK_99": ["30000000-0000-0000-0000-000000000099", "Off Shift Employee", "EMP099"],
+          "KIOSK_MISMATCH": ["30000000-0000-0000-0000-000000000010", "Payload Employee", "EMP010"],
+          "KIOSK_ON": ["30000000-0000-0000-0000-000000000098", "On Shift Employee", "EMP098"],
+          "device-123": ["30000000-0000-0000-0000-000000000088", "Event Owner", "EMP088"],
+        };
+        const mapped = mappings[deviceId] || [deviceId === "KIOSK_UNMAPPED" || deviceId === "KIOSK_01" ? null : "30000000-0000-0000-0000-000000000088", deviceId === "KIOSK_01" ? "Ops Manager" : "Registered Test Device", "EMPTEST"];
+        return [{
+          requested_device_id: deviceId,
+          matched_by: "canonical",
+          canonical_device_id: deviceId,
+          device_id: deviceId,
+          device_name: `${mapped[1] || deviceId} phone`,
+          device_active: true,
+          assigned_employee_id: mapped[0],
+          assigned_employee_name: mapped[1],
+          employee_code: mapped[2],
+          role: deviceId === "KIOSK_01" ? "manager" : "employee",
+          employee_active: Boolean(mapped[0]),
+        }];
+      }
+      const match = query.match(/msg_get_user_by_device\('([^']+)'\)/i);
+      if (!match) return rows;
+      const deviceId = match[1];
+      return [{
+        msg_user_id: "00000000-0000-4000-8000-000000000088",
+        display_name: deviceId === "KIOSK_01" ? "Ops Manager" : "Registered Test Device",
+        role: deviceId === "KIOSK_01" ? "manager" : "employee",
+        canonical_device_id: deviceId,
+      }];
+    },
+  });
+}
+
 const responder = createMemphisResponder({
   runReadOnlySql: async (sql) => {
     const query = String(sql || "");
@@ -192,7 +240,7 @@ async function withServer(app, fn) {
 const threadMetadataReadCalls = [];
 const threadMetadataApp = express();
 threadMetadataApp.use(express.json());
-threadMetadataApp.use('/messaging-api', createMessagingRouter({
+threadMetadataApp.use('/messaging-api', createTestMessagingRouter({
   runReadOnlySql: async (sql) => {
     const query = String(sql || '');
     threadMetadataReadCalls.push(query);
@@ -246,10 +294,18 @@ assert.ok(threadMetadataReadCalls.some((sql) => /last_message_metadata_json/i.te
 const reminderReadCalls = [];
 const reminderApp = express();
 reminderApp.use(express.json());
-reminderApp.use('/messaging-api', createMessagingRouter({
+reminderApp.use('/messaging-api', createTestMessagingRouter({
   runReadOnlySql: async (sql) => {
     const query = String(sql || '');
     reminderReadCalls.push(query);
+    if (/msg_get_user_by_device/i.test(query)) {
+      return [{
+        msg_user_id: '00000000-0000-0000-0000-000000000088',
+        display_name: 'Event Owner',
+        role: 'employee',
+        canonical_device_id: 'device-123',
+      }];
+    }
     if (/notification_state/i.test(query)) {
       return [{
         requested_device_id: 'device-123',
@@ -271,7 +327,7 @@ reminderApp.use('/messaging-api', createMessagingRouter({
         display_name: 'Event Owner',
         body: 'Two-day event reminder: Donor Dinner is scheduled in Event Center.',
         message_type: 'bot_response',
-        metadata_json: { source: 'events_app', notification_kind: 'two_days_out' },
+        metadata_json: { source: 'events_app', notification_kind: 'event_reminder', notification_key: 'event:test:owner' },
         sent_at: '2026-06-04T13:15:00Z',
         created_at: '2026-06-04T13:15:00Z',
         delivered_at: null,
@@ -293,24 +349,32 @@ await withServer(reminderApp, async (baseUrl) => {
   const payload = await response.json();
   assert.equal(payload.ok, true);
   assert.equal(payload.data.length, 1);
-  assert.equal(payload.data[0].metadata_json.notification_kind, 'two_days_out');
+  assert.equal(payload.data[0].metadata_json.notification_kind, 'event_reminder');
 });
 const reminderSql = reminderReadCalls.find((sql) => /metadata_json->>'source'/i.test(sql));
 assert.ok(reminderSql, 'device event reminder route should query reminders by mapped device after notification-state check');
 assert.match(reminderSql, /msg_device_assignments/, 'device reminder route should resolve the active device assignment');
 assert.match(reminderSql, /metadata_json->>'source'.*= 'events_app'/s, 'device reminder route should only return event-app messages');
-assert.match(reminderSql, /metadata_json->>'notification_kind'.*day_of_event.*two_days_out.*three_days_out/s, 'device reminder route should return the current event reminder kinds');
-assert.match(reminderSql, /metadata_json->>'notification_kind'.*two_days_before.*day_before.*morning_of/s, 'device reminder route should still honor legacy reminder kinds until old payloads age out');
-assert.match(reminderSql, /r\.read_at is null/, 'device reminder route should only return unread reminders');
+assert.match(reminderSql, /metadata_json->>'notification_kind'.*= 'event_reminder'/s, 'device reminder route should return only the canonical one-per-event reminder kind');
+assert.doesNotMatch(reminderSql, /three_days_out|two_days_out|day_of_event|day_before|morning_of/, 'legacy cadence reminders must not be replayed by employee devices');
+assert.match(reminderSql, /coalesce\(r\.acknowledged_at, r\.read_at\) is null/, 'device reminder route should only return unacknowledged reminders');
 
 const notificationGuardReadCalls = [];
 let notificationGuardQueriedMessages = false;
 const notificationGuardApp = express();
 notificationGuardApp.use(express.json());
-notificationGuardApp.use('/messaging-api', createMessagingRouter({
+notificationGuardApp.use('/messaging-api', createTestMessagingRouter({
   runReadOnlySql: async (sql) => {
     const query = String(sql || '');
     notificationGuardReadCalls.push(query);
+    if (/msg_get_user_by_device/i.test(query)) {
+      return [{
+        msg_user_id: '00000000-0000-0000-0000-000000000077',
+        display_name: 'Off Shift Employee',
+        role: 'employee',
+        canonical_device_id: 'KIOSK_99',
+      }];
+    }
     if (/notification_state/i.test(query)) {
       return [{
         requested_device_id: 'KIOSK_99',
@@ -379,7 +443,7 @@ const managerDeviceReminderReadCalls = [];
 let managerDeviceReminderQueriedMessages = false;
 const managerDeviceReminderApp = express();
 managerDeviceReminderApp.use(express.json());
-managerDeviceReminderApp.use('/messaging-api', createMessagingRouter({
+managerDeviceReminderApp.use('/messaging-api', createTestMessagingRouter({
   runReadOnlySql: async (sql) => {
     const query = String(sql || '');
     managerDeviceReminderReadCalls.push(query);
@@ -436,7 +500,7 @@ assert.ok(managerDeviceReminderReadCalls.find((sql) => /notification_state/i.tes
 const presentationDemoOffShiftReadCalls = [];
 const presentationDemoOffShiftApp = express();
 presentationDemoOffShiftApp.use(express.json());
-presentationDemoOffShiftApp.use('/messaging-api', createMessagingRouter({
+presentationDemoOffShiftApp.use('/messaging-api', createTestMessagingRouter({
   runReadOnlySql: async (sql) => {
     const query = String(sql || '');
     presentationDemoOffShiftReadCalls.push(query);
@@ -505,7 +569,7 @@ const missingEmployeeMappingReadCalls = [];
 let missingEmployeeMappingQueriedMessages = false;
 const missingEmployeeMappingApp = express();
 missingEmployeeMappingApp.use(express.json());
-missingEmployeeMappingApp.use('/messaging-api', createMessagingRouter({
+missingEmployeeMappingApp.use('/messaging-api', createTestMessagingRouter({
   runReadOnlySql: async (sql) => {
     const query = String(sql || '');
     missingEmployeeMappingReadCalls.push(query);
@@ -543,7 +607,7 @@ assert.equal(missingEmployeeMappingQueriedMessages, false, 'Unmapped employee de
 const locationStatusReadCalls = [];
 const locationStatusApp = express();
 locationStatusApp.use(express.json());
-locationStatusApp.use('/messaging-api', createMessagingRouter({
+locationStatusApp.use('/messaging-api', createTestMessagingRouter({
   runReadOnlySql: async (sql) => {
     const query = String(sql || '');
     locationStatusReadCalls.push(query);
@@ -636,7 +700,7 @@ const locationGuardReadCalls = [];
 let locationGuardQueriedStatuses = false;
 const locationGuardApp = express();
 locationGuardApp.use(express.json());
-locationGuardApp.use('/messaging-api', createMessagingRouter({
+locationGuardApp.use('/messaging-api', createTestMessagingRouter({
   runReadOnlySql: async (sql) => {
     const query = String(sql || '');
     locationGuardReadCalls.push(query);
@@ -688,7 +752,7 @@ const locationMismatchReadCalls = [];
 let locationMismatchQueriedStatuses = false;
 const locationMismatchApp = express();
 locationMismatchApp.use(express.json());
-locationMismatchApp.use('/messaging-api', createMessagingRouter({
+locationMismatchApp.use('/messaging-api', createTestMessagingRouter({
   runReadOnlySql: async (sql) => {
     const query = String(sql || '');
     locationMismatchReadCalls.push(query);
@@ -739,7 +803,7 @@ assert.ok(locationMismatchReadCalls.find((sql) => /'30000000-0000-0000-0000-0000
 const offShiftThreadReadCalls = [];
 const offShiftThreadsApp = express();
 offShiftThreadsApp.use(express.json());
-offShiftThreadsApp.use('/messaging-api', createMessagingRouter({
+offShiftThreadsApp.use('/messaging-api', createTestMessagingRouter({
   runReadOnlySql: async (sql) => {
     const query = String(sql || '');
     offShiftThreadReadCalls.push(query);
@@ -847,7 +911,7 @@ const visibilityReadCalls = [];
 let unexpectedGroupRpc = false;
 const visibilityApp = express();
 visibilityApp.use(express.json());
-visibilityApp.use('/messaging-api', createMessagingRouter({
+visibilityApp.use('/messaging-api', createTestMessagingRouter({
   runReadOnlySql: async (sql) => {
     const query = String(sql || '');
     visibilityReadCalls.push(query);
@@ -1004,7 +1068,7 @@ let deleteThreadRpcCall = null;
 let permanentDeleteTriggered = false;
 const deleteThreadApp = express();
 deleteThreadApp.use(express.json());
-deleteThreadApp.use('/messaging-api', createMessagingRouter({
+deleteThreadApp.use('/messaging-api', createTestMessagingRouter({
   runReadOnlySql: async (sql) => {
     const query = String(sql || '');
     if (/msg_get_user_by_device\('KIOSK_04'\)/i.test(query)) {
@@ -1063,7 +1127,7 @@ const adminAuditReadCalls = [];
 const adminAuditRpcCalls = [];
 const adminAuditApp = express();
 adminAuditApp.use(express.json());
-adminAuditApp.use('/messaging-api', createMessagingRouter({
+adminAuditApp.use('/messaging-api', createTestMessagingRouter({
   runReadOnlySql: async (sql) => {
     const query = String(sql || '');
     adminAuditReadCalls.push(query);

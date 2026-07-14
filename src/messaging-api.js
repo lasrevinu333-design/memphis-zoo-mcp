@@ -3,6 +3,7 @@ import { makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
 import { makeGeminiAdminMiddleware } from "./auth/gemini-admin-auth.js";
 import { getGeminiDiagnostics } from "./utils/gemini-config.js";
 import { createMemphisResponder } from "./services/index.js";
+import { resolveCanonicalDevice } from "./device-identity.js";
 
 export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPayload, appVersion, releaseId, contractVersion }) {
   const router = express.Router();
@@ -60,8 +61,19 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
   async function getViewerIdentity(deviceId = "") {
     const normalizedDeviceId = String(deviceId || "").trim();
     if (!normalizedDeviceId) return null;
-    const rows = await runReadOnlySql(`select * from public.msg_get_user_by_device('${esc(normalizedDeviceId)}')`);
-    return Array.isArray(rows) && rows.length ? rows[0] : null;
+    const device = await resolveCanonicalDevice({ runReadOnlySql, deviceIdentifier: normalizedDeviceId });
+    const canonicalDeviceId = String(device?.canonical_device_id || normalizedDeviceId).trim();
+    let rows = await runReadOnlySql(`select * from public.msg_get_user_by_device('${esc(canonicalDeviceId)}')`);
+    if ((!Array.isArray(rows) || !rows.length) && canonicalDeviceId.toLowerCase() !== normalizedDeviceId.toLowerCase()) {
+      rows = await runReadOnlySql(`select * from public.msg_get_user_by_device('${esc(normalizedDeviceId)}')`);
+    }
+    if (!Array.isArray(rows) || !rows.length) return null;
+    return {
+      ...rows[0],
+      requested_device_id: normalizedDeviceId,
+      canonical_device_id: canonicalDeviceId,
+      matched_by: device?.matched_by || "messenger_assignment",
+    };
   }
 
   async function resolveViewerContext({ userId = "", deviceId = "" } = {}) {
@@ -547,22 +559,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
   async function getAssignedEmployeeForDevice(deviceId = "") {
     const normalizedDeviceId = String(deviceId || "").trim();
     if (!normalizedDeviceId) return null;
-    const rows = await runReadOnlySql(`
-      select
-        d.device_id,
-        d.device_name,
-        d.assigned_employee_id,
-        e.display_name as assigned_employee_name,
-        e.employee_code,
-        e.role,
-        d.active as device_active,
-        coalesce(e.active, false) as employee_active
-      from public.devices d
-      left join public.employees e on e.id = d.assigned_employee_id
-      where d.device_id = '${esc(normalizedDeviceId)}'
-      limit 1
-    `);
-    return Array.isArray(rows) && rows.length ? rows[0] : null;
+    return resolveCanonicalDevice({ runReadOnlySql, deviceIdentifier: normalizedDeviceId });
   }
 
   function buildThreadListSql({ viewerUserId = "", managerOverview = false }) {
@@ -841,22 +838,23 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   });
 
-  router.get("/me/by-device", async (req, res) => {
+  router.get("/me/by-device", requireDeviceOrOpsAuth, async (req, res) => {
     try {
       const deviceId = String(req.query.device_id || "").trim();
       if (!deviceId) throw new Error("device_id is required.");
-      const rows = await runReadOnlySql(`select * from public.msg_get_user_by_device('${esc(deviceId)}')`);
-      const data = Array.isArray(rows) && rows.length ? rows[0] : null;
+      const data = req.memphisMessagingDevice?.identity || await getViewerIdentity(deviceId);
       res.status(200).json({ ok: true, data, meta: messagingMeta() });
     } catch (error) {
       fail(res, error, "Device identity lookup failed");
     }
   });
 
-  router.get("/users", async (req, res) => {
+  router.get("/users", requireDeviceOrOpsAuth, async (req, res) => {
     try {
-      const userId = String(req.query.user_id || "").trim() || null;
-      const rows = await runReadOnlySql(`select * from public.msg_list_users(${userId ? `'${esc(userId)}'::uuid` : "null::uuid"})`);
+      const requestedUserId = String(req.query.user_id || "").trim();
+      const deviceId = String(req.query.device_id || req.header("x-device-id") || "").trim();
+      const viewer = await resolveViewerContext({ userId: requestedUserId, deviceId });
+      const rows = await runReadOnlySql(`select * from public.msg_list_users('${esc(viewer.effectiveUserId)}'::uuid)`);
       res.status(200).json({ ok: true, data: rows || [], meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Messaging users failed");
@@ -882,12 +880,13 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   });
 
-  router.get("/device-event-reminders", async (req, res) => {
+  router.get("/device-event-reminders", requireDeviceOrOpsAuth, async (req, res) => {
     try {
       const deviceId = String(req.query.device_id || "").trim();
       const limit = Math.min(Math.max(Number.parseInt(String(req.query.limit || 5), 10) || 5, 1), 20);
       if (!deviceId) throw new Error("device_id is required.");
-      const notificationState = await getDeviceNotificationState(deviceId);
+      const canonicalDeviceId = String(req.memphisMessagingDevice?.identity?.canonical_device_id || deviceId).trim();
+      const notificationState = await getDeviceNotificationState(canonicalDeviceId);
       const suppressedNotificationState = phoneSuppressedNotificationState(notificationState);
       if (notificationState?.is_employee_device !== true) {
         res.status(200).json({ ok: true, data: [], meta: messagingMeta(notificationStateMeta(suppressedNotificationState)) });
@@ -901,7 +900,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       }
       const presentationDemoClause = presentationDemoOnly
         ? `and coalesce(m.metadata_json->>'presentation_demo', '') = 'true'
-            and coalesce(nullif(m.metadata_json->>'target_device_id', ''), '${esc(deviceId)}') = '${esc(deviceId)}'`
+            and coalesce(nullif(m.metadata_json->>'target_device_id', ''), '${esc(canonicalDeviceId)}') = '${esc(canonicalDeviceId)}'`
         : "";
       const rows = await runReadOnlySql(`
         select *
@@ -910,7 +909,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
             select mu.id as msg_user_id, mu.display_name, mda.device_identifier
             from public.msg_device_assignments mda
             join public.msg_users mu on mu.id = mda.msg_user_id
-            where mda.device_identifier = '${esc(deviceId)}'
+            where mda.device_identifier = '${esc(canonicalDeviceId)}'
               and mda.is_active = true
               and mu.is_active = true
             limit 1
@@ -926,7 +925,13 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
             m.sent_at,
             m.created_at,
             r.delivered_at,
-            r.read_at
+            r.displayed_at,
+            r.read_at,
+            r.acknowledged_at,
+            coalesce(
+              nullif(m.metadata_json->>'notification_key',''),
+              ('event:' || coalesce(nullif(m.metadata_json->>'event_id',''), m.id::text) || ':' || du.msg_user_id::text)
+            ) as notification_key
           from device_user du
           join public.msg_thread_participants tp
             on tp.user_id = du.msg_user_id
@@ -938,17 +943,19 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
             on r.message_id = m.id
            and r.user_id = du.msg_user_id
           where coalesce(m.metadata_json->>'source', '') = 'events_app'
-            and coalesce(m.metadata_json->>'notification_kind', '') in (
-              'day_of_event',
-              'two_days_out',
-              'three_days_out',
-              'two_days_before',
-              'day_before',
-              'morning_of',
-              ('shift_plus_' || 'fifteen')
-            )
+            and coalesce(m.metadata_json->>'notification_kind', '') = 'event_reminder'
             ${presentationDemoClause}
-            and r.read_at is null
+            and coalesce(r.acknowledged_at, r.read_at) is null
+            and not exists (
+              select 1
+              from public.device_notification_acknowledgements a
+              where upper(btrim(a.device_identifier)) = upper(btrim('${esc(canonicalDeviceId)}'))
+                and a.notification_key = coalesce(
+                  nullif(m.metadata_json->>'notification_key',''),
+                  ('event:' || coalesce(nullif(m.metadata_json->>'event_id',''), m.id::text) || ':' || du.msg_user_id::text)
+                )
+                and a.acknowledged_at is not null
+            )
             and m.sent_at >= now() - interval '4 days'
           order by m.sent_at desc, m.created_at desc
           limit ${limit}
@@ -960,13 +967,14 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   });
 
-  router.get("/device-location-status-reminders", async (req, res) => {
+  router.get("/device-location-status-reminders", requireDeviceOrOpsAuth, async (req, res) => {
     try {
       const deviceId = String(req.query.device_id || "").trim();
       const limit = Math.min(Math.max(Number.parseInt(String(req.query.limit || 5), 10) || 5, 1), 20);
       if (!deviceId) throw new Error("device_id is required.");
 
       const assignment = await getAssignedEmployeeForDevice(deviceId);
+      const canonicalDeviceId = String(assignment?.canonical_device_id || assignment?.device_id || deviceId).trim();
       if (!assignment || !assignment.device_active) {
         res.status(404).json({ ok: false, error: "Active device assignment not found." });
         return;
@@ -978,7 +986,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
 
       const serviceDate = String(req.query.service_date || req.query.date || "").trim() || await getServiceDate();
       if (!serviceDate) throw new Error("service_date could not be resolved.");
-      const notificationState = await getDeviceNotificationState(deviceId, { serviceDate, employeeId: assignment.assigned_employee_id });
+      const notificationState = await getDeviceNotificationState(canonicalDeviceId, { serviceDate, employeeId: assignment.assigned_employee_id });
       if (idsDiffer(notificationState?.employee_id, assignment.assigned_employee_id)) {
         const mismatchState = forceSilentNotificationState(notificationState, "device_assignment_mismatch");
         res.status(200).json({ ok: true, data: [], meta: messagingMeta(notificationStateMeta(mismatchState)) });
@@ -1022,7 +1030,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
           )
           select
             '${esc(serviceDate)}'::date as service_date,
-            '${esc(assignment.device_id || deviceId)}'::text as device_id,
+            '${esc(canonicalDeviceId)}'::text as device_id,
             ${assignment.device_name ? `'${esc(assignment.device_name)}'::text` : 'null::text'} as device_name,
             '${esc(assignment.assigned_employee_id)}'::uuid as employee_id,
             ${assignment.assigned_employee_name ? `'${esc(assignment.assigned_employee_name)}'::text` : 'null::text'} as employee_name,
@@ -1047,10 +1055,18 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
             v.services_performed,
             v.open_ticket_count,
             v.last_scan_at,
-            v.last_scan_at_display
+            v.last_scan_at_display,
+            ('location-status:' || '${esc(serviceDate)}' || ':' || al.location_id::text || ':' || v.status_code || ':' || coalesce(to_char(v.latest_completed_at at time zone 'UTC','YYYYMMDDHH24MISSUS'),'never')) as notification_key
           from assigned_locations al
           join public.v_location_dashboard_status v on v.location_id = al.location_id
           where v.status_code in ('overdue', 'due_soon')
+            and not exists (
+              select 1
+              from public.device_notification_acknowledgements a
+              where upper(btrim(a.device_identifier)) = upper(btrim('${esc(canonicalDeviceId)}'))
+                and a.notification_key = ('location-status:' || '${esc(serviceDate)}' || ':' || al.location_id::text || ':' || v.status_code || ':' || coalesce(to_char(v.latest_completed_at at time zone 'UTC','YYYYMMDDHH24MISSUS'),'never'))
+                and a.acknowledged_at is not null
+            )
           order by
             case when v.status_code = 'overdue' then 0 else 1 end,
             case when al.form_type = 'restroom' then 0 else 1 end,
@@ -1061,6 +1077,44 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       res.status(200).json({ ok: true, data: rows || [], meta: messagingMeta(notificationStateMeta(notificationState)) });
     } catch (error) {
       fail(res, error, "Device location status reminders failed");
+    }
+  });
+
+  router.post("/device-notifications/ack", requireDeviceOrOpsAuth, async (req, res) => {
+    try {
+      const requestedDeviceId = String(req.body?.device_id || req.body?.deviceId || req.header("x-device-id") || "").trim();
+      const notificationKey = String(req.body?.notification_key || req.body?.notificationKey || "").trim();
+      const notificationType = String(req.body?.notification_type || req.body?.notificationType || "notification").trim().toLowerCase();
+      const action = String(req.body?.action || "dismissed").trim().toLowerCase();
+      if (!requestedDeviceId) throw new Error("device_id is required.");
+      if (!notificationKey || notificationKey.length > 500) throw new Error("notification_key is required and must be at most 500 characters.");
+      if (!['displayed','dismissed','opened','acknowledged'].includes(action)) throw new Error("action must be displayed, dismissed, opened, or acknowledged.");
+      const device = await getAssignedEmployeeForDevice(requestedDeviceId);
+      if (!device || !device.device_active) throw new Error("Active device assignment not found.");
+      const canonicalDeviceId = String(device.canonical_device_id || device.device_id).trim();
+      const metadata = req.body?.metadata && typeof req.body.metadata === 'object' && !Array.isArray(req.body.metadata)
+        ? req.body.metadata
+        : {};
+      const data = await runRpc("ack_device_notification", {
+        p_device_identifier: canonicalDeviceId,
+        p_notification_key: notificationKey,
+        p_notification_type: notificationType,
+        p_action: action,
+        p_metadata_json: metadata,
+      });
+      if (notificationType === 'event' && req.body?.message_id && device.assigned_employee_id) {
+        const viewer = await getViewerIdentity(canonicalDeviceId);
+        if (viewer?.msg_user_id) {
+          await runRpc("msg_acknowledge_message", {
+            p_message_id: String(req.body.message_id),
+            p_user_id: viewer.msg_user_id,
+            p_device_identifier: canonicalDeviceId,
+          });
+        }
+      }
+      res.status(200).json({ ok: true, data, meta: messagingMeta() });
+    } catch (error) {
+      fail(res, error, "Device notification acknowledgement failed");
     }
   });
 
@@ -1181,10 +1235,12 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   });
 
-  router.post("/memphis/thread", async (req, res) => {
+  router.post("/memphis/thread", requireDeviceOrOpsAuth, async (req, res) => {
     try {
-      const userId = String(req.body?.user_id || "").trim();
-      const data = await runRpc("msg_get_or_create_memphis_thread", { p_user_id: userId });
+      const requestedUserId = String(req.body?.user_id || "").trim();
+      const deviceId = String(req.body?.device_id || req.body?.deviceId || req.header("x-device-id") || "").trim();
+      const viewer = await resolveViewerContext({ userId: requestedUserId, deviceId });
+      const data = await runRpc("msg_get_or_create_memphis_thread", { p_user_id: viewer.effectiveUserId });
       res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Get Memphis thread failed");
@@ -1263,14 +1319,17 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   });
 
-  router.post("/memphis/message", async (req, res) => {
+  router.post("/memphis/message", requireDeviceOrOpsAuth, async (req, res) => {
     try {
-      const userId = String(req.body?.user_id || "").trim();
+      const requestedUserId = String(req.body?.user_id || "").trim();
       const body = String(req.body?.body || "").trim();
-      const deviceId = String(req.body?.device_id || "").trim();
-      if (!userId) throw new Error("user_id is required.");
+      const deviceId = String(req.body?.device_id || req.body?.deviceId || req.header("x-device-id") || "").trim();
+      const clientMessageId = String(req.body?.client_message_id || req.body?.clientMessageId || "").trim();
       if (!body) throw new Error("body is required.");
 
+      const viewer = await resolveViewerContext({ userId: requestedUserId, deviceId });
+      const userId = viewer.effectiveUserId;
+      const canonicalDeviceId = String(viewer.identity?.canonical_device_id || deviceId).trim();
       const thread = await runRpc("msg_get_or_create_memphis_thread", { p_user_id: userId });
 
       const userMessage = await runRpc("msg_send_message", {
@@ -1278,7 +1337,11 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         p_sender_user_id: userId,
         p_body: body,
         p_message_type: "text",
-        p_metadata_json: { channel: "memphis" }
+        p_metadata_json: {
+          channel: "memphis",
+          device_id: canonicalDeviceId,
+          ...(clientMessageId ? { client_message_id: clientMessageId } : {}),
+        }
       });
 
       const memphisRows = await runReadOnlySql("select public.msg_get_memphis_user_id() as memphis_user_id");
@@ -1286,7 +1349,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       if (!memphisUserId) throw new Error("Memphis bot identity not found.");
 
       let reply;
-      ({ reply } = await buildMemphisReply({ userId, deviceId, threadId: thread.id, body }));
+      ({ reply } = await buildMemphisReply({ userId, deviceId: canonicalDeviceId, threadId: thread.id, body }));
 
       const botMessage = await runRpc("msg_send_message", {
         p_thread_id: thread.id,
@@ -1296,6 +1359,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         p_metadata_json: {
           channel: "memphis",
           ai: true,
+          client_message_id: `memphis-reply:${userMessage?.id || clientMessageId || thread.id}`,
           ...(reply?.meta && typeof reply.meta === "object" ? reply.meta : {})
         }
       });

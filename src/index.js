@@ -19,6 +19,7 @@ import { APP_VERSION, RELEASE_ID } from "./app-version.js";
 import { authenticateOpsAccessRequest, installSharedAuthRoutes, makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
 import { makeMcpConnectorMiddleware } from "./auth/mcp-connector-auth.js";
 import { runReadOnlySql as runSupabaseReadOnlySql } from "./supabase/read.js";
+import { resolveActiveAssignedDevice } from "./device-identity.js";
 
 const app = express();
 app.use(express.json({ limit: "10mb" }));
@@ -40,13 +41,16 @@ const SCAN_RPC_ALLOWLIST = new Set([
   "tool_finish_session",
   "tool_complete_session",
   "tool_ping_device",
-  "tool_record_scan_event"
+  "tool_record_scan_event",
+  "tool_commit_cleaning_workflow",
+  "tool_report_device_sync_status",
+  "tool_evaluate_location_proximity"
 ]);
 
-const SCAN_CONTRACT_VERSION = "scan.v1";
+const SCAN_CONTRACT_VERSION = "scan.v2";
 const DASHBOARD_CONTRACT_VERSION = "dashboard.v1";
-const MESSAGING_CONTRACT_VERSION = "messaging.v1";
-const SCHEDULE_CONTRACT_VERSION = "schedule.v1";
+const MESSAGING_CONTRACT_VERSION = "messaging.v2";
+const SCHEDULE_CONTRACT_VERSION = "schedule.v2";
 const GUEST_REPORTS_CONTRACT_VERSION = "guest-reports.v1";
 const FEEDBACK_CONTRACT_VERSION = "feedback.v1";
 const CANARY_RESTROOM_CODE = "TETM";
@@ -57,7 +61,7 @@ const ATTENDANCE_TIMEOUT_MS = toSafeInt(process.env.ND_MEMZOO_ATTENDANCE_TIMEOUT
 const ATTENDANCE_CACHE_MS = toSafeInt(process.env.ND_MEMZOO_ATTENDANCE_CACHE_MS, 60000);
 const ATTENDANCE_CF_CLEARANCE = String(process.env.ND_MEMZOO_CF_CLEARANCE || "").trim();
 const FEEDBACK_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
-const FEEDBACK_REMINDER_SWEEP_MS = toSafeInt(process.env.FEEDBACK_REMINDER_SWEEP_MS, 60000);
+const FEEDBACK_REMINDER_SWEEP_MS = toSafeNonNegativeInt(process.env.FEEDBACK_REMINDER_SWEEP_MS, 60000);
 const FEEDBACK_REMINDER_MAX_COUNT = toSafeInt(process.env.FEEDBACK_REMINDER_MAX_COUNT, 3);
 let attendanceCache = { data: null, fetched_at_ms: 0 };
 let feedbackReminderSweepInFlight = false;
@@ -98,17 +102,111 @@ setInterval(() => {
       rateLimitBuckets.delete(ip);
     }
   }
+  for (const [key, bucket] of scanRateLimitBuckets) {
+    if (now - bucket.windowStart > RATE_LIMIT_WINDOW_MS * 2) {
+      scanRateLimitBuckets.delete(key);
+    }
+  }
 }, RATE_LIMIT_WINDOW_MS).unref?.();
 
-async function validateDeviceRegistration(deviceId) {
-  const normalized = String(deviceId || "").trim();
-  if (!normalized) return false;
-  try {
-    const rows = await runReadOnlySql(`select 1 from public.devices where device_id = ${sqlLiteral(normalized)} and active = true limit 1`);
-    return Array.isArray(rows) && rows.length > 0;
-  } catch {
-    return false;
+const SCAN_READ_LIMIT_PER_MINUTE = toSafeInt(process.env.SCAN_READ_LIMIT_PER_MINUTE, 120);
+const SCAN_WRITE_LIMIT_PER_MINUTE = toSafeInt(process.env.SCAN_WRITE_LIMIT_PER_MINUTE, 30);
+const SCAN_SHARED_IP_EMERGENCY_LIMIT_PER_MINUTE = toSafeInt(process.env.SCAN_SHARED_IP_EMERGENCY_LIMIT_PER_MINUTE, 1000);
+const scanRateLimitBuckets = new Map();
+
+const SCAN_READ_FUNCTIONS = new Set([
+  "tool_get_system_settings",
+  "tool_list_active_employees",
+  "tool_get_location_scan_state",
+  "tool_ping_device",
+]);
+
+function clientIp(req) {
+  return String(req.headers["x-forwarded-for"] || req.ip || req.socket?.remoteAddress || "unknown")
+    .split(",")[0]
+    .trim();
+}
+
+function consumeRateLimitBucket({ key, limit, now = Date.now() }) {
+  const normalizedLimit = Math.max(1, Number(limit) || 1);
+  let bucket = scanRateLimitBuckets.get(key);
+  if (!bucket || now - bucket.windowStart >= RATE_LIMIT_WINDOW_MS) {
+    bucket = { windowStart: now, count: 0 };
+    scanRateLimitBuckets.set(key, bucket);
   }
+  bucket.count += 1;
+  return {
+    allowed: bucket.count <= normalizedLimit,
+    count: bucket.count,
+    limit: normalizedLimit,
+    retryAfterSeconds: Math.max(1, Math.ceil((RATE_LIMIT_WINDOW_MS - (now - bucket.windowStart)) / 1000)),
+  };
+}
+
+async function resolveRequestDevice(req) {
+  const args = req.body?.args && typeof req.body.args === "object" ? req.body.args : {};
+  const requestedDeviceId = String(
+    req.body?.device_id
+      || req.body?.deviceId
+      || args.p_device_id
+      || args.p_device_identifier
+      || ""
+  ).trim();
+  if (!requestedDeviceId) return null;
+  return resolveActiveAssignedDevice({ runReadOnlySql, deviceIdentifier: requestedDeviceId });
+}
+
+function canonicalizeScanArguments(fn, args, device) {
+  const canonicalArgs = { ...(args && typeof args === "object" ? args : {}) };
+  const canonicalDeviceId = String(device?.canonical_device_id || device?.device_id || "").trim();
+  if (canonicalDeviceId) {
+    if ("p_device_id" in canonicalArgs || [
+      "tool_get_location_scan_state",
+      "tool_start_session",
+      "tool_finish_session",
+      "tool_complete_session",
+      "tool_ping_device",
+      "tool_commit_cleaning_workflow",
+    ].includes(fn)) canonicalArgs.p_device_id = canonicalDeviceId;
+    if ("p_device_identifier" in canonicalArgs || [
+      "tool_record_scan_event",
+      "tool_report_device_sync_status",
+      "tool_evaluate_location_proximity",
+    ].includes(fn)) canonicalArgs.p_device_identifier = canonicalDeviceId;
+  }
+
+  const assignedEmployeeName = String(device?.assigned_employee_name || "").trim();
+  if (assignedEmployeeName && fn === "tool_start_session") canonicalArgs.p_employee_name = assignedEmployeeName;
+  if (assignedEmployeeName && fn === "tool_complete_session") canonicalArgs.p_submitted_by_employee_name = assignedEmployeeName;
+  return canonicalArgs;
+}
+
+function scanRpcRateLimit(req, res, next) {
+  const fn = String(req.body?.fn || "").trim();
+  const ip = clientIp(req);
+  const now = Date.now();
+  const shared = consumeRateLimitBucket({ key: `scan:ip:${ip}`, limit: SCAN_SHARED_IP_EMERGENCY_LIMIT_PER_MINUTE, now });
+  if (!shared.allowed) {
+    res.setHeader("Retry-After", String(shared.retryAfterSeconds));
+    res.status(429).json({ ok: false, error: "Shared network emergency rate limit exceeded.", scope: "shared_ip_emergency" });
+    return;
+  }
+
+  const deviceKey = String(req.memphisDevice?.canonical_device_id || req.memphisDevice?.device_id || req.memphisAuth?.device_id || "ops").trim();
+  const isRead = SCAN_READ_FUNCTIONS.has(fn);
+  const limit = isRead ? SCAN_READ_LIMIT_PER_MINUTE : SCAN_WRITE_LIMIT_PER_MINUTE;
+  const deviceBucket = consumeRateLimitBucket({ key: `scan:${isRead ? "read" : "write"}:${deviceKey}`, limit, now });
+  if (!deviceBucket.allowed) {
+    res.setHeader("Retry-After", String(deviceBucket.retryAfterSeconds));
+    res.status(429).json({
+      ok: false,
+      error: `Device ${isRead ? "read" : "write"} rate limit exceeded.`,
+      scope: isRead ? "device_read" : "device_write",
+      device_id: deviceKey,
+    });
+    return;
+  }
+  next();
 }
 
 function isHealthPath(req) {
@@ -350,6 +448,13 @@ function toSafeInt(value, fallback) {
   return parsed;
 }
 
+function toSafeNonNegativeInt(value, fallback = 0) {
+  const raw = value == null || String(value).trim() === "" ? fallback : value;
+  const parsed = Number.parseInt(String(raw), 10);
+  if (!Number.isFinite(parsed) || parsed < 0) return Math.max(0, Number(fallback) || 0);
+  return parsed;
+}
+
 function toNullableInt(value) {
   if (value == null || value === "") return null;
   const parsed = Number.parseInt(String(value), 10);
@@ -552,12 +657,12 @@ async function runReadOnlySql(sql) {
 
 async function runWriteSql(namePrefix, sql) {
   const client = getSupabaseConfig();
-  const migrationName = `${namePrefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  const { data, error } = await client.rpc("run_sql_migration", {
-    p_name: migrationName,
+  const operationName = String(namePrefix || "application_write").trim().slice(0, 120) || "application_write";
+  const { data, error } = await client.rpc("run_application_write", {
+    p_name: operationName,
     p_sql: String(sql || "").trim(),
   });
-  if (error) throw new Error(error.message || "run_sql_migration failed");
+  if (error) throw new Error(error.message || "run_application_write failed");
   return data;
 }
 
@@ -1735,13 +1840,13 @@ installSharedAuthRoutes(app, { setCors: setAdminApiCors });
 app.use("/admin-api", (req, res, next) => { setAdminApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/dashboard-api", (req, res, next) => { setPublicDashboardCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/scan-api", (req, res, next) => { setScanApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
-app.use("/messaging-api", (req, res, next) => { setMessagingApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); }, (req, res, next) => { eventMaintenanceController.kick("messaging_api_request"); next(); }, createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: MESSAGING_CONTRACT_VERSION }));
-app.use("/schedule-api", (req, res, next) => { setScheduleApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); }, (req, res, next) => { eventMaintenanceController.kick("schedule_api_request"); next(); }, createScheduleRouter({ runReadOnlySql, runRpc, runWriteSql, buildHealthPayload, requireAdminApiAuth: requireOpsManagerWrite, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: SCHEDULE_CONTRACT_VERSION }));
+app.use("/messaging-api", (req, res, next) => { setMessagingApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); }, createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: MESSAGING_CONTRACT_VERSION }));
+app.use("/schedule-api", (req, res, next) => { setScheduleApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); }, createScheduleRouter({ runReadOnlySql, runRpc, runWriteSql, buildHealthPayload, requireAdminApiAuth: requireOpsManagerWrite, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: SCHEDULE_CONTRACT_VERSION }));
 app.use("/guest-api", (req, res, next) => { setGuestApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/feedback-api", (req, res, next) => { setFeedbackApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/dashboard-api/events", createEventsPublicRouter({ runReadOnlySql, runWriteSql, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController }));
 app.use("/admin-api/events", createEventsAdminRouter({ runReadOnlySql, runWriteSql, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController, requireAdminApiAuth: requireOpsManagerAuth, requireAdminApiWrite: requireOpsManagerWrite }));
-app.get("/version", (_req, res) => { setPublicDashboardCors(res, _req); eventMaintenanceController.kick("version_ping"); res.status(200).json(buildHealthPayload("version")); });
+app.get("/version", (_req, res) => { setPublicDashboardCors(res, _req); res.status(200).json(buildHealthPayload("version")); });
 app.get("/admin-api/health", requireOpsManagerAuth, (_req, res) => { res.status(200).json(buildHealthPayload("admin", { authenticated: true })); });
 app.get("/dashboard-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("dashboard")); });
 app.get("/schedule-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("schedule", { contract_version: SCHEDULE_CONTRACT_VERSION })); });
@@ -1944,10 +2049,46 @@ app.get("/dashboard-api/summary", async (_req, res) => {
   catch (error) { console.error("dashboard summary failed:", error); res.status(500).json({ ok: false, error: error.message || "Dashboard summary failed" }); }
 });
 app.get("/dashboard-api/work-session-alerts", requireOpsManagerAuth, async (_req, res) => {
-  // Frontend dashboard renders these as optional active-work signal dots. Keep the
-  // endpoint present even when no alert producer is configured so browser probes
-  // and operator dashboards do not surface a noisy 404.
-  res.status(200).json({ ok: true, data: [] });
+  try {
+    const rows = await runReadOnlySql(`
+      select
+        s.id as session_id,
+        s.session_uuid,
+        s.client_session_id,
+        s.status as session_status,
+        s.started_at,
+        l.location_code,
+        l.location_name,
+        d.device_id as device_identifier,
+        e.display_name as employee_name,
+        coalesce(latest.result, 'gps_unverified') as result,
+        latest.notes,
+        coalesce(latest.payload_json, '{}'::jsonb) as payload_json,
+        latest.scanned_at
+      from public.sessions s
+      join public.locations l on l.id = s.location_id
+      join public.devices d on d.id = s.device_id
+      join public.employees e on e.id = s.employee_id
+      left join lateral (
+        select se.result, se.notes, se.payload_json, se.scanned_at
+        from public.scan_events se
+        where se.event_type = 'work_position_check'
+          and (
+            se.session_id = s.id
+            or se.payload_json->>'session_uuid' = s.session_uuid
+            or (s.client_session_id is not null and se.payload_json->>'client_session_id' = s.client_session_id)
+          )
+        order by se.scanned_at desc
+        limit 1
+      ) latest on true
+      where s.status in ('active', 'pending_submit')
+      order by s.started_at
+    `);
+    res.status(200).json({ ok: true, data: rows || [], meta: { version: APP_VERSION, release_id: RELEASE_ID } });
+  } catch (error) {
+    console.error("work session alert lookup failed:", error);
+    res.status(500).json({ ok: false, error: error.message || "Work session alert lookup failed" });
+  }
 });
 app.post("/dashboard-api/close-ticket", requireOpsManagerWrite, async (req, res) => {
   try {
@@ -1962,26 +2103,78 @@ app.post("/dashboard-api/close-ticket", requireOpsManagerWrite, async (req, res)
   }
   catch (error) { console.error("dashboard close ticket failed:", error); res.status(500).json({ ok: false, error: error.message || "Dashboard close ticket failed" }); }
 });
-// H7: Device auth middleware for /scan-api/rpc — validates device_id against the database.
-// This prevents unauthenticated access to scan session start/finish and scan event recording.
+// Scan device authentication is resolved server-side against the canonical device registry.
+// Hardware aliases are accepted only when they map to an active canonical device with an active employee assignment.
 async function requireDeviceAuth(req, res, next) {
-  const deviceId = String(req.body?.device_id || req.body?.deviceId || "").trim();
-  if (!deviceId) {
-    res.status(401).json({ ok: false, error: "device_id is required." });
+  const explicitOps = authenticateOpsAccessRequest(req);
+  if (explicitOps.ok) {
+    req.memphisAuth = explicitOps.session;
+    req.memphisDevice = null;
+    next();
     return;
   }
-  const deviceValid = await validateDeviceRegistration(deviceId);
-  if (!deviceValid) {
-    res.status(401).json({ ok: false, error: "Device is not registered." });
-    return;
+
+  try {
+    const device = await resolveRequestDevice(req);
+    if (!device || !device.device_active) {
+      res.status(401).json({ ok: false, error: "Registered device is required." });
+      return;
+    }
+    if (!device.assignment_valid) {
+      res.status(403).json({ ok: false, error: "This device is not assigned to an active employee." });
+      return;
+    }
+    req.memphisDevice = device;
+    req.body.device_id = device.canonical_device_id || device.device_id;
+    next();
+  } catch (error) {
+    console.error("scan device authentication failed:", error);
+    res.status(401).json({ ok: false, error: "Device authentication failed." });
   }
-  next();
 }
 
-app.get("/scan-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("scan", { available_functions: Array.from(SCAN_RPC_ALLOWLIST) })); });
-app.post("/scan-api/rpc", rateLimit, requireDeviceAuth, async (req, res) => {
-  try { eventMaintenanceController.kick("scan_api_rpc"); const fn = String(req.body?.fn || "").trim(); const args = req.body?.args && typeof req.body.args === "object" ? req.body.args : {}; if (!SCAN_RPC_ALLOWLIST.has(fn)) { res.status(400).json({ ok: false, error: `Function not allowed: ${fn}` }); return; } const data = await runRpc(fn, args); res.status(200).json({ ok: true, data, meta: { version: APP_VERSION, release_id: RELEASE_ID, contract_version: SCAN_CONTRACT_VERSION } }); }
-  catch (error) { console.error("scan rpc failed:", error); res.status(500).json({ ok: false, error: error.message || "Scan RPC failed" }); }
+app.get("/scan-api/health", (_req, res) => {
+  res.status(200).json(buildHealthPayload("scan", {
+    available_functions: Array.from(SCAN_RPC_ALLOWLIST),
+    rate_limits: {
+      reads_per_device_per_minute: SCAN_READ_LIMIT_PER_MINUTE,
+      writes_per_device_per_minute: SCAN_WRITE_LIMIT_PER_MINUTE,
+      shared_ip_emergency_per_minute: SCAN_SHARED_IP_EMERGENCY_LIMIT_PER_MINUTE,
+    },
+  }));
+});
+app.post("/scan-api/rpc", requireDeviceAuth, scanRpcRateLimit, async (req, res) => {
+  try {
+    const fn = String(req.body?.fn || "").trim();
+    if (!SCAN_RPC_ALLOWLIST.has(fn)) {
+      res.status(400).json({ ok: false, error: `Function not allowed: ${fn}` });
+      return;
+    }
+    const args = canonicalizeScanArguments(fn, req.body?.args, req.memphisDevice);
+    const data = await runRpc(fn, args);
+    res.status(200).json({
+      ok: true,
+      data,
+      meta: {
+        version: APP_VERSION,
+        release_id: RELEASE_ID,
+        contract_version: SCAN_CONTRACT_VERSION,
+        requested_device_id: req.memphisDevice?.requested_device_id || null,
+        canonical_device_id: req.memphisDevice?.canonical_device_id || req.memphisDevice?.device_id || null,
+      },
+    });
+  } catch (error) {
+    console.error("scan rpc failed:", error);
+    const message = String(error?.message || "Scan RPC failed");
+    const status = /not found|invalid|required|cannot|must|too (?:old|far|large)|exceeds/i.test(message)
+      ? 400
+      : /already has|already bound|manager recovery|required review|transition/i.test(message)
+        ? 409
+        : /unauthor|not assigned|another device/i.test(message)
+          ? 403
+          : 500;
+    res.status(status).json({ ok: false, error: message });
+  }
 });
 app.get("/", (_req, res) => { res.status(200).send("Memphis Zoo MCP server is running."); });
 // C2: MCP endpoint — uses Ops Manager access middleware.
@@ -2031,6 +2224,12 @@ app.use((err, req, res, next) => {
 });
 
 const port = Number(process.env.PORT || 3000);
+const EVENT_MAINTENANCE_SWEEP_MS = toSafeNonNegativeInt(process.env.EVENT_MAINTENANCE_SWEEP_MS, 60_000);
+if (EVENT_MAINTENANCE_SWEEP_MS > 0) {
+  setInterval(() => {
+    eventMaintenanceController.kick("scheduled_worker");
+  }, EVENT_MAINTENANCE_SWEEP_MS).unref?.();
+}
 if (FEEDBACK_REMINDER_SWEEP_MS > 0) {
   setInterval(() => {
     runSystemFeedbackReminderSweep().catch((error) => console.error("system feedback reminder sweep failed:", error));

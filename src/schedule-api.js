@@ -1,5 +1,6 @@
 import express from "express";
 import { getGeminiApiKey } from "./utils/gemini-config.js";
+import { resolveCanonicalDevice } from "./device-identity.js";
 
 const MONTH_LOOKUP = {
   january: 1, jan: 1,
@@ -29,6 +30,13 @@ const RESTROOM_REBALANCE_TZ = "America/Chicago";
 const RESTROOM_REBALANCE_MAX_WALK_MINUTES = Math.max(4, Number.parseInt(String(process.env.RESTROOM_REBALANCE_MAX_WALK_MINUTES || "12"), 10) || 12);
 const RESTROOM_REBALANCE_SEVERE_SPREAD = Math.max(2, Number.parseInt(String(process.env.RESTROOM_REBALANCE_SEVERE_SPREAD || "4"), 10) || 4);
 const RESTROOM_REBALANCE_FLEX_HELPER_WALK_MINUTES = Math.max(1, Number.parseInt(String(process.env.RESTROOM_REBALANCE_FLEX_HELPER_WALK_MINUTES || "6"), 10) || 6);
+
+function nonNegativeInt(value, fallback = 0) {
+  const raw = value == null || String(value).trim() === "" ? fallback : value;
+  const parsed = Number.parseInt(String(raw), 10);
+  if (!Number.isFinite(parsed) || parsed < 0) return Math.max(0, Number(fallback) || 0);
+  return parsed;
+}
 
 function timeToMinutes(value) {
   const match = String(value || "").match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
@@ -564,7 +572,109 @@ export function createScheduleRouter({
   const requireSchedulePin = requireAdminApiAuth;
   const AUTO_GENERATE_WINDOW_DAYS = 7;
   const AUTO_GENERATE_COOLDOWN_MS = 6 * 60 * 60 * 1000;
-  const RESTROOM_REBALANCE_SWEEP_MS = Math.max(0, Number.parseInt(String(process.env.RESTROOM_REBALANCE_SWEEP_MS || "0"), 10) || 60000);
+  const RESTROOM_REBALANCE_SWEEP_MS = nonNegativeInt(process.env.RESTROOM_REBALANCE_SWEEP_MS, 0);
+
+  async function ensureScheduleReadyForRead(serviceDate, reason = "schedule_api_read") {
+    const requested = String(serviceDate || "").trim();
+    if (!requested) throw new Error("service_date is required.");
+    const readinessRows = await runReadOnlySql(`
+      select
+        public.sch_service_date(now())::text as current_service_date,
+        (select count(*)::int from public.daily_work_roster r where r.service_date = '${esc(requested)}'::date and r.active = true) as roster_count,
+        (select count(*)::int from public.daily_schedule_assignments dsa where dsa.service_date = '${esc(requested)}'::date) as assignment_count
+    `);
+    const readiness = Array.isArray(readinessRows) && readinessRows.length ? readinessRows[0] : {};
+    const currentServiceDate = String(readiness.current_service_date || requested);
+    const rosterCount = Number(readiness.roster_count || 0);
+    const assignmentCount = Number(readiness.assignment_count || 0);
+    if (rosterCount > 0 && assignmentCount > 0) {
+      return { generated: false, roster_count: rosterCount, assignment_count: assignmentCount };
+    }
+    if (requested < currentServiceDate) {
+      return { generated: false, historical: true, roster_count: rosterCount, assignment_count: assignmentCount };
+    }
+    return runRpc("sch_ensure_daily_schedule", {
+      p_service_date: requested,
+      p_reason: String(reason || "schedule_api_read").slice(0, 200),
+    });
+  }
+  async function loadFullDayScheduleItems(serviceDate, employeeId) {
+    const rows = await runReadOnlySql(`
+      select
+        x.location_group_id,
+        x.group_code,
+        x.group_name,
+        x.included_locations,
+        x.segment_id,
+        x.segment_number,
+        x.owner_type,
+        x.coverage_purpose,
+        x.notes,
+        x.status,
+        x.load_points,
+        case
+          when x.coverage_start is null or btrim(x.coverage_start) = '' then null
+          else to_char(x.coverage_start::time, 'HH12:MI AM')
+        end as coverage_start,
+        case
+          when x.coverage_end is null or btrim(x.coverage_end) = '' then null
+          when x.coverage_end::time = time '23:59:59' then 'Close'
+          else to_char(x.coverage_end::time, 'HH12:MI AM')
+        end as coverage_end,
+        public.sch_is_public_restroom_group(x.location_group_id) as is_public_restroom,
+        (coalesce(x.coverage_purpose, '') = 'reminder') as is_schedule_only_reminder
+      from public.sch_get_daily_schedule_with_purpose('${esc(serviceDate)}'::date) x
+      where x.assigned_employee_id = '${esc(employeeId)}'::uuid
+        and x.status = 'ASSIGNED'
+      order by x.coverage_start::time, x.coverage_end::time, x.segment_number, x.group_name
+    `);
+    return (Array.isArray(rows) ? rows : []).map((row) => ({
+      ...row,
+      name: row.group_name || row.group_code || 'Assigned Area',
+    }));
+  }
+
+  function scheduleItemKey(item = {}) {
+    return [
+      String(item.group_code || item.name || '').trim().toUpperCase(),
+      String(item.coverage_purpose || '').trim().toLowerCase(),
+      String(item.coverage_start || '').trim().toUpperCase(),
+      String(item.coverage_end || '').trim().toUpperCase(),
+    ].join('|');
+  }
+
+  function combineFullDaySchedule(pageData, fullDayItems) {
+    const page = pageData && typeof pageData === 'object' ? pageData : {};
+    const currentItems = Array.isArray(page.items) ? page.items : [];
+    const currentKeys = new Set(currentItems.map(scheduleItemKey));
+    const items = (Array.isArray(fullDayItems) ? fullDayItems : []).map((item) => ({
+      ...item,
+      is_current: currentKeys.has(scheduleItemKey(item)),
+    }));
+    const scheduled = Boolean(page?.shift?.start && page?.shift?.end);
+    let scheduleStatus = 'scheduled';
+    let notice = page.notice || null;
+    if (!scheduled) {
+      scheduleStatus = 'off';
+      notice = 'Not scheduled to work today.';
+    } else if (!items.length) {
+      scheduleStatus = 'missing_assignments';
+      notice = 'Your shift is active, but no assignments were published. Contact an Ops Manager.';
+    } else if (!currentItems.length) {
+      scheduleStatus = 'between_assignments';
+      notice = 'No assignment is active at this moment. Your full-day schedule is shown below.';
+    }
+    return {
+      ...page,
+      employee_name: page?.employee?.display_name || page.employee_name || null,
+      items,
+      current_items: currentItems,
+      full_day: true,
+      schedule_status: scheduleStatus,
+      notice,
+    };
+  }
+
   let autoGenerateState = { lastStartedAt: 0, running: false, lastCompletedAt: 0, lastWindowStart: null, lastResult: [] };
   let restroomRebalanceState = { lastStartedAt: 0, running: false, lastCompletedAt: 0, lastServiceDate: null, lastResult: null };
 
@@ -3079,22 +3189,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
   }
 
   async function getAssignedEmployeeForDevice(deviceId) {
-    const rows = await runReadOnlySql(`
-      select
-        d.device_id,
-        d.device_name,
-        d.assigned_employee_id,
-        e.display_name as assigned_employee_name,
-        e.employee_code,
-        e.role,
-        d.active as device_active,
-        coalesce(e.active, false) as employee_active
-      from public.devices d
-      left join public.employees e on e.id = d.assigned_employee_id
-      where d.device_id = '${esc(deviceId)}'
-      limit 1
-    `);
-    return Array.isArray(rows) && rows.length ? rows[0] : null;
+    return resolveCanonicalDevice({ runReadOnlySql, deviceIdentifier: deviceId });
   }
 
   function toCsvValue(value) {
@@ -3372,6 +3467,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
     try {
       const serviceDate = await getServiceDate();
       if (!serviceDate) throw new Error("Could not resolve service date.");
+      await ensureScheduleReadyForRead(serviceDate, "schedule_today");
       const rows = await runReadOnlySql(`select * from public.sch_get_daily_schedule_with_purpose('${esc(serviceDate)}'::date)`);
       const rosterRows = await runReadOnlySql(`
         select r.employee_id, e.display_name as employee_name, e.employee_code,
@@ -3397,6 +3493,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
   router.get("/day", async (req, res) => {
     try {
       const serviceDate = requireDate(req.query.service_date || req.query.date);
+      await ensureScheduleReadyForRead(serviceDate, "schedule_day");
       const rows = await runReadOnlySql(`select * from public.sch_get_daily_schedule_with_purpose('${esc(serviceDate)}'::date)`);
       const rosterRows = await runReadOnlySql(`
         select r.employee_id, e.display_name as employee_name, e.employee_code,
@@ -3424,6 +3521,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
       const deviceId = String(req.query.device_id || req.query.device || "").trim();
       if (!deviceId) throw new Error("device_id is required.");
       const serviceDate = requireDate(req.query.service_date || req.query.date || (await getServiceDate()));
+      await ensureScheduleReadyForRead(serviceDate, "schedule_my_day");
       const assignment = await getAssignedEmployeeForDevice(deviceId);
       if (!assignment || !assignment.device_active) {
         res.status(404).json({ ok: false, error: "Active device assignment not found." });
@@ -3443,7 +3541,10 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
         ok: true,
         data: {
           service_date: serviceDate,
-          device_id: assignment.device_id,
+          requested_device_id: assignment.requested_device_id || deviceId,
+          device_id: assignment.canonical_device_id || assignment.device_id,
+          canonical_device_id: assignment.canonical_device_id || assignment.device_id,
+          matched_by: assignment.matched_by || "canonical",
           device_name: assignment.device_name,
           employee_id: assignment.assigned_employee_id,
           employee_name: assignment.assigned_employee_name,
@@ -3468,6 +3569,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
       }
 
       const serviceDate = requireDate(req.query.service_date || req.query.date || (await getServiceDate()));
+      await ensureScheduleReadyForRead(serviceDate, "schedule_my_day_summary");
       const atSql = optionalTimestampLiteral(req.query.as_of || req.query.at);
       let resolvedEmployeeId = employeeId;
       let assignment = null;
@@ -3499,19 +3601,26 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
         resolvedEmployeeId = employeeRows[0].employee_id;
       }
 
-      const rows = await runReadOnlySql(`
-        select public.sch_employee_my_schedule_page(
-          '${esc(serviceDate)}'::date,
-          '${esc(resolvedEmployeeId)}'::uuid,
-          ${atSql}
-        ) as data
-      `);
-      const data = Array.isArray(rows) && rows.length ? rows[0].data : null;
+      const [pageRows, fullDayItems] = await Promise.all([
+        runReadOnlySql(`
+          select public.sch_employee_my_schedule_page(
+            '${esc(serviceDate)}'::date,
+            '${esc(resolvedEmployeeId)}'::uuid,
+            ${atSql}
+          ) as data
+        `),
+        loadFullDayScheduleItems(serviceDate, resolvedEmployeeId),
+      ]);
+      const pageData = Array.isArray(pageRows) && pageRows.length ? pageRows[0].data : null;
+      const data = combineFullDaySchedule(pageData, fullDayItems);
       res.status(200).json({
         ok: true,
         data: {
-          ...(data || {}),
-          device_id: assignment?.device_id || deviceId || null,
+          ...data,
+          requested_device_id: assignment?.requested_device_id || deviceId || null,
+          device_id: assignment?.canonical_device_id || assignment?.device_id || deviceId || null,
+          canonical_device_id: assignment?.canonical_device_id || assignment?.device_id || null,
+          matched_by: assignment?.matched_by || null,
           device_name: assignment?.device_name || null,
         },
         meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion },
@@ -3524,16 +3633,21 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
   router.get("/my-schedule", async (req, res) => {
     try {
       const serviceDate = requireDate(req.query.service_date || req.query.date || (await getServiceDate()));
+      await ensureScheduleReadyForRead(serviceDate, "schedule_my_schedule");
       const atSql = optionalTimestampLiteral(req.query.as_of || req.query.at);
       const { employeeId } = await resolveEmployeeIdFromRequest(req);
-      const rows = await runReadOnlySql(`
-        select public.sch_employee_my_schedule_page(
-          '${esc(serviceDate)}'::date,
-          '${esc(employeeId)}'::uuid,
-          ${atSql}
-        ) as data
-      `);
-      const data = Array.isArray(rows) && rows.length ? rows[0].data : null;
+      const [pageRows, fullDayItems] = await Promise.all([
+        runReadOnlySql(`
+          select public.sch_employee_my_schedule_page(
+            '${esc(serviceDate)}'::date,
+            '${esc(employeeId)}'::uuid,
+            ${atSql}
+          ) as data
+        `),
+        loadFullDayScheduleItems(serviceDate, employeeId),
+      ]);
+      const pageData = Array.isArray(pageRows) && pageRows.length ? pageRows[0].data : null;
+      const data = combineFullDaySchedule(pageData, fullDayItems);
       if (!data?.ok) {
         res.status(404).send(renderMyScheduleHtml(data || { employee: { display_name: "My Schedule" }, items: [], notice: "Schedule not found." }));
         return;

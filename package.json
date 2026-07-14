@@ -22,7 +22,8 @@
     "test:dashboard": "node scripts/dashboard-recent-activity-contract-tests.mjs",
     "test:scheduler-overhaul": "node scripts/scheduler-overhaul-contract-tests.mjs",
     "audit:location-groups": "node scripts/location-group-audit-reminder-aware.mjs",
-    "test:sch2-publish": "node scripts/sch2-publish-route-tests.mjs"
+    "test:sch2-publish": "node scripts/sch2-publish-route-tests.mjs",
+    "test:foundation": "node scripts/scheduler-alerts-gps-foundation-tests.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.18.0",

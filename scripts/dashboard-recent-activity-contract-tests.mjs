@@ -29,8 +29,8 @@ assert.match(
 
 assert.match(
   source,
-  /app\.get\(["']\/dashboard-api\/work-session-alerts["'],\s*requireOpsManagerAuth[\s\S]{0,700}json\(\{\s*ok:\s*true,\s*data:\s*\[\]/,
-  'dashboard work-session alert endpoint must exist and return an empty array fallback instead of 404ing when no alert producer is configured'
+  /app\.get\(["']\/dashboard-api\/work-session-alerts["'],\s*requireOpsManagerAuth[\s\S]{0,2200}where se\.event_type = 'work_position_check'[\s\S]{0,1600}res\.status\(200\)\.json\(\{\s*ok:\s*true,\s*data:\s*rows \|\| \[\]/,
+  'dashboard work-session alerts must return authoritative GPS evidence for open sessions instead of a permanent empty fallback'
 );
 
 console.log('dashboard backend contract tests passed');

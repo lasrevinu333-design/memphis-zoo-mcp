@@ -388,80 +388,103 @@ function buildNotificationBody(eventRow) {
   return lines.join("\n").trim();
 }
 
-async function sendEventNotification({ runRpc, runWriteSql, eventRow, assignmentRow, memphisUserId, kind }) {
-  const msgUserId = assignmentRow.msg_user_id;
-  if (!msgUserId) {
-    return { ok: false, status: "skipped", notes: "Missing msg_user_id" };
-  }
+async function sendEventNotification({ runRpc, runWriteSql, eventRow, assignmentRow, memphisUserId, kind = "event_reminder" }) {
+  void runWriteSql;
+  void kind;
+  const msgUserId = String(assignmentRow.msg_user_id || "").trim();
+  if (!msgUserId) return { ok: false, status: "skipped", notes: "Missing msg_user_id" };
 
-  const thread = await runRpc("msg_get_or_create_memphis_thread", { p_user_id: msgUserId });
-  const body = buildNotificationBody(eventRow);
-  const message = await runRpc("msg_send_message", {
-    p_thread_id: thread.id,
-    p_sender_user_id: memphisUserId,
-    p_body: body,
-    p_message_type: "bot_response",
-    p_metadata_json: {
-      channel: "memphis",
-      source: "events_app",
-      event_id: eventRow.id,
-      notification_kind: kind,
-      location_group_id: eventRow.location_group_id,
-    },
+  const normalizedKind = "event_reminder";
+  const notificationKey = `event:${eventRow.id}:${msgUserId}`;
+  const scheduledForLocal = `${assignmentRow.assignment_date || eventRow.event_date} ${assignmentRow.coverage_start || "00:00:00"}`;
+  const claim = await runRpc("claim_event_notification", {
+    p_event_id: eventRow.id,
+    p_employee_id: assignmentRow.employee_id,
+    p_msg_user_id: msgUserId,
+    p_notification_kind: normalizedKind,
+    p_scheduled_for_local: scheduledForLocal,
   });
 
-  const scheduledForLocal = `${assignmentRow.assignment_date || eventRow.event_date} ${assignmentRow.coverage_start || "00:00:00"}`;
-
-  const client = getEventsSupabaseClient();
-  const { error: logError } = await client
-    .from("events_app_notification_log")
-    .upsert(
-      {
-        event_id: eventRow.id,
-        employee_id: assignmentRow.employee_id,
-        msg_user_id: msgUserId,
-        thread_id: thread.id,
-        notification_kind: kind,
-        scheduled_for_local: scheduledForLocal,
-        sent_at: new Date().toISOString(),
-        status: "sent",
-        response_message_id: message?.id || null,
-        notes: body,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "event_id,employee_id,notification_kind", ignoreDuplicates: true }
-    );
-  if (logError) throw new Error(logError.message || "Event notification log insert failed.");
-
-  const deviceIdentifiers = Array.isArray(assignmentRow.device_identifiers)
-    ? assignmentRow.device_identifiers.map((value) => String(value || "").trim()).filter(Boolean)
-    : [String(assignmentRow.device_identifier || "").trim()].filter(Boolean);
-
-  for (const deviceIdentifier of deviceIdentifiers) {
-    try {
-      await runRpc("msg_unhide_thread_for_device", {
-        p_thread_id: thread.id,
-        p_device_identifier: deviceIdentifier,
-      });
-    } catch (_error) {
-      // Non-fatal. Device visibility can lag behind message delivery.
-    }
+  if (!claim?.claimed) {
+    return {
+      ok: true,
+      status: claim?.status === "sent" ? "already_sent" : "already_reserved",
+      reason: claim?.reason || "notification_already_claimed",
+      response_message_id: claim?.response_message_id || null,
+      notification_key: notificationKey,
+    };
   }
 
-  return { ok: true, status: "sent", thread_id: thread.id, response_message_id: message?.id || null };
+  let threadId = null;
+  try {
+    const thread = await runRpc("msg_get_or_create_memphis_thread", { p_user_id: msgUserId });
+    threadId = thread?.id || null;
+    const body = buildNotificationBody(eventRow);
+    const message = await runRpc("msg_send_message", {
+      p_thread_id: thread.id,
+      p_sender_user_id: memphisUserId,
+      p_body: body,
+      p_message_type: "bot_response",
+      p_metadata_json: {
+        channel: "memphis",
+        source: "events_app",
+        event_id: eventRow.id,
+        notification_kind: normalizedKind,
+        notification_key: notificationKey,
+        location_group_id: eventRow.location_group_id,
+        client_message_id: notificationKey,
+      },
+    });
+
+    await runRpc("finalize_event_notification", {
+      p_event_id: eventRow.id,
+      p_employee_id: assignmentRow.employee_id,
+      p_notification_kind: normalizedKind,
+      p_status: "sent",
+      p_thread_id: thread.id,
+      p_response_message_id: message?.id || null,
+      p_notes: body,
+    });
+
+    const deviceIdentifiers = Array.isArray(assignmentRow.device_identifiers)
+      ? assignmentRow.device_identifiers.map((value) => String(value || "").trim()).filter(Boolean)
+      : [String(assignmentRow.device_identifier || "").trim()].filter(Boolean);
+    for (const deviceIdentifier of deviceIdentifiers) {
+      try {
+        await runRpc("msg_unhide_thread_for_device", {
+          p_thread_id: thread.id,
+          p_device_identifier: deviceIdentifier,
+        });
+      } catch (_error) {}
+    }
+
+    return {
+      ok: true,
+      status: "sent",
+      thread_id: thread.id,
+      response_message_id: message?.id || null,
+      notification_key: notificationKey,
+    };
+  } catch (error) {
+    try {
+      await runRpc("finalize_event_notification", {
+        p_event_id: eventRow.id,
+        p_employee_id: assignmentRow.employee_id,
+        p_notification_kind: normalizedKind,
+        p_status: "error",
+        p_thread_id: threadId,
+        p_response_message_id: null,
+        p_notes: String(error?.message || "Event notification failed").slice(0, 2000),
+      });
+    } catch (_finalizeError) {}
+    throw error;
+  }
 }
 
 async function getPendingNotifications(runReadOnlySql) {
   const rows = await runReadOnlySql(`
     with params as (
       select (now() at time zone '${EVENTS_TIME_ZONE}') as local_now
-    ),
-    target_days as (
-      select 0::int as day_offset, 'day_of_event'::text as notification_kind
-      union all
-      select 2::int as day_offset, 'two_days_out'::text as notification_kind
-      union all
-      select 3::int as day_offset, 'three_days_out'::text as notification_kind
     ),
     owner_assignments as (
       select
@@ -529,13 +552,12 @@ async function getPendingNotifications(runReadOnlySql) {
         oa.coverage_start,
         oa.coverage_end,
         oa.assignment_source,
-        td.notification_kind,
+        'event_reminder'::text as notification_kind,
         (oa.assignment_date::timestamp + coalesce(oa.coverage_start, time '00:00:00') + interval '15 minutes') as scheduled_for_local,
         public.msg_get_memphis_user_id() as memphis_user_id
       from params p
-      join target_days td on true
       join public.events_app_events e
-        on e.event_date = (p.local_now::date + (td.day_offset * interval '1 day'))::date
+        on e.event_date between p.local_now::date and (p.local_now::date + 3)
       join public.location_groups lg on lg.id = e.location_group_id
       join owner_assignments oa
         on oa.location_group_id = e.location_group_id
@@ -543,14 +565,17 @@ async function getPendingNotifications(runReadOnlySql) {
       join public.employees emp on emp.id = oa.employee_id and emp.active = true
       join public.msg_users mu on mu.employee_id = emp.id and mu.is_active = true
       left join msg_devices md on md.msg_user_id = mu.id
-      where p.local_now::date = oa.assignment_date
-        and p.local_now >= (oa.assignment_date::timestamp + coalesce(oa.coverage_start, time '00:00:00') + interval '15 minutes')
+      where p.local_now >= (oa.assignment_date::timestamp + coalesce(oa.coverage_start, time '00:00:00') + interval '15 minutes')
         and not exists (
           select 1
           from public.events_app_notification_log log
           where log.event_id = e.id
             and log.employee_id = emp.id
-            and log.notification_kind = td.notification_kind
+            and log.notification_kind = 'event_reminder'
+            and (
+              log.status in ('sending', 'sent')
+              or log.updated_at > now() - interval '5 minutes'
+            )
         )
     )
     select *
@@ -769,7 +794,6 @@ export function createEventsAdminRouter({
 
   router.get("/", async (_req, res) => {
     try {
-      maintenanceController?.kick("events_admin_list");
       const events = await listUpcomingEvents(runReadOnlySql);
       res.status(200).json({
         ok: true,
@@ -842,7 +866,6 @@ export function createEventsAdminRouter({
 
   router.post("/", typeof requireAdminApiWrite === "function" ? requireAdminApiWrite : (_req, _res, next) => next(), async (req, res) => {
     try {
-      maintenanceController?.kick("events_admin_create_before");
       const record = await createEventRecord(
         runWriteSql,
         req.body && typeof req.body === "object" ? req.body : {}
