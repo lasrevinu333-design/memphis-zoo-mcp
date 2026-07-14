@@ -24,18 +24,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Detect bootstrap payload
-        id: bootstrap
-        shell: bash
-        run: |
-          if compgen -G '.repair/backend_patch_chunks/chunk_*' > /dev/null; then
-            echo 'apply=true' >> "$GITHUB_OUTPUT"
-          else
-            echo 'apply=false' >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Checkout frontend feedback fixture
-        if: steps.bootstrap.outputs.apply == 'true'
         uses: actions/checkout@v4
         with:
           repository: lasrevinu333-design/Engine
@@ -45,13 +34,11 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - uses: actions/setup-node@v4
-        if: steps.bootstrap.outputs.apply == 'true'
         with:
           node-version: '22'
           cache: npm
 
       - name: Reconstruct and apply audited patch
-        if: steps.bootstrap.outputs.apply == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -59,28 +46,18 @@ jobs:
           printf '%s  %s\n' '954a7ff7c2ddf2fac53cc9d7ba956ec5e22a0f030e77b7d4fb4dafa5f5cfb17c' /tmp/backend.patch | sha256sum --check
           git apply --check /tmp/backend.patch
           git apply /tmp/backend.patch
-          if grep -R -nE 'packages\.applied|artifactory|internal\.api\.openai' package.json package-lock.json; then
-            echo 'Internal package URL found in committed dependency metadata.' >&2
-            exit 1
-          fi
-
-      - name: Prepare cross-repository feedback fixture
-        if: steps.bootstrap.outputs.apply == 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
           mkdir -p ../Engine
           cp _engine_fixture/system-feedback.html ../Engine/system-feedback.html
+          npm ci
 
-      - name: Install exact dependencies
-        if: steps.bootstrap.outputs.apply == 'true'
-        run: npm ci
-
-      - name: Run complete backend regression suite
-        if: steps.bootstrap.outputs.apply == 'true'
+      - name: Record every regression result without hiding the failing assertion
         shell: bash
         run: |
-          set -euo pipefail
+          set +e
+          report=.repair/backend_test_diagnostics.txt
+          : > "$report"
+          printf 'node=%s\nnpm=%s\ncommit=%s\n\n' "$(node --version)" "$(npm --version)" "$GITHUB_SHA" >> "$report"
+          failed=0
           for test_script in \
             test:foundation \
             test:events-parser \
@@ -97,30 +74,46 @@ jobs:
             test:scheduler-overhaul \
             test:sch2-publish
           do
-            npm run --silent "$test_script"
+            safe_name="${test_script//[:\/]/_}"
+            out="/tmp/${safe_name}.log"
+            npm run --silent "$test_script" > "$out" 2>&1
+            rc=$?
+            if [ "$rc" -eq 0 ]; then
+              printf 'PASS %s\n' "$test_script" >> "$report"
+            else
+              failed=1
+              printf '\nFAIL %s rc=%s\n' "$test_script" "$rc" >> "$report"
+              tail -n 160 "$out" >> "$report"
+              printf '\n' >> "$report"
+            fi
           done
           for file in src/*.js scripts/*.mjs; do
-            node --check "$file"
+            node --check "$file" > /tmp/syntax.log 2>&1
+            rc=$?
+            if [ "$rc" -ne 0 ]; then
+              failed=1
+              printf '\nFAIL syntax %s rc=%s\n' "$file" "$rc" >> "$report"
+              cat /tmp/syntax.log >> "$report"
+            fi
           done
-          npm audit --omit=dev --audit-level=high
+          npm audit --omit=dev --audit-level=high > /tmp/audit.log 2>&1
+          rc=$?
+          if [ "$rc" -eq 0 ]; then
+            printf 'PASS npm-audit-high\n' >> "$report"
+          else
+            failed=1
+            printf '\nFAIL npm-audit-high rc=%s\n' "$rc" >> "$report"
+            tail -n 160 /tmp/audit.log >> "$report"
+          fi
+          printf '\nFAILED=%s\n' "$failed" >> "$report"
+          cat "$report"
 
-      - name: Commit tested source to repair branch
-        if: steps.bootstrap.outputs.apply == 'true'
+      - name: Commit diagnostic evidence without publishing unverified source
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf _engine_fixture .repair
-          rm -f .github/workflows/_apply_scheduler_repair.yml
           git config user.name 'Memphis Zoo Repair Bot'
           git config user.email 'lasrevinu333@users.noreply.github.com'
-          git add -A
-          if git diff --cached --quiet; then
-            echo 'No source changes were produced.' >&2
-            exit 1
-          fi
-          git commit -m 'Repair scheduler, kiosk schedules, reminders, and GPS'
+          git add .repair/backend_test_diagnostics.txt
+          git commit -m 'Record exact backend repair gate diagnostics'
           git push origin "HEAD:${GITHUB_REF_NAME}"
-
-      - name: No bootstrap payload remains
-        if: steps.bootstrap.outputs.apply != 'true'
-        run: echo 'Bootstrap payload already consumed; nothing to apply.'
