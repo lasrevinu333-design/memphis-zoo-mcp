@@ -1,4 +1,4 @@
-name: Apply My Schedule contract hotfix
+name: Validate My Schedule contract hotfix
 
 on:
   push:
@@ -15,9 +15,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  apply-test-publish:
+  test-and-publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
@@ -28,84 +28,11 @@ jobs:
           node-version: '22'
           cache: npm
 
-      - name: Apply bounded source replacement
+      - name: Verify exact source invariants
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          import re
-          from pathlib import Path
-
-          path = Path('src/schedule-api.js')
-          source = path.read_text(encoding='utf-8')
-          replacement = '''  function combineFullDaySchedule(pageData, fullDayItems) {
-            const page = pageData && typeof pageData === 'object' ? pageData : {};
-            const currentItems = Array.isArray(page.current_items)
-              ? page.current_items
-              : (Array.isArray(page.items) ? page.items : []);
-            const currentKeys = new Set(currentItems.map(scheduleItemKey));
-            const items = (Array.isArray(fullDayItems) ? fullDayItems : []).map((item) => ({
-              ...item,
-              is_current: currentKeys.has(scheduleItemKey(item)),
-            }));
-            const shift = page?.shift && typeof page.shift === 'object' ? page.shift : {};
-            const shiftStart = shift.start || shift.shift_start || null;
-            const shiftEnd = shift.end || shift.shift_end || null;
-            const scheduled = shift.active === false
-              ? false
-              : Boolean(shift.active === true || (shiftStart && shiftEnd));
-            let scheduleStatus = 'scheduled';
-            let notice = page.notice || null;
-            if (!scheduled) {
-              scheduleStatus = 'off';
-              notice = 'Not scheduled to work today.';
-            } else if (!items.length) {
-              scheduleStatus = 'missing_assignments';
-              notice = 'Your shift is active, but no assignments were published. Contact an Ops Manager.';
-            } else if (page.phase === 'before_shift') {
-              scheduleStatus = 'scheduled';
-              notice = page.notice || 'Your full-day schedule is shown below.';
-            } else if (page.phase === 'after_shift') {
-              scheduleStatus = 'completed';
-              notice = page.notice || 'Your shift is complete. Today\\'s full schedule remains below.';
-            } else if (!currentItems.length) {
-              scheduleStatus = 'between_assignments';
-              notice = 'No assignment is active at this moment. Your full-day schedule is shown below.';
-            }
-            return {
-              ...page,
-              employee_name: page?.employee?.display_name || page.employee_name || null,
-              items,
-              current_items: currentItems,
-              full_day: true,
-              schedule_status: scheduleStatus,
-              notice,
-            };
-          }
-          '''
-          pattern = re.compile(
-              r"  function combineFullDaySchedule\(pageData, fullDayItems\) \{[\s\S]*?\n  \}\n\n  let autoGenerateState",
-              re.MULTILINE,
-          )
-          matches = list(pattern.finditer(source))
-          if len(matches) != 1:
-              raise SystemExit(f'Expected one combineFullDaySchedule region; found {len(matches)}')
-          source = pattern.sub(replacement + '\n  let autoGenerateState', source, count=1)
-          path.write_text(source, encoding='utf-8')
-          PY
-          git diff --check
-
-      - name: Install exact dependencies
-        run: npm ci --ignore-scripts
-
-      - name: Run focused and broad schedule gates
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm run --silent test:foundation
-          npm run --silent test:schedule-ai
-          npm run --silent test:leadership-demo
-          npm run --silent test:scheduler-overhaul
+          git diff --check origin/main...HEAD
           node --check src/schedule-api.js
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
@@ -114,17 +41,34 @@ jobs:
             "Array.isArray(page.current_items)",
             "shift.shift_start",
             "shift.shift_end",
+            "page.phase === 'before_shift'",
             "page.phase === 'after_shift'",
             "scheduleStatus = 'completed'",
-            "page.phase === 'before_shift'",
           ];
           for (const needle of required) {
             if (!source.includes(needle)) throw new Error(`Missing My Schedule invariant: ${needle}`);
           }
-          console.log('MY_SCHEDULE_CONTRACT_SOURCE_PASS');
+          if ((source.match(/function combineFullDaySchedule/g) || []).length !== 1) {
+            throw new Error('combineFullDaySchedule must exist exactly once');
+          }
+          console.log('MY_SCHEDULE_SOURCE_INVARIANTS_PASS');
           NODE
 
-      - name: Publish tested source only
+      - name: Install exact dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run schedule regression suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run --silent test:foundation
+          npm run --silent test:schedule-ai
+          npm run --silent test:leadership-demo
+          npm run --silent test:scheduler-overhaul
+          npm run --silent test:sch2-publish
+          npm audit --omit=dev --audit-level=high
+
+      - name: Publish clean tested source branch
         shell: bash
         run: |
           set -euo pipefail
@@ -132,7 +76,7 @@ jobs:
           rm -f .github/workflows/_apply_my_schedule_contract_hotfix.yml
           git config user.name 'Memphis Zoo Repair Bot'
           git config user.email 'lasrevinu333@users.noreply.github.com'
-          git add src/schedule-api.js supabase/migrations/20260714233000_my_schedule_contract_v3.sql
+          git add -A
           git diff --cached --check
-          git commit -m 'Fix My Schedule shift and current-item contract'
+          git commit -m 'Finalize My Schedule current and full-day contract'
           git push origin "HEAD:${GITHUB_REF_NAME}"
