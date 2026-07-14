@@ -1,0 +1,39 @@
+node=v22.23.1
+npm=10.9.8
+commit=8d6a697aa0d391f5bbfead87b9a77fe409c7c12d
+
+PASS test:foundation
+PASS test:events-parser
+PASS test:events-api
+PASS test:feedback
+PASS test:schedule-ai
+PASS test:ai-intent
+PASS test:messaging
+
+FAIL test:auth rc=1
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: Engine HTML fixture directory should exist next to the repo or in the Memphis Zoo project mirror
+    at file:///home/runner/work/memphis-zoo-mcp/memphis-zoo-mcp/scripts/shared-access-auth-tests.mjs:196:8
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: undefined,
+  expected: true,
+  operator: '==',
+  diff: 'simple'
+}
+
+Node.js v22.23.1
+
+PASS test:device-popups
+PASS test:thursday-demo
+PASS test:leadership-demo
+PASS test:dashboard
+PASS test:scheduler-overhaul
+PASS test:sch2-publish
+PASS npm-audit-high
+
+FAILED=1
