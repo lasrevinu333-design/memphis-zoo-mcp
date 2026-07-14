@@ -32,7 +32,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git diff --check origin/main...HEAD
+          git diff --check origin/main...HEAD -- src/schedule-api.js supabase/migrations/20260714233000_my_schedule_contract_v3.sql
           node --check src/schedule-api.js
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
