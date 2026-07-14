@@ -28,12 +28,98 @@ jobs:
           node-version: '22'
           cache: npm
 
-      - name: Apply exact source patch
+      - name: Apply exact source replacement
         shell: bash
         run: |
           set -euo pipefail
-          git apply --check .repair/my_schedule_contract.patch
-          git apply .repair/my_schedule_contract.patch
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/schedule-api.js')
+          source = path.read_text(encoding='utf-8')
+          old = '''  function combineFullDaySchedule(pageData, fullDayItems) {
+            const page = pageData && typeof pageData === 'object' ? pageData : {};
+            const currentItems = Array.isArray(page.items) ? page.items : [];
+            const currentKeys = new Set(currentItems.map(scheduleItemKey));
+            const items = (Array.isArray(fullDayItems) ? fullDayItems : []).map((item) => ({
+              ...item,
+              is_current: currentKeys.has(scheduleItemKey(item)),
+            }));
+            const scheduled = Boolean(page?.shift?.start && page?.shift?.end);
+            let scheduleStatus = 'scheduled';
+            let notice = page.notice || null;
+            if (!scheduled) {
+              scheduleStatus = 'off';
+              notice = 'Not scheduled to work today.';
+            } else if (!items.length) {
+              scheduleStatus = 'missing_assignments';
+              notice = 'Your shift is active, but no assignments were published. Contact an Ops Manager.';
+            } else if (!currentItems.length) {
+              scheduleStatus = 'between_assignments';
+              notice = 'No assignment is active at this moment. Your full-day schedule is shown below.';
+            }
+            return {
+              ...page,
+              employee_name: page?.employee?.display_name || page.employee_name || null,
+              items,
+              current_items: currentItems,
+              full_day: true,
+              schedule_status: scheduleStatus,
+              notice,
+            };
+          }
+          '''
+          new = '''  function combineFullDaySchedule(pageData, fullDayItems) {
+            const page = pageData && typeof pageData === 'object' ? pageData : {};
+            const currentItems = Array.isArray(page.current_items)
+              ? page.current_items
+              : (Array.isArray(page.items) ? page.items : []);
+            const currentKeys = new Set(currentItems.map(scheduleItemKey));
+            const items = (Array.isArray(fullDayItems) ? fullDayItems : []).map((item) => ({
+              ...item,
+              is_current: currentKeys.has(scheduleItemKey(item)),
+            }));
+            const shift = page?.shift && typeof page.shift === 'object' ? page.shift : {};
+            const shiftStart = shift.start || shift.shift_start || null;
+            const shiftEnd = shift.end || shift.shift_end || null;
+            const scheduled = shift.active === false
+              ? false
+              : Boolean(shift.active === true || (shiftStart && shiftEnd));
+            let scheduleStatus = 'scheduled';
+            let notice = page.notice || null;
+            if (!scheduled) {
+              scheduleStatus = 'off';
+              notice = 'Not scheduled to work today.';
+            } else if (!items.length) {
+              scheduleStatus = 'missing_assignments';
+              notice = 'Your shift is active, but no assignments were published. Contact an Ops Manager.';
+            } else if (page.phase === 'before_shift') {
+              scheduleStatus = 'scheduled';
+              notice = page.notice || 'Your full-day schedule is shown below.';
+            } else if (page.phase === 'after_shift') {
+              scheduleStatus = 'completed';
+              notice = page.notice || 'Your shift is complete. Today\\'s full schedule remains below.';
+            } else if (!currentItems.length) {
+              scheduleStatus = 'between_assignments';
+              notice = 'No assignment is active at this moment. Your full-day schedule is shown below.';
+            }
+            return {
+              ...page,
+              employee_name: page?.employee?.display_name || page.employee_name || null,
+              items,
+              current_items: currentItems,
+              full_day: true,
+              schedule_status: scheduleStatus,
+              notice,
+            };
+          }
+          '''
+          if source.count(old) != 1:
+              start = source.find('  function combineFullDaySchedule')
+              excerpt = source[start:start + 1800] if start >= 0 else 'function not found'
+              raise SystemExit(f'Expected exactly one old combineFullDaySchedule block; found {source.count(old)}.\n{excerpt}')
+          path.write_text(source.replace(old, new, 1), encoding='utf-8')
+          PY
           git diff --check
 
       - name: Install exact dependencies
