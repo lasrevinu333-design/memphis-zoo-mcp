@@ -28,48 +28,17 @@ jobs:
           node-version: '22'
           cache: npm
 
-      - name: Apply exact source replacement
+      - name: Apply bounded source replacement
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
+          import re
           from pathlib import Path
 
           path = Path('src/schedule-api.js')
           source = path.read_text(encoding='utf-8')
-          old = '''  function combineFullDaySchedule(pageData, fullDayItems) {
-            const page = pageData && typeof pageData === 'object' ? pageData : {};
-            const currentItems = Array.isArray(page.items) ? page.items : [];
-            const currentKeys = new Set(currentItems.map(scheduleItemKey));
-            const items = (Array.isArray(fullDayItems) ? fullDayItems : []).map((item) => ({
-              ...item,
-              is_current: currentKeys.has(scheduleItemKey(item)),
-            }));
-            const scheduled = Boolean(page?.shift?.start && page?.shift?.end);
-            let scheduleStatus = 'scheduled';
-            let notice = page.notice || null;
-            if (!scheduled) {
-              scheduleStatus = 'off';
-              notice = 'Not scheduled to work today.';
-            } else if (!items.length) {
-              scheduleStatus = 'missing_assignments';
-              notice = 'Your shift is active, but no assignments were published. Contact an Ops Manager.';
-            } else if (!currentItems.length) {
-              scheduleStatus = 'between_assignments';
-              notice = 'No assignment is active at this moment. Your full-day schedule is shown below.';
-            }
-            return {
-              ...page,
-              employee_name: page?.employee?.display_name || page.employee_name || null,
-              items,
-              current_items: currentItems,
-              full_day: true,
-              schedule_status: scheduleStatus,
-              notice,
-            };
-          }
-          '''
-          new = '''  function combineFullDaySchedule(pageData, fullDayItems) {
+          replacement = '''  function combineFullDaySchedule(pageData, fullDayItems) {
             const page = pageData && typeof pageData === 'object' ? pageData : {};
             const currentItems = Array.isArray(page.current_items)
               ? page.current_items
@@ -114,11 +83,15 @@ jobs:
             };
           }
           '''
-          if source.count(old) != 1:
-              start = source.find('  function combineFullDaySchedule')
-              excerpt = source[start:start + 1800] if start >= 0 else 'function not found'
-              raise SystemExit(f'Expected exactly one old combineFullDaySchedule block; found {source.count(old)}.\n{excerpt}')
-          path.write_text(source.replace(old, new, 1), encoding='utf-8')
+          pattern = re.compile(
+              r"  function combineFullDaySchedule\(pageData, fullDayItems\) \{[\s\S]*?\n  \}\n\n  let autoGenerateState",
+              re.MULTILINE,
+          )
+          matches = list(pattern.finditer(source))
+          if len(matches) != 1:
+              raise SystemExit(f'Expected one combineFullDaySchedule region; found {len(matches)}')
+          source = pattern.sub(replacement + '\n  let autoGenerateState', source, count=1)
+          path.write_text(source, encoding='utf-8')
           PY
           git diff --check
 
@@ -143,11 +116,11 @@ jobs:
             "shift.shift_end",
             "page.phase === 'after_shift'",
             "scheduleStatus = 'completed'",
+            "page.phase === 'before_shift'",
           ];
           for (const needle of required) {
             if (!source.includes(needle)) throw new Error(`Missing My Schedule invariant: ${needle}`);
           }
-          if (!source.includes("page.phase === 'before_shift'")) throw new Error('Before-shift notice invariant missing');
           console.log('MY_SCHEDULE_CONTRACT_SOURCE_PASS');
           NODE
 
