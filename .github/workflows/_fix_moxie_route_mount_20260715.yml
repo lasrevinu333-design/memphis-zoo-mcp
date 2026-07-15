@@ -1,0 +1,249 @@
+name: Fix Moxie Route Mount
+
+on:
+  push:
+    branches:
+      - fix/moxie-route-mount-20260715
+    paths:
+      - .github/workflows/_fix_moxie_route_mount_20260715.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: moxie-route-mount-20260715
+  cancel-in-progress: false
+
+jobs:
+  apply-test-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Apply deterministic route repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+
+          p = Path('src/index.js')
+          text = p.read_text(encoding='utf-8')
+          old = 'import express from "express";\n'
+          new = 'import express from "express";\nimport { fileURLToPath } from "node:url";\n'
+          if text.count(old) != 1:
+              raise SystemExit(f'index express import anchor count={text.count(old)}')
+          text = text.replace(old, new, 1)
+
+          old = '  createMessagingRouter,\n  createScheduleRouter,\n'
+          new = '  createMessagingRouter,\n  createMoxieRouter,\n  createScheduleRouter,\n'
+          if text.count(old) != 1:
+              raise SystemExit(f'route import anchor count={text.count(old)}')
+          text = text.replace(old, new, 1)
+
+          old = 'const app = express();\napp.use(express.json({ limit: "10mb" }));\n'
+          new = '''const app = express();
+          app.use(express.json({ limit: "10mb" }));
+
+          const MOXIE_MOUNT_PATH = (String(process.env.MOXIE_PREFIX || "/moxie").trim() || "/moxie").replace(/\\/+$/, "") || "/moxie";
+          const MOXIE_STATIC_DIR = fileURLToPath(new URL("../public/moxie-assets/", import.meta.url));
+          '''
+          if text.count(old) != 1:
+              raise SystemExit(f'app anchor count={text.count(old)}')
+          text = text.replace(old, new, 1)
+
+          old = 'installSharedAuthRoutes(app, { setCors: setAdminApiCors });\n\n'
+          new = '''installSharedAuthRoutes(app, { setCors: setAdminApiCors });
+
+          app.use(MOXIE_MOUNT_PATH, createMoxieRouter({ supabase: supabaseAdmin, staticDir: MOXIE_STATIC_DIR }));
+
+          '''
+          if text.count(old) != 1:
+              raise SystemExit(f'Moxie mount anchor count={text.count(old)}')
+          text = text.replace(old, new, 1)
+
+          old = '  console.log("Feedback API endpoint: /feedback-api");\n'
+          new = old + '  console.log(`Moxie endpoint: ${MOXIE_MOUNT_PATH}/`);\n'
+          if text.count(old) != 1:
+              raise SystemExit(f'endpoint log anchor count={text.count(old)}')
+          text = text.replace(old, new, 1)
+          p.write_text(text, encoding='utf-8')
+
+          p = Path('src/routes/moxie.js')
+          text = p.read_text(encoding='utf-8')
+          old = '''const MOXIE_USER = String(process.env.MOXIE_WEB_USER || "annie").trim();
+          const MOXIE_PASSWORD = String(process.env.MOXIE_WEB_PASSWORD || "").trim();
+          const MOXIE_COOKIE_SECRET = String(process.env.MOXIE_WEB_COOKIE_SECRET || "").trim();
+          '''
+          new = '''const MOXIE_USER = String(process.env.MOXIE_WEB_USER || "annie").trim();
+          const MOXIE_PASSWORD = String(
+            process.env.MOXIE_WEB_PASSWORD || process.env.GEMINI_ADMIN_PASSWORD || ""
+          ).trim();
+          const MOXIE_COOKIE_SECRET = String(
+            process.env.MOXIE_WEB_COOKIE_SECRET
+              || process.env.MOXIE_COOKIE_SECRET
+              || process.env.GEMINI_ADMIN_SESSION_SECRET
+              || process.env.SUPABASE_SERVICE_ROLE_KEY
+              || ""
+          ).trim();
+          '''
+          if text.count(old) != 1:
+              raise SystemExit(f'Moxie configuration anchor count={text.count(old)}')
+          text = text.replace(old, new, 1)
+          p.write_text(text, encoding='utf-8')
+
+          p = Path('src/app-version.js')
+          text = p.read_text(encoding='utf-8')
+          old_release = 'release-2026.07.15.manager-open.6'
+          new_release = 'release-2026.07.15.moxie-route.7'
+          if text.count(old_release) != 1:
+              raise SystemExit(f'app-version anchor count={text.count(old_release)}')
+          p.write_text(text.replace(old_release, new_release, 1), encoding='utf-8')
+
+          p = Path('package.json')
+          package = json.loads(p.read_text(encoding='utf-8'))
+          package.setdefault('scripts', {})['test:moxie-route'] = 'node scripts/moxie-route-tests.mjs'
+          p.write_text(json.dumps(package, indent=2) + '\n', encoding='utf-8')
+
+          Path('scripts/moxie-route-tests.mjs').write_text(r'''import assert from "node:assert/strict";
+          import { existsSync, readFileSync } from "node:fs";
+          import { fileURLToPath } from "node:url";
+          import express from "express";
+
+          process.env.MOXIE_WEB_PASSWORD = "memzoo";
+          process.env.MOXIE_WEB_COOKIE_SECRET = "moxie-route-test-cookie-secret-32-bytes-minimum";
+          process.env.MOXIE_GEMINI_API_KEY = "test-only-key";
+          process.env.MOXIE_PREFIX = "/moxie";
+
+          const { createMoxieRouter } = await import("../src/routes/moxie.js");
+
+          function makeSupabaseStub() {
+            const state = { id: "default", history: [], saved_chats: [], updated_at: "2026-07-15T00:00:00.000Z" };
+            return {
+              from(table) {
+                assert.ok(String(table).startsWith("annie_"), `unexpected Moxie table: ${table}`);
+                const query = {
+                  select() { return query; },
+                  eq() { return query; },
+                  order() { return query; },
+                  limit() { return Promise.resolve({ data: [], error: null }); },
+                  single() { return Promise.resolve({ data: state, error: null }); },
+                  upsert(payload) { Object.assign(state, payload); return Promise.resolve({ data: state, error: null }); },
+                  insert() { return Promise.resolve({ data: null, error: null }); },
+                  update() { return query; },
+                  delete() { return query; },
+                };
+                return query;
+              },
+            };
+          }
+
+          const app = express();
+          app.use(express.json());
+          const staticDir = fileURLToPath(new URL("../public/moxie-assets/", import.meta.url));
+          assert.equal(existsSync(staticDir), true, "Moxie asset directory must exist");
+          app.use("/moxie", createMoxieRouter({ supabase: makeSupabaseStub(), staticDir }));
+
+          const server = await new Promise((resolve) => {
+            const instance = app.listen(0, "127.0.0.1", () => resolve(instance));
+          });
+
+          try {
+            const { port } = server.address();
+            const base = `http://127.0.0.1:${port}`;
+
+            let response = await fetch(`${base}/moxie`, { redirect: "manual" });
+            assert.equal(response.status, 302, "GET /moxie must reach the mounted Moxie router");
+            assert.equal(response.headers.get("location"), "/moxie/login");
+
+            response = await fetch(`${base}/moxie/`, { redirect: "manual" });
+            assert.equal(response.status, 302, "GET /moxie/ must reach the mounted Moxie router");
+            assert.equal(response.headers.get("location"), "/moxie/login");
+
+            response = await fetch(`${base}/moxie/health`);
+            assert.equal(response.status, 200);
+            const health = await response.json();
+            assert.equal(health.ok, true);
+            assert.equal(health.area, "moxie");
+            assert.equal(health.configured, true);
+
+            response = await fetch(`${base}/moxie/login`);
+            assert.equal(response.status, 200);
+            const loginHtml = await response.text();
+            assert.match(loginHtml, /Moxie/i);
+            assert.match(loginHtml, /action="\/moxie\/login"/);
+
+            response = await fetch(`${base}/moxie/assets/moxie-avatar.jpg`);
+            assert.equal(response.status, 200, "Moxie static assets must be served below the route prefix");
+            assert.match(String(response.headers.get("content-type") || ""), /^image\//);
+
+            response = await fetch(`${base}/moxie/login`, {
+              method: "POST",
+              redirect: "manual",
+              headers: { "Content-Type": "application/x-www-form-urlencoded" },
+              body: new URLSearchParams({ password: "memzoo" }),
+            });
+            assert.equal(response.status, 302);
+            assert.equal(response.headers.get("location"), "/moxie/");
+            const cookie = String(response.headers.get("set-cookie") || "").split(";")[0];
+            assert.match(cookie, /^moxie_session=/);
+            assert.match(String(response.headers.get("set-cookie") || ""), /Path=\/moxie/i);
+
+            response = await fetch(`${base}/moxie/`, { headers: { Cookie: cookie } });
+            assert.equal(response.status, 200);
+            const page = await response.text();
+            assert.match(page, /Moxie/);
+            assert.match(page, /private work assistant/i);
+
+            response = await fetch(`${base}/moxie`, { headers: { Cookie: cookie } });
+            assert.equal(response.status, 200, "authenticated trailing-slash-free path must render Moxie");
+
+            const indexSource = readFileSync(new URL("../src/index.js", import.meta.url), "utf8");
+            assert.match(indexSource, /createMoxieRouter/);
+            assert.match(indexSource, /app\.use\(MOXIE_MOUNT_PATH,\s*createMoxieRouter/);
+            assert.match(indexSource, /public\/moxie-assets/);
+
+            console.log("MOXIE_ROUTE_TESTS_PASS");
+          } finally {
+            await new Promise((resolve) => server.close(resolve));
+          }
+          ''', encoding='utf-8')
+          PY
+          git diff --check
+
+      - name: Install exact dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run focused and regression gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run --silent test:moxie-route
+          npm run --silent test:auth
+          npm run --silent smoke
+          node --check src/index.js
+          node --check src/routes/moxie.js
+          node --check src/routes/moxie-templates.js
+          node --check scripts/moxie-route-tests.mjs
+          npm audit --omit=dev --audit-level=high
+
+      - name: Commit tested application source
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/_fix_moxie_route_mount_20260715.yml
+          git config user.name 'Memphis Zoo Repair Bot'
+          git config user.email 'lasrevinu333@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          git commit -m 'Mount and validate the Moxie application route'
+          git push origin "HEAD:${GITHUB_REF_NAME}"
