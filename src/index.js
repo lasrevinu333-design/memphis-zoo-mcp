@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { createHmac, randomUUID, timingSafeEqual } from "crypto";
 import express from "express";
+import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
@@ -13,6 +14,7 @@ import {
   createEventsAdminRouter,
   createEventsPublicRouter,
   createMessagingRouter,
+  createMoxieRouter,
   createScheduleRouter,
 } from "./routes/index.js";
 import { APP_VERSION, RELEASE_ID } from "./app-version.js";
@@ -23,6 +25,9 @@ import { resolveActiveAssignedDevice } from "./device-identity.js";
 
 const app = express();
 app.use(express.json({ limit: "10mb" }));
+
+const MOXIE_MOUNT_PATH = (String(process.env.MOXIE_PREFIX || "/moxie").trim() || "/moxie").replace(/\/+$/, "") || "/moxie";
+const MOXIE_STATIC_DIR = fileURLToPath(new URL("../public/moxie-assets/", import.meta.url));
 
 const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
 
@@ -1837,6 +1842,8 @@ function createMcpServer() {
 
 installSharedAuthRoutes(app, { setCors: setAdminApiCors });
 
+app.use(MOXIE_MOUNT_PATH, createMoxieRouter({ supabase: supabaseAdmin, staticDir: MOXIE_STATIC_DIR }));
+
 app.use("/admin-api", (req, res, next) => { setAdminApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/dashboard-api", (req, res, next) => { setPublicDashboardCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/scan-api", (req, res, next) => { setScanApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
@@ -2248,6 +2255,7 @@ app.listen(port, () => {
   console.log("Admin events endpoint: /admin-api/events");
   console.log("Schedule API endpoint: /schedule-api");
   console.log("Feedback API endpoint: /feedback-api");
+  console.log(`Moxie endpoint: ${MOXIE_MOUNT_PATH}/`);
   console.log("MCP endpoint: /mcp");
   console.log("Legacy SSE endpoint: /sse");
   console.log("Legacy messages endpoint: /messages");
