@@ -305,6 +305,7 @@ function setCorsOrigin(res, req) {
   } else {
     res.setHeader("Access-Control-Allow-Origin", DEFAULT_CORS_ORIGINS[0]);
   }
+  res.setHeader("Access-Control-Allow-Credentials", "true");
   res.setHeader("Vary", "Origin");
 }
 
@@ -1840,7 +1841,7 @@ function createMcpServer() {
   return server;
 }
 
-installSharedAuthRoutes(app, { setCors: setAdminApiCors });
+installSharedAuthRoutes(app, { setCors: setAdminApiCors, supabase: supabaseAdmin });
 
 app.use(MOXIE_MOUNT_PATH, createMoxieRouter({ supabase: supabaseAdmin, staticDir: MOXIE_STATIC_DIR }));
 

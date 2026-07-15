@@ -1,0 +1,46 @@
+name: Foundation Security Gate
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches:
+      - main
+      - foundation/security-control-plane-clean-20260715
+
+permissions:
+  contents: read
+
+concurrency:
+  group: foundation-security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install exact dependencies
+        run: npm ci --ignore-scripts
+      - name: Syntax and dependency audit
+        run: |
+          set -euo pipefail
+          node --check src/index.js
+          node --check src/auth/shared-access-auth.js
+          node --check src/auth/mcp-connector-auth.js
+          npm audit --omit=dev --audit-level=high
+      - name: Authentication and integration contracts
+        run: |
+          set -euo pipefail
+          npm run --silent test:auth
+          npm run --silent test:manager-open
+          npm run --silent test:messaging
+          npm run --silent test:moxie-route
+          npm run --silent test:schedule-source-type
+          npm run --silent test:foundation
+          npm run --silent test:scheduler-overhaul
