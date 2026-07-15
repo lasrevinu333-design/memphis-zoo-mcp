@@ -30,6 +30,30 @@ const runReadOnlySql = async (sql) => {
   if (sql.includes("from public.v_memphis_employee_schedule") && sql.includes("'2026-05-11'::date")) {
     return [{ group_name: "Teton", coverage_start: "06:00", coverage_end: "15:00", employee_name: "Tammy" }];
   }
+  if (sql.includes("public.sch_get_employee_work_status") && sql.includes("'2026-05-12'::date")) {
+    return [{ data: {
+      ok: true,
+      employee_id: "22222222-2222-4222-8222-222222222222",
+      employee_name: "Tammy",
+      service_date: "2026-05-12",
+      weekday: "Tuesday",
+      work_status: "working_assigned",
+      shift: { shift_start: "06:00", shift_end: "15:00", lunch: "10:00-10:30" },
+      assignments: [{ group_name: "Aquarium", coverage_start: "06:00", coverage_end: "15:00" }],
+    } }];
+  }
+  if (sql.includes("public.sch_resolve_employee_ref") && sql.includes("Tammy")) {
+    return [{ data: {
+      ok: true,
+      employee_id: "22222222-2222-4222-8222-222222222222",
+      employee_name: "Tammy",
+      employee_code: "EMP003",
+      role: "staff",
+      match_source: "display_name",
+      matched_text: "Tammy",
+      score: 100,
+    } }];
+  }
   if (sql.includes("from public.msg_messages")) return [];
   if (sql.includes("from public.devices d")) return [];
   if (sql.includes("select * from public.msg_get_user_by_device")) return [];
@@ -88,8 +112,8 @@ setContext("t-employee", {
   context_json: { last_question_shape: "employee_schedule" },
 });
 const employeeFollowUpReply = await responder.generateReply({ threadId: "t-employee", userMessage: "what about tomorrow?" });
-assert.equal(employeeFollowUpReply.meta?.mode, "local_employee_schedule");
-assert.match(employeeFollowUpReply.text, /Tammy on 2026-05-12/i);
+assert.equal(employeeFollowUpReply.meta?.mode, "local_employee_work_status");
+assert.match(employeeFollowUpReply.text, /Tammy is working on Tuesday, 2026-05-12/i);
 
 assert.ok(saves.length >= 3);
 

@@ -5,22 +5,52 @@ import { getGeminiDiagnostics } from "./utils/gemini-config.js";
 import { createMemphisResponder } from "./services/index.js";
 import { resolveCanonicalDevice } from "./device-identity.js";
 
-export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPayload, appVersion, releaseId, contractVersion }) {
+export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPayload, requireDeviceAccess, requireOpsManagerAuth: suppliedOpsManagerAuth, appVersion, releaseId, contractVersion }) {
   const router = express.Router();
   const memphisResponder = createMemphisResponder({ runReadOnlySql, runRpc });
-  const requireOpsManagerAuth = makeOpsAccessMiddleware();
+  const requireOpsManagerAuth = suppliedOpsManagerAuth || makeOpsAccessMiddleware();
   const requireGeminiAdminAuth = makeGeminiAdminMiddleware();
 
-  // Device-based auth is mandatory for all messaging endpoints.
-  // If no device_id is provided, return 401.
+  // All employee messaging access flows through the canonical device credential
+  // boundary. Manager bearer sessions may inspect the same routes, but read-only
+  // sessions are never allowed to mutate threads, receipts, or messages.
+  function requestDeviceId(req) {
+    return String(req?.body?.device_id || req?.body?.deviceId || req?.query?.device_id || req?.query?.device || req?.header?.("x-device-id") || "").trim();
+  }
+
+  function finishMessagingIdentity(req, res, next) {
+    if (req.memphisAuth) { next(); return; }
+    const canonicalDeviceId = String(req.memphisDevice?.canonical_device_id || req.memphisDevice?.device_id || requestDeviceId(req)).trim();
+    if (!canonicalDeviceId) {
+      res.status(401).json({ ok: false, error: "device_id is required." });
+      return;
+    }
+    getViewerIdentity(canonicalDeviceId)
+      .then((identity) => {
+        if (!identity) {
+          res.status(401).json({ ok: false, error: "Device is not registered in the messaging system." });
+          return;
+        }
+        req.memphisMessagingDevice = { deviceId: canonicalDeviceId, identity };
+        next();
+      })
+      .catch((error) => {
+        res.status(401).json({ ok: false, error: error?.message || "Device authentication failed." });
+      });
+  }
+
   function requireDeviceOrOpsAuth(req, res, next) {
-    const deviceId = String(req?.body?.device_id || req?.query?.device_id || req?.header?.("x-device-id") || "").trim();
+    if (typeof requireDeviceAccess === "function") {
+      requireDeviceAccess(req, res, () => finishMessagingIdentity(req, res, next));
+      return;
+    }
+    // Import-safe fallback for isolated router tests. Production always injects
+    // the shared credential boundary from src/index.js.
+    const deviceId = requestDeviceId(req);
     if (!deviceId) {
       res.status(401).json({ ok: false, error: "device_id is required." });
       return;
     }
-    // Validate the device is registered before proceeding.
-    // The actual user mapping resolution happens in resolveViewerContext within each route handler.
     getViewerIdentity(deviceId)
       .then((identity) => {
         if (!identity) {
@@ -30,9 +60,17 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         req.memphisMessagingDevice = { deviceId, identity };
         next();
       })
-      .catch(() => {
-        res.status(401).json({ ok: false, error: "Device authentication failed." });
-      });
+      .catch((error) => res.status(401).json({ ok: false, error: error?.message || "Device authentication failed." }));
+  }
+
+  function requireWritableDeviceOrOpsAuth(req, res, next) {
+    requireDeviceOrOpsAuth(req, res, () => {
+      if (req.memphisAuth?.read_only) {
+        res.status(403).json({ ok: false, error: "Read-only Ops Manager access cannot modify Messenger." });
+        return;
+      }
+      next();
+    });
   }
   const MANAGER_OVERVIEW_DEVICE_IDS = new Set(
     String(process.env.MANAGER_OVERVIEW_DEVICE_IDS || "1e74fe4c-dc20b3b9,KIOSK_01,KIOSK_1")
@@ -1181,7 +1219,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   });
 
-  router.post("/device-notifications/ack", requireDeviceOrOpsAuth, async (req, res) => {
+  router.post("/device-notifications/ack", requireWritableDeviceOrOpsAuth, async (req, res) => {
     try {
       const requestedDeviceId = String(req.body?.device_id || req.body?.deviceId || req.header("x-device-id") || "").trim();
       const notificationKey = String(req.body?.notification_key || req.body?.notificationKey || "").trim();
@@ -1234,7 +1272,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   });
 
-  router.post("/thread/direct", async (req, res) => {
+  router.post("/thread/direct", requireWritableDeviceOrOpsAuth, async (req, res) => {
     try {
       const createdByUserId = String(req.body?.created_by_user_id || "").trim();
       const otherUserId = String(req.body?.other_user_id || "").trim();
@@ -1249,7 +1287,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   });
 
-  router.post("/thread/group", async (req, res) => {
+  router.post("/thread/group", requireWritableDeviceOrOpsAuth, async (req, res) => {
     try {
       const createdByUserId = String(req.body?.created_by_user_id || "").trim();
       const deviceId = String(req.body?.device_id || "").trim();
@@ -1270,7 +1308,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   });
 
-  router.post("/thread/:threadId/message", requireDeviceOrOpsAuth, async (req, res) => {
+  router.post("/thread/:threadId/message", requireWritableDeviceOrOpsAuth, async (req, res) => {
     try {
       const threadId = String(req.params.threadId || "").trim();
       const senderUserId = String(req.body?.sender_user_id || "").trim();
@@ -1319,7 +1357,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   });
 
-  router.post("/thread/:threadId/delete", requireDeviceOrOpsAuth, async (req, res) => {
+  router.post("/thread/:threadId/delete", requireWritableDeviceOrOpsAuth, async (req, res) => {
     try {
       const threadId = String(req.params.threadId || "").trim();
       if (!threadId) throw new Error("threadId is required.");
@@ -1343,7 +1381,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   });
 
-  router.post("/thread/:threadId/read", requireDeviceOrOpsAuth, async (req, res) => {
+  router.post("/thread/:threadId/read", requireWritableDeviceOrOpsAuth, async (req, res) => {
     try {
       const threadId = String(req.params.threadId || "").trim();
       const userId = String(req.body?.user_id || "").trim();
@@ -1360,7 +1398,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   });
 
-  router.post("/memphis/thread", requireDeviceOrOpsAuth, async (req, res) => {
+  router.post("/memphis/thread", requireWritableDeviceOrOpsAuth, async (req, res) => {
     try {
       const requestedUserId = String(req.body?.user_id || "").trim();
       const deviceId = String(req.body?.device_id || req.body?.deviceId || req.header("x-device-id") || "").trim();
@@ -1444,7 +1482,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   });
 
-  router.post("/memphis/message", requireDeviceOrOpsAuth, async (req, res) => {
+  router.post("/memphis/message", requireWritableDeviceOrOpsAuth, async (req, res) => {
     try {
       const requestedUserId = String(req.body?.user_id || "").trim();
       const body = String(req.body?.body || "").trim();
@@ -1467,7 +1505,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   });
 
-  router.post("/broadcast", requireDeviceOrOpsAuth, async (req, res) => {
+  router.post("/broadcast", requireWritableDeviceOrOpsAuth, async (req, res) => {
     try {
       const senderUserId = String(req.body?.sender_user_id || "").trim();
       const title = req.body?.title == null ? null : String(req.body.title);

@@ -63,7 +63,7 @@ assert.match(indexSource, /const SCAN_CONTRACT_VERSION = "scan\.v2"/);
 assert.match(indexSource, /SCAN_READ_LIMIT_PER_MINUTE[^\n]*120/);
 assert.match(indexSource, /SCAN_WRITE_LIMIT_PER_MINUTE[^\n]*30/);
 assert.match(indexSource, /SCAN_SHARED_IP_EMERGENCY_LIMIT_PER_MINUTE[^\n]*1000/);
-assert.match(indexSource, /app\.post\("\/scan-api\/rpc", requireDeviceAuth, scanRpcRateLimit/);
+assert.match(indexSource, /app\.post\("\/scan-api\/rpc", requireDeviceOrOpsAccess, requireScanRpcAuthorization, scanRpcRateLimit/);
 assert.match(indexSource, /tool_commit_cleaning_workflow/);
 assert.match(indexSource, /tool_report_device_sync_status/);
 assert.match(indexSource, /tool_evaluate_location_proximity/);
@@ -88,7 +88,7 @@ assert.doesNotMatch(eventsSource, /kind = "day_of_event"/);
 
 assert.match(messagingSource, /router\.get\("\/device-event-reminders", requireDeviceOrOpsAuth/);
 assert.match(messagingSource, /router\.get\("\/device-location-status-reminders", requireDeviceOrOpsAuth/);
-assert.match(messagingSource, /router\.post\("\/device-notifications\/ack", requireDeviceOrOpsAuth/);
+assert.match(messagingSource, /router\.post\("\/device-notifications\/ack", requireWritableDeviceOrOpsAuth/);
 assert.match(messagingSource, /a\.acknowledged_at is not null/);
 assert.match(messagingSource, /notification_kind', ''\) = 'event_reminder'/);
 assert.match(messagingSource, /notification_key/);

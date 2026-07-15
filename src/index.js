@@ -20,8 +20,8 @@ import {
 import { APP_VERSION, RELEASE_ID } from "./app-version.js";
 import { authenticateOpsAccessRequest, installSharedAuthRoutes, makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
 import { makeMcpConnectorMiddleware } from "./auth/mcp-connector-auth.js";
+import { installDeviceCredentialRoutes, makeDeviceCredentialMiddleware } from "./auth/device-credential-auth.js";
 import { runReadOnlySql as runSupabaseReadOnlySql } from "./supabase/read.js";
-import { resolveActiveAssignedDevice } from "./device-identity.js";
 
 const app = express();
 app.use(express.json({ limit: "10mb" }));
@@ -77,6 +77,34 @@ const requireOpsManagerAuth = makeOpsAccessMiddleware();
 const requireOpsManagerWrite = makeOpsAccessMiddleware({ requireWrite: true });
 // MCP_CONNECTOR_TOKEN is accepted by makeMcpConnectorMiddleware for service-to-service MCP clients.
 const requireMcpAuth = makeMcpConnectorMiddleware();
+const requireEmployeeDeviceCredential = makeDeviceCredentialMiddleware({
+  supabase: supabaseAdmin,
+  runReadOnlySql,
+});
+
+function requireDeviceOrOpsAccess(req, res, next) {
+  const ops = authenticateOpsAccessRequest(req);
+  if (ops.ok) {
+    req.memphisAuth = ops.session;
+    req.memphisDevice = null;
+    next();
+    return;
+  }
+  if (ops.presented) {
+    res.status(ops.status || 401).json({ ok: false, error: ops.error || "Unauthorized" });
+    return;
+  }
+  requireEmployeeDeviceCredential(req, res, next);
+}
+
+function requireScanRpcAuthorization(req, res, next) {
+  const fn = String(req.body?.fn || "").trim();
+  if (req.memphisAuth?.read_only && !SCAN_READ_FUNCTIONS.has(fn)) {
+    res.status(403).json({ ok: false, error: "Read-only Ops Manager access cannot run scan mutations." });
+    return;
+  }
+  next();
+}
 
 // Simple in-memory rate limiter: max 10 requests per minute per IP
 const RATE_LIMIT_WINDOW_MS = 60_000;
@@ -123,7 +151,6 @@ const SCAN_READ_FUNCTIONS = new Set([
   "tool_get_system_settings",
   "tool_list_active_employees",
   "tool_get_location_scan_state",
-  "tool_ping_device",
 ]);
 
 function clientIp(req) {
@@ -146,19 +173,6 @@ function consumeRateLimitBucket({ key, limit, now = Date.now() }) {
     limit: normalizedLimit,
     retryAfterSeconds: Math.max(1, Math.ceil((RATE_LIMIT_WINDOW_MS - (now - bucket.windowStart)) / 1000)),
   };
-}
-
-async function resolveRequestDevice(req) {
-  const args = req.body?.args && typeof req.body.args === "object" ? req.body.args : {};
-  const requestedDeviceId = String(
-    req.body?.device_id
-      || req.body?.deviceId
-      || args.p_device_id
-      || args.p_device_identifier
-      || ""
-  ).trim();
-  if (!requestedDeviceId) return null;
-  return resolveActiveAssignedDevice({ runReadOnlySql, deviceIdentifier: requestedDeviceId });
 }
 
 function canonicalizeScanArguments(fn, args, device) {
@@ -306,43 +320,44 @@ function setCorsOrigin(res, req) {
     res.setHeader("Access-Control-Allow-Origin", DEFAULT_CORS_ORIGINS[0]);
   }
   res.setHeader("Access-Control-Allow-Credentials", "true");
+  res.setHeader("Access-Control-Expose-Headers", "X-Device-Enrollment-Required, Retry-After");
   res.setHeader("Vary", "Origin");
 }
 
 function setAdminApiCors(res, req) {
   setCorsOrigin(res, req);
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id, X-Admin-Key, X-Ops-Access-Key");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id, X-Device-Credential, X-Admin-Key, X-Ops-Access-Key");
 }
 
 function setPublicDashboardCors(res, req) {
   setCorsOrigin(res, req);
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id, X-Admin-Key, X-Ops-Access-Key");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id, X-Device-Credential, X-Admin-Key, X-Ops-Access-Key");
 }
 
 function setScanApiCors(res, req) {
   setCorsOrigin(res, req);
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id, X-Admin-Key, X-Ops-Access-Key");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id, X-Device-Credential, X-Admin-Key, X-Ops-Access-Key");
 }
 
 function setMessagingApiCors(res, req) {
   setCorsOrigin(res, req);
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id, X-Admin-Key, X-Ops-Access-Key");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id, X-Device-Credential, X-Admin-Key, X-Ops-Access-Key");
 }
 
 function setScheduleApiCors(res, req) {
   setCorsOrigin(res, req);
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS,PATCH,DELETE");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id, X-Admin-Key, X-Ops-Access-Key");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id, X-Device-Credential, X-Admin-Key, X-Ops-Access-Key");
 }
 
 function setGuestApiCors(res, req) {
   setCorsOrigin(res, req);
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id, X-Admin-Key, X-Ops-Access-Key");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id, X-Device-Credential, X-Admin-Key, X-Ops-Access-Key");
 }
 
 function setFeedbackApiCors(res, req) {
@@ -1842,14 +1857,21 @@ function createMcpServer() {
 }
 
 installSharedAuthRoutes(app, { setCors: setAdminApiCors, supabase: supabaseAdmin });
+installDeviceCredentialRoutes(app, {
+  setCors: setAdminApiCors,
+  supabase: supabaseAdmin,
+  runReadOnlySql,
+  requireOpsAuth: requireOpsManagerAuth,
+  requireOpsWrite: requireOpsManagerWrite,
+});
 
 app.use(MOXIE_MOUNT_PATH, createMoxieRouter({ supabase: supabaseAdmin, staticDir: MOXIE_STATIC_DIR }));
 
 app.use("/admin-api", (req, res, next) => { setAdminApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/dashboard-api", (req, res, next) => { setPublicDashboardCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/scan-api", (req, res, next) => { setScanApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
-app.use("/messaging-api", (req, res, next) => { setMessagingApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); }, createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: MESSAGING_CONTRACT_VERSION }));
-app.use("/schedule-api", (req, res, next) => { setScheduleApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); }, createScheduleRouter({ runReadOnlySql, runRpc, runWriteSql, buildHealthPayload, requireAdminApiAuth: requireOpsManagerWrite, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: SCHEDULE_CONTRACT_VERSION }));
+app.use("/messaging-api", (req, res, next) => { setMessagingApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); }, createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPayload, requireDeviceAccess: requireDeviceOrOpsAccess, requireOpsManagerAuth, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: MESSAGING_CONTRACT_VERSION }));
+app.use("/schedule-api", (req, res, next) => { setScheduleApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); }, createScheduleRouter({ runReadOnlySql, runRpc, runWriteSql, buildHealthPayload, requireAdminApiAuth: requireOpsManagerWrite, requireOpsManagerAuth, requireDeviceAccess: requireDeviceOrOpsAccess, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: SCHEDULE_CONTRACT_VERSION }));
 app.use("/guest-api", (req, res, next) => { setGuestApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/feedback-api", (req, res, next) => { setFeedbackApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/dashboard-api/events", createEventsPublicRouter({ runReadOnlySql, runWriteSql, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController }));
@@ -2111,36 +2133,6 @@ app.post("/dashboard-api/close-ticket", requireOpsManagerWrite, async (req, res)
   }
   catch (error) { console.error("dashboard close ticket failed:", error); res.status(500).json({ ok: false, error: error.message || "Dashboard close ticket failed" }); }
 });
-// Scan device authentication is resolved server-side against the canonical device registry.
-// Hardware aliases are accepted only when they map to an active canonical device with an active employee assignment.
-async function requireDeviceAuth(req, res, next) {
-  const explicitOps = authenticateOpsAccessRequest(req);
-  if (explicitOps.ok) {
-    req.memphisAuth = explicitOps.session;
-    req.memphisDevice = null;
-    next();
-    return;
-  }
-
-  try {
-    const device = await resolveRequestDevice(req);
-    if (!device || !device.device_active) {
-      res.status(401).json({ ok: false, error: "Registered device is required." });
-      return;
-    }
-    if (!device.assignment_valid) {
-      res.status(403).json({ ok: false, error: "This device is not assigned to an active employee." });
-      return;
-    }
-    req.memphisDevice = device;
-    req.body.device_id = device.canonical_device_id || device.device_id;
-    next();
-  } catch (error) {
-    console.error("scan device authentication failed:", error);
-    res.status(401).json({ ok: false, error: "Device authentication failed." });
-  }
-}
-
 app.get("/scan-api/health", (_req, res) => {
   res.status(200).json(buildHealthPayload("scan", {
     available_functions: Array.from(SCAN_RPC_ALLOWLIST),
@@ -2151,7 +2143,7 @@ app.get("/scan-api/health", (_req, res) => {
     },
   }));
 });
-app.post("/scan-api/rpc", requireDeviceAuth, scanRpcRateLimit, async (req, res) => {
+app.post("/scan-api/rpc", requireDeviceOrOpsAccess, requireScanRpcAuthorization, scanRpcRateLimit, async (req, res) => {
   try {
     const fn = String(req.body?.fn || "").trim();
     if (!SCAN_RPC_ALLOWLIST.has(fn)) {
@@ -2212,13 +2204,10 @@ app.get("/sse", requireMcpAuth, async (req, res) => {
 });
 app.post("/messages", requireMcpAuth, async (req, res) => {
   try {
-    const sessionId = String(req.query.sessionId || req.query.session_id || "");
-    let entry = sseTransports.get(sessionId);
-    if (!entry) {
-      const entries = Array.from(sseTransports.values());
-      if (!entries.length) { res.status(400).send("No active SSE transport"); return; }
-      entry = entries[entries.length - 1];
-    }
+    const sessionId = String(req.query.sessionId || req.query.session_id || "").trim();
+    if (!sessionId) { res.status(400).send("sessionId is required"); return; }
+    const entry = sseTransports.get(sessionId);
+    if (!entry) { res.status(404).send("Unknown or expired SSE session"); return; }
     await entry.transport.handlePostMessage(req, res, req.body);
   }
   catch (error) { console.error("SSE post message failed:", error); if (!res.headersSent) res.status(500).send("SSE post message failed"); }

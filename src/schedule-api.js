@@ -565,12 +565,29 @@ export function createScheduleRouter({
   runWriteSql,
   buildHealthPayload,
   requireAdminApiAuth,
+  requireOpsManagerAuth,
+  requireDeviceAccess,
   appVersion,
   releaseId,
   contractVersion,
 }) {
   const router = express.Router();
   const requireSchedulePin = requireAdminApiAuth;
+  const requireManagerRead = requireOpsManagerAuth || requireAdminApiAuth || ((_req, _res, next) => next());
+  const requireEmployeeDevice = typeof requireDeviceAccess === "function" ? requireDeviceAccess : ((_req, _res, next) => next());
+
+  function requestHasDeviceIdentity(req) {
+    return Boolean(String(req.query?.device_id || req.query?.device || req.header?.("x-device-id") || "").trim());
+  }
+
+  function requirePersonalScheduleAccess(req, res, next) {
+    if (requestHasDeviceIdentity(req)) {
+      requireEmployeeDevice(req, res, next);
+      return;
+    }
+    requireManagerRead(req, res, next);
+  }
+
   const AUTO_GENERATE_WINDOW_DAYS = 7;
   const AUTO_GENERATE_COOLDOWN_MS = 6 * 60 * 60 * 1000;
   const RESTROOM_REBALANCE_SWEEP_MS = nonNegativeInt(process.env.RESTROOM_REBALANCE_SWEEP_MS, 0);
@@ -3269,7 +3286,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
   }
 
   async function resolveEmployeeIdFromRequest(req) {
-    const deviceId = String(req.query.device_id || req.query.device || "").trim();
+    const deviceId = String(req.memphisDevice?.canonical_device_id || req.memphisDevice?.device_id || req.query.device_id || req.query.device || "").trim();
     const employeeId = String(req.query.employee_id || "").trim();
     const employeeName = String(req.query.employee_name || req.query.name || "").trim();
     const employeeCode = String(req.query.employee_code || req.query.code || "").trim();
@@ -3537,9 +3554,9 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
     }
   });
 
-  router.get("/my-day", async (req, res) => {
+  router.get("/my-day", requireEmployeeDevice, async (req, res) => {
     try {
-      const deviceId = String(req.query.device_id || req.query.device || "").trim();
+      const deviceId = String(req.memphisDevice?.canonical_device_id || req.memphisDevice?.device_id || req.query.device_id || req.query.device || "").trim();
       if (!deviceId) throw new Error("device_id is required.");
       const serviceDate = requireDate(req.query.service_date || req.query.date || (await getServiceDate()));
       await ensureScheduleReadyForRead(serviceDate, "schedule_my_day");
@@ -3580,9 +3597,9 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
     }
   });
 
-  router.get("/my-day-summary", async (req, res) => {
+  router.get("/my-day-summary", requirePersonalScheduleAccess, async (req, res) => {
     try {
-      const deviceId = String(req.query.device_id || req.query.device || "").trim();
+      const deviceId = String(req.memphisDevice?.canonical_device_id || req.memphisDevice?.device_id || req.query.device_id || req.query.device || "").trim();
       const employeeId = String(req.query.employee_id || "").trim();
       const employeeName = String(req.query.employee_name || req.query.name || "").trim();
       if (!deviceId && !employeeId && !employeeName) {
@@ -3651,7 +3668,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
     }
   });
 
-  router.get("/my-schedule", async (req, res) => {
+  router.get("/my-schedule", requirePersonalScheduleAccess, async (req, res) => {
     try {
       const serviceDate = requireDate(req.query.service_date || req.query.date || (await getServiceDate()));
       await ensureScheduleReadyForRead(serviceDate, "schedule_my_schedule");
