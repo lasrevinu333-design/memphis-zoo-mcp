@@ -1,4 +1,4 @@
-export const APP_VERSION = "release-2026.07.15.moxie-route.7";
+export const APP_VERSION = "release-2026.07.15.kiosk-lifecycle.8";
 export const RELEASE_ID = String(
   process.env.RENDER_GIT_COMMIT
     || process.env.GIT_COMMIT
