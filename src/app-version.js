@@ -1,4 +1,4 @@
-export const APP_VERSION = "release-2026.07.15.schedule-messaging.5";
+export const APP_VERSION = "release-2026.07.15.manager-open.6";
 export const RELEASE_ID = String(
   process.env.RENDER_GIT_COMMIT
     || process.env.GIT_COMMIT

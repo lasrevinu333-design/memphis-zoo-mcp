@@ -34,6 +34,21 @@ function allowExplicitLocalOpenMode(env = process.env) {
   return truthy(env.OPS_AUTH_OPEN_MODE) && !isProductionLike(env);
 }
 
+export function normalizeOpsAccessLevel(value) {
+  const normalized = String(value || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  return ["read", "readonly", "read_only"].includes(normalized) ? "read_only" : "full_access";
+}
+
+function requestedOpsAccessLevel(req) {
+  return normalizeOpsAccessLevel(
+    req?.query?.access_level
+      || req?.query?.manager_access
+      || req?.body?.access_level
+      || req?.body?.manager_access
+      || req?.header?.("x-ops-access-level")
+      || "full_access"
+  );
+}
 
 function normalizeDeviceId(deviceId) {
   const normalized = String(deviceId || "").trim().replace(/[^a-zA-Z0-9_.:-]/g, "").slice(0, 96);
@@ -156,6 +171,17 @@ export function createOpenOpsManagerSession({ deviceId, now = new Date(), env = 
   return createOpsManagerSession({ deviceId: deviceId || "manager-hub-open", now, env, authMode: "open", accessLevel: "full_access" });
 }
 
+export function createPublicOpsManagerSession({ deviceId, accessLevel = "full_access", now = new Date(), env = process.env } = {}) {
+  const normalizedAccessLevel = normalizeOpsAccessLevel(accessLevel);
+  return createOpsManagerSession({
+    deviceId: deviceId || (normalizedAccessLevel === "read_only" ? "manager-read-only" : "manager-hub"),
+    now,
+    env,
+    authMode: normalizedAccessLevel === "read_only" ? "public_read_only_link" : "public_full_access_link",
+    accessLevel: normalizedAccessLevel,
+  });
+}
+
 export function createAdminApiKeySession({ deviceId, now = new Date(), env = process.env } = {}) {
   return createOpsManagerSession({ deviceId: deviceId || "admin-api-key", now, env, authMode: "admin_api_key", accessLevel: "full_access" });
 }
@@ -248,11 +274,25 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env } = {}
   });
 
   app.get("/auth-api/session", (req, res) => {
-    const result = authenticateOpsAccessRequest(req, { env });
-    if (!result.ok) {
-      res.status(result.status || 401).json({ ok: false, error: result.error || "Ops Manager link required." });
+    const explicit = authenticatePresentedOpsAccessRequest(req, { env });
+    if (explicit.presented && !explicit.ok) {
+      res.status(explicit.status || 401).json({ ok: false, error: explicit.error || "Invalid manager session." });
       return;
     }
-    res.status(200).json({ ok: true, data: { session: result.session, operational_day: getCSTDate(), expires_at: result.session.expires_at } });
+    const session = explicit.presented
+      ? explicit.session
+      : createPublicOpsManagerSession({
+          deviceId: requestDeviceId(req),
+          accessLevel: requestedOpsAccessLevel(req),
+          env,
+        });
+    res.status(200).json({
+      ok: true,
+      data: {
+        session,
+        operational_day: getCSTDate(),
+        expires_at: session.expires_at,
+      },
+    });
   });
 }

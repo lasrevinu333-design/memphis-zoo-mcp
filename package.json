@@ -25,7 +25,8 @@
     "test:sch2-publish": "node scripts/sch2-publish-route-tests.mjs",
     "test:foundation": "node scripts/scheduler-alerts-gps-foundation-tests.mjs",
     "test:schedule-display": "node scripts/schedule-display-tests.mjs",
-    "test:messaging-recovery": "node scripts/memphis-messaging-route-recovery-tests.mjs"
+    "test:messaging-recovery": "node scripts/memphis-messaging-route-recovery-tests.mjs",
+    "test:manager-open": "node scripts/manager-open-session-foundation-tests.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.18.0",
