@@ -33,7 +33,9 @@ jobs:
             base64 -d /tmp/payload.b64 > /tmp/payload.tar.gz
             echo "751fafcc05febf508f8cc7423ca023c1aa9ea9f5f0f3bc710148eafb794b3901  /tmp/payload.tar.gz" | sha256sum -c -
             tar -xzf /tmp/payload.tar.gz
-            rm -rf .foundation-payload/backend .github/workflows/_apply-auth-foundation.yml
+            rm -rf .foundation-payload/backend
+            rm -f .github/workflows/foundation-security-gate.yml
+            git checkout HEAD -- .github/workflows/_apply-auth-foundation.yml
           fi
       - name: Validate foundation
         shell: bash
@@ -50,13 +52,13 @@ jobs:
           npm run --silent test:schedule-source-type
           npm run --silent test:foundation
           npm audit --omit=dev --audit-level=high
-      - name: Commit validated branch when changed
+      - name: Commit validated non-workflow changes when changed
         shell: bash
         run: |
           set -euo pipefail
-          git add -A
+          git add -A -- . ':(exclude).github/workflows/**'
           if git diff --cached --quiet; then
-            echo 'No generated changes to commit.'
+            echo 'No generated source changes to commit.'
             exit 0
           fi
           git config user.name "github-actions[bot]"
