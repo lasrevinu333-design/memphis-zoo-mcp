@@ -1,5 +1,4 @@
 import { timingSafeEqual } from "node:crypto";
-import { authenticateOpsAccessRequest } from "./shared-access-auth.js";
 
 function safeStringEqual(left, right) {
   const a = Buffer.from(String(left || ""));
@@ -13,20 +12,13 @@ export function getMcpConnectorToken(env = process.env) {
 }
 
 export function requestMcpConnectorToken(req) {
-  // Check custom connector token headers first
   const fromCustomHeader =
     req?.header?.("x-memphis-connector-token")
     || req?.header?.("x-mcp-connector-token");
-
   if (fromCustomHeader) return String(fromCustomHeader).trim();
 
-  // Fall back to Authorization: Bearer *** (standard HTTP auth).
-  // ChatGPT MCP connectors send this via service_http auth type.
   const authHeader = String(req?.header?.("authorization") || "").trim();
-  if (authHeader.toLowerCase().startsWith("bearer ")) {
-    return authHeader.slice(7).trim();
-  }
-
+  if (authHeader.toLowerCase().startsWith("bearer ")) return authHeader.slice(7).trim();
   return "";
 }
 
@@ -41,25 +33,20 @@ function createConnectorSession({ now = new Date() } = {}) {
 
 export function authenticateMcpConnectorRequest(req, { env = process.env, now = new Date() } = {}) {
   const configuredConnectorToken = getMcpConnectorToken(env);
+  if (!configuredConnectorToken) {
+    return { ok: false, status: 503, error: "MCP connector authentication is not configured." };
+  }
+
   const providedConnectorToken = requestMcpConnectorToken(req);
-
-  if (configuredConnectorToken) {
-    if (providedConnectorToken && safeStringEqual(providedConnectorToken, configuredConnectorToken)) {
-      return {
-        ok: true,
-        session: createConnectorSession({ now }),
-        auth_source: "connector_token",
-      };
-    }
-
+  if (!providedConnectorToken || !safeStringEqual(providedConnectorToken, configuredConnectorToken)) {
     return { ok: false, status: 401, error: "Unauthorized" };
   }
 
-  const fallbackResult = authenticateOpsAccessRequest(req, { env, now });
-  if (fallbackResult.ok) {
-    return { ...fallbackResult, auth_source: "open_ops_manager" };
-  }
-  return fallbackResult;
+  return {
+    ok: true,
+    session: createConnectorSession({ now }),
+    auth_source: "connector_token",
+  };
 }
 
 export function makeMcpConnectorMiddleware({ env = process.env } = {}) {
