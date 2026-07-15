@@ -1,4 +1,4 @@
-export const APP_VERSION = "release-2026.07.14.scheduler-alerts-gps.3";
+export const APP_VERSION = "release-2026.07.15.schedule-messaging.5";
 export const RELEASE_ID = String(
   process.env.RENDER_GIT_COMMIT
     || process.env.GIT_COMMIT

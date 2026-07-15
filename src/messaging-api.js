@@ -121,6 +121,38 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     return Array.isArray(rows) && rows.length > 0;
   }
 
+  async function getThreadIdentity(threadId) {
+    const normalizedThreadId = String(threadId || "").trim();
+    if (!normalizedThreadId) return null;
+    const rows = await runReadOnlySql(`
+      select
+        t.id,
+        t.thread_type,
+        t.title,
+        t.is_active,
+        exists (
+          select 1
+          from public.msg_thread_participants tp
+          join public.msg_users u on u.id = tp.user_id
+          where tp.thread_id = t.id
+            and tp.left_at is null
+            and u.is_active = true
+            and u.role = 'bot'
+            and lower(btrim(u.display_name)) = 'memphis'
+        ) as has_memphis_bot
+      from public.msg_threads t
+      where t.id = '${esc(normalizedThreadId)}'::uuid
+      limit 1
+    `);
+    return Array.isArray(rows) && rows.length ? rows[0] : null;
+  }
+
+  function isMemphisThread(thread = {}) {
+    return String(thread?.thread_type || "").trim().toLowerCase() === "bot"
+      || thread?.has_memphis_bot === true
+      || String(thread?.title || "").trim().toLowerCase() === "memphis";
+  }
+
   async function getServiceDate() {
     const rows = await runReadOnlySql("select public.sch_service_date(now()) as service_date");
     return Array.isArray(rows) && rows.length ? rows[0].service_date : null;
@@ -806,6 +838,74 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   }
 
+  async function sendMemphisConversationMessage({
+    userId = "",
+    deviceId = "",
+    body = "",
+    clientMessageId = "",
+    threadId = "",
+  } = {}) {
+    const normalizedUserId = String(userId || "").trim();
+    const normalizedDeviceId = String(deviceId || "").trim();
+    const normalizedBody = String(body || "").trim();
+    const normalizedClientMessageId = String(clientMessageId || "").trim();
+    if (!normalizedUserId) throw new Error("user_id is required.");
+    if (!normalizedDeviceId) throw new Error("device_id is required.");
+    if (!normalizedBody) throw new Error("body is required.");
+
+    const canonicalThread = await runRpc("msg_get_or_create_memphis_thread", { p_user_id: normalizedUserId });
+    let thread = canonicalThread;
+    const requestedThreadId = String(threadId || "").trim();
+    if (requestedThreadId) {
+      const requestedThread = await getThreadIdentity(requestedThreadId);
+      if (!requestedThread || requestedThread.is_active === false || !isMemphisThread(requestedThread)) {
+        throw new Error("The requested thread is not an active Memphis conversation.");
+      }
+      const isParticipant = await isThreadParticipant(requestedThreadId, normalizedUserId);
+      if (!isParticipant) throw new Error("The sender is not a participant in this Memphis conversation.");
+      thread = requestedThread;
+    }
+
+    const userMessage = await runRpc("msg_send_message", {
+      p_thread_id: thread.id,
+      p_sender_user_id: normalizedUserId,
+      p_body: normalizedBody,
+      p_message_type: "text",
+      p_metadata_json: {
+        channel: "memphis",
+        device_id: normalizedDeviceId,
+        ...(normalizedClientMessageId ? { client_message_id: normalizedClientMessageId } : {}),
+      },
+    });
+
+    const memphisRows = await runReadOnlySql("select public.msg_get_memphis_user_id() as memphis_user_id");
+    const memphisUserId = Array.isArray(memphisRows) && memphisRows.length ? memphisRows[0].memphis_user_id : null;
+    if (!memphisUserId) throw new Error("Memphis bot identity not found.");
+
+    const { reply } = await buildMemphisReply({
+      userId: normalizedUserId,
+      deviceId: normalizedDeviceId,
+      threadId: thread.id,
+      body: normalizedBody,
+    });
+    const replyKey = `memphis-reply:${userMessage?.id || normalizedClientMessageId || thread.id}`;
+    const botMessage = await runRpc("msg_send_message", {
+      p_thread_id: thread.id,
+      p_sender_user_id: memphisUserId,
+      p_body: String(reply?.text || "Memphis could not produce an answer."),
+      p_message_type: "bot_response",
+      p_metadata_json: {
+        channel: "memphis",
+        ai: true,
+        client_message_id: replyKey,
+        reply_to_message_id: userMessage?.id || null,
+        ...(reply?.meta && typeof reply.meta === "object" ? reply.meta : {}),
+      },
+    });
+
+    return { thread, user_message: userMessage, bot_message: botMessage };
+  }
+
   router.get("/health", (_req, res) => {
     res.status(200).json(buildHealthPayload("messaging", { contract_version: contractVersion, memphis: getGeminiDiagnosticsForMessaging() }));
   });
@@ -866,6 +966,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const userId = String(req.query.user_id || "").trim();
       const deviceId = String(req.query.device_id || "").trim();
       const viewer = await resolveViewerContext({ userId, deviceId });
+      await runRpc("msg_get_or_create_memphis_thread", { p_user_id: viewer.effectiveUserId });
       const notificationState = deviceId ? await getDeviceNotificationState(deviceId) : null;
       const suppressedNotificationState = notificationState ? phoneSuppressedNotificationState(notificationState) : null;
       const suppressUnreadForPhone = deviceId && shouldSuppressPhoneNotificationPayloads(notificationState);
@@ -1176,6 +1277,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const body = String(req.body?.body || "");
       const messageType = String(req.body?.message_type || "text").trim() || "text";
       const metadataJson = req.body?.metadata_json && typeof req.body.metadata_json === "object" ? req.body.metadata_json : {};
+      const clientMessageId = String(req.body?.client_message_id || req.body?.clientMessageId || metadataJson.client_message_id || "").trim();
       const deviceId = String(req.body?.device_id || req.body?.deviceId || "").trim();
       const viewer = await resolveViewerContext({ userId: senderUserId, deviceId });
       if (viewer.effectiveUserId !== senderUserId && !viewer.isManagerOverview) {
@@ -1187,7 +1289,30 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         res.status(403).json({ ok: false, error: "Device's user is not a participant in this thread." });
         return;
       }
-      const data = await runRpc("msg_send_message", { p_thread_id: threadId, p_sender_user_id: senderUserId, p_body: body, p_message_type: messageType, p_metadata_json: metadataJson });
+      const thread = await getThreadIdentity(threadId);
+      if (!thread || thread.is_active === false) throw new Error("Active thread not found.");
+      if (isMemphisThread(thread)) {
+        const canonicalDeviceId = String(viewer.identity?.canonical_device_id || deviceId).trim();
+        const data = await sendMemphisConversationMessage({
+          userId: viewer.effectiveUserId,
+          deviceId: canonicalDeviceId,
+          body,
+          clientMessageId,
+          threadId,
+        });
+        res.status(200).json({ ok: true, data, meta: messagingMeta({ responder: "memphis" }) });
+        return;
+      }
+      const data = await runRpc("msg_send_message", {
+        p_thread_id: threadId,
+        p_sender_user_id: senderUserId,
+        p_body: body,
+        p_message_type: messageType,
+        p_metadata_json: {
+          ...metadataJson,
+          ...(clientMessageId ? { client_message_id: clientMessageId } : {}),
+        },
+      });
       res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Send message failed");
@@ -1328,43 +1453,15 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       if (!body) throw new Error("body is required.");
 
       const viewer = await resolveViewerContext({ userId: requestedUserId, deviceId });
-      const userId = viewer.effectiveUserId;
       const canonicalDeviceId = String(viewer.identity?.canonical_device_id || deviceId).trim();
-      const thread = await runRpc("msg_get_or_create_memphis_thread", { p_user_id: userId });
-
-      const userMessage = await runRpc("msg_send_message", {
-        p_thread_id: thread.id,
-        p_sender_user_id: userId,
-        p_body: body,
-        p_message_type: "text",
-        p_metadata_json: {
-          channel: "memphis",
-          device_id: canonicalDeviceId,
-          ...(clientMessageId ? { client_message_id: clientMessageId } : {}),
-        }
+      const data = await sendMemphisConversationMessage({
+        userId: viewer.effectiveUserId,
+        deviceId: canonicalDeviceId,
+        body,
+        clientMessageId,
       });
 
-      const memphisRows = await runReadOnlySql("select public.msg_get_memphis_user_id() as memphis_user_id");
-      const memphisUserId = Array.isArray(memphisRows) && memphisRows.length ? memphisRows[0].memphis_user_id : null;
-      if (!memphisUserId) throw new Error("Memphis bot identity not found.");
-
-      let reply;
-      ({ reply } = await buildMemphisReply({ userId, deviceId: canonicalDeviceId, threadId: thread.id, body }));
-
-      const botMessage = await runRpc("msg_send_message", {
-        p_thread_id: thread.id,
-        p_sender_user_id: memphisUserId,
-        p_body: String(reply?.text || "Memphis could not produce an answer."),
-        p_message_type: "bot_response",
-        p_metadata_json: {
-          channel: "memphis",
-          ai: true,
-          client_message_id: `memphis-reply:${userMessage?.id || clientMessageId || thread.id}`,
-          ...(reply?.meta && typeof reply.meta === "object" ? reply.meta : {})
-        }
-      });
-
-      res.status(200).json({ ok: true, data: { thread, user_message: userMessage, bot_message: botMessage }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+      res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Send Memphis message failed");
     }
