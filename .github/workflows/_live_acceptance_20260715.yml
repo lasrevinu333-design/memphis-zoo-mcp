@@ -1,0 +1,70 @@
+name: One-time live acceptance probe
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Probe Render and GitHub Pages without failing the run
+        shell: bash
+        run: |
+          set +e
+          report=/tmp/live-acceptance.txt
+          : > "$report"
+          printf 'checked_at_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$report"
+          printf 'expected_backend_commit=%s\n' 'eb78c16cb1cf17de4840ae7656606253acd03028' >> "$report"
+          printf 'expected_frontend_commit=%s\n\n' '9718d489e7d66e90ff30546fdf4f96c12a3315a4' >> "$report"
+
+          probe() {
+            name="$1"
+            url="$2"
+            method="${3:-GET}"
+            body_file="/tmp/${name}.body"
+            header_file="/tmp/${name}.headers"
+            if [ "$method" = POST ]; then
+              code=$(curl -L -sS --max-time 45 -X POST -H 'Content-Type: application/json' -d '{}' -D "$header_file" -o "$body_file" -w '%{http_code}' "$url")
+              rc=$?
+            else
+              code=$(curl -L -sS --max-time 45 -D "$header_file" -o "$body_file" -w '%{http_code}' "$url")
+              rc=$?
+            fi
+            printf '===== %s =====\nurl=%s\nmethod=%s\ncurl_rc=%s\nhttp_code=%s\n' "$name" "$url" "$method" "$rc" "$code" >> "$report"
+            printf '%s\n' '-- headers --' >> "$report"
+            sed -n '1,30p' "$header_file" >> "$report" 2>/dev/null
+            printf '%s\n' '-- body (first 12000 bytes) --' >> "$report"
+            head -c 12000 "$body_file" >> "$report" 2>/dev/null
+            printf '\n\n' >> "$report"
+          }
+
+          probe render_version https://memphis-zoo-mcp.onrender.com/version
+          probe render_scan_health https://memphis-zoo-mcp.onrender.com/scan-api/health
+          probe render_schedule_health https://memphis-zoo-mcp.onrender.com/schedule-api/health
+          probe render_messaging_health https://memphis-zoo-mcp.onrender.com/messaging-api/health
+          probe render_events_health https://memphis-zoo-mcp.onrender.com/events-api/health
+          probe protected_schedule_employees https://memphis-zoo-mcp.onrender.com/schedule-api/employees
+          probe protected_messaging_users https://memphis-zoo-mcp.onrender.com/messaging-api/users
+          probe protected_dashboard_summary https://memphis-zoo-mcp.onrender.com/dashboard-api/summary
+          probe pages_start https://lasrevinu333-design.github.io/Engine/start_page1.html
+          probe pages_employee_schedule https://lasrevinu333-design.github.io/Engine/employee-schedule.html
+          probe pages_reminders https://lasrevinu333-design.github.io/Engine/memphis-device-reminders.js
+          probe pages_scan_sync https://lasrevinu333-design.github.io/Engine/memphis-scan-sync.js
+
+          printf '%s\n' '===== EXTRACTED RELEASE MARKERS =====' >> "$report"
+          grep -Eo 'release-2026\.[0-9.]+[A-Za-z0-9._-]*|eb78c16cb1cf17de4840ae7656606253acd03028|9718d489e7d66e90ff30546fdf4f96c12a3315a4|scan\.v[0-9]+|schedule\.v[0-9]+|messaging\.v[0-9]+' /tmp/*.body 2>/dev/null | sort -u >> "$report"
+          cat "$report"
+
+      - name: Upload acceptance report
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-acceptance-20260715
+          path: /tmp/live-acceptance.txt
+          if-no-files-found: error
+          retention-days: 1
