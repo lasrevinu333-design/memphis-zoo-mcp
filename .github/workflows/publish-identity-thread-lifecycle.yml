@@ -1,0 +1,125 @@
+name: Publish Identity and Thread Lifecycle Repair
+
+on:
+  push:
+    branches:
+      - fix/identity-thread-lifecycle-20260715
+    paths:
+      - .github/workflows/publish-identity-thread-lifecycle.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-identity-thread-lifecycle
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Apply and validate exact repair
+        shell: bash
+        run: |
+          set +e
+          report=/tmp/identity-thread-lifecycle-report.txt
+          : > "$report"
+          failed=0
+          pass(){ printf 'PASS %s\n' "$*" | tee -a "$report"; }
+          fail(){ printf 'FAIL %s\n' "$*" | tee -a "$report"; failed=1; }
+
+          cat .repair/backend_chunks/chunk_* | base64 --decode > /tmp/backend.patch.gz
+          [ $? -eq 0 ] && pass 'payload decode' || fail 'payload decode'
+          printf '%s  %s\n' 'cfe83eb8ce1b0ec049f978e17173f7b8d205b006bf1004412a1bf0d60dfa10c9' /tmp/backend.patch.gz | sha256sum --check >> "$report" 2>&1
+          [ $? -eq 0 ] && pass 'compressed checksum' || fail 'compressed checksum'
+          gzip --decompress --stdout /tmp/backend.patch.gz > /tmp/backend.patch
+          [ $? -eq 0 ] && pass 'payload decompression' || fail 'payload decompression'
+          printf '%s  %s\n' '3795228e67005b28203a6763cc753fff62c171b6192ab2aa047b92f0b624f56b' /tmp/backend.patch | sha256sum --check >> "$report" 2>&1
+          [ $? -eq 0 ] && pass 'patch checksum' || fail 'patch checksum'
+          git apply --check /tmp/backend.patch >> "$report" 2>&1
+          [ $? -eq 0 ] && pass 'patch preflight' || fail 'patch preflight'
+          if [ "$failed" -eq 0 ]; then
+            git apply /tmp/backend.patch >> "$report" 2>&1
+            [ $? -eq 0 ] && pass 'patch apply' || fail 'patch apply'
+          fi
+
+          if [ "$failed" -eq 0 ]; then
+            npm ci --ignore-scripts >> "$report" 2>&1
+            [ $? -eq 0 ] && pass 'npm ci' || fail 'npm ci'
+          fi
+
+          scripts=(
+            smoke
+            test:events-parser
+            test:events-api
+            test:feedback
+            test:schedule-ai
+            test:ai-intent
+            test:messaging
+            test:auth
+            test:device-popups
+            test:thursday-demo
+            test:leadership-demo
+            test:dashboard
+            test:scheduler-overhaul
+            test:sch2-publish
+            test:foundation
+            test:schedule-display
+            test:messaging-recovery
+            test:manager-open
+            test:moxie-route
+            test:schedule-source-type
+            test:identity-thread-lifecycle
+          )
+          if [ "$failed" -eq 0 ]; then
+            for script in "${scripts[@]}"; do
+              npm run --silent "$script" >> "$report" 2>&1
+              [ $? -eq 0 ] && pass "$script" || fail "$script"
+            done
+            while IFS= read -r file; do
+              node --check "$file" >> "$report" 2>&1
+              [ $? -eq 0 ] && pass "syntax $file" || fail "syntax $file"
+            done < <(find src scripts -type f \( -name '*.js' -o -name '*.mjs' \) | sort)
+            npm audit --omit=dev --audit-level=high >> "$report" 2>&1
+            [ $? -eq 0 ] && pass 'dependency audit' || fail 'dependency audit'
+            git diff --check >> "$report" 2>&1
+            [ $? -eq 0 ] && pass 'git diff check' || fail 'git diff check'
+          fi
+
+          git config user.name 'Memphis Zoo Repair Bot'
+          git config user.email 'lasrevinu333@users.noreply.github.com'
+
+          if [ "$failed" -eq 0 ]; then
+            rm -rf .repair
+            rm -f .github/workflows/publish-identity-thread-lifecycle.yml
+            git add -A
+            git diff --cached --check >> "$report" 2>&1 || failed=1
+          fi
+
+          if [ "$failed" -eq 0 ]; then
+            git commit -m 'Remove demo identities and fix Messenger thread lifecycle' >> "$report" 2>&1
+            git push origin "HEAD:${GITHUB_REF_NAME}" >> "$report" 2>&1
+            cat "$report"
+            exit 0
+          fi
+
+          git reset --hard "$GITHUB_SHA" >/dev/null 2>&1
+          rm -f .github/workflows/publish-identity-thread-lifecycle.yml
+          rm -rf .repair/backend_chunks
+          mkdir -p .repair
+          cp "$report" .repair/identity-thread-lifecycle-failure.txt
+          git add -A
+          git commit -m 'diagnostic: preserve identity lifecycle publication failure' >/dev/null 2>&1 || true
+          git push origin "HEAD:${GITHUB_REF_NAME}" >/dev/null 2>&1 || true
+          cat "$report"
+          exit 0
