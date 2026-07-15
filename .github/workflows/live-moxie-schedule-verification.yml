@@ -1,0 +1,149 @@
+name: Verify Live Moxie and Employee Schedules
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - diagnostic/moxie-schedule-live-20260715
+    paths:
+      - .github/workflows/live-moxie-schedule-verification.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: live-moxie-schedule-verification
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Poll Render and verify live contracts
+        shell: bash
+        run: |
+          set -uo pipefail
+          base='https://memphis-zoo-mcp.onrender.com'
+          expected='2a8b22ded1646e47a2d7703e644d2d1e4b42d009'
+          mkdir -p .diagnostic
+          tmp="$(mktemp -d)"
+          ready=false
+          for attempt in $(seq 1 90); do
+            curl -fsS --max-time 20 "$base/version" -o "$tmp/version.json" 2>/dev/null || true
+            release_id="$(jq -r '.release_id // empty' "$tmp/version.json" 2>/dev/null || true)"
+            if [ "$release_id" = "$expected" ]; then
+              ready=true
+              break
+            fi
+            sleep 10
+          done
+
+          python3 - "$base" "$expected" "$ready" "$tmp" <<'PY'
+          import json, pathlib, subprocess, sys
+
+          base, expected, ready_text, tmp_dir = sys.argv[1:]
+          tmp = pathlib.Path(tmp_dir)
+          report = {
+              'expected_commit': expected,
+              'render_ready': ready_text == 'true',
+              'version': {},
+              'moxie': {},
+              'schedules': [],
+          }
+
+          try:
+              report['version'] = json.loads((tmp / 'version.json').read_text())
+          except Exception as exc:
+              report['version_error'] = str(exc)
+
+          def request(path):
+              args = ['curl', '-sS', '--max-time', '30', '-D', '-', '-o', '-', base + path]
+              proc = subprocess.run(args, capture_output=True, text=True)
+              raw = proc.stdout
+              parts = raw.split('\r\n\r\n') if '\r\n\r\n' in raw else raw.split('\n\n')
+              headers = parts[0] if parts else ''
+              body = parts[-1] if len(parts) > 1 else ''
+              status = None
+              location = ''
+              for line in headers.splitlines():
+                  if line.startswith('HTTP/'):
+                      try: status = int(line.split()[1])
+                      except Exception: pass
+                  if line.lower().startswith('location:'):
+                      location = line.split(':', 1)[1].strip()
+              return {
+                  'status': status,
+                  'location': location,
+                  'body': body,
+                  'curl_rc': proc.returncode,
+                  'stderr': proc.stderr[:500],
+              }
+
+          for path, key in [('/moxie', 'no_slash'),('/moxie/', 'slash'),('/moxie/health','health'),('/moxie/login','login')]:
+              result = request(path)
+              if key == 'health':
+                  try: result['json'] = json.loads(result['body'])
+                  except Exception: pass
+              result['body'] = result['body'][:2000]
+              report['moxie'][key] = result
+
+          for number in range(2, 11):
+              device = f'KIOSK_{number:02d}'
+              result = request(f'/schedule-api/my-day-summary?device_id={device}')
+              entry = {'device_id': device, 'http': result['status'], 'curl_rc': result['curl_rc']}
+              try:
+                  payload = json.loads(result['body'])
+                  entry['ok'] = payload.get('ok')
+                  entry['error'] = payload.get('error')
+                  data = payload.get('data') or {}
+                  entry['employee_name'] = data.get('employee_name') or (data.get('employee') or {}).get('display_name')
+                  entry['schedule_status'] = data.get('schedule_status')
+                  entry['display_item_count'] = len(data.get('display_items') or data.get('items') or [])
+                  entry['raw_item_count'] = len(data.get('raw_items') or [])
+                  entry['source_type_values'] = sorted({
+                      str(item.get('source_type') or '').strip()
+                      for item in (data.get('raw_items') or [])
+                      if str(item.get('source_type') or '').strip()
+                  })
+              except Exception as exc:
+                  entry['parse_error'] = str(exc)
+                  entry['body'] = result['body'][:2000]
+              report['schedules'].append(entry)
+
+          moxie_ok = (
+              report['moxie'].get('no_slash', {}).get('status') in (200, 301, 302, 303, 307, 308)
+              and report['moxie'].get('slash', {}).get('status') in (200, 301, 302, 303, 307, 308)
+              and report['moxie'].get('health', {}).get('status') == 200
+              and report['moxie'].get('health', {}).get('json', {}).get('ok') is True
+              and report['moxie'].get('login', {}).get('status') == 200
+              and 'Cannot GET' not in report['moxie'].get('slash', {}).get('body', '')
+          )
+          schedules_ok = all(
+              row.get('http') == 200 and row.get('ok') is True and not row.get('error') and not row.get('parse_error')
+              for row in report['schedules']
+          )
+          report['moxie_ok'] = moxie_ok
+          report['schedules_ok'] = schedules_ok
+          report['overall_ok'] = bool(report['render_ready'] and moxie_ok and schedules_ok)
+          pathlib.Path('.diagnostic/live-moxie-schedule-verification.json').write_text(json.dumps(report, indent=2) + '\n')
+          print(json.dumps(report, indent=2))
+          PY
+
+      - name: Preserve diagnostic report
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'Memphis Zoo Diagnostic Bot'
+          git config user.email 'lasrevinu333@users.noreply.github.com'
+          git add .diagnostic/live-moxie-schedule-verification.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'diagnostic: record live Moxie and schedule verification'
+            git push origin "HEAD:${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+          fi

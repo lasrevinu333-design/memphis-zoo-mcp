@@ -1,0 +1,130 @@
+{
+  "expected_commit": "2a8b22ded1646e47a2d7703e644d2d1e4b42d009",
+  "render_ready": true,
+  "version": {
+    "ok": true,
+    "app": "memphis-zoo-mcp",
+    "area": "version",
+    "version": "release-2026.07.15.moxie-route.7",
+    "release_id": "2a8b22ded1646e47a2d7703e644d2d1e4b42d009",
+    "contracts": {
+      "scan": "scan.v2",
+      "dashboard": "dashboard.v1",
+      "messaging": "messaging.v2",
+      "schedule": "schedule.v2",
+      "events": "events.v2",
+      "feedback": "feedback.v1"
+    }
+  },
+  "moxie": {
+    "no_slash": {
+      "status": 302,
+      "location": "/moxie/login",
+      "body": "Found. Redirecting to /moxie/login",
+      "curl_rc": 0,
+      "stderr": ""
+    },
+    "slash": {
+      "status": 302,
+      "location": "/moxie/login",
+      "body": "Found. Redirecting to /moxie/login",
+      "curl_rc": 0,
+      "stderr": ""
+    },
+    "health": {
+      "status": 200,
+      "location": "",
+      "body": "{\"ok\":true,\"area\":\"moxie\",\"configured\":true}",
+      "curl_rc": 0,
+      "stderr": "",
+      "json": {
+        "ok": true,
+        "area": "moxie",
+        "configured": true
+      }
+    },
+    "login": {
+      "status": 200,
+      "location": "",
+      "body": "<div class=\"wrap\"><div class=\"panel login\">\n  <div class=\"brand\" style=\"margin-bottom:18px\">Moxie</div>\n  <div class=\"hint\" style=\"margin-bottom:18px\">Annie's private work assistant</div>\n  \n  <form method=\"post\" action=\"/moxie/login\">\n    <label for=\"password\" class=\"hint\">Password</label>\n    <input type=\"password\" id=\"password\" name=\"password\" required autofocus>\n    <button type=\"submit\">Sign in</button>\n  </form>\n</div></div>\n</body>\n</html>",
+      "curl_rc": 0,
+      "stderr": ""
+    }
+  },
+  "schedules": [
+    {
+      "device_id": "KIOSK_02",
+      "http": 200,
+      "curl_rc": 0,
+      "ok": true,
+      "error": null,
+      "employee_name": "Alijah Collins",
+      "schedule_status": "off",
+      "display_item_count": 0,
+      "raw_item_count": 0
+    },
+    {
+      "device_id": "KIOSK_03",
+      "http": 200,
+      "curl_rc": 0,
+      "ok": true,
+      "error": null,
+      "employee_name": "Michael McWright",
+      "schedule_status": "off",
+      "display_item_count": 0,
+      "raw_item_count": 0
+    },
+    {
+      "device_id": "KIOSK_04",
+      "http": 200,
+      "curl_rc": 0,
+      "parse_error": "Unterminated string starting at: line 1 column 1970 (char 1969)",
+      "body": "{\"ok\":true,\"data\":{\"ok\":true,\"items\":[{\"location_group_id\":\"4726ec92-a4d1-46d4-abe5-304e3df698dc\",\"group_code\":\"EAST_END_RESTROOMS\",\"group_name\":\"East End Restrooms\",\"name\":\"East End Restrooms\",\"section_key\":\"morning\",\"section_title\":\"Morning Full Clean Schedule\",\"section_order\":10,\"coverage_purpose\":\"deep_clean\",\"purposes\":[\"deep_clean\"],\"source_type\":\"coverage_template:lunch_split_before\",\"source_types\":[\"coverage_template:lunch_split_before\"],\"owner_type\":\"EMPLOYEE\",\"owner_types\":[\"EMPLOYEE\"],\"status\":\"ASSIGNED\",\"notes\":\"Imported from uploaded static PDF schedule: morning primary owner. | Morning ownership until lunch\",\"included_locations\":[\"East End Men's Restroom\",\"East End Women's Restroom\"],\"coverage_start\":\"05:00 AM\",\"coverage_end\":\"09:00 AM\",\"time_ranges\":[{\"start\":300,\"end\":540,\"start_label\":\"05:00 AM\",\"end_label\":\"09:00 AM\",\"label\":\"05:00 AM \u2013 09:00 AM\"}],\"time_label\":\"05:00 AM \u2013 09:00 AM\",\"is_current\":true,\"is_public_restroom\":true,\"is_schedule_only_reminder\":false,\"source_rows\":1},{\"location_group_id\":\"22e148ce-ba0e-4ae2-836f-dfd15c34818f\",\"group_code\":\"NORTH_WEST_PASSAGE\",\"group_name\":\"North West Passage\",\"name\":\"North West Passage\",\"section_key\":\"morning\",\"section_title\":\"Morning Full Clean Schedule\",\"section_order\":10,\"coverage_purpose\":\"deep_clean\",\"purposes\":[\"deep_clean\"],\"source_type\":\"coverage_template:lunch_split_before\",\"source_types\":[\"coverage_template:lunch_split_before\"],\"owner_type\":\"EMPLOYEE\",\"owner_types\":[\"EMPLOYEE\"],\"status\":\"ASSIGNED\",\"notes\":\"Imported from uploaded static PDF schedule: morning primary owner. | Morning ownership until lunch\",\"included_locations\":[\"North West Passage\"],\"coverage_start\":\"05:00 AM\",\"coverage_end\":\"09:00 AM\",\"time_ranges\":[{\"start\":300,\"end\":540,\"start_label\":\"05:00 AM\",\"end_label\":\"09:00 AM\",\"label\":\"05:00 AM \u2013 09:00 AM\"}],\"time_label\":\"05:00 AM \u2013 09:00 AM\",\"is_current\":true,\"is_public_restroom\":false,\"is_schedule_only_reminder\":false,\"source_rows\":1},{\"location_group_id\":\"7b5749c0-f37b-4ffd-948d-ed09f3"
+    },
+    {
+      "device_id": "KIOSK_05",
+      "http": 200,
+      "curl_rc": 0,
+      "parse_error": "Unterminated string starting at: line 1 column 2000 (char 1999)",
+      "body": "{\"ok\":true,\"data\":{\"ok\":true,\"items\":[{\"location_group_id\":\"11bf77db-1c5a-4bc9-9c79-ddf2c1085a0c\",\"group_code\":\"BONOBOS_RESTROOMS\",\"group_name\":\"Bonobos Restrooms\",\"name\":\"Bonobos Restrooms\",\"section_key\":\"morning\",\"section_title\":\"Morning Full Clean Schedule\",\"section_order\":10,\"coverage_purpose\":\"deep_clean\",\"purposes\":[\"deep_clean\"],\"source_type\":\"coverage_template\",\"source_types\":[\"coverage_template\"],\"owner_type\":\"EMPLOYEE\",\"owner_types\":[\"EMPLOYEE\"],\"status\":\"ASSIGNED\",\"notes\":\"Imported from uploaded static PDF schedule: morning primary owner.\",\"included_locations\":[\"Bonobos Men's Restroom\",\"Bonobos Women's Restroom\"],\"coverage_start\":\"07:00 AM\",\"coverage_end\":\"09:45 AM\",\"time_ranges\":[{\"start\":420,\"end\":585,\"start_label\":\"07:00 AM\",\"end_label\":\"09:45 AM\",\"label\":\"07:00 AM \u2013 09:45 AM\"}],\"time_label\":\"07:00 AM \u2013 09:45 AM\",\"is_current\":true,\"is_public_restroom\":true,\"is_schedule_only_reminder\":false,\"source_rows\":1},{\"location_group_id\":\"0cfdb62d-e7ea-4551-b61a-4f4bec582b1d\",\"group_code\":\"CATHOUSE_CAFE_RESTROOMS\",\"group_name\":\"Cathouse Cafe Restrooms\",\"name\":\"Cathouse Cafe Restrooms\",\"section_key\":\"morning\",\"section_title\":\"Morning Full Clean Schedule\",\"section_order\":10,\"coverage_purpose\":\"deep_clean\",\"purposes\":[\"deep_clean\"],\"source_type\":\"coverage_template\",\"source_types\":[\"coverage_template\"],\"owner_type\":\"EMPLOYEE\",\"owner_types\":[\"EMPLOYEE\"],\"status\":\"ASSIGNED\",\"notes\":\"Imported from uploaded static PDF schedule: morning primary owner.\",\"included_locations\":[\"Cathouse Cafe Men's Restroom\",\"Cathouse Cafe Women's Restroom\"],\"coverage_start\":\"07:00 AM\",\"coverage_end\":\"09:45 AM\",\"time_ranges\":[{\"start\":420,\"end\":585,\"start_label\":\"07:00 AM\",\"end_label\":\"09:45 AM\",\"label\":\"07:00 AM \u2013 09:45 AM\"}],\"time_label\":\"07:00 AM \u2013 09:45 AM\",\"is_current\":true,\"is_public_restroom\":true,\"is_schedule_only_reminder\":false,\"source_rows\":1},{\"location_group_id\":\"9b7b4331-b4d3-41e3-9656-d524d7ae25f6\",\"group_code\":\"SPLASH_PAD_RESTROOMS\",\"group_name\":\"Splash Pad Restrooms\",\"name\":\""
+    },
+    {
+      "device_id": "KIOSK_06",
+      "http": 200,
+      "curl_rc": 0,
+      "parse_error": "Expecting ',' delimiter: line 1 column 2001 (char 2000)",
+      "body": "{\"ok\":true,\"data\":{\"ok\":true,\"items\":[{\"location_group_id\":\"6b6f2ff8-c5a7-4773-b9af-f8186dfd198a\",\"group_code\":\"COURTYARD_RESTROOMS\",\"group_name\":\"Courtyard Restrooms\",\"name\":\"Courtyard Restrooms\",\"section_key\":\"morning\",\"section_title\":\"Morning Full Clean Schedule\",\"section_order\":10,\"coverage_purpose\":\"deep_clean\",\"purposes\":[\"deep_clean\"],\"source_type\":\"coverage_template\",\"source_types\":[\"coverage_template\"],\"owner_type\":\"EMPLOYEE\",\"owner_types\":[\"EMPLOYEE\"],\"status\":\"ASSIGNED\",\"notes\":\"Imported from uploaded static PDF schedule: morning primary owner.\",\"included_locations\":[\"Courtyard Men's Restroom\",\"Courtyard Women's Restroom\"],\"coverage_start\":\"06:00 AM\",\"coverage_end\":\"09:45 AM\",\"time_ranges\":[{\"start\":360,\"end\":585,\"start_label\":\"06:00 AM\",\"end_label\":\"09:45 AM\",\"label\":\"06:00 AM \u2013 09:45 AM\"}],\"time_label\":\"06:00 AM \u2013 09:45 AM\",\"is_current\":true,\"is_public_restroom\":true,\"is_schedule_only_reminder\":false,\"source_rows\":1},{\"location_group_id\":\"94ae55c3-7062-407d-b47d-286f4a7fcf2f\",\"group_code\":\"EAST_ADMIN\",\"group_name\":\"East Admin\",\"name\":\"East Admin\",\"section_key\":\"morning\",\"section_title\":\"Morning Full Clean Schedule\",\"section_order\":10,\"coverage_purpose\":\"deep_clean\",\"purposes\":[\"deep_clean\"],\"source_type\":\"coverage_template\",\"source_types\":[\"coverage_template\"],\"owner_type\":\"EMPLOYEE\",\"owner_types\":[\"EMPLOYEE\"],\"status\":\"ASSIGNED\",\"notes\":\"Imported from uploaded static PDF schedule: morning primary owner.\",\"included_locations\":[\"East Admin Building\",\"East Admin Men's Restroom\",\"East Admin Women's Restroom\"],\"coverage_start\":\"06:00 AM\",\"coverage_end\":\"09:45 AM\",\"time_ranges\":[{\"start\":360,\"end\":585,\"start_label\":\"06:00 AM\",\"end_label\":\"09:45 AM\",\"label\":\"06:00 AM \u2013 09:45 AM\"}],\"time_label\":\"06:00 AM \u2013 09:45 AM\",\"is_current\":true,\"is_public_restroom\":false,\"is_schedule_only_reminder\":false,\"source_rows\":1},{\"location_group_id\":\"25dff7df-6916-4557-b182-680e903d4aa5\",\"group_code\":\"EDUCATION\",\"group_name\":\"Education\",\"name\":\"Education\",\"section_key\":\"morning\""
+    },
+    {
+      "device_id": "KIOSK_07",
+      "http": 200,
+      "curl_rc": 0,
+      "parse_error": "Unterminated string starting at: line 1 column 1996 (char 1995)",
+      "body": "{\"ok\":true,\"data\":{\"ok\":true,\"items\":[{\"location_group_id\":\"7c89cbe9-4b24-4256-85a9-b36550402f16\",\"group_code\":\"AQUARIUM\",\"group_name\":\"Aquarium\",\"name\":\"Aquarium\",\"section_key\":\"morning\",\"section_title\":\"Morning Full Clean Schedule\",\"section_order\":10,\"coverage_purpose\":\"deep_clean\",\"purposes\":[\"deep_clean\"],\"source_type\":\"coverage_template\",\"source_types\":[\"coverage_template\"],\"owner_type\":\"EMPLOYEE\",\"owner_types\":[\"EMPLOYEE\"],\"status\":\"ASSIGNED\",\"notes\":\"Imported from uploaded static PDF schedule: morning primary owner.\",\"included_locations\":[\"Aquarium\"],\"coverage_start\":\"06:00 AM\",\"coverage_end\":\"09:45 AM\",\"time_ranges\":[{\"start\":360,\"end\":585,\"start_label\":\"06:00 AM\",\"end_label\":\"09:45 AM\",\"label\":\"06:00 AM \u2013 09:45 AM\"}],\"time_label\":\"06:00 AM \u2013 09:45 AM\",\"is_current\":true,\"is_public_restroom\":false,\"is_schedule_only_reminder\":false,\"source_rows\":1},{\"location_group_id\":\"7222bac3-6a27-48ed-b0be-2a2bf0fbab71\",\"group_code\":\"EXPO\",\"group_name\":\"Expo\",\"name\":\"Expo\",\"section_key\":\"morning\",\"section_title\":\"Morning Full Clean Schedule\",\"section_order\":10,\"coverage_purpose\":\"deep_clean\",\"purposes\":[\"deep_clean\"],\"source_type\":\"coverage_template\",\"source_types\":[\"coverage_template\"],\"owner_type\":\"EMPLOYEE\",\"owner_types\":[\"EMPLOYEE\"],\"status\":\"ASSIGNED\",\"notes\":\"Imported from uploaded static PDF schedule: morning primary owner.\",\"included_locations\":[\"Expo\",\"Expo Men's Restroom\",\"Expo Women's Restroom\"],\"coverage_start\":\"06:00 AM\",\"coverage_end\":\"09:45 AM\",\"time_ranges\":[{\"start\":360,\"end\":585,\"start_label\":\"06:00 AM\",\"end_label\":\"09:45 AM\",\"label\":\"06:00 AM \u2013 09:45 AM\"}],\"time_label\":\"06:00 AM \u2013 09:45 AM\",\"is_current\":true,\"is_public_restroom\":true,\"is_schedule_only_reminder\":false,\"source_rows\":1},{\"location_group_id\":\"d9386475-17dc-46e9-be8b-95e1c5850ea6\",\"group_code\":\"KOMODOS\",\"group_name\":\"Komodos\",\"name\":\"Komodos\",\"section_key\":\"morning\",\"section_title\":\"Morning Full Clean Schedule\",\"section_order\":10,\"coverage_purpose\":\"deep_clean\",\"purposes\":[\"deep_clean\"],\"sour"
+    },
+    {
+      "device_id": "KIOSK_08",
+      "http": 200,
+      "curl_rc": 0,
+      "parse_error": "Unterminated string starting at: line 1 column 1971 (char 1970)",
+      "body": "{\"ok\":true,\"data\":{\"ok\":true,\"items\":[{\"location_group_id\":\"39c59094-6c1e-4f6c-b9e9-890e332976f2\",\"group_code\":\"BREEZEWAY_RESTROOMS\",\"group_name\":\"Breezeway Restrooms\",\"name\":\"Breezeway Restrooms\",\"section_key\":\"morning\",\"section_title\":\"Morning Full Clean Schedule\",\"section_order\":10,\"coverage_purpose\":\"deep_clean\",\"purposes\":[\"deep_clean\"],\"source_type\":\"coverage_template:lunch_split_before\",\"source_types\":[\"coverage_template:lunch_split_before\"],\"owner_type\":\"EMPLOYEE\",\"owner_types\":[\"EMPLOYEE\"],\"status\":\"ASSIGNED\",\"notes\":\"Imported from uploaded static PDF schedule: morning primary owner. | Morning ownership until lunch\",\"included_locations\":[\"Breezeway Men's Restroom\",\"Breezeway Women's Restroom\"],\"coverage_start\":\"05:00 AM\",\"coverage_end\":\"09:00 AM\",\"time_ranges\":[{\"start\":300,\"end\":540,\"start_label\":\"05:00 AM\",\"end_label\":\"09:00 AM\",\"label\":\"05:00 AM \u2013 09:00 AM\"}],\"time_label\":\"05:00 AM \u2013 09:00 AM\",\"is_current\":true,\"is_public_restroom\":true,\"is_schedule_only_reminder\":false,\"source_rows\":1},{\"location_group_id\":\"1a0c8ff1-aa38-4f87-9188-54e15aa2f4bb\",\"group_code\":\"PRIMATE_PAVILLION\",\"group_name\":\"Primate Pavillion\",\"name\":\"Primate Pavillion\",\"section_key\":\"morning\",\"section_title\":\"Morning Full Clean Schedule\",\"section_order\":10,\"coverage_purpose\":\"deep_clean\",\"purposes\":[\"deep_clean\"],\"source_type\":\"coverage_template:lunch_split_before\",\"source_types\":[\"coverage_template:lunch_split_before\"],\"owner_type\":\"EMPLOYEE\",\"owner_types\":[\"EMPLOYEE\"],\"status\":\"ASSIGNED\",\"notes\":\"Imported from uploaded static PDF schedule: morning primary owner. | Morning ownership until lunch\",\"included_locations\":[\"Primate Pavillion\"],\"coverage_start\":\"05:00 AM\",\"coverage_end\":\"09:00 AM\",\"time_ranges\":[{\"start\":300,\"end\":540,\"start_label\":\"05:00 AM\",\"end_label\":\"09:00 AM\",\"label\":\"05:00 AM \u2013 09:00 AM\"}],\"time_label\":\"05:00 AM \u2013 09:00 AM\",\"is_current\":true,\"is_public_restroom\":false,\"is_schedule_only_reminder\":false,\"source_rows\":1},{\"location_group_id\":\"fdc6e302-40f3-4714-8770-8c300"
+    },
+    {
+      "device_id": "KIOSK_09",
+      "http": 200,
+      "curl_rc": 0,
+      "parse_error": "Expecting property name enclosed in double quotes: line 1 column 2001 (char 2000)",
+      "body": "{\"ok\":true,\"data\":{\"ok\":true,\"items\":[{\"location_group_id\":\"1360eb3b-1347-4e3f-8e38-9bb52719568c\",\"group_code\":\"EVENT_CENTER\",\"group_name\":\"Event Center\",\"name\":\"Event Center\",\"section_key\":\"morning\",\"section_title\":\"Morning Full Clean Schedule\",\"section_order\":10,\"coverage_purpose\":\"deep_clean\",\"purposes\":[\"deep_clean\"],\"source_type\":\"coverage_template\",\"source_types\":[\"coverage_template\"],\"owner_type\":\"EMPLOYEE\",\"owner_types\":[\"EMPLOYEE\"],\"status\":\"ASSIGNED\",\"notes\":\"Imported from uploaded static PDF schedule: morning primary owner.\",\"included_locations\":[\"Event Center\",\"Event Center Left Restroom\",\"Event Center Right Restroom\"],\"coverage_start\":\"08:30 AM\",\"coverage_end\":\"09:45 AM\",\"time_ranges\":[{\"start\":510,\"end\":585,\"start_label\":\"08:30 AM\",\"end_label\":\"09:45 AM\",\"label\":\"08:30 AM \u2013 09:45 AM\"}],\"time_label\":\"08:30 AM \u2013 09:45 AM\",\"is_current\":true,\"is_public_restroom\":true,\"is_schedule_only_reminder\":false,\"source_rows\":1},{\"location_group_id\":\"11bf77db-1c5a-4bc9-9c79-ddf2c1085a0c\",\"group_code\":\"BONOBOS_RESTROOMS\",\"group_name\":\"Bonobos Restrooms\",\"name\":\"Bonobos Restrooms\",\"section_key\":\"rebalance\",\"section_title\":\"Restroom Rebalance Schedule\",\"section_order\":20,\"coverage_purpose\":\"restroom_upkeep\",\"purposes\":[\"restroom_upkeep\"],\"source_type\":\"coverage_template:lunch_split_before\",\"source_types\":[\"coverage_template:lunch_split_before\",\"coverage_template\",\"coverage_template:lunch_split_after\"],\"owner_type\":\"EMPLOYEE\",\"owner_types\":[\"EMPLOYEE\"],\"status\":\"ASSIGNED\",\"notes\":\"Imported from uploaded static PDF schedule: 9:45 restroom rebalance. | Capped to Markiesha 5:00 PM shift end. | Morning ownership until lunch | Imported from uploaded static PDF schedule: 9:45 restroom rebalance. | Capped to Markiesha 5:00 PM shift end. | Imported from uploaded static PDF schedule: 9:45 restroom rebalance. | Capped to Markiesha 5:00 PM shift end. | Return to owner after lunch\",\"included_locations\":[\"Bonobos Men's Restroom\",\"Bonobos Women's Restroom\"],\"coverage_start\":\"09:45 AM\","
+    },
+    {
+      "device_id": "KIOSK_10",
+      "http": 200,
+      "curl_rc": 0,
+      "parse_error": "Unterminated string starting at: line 1 column 1990 (char 1989)",
+      "body": "{\"ok\":true,\"data\":{\"ok\":true,\"items\":[{\"location_group_id\":\"28e9cfa4-384a-443c-83dc-e42a19de0e33\",\"group_code\":\"CHINA\",\"group_name\":\"China\",\"name\":\"China\",\"section_key\":\"morning\",\"section_title\":\"Morning Full Clean Schedule\",\"section_order\":10,\"coverage_purpose\":\"deep_clean\",\"purposes\":[\"deep_clean\"],\"source_type\":\"coverage_template\",\"source_types\":[\"coverage_template\"],\"owner_type\":\"EMPLOYEE\",\"owner_types\":[\"EMPLOYEE\"],\"status\":\"ASSIGNED\",\"notes\":\"Imported from uploaded static PDF schedule: morning primary owner.\",\"included_locations\":[\"China\",\"China Men's Restroom\",\"China Women's Restroom\"],\"coverage_start\":\"08:00 AM\",\"coverage_end\":\"09:45 AM\",\"time_ranges\":[{\"start\":480,\"end\":585,\"start_label\":\"08:00 AM\",\"end_label\":\"09:45 AM\",\"label\":\"08:00 AM \u2013 09:45 AM\"}],\"time_label\":\"08:00 AM \u2013 09:45 AM\",\"is_current\":true,\"is_public_restroom\":true,\"is_schedule_only_reminder\":false,\"source_rows\":1},{\"location_group_id\":\"0cfdb62d-e7ea-4551-b61a-4f4bec582b1d\",\"group_code\":\"CATHOUSE_CAFE_RESTROOMS\",\"group_name\":\"Cathouse Cafe Restrooms\",\"name\":\"Cathouse Cafe Restrooms\",\"section_key\":\"rebalance\",\"section_title\":\"Restroom Rebalance Schedule\",\"section_order\":20,\"coverage_purpose\":\"restroom_upkeep\",\"purposes\":[\"restroom_upkeep\"],\"source_type\":\"coverage_template:lunch_split_before\",\"source_types\":[\"coverage_template:lunch_split_before\",\"coverage_template\",\"coverage_template:lunch_split_after\"],\"owner_type\":\"EMPLOYEE\",\"owner_types\":[\"EMPLOYEE\"],\"status\":\"ASSIGNED\",\"notes\":\"Imported from uploaded static PDF schedule: 9:45 restroom rebalance. | Morning ownership until lunch | Imported from uploaded static PDF schedule: 9:45 restroom rebalance. | Imported from uploaded static PDF schedule: 9:45 restroom rebalance. | Return to owner after lunch\",\"included_locations\":[\"Cathouse Cafe Men's Restroom\",\"Cathouse Cafe Women's Restroom\"],\"coverage_start\":\"09:45 AM\",\"coverage_end\":\"05:00 PM\",\"time_ranges\":[{\"start\":585,\"end\":1020,\"start_label\":\"09:45 AM\",\"end_label\":\"05:00 PM\",\"label\":\"09:45 AM \u2013"
+    }
+  ],
+  "moxie_ok": true,
+  "schedules_ok": false,
+  "overall_ok": false
+}
