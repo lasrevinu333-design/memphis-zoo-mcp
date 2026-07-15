@@ -1,37 +1,40 @@
 name: Bootstrap authentication foundation branch
 
 on:
-  push:
+  pull_request:
     branches:
       - main
-    paths:
-      - .github/workflows/bootstrap-auth-foundation.yml
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: write
+  pull-requests: read
 
 concurrency:
-  group: bootstrap-authentication-foundation-backend
+  group: bootstrap-authentication-foundation-backend-${{ github.event.pull_request.number }}
   cancel-in-progress: false
 
 jobs:
   apply:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'foundation/security-control-plane-20260715'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: foundation/security-control-plane-20260715
+          ref: ${{ github.head_ref }}
           fetch-depth: 0
-      - name: Install exact audited payload
+      - name: Install exact audited payload when staged
         shell: bash
         run: |
           set -euo pipefail
-          cat .foundation-payload/backend/part-* > /tmp/payload.b64
-          base64 -d /tmp/payload.b64 > /tmp/payload.tar.gz
-          echo "751fafcc05febf508f8cc7423ca023c1aa9ea9f5f0f3bc710148eafb794b3901  /tmp/payload.tar.gz" | sha256sum -c -
-          tar -xzf /tmp/payload.tar.gz
-          rm -rf .foundation-payload/backend .github/workflows/_apply-auth-foundation.yml
+          if compgen -G '.foundation-payload/backend/part-*' >/dev/null; then
+            cat .foundation-payload/backend/part-* > /tmp/payload.b64
+            base64 -d /tmp/payload.b64 > /tmp/payload.tar.gz
+            echo "751fafcc05febf508f8cc7423ca023c1aa9ea9f5f0f3bc710148eafb794b3901  /tmp/payload.tar.gz" | sha256sum -c -
+            tar -xzf /tmp/payload.tar.gz
+            rm -rf .foundation-payload/backend .github/workflows/_apply-auth-foundation.yml
+          fi
       - name: Validate foundation
         shell: bash
         run: |
@@ -47,12 +50,16 @@ jobs:
           npm run --silent test:schedule-source-type
           npm run --silent test:foundation
           npm audit --omit=dev --audit-level=high
-      - name: Commit validated branch
+      - name: Commit validated branch when changed
         shell: bash
         run: |
           set -euo pipefail
+          git add -A
+          if git diff --cached --quiet; then
+            echo 'No generated changes to commit.'
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
           git commit -m "security: establish one-time trusted-device authentication"
-          git push origin HEAD:foundation/security-control-plane-20260715
+          git push origin HEAD:${{ github.head_ref }}
