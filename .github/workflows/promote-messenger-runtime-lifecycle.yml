@@ -1,0 +1,68 @@
+name: Promote Messenger Runtime Lifecycle
+
+on:
+  push:
+    branches:
+      - fix/identity-thread-lifecycle-20260715
+    paths:
+      - .github/workflows/promote-messenger-runtime-lifecycle.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: promote-messenger-runtime-lifecycle
+  cancel-in-progress: false
+
+jobs:
+  validate-and-promote:
+    if: github.event.head_commit.message == 'ci: promote validated Messenger lifecycle release'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run release gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run --silent test:messenger-lifecycle
+          npm run --silent test:messaging
+          npm run --silent test:messaging-recovery
+          npm run --silent test:moxie-route
+          npm run --silent test:manager-open
+          npm run --silent smoke
+          node --check src/messaging-api.js
+          node --check src/routes/moxie.js
+          node --check scripts/messenger-runtime-membership-thread-delete-tests.mjs
+          npm audit --omit=dev --audit-level=high
+          grep -q "update public.msg_thread_participants" supabase/migrations/20260715114500_messenger_runtime_membership_thread_delete.sql
+          grep -q "msg_is_runtime_user" supabase/migrations/20260715114500_messenger_runtime_membership_thread_delete.sql
+
+      - name: Publish only the validated source tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git merge-base --is-ancestor origin/main HEAD
+          rm -f .github/workflows/messenger-runtime-lifecycle-hotfix.yml
+          rm -f .github/workflows/promote-messenger-runtime-lifecycle.yml
+          rm -f .github/workflows/_source_snapshot_identity_thread.yml
+          rm -f .artifact-run-id
+          git config user.name 'Memphis Zoo Repair Bot'
+          git config user.email 'lasrevinu333@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          git commit -m 'Finalize custodial Messenger identity and thread lifecycle'
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+          git push origin HEAD:main
