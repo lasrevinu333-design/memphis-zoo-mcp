@@ -1,0 +1,58 @@
+name: Moxie and My Schedule Hotfix Gate
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - fix/moxie-route-mount-20260715
+
+permissions:
+  contents: read
+
+concurrency:
+  group: moxie-schedule-hotfix-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run focused foundation gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run --silent test:moxie-route
+          npm run --silent test:schedule-source-type
+          npm run --silent test:auth
+          npm run --silent test:schedule-display
+          npm run --silent test:leadership-demo
+          npm run --silent test:messaging
+          npm run --silent test:scheduler-overhaul
+          npm run --silent smoke
+
+      - name: Syntax and dependency audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check src/index.js
+          node --check src/routes/moxie.js
+          node --check src/routes/moxie-templates.js
+          node --check src/schedule-api.js
+          node --check scripts/moxie-route-tests.mjs
+          node --check scripts/schedule-source-type-contract-tests.mjs
+          npm audit --omit=dev --audit-level=high
