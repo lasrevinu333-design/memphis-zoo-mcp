@@ -1,0 +1,29 @@
+name: One-time backend source snapshot
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Export exact backend source
+        run: |
+          git archive --format=tar.gz --output=/tmp/memphis-zoo-mcp-current.tar.gz HEAD
+          sha256sum /tmp/memphis-zoo-mcp-current.tar.gz > /tmp/memphis-zoo-mcp-current.tar.gz.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: memphis-zoo-mcp-current-20260715
+          path: |
+            /tmp/memphis-zoo-mcp-current.tar.gz
+            /tmp/memphis-zoo-mcp-current.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 1
