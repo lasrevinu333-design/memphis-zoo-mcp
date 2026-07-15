@@ -26,7 +26,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: lasrevinu333-design/Engine
-          ref: main
+          ref: fix/open-manager-hubs-20260715
           path: _engine_fixture
           fetch-depth: 1
 
