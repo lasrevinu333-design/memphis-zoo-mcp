@@ -1,0 +1,10 @@
+FAIL payload decode
+/tmp/backend.patch.gz: FAILED
+sha256sum: WARNING: 1 computed checksum did NOT match
+FAIL compressed checksum
+FAIL payload decompression
+/tmp/backend.patch: FAILED
+sha256sum: WARNING: 1 computed checksum did NOT match
+FAIL patch checksum
+error: No valid patches in input (allow with "--allow-empty")
+FAIL patch preflight
