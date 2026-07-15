@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - verify/auth-foundation-live-20260715
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -13,8 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
-      - name: Wait for Render deployment
-        run: sleep 150
+      - name: Wait briefly for Render deployment
+        run: sleep 15
       - name: Verify live backend
         shell: bash
         run: |
