@@ -1,0 +1,35 @@
+name: Diagnose backend patch payload
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Normalize payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/diagnostic
+          tr -d '[:space:]' < .foundation/device_credentials/device-credentials.patch.gz.b64 > /tmp/diagnostic/normalized.b64
+          sha256sum .foundation/device_credentials/device-credentials.patch.gz.b64 > /tmp/diagnostic/original.sha256
+          sha256sum /tmp/diagnostic/normalized.b64 > /tmp/diagnostic/normalized.sha256
+          wc -c .foundation/device_credentials/device-credentials.patch.gz.b64 /tmp/diagnostic/normalized.b64 > /tmp/diagnostic/sizes.txt
+          base64 -d /tmp/diagnostic/normalized.b64 > /tmp/diagnostic/payload.gz 2> /tmp/diagnostic/base64-error.txt || true
+          gzip -t /tmp/diagnostic/payload.gz > /tmp/diagnostic/gzip-test.txt 2>&1 || true
+          gzip -dc /tmp/diagnostic/payload.gz > /tmp/diagnostic/decoded.patch 2> /tmp/diagnostic/gzip-error.txt || true
+          sha256sum /tmp/diagnostic/decoded.patch > /tmp/diagnostic/decoded.sha256 2>/dev/null || true
+          cat /tmp/diagnostic/*.sha256 /tmp/diagnostic/sizes.txt /tmp/diagnostic/base64-error.txt /tmp/diagnostic/gzip-test.txt /tmp/diagnostic/gzip-error.txt || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-patch-payload-diagnostic
+          path: /tmp/diagnostic
+          retention-days: 1
