@@ -63,11 +63,8 @@ jobs:
           except Exception as exc:
               report['version_error'] = str(exc)
 
-          def request(path, follow=False):
-              args = ['curl', '-sS', '--max-time', '30', '-D', '-', '-o', '-']
-              if follow:
-                  args.insert(1, '-L')
-              args.append(base + path)
+          def request(path):
+              args = ['curl', '-sS', '--max-time', '30', '-D', '-', '-o', '-', base + path]
               proc = subprocess.run(args, capture_output=True, text=True)
               raw = proc.stdout
               parts = raw.split('\r\n\r\n') if '\r\n\r\n' in raw else raw.split('\n\n')
@@ -81,13 +78,20 @@ jobs:
                       except Exception: pass
                   if line.lower().startswith('location:'):
                       location = line.split(':', 1)[1].strip()
-              return {'status': status, 'location': location, 'body': body[:2000], 'curl_rc': proc.returncode, 'stderr': proc.stderr[:500]}
+              return {
+                  'status': status,
+                  'location': location,
+                  'body': body,
+                  'curl_rc': proc.returncode,
+                  'stderr': proc.stderr[:500],
+              }
 
           for path, key in [('/moxie', 'no_slash'),('/moxie/', 'slash'),('/moxie/health','health'),('/moxie/login','login')]:
               result = request(path)
               if key == 'health':
                   try: result['json'] = json.loads(result['body'])
                   except Exception: pass
+              result['body'] = result['body'][:2000]
               report['moxie'][key] = result
 
           for number in range(2, 11):
@@ -103,9 +107,14 @@ jobs:
                   entry['schedule_status'] = data.get('schedule_status')
                   entry['display_item_count'] = len(data.get('display_items') or data.get('items') or [])
                   entry['raw_item_count'] = len(data.get('raw_items') or [])
+                  entry['source_type_values'] = sorted({
+                      str(item.get('source_type') or '').strip()
+                      for item in (data.get('raw_items') or [])
+                      if str(item.get('source_type') or '').strip()
+                  })
               except Exception as exc:
                   entry['parse_error'] = str(exc)
-                  entry['body'] = result['body']
+                  entry['body'] = result['body'][:2000]
               report['schedules'].append(entry)
 
           moxie_ok = (
@@ -117,7 +126,7 @@ jobs:
               and 'Cannot GET' not in report['moxie'].get('slash', {}).get('body', '')
           )
           schedules_ok = all(
-              row.get('http') == 200 and row.get('ok') is True and not row.get('error')
+              row.get('http') == 200 and row.get('ok') is True and not row.get('error') and not row.get('parse_error')
               for row in report['schedules']
           )
           report['moxie_ok'] = moxie_ok
