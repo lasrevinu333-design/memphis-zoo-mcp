@@ -1,0 +1,58 @@
+name: Bootstrap authentication foundation branch
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/bootstrap-auth-foundation.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bootstrap-authentication-foundation-backend
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: foundation/security-control-plane-20260715
+          fetch-depth: 0
+      - name: Install exact audited payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .foundation-payload/backend/part-* > /tmp/payload.b64
+          base64 -d /tmp/payload.b64 > /tmp/payload.tar.gz
+          echo "751fafcc05febf508f8cc7423ca023c1aa9ea9f5f0f3bc710148eafb794b3901  /tmp/payload.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/payload.tar.gz
+          rm -rf .foundation-payload/backend .github/workflows/_apply-auth-foundation.yml
+      - name: Validate foundation
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts
+          node --check src/index.js
+          node --check src/auth/shared-access-auth.js
+          node --check src/auth/mcp-connector-auth.js
+          npm run --silent test:auth
+          npm run --silent test:manager-open
+          npm run --silent test:messaging
+          npm run --silent test:moxie-route
+          npm run --silent test:schedule-source-type
+          npm run --silent test:foundation
+          npm audit --omit=dev --audit-level=high
+      - name: Commit validated branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "security: establish one-time trusted-device authentication"
+          git push origin HEAD:foundation/security-control-plane-20260715
