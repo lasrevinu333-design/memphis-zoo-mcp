@@ -1,0 +1,163 @@
+name: Verify Live Kiosk and Messenger Lifecycle
+
+on:
+  push:
+    branches:
+      - diagnostic/live-kiosk-messenger-lifecycle-20260715
+    paths:
+      - .github/workflows/live-kiosk-messenger-lifecycle-verification.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: live-kiosk-messenger-lifecycle-verification
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.event.head_commit.message == 'diagnostic: verify live kiosk and Messenger lifecycle'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Poll and verify live production
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://memphis-zoo-mcp.onrender.com'
+          pages='https://lasrevinu333-design.github.io/Engine'
+          expected_version='release-2026.07.15.kiosk-lifecycle.8'
+          mkdir -p .diagnostic
+          tmp="$(mktemp -d)"
+          ready=false
+          for attempt in $(seq 1 90); do
+            curl -fsS --max-time 25 "$base/version" -o "$tmp/version.json" 2>/dev/null || true
+            version="$(jq -r '.version // empty' "$tmp/version.json" 2>/dev/null || true)"
+            page="$(curl -fsS --max-time 25 "$pages/employee-hub.html?verify=$attempt" 2>/dev/null || true)"
+            lifecycle="$(curl -fsS --max-time 25 "$pages/memphis-kiosk-lifecycle.js?verify=$attempt" 2>/dev/null || true)"
+            if [ "$version" = "$expected_version" ] && printf '%s' "$page" | grep -q 'memphis-kiosk-lifecycle.js' && printf '%s' "$lifecycle" | grep -q 'mz_employee_kiosk_screen_off_v2'; then
+              ready=true
+              break
+            fi
+            sleep 10
+          done
+
+          python3 - "$base" "$pages" "$expected_version" "$ready" <<'PY'
+          import json, pathlib, subprocess, sys, urllib.parse, urllib.request
+
+          base, pages, expected_version, ready_text = sys.argv[1:]
+          report = {
+              'expected_version': expected_version,
+              'deployment_ready': ready_text == 'true',
+              'backend': {},
+              'frontend': {},
+              'schedules': [],
+              'messenger': {},
+          }
+
+          def get_json(url):
+              try:
+                  with urllib.request.urlopen(url, timeout=30) as response:
+                      return response.status, json.load(response)
+              except Exception as exc:
+                  return None, {'error': str(exc)}
+
+          def get_text(url):
+              try:
+                  request = urllib.request.Request(url, headers={'User-Agent':'Memphis-Zoo-Live-Verification'})
+                  with urllib.request.urlopen(request, timeout=30) as response:
+                      return response.status, response.read().decode('utf-8', errors='replace')
+              except Exception as exc:
+                  return None, str(exc)
+
+          status, version = get_json(base + '/version')
+          report['backend']['version_http'] = status
+          report['backend']['version'] = version
+          for route in ['/messaging-api/health','/schedule-api/health','/scan-api/health','/moxie/health']:
+              code, payload = get_json(base + route)
+              report['backend'][route] = {'http': code, 'payload': payload}
+
+          for page in ['employee-hub.html','messages.html','thread.html','employee-schedule.html','events.html','system-feedback.html','index.html']:
+              code, text = get_text(f'{pages}/{page}?verify=lifecycle')
+              report['frontend'][page] = {
+                  'http': code,
+                  'has_lifecycle_script': ('memphis-kiosk-lifecycle.js' in text) if page != 'index.html' else None,
+                  'has_protected_scan_guard': ('hasProtectedScanWorkflow' in text and '!hasProtectedScanWorkflow()&&shouldResetScanWorkflowToEmployeeHub()' in text) if page == 'index.html' else None,
+                  'touch_suppression_absent': ('touch-action:none' not in text) if page == 'employee-hub.html' else None,
+              }
+          code, lifecycle = get_text(pages + '/memphis-kiosk-lifecycle.js?verify=lifecycle')
+          report['frontend']['memphis-kiosk-lifecycle.js'] = {
+              'http': code,
+              'screen_off': 'screenOff' in lifecycle,
+              'screen_on': 'screenOn' in lifecycle,
+              'locked_hub': 'employee-hub.html' in lifecycle and 'lock' in lifecycle,
+          }
+
+          for number in range(2, 11):
+              device = f'KIOSK_{number:02d}'
+              code, payload = get_json(base + '/schedule-api/my-day-summary?device_id=' + urllib.parse.quote(device))
+              data = payload.get('data') if isinstance(payload, dict) else None
+              raw = (data or {}).get('raw_items') or []
+              report['schedules'].append({
+                  'device_id': device,
+                  'http': code,
+                  'ok': payload.get('ok') if isinstance(payload, dict) else False,
+                  'employee_name': (data or {}).get('employee_name'),
+                  'schedule_status': (data or {}).get('schedule_status'),
+                  'source_type_missing': any('source_type' not in row for row in raw),
+                  'error': payload.get('error') if isinstance(payload, dict) else str(payload),
+              })
+
+          code, users = get_json(base + '/messaging-api/users?device_id=KIOSK_02')
+          body = json.dumps(users, sort_keys=True)
+          report['messenger'] = {
+              'users_http': code,
+              'users_ok': users.get('ok') if isinstance(users, dict) else False,
+              'contains_clayton': 'clayton jones' in body.lower(),
+              'contains_jennifer': 'jennifer sheffield' in body.lower(),
+          }
+
+          backend_ok = (
+              report['deployment_ready']
+              and report['backend']['version_http'] == 200
+              and report['backend']['version'].get('version') == expected_version
+              and all(value.get('http') == 200 and value.get('payload', {}).get('ok') is True for key, value in report['backend'].items() if key.startswith('/'))
+          )
+          frontend_ok = all(
+              value.get('http') == 200
+              and (value.get('has_lifecycle_script') is not False)
+              and (value.get('has_protected_scan_guard') is not False)
+              and (value.get('touch_suppression_absent') is not False)
+              for key, value in report['frontend'].items() if key.endswith('.html')
+          ) and report['frontend']['memphis-kiosk-lifecycle.js'].get('http') == 200
+          schedules_ok = all(row['http'] == 200 and row['ok'] is True and not row['source_type_missing'] and not row['error'] for row in report['schedules'])
+          messenger_ok = (
+              report['messenger']['users_http'] == 200
+              and report['messenger']['users_ok'] is True
+              and not report['messenger']['contains_clayton']
+              and not report['messenger']['contains_jennifer']
+          )
+          report['backend_ok'] = backend_ok
+          report['frontend_ok'] = frontend_ok
+          report['schedules_ok'] = schedules_ok
+          report['messenger_ok'] = messenger_ok
+          report['overall_ok'] = bool(backend_ok and frontend_ok and schedules_ok and messenger_ok)
+          pathlib.Path('.diagnostic/live-kiosk-messenger-lifecycle.json').write_text(json.dumps(report, indent=2) + '\n')
+          if report['overall_ok']:
+              pathlib.Path('.diagnostic/LIVE_PASS').write_text('PASS\n')
+          print(json.dumps(report, indent=2))
+          PY
+
+      - name: Preserve report without creating a failure email
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'Memphis Zoo Diagnostic Bot'
+          git config user.email 'lasrevinu333@users.noreply.github.com'
+          git add .diagnostic/
+          git commit -m "diagnostic: preserve live kiosk and Messenger lifecycle result"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
