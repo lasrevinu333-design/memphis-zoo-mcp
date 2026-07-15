@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - internal/night-audit-source-20260715-v2
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read
