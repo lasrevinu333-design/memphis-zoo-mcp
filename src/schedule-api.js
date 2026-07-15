@@ -1,6 +1,7 @@
 import express from "express";
 import { getGeminiApiKey } from "./utils/gemini-config.js";
 import { resolveCanonicalDevice } from "./device-identity.js";
+import { consolidateScheduleItems } from "./schedule-display.js";
 
 const MONTH_LOOKUP = {
   january: 1, jan: 1,
@@ -609,6 +610,7 @@ export function createScheduleRouter({
         x.segment_number,
         x.owner_type,
         x.coverage_purpose,
+        x.source_type,
         x.notes,
         x.status,
         x.load_points,
@@ -649,10 +651,12 @@ export function createScheduleRouter({
     ? page.current_items
     : (Array.isArray(page.items) ? page.items : []);
   const currentKeys = new Set(currentItems.map(scheduleItemKey));
-  const items = (Array.isArray(fullDayItems) ? fullDayItems : []).map((item) => ({
+  const rawItems = (Array.isArray(fullDayItems) ? fullDayItems : []).map((item) => ({
     ...item,
     is_current: currentKeys.has(scheduleItemKey(item)),
   }));
+  const consolidated = consolidateScheduleItems(rawItems);
+  const items = consolidated.items;
   const shift = page?.shift && typeof page.shift === 'object' ? page.shift : {};
   const shiftStart = shift.start || shift.shift_start || null;
   const shiftEnd = shift.end || shift.shift_end || null;
@@ -681,8 +685,12 @@ export function createScheduleRouter({
     ...page,
     employee_name: page?.employee?.display_name || page.employee_name || null,
     items,
+    display_items: items,
+    display_sections: consolidated.sections,
+    raw_items: rawItems,
     current_items: currentItems,
     full_day: true,
+    schedule_display_contract: 'schedule-display.v1',
     schedule_status: scheduleStatus,
     notice,
   };

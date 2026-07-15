@@ -1,7 +1,23 @@
+import { summarizeScheduleAreas } from "../schedule-display.js";
+
 export function weekdayNameForIsoDate(serviceDate = "") {
   const date = new Date(`${serviceDate}T12:00:00`);
   if (Number.isNaN(date.getTime())) return "that day";
   return ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][date.getDay()] || "that day";
+}
+
+function compactScheduleSummary(assignments = []) {
+  const sections = summarizeScheduleAreas(assignments);
+  const itemCount = sections.reduce((total, section) => total + section.items.length, 0);
+  const includeTimes = itemCount <= 8;
+  const text = sections.map((section) => {
+    const areas = section.items.map((item) => {
+      if (!includeTimes || !item.time_label) return item.name;
+      return `${item.name} (${item.time_label})`;
+    });
+    return `${section.title}: ${areas.join(", ")}`;
+  }).join(". ");
+  return text.length > 1700 ? `${text.slice(0, 1697).trimEnd()}...` : text;
 }
 
 export function summarizeEmployeeWorkStatus(status = {}) {
@@ -37,7 +53,8 @@ export function summarizeEmployeeWorkStatus(status = {}) {
     if (!assignments.length) {
       return `${name} is scheduled to work on ${weekday}, ${serviceDate}${shiftStart && shiftEnd ? ` from ${shiftStart} to ${shiftEnd}${lunch}` : ""}, and has generated assignments.`;
     }
-    return `${name} is working on ${weekday}, ${serviceDate}${shiftStart && shiftEnd ? ` from ${shiftStart} to ${shiftEnd}${lunch}` : ""}: ` + assignments.slice(0, 12).map((row) => `${row.group_name || row.group_code || "Unknown area"} from ${row.coverage_start || "—"} to ${row.coverage_end || "—"}`).join("; ") + ".";
+    const scheduleSummary = compactScheduleSummary(assignments);
+    return `${name} is working on ${weekday}, ${serviceDate}${shiftStart && shiftEnd ? ` from ${shiftStart} to ${shiftEnd}${lunch}` : ""}. ${scheduleSummary}.`;
   }
 
   if (workStatus === "inactive_employee") {

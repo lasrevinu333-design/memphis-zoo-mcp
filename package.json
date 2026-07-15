@@ -1,7 +1,7 @@
 {
   "name": "memphis-zoo-mcp",
   "version": "1.0.0",
-  "description": "Memphis Zoo MCP backend. Package version is semantic; runtime deploy identity is defined by RELEASE_ID in src/index.js.",
+  "description": "Memphis Zoo MCP backend. Package version is semantic; runtime deploy identity is defined by src/app-version.js and the deployed Git commit.",
   "type": "module",
   "main": "src/index.js",
   "scripts": {
@@ -23,7 +23,9 @@
     "test:scheduler-overhaul": "node scripts/scheduler-overhaul-contract-tests.mjs",
     "audit:location-groups": "node scripts/location-group-audit-reminder-aware.mjs",
     "test:sch2-publish": "node scripts/sch2-publish-route-tests.mjs",
-    "test:foundation": "node scripts/scheduler-alerts-gps-foundation-tests.mjs"
+    "test:foundation": "node scripts/scheduler-alerts-gps-foundation-tests.mjs",
+    "test:schedule-display": "node scripts/schedule-display-tests.mjs",
+    "test:messaging-recovery": "node scripts/memphis-messaging-route-recovery-tests.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.18.0",
