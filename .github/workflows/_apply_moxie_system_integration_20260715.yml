@@ -1,0 +1,164 @@
+name: Validate Moxie runtime and whole-system integration
+
+on:
+  push:
+    branches:
+      - fix/moxie-system-integration-20260715
+    paths:
+      - .github/workflows/_apply_moxie_system_integration_20260715.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: moxie-system-integration-backend-20260715
+  cancel-in-progress: false
+
+jobs:
+  apply-test-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/checkout@v4
+        with:
+          repository: lasrevinu333-design/Engine
+          ref: main
+          path: _engine_fixture
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Apply audited source payloads
+        id: apply
+        shell: bash
+        run: |
+          set +e
+          report=/tmp/backend-integration-gate.txt
+          : > "$report"
+          failed=0
+
+          base64 --decode .repair/backend.patch.gz.b64 > /tmp/backend.patch.gz 2>>"$report" || failed=1
+          printf '%s  %s\n' '8e72fdafce620b6c00a3aecd75daecce2bcc8aae6689e01b46a0c618b5b3eb37' /tmp/backend.patch.gz | sha256sum --check >>"$report" 2>&1 || failed=1
+          if [ "$failed" -eq 0 ]; then
+            gzip --decompress --stdout /tmp/backend.patch.gz > /tmp/backend.patch 2>>"$report" || failed=1
+          fi
+          if [ "$failed" -eq 0 ]; then
+            git apply --check /tmp/backend.patch >>"$report" 2>&1 || failed=1
+          fi
+          if [ "$failed" -eq 0 ]; then
+            git apply /tmp/backend.patch >>"$report" 2>&1 || failed=1
+          fi
+
+          base64 --decode .repair/backend-new-files.tar.gz.b64 > /tmp/backend-new-files.tar.gz 2>>"$report" || failed=1
+          printf '%s  %s\n' '4bf51cc82d32d7e1a47ab5c0858c7a2dfc5776764d4cbec36a3dd13b17cbb993' /tmp/backend-new-files.tar.gz | sha256sum --check >>"$report" 2>&1 || failed=1
+          if [ "$failed" -eq 0 ]; then
+            tar -xzf /tmp/backend-new-files.tar.gz -C . >>"$report" 2>&1 || failed=1
+          fi
+
+          if [ "$failed" -eq 0 ]; then
+            python3 .repair/patch_moxie_templates.py >>"$report" 2>&1 || failed=1
+          fi
+
+          git diff --check >>"$report" 2>&1 || failed=1
+          echo "failed=$failed" >> "$GITHUB_OUTPUT"
+          echo "APPLY_FAILED=$failed" >> "$report"
+          cat "$report"
+          exit 0
+
+      - name: Install exact dependencies
+        id: install
+        shell: bash
+        run: |
+          set +e
+          npm ci --ignore-scripts >>/tmp/backend-integration-gate.txt 2>&1
+          rc=$?
+          echo "failed=$([ "$rc" -eq 0 ] && echo 0 || echo 1)" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Run complete backend and integration gate
+        id: gate
+        shell: bash
+        env:
+          ENGINE_FIXTURE_ROOT: ${{ github.workspace }}/_engine_fixture
+        run: |
+          set +e
+          report=/tmp/backend-integration-gate.txt
+          failed='${{ steps.apply.outputs.failed }}'
+          if [ '${{ steps.install.outputs.failed }}' != '0' ]; then failed=1; fi
+
+          if [ "$failed" -eq 0 ]; then
+            for test_script in \
+              smoke \
+              test:events-parser \
+              test:events-api \
+              test:feedback \
+              test:schedule-ai \
+              test:ai-intent \
+              test:messaging \
+              test:auth \
+              test:device-popups \
+              test:thursday-demo \
+              test:leadership-demo \
+              test:dashboard \
+              test:scheduler-overhaul \
+              test:sch2-publish \
+              test:foundation \
+              test:schedule-display \
+              test:messaging-recovery \
+              test:manager-open \
+              test:moxie \
+              audit:system-integration
+            do
+              npm run --silent "$test_script" >>"$report" 2>&1 || { echo "FAIL $test_script" >>"$report"; failed=1; }
+            done
+
+            for file in src/*.js src/**/*.js scripts/*.mjs; do
+              [ -f "$file" ] || continue
+              node --check "$file" >>"$report" 2>&1 || { echo "FAIL syntax $file" >>"$report"; failed=1; }
+            done
+
+            npm audit --omit=dev --audit-level=high >>"$report" 2>&1 || { echo 'FAIL production dependency audit' >>"$report"; failed=1; }
+          fi
+
+          if grep -R -nE 'packages\.applied|artifactory|internal\.api\.openai' . --exclude-dir=.git --exclude-dir=.repair --exclude-dir=_engine_fixture --exclude-dir=node_modules >>"$report" 2>&1; then
+            echo 'FAIL internal build URL found' >>"$report"
+            failed=1
+          fi
+          if grep -R -n 'eric-precision-tower-3620\.taildaacbb\.ts\.net/annie' . --exclude-dir=.git --exclude-dir=.repair --exclude-dir=_engine_fixture --exclude-dir=node_modules >>"$report" 2>&1; then
+            echo 'FAIL retired PC/Hermes Moxie URL found in backend' >>"$report"
+            failed=1
+          fi
+
+          echo "failed=$failed" >> "$GITHUB_OUTPUT"
+          echo "FAILED=$failed" >> "$report"
+          cat "$report"
+          exit 0
+
+      - name: Publish tested source or preserve diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'Memphis Zoo Repair Bot'
+          git config user.email 'lasrevinu333@users.noreply.github.com'
+          if [ '${{ steps.gate.outputs.failed }}' = '0' ]; then
+            rm -rf .repair _engine_fixture
+            rm -f .github/workflows/_apply_moxie_system_integration_20260715.yml
+            git add -A
+            git diff --cached --check
+            git commit -m 'Integrate Moxie runtime and whole-system audit'
+          else
+            git reset --hard "$GITHUB_SHA"
+            rm -rf _engine_fixture
+            mkdir -p .repair
+            cp /tmp/backend-integration-gate.txt .repair/backend-integration-gate.txt
+            git add .repair/backend-integration-gate.txt
+            git commit -m 'Record Moxie backend integration diagnostics'
+          fi
+          git push origin "HEAD:${GITHUB_REF_NAME}"
