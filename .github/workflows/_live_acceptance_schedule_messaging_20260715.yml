@@ -1,0 +1,304 @@
+name: One-time live schedule and Messenger acceptance
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Probe the live Render and GitHub Pages releases
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/live_acceptance.py <<'PY'
+          import json
+          import time
+          import uuid
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+          from pathlib import Path
+
+          API = 'https://memphis-zoo-mcp.onrender.com'
+          PAGES = 'https://lasrevinu333-design.github.io/Engine'
+          EXPECTED_BACKEND_COMMIT = '6100cb6d49bffd7e93cd34f3754266dffe4d5871'
+          EXPECTED_BACKEND_VERSION = 'release-2026.07.15.schedule-messaging.5'
+          EXPECTED_FRONTEND_VERSION = 'release-2026.07.15.schedule-messaging.5'
+          EMPLOYEES = {
+              'KIOSK_02': 'Alijah Collins',
+              'KIOSK_03': 'Michael McWright',
+              'KIOSK_04': 'Tammy Miller',
+              'KIOSK_05': 'Daniel Morgan',
+              'KIOSK_06': 'Kinnaye Peete',
+              'KIOSK_07': 'Kathy Phelps',
+              'KIOSK_08': 'Karen Robinson',
+              'KIOSK_09': 'Markiesha Warren',
+              'KIOSK_10': 'Sherita Wilbon',
+          }
+
+          report = {
+              'checked_at_epoch': time.time(),
+              'expected_backend_commit': EXPECTED_BACKEND_COMMIT,
+              'expected_backend_version': EXPECTED_BACKEND_VERSION,
+              'expected_frontend_version': EXPECTED_FRONTEND_VERSION,
+              'checks': [],
+              'kiosks': {},
+              'temporary_message': None,
+          }
+
+          def request(name, url, method='GET', headers=None, payload=None, retries=4, timeout=60):
+              headers = dict(headers or {})
+              data = None
+              if payload is not None:
+                  data = json.dumps(payload).encode('utf-8')
+                  headers.setdefault('Content-Type', 'application/json')
+              last = None
+              for attempt in range(1, retries + 1):
+                  started = time.time()
+                  req = urllib.request.Request(url, data=data, headers=headers, method=method)
+                  try:
+                      with urllib.request.urlopen(req, timeout=timeout) as response:
+                          body = response.read().decode('utf-8', errors='replace')
+                          result = {
+                              'name': name,
+                              'url': url,
+                              'method': method,
+                              'status': response.status,
+                              'elapsed_seconds': round(time.time() - started, 3),
+                              'content_type': response.headers.get('content-type'),
+                              'body': body,
+                          }
+                          report['checks'].append(result)
+                          return result
+                  except urllib.error.HTTPError as error:
+                      body = error.read().decode('utf-8', errors='replace')
+                      result = {
+                          'name': name,
+                          'url': url,
+                          'method': method,
+                          'status': error.code,
+                          'elapsed_seconds': round(time.time() - started, 3),
+                          'content_type': error.headers.get('content-type') if error.headers else None,
+                          'body': body,
+                      }
+                      report['checks'].append(result)
+                      return result
+                  except Exception as error:
+                      last = {
+                          'name': name,
+                          'url': url,
+                          'method': method,
+                          'status': 0,
+                          'attempt': attempt,
+                          'elapsed_seconds': round(time.time() - started, 3),
+                          'error': f'{type(error).__name__}: {error}',
+                          'body': '',
+                      }
+                      if attempt < retries:
+                          time.sleep(min(15, attempt * 4))
+              report['checks'].append(last)
+              return last
+
+          def json_body(result):
+              try:
+                  return json.loads(result.get('body') or 'null')
+              except Exception:
+                  return None
+
+          def get_data(payload):
+              if not isinstance(payload, dict):
+                  return None
+              return payload.get('data')
+
+          version_result = request('render_version', f'{API}/version', retries=5, timeout=75)
+          version_payload = json_body(version_result)
+          report['render_version'] = version_payload
+          report['backend_version_ok'] = isinstance(version_payload, dict) and version_payload.get('version') == EXPECTED_BACKEND_VERSION
+          report['backend_commit_ok'] = isinstance(version_payload, dict) and version_payload.get('release_id') == EXPECTED_BACKEND_COMMIT
+
+          for area in ['scan', 'schedule', 'messaging', 'events']:
+              result = request(f'{area}_health', f'{API}/{area}-api/health', retries=3, timeout=60)
+              payload = json_body(result)
+              report[f'{area}_health_ok'] = result.get('status') == 200 and isinstance(payload, dict) and payload.get('ok') is True
+
+          anonymous = {
+              'schedule_employees': f'{API}/schedule-api/employees',
+              'messaging_users': f'{API}/messaging-api/users',
+              'dashboard_summary': f'{API}/dashboard-api/summary',
+          }
+          report['anonymous_boundaries'] = {}
+          for name, url in anonymous.items():
+              result = request(f'anonymous_{name}', url, retries=2, timeout=45)
+              report['anonymous_boundaries'][name] = {
+                  'status': result.get('status'),
+                  'rejected': result.get('status') in (401, 403),
+              }
+
+          page_checks = {
+              'employee_schedule': ('employee-schedule.html', ['display_sections', 'consolidateDisplayItems', EXPECTED_FRONTEND_VERSION]),
+              'thread': ('thread.html', ['isMemphisConversation', 'client_message_id:clientMessageId', EXPECTED_FRONTEND_VERSION]),
+              'messages': ('messages.html', [EXPECTED_FRONTEND_VERSION]),
+              'scan_sync': ('memphis-scan-sync.js', [EXPECTED_FRONTEND_VERSION, 'discard_local_workflow']),
+          }
+          report['pages'] = {}
+          cache_bust = int(time.time())
+          for name, (path, markers) in page_checks.items():
+              result = request(f'pages_{name}', f'{PAGES}/{path}?acceptance={cache_bust}', retries=3, timeout=60)
+              body = result.get('body') or ''
+              report['pages'][name] = {
+                  'status': result.get('status'),
+                  'markers': {marker: marker in body for marker in markers},
+                  'all_markers_present': result.get('status') == 200 and all(marker in body for marker in markers),
+              }
+
+          for device_id, expected_name in EMPLOYEES.items():
+              headers = {'X-Device-Id': device_id, 'Cache-Control': 'no-cache'}
+              encoded = urllib.parse.quote(device_id)
+              schedule_result = request(
+                  f'{device_id}_schedule',
+                  f'{API}/schedule-api/my-day-summary?device_id={encoded}',
+                  headers=headers,
+                  retries=3,
+                  timeout=60,
+              )
+              schedule_payload = json_body(schedule_result)
+              schedule_data = get_data(schedule_payload) or {}
+              sections = schedule_data.get('display_sections') if isinstance(schedule_data, dict) else None
+              duplicate_rows = []
+              section_counts = {}
+              if isinstance(sections, list):
+                  for section in sections:
+                      section_key = str(section.get('key') or section.get('title') or 'unknown')
+                      seen = set()
+                      duplicates = []
+                      items = section.get('items') if isinstance(section, dict) else []
+                      for item in items if isinstance(items, list) else []:
+                          identity = str(item.get('location_group_id') or item.get('group_code') or item.get('group_name') or item.get('name') or '').strip().lower()
+                          if identity in seen and identity:
+                              duplicates.append(identity)
+                          seen.add(identity)
+                      section_counts[section_key] = len(items) if isinstance(items, list) else 0
+                      if duplicates:
+                          duplicate_rows.append({'section': section_key, 'duplicates': duplicates})
+
+              me_result = request(
+                  f'{device_id}_messenger_identity',
+                  f'{API}/messaging-api/me/by-device?device_id={encoded}',
+                  headers=headers,
+                  retries=3,
+                  timeout=60,
+              )
+              me_payload = json_body(me_result)
+              me_data = get_data(me_payload) or {}
+
+              threads_result = request(
+                  f'{device_id}_messenger_threads',
+                  f'{API}/messaging-api/threads?device_id={encoded}',
+                  headers=headers,
+                  retries=3,
+                  timeout=60,
+              )
+              threads_payload = json_body(threads_result)
+              threads_data = get_data(threads_payload)
+              if isinstance(threads_data, dict):
+                  threads = threads_data.get('threads') or threads_data.get('data') or []
+              else:
+                  threads = threads_data if isinstance(threads_data, list) else []
+              memphis_threads = [
+                  thread for thread in threads
+                  if str(thread.get('thread_type') or '').lower() == 'bot'
+                  or str(thread.get('thread_title') or thread.get('title') or '').strip().lower() == 'memphis'
+              ]
+
+              actual_schedule_name = str(schedule_data.get('employee_name') or schedule_data.get('employee', {}).get('display_name') or '').strip() if isinstance(schedule_data, dict) else ''
+              actual_messenger_name = str(me_data.get('display_name') or me_data.get('user_name') or me_data.get('employee_name') or '').strip() if isinstance(me_data, dict) else ''
+              report['kiosks'][device_id] = {
+                  'expected_employee': expected_name,
+                  'schedule_status': schedule_result.get('status'),
+                  'schedule_employee': actual_schedule_name,
+                  'schedule_identity_ok': actual_schedule_name == expected_name,
+                  'schedule_display_contract': schedule_data.get('schedule_display_contract') if isinstance(schedule_data, dict) else None,
+                  'schedule_sections': section_counts,
+                  'schedule_duplicate_locations': duplicate_rows,
+                  'schedule_deduplicated': schedule_result.get('status') == 200 and isinstance(sections, list) and not duplicate_rows,
+                  'messenger_identity_status': me_result.get('status'),
+                  'messenger_employee': actual_messenger_name,
+                  'messenger_identity_ok': me_result.get('status') == 200 and (not actual_messenger_name or actual_messenger_name == expected_name),
+                  'messenger_user_id': me_data.get('msg_user_id') or me_data.get('id') if isinstance(me_data, dict) else None,
+                  'threads_status': threads_result.get('status'),
+                  'thread_count': len(threads),
+                  'memphis_thread_count': len(memphis_threads),
+                  'memphis_thread_id': (memphis_threads[0].get('thread_id') or memphis_threads[0].get('id')) if memphis_threads else None,
+                  'memphis_thread_ok': threads_result.get('status') == 200 and len(memphis_threads) == 1,
+              }
+
+          alijah = report['kiosks'].get('KIOSK_02', {})
+          alijah_thread = alijah.get('memphis_thread_id')
+          alijah_user = alijah.get('messenger_user_id')
+          if alijah_thread and alijah_user:
+              acceptance_id = f'acceptance-20260715:{uuid.uuid4()}'
+              send_result = request(
+                  'alijah_generic_memphis_send',
+                  f'{API}/messaging-api/thread/{urllib.parse.quote(str(alijah_thread))}/message',
+                  method='POST',
+                  headers={'X-Device-Id': 'KIOSK_02'},
+                  payload={
+                      'sender_user_id': alijah_user,
+                      'body': 'What is my schedule today?',
+                      'device_id': 'KIOSK_02',
+                      'client_message_id': acceptance_id,
+                  },
+                  retries=2,
+                  timeout=90,
+              )
+              send_payload = json_body(send_result)
+              send_data = get_data(send_payload)
+              report['temporary_message'] = {
+                  'client_message_id': acceptance_id,
+                  'status': send_result.get('status'),
+                  'response': send_data,
+                  'ok': send_result.get('status') == 200 and isinstance(send_payload, dict) and send_payload.get('ok') is True,
+              }
+
+          kiosk_rows = list(report['kiosks'].values())
+          report['fleet_summary'] = {
+              'kiosk_count': len(kiosk_rows),
+              'schedule_identity_pass': sum(1 for row in kiosk_rows if row.get('schedule_identity_ok')),
+              'schedule_dedupe_pass': sum(1 for row in kiosk_rows if row.get('schedule_deduplicated')),
+              'messenger_identity_pass': sum(1 for row in kiosk_rows if row.get('messenger_identity_ok')),
+              'memphis_thread_pass': sum(1 for row in kiosk_rows if row.get('memphis_thread_ok')),
+          }
+          report['overall_pass'] = all([
+              report.get('backend_version_ok'),
+              report.get('scan_health_ok'),
+              report.get('schedule_health_ok'),
+              report.get('messaging_health_ok'),
+              report.get('events_health_ok'),
+              all(page.get('all_markers_present') for page in report.get('pages', {}).values()),
+              report['fleet_summary']['schedule_identity_pass'] == len(EMPLOYEES),
+              report['fleet_summary']['schedule_dedupe_pass'] == len(EMPLOYEES),
+              report['fleet_summary']['messenger_identity_pass'] == len(EMPLOYEES),
+              report['fleet_summary']['memphis_thread_pass'] == len(EMPLOYEES),
+              bool(report.get('temporary_message', {}).get('ok')),
+          ])
+
+          output = Path('/tmp/live-schedule-messaging-acceptance.json')
+          output.write_text(json.dumps(report, indent=2, sort_keys=True), encoding='utf-8')
+          print(output.read_text(encoding='utf-8'))
+          PY
+          python3 /tmp/live_acceptance.py
+
+      - name: Upload exact acceptance evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-schedule-messaging-acceptance-20260715
+          path: /tmp/live-schedule-messaging-acceptance.json
+          if-no-files-found: error
+          retention-days: 1
