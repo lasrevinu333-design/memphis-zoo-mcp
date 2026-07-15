@@ -17,23 +17,24 @@ jobs:
     timeout-minutes: 12
     steps:
       - name: Wait briefly for Render deployment
-        run: sleep 15
+        run: sleep 10
       - name: Verify live backend
         shell: bash
         run: |
           set -euo pipefail
           base='https://memphis-zoo-mcp.onrender.com'
-          for attempt in $(seq 1 12); do
+          for attempt in $(seq 1 6); do
             version="$(curl -fsS --max-time 25 "$base/version" || true)"
-            health="$(curl -fsS --max-time 25 "$base/health" || true)"
+            health="$(curl -fsS --max-time 25 "$base/messaging-api/health" || true)"
             config="$(curl -fsS --max-time 25 "$base/auth-api/config" || true)"
             printf 'attempt=%s\nversion=%s\nhealth=%s\nconfig=%s\n' "$attempt" "$version" "$health" "$config"
             if grep -q 'release-2026.07.15.auth-foundation.1' <<<"$version" \
+              && grep -q '"ok":true' <<<"$version" \
               && grep -q '"ok":true' <<<"$health" \
               && grep -q '"passwordless_manager_access":false' <<<"$config" \
               && grep -q '"trusted_device_enrollment":true' <<<"$config"; then
               exit 0
             fi
-            sleep 20
+            sleep 15
           done
           exit 1
