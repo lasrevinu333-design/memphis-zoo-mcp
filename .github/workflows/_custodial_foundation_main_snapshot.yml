@@ -1,0 +1,28 @@
+name: Custodial foundation canonical-main snapshot
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+      - name: Build archive
+        run: |
+          git archive --format=tar.gz --output=/tmp/custodial-main.tar.gz HEAD
+          sha256sum /tmp/custodial-main.tar.gz > /tmp/custodial-main.tar.gz.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: custodial-main-source
+          path: |
+            /tmp/custodial-main.tar.gz
+            /tmp/custodial-main.tar.gz.sha256
+          retention-days: 1
