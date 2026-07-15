@@ -1,0 +1,110 @@
+name: Live Messenger Fleet Smoke
+
+on:
+  push:
+    branches:
+      - diagnostic/live-messenger-smoke-20260715
+    paths:
+      - .github/workflows/_live_messenger_smoke_20260715.yml
+
+permissions:
+  contents: write
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run live non-failing fleet smoke
+        shell: bash
+        run: |
+          set +e
+          base='https://memphis-zoo-mcp.onrender.com'
+          out='.diagnostics/live-messenger-smoke-20260715.json'
+          mkdir -p .diagnostics
+          tmp="$(mktemp -d)"
+          smoke_id="live-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+
+          curl_json() {
+            local method="$1" url="$2" body="${3:-}"
+            local response_file="$4" status_file="$5"
+            if [ "$method" = POST ]; then
+              curl -sS --max-time 45 -o "$response_file" -w '%{http_code}' \
+                -H 'Content-Type: application/json' \
+                -X POST "$url" -d "$body" > "$status_file"
+            else
+              curl -sS --max-time 30 -o "$response_file" -w '%{http_code}' "$url" > "$status_file"
+            fi
+            return 0
+          }
+
+          curl_json GET "$base/version" '' "$tmp/version.json" "$tmp/version.status"
+          curl_json GET "$base/messaging-api/health" '' "$tmp/health.json" "$tmp/health.status"
+
+          devices='KIOSK_02 KIOSK_03 KIOSK_04 KIOSK_05 KIOSK_06 KIOSK_07 KIOSK_08 KIOSK_09 KIOSK_10'
+          : > "$tmp/devices.ndjson"
+          for device in $devices; do
+            identity="$tmp/${device}.identity.json"
+            identity_status="$tmp/${device}.identity.status"
+            thread="$tmp/${device}.thread.json"
+            thread_status="$tmp/${device}.thread.status"
+            curl_json GET "$base/messaging-api/me/by-device?device_id=${device}" '' "$identity" "$identity_status"
+            curl_json POST "$base/messaging-api/memphis/thread" "{\"device_id\":\"${device}\"}" "$thread" "$thread_status"
+            jq -n \
+              --arg device "$device" \
+              --arg identity_status "$(cat "$identity_status" 2>/dev/null)" \
+              --arg thread_status "$(cat "$thread_status" 2>/dev/null)" \
+              --slurpfile identity "$identity" \
+              --slurpfile thread "$thread" \
+              '{device_id:$device,identity_http:$identity_status,thread_http:$thread_status,identity:($identity[0] // null),thread:($thread[0] // null)}' \
+              >> "$tmp/devices.ndjson"
+          done
+
+          : > "$tmp/messages.ndjson"
+          for device in KIOSK_03 KIOSK_10; do
+            response="$tmp/${device}.message.json"
+            status="$tmp/${device}.message.status"
+            client_id="${smoke_id}-${device}"
+            body="Automated live smoke test: what is my schedule tomorrow? Reference ${client_id}."
+            payload="$(jq -nc --arg device "$device" --arg body "$body" --arg client "$client_id" '{device_id:$device,body:$body,client_message_id:$client}')"
+            curl_json POST "$base/messaging-api/memphis/message" "$payload" "$response" "$status"
+            jq -n \
+              --arg device "$device" \
+              --arg client_message_id "$client_id" \
+              --arg http_status "$(cat "$status" 2>/dev/null)" \
+              --slurpfile response "$response" \
+              '{device_id:$device,client_message_id:$client_message_id,http_status:$http_status,response:($response[0] // null)}' \
+              >> "$tmp/messages.ndjson"
+          done
+
+          jq -s '.' "$tmp/devices.ndjson" > "$tmp/devices.json"
+          jq -s '.' "$tmp/messages.ndjson" > "$tmp/messages.json"
+          jq -n \
+            --arg tested_at "$(date -u +%FT%TZ)" \
+            --arg smoke_id "$smoke_id" \
+            --arg version_http "$(cat "$tmp/version.status" 2>/dev/null)" \
+            --arg health_http "$(cat "$tmp/health.status" 2>/dev/null)" \
+            --slurpfile version "$tmp/version.json" \
+            --slurpfile health "$tmp/health.json" \
+            --slurpfile devices "$tmp/devices.json" \
+            --slurpfile messages "$tmp/messages.json" \
+            '{tested_at:$tested_at,smoke_id:$smoke_id,version_http:$version_http,health_http:$health_http,version:($version[0] // null),health:($health[0] // null),devices:($devices[0] // []),messages:($messages[0] // [])}' \
+            > "$out"
+          cat "$out"
+
+      - name: Commit exact diagnostic result
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'Memphis Zoo Diagnostic Bot'
+          git config user.email 'lasrevinu333@users.noreply.github.com'
+          git add .diagnostics/live-messenger-smoke-20260715.json
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m 'diagnostic: record live messenger fleet smoke'
+          git push origin "HEAD:${GITHUB_REF_NAME}"
