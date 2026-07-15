@@ -1,0 +1,29 @@
+name: Verify staged security patch chunks
+
+on:
+  push:
+    branches:
+      - foundation/security-control-plane-20260715
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify exact chunks and decoded patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'de32bccc0b67ff219a7e7f4bdebc204a5d0ff034407317b763b357c212327da8  .foundation/security_patch/chunk_00' > /dev/null
+          test "$(sha256sum .foundation/security_patch/chunk_00 | awk '{print $1}')" = 'de32bccc0b67ff219a7e7f4bdebc204a5d0ff034407317b763b357c212327da8'
+          test "$(sha256sum .foundation/security_patch/chunk_01 | awk '{print $1}')" = 'd92f10a2abed04d7c9a64bd5f94b29ec8f90797e840bde2233e4be7422937a59'
+          test "$(sha256sum .foundation/security_patch/chunk_02 | awk '{print $1}')" = '44a81b7061a920444ca7a54139ff7b68e20d57ca602e4d74ed6a1f2ccfe1af4c'
+          test "$(sha256sum .foundation/security_patch/chunk_03 | awk '{print $1}')" = 'ccf9299e13ad4ce5337367fd8f2e413e47275f312e06f8908abe685d86204c6f'
+          test "$(sha256sum .foundation/security_patch/chunk_04 | awk '{print $1}')" = 'ed4aa4f3366acf1cdb9ee28f7cc19495d702329d05932bacc99bafa4fb15f3cd'
+          test "$(sha256sum .foundation/security_patch/chunk_05 | awk '{print $1}')" = '4a86046834379da0b9f962401aa852094eec8bc1d116360189a737f114c021a1'
+          cat .foundation/security_patch/chunk_* | base64 -d > /tmp/backend-security.patch
+          test "$(sha256sum /tmp/backend-security.patch | awk '{print $1}')" = '9750e8907cf2137e268a75536dda5c8c829b832b579086833aa27a16cbb70600'
+          git apply --check /tmp/backend-security.patch
