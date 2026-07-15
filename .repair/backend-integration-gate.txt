@@ -1,0 +1,17 @@
+base64: invalid input
+/tmp/backend.patch.gz: FAILED
+sha256sum: WARNING: 1 computed checksum did NOT match
+base64: invalid input
+/tmp/backend-new-files.tar.gz: FAILED
+sha256sum: WARNING: 1 computed checksum did NOT match
+APPLY_FAILED=1
+
+added 153 packages, and audited 154 packages in 3s
+
+30 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
+./.github/workflows/_apply_moxie_system_integration_20260715.yml:130:          if grep -R -nE 'packages\.applied|artifactory|internal\.api\.openai' . --exclude-dir=.git --exclude-dir=.repair --exclude-dir=_engine_fixture --exclude-dir=node_modules >>"$report" 2>&1; then
+FAIL internal build URL found
+FAILED=1
