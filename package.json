@@ -27,7 +27,8 @@
     "test:schedule-display": "node scripts/schedule-display-tests.mjs",
     "test:messaging-recovery": "node scripts/memphis-messaging-route-recovery-tests.mjs",
     "test:manager-open": "node scripts/manager-open-session-foundation-tests.mjs",
-    "test:moxie-route": "node scripts/moxie-route-tests.mjs"
+    "test:moxie-route": "node scripts/moxie-route-tests.mjs",
+    "test:schedule-source-type": "node scripts/schedule-source-type-contract-tests.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.18.0",
