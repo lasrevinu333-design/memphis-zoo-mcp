@@ -1,0 +1,569 @@
+{
+  "tested_at": "2026-07-15T01:24:08Z",
+  "smoke_id": "live-smoke-29381525577-1",
+  "version_http": "200",
+  "health_http": "200",
+  "version": {
+    "ok": true,
+    "app": "memphis-zoo-mcp",
+    "area": "version",
+    "version": "release-2026.07.14.scheduler-alerts-gps.3",
+    "release_id": "eb78c16cb1cf17de4840ae7656606253acd03028",
+    "contracts": {
+      "scan": "scan.v2",
+      "dashboard": "dashboard.v1",
+      "messaging": "messaging.v2",
+      "schedule": "schedule.v2",
+      "events": "events.v2",
+      "feedback": "feedback.v1"
+    }
+  },
+  "health": {
+    "ok": true,
+    "app": "memphis-zoo-mcp",
+    "area": "messaging",
+    "version": "release-2026.07.14.scheduler-alerts-gps.3",
+    "release_id": "eb78c16cb1cf17de4840ae7656606253acd03028",
+    "contracts": {
+      "scan": "scan.v2",
+      "dashboard": "dashboard.v1",
+      "messaging": "messaging.v2",
+      "schedule": "schedule.v2",
+      "events": "events.v2",
+      "feedback": "feedback.v1"
+    },
+    "contract_version": "messaging.v2",
+    "memphis": {
+      "gemini_configured": true,
+      "gemini_key_source": "GEMINI_API_KEY",
+      "memphis_model": "gemini-2.5-flash"
+    }
+  },
+  "devices": [
+    {
+      "device_id": "KIOSK_02",
+      "identity_http": "200",
+      "thread_http": "200",
+      "identity": {
+        "ok": true,
+        "data": {
+          "role": "employee",
+          "is_active": true,
+          "msg_user_id": "7134fcc4-cf43-426c-bf1c-82c39d8e4845",
+          "display_name": "Alijah Collins",
+          "device_identifier": "KIOSK_02",
+          "requested_device_id": "KIOSK_02",
+          "canonical_device_id": "KIOSK_02",
+          "matched_by": "canonical"
+        },
+        "meta": {
+          "version": "release-2026.07.14.scheduler-alerts-gps.3",
+          "release_id": "eb78c16cb1cf17de4840ae7656606253acd03028",
+          "contract_version": "messaging.v2"
+        }
+      },
+      "thread": {
+        "ok": true,
+        "data": {
+          "id": "4eb1b932-1e66-40e4-add0-6494ba41ccdd",
+          "thread_type": "bot",
+          "title": "Memphis",
+          "created_by_user_id": "7134fcc4-cf43-426c-bf1c-82c39d8e4845",
+          "is_active": true,
+          "created_at": "2026-07-15T01:24:00.991287+00:00",
+          "updated_at": "2026-07-15T01:24:00.991287+00:00",
+          "last_message_at": null
+        },
+        "meta": {
+          "version": "release-2026.07.14.scheduler-alerts-gps.3",
+          "release_id": "eb78c16cb1cf17de4840ae7656606253acd03028",
+          "contract_version": "messaging.v2"
+        }
+      }
+    },
+    {
+      "device_id": "KIOSK_03",
+      "identity_http": "200",
+      "thread_http": "200",
+      "identity": {
+        "ok": true,
+        "data": {
+          "role": "employee",
+          "is_active": true,
+          "msg_user_id": "46025e10-967d-4dc7-97ad-f8f6f3cd96c0",
+          "display_name": "Michael McWright",
+          "device_identifier": "KIOSK_03",
+          "requested_device_id": "KIOSK_03",
+          "canonical_device_id": "KIOSK_03",
+          "matched_by": "canonical"
+        },
+        "meta": {
+          "version": "release-2026.07.14.scheduler-alerts-gps.3",
+          "release_id": "eb78c16cb1cf17de4840ae7656606253acd03028",
+          "contract_version": "messaging.v2"
+        }
+      },
+      "thread": {
+        "ok": true,
+        "data": {
+          "id": "ea1774f1-4027-48bd-aa87-d601f4cfa810",
+          "thread_type": "bot",
+          "title": "Memphis",
+          "created_by_user_id": "46025e10-967d-4dc7-97ad-f8f6f3cd96c0",
+          "is_active": true,
+          "created_at": "2026-07-15T00:47:07.63969+00:00",
+          "updated_at": "2026-07-15T01:23:41.748186+00:00",
+          "last_message_at": "2026-07-15T01:23:41.748186+00:00"
+        },
+        "meta": {
+          "version": "release-2026.07.14.scheduler-alerts-gps.3",
+          "release_id": "eb78c16cb1cf17de4840ae7656606253acd03028",
+          "contract_version": "messaging.v2"
+        }
+      }
+    },
+    {
+      "device_id": "KIOSK_04",
+      "identity_http": "200",
+      "thread_http": "200",
+      "identity": {
+        "ok": true,
+        "data": {
+          "role": "employee",
+          "is_active": true,
+          "msg_user_id": "2a7ea7ee-f757-4a8e-beec-0955317381e2",
+          "display_name": "Tammy Miller",
+          "device_identifier": "KIOSK_04",
+          "requested_device_id": "KIOSK_04",
+          "canonical_device_id": "KIOSK_04",
+          "matched_by": "canonical"
+        },
+        "meta": {
+          "version": "release-2026.07.14.scheduler-alerts-gps.3",
+          "release_id": "eb78c16cb1cf17de4840ae7656606253acd03028",
+          "contract_version": "messaging.v2"
+        }
+      },
+      "thread": {
+        "ok": true,
+        "data": {
+          "id": "67ea63c0-2b7d-418a-a618-a939ea3f0d30",
+          "thread_type": "bot",
+          "title": "Memphis",
+          "created_by_user_id": "2a7ea7ee-f757-4a8e-beec-0955317381e2",
+          "is_active": true,
+          "created_at": "2026-07-15T00:36:52.949224+00:00",
+          "updated_at": "2026-07-15T01:18:00.065904+00:00",
+          "last_message_at": "2026-07-15T00:37:13.847783+00:00"
+        },
+        "meta": {
+          "version": "release-2026.07.14.scheduler-alerts-gps.3",
+          "release_id": "eb78c16cb1cf17de4840ae7656606253acd03028",
+          "contract_version": "messaging.v2"
+        }
+      }
+    },
+    {
+      "device_id": "KIOSK_05",
+      "identity_http": "200",
+      "thread_http": "200",
+      "identity": {
+        "ok": true,
+        "data": {
+          "role": "employee",
+          "is_active": true,
+          "msg_user_id": "331eb51a-7d8d-458e-b299-679adcfba332",
+          "display_name": "Daniel Morgan",
+          "device_identifier": "KIOSK_05",
+          "requested_device_id": "KIOSK_05",
+          "canonical_device_id": "KIOSK_05",
+          "matched_by": "canonical"
+        },
+        "meta": {
+          "version": "release-2026.07.14.scheduler-alerts-gps.3",
+          "release_id": "eb78c16cb1cf17de4840ae7656606253acd03028",
+          "contract_version": "messaging.v2"
+        }
+      },
+      "thread": {
+        "ok": true,
+        "data": {
+          "id": "6caf51a0-4aba-4b94-ab1e-7ea8779309da",
+          "thread_type": "bot",
+          "title": "Memphis",
+          "created_by_user_id": "331eb51a-7d8d-458e-b299-679adcfba332",
+          "is_active": true,
+          "created_at": "2026-07-04T19:42:29.094233+00:00",
+          "updated_at": "2026-07-15T01:18:00.065904+00:00",
+          "last_message_at": "2026-07-15T00:43:06.107223+00:00"
+        },
+        "meta": {
+          "version": "release-2026.07.14.scheduler-alerts-gps.3",
+          "release_id": "eb78c16cb1cf17de4840ae7656606253acd03028",
+          "contract_version": "messaging.v2"
+        }
+      }
+    },
+    {
+      "device_id": "KIOSK_06",
+      "identity_http": "200",
+      "thread_http": "200",
+      "identity": {
+        "ok": true,
+        "data": {
+          "role": "employee",
+          "is_active": true,
+          "msg_user_id": "cf550fdd-7dc8-45e3-adde-f514806867b5",
+          "display_name": "Kinnaye Peete",
+          "device_identifier": "KIOSK_06",
+          "requested_device_id": "KIOSK_06",
+          "canonical_device_id": "KIOSK_06",
+          "matched_by": "canonical"
+        },
+        "meta": {
+          "version": "release-2026.07.14.scheduler-alerts-gps.3",
+          "release_id": "eb78c16cb1cf17de4840ae7656606253acd03028",
+          "contract_version": "messaging.v2"
+        }
+      },
+      "thread": {
+        "ok": true,
+        "data": {
+          "id": "a3a56197-bc15-471c-82e1-393f6613bfd5",
+          "thread_type": "bot",
+          "title": "Memphis",
+          "created_by_user_id": "cf550fdd-7dc8-45e3-adde-f514806867b5",
+          "is_active": true,
+          "created_at": "2026-07-15T01:02:17.011744+00:00",
+          "updated_at": "2026-07-15T01:18:00.065904+00:00",
+          "last_message_at": "2026-07-15T01:02:33.73841+00:00"
+        },
+        "meta": {
+          "version": "release-2026.07.14.scheduler-alerts-gps.3",
+          "release_id": "eb78c16cb1cf17de4840ae7656606253acd03028",
+          "contract_version": "messaging.v2"
+        }
+      }
+    },
+    {
+      "device_id": "KIOSK_07",
+      "identity_http": "200",
+      "thread_http": "200",
+      "identity": {
+        "ok": true,
+        "data": {
+          "role": "employee",
+          "is_active": true,
+          "msg_user_id": "f155947f-5e56-47e9-9fbc-0a643bef608b",
+          "display_name": "Kathy Phelps",
+          "device_identifier": "KIOSK_07",
+          "requested_device_id": "KIOSK_07",
+          "canonical_device_id": "KIOSK_07",
+          "matched_by": "canonical"
+        },
+        "meta": {
+          "version": "release-2026.07.14.scheduler-alerts-gps.3",
+          "release_id": "eb78c16cb1cf17de4840ae7656606253acd03028",
+          "contract_version": "messaging.v2"
+        }
+      },
+      "thread": {
+        "ok": true,
+        "data": {
+          "id": "ab6a6f1f-f635-4e70-9a67-cedc2bd386b4",
+          "thread_type": "bot",
+          "title": "Memphis",
+          "created_by_user_id": "f155947f-5e56-47e9-9fbc-0a643bef608b",
+          "is_active": true,
+          "created_at": "2026-07-15T01:24:04.166609+00:00",
+          "updated_at": "2026-07-15T01:24:04.166609+00:00",
+          "last_message_at": null
+        },
+        "meta": {
+          "version": "release-2026.07.14.scheduler-alerts-gps.3",
+          "release_id": "eb78c16cb1cf17de4840ae7656606253acd03028",
+          "contract_version": "messaging.v2"
+        }
+      }
+    },
+    {
+      "device_id": "KIOSK_08",
+      "identity_http": "200",
+      "thread_http": "200",
+      "identity": {
+        "ok": true,
+        "data": {
+          "role": "employee",
+          "is_active": true,
+          "msg_user_id": "ffa815ce-c1dc-4c41-b696-2320825044a0",
+          "display_name": "Karen Robinson",
+          "device_identifier": "KIOSK_08",
+          "requested_device_id": "KIOSK_08",
+          "canonical_device_id": "KIOSK_08",
+          "matched_by": "canonical"
+        },
+        "meta": {
+          "version": "release-2026.07.14.scheduler-alerts-gps.3",
+          "release_id": "eb78c16cb1cf17de4840ae7656606253acd03028",
+          "contract_version": "messaging.v2"
+        }
+      },
+      "thread": {
+        "ok": true,
+        "data": {
+          "id": "ce31ea19-889a-4413-acb3-4952067bcf47",
+          "thread_type": "bot",
+          "title": "Memphis",
+          "created_by_user_id": "ffa815ce-c1dc-4c41-b696-2320825044a0",
+          "is_active": true,
+          "created_at": "2026-07-15T01:24:04.655777+00:00",
+          "updated_at": "2026-07-15T01:24:04.655777+00:00",
+          "last_message_at": null
+        },
+        "meta": {
+          "version": "release-2026.07.14.scheduler-alerts-gps.3",
+          "release_id": "eb78c16cb1cf17de4840ae7656606253acd03028",
+          "contract_version": "messaging.v2"
+        }
+      }
+    },
+    {
+      "device_id": "KIOSK_09",
+      "identity_http": "200",
+      "thread_http": "200",
+      "identity": {
+        "ok": true,
+        "data": {
+          "role": "employee",
+          "is_active": true,
+          "msg_user_id": "fd41bf52-7d5b-40d4-a576-4d28f28c675a",
+          "display_name": "Markiesha Warren",
+          "device_identifier": "KIOSK_09",
+          "requested_device_id": "KIOSK_09",
+          "canonical_device_id": "KIOSK_09",
+          "matched_by": "canonical"
+        },
+        "meta": {
+          "version": "release-2026.07.14.scheduler-alerts-gps.3",
+          "release_id": "eb78c16cb1cf17de4840ae7656606253acd03028",
+          "contract_version": "messaging.v2"
+        }
+      },
+      "thread": {
+        "ok": true,
+        "data": {
+          "id": "ff86c0ab-1149-4094-86cd-5a5a35333a95",
+          "thread_type": "bot",
+          "title": "Memphis",
+          "created_by_user_id": "fd41bf52-7d5b-40d4-a576-4d28f28c675a",
+          "is_active": true,
+          "created_at": "2026-07-01T18:15:52.063081+00:00",
+          "updated_at": "2026-07-15T01:18:00.065904+00:00",
+          "last_message_at": "2026-07-14T18:15:07.461768+00:00"
+        },
+        "meta": {
+          "version": "release-2026.07.14.scheduler-alerts-gps.3",
+          "release_id": "eb78c16cb1cf17de4840ae7656606253acd03028",
+          "contract_version": "messaging.v2"
+        }
+      }
+    },
+    {
+      "device_id": "KIOSK_10",
+      "identity_http": "200",
+      "thread_http": "200",
+      "identity": {
+        "ok": true,
+        "data": {
+          "role": "employee",
+          "is_active": true,
+          "msg_user_id": "eb80f4ef-215e-4f08-8627-e87468722332",
+          "display_name": "Sherita Wilbon",
+          "device_identifier": "KIOSK_10",
+          "requested_device_id": "KIOSK_10",
+          "canonical_device_id": "KIOSK_10",
+          "matched_by": "canonical"
+        },
+        "meta": {
+          "version": "release-2026.07.14.scheduler-alerts-gps.3",
+          "release_id": "eb78c16cb1cf17de4840ae7656606253acd03028",
+          "contract_version": "messaging.v2"
+        }
+      },
+      "thread": {
+        "ok": true,
+        "data": {
+          "id": "3569bd18-8e27-4384-b181-ee3f042b086c",
+          "thread_type": "bot",
+          "title": "Memphis",
+          "created_by_user_id": "eb80f4ef-215e-4f08-8627-e87468722332",
+          "is_active": true,
+          "created_at": "2026-07-15T00:45:46.899933+00:00",
+          "updated_at": "2026-07-15T01:23:41.748186+00:00",
+          "last_message_at": "2026-07-15T01:23:41.748186+00:00"
+        },
+        "meta": {
+          "version": "release-2026.07.14.scheduler-alerts-gps.3",
+          "release_id": "eb78c16cb1cf17de4840ae7656606253acd03028",
+          "contract_version": "messaging.v2"
+        }
+      }
+    }
+  ],
+  "messages": [
+    {
+      "device_id": "KIOSK_03",
+      "client_message_id": "live-smoke-29381525577-1-KIOSK_03",
+      "http_status": "200",
+      "response": {
+        "ok": true,
+        "data": {
+          "thread": {
+            "id": "ea1774f1-4027-48bd-aa87-d601f4cfa810",
+            "thread_type": "bot",
+            "title": "Memphis",
+            "created_by_user_id": "46025e10-967d-4dc7-97ad-f8f6f3cd96c0",
+            "is_active": true,
+            "created_at": "2026-07-15T00:47:07.63969+00:00",
+            "updated_at": "2026-07-15T01:23:41.748186+00:00",
+            "last_message_at": "2026-07-15T01:23:41.748186+00:00"
+          },
+          "user_message": {
+            "id": "747ccb11-c996-4293-b4a4-872f24a038cb",
+            "thread_id": "ea1774f1-4027-48bd-aa87-d601f4cfa810",
+            "sender_user_id": "46025e10-967d-4dc7-97ad-f8f6f3cd96c0",
+            "message_type": "text",
+            "body": "Automated live smoke test: what is my schedule tomorrow? Reference live-smoke-29381525577-1-KIOSK_03.",
+            "metadata_json": {
+              "channel": "memphis",
+              "device_id": "KIOSK_03",
+              "client_message_id": "live-smoke-29381525577-1-KIOSK_03"
+            },
+            "sent_at": "2026-07-15T01:24:06.084133+00:00",
+            "created_at": "2026-07-15T01:24:06.084133+00:00",
+            "is_deleted": false,
+            "client_message_id": "live-smoke-29381525577-1-KIOSK_03"
+          },
+          "bot_message": {
+            "id": "3074a4f7-3f6d-4480-8dde-90418919232c",
+            "thread_id": "ea1774f1-4027-48bd-aa87-d601f4cfa810",
+            "sender_user_id": "41656853-ddeb-4f7e-8b82-e5106f5d188a",
+            "message_type": "bot_response",
+            "body": "I couldn't find schedule assignments for Michael McWright on Wednesday, 2026-07-15.",
+            "metadata_json": {
+              "ai": true,
+              "mode": "local_my_schedule",
+              "intent": "my_schedule",
+              "channel": "memphis",
+              "sources": [
+                "devices",
+                "v_memphis_employee_schedule"
+              ],
+              "entities": {
+                "date": {
+                  "weekday": null,
+                  "explicit_date": null,
+                  "relative_offset": 1,
+                  "weekday_modifier": null,
+                  "inherited_service_date": null
+                },
+                "audience": "all"
+              },
+              "fallback": true,
+              "warnings": [],
+              "intent_ambiguous": false,
+              "client_message_id": "memphis-reply:747ccb11-c996-4293-b4a4-872f24a038cb",
+              "intent_confidence": 0.35
+            },
+            "sent_at": "2026-07-15T01:24:07.306244+00:00",
+            "created_at": "2026-07-15T01:24:07.306244+00:00",
+            "is_deleted": false,
+            "client_message_id": "memphis-reply:747ccb11-c996-4293-b4a4-872f24a038cb"
+          }
+        },
+        "meta": {
+          "version": "release-2026.07.14.scheduler-alerts-gps.3",
+          "release_id": "eb78c16cb1cf17de4840ae7656606253acd03028",
+          "contract_version": "messaging.v2"
+        }
+      }
+    },
+    {
+      "device_id": "KIOSK_10",
+      "client_message_id": "live-smoke-29381525577-1-KIOSK_10",
+      "http_status": "200",
+      "response": {
+        "ok": true,
+        "data": {
+          "thread": {
+            "id": "3569bd18-8e27-4384-b181-ee3f042b086c",
+            "thread_type": "bot",
+            "title": "Memphis",
+            "created_by_user_id": "eb80f4ef-215e-4f08-8627-e87468722332",
+            "is_active": true,
+            "created_at": "2026-07-15T00:45:46.899933+00:00",
+            "updated_at": "2026-07-15T01:23:41.748186+00:00",
+            "last_message_at": "2026-07-15T01:23:41.748186+00:00"
+          },
+          "user_message": {
+            "id": "11fec576-a279-47d6-a749-a4232ff47cc9",
+            "thread_id": "3569bd18-8e27-4384-b181-ee3f042b086c",
+            "sender_user_id": "eb80f4ef-215e-4f08-8627-e87468722332",
+            "message_type": "text",
+            "body": "Automated live smoke test: what is my schedule tomorrow? Reference live-smoke-29381525577-1-KIOSK_10.",
+            "metadata_json": {
+              "channel": "memphis",
+              "device_id": "KIOSK_10",
+              "client_message_id": "live-smoke-29381525577-1-KIOSK_10"
+            },
+            "sent_at": "2026-07-15T01:24:07.586485+00:00",
+            "created_at": "2026-07-15T01:24:07.586485+00:00",
+            "is_deleted": false,
+            "client_message_id": "live-smoke-29381525577-1-KIOSK_10"
+          },
+          "bot_message": {
+            "id": "0537b815-6174-4d42-8aa9-b0d8cdc41071",
+            "thread_id": "3569bd18-8e27-4384-b181-ee3f042b086c",
+            "sender_user_id": "41656853-ddeb-4f7e-8b82-e5106f5d188a",
+            "message_type": "bot_response",
+            "body": "Sherita Wilbon on Wednesday, 2026-07-15: assigned to Aquarium, Breezeway Restrooms, Cathouse Cafe Restrooms, China, East End Restrooms, Event Center, Komodos, North West Passage, Primate Pavillion, Teton, West Admin, Zambezi for the shift.",
+            "metadata_json": {
+              "ai": true,
+              "mode": "local_my_schedule",
+              "intent": "my_schedule",
+              "channel": "memphis",
+              "sources": [
+                "devices",
+                "v_memphis_employee_schedule"
+              ],
+              "entities": {
+                "date": {
+                  "weekday": null,
+                  "explicit_date": null,
+                  "relative_offset": 1,
+                  "weekday_modifier": null,
+                  "inherited_service_date": null
+                },
+                "audience": "all"
+              },
+              "fallback": true,
+              "warnings": [],
+              "intent_ambiguous": false,
+              "client_message_id": "memphis-reply:11fec576-a279-47d6-a749-a4232ff47cc9",
+              "intent_confidence": 0.35
+            },
+            "sent_at": "2026-07-15T01:24:08.623334+00:00",
+            "created_at": "2026-07-15T01:24:08.623334+00:00",
+            "is_deleted": false,
+            "client_message_id": "memphis-reply:11fec576-a279-47d6-a749-a4232ff47cc9"
+          }
+        },
+        "meta": {
+          "version": "release-2026.07.14.scheduler-alerts-gps.3",
+          "release_id": "eb78c16cb1cf17de4840ae7656606253acd03028",
+          "contract_version": "messaging.v2"
+        }
+      }
+    }
+  ]
+}
