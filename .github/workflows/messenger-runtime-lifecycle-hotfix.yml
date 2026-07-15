@@ -1,0 +1,47 @@
+name: Messenger Runtime Lifecycle Hotfix
+
+on:
+  push:
+    branches:
+      - fix/identity-thread-lifecycle-20260715
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: messenger-runtime-lifecycle-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run focused Messenger and routing gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run --silent test:messenger-lifecycle
+          npm run --silent test:messaging
+          npm run --silent test:messaging-recovery
+          npm run --silent test:moxie-route
+          npm run --silent smoke
+          node --check src/messaging-api.js
+          node --check src/routes/moxie.js
+          node --check scripts/messenger-runtime-membership-thread-delete-tests.mjs
+          npm audit --omit=dev --audit-level=high
