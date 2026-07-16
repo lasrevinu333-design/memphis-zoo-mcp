@@ -1,4 +1,4 @@
-name: Foundation Repair Live Acceptance
+name: Manager Access, Moxie, and Operational Live Acceptance
 
 on:
   push:
@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: foundation-repair-live-main
+  group: manager-access-moxie-operational-live-main
   cancel-in-progress: true
 
 jobs:
@@ -16,35 +16,84 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - name: Verify deployed foundation repair
+      - name: Verify deployed manager-access repair and operational contracts
         shell: bash
         run: |
           set -euo pipefail
           root='https://memphis-zoo-mcp.onrender.com'
-          expected='release-2026.07.16.foundation-repair.1'
+          expected='release-2026.07.16.manager-access-repair.1'
           version=''
-          for attempt in $(seq 1 50); do
+          moxie_health=''
+          for attempt in $(seq 1 60); do
             version="$(curl -fsSL --max-time 40 "$root/version?attempt=$attempt" || true)"
-            printf 'attempt=%s version=%s\n' "$attempt" "$version"
-            if grep -q "$expected" <<<"$version"; then break; fi
-            sleep 20
+            moxie_health="$(curl -fsSL --max-time 40 "$root/moxie/health?attempt=$attempt" || true)"
+            printf 'attempt=%s version=%s moxie_health=%s\n' "$attempt" "$version" "$moxie_health"
+            if grep -Fq "$expected" <<<"$version" && grep -Fq '"auth_required":true' <<<"$moxie_health"; then break; fi
+            sleep 10
           done
-          grep -q "$expected" <<<"$version"
+          grep -Fq "$expected" <<<"$version"
+          python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["ok"] is True and d["configured"] is True and d["auth_required"] is True' <<<"$moxie_health"
 
-          auth="$(curl -fsSL --max-time 40 -H 'X-Device-Id: live-foundation-manager' "$root/auth-api/session?access_level=full_access")"
+          auth="$(curl -fsSL --max-time 40 -H 'X-Device-Id: live-manager-access-verifier' "$root/auth-api/session?access_level=full_access")"
           token="$(python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; assert d["operations_first"] is True; assert d["session"]["access_level"]=="full_access"; print(d["session"]["token"])' <<<"$auth")"
 
-          for endpoint in /scan-api/health /schedule-api/health /messaging-api/health /moxie/health /dashboard-api/health; do
+          for endpoint in /scan-api/health /schedule-api/health /messaging-api/health /dashboard-api/health; do
             body="$(curl -fsSL --max-time 40 "$root$endpoint")"
             printf '%s %s\n' "$endpoint" "$body"
-            grep -q '"ok":true' <<<"$body"
+            grep -Fq '"ok":true' <<<"$body"
+            grep -Fq "$expected" <<<"$body"
           done
 
-          moxie="$(curl -fsSL --max-time 40 "$root/moxie/")"
-          grep -qi 'Moxie' <<<"$moxie"
+          root_status="$(curl -sS --max-time 40 -D /tmp/moxie-root.headers -o /tmp/moxie-root.body -w '%{http_code}' "$root/moxie/")"
+          tr -d '\r' < /tmp/moxie-root.headers > /tmp/moxie-root.normalized
+          cat /tmp/moxie-root.normalized
+          case "$root_status" in 302|303) ;; *) echo "Unexpected Moxie root status: $root_status"; exit 1 ;; esac
+          grep -Fqi 'location: /moxie/login' /tmp/moxie-root.normalized
+          grep -Eiq '^cache-control: .*no-store' /tmp/moxie-root.normalized
+
+          login_status="$(curl -sS --max-time 40 -D /tmp/moxie-login.headers -o /tmp/moxie-login.html -w '%{http_code}' "$root/moxie/login")"
+          test "$login_status" = '200'
+          grep -Fq 'type="password"' /tmp/moxie-login.html
+          grep -Fq 'id="moxie-secret-entry"' /tmp/moxie-login.html
+          grep -Fq 'value=""' /tmp/moxie-login.html
+          grep -Fq 'autocomplete="new-password"' /tmp/moxie-login.html
+          grep -Fq 'readonly' /tmp/moxie-login.html
+          grep -Fq 'data-lpignore="true"' /tmp/moxie-login.html
+          grep -Fq 'data-1p-ignore="true"' /tmp/moxie-login.html
+          grep -Fq 'id="moxie-secret-submit" name="password" value=""' /tmp/moxie-login.html
+
+          wrong="invalid-live-probe-$(date +%s)"
+          wrong_status="$(curl -sS --max-time 40 -D /tmp/moxie-wrong.headers -o /tmp/moxie-wrong.html -w '%{http_code}' \
+            -H 'Content-Type: application/x-www-form-urlencoded' \
+            --data-urlencode "password=$wrong" \
+            "$root/moxie/login")"
+          test "$wrong_status" = '401'
+          grep -Fqi 'Wrong password' /tmp/moxie-wrong.html
+          ! grep -Eiq '^set-cookie: moxie_session=[^;]+' /tmp/moxie-wrong.headers
+
+          logout_status="$(curl -sS --max-time 40 -D /tmp/moxie-logout.headers -o /tmp/moxie-logout.body -w '%{http_code}' "$root/moxie/logout")"
+          tr -d '\r' < /tmp/moxie-logout.headers > /tmp/moxie-logout.normalized
+          test "$logout_status" = '303'
+          grep -Fqi 'location: /moxie/login?logged_out=1' /tmp/moxie-logout.normalized
+          grep -Eiq '^set-cookie: moxie_session=' /tmp/moxie-logout.normalized
+          grep -Eiq 'path=/moxie' /tmp/moxie-logout.normalized
+          grep -Eiq 'max-age=0|expires=Thu, 01 Jan 1970' /tmp/moxie-logout.normalized
+
+          signed_out_status="$(curl -sS --max-time 40 -o /tmp/moxie-signed-out.html -w '%{http_code}' "$root/moxie/login?logged_out=1")"
+          test "$signed_out_status" = '200'
+          grep -Fq 'Signed out. Enter the password to open Moxie again.' /tmp/moxie-signed-out.html
+
+          for asset in moxie-avatar.jpg frog-on-log-writing-pad.png reminders-woodland-animal.png contacts-creekside-animal.png settings-woodland-cog.png ops-dashboard.png ops-schedule.png ops-events.png ops-messaging.png; do
+            status="$(curl -sS --max-time 40 -D "/tmp/$asset.headers" -o "/tmp/$asset" -w '%{http_code}' "$root/moxie/assets/$asset")"
+            bytes="$(wc -c < "/tmp/$asset" | tr -d ' ')"
+            printf '%s status=%s bytes=%s\n' "$asset" "$status" "$bytes"
+            test "$status" = '200'
+            grep -Eiq '^content-type: image/' "/tmp/$asset.headers"
+            test "$bytes" -gt 500
+          done
 
           summary="$(curl -fsSL --max-time 40 -H "Authorization: Bearer $token" -H 'Content-Type: application/json' -d '{}' "$root/admin-api/bundle")"
-          grep -q '"ok":true' <<<"$summary"
+          grep -Fq '"ok":true' <<<"$summary"
 
           window="$(curl -fsSL --max-time 40 "$root/schedule-api/generation-window?days=14")"
           python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; assert d["days"]==14 and d["ready_days"]==14 and d["missing_days"]==0; assert d["auto_generation"]["trigger_auto_ignored"] is False' <<<"$window"
@@ -59,7 +108,7 @@ jobs:
           for device in KIOSK_02 KIOSK_03 KIOSK_04 KIOSK_05 KIOSK_06 KIOSK_07 KIOSK_08 KIOSK_09 KIOSK_10; do
             schedule="$(curl -fsSL --max-time 40 -H "X-Device-Id: $device" "$root/schedule-api/my-day-summary?device_id=$device")"
             printf '%s schedule_bytes=%s\n' "$device" "${#schedule}"
-            grep -q '"ok":true' <<<"$schedule"
+            grep -Fq '"ok":true' <<<"$schedule"
           done
 
-          echo FOUNDATION_REPAIR_LIVE_PASS
+          echo MANAGER_ACCESS_MOXIE_OPERATIONAL_LIVE_PASS
