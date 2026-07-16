@@ -1,0 +1,290 @@
+diff --git a/docs/env.md b/docs/env.md
+index 5197294..5377a61 100644
+--- a/docs/env.md
++++ b/docs/env.md
+@@ -56 +56 @@ Render production must have at least one valid Ops/Admin credential before prote
+-| `MOXIE_WEB_PASSWORD` | **Yes** | Sign-in password for Moxie web UI. |
++| `MOXIE_WEB_PASSWORD` | **Yes** | Sign-in password for Moxie web UI. The field is never prefilled or embedded in page source. |
+@@ -57,0 +58 @@ Render production must have at least one valid Ops/Admin credential before prote
++| `MOXIE_AUTH_REQUIRED` | No | Local/test override. Production and Render always require Moxie authentication; `false` is honored only outside production. |
+diff --git a/scripts/moxie-route-tests.mjs b/scripts/moxie-route-tests.mjs
+index 74e8a2b..3b88aa4 100644
+--- a/scripts/moxie-route-tests.mjs
++++ b/scripts/moxie-route-tests.mjs
+@@ -6 +6,2 @@ import express from "express";
+-process.env.MOXIE_WEB_PASSWORD = "memzoo";
++process.env.NODE_ENV = "test";
++process.env.MOXIE_WEB_PASSWORD = "test-moxie-password";
+@@ -10 +11 @@ process.env.MOXIE_PREFIX = "/moxie";
+-process.env.MOXIE_AUTH_REQUIRED = "false";
++process.env.MOXIE_AUTH_REQUIRED = "true";
+@@ -15 +16 @@ function makeSupabaseStub() {
+-  const state = { id: "default", history: [], saved_chats: [], updated_at: "2026-07-15T00:00:00.000Z" };
++  const state = { id: "default", history: [], saved_chats: [], updated_at: "2026-07-16T00:00:00.000Z" };
+@@ -50 +51,2 @@ try {
+-  assert.equal(response.status, 200, "GET /moxie must render directly in operations-first mode");
++  assert.equal(response.status, 302, "Moxie must fail closed before login");
++  assert.equal(response.headers.get("location"), "/moxie/login");
+@@ -53 +55,3 @@ try {
+-  assert.equal(response.status, 200, "GET /moxie/ must render directly in operations-first mode");
++  assert.equal(response.status, 302, "Moxie trailing-slash path must fail closed before login");
++  assert.equal(response.headers.get("location"), "/moxie/login");
++  assert.match(String(response.headers.get("cache-control") || ""), /no-store/);
+@@ -61 +65 @@ try {
+-  assert.equal(health.auth_required, false);
++  assert.equal(health.auth_required, true);
+@@ -64,6 +68,10 @@ try {
+-  assert.equal(response.status, 302);
+-  assert.equal(response.headers.get("location"), "/moxie/");
+-
+-  response = await fetch(`${base}/moxie/assets/moxie-avatar.jpg`);
+-  assert.equal(response.status, 200, "Moxie static assets must be served below the route prefix");
+-  assert.match(String(response.headers.get("content-type") || ""), /^image\//);
++  assert.equal(response.status, 200);
++  const loginHtml = await response.text();
++  assert.match(loginHtml, /type="password"/);
++  assert.match(loginHtml, /autocomplete="new-password"/);
++  assert.match(loginHtml, /id="moxie-secret-entry"[\s\S]*value=""/);
++  assert.match(loginHtml, /readonly/);
++  assert.match(loginHtml, /data-lpignore="true"/);
++  assert.match(loginHtml, /data-1p-ignore="true"/);
++  assert.doesNotMatch(loginHtml, /value="test-moxie-password"/);
++  assert.doesNotMatch(loginHtml, />test-moxie-password</);
+@@ -75 +83 @@ try {
+-    body: new URLSearchParams({ password: "anything" }),
++    body: new URLSearchParams({ password: "wrong-password" }),
+@@ -77,2 +85 @@ try {
+-  assert.equal(response.status, 302);
+-  assert.equal(response.headers.get("location"), "/moxie/");
++  assert.equal(response.status, 401);
+@@ -79,0 +87 @@ try {
++  assert.match(await response.text(), /Wrong password/i);
+@@ -81 +89,16 @@ try {
+-  response = await fetch(`${base}/moxie/`);
++  response = await fetch(`${base}/moxie/login`, {
++    method: "POST",
++    redirect: "manual",
++    headers: { "Content-Type": "application/x-www-form-urlencoded" },
++    body: new URLSearchParams({ password: "test-moxie-password" }),
++  });
++  assert.equal(response.status, 303);
++  assert.equal(response.headers.get("location"), "/moxie/");
++  const setCookie = String(response.headers.get("set-cookie") || "");
++  assert.match(setCookie, /^moxie_session=/);
++  assert.match(setCookie, /HttpOnly/i);
++  assert.match(setCookie, /SameSite=Lax/i);
++  assert.match(setCookie, /Path=\/moxie/i);
++  const cookie = setCookie.split(";")[0];
++
++  response = await fetch(`${base}/moxie/`, { headers: { Cookie: cookie } });
+@@ -85,0 +109,34 @@ try {
++  assert.match(page, /Back to Ops Hub/);
++  assert.match(page, /\/moxie\/assets\/frog-on-log-writing-pad\.png/);
++  assert.match(page, /\/moxie\/assets\/reminders-woodland-animal\.png/);
++  assert.match(page, /\/moxie\/assets\/contacts-creekside-animal\.png/);
++  assert.match(page, /\/moxie\/assets\/settings-woodland-cog\.png/);
++  assert.match(page, /image-action-button::before/);
++  assert.match(page, /content:none!important/);
++  assert.match(String(response.headers.get("cache-control") || ""), /no-store/);
++
++  response = await fetch(`${base}/moxie`, { headers: { Cookie: cookie }, redirect: "manual" });
++  assert.equal(response.status, 200, "authenticated trailing-slash-free path must render Moxie");
++
++  for (const asset of [
++    "moxie-avatar.jpg",
++    "frog-on-log-writing-pad.png",
++    "reminders-woodland-animal.png",
++    "contacts-creekside-animal.png",
++    "settings-woodland-cog.png",
++  ]) {
++    response = await fetch(`${base}/moxie/assets/${asset}`);
++    assert.equal(response.status, 200, `${asset} must be served from the static Moxie asset path`);
++    assert.match(String(response.headers.get("content-type") || ""), /^image\//);
++  }
++
++  response = await fetch(`${base}/moxie/logout`, {
++    redirect: "manual",
++    headers: { Cookie: cookie },
++  });
++  assert.equal(response.status, 303);
++  assert.equal(response.headers.get("location"), "/moxie/login?logged_out=1");
++  const clearCookie = String(response.headers.get("set-cookie") || "");
++  assert.match(clearCookie, /^moxie_session=/);
++  assert.match(clearCookie, /Path=\/moxie/i);
++  assert.match(clearCookie, /Expires=Thu, 01 Jan 1970|Max-Age=0/i);
+@@ -87,2 +144,7 @@ try {
+-  response = await fetch(`${base}/moxie`);
+-  assert.equal(response.status, 200, "trailing-slash-free path must render Moxie");
++  response = await fetch(`${base}/moxie/`, { redirect: "manual" });
++  assert.equal(response.status, 302, "protected Moxie must remain inaccessible after logout");
++  assert.equal(response.headers.get("location"), "/moxie/login");
++
++  response = await fetch(`${base}/moxie/login?logged_out=1`);
++  assert.equal(response.status, 200);
++  assert.match(await response.text(), /Signed out\. Enter the password to open Moxie again\./);
+@@ -90,0 +153,2 @@ try {
++  const routeSource = readFileSync(new URL("../src/routes/moxie.js", import.meta.url), "utf8");
++  const templateSource = readFileSync(new URL("../src/routes/moxie-templates.js", import.meta.url), "utf8");
+@@ -94,2 +158,8 @@ try {
+-
+-  console.log("MOXIE_ROUTE_TESTS_PASS");
++  assert.match(routeSource, /isProductionLike\(\)[\s\S]*MOXIE_AUTH_REQUIRED/);
++  assert.match(routeSource, /clearSessionCookie\(res, req\)/);
++  assert.match(routeSource, /Cache-Control", "no-store/);
++  const shortcutSource = templateSource.match(/function shortcutTile[\s\S]*?\n}/)?.[0] || "";
++  assert.match(shortcutSource, /assetUrl\(iconFile\)/);
++  assert.doesNotMatch(shortcutSource, /_iconDataUris/);
++
++  console.log("MOXIE_AUTH_LOGOUT_UI_CONTRACT_PASS");
+diff --git a/src/app-version.js b/src/app-version.js
+index a53bd55..6e3e2e6 100644
+--- a/src/app-version.js
++++ b/src/app-version.js
+@@ -1 +1 @@
+-export const APP_VERSION = "release-2026.07.16.foundation-repair.1";
++export const APP_VERSION = "release-2026.07.16.manager-access-repair.1";
+diff --git a/src/routes/moxie-templates.js b/src/routes/moxie-templates.js
+index 5ec268b..a11f8c8 100644
+--- a/src/routes/moxie-templates.js
++++ b/src/routes/moxie-templates.js
+@@ -82 +82 @@ a{color:#b9d0ff}
+-.image-action-button{position:relative;display:block;width:132px;max-width:100%;aspect-ratio:16/9;min-height:0;padding:0;border-radius:17px;overflow:hidden;background:#0b1020;border:1px solid rgba(134,178,255,.33);box-shadow:0 12px 36px rgba(0,0,0,.38);text-decoration:none;transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease}
++.image-action-button{position:relative;display:block;width:132px;max-width:100%;aspect-ratio:16/9;min-height:0;padding:0;border-radius:17px;overflow:hidden;background:#0b1020;border:1px solid rgba(134,178,255,.33);box-shadow:0 12px 36px rgba(0,0,0,.38);text-decoration:none;transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease;isolation:isolate}
+@@ -84 +84,4 @@ a{color:#b9d0ff}
+-.image-action-button img{width:100%;height:100%;object-fit:cover;display:block}
++.image-action-button::before,.image-action-button::after,.shortcut-tile::before,.shortcut-tile::after{content:none!important;display:none!important}
++.image-action-button img{position:absolute;inset:0;z-index:2;width:100%;height:100%;object-fit:cover;object-position:center;display:block;border:0}
++.image-action-button.image-load-failed{background:#162544}
++.shortcut-tile svg,.shortcut-tile i{display:none!important}
+@@ -123,0 +127,3 @@ ${body}
++<script>
++window.addEventListener("pageshow",function(event){if(event.persisted)window.location.reload();});
++</script>
+@@ -132 +138 @@ function esc(s) {
+-export function loginPage(err = false) {
++export function loginPage(err = false, notice = "") {
+@@ -136,0 +143 @@ export function loginPage(err = false) {
++  ${notice ? `<div style="color:#7dff9e;margin-bottom:12px;font-weight:700">${esc(notice)}</div>` : ""}
+@@ -138,3 +145,16 @@ export function loginPage(err = false) {
+-  <form method="post" action="/moxie/login">
+-    <label for="password" class="hint">Password</label>
+-    <input type="password" id="password" name="password" required autofocus>
++  <form id="moxie-login-form" method="post" action="/moxie/login" autocomplete="off">
++    <label for="moxie-secret-entry" class="hint">Password</label>
++    <input
++      type="password"
++      id="moxie-secret-entry"
++      value=""
++      autocomplete="new-password"
++      autocapitalize="none"
++      spellcheck="false"
++      data-lpignore="true"
++      data-1p-ignore="true"
++      readonly
++      required
++      autofocus
++    >
++    <input type="hidden" id="moxie-secret-submit" name="password" value="">
+@@ -143 +163,16 @@ export function loginPage(err = false) {
+-</div></div>`);
++</div></div>
++<script>
++(function(){
++  const form=document.getElementById("moxie-login-form");
++  const entry=document.getElementById("moxie-secret-entry");
++  const submitted=document.getElementById("moxie-secret-submit");
++  const clear=()=>{entry.value="";submitted.value="";entry.setAttribute("readonly","readonly");};
++  const unlock=()=>entry.removeAttribute("readonly");
++  entry.addEventListener("focus",unlock,{once:true});
++  entry.addEventListener("pointerdown",unlock,{once:true});
++  entry.addEventListener("touchstart",unlock,{once:true,passive:true});
++  form.addEventListener("submit",()=>{submitted.value=entry.value;});
++  window.addEventListener("pageshow",clear);
++  clear();
++})();
++</script>`);
+@@ -151,0 +187,4 @@ export function moxieAvatarImg() { return `<img class="moxie-avatar" src="data:i
++function assetUrl(file) {
++  return `/moxie/assets/${encodeURIComponent(String(file || ""))}`;
++}
++
+@@ -153,2 +192 @@ function iconImg(file, alt) {
+-  const src = _iconDataUris[file] || `/moxie/assets/${file}`;
+-  return `<img class="log-icon" src="${src}" alt="${esc(alt)}" onerror="this.style.display='none'>`;
++  return `<img class="log-icon" src="${esc(assetUrl(file))}" alt="${esc(alt)}" decoding="async" onerror="this.hidden=true">`;
+@@ -158,2 +196,2 @@ function shortcutTile(href, iconFile, label) {
+-  const src = _iconDataUris[iconFile] || `/moxie/assets/${iconFile}`;
+-  return `<a class="shortcut-tile" href="${esc(href)}"><span class="image-action-button"><img src="${src}" alt="" onerror="this.parentElement.style.background='#162544'"></span><span class="shortcut-title">${esc(label)}</span></a>`;
++  const src = assetUrl(iconFile);
++  return `<a class="shortcut-tile" href="${esc(href)}" aria-label="${esc(label)}"><span class="image-action-button"><img src="${esc(src)}" alt="${esc(label)}" loading="lazy" decoding="async" draggable="false" onerror="this.hidden=true;this.parentElement.classList.add('image-load-failed')"></span><span class="shortcut-title">${esc(label)}</span></a>`;
+@@ -167,0 +206 @@ export function opsHubButtons() {
++  const root = "https://lasrevinu333-design.github.io/Engine";
+@@ -169,4 +208,4 @@ export function opsHubButtons() {
+-    { href: "/dashboard", icon: "ops-dashboard.png", label: "Dashboard" },
+-    { href: "/schedule", icon: "ops-schedule.png", label: "Schedule" },
+-    { href: "/events-admin", icon: "ops-events.png", label: "Events" },
+-    { href: "/messaging", icon: "ops-messaging.png", label: "Messaging" },
++    { href: `${root}/dashboard.html`, icon: "ops-dashboard.png", label: "Dashboard" },
++    { href: `${root}/schedule-simple.html`, icon: "ops-schedule.png", label: "Schedule" },
++    { href: `${root}/events-admin.html`, icon: "ops-events.png", label: "Events" },
++    { href: `${root}/messages.html`, icon: "ops-messaging.png", label: "Messaging" },
+diff --git a/src/routes/moxie.js b/src/routes/moxie.js
+index 1638014..a540e41 100644
+--- a/src/routes/moxie.js
++++ b/src/routes/moxie.js
+@@ -39 +39,10 @@ const MOXIE_SESSION_COOKIE = "moxie_session";
+-const MOXIE_AUTH_REQUIRED = /^(1|true|yes|on)$/i.test(String(process.env.MOXIE_AUTH_REQUIRED || "").trim());
++function isProductionLike() {
++  return String(process.env.NODE_ENV || "").trim().toLowerCase() === "production"
++    || /^(1|true|yes|on)$/i.test(String(process.env.RENDER || process.env.IS_RENDER || "").trim());
++}
++
++const MOXIE_AUTH_REQUIRED = isProductionLike()
++  || !/^(0|false|no|off)$/i.test(String(process.env.MOXIE_AUTH_REQUIRED ?? "true").trim());
++const MOXIE_OPS_HUB_URL = String(
++  process.env.MOXIE_OPS_HUB_URL || "https://lasrevinu333-design.github.io/Engine/ops-manager-hub.html"
++).trim();
+@@ -113,3 +122,8 @@ function setSessionCookie(res, req) {
+-function clearSessionCookie(res) {
+-  if (!MOXIE_AUTH_REQUIRED) return;
+-  res.clearCookie(MOXIE_SESSION_COOKIE, { path: MOXIE_PREFIX || "/" });
++function clearSessionCookie(res, req) {
++  const secure = req.secure || req.headers["x-forwarded-proto"]?.split(",")[0]?.trim() === "https";
++  res.clearCookie(MOXIE_SESSION_COOKIE, {
++    httpOnly: true,
++    secure,
++    sameSite: "Lax",
++    path: MOXIE_PREFIX || "/",
++  });
+@@ -391,0 +406,9 @@ export function createMoxieRouter({ supabase, staticDir }) {
++  // Moxie contains private state. Protected pages must never survive logout in
++  // browser cache or back-forward cache.
++  router.use((_req, res, next) => {
++    res.setHeader("Cache-Control", "no-store, private, max-age=0");
++    res.setHeader("Pragma", "no-cache");
++    res.setHeader("Expires", "0");
++    next();
++  });
++
+@@ -415,2 +438,3 @@ export function createMoxieRouter({ supabase, staticDir }) {
+-    if (!MOXIE_AUTH_REQUIRED || isAuthed(req)) return res.redirect(prefixed("/"));
+-    res.send(loginPage(false));
++    if (isAuthed(req)) return res.redirect(303, prefixed("/"));
++    const notice = String(req.query?.logged_out || "") === "1" ? "Signed out. Enter the password to open Moxie again." : "";
++    res.status(200).send(loginPage(false, notice));
+@@ -420 +443,0 @@ export function createMoxieRouter({ supabase, staticDir }) {
+-    if (!MOXIE_AUTH_REQUIRED) return res.redirect(prefixed("/"));
+@@ -424 +447 @@ export function createMoxieRouter({ supabase, staticDir }) {
+-      return res.redirect(prefixed("/"));
++      return res.redirect(303, prefixed("/"));
+@@ -426 +449 @@ export function createMoxieRouter({ supabase, staticDir }) {
+-    res.send(loginPage(true));
++    res.status(401).send(loginPage(true));
+@@ -430,2 +453,2 @@ export function createMoxieRouter({ supabase, staticDir }) {
+-    clearSessionCookie(res);
+-    res.redirect(prefixed("/login"));
++    clearSessionCookie(res, req);
++    res.redirect(303, `${prefixed("/login")}?logged_out=1`);
+@@ -731 +754 @@ function buildChatPage(chatState) {
+-    <div class="header-actions"><span class="pill">private beta</span><a class="hint" href="${prefixed("/logout")}">logout</a></div>
++    <div class="header-actions"><a class="button-link" href="${escapeHtml(MOXIE_OPS_HUB_URL)}">Back to Ops Hub</a><span class="pill">private beta</span><a class="hint" href="${prefixed("/logout")}">logout</a></div>
