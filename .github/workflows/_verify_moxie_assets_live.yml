@@ -1,0 +1,37 @@
+name: Verify Moxie Signed-Out Page and Artwork Live
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Verify signed-out page and intended high-resolution artwork
+        shell: bash
+        run: |
+          set -euo pipefail
+          root='https://memphis-zoo-mcp.onrender.com'
+          page_status="$(curl -sS --max-time 40 -o /tmp/loggedout.html -w '%{http_code}' "$root/moxie/login?logged_out=1")"
+          printf 'signed_out_page status=%s bytes=%s\n' "$page_status" "$(wc -c < /tmp/loggedout.html | tr -d ' ')"
+          test "$page_status" = '200'
+          grep -Fq 'Signed out. Enter the password to open Moxie again.' /tmp/loggedout.html
+          grep -Fq 'id="moxie-secret-entry"' /tmp/loggedout.html
+          grep -Fq 'autocomplete="new-password"' /tmp/loggedout.html
+          grep -Fq 'readonly' /tmp/loggedout.html
+
+          for asset in moxie-avatar.jpg frog-on-log-writing-pad.png reminders-woodland-animal.png contacts-creekside-animal.png settings-woodland-cog.png ops-dashboard.png ops-schedule.png ops-events.png ops-messaging.png; do
+            status="$(curl -sS --max-time 40 -D "/tmp/$asset.headers" -o "/tmp/$asset" -w '%{http_code}' "$root/moxie/assets/$asset")"
+            bytes="$(wc -c < "/tmp/$asset" | tr -d ' ')"
+            printf '%s status=%s bytes=%s\n' "$asset" "$status" "$bytes"
+            test "$status" = '200'
+            grep -Eiq '^content-type: image/' "/tmp/$asset.headers"
+            test "$bytes" -gt 500
+          done
+
+          echo MOXIE_SIGNED_OUT_AND_ARTWORK_LIVE_PASS
