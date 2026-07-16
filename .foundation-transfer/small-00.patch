@@ -1,0 +1,38 @@
+diff --git a/.github/workflows/device-credential-foundation.yml b/.github/workflows/device-credential-foundation.yml
+index a8a12bad42b5b7dee73b7b5e8906e97f8faa56c3..18be45a3e20812fffa9df4b971f6a589630e802e 100644
+--- a/.github/workflows/device-credential-foundation.yml
++++ b/.github/workflows/device-credential-foundation.yml
+@@ -45,6 +45,7 @@ jobs:
+             events-api-contract-tests.mjs
+             events-parser-tests.mjs
+             feedback-contract-tests.mjs
++            foundation-repair-tests.mjs
+             full-window-absence-coverage-tests.mjs
+             manager-open-session-foundation-tests.mjs
+             memphis-messaging-regression-tests.mjs
+diff --git a/.github/workflows/foundation-security-gate.yml b/.github/workflows/foundation-security-gate.yml
+index 5a835106db500afd76de21e486a47c1ec9fd0031..2ea7af11f4bed6ace8fb786c47c27ffc0daccbfc 100644
+--- a/.github/workflows/foundation-security-gate.yml
++++ b/.github/workflows/foundation-security-gate.yml
+@@ -43,4 +43,5 @@ jobs:
+           npm run --silent test:moxie-route
+           npm run --silent test:schedule-source-type
+           npm run --silent test:foundation
++          npm run --silent test:foundation-repair
+           npm run --silent test:scheduler-overhaul
+diff --git a/.github/workflows/operational-recovery-live.yml b/.github/workflows/operational-recovery-live.yml
+index 0032fb4c81d8461865724ebacc4aac84f7c70f52..e132259ade1c498ace28cd5cd3ee7c67a05bcbf9 100644
+--- a/.github/workflows/operational-recovery-live.yml
++++ b/.github/workflows/operational-recovery-live.yml
+@@ -1,4 +1,4 @@
+-name: Operational Recovery Live Acceptance
++name: Foundation Repair Live Acceptance
+ 
+ on:
+   push:
+@@ -8,26 +8,24 @@ permissions:
+   contents: read
+ 
+ concurrency:
+-  group: operational-recovery-live-main
++  group:
