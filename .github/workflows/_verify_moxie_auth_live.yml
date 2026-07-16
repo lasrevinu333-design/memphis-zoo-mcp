@@ -1,0 +1,98 @@
+name: Verify Moxie Authentication Repair Live
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Verify deployed Moxie login, logout, cache, and assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          root='https://memphis-zoo-mcp.onrender.com'
+          expected='release-2026.07.16.manager-access-repair.1'
+          version=''
+          health=''
+          for attempt in $(seq 1 72); do
+            version="$(curl -fsSL --max-time 40 "$root/version?verify=$attempt" || true)"
+            health="$(curl -fsSL --max-time 40 "$root/moxie/health?verify=$attempt" || true)"
+            printf 'attempt=%s version=%s health=%s\n' "$attempt" "$version" "$health"
+            if grep -q "$expected" <<<"$version" && grep -q '"auth_required":true' <<<"$health"; then
+              break
+            fi
+            sleep 10
+          done
+          grep -q "$expected" <<<"$version"
+          python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["ok"] is True and d["configured"] is True and d["auth_required"] is True' <<<"$health"
+
+          curl -sS --max-time 40 -D /tmp/root.headers -o /tmp/root.body "$root/moxie/"
+          root_status="$(awk 'toupper($1) ~ /^HTTP\// {code=$2} END {print code}' /tmp/root.headers)"
+          test "$root_status" = '302'
+          grep -Eiq '^location: /moxie/login\r?$' /tmp/root.headers
+          grep -Eiq '^cache-control: .*no-store' /tmp/root.headers
+
+          curl -sS --max-time 40 -D /tmp/login.headers -o /tmp/login.html "$root/moxie/login"
+          login_status="$(awk 'toupper($1) ~ /^HTTP\// {code=$2} END {print code}' /tmp/login.headers)"
+          test "$login_status" = '200'
+          grep -q 'type="password"' /tmp/login.html
+          grep -q 'id="moxie-secret-entry"' /tmp/login.html
+          grep -q 'value=""' /tmp/login.html
+          grep -q 'autocomplete="new-password"' /tmp/login.html
+          grep -q 'readonly' /tmp/login.html
+          grep -q 'data-lpignore="true"' /tmp/login.html
+          grep -q 'data-1p-ignore="true"' /tmp/login.html
+          grep -q 'id="moxie-secret-submit" name="password" value=""' /tmp/login.html
+          grep -Eiq '^cache-control: .*no-store' /tmp/login.headers
+
+          wrong="definitely-wrong-live-probe-$(date +%s)"
+          curl -sS --max-time 40 -D /tmp/wrong.headers -o /tmp/wrong.html \
+            -H 'Content-Type: application/x-www-form-urlencoded' \
+            --data-urlencode "password=$wrong" \
+            "$root/moxie/login"
+          wrong_status="$(awk 'toupper($1) ~ /^HTTP\// {code=$2} END {print code}' /tmp/wrong.headers)"
+          test "$wrong_status" = '401'
+          grep -qi 'Wrong password' /tmp/wrong.html
+          ! grep -Eiq '^set-cookie: moxie_session=[^;]+' /tmp/wrong.headers
+
+          curl -sS --max-time 40 -D /tmp/logout.headers -o /tmp/logout.body "$root/moxie/logout"
+          logout_status="$(awk 'toupper($1) ~ /^HTTP\// {code=$2} END {print code}' /tmp/logout.headers)"
+          test "$logout_status" = '303'
+          grep -Eiq '^location: /moxie/login\?logged_out=1\r?$' /tmp/logout.headers
+          grep -Eiq '^set-cookie: moxie_session=' /tmp/logout.headers
+          grep -Eiq 'Path=/moxie' /tmp/logout.headers
+          grep -Eiq 'Max-Age=0|Expires=Thu, 01 Jan 1970' /tmp/logout.headers
+
+          curl -sS --max-time 40 -D /tmp/after.headers -o /tmp/after.body "$root/moxie/"
+          after_status="$(awk 'toupper($1) ~ /^HTTP\// {code=$2} END {print code}' /tmp/after.headers)"
+          test "$after_status" = '302'
+          grep -Eiq '^location: /moxie/login\r?$' /tmp/after.headers
+
+          curl -fsSL --max-time 40 "$root/moxie/login?logged_out=1" | grep -q 'Signed out. Enter the password to open Moxie again.'
+
+          for asset in \
+            moxie-avatar.jpg \
+            frog-on-log-writing-pad.png \
+            reminders-woodland-animal.png \
+            contacts-creekside-animal.png \
+            settings-woodland-cog.png \
+            ops-dashboard.png \
+            ops-schedule.png \
+            ops-events.png \
+            ops-messaging.png; do
+            curl -sS --max-time 40 -D "/tmp/$asset.headers" -o "/tmp/$asset" "$root/moxie/assets/$asset"
+            status="$(awk 'toupper($1) ~ /^HTTP\// {code=$2} END {print code}' "/tmp/$asset.headers")"
+            test "$status" = '200'
+            grep -Eiq '^content-type: image/' "/tmp/$asset.headers"
+            bytes="$(wc -c < "/tmp/$asset" | tr -d ' ')"
+            test "$bytes" -gt 500
+            printf '%s bytes=%s\n' "$asset" "$bytes"
+          done
+
+          echo MOXIE_AUTHENTICATION_REPAIR_LIVE_PASS
