@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - repair/foundation-repair-v1-20260716
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
