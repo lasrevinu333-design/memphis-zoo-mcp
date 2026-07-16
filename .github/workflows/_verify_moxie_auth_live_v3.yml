@@ -1,0 +1,52 @@
+name: Verify Moxie Authentication Repair Live V3
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Capture and verify live Moxie responses
+        shell: bash
+        run: |
+          set -euo pipefail
+          root='https://memphis-zoo-mcp.onrender.com'
+          expected='release-2026.07.16.manager-access-repair.1'
+          version="$(curl -fsSL --max-time 40 "$root/version?verify=v3")"
+          health="$(curl -fsSL --max-time 40 "$root/moxie/health?verify=v3")"
+          printf 'version=%s\nhealth=%s\n' "$version" "$health"
+          grep -q "$expected" <<<"$version"
+          python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["ok"] is True and d["configured"] is True and d["auth_required"] is True' <<<"$health"
+
+          root_status="$(curl -sS --max-time 40 -D /tmp/root.headers -o /tmp/root.body -w '%{http_code}' "$root/moxie/")"
+          printf 'root_status=%s\n' "$root_status"
+          cat /tmp/root.headers
+          test "$root_status" = '302' -o "$root_status" = '303'
+          grep -Eiq '^location: .*/moxie/login\r?$' /tmp/root.headers
+          grep -Eiq '^cache-control: .*no-store' /tmp/root.headers
+
+          loggedout_status="$(curl -sS --max-time 40 -D /tmp/loggedout.headers -o /tmp/loggedout.html -w '%{http_code}' "$root/moxie/login?logged_out=1")"
+          printf 'loggedout_status=%s\n' "$loggedout_status"
+          cat /tmp/loggedout.headers
+          test "$loggedout_status" = '200'
+          grep -q 'Signed out. Enter the password to open Moxie again.' /tmp/loggedout.html
+          grep -q 'id="moxie-secret-entry"' /tmp/loggedout.html
+          grep -q 'autocomplete="new-password"' /tmp/loggedout.html
+          grep -q 'readonly' /tmp/loggedout.html
+
+          for asset in moxie-avatar.jpg frog-on-log-writing-pad.png reminders-woodland-animal.png contacts-creekside-animal.png settings-woodland-cog.png ops-dashboard.png ops-schedule.png ops-events.png ops-messaging.png; do
+            status="$(curl -sS --max-time 40 -D "/tmp/$asset.headers" -o "/tmp/$asset" -w '%{http_code}' "$root/moxie/assets/$asset")"
+            bytes="$(wc -c < "/tmp/$asset" | tr -d ' ')"
+            printf '%s status=%s bytes=%s\n' "$asset" "$status" "$bytes"
+            test "$status" = '200'
+            grep -Eiq '^content-type: image/' "/tmp/$asset.headers"
+            test "$bytes" -gt 500
+          done
+
+          echo MOXIE_AUTHENTICATION_REPAIR_LIVE_PASS
