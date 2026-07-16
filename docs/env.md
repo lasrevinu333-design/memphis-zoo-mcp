@@ -53,8 +53,9 @@ Render production must have at least one valid Ops/Admin credential before prote
 
 | Name | Required | Purpose |
 |---|---:|---|
-| `MOXIE_WEB_PASSWORD` | **Yes** | Sign-in password for Moxie web UI. |
+| `MOXIE_WEB_PASSWORD` | **Yes** | Sign-in password for Moxie web UI. The field is never prefilled or embedded in page source. |
 | `MOXIE_WEB_COOKIE_SECRET` | **Yes** | HMAC secret for session cookies. Generate with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. |
+| `MOXIE_AUTH_REQUIRED` | No | Local/test override. Production and Render always require Moxie authentication; `false` is honored only outside production. |
 | `MOXIE_WEB_USER` | No | Username. Defaults to `annie`. |
 | `MOXIE_PREFIX` | No | URL prefix. Defaults to `/moxie`. |
 | `MOXIE_PUBLIC_URL` | No | Public base URL for Moxie (used in links). |
