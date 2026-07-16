@@ -30,13 +30,16 @@ jobs:
           auth="$(curl -fsSL --max-time 40 -H 'X-Device-Id: live-foundation-verifier' "$root/auth-api/session?access_level=full_access")"
           token="$(python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; assert d["operations_first"] is True; assert d["session"]["access_level"]=="full_access"; print(d["session"]["token"])' <<<"$auth")"
 
-          for endpoint in /scan-api/health /schedule-api/health /messaging-api/health /moxie/health /dashboard-api/health; do
+          for endpoint in /scan-api/health /schedule-api/health /messaging-api/health /dashboard-api/health; do
             body="$(curl -fsSL --max-time 40 "$root$endpoint")"
             printf '%s %s\n' "$endpoint" "$body"
             grep -q '"ok":true' <<<"$body"
             grep -q "$expected" <<<"$body"
           done
 
+          moxie_health="$(curl -fsSL --max-time 40 "$root/moxie/health")"
+          printf '/moxie/health %s\n' "$moxie_health"
+          python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["ok"] is True and d["configured"] is True and d["auth_required"] is False' <<<"$moxie_health"
           moxie="$(curl -fsSL --max-time 40 "$root/moxie/")"
           grep -qi 'Moxie' <<<"$moxie"
 
