@@ -7,6 +7,7 @@ process.env.MOXIE_WEB_PASSWORD = "memzoo";
 process.env.MOXIE_WEB_COOKIE_SECRET = "moxie-route-test-cookie-secret-32-bytes-minimum";
 process.env.MOXIE_GEMINI_API_KEY = "test-only-key";
 process.env.MOXIE_PREFIX = "/moxie";
+process.env.MOXIE_AUTH_REQUIRED = "false";
 
 const { createMoxieRouter } = await import("../src/routes/moxie.js");
 
@@ -46,12 +47,10 @@ try {
   const base = `http://127.0.0.1:${port}`;
 
   let response = await fetch(`${base}/moxie`, { redirect: "manual" });
-  assert.equal(response.status, 302, "GET /moxie must reach the mounted Moxie router");
-  assert.equal(response.headers.get("location"), "/moxie/login");
+  assert.equal(response.status, 200, "GET /moxie must render directly in operations-first mode");
 
   response = await fetch(`${base}/moxie/`, { redirect: "manual" });
-  assert.equal(response.status, 302, "GET /moxie/ must reach the mounted Moxie router");
-  assert.equal(response.headers.get("location"), "/moxie/login");
+  assert.equal(response.status, 200, "GET /moxie/ must render directly in operations-first mode");
 
   response = await fetch(`${base}/moxie/health`);
   assert.equal(response.status, 200);
@@ -59,12 +58,11 @@ try {
   assert.equal(health.ok, true);
   assert.equal(health.area, "moxie");
   assert.equal(health.configured, true);
+  assert.equal(health.auth_required, false);
 
-  response = await fetch(`${base}/moxie/login`);
-  assert.equal(response.status, 200);
-  const loginHtml = await response.text();
-  assert.match(loginHtml, /Moxie/i);
-  assert.match(loginHtml, /action="\/moxie\/login"/);
+  response = await fetch(`${base}/moxie/login`, { redirect: "manual" });
+  assert.equal(response.status, 302);
+  assert.equal(response.headers.get("location"), "/moxie/");
 
   response = await fetch(`${base}/moxie/assets/moxie-avatar.jpg`);
   assert.equal(response.status, 200, "Moxie static assets must be served below the route prefix");
@@ -74,22 +72,20 @@ try {
     method: "POST",
     redirect: "manual",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ password: "memzoo" }),
+    body: new URLSearchParams({ password: "anything" }),
   });
   assert.equal(response.status, 302);
   assert.equal(response.headers.get("location"), "/moxie/");
-  const cookie = String(response.headers.get("set-cookie") || "").split(";")[0];
-  assert.match(cookie, /^moxie_session=/);
-  assert.match(String(response.headers.get("set-cookie") || ""), /Path=\/moxie/i);
+  assert.equal(response.headers.get("set-cookie"), null);
 
-  response = await fetch(`${base}/moxie/`, { headers: { Cookie: cookie } });
+  response = await fetch(`${base}/moxie/`);
   assert.equal(response.status, 200);
   const page = await response.text();
   assert.match(page, /Moxie/);
   assert.match(page, /private work assistant/i);
 
-  response = await fetch(`${base}/moxie`, { headers: { Cookie: cookie } });
-  assert.equal(response.status, 200, "authenticated trailing-slash-free path must render Moxie");
+  response = await fetch(`${base}/moxie`);
+  assert.equal(response.status, 200, "trailing-slash-free path must render Moxie");
 
   const indexSource = readFileSync(new URL("../src/index.js", import.meta.url), "utf8");
   assert.match(indexSource, /createMoxieRouter/);

@@ -24,6 +24,7 @@ const env = {
   MOXIE_WEB_PASSWORD: "memzoo",
   MOXIE_WEB_COOKIE_SECRET: "test-moxie-cookie-secret",
   MCP_CONNECTOR_TOKEN: "connector-secret",
+  OPS_MANAGER_AUTH_REQUIRED: "true",
 };
 
 function mockRequest({ query = {}, body = {}, headers = {}, ip = "127.0.0.1" } = {}) {
@@ -110,7 +111,7 @@ assert.equal(normalizeOpsAccessLevel("read-only"), "read_only");
 assert.equal(normalizeOpsAccessLevel("READONLY"), "read_only");
 assert.equal(normalizeOpsAccessLevel("anything-else"), "read_only");
 assert.equal(normalizeOpsAccessLevel("full"), "full_access");
-assert.throws(() => createPublicOpsManagerSession(), /Passwordless Ops Manager sessions are disabled/);
+assert.throws(() => createPublicOpsManagerSession({ env }), /authentication is required/i);
 
 const adminSession = createAdminApiKeySession({
   deviceId: "attendance-pusher",
@@ -249,7 +250,8 @@ const migration = readFileSync(resolve("supabase/migrations/20260715180000_ops_m
 assert.match(backendIndex, /installSharedAuthRoutes\(app, \{ setCors: setAdminApiCors, supabase: supabaseAdmin \}\)/);
 assert.match(backendIndex, /Access-Control-Allow-Credentials/);
 assert.match(sharedAccess, /memphis_ops_trust/);
-assert.match(sharedAccess, /Passwordless Ops Manager sessions are disabled/);
+assert.match(sharedAccess, /Ops Manager authentication is required on this deployment/);
+assert.match(sharedAccess, /operations_first/);
 assert.match(sharedAccess, /trusted_device/);
 assert.doesNotMatch(mcpAuth, /authenticateOpsAccessRequest|open_ops_manager/);
 assert.match(migration, /ops_manager_trusted_devices/);
