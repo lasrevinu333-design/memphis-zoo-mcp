@@ -29,13 +29,32 @@ jobs:
           node-version: '22'
           cache: npm
       - name: Apply deterministic source repair
+        id: apply_source
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
           cat .foundation-transfer/apply-00.py .foundation-transfer/apply-01.py .foundation-transfer/apply-02.py > /tmp/apply-foundation-repair.py
-          python3 -m py_compile /tmp/apply-foundation-repair.py
-          python3 /tmp/apply-foundation-repair.py
-          git diff --check
+          {
+            echo '=== combined apply script sha ==='
+            sha256sum /tmp/apply-foundation-repair.py
+            echo '=== syntax check ==='
+            python3 -m py_compile /tmp/apply-foundation-repair.py
+            echo '=== application ==='
+            python3 /tmp/apply-foundation-repair.py
+            echo '=== diff check ==='
+            git diff --check
+          } > /tmp/foundation-apply.log 2>&1
+          rc=$?
+          cat /tmp/foundation-apply.log
+          exit "$rc"
+      - name: Upload deterministic apply diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: foundation-repair-apply-diagnostics
+          path: /tmp/foundation-apply.log
+          if-no-files-found: warn
+          retention-days: 2
       - name: Install and validate complete backend matrix
         shell: bash
         run: |
