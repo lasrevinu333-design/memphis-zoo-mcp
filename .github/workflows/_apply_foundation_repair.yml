@@ -52,7 +52,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: foundation-repair-apply-diagnostics
-          path: /tmp/foundation-apply.log
+          path: |
+            /tmp/foundation-apply.log
+            /tmp/apply-foundation-repair.py
+            src/schedule-api.js
+            src/routes/moxie.js
+            scripts/scheduler-alerts-gps-foundation-tests.mjs
+            supabase/migrations/20260716150000_foundation_repair_v1.sql
           if-no-files-found: warn
           retention-days: 2
       - name: Install and validate complete backend matrix
