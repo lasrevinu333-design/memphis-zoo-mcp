@@ -3,6 +3,8 @@ name: Manager Access Source Snapshot
 on:
   push:
     branches: [snapshot/manager-access-retirement-20260716]
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: read
