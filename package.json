@@ -29,7 +29,8 @@
     "test:manager-open": "node scripts/manager-open-session-foundation-tests.mjs",
     "test:moxie-route": "node scripts/moxie-route-tests.mjs",
     "test:schedule-source-type": "node scripts/schedule-source-type-contract-tests.mjs",
-    "test:device-credentials": "node scripts/device-credential-foundation-tests.mjs"
+    "test:device-credentials": "node scripts/device-credential-foundation-tests.mjs",
+    "test:operational-recovery": "node scripts/operational-recovery-tests.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.18.0",

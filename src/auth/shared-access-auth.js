@@ -28,6 +28,10 @@ function isProductionLike(env = process.env) {
   return String(env.NODE_ENV || "").trim().toLowerCase() === "production" || truthy(env.RENDER) || truthy(env.IS_RENDER);
 }
 
+export function opsManagerAuthRequired(env = process.env) {
+  return truthy(env.OPS_MANAGER_AUTH_REQUIRED);
+}
+
 function boundedNumber(value, fallback, minimum, maximum) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return fallback;
@@ -228,16 +232,29 @@ export function createAdminApiKeySession({ deviceId, now = new Date(), env = pro
   });
 }
 
-export function createPublicOpsManagerSession() {
-  const error = new Error("Passwordless Ops Manager sessions are disabled.");
-  error.status = 401;
-  throw error;
+export function createPublicOpsManagerSession({
+  deviceId = "manager-browser",
+  now = new Date(),
+  env = process.env,
+  accessLevel = "full_access",
+} = {}) {
+  if (opsManagerAuthRequired(env)) {
+    const error = new Error("Ops Manager authentication is required on this deployment.");
+    error.status = 401;
+    throw error;
+  }
+  return createOpsManagerSession({
+    deviceId,
+    now,
+    env,
+    authMode: "operations_first",
+    accessLevel,
+    maximumAccessLevel: "full_access",
+  });
 }
 
-export function createOpenOpsManagerSession() {
-  const error = new Error("Open Ops Manager mode is disabled.");
-  error.status = 401;
-  throw error;
+export function createOpenOpsManagerSession(options = {}) {
+  return createPublicOpsManagerSession(options);
 }
 
 export function getSharedAccessConfig(env = process.env) {
@@ -251,7 +268,7 @@ export function getSharedAccessConfig(env = process.env) {
     productionLike: isProductionLike(env),
     accessTtlMs: getAccessTtlMs(env),
     trustTtlMs: getTrustTtlMs(env),
-    passwordlessManagerAccess: false,
+    passwordlessManagerAccess: !opsManagerAuthRequired(env),
   };
 }
 
@@ -621,6 +638,19 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
         res.status(200).json({ ok: true, data: { session: explicit.session, operational_day: getCSTDate() } });
         return;
       }
+      if (!opsManagerAuthRequired(env)) {
+        const session = createPublicOpsManagerSession({
+          deviceId: requestDeviceId(req) || "manager-browser",
+          accessLevel: requestedOpsAccessLevel(req),
+          env,
+        });
+        res.status(200).json({
+          ok: true,
+          data: { session, operational_day: getCSTDate(), operations_first: true },
+        });
+        return;
+      }
+
       const trusted = await verifyTrustedDevice(req, { store, env });
       if (!trusted.ok) {
         clearTrustCookie(res, env);
@@ -692,8 +722,9 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
     res.status(200).json({
       ok: true,
       data: {
-        passwordless_manager_access: false,
-        trusted_device_enrollment: config.enrollmentConfigured && Boolean(store),
+        passwordless_manager_access: config.passwordlessManagerAccess,
+        operations_first: config.passwordlessManagerAccess,
+        trusted_device_enrollment: !config.passwordlessManagerAccess && config.enrollmentConfigured && Boolean(store),
         access_token_ttl_seconds: Math.floor(config.accessTtlMs / 1000),
         trusted_device_ttl_days: Math.floor(config.trustTtlMs / 86_400_000),
       },

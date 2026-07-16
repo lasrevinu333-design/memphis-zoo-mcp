@@ -36,6 +36,16 @@ const MOXIE_PREFIX = (String(process.env.MOXIE_PREFIX || "/moxie").trim() || "")
 const MOXIE_PUBLIC_URL = String(process.env.MOXIE_PUBLIC_URL || "").trim();
 const MOXIE_MAX_MESSAGE_CHARS = 20_000;
 const MOXIE_SESSION_COOKIE = "moxie_session";
+const MOXIE_AUTH_REQUIRED = /^(1|true|yes|on)$/i.test(String(process.env.MOXIE_AUTH_REQUIRED || "").trim());
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 
 // Gemini config — reuse the same env vars as Memphis AI
 const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
@@ -78,6 +88,7 @@ function unsign(token) {
 // ---------------------------------------------------------------------------
 
 function isAuthed(req) {
+  if (!MOXIE_AUTH_REQUIRED) return true;
   const token = req.cookies?.[MOXIE_SESSION_COOKIE];
   if (!token) return false;
   const value = unsign(token);
@@ -90,6 +101,7 @@ function isAuthed(req) {
 }
 
 function setSessionCookie(res, req) {
+  if (!MOXIE_AUTH_REQUIRED) return;
   const secure = req.secure || req.headers["x-forwarded-proto"]?.split(",")[0]?.trim() === "https";
   res.cookie(MOXIE_SESSION_COOKIE, sign(`${MOXIE_USER}:${Math.floor(Date.now() / 1000)}`), {
     httpOnly: true, secure, sameSite: "Lax",
@@ -99,6 +111,7 @@ function setSessionCookie(res, req) {
 }
 
 function clearSessionCookie(res) {
+  if (!MOXIE_AUTH_REQUIRED) return;
   res.clearCookie(MOXIE_SESSION_COOKIE, { path: MOXIE_PREFIX || "/" });
 }
 
@@ -361,10 +374,10 @@ import {
 
 export function createMoxieRouter({ supabase, staticDir }) {
   const router = Router();
-  if (!MOXIE_PASSWORD || !MOXIE_COOKIE_SECRET || !supabase) {
+  if ((MOXIE_AUTH_REQUIRED && (!MOXIE_PASSWORD || !MOXIE_COOKIE_SECRET)) || !supabase) {
     const missing = [];
-    if (!MOXIE_PASSWORD) missing.push("MOXIE_WEB_PASSWORD");
-    if (!MOXIE_COOKIE_SECRET) missing.push("MOXIE_WEB_COOKIE_SECRET");
+    if (MOXIE_AUTH_REQUIRED && !MOXIE_PASSWORD) missing.push("MOXIE_WEB_PASSWORD");
+    if (MOXIE_AUTH_REQUIRED && !MOXIE_COOKIE_SECRET) missing.push("MOXIE_WEB_COOKIE_SECRET");
     if (!supabase) missing.push("SUPABASE_CLIENT");
     router.get("/health", (_req, res) => res.status(503).json({ ok: false, area: "moxie", configured: false, missing }));
     router.use((_req, res) => res.status(503).send("Moxie is not configured on this deployment."));
@@ -394,16 +407,17 @@ export function createMoxieRouter({ supabase, staticDir }) {
 
   // --- Health ---
   router.get("/health", (req, res) => {
-    res.json({ ok: true, area: "moxie", configured: Boolean(GEMINI_API_KEY) });
+    res.json({ ok: true, area: "moxie", configured: Boolean(GEMINI_API_KEY), auth_required: MOXIE_AUTH_REQUIRED });
   });
 
   // --- Login ---
   router.get("/login", (req, res) => {
-    if (isAuthed(req)) return res.redirect(prefixed("/"));
+    if (!MOXIE_AUTH_REQUIRED || isAuthed(req)) return res.redirect(prefixed("/"));
     res.send(loginPage(false));
   });
 
   router.post("/login", (req, res) => {
+    if (!MOXIE_AUTH_REQUIRED) return res.redirect(prefixed("/"));
     const pw = String(req.body?.password || "");
     if (pw === MOXIE_PASSWORD) {
       setSessionCookie(res, req);
@@ -432,7 +446,7 @@ export function createMoxieRouter({ supabase, staticDir }) {
       const body = buildChatPage(chatState);
       res.send(pageShell("Moxie — Annie's Assistant", body));
     } catch (err) {
-      res.status(500).send(pageShell("Moxie — Error", `<div class="wrap"><div class="panel" style="padding:24px"><div class="brand" style="margin-bottom:12px">Something went wrong</div><div class="hint">${String(err.message || err)}</div><a class="button-link" href="${prefixed("/")}" style="margin-top:16px;display:inline-block">Try again</a></div></div>`));
+      res.status(500).send(pageShell("Moxie — Error", `<div class="wrap"><div class="panel" style="padding:24px"><div class="brand" style="margin-bottom:12px">Something went wrong</div><div class="hint">${escapeHtml(err.message || err)}</div><a class="button-link" href="${prefixed("/")}" style="margin-top:16px;display:inline-block">Try again</a></div></div>`));
     }
   });
 
@@ -496,7 +510,7 @@ export function createMoxieRouter({ supabase, staticDir }) {
       const body = buildLogPage(notes, reminders, suggested);
       res.send(pageShell("Annie's Log", body));
     } catch (err) {
-      res.status(500).send(pageShell("Annie's Log — Error", `<div class="wrap"><div class="panel" style="padding:24px"><div class="hint">${String(err.message || err)}</div></div></div>`));
+      res.status(500).send(pageShell("Annie's Log — Error", `<div class="wrap"><div class="panel" style="padding:24px"><div class="hint">${escapeHtml(err.message || err)}</div></div></div>`));
     }
   });
 
@@ -583,7 +597,7 @@ export function createMoxieRouter({ supabase, staticDir }) {
       const body = buildContactsPage(contacts, suggested);
       res.send(pageShell("Annie's Contacts", body));
     } catch (err) {
-      res.status(500).send(pageShell("Contacts — Error", `<div class="wrap"><div class="panel" style="padding:24px"><div class="hint">${String(err.message || err)}</div></div></div>`));
+      res.status(500).send(pageShell("Contacts — Error", `<div class="wrap"><div class="panel" style="padding:24px"><div class="hint">${escapeHtml(err.message || err)}</div></div></div>`));
     }
   });
 
@@ -672,6 +686,10 @@ document.getElementById("pwform").addEventListener("submit",async(e)=>{
   });
 
   router.post("/password", (req, res) => {
+    if (!MOXIE_AUTH_REQUIRED) {
+      res.json({ ok: true, auth_required: false, note: "Moxie sign-in is disabled in operations-first mode." });
+      return;
+    }
     const { old_password, new_password } = req.body || {};
     if (String(old_password || "") !== MOXIE_PASSWORD) {
       return res.status(403).json({ error: "Current password is incorrect" });
@@ -679,10 +697,7 @@ document.getElementById("pwform").addEventListener("submit",async(e)=>{
     if (!new_password || String(new_password).length < 8) {
       return res.status(400).json({ error: "New password must be at least 8 characters" });
     }
-    // Note: In production, this would update the env var or a DB setting.
-    // For now, it updates the in-memory password (resets on deploy).
-    // IT should set MOXIE_WEB_PASSWORD env var for persistence.
-    res.json({ ok: true, note: "Password accepted for this session. Set MOXIE_WEB_PASSWORD env var for persistence." });
+    res.status(409).json({ error: "Persistent password rotation is not enabled on this release." });
   });
 
   // --- Reminders page ---
@@ -693,7 +708,7 @@ document.getElementById("pwform").addEventListener("submit",async(e)=>{
       const body = buildRemindersPage(reminders, suggested);
       res.send(pageShell("Annie's Reminders", body));
     } catch (err) {
-      res.status(500).send(pageShell("Reminders — Error", `<div class="wrap"><div class="panel" style="padding:24px"><div class="hint">${String(err.message || err)}</div></div></div>`));
+      res.status(500).send(pageShell("Reminders — Error", `<div class="wrap"><div class="panel" style="padding:24px"><div class="hint">${escapeHtml(err.message || err)}</div></div></div>`));
     }
   });
 

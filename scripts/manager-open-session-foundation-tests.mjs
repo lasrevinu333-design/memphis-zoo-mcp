@@ -9,12 +9,13 @@ const env = {
   NODE_ENV: "production",
   OPS_MANAGER_PASSWORD: "manager-password",
   OPS_MANAGER_SESSION_SECRET: "manager-foundation-secret",
+  OPS_MANAGER_AUTH_REQUIRED: "true",
 };
 
 assert.equal(normalizeOpsAccessLevel("read-only"), "read_only");
 assert.equal(normalizeOpsAccessLevel("anything-else"), "read_only");
 assert.equal(normalizeOpsAccessLevel("full"), "full_access");
-assert.throws(() => createPublicOpsManagerSession(), /Passwordless Ops Manager sessions are disabled/);
+assert.throws(() => createPublicOpsManagerSession({ env }), /authentication is required/i);
 
 const rows = new Map();
 const store = {
