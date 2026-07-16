@@ -11,6 +11,11 @@ const scheduleSource = read('src/schedule-api.js');
 const messagingSource = read('src/messaging-api.js');
 const eventsSource = read('src/events-api.js');
 const migration = read('sql/2026-07-14_scheduler_notifications_gps_foundation.sql');
+const foundationRepair = [
+  'supabase/migrations/20260716193547_foundation_repair_schedule_audit.sql',
+  'supabase/migrations/20260716193606_foundation_repair_schedule_window.sql',
+  'supabase/migrations/20260716193627_foundation_repair_schedule_cron.sql',
+].map(read).join('\n');
 const packageJson = JSON.parse(read('package.json'));
 
 assert.equal(packageJson.scripts?.['test:foundation'], 'node scripts/scheduler-alerts-gps-foundation-tests.mjs');
@@ -51,12 +56,15 @@ assert.match(scheduleSource, /resolveCanonicalDevice/);
 assert.match(scheduleSource, /requested_device_id/);
 assert.match(scheduleSource, /canonical_device_id/);
 assert.match(scheduleSource, /router\.get\("\/my-day-summary"/);
-assert.match(scheduleSource, /ensureScheduleReadyForRead/);
+assert.match(scheduleSource, /assertScheduleReadyForRead/);
+const readinessHelper = scheduleSource.match(/async function assertScheduleReadyForRead[\s\S]*?\n  }\n  async function loadFullDayScheduleItems/)?.[0] || "";
+assert.doesNotMatch(readinessHelper, /runRpc|runWriteSql|sch_ensure_daily_schedule/);
 assert.match(scheduleSource, /loadFullDayScheduleItems/);
 assert.match(scheduleSource, /combineFullDaySchedule/);
 assert.match(scheduleSource, /Not scheduled to work today\./);
 assert.match(scheduleSource, /No assignment is active at this moment\. Your full-day schedule is shown below\./);
-assert.match(scheduleSource, /sch_ensure_daily_schedule/);
+assert.match(foundationRepair, /sch_ensure_schedule_window/);
+assert.match(foundationRepair, /scheduled_rolling_window_readiness/);
 assert.match(scheduleSource, /nonNegativeInt\(process\.env\.RESTROOM_REBALANCE_SWEEP_MS, 0\)/);
 
 assert.match(indexSource, /const SCAN_CONTRACT_VERSION = "scan\.v2"/);
@@ -122,7 +130,7 @@ console.log(JSON.stringify({
     'per_device_scan_rate_limits',
     'atomic_scan_workflow',
     'scheduled_event_worker',
-    'schedule_readiness_self_heal',
+    'schedule_readiness_read_only_guard',
     'one_event_reminder_reservation',
     'durable_notification_acknowledgement',
     'authoritative_offsite_gps_contract',

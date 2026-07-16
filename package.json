@@ -30,7 +30,8 @@
     "test:moxie-route": "node scripts/moxie-route-tests.mjs",
     "test:schedule-source-type": "node scripts/schedule-source-type-contract-tests.mjs",
     "test:device-credentials": "node scripts/device-credential-foundation-tests.mjs",
-    "test:operational-recovery": "node scripts/operational-recovery-tests.mjs"
+    "test:operational-recovery": "node scripts/operational-recovery-tests.mjs",
+    "test:foundation-repair": "node scripts/foundation-repair-tests.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.18.0",

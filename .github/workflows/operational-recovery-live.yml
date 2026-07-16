@@ -1,4 +1,4 @@
-name: Operational Recovery Live Acceptance
+name: Foundation Repair Live Acceptance
 
 on:
   push:
@@ -8,40 +8,33 @@ permissions:
   contents: read
 
 concurrency:
-  group: operational-recovery-live-main
+  group: foundation-repair-live-main
   cancel-in-progress: true
 
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
-      - name: Poll deployed operational release
+      - name: Verify deployed foundation repair
         shell: bash
         run: |
           set -euo pipefail
           root='https://memphis-zoo-mcp.onrender.com'
-          expected='release-2026.07.16.operational-recovery.1'
-          for attempt in $(seq 1 40); do
+          expected='release-2026.07.16.foundation-repair.1'
+          version=''
+          for attempt in $(seq 1 50); do
             version="$(curl -fsSL --max-time 40 "$root/version?attempt=$attempt" || true)"
             printf 'attempt=%s version=%s\n' "$attempt" "$version"
-            if grep -q "$expected" <<<"$version"; then
-              break
-            fi
+            if grep -q "$expected" <<<"$version"; then break; fi
             sleep 20
           done
           grep -q "$expected" <<<"$version"
 
-          auth="$(curl -fsSL --max-time 40 -H 'X-Device-Id: live-acceptance-manager' "$root/auth-api/session?access_level=full_access")"
-          token="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["session"]["token"])' <<<"$auth")"
-          grep -q '"operations_first":true' <<<"$auth"
+          auth="$(curl -fsSL --max-time 40 -H 'X-Device-Id: live-foundation-manager' "$root/auth-api/session?access_level=full_access")"
+          token="$(python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; assert d["operations_first"] is True; assert d["session"]["access_level"]=="full_access"; print(d["session"]["token"])' <<<"$auth")"
 
-          for endpoint in \
-            /scan-api/health \
-            /schedule-api/health \
-            /messaging-api/health \
-            /moxie/health \
-            /dashboard-api/health; do
+          for endpoint in /scan-api/health /schedule-api/health /messaging-api/health /moxie/health /dashboard-api/health; do
             body="$(curl -fsSL --max-time 40 "$root$endpoint")"
             printf '%s %s\n' "$endpoint" "$body"
             grep -q '"ok":true' <<<"$body"
@@ -53,8 +46,20 @@ jobs:
           summary="$(curl -fsSL --max-time 40 -H "Authorization: Bearer $token" -H 'Content-Type: application/json' -d '{}' "$root/admin-api/bundle")"
           grep -q '"ok":true' <<<"$summary"
 
+          window="$(curl -fsSL --max-time 40 "$root/schedule-api/generation-window?days=14")"
+          python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; assert d["days"]==14 and d["ready_days"]==14 and d["missing_days"]==0; assert d["auto_generation"]["trigger_auto_ignored"] is False' <<<"$window"
+
+          future_date="$(python3 -c 'from datetime import date,timedelta; print((date.today()+timedelta(days=13)).isoformat())')"
+          audit="$(curl -fsSL --max-time 40 "$root/schedule-api/audit/day?service_date=$future_date")"
+          python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; assert d["ok"] is True and d["readiness_status"]=="ready" and d["readiness_ok"] is True' <<<"$audit"
+
+          device_status="$(curl -fsSL --max-time 40 -H 'X-Device-Id: KIOSK_02' "$root/device-auth/status?device_id=KIOSK_02")"
+          python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; assert d["policy_mode"]=="observe" and d["enrollment_required"] is False' <<<"$device_status"
+
           for device in KIOSK_02 KIOSK_03 KIOSK_04 KIOSK_05 KIOSK_06 KIOSK_07 KIOSK_08 KIOSK_09 KIOSK_10; do
             schedule="$(curl -fsSL --max-time 40 -H "X-Device-Id: $device" "$root/schedule-api/my-day-summary?device_id=$device")"
             printf '%s schedule_bytes=%s\n' "$device" "${#schedule}"
             grep -q '"ok":true' <<<"$schedule"
           done
+
+          echo FOUNDATION_REPAIR_LIVE_PASS
