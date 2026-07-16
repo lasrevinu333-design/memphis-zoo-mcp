@@ -1,0 +1,34 @@
+name: Manager Access Source Snapshot
+
+on:
+  push:
+    branches: [snapshot/manager-access-retirement-20260716]
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+      - name: Archive exact backend main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD > commit.txt
+          git archive --format=tar HEAD | gzip -9 > backend-main.tar.gz
+          sha256sum backend-main.tar.gz > backend-main.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: manager-access-backend-main
+          path: |
+            backend-main.tar.gz
+            backend-main.sha256
+            commit.txt
+          if-no-files-found: error
+          retention-days: 1
