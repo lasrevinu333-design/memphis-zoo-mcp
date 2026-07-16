@@ -1,0 +1,67 @@
+name: Verify Operational Recovery Live
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-operational-recovery-live
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Verify deployed operational release
+        shell: bash
+        run: |
+          set -euo pipefail
+          root='https://memphis-zoo-mcp.onrender.com'
+          expected='release-2026.07.16.operational-recovery.1'
+          version=''
+          for attempt in $(seq 1 45); do
+            version="$(curl -fsSL --max-time 40 "$root/version?operational_recovery_attempt=$attempt" || true)"
+            printf 'attempt=%s version=%s\n' "$attempt" "$version"
+            if grep -q "$expected" <<<"$version"; then
+              break
+            fi
+            sleep 20
+          done
+          grep -q "$expected" <<<"$version"
+
+          auth="$(curl -fsSL --max-time 40 -H 'X-Device-Id: live-acceptance-manager' "$root/auth-api/session?access_level=full_access")"
+          printf 'manager_auth=%s\n' "$auth"
+          token="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["session"]["token"])' <<<"$auth")"
+          grep -q '"operations_first":true' <<<"$auth"
+          grep -q '"full_access"' <<<"$auth"
+
+          for endpoint in \
+            /scan-api/health \
+            /schedule-api/health \
+            /messaging-api/health \
+            /moxie/health \
+            /dashboard-api/health; do
+            body="$(curl -fsSL --max-time 40 "$root$endpoint")"
+            printf '%s %s\n' "$endpoint" "$body"
+            grep -q '"ok":true' <<<"$body"
+          done
+
+          moxie="$(curl -fsSL --max-time 40 "$root/moxie/")"
+          printf 'moxie_bytes=%s\n' "${#moxie}"
+          grep -qi 'Moxie' <<<"$moxie"
+
+          summary="$(curl -fsSL --max-time 40 -H "Authorization: Bearer $token" -H 'Content-Type: application/json' -d '{}' "$root/admin-api/bundle")"
+          printf 'manager_bundle_bytes=%s\n' "${#summary}"
+          grep -q '"ok":true' <<<"$summary"
+
+          for device in KIOSK_02 KIOSK_03 KIOSK_04 KIOSK_05 KIOSK_06 KIOSK_07 KIOSK_08 KIOSK_09 KIOSK_10; do
+            schedule="$(curl -fsSL --max-time 40 -H "X-Device-Id: $device" "$root/schedule-api/my-day-summary?device_id=$device")"
+            printf '%s schedule_bytes=%s\n' "$device" "${#schedule}"
+            grep -q '"ok":true' <<<"$schedule"
+          done
+
+          echo OPERATIONAL_RECOVERY_LIVE_PASS
