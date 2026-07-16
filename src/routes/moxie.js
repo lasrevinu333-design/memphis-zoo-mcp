@@ -36,7 +36,16 @@ const MOXIE_PREFIX = (String(process.env.MOXIE_PREFIX || "/moxie").trim() || "")
 const MOXIE_PUBLIC_URL = String(process.env.MOXIE_PUBLIC_URL || "").trim();
 const MOXIE_MAX_MESSAGE_CHARS = 20_000;
 const MOXIE_SESSION_COOKIE = "moxie_session";
-const MOXIE_AUTH_REQUIRED = /^(1|true|yes|on)$/i.test(String(process.env.MOXIE_AUTH_REQUIRED || "").trim());
+function isProductionLike() {
+  return String(process.env.NODE_ENV || "").trim().toLowerCase() === "production"
+    || /^(1|true|yes|on)$/i.test(String(process.env.RENDER || process.env.IS_RENDER || "").trim());
+}
+
+const MOXIE_AUTH_REQUIRED = isProductionLike()
+  || !/^(0|false|no|off)$/i.test(String(process.env.MOXIE_AUTH_REQUIRED ?? "true").trim());
+const MOXIE_OPS_HUB_URL = String(
+  process.env.MOXIE_OPS_HUB_URL || "https://lasrevinu333-design.github.io/Engine/ops-manager-hub.html"
+).trim();
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -110,9 +119,14 @@ function setSessionCookie(res, req) {
   });
 }
 
-function clearSessionCookie(res) {
-  if (!MOXIE_AUTH_REQUIRED) return;
-  res.clearCookie(MOXIE_SESSION_COOKIE, { path: MOXIE_PREFIX || "/" });
+function clearSessionCookie(res, req) {
+  const secure = req.secure || req.headers["x-forwarded-proto"]?.split(",")[0]?.trim() === "https";
+  res.clearCookie(MOXIE_SESSION_COOKIE, {
+    httpOnly: true,
+    secure,
+    sameSite: "Lax",
+    path: MOXIE_PREFIX || "/",
+  });
 }
 
 export function prefixed(p) {
@@ -389,6 +403,15 @@ export function createMoxieRouter({ supabase, staticDir }) {
     router.use("/assets", express.static(staticDir, { maxAge: "1d" }));
   }
 
+  // Moxie contains private state. Protected pages must never survive logout in
+  // browser cache or back-forward cache.
+  router.use((_req, res, next) => {
+    res.setHeader("Cache-Control", "no-store, private, max-age=0");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    next();
+  });
+
   // Parse cookies
   router.use((req, res, next) => {
     req.cookies = {};
@@ -412,23 +435,23 @@ export function createMoxieRouter({ supabase, staticDir }) {
 
   // --- Login ---
   router.get("/login", (req, res) => {
-    if (!MOXIE_AUTH_REQUIRED || isAuthed(req)) return res.redirect(prefixed("/"));
-    res.send(loginPage(false));
+    if (isAuthed(req)) return res.redirect(303, prefixed("/"));
+    const notice = String(req.query?.logged_out || "") === "1" ? "Signed out. Enter the password to open Moxie again." : "";
+    res.status(200).send(loginPage(false, notice));
   });
 
   router.post("/login", (req, res) => {
-    if (!MOXIE_AUTH_REQUIRED) return res.redirect(prefixed("/"));
     const pw = String(req.body?.password || "");
     if (pw === MOXIE_PASSWORD) {
       setSessionCookie(res, req);
-      return res.redirect(prefixed("/"));
+      return res.redirect(303, prefixed("/"));
     }
-    res.send(loginPage(true));
+    res.status(401).send(loginPage(true));
   });
 
   router.get("/logout", (req, res) => {
-    clearSessionCookie(res);
-    res.redirect(prefixed("/login"));
+    clearSessionCookie(res, req);
+    res.redirect(303, `${prefixed("/login")}?logged_out=1`);
   });
 
   // --- Auth gate ---
@@ -728,7 +751,7 @@ function buildChatPage(chatState) {
 <div class="wrap chat-wrap">
   <header>
     <div class="brand-with-avatar">${moxieAvatarImg()}<div class="moxie-tagline"><div class="brand">Moxie</div><div class="hint">Annie's private work assistant with a local log, reminders, and contacts</div></div></div>
-    <div class="header-actions"><span class="pill">private beta</span><a class="hint" href="${prefixed("/logout")}">logout</a></div>
+    <div class="header-actions"><a class="button-link" href="${escapeHtml(MOXIE_OPS_HUB_URL)}">Back to Ops Hub</a><span class="pill">private beta</span><a class="hint" href="${prefixed("/logout")}">logout</a></div>
   </header>
   <div class="chat-main">
     <aside class="saved-chats-rail" aria-label="Saved chats">
