@@ -1,4 +1,4 @@
-      requested < currentServiceDate
+  requested < currentServiceDate
         ? `No published schedule exists for historical date ${requested}.`
         : `Schedule for ${requested} is not ready. Use the explicit schedule generation control before opening employee schedules.`
     );
