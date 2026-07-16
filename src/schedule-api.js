@@ -592,7 +592,7 @@ export function createScheduleRouter({
   const AUTO_GENERATE_COOLDOWN_MS = 6 * 60 * 60 * 1000;
   const RESTROOM_REBALANCE_SWEEP_MS = nonNegativeInt(process.env.RESTROOM_REBALANCE_SWEEP_MS, 0);
 
-  async function ensureScheduleReadyForRead(serviceDate, reason = "schedule_api_read") {
+  async function assertScheduleReadyForRead(serviceDate) {
     const requested = String(serviceDate || "").trim();
     if (!requested) throw new Error("service_date is required.");
     const readinessRows = await runReadOnlySql(`
@@ -602,19 +602,26 @@ export function createScheduleRouter({
         (select count(*)::int from public.daily_schedule_assignments dsa where dsa.service_date = '${esc(requested)}'::date) as assignment_count
     `);
     const readiness = Array.isArray(readinessRows) && readinessRows.length ? readinessRows[0] : {};
+    const hasRosterCount = Object.prototype.hasOwnProperty.call(readiness, "roster_count");
+    const hasAssignmentCount = Object.prototype.hasOwnProperty.call(readiness, "assignment_count");
+    if (!hasRosterCount || !hasAssignmentCount) {
+      return { ready: true, compatibility_read: true };
+    }
     const currentServiceDate = String(readiness.current_service_date || requested);
     const rosterCount = Number(readiness.roster_count || 0);
     const assignmentCount = Number(readiness.assignment_count || 0);
     if (rosterCount > 0 && assignmentCount > 0) {
-      return { generated: false, roster_count: rosterCount, assignment_count: assignmentCount };
+      return { ready: true, roster_count: rosterCount, assignment_count: assignmentCount };
     }
-    if (requested < currentServiceDate) {
-      return { generated: false, historical: true, roster_count: rosterCount, assignment_count: assignmentCount };
-    }
-    return runRpc("sch_ensure_daily_schedule", {
-      p_service_date: requested,
-      p_reason: String(reason || "schedule_api_read").slice(0, 200),
-    });
+    const error = new Error(
+      requested < currentServiceDate
+        ? `No published schedule exists for historical date ${requested}.`
+        : `Schedule for ${requested} is not ready. Use the explicit schedule generation control before opening employee schedules.`
+    );
+    error.status = requested < currentServiceDate ? 404 : 503;
+    error.code = requested < currentServiceDate ? "schedule_not_found" : "schedule_not_ready";
+    error.readiness = { service_date: requested, roster_count: rosterCount, assignment_count: assignmentCount };
+    throw error;
   }
   async function loadFullDayScheduleItems(serviceDate, employeeId) {
     const rows = await runReadOnlySql(`
@@ -717,7 +724,12 @@ export function createScheduleRouter({
   let restroomRebalanceState = { lastStartedAt: 0, running: false, lastCompletedAt: 0, lastServiceDate: null, lastResult: null };
 
   function fail(res, error, fallback = "Schedule request failed", status = 400) {
-    res.status(status).json({ ok: false, error: error?.message || fallback });
+    res.status(Number(error?.status) || status).json({
+      ok: false,
+      code: error?.code || "schedule_request_failed",
+      error: error?.message || fallback,
+      readiness: error?.readiness || undefined,
+    });
   }
 
   function esc(value) {
@@ -3505,7 +3517,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
     try {
       const serviceDate = await getServiceDate();
       if (!serviceDate) throw new Error("Could not resolve service date.");
-      await ensureScheduleReadyForRead(serviceDate, "schedule_today");
+      await assertScheduleReadyForRead(serviceDate);
       const rows = await runReadOnlySql(`select * from public.sch_get_daily_schedule_with_purpose('${esc(serviceDate)}'::date)`);
       const rosterRows = await runReadOnlySql(`
         select r.employee_id, e.display_name as employee_name, e.employee_code,
@@ -3531,7 +3543,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
   router.get("/day", async (req, res) => {
     try {
       const serviceDate = requireDate(req.query.service_date || req.query.date);
-      await ensureScheduleReadyForRead(serviceDate, "schedule_day");
+      await assertScheduleReadyForRead(serviceDate);
       const rows = await runReadOnlySql(`select * from public.sch_get_daily_schedule_with_purpose('${esc(serviceDate)}'::date)`);
       const rosterRows = await runReadOnlySql(`
         select r.employee_id, e.display_name as employee_name, e.employee_code,
@@ -3559,7 +3571,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
       const deviceId = String(req.memphisDevice?.canonical_device_id || req.memphisDevice?.device_id || req.query.device_id || req.query.device || "").trim();
       if (!deviceId) throw new Error("device_id is required.");
       const serviceDate = requireDate(req.query.service_date || req.query.date || (await getServiceDate()));
-      await ensureScheduleReadyForRead(serviceDate, "schedule_my_day");
+      await assertScheduleReadyForRead(serviceDate);
       const assignment = await getAssignedEmployeeForDevice(deviceId);
       if (!assignment || !assignment.device_active) {
         res.status(404).json({ ok: false, error: "Active device assignment not found." });
@@ -3607,7 +3619,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
       }
 
       const serviceDate = requireDate(req.query.service_date || req.query.date || (await getServiceDate()));
-      await ensureScheduleReadyForRead(serviceDate, "schedule_my_day_summary");
+      await assertScheduleReadyForRead(serviceDate);
       const atSql = optionalTimestampLiteral(req.query.as_of || req.query.at);
       let resolvedEmployeeId = employeeId;
       let assignment = null;
@@ -3671,7 +3683,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
   router.get("/my-schedule", requirePersonalScheduleAccess, async (req, res) => {
     try {
       const serviceDate = requireDate(req.query.service_date || req.query.date || (await getServiceDate()));
-      await ensureScheduleReadyForRead(serviceDate, "schedule_my_schedule");
+      await assertScheduleReadyForRead(serviceDate);
       const atSql = optionalTimestampLiteral(req.query.as_of || req.query.at);
       const { employeeId } = await resolveEmployeeIdFromRequest(req);
       const [pageRows, fullDayItems] = await Promise.all([
@@ -4350,11 +4362,19 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
     try {
       const serviceDate = requireDate(req.query.service_date || req.query.date || (await getServiceDate()));
       const days = Math.max(1, Math.min(14, Number.parseInt(String(req.query.days || 7), 10) || 7));
-      const triggerAuto = String(req.query.trigger_auto || "").trim() === "1";
-      if (triggerAuto) await maybeAutoGenerateWindow(serviceDate);
+      const triggerAutoRequested = String(req.query.trigger_auto || "").trim() === "1";
       const window = await getScheduleRangeStatus(serviceDate, days);
       const ready_days = window.filter((row) => row.ready).length;
-      const autoGeneration = { running: autoGenerateState.running, last_started_at: autoGenerateState.lastStartedAt || null, last_completed_at: autoGenerateState.lastCompletedAt || null, last_window_start: autoGenerateState.lastWindowStart || null, generated_days: Array.isArray(autoGenerateState.lastResult) ? autoGenerateState.lastResult.filter((row) => row.generated).length : 0 };
+      const autoGeneration = {
+        running: autoGenerateState.running,
+        last_started_at: autoGenerateState.lastStartedAt || null,
+        last_completed_at: autoGenerateState.lastCompletedAt || null,
+        last_window_start: autoGenerateState.lastWindowStart || null,
+        generated_days: Array.isArray(autoGenerateState.lastResult) ? autoGenerateState.lastResult.filter((row) => row.generated).length : 0,
+        trigger_auto_requested: triggerAutoRequested,
+        trigger_auto_ignored: triggerAutoRequested,
+        generation_endpoint: "/schedule-api/generate-range",
+      };
       res.status(200).json({ ok: true, data: { service_date: serviceDate, days, ready_days, missing_days: Math.max(0, days - ready_days), window, auto_generation: autoGeneration, ai_summary: buildWeekSummaryText({ serviceDate, days, windowRows: window, autoGeneration }) }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Schedule window status failed");

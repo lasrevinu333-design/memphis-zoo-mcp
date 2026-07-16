@@ -677,8 +677,8 @@ document.getElementById("pwform").addEventListener("submit",async(e)=>{
   try{
     const r=await fetch(${JSON.stringify(prefixed("/password"))},{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({old_password:oldpw,new_password:newpw})});
     const d=await r.json();
-    if(r.ok){msg.textContent="Password changed. Use it next time you sign in.";msg.style.color="#7dff9e";document.getElementById("pwform").reset();}
-    else{msg.textContent=d.error||"Could not change password.";msg.style.color="#ff8fa3";}
+    if(r.ok&&d?.changed===true){msg.textContent="Password changed. Use it next time you sign in.";msg.style.color="#7dff9e";document.getElementById("pwform").reset();}
+    else{msg.textContent=d.error||d.note||"No password was changed.";msg.style.color="#ff8fa3";}
   }catch(err){msg.textContent="Error: "+err.message;msg.style.color="#ff8fa3";}
 });
 </script>`;
@@ -687,7 +687,7 @@ document.getElementById("pwform").addEventListener("submit",async(e)=>{
 
   router.post("/password", (req, res) => {
     if (!MOXIE_AUTH_REQUIRED) {
-      res.json({ ok: true, auth_required: false, note: "Moxie sign-in is disabled in operations-first mode." });
+      res.status(409).json({ ok: false, changed: false, auth_required: false, error: "Moxie sign-in is disabled on this release, so there is no active password to rotate." });
       return;
     }
     const { old_password, new_password } = req.body || {};
