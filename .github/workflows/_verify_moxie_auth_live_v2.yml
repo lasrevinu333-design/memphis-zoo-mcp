@@ -1,0 +1,49 @@
+name: Verify Moxie Authentication Repair Live V2
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Verify release and protected entry
+        shell: bash
+        run: |
+          set -euo pipefail
+          root='https://memphis-zoo-mcp.onrender.com'
+          expected='release-2026.07.16.manager-access-repair.1'
+          for attempt in $(seq 1 60); do
+            version="$(curl -fsSL --max-time 40 "$root/version?verify=v2-$attempt" || true)"
+            health="$(curl -fsSL --max-time 40 "$root/moxie/health?verify=v2-$attempt" || true)"
+            if grep -q "$expected" <<<"$version" && grep -q '"auth_required":true' <<<"$health"; then break; fi
+            sleep 10
+          done
+          grep -q "$expected" <<<"$version"
+          python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["ok"] is True and d["configured"] is True and d["auth_required"] is True' <<<"$health"
+          curl -sS --max-time 40 -D /tmp/root.headers -o /tmp/root.body "$root/moxie/"
+          test "$(awk 'toupper($1) ~ /^HTTP\// {c=$2} END {print c}' /tmp/root.headers)" = '302'
+          grep -Eiq '^location: /moxie/login\r?$' /tmp/root.headers
+          grep -Eiq '^cache-control: .*no-store' /tmp/root.headers
+
+      - name: Verify signed-out page and intended artwork
+        shell: bash
+        run: |
+          set -euo pipefail
+          root='https://memphis-zoo-mcp.onrender.com'
+          curl -fsSL --max-time 40 -o /tmp/loggedout.html "$root/moxie/login?logged_out=1"
+          grep -q 'Signed out. Enter the password to open Moxie again.' /tmp/loggedout.html
+          for asset in moxie-avatar.jpg frog-on-log-writing-pad.png reminders-woodland-animal.png contacts-creekside-animal.png settings-woodland-cog.png ops-dashboard.png ops-schedule.png ops-events.png ops-messaging.png; do
+            curl -sS --max-time 40 -D "/tmp/$asset.headers" -o "/tmp/$asset" "$root/moxie/assets/$asset"
+            test "$(awk 'toupper($1) ~ /^HTTP\// {c=$2} END {print c}' "/tmp/$asset.headers")" = '200'
+            grep -Eiq '^content-type: image/' "/tmp/$asset.headers"
+            bytes="$(wc -c < "/tmp/$asset" | tr -d ' ')"
+            test "$bytes" -gt 500
+            printf '%s bytes=%s\n' "$asset" "$bytes"
+          done
+          echo MOXIE_AUTHENTICATION_REPAIR_LIVE_PASS
