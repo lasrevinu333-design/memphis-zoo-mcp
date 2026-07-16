@@ -18,6 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: main
           fetch-depth: 1
       - name: Build immutable tracked-source archive
         shell: bash
@@ -29,7 +30,7 @@ jobs:
           sha256sum custodial-backend-source.tar.gz > custodial-backend-source.sha256
       - uses: actions/upload-artifact@v4
         with:
-          name: custodial-backend-current-source
+          name: custodial-backend-current-main-source
           path: |
             custodial-backend-source.tar.gz
             custodial-backend-source.sha256
