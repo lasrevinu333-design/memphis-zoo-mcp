@@ -11,7 +11,11 @@ const scheduleSource = read('src/schedule-api.js');
 const messagingSource = read('src/messaging-api.js');
 const eventsSource = read('src/events-api.js');
 const migration = read('sql/2026-07-14_scheduler_notifications_gps_foundation.sql');
-const foundationRepair = read('supabase/migrations/20260716150000_foundation_repair_v1.sql');
+const foundationRepair = [
+  'supabase/migrations/20260716193547_foundation_repair_schedule_audit.sql',
+  'supabase/migrations/20260716193606_foundation_repair_schedule_window.sql',
+  'supabase/migrations/20260716193627_foundation_repair_schedule_cron.sql',
+].map(read).join('\n');
 const packageJson = JSON.parse(read('package.json'));
 
 assert.equal(packageJson.scripts?.['test:foundation'], 'node scripts/scheduler-alerts-gps-foundation-tests.mjs');
