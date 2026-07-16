@@ -43,4 +43,5 @@ jobs:
           npm run --silent test:moxie-route
           npm run --silent test:schedule-source-type
           npm run --silent test:foundation
+          npm run --silent test:foundation-repair
           npm run --silent test:scheduler-overhaul
