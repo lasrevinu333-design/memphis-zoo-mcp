@@ -10,6 +10,7 @@ const migrationFiles = [
   '20260716193627_foundation_repair_schedule_cron.sql',
   '20260716193644_foundation_repair_migration_log_compaction.sql',
   '20260716193725_foundation_repair_migration_runner_governance.sql',
+  '20260716194539_foundation_repair_legacy_ledger_rollup.sql',
 ];
 const migration = migrationFiles
   .map((name) => readFileSync(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8'))
@@ -41,5 +42,7 @@ assert.match(migration, /'readiness_status'/);
 assert.match(migration, /truncate table public\.migration_log/);
 assert.match(migration, /employee_planned_time_off[\s\S]*active = false/);
 assert.match(migration, /Compact migration evidence; full SQL belongs in canonical source control/);
+assert.match(migration, /legacy_application_write_rollups/);
+assert.match(migration, /truncate table public\.migration_log_summary/);
 
 console.log('FOUNDATION_REPAIR_TESTS_PASS');
