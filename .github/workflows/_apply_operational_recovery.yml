@@ -1,9 +1,6 @@
 name: Apply Operational Recovery Source
 
 on:
-  push:
-    branches:
-      - recovery/operations-first-20260716
   pull_request:
     branches:
       - main
@@ -92,13 +89,12 @@ jobs:
             node "scripts/$test_file"
           done
 
-      - name: Commit verified recovery source
+      - name: Commit verified application source
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf .recovery-transfer
-          rm -f .github/workflows/_apply_operational_recovery.yml
-          git add -A
+          git add package.json src scripts supabase/migrations
+          git diff --cached --check
           git config user.name 'custodial-recovery-bot'
           git config user.email 'custodial-recovery-bot@users.noreply.github.com'
           git commit -m 'fix: restore operations-first custodial workflows'
