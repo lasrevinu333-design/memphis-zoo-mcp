@@ -7,7 +7,7 @@ const DEFAULT_ENROLLMENT_TTL_MINUTES = 30;
 const ENROLLMENT_WINDOW_MS = 15 * 60 * 1000;
 const ENROLLMENT_ATTEMPT_LIMIT = 8;
 const enrollmentAttempts = new Map();
-const VALID_POLICY_MODES = new Set(["observe", "enroll", "enforce"]);
+const VALID_POLICY_MODES = new Set(["observe", "enroll", "enforce-ready", "enforce"]);
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function truthy(value) {
@@ -710,14 +710,14 @@ export function installDeviceCredentialRoutes(app, {
     try {
       const requestedMode = String(req.body?.mode || "").trim().toLowerCase();
       if (!VALID_POLICY_MODES.has(requestedMode)) {
-        res.status(400).json({ ok: false, error: "mode must be observe, enroll, or enforce." });
+        res.status(400).json({ ok: false, error: "mode must be observe, enroll, enforce-ready, or enforce." });
         return;
       }
       const [coverage, previousPolicy] = await Promise.all([
         activeDeviceCoverage({ supabase }),
         store.getPolicy(),
       ]);
-      if (requestedMode === "enforce" && !coverage.ready_to_enforce) {
+      if (["enforce-ready", "enforce"].includes(requestedMode) && !coverage.ready_to_enforce) {
         res.status(409).json({ ok: false, error: "All nine employee kiosks must be enrolled before enforcement can begin.", missing_devices: coverage.missing });
         return;
       }

@@ -18,6 +18,7 @@ import {
   createScheduleRouter,
 } from "./routes/index.js";
 import { APP_VERSION, RELEASE_ID } from "./app-version.js";
+import { buildReleaseManifest } from "./release-manifest.js";
 import { authenticateOpsAccessRequest, installSharedAuthRoutes, makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
 import { makeMcpConnectorMiddleware } from "./auth/mcp-connector-auth.js";
 import { installDeviceCredentialRoutes, makeDeviceCredentialMiddleware } from "./auth/device-credential-auth.js";
@@ -43,6 +44,7 @@ const SCAN_RPC_ALLOWLIST = new Set([
   "tool_list_active_employees",
   "tool_get_location_scan_state",
   "tool_start_session",
+  "tool_start_session_v2",
   "tool_finish_session",
   "tool_complete_session",
   "tool_ping_device",
@@ -66,6 +68,7 @@ const ATTENDANCE_TIMEOUT_MS = toSafeInt(process.env.ND_MEMZOO_ATTENDANCE_TIMEOUT
 const ATTENDANCE_CACHE_MS = toSafeInt(process.env.ND_MEMZOO_ATTENDANCE_CACHE_MS, 60000);
 const ATTENDANCE_CF_CLEARANCE = String(process.env.ND_MEMZOO_CF_CLEARANCE || "").trim();
 const FEEDBACK_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+const FEEDBACK_IMAGE_BUCKET = String(process.env.FEEDBACK_IMAGE_BUCKET || "system-feedback-private").trim();
 const FEEDBACK_REMINDER_SWEEP_MS = toSafeNonNegativeInt(process.env.FEEDBACK_REMINDER_SWEEP_MS, 60000);
 const FEEDBACK_REMINDER_MAX_COUNT = toSafeInt(process.env.FEEDBACK_REMINDER_MAX_COUNT, 3);
 let attendanceCache = { data: null, fetched_at_ms: 0 };
@@ -200,6 +203,50 @@ function canonicalizeScanArguments(fn, args, device) {
   return canonicalArgs;
 }
 
+function prepareScanRpcCall(fn, args) {
+  const normalizedFn = String(fn || "").trim();
+  const nextArgs = { ...(args && typeof args === "object" ? args : {}) };
+  if (normalizedFn === "tool_start_session") {
+    const clientSessionId = String(nextArgs.p_client_session_id || nextArgs.client_session_id || "").trim();
+    if (!clientSessionId) {
+      const error = new Error("p_client_session_id is required for scan start idempotency.");
+      error.status = 422;
+      throw error;
+    }
+    return {
+      fn: "tool_start_session_v2",
+      args: {
+        p_location_code: nextArgs.p_location_code,
+        p_device_id: nextArgs.p_device_id,
+        p_client_session_id: clientSessionId,
+        p_client_started_at: nextArgs.p_client_started_at || nextArgs.started_at || null,
+        p_correlation_id: nextArgs.p_correlation_id || `scan-start:${clientSessionId}`,
+      },
+    };
+  }
+  if (normalizedFn === "tool_start_session_v2") {
+    const clientSessionId = String(nextArgs.p_client_session_id || nextArgs.client_session_id || "").trim();
+    if (!clientSessionId) {
+      const error = new Error("p_client_session_id is required for scan start idempotency.");
+      error.status = 422;
+      throw error;
+    }
+    nextArgs.p_client_session_id = clientSessionId;
+    if (!nextArgs.p_correlation_id) nextArgs.p_correlation_id = `scan-start:${clientSessionId}`;
+  }
+  if (normalizedFn === "tool_commit_cleaning_workflow") {
+    const clientSessionId = String(nextArgs.p_client_session_id || "").trim();
+    const clientCompletionId = String(nextArgs.p_client_completion_id || "").trim();
+    if (!clientSessionId || !clientCompletionId) {
+      const error = new Error("p_client_session_id and p_client_completion_id are required for idempotent completion.");
+      error.status = 422;
+      throw error;
+    }
+    if (!nextArgs.p_correlation_id) nextArgs.p_correlation_id = `scan-commit:${clientSessionId}:${clientCompletionId}`;
+  }
+  return { fn: normalizedFn, args: nextArgs };
+}
+
 function scanRpcRateLimit(req, res, next) {
   const fn = String(req.body?.fn || "").trim();
   const ip = clientIp(req);
@@ -233,20 +280,22 @@ function isHealthPath(req) {
 }
 
 function buildHealthPayload(area, extra = {}) {
+  const contracts = {
+    scan: SCAN_CONTRACT_VERSION,
+    dashboard: DASHBOARD_CONTRACT_VERSION,
+    messaging: MESSAGING_CONTRACT_VERSION,
+    schedule: SCHEDULE_CONTRACT_VERSION,
+    events: EVENTS_CONTRACT_VERSION,
+    feedback: FEEDBACK_CONTRACT_VERSION,
+  };
   return {
     ok: true,
     app: "memphis-zoo-mcp",
     area,
     version: APP_VERSION,
     release_id: RELEASE_ID,
-    contracts: {
-      scan: SCAN_CONTRACT_VERSION,
-      dashboard: DASHBOARD_CONTRACT_VERSION,
-      messaging: MESSAGING_CONTRACT_VERSION,
-      schedule: SCHEDULE_CONTRACT_VERSION,
-      events: EVENTS_CONTRACT_VERSION,
-      feedback: FEEDBACK_CONTRACT_VERSION,
-    },
+    contracts,
+    release_manifest: area === "version" ? buildReleaseManifest({ appVersion: APP_VERSION, releaseId: RELEASE_ID, contracts }) : undefined,
     ...extra,
   };
 }
@@ -702,28 +751,8 @@ async function runAdminBundleViaSqlRead(limits = {}) {
 }
 
 async function ensureGuestReportsSchema() {
-  await runWriteSql(
-    "guest_reports_schema",
-    `create table if not exists public.guest_cleanliness_reports (
-       id uuid primary key default gen_random_uuid(),
-       location_code text not null,
-       location_name text null,
-       issue_type text not null,
-       severity text not null,
-       notes text null,
-       status text not null default 'open',
-       source text not null default 'guest_qr',
-       submitted_at timestamptz not null default now(),
-       resolved_at timestamptz null,
-       notification_status text not null default 'pending',
-       notified_employee_user_id uuid null,
-       notified_ops_count integer not null default 0,
-       metadata_json jsonb not null default '{}'::jsonb
-     );
-     create index if not exists idx_guest_cleanliness_reports_submitted_at on public.guest_cleanliness_reports (submitted_at desc);
-     create index if not exists idx_guest_cleanliness_reports_location_code on public.guest_cleanliness_reports (location_code);
-     create index if not exists idx_guest_cleanliness_reports_status on public.guest_cleanliness_reports (status);`
-  );
+  const rows = await runReadOnlySql("select to_regclass('public.guest_cleanliness_reports') is not null as present");
+  if (!rows?.[0]?.present) throw new Error("Required table public.guest_cleanliness_reports is missing. Apply source-controlled migrations.");
 }
 
 async function resolveGuestReportLocation(locationCode) {
@@ -880,43 +909,21 @@ async function listGuestCleanlinessReports({ status, locationCode, limit = 100 }
 
 async function ensureSystemFeedbackSchema() {
   if (feedbackSchemaEnsured) return;
-  // M11: Use a promise-based guard to prevent race condition when multiple concurrent
-  // requests call ensureSystemFeedbackSchema simultaneously.
   if (feedbackSchemaEnsurePromise) return feedbackSchemaEnsurePromise;
   feedbackSchemaEnsurePromise = (async () => {
-    await runWriteSql(
-    "system_feedback_schema",
-    `create table if not exists public.system_feedback_items (
-       id uuid primary key default gen_random_uuid(),
-       category text not null default 'other',
-       priority text not null default 'normal',
-       message text not null,
-       submitted_by text null,
-       hub_context text not null default 'unknown',
-       device_id text null,
-       page_url text null,
-       status text not null default 'new',
-       summary text null,
-       notification_status text not null default 'pending',
-       notified_ops_count integer not null default 0,
-       last_feedback_reminder_at timestamptz null,
-       feedback_reminder_count integer not null default 0,
-       acknowledged_at timestamptz null,
-       acknowledged_by text null,
-       metadata_json jsonb not null default '{}'::jsonb,
-       created_at timestamptz not null default now(),
-       updated_at timestamptz not null default now()
-     );
-     alter table public.system_feedback_items add column if not exists last_feedback_reminder_at timestamptz null;
-     alter table public.system_feedback_items add column if not exists feedback_reminder_count integer not null default 0;
-     alter table public.system_feedback_items add column if not exists acknowledged_at timestamptz null;
-     alter table public.system_feedback_items add column if not exists acknowledged_by text null;
-     create index if not exists idx_system_feedback_items_created_at on public.system_feedback_items (created_at desc);
-     create index if not exists idx_system_feedback_items_status on public.system_feedback_items (status);
-     create index if not exists idx_system_feedback_items_priority on public.system_feedback_items (priority);
-     create index if not exists idx_system_feedback_items_hub_context on public.system_feedback_items (hub_context);
-     create index if not exists idx_system_feedback_items_reminder_due on public.system_feedback_items (status, last_feedback_reminder_at);`
-    );
+    const rows = await runReadOnlySql(`
+      select
+        to_regclass('public.system_feedback_items') is not null as table_present,
+        exists (
+          select 1 from information_schema.columns
+          where table_schema = 'public'
+            and table_name = 'system_feedback_items'
+            and column_name = 'metadata_json'
+        ) as metadata_column_present
+    `);
+    if (!rows?.[0]?.table_present || !rows?.[0]?.metadata_column_present) {
+      throw new Error("Required table public.system_feedback_items is missing or incomplete. Apply source-controlled migrations.");
+    }
     feedbackSchemaEnsured = true;
   })();
   try {
@@ -984,8 +991,38 @@ function validateSystemFeedbackImageAttachment(input) {
     name,
     type: mimeType,
     size,
-    data_url: `data:${mimeType};base64,${base64}`,
+    base64,
     uploaded_at: new Date().toISOString(),
+  };
+}
+
+async function storeSystemFeedbackImageAttachment(feedbackId, imageAttachment) {
+  if (!imageAttachment) return null;
+  if (!supabaseAdmin) throw new Error("Feedback image storage is not configured.");
+  const extension = {
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/webp": "webp",
+    "image/gif": "gif",
+  }[imageAttachment.type] || "bin";
+  const objectPath = `feedback/${feedbackId}/${randomUUID()}.${extension}`;
+  const body = Buffer.from(String(imageAttachment.base64 || ""), "base64");
+  if (!body.length || body.length > FEEDBACK_IMAGE_MAX_BYTES) throw new Error("image_attachment is empty or too large.");
+  const { error } = await supabaseAdmin.storage
+    .from(FEEDBACK_IMAGE_BUCKET)
+    .upload(objectPath, body, {
+      contentType: imageAttachment.type,
+      upsert: false,
+      cacheControl: "private, max-age=3600",
+    });
+  if (error) throw new Error(error.message || "Feedback image upload failed.");
+  return {
+    name: imageAttachment.name,
+    type: imageAttachment.type,
+    size: body.length,
+    storage_bucket: FEEDBACK_IMAGE_BUCKET,
+    storage_path: objectPath,
+    uploaded_at: imageAttachment.uploaded_at,
   };
 }
 
@@ -1004,7 +1041,11 @@ async function createSystemFeedbackItem(payload = {}) {
   const hubContext = String(payload.hub_context || payload.hub || "unknown").trim().toLowerCase() || "unknown";
   const deviceId = String(payload.device_id || payload.device || "").trim() || null;
   const pageUrl = String(payload.page_url || payload.url || "").trim().slice(0, 1000) || null;
-  const imageAttachment = validateSystemFeedbackImageAttachment(payload.image_attachment || payload.image || null);
+  const feedbackId = randomUUID();
+  const imageAttachment = await storeSystemFeedbackImageAttachment(
+    feedbackId,
+    validateSystemFeedbackImageAttachment(payload.image_attachment || payload.image || null),
+  );
   const metadata = {
     submitted_via: "system_feedback",
     user_agent: String(payload.user_agent || "").slice(0, 500) || null,
@@ -1014,7 +1055,6 @@ async function createSystemFeedbackItem(payload = {}) {
   if (!message) throw new Error("message is required.");
 
   const summary = summarizeSystemFeedback({ category, priority, message, hubContext, submittedBy });
-  const feedbackId = randomUUID();
   await runWriteSql(
     "system_feedback_insert",
     `insert into public.system_feedback_items (
@@ -1877,6 +1917,7 @@ app.use("/feedback-api", (req, res, next) => { setFeedbackApiCors(res, req); if 
 app.use("/dashboard-api/events", createEventsPublicRouter({ runReadOnlySql, runWriteSql, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController }));
 app.use("/admin-api/events", createEventsAdminRouter({ runReadOnlySql, runWriteSql, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController, requireAdminApiAuth: requireOpsManagerAuth, requireAdminApiWrite: requireOpsManagerWrite }));
 app.get("/version", (_req, res) => { setPublicDashboardCors(res, _req); res.status(200).json(buildHealthPayload("version")); });
+app.get("/release-manifest", (_req, res) => { setPublicDashboardCors(res, _req); res.status(200).json(buildReleaseManifest({ appVersion: APP_VERSION, releaseId: RELEASE_ID, contracts: buildHealthPayload("contracts").contracts })); });
 app.get("/admin-api/health", requireOpsManagerAuth, (_req, res) => { res.status(200).json(buildHealthPayload("admin", { authenticated: true })); });
 app.get("/dashboard-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("dashboard")); });
 app.get("/schedule-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("schedule", { contract_version: SCHEDULE_CONTRACT_VERSION })); });
@@ -1887,6 +1928,18 @@ app.get("/feedback-api/image/:feedbackId", requireFeedbackSignedLinkOrOps("image
     await ensureSystemFeedbackSchema();
     const item = await getSystemFeedbackItemById(String(req.params.feedbackId || ""));
     const image = getSystemFeedbackMetadata(item).image_attachment;
+    if (image?.storage_bucket && image?.storage_path) {
+      if (!supabaseAdmin) throw new Error("Feedback image storage is not configured.");
+      const { data, error } = await supabaseAdmin.storage
+        .from(String(image.storage_bucket))
+        .download(String(image.storage_path));
+      if (error) throw new Error(error.message || "Feedback image download failed.");
+      const arrayBuffer = await data.arrayBuffer();
+      res.setHeader("Content-Type", String(image.type || data.type || "application/octet-stream"));
+      res.setHeader("Cache-Control", "private, max-age=3600");
+      res.status(200).send(Buffer.from(arrayBuffer));
+      return;
+    }
     const dataUrl = String(image?.data_url || "");
     const match = dataUrl.match(/^data:(image\/(?:png|jpeg|jpg|webp|gif));base64,([a-z0-9+/=\s]+)$/i);
     if (!match) {
@@ -2151,7 +2204,8 @@ app.post("/scan-api/rpc", requireDeviceOrOpsAccess, requireScanRpcAuthorization,
       return;
     }
     const args = canonicalizeScanArguments(fn, req.body?.args, req.memphisDevice);
-    const data = await runRpc(fn, args);
+    const prepared = prepareScanRpcCall(fn, args);
+    const data = await runRpc(prepared.fn, prepared.args);
     res.status(200).json({
       ok: true,
       data,
@@ -2166,13 +2220,16 @@ app.post("/scan-api/rpc", requireDeviceOrOpsAccess, requireScanRpcAuthorization,
   } catch (error) {
     console.error("scan rpc failed:", error);
     const message = String(error?.message || "Scan RPC failed");
-    const status = /not found|invalid|required|cannot|must|too (?:old|far|large)|exceeds/i.test(message)
-      ? 400
+    const status = error?.status
+      || (/not found/i.test(message)
+        ? 404
+        : /invalid|required|cannot|must|too (?:old|far|large)|exceeds/i.test(message)
+          ? 422
       : /already has|already bound|manager recovery|required review|transition/i.test(message)
         ? 409
-        : /unauthor|not assigned|another device/i.test(message)
-          ? 403
-          : 500;
+      : /unauthor|not assigned|another device/i.test(message)
+        ? 403
+        : 500);
     res.status(status).json({ ok: false, error: message });
   }
 });

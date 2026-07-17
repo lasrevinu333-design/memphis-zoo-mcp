@@ -29,7 +29,9 @@ function isProductionLike(env = process.env) {
 }
 
 export function opsManagerAuthRequired(env = process.env) {
-  return truthy(env.OPS_MANAGER_AUTH_REQUIRED);
+  const configured = String(env.OPS_MANAGER_AUTH_REQUIRED || "").trim();
+  if (configured) return truthy(configured);
+  return isProductionLike(env);
 }
 
 function boundedNumber(value, fallback, minimum, maximum) {

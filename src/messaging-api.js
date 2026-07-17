@@ -713,14 +713,21 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     `;
   }
 
-  function buildThreadMessagesSql({ threadId = "", viewerUserId = "", managerOverview = false, before = null, limit = 50 }) {
+  function buildThreadMessagesSql({ threadId = "", viewerUserId = "", managerOverview = false, before = null, beforeId = null, limit = 100 }) {
     const viewer = esc(viewerUserId);
     const thread = esc(threadId);
-    const beforeSql = before ? `and coalesce(m.sent_at, m.created_at) < '${esc(String(before).trim())}'::timestamptz` : "";
+    const normalizedBefore = before ? esc(String(before).trim()) : "";
+    const normalizedBeforeId = beforeId ? esc(String(beforeId).trim()) : "";
+    const beforeSql = normalizedBefore
+      ? normalizedBeforeId
+        ? `and (coalesce(m.sent_at, m.created_at), m.id) < ('${normalizedBefore}'::timestamptz, '${normalizedBeforeId}'::uuid)`
+        : `and coalesce(m.sent_at, m.created_at) < '${normalizedBefore}'::timestamptz`
+      : "";
     const visibilityClause = managerOverview
       ? "true"
       : "exists (select 1 from public.msg_thread_participants tp where tp.thread_id = t.id and tp.user_id = '" + viewer + "'::uuid and tp.left_at is null)";
     return `
+      select * from (
       select * from (
       select
         m.id,
@@ -740,8 +747,10 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         and ${visibilityClause}
         and m.is_deleted = false
         ${beforeSql}
-      order by coalesce(m.sent_at, m.created_at) asc, m.id asc
-      limit ${Math.min(Math.max(Number(limit) || 50, 1), 200)}
+      order by coalesce(m.sent_at, m.created_at) desc, m.id desc
+      limit ${Math.min(Math.max(Number(limit) || 100, 1), 200)}
+      ) newest_page
+      order by coalesce(sent_at, created_at) asc, id asc
       ) thread_messages
     `;
   }
@@ -914,6 +923,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         device_id: normalizedDeviceId,
         ...(normalizedClientMessageId ? { client_message_id: normalizedClientMessageId } : {}),
       },
+      p_client_message_id: normalizedClientMessageId || null,
     });
 
     const memphisRows = await runReadOnlySql("select public.msg_get_memphis_user_id() as memphis_user_id");
@@ -939,6 +949,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         reply_to_message_id: userMessage?.id || null,
         ...(reply?.meta && typeof reply.meta === "object" ? reply.meta : {}),
       },
+      p_client_message_id: replyKey,
     });
 
     return { thread, user_message: userMessage, bot_message: botMessage };
@@ -1262,10 +1273,11 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const threadId = String(req.params.threadId || "").trim();
       const userId = String(req.query.user_id || "").trim();
       const deviceId = String(req.query.device_id || "").trim();
-      const limit = Number.parseInt(String(req.query.limit || 50), 10) || 50;
+      const limit = Number.parseInt(String(req.query.limit || 100), 10) || 100;
       const before = req.query.before ? String(req.query.before).trim() : "";
+      const beforeId = req.query.before_id ? String(req.query.before_id).trim() : "";
       const viewer = await resolveViewerContext({ userId, deviceId });
-      const rows = await runReadOnlySql(buildThreadMessagesSql({ threadId, viewerUserId: viewer.effectiveUserId, managerOverview: viewer.isManagerOverview, before, limit }));
+      const rows = await runReadOnlySql(buildThreadMessagesSql({ threadId, viewerUserId: viewer.effectiveUserId, managerOverview: viewer.isManagerOverview, before, beforeId, limit }));
       res.status(200).json({ ok: true, data: rows || [], meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Thread messages failed");
@@ -1318,8 +1330,8 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const clientMessageId = String(req.body?.client_message_id || req.body?.clientMessageId || metadataJson.client_message_id || "").trim();
       const deviceId = String(req.body?.device_id || req.body?.deviceId || "").trim();
       const viewer = await resolveViewerContext({ userId: senderUserId, deviceId });
-      if (viewer.effectiveUserId !== senderUserId && !viewer.isManagerOverview) {
-        res.status(403).json({ ok: false, error: "Sender user ID does not match the device's assigned user." });
+      if (senderUserId && viewer.effectiveUserId !== senderUserId) {
+        res.status(403).json({ ok: false, error: "Sender user ID must match the authenticated viewer." });
         return;
       }
       const isParticipant = await isThreadParticipant(threadId, viewer.effectiveUserId);
@@ -1343,13 +1355,14 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       }
       const data = await runRpc("msg_send_message", {
         p_thread_id: threadId,
-        p_sender_user_id: senderUserId,
+        p_sender_user_id: viewer.effectiveUserId,
         p_body: body,
         p_message_type: messageType,
         p_metadata_json: {
           ...metadataJson,
           ...(clientMessageId ? { client_message_id: clientMessageId } : {}),
         },
+        p_client_message_id: clientMessageId || null,
       });
       res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
@@ -1387,11 +1400,11 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const userId = String(req.body?.user_id || "").trim();
       const deviceId = String(req.body?.device_id || req.body?.deviceId || "").trim();
       const viewer = await resolveViewerContext({ userId, deviceId });
-      if (viewer.effectiveUserId !== userId && !viewer.isManagerOverview) {
-        res.status(403).json({ ok: false, error: "User ID does not match the device's assigned user." });
+      if (userId && viewer.effectiveUserId !== userId) {
+        res.status(403).json({ ok: false, error: "Read acknowledgement user ID must match the authenticated viewer." });
         return;
       }
-      const data = await runRpc("msg_mark_thread_read", { p_thread_id: threadId, p_user_id: userId });
+      const data = await runRpc("msg_mark_thread_read", { p_thread_id: threadId, p_user_id: viewer.effectiveUserId });
       res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Mark thread read failed");
