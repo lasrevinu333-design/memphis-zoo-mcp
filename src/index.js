@@ -19,7 +19,7 @@ import {
 } from "./routes/index.js";
 import { APP_VERSION, RELEASE_ID } from "./app-version.js";
 import { buildReleaseManifest } from "./release-manifest.js";
-import { authenticateOpsAccessRequest, installSharedAuthRoutes, makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
+import { authenticateOpsAccessRequest, createSupabaseTrustedDeviceStore, installSharedAuthRoutes, makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
 import { makeMcpConnectorMiddleware } from "./auth/mcp-connector-auth.js";
 import { installDeviceCredentialRoutes, makeDeviceCredentialMiddleware } from "./auth/device-credential-auth.js";
 import { runReadOnlySql as runSupabaseReadOnlySql } from "./supabase/read.js";
@@ -38,6 +38,7 @@ const supabaseAdmin =
         auth: { persistSession: false, autoRefreshToken: false },
       })
     : null;
+const opsTrustedDeviceStore = createSupabaseTrustedDeviceStore(supabaseAdmin);
 
 const SCAN_RPC_ALLOWLIST = new Set([
   "tool_get_system_settings",
@@ -76,8 +77,8 @@ let feedbackReminderSweepInFlight = false;
 let feedbackSchemaEnsured = false;
 let feedbackSchemaEnsurePromise = null;
 
-const requireOpsManagerAuth = makeOpsAccessMiddleware();
-const requireOpsManagerWrite = makeOpsAccessMiddleware({ requireWrite: true });
+const requireOpsManagerAuth = makeOpsAccessMiddleware({ trustedDeviceStore: opsTrustedDeviceStore });
+const requireOpsManagerWrite = makeOpsAccessMiddleware({ requireWrite: true, trustedDeviceStore: opsTrustedDeviceStore });
 // MCP_CONNECTOR_TOKEN is accepted by makeMcpConnectorMiddleware for service-to-service MCP clients.
 const requireMcpAuth = makeMcpConnectorMiddleware();
 const requireEmployeeDeviceCredential = makeDeviceCredentialMiddleware({
@@ -88,9 +89,10 @@ const requireEmployeeDeviceCredential = makeDeviceCredentialMiddleware({
 function requireDeviceOrOpsAccess(req, res, next) {
   const ops = authenticateOpsAccessRequest(req);
   if (ops.ok) {
-    req.memphisAuth = ops.session;
-    req.memphisDevice = null;
-    next();
+    requireOpsManagerAuth(req, res, () => {
+      req.memphisDevice = null;
+      next();
+    });
     return;
   }
   if (ops.presented) {
@@ -1896,7 +1898,7 @@ function createMcpServer() {
   return server;
 }
 
-installSharedAuthRoutes(app, { setCors: setAdminApiCors, supabase: supabaseAdmin });
+installSharedAuthRoutes(app, { setCors: setAdminApiCors, supabase: supabaseAdmin, trustedDeviceStore: opsTrustedDeviceStore });
 installDeviceCredentialRoutes(app, {
   setCors: setAdminApiCors,
   supabase: supabaseAdmin,
