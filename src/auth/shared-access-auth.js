@@ -1,4 +1,4 @@
-import { createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { loginGeminiAdmin, verifyGeminiAdminToken } from "./gemini-admin-auth.js";
 
 const MEMPHIS_TIME_ZONE = "America/Chicago";
@@ -14,6 +14,10 @@ const ENROLLMENT_ATTEMPT_LIMIT = 5;
 const PAIRING_TOKEN_MIN_TTL_SECONDS = 60;
 const PAIRING_TOKEN_DEFAULT_TTL_SECONDS = 10 * 60;
 const PAIRING_TOKEN_MAX_TTL_SECONDS = 15 * 60;
+const MANAGER_INVITE_DEFAULT_TTL_SECONDS = 24 * 60 * 60;
+const MANAGER_INVITE_MIN_TTL_SECONDS = 5 * 60;
+const MANAGER_INVITE_MAX_TTL_SECONDS = 7 * 24 * 60 * 60;
+const MANAGER_ROLES = new Set(["OPS_MANAGER", "DIRECTOR", "SECURITY_ADMIN"]);
 const enrollmentAttempts = new Map();
 
 function safeEqual(a, b) {
@@ -55,6 +59,55 @@ function getCSTDate(date = new Date()) {
 export function normalizeOpsAccessLevel(value) {
   const normalized = String(value || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
   return ["full", "write", "admin", "full_access"].includes(normalized) ? "full_access" : "read_only";
+}
+
+function normalizeManagerRole(value) {
+  const normalized = String(value || "").trim().toUpperCase().replace(/[\s-]+/g, "_");
+  return MANAGER_ROLES.has(normalized) ? normalized : "OPS_MANAGER";
+}
+
+function normalizeManagerRoles(value) {
+  const raw = Array.isArray(value) ? value : [value];
+  const roles = new Set();
+  for (const item of raw) {
+    const role = normalizeManagerRole(item);
+    if (MANAGER_ROLES.has(role)) roles.add(role);
+  }
+  if (!roles.size) roles.add("OPS_MANAGER");
+  if (roles.has("SECURITY_ADMIN")) {
+    roles.add("DIRECTOR");
+    roles.add("OPS_MANAGER");
+  }
+  if (roles.has("DIRECTOR")) roles.add("OPS_MANAGER");
+  return Array.from(roles);
+}
+
+function hasManagerRole(managerOrSession, role) {
+  const wanted = normalizeManagerRole(role);
+  const roles = normalizeManagerRoles(managerOrSession?.roles || managerOrSession?.manager_roles || []);
+  return roles.includes(wanted);
+}
+
+function requireManagerAdminRole(managerOrSession) {
+  return hasManagerRole(managerOrSession, "DIRECTOR") || hasManagerRole(managerOrSession, "SECURITY_ADMIN");
+}
+
+function managerPublicView(row, devices = []) {
+  if (!row) return null;
+  const roles = normalizeManagerRoles(row.roles);
+  return {
+    manager_id: String(row.manager_id || ""),
+    display_name: String(row.display_name || ""),
+    contact_label: row.contact_label || null,
+    roles,
+    role: roles.includes("SECURITY_ADMIN") ? "SECURITY_ADMIN" : (roles.includes("DIRECTOR") ? "DIRECTOR" : "OPS_MANAGER"),
+    active: row.active !== false && !row.revoked_at,
+    revoked_at: row.revoked_at || null,
+    revoked_reason: row.revoked_reason || null,
+    created_at: row.created_at || null,
+    last_access_at: row.last_access_at || null,
+    devices,
+  };
 }
 
 function requestedOpsAccessLevel(req) {
@@ -154,6 +207,15 @@ function getPairingTtlSeconds(value) {
   ));
 }
 
+function getManagerInviteTtlSeconds(value) {
+  return Math.floor(boundedNumber(
+    value,
+    MANAGER_INVITE_DEFAULT_TTL_SECONDS,
+    MANAGER_INVITE_MIN_TTL_SECONDS,
+    MANAGER_INVITE_MAX_TTL_SECONDS,
+  ));
+}
+
 function getManagerHubUrl(env = process.env) {
   return String(
     env.OPS_MANAGER_HUB_URL
@@ -172,6 +234,10 @@ function getTrustTtlMs(env = process.env) {
 
 function hmacHex(secret, value) {
   return createHmac("sha256", secret).update(String(value || "")).digest("hex");
+}
+
+function sha256Hex(value) {
+  return createHash("sha256").update(String(value || "")).digest("hex");
 }
 
 function signOpsPayload(payload, { env = process.env } = {}) {
@@ -208,8 +274,12 @@ function parseOpsToken(token, { env = process.env, now = new Date() } = {}) {
     return { ok: false, status: 401, error: "Ops Manager access token expired." };
   }
   const accessLevel = normalizeOpsAccessLevel(payload.access_level);
+  const roles = normalizeManagerRoles(payload.roles || payload.manager_roles || []);
   const session = {
     role: "ops_manager",
+    manager_id: String(payload.manager_id || ""),
+    manager_display_name: String(payload.manager_display_name || ""),
+    roles,
     token: raw,
     credential_id: String(payload.credential_id || ""),
     device_id: normalizeDeviceId(payload.device_id),
@@ -226,6 +296,7 @@ function parseOpsToken(token, { env = process.env, now = new Date() } = {}) {
 export function createOpsManagerSession({
   credentialId = "",
   deviceId,
+  manager = null,
   now = new Date(),
   env = process.env,
   authMode = "trusted_device",
@@ -233,10 +304,14 @@ export function createOpsManagerSession({
   maximumAccessLevel = "full_access",
 } = {}) {
   const normalizedAccessLevel = clampAccessLevel(accessLevel, maximumAccessLevel);
+  const roles = normalizeManagerRoles(manager?.roles || []);
   const expiresAt = now.getTime() + getAccessTtlMs(env);
   const payload = {
     v: OPS_ACCESS_TOKEN_VERSION,
     role: "ops_manager",
+    manager_id: String(manager?.manager_id || ""),
+    manager_display_name: String(manager?.display_name || ""),
+    roles,
     credential_id: String(credentialId || ""),
     device_id: normalizeDeviceId(deviceId || "manager-device"),
     operational_day: getCSTDate(now),
@@ -248,6 +323,9 @@ export function createOpsManagerSession({
   };
   return {
     role: payload.role,
+    manager_id: payload.manager_id,
+    manager_display_name: payload.manager_display_name,
+    roles: payload.roles,
     credential_id: payload.credential_id,
     device_id: payload.device_id,
     operational_day: payload.operational_day,
@@ -434,6 +512,34 @@ function requestUserAgent(req) {
   return String(req?.header?.("user-agent") || req?.headers?.["user-agent"] || "").trim().slice(0, 1000);
 }
 
+function requestOrigin(req) {
+  return String(req?.headers?.origin || req?.header?.("origin") || "").trim();
+}
+
+function isAllowedManagerInviteOrigin(req, env = process.env) {
+  const origin = requestOrigin(req);
+  if (!origin) return true;
+  const configured = String(env.OPS_MANAGER_INVITE_ALLOWED_ORIGINS || env.ALLOWED_CORS_ORIGINS || "")
+    .split(",").map((value) => value.trim()).filter(Boolean);
+  const allowed = new Set([
+    "https://lasrevinu333-design.github.io",
+    "https://memphis-zoo-mcp.onrender.com",
+    ...configured,
+  ]);
+  return allowed.has(origin);
+}
+
+function platformSummary(req) {
+  const ua = requestUserAgent(req);
+  if (/iphone|ipad|ios/i.test(ua)) return "iPhone/iPad Safari";
+  if (/android/i.test(ua)) return "Android browser";
+  if (/edg\//i.test(ua)) return "Desktop Edge";
+  if (/chrome|chromium/i.test(ua)) return "Desktop Chrome";
+  if (/safari/i.test(ua)) return "Safari";
+  if (/firefox/i.test(ua)) return "Firefox";
+  return "Browser";
+}
+
 function privacyHash(value, env, prefix) {
   if (!value) return null;
   const secret = getSessionSecret(env);
@@ -463,12 +569,16 @@ function clearEnrollmentAttempts(req) {
 
 function normalizeStoreRow(row) {
   if (!row || typeof row !== "object") return null;
+  const manager = row.manager && typeof row.manager === "object" ? managerPublicView(row.manager) : null;
   return {
     credential_id: String(row.credential_id || row.id || ""),
     device_id: normalizeDeviceId(row.device_id),
     device_label: normalizeDeviceLabel(row.device_label),
     token_hash: String(row.token_hash || ""),
     max_access_level: normalizeOpsAccessLevel(row.max_access_level),
+    manager_id: row.manager_id || manager?.manager_id || null,
+    manager,
+    platform_summary: row.platform_summary || row.metadata_json?.platform_summary || null,
     created_at: row.created_at || null,
     last_used_at: row.last_used_at || null,
     expires_at: row.expires_at || null,
@@ -485,6 +595,9 @@ function trustedDevicePublicView(row) {
     device_id: normalized.device_id,
     device_label: normalized.device_label,
     max_access_level: normalized.max_access_level,
+    manager_id: normalized.manager_id,
+    manager: normalized.manager,
+    platform_summary: normalized.platform_summary,
     created_at: normalized.created_at,
     last_used_at: normalized.last_used_at,
     expires_at: normalized.expires_at,
@@ -508,11 +621,20 @@ async function verifySessionAgainstTrustedDeviceStore(session, { store, env = pr
   if (session.device_id && normalizeDeviceId(session.device_id) !== normalizeDeviceId(row.device_id)) {
     return { ok: false, status: 401, error: "This manager device session is no longer trusted." };
   }
+  if (row.manager_id && !row.manager) {
+    return { ok: false, status: 403, error: "This manager record is unavailable." };
+  }
+  if (row.manager && (!row.manager.active || row.manager.revoked_at)) {
+    return { ok: false, status: 403, error: "This manager is no longer active." };
+  }
   const accessLevel = clampAccessLevel(session.access_level, row.max_access_level);
   return {
     ok: true,
     session: {
       ...session,
+      manager_id: row.manager?.manager_id || row.manager_id || session.manager_id || "",
+      manager_display_name: row.manager?.display_name || session.manager_display_name || "",
+      roles: normalizeManagerRoles(row.manager?.roles || session.roles || []),
       device_id: row.device_id,
       credential_id: row.credential_id,
       access_level: accessLevel,
@@ -524,7 +646,143 @@ async function verifySessionAgainstTrustedDeviceStore(session, { store, env = pr
 
 export function createSupabaseTrustedDeviceStore(supabase) {
   if (!supabase) return null;
+  async function getManager(managerId) {
+    if (!managerId) return null;
+    const { data, error } = await supabase
+      .from("ops_manager_managers")
+      .select("manager_id,display_name,contact_label,roles,active,revoked_at,revoked_reason,created_at,last_access_at")
+      .eq("manager_id", managerId)
+      .maybeSingle();
+    if (error) throw error;
+    return managerPublicView(data);
+  }
+  async function hydrateTrustedRow(row) {
+    const normalized = normalizeStoreRow(row);
+    if (!normalized) return null;
+    if (normalized.manager_id && !normalized.manager) normalized.manager = await getManager(normalized.manager_id);
+    return normalized;
+  }
   return {
+    getManager,
+    async createManager(record = {}) {
+      const roles = normalizeManagerRoles(record.roles || record.role);
+      const insert = {
+        display_name: String(record.display_name || record.displayName || "").trim().slice(0, 160),
+        contact_label: String(record.contact_label || record.contactLabel || "").trim().slice(0, 240) || null,
+        roles,
+        active: record.active !== false,
+        created_by_manager_id: record.created_by_manager_id || null,
+        created_by_credential_id: record.created_by_credential_id || null,
+        metadata_json: record.metadata_json && typeof record.metadata_json === "object" && !Array.isArray(record.metadata_json) ? record.metadata_json : {},
+      };
+      if (!insert.display_name) throw Object.assign(new Error("Manager display name is required."), { status: 400 });
+      const { data, error } = await supabase
+        .from("ops_manager_managers")
+        .insert(insert)
+        .select("manager_id,display_name,contact_label,roles,active,revoked_at,revoked_reason,created_at,last_access_at")
+        .single();
+      if (error) throw error;
+      return managerPublicView(data);
+    },
+    async updateManager(managerId, patch = {}) {
+      const update = {};
+      if (patch.display_name !== undefined || patch.displayName !== undefined) update.display_name = String(patch.display_name || patch.displayName || "").trim().slice(0, 160);
+      if (patch.contact_label !== undefined || patch.contactLabel !== undefined) update.contact_label = String(patch.contact_label || patch.contactLabel || "").trim().slice(0, 240) || null;
+      if (patch.roles !== undefined || patch.role !== undefined) update.roles = normalizeManagerRoles(patch.roles || patch.role);
+      if (patch.active !== undefined) update.active = patch.active !== false;
+      const { data, error } = await supabase
+        .from("ops_manager_managers")
+        .update(update)
+        .eq("manager_id", managerId)
+        .select("manager_id,display_name,contact_label,roles,active,revoked_at,revoked_reason,created_at,last_access_at")
+        .maybeSingle();
+      if (error) throw error;
+      return managerPublicView(data);
+    },
+    async revokeManager(managerId, { revokedByManagerId = null, reason = "manager_revoked" } = {}) {
+      const { data, error } = await supabase
+        .from("ops_manager_managers")
+        .update({ active: false, revoked_at: new Date().toISOString(), revoked_by_manager_id: revokedByManagerId, revoked_reason: String(reason || "manager_revoked").slice(0, 160) })
+        .eq("manager_id", managerId)
+        .select("manager_id,display_name,contact_label,roles,active,revoked_at,revoked_reason,created_at,last_access_at")
+        .maybeSingle();
+      if (error) throw error;
+      return managerPublicView(data);
+    },
+    async listManagers() {
+      const { data: managers, error } = await supabase
+        .from("ops_manager_managers")
+        .select("manager_id,display_name,contact_label,roles,active,revoked_at,revoked_reason,created_at,last_access_at")
+        .order("display_name", { ascending: true });
+      if (error) throw error;
+      const devices = await this.listTrustedDevices();
+      const devicesByManager = new Map();
+      for (const device of devices) {
+        if (!device.manager_id) continue;
+        if (!devicesByManager.has(device.manager_id)) devicesByManager.set(device.manager_id, []);
+        devicesByManager.get(device.manager_id).push(device);
+      }
+      return (managers || []).map((row) => managerPublicView(row, devicesByManager.get(String(row.manager_id)) || []));
+    },
+    async createManagerInvitation(record = {}) {
+      const token = randomBytes(32).toString("hex");
+      const ttlSeconds = getManagerInviteTtlSeconds(record.ttl_seconds || record.ttlSeconds);
+      const managerId = String(record.manager_id || record.managerId || "");
+      const manager = await getManager(managerId);
+      if (!manager?.active) throw Object.assign(new Error("Active manager record is required for invitations."), { status: 404 });
+      const role = normalizeManagerRole(record.intended_role || record.role || manager.role);
+      if (!manager.roles.includes(role)) throw Object.assign(new Error("Invitation role must match the named manager."), { status: 400 });
+      const insert = {
+        token_hash: sha256Hex(token),
+        created_by_credential_id: record.created_by_credential_id || null,
+        created_by_device_id: normalizeDeviceId(record.created_by_device_id || ""),
+        created_by_actor: String(record.created_by_actor || "trusted_manager_device").slice(0, 120),
+        intended_device_label: normalizeDeviceLabel(record.intended_device_label || ""),
+        max_access_level: "full_access",
+        manager_id: managerId,
+        intended_role: role,
+        invitation_kind: String(record.invitation_kind || "pc").trim().toLowerCase().replace(/[^a-z_]/g, "_").slice(0, 40) || "pc",
+        max_uses: Math.min(5, Math.max(1, Number.parseInt(String(record.max_uses || record.maxUses || 1), 10) || 1)),
+        expires_at: new Date(Date.now() + ttlSeconds * 1000).toISOString(),
+        metadata_json: record.metadata_json && typeof record.metadata_json === "object" && !Array.isArray(record.metadata_json) ? record.metadata_json : {},
+      };
+      const { data, error } = await supabase
+        .from("ops_manager_pairing_tokens")
+        .insert(insert)
+        .select("pairing_id,manager_id,intended_role,invitation_kind,expires_at,max_uses,use_count,revoked_at")
+        .single();
+      if (error) throw error;
+      return { ok: true, ...data, pairing_token: token, ttl_seconds: ttlSeconds, manager };
+    },
+    async revokeInvitation(pairingId, { reason = "invitation_revoked" } = {}) {
+      const { data, error } = await supabase
+        .from("ops_manager_pairing_tokens")
+        .update({ revoked_at: new Date().toISOString(), revoked_reason: String(reason || "invitation_revoked").slice(0, 160) })
+        .eq("pairing_id", pairingId)
+        .is("revoked_at", null)
+        .select("pairing_id,manager_id,revoked_at,revoked_reason")
+        .maybeSingle();
+      if (error) throw error;
+      return data || null;
+    },
+    async consumeManagerInvitation(record = {}) {
+      const { data, error } = await supabase.rpc("ops_manager_consume_manager_invitation", {
+        p_token: normalizePairingToken(record.pairing_token || record.token),
+        p_credential_id: record.credential_id,
+        p_device_id: normalizeDeviceId(record.device_id || ""),
+        p_device_label: normalizeDeviceLabel(record.device_label || ""),
+        p_trust_token_hash: String(record.token_hash || ""),
+        p_user_agent_hash: record.user_agent_hash || null,
+        p_created_ip_hash: record.created_ip_hash || null,
+        p_platform_summary: String(record.platform_summary || "").slice(0, 160) || null,
+        p_expires_at: record.expires_at,
+        p_metadata_json: record.metadata_json && typeof record.metadata_json === "object" && !Array.isArray(record.metadata_json)
+          ? record.metadata_json
+          : {},
+      });
+      if (error) throw error;
+      return data;
+    },
     async createPairingToken(record = {}) {
       const { data, error } = await supabase.rpc("ops_manager_create_pairing_token", {
         p_created_by_credential_id: record.created_by_credential_id || null,
@@ -569,11 +827,11 @@ export function createSupabaseTrustedDeviceStore(supabase) {
     async find(credentialId) {
       const { data, error } = await supabase
         .from("ops_manager_trusted_devices")
-        .select("credential_id,device_id,device_label,token_hash,max_access_level,created_at,last_used_at,expires_at,revoked_at,revoked_reason")
+        .select("credential_id,device_id,device_label,token_hash,max_access_level,manager_id,platform_summary,created_at,last_used_at,expires_at,revoked_at,revoked_reason")
         .eq("credential_id", credentialId)
         .maybeSingle();
       if (error) throw error;
-      return normalizeStoreRow(data);
+      return hydrateTrustedRow(data);
     },
     async touch(credentialId, patch = {}) {
       const { error } = await supabase
@@ -585,10 +843,12 @@ export function createSupabaseTrustedDeviceStore(supabase) {
     async listTrustedDevices() {
       const { data, error } = await supabase
         .from("ops_manager_trusted_devices")
-        .select("credential_id,device_id,device_label,max_access_level,created_at,last_used_at,expires_at,revoked_at,revoked_reason")
+        .select("credential_id,device_id,device_label,max_access_level,manager_id,platform_summary,created_at,last_used_at,expires_at,revoked_at,revoked_reason")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return (data || []).map(trustedDevicePublicView).filter(Boolean);
+      const result = [];
+      for (const row of data || []) result.push(trustedDevicePublicView(await hydrateTrustedRow(row)));
+      return result.filter(Boolean);
     },
     async revoke(credentialId, reason = "logout") {
       const { error } = await supabase
@@ -611,7 +871,17 @@ export function createSupabaseTrustedDeviceStore(supabase) {
         .from("ops_manager_trusted_devices")
         .update({ revoked_at: new Date().toISOString(), revoked_reason: String(reason || "revoke_all").slice(0, 160) })
         .is("revoked_at", null)
-        .select("credential_id,device_id,device_label,max_access_level,created_at,last_used_at,expires_at,revoked_at,revoked_reason");
+        .select("credential_id,device_id,device_label,max_access_level,manager_id,platform_summary,created_at,last_used_at,expires_at,revoked_at,revoked_reason");
+      if (error) throw error;
+      return (data || []).map(trustedDevicePublicView).filter(Boolean);
+    },
+    async revokeManagerDevices(managerId, reason = "manager_sessions_revoked") {
+      const { data, error } = await supabase
+        .from("ops_manager_trusted_devices")
+        .update({ revoked_at: new Date().toISOString(), revoked_reason: String(reason || "manager_sessions_revoked").slice(0, 160) })
+        .eq("manager_id", managerId)
+        .is("revoked_at", null)
+        .select("credential_id,device_id,device_label,max_access_level,manager_id,platform_summary,created_at,last_used_at,expires_at,revoked_at,revoked_reason");
       if (error) throw error;
       return (data || []).map(trustedDevicePublicView).filter(Boolean);
     },
@@ -692,6 +962,7 @@ async function authenticateTrustedManagerDevice(req, { store, env = process.env,
     session = createOpsManagerSession({
       credentialId,
       deviceId: trusted.row.device_id,
+      manager: trusted.row.manager,
       accessLevel: "full_access",
       maximumAccessLevel: trusted.row.max_access_level,
       authMode: "trusted_device",
@@ -702,6 +973,9 @@ async function authenticateTrustedManagerDevice(req, { store, env = process.env,
 
   if (!session || session.read_only || session.access_level !== "full_access") {
     return { ok: false, status: 403, error: "Full Ops Manager trusted-device access is required." };
+  }
+  if (!session.manager_id || !trustedRow?.manager?.active) {
+    return { ok: false, status: 403, error: "Named active manager identity is required." };
   }
   if (activeStore.touch && credentialId) {
     await activeStore.touch(credentialId, {
@@ -746,6 +1020,200 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
     res.status(200).json({ ok: true, data: { session: result.session } });
   });
 
+  app.get("/auth-api/ops/managers", async (req, res) => {
+    try {
+      const activeStore = trustedDeviceStoreOrThrow(store);
+      const manager = await authenticateTrustedManagerDevice(req, { store: activeStore, env });
+      if (!manager.ok) { sendTrustedManagerAuthFailure(res, manager); return; }
+      if (!requireManagerAdminRole(manager.session)) {
+        res.status(403).json({ ok: false, error: "Director or Security Admin manager access is required." });
+        return;
+      }
+      const managers = activeStore.listManagers ? await activeStore.listManagers() : [];
+      res.status(200).json({ ok: true, data: { managers, current_manager_id: manager.session.manager_id } });
+    } catch (error) {
+      sendAuthError(res, error, "Managers could not be listed.");
+    }
+  });
+
+  app.post("/auth-api/ops/managers", async (req, res) => {
+    try {
+      const activeStore = trustedDeviceStoreOrThrow(store);
+      const creator = await authenticateTrustedManagerDevice(req, { store: activeStore, env });
+      if (!creator.ok) { sendTrustedManagerAuthFailure(res, creator); return; }
+      if (!requireManagerAdminRole(creator.session)) {
+        res.status(403).json({ ok: false, error: "Director or Security Admin manager access is required." });
+        return;
+      }
+      const created = await activeStore.createManager({
+        display_name: req.body?.display_name || req.body?.displayName,
+        contact_label: req.body?.contact_label || req.body?.contactLabel,
+        roles: req.body?.roles || req.body?.role || "OPS_MANAGER",
+        created_by_manager_id: creator.session.manager_id,
+        created_by_credential_id: creator.credentialId,
+        metadata_json: { created_from: "manager_access_ui" },
+      });
+      await auditTrustedDevice(activeStore, authEvent(req, {
+        credentialId: creator.credentialId,
+        deviceId: creator.session.device_id,
+        eventType: "manager_created",
+        success: true,
+        detail: { manager_id: created.manager_id, roles: created.roles },
+        env,
+      }));
+      res.status(200).json({ ok: true, data: { manager: created } });
+    } catch (error) {
+      sendAuthError(res, error, "Manager could not be created.");
+    }
+  });
+
+  const updateManagerHandler = async (req, res) => {
+    try {
+      const activeStore = trustedDeviceStoreOrThrow(store);
+      const actor = await authenticateTrustedManagerDevice(req, { store: activeStore, env });
+      if (!actor.ok) { sendTrustedManagerAuthFailure(res, actor); return; }
+      if (!requireManagerAdminRole(actor.session)) {
+        res.status(403).json({ ok: false, error: "Director or Security Admin manager access is required." });
+        return;
+      }
+      const managerId = String(req.params?.managerId || "");
+      if (!/^[0-9a-f-]{36}$/i.test(managerId)) throw Object.assign(new Error("managerId must be a UUID."), { status: 400 });
+      const updated = await activeStore.updateManager(managerId, req.body || {});
+      if (!updated) throw Object.assign(new Error("Manager not found."), { status: 404 });
+      await auditTrustedDevice(activeStore, authEvent(req, {
+        credentialId: actor.credentialId,
+        deviceId: actor.session.device_id,
+        eventType: "manager_updated",
+        success: true,
+        detail: { manager_id: managerId, roles: updated.roles },
+        env,
+      }));
+      res.status(200).json({ ok: true, data: { manager: updated } });
+    } catch (error) {
+      sendAuthError(res, error, "Manager could not be updated.");
+    }
+  };
+  if (typeof app.patch === "function") app.patch("/auth-api/ops/managers/:managerId", updateManagerHandler);
+  app.post("/auth-api/ops/managers/:managerId/update", updateManagerHandler);
+
+  app.post("/auth-api/ops/managers/:managerId/revoke", async (req, res) => {
+    try {
+      const activeStore = trustedDeviceStoreOrThrow(store);
+      const actor = await authenticateTrustedManagerDevice(req, { store: activeStore, env });
+      if (!actor.ok) { sendTrustedManagerAuthFailure(res, actor); return; }
+      if (!requireManagerAdminRole(actor.session)) {
+        res.status(403).json({ ok: false, error: "Director or Security Admin manager access is required." });
+        return;
+      }
+      const managerId = String(req.params?.managerId || "");
+      if (!/^[0-9a-f-]{36}$/i.test(managerId)) throw Object.assign(new Error("managerId must be a UUID."), { status: 400 });
+      const reason = String(req.body?.reason || "manager_deactivated").slice(0, 160);
+      const revoked = await activeStore.revokeManager(managerId, { revokedByManagerId: actor.session.manager_id, reason });
+      const revokedDevices = activeStore.revokeManagerDevices ? await activeStore.revokeManagerDevices(managerId, "manager_deactivated") : [];
+      await auditTrustedDevice(activeStore, authEvent(req, {
+        credentialId: actor.credentialId,
+        deviceId: actor.session.device_id,
+        eventType: "manager_revoked",
+        success: true,
+        detail: { manager_id: managerId, revoked_devices: revokedDevices.length },
+        env,
+      }));
+      res.status(200).json({ ok: true, data: { manager: revoked, revoked_devices: revokedDevices } });
+    } catch (error) {
+      sendAuthError(res, error, "Manager could not be revoked.");
+    }
+  });
+
+  app.post("/auth-api/ops/managers/:managerId/revoke-sessions", async (req, res) => {
+    try {
+      const activeStore = trustedDeviceStoreOrThrow(store);
+      const actor = await authenticateTrustedManagerDevice(req, { store: activeStore, env });
+      if (!actor.ok) { sendTrustedManagerAuthFailure(res, actor); return; }
+      if (!requireManagerAdminRole(actor.session)) {
+        res.status(403).json({ ok: false, error: "Director or Security Admin manager access is required." });
+        return;
+      }
+      const managerId = String(req.params?.managerId || "");
+      if (!/^[0-9a-f-]{36}$/i.test(managerId)) throw Object.assign(new Error("managerId must be a UUID."), { status: 400 });
+      const revoked = activeStore.revokeManagerDevices ? await activeStore.revokeManagerDevices(managerId, String(req.body?.reason || "manager_sessions_revoked")) : [];
+      if (managerId === actor.session.manager_id) clearTrustCookie(res, env);
+      res.status(200).json({ ok: true, data: { revoked_count: revoked.length, revoked_devices: revoked } });
+    } catch (error) {
+      sendAuthError(res, error, "Manager sessions could not be revoked.");
+    }
+  });
+
+  app.post("/auth-api/ops/managers/:managerId/invitations", async (req, res) => {
+    try {
+      const activeStore = trustedDeviceStoreOrThrow(store);
+      const actor = await authenticateTrustedManagerDevice(req, { store: activeStore, env });
+      if (!actor.ok) { sendTrustedManagerAuthFailure(res, actor); return; }
+      if (!requireManagerAdminRole(actor.session)) {
+        res.status(403).json({ ok: false, error: "Director or Security Admin manager access is required." });
+        return;
+      }
+      const managerId = String(req.params?.managerId || "");
+      if (!/^[0-9a-f-]{36}$/i.test(managerId)) throw Object.assign(new Error("managerId must be a UUID."), { status: 400 });
+      const invite = await activeStore.createManagerInvitation({
+        manager_id: managerId,
+        role: req.body?.role || req.body?.intended_role,
+        invitation_kind: req.body?.invitation_kind || req.body?.kind || "pc",
+        ttl_seconds: req.body?.ttl_seconds || req.body?.ttlSeconds || MANAGER_INVITE_DEFAULT_TTL_SECONDS,
+        max_uses: req.body?.max_uses || req.body?.maxUses || 1,
+        created_by_credential_id: actor.credentialId,
+        created_by_device_id: actor.session.device_id,
+        created_by_actor: actor.session.manager_display_name || actor.session.manager_id || "trusted_manager_device",
+        intended_device_label: requestDeviceLabel(req) || normalizeDeviceLabel(req.body?.intended_device_label || req.body?.device_label || ""),
+        metadata_json: {
+          created_from: "manager_access_ui",
+          created_by_manager_id: actor.session.manager_id,
+          user_agent_hash: privacyHash(requestUserAgent(req), env, "ua"),
+          ip_hash: privacyHash(requestIp(req), env, "ip"),
+        },
+      });
+      await auditTrustedDevice(activeStore, authEvent(req, {
+        credentialId: actor.credentialId,
+        deviceId: actor.session.device_id,
+        eventType: "manager_invitation_created",
+        success: true,
+        detail: { pairing_id: invite.pairing_id, manager_id: managerId, role: invite.intended_role, kind: invite.invitation_kind },
+        env,
+      }));
+      res.status(200).json({
+        ok: true,
+        data: {
+          invitation_id: invite.pairing_id,
+          enrollment_url: pairingEnrollmentUrl({ token: invite.pairing_token, req, env }),
+          expires_at: invite.expires_at,
+          ttl_seconds: invite.ttl_seconds,
+          invitation_kind: invite.invitation_kind,
+          max_uses: invite.max_uses,
+          manager: invite.manager,
+        },
+      });
+    } catch (error) {
+      sendAuthError(res, error, "Manager invitation could not be created.");
+    }
+  });
+
+  app.post("/auth-api/ops/invitations/:invitationId/revoke", async (req, res) => {
+    try {
+      const activeStore = trustedDeviceStoreOrThrow(store);
+      const actor = await authenticateTrustedManagerDevice(req, { store: activeStore, env });
+      if (!actor.ok) { sendTrustedManagerAuthFailure(res, actor); return; }
+      if (!requireManagerAdminRole(actor.session)) {
+        res.status(403).json({ ok: false, error: "Director or Security Admin manager access is required." });
+        return;
+      }
+      const invitationId = String(req.params?.invitationId || "");
+      if (!/^[0-9a-f-]{36}$/i.test(invitationId)) throw Object.assign(new Error("invitationId must be a UUID."), { status: 400 });
+      const revoked = activeStore.revokeInvitation ? await activeStore.revokeInvitation(invitationId, { reason: req.body?.reason || "manager_cancelled_invitation" }) : null;
+      res.status(200).json({ ok: true, data: { revoked: Boolean(revoked), invitation: revoked } });
+    } catch (error) {
+      sendAuthError(res, error, "Manager invitation could not be revoked.");
+    }
+  });
+
   app.post("/auth-api/ops/pairing/consume", async (req, res) => {
     const rate = consumeEnrollmentAttempt(req);
     if (!rate.allowed) {
@@ -757,6 +1225,7 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
       const activeStore = trustedDeviceStoreOrThrow(store);
       const pairingToken = requestPairingToken(req);
       if (!pairingToken) throw Object.assign(new Error("A valid one-time Ops Manager pairing token is required."), { status: 400 });
+      if (!isAllowedManagerInviteOrigin(req, env)) throw Object.assign(new Error("Ops Manager invitations cannot be consumed from this origin."), { status: 403 });
       const deviceId = requestDeviceId(req);
       if (!deviceId) throw Object.assign(new Error("A stable manager device ID is required."), { status: 400 });
       const deviceLabel = requestDeviceLabel(req) || deviceId;
@@ -764,7 +1233,25 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
       const secret = randomBytes(32).toString("base64url");
       const now = new Date();
       const expiresAt = new Date(now.getTime() + getTrustTtlMs(env)).toISOString();
-      const data = await activeStore.consumePairingAndEnroll({
+      let data = activeStore.consumeManagerInvitation ? await activeStore.consumeManagerInvitation({
+        pairing_token: pairingToken,
+        credential_id: credentialId,
+        device_id: deviceId,
+        device_label: deviceLabel,
+        token_hash: trustTokenHash(secret, env),
+        user_agent_hash: privacyHash(requestUserAgent(req), env, "ua"),
+        created_ip_hash: privacyHash(requestIp(req), env, "ip"),
+        platform_summary: platformSummary(req),
+        expires_at: expiresAt,
+        metadata_json: {
+          enrolled_by: "named_manager_invitation",
+          user_agent_hash: privacyHash(requestUserAgent(req), env, "ua"),
+          ip_hash: privacyHash(requestIp(req), env, "ip"),
+          platform_summary: platformSummary(req),
+        },
+      }) : null;
+      if ((!data || (!data.ok && data.reason === "manager_required")) && activeStore.consumePairingAndEnroll) {
+        data = await activeStore.consumePairingAndEnroll({
         pairing_token: pairingToken,
         credential_id: credentialId,
         device_id: deviceId,
@@ -779,7 +1266,8 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
           user_agent_hash: privacyHash(requestUserAgent(req), env, "ua"),
           ip_hash: privacyHash(requestIp(req), env, "ip"),
         },
-      });
+        });
+      }
       if (!data?.ok) {
         const status = Number(data?.status) || (["used", "expired", "revoked"].includes(data?.reason) ? 410 : 401);
         throw Object.assign(new Error("Ops Manager pairing link is invalid, expired, or already used."), { status });
@@ -789,6 +1277,7 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
       const session = createOpsManagerSession({
         credentialId,
         deviceId: data.trusted_device?.device_id || deviceId,
+        manager: data.manager || data.trusted_device?.manager || null,
         accessLevel: requestedOpsAccessLevel(req),
         maximumAccessLevel: data.trusted_device?.max_access_level || "full_access",
         authMode: "trusted_device",
@@ -804,6 +1293,7 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
         detail: {
           pairing_id: data.pairing_id || null,
           maximum_access_level: data.trusted_device?.max_access_level || "full_access",
+          manager_id: data.manager?.manager_id || data.trusted_device?.manager_id || null,
         },
         env,
       }));
@@ -817,7 +1307,9 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
             device_label: deviceLabel,
             expires_at: expiresAt,
             max_access_level: data.trusted_device?.max_access_level || "full_access",
+            manager_id: data.manager?.manager_id || data.trusted_device?.manager_id || null,
           },
+          manager: data.manager || null,
         },
       });
     } catch (error) {
@@ -834,7 +1326,22 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
         return;
       }
       const ttlSeconds = getPairingTtlSeconds(req.body?.ttl_seconds || req.body?.ttlSeconds);
-      const data = await activeStore.createPairingToken({
+      const managerId = String(req.body?.manager_id || req.body?.managerId || manager.session.manager_id || "");
+      const data = activeStore.createManagerInvitation ? await activeStore.createManagerInvitation({
+        manager_id: managerId,
+        role: req.body?.role || req.body?.intended_role || "OPS_MANAGER",
+        invitation_kind: req.body?.invitation_kind || req.body?.kind || "additional_device",
+        ttl_seconds: getManagerInviteTtlSeconds(req.body?.ttl_seconds || req.body?.ttlSeconds || MANAGER_INVITE_DEFAULT_TTL_SECONDS),
+        created_by_credential_id: manager.credentialId,
+        created_by_device_id: manager.session.device_id,
+        created_by_actor: manager.session.manager_display_name || "trusted_manager_device",
+        intended_device_label: requestDeviceLabel(req) || normalizeDeviceLabel(req.body?.intended_device_label || req.body?.device_label || ""),
+        metadata_json: {
+          created_from: "manager_device_admin",
+          user_agent_hash: privacyHash(requestUserAgent(req), env, "ua"),
+          ip_hash: privacyHash(requestIp(req), env, "ip"),
+        },
+      }) : await activeStore.createPairingToken({
         created_by_credential_id: manager.credentialId,
         created_by_device_id: manager.session.device_id,
         created_by_actor: "trusted_ops_manager_device",
@@ -852,7 +1359,7 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
         deviceId: manager.session.device_id,
         eventType: "pairing_link_created",
         success: true,
-        detail: { pairing_id: data.pairing_id || null, ttl_seconds: ttlSeconds },
+        detail: { pairing_id: data.pairing_id || null, ttl_seconds: data.ttl_seconds || ttlSeconds, manager_id: data.manager?.manager_id || managerId || null },
         env,
       }));
       res.status(200).json({
@@ -861,7 +1368,8 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
           pairing_id: data.pairing_id,
           enrollment_url: pairingEnrollmentUrl({ token: data.pairing_token, req, env }),
           expires_at: data.expires_at,
-          ttl_seconds: ttlSeconds,
+          ttl_seconds: data.ttl_seconds || ttlSeconds,
+          manager: data.manager || null,
         },
       });
     } catch (error) {
@@ -986,6 +1494,7 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
       const session = createOpsManagerSession({
         credentialId: trusted.credentialId,
         deviceId: trusted.row.device_id,
+        manager: trusted.row.manager,
         accessLevel: requested,
         maximumAccessLevel: trusted.row.max_access_level,
         authMode: "trusted_device",

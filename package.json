@@ -27,6 +27,8 @@
     "test:schedule-display": "node scripts/schedule-display-tests.mjs",
     "test:messaging-recovery": "node scripts/memphis-messaging-route-recovery-tests.mjs",
     "test:manager-open": "node scripts/manager-open-session-foundation-tests.mjs",
+    "test:manager-onboarding": "node scripts/manager-passwordless-onboarding-tests.mjs",
+    "test:device-security-app": "node scripts/device-security-app-tests.mjs",
     "test:moxie-route": "node scripts/moxie-route-tests.mjs",
     "test:schedule-source-type": "node scripts/schedule-source-type-contract-tests.mjs",
     "test:device-credentials": "node scripts/device-credential-foundation-tests.mjs",
@@ -34,11 +36,13 @@
     "test:foundation-repair": "node scripts/foundation-repair-tests.mjs",
     "test:custodial-repair": "node scripts/custodial-repair-contract-tests.mjs",
     "test:schema-fingerprint": "node scripts/schema-fingerprint-check.mjs",
-    "test:empty-db-rebuild": "node scripts/empty-database-rebuild-check.mjs"
+    "test:empty-db-rebuild": "node scripts/empty-database-rebuild-check.mjs",
+    "device-security:password": "node scripts/device-security-password-admin.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.18.0",
     "@supabase/supabase-js": "^2.103.2",
+    "argon2": "^0.44.0",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "octokit": "^5.0.3",
