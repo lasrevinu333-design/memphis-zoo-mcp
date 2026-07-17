@@ -75,6 +75,21 @@ if (dockerImage) {
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);
     }
     if (!ready) throw new Error(`Disposable rebuild container ${dockerContainer} did not become ready.`);
+    let healthy = false;
+    for (let attempt = 0; attempt < 120; attempt += 1) {
+      const status = spawnSync(
+        "docker",
+        ["inspect", "--format", "{{if .State.Health}}{{.State.Health.Status}}{{end}}", dockerContainer],
+        { encoding: "utf8" },
+      ).stdout.trim();
+      if (!status || status === "healthy") {
+        healthy = true;
+        break;
+      }
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);
+    }
+    if (!healthy) throw new Error(`Disposable rebuild container ${dockerContainer} did not become healthy.`);
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10000);
   } catch (error) {
     execFileSync("docker", ["rm", "-f", dockerContainer], { stdio: "ignore" });
     throw error;

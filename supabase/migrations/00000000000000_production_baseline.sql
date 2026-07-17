@@ -16,12 +16,16 @@ create schema if not exists vault;
 
 do $$
 begin
-  if not exists (select 1 from pg_roles where rolname = 'authenticated') then
+  begin
     create role authenticated;
-  end if;
-  if not exists (select 1 from pg_roles where rolname = 'service_role') then
+  exception when duplicate_object then
+    null;
+  end;
+  begin
     create role service_role;
-  end if;
+  exception when duplicate_object then
+    null;
+  end;
 end
 $$;
 
