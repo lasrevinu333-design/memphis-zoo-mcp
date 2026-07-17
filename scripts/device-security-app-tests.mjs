@@ -65,7 +65,22 @@ const passwordHash = await argon2.hash(password, { type: argon2.argon2id, memory
 const sessions = new Map();
 const rateLimits = new Map();
 const enrollmentCodes = new Map();
+const managers = new Map([
+  ["00000000-0000-4000-8000-000000000001", {
+    manager_id: "00000000-0000-4000-8000-000000000001",
+    display_name: "Eric",
+    roles: ["OPS_MANAGER", "DIRECTOR", "SECURITY_ADMIN"],
+    active: true,
+  }],
+  ["44444444-4444-4444-8444-444444444444", {
+    manager_id: "44444444-4444-4444-8444-444444444444",
+    display_name: "Ops Only",
+    roles: ["OPS_MANAGER"],
+    active: true,
+  }],
+]);
 const store = {
+  async getManager(id) { return managers.get(id) || null; },
   async getDeviceSecurityConfig() { return { password_hash: passwordHash, password_version: 1, rotated_at: new Date().toISOString(), sessions_revoked_at: null }; },
   async getDeviceSecurityRateLimit(k) { return rateLimits.get(k) || null; },
   async recordDeviceSecurityFailure(k) { const current = rateLimits.get(k) || { failure_count: 0 }; const next = { key_hash: k, failure_count: current.failure_count + 1, locked_until: current.failure_count + 1 >= 5 ? new Date(Date.now() + 900000).toISOString() : null }; rateLimits.set(k, next); return next; },
@@ -139,7 +154,24 @@ result = await invoke(app.routes.get("POST /admin-api/device-auth/enrollment-cod
 }));
 assert.equal(result.statusCode, 403, "CSRF header is required after unlock");
 
-result = await invoke(app.routes.get("POST /admin-api/device-security/unlock"), req({ body: { password }, auth: { roles: ["OPS_MANAGER"] } }));
+const ordinaryManagerAuth = {
+  manager_id: "44444444-4444-4444-8444-444444444444",
+  credential_id: "55555555-5555-4555-8555-555555555555",
+  manager_display_name: "Ops Only",
+  roles: ["OPS_MANAGER"],
+};
+
+result = await invoke(app.routes.get("GET /admin-api/device-security/session"), req({ auth: ordinaryManagerAuth }));
+assert.equal(result.statusCode, 403, "ordinary managers cannot inspect Device Security session state");
+
+result = await invoke(app.routes.get("POST /admin-api/device-security/unlock"), req({ body: { password }, auth: ordinaryManagerAuth }));
 assert.equal(result.statusCode, 403, "ordinary managers cannot unlock Device Security");
+
+result = await invoke(app.routes.get("POST /admin-api/device-auth/enrollment-code"), req({
+  body: { device_id: "KIOSK_02" },
+  headers: { cookie, "x-device-security-csrf": csrf },
+  auth: ordinaryManagerAuth,
+}));
+assert.equal(result.statusCode, 403, "ordinary managers cannot use a Security Admin device-session cookie");
 
 console.log("DEVICE_SECURITY_APP_TESTS_PASS");

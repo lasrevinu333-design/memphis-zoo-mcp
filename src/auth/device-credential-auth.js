@@ -244,9 +244,49 @@ function deviceSecurityCsrfHash(csrf, env) {
   return hmacHex(env, "device-security-csrf", csrf);
 }
 
+function normalizeManagerRolesForDeviceSecurity(roles) {
+  const normalized = new Set();
+  const list = Array.isArray(roles) ? roles : [roles];
+  for (const role of list) {
+    const value = String(role || "").trim().toUpperCase();
+    if (["OPS_MANAGER", "DIRECTOR", "SECURITY_ADMIN"].includes(value)) normalized.add(value);
+  }
+  if (normalized.has("SECURITY_ADMIN")) {
+    normalized.add("DIRECTOR");
+    normalized.add("OPS_MANAGER");
+  }
+  if (normalized.has("DIRECTOR")) normalized.add("OPS_MANAGER");
+  return Array.from(normalized);
+}
+
 function hasSecurityAdminRole(req) {
-  const roles = Array.isArray(req?.memphisAuth?.roles) ? req.memphisAuth.roles : [];
-  return roles.map((role) => String(role).toUpperCase()).includes("SECURITY_ADMIN");
+  return normalizeManagerRolesForDeviceSecurity(req?.memphisAuth?.roles).includes("SECURITY_ADMIN");
+}
+
+async function loadAuthoritativeManager(req, store) {
+  const id = managerId(req);
+  if (!id || typeof store?.getManager !== "function") return null;
+  const manager = await store.getManager(id);
+  if (!manager) return null;
+  const active = manager.active !== false && !manager.revoked_at;
+  const roles = normalizeManagerRolesForDeviceSecurity(manager.roles);
+  req.memphisAuth = {
+    ...(req.memphisAuth || {}),
+    manager_id: manager.manager_id || id,
+    manager_display_name: manager.display_name || req.memphisAuth?.manager_display_name || "",
+    roles,
+  };
+  return { ...manager, active, roles };
+}
+
+async function hasAuthoritativeSecurityAdminRole(req, store) {
+  if (managerId(req) && typeof store?.getManager === "function") {
+    const manager = await loadAuthoritativeManager(req, store);
+    return Boolean(manager?.active && manager.roles.includes("SECURITY_ADMIN"));
+  }
+  const manager = await loadAuthoritativeManager(req, store);
+  if (manager) return Boolean(manager.active && manager.roles.includes("SECURITY_ADMIN"));
+  return hasSecurityAdminRole(req);
 }
 
 function managerId(req) {
@@ -280,6 +320,27 @@ function clearEnrollmentAttempts(req) {
 export function createSupabaseDeviceCredentialStore(supabase) {
   if (!supabase) return null;
   return {
+    async getManager(managerId) {
+      if (!managerId) return null;
+      const { data, error } = await supabase
+        .from("ops_manager_managers")
+        .select("manager_id,display_name,contact_label,roles,active,revoked_at,revoked_reason,created_at,last_access_at")
+        .eq("manager_id", managerId)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) return null;
+      return {
+        manager_id: data.manager_id,
+        display_name: data.display_name,
+        contact_label: data.contact_label,
+        roles: normalizeManagerRolesForDeviceSecurity(data.roles),
+        active: data.active !== false && !data.revoked_at,
+        revoked_at: data.revoked_at || null,
+        revoked_reason: data.revoked_reason || null,
+        created_at: data.created_at || null,
+        last_access_at: data.last_access_at || null,
+      };
+    },
     async getPolicy() {
       const { data, error } = await supabase.from("device_auth_policy").select("mode,updated_by,updated_at").eq("singleton", true).maybeSingle();
       if (error) throw error;
@@ -674,7 +735,7 @@ async function auditDeviceSecurity(store, req, { eventType, success, reason = nu
 }
 
 async function verifyDeviceSecuritySession(req, { store, env = process.env, requireCsrf = false } = {}) {
-  if (!hasSecurityAdminRole(req)) {
+  if (!(await hasAuthoritativeSecurityAdminRole(req, store))) {
     return { ok: false, status: 403, error: "Security Admin access is required." };
   }
   const config = await store.getDeviceSecurityConfig?.();
@@ -797,7 +858,7 @@ export function installDeviceCredentialRoutes(app, {
 
   app.get("/admin-api/device-security/session", requireOpsAuth, async (req, res) => {
     try {
-      if (!hasSecurityAdminRole(req)) {
+      if (!(await hasAuthoritativeSecurityAdminRole(req, store))) {
         res.status(403).json({ ok: false, error: "Security Admin access is required.", device_security_locked: true });
         return;
       }
@@ -822,7 +883,7 @@ export function installDeviceCredentialRoutes(app, {
 
   app.post("/admin-api/device-security/unlock", requireOpsAuth, async (req, res) => {
     try {
-      if (!hasSecurityAdminRole(req)) {
+      if (!(await hasAuthoritativeSecurityAdminRole(req, store))) {
         await auditDeviceSecurity(store, req, { eventType: "device_security_unlock_denied", success: false, reason: "not_security_admin", env });
         res.status(403).json({ ok: false, error: "Device Security password rejected." });
         return;
