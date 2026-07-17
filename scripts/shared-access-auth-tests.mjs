@@ -90,6 +90,15 @@ function makeMemoryTrustedDeviceStore() {
   const rows = new Map();
   const events = [];
   const pairings = new Map();
+  const bootstrapManager = {
+    manager_id: "00000000-0000-4000-8000-000000000001",
+    display_name: "Eric",
+    contact_label: "test security admin",
+    roles: ["OPS_MANAGER", "DIRECTOR", "SECURITY_ADMIN"],
+    active: true,
+    revoked_at: null,
+    created_at: new Date().toISOString(),
+  };
   let tokenCounter = 1;
   function publicRow(row) {
     const { token_hash, user_agent_hash, created_ip_hash, last_ip_hash, last_user_agent_hash, metadata_json, ...safe } = row;
@@ -130,6 +139,8 @@ function makeMemoryTrustedDeviceStore() {
         device_label: record.device_label,
         token_hash: record.token_hash,
         max_access_level: record.max_access_level || "full_access",
+        manager_id: bootstrapManager.manager_id,
+        manager: bootstrapManager,
         created_at: now,
         last_used_at: null,
         expires_at: record.expires_at,
@@ -142,7 +153,8 @@ function makeMemoryTrustedDeviceStore() {
       return { ok: true, pairing_id: pairing.pairing_id, trusted_device: publicRow(row) };
     },
     async enroll(record) { rows.set(record.credential_id, { ...record, created_at: new Date().toISOString(), revoked_at: null }); return rows.get(record.credential_id); },
-    async find(id) { return rows.get(id) || null; },
+    async find(id) { const row = rows.get(id); return row ? { ...row, manager: row.manager || bootstrapManager, manager_id: row.manager_id || bootstrapManager.manager_id } : null; },
+    async getManager() { return bootstrapManager; },
     async touch(id, patch = {}) { const row = rows.get(id); if (row) rows.set(id, { ...row, ...patch, last_used_at: new Date().toISOString() }); },
     async listTrustedDevices() { return Array.from(rows.values()).map(publicRow).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))); },
     async revoke(id, reason = "logout") { const row = rows.get(id); if (row) rows.set(id, { ...row, revoked_at: new Date().toISOString(), revoked_reason: reason }); },
@@ -393,6 +405,7 @@ const engineRoot = [
 if (engineRoot) {
   const authHelper = readFileSync(resolve(engineRoot, "memphis-auth.js"), "utf8");
   const managerHub = readFileSync(resolve(engineRoot, "ops-manager-hub.html"), "utf8");
+  const managerAccess = readFileSync(resolve(engineRoot, "manager-access.html"), "utf8");
   const deviceSecurity = readFileSync(resolve(engineRoot, "device-security.html"), "utf8");
   assert.doesNotMatch(authHelper, /const\s+OPS_SESSION_KEY|localStorage\.setItem\([^\n]*memphisOpsManagerSession\.v2/);
   assert.match(authHelper, /credentials:'include'/);
@@ -401,8 +414,12 @@ if (engineRoot) {
   assert.doesNotMatch(authHelper, /ops\/enroll|promptForOneTimeEnrollment|Ops Manager password|Manager password|enrollOpsManagerDevice/);
   assert.match(managerHub, /one-time pairing link/i);
   assert.doesNotMatch(managerHub, /password/i);
-  assert.match(deviceSecurity, /Generate Pairing Link/);
-  assert.match(deviceSecurity, /revokeAllOpsManagerTrustedDevices/);
+  assert.match(managerAccess, /MANAGER ACCESS/);
+  assert.match(managerAccess, /Generate PC Invite/);
+  assert.match(managerAccess, /Display Invite QR/);
+  assert.match(deviceSecurity, /Security Admin unlock required/);
+  assert.match(deviceSecurity, /Device Security password/);
+  assert.doesNotMatch(deviceSecurity, /Generate Pairing Link/);
 }
 
 console.log("SHARED_ACCESS_AUTH_TESTS_PASS");

@@ -1,9 +1,14 @@
 import { createHmac, randomBytes, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
+import argon2 from "argon2";
 import { isCanonicalEmployeeKiosk, normalizeDeviceIdentifier, resolveActiveAssignedDevice } from "../device-identity.js";
 
 const DEVICE_COOKIE_NAME = "memphis_device_credential";
+const DEVICE_SECURITY_COOKIE_NAME = "memphis_device_security_session";
 const DEFAULT_CREDENTIAL_TTL_DAYS = 3650;
 const DEFAULT_ENROLLMENT_TTL_MINUTES = 30;
+const DEVICE_SECURITY_SESSION_TTL_MS = 15 * 60 * 1000;
+const DEVICE_SECURITY_LOCKOUT_MS = 15 * 60 * 1000;
+const DEVICE_SECURITY_FAILURE_LIMIT = 5;
 const ENROLLMENT_WINDOW_MS = 15 * 60 * 1000;
 const ENROLLMENT_ATTEMPT_LIMIT = 8;
 const enrollmentAttempts = new Map();
@@ -199,6 +204,59 @@ function clearDeviceCredentialCookie(res, req, env = process.env) {
   }));
 }
 
+function setDeviceSecurityCookie(res, rawToken, req, env = process.env) {
+  const sameSite = cookieSameSite(env);
+  const secure = cookieSecure(req, env);
+  setCookieHeader(res, serializeCookie(DEVICE_SECURITY_COOKIE_NAME, rawToken, {
+    maxAgeSeconds: Math.floor(DEVICE_SECURITY_SESSION_TTL_MS / 1000),
+    sameSite,
+    secure,
+    partitioned: secure && sameSite === "None" && !truthy(env.DEVICE_CREDENTIAL_COOKIE_DISABLE_PARTITIONED),
+  }));
+}
+
+function clearDeviceSecurityCookie(res, req, env = process.env) {
+  const sameSite = cookieSameSite(env);
+  const secure = cookieSecure(req, env);
+  setCookieHeader(res, serializeCookie(DEVICE_SECURITY_COOKIE_NAME, "", {
+    sameSite,
+    secure,
+    clear: true,
+    partitioned: secure && sameSite === "None" && !truthy(env.DEVICE_CREDENTIAL_COOKIE_DISABLE_PARTITIONED),
+  }));
+}
+
+function deviceSecuritySessionParts(req) {
+  const raw = String(parseCookies(req)[DEVICE_SECURITY_COOKIE_NAME] || "").trim();
+  const dot = raw.indexOf(".");
+  if (dot <= 0) return null;
+  const sessionId = raw.slice(0, dot);
+  const secret = raw.slice(dot + 1);
+  if (!UUID_PATTERN.test(sessionId) || !/^[A-Za-z0-9_-]{32,}$/.test(secret)) return null;
+  return { sessionId, secret };
+}
+
+function deviceSecurityHash(secret, env) {
+  return hmacHex(env, "device-security-session", secret);
+}
+
+function deviceSecurityCsrfHash(csrf, env) {
+  return hmacHex(env, "device-security-csrf", csrf);
+}
+
+function hasSecurityAdminRole(req) {
+  const roles = Array.isArray(req?.memphisAuth?.roles) ? req.memphisAuth.roles : [];
+  return roles.map((role) => String(role).toUpperCase()).includes("SECURITY_ADMIN");
+}
+
+function managerId(req) {
+  return String(req?.memphisAuth?.manager_id || "").trim() || null;
+}
+
+function credentialId(req) {
+  return String(req?.memphisAuth?.credential_id || "").trim() || null;
+}
+
 function enrollmentRateKey(req) {
   return `${requestIp(req) || "unknown"}|${requestDeviceIdentifier(req) || "unknown"}`;
 }
@@ -308,6 +366,117 @@ export function createSupabaseDeviceCredentialStore(supabase) {
         .maybeSingle();
       if (error) throw error;
       return data || null;
+    },
+    async getDeviceSecurityConfig() {
+      const { data, error } = await supabase
+        .from("ops_manager_device_security_config")
+        .select("password_hash,password_version,rotated_at,sessions_revoked_at")
+        .eq("singleton", true)
+        .maybeSingle();
+      if (error) throw error;
+      return data || null;
+    },
+    async getDeviceSecurityRateLimit(keyHash) {
+      const { data, error } = await supabase
+        .from("ops_manager_device_security_rate_limits")
+        .select("key_hash,failure_count,first_failed_at,last_failed_at,locked_until")
+        .eq("key_hash", keyHash)
+        .maybeSingle();
+      if (error) throw error;
+      return data || null;
+    },
+    async recordDeviceSecurityFailure(keyHash, metadata = {}) {
+      const now = new Date();
+      const current = await this.getDeviceSecurityRateLimit(keyHash);
+      const firstFailedAt = current?.first_failed_at && Date.parse(current.first_failed_at) > now.getTime() - DEVICE_SECURITY_LOCKOUT_MS
+        ? current.first_failed_at
+        : now.toISOString();
+      const failureCount = current?.first_failed_at && Date.parse(current.first_failed_at) > now.getTime() - DEVICE_SECURITY_LOCKOUT_MS
+        ? Number(current.failure_count || 0) + 1
+        : 1;
+      const lockedUntil = failureCount >= DEVICE_SECURITY_FAILURE_LIMIT
+        ? new Date(now.getTime() + DEVICE_SECURITY_LOCKOUT_MS).toISOString()
+        : null;
+      const { data, error } = await supabase
+        .from("ops_manager_device_security_rate_limits")
+        .upsert({
+          key_hash: keyHash,
+          failure_count: failureCount,
+          first_failed_at: firstFailedAt,
+          last_failed_at: now.toISOString(),
+          locked_until: lockedUntil,
+          metadata_json: metadata,
+        })
+        .select("key_hash,failure_count,first_failed_at,last_failed_at,locked_until")
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    async clearDeviceSecurityFailures(keyHash) {
+      const { error } = await supabase
+        .from("ops_manager_device_security_rate_limits")
+        .delete()
+        .eq("key_hash", keyHash);
+      if (error) throw error;
+    },
+    async createDeviceSecuritySession(record = {}) {
+      const { data, error } = await supabase
+        .from("ops_manager_device_security_sessions")
+        .insert(record)
+        .select("session_id,manager_id,credential_id,password_version,created_at,last_used_at,expires_at,revoked_at")
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    async findDeviceSecuritySession(sessionId) {
+      const { data, error } = await supabase
+        .from("ops_manager_device_security_sessions")
+        .select("session_id,manager_id,credential_id,token_hash,csrf_hash,password_version,created_at,last_used_at,expires_at,revoked_at,revoked_reason")
+        .eq("session_id", sessionId)
+        .maybeSingle();
+      if (error) throw error;
+      return data || null;
+    },
+    async touchDeviceSecuritySession(sessionId) {
+      const { error } = await supabase
+        .from("ops_manager_device_security_sessions")
+        .update({ last_used_at: new Date().toISOString(), expires_at: new Date(Date.now() + DEVICE_SECURITY_SESSION_TTL_MS).toISOString() })
+        .eq("session_id", sessionId)
+        .is("revoked_at", null);
+      if (error) throw error;
+    },
+    async revokeDeviceSecuritySession(sessionId, reason = "manual_lock") {
+      const { error } = await supabase
+        .from("ops_manager_device_security_sessions")
+        .update({ revoked_at: new Date().toISOString(), revoked_reason: String(reason || "manual_lock").slice(0, 160) })
+        .eq("session_id", sessionId)
+        .is("revoked_at", null);
+      if (error) throw error;
+    },
+    async revokeAllDeviceSecuritySessions(reason = "password_rotation") {
+      const { data, error } = await supabase
+        .from("ops_manager_device_security_sessions")
+        .update({ revoked_at: new Date().toISOString(), revoked_reason: String(reason || "password_rotation").slice(0, 160) })
+        .is("revoked_at", null)
+        .select("session_id");
+      if (error) throw error;
+      return data || [];
+    },
+    async revokeEnrollmentCode(enrollmentId, { managerId = null, reason = "revoked_by_security_admin" } = {}) {
+      const { data, error } = await supabase
+        .from("device_auth_enrollment_codes")
+        .update({ revoked_at: new Date().toISOString(), status: "revoked", revoked_by_manager_id: managerId, metadata_json: { revoked_reason: String(reason || "revoked_by_security_admin").slice(0, 160) } })
+        .eq("enrollment_id", enrollmentId)
+        .is("consumed_at", null)
+        .is("revoked_at", null)
+        .select("enrollment_id,device_id,expires_at,revoked_at,status")
+        .maybeSingle();
+      if (error) throw error;
+      return data || null;
+    },
+    async auditSecurityCode(event = {}) {
+      const { error } = await supabase.from("ops_manager_security_code_events").insert(event);
+      if (error) throw error;
     },
     async audit(event) {
       const { error } = await supabase.from("device_auth_events").insert(event);
@@ -479,7 +648,78 @@ export function makeDeviceCredentialMiddleware(options = {}) {
 }
 
 function managerIdentity(req) {
-  return String(req?.memphisAuth?.device_id || req?.memphisAuth?.session_id || "ops_manager").slice(0, 160);
+  return String(req?.memphisAuth?.manager_display_name || req?.memphisAuth?.manager_id || req?.memphisAuth?.device_id || req?.memphisAuth?.session_id || "ops_manager").slice(0, 160);
+}
+
+function deviceSecurityRateKey(req, env) {
+  return hmacHex(env, "device-security-rate", `${managerId(req) || "unknown"}|${credentialId(req) || "unknown"}|${requestIp(req) || "unknown"}`);
+}
+
+async function auditDeviceSecurity(store, req, { eventType, success, reason = null, metadata = {}, env = process.env } = {}) {
+  await audit(store, {
+    device_id: null,
+    credential_id: null,
+    event_type: String(eventType || "device_security").slice(0, 100),
+    success: Boolean(success),
+    reason: reason ? String(reason).slice(0, 500) : null,
+    presented_identifier: managerId(req) || credentialId(req) || null,
+    ip_hash: privacyHash(requestIp(req), env, "ip"),
+    user_agent_hash: privacyHash(requestUserAgent(req), env, "ua"),
+    metadata_json: {
+      manager_id: managerId(req),
+      manager_credential_id: credentialId(req),
+      ...metadata,
+    },
+  });
+}
+
+async function verifyDeviceSecuritySession(req, { store, env = process.env, requireCsrf = false } = {}) {
+  if (!hasSecurityAdminRole(req)) {
+    return { ok: false, status: 403, error: "Security Admin access is required." };
+  }
+  const config = await store.getDeviceSecurityConfig?.();
+  if (!config?.password_hash) return { ok: false, status: 503, error: "Device Security password is not initialized." };
+  const parts = deviceSecuritySessionParts(req);
+  if (!parts) return { ok: false, status: 401, error: "Device Security password is required." };
+  const row = await store.findDeviceSecuritySession?.(parts.sessionId);
+  const now = Date.now();
+  const valid = Boolean(
+    row
+    && !row.revoked_at
+    && row.manager_id === managerId(req)
+    && row.credential_id === credentialId(req)
+    && row.password_version === config.password_version
+    && Date.parse(row.expires_at) > now
+    && row.token_hash
+    && safeEqual(row.token_hash, deviceSecurityHash(parts.secret, env))
+    && (!config.sessions_revoked_at || Date.parse(row.created_at) > Date.parse(config.sessions_revoked_at))
+  );
+  if (!valid) return { ok: false, status: 401, error: "Device Security password is required." };
+  if (requireCsrf) {
+    const csrf = String(req?.header?.("x-device-security-csrf") || req?.headers?.["x-device-security-csrf"] || "").trim();
+    if (!csrf || !safeEqual(row.csrf_hash, deviceSecurityCsrfHash(csrf, env))) {
+      return { ok: false, status: 403, error: "Device Security request could not be verified." };
+    }
+  }
+  await store.touchDeviceSecuritySession?.(row.session_id);
+  return { ok: true, session: row };
+}
+
+function makeDeviceSecurityMiddleware({ store, env = process.env } = {}) {
+  return async function requireDeviceSecuritySession(req, res, next) {
+    try {
+      const result = await verifyDeviceSecuritySession(req, { store, env, requireCsrf: req.method !== "GET" });
+      if (!result.ok) {
+        clearDeviceSecurityCookie(res, req, env);
+        res.status(result.status || 401).json({ ok: false, error: result.error || "Device Security password is required.", device_security_locked: true });
+        return;
+      }
+      req.memphisDeviceSecurity = result.session;
+      await next();
+    } catch (error) {
+      res.status(error?.status || 500).json({ ok: false, error: error?.message || "Device Security authorization failed." });
+    }
+  };
 }
 
 async function activeDeviceCoverage({ supabase, now = new Date() }) {
@@ -551,6 +791,109 @@ export function installDeviceCredentialRoutes(app, {
   };
   app.use("/device-auth", deviceRouteCors);
   app.use("/admin-api/device-auth", deviceRouteCors);
+  app.use("/admin-api/device-security", deviceRouteCors);
+
+  const requireDeviceSecurity = makeDeviceSecurityMiddleware({ store, env });
+
+  app.get("/admin-api/device-security/session", requireOpsAuth, async (req, res) => {
+    try {
+      if (!hasSecurityAdminRole(req)) {
+        res.status(403).json({ ok: false, error: "Security Admin access is required.", device_security_locked: true });
+        return;
+      }
+      const config = await store.getDeviceSecurityConfig?.();
+      const unlocked = config?.password_hash
+        ? (await verifyDeviceSecuritySession(req, { store, env, requireCsrf: false })).ok
+        : false;
+      res.status(200).json({
+        ok: true,
+        data: {
+          configured: Boolean(config?.password_hash),
+          unlocked,
+          expires_at: unlocked ? new Date(Date.now() + DEVICE_SECURITY_SESSION_TTL_MS).toISOString() : null,
+          manager_id: managerId(req),
+          roles: req.memphisAuth?.roles || [],
+        },
+      });
+    } catch (error) {
+      res.status(500).json({ ok: false, error: error?.message || "Device Security session check failed." });
+    }
+  });
+
+  app.post("/admin-api/device-security/unlock", requireOpsAuth, async (req, res) => {
+    try {
+      if (!hasSecurityAdminRole(req)) {
+        await auditDeviceSecurity(store, req, { eventType: "device_security_unlock_denied", success: false, reason: "not_security_admin", env });
+        res.status(403).json({ ok: false, error: "Device Security password rejected." });
+        return;
+      }
+      const config = await store.getDeviceSecurityConfig?.();
+      if (!config?.password_hash) {
+        res.status(503).json({ ok: false, error: "Device Security password is not initialized." });
+        return;
+      }
+      const rateKey = deviceSecurityRateKey(req, env);
+      const rate = await store.getDeviceSecurityRateLimit?.(rateKey);
+      if (rate?.locked_until && Date.parse(rate.locked_until) > Date.now()) {
+        await auditDeviceSecurity(store, req, { eventType: "device_security_unlock_locked", success: false, reason: "locked", env });
+        res.setHeader("Retry-After", String(Math.ceil((Date.parse(rate.locked_until) - Date.now()) / 1000)));
+        res.status(429).json({ ok: false, error: "Device Security password rejected." });
+        return;
+      }
+      const password = String(req.body?.password || "");
+      const verified = password ? await argon2.verify(config.password_hash, password, { type: argon2.argon2id }).catch(() => false) : false;
+      if (!verified) {
+        const nextRate = await store.recordDeviceSecurityFailure?.(rateKey, { manager_id: managerId(req) });
+        await auditDeviceSecurity(store, req, { eventType: "device_security_unlock_failed", success: false, reason: "invalid_password", metadata: { failure_count: nextRate?.failure_count || null }, env });
+        if (nextRate?.locked_until) res.setHeader("Retry-After", String(Math.ceil((Date.parse(nextRate.locked_until) - Date.now()) / 1000)));
+        res.status(nextRate?.locked_until ? 429 : 401).json({ ok: false, error: "Device Security password rejected." });
+        return;
+      }
+      await store.clearDeviceSecurityFailures?.(rateKey);
+      const sessionId = randomUUID();
+      const secret = randomBytes(32).toString("base64url");
+      const csrf = randomBytes(32).toString("base64url");
+      const expiresAt = new Date(Date.now() + DEVICE_SECURITY_SESSION_TTL_MS).toISOString();
+      const row = await store.createDeviceSecuritySession?.({
+        session_id: sessionId,
+        manager_id: managerId(req),
+        credential_id: credentialId(req),
+        token_hash: deviceSecurityHash(secret, env),
+        csrf_hash: deviceSecurityCsrfHash(csrf, env),
+        password_version: config.password_version,
+        expires_at: expiresAt,
+        ip_hash: privacyHash(requestIp(req), env, "ip"),
+        user_agent_hash: privacyHash(requestUserAgent(req), env, "ua"),
+        metadata_json: { unlock: "device_security_password" },
+      });
+      setDeviceSecurityCookie(res, `${sessionId}.${secret}`, req, env);
+      await auditDeviceSecurity(store, req, { eventType: "device_security_unlock_success", success: true, env });
+      res.status(200).json({ ok: true, data: { unlocked: true, expires_at: row?.expires_at || expiresAt, csrf_token: csrf } });
+    } catch (error) {
+      res.status(500).json({ ok: false, error: "Device Security unlock failed." });
+    }
+  });
+
+  app.post("/admin-api/device-security/lock", requireOpsAuth, async (req, res) => {
+    try {
+      const parts = deviceSecuritySessionParts(req);
+      if (parts) await store.revokeDeviceSecuritySession?.(parts.sessionId, "manual_lock");
+      clearDeviceSecurityCookie(res, req, env);
+      res.status(200).json({ ok: true, data: { locked: true } });
+    } catch (error) {
+      clearDeviceSecurityCookie(res, req, env);
+      res.status(200).json({ ok: true, data: { locked: true } });
+    }
+  });
+
+  app.post("/admin-api/device-security/sessions/revoke-all", requireOpsAuth, requireDeviceSecurity, async (_req, res) => {
+    try {
+      const revoked = await store.revokeAllDeviceSecuritySessions?.("security_admin_revoke_all");
+      res.status(200).json({ ok: true, data: { revoked_count: revoked?.length || 0 } });
+    } catch (error) {
+      res.status(500).json({ ok: false, error: "Device Security sessions could not be revoked." });
+    }
+  });
 
   app.get("/device-auth/status", async (req, res) => {
     try {
@@ -663,7 +1006,7 @@ export function installDeviceCredentialRoutes(app, {
     res.status(200).json({ ok: true, data: { logged_out: true } });
   });
 
-  app.get("/admin-api/device-auth/summary", requireOpsAuth, async (_req, res) => {
+  app.get("/admin-api/device-auth/summary", requireOpsAuth, requireDeviceSecurity, async (_req, res) => {
     try {
       const [policy, coverage] = await Promise.all([store.getPolicy(), activeDeviceCoverage({ supabase })]);
       res.status(200).json({ ok: true, data: { policy, coverage } });
@@ -672,7 +1015,7 @@ export function installDeviceCredentialRoutes(app, {
     }
   });
 
-  app.post("/admin-api/device-auth/enrollment-code", requireOpsWrite, async (req, res) => {
+  app.post("/admin-api/device-auth/enrollment-code", requireOpsWrite, requireDeviceSecurity, async (req, res) => {
     try {
       const identifier = normalizeDeviceIdentifier(req.body?.device_id || req.body?.deviceId || "");
       const device = await resolveActiveAssignedDevice({ runReadOnlySql, deviceIdentifier: identifier });
@@ -687,14 +1030,26 @@ export function installDeviceCredentialRoutes(app, {
         codeHash: enrollmentCodeHash(device.canonical_device_pk, code, env),
         createdBy: managerIdentity(req),
         expiresAt,
-        metadata: { canonical_device_id: device.canonical_device_id, employee_name: device.assigned_employee_name },
+        metadata: { canonical_device_id: device.canonical_device_id, employee_name: device.assigned_employee_name, purpose: "employee_device_enrollment", max_uses: 1 },
       });
-      await audit(store, authEvent(req, device, { eventType: "enrollment_code_issued", success: true, metadata: { enrollment_id: row?.enrollment_id }, env }));
+      await audit(store, authEvent(req, device, { eventType: "enrollment_code_issued", success: true, metadata: { enrollment_id: row?.enrollment_id, manager_id: managerId(req) }, env }));
+      await store.auditSecurityCode?.({
+        code_id: row?.enrollment_id || null,
+        purpose: "employee_device_enrollment",
+        target_device_id: device.canonical_device_pk,
+        manager_id: managerId(req),
+        credential_id: credentialId(req),
+        event_type: "created",
+        metadata_json: { canonical_device_id: device.canonical_device_id, max_uses: 1 },
+      });
       res.status(200).json({
         ok: true,
         data: {
           enrollment_code: code,
           enrollment_id: row?.enrollment_id || null,
+          code_id: row?.enrollment_id || null,
+          purpose: "employee_device_enrollment",
+          max_uses: 1,
           expires_at: row?.expires_at || expiresAt,
           canonical_device_id: device.canonical_device_id,
           device_name: device.device_name,
@@ -706,7 +1061,7 @@ export function installDeviceCredentialRoutes(app, {
     }
   });
 
-  app.post("/admin-api/device-auth/mode", requireOpsWrite, async (req, res) => {
+  app.post("/admin-api/device-auth/mode", requireOpsWrite, requireDeviceSecurity, async (req, res) => {
     try {
       const requestedMode = String(req.body?.mode || "").trim().toLowerCase();
       if (!VALID_POLICY_MODES.has(requestedMode)) {
@@ -734,7 +1089,30 @@ export function installDeviceCredentialRoutes(app, {
     }
   });
 
-  app.post("/admin-api/device-auth/credentials/:credentialId/revoke", requireOpsWrite, async (req, res) => {
+  app.post("/admin-api/device-auth/codes/:codeId/revoke", requireOpsWrite, requireDeviceSecurity, async (req, res) => {
+    try {
+      const codeId = String(req.params?.codeId || "").trim();
+      if (!UUID_PATTERN.test(codeId)) {
+        res.status(400).json({ ok: false, error: "codeId must be a UUID." });
+        return;
+      }
+      const row = await store.revokeEnrollmentCode?.(codeId, { managerId: managerId(req), reason: req.body?.reason || "revoked_by_security_admin" });
+      await store.auditSecurityCode?.({
+        code_id: codeId,
+        purpose: "employee_device_enrollment",
+        target_device_id: row?.device_id || null,
+        manager_id: managerId(req),
+        credential_id: credentialId(req),
+        event_type: "revoked",
+        metadata_json: { revoked: Boolean(row) },
+      });
+      res.status(200).json({ ok: true, data: { revoked: Boolean(row), code: row } });
+    } catch (error) {
+      res.status(500).json({ ok: false, error: error?.message || "Could not revoke security code." });
+    }
+  });
+
+  app.post("/admin-api/device-auth/credentials/:credentialId/revoke", requireOpsWrite, requireDeviceSecurity, async (req, res) => {
     try {
       const credentialId = String(req.params?.credentialId || "").trim();
       if (!UUID_PATTERN.test(credentialId)) {

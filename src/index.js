@@ -369,6 +369,7 @@ const TRUSTED_DEVICE_CORS_HEADERS = [
   "X-Device-Id",
   "X-Device-Label",
   "X-Device-Credential",
+  "X-Device-Security-CSRF",
   "X-Admin-Key",
   "X-Ops-Access-Key",
 ].join(", ");
@@ -387,7 +388,7 @@ function setCorsOrigin(res, req) {
 
 function setAdminApiCors(res, req) {
   setCorsOrigin(res, req);
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", TRUSTED_DEVICE_CORS_HEADERS);
 }
 
