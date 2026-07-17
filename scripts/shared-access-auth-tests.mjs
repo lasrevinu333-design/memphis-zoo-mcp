@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import {
   authenticateOpsAccessRequest,
   createAdminApiKeySession,
+  createOpsManagerSession,
   createPublicOpsManagerSession,
   installSharedAuthRoutes,
   makeOpsAccessMiddleware,
@@ -265,6 +266,63 @@ result = await invokeRoute(sessionRoute, mockRequest({
 }));
 assert.equal(result.statusCode, 200);
 assert.equal(result.payload.data.session.access_level, "full_access");
+
+const opsOnlyManager = {
+  manager_id: "22222222-2222-4222-8222-222222222222",
+  display_name: "Ops Only",
+  contact_label: "test ops manager",
+  roles: ["OPS_MANAGER"],
+  active: true,
+  revoked_at: null,
+};
+const opsOnlyCredentialId = randomUUID();
+const opsOnlySession = createOpsManagerSession({
+  credentialId: opsOnlyCredentialId,
+  deviceId: "manager-browser-ops-only",
+  manager: opsOnlyManager,
+  accessLevel: "full_access",
+  maximumAccessLevel: "full_access",
+  env,
+});
+store.rows.set(opsOnlyCredentialId, {
+  credential_id: opsOnlyCredentialId,
+  device_id: "manager-browser-ops-only",
+  device_label: "Ops only browser",
+  token_hash: "not-used-by-bearer-session-test",
+  max_access_level: "full_access",
+  manager_id: opsOnlyManager.manager_id,
+  manager: opsOnlyManager,
+  created_at: new Date().toISOString(),
+  expires_at: new Date(Date.now() + 600_000).toISOString(),
+  revoked_at: null,
+  revoked_reason: null,
+});
+
+result = await invokeRoute(createPairingRoute, mockRequest({
+  body: { ttl_seconds: 600 },
+  headers: { Authorization: `Bearer ${opsOnlySession.token}`, "X-Device-Id": "manager-browser-ops-only" },
+}));
+assert.equal(result.statusCode, 403, "ordinary OPS_MANAGER cannot create manager pairing links");
+
+result = await invokeRoute(listTrustedRoute, mockRequest({
+  headers: { Authorization: `Bearer ${opsOnlySession.token}`, "X-Device-Id": "manager-browser-ops-only" },
+}));
+assert.equal(result.statusCode, 403, "ordinary OPS_MANAGER cannot list manager trusted devices");
+
+result = await invokeRoute(revokeTrustedRoute, mockRequest({
+  params: { credentialId: fullCredentialId },
+  body: { reason: "ops_only_attempt" },
+  headers: { Authorization: `Bearer ${opsOnlySession.token}`, "X-Device-Id": "manager-browser-ops-only" },
+}));
+assert.equal(result.statusCode, 403, "ordinary OPS_MANAGER cannot revoke manager trusted devices");
+assert.notEqual(store.rows.get(fullCredentialId).revoked_reason, "ops_only_attempt");
+
+result = await invokeRoute(revokeAllRoute, mockRequest({
+  body: { reason: "ops_only_attempt_all" },
+  headers: { Authorization: `Bearer ${opsOnlySession.token}`, "X-Device-Id": "manager-browser-ops-only" },
+}));
+assert.equal(result.statusCode, 403, "ordinary OPS_MANAGER cannot revoke all manager sessions");
+store.rows.delete(opsOnlyCredentialId);
 
 result = await invokeRoute(createPairingRoute, mockRequest({
   body: { ttl_seconds: 600 },

@@ -1325,6 +1325,10 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
         sendTrustedManagerAuthFailure(res, manager);
         return;
       }
+      if (!requireManagerAdminRole(manager.session)) {
+        res.status(403).json({ ok: false, error: "Director or Security Admin manager access is required." });
+        return;
+      }
       const ttlSeconds = getPairingTtlSeconds(req.body?.ttl_seconds || req.body?.ttlSeconds);
       const managerId = String(req.body?.manager_id || req.body?.managerId || manager.session.manager_id || "");
       const data = activeStore.createManagerInvitation ? await activeStore.createManagerInvitation({
@@ -1385,6 +1389,10 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
         sendTrustedManagerAuthFailure(res, manager);
         return;
       }
+      if (!requireManagerAdminRole(manager.session)) {
+        res.status(403).json({ ok: false, error: "Director or Security Admin manager access is required." });
+        return;
+      }
       const devices = activeStore.listTrustedDevices ? await activeStore.listTrustedDevices() : [];
       res.status(200).json({ ok: true, data: { devices, current_credential_id: manager.credentialId } });
     } catch (error) {
@@ -1398,6 +1406,10 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
       const manager = await authenticateTrustedManagerDevice(req, { store: activeStore, env });
       if (!manager.ok) {
         sendTrustedManagerAuthFailure(res, manager);
+        return;
+      }
+      if (!requireManagerAdminRole(manager.session)) {
+        res.status(403).json({ ok: false, error: "Director or Security Admin manager access is required." });
         return;
       }
       const reason = String(req.body?.reason || "manager_revoke_all").slice(0, 160);
@@ -1424,6 +1436,10 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
       const manager = await authenticateTrustedManagerDevice(req, { store: activeStore, env });
       if (!manager.ok) {
         sendTrustedManagerAuthFailure(res, manager);
+        return;
+      }
+      if (!requireManagerAdminRole(manager.session)) {
+        res.status(403).json({ ok: false, error: "Director or Security Admin manager access is required." });
         return;
       }
       const credentialId = String(req.params?.credentialId || "").trim();
