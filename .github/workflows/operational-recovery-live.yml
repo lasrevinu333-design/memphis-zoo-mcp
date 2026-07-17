@@ -34,8 +34,9 @@ jobs:
           grep -Fq "$expected" <<<"$version"
           python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["ok"] is True and d["configured"] is True and d["auth_required"] is True' <<<"$moxie_health"
 
-          auth="$(curl -fsSL --max-time 40 -H 'X-Device-Id: live-manager-access-verifier' "$root/auth-api/session?access_level=full_access")"
-          token="$(python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; assert d["operations_first"] is True; assert d["session"]["access_level"]=="full_access"; print(d["session"]["token"])' <<<"$auth")"
+          auth_status="$(curl -sS --max-time 40 -o /tmp/passwordless-manager-auth.json -w '%{http_code}' -H 'X-Device-Id: live-manager-access-verifier' "$root/auth-api/session?access_level=full_access")"
+          test "$auth_status" = '401'
+          grep -Eiq 'manager|auth|denied|unauthorized|password' /tmp/passwordless-manager-auth.json
 
           for endpoint in /scan-api/health /schedule-api/health /messaging-api/health /dashboard-api/health; do
             body="$(curl -fsSL --max-time 40 "$root$endpoint")"
@@ -91,9 +92,6 @@ jobs:
             grep -Eiq '^content-type: image/' "/tmp/$asset.headers"
             test "$bytes" -gt 500
           done
-
-          summary="$(curl -fsSL --max-time 40 -H "Authorization: Bearer $token" -H 'Content-Type: application/json' -d '{}' "$root/admin-api/bundle")"
-          grep -Fq '"ok":true' <<<"$summary"
 
           window="$(curl -fsSL --max-time 40 "$root/schedule-api/generation-window?days=14")"
           python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; assert d["days"]==14 and d["ready_days"]==14 and d["missing_days"]==0; assert d["auto_generation"]["trigger_auto_ignored"] is False' <<<"$window"
