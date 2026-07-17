@@ -1,0 +1,63 @@
+name: Custodial Production Repair Gate
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches:
+      - main
+      - codex/custodial-foundation-repair-20260717
+
+permissions:
+  contents: read
+
+concurrency:
+  group: custodial-production-repair-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install exact dependencies
+        run: npm ci --ignore-scripts
+      - name: Syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r file; do node --check "$file"; done < <(find src scripts -type f \( -name '*.js' -o -name '*.mjs' \) -print | sort)
+      - name: Source contract and unit tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run --silent test:events-parser
+          npm run --silent test:events-api
+          npm run --silent test:feedback
+          npm run --silent test:schedule-ai
+          npm run --silent test:ai-intent
+          npm run --silent test:messaging
+          npm run --silent test:auth
+          npm run --silent test:dashboard
+          npm run --silent test:scheduler-overhaul
+          npm run --silent test:sch2-publish
+          npm run --silent test:foundation
+          npm run --silent test:schedule-display
+          npm run --silent test:messaging-recovery
+          npm run --silent test:manager-open
+          npm run --silent test:moxie-route
+          npm run --silent test:schedule-source-type
+          npm run --silent test:device-credentials
+          npm run --silent test:operational-recovery
+          npm run --silent test:foundation-repair
+          npm run --silent test:custodial-repair
+          npm run --silent test:schema-fingerprint
+      - name: Empty database migration rebuild
+        env:
+          SCHEMA_REBUILD_DOCKER_IMAGE: public.ecr.aws/supabase/postgres:17.6.1.143
+        run: npm run --silent test:empty-db-rebuild

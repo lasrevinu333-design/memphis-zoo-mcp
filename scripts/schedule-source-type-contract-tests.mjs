@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const scheduleApi = readFileSync(resolve('src/schedule-api.js'), 'utf8');
+const migrationPath = resolve('supabase/migrations/20260715062000_schedule_source_type_contract.sql');
 const migration = readFileSync(
-  resolve('supabase/migrations/20260715062000_schedule_source_type_contract.sql'),
+  existsSync(migrationPath)
+    ? migrationPath
+    : resolve('supabase/legacy_migrations/20260715062000_schedule_source_type_contract.sql'),
   'utf8'
 );
 

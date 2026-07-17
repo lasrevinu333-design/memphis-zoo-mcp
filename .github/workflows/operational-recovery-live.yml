@@ -21,7 +21,7 @@ jobs:
         run: |
           set -euo pipefail
           root='https://memphis-zoo-mcp.onrender.com'
-          expected='release-2026.07.16.manager-access-repair.1'
+          expected='release-2026.07.17.custodial-repair.1'
           version=''
           moxie_health=''
           for attempt in $(seq 1 60); do

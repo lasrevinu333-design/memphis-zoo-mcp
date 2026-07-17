@@ -4,7 +4,11 @@ import path from 'node:path';
 import { resolveCanonicalDevice } from '../src/device-identity.js';
 
 const root = process.cwd();
-const read = (relative) => fs.readFileSync(path.resolve(root, relative), 'utf8');
+const read = (relative) => {
+  const current = path.resolve(root, relative);
+  if (fs.existsSync(current)) return fs.readFileSync(current, 'utf8');
+  return fs.readFileSync(current.replace('/supabase/migrations/', '/supabase/legacy_migrations/'), 'utf8');
+};
 
 const indexSource = read('src/index.js');
 const scheduleSource = read('src/schedule-api.js');

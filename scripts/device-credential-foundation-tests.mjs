@@ -10,7 +10,11 @@ import {
 } from "../src/auth/device-credential-auth.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const read = (name) => fs.readFileSync(path.join(root, name), "utf8");
+const read = (name) => {
+  const current = path.join(root, name);
+  if (fs.existsSync(current)) return fs.readFileSync(current, "utf8");
+  return fs.readFileSync(current.replace("/supabase/migrations/", "/supabase/legacy_migrations/"), "utf8");
+};
 const env = {
   NODE_ENV: "production",
   RENDER: "true",

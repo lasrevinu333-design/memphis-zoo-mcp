@@ -246,7 +246,12 @@ assert.equal(verifyGeminiAdminToken(geminiSession.token, { env, now: new Date("2
 const backendIndex = readFileSync(resolve("src/index.js"), "utf8");
 const sharedAccess = readFileSync(resolve("src/auth/shared-access-auth.js"), "utf8");
 const mcpAuth = readFileSync(resolve("src/auth/mcp-connector-auth.js"), "utf8");
-const migration = readFileSync(resolve("supabase/migrations/20260715180000_ops_manager_trusted_device_auth.sql"), "utf8");
+function readMigration(name) {
+  const current = resolve("supabase/migrations", name);
+  if (existsSync(current)) return readFileSync(current, "utf8");
+  return readFileSync(resolve("supabase/legacy_migrations", name), "utf8");
+}
+const migration = readMigration("20260715180000_ops_manager_trusted_device_auth.sql");
 assert.match(backendIndex, /installSharedAuthRoutes\(app, \{ setCors: setAdminApiCors, supabase: supabaseAdmin \}\)/);
 assert.match(backendIndex, /Access-Control-Allow-Credentials/);
 assert.match(sharedAccess, /memphis_ops_trust/);
@@ -260,6 +265,7 @@ assert.match(migration, /revoke all on table public\.ops_manager_trusted_devices
 
 const engineRoot = [
   process.env.ENGINE_FIXTURE_ROOT,
+  "/home/eric/Projects/Engine-repair",
   resolve("../Engine"),
   resolve("../engine"),
   "/home/eric/Projects/memphis-zoo/Engine",
