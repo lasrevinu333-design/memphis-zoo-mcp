@@ -18,7 +18,6 @@ const productionDefaultEnv = {
 const lockedEnv = {
   ...productionDefaultEnv,
   OPS_MANAGER_AUTH_REQUIRED: "true",
-  OPS_MANAGER_PASSWORD: "manager-password",
 };
 
 assert.equal(opsManagerAuthRequired(openEnv), false);

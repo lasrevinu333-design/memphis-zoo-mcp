@@ -11,6 +11,9 @@ const MIN_TRUST_TTL_MS = 24 * 60 * 60 * 1000;
 const OPS_TRUST_COOKIE = "memphis_ops_trust";
 const ENROLLMENT_WINDOW_MS = 15 * 60 * 1000;
 const ENROLLMENT_ATTEMPT_LIMIT = 5;
+const PAIRING_TOKEN_MIN_TTL_SECONDS = 60;
+const PAIRING_TOKEN_DEFAULT_TTL_SECONDS = 10 * 60;
+const PAIRING_TOKEN_MAX_TTL_SECONDS = 15 * 60;
 const enrollmentAttempts = new Map();
 
 function safeEqual(a, b) {
@@ -97,6 +100,31 @@ function requestDeviceLabel(req) {
   return normalizeDeviceLabel(req?.body?.device_label || req?.body?.deviceLabel || req?.header?.("x-device-label") || "");
 }
 
+function normalizePairingToken(value) {
+  const token = String(value || "").trim();
+  if (!/^[a-f0-9]{64}$/i.test(token)) return "";
+  return token.toLowerCase();
+}
+
+function requestPairingToken(req) {
+  return normalizePairingToken(
+    req?.body?.pairing_token
+      || req?.body?.pairingToken
+      || req?.body?.token
+      || req?.query?.ops_pairing_token
+      || req?.query?.pairing_token
+      || req?.query?.token
+      || ""
+  );
+}
+
+function pairingEnrollmentUrl({ token, req = null, env = process.env } = {}) {
+  const base = String(req?.body?.return_url || req?.body?.returnUrl || getManagerHubUrl(env)).trim();
+  const url = new URL(base || getManagerHubUrl(env));
+  url.searchParams.set("ops_pairing_token", token);
+  return url.toString();
+}
+
 function bearerToken(req) {
   const authorization = String(req?.header?.("authorization") || "").trim();
   if (/^bearer\s+/i.test(authorization)) return authorization.replace(/^bearer\s+/i, "").trim();
@@ -117,12 +145,21 @@ function getSessionSecret(env = process.env) {
   ).trim();
 }
 
-function getEnrollmentPassword(env = process.env) {
-  const preferred = String(env.OPS_MANAGER_PASSWORD || "").trim();
-  if (preferred) return { password: preferred, source: "OPS_MANAGER_PASSWORD" };
-  const transitional = String(env.GEMINI_ADMIN_PASSWORD || env.MOXIE_WEB_PASSWORD || "").trim();
-  if (transitional) return { password: transitional, source: env.GEMINI_ADMIN_PASSWORD ? "GEMINI_ADMIN_PASSWORD" : "MOXIE_WEB_PASSWORD" };
-  return { password: "", source: "unconfigured" };
+function getPairingTtlSeconds(value) {
+  return Math.floor(boundedNumber(
+    value,
+    PAIRING_TOKEN_DEFAULT_TTL_SECONDS,
+    PAIRING_TOKEN_MIN_TTL_SECONDS,
+    PAIRING_TOKEN_MAX_TTL_SECONDS,
+  ));
+}
+
+function getManagerHubUrl(env = process.env) {
+  return String(
+    env.OPS_MANAGER_HUB_URL
+      || env.MANAGER_HUB_URL
+      || "https://lasrevinu333-design.github.io/Engine/start_page1.html"
+  ).trim();
 }
 
 function getAccessTtlMs(env = process.env) {
@@ -261,11 +298,8 @@ export function createOpenOpsManagerSession(options = {}) {
 
 export function getSharedAccessConfig(env = process.env) {
   const adminApiKeyValue = String(env.ADMIN_API_KEY || "").trim();
-  const enrollment = getEnrollmentPassword(env);
   return {
     adminApiKey: adminApiKeyValue,
-    enrollmentConfigured: Boolean(enrollment.password),
-    enrollmentPasswordSource: enrollment.source,
     sessionSecretConfigured: Boolean(getSessionSecret(env)),
     productionLike: isProductionLike(env),
     accessTtlMs: getAccessTtlMs(env),
@@ -295,18 +329,31 @@ export function authenticateOpsAccessRequest(req, { env = process.env, now = new
   return { ok: false, status: 401, error: "Ops Manager authentication required." };
 }
 
-export function makeOpsAccessMiddleware({ env = process.env, requireWrite = false } = {}) {
-  return function requireOpsAccess(req, res, next) {
+export function makeOpsAccessMiddleware({ env = process.env, requireWrite = false, trustedDeviceStore = null, supabase = null } = {}) {
+  const store = trustedDeviceStore || createSupabaseTrustedDeviceStore(supabase);
+  return async function requireOpsAccess(req, res, next) {
     const result = authenticateOpsAccessRequest(req, { env });
     if (!result.ok) {
       res.status(result.status || 401).json({ ok: false, error: result.error || "Unauthorized" });
       return;
     }
-    if (requireWrite && result.session?.read_only) {
+    let session = result.session;
+    try {
+      const trustedState = await verifySessionAgainstTrustedDeviceStore(session, { store, env });
+      if (!trustedState.ok) {
+        res.status(trustedState.status || 401).json({ ok: false, error: trustedState.error || "Unauthorized" });
+        return;
+      }
+      session = trustedState.session;
+    } catch (error) {
+      res.status(error?.status || 500).json({ ok: false, error: error?.message || "Ops Manager session verification failed." });
+      return;
+    }
+    if (requireWrite && session?.read_only) {
       res.status(403).json({ ok: false, error: "Read-only Ops Manager session cannot make changes." });
       return;
     }
-    req.memphisAuth = result.session;
+    req.memphisAuth = session;
     next();
   };
 }
@@ -430,9 +477,86 @@ function normalizeStoreRow(row) {
   };
 }
 
+function trustedDevicePublicView(row) {
+  const normalized = normalizeStoreRow(row);
+  if (!normalized) return null;
+  return {
+    credential_id: normalized.credential_id,
+    device_id: normalized.device_id,
+    device_label: normalized.device_label,
+    max_access_level: normalized.max_access_level,
+    created_at: normalized.created_at,
+    last_used_at: normalized.last_used_at,
+    expires_at: normalized.expires_at,
+    revoked_at: normalized.revoked_at,
+    revoked_reason: normalized.revoked_reason,
+    active: !normalized.revoked_at && (!normalized.expires_at || Date.parse(normalized.expires_at) > Date.now()),
+  };
+}
+
+async function verifySessionAgainstTrustedDeviceStore(session, { store, env = process.env, now = new Date() } = {}) {
+  if (!session?.trusted_device) return { ok: true, session };
+  if (!store?.find) return { ok: true, session };
+  const credentialId = String(session.credential_id || "").trim();
+  if (!credentialId) return { ok: false, status: 401, error: "This manager device session is no longer trusted." };
+  const row = await store.find(credentialId);
+  if (!row || row.revoked_at) return { ok: false, status: 401, error: "This manager device session is no longer trusted." };
+  const expiresAt = Date.parse(String(row.expires_at || ""));
+  if (!Number.isFinite(expiresAt) || expiresAt <= now.getTime()) {
+    return { ok: false, status: 401, error: "This manager device enrollment expired." };
+  }
+  if (session.device_id && normalizeDeviceId(session.device_id) !== normalizeDeviceId(row.device_id)) {
+    return { ok: false, status: 401, error: "This manager device session is no longer trusted." };
+  }
+  const accessLevel = clampAccessLevel(session.access_level, row.max_access_level);
+  return {
+    ok: true,
+    session: {
+      ...session,
+      device_id: row.device_id,
+      credential_id: row.credential_id,
+      access_level: accessLevel,
+      read_only: accessLevel === "read_only",
+    },
+    row,
+  };
+}
+
 export function createSupabaseTrustedDeviceStore(supabase) {
   if (!supabase) return null;
   return {
+    async createPairingToken(record = {}) {
+      const { data, error } = await supabase.rpc("ops_manager_create_pairing_token", {
+        p_created_by_credential_id: record.created_by_credential_id || null,
+        p_created_by_device_id: normalizeDeviceId(record.created_by_device_id || ""),
+        p_created_by_actor: String(record.created_by_actor || "ops_manager").slice(0, 120),
+        p_intended_device_label: normalizeDeviceLabel(record.intended_device_label || ""),
+        p_ttl_seconds: getPairingTtlSeconds(record.ttl_seconds),
+        p_metadata_json: record.metadata_json && typeof record.metadata_json === "object" && !Array.isArray(record.metadata_json)
+          ? record.metadata_json
+          : {},
+      });
+      if (error) throw error;
+      return data;
+    },
+    async consumePairingAndEnroll(record = {}) {
+      const { data, error } = await supabase.rpc("ops_manager_consume_pairing_and_enroll", {
+        p_token: normalizePairingToken(record.pairing_token || record.token),
+        p_credential_id: record.credential_id,
+        p_device_id: normalizeDeviceId(record.device_id || ""),
+        p_device_label: normalizeDeviceLabel(record.device_label || ""),
+        p_trust_token_hash: String(record.token_hash || ""),
+        p_max_access_level: normalizeOpsAccessLevel(record.max_access_level || "full_access"),
+        p_user_agent_hash: record.user_agent_hash || null,
+        p_created_ip_hash: record.created_ip_hash || null,
+        p_expires_at: record.expires_at,
+        p_metadata_json: record.metadata_json && typeof record.metadata_json === "object" && !Array.isArray(record.metadata_json)
+          ? record.metadata_json
+          : {},
+      });
+      if (error) throw error;
+      return data;
+    },
     async enroll(record) {
       const { data, error } = await supabase
         .from("ops_manager_trusted_devices")
@@ -458,6 +582,14 @@ export function createSupabaseTrustedDeviceStore(supabase) {
         .eq("credential_id", credentialId);
       if (error) throw error;
     },
+    async listTrustedDevices() {
+      const { data, error } = await supabase
+        .from("ops_manager_trusted_devices")
+        .select("credential_id,device_id,device_label,max_access_level,created_at,last_used_at,expires_at,revoked_at,revoked_reason")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data || []).map(trustedDevicePublicView).filter(Boolean);
+    },
     async revoke(credentialId, reason = "logout") {
       const { error } = await supabase
         .from("ops_manager_trusted_devices")
@@ -473,6 +605,15 @@ export function createSupabaseTrustedDeviceStore(supabase) {
         .eq("device_id", normalizeDeviceId(deviceId))
         .is("revoked_at", null);
       if (error) throw error;
+    },
+    async revokeAll(reason = "revoke_all") {
+      const { data, error } = await supabase
+        .from("ops_manager_trusted_devices")
+        .update({ revoked_at: new Date().toISOString(), revoked_reason: String(reason || "revoke_all").slice(0, 160) })
+        .is("revoked_at", null)
+        .select("credential_id,device_id,device_label,max_access_level,created_at,last_used_at,expires_at,revoked_at,revoked_reason");
+      if (error) throw error;
+      return (data || []).map(trustedDevicePublicView).filter(Boolean);
     },
     async audit(event) {
       const { error } = await supabase.from("ops_manager_auth_events").insert(event);
@@ -526,6 +667,55 @@ function sendAuthError(res, error, fallback = "Ops Manager authentication failed
   res.status(error?.status || 500).json({ ok: false, error: error?.message || fallback });
 }
 
+async function authenticateTrustedManagerDevice(req, { store, env = process.env, now = new Date() } = {}) {
+  const activeStore = trustedDeviceStoreOrThrow(store);
+  let session = null;
+  let trustedRow = null;
+  let credentialId = "";
+
+  const explicit = authenticatePresentedOpsAccessRequest(req, { env, now });
+  if (explicit.presented) {
+    if (!explicit.ok) return { ok: false, status: explicit.status || 401, error: explicit.error || "Unauthorized" };
+    if (!explicit.session?.trusted_device) {
+      return { ok: false, status: 403, error: "A trusted Ops Manager device is required." };
+    }
+    const trustedState = await verifySessionAgainstTrustedDeviceStore(explicit.session, { store: activeStore, env, now });
+    if (!trustedState.ok) return trustedState;
+    session = trustedState.session;
+    trustedRow = trustedState.row;
+    credentialId = session.credential_id;
+  } else {
+    const trusted = await verifyTrustedDevice(req, { store: activeStore, env, now });
+    if (!trusted.ok) return trusted;
+    trustedRow = trusted.row;
+    credentialId = trusted.credentialId;
+    session = createOpsManagerSession({
+      credentialId,
+      deviceId: trusted.row.device_id,
+      accessLevel: "full_access",
+      maximumAccessLevel: trusted.row.max_access_level,
+      authMode: "trusted_device",
+      env,
+      now,
+    });
+  }
+
+  if (!session || session.read_only || session.access_level !== "full_access") {
+    return { ok: false, status: 403, error: "Full Ops Manager trusted-device access is required." };
+  }
+  if (activeStore.touch && credentialId) {
+    await activeStore.touch(credentialId, {
+      last_ip_hash: privacyHash(requestIp(req), env, "ip"),
+      last_user_agent_hash: privacyHash(requestUserAgent(req), env, "ua"),
+    });
+  }
+  return { ok: true, session, row: trustedRow, credentialId };
+}
+
+function sendTrustedManagerAuthFailure(res, result) {
+  res.status(result?.status || 401).json({ ok: false, error: result?.error || "Trusted Ops Manager device required." });
+}
+
 export function installSharedAuthRoutes(app, { setCors, env = process.env, supabase = null, trustedDeviceStore = null } = {}) {
   const applyCors = typeof setCors === "function" ? setCors : (_res) => {};
   const store = trustedDeviceStore || createSupabaseTrustedDeviceStore(supabase);
@@ -556,49 +746,51 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
     res.status(200).json({ ok: true, data: { session: result.session } });
   });
 
-  app.post("/auth-api/ops/enroll", async (req, res) => {
+  app.post("/auth-api/ops/pairing/consume", async (req, res) => {
     const rate = consumeEnrollmentAttempt(req);
     if (!rate.allowed) {
       res.setHeader?.("Retry-After", String(rate.retryAfterSeconds));
-      res.status(429).json({ ok: false, error: "Too many enrollment attempts. Try again later." });
+      res.status(429).json({ ok: false, error: "Too many pairing attempts. Try again later." });
       return;
     }
     try {
       const activeStore = trustedDeviceStoreOrThrow(store);
-      const enrollment = getEnrollmentPassword(env);
-      if (!enrollment.password) throw Object.assign(new Error("Ops Manager enrollment password is not configured."), { status: 503 });
-      const password = String(req.body?.password || "").trim();
-      if (!password || !safeEqual(password, enrollment.password)) {
-        await auditTrustedDevice(activeStore, authEvent(req, { eventType: "enrollment_failed", success: false, detail: { reason: "invalid_password" }, env }));
-        throw Object.assign(new Error("Manager password was not accepted."), { status: 401 });
-      }
+      const pairingToken = requestPairingToken(req);
+      if (!pairingToken) throw Object.assign(new Error("A valid one-time Ops Manager pairing token is required."), { status: 400 });
       const deviceId = requestDeviceId(req);
       if (!deviceId) throw Object.assign(new Error("A stable manager device ID is required."), { status: 400 });
       const deviceLabel = requestDeviceLabel(req) || deviceId;
-      const maximumAccessLevel = "full_access";
       const credentialId = randomUUID();
       const secret = randomBytes(32).toString("base64url");
       const now = new Date();
       const expiresAt = new Date(now.getTime() + getTrustTtlMs(env)).toISOString();
-      await activeStore.revokeActiveForDevice?.(deviceId, "device_re-enrolled");
-      const row = await activeStore.enroll({
+      const data = await activeStore.consumePairingAndEnroll({
+        pairing_token: pairingToken,
         credential_id: credentialId,
         device_id: deviceId,
         device_label: deviceLabel,
         token_hash: trustTokenHash(secret, env),
-        max_access_level: maximumAccessLevel,
+        max_access_level: "full_access",
         user_agent_hash: privacyHash(requestUserAgent(req), env, "ua"),
         created_ip_hash: privacyHash(requestIp(req), env, "ip"),
         expires_at: expiresAt,
-        metadata_json: { enrollment_password_source: enrollment.source },
+        metadata_json: {
+          enrolled_by: "one_time_pairing_link",
+          user_agent_hash: privacyHash(requestUserAgent(req), env, "ua"),
+          ip_hash: privacyHash(requestIp(req), env, "ip"),
+        },
       });
+      if (!data?.ok) {
+        const status = Number(data?.status) || (["used", "expired", "revoked"].includes(data?.reason) ? 410 : 401);
+        throw Object.assign(new Error("Ops Manager pairing link is invalid, expired, or already used."), { status });
+      }
       const trustValue = `${credentialId}.${secret}`;
       setTrustCookie(res, trustValue, env);
       const session = createOpsManagerSession({
         credentialId,
-        deviceId: row?.device_id || deviceId,
+        deviceId: data.trusted_device?.device_id || deviceId,
         accessLevel: requestedOpsAccessLevel(req),
-        maximumAccessLevel: row?.max_access_level || maximumAccessLevel,
+        maximumAccessLevel: data.trusted_device?.max_access_level || "full_access",
         authMode: "trusted_device",
         env,
         now,
@@ -607,9 +799,12 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
       await auditTrustedDevice(activeStore, authEvent(req, {
         credentialId,
         deviceId,
-        eventType: "device_enrolled",
+        eventType: "device_enrolled_by_pairing",
         success: true,
-        detail: { maximum_access_level: maximumAccessLevel, password_source: enrollment.source },
+        detail: {
+          pairing_id: data.pairing_id || null,
+          maximum_access_level: data.trusted_device?.max_access_level || "full_access",
+        },
         env,
       }));
       res.status(200).json({
@@ -621,12 +816,135 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
             device_id: deviceId,
             device_label: deviceLabel,
             expires_at: expiresAt,
+            max_access_level: data.trusted_device?.max_access_level || "full_access",
           },
         },
       });
     } catch (error) {
-      sendAuthError(res, error, "Device enrollment failed.");
+      sendAuthError(res, error, "Ops Manager device pairing failed.");
     }
+  });
+
+  app.post("/auth-api/ops/pairing-links", async (req, res) => {
+    try {
+      const activeStore = trustedDeviceStoreOrThrow(store);
+      const manager = await authenticateTrustedManagerDevice(req, { store: activeStore, env });
+      if (!manager.ok) {
+        sendTrustedManagerAuthFailure(res, manager);
+        return;
+      }
+      const ttlSeconds = getPairingTtlSeconds(req.body?.ttl_seconds || req.body?.ttlSeconds);
+      const data = await activeStore.createPairingToken({
+        created_by_credential_id: manager.credentialId,
+        created_by_device_id: manager.session.device_id,
+        created_by_actor: "trusted_ops_manager_device",
+        intended_device_label: requestDeviceLabel(req) || normalizeDeviceLabel(req.body?.intended_device_label || req.body?.device_label || ""),
+        ttl_seconds: ttlSeconds,
+        metadata_json: {
+          created_from: "manager_device_admin",
+          user_agent_hash: privacyHash(requestUserAgent(req), env, "ua"),
+          ip_hash: privacyHash(requestIp(req), env, "ip"),
+        },
+      });
+      if (!data?.ok || !data.pairing_token) throw Object.assign(new Error("Pairing link was not created."), { status: 500 });
+      await auditTrustedDevice(activeStore, authEvent(req, {
+        credentialId: manager.credentialId,
+        deviceId: manager.session.device_id,
+        eventType: "pairing_link_created",
+        success: true,
+        detail: { pairing_id: data.pairing_id || null, ttl_seconds: ttlSeconds },
+        env,
+      }));
+      res.status(200).json({
+        ok: true,
+        data: {
+          pairing_id: data.pairing_id,
+          enrollment_url: pairingEnrollmentUrl({ token: data.pairing_token, req, env }),
+          expires_at: data.expires_at,
+          ttl_seconds: ttlSeconds,
+        },
+      });
+    } catch (error) {
+      sendAuthError(res, error, "Pairing link creation failed.");
+    }
+  });
+
+  app.get("/auth-api/ops/trusted-devices", async (req, res) => {
+    try {
+      const activeStore = trustedDeviceStoreOrThrow(store);
+      const manager = await authenticateTrustedManagerDevice(req, { store: activeStore, env });
+      if (!manager.ok) {
+        sendTrustedManagerAuthFailure(res, manager);
+        return;
+      }
+      const devices = activeStore.listTrustedDevices ? await activeStore.listTrustedDevices() : [];
+      res.status(200).json({ ok: true, data: { devices, current_credential_id: manager.credentialId } });
+    } catch (error) {
+      sendAuthError(res, error, "Trusted manager devices could not be listed.");
+    }
+  });
+
+  app.post("/auth-api/ops/trusted-devices/revoke-all", async (req, res) => {
+    try {
+      const activeStore = trustedDeviceStoreOrThrow(store);
+      const manager = await authenticateTrustedManagerDevice(req, { store: activeStore, env });
+      if (!manager.ok) {
+        sendTrustedManagerAuthFailure(res, manager);
+        return;
+      }
+      const reason = String(req.body?.reason || "manager_revoke_all").slice(0, 160);
+      const revoked = activeStore.revokeAll ? await activeStore.revokeAll(reason) : [];
+      await auditTrustedDevice(activeStore, authEvent(req, {
+        credentialId: manager.credentialId,
+        deviceId: manager.session.device_id,
+        eventType: "all_manager_devices_revoked",
+        success: true,
+        detail: { reason, revoked_count: revoked.length },
+        env,
+      }));
+      clearTrustCookie(res, env);
+      res.status(200).json({ ok: true, data: { revoked_count: revoked.length, revoked_devices: revoked } });
+    } catch (error) {
+      clearTrustCookie(res, env);
+      sendAuthError(res, error, "Trusted manager devices could not be revoked.");
+    }
+  });
+
+  app.post("/auth-api/ops/trusted-devices/:credentialId/revoke", async (req, res) => {
+    try {
+      const activeStore = trustedDeviceStoreOrThrow(store);
+      const manager = await authenticateTrustedManagerDevice(req, { store: activeStore, env });
+      if (!manager.ok) {
+        sendTrustedManagerAuthFailure(res, manager);
+        return;
+      }
+      const credentialId = String(req.params?.credentialId || "").trim();
+      if (!/^[0-9a-f-]{36}$/i.test(credentialId)) throw Object.assign(new Error("A valid trusted-device credential ID is required."), { status: 400 });
+      const reason = String(req.body?.reason || "manager_revoke_device").slice(0, 160);
+      await activeStore.revoke?.(credentialId, reason);
+      await auditTrustedDevice(activeStore, authEvent(req, {
+        credentialId,
+        deviceId: requestDeviceId(req),
+        eventType: "device_revoked_by_manager",
+        success: true,
+        detail: { reason, revoked_by_credential_id: manager.credentialId },
+        env,
+      }));
+      if (credentialId === manager.credentialId) clearTrustCookie(res, env);
+      res.status(200).json({ ok: true, data: { revoked_credential_id: credentialId } });
+    } catch (error) {
+      sendAuthError(res, error, "Trusted manager device could not be revoked.");
+    }
+  });
+
+  app.post("/auth-api/ops/enroll", async (req, res) => {
+    await auditTrustedDevice(store, authEvent(req, {
+      eventType: "legacy_enrollment_route_rejected",
+      success: false,
+      detail: { reason: "one_time_pairing_required" },
+      env,
+    }));
+    res.status(410).json({ ok: false, error: "Ops Manager enrollment uses one-time trusted-device pairing links." });
   });
 
   app.get("/auth-api/session", async (req, res) => {
@@ -637,7 +955,12 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
           res.status(explicit.status || 401).json({ ok: false, error: explicit.error || "Invalid manager session." });
           return;
         }
-        res.status(200).json({ ok: true, data: { session: explicit.session, operational_day: getCSTDate() } });
+        const trustedState = await verifySessionAgainstTrustedDeviceStore(explicit.session, { store, env });
+        if (!trustedState.ok) {
+          res.status(trustedState.status || 401).json({ ok: false, error: trustedState.error || "Invalid manager session." });
+          return;
+        }
+        res.status(200).json({ ok: true, data: { session: trustedState.session, operational_day: getCSTDate() } });
         return;
       }
       if (!opsManagerAuthRequired(env)) {
@@ -726,7 +1049,8 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
       data: {
         passwordless_manager_access: config.passwordlessManagerAccess,
         operations_first: config.passwordlessManagerAccess,
-        trusted_device_enrollment: !config.passwordlessManagerAccess && config.enrollmentConfigured && Boolean(store),
+        trusted_device_enrollment: !config.passwordlessManagerAccess && Boolean(store),
+        trusted_device_pairing: !config.passwordlessManagerAccess && Boolean(store),
         access_token_ttl_seconds: Math.floor(config.accessTtlMs / 1000),
         trusted_device_ttl_days: Math.floor(config.trustTtlMs / 86_400_000),
       },

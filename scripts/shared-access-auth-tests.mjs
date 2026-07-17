@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { randomUUID } from "node:crypto";
 import {
   authenticateOpsAccessRequest,
   createAdminApiKeySession,
@@ -15,7 +16,6 @@ import { loginGeminiAdmin, verifyGeminiAdminToken } from "../src/auth/gemini-adm
 const env = {
   NODE_ENV: "production",
   ADMIN_API_KEY: "service-key",
-  OPS_MANAGER_PASSWORD: "manager-password",
   OPS_MANAGER_SESSION_SECRET: "test-ops-session-secret",
   OPS_MANAGER_ACCESS_TTL_MS: "900000",
   OPS_MANAGER_TRUST_TTL_MS: String(10 * 365 * 24 * 60 * 60 * 1000),
@@ -27,13 +27,14 @@ const env = {
   OPS_MANAGER_AUTH_REQUIRED: "true",
 };
 
-function mockRequest({ query = {}, body = {}, headers = {}, ip = "127.0.0.1" } = {}) {
+function mockRequest({ query = {}, body = {}, headers = {}, params = {}, ip = "127.0.0.1" } = {}) {
   const normalizedHeaders = Object.fromEntries(
     Object.entries(headers).map(([key, value]) => [String(key).toLowerCase(), value])
   );
   return {
     query,
     body,
+    params,
     ip,
     headers: normalizedHeaders,
     header(name) {
@@ -73,7 +74,7 @@ async function invokeRoute(handler, req) {
   return { statusCode, payload, headers };
 }
 
-function invokeMiddleware(middleware, req) {
+async function invokeMiddleware(middleware, req) {
   let statusCode = 200;
   let payload = null;
   let nextCalled = false;
@@ -81,22 +82,83 @@ function invokeMiddleware(middleware, req) {
     status(code) { statusCode = code; return this; },
     json(value) { payload = value; return this; },
   };
-  middleware(req, res, () => { nextCalled = true; });
+  await middleware(req, res, () => { nextCalled = true; });
   return { statusCode, payload, nextCalled, auth: req.memphisAuth || null };
 }
 
 function makeMemoryTrustedDeviceStore() {
   const rows = new Map();
   const events = [];
+  const pairings = new Map();
+  let tokenCounter = 1;
+  function publicRow(row) {
+    const { token_hash, user_agent_hash, created_ip_hash, last_ip_hash, last_user_agent_hash, metadata_json, ...safe } = row;
+    return safe;
+  }
   return {
     rows,
     events,
+    pairings,
+    async createPairingToken(record = {}) {
+      const token = String(tokenCounter++).padStart(64, "0");
+      const row = {
+        pairing_id: randomUUID(),
+        pairing_token: token,
+        created_by_credential_id: record.created_by_credential_id || null,
+        created_by_device_id: record.created_by_device_id || "",
+        expires_at: new Date(Date.now() + 600_000).toISOString(),
+        used_at: null,
+        revoked_at: null,
+      };
+      pairings.set(token, row);
+      return { ok: true, pairing_id: row.pairing_id, pairing_token: token, expires_at: row.expires_at, ttl_seconds: 600, max_access_level: "full_access" };
+    },
+    async consumePairingAndEnroll(record = {}) {
+      const token = String(record.pairing_token || record.token || "");
+      const pairing = pairings.get(token);
+      if (!pairing) return { ok: false, status: 401, reason: "invalid" };
+      if (pairing.revoked_at) return { ok: false, status: 410, reason: "revoked", pairing_id: pairing.pairing_id };
+      if (pairing.used_at) return { ok: false, status: 410, reason: "used", pairing_id: pairing.pairing_id };
+      if (Date.parse(pairing.expires_at) <= Date.now()) return { ok: false, status: 410, reason: "expired", pairing_id: pairing.pairing_id };
+      for (const [id, row] of rows) {
+        if (row.device_id === record.device_id && !row.revoked_at) rows.set(id, { ...row, revoked_at: new Date().toISOString(), revoked_reason: "device_re-enrolled_by_pairing" });
+      }
+      const now = new Date().toISOString();
+      const row = {
+        credential_id: record.credential_id,
+        device_id: record.device_id,
+        device_label: record.device_label,
+        token_hash: record.token_hash,
+        max_access_level: record.max_access_level || "full_access",
+        created_at: now,
+        last_used_at: null,
+        expires_at: record.expires_at,
+        revoked_at: null,
+        revoked_reason: null,
+        metadata_json: { pairing_id: pairing.pairing_id },
+      };
+      rows.set(record.credential_id, row);
+      pairings.set(token, { ...pairing, used_at: now, used_by_credential_id: record.credential_id, used_by_device_id: record.device_id });
+      return { ok: true, pairing_id: pairing.pairing_id, trusted_device: publicRow(row) };
+    },
     async enroll(record) { rows.set(record.credential_id, { ...record, created_at: new Date().toISOString(), revoked_at: null }); return rows.get(record.credential_id); },
     async find(id) { return rows.get(id) || null; },
     async touch(id, patch = {}) { const row = rows.get(id); if (row) rows.set(id, { ...row, ...patch, last_used_at: new Date().toISOString() }); },
+    async listTrustedDevices() { return Array.from(rows.values()).map(publicRow).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))); },
     async revoke(id, reason = "logout") { const row = rows.get(id); if (row) rows.set(id, { ...row, revoked_at: new Date().toISOString(), revoked_reason: reason }); },
     async revokeActiveForDevice(deviceId, reason = "re-enrolled") {
       for (const [id, row] of rows) if (row.device_id === deviceId && !row.revoked_at) rows.set(id, { ...row, revoked_at: new Date().toISOString(), revoked_reason: reason });
+    },
+    async revokeAll(reason = "revoke_all") {
+      const revoked = [];
+      for (const [id, row] of rows) {
+        if (!row.revoked_at) {
+          const next = { ...row, revoked_at: new Date().toISOString(), revoked_reason: reason };
+          rows.set(id, next);
+          revoked.push(publicRow(next));
+        }
+      }
+      return revoked;
     },
     async audit(event) { events.push(event); },
   };
@@ -125,29 +187,33 @@ const store = makeMemoryTrustedDeviceStore();
 const routes = captureAuthRoutes(env, store);
 const sessionRoute = routes.get("GET /auth-api/session");
 const enrollRoute = routes.get("POST /auth-api/ops/enroll");
+const consumePairingRoute = routes.get("POST /auth-api/ops/pairing/consume");
+const createPairingRoute = routes.get("POST /auth-api/ops/pairing-links");
+const listTrustedRoute = routes.get("GET /auth-api/ops/trusted-devices");
+const revokeTrustedRoute = routes.get("POST /auth-api/ops/trusted-devices/:credentialId/revoke");
+const revokeAllRoute = routes.get("POST /auth-api/ops/trusted-devices/revoke-all");
 const logoutRoute = routes.get("POST /auth-api/ops/logout");
-assert.equal(typeof sessionRoute, "function");
-assert.equal(typeof enrollRoute, "function");
-assert.equal(typeof logoutRoute, "function");
+for (const route of [sessionRoute, enrollRoute, consumePairingRoute, createPairingRoute, listTrustedRoute, revokeTrustedRoute, revokeAllRoute, logoutRoute]) assert.equal(typeof route, "function");
 
 let result = await invokeRoute(sessionRoute, mockRequest({
   query: { access_level: "full_access" },
   headers: { "X-Device-Id": "manager-browser-full" },
 }));
-assert.equal(result.statusCode, 401, "passwordless manager sessions must be rejected");
+assert.equal(result.statusCode, 401, "untrusted manager sessions must be rejected");
 assert.equal(result.payload.enrollment_required, true);
 assert.equal(store.rows.size, 0);
 
 result = await invokeRoute(enrollRoute, mockRequest({
-  body: { password: "wrong", device_id: "manager-browser-full", access_level: "full_access" },
+  body: { device_id: "manager-browser-full", access_level: "full_access" },
   headers: { "user-agent": "test-browser" },
 }));
-assert.equal(result.statusCode, 401, "wrong manager password must be rejected");
+assert.equal(result.statusCode, 410, "legacy Ops Manager enrollment route must be disabled");
 assert.equal(store.rows.size, 0);
 
-result = await invokeRoute(enrollRoute, mockRequest({
+const bootstrapPairing = await store.createPairingToken({ created_by_actor: "repair_session" });
+result = await invokeRoute(consumePairingRoute, mockRequest({
   body: {
-    password: env.OPS_MANAGER_PASSWORD,
+    pairing_token: bootstrapPairing.pairing_token,
     device_id: "manager-browser-full",
     device_label: "Eric office computer",
     access_level: "full_access",
@@ -157,32 +223,21 @@ result = await invokeRoute(enrollRoute, mockRequest({
 assert.equal(result.statusCode, 200);
 assert.equal(result.payload.data.session.access_level, "full_access");
 assert.equal(result.payload.data.session.auth_mode, "trusted_device");
+assert.equal(result.payload.data.session.trusted_device, true);
 assert.equal(store.rows.size, 1);
 const trustCookie = cookiePair(result.headers.get("set-cookie"));
 assert.match(trustCookie, /^memphis_ops_trust=/);
 assert.match(String(result.headers.get("set-cookie")), /HttpOnly/);
 assert.match(String(result.headers.get("set-cookie")), /Max-Age=/);
-assert.equal(JSON.stringify(result.payload).includes("token_hash"), false, "server must not return the persisted hash");
+assert.equal(JSON.stringify(result.payload).includes("token_hash"), false, "server must not return persisted hashes");
 const fullAccessToken = result.payload.data.session.token;
+const fullCredentialId = result.payload.data.trusted_device.credential_id;
 
-let readOnlyEnrollment = await invokeRoute(enrollRoute, mockRequest({
-  body: {
-    password: env.OPS_MANAGER_PASSWORD,
-    device_id: "manager-browser-readonly-entry",
-    device_label: "Read-only entry browser",
-    access_level: "read_only",
-    maximum_access_level: "read_only",
-  },
+result = await invokeRoute(consumePairingRoute, mockRequest({
+  body: { pairing_token: bootstrapPairing.pairing_token, device_id: "manager-browser-other", device_label: "Other browser" },
 }));
-assert.equal(readOnlyEnrollment.statusCode, 200);
-assert.equal(readOnlyEnrollment.payload.data.session.access_level, "read_only");
-const readOnlyEnrollmentCookie = cookiePair(readOnlyEnrollment.headers.get("set-cookie"));
-readOnlyEnrollment = await invokeRoute(sessionRoute, mockRequest({
-  query: { access_level: "full_access" },
-  headers: { Cookie: readOnlyEnrollmentCookie },
-}));
-assert.equal(readOnlyEnrollment.statusCode, 200, "one trusted-device enrollment must work for both manager hubs");
-assert.equal(readOnlyEnrollment.payload.data.session.access_level, "full_access");
+assert.equal(result.statusCode, 410, "pairing tokens must be single-use");
+assert.equal(store.rows.size, 1);
 
 result = await invokeRoute(sessionRoute, mockRequest({
   query: { access_level: "read_only" },
@@ -190,7 +245,6 @@ result = await invokeRoute(sessionRoute, mockRequest({
 }));
 assert.equal(result.statusCode, 200);
 assert.equal(result.payload.data.session.access_level, "read_only");
-assert.equal(result.payload.data.session.read_only, true);
 const readOnlyToken = result.payload.data.session.token;
 
 result = await invokeRoute(sessionRoute, mockRequest({
@@ -200,20 +254,52 @@ result = await invokeRoute(sessionRoute, mockRequest({
 assert.equal(result.statusCode, 200);
 assert.equal(result.payload.data.session.access_level, "full_access");
 
-const viewMiddleware = makeOpsAccessMiddleware({ env });
-const writeMiddleware = makeOpsAccessMiddleware({ env, requireWrite: true });
-let guarded = invokeMiddleware(viewMiddleware, mockRequest({ headers: { Authorization: `Bearer ${readOnlyToken}` } }));
+result = await invokeRoute(createPairingRoute, mockRequest({
+  body: { ttl_seconds: 600 },
+  headers: { Authorization: `Bearer ${fullAccessToken}`, "X-Device-Id": "manager-browser-full" },
+}));
+assert.equal(result.statusCode, 200);
+assert.match(result.payload.data.enrollment_url, /ops_pairing_token=[a-f0-9]{64}/);
+assert.equal(JSON.stringify(result.payload).includes("token_hash"), false, "pairing-link responses must not include persisted hashes");
+const secondPairingUrl = new URL(result.payload.data.enrollment_url);
+const secondPairingToken = secondPairingUrl.searchParams.get("ops_pairing_token");
+
+result = await invokeRoute(listTrustedRoute, mockRequest({
+  headers: { Authorization: `Bearer ${fullAccessToken}`, "X-Device-Id": "manager-browser-full" },
+}));
+assert.equal(result.statusCode, 200);
+assert.equal(result.payload.data.devices.length, 1);
+assert.equal(JSON.stringify(result.payload).includes("token_hash"), false, "trusted-device list must not include token hashes");
+
+result = await invokeRoute(consumePairingRoute, mockRequest({
+  body: { pairing_token: secondPairingToken, device_id: "manager-browser-second", device_label: "Second trusted manager" },
+}));
+assert.equal(result.statusCode, 200);
+assert.equal(store.rows.size, 2);
+const secondCredentialId = result.payload.data.trusted_device.credential_id;
+
+result = await invokeRoute(revokeTrustedRoute, mockRequest({
+  params: { credentialId: secondCredentialId },
+  body: { reason: "unit_test_revoke" },
+  headers: { Authorization: `Bearer ${fullAccessToken}`, "X-Device-Id": "manager-browser-full" },
+}));
+assert.equal(result.statusCode, 200);
+assert.equal(store.rows.get(secondCredentialId).revoked_reason, "unit_test_revoke");
+
+const viewMiddleware = makeOpsAccessMiddleware({ env, trustedDeviceStore: store });
+const writeMiddleware = makeOpsAccessMiddleware({ env, requireWrite: true, trustedDeviceStore: store });
+let guarded = await invokeMiddleware(viewMiddleware, mockRequest({ headers: { Authorization: `Bearer ${readOnlyToken}` } }));
 assert.equal(guarded.nextCalled, true);
 assert.equal(guarded.auth.access_level, "read_only");
 
-guarded = invokeMiddleware(writeMiddleware, mockRequest({ headers: { Authorization: `Bearer ${readOnlyToken}` } }));
+guarded = await invokeMiddleware(writeMiddleware, mockRequest({ headers: { Authorization: `Bearer ${readOnlyToken}` } }));
 assert.equal(guarded.nextCalled, false);
 assert.equal(guarded.statusCode, 403);
 
-guarded = invokeMiddleware(writeMiddleware, mockRequest({ headers: { Authorization: `Bearer ${fullAccessToken}` } }));
+guarded = await invokeMiddleware(writeMiddleware, mockRequest({ headers: { Authorization: `Bearer ${fullAccessToken}` } }));
 assert.equal(guarded.nextCalled, true);
 
-guarded = invokeMiddleware(writeMiddleware, mockRequest());
+guarded = await invokeMiddleware(writeMiddleware, mockRequest());
 assert.equal(guarded.nextCalled, false);
 assert.equal(guarded.statusCode, 401);
 
@@ -227,13 +313,38 @@ const adminAuth = authenticateOpsAccessRequest(mockRequest({
 assert.equal(adminAuth.ok, true);
 assert.equal(adminAuth.session.auth_mode, "admin_api_key");
 
-result = await invokeRoute(logoutRoute, mockRequest({ headers: { Cookie: trustCookie } }));
+result = await invokeRoute(revokeAllRoute, mockRequest({
+  body: { reason: "unit_test_revoke_all" },
+  headers: { Authorization: `Bearer ${fullAccessToken}`, "X-Device-Id": "manager-browser-full" },
+}));
 assert.equal(result.statusCode, 200);
-assert.match(String(result.headers.get("set-cookie")), /Max-Age=0/);
-assert.equal(Array.from(store.rows.values())[0].revoked_reason, "user_logout");
+assert.equal(store.rows.get(fullCredentialId).revoked_reason, "unit_test_revoke_all");
+
+guarded = await invokeMiddleware(writeMiddleware, mockRequest({ headers: { Authorization: `Bearer ${fullAccessToken}` } }));
+assert.equal(guarded.nextCalled, false, "revoked trusted-device bearer token must fail immediately when the store is available");
+assert.equal(guarded.statusCode, 401);
+
+result = await invokeRoute(sessionRoute, mockRequest({ headers: { Authorization: `Bearer ${fullAccessToken}` } }));
+assert.equal(result.statusCode, 401, "revoked trusted-device bearer token must not refresh a session");
 
 result = await invokeRoute(sessionRoute, mockRequest({ headers: { Cookie: trustCookie } }));
 assert.equal(result.statusCode, 401, "revoked trusted device cookie must not refresh a session");
+
+const replacementPairing = await store.createPairingToken({ created_by_actor: "repair_session" });
+result = await invokeRoute(consumePairingRoute, mockRequest({
+  body: {
+    pairing_token: replacementPairing.pairing_token,
+    device_id: "manager-browser-full",
+    device_label: "Eric office computer re-enrolled",
+    access_level: "full_access",
+  },
+}));
+assert.equal(result.statusCode, 200, "current browser can be re-enrolled using a fresh pairing link");
+const replacementCookie = cookiePair(result.headers.get("set-cookie"));
+
+result = await invokeRoute(logoutRoute, mockRequest({ headers: { Cookie: replacementCookie } }));
+assert.equal(result.statusCode, 200);
+assert.match(String(result.headers.get("set-cookie")), /Max-Age=0/);
 
 assert.equal(authenticateMcpConnectorRequest(mockRequest(), { env: { ...env, MCP_CONNECTOR_TOKEN: "" } }).status, 503);
 assert.equal(authenticateMcpConnectorRequest(mockRequest({ headers: { Authorization: `Bearer ${fullAccessToken}` } }), { env: { ...env, MCP_CONNECTOR_TOKEN: "" } }).ok, false, "Ops tokens must never substitute for MCP connector auth");
@@ -251,17 +362,25 @@ function readMigration(name) {
   if (existsSync(current)) return readFileSync(current, "utf8");
   return readFileSync(resolve("supabase/legacy_migrations", name), "utf8");
 }
-const migration = readMigration("20260715180000_ops_manager_trusted_device_auth.sql");
-assert.match(backendIndex, /installSharedAuthRoutes\(app, \{ setCors: setAdminApiCors, supabase: supabaseAdmin \}\)/);
+const trustedDeviceMigration = readMigration("20260715180000_ops_manager_trusted_device_auth.sql");
+const pairingMigration = readMigration("20260717175320_ops_manager_pairing_links.sql");
+assert.match(backendIndex, /installSharedAuthRoutes\(app, \{ setCors: setAdminApiCors, supabase: supabaseAdmin, trustedDeviceStore: opsTrustedDeviceStore \}\)/);
 assert.match(backendIndex, /Access-Control-Allow-Credentials/);
 assert.match(sharedAccess, /memphis_ops_trust/);
+assert.match(sharedAccess, /ops\/pairing\/consume/);
+assert.match(sharedAccess, /ops\/pairing-links/);
+assert.match(sharedAccess, /Ops Manager enrollment uses one-time trusted-device pairing links/);
 assert.match(sharedAccess, /Ops Manager authentication is required on this deployment/);
 assert.match(sharedAccess, /operations_first/);
 assert.match(sharedAccess, /trusted_device/);
 assert.doesNotMatch(mcpAuth, /authenticateOpsAccessRequest|open_ops_manager/);
-assert.match(migration, /ops_manager_trusted_devices/);
-assert.match(migration, /ops_manager_auth_events/);
-assert.match(migration, /revoke all on table public\.ops_manager_trusted_devices from public, anon, authenticated/);
+assert.match(trustedDeviceMigration, /ops_manager_trusted_devices/);
+assert.match(trustedDeviceMigration, /ops_manager_auth_events/);
+assert.match(trustedDeviceMigration, /revoke all on table public\.ops_manager_trusted_devices from public, anon, authenticated/);
+assert.match(pairingMigration, /ops_manager_pairing_tokens/);
+assert.match(pairingMigration, /ops_manager_create_pairing_token/);
+assert.match(pairingMigration, /ops_manager_consume_pairing_and_enroll/);
+assert.match(pairingMigration, /revoke all on table public\.ops_manager_pairing_tokens from public, anon, authenticated/);
 
 const engineRoot = [
   process.env.ENGINE_FIXTURE_ROOT,
@@ -274,11 +393,16 @@ const engineRoot = [
 if (engineRoot) {
   const authHelper = readFileSync(resolve(engineRoot, "memphis-auth.js"), "utf8");
   const managerHub = readFileSync(resolve(engineRoot, "ops-manager-hub.html"), "utf8");
+  const deviceSecurity = readFileSync(resolve(engineRoot, "device-security.html"), "utf8");
   assert.doesNotMatch(authHelper, /const\s+OPS_SESSION_KEY|localStorage\.setItem\([^\n]*memphisOpsManagerSession\.v2/);
   assert.match(authHelper, /credentials:'include'/);
-  assert.match(authHelper, /ops\/enroll/);
-  assert.match(authHelper, /trust this device.*once|once on this device/i);
-  assert.match(managerHub, /one time|once/i);
+  assert.match(authHelper, /ops\/pairing\/consume/);
+  assert.match(authHelper, /ops\/pairing-links/);
+  assert.doesNotMatch(authHelper, /ops\/enroll|promptForOneTimeEnrollment|Ops Manager password|Manager password|enrollOpsManagerDevice/);
+  assert.match(managerHub, /one-time pairing link/i);
+  assert.doesNotMatch(managerHub, /password/i);
+  assert.match(deviceSecurity, /Generate Pairing Link/);
+  assert.match(deviceSecurity, /revokeAllOpsManagerTrustedDevices/);
 }
 
 console.log("SHARED_ACCESS_AUTH_TESTS_PASS");
