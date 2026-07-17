@@ -1,10 +1,9 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
-const migration = fs.readFileSync(
-  new URL('../supabase/migrations/20260714235500_full_window_absence_coverage.sql', import.meta.url),
-  'utf8',
-);
+const current = new URL('../supabase/migrations/20260714235500_full_window_absence_coverage.sql', import.meta.url);
+const legacy = new URL('../supabase/legacy_migrations/20260714235500_full_window_absence_coverage.sql', import.meta.url);
+const migration = fs.readFileSync(fs.existsSync(current) ? current : legacy, 'utf8');
 
 assert.match(migration, /dwr\.shift_start <= p_coverage_start/);
 assert.match(migration, /dwr\.shift_end >= p_coverage_end/);

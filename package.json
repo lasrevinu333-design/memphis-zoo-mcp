@@ -31,7 +31,10 @@
     "test:schedule-source-type": "node scripts/schedule-source-type-contract-tests.mjs",
     "test:device-credentials": "node scripts/device-credential-foundation-tests.mjs",
     "test:operational-recovery": "node scripts/operational-recovery-tests.mjs",
-    "test:foundation-repair": "node scripts/foundation-repair-tests.mjs"
+    "test:foundation-repair": "node scripts/foundation-repair-tests.mjs",
+    "test:custodial-repair": "node scripts/custodial-repair-contract-tests.mjs",
+    "test:schema-fingerprint": "node scripts/schema-fingerprint-check.mjs",
+    "test:empty-db-rebuild": "node scripts/empty-database-rebuild-check.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.18.0",

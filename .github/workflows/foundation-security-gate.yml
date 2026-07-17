@@ -7,6 +7,7 @@ on:
     branches:
       - main
       - foundation/security-control-plane-clean-20260715
+      - codex/custodial-foundation-repair-20260717
 
 permissions:
   contents: read

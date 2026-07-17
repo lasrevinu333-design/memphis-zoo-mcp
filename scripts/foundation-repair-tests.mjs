@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 const schedule = readFileSync(new URL('../src/schedule-api.js', import.meta.url), 'utf8');
 const moxie = readFileSync(new URL('../src/routes/moxie.js', import.meta.url), 'utf8');
@@ -12,8 +12,13 @@ const migrationFiles = [
   '20260716193725_foundation_repair_migration_runner_governance.sql',
   '20260716194539_foundation_repair_legacy_ledger_rollup.sql',
 ];
+function migrationUrl(name) {
+  const current = new URL(`../supabase/migrations/${name}`, import.meta.url);
+  if (existsSync(current)) return current;
+  return new URL(`../supabase/legacy_migrations/${name}`, import.meta.url);
+}
 const migration = migrationFiles
-  .map((name) => readFileSync(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8'))
+  .map((name) => readFileSync(migrationUrl(name), 'utf8'))
   .join('\n');
 
 const readiness = schedule.match(/async function assertScheduleReadyForRead[\s\S]*?\n  }\n  async function loadFullDayScheduleItems/)?.[0] || '';
