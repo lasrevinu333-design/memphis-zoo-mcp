@@ -248,6 +248,7 @@ const indexSource = read("src/index.js");
 assert.match(indexSource, /installDeviceCredentialRoutes/);
 assert.match(indexSource, /requireDeviceOrOpsAccess, requireScanRpcAuthorization, scanRpcRateLimit/);
 assert.match(indexSource, /X-Device-Credential/);
+assert.match(indexSource, /X-Device-Label/);
 assert.match(indexSource, /Access-Control-Expose-Headers", "X-Device-Enrollment-Required, Retry-After"/);
 assert.match(indexSource, /sessionId is required/);
 assert.match(indexSource, /Unknown or expired SSE session/);

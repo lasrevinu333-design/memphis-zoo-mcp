@@ -362,6 +362,16 @@ const DEFAULT_CORS_ORIGINS = [
   "https://nousresearch.github.io",
 ];
 const CORS_ORIGINS_SET = new Set([...ALLOWED_CORS_ORIGINS, ...DEFAULT_CORS_ORIGINS]);
+const TRUSTED_DEVICE_CORS_HEADERS = [
+  "Content-Type",
+  "Authorization",
+  "X-Memphis-Auth",
+  "X-Device-Id",
+  "X-Device-Label",
+  "X-Device-Credential",
+  "X-Admin-Key",
+  "X-Ops-Access-Key",
+].join(", ");
 
 function setCorsOrigin(res, req) {
   const origin = String(req?.headers?.origin || "").trim();
@@ -378,37 +388,37 @@ function setCorsOrigin(res, req) {
 function setAdminApiCors(res, req) {
   setCorsOrigin(res, req);
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id, X-Device-Credential, X-Admin-Key, X-Ops-Access-Key");
+  res.setHeader("Access-Control-Allow-Headers", TRUSTED_DEVICE_CORS_HEADERS);
 }
 
 function setPublicDashboardCors(res, req) {
   setCorsOrigin(res, req);
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id, X-Device-Credential, X-Admin-Key, X-Ops-Access-Key");
+  res.setHeader("Access-Control-Allow-Headers", TRUSTED_DEVICE_CORS_HEADERS);
 }
 
 function setScanApiCors(res, req) {
   setCorsOrigin(res, req);
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id, X-Device-Credential, X-Admin-Key, X-Ops-Access-Key");
+  res.setHeader("Access-Control-Allow-Headers", TRUSTED_DEVICE_CORS_HEADERS);
 }
 
 function setMessagingApiCors(res, req) {
   setCorsOrigin(res, req);
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id, X-Device-Credential, X-Admin-Key, X-Ops-Access-Key");
+  res.setHeader("Access-Control-Allow-Headers", TRUSTED_DEVICE_CORS_HEADERS);
 }
 
 function setScheduleApiCors(res, req) {
   setCorsOrigin(res, req);
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS,PATCH,DELETE");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id, X-Device-Credential, X-Admin-Key, X-Ops-Access-Key");
+  res.setHeader("Access-Control-Allow-Headers", TRUSTED_DEVICE_CORS_HEADERS);
 }
 
 function setGuestApiCors(res, req) {
   setCorsOrigin(res, req);
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id, X-Device-Credential, X-Admin-Key, X-Ops-Access-Key");
+  res.setHeader("Access-Control-Allow-Headers", TRUSTED_DEVICE_CORS_HEADERS);
 }
 
 function setFeedbackApiCors(res, req) {
