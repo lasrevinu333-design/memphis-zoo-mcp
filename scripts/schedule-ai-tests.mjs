@@ -14,6 +14,7 @@ const liveMyScheduleRebalancePath = path.resolve("sql/2026-06-30_my_schedule_liv
 const exceptionLunchGuardMigrationPath = path.resolve("sql/2026-06-10_scheduler_exception_lunch_guards.sql");
 const responseOnlyStaleLunchRepairPath = path.resolve("sql/2026-06-10_repair_response_only_stale_lunch_rows.sql");
 const restoreOpenOwnerRowsPath = path.resolve("sql/2026-06-10_restore_scheduler_open_owner_rows.sql");
+const productionBaselinePath = path.resolve("supabase/migrations/00000000000000_production_baseline.sql");
 
 function extractFunction(name) {
   const startToken = `function ${name}(`;
@@ -384,9 +385,14 @@ assert.match(completionSelectSql, /schedule_automation_runs/);
 assert.match(completionSelectSql, /restroom_rebalance_0945/);
 assert.match(completionSelectSql, /2026-06-02/);
 const completionUpsertSql = context.buildRestroomRebalanceCompletionUpsertSql("2026-06-02", { ok: true, moved_count: 2 });
-assert.match(completionUpsertSql, /create table if not exists public\.schedule_automation_runs/);
+assert.doesNotMatch(completionUpsertSql, /create table/i, "request-time schedule writes must not mutate schema");
 assert.match(completionUpsertSql, /on conflict \(automation_key, service_date\)/);
 assert.match(completionUpsertSql, /completed/);
+assert.match(
+  fs.readFileSync(productionBaselinePath, "utf8"),
+  /create table "public"\."schedule_automation_runs"/i,
+  "authoritative migrations must preprovision schedule_automation_runs",
+);
 
 const weekSummary = context.summarizeWeekWindow([
   { service_date: "2026-05-14", ready: true, assignment_count: 10, roster_count: 11 },

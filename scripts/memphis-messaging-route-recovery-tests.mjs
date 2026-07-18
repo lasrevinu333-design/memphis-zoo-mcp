@@ -26,6 +26,16 @@ const runReadOnlySql = async (sql) => {
   }
   if (/from public\.msg_thread_participants/i.test(query) && /select 1/i.test(query)) return [{ one: 1 }];
   if (/msg_get_memphis_user_id/i.test(query)) return [{ memphis_user_id: BOT_ID }];
+  if (/from public\.msg_messages m/i.test(query) && /where m\.id/i.test(query)) {
+    return [{
+      id: '30000000-0000-4000-8000-000000000001',
+      thread_id: THREAD_ID,
+      sender_user_id: USER_ID,
+      body: 'help',
+      metadata_json: { channel: 'memphis', device_id: 'KIOSK_02', client_message_id: 'client-message-001' },
+      device_id: 'KIOSK_02',
+    }];
+  }
   if (/from public\.msg_threads t/i.test(query)) {
     return [{
       thread_id: THREAD_ID, updated_at: '2026-07-15T00:00:00Z', thread_type: 'bot', thread_title: 'Memphis',
@@ -47,6 +57,15 @@ const runRpc = async (name, params = {}) => {
       ...params,
     };
   }
+  if (name === 'claim_operational_notification_job_by_key') {
+    return {
+      job_id: '40000000-0000-4000-8000-000000000001',
+      source_id: '30000000-0000-4000-8000-000000000001',
+      lease_token: '40000000-0000-4000-8000-000000000002',
+      payload_json: { message_id: '30000000-0000-4000-8000-000000000001' },
+    };
+  }
+  if (name === 'finish_operational_notification_job') return { status: 'completed' };
   return null;
 };
 
@@ -95,6 +114,8 @@ try {
   assert.equal(sendCalls[0].params.p_metadata_json.client_message_id, 'client-message-001');
   assert.equal(sendCalls[1].params.p_metadata_json.client_message_id, 'memphis-reply:30000000-0000-4000-8000-000000000001');
   assert.equal(sendCalls[1].params.p_metadata_json.reply_to_message_id, '30000000-0000-4000-8000-000000000001');
+  assert.ok(rpcCalls.some((call) => call.name === 'claim_operational_notification_job_by_key'), 'The request path must lease the durable bot job rather than starting untracked work');
+  assert.ok(rpcCalls.some((call) => call.name === 'finish_operational_notification_job' && call.params.p_succeeded === true), 'The durable bot job must be finalized with its authoritative lease');
 
   console.log('MEMPHIS_MESSAGING_ROUTE_RECOVERY_TESTS_PASS');
 } finally {

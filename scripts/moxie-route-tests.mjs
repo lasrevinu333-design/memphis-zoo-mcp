@@ -226,18 +226,17 @@ try {
   assert.match(page, /Moxie/);
   assert.match(page, /private work assistant/i);
   assert.match(page, /Back to Ops Hub/);
-  assert.match(page, /\/moxie\/assets\/frog-on-log-writing-pad\.png/);
-  assert.match(page, /\/moxie\/assets\/reminders-woodland-animal\.png/);
-  assert.match(page, /\/moxie\/assets\/contacts-creekside-animal\.png/);
-  assert.match(page, /\/moxie\/assets\/settings-woodland-cog\.png/);
+  assert.doesNotMatch(page, /\/moxie\/assets\/frog-on-log-writing-pad\.png/);
+  assert.doesNotMatch(page, /\/moxie\/assets\/reminders-woodland-animal\.png/);
+  assert.doesNotMatch(page, /\/moxie\/assets\/contacts-creekside-animal\.png/);
+  assert.doesNotMatch(page, /\/moxie\/assets\/settings-woodland-cog\.png/);
+  assert.doesNotMatch(page, /chat-tools|quick-actions-cluster|shortcut-tile|image-action-button/);
   assert.doesNotMatch(page, /Ops Hub shortcuts/);
   assert.doesNotMatch(page, /ops-hub-grid/);
   assert.doesNotMatch(page, /\/moxie\/assets\/ops-dashboard\.png/);
   assert.doesNotMatch(page, /\/moxie\/assets\/ops-schedule\.png/);
   assert.doesNotMatch(page, /\/moxie\/assets\/ops-events\.png/);
   assert.doesNotMatch(page, /\/moxie\/assets\/ops-messaging\.png/);
-  assert.match(page, /image-action-button::before/);
-  assert.match(page, /content:none!important/);
   assert.match(page, /clearChatButton\.addEventListener\("click",showModal\)/);
   assert.match(page, /saveClearChat\.addEventListener\("click",saveChat\)/);
   assert.match(page, /deleteClearChat\.addEventListener\("click",deleteChat\)/);
@@ -356,9 +355,7 @@ try {
   assert.match(routeSource, /isProductionLike\(\)[\s\S]*MOXIE_AUTH_REQUIRED/);
   assert.match(routeSource, /clearSessionCookie\(res, req\)/);
   assert.match(routeSource, /Cache-Control", "no-store/);
-  const shortcutSource = templateSource.match(/function shortcutTile[\s\S]*?\n}/)?.[0] || "";
-  assert.match(shortcutSource, /assetUrl\(iconFile\)/);
-  assert.doesNotMatch(shortcutSource, /_iconDataUris/);
+  assert.doesNotMatch(templateSource, /function shortcutTile|chat-tools|quick-actions-cluster/);
 
   console.log("MOXIE_AUTH_LOGOUT_UI_CONTRACT_PASS");
 } finally {

@@ -1,0 +1,21 @@
+{
+  "release_id": "release-2026.07.18.custodial-v3.1",
+  "frontend_commit_sha": "c9aeb20049359710fe41a5ec47e4cd3a7a3a4890",
+  "frontend_commit_state": "coordinated_v3_frontend",
+  "backend_minimum_version": "release-2026.07.18.custodial-v3.1",
+  "schema_fingerprint": "515fec756d4475f7b1ab1d301d20dc6c8059b7c8a3c0fa23800dbbaac1b9e6e5",
+  "api_contract_versions": {
+    "scan": "scan.v2",
+    "dashboard": "dashboard.v1",
+    "messaging": "messaging.v2",
+    "schedule": "schedule.v2",
+    "events": "events.v3",
+    "ops_manager_auth": "ops-manager-auth.v4.shared-48h",
+    "gemini_console": "gemini-console.v2"
+  },
+  "queue_compatibility_versions": {
+    "scan": ["legacy-local-storage", "indexeddb-v1", "indexeddb-v2", "indexeddb-v3", "indexeddb-v4"],
+    "messaging": ["local-storage-outbox-v1"],
+    "gemini_console": ["indexeddb-outbox-v1"]
+  }
+}

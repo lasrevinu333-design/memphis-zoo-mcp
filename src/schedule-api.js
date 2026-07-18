@@ -134,16 +134,6 @@ function buildRestroomRebalanceCompletionSelectSql(serviceDate) {
 function buildRestroomRebalanceCompletionUpsertSql(serviceDate, result = {}, status = "completed") {
   const resultJson = JSON.stringify(result || {});
   return `
-    create table if not exists public.schedule_automation_runs (
-      automation_key text not null,
-      service_date date not null,
-      status text not null default 'completed',
-      result_json jsonb not null default '{}'::jsonb,
-      created_at timestamptz not null default now(),
-      updated_at timestamptz not null default now(),
-      primary key (automation_key, service_date)
-    );
-
     insert into public.schedule_automation_runs (automation_key, service_date, status, result_json, updated_at)
     values ('${sqlQuote(RESTROOM_REBALANCE_SOURCE)}', '${sqlQuote(serviceDate)}'::date, '${sqlQuote(status)}', '${sqlQuote(resultJson)}'::jsonb, now())
     on conflict (automation_key, service_date)
@@ -2130,30 +2120,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
     };
   }
 
-  async function ensurePtoTable() {
-    if (typeof runWriteSql !== "function") throw new Error("PTO write path is not configured.");
-    await runWriteSql("pto_schema", `
-      create table if not exists public.employee_planned_time_off (
-        id uuid primary key default gen_random_uuid(),
-        employee_id uuid not null references public.employees(id) on delete cascade,
-        start_date date not null,
-        end_date date not null,
-        pto_type text not null default 'PTO',
-        source text not null default 'import',
-        notes text null,
-        active boolean not null default true,
-        created_at timestamptz not null default now(),
-        updated_at timestamptz not null default now(),
-        constraint employee_planned_time_off_date_order check (end_date >= start_date),
-        constraint employee_planned_time_off_unique unique (employee_id, start_date, end_date, pto_type, source)
-      );
-      create index if not exists employee_planned_time_off_active_dates_idx on public.employee_planned_time_off (active, start_date, end_date);
-      create index if not exists employee_planned_time_off_employee_dates_idx on public.employee_planned_time_off (employee_id, start_date, end_date);
-    `);
-  }
-
   async function importPtoRows(inputRows = []) {
-    await ensurePtoTable();
     if (!Array.isArray(inputRows) || !inputRows.length) throw new Error("rows must be a non-empty array.");
     const employeeRows = await runReadOnlySql(`
       select id as employee_id, display_name, employee_code
@@ -3445,7 +3412,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
     res.status(200).json(buildHealthPayload("schedule", { contract_version: contractVersion }));
   });
 
-  router.get("/audit/day", async (req, res) => {
+  router.get("/audit/day", requireManagerRead, async (req, res) => {
     try {
       const serviceDate = requireDate(req.query.service_date || req.query.date || (await getServiceDate()));
       const rows = await runReadOnlySql(`
@@ -3462,7 +3429,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
     }
   });
 
-  router.get("/work-status", async (req, res) => {
+  router.get("/work-status", requireManagerRead, async (req, res) => {
     try {
       const serviceDate = requireDate(req.query.service_date || req.query.date || (await getServiceDate()));
       const employeeId = String(req.query.employee_id || "").trim();
@@ -3513,7 +3480,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
     }
   });
 
-  router.get("/today", async (_req, res) => {
+  router.get("/today", requireManagerRead, async (_req, res) => {
     try {
       const serviceDate = await getServiceDate();
       if (!serviceDate) throw new Error("Could not resolve service date.");
@@ -3540,7 +3507,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
     }
   });
 
-  router.get("/day", async (req, res) => {
+  router.get("/day", requireManagerRead, async (req, res) => {
     try {
       const serviceDate = requireDate(req.query.service_date || req.query.date);
       await assertScheduleReadyForRead(serviceDate);
@@ -3717,7 +3684,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
     }
   });
 
-  router.get("/settings/close-time", async (req, res) => {
+  router.get("/settings/close-time", requireManagerRead, async (req, res) => {
     try {
       const serviceDate = requireDate(req.query.service_date || req.query.date || (await getServiceDate()));
       const rows = await runReadOnlySql(`select public.sch_get_schedule_close_time('${esc(serviceDate)}'::date) as closing_time`);
@@ -3748,7 +3715,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
     }
   });
 
-  router.get("/employees", async (_req, res) => {
+  router.get("/employees", requireManagerRead, async (_req, res) => {
     try {
       const rows = await runReadOnlySql(`
         select
@@ -3768,7 +3735,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
     }
   });
 
-  router.get("/employee-aliases", async (req, res) => {
+  router.get("/employee-aliases", requireManagerRead, async (req, res) => {
     try {
       const employeeRef = String(req.query.employee || req.query.employee_name || req.query.employee_code || "").trim();
       const includeInactive = String(req.query.include_inactive || "").trim() === "1";
@@ -3848,7 +3815,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
     }
   });
 
-  router.get("/shift-templates", async (req, res) => {
+  router.get("/shift-templates", requireManagerRead, async (req, res) => {
     try {
       const employeeRef = String(req.query.employee || req.query.employee_name || req.query.employee_code || "").trim();
       const includeInactive = String(req.query.include_inactive || "").trim() === "1";
@@ -3930,7 +3897,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
     }
   });
 
-  router.get("/pto", async (req, res) => {
+  router.get("/pto", requireManagerRead, async (req, res) => {
     try {
       const startDate = requireDate(req.query.start_date || req.query.service_date || req.query.date || (await getServiceDate()));
       const endDate = requireDate(req.query.end_date || startDate);
@@ -3969,7 +3936,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
     }
   });
 
-  router.get("/coverall/slots", async (req, res) => {
+  router.get("/coverall/slots", requireManagerRead, async (req, res) => {
     try {
       const serviceDate = requireDate(req.query.service_date || req.query.date || (await getServiceDate()));
       const slots = await listCoverAllSlotsForDate(serviceDate);
@@ -4084,7 +4051,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
     }
   });
 
-  router.get("/location-groups", async (_req, res) => {
+  router.get("/location-groups", requireManagerRead, async (_req, res) => {
     try {
       const rows = await listLocationGroups();
       res.status(200).json({ ok: true, data: rows || [], meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
@@ -4150,7 +4117,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
     }
   });
 
-  router.get("/coverage-templates/export.csv", async (_req, res) => {
+  router.get("/coverage-templates/export.csv", requireManagerRead, async (_req, res) => {
     try {
       const rows = await runReadOnlySql(`
         select
@@ -4203,7 +4170,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
     }
   });
 
-  router.get("/locations/workload-settings", async (_req, res) => {
+  router.get("/locations/workload-settings", requireManagerRead, async (_req, res) => {
     try {
       const rows = await runReadOnlySql(`select * from public.sch_list_location_workload_settings()`);
       res.status(200).json({ ok: true, data: rows || [], meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
@@ -4236,7 +4203,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
     next();
   });
 
-  router.get("/current-owner", async (req, res) => {
+  router.get("/current-owner", requireManagerRead, async (req, res) => {
     try {
       const locationCode = String(req.query.location_code || req.query.code || "").trim();
       if (!locationCode) throw new Error("location_code is required.");
@@ -4327,7 +4294,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
     }
   });
 
-  router.get("/sch2/runs", async (req, res) => {
+  router.get("/sch2/runs", requireManagerRead, async (req, res) => {
     try {
       const serviceDate = req.query.service_date || req.query.date ? requireDate(req.query.service_date || req.query.date) : "";
       const limit = Math.max(1, Math.min(50, Number.parseInt(String(req.query.limit || 10), 10) || 10));
@@ -4346,7 +4313,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
     }
   });
 
-  router.get("/sch2/explain", async (req, res) => {
+  router.get("/sch2/explain", requireManagerRead, async (req, res) => {
     try {
       const runId = requireUuid(req.query.run_id || req.query.id, "run_id");
       const workItemId = requireUuid(req.query.work_item_id || req.query.item_id, "work_item_id");
@@ -4358,7 +4325,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
     }
   });
 
-  router.get("/generation-window", async (req, res) => {
+  router.get("/generation-window", requireManagerRead, async (req, res) => {
     try {
       const serviceDate = requireDate(req.query.service_date || req.query.date || (await getServiceDate()));
       const days = Math.max(1, Math.min(14, Number.parseInt(String(req.query.days || 7), 10) || 7));

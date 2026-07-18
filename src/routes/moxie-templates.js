@@ -41,7 +41,7 @@ a{color:#b9d0ff}
 .button-link:hover{background:#314a7a}
 .pill{display:inline-block;padding:4px 10px;border-radius:99px;background:#1a2744;color:#9fc0ff;font-size:.75rem;font-weight:800;letter-spacing:.04em;border:1px solid #314472}
 .panel{background:rgba(13,18,32,.82);border:1px solid #26375d;border-radius:16px}
-.chat-main{display:grid;grid-template-columns:292px minmax(0,920px) 292px;gap:18px;align-items:stretch;justify-content:center;width:100%;flex:1 1 auto;min-height:0}
+.chat-main{display:grid;grid-template-columns:292px minmax(0,920px);gap:18px;align-items:stretch;justify-content:center;width:100%;flex:1 1 auto;min-height:0}
 .chat-panel{width:100%;max-width:920px;justify-self:center;display:flex;flex-direction:column;min-height:0;max-height:100%}
 .saved-chats-rail{justify-self:start;width:292px;max-width:292px}
 .saved-chats-panel{padding:14px;height:100%;display:flex;flex-direction:column;min-height:0}
@@ -72,19 +72,6 @@ a{color:#b9d0ff}
 .composer button{padding:0 22px;border-radius:13px;border:1px solid #4a5e91;background:#314a7a;color:#f3f6ff;font-weight:800;font-size:1rem;cursor:pointer}
 .composer button:hover{background:#3d5a8e}
 .composer button:disabled{opacity:.5;cursor:not-allowed}
-.chat-tools{display:flex;flex-direction:column;align-items:flex-end;gap:24px;min-height:0;height:100%;padding-top:2px;justify-self:end;width:292px}
-.quick-actions-section{width:292px;max-width:292px;display:flex;justify-content:flex-end}
-.ops-hub-section{margin-top:auto}
-.shortcut-section-title{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
-.quick-actions-cluster{display:grid;grid-template-columns:repeat(2,132px);gap:18px 16px;align-items:start;justify-content:end;width:292px}
-.shortcut-tile{display:block;width:132px;max-width:100%;color:#dbe5ff;text-decoration:none;text-align:center}
-.shortcut-title{display:block;margin-top:5px;color:#f3f6ff;font-size:.68rem;line-height:1.08;font-weight:800;text-align:center;text-shadow:0 2px 8px rgba(0,0,0,.9);letter-spacing:.01em}
-.image-action-button{position:relative;display:block;width:132px;max-width:100%;aspect-ratio:16/9;min-height:0;padding:0;border-radius:17px;overflow:hidden;background:#0b1020;border:1px solid rgba(134,178,255,.33);box-shadow:0 12px 36px rgba(0,0,0,.38);text-decoration:none;transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease;isolation:isolate}
-.image-action-button:hover{transform:translateY(-2px);box-shadow:0 16px 44px rgba(0,0,0,.45);border-color:#b9d0ff}
-.image-action-button::before,.image-action-button::after,.shortcut-tile::before,.shortcut-tile::after{content:none!important;display:none!important}
-.image-action-button img{position:absolute;inset:0;z-index:2;width:100%;height:100%;object-fit:cover;object-position:center;display:block;border:0}
-.image-action-button.image-load-failed{background:#162544}
-.shortcut-tile svg,.shortcut-tile i{display:none!important}
 .chat-modal{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.58)}
 .chat-modal[hidden]{display:none!important}
 .chat-modal-card{width:min(420px,100%);padding:22px;border-radius:20px;background:#0d1426;border:1px solid #4a5e91;box-shadow:0 30px 100px rgba(0,0,0,.55)}
@@ -133,7 +120,7 @@ a{color:#b9d0ff}
 .contact-form{padding:18px;display:flex;flex-direction:column;gap:10px}
 .contact-form input{padding:10px;border-radius:10px;border:1px solid #314472;background:#0d1426;color:#f3f6ff;font-size:.95rem;font-family:inherit}
 .contact-form button{padding:10px 20px;border-radius:10px;border:1px solid #4a5e91;background:#26375d;color:#dbe5ff;font-weight:700;cursor:pointer;align-self:flex-start;font-family:inherit}
-@media(max-width:1200px){.chat-main{grid-template-columns:1fr}.saved-chats-rail,.chat-tools{display:none}}
+@media(max-width:1200px){.chat-main{grid-template-columns:1fr}.saved-chats-rail{display:none}}
 @media(max-width:700px){.wrap{padding:12px}.chat-wrap{width:100%;max-width:100%}.log-grid,.contacts-grid,.log-form-grid{grid-template-columns:1fr}.log-mission{margin:0 12px}.intake-textarea{min-height:180px!important}}
 ${extraHead}
 </style>
@@ -206,25 +193,4 @@ function assetUrl(file) {
 
 function iconImg(file, alt) {
   return `<img class="log-icon" src="${esc(assetUrl(file))}" alt="${esc(alt)}" decoding="async" onerror="this.hidden=true">`;
-}
-
-function shortcutTile(href, iconFile, label) {
-  const src = assetUrl(iconFile);
-  return `<a class="shortcut-tile" href="${esc(href)}" aria-label="${esc(label)}"><span class="image-action-button"><img src="${esc(src)}" alt="${esc(label)}" loading="lazy" decoding="async" draggable="false" onerror="this.hidden=true;this.parentElement.classList.add('image-load-failed')"></span><span class="shortcut-title">${esc(label)}</span></a>`;
-}
-
-export function logButtonLink() { return shortcutTile("/moxie/log", "frog-on-log-writing-pad.png", "Annie's Log"); }
-export function reminderButtonLink() { return shortcutTile("/moxie/reminders", "reminders-woodland-animal.png", "Reminders"); }
-export function contactsButtonLink() { return shortcutTile("/moxie/contacts", "contacts-creekside-animal.png", "Contacts"); }
-export function settingsButtonLink() { return shortcutTile("/moxie/password", "settings-woodland-cog.png", "Settings"); }
-
-export function opsHubButtons() {
-  const root = "https://lasrevinu333-design.github.io/Engine";
-  const items = [
-    { href: `${root}/dashboard.html`, icon: "ops-dashboard.png", label: "Dashboard" },
-    { href: `${root}/schedule-simple.html`, icon: "ops-schedule.png", label: "Schedule" },
-    { href: `${root}/events-admin.html`, icon: "ops-events.png", label: "Events" },
-    { href: `${root}/messages.html`, icon: "ops-messaging.png", label: "Messaging" },
-  ];
-  return items.map(i => shortcutTile(i.href, i.icon, i.label)).join("\n");
 }

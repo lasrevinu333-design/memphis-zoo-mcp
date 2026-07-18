@@ -33,8 +33,10 @@ assert.match(windowRoute, /trigger_auto_ignored/);
 assert.match(schedule, /router\.post\("\/generate-range", requireSchedulePin/);
 
 assert.doesNotMatch(moxie, /if\(r\.ok\)\{msg\.textContent="Password changed/);
-assert.match(moxie, /d\?\.changed===true/);
-assert.match(moxie, /there is no active password to rotate/);
+assert.doesNotMatch(moxie, /router\.post\("\/settings\/password"/);
+assert.doesNotMatch(moxie, /id="settingsModal"/);
+assert.match(moxie, /expectedRevision:sharedRevision/);
+assert.match(moxie, /r\.status===409/);
 
 assert.equal(new Set(migrationFiles.map((name) => name.slice(0, 14))).size, migrationFiles.length);
 assert.match(migration, /sch_ensure_schedule_window/);
