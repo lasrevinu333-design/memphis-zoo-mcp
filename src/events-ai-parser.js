@@ -69,6 +69,38 @@ const GARBAGE_PHRASES = [
   "tbd",
 ];
 
+const EVENT_SCOPES = new Set(["ZOO_WIDE", "SINGLE_VENUE", "MULTI_VENUE", "OFFSITE", "UNKNOWN"]);
+const ZOO_WIDE_DISPLAY_LOCATION = "Zoo Footprint";
+const ZOO_WIDE_PHRASES = [
+  "zoo wide",
+  "zoo-wide",
+  "entire zoo",
+  "whole zoo",
+  "across the zoo",
+  "full zoo",
+  "entire footprint",
+  "zoo footprint",
+  "campus wide",
+  "campus-wide",
+  "park wide",
+  "park-wide",
+];
+
+const SOURCE_CONTROLLED_EVENT_DEFAULTS = [
+  {
+    normalized_match: "members night",
+    match_text: "Members Night",
+    event_scope: "ZOO_WIDE",
+    display_location: ZOO_WIDE_DISPLAY_LOCATION,
+  },
+  {
+    normalized_match: "member night",
+    match_text: "Member Night",
+    event_scope: "ZOO_WIDE",
+    display_location: ZOO_WIDE_DISPLAY_LOCATION,
+  },
+];
+
 import { getGeminiApiKey } from "./utils/gemini-config.js";
 
 const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
@@ -98,6 +130,86 @@ function normalizeLoose(value) {
     .replace(/\band\b/g, " ")
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
+}
+
+function normalizeEventScope(value, fallback = "UNKNOWN") {
+  const raw = String(value || "").trim().toUpperCase().replace(/[\s-]+/g, "_");
+  if (raw === "ZOO" || raw === "ZOO_WIDE" || raw === "ZOO_FOOTPRINT") return "ZOO_WIDE";
+  if (raw === "SINGLE" || raw === "SINGLE_VENUE") return "SINGLE_VENUE";
+  if (raw === "MULTI" || raw === "MULTIPLE" || raw === "MULTI_VENUE" || raw === "MULTIPLE_VENUES") return "MULTI_VENUE";
+  if (raw === "OFF_SITE") return "OFFSITE";
+  return EVENT_SCOPES.has(raw) ? raw : fallback;
+}
+
+function hasZooWideLanguage(...values) {
+  const text = normalizeLoose(values.filter(Boolean).join(" "));
+  if (!text) return false;
+  return ZOO_WIDE_PHRASES.some((phrase) => {
+    const normalized = normalizeLoose(phrase);
+    return new RegExp(`(?:^|\\s)${escapeRegex(normalized)}(?:\\s|$)`).test(text);
+  });
+}
+
+function isRestroomGroup(group = {}) {
+  const code = String(group.group_code || "").toUpperCase();
+  const name = String(group.group_name || "");
+  return code.includes("RESTROOM") || /restrooms?/i.test(name) || group.public_restroom === true || group.staff_restroom === true;
+}
+
+function normalizeEventVenueOptions(locationGroups = [], eventVenues = []) {
+  const supplied = (Array.isArray(eventVenues) ? eventVenues : [])
+    .filter((venue) => venue && venue.active !== false)
+    .map((venue) => ({
+      venue_id: String(venue.venue_id || venue.id || "").trim(),
+      venue_code: String(venue.venue_code || venue.group_code || "").trim(),
+      display_name: String(venue.display_name || venue.group_name || "").trim(),
+      event_scope: normalizeEventScope(venue.event_scope, venue.venue_code === "ZOO_FOOTPRINT" ? "ZOO_WIDE" : "SINGLE_VENUE"),
+      location_group_id: String(venue.location_group_id || "").trim(),
+      group_code: String(venue.group_code || venue.venue_code || "").trim(),
+      group_name: String(venue.group_name || venue.display_name || "").trim(),
+      eligible_event_venue: venue.eligible_event_venue !== false,
+      eligible_event_scope: venue.eligible_event_scope === true || normalizeEventScope(venue.event_scope, "") === "ZOO_WIDE",
+      aliases: Array.isArray(venue.aliases) ? venue.aliases.map(String).filter(Boolean) : [],
+    }))
+    .filter((venue) => venue.venue_id && venue.display_name);
+  if (supplied.length) return supplied;
+
+  return (Array.isArray(locationGroups) ? locationGroups : [])
+    .filter((group) => group && group.active !== false)
+    .filter((group) => group.eligible_event_venue === true || (!isRestroomGroup(group) && group.eligible_event_venue !== false))
+    .map((group) => ({
+      venue_id: String(group.venue_id || group.location_group_id || "").trim(),
+      venue_code: String(group.venue_code || group.group_code || "").trim(),
+      display_name: eventAreaDisplayName(group.display_name || group.group_name || group.group_code || ""),
+      event_scope: normalizeEventScope(group.event_scope, "SINGLE_VENUE"),
+      location_group_id: String(group.location_group_id || "").trim(),
+      group_code: String(group.group_code || "").trim(),
+      group_name: String(group.group_name || "").trim(),
+      eligible_event_venue: true,
+      eligible_event_scope: group.eligible_event_scope === true,
+      aliases: (group.included_locations || []).concat(group.aliases || []).map(String).filter(Boolean),
+    }))
+    .filter((venue) => venue.venue_id && venue.display_name);
+}
+
+function normalizeEventDefaults(eventDefaults = []) {
+  const supplied = (Array.isArray(eventDefaults) ? eventDefaults : []).filter(Boolean).map((rule) => ({
+    ...rule,
+    normalized_match: normalizeLoose(rule.normalized_match || rule.match_text),
+    match_text: String(rule.match_text || "").trim(),
+    event_scope: normalizeEventScope(rule.event_scope, ""),
+  })).filter((rule) => rule.normalized_match && rule.event_scope && rule.active !== false);
+  const merged = [...supplied];
+  for (const fallback of SOURCE_CONTROLLED_EVENT_DEFAULTS) {
+    if (!merged.some((rule) => rule.normalized_match === fallback.normalized_match)) merged.push(fallback);
+  }
+  return merged;
+}
+
+function matchDefaultRule(eventName = "", eventDefaults = []) {
+  const normalized = normalizeLoose(eventName);
+  if (!normalized) return null;
+  return normalizeEventDefaults(eventDefaults).find((rule) => normalized === rule.normalized_match || normalized.includes(rule.normalized_match)) || null;
 }
 
 function isOvernightEventContext(...values) {
@@ -659,6 +771,305 @@ function rankLocationGroups(locationGroups, nameOrCode, limit = 3) {
     .slice(0, Math.max(1, limit));
 }
 
+function rankEventVenues(eventVenues, nameOrCode, limit = 5) {
+  const needle = normalizeLoose(nameOrCode);
+  if (!needle) return [];
+  const byVenue = new Map();
+  for (const venue of eventVenues || []) {
+    const names = [
+      venue.display_name,
+      venue.venue_code,
+      venue.group_name,
+      venue.group_code,
+    ].concat(venue.aliases || []).filter(Boolean);
+    for (const name of names) {
+      const normalized = normalizeLoose(name);
+      if (!normalized) continue;
+      let score = -1;
+      if (needle === normalized) score = 1200 + normalized.length;
+      else if (needle.includes(normalized)) {
+        if (normalized.length <= 2 && !(new RegExp(`\\b${escapeRegex(normalized)}\\b`).test(needle))) score = -1;
+        else score = 850 + normalized.length;
+      } else if (normalized.includes(needle)) {
+        if (needle.length <= 2 && !(new RegExp(`\\b${escapeRegex(needle)}\\b`).test(normalized))) score = -1;
+        else score = 650 + needle.length;
+      } else {
+        const needleParts = needle.split(/\s+/).filter(Boolean);
+        const nameParts = normalized.split(/\s+/).filter(Boolean);
+        const overlap = needleParts.filter((part) => nameParts.includes(part)).length;
+        if (overlap >= Math.min(2, nameParts.length)) score = (overlap * 120) + normalized.length;
+      }
+      if (normalized === "event center" && score < 1000 && !/\b(ec|event center|event centre)\b/.test(needle)) score = -1;
+      if (score < 0) continue;
+      const key = String(venue.venue_id || venue.venue_code || venue.display_name || "");
+      const current = byVenue.get(key);
+      if (!current || score > current.score) {
+        byVenue.set(key, {
+          venue_id: venue.venue_id,
+          venue_code: venue.venue_code,
+          display_name: venue.display_name,
+          location_group_id: venue.location_group_id,
+          event_scope: venue.event_scope,
+          matched_text: String(name || ""),
+          score,
+          venue,
+        });
+      }
+    }
+  }
+  return Array.from(byVenue.values())
+    .sort((a, b) => b.score - a.score || String(a.display_name).localeCompare(String(b.display_name)))
+    .slice(0, Math.max(1, limit));
+}
+
+function detectCoverageLocations(locationGroups = [], text = "") {
+  const haystack = normalizeLoose(text);
+  if (!haystack) return [];
+  const byGroup = new Map();
+  for (const group of locationGroups || []) {
+    if (group.eligible_custodial_coverage === false) continue;
+    const names = [group.group_name, group.group_code].concat(group.included_locations || [], group.aliases || []).filter(Boolean);
+    for (const name of names) {
+      const normalizedName = normalizeLoose(name);
+      if (!normalizedName) continue;
+      const boundary = new RegExp(`(?:^|\\s)${escapeRegex(normalizedName)}(?:\\s|$)`);
+      if (!boundary.test(haystack) && !(normalizedName.includes(" ") && haystack.includes(normalizedName))) continue;
+      const id = String(group.location_group_id || "").trim();
+      if (!id) continue;
+      const current = byGroup.get(id);
+      if (!current || normalizedName.length > current.normalized_match_length) {
+        byGroup.set(id, {
+          location_group_id: id,
+          group_code: group.group_code || "",
+          group_name: group.group_name || "",
+          matched_text: String(name || ""),
+          normalized_match_length: normalizedName.length,
+        });
+      }
+    }
+  }
+  return Array.from(byGroup.values()).sort((a, b) => String(a.group_name).localeCompare(String(b.group_name)));
+}
+
+function detectIneligibleVenueConflicts(locationGroups = [], text = "") {
+  return detectCoverageLocations(locationGroups, text).filter((group) => {
+    const source = (locationGroups || []).find((row) => row.location_group_id === group.location_group_id) || {};
+    return source.eligible_event_venue === false || isRestroomGroup(source);
+  });
+}
+
+function buildLocationSemantics({
+  eventName = "",
+  rawText = "",
+  areaText = "",
+  matchedGroup = null,
+  areaCandidates = [],
+  locationGroups = [],
+  eventVenues = [],
+  eventDefaults = [],
+} = {}) {
+  const venues = normalizeEventVenueOptions(locationGroups, eventVenues);
+  const textForScope = [areaText, rawText, eventName].filter(Boolean).join(" ");
+  const coverageMatches = detectCoverageLocations(locationGroups, rawText);
+  const ineligibleConflicts = detectIneligibleVenueConflicts(locationGroups, areaText || rawText);
+  const zooVenue = venues.find((venue) => venue.event_scope === "ZOO_WIDE" || venue.venue_code === "ZOO_FOOTPRINT") || null;
+  const zooWideExplicit = hasZooWideLanguage(areaText, rawText);
+  if (zooWideExplicit) {
+    return {
+      event_scope: "ZOO_WIDE",
+      primary_venue_id: zooVenue?.venue_id || "",
+      venue_ids: zooVenue?.venue_id ? [zooVenue.venue_id] : [],
+      display_location: ZOO_WIDE_DISPLAY_LOCATION,
+      location_group_id: zooVenue?.location_group_id || "",
+      location_group_name: ZOO_WIDE_DISPLAY_LOCATION,
+      coverage_location_ids: coverageMatches.map((row) => row.location_group_id),
+      source_location_text: cleanupLooseText(areaText || ""),
+      parser_confidence: "high",
+      needs_review: false,
+      parse_reason: "Explicit zoo-wide language mapped event scope to Zoo Footprint before venue matching.",
+      event_venue_candidates: [],
+      coverage_location_matches: coverageMatches,
+    };
+  }
+
+  const venueCandidates = rankEventVenues(venues, areaText || rawText, 5);
+  const highVenueCandidates = venueCandidates.filter((candidate) => candidate.score >= 850);
+  if (highVenueCandidates.length === 1) {
+    const venue = highVenueCandidates[0].venue;
+    return {
+      event_scope: venue.event_scope === "ZOO_WIDE" ? "ZOO_WIDE" : "SINGLE_VENUE",
+      primary_venue_id: venue.venue_id || "",
+      venue_ids: venue.venue_id ? [venue.venue_id] : [],
+      display_location: venue.event_scope === "ZOO_WIDE" ? ZOO_WIDE_DISPLAY_LOCATION : venue.display_name,
+      location_group_id: venue.location_group_id || "",
+      location_group_name: venue.event_scope === "ZOO_WIDE" ? ZOO_WIDE_DISPLAY_LOCATION : venue.display_name,
+      coverage_location_ids: coverageMatches.map((row) => row.location_group_id),
+      source_location_text: cleanupLooseText(areaText || highVenueCandidates[0].matched_text || ""),
+      parser_confidence: "high",
+      needs_review: false,
+      parse_reason: "Matched explicit eligible event venue.",
+      event_venue_candidates: compactAreaCandidates(highVenueCandidates.map((candidate) => ({
+        location_group_id: candidate.venue_id,
+        group_name: candidate.display_name,
+        group_code: candidate.venue_code,
+        matched_text: candidate.matched_text,
+        score: candidate.score,
+      }))),
+      coverage_location_matches: coverageMatches,
+    };
+  }
+  if (highVenueCandidates.length > 1) {
+    const venueIds = highVenueCandidates.map((candidate) => candidate.venue_id).filter(Boolean);
+    return {
+      event_scope: "MULTI_VENUE",
+      primary_venue_id: venueIds[0] || "",
+      venue_ids: venueIds,
+      display_location: highVenueCandidates.map((candidate) => candidate.display_name).join(", "),
+      location_group_id: highVenueCandidates[0]?.location_group_id || "",
+      location_group_name: highVenueCandidates.map((candidate) => candidate.display_name).join(", "),
+      coverage_location_ids: coverageMatches.map((row) => row.location_group_id),
+      source_location_text: cleanupLooseText(areaText || ""),
+      parser_confidence: "medium",
+      needs_review: false,
+      parse_reason: "Matched multiple eligible event venues.",
+      event_venue_candidates: compactAreaCandidates(highVenueCandidates.map((candidate) => ({
+        location_group_id: candidate.venue_id,
+        group_name: candidate.display_name,
+        group_code: candidate.venue_code,
+        matched_text: candidate.matched_text,
+        score: candidate.score,
+      }))),
+      coverage_location_matches: coverageMatches,
+    };
+  }
+
+  const defaultRule = matchDefaultRule(eventName, eventDefaults);
+  if (defaultRule?.event_scope === "ZOO_WIDE") {
+    return {
+      event_scope: "ZOO_WIDE",
+      primary_venue_id: defaultRule.primary_venue_id || zooVenue?.venue_id || "",
+      venue_ids: [defaultRule.primary_venue_id || zooVenue?.venue_id].filter(Boolean),
+      display_location: defaultRule.display_location || ZOO_WIDE_DISPLAY_LOCATION,
+      location_group_id: defaultRule.location_group_id || zooVenue?.location_group_id || "",
+      location_group_name: defaultRule.display_location || ZOO_WIDE_DISPLAY_LOCATION,
+      coverage_location_ids: coverageMatches.map((row) => row.location_group_id),
+      source_location_text: cleanupLooseText(areaText || ""),
+      parser_confidence: "high",
+      needs_review: false,
+      parse_reason: `Matched configured recurring event default: ${defaultRule.match_text || defaultRule.normalized_match}.`,
+      event_venue_candidates: [],
+      coverage_location_matches: coverageMatches,
+    };
+  }
+
+  if (ineligibleConflicts.length) {
+    return {
+      event_scope: "UNKNOWN",
+      primary_venue_id: "",
+      venue_ids: [],
+      display_location: "Needs Review",
+      location_group_id: "",
+      location_group_name: "Needs Review",
+      coverage_location_ids: ineligibleConflicts.map((row) => row.location_group_id),
+      source_location_text: cleanupLooseText(areaText || ineligibleConflicts.map((row) => row.group_name).join(", ")),
+      parser_confidence: "low",
+      needs_review: true,
+      parse_reason: `Found custodial coverage location(s) ${ineligibleConflicts.map((row) => row.group_name).join(", ")} but no eligible event venue or zoo-wide scope.`,
+      event_venue_candidates: compactAreaCandidates(venueCandidates.map((candidate) => ({
+        location_group_id: candidate.venue_id,
+        group_name: candidate.display_name,
+        group_code: candidate.venue_code,
+        matched_text: candidate.matched_text,
+        score: candidate.score,
+      }))),
+      coverage_location_matches: coverageMatches,
+    };
+  }
+
+  if (matchedGroup?.location_group_id && !isRestroomGroup(matchedGroup)) {
+    return {
+      event_scope: "SINGLE_VENUE",
+      primary_venue_id: "",
+      venue_ids: [],
+      display_location: eventAreaDisplayName(matchedGroup.group_name || matchedGroup.group_code || ""),
+      location_group_id: matchedGroup.location_group_id || "",
+      location_group_name: eventAreaDisplayName(matchedGroup.group_name || ""),
+      coverage_location_ids: coverageMatches.map((row) => row.location_group_id),
+      source_location_text: cleanupLooseText(areaText || ""),
+      parser_confidence: "medium",
+      needs_review: false,
+      parse_reason: "Legacy eligible location group fallback used because no event_venues list was supplied.",
+      event_venue_candidates: [],
+      coverage_location_matches: coverageMatches,
+    };
+  }
+
+  return {
+    event_scope: "UNKNOWN",
+    primary_venue_id: "",
+    venue_ids: [],
+    display_location: "Needs Review",
+    location_group_id: "",
+    location_group_name: "Needs Review",
+    coverage_location_ids: coverageMatches.map((row) => row.location_group_id),
+    source_location_text: cleanupLooseText(areaText || ""),
+    parser_confidence: "low",
+    needs_review: true,
+    parse_reason: "No eligible event scope or venue could be resolved.",
+    event_venue_candidates: compactAreaCandidates(venueCandidates.map((candidate) => ({
+      location_group_id: candidate.venue_id,
+      group_name: candidate.display_name,
+      group_code: candidate.venue_code,
+      matched_text: candidate.matched_text,
+      score: candidate.score,
+    }))),
+    coverage_location_matches: coverageMatches,
+  };
+}
+
+function buildCanonicalNoteLocationGroup(locationSemantics = {}, fallbackGroup = null, eventVenues = []) {
+  const names = [];
+  const primaryVenueId = String(locationSemantics.primary_venue_id || "").trim();
+  const primaryVenue = primaryVenueId
+    ? (eventVenues || []).find((venue) => String(venue?.venue_id || "") === primaryVenueId)
+    : null;
+  const venueIds = new Set((locationSemantics.venue_ids || []).map((id) => String(id || "").trim()).filter(Boolean));
+
+  for (const venue of eventVenues || []) {
+    const venueId = String(venue?.venue_id || "").trim();
+    if ((primaryVenue && venueId === primaryVenueId) || venueIds.has(venueId)) {
+      names.push(venue.display_name, venue.venue_code, ...(venue.aliases || []));
+    }
+  }
+
+  names.push(
+    locationSemantics.display_location,
+    locationSemantics.location_group_name,
+    locationSemantics.source_location_text,
+    fallbackGroup?.group_name,
+    fallbackGroup?.group_code,
+    ...(fallbackGroup?.included_locations || [])
+  );
+
+  const includedLocations = [];
+  const seen = new Set();
+  for (const value of names) {
+    const text = String(value || "").replace(/\s+/g, " ").trim();
+    if (!text) continue;
+    const key = normalizeLoose(text);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    includedLocations.push(text);
+  }
+
+  if (!includedLocations.length) return fallbackGroup;
+  return {
+    group_name: includedLocations[0],
+    group_code: primaryVenue?.venue_code || fallbackGroup?.group_code || "",
+    included_locations: includedLocations,
+  };
+}
+
 function eventAreaDisplayName(value = "") {
   const raw = String(value || "").replace(/\s+/g, " ").trim();
   if (/^splash\s*pad\s+restrooms?$/i.test(raw)) return "Splash Pad";
@@ -757,6 +1168,7 @@ function inferSpecialEventTitle(value = "") {
     ["corporate meeting", "Corporate Meeting"],
     ["school visit", "School Visit"],
     ["field trip", "Field Trip"],
+    ["members night", "Members Night"],
     ["member night", "Member Night"],
     ["private tour", "Private Tour"],
     ["staff training", "Staff Training"],
@@ -1039,7 +1451,7 @@ function detectApproxTimeRange(text = "") {
   return null;
 }
 
-function parseOneEventText(rawText, locationGroups, index = 0) {
+function parseOneEventText(rawText, locationGroups, index = 0, eventVenues = [], eventDefaults = []) {
   const normalizedText = normalizeIntakeText(rawText);
   const labels = parseLabelMap(normalizedText);
   const eventNameFromLabel = firstLabelValue(labels, ["Event Name", "Event", "Name", "Title", "Event Title"]);
@@ -1070,29 +1482,54 @@ function parseOneEventText(rawText, locationGroups, index = 0) {
   const eventName = eventNameFromLabel
     ? cleanEventName(eventNameFromLabel, matchedGroup, { stripBareArea: false })
     : (ambiguousAreaName || specialName || cleanEventName(leadingDashTitle || narrativeName || extractFallbackTitle(normalizedText, matchedGroup, timeRange), matchedGroup));
-  const baseNotes = notesFromLabel ? buildNotesFromNarrative(normalizedText, notesFromLabel, eventName, matchedGroup) : compactNarrativeNotes(normalizedText, eventName, matchedGroup);
+  const locationSemantics = buildLocationSemantics({
+    eventName,
+    rawText: normalizedText,
+    areaText: areaFromLabel,
+    matchedGroup,
+    areaCandidates,
+    locationGroups,
+    eventVenues,
+    eventDefaults,
+  });
+  const noteLocationGroup = buildCanonicalNoteLocationGroup(locationSemantics, matchedGroup, eventVenues);
+  const baseNotes = notesFromLabel ? buildNotesFromNarrative(normalizedText, notesFromLabel, eventName, noteLocationGroup) : compactNarrativeNotes(normalizedText, eventName, noteLocationGroup);
   const startTime = timeRange?.start_time || "";
   const endTime = timeRange?.end_time || "";
-  const warnings = buildParseWarnings({ eventName, locationGroupId: matchedGroup?.location_group_id || "", eventDate, startTime, endTime, areaCandidates, rawText: normalizedText, notes: baseNotes });
+  const warnings = buildParseWarnings({ eventName, locationGroupId: locationSemantics.location_group_id || "", eventDate, startTime, endTime, areaCandidates, rawText: normalizedText, notes: baseNotes });
+  if (locationSemantics.needs_review) warnings.push("event_location_needs_review");
+  if (locationSemantics.event_scope === "UNKNOWN") warnings.push("missing_event_scope");
   const operational_profile = inferEventProfile({ eventName, notes: baseNotes || normalizedText, attendeeCount, startTime, endTime });
-  const field_confidence = buildFieldConfidence({ eventName, locationGroupId: matchedGroup?.location_group_id || "", eventDate, startTime, endTime, attendeeCount, areaCandidates, warnings });
+  const field_confidence = buildFieldConfidence({ eventName, locationGroupId: locationSemantics.location_group_id || "", eventDate, startTime, endTime, attendeeCount, areaCandidates, warnings });
 
   return {
     raw_text: normalizedText,
     source_index: index,
     event_name: eventName,
-    location_group_id: matchedGroup?.location_group_id || "",
-    location_group_name: eventAreaDisplayName(matchedGroup?.group_name || areaFromLabel || ""),
+    event_scope: locationSemantics.event_scope,
+    primary_venue_id: locationSemantics.primary_venue_id || "",
+    venue_ids: locationSemantics.venue_ids || [],
+    display_location: locationSemantics.display_location || "",
+    location_group_id: locationSemantics.location_group_id || "",
+    location_group_name: locationSemantics.location_group_name || locationSemantics.display_location || "",
+    coverage_location_ids: locationSemantics.coverage_location_ids || [],
+    staffing_area_ids: [],
+    source_location_text: locationSemantics.source_location_text || areaFromLabel || "",
+    parser_confidence: locationSemantics.parser_confidence || (warnings.length ? "medium" : "high"),
+    needs_review: Boolean(locationSemantics.needs_review),
+    parse_reason: locationSemantics.parse_reason || null,
     event_date: eventDate,
     start_time: startTime,
     end_time: endTime,
     attendee_count: attendeeCount,
     notes: baseNotes,
     created_by: "Input Console Parse",
-    confidence: warnings.length ? (warnings.some((warning) => ["missing_event_name", "missing_area", "missing_date", "missing_time", "end_not_after_start"].includes(warning)) ? "medium" : "high") : "high",
+    confidence: warnings.length ? (warnings.some((warning) => ["missing_event_name", "missing_area", "missing_event_scope", "event_location_needs_review", "missing_date", "missing_time", "end_not_after_start"].includes(warning)) ? "medium" : "high") : "high",
     review_notes: warnings.length ? warnings.join(", ") : null,
     warnings,
     area_candidates: compactAreaCandidates(areaCandidates),
+    event_venue_candidates: locationSemantics.event_venue_candidates || [],
+    coverage_location_matches: locationSemantics.coverage_location_matches || [],
     field_confidence,
     operational_profile,
   };
@@ -1104,6 +1541,9 @@ function shouldUseGemini(localRow) {
   if (warnings.some((warning) => [
     "missing_event_name",
     "missing_area",
+    "missing_event_scope",
+    "event_location_needs_review",
+    "ineligible_event_venue",
     "missing_date",
     "missing_time",
     "end_not_after_start",
@@ -1117,12 +1557,32 @@ function shouldUseGemini(localRow) {
   return Object.values(fieldConfidence).some((value) => String(value || "") === "medium" || String(value || "") === "low");
 }
 
-function buildGeminiPrompt(rows, locationGroups) {
-  const groups = (locationGroups || []).map((group) => ({
-    location_group_id: group.location_group_id,
-    group_name: group.group_name,
-    group_code: group.group_code,
-    included_locations: group.included_locations || [],
+function buildGeminiPrompt(rows, locationGroups = [], eventVenues = [], eventDefaults = []) {
+  const venues = normalizeEventVenueOptions(locationGroups, eventVenues).map((venue) => ({
+    venue_id: venue.venue_id,
+    venue_code: venue.venue_code,
+    display_name: venue.display_name,
+    event_scope: venue.event_scope,
+    location_group_id: venue.location_group_id,
+    aliases: venue.aliases || [],
+  }));
+  const coverageGroups = (locationGroups || [])
+    .filter((group) => group.eligible_custodial_coverage !== false)
+    .map((group) => ({
+      location_group_id: group.location_group_id,
+      group_name: group.group_name,
+      group_code: group.group_code,
+      eligible_event_venue: group.eligible_event_venue === true,
+      public_restroom: group.public_restroom === true,
+      staff_restroom: group.staff_restroom === true,
+      included_locations: group.included_locations || [],
+    }));
+  const defaults = normalizeEventDefaults(eventDefaults).map((rule) => ({
+    match_text: rule.match_text,
+    normalized_match: rule.normalized_match,
+    event_scope: rule.event_scope,
+    display_location: rule.display_location || "",
+    primary_venue_id: rule.primary_venue_id || "",
   }));
 
   return [
@@ -1130,15 +1590,22 @@ function buildGeminiPrompt(rows, locationGroups) {
     "Return JSON only. No markdown. No explanation.",
     "Output shape: {\"rows\":[{...}]}",
     "Each row must include:",
-    "source_index, event_name, location_group_id, location_group_name, event_date, start_time, end_time, attendee_count, notes, confidence, review_notes, warnings, event_type, custodial_impact, restroom_pressure, cleanup_pressure, requires_followup",
+    "source_index, event_name, event_scope, primary_venue_id, venue_ids, display_location, location_group_id, location_group_name, coverage_location_ids, source_location_text, event_date, start_time, end_time, attendee_count, notes, confidence, review_notes, warnings, event_type, custodial_impact, restroom_pressure, cleanup_pressure, requires_followup",
     "Rules:",
+    "- event_scope must be one of ZOO_WIDE, SINGLE_VENUE, MULTI_VENUE, OFFSITE, UNKNOWN.",
+    "- Explicit operator-selected scope or venue language wins over guesses.",
+    "- Zoo-wide phrases including zoo wide, zoo-wide, entire zoo, whole zoo, across the zoo, full zoo, entire footprint, zoo footprint, campus-wide, and park-wide map to event_scope ZOO_WIDE and display_location Zoo Footprint.",
+    "- Use primary_venue_id and venue_ids only from the provided Event venues list.",
+    "- Public restrooms, staff restrooms, restroom groups, cleaning checkpoints, scan locations, janitorial closets, trash routes, and custodial service zones must never become a primary event venue.",
+    "- If source text only identifies an ineligible restroom or custodial coverage location and no eligible venue/scope exists, set event_scope UNKNOWN, display_location Needs Review, empty primary_venue_id and venue_ids, include the restroom in coverage_location_ids when present, and add event_location_needs_review.",
+    "- Coverage locations are custodial work targets only; they must not overwrite event_scope or display_location.",
+    "- Use configured event defaults only when no explicit operator-selected scope or eligible venue conflicts with them.",
     "- event_date must be YYYY-MM-DD when known, else empty string.",
     "- start_time and end_time must be HH:MM:SS 24-hour when known, else empty string.",
     "- Overnight Zoo Snooze/sleepover/campout/lock-in events may end after midnight; for those, keep the real next-morning end_time even when it is earlier than start_time and do not use end_not_after_start just because the event crosses midnight.",
     "- attendee_count must be a string integer or null.",
-    "- location_group_id must match one of the provided location groups when you can infer it, else empty string.",
-    "- location_group_name should be the canonical event area name when matched. For event rows, call Splash Pad Restrooms 'Splash Pad' and Courtyard Restrooms 'Courtyard' because the events happen in those areas, not inside the restrooms.",
-    "- warnings must be an array using these values when applicable: missing_event_name, missing_area, missing_date, missing_time, end_not_after_start, ambiguous_area, ambiguous_date, ambiguous_time.",
+    "- location_group_id is the legacy compatibility group for the selected venue/scope, not coverage. Leave it empty when unresolved.",
+    "- warnings must be an array using these values when applicable: missing_event_name, missing_area, missing_event_scope, event_location_needs_review, ineligible_event_venue, missing_date, missing_time, end_not_after_start, ambiguous_area, ambiguous_date, ambiguous_time.",
     "- confidence must be one of high, medium, low.",
     "- review_notes should be short plain text or null.",
     "- Do not invent facts. Leave fields blank if unknown.",
@@ -1146,8 +1613,12 @@ function buildGeminiPrompt(rows, locationGroups) {
     "- Use event_type values like school_group, formal_event, party, corporate_event, member_event, public_event, or general_event.",
     "- custodial_impact, restroom_pressure, and cleanup_pressure must be low, medium, or high.",
     "- requires_followup must be true when setup, breakdown, cleanup, restroom pressure, vendors, food, trash, or high attendance appears likely.",
-    "Location groups:",
-    JSON.stringify(groups),
+    "Event venues:",
+    JSON.stringify(venues),
+    "Custodial coverage locations:",
+    JSON.stringify(coverageGroups),
+    "Configured event defaults:",
+    JSON.stringify(defaults),
     "Input rows:",
     JSON.stringify((rows || []).map((row) => ({
       source_index: Number(row?.source_index),
@@ -1175,10 +1646,10 @@ function safeJsonParse(text) {
   }
 }
 
-async function tryGeminiParseTexts({ rows, locationGroups }) {
+async function tryGeminiParseTexts({ rows, locationGroups, eventVenues, eventDefaults }) {
   const apiKey = getGeminiApiKey(["EVENTS_GEMINI_API_KEY"]);
   if (!apiKey) return { ok: false, reason: "gemini_not_configured" };
-  const prompt = buildGeminiPrompt(rows, locationGroups);
+  const prompt = buildGeminiPrompt(rows, locationGroups, eventVenues, eventDefaults);
   const response = await fetchWithTimeout(`${GEMINI_BASE_URL}/${encodeURIComponent(GEMINI_MODEL)}:generateContent`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
@@ -1200,7 +1671,7 @@ async function tryGeminiParseTexts({ rows, locationGroups }) {
 }
 
 function mergeWarnings(...warningLists) {
-  const allowed = new Set(["missing_event_name", "missing_area", "missing_date", "missing_time", "end_not_after_start", "ambiguous_area", "ambiguous_date", "ambiguous_time", "suspicious_time"]);
+  const allowed = new Set(["missing_event_name", "missing_area", "missing_event_scope", "event_location_needs_review", "ineligible_event_venue", "missing_date", "missing_time", "end_not_after_start", "ambiguous_area", "ambiguous_date", "ambiguous_time", "suspicious_time"]);
   return Array.from(new Set(warningLists.flat().map((warning) => String(warning || "").trim()).filter((warning) => allowed.has(warning))));
 }
 
@@ -1211,21 +1682,25 @@ function normalizedEnum(value, allowed, fallback = "") {
 
 function recomputeRowMetadata(row = {}, locationGroups = []) {
   const areaCandidates = rankLocationGroups(locationGroups, row.location_group_name || row.raw_text || "", 3);
-  const warnings = buildParseWarnings({
-    eventName: row.event_name || "",
-    locationGroupId: row.location_group_id || "",
-    eventDate: row.event_date || "",
-    startTime: row.start_time || "",
-    endTime: row.end_time || "",
-    areaCandidates,
-    rawText: row.raw_text || "",
-    notes: row.notes || "",
-  });
+  const warnings = mergeWarnings(
+    buildParseWarnings({
+      eventName: row.event_name || "",
+      locationGroupId: row.location_group_id || "",
+      eventDate: row.event_date || "",
+      startTime: row.start_time || "",
+      endTime: row.end_time || "",
+      areaCandidates,
+      rawText: row.raw_text || "",
+      notes: row.notes || "",
+    }),
+    row.needs_review ? ["event_location_needs_review"] : [],
+    normalizeEventScope(row.event_scope, "UNKNOWN") === "UNKNOWN" ? ["missing_event_scope"] : [],
+  );
   return {
     ...row,
     warnings,
     review_notes: warnings.length ? warnings.join(", ") : null,
-    confidence: warnings.length ? (warnings.some((warning) => ["missing_event_name", "missing_area", "missing_date", "missing_time", "end_not_after_start"].includes(warning)) ? "medium" : "high") : "high",
+    confidence: warnings.length ? (warnings.some((warning) => ["missing_event_name", "missing_area", "missing_event_scope", "event_location_needs_review", "missing_date", "missing_time", "end_not_after_start"].includes(warning)) ? "medium" : "high") : "high",
     field_confidence: buildFieldConfidence({
       eventName: row.event_name || "",
       locationGroupId: row.location_group_id || "",
@@ -1239,13 +1714,11 @@ function recomputeRowMetadata(row = {}, locationGroups = []) {
   };
 }
 
-function normalizeGeminiRow(raw = {}, locationGroups = [], fallbackText = "", index = 0) {
+function normalizeGeminiRow(raw = {}, locationGroups = [], fallbackText = "", index = 0, eventVenues = [], eventDefaults = []) {
   const matchedById = raw.location_group_id
     ? (locationGroups || []).find((group) => String(group.location_group_id || "") === String(raw.location_group_id || "")) || null
     : null;
   const matchedGroup = matchedById || matchLocationGroup(locationGroups, raw.location_group_name || fallbackText);
-  const locationGroupId = matchedGroup?.location_group_id || "";
-  const locationGroupName = eventAreaDisplayName(matchedGroup?.group_name || (locationGroupId ? String(raw.location_group_name || "").trim() : ""));
   const eventDate = normalizePossibleDate(raw.event_date);
   const timePair = normalizeTimePair(raw.start_time, raw.end_time);
   const attendeeRaw = raw.attendee_count == null || raw.attendee_count === "" ? null : Number.parseInt(String(raw.attendee_count), 10);
@@ -1253,9 +1726,21 @@ function normalizeGeminiRow(raw = {}, locationGroups = [], fallbackText = "", in
   const eventName = cleanEventName(raw.event_name || "", matchedGroup);
   const notes = cleanNotes(raw.notes || "", eventName, matchedGroup);
   const areaCandidates = rankLocationGroups(locationGroups, raw.location_group_name || fallbackText, 3);
+  const locationSemantics = buildLocationSemantics({
+    eventName,
+    rawText: fallbackText,
+    areaText: raw.location_group_name || raw.display_location || "",
+    matchedGroup,
+    areaCandidates,
+    locationGroups,
+    eventVenues,
+    eventDefaults,
+  });
   const warnings = mergeWarnings(
     Array.isArray(raw.warnings) ? raw.warnings.map((x) => String(x || "").trim()).filter(Boolean) : [],
-    buildParseWarnings({ eventName, locationGroupId, eventDate, startTime: timePair.start_time, endTime: timePair.end_time, areaCandidates, rawText: fallbackText, notes })
+    buildParseWarnings({ eventName, locationGroupId: locationSemantics.location_group_id || "", eventDate, startTime: timePair.start_time, endTime: timePair.end_time, areaCandidates, rawText: fallbackText, notes }),
+    locationSemantics.needs_review ? ["event_location_needs_review"] : [],
+    locationSemantics.event_scope === "UNKNOWN" ? ["missing_event_scope"] : []
   ).filter((warning) => !(warning === "end_not_after_start" && isOvernightEventContext(eventName, fallbackText, notes)));
   const aiProfile = {
     event_type: normalizedEnum(raw.event_type, ["school_group", "formal_event", "party", "corporate_event", "member_event", "public_event", "general_event"]),
@@ -1269,14 +1754,24 @@ function normalizeGeminiRow(raw = {}, locationGroups = [], fallbackText = "", in
     ...fallbackProfile,
     ...Object.fromEntries(Object.entries(aiProfile).filter(([, value]) => value !== "" && value != null)),
   };
-  const field_confidence = buildFieldConfidence({ eventName, locationGroupId, eventDate, startTime: timePair.start_time, endTime: timePair.end_time, attendeeCount, areaCandidates, warnings });
+  const field_confidence = buildFieldConfidence({ eventName, locationGroupId: locationSemantics.location_group_id || "", eventDate, startTime: timePair.start_time, endTime: timePair.end_time, attendeeCount, areaCandidates, warnings });
 
   return {
     raw_text: normalizeIntakeText(fallbackText),
     source_index: Number.isFinite(Number(raw.source_index)) ? Number(raw.source_index) : index,
     event_name: eventName,
-    location_group_id: locationGroupId || "",
-    location_group_name: locationGroupName || "",
+    event_scope: locationSemantics.event_scope,
+    primary_venue_id: locationSemantics.primary_venue_id || "",
+    venue_ids: locationSemantics.venue_ids || [],
+    display_location: locationSemantics.display_location || "",
+    location_group_id: locationSemantics.location_group_id || "",
+    location_group_name: locationSemantics.location_group_name || locationSemantics.display_location || "",
+    coverage_location_ids: locationSemantics.coverage_location_ids || [],
+    staffing_area_ids: [],
+    source_location_text: locationSemantics.source_location_text || "",
+    parser_confidence: locationSemantics.parser_confidence || (warnings.length ? "medium" : "high"),
+    needs_review: Boolean(locationSemantics.needs_review),
+    parse_reason: locationSemantics.parse_reason || null,
     event_date: eventDate,
     start_time: timePair.start_time || "",
     end_time: timePair.end_time || "",
@@ -1287,6 +1782,8 @@ function normalizeGeminiRow(raw = {}, locationGroups = [], fallbackText = "", in
     review_notes: raw.review_notes == null ? (warnings.length ? warnings.join(", ") : null) : String(raw.review_notes || "").trim() || null,
     warnings,
     area_candidates: compactAreaCandidates(areaCandidates),
+    event_venue_candidates: locationSemantics.event_venue_candidates || [],
+    coverage_location_matches: locationSemantics.coverage_location_matches || [],
     field_confidence,
     operational_profile,
     provider: "gemini",
@@ -1310,15 +1807,25 @@ function chooseBestRow(localRow, geminiRow, locationGroups = []) {
 
   const localWarnings = Array.isArray(localRow?.warnings) ? localRow.warnings : [];
   const geminiWarnings = Array.isArray(geminiRow?.warnings) ? geminiRow.warnings : [];
-  const localCriticalMissing = localWarnings.filter((w) => ["missing_event_name", "missing_area", "missing_date", "missing_time", "end_not_after_start"].includes(w));
-  const geminiCriticalMissing = geminiWarnings.filter((w) => ["missing_event_name", "missing_area", "missing_date", "missing_time", "end_not_after_start"].includes(w));
+  const criticalWarnings = ["missing_event_name", "missing_area", "missing_event_scope", "event_location_needs_review", "missing_date", "missing_time", "end_not_after_start"];
+  const localCriticalMissing = localWarnings.filter((w) => criticalWarnings.includes(w));
+  const geminiCriticalMissing = geminiWarnings.filter((w) => criticalWarnings.includes(w));
 
   if (geminiCriticalMissing.length < localCriticalMissing.length) {
     const merged = recomputeRowMetadata({
       ...localRow,
       event_name: localRow.event_name || geminiRow.event_name || "",
+      event_scope: localRow.event_scope !== "UNKNOWN" ? localRow.event_scope : (geminiRow.event_scope || localRow.event_scope || "UNKNOWN"),
+      primary_venue_id: localRow.primary_venue_id || geminiRow.primary_venue_id || "",
+      venue_ids: (localRow.venue_ids && localRow.venue_ids.length) ? localRow.venue_ids : (geminiRow.venue_ids || []),
+      display_location: localRow.display_location && localRow.display_location !== "Needs Review" ? localRow.display_location : (geminiRow.display_location || localRow.display_location || ""),
       location_group_id: localRow.location_group_id || geminiRow.location_group_id || "",
       location_group_name: localRow.location_group_name || geminiRow.location_group_name || "",
+      coverage_location_ids: (localRow.coverage_location_ids && localRow.coverage_location_ids.length) ? localRow.coverage_location_ids : (geminiRow.coverage_location_ids || []),
+      source_location_text: localRow.source_location_text || geminiRow.source_location_text || "",
+      parser_confidence: localRow.parser_confidence || geminiRow.parser_confidence || "",
+      needs_review: Boolean(localRow.needs_review && !geminiRow.primary_venue_id && geminiRow.event_scope === "UNKNOWN"),
+      parse_reason: localRow.parse_reason || geminiRow.parse_reason || null,
       event_date: localRow.event_date || geminiRow.event_date || "",
       start_time: localRow.start_time || geminiRow.start_time || "",
       end_time: localRow.end_time || geminiRow.end_time || "",
@@ -1331,18 +1838,18 @@ function chooseBestRow(localRow, geminiRow, locationGroups = []) {
     return merged;
   }
 
-  const localFilled = [localRow.event_name, localRow.location_group_id, localRow.event_date, localRow.start_time, localRow.end_time].filter(Boolean).length;
-  const geminiFilled = [geminiRow.event_name, geminiRow.location_group_id, geminiRow.event_date, geminiRow.start_time, geminiRow.end_time].filter(Boolean).length;
+  const localFilled = [localRow.event_name, localRow.event_scope !== "UNKNOWN" ? localRow.event_scope : "", localRow.display_location !== "Needs Review" ? localRow.display_location : "", localRow.location_group_id, localRow.event_date, localRow.start_time, localRow.end_time].filter(Boolean).length;
+  const geminiFilled = [geminiRow.event_name, geminiRow.event_scope !== "UNKNOWN" ? geminiRow.event_scope : "", geminiRow.display_location !== "Needs Review" ? geminiRow.display_location : "", geminiRow.location_group_id, geminiRow.event_date, geminiRow.start_time, geminiRow.end_time].filter(Boolean).length;
   if (localFilled < 3 && geminiFilled > localFilled) return geminiRow;
   return localRow;
 }
 
-export async function aiParseEventTexts({ texts, locationGroups }) {
+export async function aiParseEventTexts({ texts, locationGroups, eventVenues = [], eventDefaults = [] }) {
   const rows = texts
     .map((text, index) => ({ index, text: String(text || "").trim() }))
     .filter((row) => row.text);
 
-  const localRows = rows.map((row) => decorateLocalRow(parseOneEventText(row.text, locationGroups || [], row.index)));
+  const localRows = rows.map((row) => decorateLocalRow(parseOneEventText(row.text, locationGroups || [], row.index, eventVenues || [], eventDefaults || [])));
   const rowsNeedingAi = localRows.filter(shouldUseGemini);
   if (!rowsNeedingAi.length) return localRows;
 
@@ -1355,6 +1862,8 @@ export async function aiParseEventTexts({ texts, locationGroups }) {
     const geminiResult = await tryGeminiParseTexts({
       rows: aiInputRows,
       locationGroups: locationGroups || [],
+      eventVenues: eventVenues || [],
+      eventDefaults: eventDefaults || [],
     });
     if (!geminiResult?.ok || !Array.isArray(geminiResult.rows)) return localRows.map((row) => decorateLocalRow(row, { providerFallback: shouldUseGemini(row) }));
 
@@ -1365,7 +1874,9 @@ export async function aiParseEventTexts({ texts, locationGroups }) {
         row,
         locationGroups || [],
         fallbackRow?.text || "",
-        fallbackRow?.source_index ?? idx
+        fallbackRow?.source_index ?? idx,
+        eventVenues || [],
+        eventDefaults || []
       );
     });
     const bySourceIndex = new Map(geminiRows.map((row) => [row.source_index, row]));

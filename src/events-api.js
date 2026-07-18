@@ -17,7 +17,7 @@ function getEventsSupabaseClient() {
 }
 
 const EVENTS_TIME_ZONE = "America/Chicago";
-const EVENTS_CONTRACT_VERSION = "events.v2";
+const EVENTS_CONTRACT_VERSION = "events.v3";
 const DAY_BEFORE_NOTIFICATION_TIME = "08:00:00";
 const EVENT_MAINTENANCE_COOLDOWN_MS = 20 * 1000;
 const MAX_NOTIFICATIONS_PER_RUN = 50;
@@ -108,6 +108,223 @@ function sanitizeEventNotes(value, attendeeCount = null) {
   return raw;
 }
 
+const EVENT_SCOPES = new Set(["ZOO_WIDE", "SINGLE_VENUE", "MULTI_VENUE", "OFFSITE", "UNKNOWN"]);
+const PARSER_CONFIDENCE_VALUES = new Set(["high", "medium", "low"]);
+
+function normalizeEventScope(value, fallback = "UNKNOWN") {
+  const raw = String(value || "").trim().toUpperCase().replace(/[\s-]+/g, "_");
+  if (raw === "ZOO" || raw === "ZOO_WIDE" || raw === "ZOO_FOOTPRINT" || raw === "ZOO-WIDE") return "ZOO_WIDE";
+  if (raw === "SINGLE" || raw === "SINGLE_VENUE") return "SINGLE_VENUE";
+  if (raw === "MULTI" || raw === "MULTIPLE" || raw === "MULTI_VENUE" || raw === "MULTIPLE_VENUES") return "MULTI_VENUE";
+  if (raw === "OFF_SITE") return "OFFSITE";
+  return EVENT_SCOPES.has(raw) ? raw : fallback;
+}
+
+function normalizeParserConfidence(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  return PARSER_CONFIDENCE_VALUES.has(raw) ? raw : null;
+}
+
+function normalizeUuidArray(value) {
+  if (value == null || value === "") return [];
+  const raw = Array.isArray(value) ? value : String(value).split(",");
+  const seen = new Set();
+  const ids = [];
+  for (const item of raw) {
+    const id = String(item || "").trim();
+    if (!id) continue;
+    if (!isUuid(id)) throw new Error("Location and venue id arrays must contain only valid UUIDs.");
+    const key = id.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    ids.push(id);
+  }
+  return ids;
+}
+
+function sqlUuidArrayLiteral(ids = []) {
+  const values = normalizeUuidArray(ids);
+  if (!values.length) return "'{}'::uuid[]";
+  return `array[${values.map((id) => `${sqlLiteral(id)}::uuid`).join(", ")}]::uuid[]`;
+}
+
+function normalizeDisplayLocation(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function isRestroomGroup(row = {}) {
+  const code = String(row.group_code || "").toUpperCase();
+  const name = String(row.group_name || "");
+  if (code.includes("RESTROOM") || /restrooms?/i.test(name)) return true;
+  return Boolean(row.public_restroom || row.staff_restroom);
+}
+
+function mapRowsBy(rows = [], key) {
+  const map = new Map();
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const value = String(row?.[key] || "").trim();
+    if (value) map.set(value, row);
+  }
+  return map;
+}
+
+async function getEventReferenceData(runReadOnlySql) {
+  const locationGroups = await listLocationGroups(runReadOnlySql);
+  const eventVenues = await listEventVenues(runReadOnlySql);
+  const defaultRules = await listEventDefaultRules(runReadOnlySql);
+  const groupsById = mapRowsBy(locationGroups, "location_group_id");
+  const venuesById = mapRowsBy(eventVenues, "venue_id");
+  const zooVenue = eventVenues.find((row) => row.venue_code === "ZOO_FOOTPRINT" || row.event_scope === "ZOO_WIDE") || null;
+  const offsiteVenue = eventVenues.find((row) => row.venue_code === "OFFSITE" || row.event_scope === "OFFSITE") || null;
+  return { locationGroups, eventVenues, defaultRules, groupsById, venuesById, zooVenue, offsiteVenue };
+}
+
+function resolveVenueByLegacyLocationGroup(referenceData, locationGroupId) {
+  const id = String(locationGroupId || "").trim();
+  if (!id) return null;
+  return (referenceData.eventVenues || []).find((venue) => String(venue.location_group_id || "") === id) || null;
+}
+
+function normalizeEventLocationPayload(payload = {}, referenceData = {}) {
+  const explicitScope = normalizeEventScope(payload.event_scope, "");
+  const primaryVenueId = String(payload.primary_venue_id || payload.event_venue_id || "").trim();
+  const venueIds = normalizeUuidArray(payload.venue_ids);
+  const coverageLocationIds = normalizeUuidArray(payload.coverage_location_ids);
+  const staffingAreaIds = normalizeUuidArray(payload.staffing_area_ids);
+  const legacyLocationGroupId = String(payload.location_group_id || "").trim();
+  const displayLocationInput = normalizeDisplayLocation(payload.display_location || payload.location_group_name);
+  const parserConfidence = normalizeParserConfidence(payload.parser_confidence || payload.confidence);
+  const sourceLocationText = normalizeDisplayLocation(payload.source_location_text || payload.location_group_name || "");
+  const sourceText = String(payload.source_text || payload.raw_text || "").trim() || null;
+  const sourceFormat = String(payload.source_format || "").trim() || null;
+  const manuallyOverridden = Boolean(payload.manually_overridden);
+  const overriddenBy = payload.overridden_by == null ? null : String(payload.overridden_by).trim() || null;
+  const eventTimezone = String(payload.event_timezone || EVENTS_TIME_ZONE).trim() || EVENTS_TIME_ZONE;
+
+  if (eventTimezone !== EVENTS_TIME_ZONE) throw new Error(`event_timezone must be ${EVENTS_TIME_ZONE}.`);
+
+  let scope = explicitScope || "UNKNOWN";
+  let primaryVenue = primaryVenueId ? referenceData.venuesById?.get(primaryVenueId) : null;
+  if (primaryVenueId && !primaryVenue) throw new Error("primary_venue_id is not an active event venue.");
+
+  let normalizedVenueIds = venueIds;
+  if (primaryVenue && !normalizedVenueIds.map((id) => id.toLowerCase()).includes(String(primaryVenue.venue_id).toLowerCase())) {
+    normalizedVenueIds = [primaryVenue.venue_id, ...normalizedVenueIds];
+  }
+
+  if (!primaryVenue && legacyLocationGroupId) {
+    primaryVenue = resolveVenueByLegacyLocationGroup(referenceData, legacyLocationGroupId);
+    if (primaryVenue) {
+      normalizedVenueIds = [primaryVenue.venue_id, ...normalizedVenueIds.filter((id) => id.toLowerCase() !== String(primaryVenue.venue_id).toLowerCase())];
+      if (!explicitScope) scope = primaryVenue.event_scope || "SINGLE_VENUE";
+    }
+  }
+
+  if (!explicitScope && primaryVenue) scope = primaryVenue.event_scope === "ZOO_WIDE" ? "ZOO_WIDE" : "SINGLE_VENUE";
+  if (!explicitScope && normalizedVenueIds.length > 1) scope = "MULTI_VENUE";
+
+  if (scope === "ZOO_WIDE") {
+    const zooVenue = referenceData.zooVenue || primaryVenue;
+    if (zooVenue) {
+      primaryVenue = zooVenue;
+      normalizedVenueIds = [zooVenue.venue_id];
+    }
+  }
+
+  if (scope === "SINGLE_VENUE" && !primaryVenue && normalizedVenueIds.length === 1) {
+    primaryVenue = referenceData.venuesById?.get(normalizedVenueIds[0]) || null;
+  }
+
+  const venueRows = normalizedVenueIds.map((id) => referenceData.venuesById?.get(id)).filter(Boolean);
+  if (venueRows.length !== normalizedVenueIds.length) throw new Error("venue_ids contains an unknown or inactive event venue.");
+  const ineligibleVenue = venueRows.find((venue) => venue.eligible_event_venue === false && !["ZOO_WIDE", "OFFSITE"].includes(String(venue.event_scope || "")));
+  if (ineligibleVenue) throw new Error(`${ineligibleVenue.display_name || "Selected venue"} is not eligible as a primary event venue.`);
+
+  for (const locationGroupId of coverageLocationIds) {
+    const group = referenceData.groupsById?.get(locationGroupId);
+    if (!group) throw new Error("coverage_location_ids contains an unknown location group.");
+    if (group.eligible_custodial_coverage === false) throw new Error(`${group.group_name || "Selected location"} is not eligible for custodial coverage.`);
+  }
+
+  for (const locationGroupId of staffingAreaIds) {
+    const group = referenceData.groupsById?.get(locationGroupId);
+    if (!group) throw new Error("staffing_area_ids contains an unknown location group.");
+    if (group.eligible_staffing_assignment === false) throw new Error(`${group.group_name || "Selected location"} is not eligible for staffing assignment.`);
+  }
+
+  let displayLocation = displayLocationInput;
+  let finalLegacyLocationGroupId = legacyLocationGroupId;
+  let needsReview = Boolean(payload.needs_review);
+  const parseReasons = [];
+  if (payload.parse_reason) parseReasons.push(String(payload.parse_reason).trim());
+
+  if (scope === "ZOO_WIDE") {
+    displayLocation = "Zoo Footprint";
+    finalLegacyLocationGroupId = String(primaryVenue?.location_group_id || referenceData.zooVenue?.location_group_id || legacyLocationGroupId || "").trim();
+    needsReview = false;
+    parseReasons.push("Event scope is ZOO_WIDE; display location normalized to Zoo Footprint.");
+  } else if (scope === "SINGLE_VENUE") {
+    if (!primaryVenue) throw new Error("SINGLE_VENUE events require one eligible event venue.");
+    if (primaryVenue.eligible_event_venue === false) throw new Error(`${primaryVenue.display_name || "Selected venue"} is not eligible as a primary event venue.`);
+    displayLocation = primaryVenue.display_name || displayLocation || "Unknown Venue";
+    finalLegacyLocationGroupId = String(primaryVenue.location_group_id || legacyLocationGroupId || "").trim();
+    needsReview = false;
+  } else if (scope === "MULTI_VENUE") {
+    if (venueRows.length < 2) throw new Error("MULTI_VENUE events require at least two eligible event venues.");
+    displayLocation = displayLocation || venueRows.map((venue) => venue.display_name).filter(Boolean).join(", ");
+    primaryVenue = primaryVenue || venueRows[0] || null;
+    finalLegacyLocationGroupId = String(primaryVenue?.location_group_id || legacyLocationGroupId || "").trim();
+    needsReview = false;
+  } else if (scope === "OFFSITE") {
+    displayLocation = displayLocation || "Offsite";
+    const offsiteVenue = referenceData.offsiteVenue || null;
+    if (offsiteVenue) {
+      primaryVenue = offsiteVenue;
+      normalizedVenueIds = [offsiteVenue.venue_id];
+      finalLegacyLocationGroupId = String(offsiteVenue.location_group_id || legacyLocationGroupId || "").trim();
+    }
+    needsReview = false;
+  } else {
+    scope = "UNKNOWN";
+    needsReview = true;
+    displayLocation = displayLocation || "Needs Review";
+    finalLegacyLocationGroupId = String(finalLegacyLocationGroupId || referenceData.zooVenue?.location_group_id || "").trim();
+    parseReasons.push("Event venue/scope is unresolved and requires manager review.");
+  }
+
+  const legacyGroup = referenceData.groupsById?.get(finalLegacyLocationGroupId);
+  if (scope !== "UNKNOWN" && legacyGroup && isRestroomGroup(legacyGroup) && !legacyGroup.eligible_event_venue) {
+    throw new Error(`${legacyGroup.group_name} is a custodial coverage location, not an eligible primary event venue.`);
+  }
+
+  if (!finalLegacyLocationGroupId) {
+    throw new Error("A compatible location_group_id could not be resolved for the event.");
+  }
+  if (!referenceData.groupsById?.has(finalLegacyLocationGroupId)) {
+    throw new Error("location_group_id must reference a known location group.");
+  }
+
+  return {
+    event_scope: scope,
+    primary_venue_id: primaryVenue?.venue_id || null,
+    venue_ids: normalizedVenueIds,
+    display_location: displayLocation,
+    coverage_location_ids: coverageLocationIds,
+    staffing_area_ids: staffingAreaIds,
+    source_location_text: sourceLocationText || null,
+    parser_confidence: parserConfidence,
+    needs_review: needsReview,
+    parse_reason: parseReasons.filter(Boolean).join(" "),
+    source_text: sourceText,
+    source_format: sourceFormat,
+    manually_overridden: manuallyOverridden,
+    overridden_by: overriddenBy,
+    overridden_at: manuallyOverridden ? new Date().toISOString() : null,
+    event_timezone: eventTimezone,
+    location_group_id: finalLegacyLocationGroupId,
+  };
+}
+
 function cleanEventName(value) {
   let text = String(value || "").replace(/\s+/g, " " ).trim();
   const labelPattern = /\b(Start Time|End Time|Location|Area|Host Department|Projected|Attendees|Event Date|Date|Notes?)\b[:\s]*/i;
@@ -128,27 +345,31 @@ function addDaysToIsoDate(value, days = 0) {
   return date.toISOString().slice(0, 10);
 }
 
-function normalizeEventPayload(payload = {}) {
+function normalizeEventPayload(payload = {}, referenceData = {}) {
   const eventName = cleanEventName(payload.event_name);
-  const locationGroupId = String(payload.location_group_id || "").trim();
   const eventDate = String(payload.event_date || "").trim();
   const startTime = normalizeTimeInput(payload.start_time);
   const endTime = normalizeTimeInput(payload.end_time);
   const attendeeCount = toNullableInt(payload.attendee_count);
   const notes = sanitizeEventNotes(payload.notes, attendeeCount);
   const createdBy = payload.created_by == null ? null : String(payload.created_by).trim() || null;
+  const operationId = payload.operation_id == null || payload.operation_id === "" ? null : String(payload.operation_id).trim();
+  const location = normalizeEventLocationPayload(payload, referenceData);
 
   if (!eventName) throw new Error("event_name is required.");
-  if (!isUuid(locationGroupId)) throw new Error("location_group_id must be a valid UUID.");
+  if (location.needs_review || location.event_scope === "UNKNOWN") {
+    throw new Error("Event scope or venue requires review before saving. Select Zoo Footprint or an eligible event venue.");
+  }
   if (!isIsoDate(eventDate)) throw new Error("event_date must be YYYY-MM-DD.");
   if (endTime === startTime) throw new Error("end_time must differ from start_time.");
+  if (operationId && !isUuid(operationId)) throw new Error("operation_id must be a valid UUID when supplied.");
 
   const spansOvernight = endTime < startTime;
   const endDate = spansOvernight ? addDaysToIsoDate(eventDate, 1) : eventDate;
 
   return {
     event_name: eventName,
-    location_group_id: locationGroupId,
+    ...location,
     event_date: eventDate,
     end_date: endDate,
     start_time: startTime,
@@ -157,6 +378,7 @@ function normalizeEventPayload(payload = {}) {
     notes,
     created_by: createdBy,
     spans_overnight: spansOvernight,
+    operation_id: operationId,
   };
 }
 
@@ -186,17 +408,26 @@ async function listUpcomingEvents(runReadOnlySql) {
     select
       e.id,
       e.event_name,
+      e.event_name as event_title,
+      coalesce(e.event_scope, 'UNKNOWN') as event_scope,
+      e.primary_venue_id,
+      e.venue_ids,
+      e.display_location,
+      e.coverage_location_ids,
+      e.staffing_area_ids,
+      e.source_location_text,
+      e.parser_confidence,
+      coalesce(e.needs_review, false) as needs_review,
+      e.parse_reason,
+      coalesce(e.manually_overridden, false) as manually_overridden,
+      e.overridden_by,
+      e.overridden_at,
+      coalesce(e.event_timezone, '${EVENTS_TIME_ZONE}') as event_timezone,
       e.location_group_id,
-      case
-        when lg.group_code = 'SPLASH_PAD_RESTROOMS' then 'SPLASH_PAD'
-        when lg.group_code = 'COURTYARD_RESTROOMS' then 'COURTYARD'
-        else lg.group_code
-      end as group_code,
-      case
-        when lg.group_code = 'SPLASH_PAD_RESTROOMS' then 'Splash Pad'
-        when lg.group_code = 'COURTYARD_RESTROOMS' then 'Courtyard'
-        else lg.group_name
-      end as group_name,
+      coalesce(ev.venue_code, lg.group_code) as venue_code,
+      coalesce(ev.display_name, nullif(e.display_location, ''), lg.group_name) as venue_name,
+      coalesce(ev.venue_code, lg.group_code) as group_code,
+      coalesce(nullif(e.display_location, ''), ev.display_name, lg.group_name) as group_name,
       e.event_date,
       e.end_date,
       to_char(e.start_time, 'HH24:MI:SS') as start_time,
@@ -213,6 +444,7 @@ async function listUpcomingEvents(runReadOnlySql) {
       e.updated_at
     from public.events_app_events e
     join public.location_groups lg on lg.id = e.location_group_id
+    left join public.event_venues ev on ev.id = e.primary_venue_id
     where coalesce(e.end_date, e.event_date) >= (now() at time zone '${EVENTS_TIME_ZONE}')::date
     order by e.event_date asc, e.start_time asc, e.event_name asc
   `);
@@ -225,6 +457,18 @@ async function listLocationGroups(runReadOnlySql) {
       lg.id as location_group_id,
       lg.group_code,
       lg.group_name,
+      coalesce(lg.eligible_event_venue, false) as eligible_event_venue,
+      coalesce(lg.eligible_event_scope, false) as eligible_event_scope,
+      coalesce(lg.eligible_custodial_coverage, true) as eligible_custodial_coverage,
+      coalesce(lg.eligible_staffing_assignment, true) as eligible_staffing_assignment,
+      coalesce(lg.public_restroom, false) as public_restroom,
+      coalesce(lg.staff_restroom, false) as staff_restroom,
+      coalesce(lg.exhibit, false) as exhibit,
+      coalesce(lg.restaurant, false) as restaurant,
+      coalesce(lg.event_venue, false) as event_venue,
+      coalesce(lg.administrative, false) as administrative,
+      coalesce(lg.zoo_wide_scope, false) as zoo_wide_scope,
+      coalesce(lg.offsite, false) as offsite,
       coalesce(
         array_agg(distinct item.name order by item.name)
           filter (where item.name is not null),
@@ -246,8 +490,57 @@ async function listLocationGroups(runReadOnlySql) {
       where eaa.location_group_id = lg.id and eaa.active = true
     ) item on true
     where lg.active = true
+       or coalesce(lg.eligible_event_scope, false) = true
+       or coalesce(lg.eligible_event_venue, false) = true
     group by lg.id, lg.group_code, lg.group_name
     order by lg.group_name asc
+  `);
+  return Array.isArray(rows) ? rows : [];
+}
+
+async function listEventVenues(runReadOnlySql) {
+  const rows = await runReadOnlySql(`
+    select
+      ev.id as venue_id,
+      ev.venue_code,
+      ev.display_name,
+      ev.event_scope,
+      ev.location_group_id,
+      lg.group_code,
+      lg.group_name,
+      coalesce(ev.eligible_event_venue, false) as eligible_event_venue,
+      coalesce(ev.eligible_event_scope, false) as eligible_event_scope,
+      coalesce(ev.active, true) as active,
+      coalesce(ev.aliases, array[]::text[]) as aliases
+    from public.event_venues ev
+    left join public.location_groups lg on lg.id = ev.location_group_id
+    where ev.active = true
+    order by case when ev.event_scope = 'ZOO_WIDE' then 0 else 1 end, ev.display_name asc
+  `);
+  return Array.isArray(rows) ? rows : [];
+}
+
+async function listCoverageLocationGroups(runReadOnlySql) {
+  const groups = await listLocationGroups(runReadOnlySql);
+  return groups.filter((group) => group.eligible_custodial_coverage !== false);
+}
+
+async function listEventDefaultRules(runReadOnlySql) {
+  const rows = await runReadOnlySql(`
+    select
+      edr.id,
+      edr.match_text,
+      edr.normalized_match,
+      edr.event_scope,
+      edr.primary_venue_id,
+      ev.display_name,
+      ev.venue_code,
+      ev.location_group_id,
+      coalesce(edr.active, true) as active
+    from public.event_default_rules edr
+    left join public.event_venues ev on ev.id = edr.primary_venue_id
+    where edr.active = true
+    order by length(edr.normalized_match) desc, edr.match_text asc
   `);
   return Array.isArray(rows) ? rows : [];
 }
@@ -306,13 +599,30 @@ async function ensureUpcomingEventScheduleState({ runReadOnlySql, runRpc }) {
   return { ok: true, checked_dates: states.length, generated_dates: generatedDates };
 }
 
-async function createEventRecord(runWriteSql, payload) {
-  const record = normalizeEventPayload(payload);
-  const rows = await runWriteSql(
-    "events_app_create",
-    `insert into public.events_app_events (
+function buildEventInsertSql(record) {
+  const operationConflict = record.operation_id
+    ? `on conflict (operation_id) where operation_id is not null do update set updated_at = public.events_app_events.updated_at`
+    : "";
+  return `insert into public.events_app_events (
        event_name,
        location_group_id,
+       event_scope,
+       primary_venue_id,
+       venue_ids,
+       display_location,
+       coverage_location_ids,
+       staffing_area_ids,
+       source_location_text,
+       parser_confidence,
+       needs_review,
+       parse_reason,
+       source_text,
+       source_format,
+       manually_overridden,
+       overridden_by,
+       overridden_at,
+       event_timezone,
+       operation_id,
        event_date,
        end_date,
        start_time,
@@ -324,6 +634,23 @@ async function createEventRecord(runWriteSql, payload) {
      ) values (
        ${sqlLiteral(record.event_name)},
        ${sqlLiteral(record.location_group_id)}::uuid,
+       ${sqlLiteral(record.event_scope)},
+       ${record.primary_venue_id ? `${sqlLiteral(record.primary_venue_id)}::uuid` : "null"},
+       ${sqlUuidArrayLiteral(record.venue_ids)},
+       ${sqlLiteral(record.display_location)},
+       ${sqlUuidArrayLiteral(record.coverage_location_ids)},
+       ${sqlUuidArrayLiteral(record.staffing_area_ids)},
+       ${sqlLiteral(record.source_location_text)},
+       ${sqlLiteral(record.parser_confidence)},
+       ${record.needs_review ? "true" : "false"},
+       ${sqlLiteral(record.parse_reason)},
+       ${sqlLiteral(record.source_text)},
+       ${sqlLiteral(record.source_format)},
+       ${record.manually_overridden ? "true" : "false"},
+       ${sqlLiteral(record.overridden_by)},
+       ${record.overridden_at ? `${sqlLiteral(record.overridden_at)}::timestamptz` : "null"},
+       ${sqlLiteral(record.event_timezone)},
+       ${record.operation_id ? `${sqlLiteral(record.operation_id)}::uuid` : "null"},
        ${sqlLiteral(record.event_date)}::date,
        ${sqlLiteral(record.end_date)}::date,
        ${sqlLiteral(record.start_time)}::time,
@@ -333,10 +660,79 @@ async function createEventRecord(runWriteSql, payload) {
        ${sqlLiteral(record.created_by)},
        now()
      )
-     returning *;`
+     ${operationConflict}
+     returning *;`;
+}
+
+function buildEventUpdateSql(eventId, record) {
+  return `with before_row as (
+       select to_jsonb(e.*) as previous_record
+       from public.events_app_events e
+       where e.id = ${sqlLiteral(eventId)}::uuid
+       for update
+     ), updated as (
+       update public.events_app_events e
+          set event_name = ${sqlLiteral(record.event_name)},
+              location_group_id = ${sqlLiteral(record.location_group_id)}::uuid,
+              event_scope = ${sqlLiteral(record.event_scope)},
+              primary_venue_id = ${record.primary_venue_id ? `${sqlLiteral(record.primary_venue_id)}::uuid` : "null"},
+              venue_ids = ${sqlUuidArrayLiteral(record.venue_ids)},
+              display_location = ${sqlLiteral(record.display_location)},
+              coverage_location_ids = ${sqlUuidArrayLiteral(record.coverage_location_ids)},
+              staffing_area_ids = ${sqlUuidArrayLiteral(record.staffing_area_ids)},
+              source_location_text = ${sqlLiteral(record.source_location_text)},
+              parser_confidence = ${sqlLiteral(record.parser_confidence)},
+              needs_review = ${record.needs_review ? "true" : "false"},
+              parse_reason = ${sqlLiteral(record.parse_reason)},
+              source_text = ${sqlLiteral(record.source_text)},
+              source_format = ${sqlLiteral(record.source_format)},
+              manually_overridden = true,
+              overridden_by = ${sqlLiteral(record.overridden_by || record.created_by || "Input Console")},
+              overridden_at = now(),
+              event_timezone = ${sqlLiteral(record.event_timezone)},
+              event_date = ${sqlLiteral(record.event_date)}::date,
+              end_date = ${sqlLiteral(record.end_date)}::date,
+              start_time = ${sqlLiteral(record.start_time)}::time,
+              end_time = ${sqlLiteral(record.end_time)}::time,
+              attendee_count = ${record.attendee_count == null ? "null" : record.attendee_count},
+              notes = ${sqlLiteral(record.notes)},
+              revision = coalesce(e.revision, 1) + 1,
+              updated_at = now()
+        from before_row
+        where e.id = ${sqlLiteral(eventId)}::uuid
+        returning e.*, before_row.previous_record
+     ), history as (
+       insert into public.events_app_event_history (
+         event_id, action, actor, reason, previous_record, new_record, created_at
+       )
+       select id, 'update', ${sqlLiteral(record.overridden_by || record.created_by || "Input Console")},
+              ${sqlLiteral(record.parse_reason || "Event updated from Event Input Console.")},
+              previous_record, to_jsonb(updated.*) - 'previous_record', now()
+       from updated
+       returning id
+     )
+     select * from updated;`;
+}
+
+async function createEventRecord(runReadOnlySql, runWriteSql, payload) {
+  const referenceData = await getEventReferenceData(runReadOnlySql);
+  const record = normalizeEventPayload(payload, referenceData);
+  const rows = await runWriteSql(
+    "events_app_create",
+    buildEventInsertSql(record)
   );
   if (Array.isArray(rows) && rows.length) return { ...record, ...rows[0] };
   return record;
+}
+
+async function updateEventRecord(runReadOnlySql, runWriteSql, eventId, payload) {
+  const normalizedId = String(eventId || "").trim();
+  if (!isUuid(normalizedId)) throw new Error("A valid event id is required.");
+  const referenceData = await getEventReferenceData(runReadOnlySql);
+  const record = normalizeEventPayload({ ...payload, manually_overridden: true }, referenceData);
+  const rows = await runWriteSql("events_app_update", buildEventUpdateSql(normalizedId, record));
+  if (!Array.isArray(rows) || !rows.length) throw new Error("Event not found.");
+  return { ...record, ...rows[0], previous_record: undefined };
 }
 
 async function deleteEventRecord(runWriteSql, eventId) {
@@ -370,7 +766,7 @@ function extractCustodialNotes(notes = "") {
 }
 
 function buildNotificationBody(eventRow) {
-  const area = eventRow.group_name || eventRow.group_code || "Assigned area";
+  const area = eventRow.display_location || eventRow.venue_name || eventRow.group_name || eventRow.group_code || "Assigned area";
   const attendees = eventRow.attendee_count == null ? "unknown" : String(eventRow.attendee_count);
   const custodialNotes = extractCustodialNotes(eventRow.notes);
   const dateLabel = String(eventRow?.end_date || eventRow?.event_date || "") > String(eventRow?.event_date || "")
@@ -535,6 +931,10 @@ async function getPendingNotifications(runReadOnlySql) {
       select
         e.id,
         e.event_name,
+        coalesce(e.event_scope, 'UNKNOWN') as event_scope,
+        coalesce(nullif(e.display_location, ''), ev.display_name, lg.group_name) as display_location,
+        e.primary_venue_id,
+        e.coverage_location_ids,
         e.location_group_id,
         e.event_date,
         e.end_date,
@@ -542,8 +942,8 @@ async function getPendingNotifications(runReadOnlySql) {
         e.end_time,
         e.attendee_count,
         e.notes,
-        lg.group_code,
-        lg.group_name,
+        coalesce(ev.venue_code, lg.group_code) as group_code,
+        coalesce(nullif(e.display_location, ''), ev.display_name, lg.group_name) as group_name,
         emp.id as employee_id,
         emp.display_name as employee_name,
         mu.id as msg_user_id,
@@ -559,8 +959,16 @@ async function getPendingNotifications(runReadOnlySql) {
       join public.events_app_events e
         on e.event_date between p.local_now::date and (p.local_now::date + 3)
       join public.location_groups lg on lg.id = e.location_group_id
+      left join public.event_venues ev on ev.id = e.primary_venue_id
+      cross join lateral unnest(
+        case
+          when coalesce(array_length(e.coverage_location_ids, 1), 0) > 0 then e.coverage_location_ids
+          when coalesce(e.event_scope, 'UNKNOWN') = 'ZOO_WIDE' then '{}'::uuid[]
+          else array[e.location_group_id]::uuid[]
+        end
+      ) as event_targets(location_group_id)
       join owner_assignments oa
-        on oa.location_group_id = e.location_group_id
+        on oa.location_group_id = event_targets.location_group_id
        and oa.assignment_date = p.local_now::date
       join public.employees emp on emp.id = oa.employee_id and emp.active = true
       join public.msg_users mu on mu.employee_id = emp.id and mu.is_active = true
@@ -774,6 +1182,40 @@ export function createEventsPublicRouter({
     }
   });
 
+  router.get("/event-venues", async (_req, res) => {
+    try {
+      const rows = await listEventVenues(runReadOnlySql);
+      res.status(200).json({
+        ok: true,
+        data: rows,
+        meta: {
+          version: appVersion,
+          release_id: releaseId,
+          contract_version: EVENTS_CONTRACT_VERSION,
+        },
+      });
+    } catch (error) {
+      fail(res, error, "Event venues failed", 500);
+    }
+  });
+
+  router.get("/coverage-locations", async (_req, res) => {
+    try {
+      const rows = await listCoverageLocationGroups(runReadOnlySql);
+      res.status(200).json({
+        ok: true,
+        data: rows,
+        meta: {
+          version: appVersion,
+          release_id: releaseId,
+          contract_version: EVENTS_CONTRACT_VERSION,
+        },
+      });
+    } catch (error) {
+      fail(res, error, "Coverage locations failed", 500);
+    }
+  });
+
   return router;
 }
 
@@ -836,6 +1278,40 @@ export function createEventsAdminRouter({
     }
   });
 
+  router.get("/event-venues", async (_req, res) => {
+    try {
+      const rows = await listEventVenues(runReadOnlySql);
+      res.status(200).json({
+        ok: true,
+        data: rows,
+        meta: {
+          version: appVersion,
+          release_id: releaseId,
+          contract_version: EVENTS_CONTRACT_VERSION,
+        },
+      });
+    } catch (error) {
+      fail(res, error, "Event venues failed", 500);
+    }
+  });
+
+  router.get("/coverage-locations", async (_req, res) => {
+    try {
+      const rows = await listCoverageLocationGroups(runReadOnlySql);
+      res.status(200).json({
+        ok: true,
+        data: rows,
+        meta: {
+          version: appVersion,
+          release_id: releaseId,
+          contract_version: EVENTS_CONTRACT_VERSION,
+        },
+      });
+    } catch (error) {
+      fail(res, error, "Coverage locations failed", 500);
+    }
+  });
+
   router.post("/parse-ai", async (req, res) => {
     try {
       const body = req.body && typeof req.body === "object" ? req.body : {};
@@ -844,7 +1320,9 @@ export function createEventsAdminRouter({
         : [String(body.text || "").trim()].filter(Boolean);
       if (!texts.length) throw new Error("text or texts is required.");
       const groups = await listLocationGroups(runReadOnlySql);
-      const parsed = await aiParseEventTexts({ texts, locationGroups: groups });
+      const eventVenues = await listEventVenues(runReadOnlySql);
+      const eventDefaults = await listEventDefaultRules(runReadOnlySql);
+      const parsed = await aiParseEventTexts({ texts, locationGroups: groups, eventVenues, eventDefaults });
       const providersUsed = Array.from(new Set(parsed.map((row) => String(row?.provider_used || row?.provider || "local-parser").trim()).filter(Boolean)));
       const fallbackCount = parsed.filter((row) => row?.provider_fallback).length;
       res.status(200).json({
@@ -867,6 +1345,7 @@ export function createEventsAdminRouter({
   router.post("/", typeof requireAdminApiWrite === "function" ? requireAdminApiWrite : (_req, _res, next) => next(), async (req, res) => {
     try {
       const record = await createEventRecord(
+        runReadOnlySql,
         runWriteSql,
         req.body && typeof req.body === "object" ? req.body : {}
       );
@@ -882,6 +1361,29 @@ export function createEventsAdminRouter({
       });
     } catch (error) {
       fail(res, error, "Create event failed", 400);
+    }
+  });
+
+  router.put("/:eventId", typeof requireAdminApiWrite === "function" ? requireAdminApiWrite : (_req, _res, next) => next(), async (req, res) => {
+    try {
+      const record = await updateEventRecord(
+        runReadOnlySql,
+        runWriteSql,
+        req.params.eventId,
+        req.body && typeof req.body === "object" ? req.body : {}
+      );
+      maintenanceController?.kick("events_admin_update_after");
+      res.status(200).json({
+        ok: true,
+        data: record,
+        meta: {
+          version: appVersion,
+          release_id: releaseId,
+          contract_version: EVENTS_CONTRACT_VERSION,
+        },
+      });
+    } catch (error) {
+      fail(res, error, "Update event failed", 400);
     }
   });
 

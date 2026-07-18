@@ -7,23 +7,135 @@ const locationGroups = [
     group_code: "EC",
     group_name: "Event Center",
     included_locations: ["Event Center", "Event Ctr", "EC", "event centre"],
+    eligible_event_venue: true,
+    eligible_custodial_coverage: true,
   },
   {
     location_group_id: "00000000-0000-4000-8000-000000000002",
     group_code: "PP",
     group_name: "Primate Pavilion",
     included_locations: ["Primate Pavilion", "Primate Pavillion", "PP"],
+    eligible_event_venue: true,
+    eligible_custodial_coverage: true,
   },
   {
     location_group_id: "00000000-0000-4000-8000-000000000009",
     group_code: "NWP",
     group_name: "Northwest Passage",
     included_locations: ["Northwest Passage", "North West Passage", "NWP"],
+    eligible_event_venue: true,
+    eligible_custodial_coverage: true,
+  },
+];
+
+const eventVenues = [
+  {
+    venue_id: "10000000-0000-4000-8000-000000000000",
+    venue_code: "ZOO_FOOTPRINT",
+    display_name: "Zoo Footprint",
+    event_scope: "ZOO_WIDE",
+    location_group_id: "20000000-0000-4000-8000-000000000000",
+    eligible_event_venue: false,
+    eligible_event_scope: true,
+    aliases: ["Zoo Footprint", "zoo wide", "zoo-wide", "entire zoo", "whole zoo", "across the zoo", "campus-wide", "park-wide"],
+  },
+  {
+    venue_id: "10000000-0000-4000-8000-000000000001",
+    venue_code: "EVENT_CENTER",
+    display_name: "Event Center",
+    event_scope: "SINGLE_VENUE",
+    location_group_id: "00000000-0000-4000-8000-000000000001",
+    eligible_event_venue: true,
+    aliases: ["Event Center", "Event Ctr", "EC", "event centre"],
+  },
+  {
+    venue_id: "10000000-0000-4000-8000-000000000002",
+    venue_code: "PRIMATE_PAVILION",
+    display_name: "Primate Pavilion",
+    event_scope: "SINGLE_VENUE",
+    location_group_id: "00000000-0000-4000-8000-000000000002",
+    eligible_event_venue: true,
+    aliases: ["Primate Pavilion", "Primate Pavillion", "PP"],
+  },
+  {
+    venue_id: "10000000-0000-4000-8000-000000000009",
+    venue_code: "NORTH_WEST_PASSAGE",
+    display_name: "Northwest Passage",
+    event_scope: "SINGLE_VENUE",
+    location_group_id: "00000000-0000-4000-8000-000000000009",
+    eligible_event_venue: true,
+    aliases: ["Northwest Passage", "North West Passage", "NWP"],
+  },
+  {
+    venue_id: "10000000-0000-4000-8000-000000000003",
+    venue_code: "CAT_HOUSE_CAFE",
+    display_name: "Cat House Café",
+    event_scope: "SINGLE_VENUE",
+    location_group_id: "20000000-0000-4000-8000-000000000003",
+    eligible_event_venue: true,
+    aliases: ["Cat House Cafe", "Cathouse Cafe", "Cat House", "Cathouse"],
+  },
+  {
+    venue_id: "10000000-0000-4000-8000-000000000004",
+    venue_code: "COURTYARD",
+    display_name: "Courtyard",
+    event_scope: "SINGLE_VENUE",
+    location_group_id: "20000000-0000-4000-8000-000000000004",
+    eligible_event_venue: true,
+    aliases: ["Courtyard", "Entrance Courtyard"],
+  },
+  {
+    venue_id: "10000000-0000-4000-8000-000000000005",
+    venue_code: "SPLASH_PAD",
+    display_name: "Splash Pad",
+    event_scope: "SINGLE_VENUE",
+    location_group_id: "20000000-0000-4000-8000-000000000005",
+    eligible_event_venue: true,
+    aliases: ["Splash Pad", "Splashpad"],
+  },
+  {
+    venue_id: "10000000-0000-4000-8000-000000000006",
+    venue_code: "TETON_LODGE",
+    display_name: "Teton Lodge",
+    event_scope: "SINGLE_VENUE",
+    location_group_id: "00000000-0000-4000-8000-000000000006",
+    eligible_event_venue: true,
+    aliases: ["Teton", "Teton Trek", "Teton Lodge", "Teton Trek Lodge"],
+  },
+  {
+    venue_id: "10000000-0000-4000-8000-000000000007",
+    venue_code: "CHINA_EXHIBIT",
+    display_name: "China Exhibit",
+    event_scope: "SINGLE_VENUE",
+    location_group_id: "00000000-0000-4000-8000-000000000007",
+    eligible_event_venue: true,
+    aliases: ["China", "China exhibit", "China Theater"],
+  },
+  {
+    venue_id: "10000000-0000-4000-8000-000000000008",
+    venue_code: "CAT_COUNTRY",
+    display_name: "Cat Country",
+    event_scope: "SINGLE_VENUE",
+    location_group_id: "00000000-0000-4000-8000-000000000008",
+    eligible_event_venue: true,
+    aliases: ["Cat Country", "catcountry", "Cat Country Exhibit"],
+  },
+];
+
+const eventDefaults = [
+  {
+    match_text: "Members Night",
+    normalized_match: "members night",
+    event_scope: "ZOO_WIDE",
+    primary_venue_id: "10000000-0000-4000-8000-000000000000",
+    display_location: "Zoo Footprint",
+    location_group_id: "20000000-0000-4000-8000-000000000000",
+    active: true,
   },
 ];
 
 async function parseOne(text) {
-  const [row] = await aiParseEventTexts({ texts: [text], locationGroups });
+  const [row] = await aiParseEventTexts({ texts: [text], locationGroups, eventVenues, eventDefaults });
   return row;
 }
 
@@ -31,6 +143,60 @@ function assertTime(row, start, end) {
   assert.equal(row.start_time, start, `start_time for ${row.raw_text}`);
   assert.equal(row.end_time, end, `end_time for ${row.raw_text}`);
 }
+
+for (const phrase of ["zoo wide", "zoo-wide", "entire zoo", "across the zoo", "campus-wide", "park-wide"]) {
+  const row = await parseOne(`Event Name: Members Night | Location: ${phrase} | Event Date: 7/17/2026 | Start Time: 6pm | End Time: 8:30pm | Attendance: Not listed`);
+  assert.equal(row.event_scope, "ZOO_WIDE", `${phrase} should map to ZOO_WIDE`);
+  assert.equal(row.display_location, "Zoo Footprint", `${phrase} should display Zoo Footprint`);
+  assert.equal(row.primary_venue_id, "10000000-0000-4000-8000-000000000000");
+}
+
+const membersDefault = await parseOne("Event Name: Members Night | Location: MemMex Restrooms | Event Date: 7/17/2026 | Start Time: 6pm | End Time: 8:30pm");
+assert.equal(membersDefault.event_scope, "ZOO_WIDE");
+assert.equal(membersDefault.display_location, "Zoo Footprint");
+assert.equal(membersDefault.location_group_name, "Zoo Footprint");
+
+const zooWideCoverage = await aiParseEventTexts({
+  texts: ["Members Night is zoo-wide on 7/17/2026 from 6pm to 8:30pm. Custodial coverage: MemMex Restrooms."],
+  locationGroups: [
+    ...locationGroups,
+    {
+      location_group_id: "30000000-0000-4000-8000-000000000001",
+      group_code: "MEMMEX_RESTROOMS",
+      group_name: "MemMex Restrooms",
+      included_locations: ["MemMex Restrooms", "MemMex Men's Restroom", "MemMex Women's Restroom"],
+      eligible_event_venue: false,
+      eligible_custodial_coverage: true,
+      public_restroom: true,
+    },
+  ],
+  eventVenues,
+  eventDefaults,
+});
+assert.equal(zooWideCoverage[0].event_scope, "ZOO_WIDE");
+assert.equal(zooWideCoverage[0].display_location, "Zoo Footprint");
+assert.ok(zooWideCoverage[0].coverage_location_ids.includes("30000000-0000-4000-8000-000000000001"), "MemMex Restrooms should remain coverage, not venue");
+
+const restroomOnly = await aiParseEventTexts({
+  texts: ["Event Name: Unknown Party | Event Area: MemMex Restrooms | Event Date: 7/17/2026 | Start Time: 6pm | End Time: 8pm"],
+  locationGroups: [
+    ...locationGroups,
+    {
+      location_group_id: "30000000-0000-4000-8000-000000000001",
+      group_code: "MEMMEX_RESTROOMS",
+      group_name: "MemMex Restrooms",
+      included_locations: ["MemMex Restrooms", "MemMex"],
+      eligible_event_venue: false,
+      eligible_custodial_coverage: true,
+      public_restroom: true,
+    },
+  ],
+  eventVenues,
+  eventDefaults: [],
+});
+assert.equal(restroomOnly[0].event_scope, "UNKNOWN");
+assert.equal(restroomOnly[0].needs_review, true);
+assert.match(restroomOnly[0].parse_reason, /custodial coverage/i);
 
 const babyDay = await parseOne(`
 Event Name
@@ -120,33 +286,66 @@ assertTime(pavilionTypo, "18:30:00", "21:00:00");
 assert.equal(pavilionTypo.attendee_count, "55");
 assert.ok(pavilionTypo.event_name.includes("Windsor Prom"));
 
+const catCountryVenue = await aiParseEventTexts({
+  texts: ["National Mountain Lion Day at Cat Country on 8/26/2026 from 10am to 2pm"],
+  locationGroups: [
+    ...locationGroups,
+    {
+      location_group_id: "00000000-0000-4000-8000-000000000008",
+      group_code: "CAT_COUNTRY",
+      group_name: "Cat Country",
+      included_locations: ["Cat Country"],
+      eligible_event_venue: true,
+      eligible_custodial_coverage: true,
+      exhibit: true,
+    },
+  ],
+  eventVenues,
+  eventDefaults,
+});
+assert.equal(catCountryVenue[0].event_scope, "SINGLE_VENUE");
+assert.equal(catCountryVenue[0].display_location, "Cat Country");
+assert.equal(catCountryVenue[0].primary_venue_id, "10000000-0000-4000-8000-000000000008");
+
 const eventAreaGroups = [
   ...locationGroups,
   {
     location_group_id: "00000000-0000-4000-8000-000000000010",
     group_code: "SPLASH_PAD_RESTROOMS",
     group_name: "Splash Pad Restrooms",
-    included_locations: ["Splash Pad", "Splashpad", "Splash Pad Restrooms"],
+    included_locations: ["Splash Pad Restrooms"],
+    eligible_event_venue: false,
+    eligible_custodial_coverage: true,
+    public_restroom: true,
   },
   {
     location_group_id: "00000000-0000-4000-8000-000000000011",
     group_code: "COURTYARD_RESTROOMS",
     group_name: "Courtyard Restrooms",
-    included_locations: ["Courtyard", "Courtyard Restrooms"],
+    included_locations: ["Courtyard Restrooms"],
+    eligible_event_venue: false,
+    eligible_custodial_coverage: true,
+    public_restroom: true,
   },
 ];
 const splashPadEvent = await aiParseEventTexts({
   texts: ["Event Name: Splash Pad Birthday | Event Area: Splash Pad | Event Date: 7/11 | Start Time: 10am | End Time: 12pm | Guests: 45"],
   locationGroups: eventAreaGroups,
+  eventVenues,
+  eventDefaults,
 });
-assert.equal(splashPadEvent[0].location_group_id, "00000000-0000-4000-8000-000000000010");
+assert.equal(splashPadEvent[0].event_scope, "SINGLE_VENUE");
+assert.equal(splashPadEvent[0].location_group_id, "20000000-0000-4000-8000-000000000005");
 assert.equal(splashPadEvent[0].location_group_name, "Splash Pad");
 assert.doesNotMatch(splashPadEvent[0].location_group_name, /Restrooms/i);
 const courtyardEvent = await aiParseEventTexts({
   texts: ["Donor mixer at Courtyard on 7/12 from 5pm to 7pm. 80 guests."],
   locationGroups: eventAreaGroups,
+  eventVenues,
+  eventDefaults,
 });
-assert.equal(courtyardEvent[0].location_group_id, "00000000-0000-4000-8000-000000000011");
+assert.equal(courtyardEvent[0].event_scope, "SINGLE_VENUE");
+assert.equal(courtyardEvent[0].location_group_id, "20000000-0000-4000-8000-000000000004");
 assert.equal(courtyardEvent[0].location_group_name, "Courtyard");
 assert.doesNotMatch(courtyardEvent[0].location_group_name, /Restrooms/i);
 
@@ -211,12 +410,18 @@ const weddingSetup = await aiParseEventTexts({
       location_group_id: "00000000-0000-4000-8000-000000000003",
       group_code: "CATHOUSE_CAFE_RESTROOMS",
       group_name: "Cathouse Cafe Restrooms",
-      included_locations: ["Cat House Cafe", "Cathouse Cafe", "Cafe"],
+      included_locations: ["Cathouse Cafe Restrooms"],
+      eligible_event_venue: false,
+      eligible_custodial_coverage: true,
+      public_restroom: true,
     },
   ],
+  eventVenues,
+  eventDefaults,
 });
 assert.equal(weddingSetup[0].event_name, "Wedding setup");
-assert.equal(weddingSetup[0].location_group_name, "Cathouse Cafe Restrooms");
+assert.equal(weddingSetup[0].event_scope, "SINGLE_VENUE");
+assert.equal(weddingSetup[0].location_group_name, "Cat House Café");
 assert.match(weddingSetup[0].event_date, /^\d{4}-06-14$/);
 assertTime(weddingSetup[0], "10:00:00", "14:00:00");
 assert.equal(weddingSetup[0].attendee_count, "75");
@@ -286,6 +491,10 @@ try {
                   rows: [{
                     source_index: 1,
                     event_name: "End of Summer Bash",
+                    event_scope: "SINGLE_VENUE",
+                    primary_venue_id: eventVenues[1].venue_id,
+                    venue_ids: [eventVenues[1].venue_id],
+                    display_location: "Event Center",
                     location_group_id: locationGroups[0].location_group_id,
                     location_group_name: locationGroups[0].group_name,
                     event_date: "2026-05-09",
@@ -312,6 +521,8 @@ try {
       "Event Area: Event Center",
     ],
     locationGroups,
+    eventVenues,
+    eventDefaults,
   });
 
   assert.match(capturedPrompt, /"source_index":1/);
