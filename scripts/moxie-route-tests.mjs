@@ -226,11 +226,16 @@ try {
   assert.match(page, /Moxie/);
   assert.match(page, /private work assistant/i);
   assert.match(page, /Back to Ops Hub/);
-  assert.doesNotMatch(page, /\/moxie\/assets\/frog-on-log-writing-pad\.png/);
-  assert.doesNotMatch(page, /\/moxie\/assets\/reminders-woodland-animal\.png/);
-  assert.doesNotMatch(page, /\/moxie\/assets\/contacts-creekside-animal\.png/);
-  assert.doesNotMatch(page, /\/moxie\/assets\/settings-woodland-cog\.png/);
-  assert.doesNotMatch(page, /chat-tools|quick-actions-cluster|shortcut-tile|image-action-button/);
+  assert.match(page, /aria-label="Annie workspace tools"/);
+  assert.match(page, /\/moxie\/assets\/frog-on-log-writing-pad\.png/);
+  assert.match(page, /\/moxie\/assets\/reminders-woodland-animal\.png/);
+  assert.match(page, /\/moxie\/assets\/contacts-creekside-animal\.png/);
+  assert.match(page, /\/moxie\/assets\/settings-woodland-cog\.png/);
+  assert.match(page, /href="\/moxie\/log"/);
+  assert.match(page, /href="\/moxie\/reminders"/);
+  assert.match(page, /href="\/moxie\/contacts"/);
+  assert.match(page, /href="\/moxie\/settings"/);
+  assert.match(page, /chat-tools|quick-actions-cluster|shortcut-tile|image-action-button/);
   assert.doesNotMatch(page, /Ops Hub shortcuts/);
   assert.doesNotMatch(page, /ops-hub-grid/);
   assert.doesNotMatch(page, /\/moxie\/assets\/ops-dashboard\.png/);
@@ -327,6 +332,17 @@ try {
   assert.match(remindersHtml, /id="reminders-page-form"/);
   assert.doesNotMatch(remindersHtml, /onclick=/);
 
+  response = await fetch(`${base}/moxie/settings`, { headers: { Cookie: cookie } });
+  assert.equal(response.status, 200);
+  const settingsHtml = await response.text();
+  assert.match(settingsHtml, /Moxie Settings/);
+  assert.match(settingsHtml, /Private workspace/);
+  assert.match(settingsHtml, /Sign out of Moxie/);
+
+  response = await fetch(`${base}/moxie/password`, { headers: { Cookie: cookie }, redirect: "manual" });
+  assert.equal(response.status, 303);
+  assert.equal(response.headers.get("location"), "/moxie/settings");
+
   response = await fetch(`${base}/moxie/logout`, {
     redirect: "manual",
     headers: { Cookie: cookie },
@@ -355,7 +371,10 @@ try {
   assert.match(routeSource, /isProductionLike\(\)[\s\S]*MOXIE_AUTH_REQUIRED/);
   assert.match(routeSource, /clearSessionCookie\(res, req\)/);
   assert.match(routeSource, /Cache-Control", "no-store/);
-  assert.doesNotMatch(templateSource, /function shortcutTile|chat-tools|quick-actions-cluster/);
+  const shortcutSource = templateSource.match(/function shortcutTile[\s\S]*?\n}/)?.[0] || "";
+  assert.match(shortcutSource, /assetUrl\(iconFile\)/);
+  assert.doesNotMatch(shortcutSource, /_iconDataUris/);
+  assert.doesNotMatch(templateSource, /function opsHubButtons/);
 
   console.log("MOXIE_AUTH_LOGOUT_UI_CONTRACT_PASS");
 } finally {

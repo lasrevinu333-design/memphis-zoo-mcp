@@ -611,7 +611,8 @@ export async function callGemini(messages) {
 
 import {
   pageShell, loginPage, logIconImg, reminderIconImg, contactsIconImg,
-  moxieAvatarImg,
+  settingsIconImg, moxieAvatarImg, logButtonLink, reminderButtonLink,
+  contactsButtonLink, settingsButtonLink,
 } from "./moxie-templates.js";
 
 // ---------------------------------------------------------------------------
@@ -1014,6 +1015,17 @@ export function createMoxieRouter({ supabase, staticDir }) {
     }
   });
 
+  // --- Workspace settings ---
+  router.get("/settings", (_req, res) => {
+    res.send(pageShell("Moxie — Settings", buildSettingsPage()));
+  });
+
+  // Preserve old bookmarks without restoring the removed, nonfunctional
+  // password-rotation form.
+  router.get("/password", (_req, res) => {
+    res.redirect(303, prefixed("/settings"));
+  });
+
   return router;
 }
 
@@ -1047,6 +1059,14 @@ function buildChatPage(chatState) {
         <div class="composer-main"><textarea id="input" placeholder="Type a message… (Shift+Enter for newline)" maxlength="${MOXIE_MAX_MESSAGE_CHARS}"></textarea><button id="send" type="submit">Send</button></div>
       </form>
     </div>
+    <aside class="chat-tools" aria-label="Annie workspace tools">
+      <section class="quick-actions-section annie-actions-section" aria-labelledby="annie-actions-title">
+        <h2 id="annie-actions-title" class="shortcut-section-title">Annie workspace tools</h2>
+        <nav class="quick-actions-cluster annie-actions-grid" aria-label="Annie workspace">
+          ${logButtonLink()}${reminderButtonLink()}${contactsButtonLink()}${settingsButtonLink()}
+        </nav>
+      </section>
+    </aside>
   </div>
 </div>
 <div id="clear-chat-modal" class="chat-modal" hidden role="dialog" aria-modal="true" aria-labelledby="clear-chat-title">
@@ -1134,6 +1154,22 @@ form.addEventListener("submit",async(e)=>{
   }finally{send.disabled=false;input.focus();}
 });
 </script>`;
+}
+
+function buildSettingsPage() {
+  return `
+<div class="wrap">
+  <header>
+    <div class="brand-with-icon">${settingsIconImg()}<div><div class="brand">Moxie Settings</div><div class="hint">Private workspace access and navigation.</div></div></div>
+    <div class="header-actions"><a class="button-link" href="${prefixed("/")}">Back to chat</a><a class="button-link" href="${prefixed("/log")}">Annie's Log</a><a class="button-link" href="${prefixed("/reminders")}">Reminders</a><a class="button-link" href="${prefixed("/contacts")}">Contacts</a></div>
+  </header>
+  <div class="panel settings" style="max-width:760px;margin:0 auto;padding:24px">
+    <h2 style="margin-top:0">Private workspace</h2>
+    <p class="hint">Moxie's chat, Annie's Log, reminders, and contacts share one protected workspace. Protected pages are not stored in the browser cache after sign-out.</p>
+    <p class="hint">Access credentials are managed securely by the deployed service. This page does not expose or pretend to rotate a credential that the service cannot persist.</p>
+    <div class="header-actions" style="margin-top:20px"><a class="button-link" href="${prefixed("/logout")}">Sign out of Moxie</a></div>
+  </div>
+</div>`;
 }
 
 function buildLogPage(notes, reminders, suggested) {
