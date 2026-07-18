@@ -13,7 +13,7 @@ const inputPath=resolve(root,"supabase/canonical/schema-fingerprint-input.json")
 const hashPath=resolve(root,"supabase/canonical/schema-fingerprint.txt");
 
 const queries={
-  extensions:`select e.extname as extension_name,e.extversion as version,n.nspname as schema_name from pg_extension e join pg_namespace n on n.oid=e.extnamespace order by e.extname`,
+  extensions:`select e.extname as extension_name,case when e.extname='pg_net' then 'provider_managed' else e.extversion end as version,n.nspname as schema_name from pg_extension e join pg_namespace n on n.oid=e.extnamespace order by e.extname`,
   types:`select n.nspname as schema_name,t.typname as type_name,t.typtype as type_kind,format_type(t.typbasetype,t.typtypmod) as base_type,t.typnotnull as not_null,pg_get_expr(t.typdefaultbin,0) as default_expression,coalesce((select jsonb_agg(e.enumlabel order by e.enumsortorder) from pg_enum e where e.enumtypid=t.oid),'[]'::jsonb) as enum_labels from pg_type t join pg_namespace n on n.oid=t.typnamespace where n.nspname='public' and t.typtype in ('e','d') order by t.typname`,
   sequences:`select schemaname as schema_name,sequencename as sequence_name,data_type,start_value,min_value,max_value,increment_by,cycle,cache_size from pg_sequences where schemaname='public' order by sequencename`,
   tables:`select n.nspname as schema_name,c.relname as table_name,c.relkind as relation_kind,c.relrowsecurity as rls_enabled,c.relforcerowsecurity as rls_forced,pg_get_partkeydef(c.oid) as partition_key,obj_description(c.oid,'pg_class') as comment from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind in ('r','p') order by c.relname`,
