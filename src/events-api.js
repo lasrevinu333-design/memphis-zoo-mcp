@@ -404,7 +404,17 @@ async function purgeExpiredEvents() {
 }
 
 async function listUpcomingEvents(runReadOnlySql) {
-  const rows = await runReadOnlySql(`
+  const rows = await runReadOnlySql(buildEventResponseSelectSql(
+    `coalesce(e.end_date, e.event_date) >= (now() at time zone '${EVENTS_TIME_ZONE}')::date`,
+    `order by e.event_date asc, e.start_time asc, e.event_name asc`
+  ));
+  return Array.isArray(rows) ? rows : [];
+}
+
+function buildEventResponseSelectSql(whereSql, suffixSql = "") {
+  const where = String(whereSql || "").trim();
+  const suffix = String(suffixSql || "").trim();
+  return `
     select
       e.id,
       e.event_name,
@@ -445,10 +455,29 @@ async function listUpcomingEvents(runReadOnlySql) {
     from public.events_app_events e
     join public.location_groups lg on lg.id = e.location_group_id
     left join public.event_venues ev on ev.id = e.primary_venue_id
-    where coalesce(e.end_date, e.event_date) >= (now() at time zone '${EVENTS_TIME_ZONE}')::date
-    order by e.event_date asc, e.start_time asc, e.event_name asc
-  `);
-  return Array.isArray(rows) ? rows : [];
+    ${where ? `where ${where}` : ""}
+    ${suffix}
+  `;
+}
+
+async function readEventByOperationId(runReadOnlySql, operationId) {
+  const normalizedId = String(operationId || "").trim();
+  if (!isUuid(normalizedId)) return null;
+  const rows = await runReadOnlySql(buildEventResponseSelectSql(
+    `e.operation_id = ${sqlLiteral(normalizedId)}::uuid`,
+    "limit 1"
+  ));
+  return Array.isArray(rows) && rows[0]?.id ? rows[0] : null;
+}
+
+async function readEventById(runReadOnlySql, eventId) {
+  const normalizedId = String(eventId || "").trim();
+  if (!isUuid(normalizedId)) return null;
+  const rows = await runReadOnlySql(buildEventResponseSelectSql(
+    `e.id = ${sqlLiteral(normalizedId)}::uuid`,
+    "limit 1"
+  ));
+  return Array.isArray(rows) && rows[0]?.id ? rows[0] : null;
 }
 
 async function listLocationGroups(runReadOnlySql) {
@@ -727,7 +756,10 @@ async function createEventRecord(runReadOnlySql, runWriteSql, payload) {
     "events_app_create",
     buildEventInsertSql(record)
   ));
-  if (Array.isArray(rows) && rows.length) return { ...record, ...rows[0] };
+  const writeRow = rows.find((row) => row?.id);
+  if (writeRow) return { ...record, ...writeRow };
+  const authoritativeRow = await readEventByOperationId(runReadOnlySql, record.operation_id);
+  if (authoritativeRow) return { ...record, ...authoritativeRow };
   return record;
 }
 
@@ -737,8 +769,11 @@ async function updateEventRecord(runReadOnlySql, runWriteSql, eventId, payload) 
   const referenceData = await getEventReferenceData(runReadOnlySql);
   const record = normalizeEventPayload({ ...payload, manually_overridden: true }, referenceData);
   const rows = normalizeWriteResultRows(await runWriteSql("events_app_update", buildEventUpdateSql(normalizedId, record)));
-  if (!Array.isArray(rows) || !rows.length) throw new Error("Event not found.");
-  return { ...record, ...rows[0], previous_record: undefined };
+  const writeRow = rows.find((row) => row?.id);
+  if (writeRow) return { ...record, ...writeRow, previous_record: undefined };
+  const authoritativeRow = await readEventById(runReadOnlySql, normalizedId);
+  if (authoritativeRow) return { ...record, ...authoritativeRow, previous_record: undefined };
+  throw new Error("Event not found.");
 }
 
 async function deleteEventRecord(runWriteSql, eventId) {
