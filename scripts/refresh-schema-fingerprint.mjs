@@ -26,7 +26,7 @@ const queries={
   policies:`select n.nspname as schema_name,c.relname as table_name,p.polname as policy_name,p.polpermissive as permissive,p.polcmd as command_code,coalesce((select jsonb_agg(r.rolname order by r.rolname) from unnest(p.polroles) role_oid join pg_roles r on r.oid=role_oid),'[]'::jsonb) as roles,pg_get_expr(p.polqual,p.polrelid) as using_expression,pg_get_expr(p.polwithcheck,p.polrelid) as check_expression from pg_policy p join pg_class c on c.oid=p.polrelid join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' order by c.relname,p.polname`,
   table_grants:`select table_schema as schema_name,table_name,grantee,privilege_type,is_grantable from information_schema.role_table_grants where table_schema='public' and grantee in ('PUBLIC','anon','authenticated','service_role') order by table_name,grantee,privilege_type`,
   routine_grants:`select n.nspname as schema_name,p.proname as function_name,pg_get_function_identity_arguments(p.oid) as identity_arguments,coalesce(r.rolname,'PUBLIC') as grantee,x.privilege_type,x.is_grantable from pg_proc p join pg_namespace n on n.oid=p.pronamespace cross join lateral aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) x left join pg_roles r on r.oid=x.grantee where n.nspname='public' and coalesce(r.rolname,'PUBLIC') in ('PUBLIC','anon','authenticated','service_role') order by p.proname,pg_get_function_identity_arguments(p.oid),grantee`,
-  cron_jobs:`select jobname,schedule,command,database,username,active from cron.job order by jobname`,
+  cron_jobs:`select jobname,schedule,command,database,case when username in ('postgres','supabase_admin') then 'migration_owner' else username end as username,active from cron.job order by jobname`,
 };
 
 function query(sql){

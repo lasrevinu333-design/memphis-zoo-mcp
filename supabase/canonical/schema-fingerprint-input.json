@@ -20667,7 +20667,7 @@
       "database": "postgres",
       "jobname": "mz-free-tier-retention-daily",
       "schedule": "20 3 * * *",
-      "username": "postgres"
+      "username": "migration_owner"
     },
     {
       "active": false,
@@ -20675,7 +20675,7 @@
       "database": "postgres",
       "jobname": "mz-message-cleanup-deleted-hourly",
       "schedule": "18 * * * *",
-      "username": "postgres"
+      "username": "migration_owner"
     },
     {
       "active": false,
@@ -20683,7 +20683,7 @@
       "database": "postgres",
       "jobname": "mz-message-hidden-threads-hourly",
       "schedule": "19 * * * *",
-      "username": "postgres"
+      "username": "migration_owner"
     },
     {
       "active": false,
@@ -20691,7 +20691,7 @@
       "database": "postgres",
       "jobname": "mz-message-purge-old-hourly",
       "schedule": "17 * * * *",
-      "username": "postgres"
+      "username": "migration_owner"
     },
     {
       "active": true,
@@ -20699,7 +20699,7 @@
       "database": "postgres",
       "jobname": "mz-rolling-schedule-window-ready",
       "schedule": "*/30 * * * *",
-      "username": "postgres"
+      "username": "migration_owner"
     },
     {
       "active": true,
@@ -20707,7 +20707,7 @@
       "database": "postgres",
       "jobname": "mz-stale-sessions-hourly",
       "schedule": "5 * * * *",
-      "username": "postgres"
+      "username": "migration_owner"
     }
   ],
   "extensions": [
