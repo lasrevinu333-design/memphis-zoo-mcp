@@ -21,8 +21,9 @@ export function pageShell(title, body, extraHead = "") {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>${esc(title)}</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2384c341'/%3E%3Ctext x='32' y='43' text-anchor='middle' font-size='38'%3E🦉%3C/text%3E%3C/svg%3E">
 <style>
-:root{color-scheme:dark;font-family:Cambria,Georgia,'Times New Roman',serif;font-size:17px;background:#080b12;color:#f3f6ff}
+:root{color-scheme:dark;font-family:Arial,Helvetica,sans-serif;font-size:17px;background:#080b12;color:#f3f6ff;--mz-green:#84c341;--mz-green-bright:#9be11f;--mz-focus:0 0 0 3px rgba(155,225,31,.42)}
 *{box-sizing:border-box}
 body{margin:0;min-height:100vh;background:linear-gradient(rgba(4,8,16,.78),rgba(4,8,16,.82)),radial-gradient(circle at 20% 0%,#2a3a66 0,#080b12 42%,#05060a 100%);background-size:cover;background-position:center;background-attachment:fixed}
 .wrap{max-width:1040px;margin:0 auto;padding:24px 30px}
@@ -39,6 +40,9 @@ header{display:flex;justify-content:space-between;align-items:center;gap:14px;ma
 a{color:#b9d0ff}
 .button-link{display:inline-block;padding:6px 14px;border-radius:11px;background:#26375d;color:#dbe5ff;border:1px solid #4a5e91;text-decoration:none;font-size:.85rem;font-weight:700}
 .button-link:hover{background:#314a7a}
+.ops-hub-link{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:44px;padding:8px 14px;border-radius:14px;background:linear-gradient(180deg,var(--mz-green-bright),var(--mz-green));color:#102106;border:1px solid rgba(255,255,255,.2);text-decoration:none;font-size:.88rem;font-weight:900;box-shadow:0 6px 16px rgba(0,0,0,.22);transition:transform .14s ease,filter .14s ease}
+.ops-hub-link::before{content:"←";font-size:1.05em}.ops-hub-link:hover{background:linear-gradient(180deg,var(--mz-green-bright),var(--mz-green));filter:brightness(1.05);transform:translateY(-1px)}
+button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid #f8fafc!important;outline-offset:2px;box-shadow:var(--mz-focus)!important}
 .pill{display:inline-block;padding:4px 10px;border-radius:99px;background:#1a2744;color:#9fc0ff;font-size:.75rem;font-weight:800;letter-spacing:.04em;border:1px solid #314472}
 .panel{background:rgba(13,18,32,.82);border:1px solid #26375d;border-radius:16px}
 .chat-main{display:grid;grid-template-columns:292px minmax(0,920px) 292px;gap:18px;align-items:stretch;justify-content:center;width:100%;flex:1 1 auto;min-height:0}
@@ -134,6 +138,7 @@ a{color:#b9d0ff}
 .contact-form button{padding:10px 20px;border-radius:10px;border:1px solid #4a5e91;background:#26375d;color:#dbe5ff;font-weight:700;cursor:pointer;align-self:flex-start;font-family:inherit}
 @media(max-width:1200px){.chat-main{grid-template-columns:1fr}.saved-chats-rail,.chat-tools{display:none}}
 @media(max-width:700px){.wrap{padding:12px}.chat-wrap{width:100%;max-width:100%}.log-grid,.contacts-grid,.log-form-grid{grid-template-columns:1fr}.log-mission{margin:0 12px}.intake-textarea{min-height:180px!important}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
 ${extraHead}
 </style>
 </head>
@@ -155,6 +160,7 @@ export function loginPage(err = false, notice = "") {
 <div class="wrap"><div class="panel login">
   <div class="brand" style="margin-bottom:18px">Moxie</div>
   <div class="hint" style="margin-bottom:18px">Annie's private work assistant</div>
+  <a class="ops-hub-link" href="https://lasrevinu333-design.github.io/Engine/start_page1.html" style="margin-bottom:18px">Back to Ops Hub</a>
   ${notice ? `<div style="color:#7dff9e;margin-bottom:12px;font-weight:700">${esc(notice)}</div>` : ""}
   ${err ? '<div style="color:#ff8fa3;margin-bottom:12px;font-weight:700">Wrong password. Try again.</div>' : ""}
   <form id="moxie-login-form" method="post" action="/moxie/login" autocomplete="off">

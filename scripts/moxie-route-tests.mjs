@@ -212,6 +212,7 @@ try {
   response = await fetch(`${base}/moxie/login`, { redirect: "manual" });
   assert.equal(response.status, 200);
   const loginHtml = await response.text();
+  assert.match(loginHtml, /class="ops-hub-link"[^>]*>Back to Ops Hub</);
   assert.match(loginHtml, /type="password"/);
   assert.match(loginHtml, /autocomplete="new-password"/);
   assert.match(loginHtml, /id="moxie-secret-entry"[\s\S]*value=""/);
@@ -293,6 +294,7 @@ try {
   response = await fetch(`${base}/moxie/log`, { headers: { Cookie: cookie } });
   assert.equal(response.status, 200);
   const logHtml = await response.text();
+  assert.match(logHtml, /class="ops-hub-link"[^>]*>Back to Ops Hub</);
   assert.match(logHtml, /Paste or import communication/);
   assert.match(logHtml, /id="intake-form"/);
   assert.match(logHtml, /id="intake-file" type="file"/);
@@ -346,6 +348,7 @@ try {
   response = await fetch(`${base}/moxie/contacts`, { headers: { Cookie: cookie } });
   assert.equal(response.status, 200);
   const contactsHtml = await response.text();
+  assert.match(contactsHtml, /class="ops-hub-link"[^>]*>Back to Ops Hub</);
   assert.match(contactsHtml, /Maria Lopez/);
   assert.match(contactsHtml, /City Maintenance Supervisor/);
   assert.match(contactsHtml, /id="contacts-page-form"/);
@@ -354,6 +357,7 @@ try {
   response = await fetch(`${base}/moxie/reminders`, { headers: { Cookie: cookie } });
   assert.equal(response.status, 200);
   const remindersHtml = await response.text();
+  assert.match(remindersHtml, /class="ops-hub-link"[^>]*>Back to Ops Hub</);
   assert.match(remindersHtml, /Follow up with Maria/i);
   assert.match(remindersHtml, /id="reminders-page-form"/);
   assert.doesNotMatch(remindersHtml, /onclick=/);
@@ -361,6 +365,7 @@ try {
   response = await fetch(`${base}/moxie/settings`, { headers: { Cookie: cookie } });
   assert.equal(response.status, 200);
   const settingsHtml = await response.text();
+  assert.match(settingsHtml, /class="ops-hub-link"[^>]*>Back to Ops Hub</);
   assert.match(settingsHtml, /Moxie Settings/);
   assert.match(settingsHtml, /id="moxie-password-form"/);
   assert.match(settingsHtml, /id="moxie-current-password"/);
@@ -499,6 +504,8 @@ try {
   assert.match(shortcutSource, /assetUrl\(iconFile\)/);
   assert.doesNotMatch(shortcutSource, /_iconDataUris/);
   assert.doesNotMatch(templateSource, /function opsHubButtons/);
+  assert.match(templateSource, /\.ops-hub-link\{/);
+  assert.match(templateSource, /prefers-reduced-motion/);
 
   console.log("MOXIE_AUTH_LOGOUT_UI_CONTRACT_PASS");
 } finally {
