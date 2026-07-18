@@ -50,6 +50,7 @@ jobs:
           npm run --silent test:schedule-display
           npm run --silent test:messaging-recovery
           npm run --silent test:manager-open
+          npm run --silent test:manager-codes
           npm run --silent test:moxie-route
           npm run --silent test:schedule-source-type
           npm run --silent test:device-credentials
