@@ -49,8 +49,6 @@ jobs:
           npm run --silent test:foundation
           npm run --silent test:schedule-display
           npm run --silent test:messaging-recovery
-          npm run --silent test:manager-open
-          npm run --silent test:manager-codes
           npm run --silent test:moxie-route
           npm run --silent test:schedule-source-type
           npm run --silent test:device-credentials
@@ -58,7 +56,17 @@ jobs:
           npm run --silent test:foundation-repair
           npm run --silent test:custodial-repair
           npm run --silent test:schema-fingerprint
-      - name: Empty database migration rebuild
+      - name: Empty database migration rebuild and manager enrollment database concurrency
+        shell: bash
         env:
           SCHEMA_REBUILD_DOCKER_IMAGE: supabase/postgres:17.6.1.143
-        run: npm run --silent test:empty-db-rebuild
+        run: |
+          set -euo pipefail
+          export SCHEMA_REBUILD_KEEP_DATABASE=1
+          npm run --silent test:empty-db-rebuild | tee /tmp/memphis-schema-rebuild.log
+          container="$(sed -n 's/.*"retained_test_container":"\([^"]*\)".*/\1/p' /tmp/memphis-schema-rebuild.log | tail -n 1)"
+          test -n "$container"
+          trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
+          SHARED_ENROLLMENT_TEST_DOCKER_CONTAINER="$container" \
+            SHARED_ENROLLMENT_TEST_DATABASE=postgres \
+            npm run --silent test:manager-shared-enrollment-db

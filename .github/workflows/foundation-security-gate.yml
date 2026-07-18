@@ -39,8 +39,7 @@ jobs:
         run: |
           set -euo pipefail
           npm run --silent test:auth
-          npm run --silent test:manager-open
-          npm run --silent test:manager-codes
+          npm run --silent test:manager-shared-enrollment
           npm run --silent test:messaging
           npm run --silent test:moxie-route
           npm run --silent test:schedule-source-type

@@ -9076,6 +9076,188 @@
     },
     {
       "collation_name": null,
+      "column_name": "manager_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": "gen_random_uuid()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 1,
+      "schema_name": "public",
+      "table_name": "ops_manager_managers"
+    },
+    {
+      "collation_name": null,
+      "column_name": "display_name",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 2,
+      "schema_name": "public",
+      "table_name": "ops_manager_managers"
+    },
+    {
+      "collation_name": null,
+      "column_name": "contact_label",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 3,
+      "schema_name": "public",
+      "table_name": "ops_manager_managers"
+    },
+    {
+      "collation_name": null,
+      "column_name": "roles",
+      "comment": null,
+      "data_type": "text[]",
+      "default_expression": "ARRAY['OPS_MANAGER'::text]",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 4,
+      "schema_name": "public",
+      "table_name": "ops_manager_managers"
+    },
+    {
+      "collation_name": null,
+      "column_name": "active",
+      "comment": null,
+      "data_type": "boolean",
+      "default_expression": "true",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 5,
+      "schema_name": "public",
+      "table_name": "ops_manager_managers"
+    },
+    {
+      "collation_name": null,
+      "column_name": "revoked_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 6,
+      "schema_name": "public",
+      "table_name": "ops_manager_managers"
+    },
+    {
+      "collation_name": null,
+      "column_name": "revoked_by_manager_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 7,
+      "schema_name": "public",
+      "table_name": "ops_manager_managers"
+    },
+    {
+      "collation_name": null,
+      "column_name": "revoked_reason",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 8,
+      "schema_name": "public",
+      "table_name": "ops_manager_managers"
+    },
+    {
+      "collation_name": null,
+      "column_name": "created_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "now()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 9,
+      "schema_name": "public",
+      "table_name": "ops_manager_managers"
+    },
+    {
+      "collation_name": null,
+      "column_name": "created_by_manager_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 10,
+      "schema_name": "public",
+      "table_name": "ops_manager_managers"
+    },
+    {
+      "collation_name": null,
+      "column_name": "created_by_credential_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 11,
+      "schema_name": "public",
+      "table_name": "ops_manager_managers"
+    },
+    {
+      "collation_name": null,
+      "column_name": "last_access_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 12,
+      "schema_name": "public",
+      "table_name": "ops_manager_managers"
+    },
+    {
+      "collation_name": null,
+      "column_name": "metadata_json",
+      "comment": null,
+      "data_type": "jsonb",
+      "default_expression": "'{}'::jsonb",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 13,
+      "schema_name": "public",
+      "table_name": "ops_manager_managers"
+    },
+    {
+      "collation_name": null,
+      "column_name": "system_key",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 14,
+      "schema_name": "public",
+      "table_name": "ops_manager_managers"
+    },
+    {
+      "collation_name": null,
       "column_name": "pairing_id",
       "comment": null,
       "data_type": "uuid",
@@ -9271,6 +9453,305 @@
     },
     {
       "collation_name": null,
+      "column_name": "key_hash",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 1,
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_rate_limits"
+    },
+    {
+      "collation_name": null,
+      "column_name": "failure_count",
+      "comment": null,
+      "data_type": "integer",
+      "default_expression": "0",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 2,
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_rate_limits"
+    },
+    {
+      "collation_name": null,
+      "column_name": "first_failed_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "now()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 3,
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_rate_limits"
+    },
+    {
+      "collation_name": null,
+      "column_name": "last_failed_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "now()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 4,
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_rate_limits"
+    },
+    {
+      "collation_name": null,
+      "column_name": "locked_until",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 5,
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_rate_limits"
+    },
+    {
+      "collation_name": null,
+      "column_name": "metadata_json",
+      "comment": null,
+      "data_type": "jsonb",
+      "default_expression": "'{}'::jsonb",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 6,
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_rate_limits"
+    },
+    {
+      "collation_name": null,
+      "column_name": "window_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": "gen_random_uuid()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 1,
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "collation_name": null,
+      "column_name": "code_hash",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 2,
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "collation_name": null,
+      "column_name": "manager_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 3,
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "collation_name": null,
+      "column_name": "created_by_manager_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 4,
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "collation_name": null,
+      "column_name": "created_by_credential_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 5,
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "collation_name": null,
+      "column_name": "created_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "now()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 6,
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "collation_name": null,
+      "column_name": "expires_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 7,
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "collation_name": null,
+      "column_name": "disabled_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 8,
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "collation_name": null,
+      "column_name": "disabled_by_manager_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 9,
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "collation_name": null,
+      "column_name": "disabled_by_credential_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 10,
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "collation_name": null,
+      "column_name": "disabled_reason",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 11,
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "collation_name": null,
+      "column_name": "replaced_by_window_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 12,
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "collation_name": null,
+      "column_name": "enrollment_count",
+      "comment": null,
+      "data_type": "integer",
+      "default_expression": "0",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 13,
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "collation_name": null,
+      "column_name": "failed_attempt_count",
+      "comment": null,
+      "data_type": "integer",
+      "default_expression": "0",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 14,
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "collation_name": null,
+      "column_name": "last_enrolled_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 15,
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "collation_name": null,
+      "column_name": "status",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": "'active'::text",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 16,
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "collation_name": null,
+      "column_name": "metadata_json",
+      "comment": null,
+      "data_type": "jsonb",
+      "default_expression": "'{}'::jsonb",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 17,
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "collation_name": null,
       "column_name": "credential_id",
       "comment": null,
       "data_type": "uuid",
@@ -9461,6 +9942,71 @@
       "identity_kind": "",
       "not_null": false,
       "ordinal_position": 15,
+      "schema_name": "public",
+      "table_name": "ops_manager_trusted_devices"
+    },
+    {
+      "collation_name": null,
+      "column_name": "manager_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 16,
+      "schema_name": "public",
+      "table_name": "ops_manager_trusted_devices"
+    },
+    {
+      "collation_name": null,
+      "column_name": "invitation_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 17,
+      "schema_name": "public",
+      "table_name": "ops_manager_trusted_devices"
+    },
+    {
+      "collation_name": null,
+      "column_name": "platform_summary",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 18,
+      "schema_name": "public",
+      "table_name": "ops_manager_trusted_devices"
+    },
+    {
+      "collation_name": null,
+      "column_name": "manager_enrollment_code_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 19,
+      "schema_name": "public",
+      "table_name": "ops_manager_trusted_devices"
+    },
+    {
+      "collation_name": null,
+      "column_name": "shared_enrollment_window_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 20,
       "schema_name": "public",
       "table_name": "ops_manager_trusted_devices"
     },
@@ -15193,6 +15739,54 @@
       "validated": true
     },
     {
+      "constraint_name": "ops_manager_managers_contact_label_len",
+      "constraint_type": "c",
+      "definition": "CHECK (contact_label IS NULL OR length(contact_label) <= 240)",
+      "schema_name": "public",
+      "table_name": "ops_manager_managers",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_managers_display_name_len",
+      "constraint_type": "c",
+      "definition": "CHECK (length(btrim(display_name)) >= 1 AND length(btrim(display_name)) <= 160)",
+      "schema_name": "public",
+      "table_name": "ops_manager_managers",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_managers_metadata_object",
+      "constraint_type": "c",
+      "definition": "CHECK (jsonb_typeof(metadata_json) = 'object'::text)",
+      "schema_name": "public",
+      "table_name": "ops_manager_managers",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_managers_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (manager_id)",
+      "schema_name": "public",
+      "table_name": "ops_manager_managers",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_managers_roles_valid",
+      "constraint_type": "c",
+      "definition": "CHECK (cardinality(roles) >= 1 AND roles <@ ARRAY['OPS_MANAGER'::text, 'CUSTODIAL_MANAGER'::text, 'DIRECTOR'::text, 'SECURITY_ADMIN'::text])",
+      "schema_name": "public",
+      "table_name": "ops_manager_managers",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_managers_system_key_len",
+      "constraint_type": "c",
+      "definition": "CHECK (system_key IS NULL OR system_key ~ '^[a-z][a-z0-9_]{2,63}$'::text)",
+      "schema_name": "public",
+      "table_name": "ops_manager_managers",
+      "validated": true
+    },
+    {
       "constraint_name": "ops_manager_pairing_tokens_access_level",
       "constraint_type": "c",
       "definition": "CHECK (max_access_level = ANY (ARRAY['read_only'::text, 'full_access'::text]))",
@@ -15297,6 +15891,158 @@
       "validated": true
     },
     {
+      "constraint_name": "ops_manager_shared_enrollment_rate_limits_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (key_hash)",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_rate_limits",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_shared_rate_count",
+      "constraint_type": "c",
+      "definition": "CHECK (failure_count >= 0 AND failure_count <= 1000)",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_rate_limits",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_shared_rate_key_len",
+      "constraint_type": "c",
+      "definition": "CHECK (key_hash ~ '^[a-f0-9]{64}$'::text)",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_rate_limits",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_shared_rate_metadata_object",
+      "constraint_type": "c",
+      "definition": "CHECK (jsonb_typeof(metadata_json) = 'object'::text)",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_rate_limits",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_shared_enrollment_wi_disabled_by_credential_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (disabled_by_credential_id) REFERENCES ops_manager_trusted_devices(credential_id) ON DELETE SET NULL",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_shared_enrollment_win_created_by_credential_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (created_by_credential_id) REFERENCES ops_manager_trusted_devices(credential_id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_shared_enrollment_windo_disabled_by_manager_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (disabled_by_manager_id) REFERENCES ops_manager_managers(manager_id) ON DELETE SET NULL",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_shared_enrollment_window_created_by_manager_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (created_by_manager_id) REFERENCES ops_manager_managers(manager_id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_shared_enrollment_window_replaced_by_window_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (replaced_by_window_id) REFERENCES ops_manager_shared_enrollment_windows(window_id) ON DELETE SET NULL",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_shared_enrollment_windows_code_hash_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (code_hash)",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_shared_enrollment_windows_manager_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (manager_id) REFERENCES ops_manager_managers(manager_id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_shared_enrollment_windows_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (window_id)",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_shared_windows_counts",
+      "constraint_type": "c",
+      "definition": "CHECK (enrollment_count >= 0 AND failed_attempt_count >= 0)",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_shared_windows_disabled_consistent",
+      "constraint_type": "c",
+      "definition": "CHECK (status = 'active'::text AND disabled_at IS NULL AND replaced_by_window_id IS NULL OR status = 'expired'::text AND disabled_at IS NULL AND replaced_by_window_id IS NULL OR status = 'disabled'::text AND disabled_at IS NOT NULL AND replaced_by_window_id IS NULL OR status = 'replaced'::text AND disabled_at IS NOT NULL AND replaced_by_window_id IS NOT NULL)",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_shared_windows_exact_lifetime",
+      "constraint_type": "c",
+      "definition": "CHECK (expires_at = (created_at + '48:00:00'::interval))",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_shared_windows_hash_len",
+      "constraint_type": "c",
+      "definition": "CHECK (code_hash ~ '^[a-f0-9]{64}$'::text)",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_shared_windows_metadata_object",
+      "constraint_type": "c",
+      "definition": "CHECK (jsonb_typeof(metadata_json) = 'object'::text)",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_shared_windows_reason_len",
+      "constraint_type": "c",
+      "definition": "CHECK (disabled_reason IS NULL OR length(disabled_reason) <= 160)",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_shared_windows_status",
+      "constraint_type": "c",
+      "definition": "CHECK (status = ANY (ARRAY['active'::text, 'expired'::text, 'disabled'::text, 'replaced'::text]))",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows",
+      "validated": true
+    },
+    {
       "constraint_name": "ops_manager_trusted_devices_access_level",
       "constraint_type": "c",
       "definition": "CHECK (max_access_level = ANY (ARRAY['read_only'::text, 'full_access'::text]))",
@@ -15337,6 +16083,22 @@
       "validated": true
     },
     {
+      "constraint_name": "ops_manager_trusted_devices_manager_enrollment_code_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (manager_enrollment_code_id) REFERENCES ops_manager_enrollment_codes(id) ON DELETE SET NULL",
+      "schema_name": "public",
+      "table_name": "ops_manager_trusted_devices",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_trusted_devices_manager_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (manager_id) REFERENCES ops_manager_managers(manager_id) ON DELETE SET NULL",
+      "schema_name": "public",
+      "table_name": "ops_manager_trusted_devices",
+      "validated": true
+    },
+    {
       "constraint_name": "ops_manager_trusted_devices_metadata_object",
       "constraint_type": "c",
       "definition": "CHECK (jsonb_typeof(metadata_json) = 'object'::text)",
@@ -15348,6 +16110,14 @@
       "constraint_name": "ops_manager_trusted_devices_pkey",
       "constraint_type": "p",
       "definition": "PRIMARY KEY (credential_id)",
+      "schema_name": "public",
+      "table_name": "ops_manager_trusted_devices",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_trusted_devices_shared_enrollment_window_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (shared_enrollment_window_id) REFERENCES ops_manager_shared_enrollment_windows(window_id) ON DELETE SET NULL",
       "schema_name": "public",
       "table_name": "ops_manager_trusted_devices",
       "validated": true
@@ -16674,10 +17444,31 @@
       "schema_name": "public"
     },
     {
+      "comment": "Atomically enrolls one independent OPS_MANAGER browser from the active shared passcode without invalidating the passcode for other approved browsers.",
+      "definition": "CREATE OR REPLACE FUNCTION public.ops_manager_consume_shared_enrollment_window(p_code_hash text, p_credential_id uuid, p_device_id text, p_device_label text, p_trust_token_hash text, p_user_agent_hash text DEFAULT NULL::text, p_created_ip_hash text DEFAULT NULL::text, p_platform_summary text DEFAULT NULL::text, p_expires_at timestamp with time zone DEFAULT NULL::timestamp with time zone, p_metadata_json jsonb DEFAULT '{}'::jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_window public.ops_manager_shared_enrollment_windows%rowtype;\n  v_manager public.ops_manager_managers%rowtype;\n  v_device public.ops_manager_trusted_devices%rowtype;\n  v_now timestamptz := clock_timestamp();\n  v_metadata jsonb := coalesce(p_metadata_json, '{}'::jsonb);\nbegin\n  if p_code_hash is null or p_code_hash !~ '^[a-f0-9]{64}$' then\n    return jsonb_build_object('ok', false, 'status', 400, 'reason', 'malformed');\n  end if;\n  if p_credential_id is null then raise exception 'credential_id is required'; end if;\n  if p_device_id is null or length(btrim(p_device_id)) not between 1 and 96 then\n    raise exception 'valid device_id is required';\n  end if;\n  if p_device_label is null or length(btrim(p_device_label)) not between 1 and 160 then\n    raise exception 'valid device_label is required';\n  end if;\n  if p_trust_token_hash is null or p_trust_token_hash !~ '^[a-f0-9]{64}$' then\n    raise exception 'valid trust token hash is required';\n  end if;\n  if p_expires_at is null or p_expires_at <= v_now then\n    raise exception 'future trusted-device expiration is required';\n  end if;\n  if jsonb_typeof(v_metadata) <> 'object' then raise exception 'metadata_json must be an object'; end if;\n\n  perform pg_advisory_xact_lock(hashtextextended('ops-manager-shared-enrollment-window', 0));\n\n  select * into v_window\n  from public.ops_manager_shared_enrollment_windows\n  where status = 'active'\n  for update;\n\n  if not found then\n    return jsonb_build_object('ok', false, 'status', 401, 'reason', 'inactive');\n  end if;\n\n  if v_window.expires_at <= v_now then\n    update public.ops_manager_shared_enrollment_windows\n    set status = 'expired', metadata_json = metadata_json || jsonb_build_object('expired_checked_at', v_now)\n    where window_id = v_window.window_id;\n    return jsonb_build_object('ok', false, 'status', 401, 'reason', 'expired');\n  end if;\n\n  if v_window.code_hash <> lower(p_code_hash) then\n    update public.ops_manager_shared_enrollment_windows\n    set failed_attempt_count = failed_attempt_count + 1,\n        metadata_json = metadata_json || jsonb_build_object('last_failed_at', v_now)\n    where window_id = v_window.window_id;\n    return jsonb_build_object('ok', false, 'status', 401, 'reason', 'invalid');\n  end if;\n\n  select * into v_manager\n  from public.ops_manager_managers\n  where manager_id = v_window.manager_id\n  for update;\n\n  if not found or not v_manager.active or v_manager.revoked_at is not null\n     or v_manager.roles <> array['OPS_MANAGER']::text[] then\n    return jsonb_build_object('ok', false, 'status', 503, 'reason', 'shared_manager_unavailable');\n  end if;\n\n  update public.ops_manager_trusted_devices\n  set revoked_at = v_now,\n      revoked_reason = 'device_re_enrolled_by_shared_window'\n  where device_id = btrim(p_device_id)\n    and revoked_at is null;\n\n  insert into public.ops_manager_trusted_devices (\n    credential_id, device_id, device_label, token_hash, max_access_level,\n    manager_id, shared_enrollment_window_id, user_agent_hash, created_ip_hash,\n    platform_summary, expires_at, metadata_json\n  ) values (\n    p_credential_id, btrim(p_device_id), btrim(p_device_label), lower(p_trust_token_hash),\n    'full_access', v_manager.manager_id, v_window.window_id, p_user_agent_hash,\n    p_created_ip_hash, nullif(left(coalesce(p_platform_summary, ''), 160), ''),\n    p_expires_at,\n    v_metadata || jsonb_build_object(\n      'shared_enrollment_window_id', v_window.window_id,\n      'enrollment_source', 'shared_48_hour_passcode',\n      'role_snapshot', 'OPS_MANAGER'\n    )\n  ) returning * into v_device;\n\n  update public.ops_manager_shared_enrollment_windows\n  set enrollment_count = enrollment_count + 1,\n      last_enrolled_at = v_now\n  where window_id = v_window.window_id;\n\n  update public.ops_manager_managers\n  set last_access_at = v_now\n  where manager_id = v_manager.manager_id;\n\n  return jsonb_build_object(\n    'ok', true,\n    'window_id', v_window.window_id,\n    'manager', jsonb_build_object(\n      'manager_id', v_manager.manager_id,\n      'display_name', v_manager.display_name,\n      'roles', to_jsonb(v_manager.roles),\n      'active', v_manager.active\n    ),\n    'trusted_device', jsonb_build_object(\n      'credential_id', v_device.credential_id,\n      'device_id', v_device.device_id,\n      'device_label', v_device.device_label,\n      'manager_id', v_device.manager_id,\n      'shared_enrollment_window_id', v_window.window_id,\n      'max_access_level', v_device.max_access_level,\n      'created_at', v_device.created_at,\n      'expires_at', v_device.expires_at\n    )\n  );\nend;\n$function$\n",
+      "function_name": "ops_manager_consume_shared_enrollment_window",
+      "identity_arguments": "p_code_hash text, p_credential_id uuid, p_device_id text, p_device_label text, p_trust_token_hash text, p_user_agent_hash text, p_created_ip_hash text, p_platform_summary text, p_expires_at timestamp with time zone, p_metadata_json jsonb",
+      "schema_name": "public"
+    },
+    {
       "comment": "Creates a short-lived single-use Ops Manager trusted-device pairing token and returns the raw token exactly to the service-role caller.",
       "definition": "CREATE OR REPLACE FUNCTION public.ops_manager_create_pairing_token(p_created_by_credential_id uuid DEFAULT NULL::uuid, p_created_by_device_id text DEFAULT NULL::text, p_created_by_actor text DEFAULT 'ops_manager'::text, p_intended_device_label text DEFAULT NULL::text, p_ttl_seconds integer DEFAULT 600, p_metadata_json jsonb DEFAULT '{}'::jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_pairing_id uuid;\n  v_token text := encode(gen_random_bytes(32), 'hex');\n  v_hash text := encode(digest(v_token, 'sha256'), 'hex');\n  v_ttl integer := least(900, greatest(60, coalesce(p_ttl_seconds, 600)));\n  v_expires_at timestamptz := now() + make_interval(secs => least(900, greatest(60, coalesce(p_ttl_seconds, 600))));\n  v_metadata jsonb := coalesce(p_metadata_json, '{}'::jsonb);\n  v_access text := 'full_access';\nbegin\n  if jsonb_typeof(v_metadata) <> 'object' then\n    raise exception 'metadata_json must be an object';\n  end if;\n\n  if p_created_by_credential_id is not null and not exists (\n    select 1\n    from public.ops_manager_trusted_devices d\n    where d.credential_id = p_created_by_credential_id\n      and d.revoked_at is null\n      and d.expires_at > now()\n      and d.max_access_level = 'full_access'\n  ) then\n    raise exception 'creating credential is not an active full-access trusted manager device';\n  end if;\n\n  insert into public.ops_manager_pairing_tokens (\n    token_hash,\n    created_by_credential_id,\n    created_by_device_id,\n    created_by_actor,\n    intended_device_label,\n    max_access_level,\n    expires_at,\n    metadata_json\n  )\n  values (\n    v_hash,\n    p_created_by_credential_id,\n    nullif(left(coalesce(p_created_by_device_id, ''), 96), ''),\n    left(coalesce(nullif(p_created_by_actor, ''), 'ops_manager'), 120),\n    nullif(left(coalesce(p_intended_device_label, ''), 160), ''),\n    v_access,\n    v_expires_at,\n    v_metadata\n  )\n  returning pairing_id into v_pairing_id;\n\n  return jsonb_build_object(\n    'ok', true,\n    'pairing_id', v_pairing_id,\n    'pairing_token', v_token,\n    'expires_at', v_expires_at,\n    'ttl_seconds', v_ttl,\n    'max_access_level', v_access\n  );\nend;\n$function$\n",
       "function_name": "ops_manager_create_pairing_token",
       "identity_arguments": "p_created_by_credential_id uuid, p_created_by_device_id text, p_created_by_actor text, p_intended_device_label text, p_ttl_seconds integer, p_metadata_json jsonb",
+      "schema_name": "public"
+    },
+    {
+      "comment": "CUSTODIAL_MANAGER-only transaction that atomically replaces any active shared enrollment window with a new exact 48-hour window.",
+      "definition": "CREATE OR REPLACE FUNCTION public.ops_manager_create_shared_enrollment_window(p_code_hash text, p_created_by_manager_id uuid, p_created_by_credential_id uuid, p_metadata_json jsonb DEFAULT '{}'::jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_actor public.ops_manager_managers%rowtype;\n  v_device public.ops_manager_trusted_devices%rowtype;\n  v_shared_manager public.ops_manager_managers%rowtype;\n  v_old public.ops_manager_shared_enrollment_windows%rowtype;\n  v_new public.ops_manager_shared_enrollment_windows%rowtype;\n  v_now timestamptz := clock_timestamp();\n  v_metadata jsonb := coalesce(p_metadata_json, '{}'::jsonb);\nbegin\n  perform pg_advisory_xact_lock(hashtextextended('ops-manager-shared-enrollment-window', 0));\n\n  if p_code_hash is null or p_code_hash !~ '^[a-f0-9]{64}$' then\n    raise exception 'valid code hash is required';\n  end if;\n  if jsonb_typeof(v_metadata) <> 'object' then\n    raise exception 'metadata_json must be an object';\n  end if;\n\n  select * into v_actor\n  from public.ops_manager_managers\n  where manager_id = p_created_by_manager_id\n  for update;\n\n  if not found or not v_actor.active or v_actor.revoked_at is not null\n     or not ('CUSTODIAL_MANAGER' = any(v_actor.roles)) then\n    return jsonb_build_object('ok', false, 'status', 403, 'reason', 'custodial_manager_required');\n  end if;\n\n  select * into v_device\n  from public.ops_manager_trusted_devices\n  where credential_id = p_created_by_credential_id\n    and manager_id = v_actor.manager_id\n    and revoked_at is null\n    and expires_at > v_now\n  for update;\n\n  if not found then\n    return jsonb_build_object('ok', false, 'status', 403, 'reason', 'active_creator_device_required');\n  end if;\n\n  select * into v_shared_manager\n  from public.ops_manager_managers\n  where system_key = 'shared_ops_manager'\n    and active\n    and revoked_at is null\n  for update;\n\n  if not found or v_shared_manager.roles <> array['OPS_MANAGER']::text[] then\n    return jsonb_build_object('ok', false, 'status', 503, 'reason', 'shared_manager_unavailable');\n  end if;\n\n  select * into v_old\n  from public.ops_manager_shared_enrollment_windows\n  where status = 'active'\n  for update;\n\n  if found then\n    update public.ops_manager_shared_enrollment_windows\n    set status = case when expires_at <= v_now then 'expired' else 'disabled' end,\n        disabled_at = case when expires_at <= v_now then null else v_now end,\n        disabled_by_manager_id = case when expires_at <= v_now then null else v_actor.manager_id end,\n        disabled_by_credential_id = case when expires_at <= v_now then null else v_device.credential_id end,\n        disabled_reason = case when expires_at <= v_now then null else 'replaced_by_new_window' end,\n        metadata_json = metadata_json || jsonb_build_object('closed_at', v_now)\n    where window_id = v_old.window_id;\n  end if;\n\n  insert into public.ops_manager_shared_enrollment_windows (\n    code_hash, manager_id, created_by_manager_id, created_by_credential_id,\n    created_at, expires_at, metadata_json\n  ) values (\n    lower(p_code_hash), v_shared_manager.manager_id, v_actor.manager_id,\n    v_device.credential_id, v_now, v_now + interval '48 hours',\n    v_metadata || jsonb_build_object('role_snapshot', 'OPS_MANAGER')\n  ) returning * into v_new;\n\n  if v_old.window_id is not null and v_old.expires_at > v_now then\n    update public.ops_manager_shared_enrollment_windows\n    set status = 'replaced',\n        replaced_by_window_id = v_new.window_id\n    where window_id = v_old.window_id;\n  end if;\n\n  return jsonb_build_object(\n    'ok', true,\n    'window_id', v_new.window_id,\n    'status', v_new.status,\n    'created_at', v_new.created_at,\n    'expires_at', v_new.expires_at,\n    'enrollment_count', v_new.enrollment_count,\n    'replaced_window_id', v_old.window_id\n  );\nend;\n$function$\n",
+      "function_name": "ops_manager_create_shared_enrollment_window",
+      "identity_arguments": "p_code_hash text, p_created_by_manager_id uuid, p_created_by_credential_id uuid, p_metadata_json jsonb",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.ops_manager_disable_shared_enrollment_window(p_window_id uuid, p_actor_manager_id uuid, p_actor_credential_id uuid, p_reason text DEFAULT 'disabled_by_custodial_manager'::text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_actor public.ops_manager_managers%rowtype;\n  v_device public.ops_manager_trusted_devices%rowtype;\n  v_window public.ops_manager_shared_enrollment_windows%rowtype;\n  v_now timestamptz := clock_timestamp();\nbegin\n  perform pg_advisory_xact_lock(hashtextextended('ops-manager-shared-enrollment-window', 0));\n\n  select * into v_actor from public.ops_manager_managers\n  where manager_id = p_actor_manager_id for update;\n  if not found or not v_actor.active or v_actor.revoked_at is not null\n     or not ('CUSTODIAL_MANAGER' = any(v_actor.roles)) then\n    return jsonb_build_object('ok', false, 'status', 403, 'reason', 'custodial_manager_required');\n  end if;\n\n  select * into v_device from public.ops_manager_trusted_devices\n  where credential_id = p_actor_credential_id\n    and manager_id = v_actor.manager_id\n    and revoked_at is null\n    and expires_at > v_now\n  for update;\n  if not found then\n    return jsonb_build_object('ok', false, 'status', 403, 'reason', 'active_creator_device_required');\n  end if;\n\n  select * into v_window from public.ops_manager_shared_enrollment_windows\n  where window_id = p_window_id for update;\n  if not found then return jsonb_build_object('ok', false, 'status', 404, 'reason', 'not_found'); end if;\n  if v_window.status <> 'active' then\n    return jsonb_build_object('ok', true, 'window_id', v_window.window_id, 'status', v_window.status, 'already_closed', true);\n  end if;\n\n  update public.ops_manager_shared_enrollment_windows\n  set status = case when expires_at <= v_now then 'expired' else 'disabled' end,\n      disabled_at = case when expires_at <= v_now then null else v_now end,\n      disabled_by_manager_id = case when expires_at <= v_now then null else v_actor.manager_id end,\n      disabled_by_credential_id = case when expires_at <= v_now then null else v_device.credential_id end,\n      disabled_reason = case when expires_at <= v_now then null else left(coalesce(nullif(btrim(p_reason), ''), 'disabled_by_custodial_manager'), 160) end,\n      metadata_json = metadata_json || jsonb_build_object('closed_at', v_now)\n  where window_id = v_window.window_id\n  returning * into v_window;\n\n  return jsonb_build_object('ok', true, 'window_id', v_window.window_id, 'status', v_window.status, 'disabled_at', v_window.disabled_at);\nend;\n$function$\n",
+      "function_name": "ops_manager_disable_shared_enrollment_window",
+      "identity_arguments": "p_window_id uuid, p_actor_manager_id uuid, p_actor_credential_id uuid, p_reason text",
       "schema_name": "public"
     },
     {
@@ -19929,6 +20720,42 @@
     },
     {
       "backs_constraint": false,
+      "definition": "CREATE INDEX idx_ops_manager_managers_active ON public.ops_manager_managers USING btree (active, display_name)",
+      "index_name": "idx_ops_manager_managers_active",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "ops_manager_managers"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_ops_manager_managers_roles ON public.ops_manager_managers USING gin (roles)",
+      "index_name": "idx_ops_manager_managers_roles",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "ops_manager_managers"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE UNIQUE INDEX idx_ops_manager_managers_system_key ON public.ops_manager_managers USING btree (system_key) WHERE (system_key IS NOT NULL)",
+      "index_name": "idx_ops_manager_managers_system_key",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "ops_manager_managers"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX ops_manager_managers_pkey ON public.ops_manager_managers USING btree (manager_id)",
+      "index_name": "ops_manager_managers_pkey",
+      "is_primary": true,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "ops_manager_managers"
+    },
+    {
+      "backs_constraint": false,
       "definition": "CREATE INDEX idx_ops_manager_pairing_tokens_active ON public.ops_manager_pairing_tokens USING btree (expires_at, created_at) WHERE ((used_at IS NULL) AND (revoked_at IS NULL))",
       "index_name": "idx_ops_manager_pairing_tokens_active",
       "is_primary": false,
@@ -19974,6 +20801,69 @@
     },
     {
       "backs_constraint": false,
+      "definition": "CREATE INDEX idx_ops_manager_shared_rate_locked ON public.ops_manager_shared_enrollment_rate_limits USING btree (locked_until) WHERE (locked_until IS NOT NULL)",
+      "index_name": "idx_ops_manager_shared_rate_locked",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_rate_limits"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX ops_manager_shared_enrollment_rate_limits_pkey ON public.ops_manager_shared_enrollment_rate_limits USING btree (key_hash)",
+      "index_name": "ops_manager_shared_enrollment_rate_limits_pkey",
+      "is_primary": true,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_rate_limits"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_ops_manager_shared_windows_expires ON public.ops_manager_shared_enrollment_windows USING btree (expires_at) WHERE (status = 'active'::text)",
+      "index_name": "idx_ops_manager_shared_windows_expires",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_ops_manager_shared_windows_history ON public.ops_manager_shared_enrollment_windows USING btree (created_at DESC)",
+      "index_name": "idx_ops_manager_shared_windows_history",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE UNIQUE INDEX idx_ops_manager_shared_windows_one_active ON public.ops_manager_shared_enrollment_windows USING btree (status) WHERE (status = 'active'::text)",
+      "index_name": "idx_ops_manager_shared_windows_one_active",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX ops_manager_shared_enrollment_windows_code_hash_key ON public.ops_manager_shared_enrollment_windows USING btree (code_hash)",
+      "index_name": "ops_manager_shared_enrollment_windows_code_hash_key",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX ops_manager_shared_enrollment_windows_pkey ON public.ops_manager_shared_enrollment_windows USING btree (window_id)",
+      "index_name": "ops_manager_shared_enrollment_windows_pkey",
+      "is_primary": true,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "backs_constraint": false,
       "definition": "CREATE INDEX idx_ops_manager_trusted_devices_active_device ON public.ops_manager_trusted_devices USING btree (device_id, expires_at DESC) WHERE (revoked_at IS NULL)",
       "index_name": "idx_ops_manager_trusted_devices_active_device",
       "is_primary": false,
@@ -19985,6 +20875,33 @@
       "backs_constraint": false,
       "definition": "CREATE INDEX idx_ops_manager_trusted_devices_last_used ON public.ops_manager_trusted_devices USING btree (last_used_at DESC NULLS LAST)",
       "index_name": "idx_ops_manager_trusted_devices_last_used",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "ops_manager_trusted_devices"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_ops_manager_trusted_devices_manager ON public.ops_manager_trusted_devices USING btree (manager_id, revoked_at, last_used_at DESC NULLS LAST)",
+      "index_name": "idx_ops_manager_trusted_devices_manager",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "ops_manager_trusted_devices"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_ops_manager_trusted_devices_manager_code ON public.ops_manager_trusted_devices USING btree (manager_enrollment_code_id) WHERE (manager_enrollment_code_id IS NOT NULL)",
+      "index_name": "idx_ops_manager_trusted_devices_manager_code",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "ops_manager_trusted_devices"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_ops_manager_trusted_devices_shared_window ON public.ops_manager_trusted_devices USING btree (shared_enrollment_window_id, created_at DESC) WHERE (shared_enrollment_window_id IS NOT NULL)",
+      "index_name": "idx_ops_manager_trusted_devices_shared_window",
       "is_primary": false,
       "is_unique": false,
       "schema_name": "public",
@@ -22527,6 +23444,22 @@
       "schema_name": "public"
     },
     {
+      "function_name": "ops_manager_consume_shared_enrollment_window",
+      "grantee": "postgres",
+      "identity_arguments": "p_code_hash text, p_credential_id uuid, p_device_id text, p_device_label text, p_trust_token_hash text, p_user_agent_hash text, p_created_ip_hash text, p_platform_summary text, p_expires_at timestamp with time zone, p_metadata_json jsonb",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "ops_manager_consume_shared_enrollment_window",
+      "grantee": "service_role",
+      "identity_arguments": "p_code_hash text, p_credential_id uuid, p_device_id text, p_device_label text, p_trust_token_hash text, p_user_agent_hash text, p_created_ip_hash text, p_platform_summary text, p_expires_at timestamp with time zone, p_metadata_json jsonb",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
       "function_name": "ops_manager_create_pairing_token",
       "grantee": "postgres",
       "identity_arguments": "p_created_by_credential_id uuid, p_created_by_device_id text, p_created_by_actor text, p_intended_device_label text, p_ttl_seconds integer, p_metadata_json jsonb",
@@ -22546,6 +23479,38 @@
       "function_name": "ops_manager_create_pairing_token",
       "grantee": "supabase_admin",
       "identity_arguments": "p_created_by_credential_id uuid, p_created_by_device_id text, p_created_by_actor text, p_intended_device_label text, p_ttl_seconds integer, p_metadata_json jsonb",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "ops_manager_create_shared_enrollment_window",
+      "grantee": "postgres",
+      "identity_arguments": "p_code_hash text, p_created_by_manager_id uuid, p_created_by_credential_id uuid, p_metadata_json jsonb",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "ops_manager_create_shared_enrollment_window",
+      "grantee": "service_role",
+      "identity_arguments": "p_code_hash text, p_created_by_manager_id uuid, p_created_by_credential_id uuid, p_metadata_json jsonb",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "ops_manager_disable_shared_enrollment_window",
+      "grantee": "postgres",
+      "identity_arguments": "p_window_id uuid, p_actor_manager_id uuid, p_actor_credential_id uuid, p_reason text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "ops_manager_disable_shared_enrollment_window",
+      "grantee": "service_role",
+      "identity_arguments": "p_window_id uuid, p_actor_manager_id uuid, p_actor_credential_id uuid, p_reason text",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -32054,6 +33019,104 @@
       "is_grantable": "YES",
       "privilege_type": "DELETE",
       "schema_name": "public",
+      "table_name": "ops_manager_managers"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "YES",
+      "privilege_type": "INSERT",
+      "schema_name": "public",
+      "table_name": "ops_manager_managers"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "YES",
+      "privilege_type": "REFERENCES",
+      "schema_name": "public",
+      "table_name": "ops_manager_managers"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "YES",
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "ops_manager_managers"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "YES",
+      "privilege_type": "TRIGGER",
+      "schema_name": "public",
+      "table_name": "ops_manager_managers"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "YES",
+      "privilege_type": "TRUNCATE",
+      "schema_name": "public",
+      "table_name": "ops_manager_managers"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "YES",
+      "privilege_type": "UPDATE",
+      "schema_name": "public",
+      "table_name": "ops_manager_managers"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "DELETE",
+      "schema_name": "public",
+      "table_name": "ops_manager_managers"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "INSERT",
+      "schema_name": "public",
+      "table_name": "ops_manager_managers"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "REFERENCES",
+      "schema_name": "public",
+      "table_name": "ops_manager_managers"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "ops_manager_managers"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "TRIGGER",
+      "schema_name": "public",
+      "table_name": "ops_manager_managers"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "TRUNCATE",
+      "schema_name": "public",
+      "table_name": "ops_manager_managers"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "UPDATE",
+      "schema_name": "public",
+      "table_name": "ops_manager_managers"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "YES",
+      "privilege_type": "DELETE",
+      "schema_name": "public",
       "table_name": "ops_manager_pairing_tokens"
     },
     {
@@ -32195,6 +33258,300 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "ops_manager_pairing_tokens"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "YES",
+      "privilege_type": "DELETE",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_rate_limits"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "YES",
+      "privilege_type": "INSERT",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_rate_limits"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "YES",
+      "privilege_type": "REFERENCES",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_rate_limits"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "YES",
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_rate_limits"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "YES",
+      "privilege_type": "TRIGGER",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_rate_limits"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "YES",
+      "privilege_type": "TRUNCATE",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_rate_limits"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "YES",
+      "privilege_type": "UPDATE",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_rate_limits"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "DELETE",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_rate_limits"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "INSERT",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_rate_limits"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "REFERENCES",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_rate_limits"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_rate_limits"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "TRIGGER",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_rate_limits"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "TRUNCATE",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_rate_limits"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "UPDATE",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_rate_limits"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "YES",
+      "privilege_type": "DELETE",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "YES",
+      "privilege_type": "INSERT",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "YES",
+      "privilege_type": "REFERENCES",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "YES",
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "YES",
+      "privilege_type": "TRIGGER",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "YES",
+      "privilege_type": "TRUNCATE",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "YES",
+      "privilege_type": "UPDATE",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "DELETE",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "INSERT",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "REFERENCES",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "TRIGGER",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "TRUNCATE",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "UPDATE",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "grantee": "anon",
+      "is_grantable": "NO",
+      "privilege_type": "DELETE",
+      "schema_name": "public",
+      "table_name": "ops_manager_trusted_devices"
+    },
+    {
+      "grantee": "anon",
+      "is_grantable": "NO",
+      "privilege_type": "INSERT",
+      "schema_name": "public",
+      "table_name": "ops_manager_trusted_devices"
+    },
+    {
+      "grantee": "anon",
+      "is_grantable": "NO",
+      "privilege_type": "REFERENCES",
+      "schema_name": "public",
+      "table_name": "ops_manager_trusted_devices"
+    },
+    {
+      "grantee": "anon",
+      "is_grantable": "NO",
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "ops_manager_trusted_devices"
+    },
+    {
+      "grantee": "anon",
+      "is_grantable": "NO",
+      "privilege_type": "TRIGGER",
+      "schema_name": "public",
+      "table_name": "ops_manager_trusted_devices"
+    },
+    {
+      "grantee": "anon",
+      "is_grantable": "NO",
+      "privilege_type": "TRUNCATE",
+      "schema_name": "public",
+      "table_name": "ops_manager_trusted_devices"
+    },
+    {
+      "grantee": "anon",
+      "is_grantable": "NO",
+      "privilege_type": "UPDATE",
+      "schema_name": "public",
+      "table_name": "ops_manager_trusted_devices"
+    },
+    {
+      "grantee": "authenticated",
+      "is_grantable": "NO",
+      "privilege_type": "DELETE",
+      "schema_name": "public",
+      "table_name": "ops_manager_trusted_devices"
+    },
+    {
+      "grantee": "authenticated",
+      "is_grantable": "NO",
+      "privilege_type": "INSERT",
+      "schema_name": "public",
+      "table_name": "ops_manager_trusted_devices"
+    },
+    {
+      "grantee": "authenticated",
+      "is_grantable": "NO",
+      "privilege_type": "REFERENCES",
+      "schema_name": "public",
+      "table_name": "ops_manager_trusted_devices"
+    },
+    {
+      "grantee": "authenticated",
+      "is_grantable": "NO",
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "ops_manager_trusted_devices"
+    },
+    {
+      "grantee": "authenticated",
+      "is_grantable": "NO",
+      "privilege_type": "TRIGGER",
+      "schema_name": "public",
+      "table_name": "ops_manager_trusted_devices"
+    },
+    {
+      "grantee": "authenticated",
+      "is_grantable": "NO",
+      "privilege_type": "TRUNCATE",
+      "schema_name": "public",
+      "table_name": "ops_manager_trusted_devices"
+    },
+    {
+      "grantee": "authenticated",
+      "is_grantable": "NO",
+      "privilege_type": "UPDATE",
+      "schema_name": "public",
+      "table_name": "ops_manager_trusted_devices"
     },
     {
       "grantee": "postgres",
@@ -37587,6 +38944,15 @@
       "table_name": "ops_manager_auth_events"
     },
     {
+      "comment": "Named passwordless Ops Manager principals. Device trust is stored separately in ops_manager_trusted_devices.",
+      "partition_key": null,
+      "relation_kind": "r",
+      "rls_enabled": true,
+      "rls_forced": true,
+      "schema_name": "public",
+      "table_name": "ops_manager_managers"
+    },
+    {
       "comment": "Short-lived single-use Ops Manager trusted-device pairing tokens. token_hash is persisted; raw pairing tokens are returned only by the server-side creation function.",
       "partition_key": null,
       "relation_kind": "r",
@@ -37594,6 +38960,24 @@
       "rls_forced": true,
       "schema_name": "public",
       "table_name": "ops_manager_pairing_tokens"
+    },
+    {
+      "comment": "Durable privacy-preserving per-browser/IP abuse limits for the shared numeric enrollment passcode.",
+      "partition_key": null,
+      "relation_kind": "r",
+      "rls_enabled": true,
+      "rls_forced": true,
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_rate_limits"
+    },
+    {
+      "comment": "One active shared Ops Manager enrollment window at a time. The server returns an eight-digit passcode once; only its keyed HMAC is persisted. Each successful use creates a separate revocable OPS_MANAGER device and does not consume the window.",
+      "partition_key": null,
+      "relation_kind": "r",
+      "rls_enabled": true,
+      "rls_forced": true,
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
     },
     {
       "comment": "Revocable Ops Manager trusted-device credentials. token_hash is an HMAC; raw cookie secrets are never persisted.",

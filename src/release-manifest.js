@@ -69,8 +69,8 @@ export function buildReleaseManifest({ appVersion, releaseId, contracts = {} } =
       messaging: ["local-storage-outbox-v1"],
     },
     minimum_supported: {
-      frontend_version: "release-2026.07.17.custodial-repair.1",
-      backend_version: "release-2026.07.17.custodial-repair.1",
+      frontend_version: "release-2026.07.18.auth-shared-48h.1",
+      backend_version: "release-2026.07.18.auth-shared-48h.1",
     },
     build_time: String(process.env.BUILD_TIME || process.env.RENDER_BUILD_TIMESTAMP || "source-controlled"),
   };
