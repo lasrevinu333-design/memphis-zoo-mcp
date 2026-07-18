@@ -38,6 +38,7 @@
     "test:foundation-repair": "node scripts/foundation-repair-tests.mjs",
     "test:custodial-repair": "node scripts/custodial-repair-contract-tests.mjs",
     "test:schema-fingerprint": "node scripts/schema-fingerprint-check.mjs",
+    "schema:fingerprint:refresh": "node scripts/refresh-schema-fingerprint.mjs",
     "test:empty-db-rebuild": "node scripts/empty-database-rebuild-check.mjs",
     "device-security:password": "node scripts/device-security-password-admin.mjs"
   },
