@@ -20819,6 +20819,42 @@
     },
     {
       "backs_constraint": false,
+      "definition": "CREATE INDEX idx_ops_manager_shared_windows_created_by_credential ON public.ops_manager_shared_enrollment_windows USING btree (created_by_credential_id)",
+      "index_name": "idx_ops_manager_shared_windows_created_by_credential",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_ops_manager_shared_windows_created_by_manager ON public.ops_manager_shared_enrollment_windows USING btree (created_by_manager_id)",
+      "index_name": "idx_ops_manager_shared_windows_created_by_manager",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_ops_manager_shared_windows_disabled_by_credential ON public.ops_manager_shared_enrollment_windows USING btree (disabled_by_credential_id) WHERE (disabled_by_credential_id IS NOT NULL)",
+      "index_name": "idx_ops_manager_shared_windows_disabled_by_credential",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_ops_manager_shared_windows_disabled_by_manager ON public.ops_manager_shared_enrollment_windows USING btree (disabled_by_manager_id) WHERE (disabled_by_manager_id IS NOT NULL)",
+      "index_name": "idx_ops_manager_shared_windows_disabled_by_manager",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "backs_constraint": false,
       "definition": "CREATE INDEX idx_ops_manager_shared_windows_expires ON public.ops_manager_shared_enrollment_windows USING btree (expires_at) WHERE (status = 'active'::text)",
       "index_name": "idx_ops_manager_shared_windows_expires",
       "is_primary": false,
@@ -20837,10 +20873,28 @@
     },
     {
       "backs_constraint": false,
+      "definition": "CREATE INDEX idx_ops_manager_shared_windows_manager ON public.ops_manager_shared_enrollment_windows USING btree (manager_id)",
+      "index_name": "idx_ops_manager_shared_windows_manager",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "backs_constraint": false,
       "definition": "CREATE UNIQUE INDEX idx_ops_manager_shared_windows_one_active ON public.ops_manager_shared_enrollment_windows USING btree (status) WHERE (status = 'active'::text)",
       "index_name": "idx_ops_manager_shared_windows_one_active",
       "is_primary": false,
       "is_unique": true,
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_ops_manager_shared_windows_replaced_by ON public.ops_manager_shared_enrollment_windows USING btree (replaced_by_window_id) WHERE (replaced_by_window_id IS NOT NULL)",
+      "index_name": "idx_ops_manager_shared_windows_replaced_by",
+      "is_primary": false,
+      "is_unique": false,
       "schema_name": "public",
       "table_name": "ops_manager_shared_enrollment_windows"
     },

@@ -51,4 +51,5 @@ assert.equal(disabledAttempt.ok,false);
 assert.equal(disabledAttempt.reason,"inactive");
 assert.equal(await sql(`select revoked_at is null from public.ops_manager_trusted_devices where credential_id='${actorCredential}'::uuid;`),"t","Eric test authority must not be revoked");
 assert.equal(await sql("select count(*) from information_schema.columns where table_schema='public' and table_name='ops_manager_shared_enrollment_windows' and column_name ilike '%plain%';"),"0");
+assert.equal(await sql("select count(*) from pg_indexes where schemaname='public' and indexname in ('idx_ops_manager_shared_windows_manager','idx_ops_manager_shared_windows_created_by_manager','idx_ops_manager_shared_windows_created_by_credential','idx_ops_manager_shared_windows_disabled_by_manager','idx_ops_manager_shared_windows_disabled_by_credential','idx_ops_manager_shared_windows_replaced_by');"),"6","every shared-window audit foreign key must have a covering index");
 console.log("MANAGER_SHARED_48_HOUR_DATABASE_CONCURRENCY_PASS");
