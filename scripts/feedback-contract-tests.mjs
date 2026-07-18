@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 
 const repoRoot = resolve(import.meta.dirname, "..");
 const apiSource = readFileSync(resolve(repoRoot, "src/index.js"), "utf8");
+const reliabilityMigration = readFileSync(resolve(repoRoot, "supabase/migrations/20260718103215_custodial_v3_reliability_and_retention.sql"), "utf8");
 const engineRoot = [process.env.ENGINE_FIXTURE_ROOT, resolve(repoRoot, "../Engine"), "/home/eric/Projects/memphis-zoo/Engine"]
   .filter(Boolean)
   .find((candidate) => existsSync(resolve(candidate, "system-feedback.html")));
@@ -27,9 +28,15 @@ if (feedbackHtml) {
   assertContains(feedbackHtml, "readAsDataURL", "feedback image upload should encode the selected image for JSON submit");
 }
 
-// Backend: image attachment must be validated, persisted in metadata, and retrievable.
+// Backend: image attachment must be validated, stored privately, referenced by
+// metadata, recoverable from a private backup, and retrievable only through the
+// authorized application route.
 assertContains(apiSource, "validateSystemFeedbackImageAttachment", "backend should validate optional feedback image attachments");
-assertContains(apiSource, "image_attachment", "backend should persist image attachment metadata/data");
+assertContains(apiSource, "persistedSystemFeedbackImageMetadata", "backend should exclude internal upload state from persisted metadata");
+assertContains(apiSource, "removeUnreferencedSystemFeedbackImage", "backend should clean a newly uploaded object when database persistence fails");
+assertContains(apiSource, "feedback_image_migration", "backend should migrate retained legacy inline images through the durable worker");
+assertContains(reliabilityMigration, "system_feedback_legacy_image_backups", "migration should preserve exact legacy metadata before removing inline image data");
+assertContains(reliabilityMigration, "feedback-image-migration:", "migration should enqueue an idempotent private-storage migration job");
 assertMatches(apiSource, /feedback-api\/image\/:feedbackId/, "backend should expose a feedback image retrieval endpoint");
 
 // Backend: feedback should be dashboard-only and must not DM ops managers in Messenger.
