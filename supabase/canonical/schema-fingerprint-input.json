@@ -22277,6 +22277,13 @@
       "schema_name": "public"
     },
     {
+      "comment": "Atomically creates or rotates the private Moxie scrypt credential using optimistic version control. Service role only; accepts no plaintext password.",
+      "definition": "CREATE OR REPLACE FUNCTION public.rotate_moxie_auth_credential(p_credential_key text, p_expected_version integer, p_password_salt text, p_password_hash text, p_updated_by text)\n RETURNS TABLE(password_version integer, updated_at timestamp with time zone)\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_credential public.moxie_auth_credentials%rowtype;\nbegin\n  if btrim(coalesce(p_credential_key, '')) = '' then\n    raise exception using errcode = '22023', message = 'credential key is required';\n  end if;\n  if coalesce(p_expected_version, -1) < 0 then\n    raise exception using errcode = '22023', message = 'expected version must be zero or greater';\n  end if;\n  if p_password_salt is null or p_password_salt !~ '^[0-9a-f]{64}$' then\n    raise exception using errcode = '22023', message = 'password salt format is invalid';\n  end if;\n  if p_password_hash is null or p_password_hash !~ '^[0-9a-f]{128}$' then\n    raise exception using errcode = '22023', message = 'password hash format is invalid';\n  end if;\n\n  if p_expected_version = 0 then\n    insert into public.moxie_auth_credentials(\n      credential_key,\n      password_salt,\n      password_hash,\n      password_version,\n      updated_by,\n      created_at,\n      updated_at\n    ) values (\n      btrim(p_credential_key),\n      p_password_salt,\n      p_password_hash,\n      1,\n      nullif(left(btrim(coalesce(p_updated_by, '')), 160), ''),\n      now(),\n      now()\n    )\n    on conflict (credential_key) do nothing\n    returning * into v_credential;\n  else\n    update public.moxie_auth_credentials as credential\n       set password_salt = p_password_salt,\n           password_hash = p_password_hash,\n           password_version = credential.password_version + 1,\n           updated_by = nullif(left(btrim(coalesce(p_updated_by, '')), 160), ''),\n           updated_at = now()\n     where credential.credential_key = btrim(p_credential_key)\n       and credential.password_version = p_expected_version\n    returning credential.* into v_credential;\n  end if;\n\n  if v_credential.credential_key is null then\n    raise exception using\n      errcode = '40001',\n      message = 'Moxie credential changed concurrently; reload and try again.';\n  end if;\n\n  return query\n  select v_credential.password_version, v_credential.updated_at;\nend;\n$function$\n",
+      "function_name": "rotate_moxie_auth_credential",
+      "identity_arguments": "p_credential_key text, p_expected_version integer, p_password_salt text, p_password_hash text, p_updated_by text",
+      "schema_name": "public"
+    },
+    {
       "comment": null,
       "definition": "CREATE OR REPLACE FUNCTION public.run_application_write(p_name text, p_sql text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\n SET statement_timeout TO '60s'\nAS $function$\ndeclare\n  v_name text := nullif(btrim(coalesce(p_name, '')), '');\n  v_sql text := btrim(coalesce(p_sql, ''));\n  v_lower text;\n  v_result jsonb;\nbegin\n  if v_name is null then\n    raise exception 'Application write name is required';\n  end if;\n  if v_sql = '' then\n    raise exception 'Application write SQL is required';\n  end if;\n  if length(v_sql) > 1000000 then\n    raise exception 'Application write SQL exceeds 1 MB';\n  end if;\n  v_lower := lower(v_sql);\n  if v_lower ~ '^\\s*(begin|commit|rollback|savepoint|prepare|vacuum|reindex|cluster|copy|alter\\s+system|create\\s+extension|drop\\s+database|drop\\s+schema)' then\n    raise exception 'Transaction, maintenance, extension, and destructive database-control statements are not accepted by run_application_write';\n  end if;\n\n  if v_lower ~ '^\\s*(insert|update|delete|select|with)\\b'\n     and v_lower like '% returning %'\n     and position(';' in regexp_replace(v_sql, ';\\s*$', '')) = 0 then\n    execute format(\n      'with _application_rows as (%s) select coalesce(jsonb_agg(to_jsonb(_application_rows)), ''[]''::jsonb) from _application_rows',\n      regexp_replace(v_sql, ';\\s*$', '')\n    ) into v_result;\n  else\n    execute v_sql;\n    v_result := jsonb_build_object('ok', true, 'name', v_name, 'executed_at', now());\n  end if;\n  return coalesce(v_result, '[]'::jsonb);\nend\n$function$\n",
       "function_name": "run_application_write",
@@ -28417,6 +28424,14 @@
       "function_name": "resolve_scan_location_code",
       "grantee": "service_role",
       "identity_arguments": "p_input text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "rotate_moxie_auth_credential",
+      "grantee": "service_role",
+      "identity_arguments": "p_credential_key text, p_expected_version integer, p_password_salt text, p_password_hash text, p_updated_by text",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
