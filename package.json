@@ -26,6 +26,8 @@
     "test:foundation": "node scripts/scheduler-alerts-gps-foundation-tests.mjs",
     "test:schedule-display": "node scripts/schedule-display-tests.mjs",
     "test:messaging-recovery": "node scripts/memphis-messaging-route-recovery-tests.mjs",
+    "test:messaging-incremental": "node scripts/messaging-incremental-sync-tests.mjs",
+    "test:messaging-manager-authority": "node scripts/messaging-manager-authority-tests.mjs",
     "test:manager-shared-enrollment": "node scripts/manager-shared-48-hour-enrollment-tests.mjs",
     "test:manager-shared-enrollment-db": "node scripts/manager-shared-enrollment-database-tests.mjs",
     "test:gemini-console": "node scripts/gemini-console-foundation-tests.mjs",

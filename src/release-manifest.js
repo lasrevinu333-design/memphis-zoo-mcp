@@ -65,13 +65,13 @@ export function buildReleaseManifest({ appVersion, releaseId, contracts = {} } =
     },
     api_contract_versions: contracts,
     queue_compatibility_versions: {
-      scan: ["legacy-local-storage", "indexeddb-v1", "indexeddb-v2"],
+      scan: ["legacy-local-storage", "indexeddb-v1", "indexeddb-v2", "indexeddb-v3", "indexeddb-v4"],
       messaging: ["local-storage-outbox-v1"],
       gemini_console: ["indexeddb-outbox-v1"],
     },
     minimum_supported: {
-      frontend_version: "release-2026.07.18.gemini-console.1",
-      backend_version: "release-2026.07.18.gemini-console.1",
+      frontend_version: "release-2026.07.18.custodial-v3.1",
+      backend_version: "release-2026.07.18.custodial-v3.1",
     },
     build_time: String(process.env.BUILD_TIME || process.env.RENDER_BUILD_TIMESTAMP || "source-controlled"),
   };

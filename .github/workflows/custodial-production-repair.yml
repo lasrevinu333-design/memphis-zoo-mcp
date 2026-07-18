@@ -27,6 +27,8 @@ jobs:
           cache: npm
       - name: Install exact dependencies
         run: npm ci --ignore-scripts
+      - name: Production dependency audit
+        run: npm audit --omit=dev --audit-level=high
       - name: Syntax
         shell: bash
         run: |
@@ -49,14 +51,18 @@ jobs:
           npm run --silent test:foundation
           npm run --silent test:schedule-display
           npm run --silent test:messaging-recovery
+          npm run --silent test:messaging-incremental
+          npm run --silent test:messaging-manager-authority
           npm run --silent test:moxie-route
           npm run --silent test:schedule-source-type
           npm run --silent test:device-credentials
           npm run --silent test:operational-recovery
           npm run --silent test:foundation-repair
           npm run --silent test:custodial-repair
+          npm run --silent test:device-security-app
+          npm run --silent test:gemini-console
           npm run --silent test:schema-fingerprint
-      - name: Empty database migration rebuild and manager enrollment database concurrency
+      - name: Empty database migration rebuild and database concurrency
         shell: bash
         env:
           SCHEMA_REBUILD_DOCKER_IMAGE: supabase/postgres:17.6.1.143
@@ -70,3 +76,6 @@ jobs:
           SHARED_ENROLLMENT_TEST_DOCKER_CONTAINER="$container" \
             SHARED_ENROLLMENT_TEST_DATABASE=postgres \
             npm run --silent test:manager-shared-enrollment-db
+          GEMINI_CONSOLE_TEST_DOCKER_CONTAINER="$container" \
+            GEMINI_CONSOLE_TEST_DATABASE=postgres \
+            npm run --silent test:gemini-console-db
