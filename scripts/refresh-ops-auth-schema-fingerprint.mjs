@@ -13,8 +13,15 @@ if(!/^(postgres|mz_schema_rebuild_[a-zA-Z0-9_]+)$/.test(database)||!/^mz_schema_
 const root=resolve(new URL("..",import.meta.url).pathname);
 const inputPath=resolve(root,"supabase/canonical/schema-fingerprint-input.json");
 const hashPath=resolve(root,"supabase/canonical/schema-fingerprint.txt");
-const affectedTables=new Set(["ops_manager_managers","ops_manager_trusted_devices","ops_manager_shared_enrollment_windows","ops_manager_shared_enrollment_rate_limits"]);
-const affectedFunctions=new Set(["ops_manager_create_shared_enrollment_window","ops_manager_disable_shared_enrollment_window","ops_manager_consume_shared_enrollment_window"]);
+const affectedTables=new Set([
+  "ops_manager_managers","ops_manager_trusted_devices","ops_manager_shared_enrollment_windows","ops_manager_shared_enrollment_rate_limits",
+  "gemini_console_conversations","gemini_console_messages","gemini_console_attachments",
+  "gemini_console_repair_proposals","gemini_console_repair_jobs","gemini_console_repair_job_events",
+]);
+const affectedFunctions=new Set([
+  "ops_manager_create_shared_enrollment_window","ops_manager_disable_shared_enrollment_window","ops_manager_consume_shared_enrollment_window",
+  "gemini_console_begin_turn","gemini_console_complete_turn","gemini_console_fail_turn","gemini_console_authorize_repair",
+]);
 
 function query(sql){
   const output=execFileSync("docker",["exec",container,"psql","-v","ON_ERROR_STOP=1","-At","-U","supabase_admin","-d",database,"-c",`select coalesce(json_agg(row_to_json(q)),'[]'::json)::text from (${sql}) q;`],{encoding:"utf8",maxBuffer:32*1024*1024}).trim();

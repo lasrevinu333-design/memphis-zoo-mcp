@@ -1,5 +1,4 @@
 import { createHash, createHmac, randomBytes, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
-import { loginGeminiAdmin, verifyGeminiAdminToken } from "./gemini-admin-auth.js";
 
 const MEMPHIS_TIME_ZONE = "America/Chicago";
 const OPS_ACCESS_TOKEN_VERSION = 2;
@@ -1465,23 +1464,12 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
     next();
   });
 
-  app.post("/auth-api/gemini/login", (req, res) => {
-    try {
-      const session = loginGeminiAdmin({ password: req.body?.password, env });
-      res.status(200).json({ ok: true, data: session });
-    } catch (error) {
-      res.status(error?.status || 500).json({ ok: false, error: error?.message || "Gemini login failed" });
-    }
+  const retiredGeminiPasswordAuth = (_req, res) => res.status(410).json({
+    ok: false,
+    error: "The legacy Gemini password session is retired. Use a trusted Ops Manager device.",
   });
-
-  app.get("/auth-api/gemini/session", (req, res) => {
-    const result = verifyGeminiAdminToken(bearerToken(req), { env });
-    if (!result.ok) {
-      res.status(result.status || 401).json({ ok: false, error: result.error || "Gemini password required." });
-      return;
-    }
-    res.status(200).json({ ok: true, data: { session: result.session } });
-  });
+  app.post("/auth-api/gemini/login", retiredGeminiPasswordAuth);
+  app.get("/auth-api/gemini/session", retiredGeminiPasswordAuth);
 
   const requireCustodialManager = async (req, res) => {
     const activeStore = trustedDeviceStoreOrThrow(store);

@@ -23,6 +23,7 @@ import { authenticateOpsAccessRequest, createSupabaseTrustedDeviceStore, install
 import { makeMcpConnectorMiddleware } from "./auth/mcp-connector-auth.js";
 import { installDeviceCredentialRoutes, makeDeviceCredentialMiddleware } from "./auth/device-credential-auth.js";
 import { runReadOnlySql as runSupabaseReadOnlySql } from "./supabase/read.js";
+import { createGeminiConsoleRouter } from "./gemini-console-api.js";
 
 const app = express();
 app.use(express.json({ limit: "10mb" }));
@@ -62,6 +63,7 @@ const SCHEDULE_CONTRACT_VERSION = "schedule.v2";
 const GUEST_REPORTS_CONTRACT_VERSION = "guest-reports.v1";
 const FEEDBACK_CONTRACT_VERSION = "feedback.v1";
 const OPS_MANAGER_AUTH_CONTRACT_VERSION = "ops-manager-auth.v4.shared-48h";
+const GEMINI_CONSOLE_CONTRACT_VERSION = "gemini-console.v2";
 const CANARY_RESTROOM_CODE = "TETM";
 const CANARY_EXHIBIT_CODE = "TETX";
 const CANARY_DEVICE_ID = "canary-check";
@@ -291,6 +293,7 @@ function buildHealthPayload(area, extra = {}) {
     events: EVENTS_CONTRACT_VERSION,
     feedback: FEEDBACK_CONTRACT_VERSION,
     ops_manager_auth: OPS_MANAGER_AUTH_CONTRACT_VERSION,
+    gemini_console: GEMINI_CONSOLE_CONTRACT_VERSION,
   };
   return {
     ok: true,
@@ -428,6 +431,12 @@ function setFeedbackApiCors(res, req) {
   setCorsOrigin(res, req);
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Memphis-Auth, X-Device-Id, X-Feedback-Reminder-Secret, X-Ops-Access-Key, X-Admin-Key");
+}
+
+function setGeminiApiCors(res, req) {
+  setCorsOrigin(res, req);
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", TRUSTED_DEVICE_CORS_HEADERS);
 }
 
 
@@ -1929,6 +1938,20 @@ app.use("/messaging-api", (req, res, next) => { setMessagingApiCors(res, req); i
 app.use("/schedule-api", (req, res, next) => { setScheduleApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); }, createScheduleRouter({ runReadOnlySql, runRpc, runWriteSql, buildHealthPayload, requireAdminApiAuth: requireOpsManagerWrite, requireOpsManagerAuth, requireDeviceAccess: requireDeviceOrOpsAccess, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: SCHEDULE_CONTRACT_VERSION }));
 app.use("/guest-api", (req, res, next) => { setGuestApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/feedback-api", (req, res, next) => { setFeedbackApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
+app.use(
+  "/gemini-api",
+  (req, res, next) => { setGeminiApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); },
+  createGeminiConsoleRouter({
+    supabase: supabaseAdmin,
+    runReadOnlySql,
+    requireOpsManagerAuth,
+    buildHealthPayload,
+    appVersion: APP_VERSION,
+    releaseId: RELEASE_ID,
+    schemaFingerprint: buildReleaseManifest({ appVersion: APP_VERSION, releaseId: RELEASE_ID }).schema.fingerprint,
+    frontendCommit: process.env.FRONTEND_COMMIT_SHA || "unknown",
+  }),
+);
 app.use("/dashboard-api/events", createEventsPublicRouter({ runReadOnlySql, runWriteSql, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController }));
 app.use("/admin-api/events", createEventsAdminRouter({ runReadOnlySql, runWriteSql, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController, requireAdminApiAuth: requireOpsManagerAuth, requireAdminApiWrite: requireOpsManagerWrite }));
 app.get("/version", (_req, res) => { setPublicDashboardCors(res, _req); res.status(200).json(buildHealthPayload("version")); });
