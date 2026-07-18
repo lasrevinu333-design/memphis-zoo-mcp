@@ -20719,7 +20719,7 @@
     {
       "extension_name": "pg_net",
       "schema_name": "public",
-      "version": "0.20.3"
+      "version": "provider_managed"
     },
     {
       "extension_name": "pg_stat_statements",
