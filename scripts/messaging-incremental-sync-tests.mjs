@@ -40,10 +40,12 @@ async function runReadOnlySql(sql) {
       sender_user_id: USER_ID,
       sender_display_name: "Incremental Sync Tester",
       message_type: "text",
-      body: "cursor update",
-      metadata_json: {},
+      body: "[deleted]",
+      metadata_json: { deleted_by: USER_ID },
       sent_at: "2026-07-18T12:00:00.000Z",
       created_at: "2026-07-18T12:00:00.000Z",
+      updated_at: "2026-07-18T12:05:00.000Z",
+      is_deleted: true,
     }];
   }
   if (/visible_threads/i.test(query)) {
@@ -85,10 +87,11 @@ try {
   assert.equal(payload.ok, true);
   assert.equal(payload.data.length, 1);
   assert.equal(payload.data[0].id, MESSAGE_ID);
+  assert.equal(payload.data[0].is_deleted, true, "deletion tombstones propagate through the incremental cursor");
   assert.equal(payload.meta.transport, "cursor_long_poll");
   assert.equal(payload.meta.request_sequence, 17);
   assert.deepEqual(payload.meta.next_cursor, {
-    after: "2026-07-18T12:00:00.000Z",
+    after: "2026-07-18T12:05:00.000Z",
     after_id: MESSAGE_ID,
   });
 
@@ -112,8 +115,9 @@ try {
 
   const messageSql = readQueries.find((sql) => /thread_updates/i.test(sql));
   assert.ok(messageSql);
-  assert.match(messageSql, /\(coalesce\(m\.sent_at, m\.created_at\), m\.id\) >/);
-  assert.match(messageSql, /order by coalesce\(m\.sent_at, m\.created_at\) asc, m\.id asc/);
+  assert.match(messageSql, /\(m\.updated_at, m\.id\) >/);
+  assert.match(messageSql, /order by m\.updated_at asc, m\.id asc/);
+  assert.doesNotMatch(messageSql, /m\.is_deleted\s*=\s*false/, "deleted-message tombstones are not suppressed from reconciliation");
   assert.match(messageSql, /msg_thread_participants/);
 
   const threadSql = readQueries.find((sql) => /visible_threads/i.test(sql));

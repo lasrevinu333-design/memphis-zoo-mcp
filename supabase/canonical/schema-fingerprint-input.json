@@ -10714,6 +10714,19 @@
     },
     {
       "collation_name": null,
+      "column_name": "updated_at",
+      "comment": "Server-owned message-change cursor; sent_at remains immutable display ordering.",
+      "data_type": "timestamp with time zone",
+      "default_expression": "now()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 11,
+      "schema_name": "public",
+      "table_name": "msg_messages"
+    },
+    {
+      "collation_name": null,
       "column_name": "id",
       "comment": null,
       "data_type": "uuid",
@@ -11112,6 +11125,19 @@
       "identity_kind": "",
       "not_null": false,
       "ordinal_position": 8,
+      "schema_name": "public",
+      "table_name": "msg_threads"
+    },
+    {
+      "collation_name": null,
+      "column_name": "system_key",
+      "comment": "Immutable application-owned identity for singleton/system threads; null for ordinary user-created conversations.",
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 9,
       "schema_name": "public",
       "table_name": "msg_threads"
     },
@@ -19842,6 +19868,14 @@
       "validated": true
     },
     {
+      "constraint_name": "msg_threads_system_key_format_check",
+      "constraint_type": "c",
+      "definition": "CHECK (system_key IS NULL OR system_key ~ '^[a-z][a-z0-9_]{2,79}$'::text)",
+      "schema_name": "public",
+      "table_name": "msg_threads",
+      "validated": true
+    },
+    {
       "constraint_name": "msg_threads_thread_type_check",
       "constraint_type": "c",
       "definition": "CHECK (thread_type = ANY (ARRAY['direct'::text, 'broadcast'::text, 'bot'::text, 'group'::text]))",
@@ -21941,8 +21975,8 @@
       "schema_name": "public"
     },
     {
-      "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.msg_delete_message(p_message_id uuid, p_request_user_id uuid)\n RETURNS msg_messages\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_message public.msg_messages%rowtype;\n  v_request_role text;\nbegin\n  if p_message_id is null or p_request_user_id is null then\n    raise exception 'message_id and request_user_id are required.';\n  end if;\n\n  select role into v_request_role\n  from public.msg_users\n  where id = p_request_user_id\n    and is_active = true\n  limit 1;\n\n  if v_request_role is null then\n    raise exception 'Requesting user not found or inactive.';\n  end if;\n\n  select * into v_message\n  from public.msg_messages\n  where id = p_message_id\n  limit 1;\n\n  if v_message.id is null then\n    raise exception 'Message not found.';\n  end if;\n\n  if v_message.sender_user_id <> p_request_user_id and v_request_role not in ('manager','admin') then\n    raise exception 'Only the sender or a manager/admin can delete this message.';\n  end if;\n\n  update public.msg_messages\n  set is_deleted = true,\n      body = '[deleted]',\n      metadata_json = coalesce(metadata_json, '{}'::jsonb) || jsonb_build_object('deleted_by', p_request_user_id, 'deleted_at', now())\n  where id = p_message_id\n  returning * into v_message;\n\n  return v_message;\nend;\n$function$\n",
+      "comment": "Soft-deletes one message idempotently after server-derived sender/manager authorization and advances cross-device reconciliation.",
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_delete_message(p_message_id uuid, p_request_user_id uuid)\n RETURNS msg_messages\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_message public.msg_messages%rowtype;\n  v_request_role text;\n  v_now timestamptz := now();\nbegin\n  if p_message_id is null or p_request_user_id is null then\n    raise exception using errcode = '22023', message = 'Message and authenticated user are required';\n  end if;\n\n  select role into v_request_role\n  from public.msg_users\n  where id = p_request_user_id\n    and is_active is true;\n\n  if v_request_role is null then\n    raise exception using errcode = '42501', message = 'Authenticated messaging user was not found';\n  end if;\n\n  select * into v_message\n  from public.msg_messages\n  where id = p_message_id\n  for update;\n\n  if v_message.id is null then\n    raise exception using errcode = 'P0002', message = 'Message not found';\n  end if;\n\n  if v_message.sender_user_id <> p_request_user_id\n     and v_request_role not in ('manager', 'admin') then\n    raise exception using errcode = '42501', message = 'Only the sender or an Ops Manager can delete this message';\n  end if;\n\n  if v_message.is_deleted is false then\n    update public.msg_messages\n    set is_deleted = true,\n        body = '[deleted]',\n        metadata_json = coalesce(metadata_json, '{}'::jsonb)\n          || jsonb_build_object(\n            'deleted_by', p_request_user_id,\n            'deleted_at', v_now\n          ),\n        updated_at = v_now\n    where id = p_message_id\n    returning * into v_message;\n\n    update public.msg_threads\n    set updated_at = v_now\n    where id = v_message.thread_id;\n  end if;\n\n  return v_message;\nend;\n$function$\n",
       "function_name": "msg_delete_message",
       "identity_arguments": "p_message_id uuid, p_request_user_id uuid",
       "schema_name": "public"
@@ -22001,6 +22035,13 @@
       "definition": "CREATE OR REPLACE FUNCTION public.msg_get_or_create_memphis_thread(p_user_id uuid)\n RETURNS msg_threads\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_memphis_user_id uuid;\n  v_thread public.msg_threads%rowtype;\nbegin\n  if p_user_id is null then\n    raise exception 'user_id is required.';\n  end if;\n  if not public.msg_is_runtime_user(p_user_id) then\n    raise exception 'User is not an active custodial Messenger identity.';\n  end if;\n\n  select mu.id into v_memphis_user_id\n  from public.msg_users mu\n  where mu.is_active = true\n    and mu.role = 'bot'\n    and lower(btrim(mu.display_name)) = 'memphis'\n  order by mu.created_at asc\n  limit 1;\n\n  if v_memphis_user_id is null then\n    raise exception 'Memphis bot user not found.';\n  end if;\n  if p_user_id = v_memphis_user_id then\n    raise exception 'Memphis cannot create a conversation with itself.';\n  end if;\n\n  select t.* into v_thread\n  from public.msg_threads t\n  join public.msg_thread_participants p1\n    on p1.thread_id = t.id and p1.user_id = p_user_id and p1.left_at is null\n  join public.msg_thread_participants p2\n    on p2.thread_id = t.id and p2.user_id = v_memphis_user_id and p2.left_at is null\n  where t.is_active = true\n    and t.thread_type in ('bot','direct')\n    and 2 = (\n      select count(*)\n      from public.msg_thread_participants px\n      where px.thread_id = t.id and px.left_at is null\n    )\n  order by case when t.thread_type = 'bot' then 0 else 1 end, t.created_at asc\n  limit 1;\n\n  if v_thread.id is not null then\n    if v_thread.thread_type <> 'bot' or coalesce(v_thread.title,'') <> 'Memphis' then\n      update public.msg_threads\n      set thread_type = 'bot', title = 'Memphis', updated_at = now()\n      where id = v_thread.id\n      returning * into v_thread;\n    end if;\n    return v_thread;\n  end if;\n\n  insert into public.msg_threads(thread_type, title, created_by_user_id, is_active)\n  values('bot', 'Memphis', p_user_id, true)\n  returning * into v_thread;\n\n  insert into public.msg_thread_participants(thread_id, user_id)\n  values(v_thread.id, p_user_id), (v_thread.id, v_memphis_user_id);\n\n  return v_thread;\nend\n$function$\n",
       "function_name": "msg_get_or_create_memphis_thread",
       "identity_arguments": "p_user_id uuid",
+      "schema_name": "public"
+    },
+    {
+      "comment": "Returns the one canonical Ops Manager chat and transactionally reconciles the authenticated manager principal as an active participant.",
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_get_or_create_ops_manager_thread(p_manager_id uuid)\n RETURNS msg_threads\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_manager public.ops_manager_managers%rowtype;\n  v_user public.msg_users%rowtype;\n  v_thread public.msg_threads%rowtype;\nbegin\n  if p_manager_id is null then\n    raise exception using errcode = '22023', message = 'Authenticated manager id is required';\n  end if;\n\n  select * into v_manager\n  from public.ops_manager_managers\n  where manager_id = p_manager_id\n    and active is true\n    and revoked_at is null\n    and roles && array['OPS_MANAGER','CUSTODIAL_MANAGER','DIRECTOR','SECURITY_ADMIN']::text[];\n\n  if v_manager.manager_id is null then\n    raise exception using errcode = '42501', message = 'Active authenticated Ops Manager was not found';\n  end if;\n\n  v_user := public.msg_ensure_ops_manager_user(p_manager_id);\n\n  select * into v_thread\n  from public.msg_threads\n  where system_key = 'ops_manager_shared_chat_v1'\n  limit 1;\n\n  if v_thread.id is null then\n    -- Serialize singleton creation only. Established rooms do not contend on\n    -- this global lock during ordinary polling and message traffic.\n    perform pg_advisory_xact_lock(hashtextextended('ops-manager-shared-messenger-v1', 0));\n    select * into v_thread\n    from public.msg_threads\n    where system_key = 'ops_manager_shared_chat_v1'\n    limit 1;\n    if v_thread.id is null then\n      insert into public.msg_threads(\n        thread_type,\n        title,\n        created_by_user_id,\n        is_active,\n        system_key\n      ) values (\n        'group',\n        'Ops Manager Chat',\n        v_user.id,\n        true,\n        'ops_manager_shared_chat_v1'\n      )\n      returning * into v_thread;\n    end if;\n  elsif v_thread.is_active is false\n     or v_thread.thread_type <> 'group'\n     or v_thread.title is distinct from 'Ops Manager Chat' then\n    update public.msg_threads\n    set is_active = true,\n        thread_type = 'group',\n        title = 'Ops Manager Chat',\n        updated_at = now()\n    where id = v_thread.id\n    returning * into v_thread;\n  end if;\n\n  insert into public.msg_thread_participants(thread_id, user_id, joined_at, left_at)\n  values (v_thread.id, v_user.id, now(), null)\n  on conflict (thread_id, user_id) do update\n  set left_at = null\n  where msg_thread_participants.left_at is not null;\n\n  -- A manager who first opens Messenger after messages already exist must see\n  -- and be able to acknowledge that history. Missing receipts are backfilled;\n  -- existing delivery/read evidence is never overwritten.\n  insert into public.msg_receipts(message_id, user_id, queued_at)\n  select m.id, v_user.id, now()\n  from public.msg_messages m\n  where m.thread_id = v_thread.id\n    and m.is_deleted is false\n    and m.sender_user_id <> v_user.id\n  on conflict (message_id, user_id) do nothing;\n\n  return v_thread;\nend;\n$function$\n",
+      "function_name": "msg_get_or_create_ops_manager_thread",
+      "identity_arguments": "p_manager_id uuid",
       "schema_name": "public"
     },
     {
@@ -25672,6 +25713,15 @@
       "table_name": "msg_messages"
     },
     {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_msg_messages_thread_updated_cursor ON public.msg_messages USING btree (thread_id, updated_at, id)",
+      "index_name": "idx_msg_messages_thread_updated_cursor",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "msg_messages"
+    },
+    {
       "backs_constraint": true,
       "definition": "CREATE UNIQUE INDEX msg_messages_pkey ON public.msg_messages USING btree (id)",
       "index_name": "msg_messages_pkey",
@@ -25838,6 +25888,15 @@
       "definition": "CREATE UNIQUE INDEX msg_threads_pkey ON public.msg_threads USING btree (id)",
       "index_name": "msg_threads_pkey",
       "is_primary": true,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "msg_threads"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE UNIQUE INDEX uq_msg_threads_system_key ON public.msg_threads USING btree (system_key) WHERE (system_key IS NOT NULL)",
+      "index_name": "uq_msg_threads_system_key",
+      "is_primary": false,
       "is_unique": true,
       "schema_name": "public",
       "table_name": "msg_threads"
@@ -28112,6 +28171,14 @@
       "function_name": "msg_get_or_create_memphis_thread",
       "grantee": "service_role",
       "identity_arguments": "p_user_id uuid",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "msg_get_or_create_ops_manager_thread",
+      "grantee": "service_role",
+      "identity_arguments": "p_manager_id uuid",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"

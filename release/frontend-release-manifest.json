@@ -1,13 +1,13 @@
 {
-  "release_id": "release-2026.07.18.custodial-v3.2",
-  "frontend_commit_sha": "7f88e6969f89dcfe377b81ee121ab6fa6b999da0",
+  "release_id": "release-2026.07.18.custodial-v3.5",
+  "frontend_commit_sha": "e0ea77cb1dac89af38c87de4dc00c94de87918ce",
   "frontend_commit_state": "coordinated_v3_frontend",
-  "backend_minimum_version": "release-2026.07.18.custodial-v3.2",
-  "schema_fingerprint": "529727b02856fa26ceefc4c9d795ac5b951ddf6d7518b0d0f5b3493c299ebdd1",
+  "backend_minimum_version": "release-2026.07.18.custodial-v3.5",
+  "schema_fingerprint": "0bd0a14bdb9a677d7c1efed8204f90a544a4b8f3ef59939af2b628e87c1cda8f",
   "api_contract_versions": {
     "scan": "scan.v2",
     "dashboard": "dashboard.v1",
-    "messaging": "messaging.v2",
+    "messaging": "messaging.v3",
     "schedule": "schedule.v2",
     "events": "events.v3",
     "ops_manager_auth": "ops-manager-auth.v4.shared-48h",
