@@ -207,6 +207,8 @@ declare
   v_finish jsonb;
   v_replay jsonb;
   v_session_uuid text;
+  v_issue_start jsonb;
+  v_issue_session_uuid text;
   v_manager_user public.msg_users%rowtype;
   v_message public.msg_messages%rowtype;
 begin
@@ -252,6 +254,42 @@ begin
   end;
   if (select count(*) from public.sessions where session_uuid = v_session_uuid) <> 1 then
     raise exception 'Exact finish functional check produced a duplicate session';
+  end if;
+
+  perform public.tool_complete_session(
+    v_session_uuid,
+    '{"services_performed":["trash_removed"],"notes":"Routine cleaning completed without a maintenance issue."}'::jsonb,
+    'Rebuild Finish Test',
+    'REBUILD-FINISH-DEVICE',
+    'rebuild-routine-notes-completion'
+  );
+  if exists (select 1 from public.maintenance_tickets where session_id = (select id from public.sessions where session_uuid = v_session_uuid)) then
+    raise exception 'Routine cleaning notes incorrectly created a maintenance ticket';
+  end if;
+
+  v_issue_start := public.tool_start_session_v2(
+    'REBUILD_FINISH',
+    'REBUILD-FINISH-DEVICE',
+    '00000000-0000-4000-8000-00000000f111',
+    now() - interval '5 minutes',
+    'rebuild-explicit-issue-start'
+  );
+  v_issue_session_uuid := v_issue_start ->> 'session_uuid';
+  perform public.tool_finish_session_exact(
+    v_issue_session_uuid,
+    'REBUILD-FINISH-DEVICE',
+    '00000000-0000-4000-8000-00000000f112',
+    now() - interval '1 minute'
+  );
+  perform public.tool_complete_session(
+    v_issue_session_uuid,
+    '{"services_performed":["trash_removed"],"notes":"Routine context.","maintenance_issues":[{"label":"Leaking toilet","fixture_identifier":"stall 2"}]}'::jsonb,
+    'Rebuild Finish Test',
+    'REBUILD-FINISH-DEVICE',
+    'rebuild-explicit-issue-completion'
+  );
+  if (select count(*) from public.maintenance_tickets where session_id = (select id from public.sessions where session_uuid = v_issue_session_uuid)) <> 1 then
+    raise exception 'Explicit maintenance issue did not create exactly one ticket';
   end if;
 
   insert into public.ops_manager_managers(manager_id, display_name, roles, active)
