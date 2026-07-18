@@ -5085,6 +5085,1293 @@
     },
     {
       "collation_name": null,
+      "column_name": "attachment_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": "gen_random_uuid()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 1,
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "collation_name": null,
+      "column_name": "conversation_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 2,
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "collation_name": null,
+      "column_name": "manager_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 3,
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "collation_name": null,
+      "column_name": "message_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 4,
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "collation_name": null,
+      "column_name": "storage_bucket",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": "'gemini-console-private'::text",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 5,
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "collation_name": null,
+      "column_name": "storage_path",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 6,
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "collation_name": null,
+      "column_name": "original_filename",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 7,
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "collation_name": null,
+      "column_name": "mime_type",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 8,
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "collation_name": null,
+      "column_name": "extension",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 9,
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "collation_name": null,
+      "column_name": "size_bytes",
+      "comment": null,
+      "data_type": "bigint",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 10,
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "collation_name": null,
+      "column_name": "sha256",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 11,
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "collation_name": null,
+      "column_name": "status",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": "'pending'::text",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 12,
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "collation_name": null,
+      "column_name": "created_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "now()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 13,
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "collation_name": null,
+      "column_name": "attached_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 14,
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "collation_name": null,
+      "column_name": "deleted_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 15,
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "collation_name": null,
+      "column_name": "retain_until",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "(now() + '90 days'::interval)",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 16,
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "collation_name": null,
+      "column_name": "metadata_json",
+      "comment": null,
+      "data_type": "jsonb",
+      "default_expression": "'{}'::jsonb",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 17,
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "collation_name": null,
+      "column_name": "conversation_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": "gen_random_uuid()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 1,
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "owner_manager_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 2,
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "title",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": "'New chat'::text",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 3,
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "status",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": "'active'::text",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 4,
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "created_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "now()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 5,
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "updated_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "now()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 6,
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "last_activity_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "now()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 7,
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "archived_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 8,
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "deleted_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 9,
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "metadata_json",
+      "comment": null,
+      "data_type": "jsonb",
+      "default_expression": "'{}'::jsonb",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 10,
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "draft_text",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": "''::text",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 11,
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "draft_updated_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 12,
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "message_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": "gen_random_uuid()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 1,
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "collation_name": null,
+      "column_name": "conversation_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 2,
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "collation_name": null,
+      "column_name": "manager_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 3,
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "collation_name": null,
+      "column_name": "role",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 4,
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "collation_name": null,
+      "column_name": "body",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": "''::text",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 5,
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "collation_name": null,
+      "column_name": "state",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": "'queued'::text",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 6,
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "collation_name": null,
+      "column_name": "client_message_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 7,
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "collation_name": null,
+      "column_name": "response_to_message_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 8,
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "collation_name": null,
+      "column_name": "correlation_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 9,
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "collation_name": null,
+      "column_name": "provider",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 10,
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "collation_name": null,
+      "column_name": "model",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 11,
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "collation_name": null,
+      "column_name": "error_code",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 12,
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "collation_name": null,
+      "column_name": "error_message",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 13,
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "collation_name": null,
+      "column_name": "metadata_json",
+      "comment": null,
+      "data_type": "jsonb",
+      "default_expression": "'{}'::jsonb",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 14,
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "collation_name": null,
+      "column_name": "created_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "now()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 15,
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "collation_name": null,
+      "column_name": "completed_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 16,
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "collation_name": null,
+      "column_name": "cancelled_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 17,
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "collation_name": null,
+      "column_name": "event_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": "gen_random_uuid()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 1,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_job_events"
+    },
+    {
+      "collation_name": null,
+      "column_name": "repair_job_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 2,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_job_events"
+    },
+    {
+      "collation_name": null,
+      "column_name": "event_type",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 3,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_job_events"
+    },
+    {
+      "collation_name": null,
+      "column_name": "status",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 4,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_job_events"
+    },
+    {
+      "collation_name": null,
+      "column_name": "correlation_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 5,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_job_events"
+    },
+    {
+      "collation_name": null,
+      "column_name": "actor_manager_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 6,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_job_events"
+    },
+    {
+      "collation_name": null,
+      "column_name": "created_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "now()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 7,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_job_events"
+    },
+    {
+      "collation_name": null,
+      "column_name": "detail_json",
+      "comment": null,
+      "data_type": "jsonb",
+      "default_expression": "'{}'::jsonb",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 8,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_job_events"
+    },
+    {
+      "collation_name": null,
+      "column_name": "repair_job_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": "gen_random_uuid()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 1,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "proposal_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 2,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "conversation_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 3,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "approving_manager_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 4,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "approving_credential_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 5,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "authorization_message_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 6,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "operation_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 7,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "status",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": "'authorized'::text",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 8,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "execution_mode",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": "'controlled_worker'::text",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 9,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "affected_components",
+      "comment": null,
+      "data_type": "text[]",
+      "default_expression": "'{}'::text[]",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 10,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "starting_backend_commit",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 11,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "starting_frontend_commit",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 12,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "starting_schema_fingerprint",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 13,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "release_id",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 14,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "backup_reference",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 15,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "branch_name",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 16,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "changed_files",
+      "comment": null,
+      "data_type": "jsonb",
+      "default_expression": "'[]'::jsonb",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 17,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "test_evidence",
+      "comment": null,
+      "data_type": "jsonb",
+      "default_expression": "'[]'::jsonb",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 18,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "migration_evidence",
+      "comment": null,
+      "data_type": "jsonb",
+      "default_expression": "'[]'::jsonb",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 19,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "deployment_evidence",
+      "comment": null,
+      "data_type": "jsonb",
+      "default_expression": "'[]'::jsonb",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 20,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "verification_evidence",
+      "comment": null,
+      "data_type": "jsonb",
+      "default_expression": "'[]'::jsonb",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 21,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "rollback_evidence",
+      "comment": null,
+      "data_type": "jsonb",
+      "default_expression": "'[]'::jsonb",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 22,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "error_code",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 23,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "error_message",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 24,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "created_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "now()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 25,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "authorized_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "now()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 26,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "started_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 27,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "finished_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 28,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "updated_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "now()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 29,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "metadata_json",
+      "comment": null,
+      "data_type": "jsonb",
+      "default_expression": "'{}'::jsonb",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 30,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "proposal_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": "gen_random_uuid()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 1,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
+    },
+    {
+      "collation_name": null,
+      "column_name": "conversation_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 2,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
+    },
+    {
+      "collation_name": null,
+      "column_name": "source_message_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 3,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
+    },
+    {
+      "collation_name": null,
+      "column_name": "proposed_by_manager_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 4,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
+    },
+    {
+      "collation_name": null,
+      "column_name": "plan_revision",
+      "comment": null,
+      "data_type": "integer",
+      "default_expression": "1",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 5,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
+    },
+    {
+      "collation_name": null,
+      "column_name": "plan_sha256",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 6,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
+    },
+    {
+      "collation_name": null,
+      "column_name": "plan_text",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 7,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
+    },
+    {
+      "collation_name": null,
+      "column_name": "affected_components",
+      "comment": null,
+      "data_type": "text[]",
+      "default_expression": "'{}'::text[]",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 8,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
+    },
+    {
+      "collation_name": null,
+      "column_name": "risk_level",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": "'review'::text",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 9,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
+    },
+    {
+      "collation_name": null,
+      "column_name": "repair_kind",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": "'controlled_source_repair'::text",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 10,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
+    },
+    {
+      "collation_name": null,
+      "column_name": "status",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": "'proposed'::text",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 11,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
+    },
+    {
+      "collation_name": null,
+      "column_name": "created_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "now()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 12,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
+    },
+    {
+      "collation_name": null,
+      "column_name": "expires_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "(now() + '24:00:00'::interval)",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 13,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
+    },
+    {
+      "collation_name": null,
+      "column_name": "authorized_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 14,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
+    },
+    {
+      "collation_name": null,
+      "column_name": "metadata_json",
+      "comment": null,
+      "data_type": "jsonb",
+      "default_expression": "'{}'::jsonb",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 15,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
+    },
+    {
+      "collation_name": null,
       "column_name": "id",
       "comment": null,
       "data_type": "uuid",
@@ -14659,6 +15946,366 @@
       "validated": true
     },
     {
+      "constraint_name": "gemini_console_attachments_conversation_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (conversation_id) REFERENCES gemini_console_conversations(conversation_id)",
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_attachments_manager_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (manager_id) REFERENCES ops_manager_managers(manager_id)",
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_attachments_message_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (message_id) REFERENCES gemini_console_messages(message_id)",
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_attachments_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (attachment_id)",
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_attachments_sha256_check",
+      "constraint_type": "c",
+      "definition": "CHECK (sha256 ~ '^[0-9a-f]{64}$'::text)",
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_attachments_size_bytes_check",
+      "constraint_type": "c",
+      "definition": "CHECK (size_bytes >= 1 AND size_bytes <= 6291456)",
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_attachments_status_check",
+      "constraint_type": "c",
+      "definition": "CHECK (status = ANY (ARRAY['pending'::text, 'attached'::text, 'deleted'::text, 'rejected'::text]))",
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_attachments_storage_bucket_storage_path_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (storage_bucket, storage_path)",
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_conversations_draft_text_check",
+      "constraint_type": "c",
+      "definition": "CHECK (char_length(draft_text) <= 30000)",
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_conversations_owner_manager_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (owner_manager_id) REFERENCES ops_manager_managers(manager_id)",
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_conversations_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (conversation_id)",
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_conversations_status_check",
+      "constraint_type": "c",
+      "definition": "CHECK (status = ANY (ARRAY['active'::text, 'archived'::text, 'deleted'::text]))",
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_conversations_title_check",
+      "constraint_type": "c",
+      "definition": "CHECK (char_length(title) >= 1 AND char_length(title) <= 160)",
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_messages_body_check",
+      "constraint_type": "c",
+      "definition": "CHECK (char_length(body) <= 100000)",
+      "schema_name": "public",
+      "table_name": "gemini_console_messages",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_messages_conversation_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (conversation_id) REFERENCES gemini_console_conversations(conversation_id)",
+      "schema_name": "public",
+      "table_name": "gemini_console_messages",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_messages_manager_id_client_message_id_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (manager_id, client_message_id)",
+      "schema_name": "public",
+      "table_name": "gemini_console_messages",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_messages_manager_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (manager_id) REFERENCES ops_manager_managers(manager_id)",
+      "schema_name": "public",
+      "table_name": "gemini_console_messages",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_messages_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (message_id)",
+      "schema_name": "public",
+      "table_name": "gemini_console_messages",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_messages_response_to_message_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (response_to_message_id) REFERENCES gemini_console_messages(message_id)",
+      "schema_name": "public",
+      "table_name": "gemini_console_messages",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_messages_role_check",
+      "constraint_type": "c",
+      "definition": "CHECK (role = ANY (ARRAY['user'::text, 'assistant'::text, 'system'::text]))",
+      "schema_name": "public",
+      "table_name": "gemini_console_messages",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_messages_state_check",
+      "constraint_type": "c",
+      "definition": "CHECK (state = ANY (ARRAY['queued'::text, 'generating'::text, 'completed'::text, 'failed'::text, 'cancelled'::text]))",
+      "schema_name": "public",
+      "table_name": "gemini_console_messages",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_repair_job_events_actor_manager_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (actor_manager_id) REFERENCES ops_manager_managers(manager_id)",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_job_events",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_repair_job_events_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (event_id)",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_job_events",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_repair_job_events_repair_job_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (repair_job_id) REFERENCES gemini_console_repair_jobs(repair_job_id)",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_job_events",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_repair_jobs_approving_credential_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (approving_credential_id) REFERENCES ops_manager_trusted_devices(credential_id)",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_repair_jobs_approving_manager_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (approving_manager_id) REFERENCES ops_manager_managers(manager_id)",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_repair_jobs_authorization_message_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (authorization_message_id) REFERENCES gemini_console_messages(message_id)",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_repair_jobs_conversation_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (conversation_id) REFERENCES gemini_console_conversations(conversation_id)",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_repair_jobs_execution_mode_check",
+      "constraint_type": "c",
+      "definition": "CHECK (execution_mode = ANY (ARRAY['controlled_worker'::text, 'acceptance_probe'::text]))",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_repair_jobs_operation_id_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (operation_id)",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_repair_jobs_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (repair_job_id)",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_repair_jobs_proposal_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (proposal_id) REFERENCES gemini_console_repair_proposals(proposal_id)",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_repair_jobs_proposal_id_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (proposal_id)",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_repair_jobs_status_check",
+      "constraint_type": "c",
+      "definition": "CHECK (status = ANY (ARRAY['authorized'::text, 'queued'::text, 'backing_up'::text, 'repairing'::text, 'testing'::text, 'deploying'::text, 'verifying'::text, 'completed'::text, 'failed'::text, 'rolled_back'::text, 'blocked'::text, 'cancelled'::text]))",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_repair_proposa_conversation_id_plan_revision_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (conversation_id, plan_revision)",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_repair_proposals_conversation_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (conversation_id) REFERENCES gemini_console_conversations(conversation_id)",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_repair_proposals_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (proposal_id)",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_repair_proposals_plan_revision_check",
+      "constraint_type": "c",
+      "definition": "CHECK (plan_revision > 0)",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_repair_proposals_plan_sha256_check",
+      "constraint_type": "c",
+      "definition": "CHECK (plan_sha256 ~ '^[0-9a-f]{64}$'::text)",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_repair_proposals_proposed_by_manager_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (proposed_by_manager_id) REFERENCES ops_manager_managers(manager_id)",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_repair_proposals_repair_kind_check",
+      "constraint_type": "c",
+      "definition": "CHECK (repair_kind = ANY (ARRAY['controlled_source_repair'::text, 'acceptance_probe'::text]))",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_repair_proposals_risk_level_check",
+      "constraint_type": "c",
+      "definition": "CHECK (risk_level = ANY (ARRAY['low'::text, 'review'::text, 'high'::text, 'destructive'::text]))",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_repair_proposals_source_message_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (source_message_id) REFERENCES gemini_console_messages(message_id)",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_repair_proposals_source_message_id_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (source_message_id)",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals",
+      "validated": true
+    },
+    {
+      "constraint_name": "gemini_console_repair_proposals_status_check",
+      "constraint_type": "c",
+      "definition": "CHECK (status = ANY (ARRAY['proposed'::text, 'authorized'::text, 'superseded'::text, 'expired'::text, 'cancelled'::text]))",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals",
+      "validated": true
+    },
+    {
       "constraint_name": "guest_cleanliness_reports_pkey",
       "constraint_type": "p",
       "definition": "PRIMARY KEY (id)",
@@ -17091,6 +18738,34 @@
       "definition": "CREATE OR REPLACE FUNCTION public.force_close_session(p_session_uuid text, p_closed_by text, p_reason text DEFAULT NULL::text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_session_id uuid;\n  v_location_id uuid;\n  v_device_pk uuid;\n  v_started_at timestamptz;\n  v_ended_at timestamptz := now();\n  v_duration_minutes integer;\n  v_duration_display text;\n  v_status text;\nbegin\n  select s.id, s.location_id, s.device_id, s.started_at, s.status\n    into v_session_id, v_location_id, v_device_pk, v_started_at, v_status\n  from public.sessions s\n  where s.session_uuid = p_session_uuid\n    and s.status in ('active', 'pending_submit')\n  limit 1;\n\n  if v_session_id is null then\n    raise exception 'Open session not found for session_uuid: %', p_session_uuid;\n  end if;\n\n  v_duration_minutes := greatest(0, round(extract(epoch from (v_ended_at - v_started_at)) / 60.0));\n  v_duration_display := v_duration_minutes::text || ' min';\n\n  update public.sessions\n  set\n    status = 'closed',\n    ended_at = coalesce(ended_at, v_ended_at),\n    duration_minutes = coalesce(duration_minutes, v_duration_minutes),\n    duration_display = coalesce(duration_display, v_duration_display),\n    completion_source = coalesce(completion_source, 'admin_force_close'),\n    updated_at = now()\n  where id = v_session_id;\n\n  insert into public.session_events (\n    session_id,\n    event_type,\n    actor_type,\n    actor_ref,\n    details_json\n  )\n  values (\n    v_session_id,\n    'session_force_closed',\n    'admin',\n    coalesce(nullif(trim(p_closed_by), ''), 'unknown'),\n    jsonb_build_object(\n      'reason', p_reason,\n      'previous_status', v_status,\n      'forced_at', v_ended_at\n    )\n  );\n\n  insert into public.system_logs (\n    level,\n    source,\n    message,\n    session_id,\n    location_id,\n    device_id\n  )\n  values (\n    'WARN',\n    'force_close_session',\n    'Session force-closed by admin',\n    v_session_id,\n    v_location_id,\n    v_device_pk\n  );\n\n  return jsonb_build_object(\n    'session_uuid', p_session_uuid,\n    'status', 'closed',\n    'closed_at', v_ended_at,\n    'closed_by', coalesce(nullif(trim(p_closed_by), ''), 'unknown'),\n    'reason', p_reason\n  );\nend;\n$function$\n",
       "function_name": "force_close_session",
       "identity_arguments": "p_session_uuid text, p_closed_by text, p_reason text",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.gemini_console_authorize_repair(p_proposal_id uuid, p_manager_id uuid, p_credential_id uuid, p_authorization_message_id uuid, p_operation_id uuid, p_release_id text, p_backend_commit text, p_frontend_commit text, p_schema_fingerprint text, p_correlation_id uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_proposal public.gemini_console_repair_proposals%rowtype;\n  v_authorization public.gemini_console_messages%rowtype;\n  v_job public.gemini_console_repair_jobs%rowtype;\n  v_kind text;\nbegin\n  select * into v_proposal from public.gemini_console_repair_proposals\n  where proposal_id = p_proposal_id for update;\n  if not found then raise exception 'repair proposal not found'; end if;\n  if v_proposal.status <> 'proposed' or v_proposal.expires_at <= now() then raise exception 'repair proposal is no longer authorizable'; end if;\n\n  if not exists (\n    select 1 from public.ops_manager_managers m\n    where m.manager_id = p_manager_id and m.active and m.revoked_at is null\n      and 'CUSTODIAL_MANAGER' = any(m.roles)\n  ) then raise exception 'Custodial Manager authorization is required'; end if;\n  if not exists (\n    select 1 from public.ops_manager_trusted_devices d\n    where d.credential_id = p_credential_id and d.manager_id = p_manager_id\n      and d.revoked_at is null and d.expires_at > now()\n  ) then raise exception 'active approving credential is required'; end if;\n\n  select * into v_authorization from public.gemini_console_messages\n  where message_id = p_authorization_message_id and manager_id = p_manager_id\n    and conversation_id = v_proposal.conversation_id and role='user' for update;\n  if not found or v_authorization.metadata_json->>'source' <> 'direct_authenticated_user' then\n    raise exception 'direct authenticated authorization message is required';\n  end if;\n  if lower(btrim(v_authorization.body)) !~ '^(go ahead and repair that|implement the plan|fix it|proceed with the repair)[.! ]*$' then\n    raise exception 'authorization message is not an explicit repair instruction';\n  end if;\n\n  v_kind := case when v_proposal.repair_kind='acceptance_probe' then 'acceptance_probe' else 'controlled_worker' end;\n  insert into public.gemini_console_repair_jobs(\n    proposal_id, conversation_id, approving_manager_id, approving_credential_id,\n    authorization_message_id, operation_id, status, execution_mode,\n    affected_components, starting_backend_commit, starting_frontend_commit,\n    starting_schema_fingerprint, release_id, backup_reference, metadata_json\n  ) values (\n    v_proposal.proposal_id, v_proposal.conversation_id, p_manager_id, p_credential_id,\n    p_authorization_message_id, p_operation_id,\n    case when v_kind='acceptance_probe' then 'completed' else 'authorized' end,\n    v_kind, v_proposal.affected_components,\n    nullif(btrim(p_backend_commit),''), nullif(btrim(p_frontend_commit),''),\n    nullif(btrim(p_schema_fingerprint),''), nullif(btrim(p_release_id),''),\n    'required_before_worker_claim',\n    jsonb_build_object('plan_sha256',v_proposal.plan_sha256,'authorization_source','direct_authenticated_user')\n  )\n  on conflict (proposal_id) do update set updated_at=now()\n  returning * into v_job;\n\n  if v_kind='acceptance_probe' then\n    update public.gemini_console_repair_jobs\n    set started_at=coalesce(started_at,now()), finished_at=coalesce(finished_at,now()),\n        test_evidence=jsonb_build_array(jsonb_build_object('kind','database_transaction','result','pass')),\n        verification_evidence=jsonb_build_array(jsonb_build_object('kind','durable_job_readback','result','pass')),\n        rollback_evidence=jsonb_build_array(jsonb_build_object('kind','no_production_feature_changed','result','pass')),\n        updated_at=now()\n    where repair_job_id=v_job.repair_job_id\n    returning * into v_job;\n  end if;\n\n  update public.gemini_console_repair_proposals\n  set status='authorized', authorized_at=now()\n  where proposal_id=v_proposal.proposal_id;\n  insert into public.gemini_console_repair_job_events(\n    repair_job_id,event_type,status,correlation_id,actor_manager_id,detail_json\n  ) values (\n    v_job.repair_job_id,'repair_authorized',v_job.status,p_correlation_id,p_manager_id,\n    jsonb_build_object('execution_mode',v_kind,'plan_sha256',v_proposal.plan_sha256)\n  );\n  return to_jsonb(v_job);\nend\n$function$\n",
+      "function_name": "gemini_console_authorize_repair",
+      "identity_arguments": "p_proposal_id uuid, p_manager_id uuid, p_credential_id uuid, p_authorization_message_id uuid, p_operation_id uuid, p_release_id text, p_backend_commit text, p_frontend_commit text, p_schema_fingerprint text, p_correlation_id uuid",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.gemini_console_begin_turn(p_conversation_id uuid, p_manager_id uuid, p_client_message_id uuid, p_body text, p_attachment_ids uuid[], p_correlation_id uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_conversation public.gemini_console_conversations%rowtype;\n  v_message public.gemini_console_messages%rowtype;\n  v_assistant public.gemini_console_messages%rowtype;\n  v_inserted boolean := false;\n  v_claimed boolean := false;\n  v_expected integer := coalesce(cardinality(p_attachment_ids), 0);\n  v_attached integer := 0;\nbegin\n  if p_conversation_id is null or p_manager_id is null or p_client_message_id is null or p_correlation_id is null then\n    raise exception 'conversation, manager, client message, and correlation identifiers are required';\n  end if;\n  if nullif(btrim(coalesce(p_body, '')), '') is null then raise exception 'message body is required'; end if;\n  if char_length(p_body) > 30000 then raise exception 'message body exceeds 30000 characters'; end if;\n\n  select * into v_conversation\n  from public.gemini_console_conversations\n  where conversation_id = p_conversation_id\n  for update;\n  if not found or v_conversation.status <> 'active' then raise exception 'active conversation not found'; end if;\n  if v_conversation.owner_manager_id <> p_manager_id then raise exception 'conversation access denied'; end if;\n  if not exists (\n    select 1 from public.ops_manager_managers m\n    where m.manager_id = p_manager_id and m.active and m.revoked_at is null\n  ) then raise exception 'active manager not found'; end if;\n\n  insert into public.gemini_console_messages(\n    conversation_id, manager_id, role, body, state, client_message_id,\n    correlation_id, metadata_json\n  ) values (\n    p_conversation_id, p_manager_id, 'user', p_body, 'queued',\n    p_client_message_id, p_correlation_id,\n    jsonb_build_object('source', 'direct_authenticated_user')\n  )\n  on conflict (manager_id, client_message_id) do nothing\n  returning * into v_message;\n  v_inserted := found;\n\n  if not v_inserted then\n    select * into v_message\n    from public.gemini_console_messages\n    where manager_id = p_manager_id and client_message_id = p_client_message_id\n    for update;\n    if v_message.conversation_id <> p_conversation_id or v_message.role <> 'user' or v_message.body <> p_body then\n      raise exception 'client message identifier conflicts with another logical message';\n    end if;\n  end if;\n\n  if v_expected > 0 then\n    update public.gemini_console_attachments\n    set message_id = v_message.message_id,\n        status = 'attached',\n        attached_at = coalesce(attached_at, now())\n    where attachment_id = any(p_attachment_ids)\n      and conversation_id = p_conversation_id\n      and manager_id = p_manager_id\n      and (status = 'pending' or message_id = v_message.message_id);\n    get diagnostics v_attached = row_count;\n    if v_attached <> v_expected then raise exception 'one or more attachments are unavailable'; end if;\n  end if;\n\n  select * into v_assistant\n  from public.gemini_console_messages\n  where response_to_message_id = v_message.message_id and role = 'assistant'\n  limit 1;\n\n  if v_assistant.message_id is null and v_message.state in ('queued','failed','cancelled') then\n    update public.gemini_console_messages\n    set state = 'generating', error_code = null, error_message = null,\n        cancelled_at = null\n    where message_id = v_message.message_id\n      and state in ('queued','failed','cancelled')\n    returning * into v_message;\n    v_claimed := found;\n  end if;\n\n  update public.gemini_console_conversations\n  set last_activity_at = now(), updated_at = now(),\n      title = case when title = 'New chat' then left(regexp_replace(p_body, E'[\\\\n\\\\r\\\\t]+', ' ', 'g'), 80) else title end\n  where conversation_id = p_conversation_id;\n\n  return jsonb_build_object(\n    'inserted', v_inserted,\n    'claimed', v_claimed,\n    'user_message', to_jsonb(v_message),\n    'assistant_message', case when v_assistant.message_id is null then null else to_jsonb(v_assistant) end\n  );\nend\n$function$\n",
+      "function_name": "gemini_console_begin_turn",
+      "identity_arguments": "p_conversation_id uuid, p_manager_id uuid, p_client_message_id uuid, p_body text, p_attachment_ids uuid[], p_correlation_id uuid",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.gemini_console_complete_turn(p_user_message_id uuid, p_body text, p_provider text, p_model text, p_correlation_id uuid, p_metadata_json jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_user public.gemini_console_messages%rowtype;\n  v_assistant public.gemini_console_messages%rowtype;\nbegin\n  select * into v_user from public.gemini_console_messages\n  where message_id = p_user_message_id and role = 'user' for update;\n  if not found then raise exception 'user message not found'; end if;\n\n  insert into public.gemini_console_messages(\n    conversation_id, manager_id, role, body, state, client_message_id,\n    response_to_message_id, correlation_id, provider, model, metadata_json,\n    completed_at\n  ) values (\n    v_user.conversation_id, v_user.manager_id, 'assistant', coalesce(p_body,''),\n    'completed', gen_random_uuid(), v_user.message_id, p_correlation_id,\n    nullif(btrim(p_provider),''), nullif(btrim(p_model),''),\n    coalesce(p_metadata_json,'{}'::jsonb), now()\n  )\n  on conflict (response_to_message_id) where response_to_message_id is not null and role = 'assistant'\n  do update set body = excluded.body, state = 'completed', provider = excluded.provider,\n    model = excluded.model, metadata_json = excluded.metadata_json,\n    completed_at = coalesce(public.gemini_console_messages.completed_at, excluded.completed_at)\n  returning * into v_assistant;\n\n  update public.gemini_console_messages\n  set state = 'completed', completed_at = now(), error_code = null, error_message = null\n  where message_id = v_user.message_id;\n  update public.gemini_console_conversations\n  set updated_at = now(), last_activity_at = now()\n  where conversation_id = v_user.conversation_id;\n  return to_jsonb(v_assistant);\nend\n$function$\n",
+      "function_name": "gemini_console_complete_turn",
+      "identity_arguments": "p_user_message_id uuid, p_body text, p_provider text, p_model text, p_correlation_id uuid, p_metadata_json jsonb",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.gemini_console_fail_turn(p_user_message_id uuid, p_state text, p_error_code text, p_error_message text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare v_message public.gemini_console_messages%rowtype;\nbegin\n  if p_state not in ('failed','cancelled') then raise exception 'invalid terminal state'; end if;\n  update public.gemini_console_messages\n  set state = p_state,\n      error_code = left(coalesce(p_error_code,'request_failed'),80),\n      error_message = left(coalesce(p_error_message,'Request failed.'),500),\n      cancelled_at = case when p_state='cancelled' then now() else cancelled_at end\n  where message_id = p_user_message_id and role='user' and state='generating'\n  returning * into v_message;\n  return case when v_message.message_id is null then null else to_jsonb(v_message) end;\nend\n$function$\n",
+      "function_name": "gemini_console_fail_turn",
+      "identity_arguments": "p_user_message_id uuid, p_state text, p_error_code text, p_error_message text",
       "schema_name": "public"
     },
     {
@@ -19691,6 +21366,240 @@
       "is_unique": true,
       "schema_name": "public",
       "table_name": "foundation_removal_archive"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX gemini_console_attachments_pkey ON public.gemini_console_attachments USING btree (attachment_id)",
+      "index_name": "gemini_console_attachments_pkey",
+      "is_primary": true,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX gemini_console_attachments_storage_bucket_storage_path_key ON public.gemini_console_attachments USING btree (storage_bucket, storage_path)",
+      "index_name": "gemini_console_attachments_storage_bucket_storage_path_key",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE UNIQUE INDEX idx_gemini_console_attachments_active_hash ON public.gemini_console_attachments USING btree (conversation_id, sha256) WHERE (status = ANY (ARRAY['pending'::text, 'attached'::text]))",
+      "index_name": "idx_gemini_console_attachments_active_hash",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_gemini_console_attachments_cleanup ON public.gemini_console_attachments USING btree (status, created_at, retain_until)",
+      "index_name": "idx_gemini_console_attachments_cleanup",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_gemini_console_attachments_manager ON public.gemini_console_attachments USING btree (manager_id)",
+      "index_name": "idx_gemini_console_attachments_manager",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_gemini_console_attachments_message ON public.gemini_console_attachments USING btree (message_id) WHERE (message_id IS NOT NULL)",
+      "index_name": "idx_gemini_console_attachments_message",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX gemini_console_conversations_pkey ON public.gemini_console_conversations USING btree (conversation_id)",
+      "index_name": "gemini_console_conversations_pkey",
+      "is_primary": true,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_gemini_console_conversations_owner_activity ON public.gemini_console_conversations USING btree (owner_manager_id, last_activity_at DESC) WHERE (status <> 'deleted'::text)",
+      "index_name": "idx_gemini_console_conversations_owner_activity",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX gemini_console_messages_manager_id_client_message_id_key ON public.gemini_console_messages USING btree (manager_id, client_message_id)",
+      "index_name": "gemini_console_messages_manager_id_client_message_id_key",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX gemini_console_messages_pkey ON public.gemini_console_messages USING btree (message_id)",
+      "index_name": "gemini_console_messages_pkey",
+      "is_primary": true,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_gemini_console_messages_conversation_created ON public.gemini_console_messages USING btree (conversation_id, created_at, message_id)",
+      "index_name": "idx_gemini_console_messages_conversation_created",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_gemini_console_messages_manager ON public.gemini_console_messages USING btree (manager_id)",
+      "index_name": "idx_gemini_console_messages_manager",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE UNIQUE INDEX idx_gemini_console_messages_one_response ON public.gemini_console_messages USING btree (response_to_message_id) WHERE ((response_to_message_id IS NOT NULL) AND (role = 'assistant'::text))",
+      "index_name": "idx_gemini_console_messages_one_response",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_gemini_console_messages_search ON public.gemini_console_messages USING gin (to_tsvector('english'::regconfig, COALESCE(body, ''::text)))",
+      "index_name": "idx_gemini_console_messages_search",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX gemini_console_repair_job_events_pkey ON public.gemini_console_repair_job_events USING btree (event_id)",
+      "index_name": "gemini_console_repair_job_events_pkey",
+      "is_primary": true,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_job_events"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_gemini_console_repair_events_actor ON public.gemini_console_repair_job_events USING btree (actor_manager_id) WHERE (actor_manager_id IS NOT NULL)",
+      "index_name": "idx_gemini_console_repair_events_actor",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_job_events"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_gemini_console_repair_events_job ON public.gemini_console_repair_job_events USING btree (repair_job_id, created_at, event_id)",
+      "index_name": "idx_gemini_console_repair_events_job",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_job_events"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX gemini_console_repair_jobs_operation_id_key ON public.gemini_console_repair_jobs USING btree (operation_id)",
+      "index_name": "gemini_console_repair_jobs_operation_id_key",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX gemini_console_repair_jobs_pkey ON public.gemini_console_repair_jobs USING btree (repair_job_id)",
+      "index_name": "gemini_console_repair_jobs_pkey",
+      "is_primary": true,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX gemini_console_repair_jobs_proposal_id_key ON public.gemini_console_repair_jobs USING btree (proposal_id)",
+      "index_name": "gemini_console_repair_jobs_proposal_id_key",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_gemini_console_repair_jobs_conversation ON public.gemini_console_repair_jobs USING btree (conversation_id, created_at DESC)",
+      "index_name": "idx_gemini_console_repair_jobs_conversation",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_gemini_console_repair_jobs_manager_status ON public.gemini_console_repair_jobs USING btree (approving_manager_id, status, created_at DESC)",
+      "index_name": "idx_gemini_console_repair_jobs_manager_status",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX gemini_console_repair_proposa_conversation_id_plan_revision_key ON public.gemini_console_repair_proposals USING btree (conversation_id, plan_revision)",
+      "index_name": "gemini_console_repair_proposa_conversation_id_plan_revision_key",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX gemini_console_repair_proposals_pkey ON public.gemini_console_repair_proposals USING btree (proposal_id)",
+      "index_name": "gemini_console_repair_proposals_pkey",
+      "is_primary": true,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX gemini_console_repair_proposals_source_message_id_key ON public.gemini_console_repair_proposals USING btree (source_message_id)",
+      "index_name": "gemini_console_repair_proposals_source_message_id_key",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_gemini_console_proposals_manager_status ON public.gemini_console_repair_proposals USING btree (proposed_by_manager_id, status, created_at DESC)",
+      "index_name": "idx_gemini_console_proposals_manager_status",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
     },
     {
       "backs_constraint": true,
@@ -22690,6 +24599,102 @@
       "schema_name": "public"
     },
     {
+      "function_name": "gemini_console_authorize_repair",
+      "grantee": "postgres",
+      "identity_arguments": "p_proposal_id uuid, p_manager_id uuid, p_credential_id uuid, p_authorization_message_id uuid, p_operation_id uuid, p_release_id text, p_backend_commit text, p_frontend_commit text, p_schema_fingerprint text, p_correlation_id uuid",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "gemini_console_authorize_repair",
+      "grantee": "service_role",
+      "identity_arguments": "p_proposal_id uuid, p_manager_id uuid, p_credential_id uuid, p_authorization_message_id uuid, p_operation_id uuid, p_release_id text, p_backend_commit text, p_frontend_commit text, p_schema_fingerprint text, p_correlation_id uuid",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "gemini_console_authorize_repair",
+      "grantee": "supabase_admin",
+      "identity_arguments": "p_proposal_id uuid, p_manager_id uuid, p_credential_id uuid, p_authorization_message_id uuid, p_operation_id uuid, p_release_id text, p_backend_commit text, p_frontend_commit text, p_schema_fingerprint text, p_correlation_id uuid",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "gemini_console_begin_turn",
+      "grantee": "postgres",
+      "identity_arguments": "p_conversation_id uuid, p_manager_id uuid, p_client_message_id uuid, p_body text, p_attachment_ids uuid[], p_correlation_id uuid",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "gemini_console_begin_turn",
+      "grantee": "service_role",
+      "identity_arguments": "p_conversation_id uuid, p_manager_id uuid, p_client_message_id uuid, p_body text, p_attachment_ids uuid[], p_correlation_id uuid",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "gemini_console_begin_turn",
+      "grantee": "supabase_admin",
+      "identity_arguments": "p_conversation_id uuid, p_manager_id uuid, p_client_message_id uuid, p_body text, p_attachment_ids uuid[], p_correlation_id uuid",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "gemini_console_complete_turn",
+      "grantee": "postgres",
+      "identity_arguments": "p_user_message_id uuid, p_body text, p_provider text, p_model text, p_correlation_id uuid, p_metadata_json jsonb",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "gemini_console_complete_turn",
+      "grantee": "service_role",
+      "identity_arguments": "p_user_message_id uuid, p_body text, p_provider text, p_model text, p_correlation_id uuid, p_metadata_json jsonb",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "gemini_console_complete_turn",
+      "grantee": "supabase_admin",
+      "identity_arguments": "p_user_message_id uuid, p_body text, p_provider text, p_model text, p_correlation_id uuid, p_metadata_json jsonb",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "gemini_console_fail_turn",
+      "grantee": "postgres",
+      "identity_arguments": "p_user_message_id uuid, p_state text, p_error_code text, p_error_message text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "gemini_console_fail_turn",
+      "grantee": "service_role",
+      "identity_arguments": "p_user_message_id uuid, p_state text, p_error_code text, p_error_message text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "gemini_console_fail_turn",
+      "grantee": "supabase_admin",
+      "identity_arguments": "p_user_message_id uuid, p_state text, p_error_code text, p_error_message text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
       "function_name": "get_last_cleaned",
       "grantee": "postgres",
       "identity_arguments": "p_location text",
@@ -23508,6 +25513,14 @@
     {
       "function_name": "ops_manager_consume_shared_enrollment_window",
       "grantee": "service_role",
+      "identity_arguments": "p_code_hash text, p_credential_id uuid, p_device_id text, p_device_label text, p_trust_token_hash text, p_user_agent_hash text, p_created_ip_hash text, p_platform_summary text, p_expires_at timestamp with time zone, p_metadata_json jsonb",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "ops_manager_consume_shared_enrollment_window",
+      "grantee": "supabase_admin",
       "identity_arguments": "p_code_hash text, p_credential_id uuid, p_device_id text, p_device_label text, p_trust_token_hash text, p_user_agent_hash text, p_created_ip_hash text, p_platform_summary text, p_expires_at timestamp with time zone, p_metadata_json jsonb",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
@@ -23548,6 +25561,14 @@
     {
       "function_name": "ops_manager_create_shared_enrollment_window",
       "grantee": "service_role",
+      "identity_arguments": "p_code_hash text, p_created_by_manager_id uuid, p_created_by_credential_id uuid, p_metadata_json jsonb",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "ops_manager_create_shared_enrollment_window",
+      "grantee": "supabase_admin",
       "identity_arguments": "p_code_hash text, p_created_by_manager_id uuid, p_created_by_credential_id uuid, p_metadata_json jsonb",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
@@ -23564,6 +25585,14 @@
     {
       "function_name": "ops_manager_disable_shared_enrollment_window",
       "grantee": "service_role",
+      "identity_arguments": "p_window_id uuid, p_actor_manager_id uuid, p_actor_credential_id uuid, p_reason text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "ops_manager_disable_shared_enrollment_window",
+      "grantee": "supabase_admin",
       "identity_arguments": "p_window_id uuid, p_actor_manager_id uuid, p_actor_credential_id uuid, p_reason text",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
@@ -29738,6 +31767,888 @@
     },
     {
       "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "DELETE",
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "INSERT",
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "REFERENCES",
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "TRIGGER",
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "TRUNCATE",
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "UPDATE",
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "DELETE",
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "INSERT",
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "REFERENCES",
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "TRIGGER",
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "TRUNCATE",
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "UPDATE",
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "DELETE",
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "INSERT",
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "REFERENCES",
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "TRIGGER",
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "TRUNCATE",
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "UPDATE",
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "DELETE",
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "INSERT",
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "REFERENCES",
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "TRIGGER",
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "TRUNCATE",
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "UPDATE",
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "DELETE",
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "INSERT",
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "REFERENCES",
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "TRIGGER",
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "TRUNCATE",
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "UPDATE",
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "DELETE",
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "INSERT",
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "REFERENCES",
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "TRIGGER",
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "TRUNCATE",
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "UPDATE",
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "DELETE",
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "INSERT",
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "REFERENCES",
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "TRIGGER",
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "TRUNCATE",
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "UPDATE",
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "DELETE",
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "INSERT",
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "REFERENCES",
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "TRIGGER",
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "TRUNCATE",
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "UPDATE",
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "DELETE",
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "INSERT",
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "REFERENCES",
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "TRIGGER",
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "TRUNCATE",
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "UPDATE",
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "DELETE",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_job_events"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "INSERT",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_job_events"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "REFERENCES",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_job_events"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_job_events"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "TRIGGER",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_job_events"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "TRUNCATE",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_job_events"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "UPDATE",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_job_events"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "DELETE",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_job_events"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "INSERT",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_job_events"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "REFERENCES",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_job_events"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_job_events"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "TRIGGER",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_job_events"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "TRUNCATE",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_job_events"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "UPDATE",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_job_events"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "DELETE",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_job_events"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "INSERT",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_job_events"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "REFERENCES",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_job_events"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_job_events"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "TRIGGER",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_job_events"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "TRUNCATE",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_job_events"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "UPDATE",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_job_events"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "DELETE",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "INSERT",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "REFERENCES",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "TRIGGER",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "TRUNCATE",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "UPDATE",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "DELETE",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "INSERT",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "REFERENCES",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "TRIGGER",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "TRUNCATE",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "UPDATE",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "DELETE",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "INSERT",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "REFERENCES",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "TRIGGER",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "TRUNCATE",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "UPDATE",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "DELETE",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "INSERT",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "REFERENCES",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "TRIGGER",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "TRUNCATE",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
+      "privilege_type": "UPDATE",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "DELETE",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "INSERT",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "REFERENCES",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "TRIGGER",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "TRUNCATE",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "UPDATE",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "DELETE",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "INSERT",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "REFERENCES",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "TRIGGER",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "TRUNCATE",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "UPDATE",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
+    },
+    {
+      "grantee": "postgres",
       "is_grantable": "YES",
       "privilege_type": "DELETE",
       "schema_name": "public",
@@ -33070,49 +35981,49 @@
     },
     {
       "grantee": "postgres",
-      "is_grantable": "YES",
+      "is_grantable": "NO",
       "privilege_type": "DELETE",
       "schema_name": "public",
       "table_name": "ops_manager_managers"
     },
     {
       "grantee": "postgres",
-      "is_grantable": "YES",
+      "is_grantable": "NO",
       "privilege_type": "INSERT",
       "schema_name": "public",
       "table_name": "ops_manager_managers"
     },
     {
       "grantee": "postgres",
-      "is_grantable": "YES",
+      "is_grantable": "NO",
       "privilege_type": "REFERENCES",
       "schema_name": "public",
       "table_name": "ops_manager_managers"
     },
     {
       "grantee": "postgres",
-      "is_grantable": "YES",
+      "is_grantable": "NO",
       "privilege_type": "SELECT",
       "schema_name": "public",
       "table_name": "ops_manager_managers"
     },
     {
       "grantee": "postgres",
-      "is_grantable": "YES",
+      "is_grantable": "NO",
       "privilege_type": "TRIGGER",
       "schema_name": "public",
       "table_name": "ops_manager_managers"
     },
     {
       "grantee": "postgres",
-      "is_grantable": "YES",
+      "is_grantable": "NO",
       "privilege_type": "TRUNCATE",
       "schema_name": "public",
       "table_name": "ops_manager_managers"
     },
     {
       "grantee": "postgres",
-      "is_grantable": "YES",
+      "is_grantable": "NO",
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "ops_manager_managers"
@@ -33162,6 +36073,55 @@
     {
       "grantee": "service_role",
       "is_grantable": "NO",
+      "privilege_type": "UPDATE",
+      "schema_name": "public",
+      "table_name": "ops_manager_managers"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "DELETE",
+      "schema_name": "public",
+      "table_name": "ops_manager_managers"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "INSERT",
+      "schema_name": "public",
+      "table_name": "ops_manager_managers"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "REFERENCES",
+      "schema_name": "public",
+      "table_name": "ops_manager_managers"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "ops_manager_managers"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "TRIGGER",
+      "schema_name": "public",
+      "table_name": "ops_manager_managers"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "TRUNCATE",
+      "schema_name": "public",
+      "table_name": "ops_manager_managers"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "ops_manager_managers"
@@ -33315,49 +36275,49 @@
     },
     {
       "grantee": "postgres",
-      "is_grantable": "YES",
+      "is_grantable": "NO",
       "privilege_type": "DELETE",
       "schema_name": "public",
       "table_name": "ops_manager_shared_enrollment_rate_limits"
     },
     {
       "grantee": "postgres",
-      "is_grantable": "YES",
+      "is_grantable": "NO",
       "privilege_type": "INSERT",
       "schema_name": "public",
       "table_name": "ops_manager_shared_enrollment_rate_limits"
     },
     {
       "grantee": "postgres",
-      "is_grantable": "YES",
+      "is_grantable": "NO",
       "privilege_type": "REFERENCES",
       "schema_name": "public",
       "table_name": "ops_manager_shared_enrollment_rate_limits"
     },
     {
       "grantee": "postgres",
-      "is_grantable": "YES",
+      "is_grantable": "NO",
       "privilege_type": "SELECT",
       "schema_name": "public",
       "table_name": "ops_manager_shared_enrollment_rate_limits"
     },
     {
       "grantee": "postgres",
-      "is_grantable": "YES",
+      "is_grantable": "NO",
       "privilege_type": "TRIGGER",
       "schema_name": "public",
       "table_name": "ops_manager_shared_enrollment_rate_limits"
     },
     {
       "grantee": "postgres",
-      "is_grantable": "YES",
+      "is_grantable": "NO",
       "privilege_type": "TRUNCATE",
       "schema_name": "public",
       "table_name": "ops_manager_shared_enrollment_rate_limits"
     },
     {
       "grantee": "postgres",
-      "is_grantable": "YES",
+      "is_grantable": "NO",
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "ops_manager_shared_enrollment_rate_limits"
@@ -33412,50 +36372,99 @@
       "table_name": "ops_manager_shared_enrollment_rate_limits"
     },
     {
-      "grantee": "postgres",
+      "grantee": "supabase_admin",
       "is_grantable": "YES",
+      "privilege_type": "DELETE",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_rate_limits"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "INSERT",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_rate_limits"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "REFERENCES",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_rate_limits"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_rate_limits"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "TRIGGER",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_rate_limits"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "TRUNCATE",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_rate_limits"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "UPDATE",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_rate_limits"
+    },
+    {
+      "grantee": "postgres",
+      "is_grantable": "NO",
       "privilege_type": "DELETE",
       "schema_name": "public",
       "table_name": "ops_manager_shared_enrollment_windows"
     },
     {
       "grantee": "postgres",
-      "is_grantable": "YES",
+      "is_grantable": "NO",
       "privilege_type": "INSERT",
       "schema_name": "public",
       "table_name": "ops_manager_shared_enrollment_windows"
     },
     {
       "grantee": "postgres",
-      "is_grantable": "YES",
+      "is_grantable": "NO",
       "privilege_type": "REFERENCES",
       "schema_name": "public",
       "table_name": "ops_manager_shared_enrollment_windows"
     },
     {
       "grantee": "postgres",
-      "is_grantable": "YES",
+      "is_grantable": "NO",
       "privilege_type": "SELECT",
       "schema_name": "public",
       "table_name": "ops_manager_shared_enrollment_windows"
     },
     {
       "grantee": "postgres",
-      "is_grantable": "YES",
+      "is_grantable": "NO",
       "privilege_type": "TRIGGER",
       "schema_name": "public",
       "table_name": "ops_manager_shared_enrollment_windows"
     },
     {
       "grantee": "postgres",
-      "is_grantable": "YES",
+      "is_grantable": "NO",
       "privilege_type": "TRUNCATE",
       "schema_name": "public",
       "table_name": "ops_manager_shared_enrollment_windows"
     },
     {
       "grantee": "postgres",
-      "is_grantable": "YES",
+      "is_grantable": "NO",
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "ops_manager_shared_enrollment_windows"
@@ -33505,6 +36514,55 @@
     {
       "grantee": "service_role",
       "is_grantable": "NO",
+      "privilege_type": "UPDATE",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "DELETE",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "INSERT",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "REFERENCES",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "TRIGGER",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "TRUNCATE",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "ops_manager_shared_enrollment_windows"
@@ -33609,49 +36667,49 @@
     },
     {
       "grantee": "postgres",
-      "is_grantable": "YES",
+      "is_grantable": "NO",
       "privilege_type": "DELETE",
       "schema_name": "public",
       "table_name": "ops_manager_trusted_devices"
     },
     {
       "grantee": "postgres",
-      "is_grantable": "YES",
+      "is_grantable": "NO",
       "privilege_type": "INSERT",
       "schema_name": "public",
       "table_name": "ops_manager_trusted_devices"
     },
     {
       "grantee": "postgres",
-      "is_grantable": "YES",
+      "is_grantable": "NO",
       "privilege_type": "REFERENCES",
       "schema_name": "public",
       "table_name": "ops_manager_trusted_devices"
     },
     {
       "grantee": "postgres",
-      "is_grantable": "YES",
+      "is_grantable": "NO",
       "privilege_type": "SELECT",
       "schema_name": "public",
       "table_name": "ops_manager_trusted_devices"
     },
     {
       "grantee": "postgres",
-      "is_grantable": "YES",
+      "is_grantable": "NO",
       "privilege_type": "TRIGGER",
       "schema_name": "public",
       "table_name": "ops_manager_trusted_devices"
     },
     {
       "grantee": "postgres",
-      "is_grantable": "YES",
+      "is_grantable": "NO",
       "privilege_type": "TRUNCATE",
       "schema_name": "public",
       "table_name": "ops_manager_trusted_devices"
     },
     {
       "grantee": "postgres",
-      "is_grantable": "YES",
+      "is_grantable": "NO",
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "ops_manager_trusted_devices"
@@ -33701,6 +36759,55 @@
     {
       "grantee": "service_role",
       "is_grantable": "NO",
+      "privilege_type": "UPDATE",
+      "schema_name": "public",
+      "table_name": "ops_manager_trusted_devices"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "DELETE",
+      "schema_name": "public",
+      "table_name": "ops_manager_trusted_devices"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "INSERT",
+      "schema_name": "public",
+      "table_name": "ops_manager_trusted_devices"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "REFERENCES",
+      "schema_name": "public",
+      "table_name": "ops_manager_trusted_devices"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "ops_manager_trusted_devices"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "TRIGGER",
+      "schema_name": "public",
+      "table_name": "ops_manager_trusted_devices"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
+      "privilege_type": "TRUNCATE",
+      "schema_name": "public",
+      "table_name": "ops_manager_trusted_devices"
+    },
+    {
+      "grantee": "supabase_admin",
+      "is_grantable": "YES",
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "ops_manager_trusted_devices"
@@ -38690,6 +41797,60 @@
       "rls_forced": true,
       "schema_name": "public",
       "table_name": "foundation_removal_archive"
+    },
+    {
+      "comment": "Private object-storage metadata; binary data is never stored inline in PostgreSQL.",
+      "partition_key": null,
+      "relation_kind": "r",
+      "rls_enabled": true,
+      "rls_forced": true,
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
+      "comment": "Private persistent Gemini Console conversations scoped to a server-authenticated manager identity.",
+      "partition_key": null,
+      "relation_kind": "r",
+      "rls_enabled": true,
+      "rls_forced": true,
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations"
+    },
+    {
+      "comment": null,
+      "partition_key": null,
+      "relation_kind": "r",
+      "rls_enabled": true,
+      "rls_forced": true,
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
+      "comment": null,
+      "partition_key": null,
+      "relation_kind": "r",
+      "rls_enabled": true,
+      "rls_forced": true,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_job_events"
+    },
+    {
+      "comment": "Durable controlled repair authorization and execution evidence. Browser input cannot supply shell commands.",
+      "partition_key": null,
+      "relation_kind": "r",
+      "rls_enabled": true,
+      "rls_forced": true,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "comment": null,
+      "partition_key": null,
+      "relation_kind": "r",
+      "rls_enabled": true,
+      "rls_forced": true,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
     },
     {
       "comment": null,
