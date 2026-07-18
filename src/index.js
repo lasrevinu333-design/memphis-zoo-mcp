@@ -58,7 +58,7 @@ const SCAN_RPC_ALLOWLIST = new Set([
 
 const SCAN_CONTRACT_VERSION = "scan.v2";
 const DASHBOARD_CONTRACT_VERSION = "dashboard.v1";
-const MESSAGING_CONTRACT_VERSION = "messaging.v4";
+const MESSAGING_CONTRACT_VERSION = "messaging.v5";
 const SCHEDULE_CONTRACT_VERSION = "schedule.v2";
 const GUEST_REPORTS_CONTRACT_VERSION = "guest-reports.v1";
 const FEEDBACK_CONTRACT_VERSION = "feedback.v1";
