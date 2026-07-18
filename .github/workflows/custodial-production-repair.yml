@@ -60,5 +60,5 @@ jobs:
           npm run --silent test:schema-fingerprint
       - name: Empty database migration rebuild
         env:
-          SCHEMA_REBUILD_DOCKER_IMAGE: public.ecr.aws/supabase/postgres:17.6.1.143
+          SCHEMA_REBUILD_DOCKER_IMAGE: supabase/postgres:17.6.1.143
         run: npm run --silent test:empty-db-rebuild
