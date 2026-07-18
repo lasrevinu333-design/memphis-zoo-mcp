@@ -379,7 +379,7 @@ export async function callGemini(messages) {
 import {
   pageShell, loginPage, logIconImg, reminderIconImg, contactsIconImg,
   settingsIconImg, moxieAvatarImg, logButtonLink, reminderButtonLink,
-  contactsButtonLink, settingsButtonLink, opsHubButtons,
+  contactsButtonLink, settingsButtonLink,
 } from "./moxie-templates.js";
 
 // ---------------------------------------------------------------------------
@@ -773,10 +773,6 @@ function buildChatPage(chatState) {
         <div class="quick-actions-cluster annie-actions-grid">
           ${logButtonLink()}${reminderButtonLink()}${contactsButtonLink()}${settingsButtonLink()}
         </div>
-      </section>
-      <section class="quick-actions-section ops-hub-section" aria-labelledby="ops-hub-title">
-        <h2 id="ops-hub-title" class="shortcut-section-title">Ops Hub shortcuts</h2>
-        <div class="quick-actions-cluster ops-hub-grid">${opsHubButtons()}</div>
       </section>
     </aside>
   </div>
