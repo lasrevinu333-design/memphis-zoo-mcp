@@ -1,4 +1,4 @@
-import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import { loginGeminiAdmin, verifyGeminiAdminToken } from "./gemini-admin-auth.js";
 
 const MEMPHIS_TIME_ZONE = "America/Chicago";
@@ -17,8 +17,14 @@ const PAIRING_TOKEN_MAX_TTL_SECONDS = 15 * 60;
 const MANAGER_INVITE_DEFAULT_TTL_SECONDS = 24 * 60 * 60;
 const MANAGER_INVITE_MIN_TTL_SECONDS = 5 * 60;
 const MANAGER_INVITE_MAX_TTL_SECONDS = 7 * 24 * 60 * 60;
+const MANAGER_CODE_DEFAULT_TTL_SECONDS = 15 * 60;
+const MANAGER_CODE_MIN_TTL_SECONDS = 60;
+const MANAGER_CODE_MAX_TTL_SECONDS = 24 * 60 * 60;
+const MANAGER_CODE_ATTEMPT_LIMIT = 5;
+const MANAGER_CODE_LOCKOUT_SECONDS = 15 * 60;
 const MANAGER_ROLES = new Set(["OPS_MANAGER", "DIRECTOR", "SECURITY_ADMIN"]);
 const enrollmentAttempts = new Map();
+const managerCodeAttempts = new Map();
 
 function safeEqual(a, b) {
   const left = Buffer.from(String(a || ""));
@@ -92,7 +98,26 @@ function requireManagerAdminRole(managerOrSession) {
   return hasManagerRole(managerOrSession, "DIRECTOR") || hasManagerRole(managerOrSession, "SECURITY_ADMIN");
 }
 
-function managerPublicView(row, devices = []) {
+function managerEnrollmentCodePublicView(row) {
+  if (!row) return null;
+  return {
+    code_id: String(row.id || row.code_id || ""),
+    manager_id: String(row.manager_id || ""),
+    role_snapshot: normalizeManagerRole(row.role_snapshot || row.role),
+    created_by_manager_id: row.created_by_manager_id || null,
+    created_at: row.created_at || null,
+    expires_at: row.expires_at || null,
+    consumed_at: row.consumed_at || null,
+    revoked_at: row.revoked_at || null,
+    revoked_reason: row.revoked_reason || null,
+    status: String(row.status || "active"),
+    attempt_count: Number(row.attempt_count || 0),
+    max_attempts: Number(row.max_attempts || MANAGER_CODE_ATTEMPT_LIMIT),
+    active: !row.consumed_at && !row.revoked_at && String(row.status || "active") === "active" && (!row.expires_at || Date.parse(row.expires_at) > Date.now()),
+  };
+}
+
+function managerPublicView(row, devices = [], enrollmentCodes = []) {
   if (!row) return null;
   const roles = normalizeManagerRoles(row.roles);
   return {
@@ -107,6 +132,7 @@ function managerPublicView(row, devices = []) {
     created_at: row.created_at || null,
     last_access_at: row.last_access_at || null,
     devices,
+    enrollment_codes: enrollmentCodes.map(managerEnrollmentCodePublicView).filter(Boolean),
   };
 }
 
@@ -157,6 +183,28 @@ function normalizePairingToken(value) {
   const token = String(value || "").trim();
   if (!/^[a-f0-9]{64}$/i.test(token)) return "";
   return token.toLowerCase();
+}
+
+function normalizeManagerCode(value) {
+  const normalized = String(value || "").trim().replace(/[\s-]+/g, "");
+  if (!/^\d{8}$/.test(normalized)) return "";
+  return normalized;
+}
+
+function requestManagerCode(req) {
+  return normalizeManagerCode(
+    req?.body?.manager_code
+      || req?.body?.managerCode
+      || req?.body?.one_time_code
+      || req?.body?.oneTimeCode
+      || req?.body?.code
+      || ""
+  );
+}
+
+function formatManagerCode(code) {
+  const normalized = normalizeManagerCode(code);
+  return normalized ? `${normalized.slice(0, 4)} ${normalized.slice(4)}` : "";
 }
 
 function requestPairingToken(req) {
@@ -216,6 +264,15 @@ function getManagerInviteTtlSeconds(value) {
   ));
 }
 
+function getManagerCodeTtlSeconds(value) {
+  return Math.floor(boundedNumber(
+    value,
+    MANAGER_CODE_DEFAULT_TTL_SECONDS,
+    MANAGER_CODE_MIN_TTL_SECONDS,
+    MANAGER_CODE_MAX_TTL_SECONDS,
+  ));
+}
+
 function getManagerHubUrl(env = process.env) {
   return String(
     env.OPS_MANAGER_HUB_URL
@@ -238,6 +295,18 @@ function hmacHex(secret, value) {
 
 function sha256Hex(value) {
   return createHash("sha256").update(String(value || "")).digest("hex");
+}
+
+function managerCodeHash(code, env = process.env) {
+  const normalized = normalizeManagerCode(code);
+  if (!normalized) throw Object.assign(new Error("A valid eight-digit manager code is required."), { status: 400 });
+  const secret = getSessionSecret(env);
+  if (!secret) throw Object.assign(new Error("Ops Manager session secret is not configured."), { status: 503 });
+  return hmacHex(secret, `ops-manager-enrollment-code:v1:${normalized}`);
+}
+
+function generateManagerCode() {
+  return String(randomInt(0, 100_000_000)).padStart(8, "0");
 }
 
 function signOpsPayload(payload, { env = process.env } = {}) {
@@ -567,6 +636,57 @@ function clearEnrollmentAttempts(req) {
   enrollmentAttempts.delete(enrollmentRateKey(req));
 }
 
+function managerCodeRateKey(req, env = process.env) {
+  const material = `${requestIp(req) || "unknown"}|${requestUserAgent(req) || "unknown"}|${requestDeviceId(req) || "unknown"}`;
+  return privacyHash(material, env, "manager-code-rate") || sha256Hex(`manager-code-rate:${material}`);
+}
+
+async function readManagerCodeRateLimit(store, keyHash) {
+  if (store?.getManagerCodeRateLimit) return store.getManagerCodeRateLimit(keyHash);
+  const row = managerCodeAttempts.get(keyHash) || null;
+  if (!row) return null;
+  const first = Date.parse(row.first_failed_at || "");
+  if (Number.isFinite(first) && Date.now() - first >= ENROLLMENT_WINDOW_MS) {
+    managerCodeAttempts.delete(keyHash);
+    return null;
+  }
+  return row;
+}
+
+async function managerCodeRateAllowed(store, keyHash, now = Date.now()) {
+  const row = await readManagerCodeRateLimit(store, keyHash);
+  const lockedUntil = Date.parse(String(row?.locked_until || ""));
+  if (Number.isFinite(lockedUntil) && lockedUntil > now) {
+    return { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil((lockedUntil - now) / 1000)), row };
+  }
+  return { allowed: true, retryAfterSeconds: 0, row };
+}
+
+async function recordManagerCodeFailure(store, keyHash, metadata = {}) {
+  if (store?.recordManagerCodeFailure) return store.recordManagerCodeFailure(keyHash, metadata);
+  const now = Date.now();
+  const current = await readManagerCodeRateLimit(store, keyHash);
+  const nextCount = Number(current?.failure_count || 0) + 1;
+  const row = {
+    key_hash: keyHash,
+    failure_count: nextCount,
+    first_failed_at: current?.first_failed_at || new Date(now).toISOString(),
+    last_failed_at: new Date(now).toISOString(),
+    locked_until: nextCount >= MANAGER_CODE_ATTEMPT_LIMIT ? new Date(now + MANAGER_CODE_LOCKOUT_SECONDS * 1000).toISOString() : null,
+    metadata_json: metadata,
+  };
+  managerCodeAttempts.set(keyHash, row);
+  return row;
+}
+
+async function clearManagerCodeFailures(store, keyHash) {
+  if (store?.clearManagerCodeFailures) {
+    await store.clearManagerCodeFailures(keyHash);
+    return;
+  }
+  managerCodeAttempts.delete(keyHash);
+}
+
 function normalizeStoreRow(row) {
   if (!row || typeof row !== "object") return null;
   const manager = row.manager && typeof row.manager === "object" ? managerPublicView(row.manager) : null;
@@ -716,13 +836,137 @@ export function createSupabaseTrustedDeviceStore(supabase) {
         .order("display_name", { ascending: true });
       if (error) throw error;
       const devices = await this.listTrustedDevices();
+      const enrollmentCodes = this.listManagerEnrollmentCodes ? await this.listManagerEnrollmentCodes() : [];
       const devicesByManager = new Map();
       for (const device of devices) {
         if (!device.manager_id) continue;
         if (!devicesByManager.has(device.manager_id)) devicesByManager.set(device.manager_id, []);
         devicesByManager.get(device.manager_id).push(device);
       }
-      return (managers || []).map((row) => managerPublicView(row, devicesByManager.get(String(row.manager_id)) || []));
+      const codesByManager = new Map();
+      for (const code of enrollmentCodes) {
+        if (!code.manager_id) continue;
+        if (!codesByManager.has(code.manager_id)) codesByManager.set(code.manager_id, []);
+        codesByManager.get(code.manager_id).push(code);
+      }
+      return (managers || []).map((row) => managerPublicView(
+        row,
+        devicesByManager.get(String(row.manager_id)) || [],
+        codesByManager.get(String(row.manager_id)) || [],
+      ));
+    },
+    async listManagerEnrollmentCodes() {
+      const { data, error } = await supabase
+        .from("ops_manager_enrollment_codes")
+        .select("id,manager_id,role_snapshot,created_by_manager_id,created_at,expires_at,consumed_at,revoked_at,revoked_reason,status,attempt_count,max_attempts")
+        .order("created_at", { ascending: false });
+      if (error) {
+        if (String(error?.message || "").includes("ops_manager_enrollment_codes")) return [];
+        throw error;
+      }
+      return (data || []).map(managerEnrollmentCodePublicView).filter(Boolean);
+    },
+    async createManagerEnrollmentCode(record = {}) {
+      const ttlSeconds = getManagerCodeTtlSeconds(record.ttl_seconds || record.ttlSeconds);
+      const managerId = String(record.manager_id || record.managerId || "");
+      const manager = await getManager(managerId);
+      if (!manager?.active) throw Object.assign(new Error("Active manager record is required for one-time codes."), { status: 404 });
+      const role = normalizeManagerRole(record.role || record.role_snapshot || manager.role);
+      if (!manager.roles.includes(role)) throw Object.assign(new Error("One-time code role must match the named manager."), { status: 400 });
+      const insert = {
+        manager_id: managerId,
+        code_hash: String(record.code_hash || record.codeHash || "").trim().toLowerCase(),
+        role_snapshot: role,
+        created_by_manager_id: record.created_by_manager_id || null,
+        created_by_credential_id: record.created_by_credential_id || null,
+        expires_at: new Date(Date.now() + ttlSeconds * 1000).toISOString(),
+        max_attempts: Math.min(20, Math.max(1, Number.parseInt(String(record.max_attempts || record.maxAttempts || MANAGER_CODE_ATTEMPT_LIMIT), 10) || MANAGER_CODE_ATTEMPT_LIMIT)),
+        metadata_json: record.metadata_json && typeof record.metadata_json === "object" && !Array.isArray(record.metadata_json) ? record.metadata_json : {},
+      };
+      if (!/^[a-f0-9]{64}$/.test(insert.code_hash)) throw Object.assign(new Error("Valid code hash is required."), { status: 400 });
+      const { data, error } = await supabase
+        .from("ops_manager_enrollment_codes")
+        .insert(insert)
+        .select("id,manager_id,role_snapshot,created_by_manager_id,created_at,expires_at,consumed_at,revoked_at,revoked_reason,status,attempt_count,max_attempts")
+        .single();
+      if (error) throw error;
+      return { ok: true, ...managerEnrollmentCodePublicView(data), ttl_seconds: ttlSeconds, manager };
+    },
+    async revokeManagerEnrollmentCode(codeId, { reason = "manager_code_cancelled" } = {}) {
+      const { data, error } = await supabase
+        .from("ops_manager_enrollment_codes")
+        .update({ status: "revoked", revoked_at: new Date().toISOString(), revoked_reason: String(reason || "manager_code_cancelled").slice(0, 160) })
+        .eq("id", codeId)
+        .is("consumed_at", null)
+        .is("revoked_at", null)
+        .select("id,manager_id,role_snapshot,created_by_manager_id,created_at,expires_at,consumed_at,revoked_at,revoked_reason,status,attempt_count,max_attempts")
+        .maybeSingle();
+      if (error) throw error;
+      return managerEnrollmentCodePublicView(data);
+    },
+    async consumeManagerEnrollmentCode(record = {}) {
+      const { data, error } = await supabase.rpc("ops_manager_consume_enrollment_code", {
+        p_code_hash: String(record.code_hash || record.codeHash || "").trim().toLowerCase(),
+        p_credential_id: record.credential_id,
+        p_device_id: normalizeDeviceId(record.device_id || ""),
+        p_device_label: normalizeDeviceLabel(record.device_label || ""),
+        p_trust_token_hash: String(record.token_hash || ""),
+        p_user_agent_hash: record.user_agent_hash || null,
+        p_created_ip_hash: record.created_ip_hash || null,
+        p_platform_summary: String(record.platform_summary || "").slice(0, 160) || null,
+        p_expires_at: record.expires_at,
+        p_metadata_json: record.metadata_json && typeof record.metadata_json === "object" && !Array.isArray(record.metadata_json)
+          ? record.metadata_json
+          : {},
+      });
+      if (error) throw error;
+      return data;
+    },
+    async getManagerCodeRateLimit(keyHash) {
+      const { data, error } = await supabase
+        .from("ops_manager_enrollment_code_rate_limits")
+        .select("key_hash,failure_count,first_failed_at,last_failed_at,locked_until,metadata_json")
+        .eq("key_hash", keyHash)
+        .maybeSingle();
+      if (error) {
+        if (String(error?.message || "").includes("ops_manager_enrollment_code_rate_limits")) return null;
+        throw error;
+      }
+      return data || null;
+    },
+    async recordManagerCodeFailure(keyHash, metadata = {}) {
+      const current = await this.getManagerCodeRateLimit(keyHash);
+      const now = new Date();
+      const firstFailedAt = current?.first_failed_at && (now.getTime() - Date.parse(current.first_failed_at) < ENROLLMENT_WINDOW_MS)
+        ? current.first_failed_at
+        : now.toISOString();
+      const existingCount = firstFailedAt === current?.first_failed_at ? Number(current?.failure_count || 0) : 0;
+      const failureCount = existingCount + 1;
+      const lockedUntil = failureCount >= MANAGER_CODE_ATTEMPT_LIMIT
+        ? new Date(now.getTime() + MANAGER_CODE_LOCKOUT_SECONDS * 1000).toISOString()
+        : null;
+      const row = {
+        key_hash: keyHash,
+        failure_count: failureCount,
+        first_failed_at: firstFailedAt,
+        last_failed_at: now.toISOString(),
+        locked_until: lockedUntil,
+        metadata_json: metadata && typeof metadata === "object" && !Array.isArray(metadata) ? metadata : {},
+      };
+      const { data, error } = await supabase
+        .from("ops_manager_enrollment_code_rate_limits")
+        .upsert(row, { onConflict: "key_hash" })
+        .select("key_hash,failure_count,first_failed_at,last_failed_at,locked_until,metadata_json")
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    async clearManagerCodeFailures(keyHash) {
+      const { error } = await supabase
+        .from("ops_manager_enrollment_code_rate_limits")
+        .delete()
+        .eq("key_hash", keyHash);
+      if (error) throw error;
     },
     async createManagerInvitation(record = {}) {
       const token = randomBytes(32).toString("hex");
@@ -1143,6 +1387,98 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
     }
   });
 
+  app.post("/auth-api/ops/managers/:managerId/enrollment-codes", async (req, res) => {
+    try {
+      const activeStore = trustedDeviceStoreOrThrow(store);
+      const actor = await authenticateTrustedManagerDevice(req, { store: activeStore, env });
+      if (!actor.ok) { sendTrustedManagerAuthFailure(res, actor); return; }
+      if (!requireManagerAdminRole(actor.session)) {
+        res.status(403).json({ ok: false, error: "Director or Security Admin manager access is required." });
+        return;
+      }
+      if (!activeStore.createManagerEnrollmentCode) {
+        throw Object.assign(new Error("One-time manager codes are not available on this deployment."), { status: 503 });
+      }
+      const managerId = String(req.params?.managerId || "");
+      if (!/^[0-9a-f-]{36}$/i.test(managerId)) throw Object.assign(new Error("managerId must be a UUID."), { status: 400 });
+      let created = null;
+      let code = "";
+      let lastError = null;
+      for (let attempt = 0; attempt < 12 && !created; attempt += 1) {
+        code = generateManagerCode();
+        try {
+          created = await activeStore.createManagerEnrollmentCode({
+            manager_id: managerId,
+            role: req.body?.role || req.body?.role_snapshot,
+            ttl_seconds: req.body?.ttl_seconds || req.body?.ttlSeconds || MANAGER_CODE_DEFAULT_TTL_SECONDS,
+            max_attempts: req.body?.max_attempts || req.body?.maxAttempts || MANAGER_CODE_ATTEMPT_LIMIT,
+            code_hash: managerCodeHash(code, env),
+            created_by_manager_id: actor.session.manager_id,
+            created_by_credential_id: actor.credentialId,
+            metadata_json: {
+              created_from: "manager_access_code_ui",
+              user_agent_hash: privacyHash(requestUserAgent(req), env, "ua"),
+              ip_hash: privacyHash(requestIp(req), env, "ip"),
+            },
+          });
+        } catch (error) {
+          lastError = error;
+          if (String(error?.code || "") !== "23505" && !String(error?.message || "").toLowerCase().includes("duplicate")) throw error;
+        }
+      }
+      if (!created) throw Object.assign(lastError || new Error("One-time manager code could not be generated."), { status: 500 });
+      await auditTrustedDevice(activeStore, authEvent(req, {
+        credentialId: actor.credentialId,
+        deviceId: actor.session.device_id,
+        eventType: "manager_enrollment_code_created",
+        success: true,
+        detail: { code_id: created.code_id, manager_id: managerId, role: created.role_snapshot, ttl_seconds: created.ttl_seconds },
+        env,
+      }));
+      res.status(200).json({
+        ok: true,
+        data: {
+          code_id: created.code_id,
+          one_time_code: code,
+          display_code: formatManagerCode(code),
+          expires_at: created.expires_at,
+          ttl_seconds: created.ttl_seconds,
+          max_attempts: created.max_attempts,
+          role_snapshot: created.role_snapshot,
+          manager: created.manager,
+        },
+      });
+    } catch (error) {
+      sendAuthError(res, error, "One-time manager code could not be created.");
+    }
+  });
+
+  app.post("/auth-api/ops/manager-codes/:codeId/revoke", async (req, res) => {
+    try {
+      const activeStore = trustedDeviceStoreOrThrow(store);
+      const actor = await authenticateTrustedManagerDevice(req, { store: activeStore, env });
+      if (!actor.ok) { sendTrustedManagerAuthFailure(res, actor); return; }
+      if (!requireManagerAdminRole(actor.session)) {
+        res.status(403).json({ ok: false, error: "Director or Security Admin manager access is required." });
+        return;
+      }
+      const codeId = String(req.params?.codeId || "");
+      if (!/^[0-9a-f-]{36}$/i.test(codeId)) throw Object.assign(new Error("codeId must be a UUID."), { status: 400 });
+      const revoked = activeStore.revokeManagerEnrollmentCode ? await activeStore.revokeManagerEnrollmentCode(codeId, { reason: req.body?.reason || "manager_cancelled_code" }) : null;
+      await auditTrustedDevice(activeStore, authEvent(req, {
+        credentialId: actor.credentialId,
+        deviceId: actor.session.device_id,
+        eventType: "manager_enrollment_code_revoked",
+        success: true,
+        detail: { code_id: codeId, revoked: Boolean(revoked) },
+        env,
+      }));
+      res.status(200).json({ ok: true, data: { revoked: Boolean(revoked), code: revoked } });
+    } catch (error) {
+      sendAuthError(res, error, "One-time manager code could not be cancelled.");
+    }
+  });
+
   app.post("/auth-api/ops/managers/:managerId/invitations", async (req, res) => {
     try {
       const activeStore = trustedDeviceStoreOrThrow(store);
@@ -1211,6 +1547,110 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
       res.status(200).json({ ok: true, data: { revoked: Boolean(revoked), invitation: revoked } });
     } catch (error) {
       sendAuthError(res, error, "Manager invitation could not be revoked.");
+    }
+  });
+
+  app.post("/auth-api/ops/manager-codes/consume", async (req, res) => {
+    const genericError = "That one-time manager code is invalid, expired, or already used.";
+    try {
+      const activeStore = trustedDeviceStoreOrThrow(store);
+      const rateKey = managerCodeRateKey(req, env);
+      if (!isAllowedManagerInviteOrigin(req, env)) throw Object.assign(new Error("Ops Manager codes cannot be consumed from this origin."), { status: 403 });
+      const rate = await managerCodeRateAllowed(activeStore, rateKey);
+      if (!rate.allowed) {
+        res.setHeader?.("Retry-After", String(rate.retryAfterSeconds || MANAGER_CODE_LOCKOUT_SECONDS));
+        res.status(429).json({ ok: false, error: "Too many attempts. Try again later." });
+        return;
+      }
+      if (!activeStore.consumeManagerEnrollmentCode) {
+        throw Object.assign(new Error("One-time manager codes are not available on this deployment."), { status: 503 });
+      }
+      const managerCode = requestManagerCode(req);
+      if (!managerCode) {
+        const limit = await recordManagerCodeFailure(activeStore, rateKey, { reason: "malformed" });
+        if (Date.parse(String(limit?.locked_until || "")) > Date.now()) res.setHeader?.("Retry-After", String(MANAGER_CODE_LOCKOUT_SECONDS));
+        res.status(Date.parse(String(limit?.locked_until || "")) > Date.now() ? 429 : 401).json({ ok: false, error: genericError });
+        return;
+      }
+      const deviceId = requestDeviceId(req);
+      if (!deviceId) throw Object.assign(new Error("A stable manager device ID is required."), { status: 400 });
+      const deviceLabel = requestDeviceLabel(req) || normalizeDeviceLabel(req.body?.device_label || req.body?.deviceLabel || "") || deviceId;
+      const credentialId = randomUUID();
+      const secret = randomBytes(32).toString("base64url");
+      const now = new Date();
+      const expiresAt = new Date(now.getTime() + getTrustTtlMs(env)).toISOString();
+      const data = await activeStore.consumeManagerEnrollmentCode({
+        code_hash: managerCodeHash(managerCode, env),
+        credential_id: credentialId,
+        device_id: deviceId,
+        device_label: deviceLabel,
+        token_hash: trustTokenHash(secret, env),
+        user_agent_hash: privacyHash(requestUserAgent(req), env, "ua"),
+        created_ip_hash: privacyHash(requestIp(req), env, "ip"),
+        platform_summary: platformSummary(req),
+        expires_at: expiresAt,
+        metadata_json: {
+          enrolled_by: "one_time_manager_code",
+          user_agent_hash: privacyHash(requestUserAgent(req), env, "ua"),
+          ip_hash: privacyHash(requestIp(req), env, "ip"),
+          platform_summary: platformSummary(req),
+        },
+      });
+      if (!data?.ok) {
+        const limit = await recordManagerCodeFailure(activeStore, rateKey, { reason: String(data?.reason || "rejected").slice(0, 80), status: Number(data?.status) || 401 });
+        const locked = Date.parse(String(limit?.locked_until || "")) > Date.now() || Number(data?.status) === 429;
+        if (locked) res.setHeader?.("Retry-After", String(MANAGER_CODE_LOCKOUT_SECONDS));
+        const status = locked ? 429 : (Number(data?.status) === 410 ? 410 : 401);
+        res.status(status).json({ ok: false, error: status === 429 ? "Too many attempts. Try again later." : genericError });
+        return;
+      }
+      await clearManagerCodeFailures(activeStore, rateKey);
+      const trustValue = `${credentialId}.${secret}`;
+      setTrustCookie(res, trustValue, env);
+      const manager = data.manager || data.trusted_device?.manager || null;
+      const session = createOpsManagerSession({
+        credentialId,
+        deviceId: data.trusted_device?.device_id || deviceId,
+        manager,
+        accessLevel: requestedOpsAccessLevel(req),
+        maximumAccessLevel: data.trusted_device?.max_access_level || "full_access",
+        authMode: "trusted_device",
+        env,
+        now,
+      });
+      await auditTrustedDevice(activeStore, authEvent(req, {
+        credentialId,
+        deviceId,
+        eventType: "device_enrolled_by_manager_code",
+        success: true,
+        detail: {
+          code_id: data.code_id || data.trusted_device?.manager_enrollment_code_id || null,
+          manager_id: manager?.manager_id || data.trusted_device?.manager_id || null,
+          maximum_access_level: data.trusted_device?.max_access_level || "full_access",
+        },
+        env,
+      }));
+      res.status(200).json({
+        ok: true,
+        data: {
+          session,
+          trusted_device: {
+            credential_id: credentialId,
+            device_id: deviceId,
+            device_label: deviceLabel,
+            expires_at: expiresAt,
+            max_access_level: data.trusted_device?.max_access_level || "full_access",
+            manager_id: manager?.manager_id || data.trusted_device?.manager_id || null,
+          },
+          manager,
+        },
+      });
+    } catch (error) {
+      if (Number(error?.status) && Number(error.status) < 500) {
+        res.status(Number(error.status)).json({ ok: false, error: error.message || genericError });
+        return;
+      }
+      sendAuthError(res, error, "Ops Manager code enrollment failed.");
     }
   });
 
@@ -1465,10 +1905,10 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
     await auditTrustedDevice(store, authEvent(req, {
       eventType: "legacy_enrollment_route_rejected",
       success: false,
-      detail: { reason: "one_time_pairing_required" },
+      detail: { reason: "one_time_manager_code_required" },
       env,
     }));
-    res.status(410).json({ ok: false, error: "Ops Manager enrollment uses one-time trusted-device pairing links." });
+    res.status(410).json({ ok: false, error: "Ops Manager enrollment uses one-time manager codes on the normal Hub URL." });
   });
 
   app.get("/auth-api/session", async (req, res) => {
@@ -1575,6 +2015,7 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
         passwordless_manager_access: config.passwordlessManagerAccess,
         operations_first: config.passwordlessManagerAccess,
         trusted_device_enrollment: !config.passwordlessManagerAccess && Boolean(store),
+        trusted_device_codes: !config.passwordlessManagerAccess && Boolean(store),
         trusted_device_pairing: !config.passwordlessManagerAccess && Boolean(store),
         access_token_ttl_seconds: Math.floor(config.accessTtlMs / 1000),
         trusted_device_ttl_days: Math.floor(config.trustTtlMs / 86_400_000),

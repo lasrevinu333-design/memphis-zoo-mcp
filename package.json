@@ -28,6 +28,7 @@
     "test:messaging-recovery": "node scripts/memphis-messaging-route-recovery-tests.mjs",
     "test:manager-open": "node scripts/manager-open-session-foundation-tests.mjs",
     "test:manager-onboarding": "node scripts/manager-passwordless-onboarding-tests.mjs",
+    "test:manager-codes": "node scripts/manager-one-time-code-tests.mjs",
     "test:device-security-app": "node scripts/device-security-app-tests.mjs",
     "test:moxie-route": "node scripts/moxie-route-tests.mjs",
     "test:schedule-source-type": "node scripts/schedule-source-type-contract-tests.mjs",

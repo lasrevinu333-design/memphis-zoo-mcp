@@ -434,12 +434,15 @@ function readMigration(name) {
 }
 const trustedDeviceMigration = readMigration("20260715180000_ops_manager_trusted_device_auth.sql");
 const pairingMigration = readMigration("20260717175320_ops_manager_pairing_links.sql");
+const managerCodeMigration = readMigration("20260717235932_ops_manager_one_time_codes.sql");
 assert.match(backendIndex, /installSharedAuthRoutes\(app, \{ setCors: setAdminApiCors, supabase: supabaseAdmin, trustedDeviceStore: opsTrustedDeviceStore \}\)/);
 assert.match(backendIndex, /Access-Control-Allow-Credentials/);
 assert.match(sharedAccess, /memphis_ops_trust/);
+assert.match(sharedAccess, /ops\/manager-codes\/consume/);
+assert.match(sharedAccess, /enrollment-codes/);
 assert.match(sharedAccess, /ops\/pairing\/consume/);
 assert.match(sharedAccess, /ops\/pairing-links/);
-assert.match(sharedAccess, /Ops Manager enrollment uses one-time trusted-device pairing links/);
+assert.match(sharedAccess, /Ops Manager enrollment uses one-time manager codes on the normal Hub URL/);
 assert.match(sharedAccess, /Ops Manager authentication is required on this deployment/);
 assert.match(sharedAccess, /operations_first/);
 assert.match(sharedAccess, /trusted_device/);
@@ -451,6 +454,9 @@ assert.match(pairingMigration, /ops_manager_pairing_tokens/);
 assert.match(pairingMigration, /ops_manager_create_pairing_token/);
 assert.match(pairingMigration, /ops_manager_consume_pairing_and_enroll/);
 assert.match(pairingMigration, /revoke all on table public\.ops_manager_pairing_tokens from public, anon, authenticated/);
+assert.match(managerCodeMigration, /ops_manager_enrollment_codes/);
+assert.match(managerCodeMigration, /ops_manager_consume_enrollment_code/);
+assert.match(managerCodeMigration, /revoke all on table public\.ops_manager_enrollment_codes from public, anon, authenticated/);
 
 const engineRoot = [
   process.env.ENGINE_FIXTURE_ROOT,
@@ -469,12 +475,15 @@ if (engineRoot) {
   assert.match(authHelper, /credentials:'include'/);
   assert.match(authHelper, /ops\/pairing\/consume/);
   assert.match(authHelper, /ops\/pairing-links/);
+  assert.match(authHelper, /ops\/manager-codes\/consume/);
   assert.doesNotMatch(authHelper, /ops\/enroll|promptForOneTimeEnrollment|Ops Manager password|Manager password|enrollOpsManagerDevice/);
-  assert.match(managerHub, /one-time pairing link/i);
+  assert.match(managerHub, /one-time manager code/i);
   assert.doesNotMatch(managerHub, /password/i);
   assert.match(managerAccess, /MANAGER ACCESS/);
-  assert.match(managerAccess, /Generate PC Invite/);
-  assert.match(managerAccess, /Display Invite QR/);
+  assert.match(managerAccess, /Generate One-Time Code/);
+  assert.match(managerAccess, /Copy Code/);
+  assert.match(managerAccess, /Cancel Unused Code/);
+  assert.doesNotMatch(managerAccess, /Generate PC Invite|Generate Phone Invite|Copy Invite Link|Display Invite QR|ops_pairing_token/);
   assert.match(deviceSecurity, /Security Admin unlock required/);
   assert.match(deviceSecurity, /Device Security password/);
   assert.doesNotMatch(deviceSecurity, /Generate Pairing Link/);
