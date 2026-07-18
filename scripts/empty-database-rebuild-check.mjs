@@ -24,7 +24,11 @@ if (adminUrl && !/(localhost|127\.0\.0\.1|memphis-rebuild|schema-rebuild|test|ci
 const root = resolve(new URL("..", import.meta.url).pathname);
 const migrationsDir = resolve(root, "supabase/migrations");
 const migrationFiles = readdirSync(migrationsDir).filter((name) => name.endsWith(".sql")).sort();
-const databaseName = `mz_schema_rebuild_${Date.now()}_${randomUUID().replaceAll("-", "").slice(0, 12)}`;
+const requestedDatabaseName = String(process.env.SCHEMA_REBUILD_DATABASE_NAME || "").trim();
+if (requestedDatabaseName && !/^mz_schema_rebuild_[a-zA-Z0-9_]+$/.test(requestedDatabaseName)) {
+  throw new Error("SCHEMA_REBUILD_DATABASE_NAME must use the disposable mz_schema_rebuild_* namespace.");
+}
+const databaseName = requestedDatabaseName || `mz_schema_rebuild_${Date.now()}_${randomUUID().replaceAll("-", "").slice(0, 12)}`;
 
 function quoteIdentifier(value) {
   return `"${String(value).replaceAll('"', '""')}"`;
@@ -218,36 +222,47 @@ async function verifyDockerConcurrency(database) {
        join public.msg_users u on u.id = p.user_id
        where p.thread_id = (select id from room)
          and p.left_at is null
-         and u.ops_manager_id is not null)::text;
+         and u.messaging_identity_key = 'ops_manager_shared_identity_v1')::text || '|' ||
+      (select count(*) from public.msg_users where is_active is true and role='manager')::text;
   `).trim();
-  if (sharedRoomState !== "1|10") throw new Error(`Shared Ops Manager room invariant failed: ${sharedRoomState}`);
-  const teamRoomCalls = await Promise.all(Array.from({ length: 10 }, (_, index) => {
-    const managerId = `00000000-0000-4000-8000-${String(9001 + index).padStart(12, "0")}`;
-    return dockerPsqlConcurrent(database, `select id from public.msg_get_or_create_custodial_team_thread((select id from public.msg_users where ops_manager_id='${managerId}'::uuid));`);
-  }));
-  if (teamRoomCalls.some((result) => result.status !== 0)) {
-    throw new Error(`Concurrent Custodial Team room reconciliation failed:\n${teamRoomCalls.map((item) => item.stderr).filter(Boolean).join("\n")}`);
+  if (sharedRoomState !== "1|1|1") throw new Error(`Shared Ops Manager identity/room invariant failed: ${sharedRoomState}`);
+  const teamRoomCall = await dockerPsqlConcurrent(database, `select id from public.msg_get_or_create_custodial_team_thread((select id from public.msg_users where messaging_identity_key='ops_manager_shared_identity_v1'));`);
+  if (teamRoomCall.status === 0 || !/retired/i.test(teamRoomCall.stderr)) {
+    throw new Error(`Retired Custodial Team room entry point did not fail closed: ${teamRoomCall.stderr}`);
   }
-  const teamRoomIds = teamRoomCalls.flatMap(outputLines);
-  if (teamRoomIds.length !== 10 || new Set(teamRoomIds).size !== 1) {
-    throw new Error(`Concurrent all-staff requests did not converge on one room: ${JSON.stringify(teamRoomIds)}`);
-  }
+  dockerPsql(database, `
+    insert into public.employees(id,employee_code,display_name,active,role)
+    values
+      ('00000000-0000-4000-8000-000000009101','EMP99101','Rebuild Group One',true,'staff'),
+      ('00000000-0000-4000-8000-000000009102','EMP99102','Rebuild Group Two',true,'staff'),
+      ('00000000-0000-4000-8000-000000009103','EMP99103','Rebuild Group Three',true,'staff');
+    insert into public.msg_users(id,employee_id,display_name,role,is_active)
+    values
+      ('00000000-0000-4000-8000-000000009111','00000000-0000-4000-8000-000000009101','Rebuild Group One','employee',true),
+      ('00000000-0000-4000-8000-000000009112','00000000-0000-4000-8000-000000009102','Rebuild Group Two','employee',true),
+      ('00000000-0000-4000-8000-000000009113','00000000-0000-4000-8000-000000009103','Rebuild Group Three','employee',true);
+    insert into public.msg_device_assignments(device_identifier,msg_user_id,is_active)
+    values
+      ('REBUILD-GROUP-DEVICE-1','00000000-0000-4000-8000-000000009111',true),
+      ('REBUILD-GROUP-DEVICE-2','00000000-0000-4000-8000-000000009112',true),
+      ('REBUILD-GROUP-DEVICE-3','00000000-0000-4000-8000-000000009113',true);
+  `);
   const groupOperationCalls = await Promise.all([
     dockerPsqlConcurrent(database, `select id from public.msg_create_group_thread_v2(
-      (select id from public.msg_users where ops_manager_id='00000000-0000-4000-8000-000000009001'::uuid),
+      '00000000-0000-4000-8000-000000009111'::uuid,
       'Concurrent Employee Group',
       array[
-        (select id from public.msg_users where ops_manager_id='00000000-0000-4000-8000-000000009002'::uuid),
-        (select id from public.msg_users where ops_manager_id='00000000-0000-4000-8000-000000009003'::uuid)
+        '00000000-0000-4000-8000-000000009112'::uuid,
+        '00000000-0000-4000-8000-000000009113'::uuid
       ],
       'thread:concurrent-empty-db-group'
     );`),
     dockerPsqlConcurrent(database, `select id from public.msg_create_group_thread_v2(
-      (select id from public.msg_users where ops_manager_id='00000000-0000-4000-8000-000000009001'::uuid),
+      '00000000-0000-4000-8000-000000009111'::uuid,
       'Concurrent Employee Group',
       array[
-        (select id from public.msg_users where ops_manager_id='00000000-0000-4000-8000-000000009002'::uuid),
-        (select id from public.msg_users where ops_manager_id='00000000-0000-4000-8000-000000009003'::uuid)
+        '00000000-0000-4000-8000-000000009112'::uuid,
+        '00000000-0000-4000-8000-000000009113'::uuid
       ],
       'thread:concurrent-empty-db-group'
     );`),
@@ -259,17 +274,42 @@ async function verifyDockerConcurrency(database) {
   if (groupIds.length !== 2 || new Set(groupIds).size !== 1) {
     throw new Error(`Concurrent group retries produced multiple conversations: ${JSON.stringify(groupIds)}`);
   }
-  const deletionMessageId = dockerPsql(database, `
+  const deletionThreadId = groupIds[0];
+  dockerPsql(database, `
     select id from public.msg_send_message(
+      '${deletionThreadId}'::uuid,
+      '00000000-0000-4000-8000-000000009111'::uuid,
+      'Concurrent conversation deletion test','text','{}'::jsonb,
+      '00000000-0000-4000-8000-000000009902'
+    );
+  `);
+  const threadDeletionCalls = await Promise.all([
+    dockerPsqlConcurrent(database, `select public.msg_delete_thread('${deletionThreadId}'::uuid,'00000000-0000-4000-8000-000000009111'::uuid,'00000000-0000-4000-8000-000000009903'::uuid);`),
+    dockerPsqlConcurrent(database, `select public.msg_delete_thread('${deletionThreadId}'::uuid,'00000000-0000-4000-8000-000000009111'::uuid,'00000000-0000-4000-8000-000000009903'::uuid);`),
+  ]);
+  if (threadDeletionCalls.some((result) => result.status !== 0)) {
+    throw new Error(`Concurrent conversation deletion failed:\n${threadDeletionCalls.map((item) => item.stderr).filter(Boolean).join("\n")}`);
+  }
+  const threadDeletionState = dockerPsql(database, `
+    select count(*)::text || '|' || bool_and(is_active is false)::text || '|' ||
+           bool_and(deletion_operation_id='00000000-0000-4000-8000-000000009903'::uuid)::text || '|' ||
+           (select bool_and(is_deleted and purge_after=deleted_at+interval '14 days') from public.msg_messages where thread_id='${deletionThreadId}'::uuid)::text
+    from public.msg_threads where id='${deletionThreadId}'::uuid;
+  `).trim();
+  if (threadDeletionState !== "1|true|true|true") {
+    throw new Error(`Concurrent conversation deletion invariant failed: ${threadDeletionState}`);
+  }
+  const deletionMessageId = dockerPsql(database, `
+    select id from public.msg_send_message_as_ops_manager(
+      '00000000-0000-4000-8000-000000009001'::uuid,
       (select id from public.msg_threads where system_key = 'ops_manager_shared_chat_v1'),
-      (select id from public.msg_users where ops_manager_id = '00000000-0000-4000-8000-000000009001'::uuid),
       'Concurrent deletion test', 'text', '{}'::jsonb,
       '00000000-0000-4000-8000-000000009901'
     );
   `).trim();
   const deletionCalls = await Promise.all([
-    dockerPsqlConcurrent(database, `select id from public.msg_delete_message('${deletionMessageId}'::uuid, (select id from public.msg_users where ops_manager_id = '00000000-0000-4000-8000-000000009001'::uuid));`),
-    dockerPsqlConcurrent(database, `select id from public.msg_delete_message('${deletionMessageId}'::uuid, (select id from public.msg_users where ops_manager_id = '00000000-0000-4000-8000-000000009002'::uuid));`),
+    dockerPsqlConcurrent(database, `select id from public.msg_delete_message('${deletionMessageId}'::uuid, (select id from public.msg_users where messaging_identity_key='ops_manager_shared_identity_v1'));`),
+    dockerPsqlConcurrent(database, `select id from public.msg_delete_message('${deletionMessageId}'::uuid, (select id from public.msg_users where messaging_identity_key='ops_manager_shared_identity_v1'));`),
   ]);
   if (deletionCalls.some((result) => result.status !== 0)) {
     throw new Error(`Concurrent message deletion failed:\n${deletionCalls.map((item) => item.stderr).filter(Boolean).join("\n")}`);
@@ -279,7 +319,7 @@ async function verifyDockerConcurrency(database) {
     from public.msg_messages where id = '${deletionMessageId}'::uuid;
   `).trim();
   if (deletionState !== "1|true|[deleted]|true") throw new Error(`Concurrent message deletion invariant failed: ${deletionState}`);
-  console.log("verified 10-way exact finish, two-worker outbox claims, restart lease recovery, two-browser Moxie CAS, atomic Moxie password rotation, 10-manager shared-room convergence, all-staff convergence, idempotent group creation, and concurrent idempotent message deletion");
+  console.log("verified 10-way exact finish, two-worker outbox claims, restart lease recovery, two-browser Moxie CAS, atomic Moxie password rotation, 10-manager shared-identity convergence, retired automatic team room, idempotent ordinary group creation, concurrent conversation deletion, and concurrent message deletion");
 }
 
 function runDocker(args, options = {}) {
@@ -307,11 +347,14 @@ function assertRebuildInvariants(result) {
   if (result.exact_finish_rpc !== true) failures.push("Exact session finish RPC is missing");
   if (result.manager_messaging_rpc !== true) failures.push("Server-derived manager messaging RPC is missing");
   if (result.manager_shared_messaging_rpc !== true) failures.push("Canonical shared Ops Manager messaging RPC is missing");
-  if (result.custodial_team_messaging_rpc !== true) failures.push("Canonical all-staff messaging RPC is missing");
+  if (result.custodial_team_retired_rpc !== true) failures.push("Fail-closed retired Custodial Team compatibility RPC is missing");
   if (result.employee_group_messaging_rpc !== true) failures.push("Idempotent employee group messaging RPC is missing");
   if (result.thread_client_operation !== true) failures.push("Stable group operation identity column is missing");
   if (result.team_or_group_public_execute !== false) failures.push("Team/group creation RPC is executable by public/anonymous/authenticated roles");
   if (result.message_change_cursor !== true) failures.push("Message cross-device change cursor is missing");
+  if (result.message_retention_columns !== true) failures.push("Deleted-message 14-day retention columns are missing");
+  if (result.thread_delete_rpc !== true) failures.push("Authoritative conversation deletion RPC is missing");
+  if (result.deleted_content_purge_rpc !== true) failures.push("Deleted-content retention purge RPC is missing");
   if (result.message_delete_public_execute !== false) failures.push("Message deletion RPC is executable by public/anonymous/authenticated roles");
   if (result.message_audit !== true) failures.push("Immutable message audit table is missing");
   if (result.notification_outbox !== true) failures.push("Operational notification outbox is missing");
@@ -343,11 +386,12 @@ declare
   v_manager_user_b public.msg_users%rowtype;
   v_shared_thread_a public.msg_threads%rowtype;
   v_shared_thread_b public.msg_threads%rowtype;
-  v_team_thread public.msg_threads%rowtype;
   v_group_thread_a public.msg_threads%rowtype;
   v_group_thread_b public.msg_threads%rowtype;
-  v_archive jsonb;
+  v_delete jsonb;
+  v_purge jsonb;
   v_message public.msg_messages%rowtype;
+  v_old_message public.msg_messages%rowtype;
 begin
   v_start := public.tool_start_session_v2(
     'REBUILD_FINISH',
@@ -432,13 +476,15 @@ begin
   insert into public.ops_manager_managers(manager_id, display_name, roles, active)
   values ('00000000-0000-4000-8000-00000000f107', 'Rebuild Messaging Manager', array['OPS_MANAGER','CUSTODIAL_MANAGER']::text[], true);
   v_manager_user := public.msg_ensure_ops_manager_user('00000000-0000-4000-8000-00000000f107');
-  if v_manager_user.ops_manager_id <> '00000000-0000-4000-8000-00000000f107'::uuid
+  if v_manager_user.messaging_identity_key <> 'ops_manager_shared_identity_v1'
+     or v_manager_user.ops_manager_id is not null
+     or v_manager_user.display_name <> 'Ops Manager'
      or v_manager_user.role <> 'manager' then
-    raise exception 'Manager messaging principal was not server-derived correctly: %', row_to_json(v_manager_user);
+    raise exception 'Shared manager messaging principal was not server-derived correctly: %', row_to_json(v_manager_user);
   end if;
   v_shared_thread_a := public.msg_get_or_create_ops_manager_thread('00000000-0000-4000-8000-00000000f107');
-  v_message := public.msg_send_message(
-    v_shared_thread_a.id, v_manager_user.id,
+  v_message := public.msg_send_message_as_ops_manager(
+    '00000000-0000-4000-8000-00000000f107', v_shared_thread_a.id,
     'Shared manager history before second manager joins', 'text', '{}'::jsonb,
     '00000000-0000-4000-8000-00000000f114'
   );
@@ -446,23 +492,27 @@ begin
   values ('00000000-0000-4000-8000-00000000f115', 'Rebuild Messaging Manager Two', array['OPS_MANAGER']::text[], true);
   v_manager_user_b := public.msg_ensure_ops_manager_user('00000000-0000-4000-8000-00000000f115');
   v_shared_thread_b := public.msg_get_or_create_ops_manager_thread('00000000-0000-4000-8000-00000000f115');
-  if v_shared_thread_a.id <> v_shared_thread_b.id
+  if v_manager_user.id <> v_manager_user_b.id
+     or v_shared_thread_a.id <> v_shared_thread_b.id
      or v_shared_thread_a.system_key <> 'ops_manager_shared_chat_v1'
-     or (select count(*) from public.msg_thread_participants where thread_id = v_shared_thread_a.id and left_at is null) <> 2 then
-    raise exception 'Ops Managers did not reconcile into one canonical shared room';
+     or (select count(*) from public.msg_thread_participants where thread_id = v_shared_thread_a.id and left_at is null) <> 1
+     or (select count(*) from public.msg_users where is_active is true and role='manager') <> 1 then
+    raise exception 'Ops Managers did not reconcile into one canonical public identity and shared room';
   end if;
   if not exists (
-    select 1 from public.msg_receipts
-    where message_id = v_message.id and user_id = v_manager_user_b.id
+    select 1 from public.msg_message_audit a
+    where a.message_id=v_message.id
+      and a.sender_user_id=v_manager_user.id
+      and a.sender_ops_manager_id='00000000-0000-4000-8000-00000000f107'::uuid
   ) then
-    raise exception 'Late-joining Ops Manager did not receive shared-room history receipt';
+    raise exception 'Named authenticated manager attribution was not preserved behind the shared public identity';
   end if;
   insert into public.msg_threads(id, thread_type, title, created_by_user_id, is_active)
   values ('00000000-0000-4000-8000-00000000f108', 'group', 'Rebuild messaging authority', v_manager_user.id, true);
   insert into public.msg_thread_participants(thread_id, user_id)
   values ('00000000-0000-4000-8000-00000000f108', v_manager_user.id);
-  v_message := public.msg_send_message(
-    '00000000-0000-4000-8000-00000000f108', v_manager_user.id,
+  v_message := public.msg_send_message_as_ops_manager(
+    '00000000-0000-4000-8000-00000000f107', '00000000-0000-4000-8000-00000000f108',
     'Manager authority audit test', 'text', '{}'::jsonb,
     '00000000-0000-4000-8000-00000000f109'
   );
@@ -475,38 +525,36 @@ begin
     raise exception 'Immutable manager message audit was not written in the message transaction';
   end if;
   insert into public.employees(id, employee_code, display_name, active, role)
-  values ('00000000-0000-4000-8000-00000000f117', 'EMP99117', 'Rebuild Ordinary Employee', true, 'staff');
+  values
+    ('00000000-0000-4000-8000-00000000f117', 'EMP99117', 'Rebuild Ordinary Employee', true, 'staff'),
+    ('00000000-0000-4000-8000-00000000f118', 'EMP99118', 'Rebuild Second Employee', true, 'staff');
   insert into public.msg_users(id, employee_id, display_name, role, is_active)
-  values (
-    '00000000-0000-4000-8000-00000000f116',
-    '00000000-0000-4000-8000-00000000f117',
-    'Rebuild Ordinary Employee',
-    'employee',
-    true
-  );
+  values
+    ('00000000-0000-4000-8000-00000000f116','00000000-0000-4000-8000-00000000f117','Rebuild Ordinary Employee','employee',true),
+    ('00000000-0000-4000-8000-00000000f119','00000000-0000-4000-8000-00000000f118','Rebuild Second Employee','employee',true);
   insert into public.msg_device_assignments(device_identifier, msg_user_id, is_active)
-  values ('REBUILD-MESSENGER-EMPLOYEE', '00000000-0000-4000-8000-00000000f116', true);
-  v_team_thread := public.msg_get_or_create_custodial_team_thread('00000000-0000-4000-8000-00000000f116');
-  if v_team_thread.system_key <> 'custodial_team_chat_v1'
-     or (select count(*) from public.msg_threads where system_key='custodial_team_chat_v1') <> 1
-     or not exists (
-       select 1 from public.msg_thread_participants
-       where thread_id=v_team_thread.id
-         and user_id='00000000-0000-4000-8000-00000000f116'::uuid
-         and left_at is null
-     ) then
-    raise exception 'Canonical Custodial Team room was not created for the employee';
+  values
+    ('REBUILD-MESSENGER-EMPLOYEE', '00000000-0000-4000-8000-00000000f116', true),
+    ('REBUILD-MESSENGER-EMPLOYEE-2', '00000000-0000-4000-8000-00000000f119', true);
+  if exists (select 1 from public.msg_threads where system_key='custodial_team_chat_v1') then
+    raise exception 'Retired Custodial Team singleton still exists';
   end if;
+  begin
+    perform public.msg_get_or_create_custodial_team_thread('00000000-0000-4000-8000-00000000f116');
+    raise exception 'Retired Custodial Team entry point created a conversation';
+  exception when feature_not_supported then
+    null;
+  end;
   v_group_thread_a := public.msg_create_group_thread_v2(
     '00000000-0000-4000-8000-00000000f116',
-    'Employee-created rebuild group',
-    array[v_manager_user.id, v_manager_user_b.id],
+    'Everyone',
+    array[v_manager_user.id, '00000000-0000-4000-8000-00000000f119'::uuid],
     'thread:empty-db-employee-group'
   );
   v_group_thread_b := public.msg_create_group_thread_v2(
     '00000000-0000-4000-8000-00000000f116',
-    'Employee-created rebuild group',
-    array[v_manager_user.id, v_manager_user_b.id],
+    'Everyone',
+    array[v_manager_user.id, '00000000-0000-4000-8000-00000000f119'::uuid],
     'thread:empty-db-employee-group'
   );
   if v_group_thread_a.id <> v_group_thread_b.id
@@ -514,31 +562,61 @@ begin
      or (select count(*) from public.msg_thread_participants where thread_id=v_group_thread_a.id and left_at is null) <> 3 then
     raise exception 'Employee group creation was not idempotent and exact';
   end if;
-  v_archive := public.msg_mark_thread_deleted(
-    v_group_thread_a.id,
-    '00000000-0000-4000-8000-00000000f116',
-    'REBUILD-FINISH-DEVICE'
-  );
-  if (v_archive ->> 'archived_on_device')::boolean is not true
-     or (v_archive ->> 'participant_left')::boolean is not false
-     or not exists (
-       select 1 from public.msg_thread_participants
-       where thread_id=v_group_thread_a.id
-         and user_id='00000000-0000-4000-8000-00000000f116'::uuid
-         and left_at is null
-     ) then
-    raise exception 'Conversation archive removed membership or failed confirmation: %', v_archive;
-  end if;
   begin
     perform public.msg_mark_thread_deleted(
-      v_team_thread.id,
+      v_group_thread_a.id,
       '00000000-0000-4000-8000-00000000f116',
       'REBUILD-FINISH-DEVICE'
     );
-    raise exception 'Required Custodial Team room was incorrectly archivable';
-  exception when check_violation then
+    raise exception 'Retired archive entry point accepted a conversation';
+  exception when feature_not_supported then
     null;
   end;
+
+  v_old_message := public.msg_send_message(
+    '00000000-0000-4000-8000-00000000f108',v_manager_user.id,
+    'Old but not deleted history must remain', 'text', '{}'::jsonb,
+    '00000000-0000-4000-8000-00000000f120'
+  );
+  update public.msg_messages
+  set sent_at=now()-interval '45 days',created_at=now()-interval '45 days',updated_at=now()-interval '45 days'
+  where id=v_old_message.id;
+
+  perform public.msg_send_message(
+    v_group_thread_a.id,'00000000-0000-4000-8000-00000000f116',
+    'Disposable deleted conversation content','text','{}'::jsonb,
+    '00000000-0000-4000-8000-00000000f121'
+  );
+  v_delete := public.msg_delete_thread(
+    v_group_thread_a.id,
+    '00000000-0000-4000-8000-00000000f116',
+    '00000000-0000-4000-8000-00000000f122'
+  );
+  if (v_delete->>'deleted')::boolean is not true
+     or (v_delete->>'replayed')::boolean is not false
+     or (select is_active from public.msg_threads where id=v_group_thread_a.id) is not false
+     or exists (select 1 from public.msg_messages where thread_id=v_group_thread_a.id and is_deleted is false) then
+    raise exception 'Conversation deletion was not authoritative for all participants: %',v_delete;
+  end if;
+  v_delete := public.msg_delete_thread(
+    v_group_thread_a.id,
+    '00000000-0000-4000-8000-00000000f116',
+    '00000000-0000-4000-8000-00000000f122'
+  );
+  if (v_delete->>'replayed')::boolean is not true then
+    raise exception 'Conversation delete retry was not idempotent: %',v_delete;
+  end if;
+  v_purge := public.msg_purge_deleted_content(((v_delete->>'deleted_at')::timestamptz)+interval '13 days',1000);
+  if not exists (select 1 from public.msg_threads where id=v_group_thread_a.id)
+     or not exists (select 1 from public.msg_messages where thread_id=v_group_thread_a.id) then
+    raise exception 'Deleted content was purged before the exact 14-day retention completed';
+  end if;
+  v_purge := public.msg_purge_deleted_content(((v_delete->>'deleted_at')::timestamptz)+interval '15 days',1000);
+  if exists (select 1 from public.msg_threads where id=v_group_thread_a.id)
+     or exists (select 1 from public.msg_messages where thread_id=v_group_thread_a.id)
+     or not exists (select 1 from public.msg_messages where id=v_old_message.id and is_deleted is false) then
+    raise exception 'Retention purge removed ordinary old history or failed to purge explicitly deleted content: %',v_purge;
+  end if;
   begin
     perform public.msg_delete_message(v_message.id, '00000000-0000-4000-8000-00000000f116');
     raise exception 'Ordinary employee deleted another sender''s message';
@@ -548,8 +626,8 @@ begin
   v_message := public.msg_delete_message(v_message.id, v_manager_user_b.id);
   if v_message.is_deleted is not true
      or v_message.body <> '[deleted]'
-     or v_message.updated_at is null
-     or not (v_message.metadata_json ? 'deleted_by')
+     or v_message.deleted_at is null
+     or v_message.purge_after <> v_message.deleted_at + interval '14 days'
      or (select count(*) from public.msg_messages where id = v_message.id) <> 1 then
     raise exception 'Manager message soft-delete did not preserve one authoritative tombstone: %', row_to_json(v_message);
   end if;
@@ -654,7 +732,7 @@ if (dockerContainer) {
         'exact_finish_rpc', to_regprocedure('public.tool_finish_session_exact(text,text,uuid,timestamp with time zone)') is not null,
         'manager_messaging_rpc', to_regprocedure('public.msg_ensure_ops_manager_user(uuid)') is not null,
         'manager_shared_messaging_rpc', to_regprocedure('public.msg_get_or_create_ops_manager_thread(uuid)') is not null,
-        'custodial_team_messaging_rpc', to_regprocedure('public.msg_get_or_create_custodial_team_thread(uuid)') is not null,
+        'custodial_team_retired_rpc', to_regprocedure('public.msg_get_or_create_custodial_team_thread(uuid)') is not null,
         'employee_group_messaging_rpc', to_regprocedure('public.msg_create_group_thread_v2(uuid,text,uuid[],text)') is not null,
         'thread_client_operation', exists(select 1 from information_schema.columns where table_schema='public' and table_name='msg_threads' and column_name='client_thread_id'),
         'team_or_group_public_execute', has_function_privilege('public', 'public.msg_get_or_create_custodial_team_thread(uuid)', 'EXECUTE')
@@ -664,6 +742,10 @@ if (dockerContainer) {
           or has_function_privilege('anon', 'public.msg_create_group_thread_v2(uuid,text,uuid[],text)', 'EXECUTE')
           or has_function_privilege('authenticated', 'public.msg_create_group_thread_v2(uuid,text,uuid[],text)', 'EXECUTE'),
         'message_change_cursor', exists(select 1 from information_schema.columns where table_schema='public' and table_name='msg_messages' and column_name='updated_at'),
+        'message_retention_columns', exists(select 1 from information_schema.columns where table_schema='public' and table_name='msg_messages' and column_name='deleted_at')
+          and exists(select 1 from information_schema.columns where table_schema='public' and table_name='msg_messages' and column_name='purge_after'),
+        'thread_delete_rpc', to_regprocedure('public.msg_delete_thread(uuid,uuid,uuid)') is not null,
+        'deleted_content_purge_rpc', to_regprocedure('public.msg_purge_deleted_content(timestamp with time zone,integer)') is not null,
         'message_delete_public_execute', has_function_privilege('public', 'public.msg_delete_message(uuid,uuid)', 'EXECUTE')
           or has_function_privilege('anon', 'public.msg_delete_message(uuid,uuid)', 'EXECUTE')
           or has_function_privilege('authenticated', 'public.msg_delete_message(uuid,uuid)', 'EXECUTE'),
@@ -744,7 +826,7 @@ try {
         to_regprocedure('public.tool_finish_session_exact(text,text,uuid,timestamp with time zone)') is not null as exact_finish_rpc,
         to_regprocedure('public.msg_ensure_ops_manager_user(uuid)') is not null as manager_messaging_rpc,
         to_regprocedure('public.msg_get_or_create_ops_manager_thread(uuid)') is not null as manager_shared_messaging_rpc,
-        to_regprocedure('public.msg_get_or_create_custodial_team_thread(uuid)') is not null as custodial_team_messaging_rpc,
+        to_regprocedure('public.msg_get_or_create_custodial_team_thread(uuid)') is not null as custodial_team_retired_rpc,
         to_regprocedure('public.msg_create_group_thread_v2(uuid,text,uuid[],text)') is not null as employee_group_messaging_rpc,
         exists(select 1 from information_schema.columns where table_schema='public' and table_name='msg_threads' and column_name='client_thread_id') as thread_client_operation,
         has_function_privilege('public', 'public.msg_get_or_create_custodial_team_thread(uuid)', 'EXECUTE')
@@ -754,6 +836,10 @@ try {
           or has_function_privilege('anon', 'public.msg_create_group_thread_v2(uuid,text,uuid[],text)', 'EXECUTE')
           or has_function_privilege('authenticated', 'public.msg_create_group_thread_v2(uuid,text,uuid[],text)', 'EXECUTE') as team_or_group_public_execute,
         exists(select 1 from information_schema.columns where table_schema='public' and table_name='msg_messages' and column_name='updated_at') as message_change_cursor,
+        exists(select 1 from information_schema.columns where table_schema='public' and table_name='msg_messages' and column_name='deleted_at')
+          and exists(select 1 from information_schema.columns where table_schema='public' and table_name='msg_messages' and column_name='purge_after') as message_retention_columns,
+        to_regprocedure('public.msg_delete_thread(uuid,uuid,uuid)') is not null as thread_delete_rpc,
+        to_regprocedure('public.msg_purge_deleted_content(timestamp with time zone,integer)') is not null as deleted_content_purge_rpc,
         has_function_privilege('public', 'public.msg_delete_message(uuid,uuid)', 'EXECUTE')
           or has_function_privilege('anon', 'public.msg_delete_message(uuid,uuid)', 'EXECUTE')
           or has_function_privilege('authenticated', 'public.msg_delete_message(uuid,uuid)', 'EXECUTE') as message_delete_public_execute,

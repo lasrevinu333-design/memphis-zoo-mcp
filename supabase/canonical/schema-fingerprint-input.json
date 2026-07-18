@@ -10727,6 +10727,45 @@
     },
     {
       "collation_name": null,
+      "column_name": "deleted_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 12,
+      "schema_name": "public",
+      "table_name": "msg_messages"
+    },
+    {
+      "collation_name": null,
+      "column_name": "deleted_by_user_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 13,
+      "schema_name": "public",
+      "table_name": "msg_messages"
+    },
+    {
+      "collation_name": null,
+      "column_name": "purge_after",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 14,
+      "schema_name": "public",
+      "table_name": "msg_messages"
+    },
+    {
+      "collation_name": null,
       "column_name": "id",
       "comment": null,
       "data_type": "uuid",
@@ -11156,6 +11195,58 @@
     },
     {
       "collation_name": null,
+      "column_name": "deleted_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 11,
+      "schema_name": "public",
+      "table_name": "msg_threads"
+    },
+    {
+      "collation_name": null,
+      "column_name": "deleted_by_user_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 12,
+      "schema_name": "public",
+      "table_name": "msg_threads"
+    },
+    {
+      "collation_name": null,
+      "column_name": "deletion_operation_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 13,
+      "schema_name": "public",
+      "table_name": "msg_threads"
+    },
+    {
+      "collation_name": null,
+      "column_name": "purge_after",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 14,
+      "schema_name": "public",
+      "table_name": "msg_threads"
+    },
+    {
+      "collation_name": null,
       "column_name": "id",
       "comment": null,
       "data_type": "uuid",
@@ -11281,6 +11372,19 @@
       "identity_kind": "",
       "not_null": false,
       "ordinal_position": 10,
+      "schema_name": "public",
+      "table_name": "msg_users"
+    },
+    {
+      "collation_name": null,
+      "column_name": "messaging_identity_key",
+      "comment": "Application-owned key for a shared public messaging identity; manager authentication records remain separate.",
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 11,
       "schema_name": "public",
       "table_name": "msg_users"
     },
@@ -19737,6 +19841,22 @@
       "validated": true
     },
     {
+      "constraint_name": "msg_messages_deleted_by_user_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (deleted_by_user_id) REFERENCES msg_users(id) ON DELETE SET NULL",
+      "schema_name": "public",
+      "table_name": "msg_messages",
+      "validated": true
+    },
+    {
+      "constraint_name": "msg_messages_deletion_state_chk",
+      "constraint_type": "c",
+      "definition": "CHECK (is_deleted IS FALSE AND deleted_at IS NULL AND purge_after IS NULL OR is_deleted IS TRUE AND deleted_at IS NOT NULL AND purge_after = (deleted_at + '14 days'::interval))",
+      "schema_name": "public",
+      "table_name": "msg_messages",
+      "validated": true
+    },
+    {
       "constraint_name": "msg_messages_message_type_check",
       "constraint_type": "c",
       "definition": "CHECK (message_type = ANY (ARRAY['text'::text, 'system'::text, 'broadcast'::text, 'bot_response'::text]))",
@@ -19881,6 +20001,22 @@
       "validated": true
     },
     {
+      "constraint_name": "msg_threads_deleted_by_user_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (deleted_by_user_id) REFERENCES msg_users(id) ON DELETE SET NULL",
+      "schema_name": "public",
+      "table_name": "msg_threads",
+      "validated": true
+    },
+    {
+      "constraint_name": "msg_threads_deletion_state_chk",
+      "constraint_type": "c",
+      "definition": "CHECK (deleted_at IS NULL AND purge_after IS NULL OR is_active IS FALSE AND deleted_at IS NOT NULL AND purge_after = (deleted_at + '14 days'::interval))",
+      "schema_name": "public",
+      "table_name": "msg_threads",
+      "validated": true
+    },
+    {
       "constraint_name": "msg_threads_pkey",
       "constraint_type": "p",
       "definition": "PRIMARY KEY (id)",
@@ -19924,6 +20060,14 @@
       "constraint_name": "msg_users_employee_unique",
       "constraint_type": "u",
       "definition": "UNIQUE (employee_id)",
+      "schema_name": "public",
+      "table_name": "msg_users",
+      "validated": true
+    },
+    {
+      "constraint_name": "msg_users_messaging_identity_key_format_chk",
+      "constraint_type": "c",
+      "definition": "CHECK (messaging_identity_key IS NULL OR messaging_identity_key ~ '^[a-z][a-z0-9_]{2,79}$'::text)",
       "schema_name": "public",
       "table_name": "msg_users",
       "validated": true
@@ -21477,39 +21621,23 @@
     {
       "active": false,
       "command": "select public.mz_apply_free_tier_retention();",
-      "database": "postgres",
+      "database": "mz_schema_rebuild_messenger_v37",
       "jobname": "mz-free-tier-retention-daily",
       "schedule": "20 3 * * *",
       "username": "migration_owner"
     },
     {
-      "active": false,
-      "command": "select public.msg_cleanup_deleted_messages();",
-      "database": "postgres",
-      "jobname": "mz-message-cleanup-deleted-hourly",
+      "active": true,
+      "command": "select public.msg_purge_deleted_content(now(),1000);",
+      "database": "mz_schema_rebuild_messenger_v37",
+      "jobname": "mz-message-deleted-retention-hourly",
       "schedule": "18 * * * *",
-      "username": "migration_owner"
-    },
-    {
-      "active": false,
-      "command": "select public.msg_purge_fully_hidden_threads();",
-      "database": "postgres",
-      "jobname": "mz-message-hidden-threads-hourly",
-      "schedule": "19 * * * *",
-      "username": "migration_owner"
-    },
-    {
-      "active": false,
-      "command": "select public.msg_purge_messages_older_than_14_days();",
-      "database": "postgres",
-      "jobname": "mz-message-purge-old-hourly",
-      "schedule": "17 * * * *",
       "username": "migration_owner"
     },
     {
       "active": true,
       "command": "select public.sch_ensure_schedule_window(public.sch_service_date(now()), 14, 'scheduled_rolling_window_readiness');",
-      "database": "postgres",
+      "database": "mz_schema_rebuild_messenger_v37",
       "jobname": "mz-rolling-schedule-window-ready",
       "schedule": "*/30 * * * *",
       "username": "migration_owner"
@@ -21517,7 +21645,7 @@
     {
       "active": true,
       "command": "select public.expire_stale_open_sessions();",
-      "database": "postgres",
+      "database": "mz_schema_rebuild_messenger_v37",
       "jobname": "mz-stale-sessions-hourly",
       "schedule": "5 * * * *",
       "username": "migration_owner"
@@ -21983,7 +22111,7 @@
     },
     {
       "comment": "Destructive legacy message cleanup. Automatic execution disabled 2026-07-15. PostgreSQL-owner execution only.",
-      "definition": "CREATE OR REPLACE FUNCTION public.msg_cleanup_deleted_messages()\n RETURNS integer\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_deleted_count integer := 0;\nbegin\n  with eligible as (\n    select m.id\n    from public.msg_messages m\n    join public.msg_threads t on t.id = m.thread_id\n    where m.is_deleted = false\n      and (\n        m.sent_at < now() - interval '14 days'\n        or not exists (\n          select 1\n          from public.msg_thread_participants tp\n          where tp.thread_id = m.thread_id\n            and tp.left_at is null\n            and not exists (\n              select 1\n              from public.msg_message_deletions md\n              where md.message_id = m.id\n                and md.user_id = tp.user_id\n            )\n        )\n      )\n  ), deleted_receipts as (\n    delete from public.msg_receipts r\n    where r.message_id in (select id from eligible)\n  ), deleted_marks as (\n    delete from public.msg_message_deletions md\n    where md.message_id in (select id from eligible)\n  ), deleted_messages as (\n    delete from public.msg_messages m\n    where m.id in (select id from eligible)\n    returning m.id\n  )\n  select count(*) into v_deleted_count from deleted_messages;\n\n  update public.msg_threads t\n  set last_message_at = latest.last_message_at,\n      updated_at = now()\n  from (\n    select th.id as thread_id,\n           max(m.sent_at) as last_message_at\n    from public.msg_threads th\n    left join public.msg_messages m on m.thread_id = th.id and m.is_deleted = false\n    group by th.id\n  ) latest\n  where latest.thread_id = t.id;\n\n  return v_deleted_count;\nend;\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_cleanup_deleted_messages()\n RETURNS integer\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare v_result jsonb;\nbegin\n  v_result := public.msg_purge_deleted_content(now(),1000);\n  return coalesce((v_result->>'deleted_messages')::integer,0);\nend\n$function$\n",
       "function_name": "msg_cleanup_deleted_messages",
       "identity_arguments": "",
       "schema_name": "public"
@@ -22004,9 +22132,16 @@
     },
     {
       "comment": "Idempotently soft-deletes one authorized message and recomputes its conversation cursor so every device removes it.",
-      "definition": "CREATE OR REPLACE FUNCTION public.msg_delete_message(p_message_id uuid, p_request_user_id uuid)\n RETURNS msg_messages\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_message public.msg_messages%rowtype;\n  v_request_role text;\n  v_now timestamptz := clock_timestamp();\nbegin\n  if p_message_id is null or p_request_user_id is null then\n    raise exception using errcode = '22023', message = 'Message and authenticated user are required';\n  end if;\n\n  select role into v_request_role\n  from public.msg_users\n  where id = p_request_user_id\n    and is_active is true;\n\n  if v_request_role is null or not public.msg_is_runtime_user(p_request_user_id) then\n    raise exception using errcode = '42501', message = 'Authenticated messaging user was not found';\n  end if;\n\n  select * into v_message\n  from public.msg_messages\n  where id = p_message_id\n  for update;\n\n  if v_message.id is null then\n    raise exception using errcode = 'P0002', message = 'Message not found';\n  end if;\n\n  if v_message.sender_user_id <> p_request_user_id\n     and v_request_role not in ('manager', 'admin') then\n    raise exception using errcode = '42501', message = 'Only the sender or an Ops Manager can delete this message';\n  end if;\n\n  if v_message.is_deleted is false then\n    update public.msg_messages\n    set is_deleted = true,\n        body = '[deleted]',\n        metadata_json = coalesce(metadata_json, '{}'::jsonb)\n          || jsonb_build_object(\n            'deleted_by', p_request_user_id,\n            'deleted_at', v_now\n          ),\n        updated_at = v_now\n    where id = p_message_id\n    returning * into v_message;\n\n    update public.msg_threads t\n    set last_message_at = (\n          select max(m.sent_at)\n          from public.msg_messages m\n          where m.thread_id = v_message.thread_id\n            and m.is_deleted is false\n        ),\n        updated_at = v_now\n    where t.id = v_message.thread_id;\n  end if;\n\n  return v_message;\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_delete_message(p_message_id uuid, p_request_user_id uuid)\n RETURNS msg_messages\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_message public.msg_messages%rowtype;\n  v_request_role text;\n  v_now timestamptz := clock_timestamp();\nbegin\n  if p_message_id is null or p_request_user_id is null then\n    raise exception using errcode='22023', message='Message and authenticated user are required';\n  end if;\n\n  select role into v_request_role\n  from public.msg_users\n  where id=p_request_user_id and is_active is true;\n\n  if v_request_role is null or not public.msg_is_runtime_user(p_request_user_id) then\n    raise exception using errcode='42501', message='Authenticated messaging user was not found';\n  end if;\n\n  select * into v_message\n  from public.msg_messages\n  where id=p_message_id\n  for update;\n\n  if v_message.id is null then\n    raise exception using errcode='P0002', message='Message not found';\n  end if;\n\n  if v_message.sender_user_id <> p_request_user_id\n     and v_request_role not in ('manager','admin') then\n    raise exception using errcode='42501', message='Only the sender or an Ops Manager can delete this message';\n  end if;\n\n  if v_message.is_deleted is false then\n    update public.msg_messages\n    set is_deleted=true,\n        body='[deleted]',\n        deleted_at=v_now,\n        deleted_by_user_id=p_request_user_id,\n        purge_after=v_now + interval '14 days',\n        metadata_json=(coalesce(metadata_json,'{}'::jsonb) - 'deleted_by' - 'deleted_at')\n          || jsonb_build_object('deletion_retention_days',14),\n        updated_at=v_now\n    where id=p_message_id\n    returning * into v_message;\n\n    update public.msg_threads t\n    set last_message_at=(\n          select max(m.sent_at) from public.msg_messages m\n          where m.thread_id=v_message.thread_id and m.is_deleted is false\n        ),\n        updated_at=v_now\n    where t.id=v_message.thread_id;\n  end if;\n\n  return v_message;\nend\n$function$\n",
       "function_name": "msg_delete_message",
       "identity_arguments": "p_message_id uuid, p_request_user_id uuid",
+      "schema_name": "public"
+    },
+    {
+      "comment": "Deletes one ordinary conversation for all participants, tombstones its content immediately, and schedules hard purge after 14 days.",
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_delete_thread(p_thread_id uuid, p_request_user_id uuid, p_operation_id uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_thread public.msg_threads%rowtype;\n  v_request_role text;\n  v_now timestamptz := clock_timestamp();\n  v_deleted_messages integer := 0;\nbegin\n  if p_thread_id is null or p_request_user_id is null or p_operation_id is null then\n    raise exception using errcode='22023', message='Thread, authenticated user, and deletion operation are required';\n  end if;\n\n  select role into v_request_role\n  from public.msg_users\n  where id=p_request_user_id and is_active is true;\n\n  if v_request_role is null or not public.msg_is_runtime_user(p_request_user_id) then\n    raise exception using errcode='42501', message='Authenticated messaging user was not found';\n  end if;\n\n  select * into v_thread\n  from public.msg_threads\n  where id=p_thread_id\n  for update;\n\n  if v_thread.id is null then\n    raise exception using errcode='P0002', message='Conversation not found';\n  end if;\n\n  if v_thread.system_key='ops_manager_shared_chat_v1' then\n    raise exception using errcode='23514', message='The shared Ops Manager conversation cannot be deleted';\n  end if;\n\n  if v_request_role not in ('manager','admin')\n     and not exists (\n       select 1 from public.msg_thread_participants p\n       where p.thread_id=p_thread_id\n         and p.user_id=p_request_user_id\n         and p.left_at is null\n     ) then\n    raise exception using errcode='42501', message='Only a participant or Ops Manager can delete this conversation';\n  end if;\n\n  if v_thread.deleted_at is not null then\n    return jsonb_build_object(\n      'ok',true,\n      'thread_id',v_thread.id,\n      'deleted',true,\n      'deleted_at',v_thread.deleted_at,\n      'purge_after',v_thread.purge_after,\n      'operation_id',v_thread.deletion_operation_id,\n      'replayed',true\n    );\n  end if;\n\n  update public.msg_messages\n  set is_deleted=true,\n      body='[deleted]',\n      deleted_at=coalesce(deleted_at,v_now),\n      deleted_by_user_id=coalesce(deleted_by_user_id,p_request_user_id),\n      purge_after=coalesce(purge_after,coalesce(deleted_at,v_now)+interval '14 days'),\n      metadata_json=(coalesce(metadata_json,'{}'::jsonb) - 'deleted_by' - 'deleted_at')\n        || jsonb_build_object('deletion_retention_days',14,'conversation_deleted',true),\n      updated_at=v_now\n  where thread_id=p_thread_id\n    and is_deleted is false;\n  get diagnostics v_deleted_messages=row_count;\n\n  update public.msg_threads\n  set is_active=false,\n      deleted_at=v_now,\n      deleted_by_user_id=p_request_user_id,\n      deletion_operation_id=p_operation_id,\n      purge_after=v_now + interval '14 days',\n      last_message_at=null,\n      updated_at=v_now\n  where id=p_thread_id\n  returning * into v_thread;\n\n  return jsonb_build_object(\n    'ok',true,\n    'thread_id',v_thread.id,\n    'deleted',true,\n    'deleted_at',v_thread.deleted_at,\n    'purge_after',v_thread.purge_after,\n    'operation_id',v_thread.deletion_operation_id,\n    'deleted_message_count',v_deleted_messages,\n    'replayed',false\n  );\nend\n$function$\n",
+      "function_name": "msg_delete_thread",
+      "identity_arguments": "p_thread_id uuid, p_request_user_id uuid, p_operation_id uuid",
       "schema_name": "public"
     },
     {
@@ -22032,7 +22167,7 @@
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.msg_ensure_ops_manager_user(p_manager_id uuid)\n RETURNS msg_users\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_manager public.ops_manager_managers%rowtype;\n  v_user public.msg_users%rowtype;\n  v_display_name text;\nbegin\n  if p_manager_id is null then\n    raise exception using errcode = '22023', message = 'Authenticated manager id is required';\n  end if;\n  perform pg_advisory_xact_lock(hashtextextended('manager-messaging-user:' || p_manager_id::text, 0));\n  select * into v_manager\n  from public.ops_manager_managers\n  where manager_id = p_manager_id\n    and active is true\n    and revoked_at is null\n  for update;\n  if v_manager.manager_id is null then\n    raise exception using errcode = '42501', message = 'Active authenticated manager was not found';\n  end if;\n\n  select * into v_user\n  from public.msg_users\n  where ops_manager_id = p_manager_id\n  limit 1;\n  if v_user.id is not null then\n    if v_user.is_active is false or v_user.role <> 'manager' then\n      update public.msg_users\n      set is_active = true, role = 'manager', updated_at = now()\n      where id = v_user.id\n      returning * into v_user;\n    end if;\n    return v_user;\n  end if;\n\n  select * into v_user\n  from public.msg_users\n  where ops_manager_id is null\n    and is_active is true\n    and role in ('manager','ops','ops_manager','operations_manager')\n    and lower(btrim(display_name)) = lower(btrim(v_manager.display_name))\n  order by created_at, id\n  limit 1\n  for update;\n  if v_user.id is not null then\n    update public.msg_users\n    set ops_manager_id = p_manager_id, role = 'manager', updated_at = now()\n    where id = v_user.id\n    returning * into v_user;\n    return v_user;\n  end if;\n\n  v_display_name := btrim(v_manager.display_name);\n  if exists (select 1 from public.msg_users where lower(btrim(display_name)) = lower(v_display_name)) then\n    v_display_name := left(v_display_name, 80) || ' · Ops Manager';\n  end if;\n  if exists (select 1 from public.msg_users where lower(btrim(display_name)) = lower(v_display_name)) then\n    v_display_name := left(v_display_name, 68) || ' · ' || left(p_manager_id::text, 8);\n  end if;\n  insert into public.msg_users(display_name, role, is_active, ops_manager_id)\n  values (v_display_name, 'manager', true, p_manager_id)\n  returning * into v_user;\n  return v_user;\nend;\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_ensure_ops_manager_user(p_manager_id uuid)\n RETURNS msg_users\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_manager public.ops_manager_managers%rowtype;\n  v_user public.msg_users%rowtype;\nbegin\n  if p_manager_id is null then\n    raise exception using errcode='22023', message='Authenticated manager id is required';\n  end if;\n\n  select * into v_manager\n  from public.ops_manager_managers\n  where manager_id=p_manager_id\n    and active is true\n    and revoked_at is null;\n\n  if v_manager.manager_id is null then\n    raise exception using errcode='42501', message='Active authenticated manager was not found';\n  end if;\n\n  perform pg_advisory_xact_lock(hashtextextended('ops-manager-shared-messaging-identity-v1',0));\n\n  select * into v_user\n  from public.msg_users\n  where messaging_identity_key='ops_manager_shared_identity_v1'\n  limit 1\n  for update;\n\n  if v_user.id is null then\n    insert into public.msg_users(\n      display_name,role,is_active,messaging_identity_key\n    ) values (\n      'Ops Manager','manager',true,'ops_manager_shared_identity_v1'\n    ) returning * into v_user;\n  elsif v_user.is_active is false\n     or coalesce(v_user.active,true) is false\n     or v_user.role <> 'manager'\n     or v_user.display_name is distinct from 'Ops Manager' then\n    update public.msg_users\n    set display_name='Ops Manager',role='manager',is_active=true,updated_at=now()\n    where id=v_user.id\n    returning * into v_user;\n  end if;\n\n  return v_user;\nend\n$function$\n",
       "function_name": "msg_ensure_ops_manager_user",
       "identity_arguments": "p_manager_id uuid",
       "schema_name": "public"
@@ -22052,8 +22187,8 @@
       "schema_name": "public"
     },
     {
-      "comment": "Returns the canonical all-active-staff Custodial Team conversation and reconciles membership.",
-      "definition": "CREATE OR REPLACE FUNCTION public.msg_get_or_create_custodial_team_thread(p_created_by_user_id uuid)\n RETURNS msg_threads\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_thread public.msg_threads%rowtype;\nbegin\n  if p_created_by_user_id is null or not public.msg_is_runtime_user(p_created_by_user_id) then\n    raise exception using errcode = '42501', message = 'An active authenticated Messenger user is required';\n  end if;\n\n  perform pg_advisory_xact_lock(hashtextextended('msg:custodial_team_chat_v1', 0));\n\n  select * into v_thread\n  from public.msg_threads\n  where system_key = 'custodial_team_chat_v1'\n  limit 1\n  for update;\n\n  if v_thread.id is null then\n    insert into public.msg_threads (\n      thread_type,\n      title,\n      created_by_user_id,\n      system_key,\n      is_active\n    ) values (\n      'group',\n      'Custodial Team',\n      p_created_by_user_id,\n      'custodial_team_chat_v1',\n      true\n    )\n    returning * into v_thread;\n  elsif v_thread.is_active is false or v_thread.title is distinct from 'Custodial Team' then\n    update public.msg_threads\n    set is_active = true,\n        title = 'Custodial Team',\n        updated_at = now()\n    where id = v_thread.id\n    returning * into v_thread;\n  end if;\n\n  insert into public.msg_thread_participants (thread_id, user_id)\n  select v_thread.id, mu.id\n  from public.msg_users mu\n  where mu.is_active is true\n    and mu.role <> 'bot'\n    and public.msg_is_runtime_user(mu.id)\n  on conflict (thread_id, user_id)\n  do update set left_at = null;\n\n  update public.msg_thread_participants tp\n  set left_at = coalesce(tp.left_at, now())\n  where tp.thread_id = v_thread.id\n    and not exists (\n      select 1\n      from public.msg_users mu\n      where mu.id = tp.user_id\n        and mu.is_active is true\n        and mu.role <> 'bot'\n        and public.msg_is_runtime_user(mu.id)\n    );\n\n  return v_thread;\nend\n$function$\n",
+      "comment": "Retired fail-closed compatibility entry point. Select Everyone creates an ordinary deletable group.",
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_get_or_create_custodial_team_thread(p_created_by_user_id uuid)\n RETURNS msg_threads\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\nbegin\n  raise exception using\n    errcode='0A000',\n    message='The automatic Custodial Team room is retired. Create an ordinary group with Select Everyone.';\nend\n$function$\n",
       "function_name": "msg_get_or_create_custodial_team_thread",
       "identity_arguments": "p_created_by_user_id uuid",
       "schema_name": "public"
@@ -22164,8 +22299,8 @@
       "schema_name": "public"
     },
     {
-      "comment": "Archives a non-system conversation on one authenticated device without removing membership or messages.",
-      "definition": "CREATE OR REPLACE FUNCTION public.msg_mark_thread_deleted(p_thread_id uuid, p_user_id uuid, p_device_identifier text DEFAULT NULL::text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_hidden_before timestamptz := clock_timestamp();\n  v_requested_device text := nullif(btrim(coalesce(p_device_identifier, '')), '');\n  v_canonical_device text;\n  v_role text;\n  v_system_key text;\nbegin\n  if p_thread_id is null or p_user_id is null then\n    raise exception using errcode = '22023', message = 'Thread and authenticated user are required';\n  end if;\n  select role into v_role\n  from public.msg_users\n  where id = p_user_id\n    and is_active is true;\n  if v_role is null or not public.msg_is_runtime_user(p_user_id) then\n    raise exception using errcode = '42501', message = 'User is not an active Messenger identity';\n  end if;\n\n  select system_key into v_system_key\n  from public.msg_threads\n  where id = p_thread_id\n    and is_active is true;\n  if not found then\n    raise exception using errcode = 'P0002', message = 'Active conversation not found';\n  end if;\n  if v_system_key in ('ops_manager_shared_chat_v1', 'custodial_team_chat_v1') then\n    raise exception using errcode = '23514', message = 'Required shared conversations cannot be archived';\n  end if;\n  if v_role not in ('manager', 'admin') and not exists (\n    select 1\n    from public.msg_thread_participants tp\n    where tp.thread_id = p_thread_id\n      and tp.user_id = p_user_id\n      and tp.left_at is null\n  ) then\n    raise exception using errcode = '42501', message = 'User is not an active participant in this conversation';\n  end if;\n\n  if v_requested_device is not null then\n    select d.device_id into v_canonical_device\n    from public.devices d\n    where d.active is true\n      and upper(btrim(d.device_id)) = upper(v_requested_device)\n    union all\n    select d.device_id\n    from public.device_aliases da\n    join public.devices d on d.id = da.canonical_device_id and d.active is true\n    where da.active is true\n      and upper(btrim(da.alias_identifier)) = upper(v_requested_device)\n    limit 1;\n  end if;\n  v_canonical_device := coalesce(v_canonical_device, v_requested_device);\n  if v_canonical_device is null then\n    raise exception using errcode = '22023', message = 'A canonical device identifier is required';\n  end if;\n\n  insert into public.msg_thread_visibility (\n    thread_id,\n    user_id,\n    device_identifier,\n    hidden_before,\n    created_at,\n    updated_at\n  ) values (\n    p_thread_id,\n    p_user_id,\n    v_canonical_device,\n    v_hidden_before,\n    now(),\n    now()\n  )\n  on conflict (thread_id, user_id, device_identifier)\n  do update set hidden_before = excluded.hidden_before,\n                updated_at = now();\n\n  update public.msg_threads\n  set updated_at = now()\n  where id = p_thread_id;\n\n  return jsonb_build_object(\n    'ok', true,\n    'thread_id', p_thread_id,\n    'user_id', p_user_id,\n    'device_identifier', v_canonical_device,\n    'hidden_before', v_hidden_before,\n    'archived_on_device', true,\n    'participant_left', false\n  );\nend\n$function$\n",
+      "comment": "Retired fail-closed compatibility entry point. Conversation archive is not supported.",
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_mark_thread_deleted(p_thread_id uuid, p_user_id uuid, p_device_identifier text DEFAULT NULL::text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\nbegin\n  raise exception using\n    errcode='0A000',\n    message='Conversation archive is retired. Refresh Messenger and use Delete Conversation.';\nend\n$function$\n",
       "function_name": "msg_mark_thread_deleted",
       "identity_arguments": "p_thread_id uuid, p_user_id uuid, p_device_identifier text",
       "schema_name": "public"
@@ -22185,15 +22320,22 @@
       "schema_name": "public"
     },
     {
+      "comment": "Hard-purges only explicitly deleted Messenger content after its 14-day retention interval; never deletes ordinary old messages.",
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_purge_deleted_content(p_now timestamp with time zone DEFAULT now(), p_batch_limit integer DEFAULT 1000)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_message_ids uuid[] := '{}'::uuid[];\n  v_affected_thread_ids uuid[] := '{}'::uuid[];\n  v_thread_ids uuid[] := '{}'::uuid[];\n  v_deleted_messages integer := 0;\n  v_deleted_threads integer := 0;\n  v_deleted_receipts integer := 0;\n  v_deleted_audit integer := 0;\nbegin\n  if p_batch_limit is null or p_batch_limit < 1 or p_batch_limit > 10000 then\n    raise exception using errcode='22023', message='Purge batch limit must be between 1 and 10000';\n  end if;\n\n  perform pg_advisory_xact_lock(hashtextextended('messenger-deleted-content-retention-v1',0));\n\n  select\n    coalesce(array_agg(candidate.id),'{}'::uuid[]),\n    coalesce(array_agg(distinct candidate.thread_id),'{}'::uuid[])\n  into v_message_ids,v_affected_thread_ids\n  from (\n    select m.id,m.thread_id\n    from public.msg_messages m\n    where m.is_deleted is true\n      and m.deleted_at is not null\n      and m.purge_after <= p_now\n    order by m.purge_after,m.id\n    limit p_batch_limit\n    for update skip locked\n  ) candidate;\n\n  if coalesce(array_length(v_message_ids,1),0) > 0 then\n    update public.events_app_notification_log\n    set response_message_id=null\n    where response_message_id=any(v_message_ids);\n\n    update public.scan_alert_notification_log\n    set msg_message_id=null\n    where msg_message_id=any(v_message_ids);\n\n    update public.scan_alert_notification_log\n    set escalation_msg_message_id=null\n    where escalation_msg_message_id=any(v_message_ids);\n\n    delete from public.msg_message_audit where message_id=any(v_message_ids);\n    get diagnostics v_deleted_audit=row_count;\n\n    delete from public.msg_message_deletions where message_id=any(v_message_ids);\n\n    delete from public.msg_receipts where message_id=any(v_message_ids);\n    get diagnostics v_deleted_receipts=row_count;\n\n    delete from public.msg_messages where id=any(v_message_ids);\n    get diagnostics v_deleted_messages=row_count;\n\n    update public.msg_threads t\n    set last_message_at=(\n          select max(m.sent_at)\n          from public.msg_messages m\n          where m.thread_id=t.id and m.is_deleted is false\n        ),\n        updated_at=p_now\n    where t.id=any(v_affected_thread_ids)\n      and t.deleted_at is null;\n  end if;\n\n  select coalesce(array_agg(candidate.id),'{}'::uuid[])\n  into v_thread_ids\n  from (\n    select t.id\n    from public.msg_threads t\n    where t.deleted_at is not null\n      and t.purge_after <= p_now\n      and not exists (select 1 from public.msg_messages m where m.thread_id=t.id)\n    order by t.purge_after,t.id\n    limit p_batch_limit\n    for update skip locked\n  ) candidate;\n\n  if coalesce(array_length(v_thread_ids,1),0) > 0 then\n    update public.events_app_notification_log set thread_id=null where thread_id=any(v_thread_ids);\n    update public.scan_alert_notification_log set msg_thread_id=null where msg_thread_id=any(v_thread_ids);\n    update public.scan_alert_notification_log set escalation_msg_thread_id=null where escalation_msg_thread_id=any(v_thread_ids);\n    delete from public.msg_broadcasts where thread_id=any(v_thread_ids);\n    delete from public.msg_memphis_thread_context where thread_id=any(v_thread_ids);\n    delete from public.msg_thread_visibility where thread_id=any(v_thread_ids);\n    delete from public.msg_hidden_threads_by_device where thread_id=any(v_thread_ids);\n    delete from public.msg_thread_participants where thread_id=any(v_thread_ids);\n    delete from public.msg_threads where id=any(v_thread_ids);\n    get diagnostics v_deleted_threads=row_count;\n  end if;\n\n  return jsonb_build_object(\n    'ok',true,\n    'retention_days',14,\n    'purged_at',p_now,\n    'deleted_messages',v_deleted_messages,\n    'deleted_threads',v_deleted_threads,\n    'deleted_receipts',v_deleted_receipts,\n    'deleted_message_audit_rows',v_deleted_audit\n  );\nend\n$function$\n",
+      "function_name": "msg_purge_deleted_content",
+      "identity_arguments": "p_now timestamp with time zone, p_batch_limit integer",
+      "schema_name": "public"
+    },
+    {
       "comment": "Destructive legacy hidden-thread purge. Automatic execution disabled 2026-07-15. PostgreSQL-owner execution only.",
-      "definition": "CREATE OR REPLACE FUNCTION public.msg_purge_fully_hidden_threads()\n RETURNS jsonb\n LANGUAGE plpgsql\nAS $function$\ndeclare\n  v_deleted_threads integer := 0;\n  v_deleted_messages integer := 0;\n  v_deleted_hides integer := 0;\n  v_deleted_participants integer := 0;\n  v_deleted_receipts integer := 0;\n  v_deleted_message_deletions integer := 0;\nbegin\n  with participant_device_counts as (\n    select\n      tp.thread_id,\n      count(distinct da.device_identifier) filter (where da.is_active = true) as participant_device_count\n    from public.msg_thread_participants tp\n    left join public.msg_device_assignments da\n      on da.msg_user_id = tp.user_id\n    where tp.left_at is null\n    group by tp.thread_id\n  ),\n  hidden_device_counts as (\n    select\n      h.thread_id,\n      count(distinct h.device_identifier) as hidden_device_count\n    from public.msg_hidden_threads_by_device h\n    group by h.thread_id\n  ),\n  doomed as (\n    select t.id\n    from public.msg_threads t\n    join participant_device_counts pdc on pdc.thread_id = t.id\n    join hidden_device_counts hdc on hdc.thread_id = t.id\n    where pdc.participant_device_count > 0\n      and hdc.hidden_device_count >= pdc.participant_device_count\n  ),\n  del_receipts as (\n    delete from public.msg_receipts r\n    where r.message_id in (select m.id from public.msg_messages m where m.thread_id in (select id from doomed))\n    returning 1\n  ),\n  del_msg_deletions as (\n    delete from public.msg_message_deletions d\n    where d.message_id in (select m.id from public.msg_messages m where m.thread_id in (select id from doomed))\n    returning 1\n  ),\n  del_messages as (\n    delete from public.msg_messages m\n    where m.thread_id in (select id from doomed)\n    returning 1\n  ),\n  del_hides as (\n    delete from public.msg_hidden_threads_by_device h\n    where h.thread_id in (select id from doomed)\n    returning 1\n  ),\n  del_participants as (\n    delete from public.msg_thread_participants p\n    where p.thread_id in (select id from doomed)\n    returning 1\n  ),\n  del_threads as (\n    delete from public.msg_threads t\n    where t.id in (select id from doomed)\n    returning 1\n  )\n  select\n    (select count(*) from del_threads),\n    (select count(*) from del_messages),\n    (select count(*) from del_hides),\n    (select count(*) from del_participants),\n    (select count(*) from del_receipts),\n    (select count(*) from del_msg_deletions)\n  into\n    v_deleted_threads,\n    v_deleted_messages,\n    v_deleted_hides,\n    v_deleted_participants,\n    v_deleted_receipts,\n    v_deleted_message_deletions;\n\n  return jsonb_build_object(\n    'deleted_threads', v_deleted_threads,\n    'deleted_messages', v_deleted_messages,\n    'deleted_hidden_rows', v_deleted_hides,\n    'deleted_participants', v_deleted_participants,\n    'deleted_receipts', v_deleted_receipts,\n    'deleted_message_deletions', v_deleted_message_deletions\n  );\nend;\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_purge_fully_hidden_threads()\n RETURNS jsonb\n LANGUAGE sql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\n  select jsonb_build_object(\n    'ok',true,\n    'retired',true,\n    'deleted_threads',0,\n    'reason','Conversation archive is retired; only explicit deletion enters retention.'\n  );\n$function$\n",
       "function_name": "msg_purge_fully_hidden_threads",
       "identity_arguments": "",
       "schema_name": "public"
     },
     {
       "comment": "Destructive legacy message purge. Automatic execution disabled 2026-07-15. PostgreSQL-owner execution only.",
-      "definition": "CREATE OR REPLACE FUNCTION public.msg_purge_messages_older_than_14_days()\n RETURNS jsonb\n LANGUAGE plpgsql\nAS $function$\ndeclare\n  v_deleted_messages integer := 0;\n  v_deleted_threads integer := 0;\n  v_deleted_receipts integer := 0;\n  v_deleted_message_deletions integer := 0;\n  v_deleted_hides integer := 0;\n  v_deleted_participants integer := 0;\nbegin\n  with old_messages as (\n    select id, thread_id\n    from public.msg_messages\n    where coalesce(sent_at, created_at) < now() - interval '14 days'\n  ),\n  del_receipts as (\n    delete from public.msg_receipts r\n    where r.message_id in (select id from old_messages)\n    returning 1\n  ),\n  del_msg_deletions as (\n    delete from public.msg_message_deletions d\n    where d.message_id in (select id from old_messages)\n    returning 1\n  ),\n  del_messages as (\n    delete from public.msg_messages m\n    where m.id in (select id from old_messages)\n    returning thread_id\n  ),\n  empty_threads as (\n    select t.id\n    from public.msg_threads t\n    left join public.msg_messages m on m.thread_id = t.id\n    group by t.id\n    having count(m.id) = 0\n  ),\n  del_hides as (\n    delete from public.msg_hidden_threads_by_device h\n    where h.thread_id in (select id from empty_threads)\n    returning 1\n  ),\n  del_participants as (\n    delete from public.msg_thread_participants p\n    where p.thread_id in (select id from empty_threads)\n    returning 1\n  ),\n  del_threads as (\n    delete from public.msg_threads t\n    where t.id in (select id from empty_threads)\n    returning 1\n  )\n  select\n    (select count(*) from del_messages),\n    (select count(*) from del_threads),\n    (select count(*) from del_receipts),\n    (select count(*) from del_msg_deletions),\n    (select count(*) from del_hides),\n    (select count(*) from del_participants)\n  into\n    v_deleted_messages,\n    v_deleted_threads,\n    v_deleted_receipts,\n    v_deleted_message_deletions,\n    v_deleted_hides,\n    v_deleted_participants;\n\n  return jsonb_build_object(\n    'deleted_messages', v_deleted_messages,\n    'deleted_threads', v_deleted_threads,\n    'deleted_receipts', v_deleted_receipts,\n    'deleted_message_deletions', v_deleted_message_deletions,\n    'deleted_hidden_rows', v_deleted_hides,\n    'deleted_participants', v_deleted_participants\n  );\nend;\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_purge_messages_older_than_14_days()\n RETURNS jsonb\n LANGUAGE sql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\n  select public.msg_purge_deleted_content(now(),1000);\n$function$\n",
       "function_name": "msg_purge_messages_older_than_14_days",
       "identity_arguments": "",
       "schema_name": "public"
@@ -22224,6 +22366,13 @@
       "definition": "CREATE OR REPLACE FUNCTION public.msg_send_message(p_thread_id uuid, p_sender_user_id uuid, p_body text, p_message_type text, p_metadata_json jsonb, p_client_message_id text)\n RETURNS msg_messages\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare v_message public.msg_messages%rowtype;\nbegin\n  if p_thread_id is null then raise exception 'thread_id is required.'; end if;\n  if p_sender_user_id is null then raise exception 'sender_user_id is required.'; end if;\n  if p_body is null or btrim(p_body)='' then raise exception 'Message body is required.'; end if;\n  if length(p_body)>4000 then raise exception 'Message body cannot exceed 4000 characters.'; end if;\n  if not exists(select 1 from public.msg_thread_participants tp where tp.thread_id=p_thread_id and tp.user_id=p_sender_user_id and tp.left_at is null) then raise exception 'Sender is not an active participant in this thread.'; end if;\n  if nullif(btrim(coalesce(p_client_message_id,'')),'') is not null then\n    select * into v_message from public.msg_messages where client_message_id=btrim(p_client_message_id) limit 1;\n    if found then\n      if v_message.thread_id<>p_thread_id or v_message.sender_user_id<>p_sender_user_id then raise exception 'client_message_id belongs to another message.'; end if;\n      return v_message;\n    end if;\n  end if;\n  insert into public.msg_messages(thread_id,sender_user_id,message_type,body,metadata_json,client_message_id)\n  values(p_thread_id,p_sender_user_id,coalesce(nullif(btrim(p_message_type),''),'text'),btrim(p_body),coalesce(p_metadata_json,'{}'::jsonb),nullif(btrim(coalesce(p_client_message_id,'')),'')) returning * into v_message;\n  insert into public.msg_receipts(message_id,user_id,queued_at,delivered_at,displayed_at,read_at)\n  select v_message.id,tp.user_id,now(),null,null,null from public.msg_thread_participants tp\n  where tp.thread_id=p_thread_id and tp.left_at is null and tp.user_id<>p_sender_user_id\n  on conflict(message_id,user_id) do nothing;\n  update public.msg_threads set last_message_at=v_message.sent_at,updated_at=now() where id=p_thread_id;\n  return v_message;\nend;\n$function$\n",
       "function_name": "msg_send_message",
       "identity_arguments": "p_thread_id uuid, p_sender_user_id uuid, p_body text, p_message_type text, p_metadata_json jsonb, p_client_message_id text",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_send_message_as_ops_manager(p_manager_id uuid, p_thread_id uuid, p_body text, p_message_type text DEFAULT 'text'::text, p_metadata_json jsonb DEFAULT '{}'::jsonb, p_client_message_id text DEFAULT NULL::text)\n RETURNS msg_messages\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_user public.msg_users%rowtype;\n  v_message public.msg_messages%rowtype;\nbegin\n  v_user := public.msg_ensure_ops_manager_user(p_manager_id);\n  v_message := public.msg_send_message(\n    p_thread_id,v_user.id,p_body,p_message_type,\n    coalesce(p_metadata_json,'{}'::jsonb) - 'authenticated_ops_manager_id',\n    p_client_message_id\n  );\n\n  update public.msg_message_audit\n  set sender_ops_manager_id=p_manager_id,\n      sender_user_id=v_user.id,\n      sender_display_name='Ops Manager',\n      sender_role='manager'\n  where message_id=v_message.id;\n\n  return v_message;\nend\n$function$\n",
+      "function_name": "msg_send_message_as_ops_manager",
+      "identity_arguments": "p_manager_id uuid, p_thread_id uuid, p_body text, p_message_type text, p_metadata_json jsonb, p_client_message_id text",
       "schema_name": "public"
     },
     {
@@ -25731,6 +25880,15 @@
     },
     {
       "backs_constraint": false,
+      "definition": "CREATE INDEX idx_msg_messages_deleted_purge ON public.msg_messages USING btree (purge_after, id) WHERE (is_deleted IS TRUE)",
+      "index_name": "idx_msg_messages_deleted_purge",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "msg_messages"
+    },
+    {
+      "backs_constraint": false,
       "definition": "CREATE INDEX idx_msg_messages_thread_cursor ON public.msg_messages USING btree (thread_id, sent_at DESC, id DESC) WHERE (is_deleted IS FALSE)",
       "index_name": "idx_msg_messages_thread_cursor",
       "is_primary": false,
@@ -25920,6 +26078,15 @@
     },
     {
       "backs_constraint": false,
+      "definition": "CREATE INDEX idx_msg_threads_deleted_purge ON public.msg_threads USING btree (purge_after, id) WHERE (deleted_at IS NOT NULL)",
+      "index_name": "idx_msg_threads_deleted_purge",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "msg_threads"
+    },
+    {
+      "backs_constraint": false,
       "definition": "CREATE INDEX idx_msg_threads_type_active_last ON public.msg_threads USING btree (thread_type, is_active, last_message_at DESC)",
       "index_name": "idx_msg_threads_type_active_last",
       "is_primary": false,
@@ -25940,6 +26107,15 @@
       "backs_constraint": false,
       "definition": "CREATE UNIQUE INDEX uq_msg_threads_creator_client_thread_id ON public.msg_threads USING btree (created_by_user_id, client_thread_id) WHERE (client_thread_id IS NOT NULL)",
       "index_name": "uq_msg_threads_creator_client_thread_id",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "msg_threads"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE UNIQUE INDEX uq_msg_threads_deletion_operation ON public.msg_threads USING btree (deletion_operation_id) WHERE (deletion_operation_id IS NOT NULL)",
+      "index_name": "uq_msg_threads_deletion_operation",
       "is_primary": false,
       "is_unique": true,
       "schema_name": "public",
@@ -26004,6 +26180,15 @@
       "definition": "CREATE UNIQUE INDEX msg_users_pkey ON public.msg_users USING btree (id)",
       "index_name": "msg_users_pkey",
       "is_primary": true,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "msg_users"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE UNIQUE INDEX uq_msg_users_messaging_identity_key ON public.msg_users USING btree (messaging_identity_key) WHERE (messaging_identity_key IS NOT NULL)",
+      "index_name": "uq_msg_users_messaging_identity_key",
+      "is_primary": false,
       "is_unique": true,
       "schema_name": "public",
       "table_name": "msg_users"
@@ -28173,6 +28358,14 @@
       "schema_name": "public"
     },
     {
+      "function_name": "msg_delete_thread",
+      "grantee": "service_role",
+      "identity_arguments": "p_thread_id uuid, p_request_user_id uuid, p_operation_id uuid",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
       "function_name": "msg_delete_thread_permanently",
       "grantee": "service_role",
       "identity_arguments": "p_thread_id uuid",
@@ -28373,6 +28566,14 @@
       "schema_name": "public"
     },
     {
+      "function_name": "msg_purge_deleted_content",
+      "grantee": "service_role",
+      "identity_arguments": "p_now timestamp with time zone, p_batch_limit integer",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
       "function_name": "msg_purge_fully_hidden_threads",
       "grantee": "service_role",
       "identity_arguments": "",
@@ -28416,6 +28617,14 @@
       "function_name": "msg_send_message",
       "grantee": "service_role",
       "identity_arguments": "p_thread_id uuid, p_sender_user_id uuid, p_body text, p_message_type text, p_metadata_json jsonb, p_client_message_id text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "msg_send_message_as_ops_manager",
+      "grantee": "service_role",
+      "identity_arguments": "p_manager_id uuid, p_thread_id uuid, p_body text, p_message_type text, p_metadata_json jsonb, p_client_message_id text",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
