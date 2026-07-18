@@ -8,6 +8,7 @@ const { Client } = pg;
 const adminUrl = process.env.SCHEMA_REBUILD_ADMIN_URL || process.env.DATABASE_URL;
 let dockerContainer = process.env.SCHEMA_REBUILD_DOCKER_CONTAINER;
 const dockerImage = process.env.SCHEMA_REBUILD_DOCKER_IMAGE;
+const keepDatabase = /^(1|true|yes)$/i.test(String(process.env.SCHEMA_REBUILD_KEEP_DATABASE || ""));
 let ownsDockerContainer = false;
 
 if (!adminUrl && !dockerContainer && !dockerImage) {
@@ -131,7 +132,7 @@ if (dockerContainer) {
     console.log(JSON.stringify({ ok: true, database: targetDatabase, migrations: migrationFiles.length, counts: JSON.parse(counts) }, null, 2));
   } finally {
     try {
-      if (!ownsDockerContainer) {
+      if (!ownsDockerContainer && !keepDatabase) {
         dockerPsql(
           "postgres",
           `
@@ -142,12 +143,14 @@ if (dockerContainer) {
         );
         dockerPsql("postgres", `drop database if exists ${quoteIdentifier(databaseName)};`);
       }
+      if (!ownsDockerContainer && keepDatabase) console.log(JSON.stringify({ retained_test_database: databaseName }));
     } catch {
       // Best-effort cleanup for local/CI disposable databases.
     } finally {
-      if (ownsDockerContainer) {
+      if (ownsDockerContainer && !keepDatabase) {
         execFileSync("docker", ["rm", "-f", dockerContainer], { stdio: "ignore" });
       }
+      if (ownsDockerContainer && keepDatabase) console.log(JSON.stringify({ retained_test_container: dockerContainer, retained_test_database: "postgres" }));
     }
   }
   process.exit(0);
