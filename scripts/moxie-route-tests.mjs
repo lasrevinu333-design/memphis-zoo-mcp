@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import express from "express";
@@ -111,8 +112,17 @@ try {
   assert.match(page, /\/moxie\/assets\/reminders-woodland-animal\.png/);
   assert.match(page, /\/moxie\/assets\/contacts-creekside-animal\.png/);
   assert.match(page, /\/moxie\/assets\/settings-woodland-cog\.png/);
+  assert.match(page, /\/moxie\/assets\/ops-dashboard\.png/);
+  assert.match(page, /\/moxie\/assets\/ops-schedule\.png/);
+  assert.match(page, /\/moxie\/assets\/ops-events\.png/);
+  assert.match(page, /\/moxie\/assets\/ops-messaging\.png/);
   assert.match(page, /image-action-button::before/);
   assert.match(page, /content:none!important/);
+  assert.match(page, /clearChatButton\.addEventListener\("click",showModal\)/);
+  assert.match(page, /saveClearChat\.addEventListener\("click",saveChat\)/);
+  assert.match(page, /deleteClearChat\.addEventListener\("click",deleteChat\)/);
+  assert.match(page, /cancelClearChat\.addEventListener\("click",hideModal\)/);
+  assert.doesNotMatch(page, /Main Dashboard|Custodial Scheduler|Events Input Console|Memphis Messenger/);
   assert.match(String(response.headers.get("cache-control") || ""), /no-store/);
 
   response = await fetch(`${base}/moxie`, { headers: { Cookie: cookie }, redirect: "manual" });
@@ -124,10 +134,26 @@ try {
     "reminders-woodland-animal.png",
     "contacts-creekside-animal.png",
     "settings-woodland-cog.png",
+    "ops-dashboard.png",
+    "ops-schedule.png",
+    "ops-events.png",
+    "ops-messaging.png",
   ]) {
     response = await fetch(`${base}/moxie/assets/${asset}`);
     assert.equal(response.status, 200, `${asset} must be served from the static Moxie asset path`);
     assert.match(String(response.headers.get("content-type") || ""), /^image\//);
+  }
+
+  const forbiddenCardOverlayHashes = new Map([
+    ["ops-dashboard.png", "4443486943c22471c19211ed26d53bcb7e587c162418f20a7a91e9084f6931d3"],
+    ["ops-schedule.png", "f3ea3460e750a2281436900a646cd93c6b82a73e1d45244c231f07125d405fd9"],
+    ["ops-events.png", "c25f75b290fca8939d7cd1d8ad2cfee61a6f4a5a91cf8c18cfeaaf9ef59f5cc6"],
+    ["ops-messaging.png", "585ca7e43747175d1b67f125232d42c93ca0991ee77afb849b72a4cf794ee1d2"],
+  ]);
+  for (const [asset, forbiddenHash] of forbiddenCardOverlayHashes.entries()) {
+    const assetPath = new URL(`../public/moxie-assets/${asset}`, import.meta.url);
+    const hash = createHash("sha256").update(readFileSync(assetPath)).digest("hex");
+    assert.notEqual(hash, forbiddenHash, `${asset} must not regress to the card-overlay artwork`);
   }
 
   response = await fetch(`${base}/moxie/logout`, {
