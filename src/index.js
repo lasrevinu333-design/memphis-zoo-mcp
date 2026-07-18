@@ -388,7 +388,7 @@ function setCorsOrigin(res, req) {
 
 function setAdminApiCors(res, req) {
   setCorsOrigin(res, req);
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", TRUSTED_DEVICE_CORS_HEADERS);
 }
 

@@ -437,6 +437,7 @@ const pairingMigration = readMigration("20260717175320_ops_manager_pairing_links
 const managerCodeMigration = readMigration("20260717235932_ops_manager_one_time_codes.sql");
 assert.match(backendIndex, /installSharedAuthRoutes\(app, \{ setCors: setAdminApiCors, supabase: supabaseAdmin, trustedDeviceStore: opsTrustedDeviceStore \}\)/);
 assert.match(backendIndex, /Access-Control-Allow-Credentials/);
+assert.match(backendIndex, /Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS"/, "admin CORS must allow PUT because the Event Input Console edit workflow uses PUT from the browser");
 assert.match(sharedAccess, /memphis_ops_trust/);
 assert.match(sharedAccess, /ops\/manager-codes\/consume/);
 assert.match(sharedAccess, /enrollment-codes/);
