@@ -122,6 +122,6 @@ assert.equal(typeof createScheduleRouter, "function");
 assert.equal(typeof createEventsAdminRouter, "function");
 assert.equal(typeof createEventsPublicRouter, "function");
 assert.equal(typeof createEventMaintenanceController, "function");
-assert.equal(EVENTS_CONTRACT_VERSION, "events.v2");
+assert.equal(EVENTS_CONTRACT_VERSION, "events.v3");
 
 console.log(JSON.stringify({ ok: true, smoke: "passed" }, null, 2));

@@ -42,25 +42,37 @@ function dockerPsql(database, sql) {
   return result.stdout;
 }
 
+function runDocker(args, options = {}) {
+  const result = spawnSync("docker", args, {
+    encoding: "utf8",
+    maxBuffer: 1024 * 1024 * 16,
+    ...options,
+  });
+  if (result.status !== 0) {
+    const detail = [
+      result.stderr ? `stderr: ${result.stderr.trim()}` : "",
+      result.stdout ? `stdout: ${result.stdout.trim()}` : "",
+    ].filter(Boolean).join("\n");
+    throw new Error(`docker ${args.join(" ")} failed (${result.status}).${detail ? `\n${detail}` : ""}`);
+  }
+  return result.stdout;
+}
+
 if (dockerImage) {
   dockerContainer = `mz_schema_rebuild_${Date.now()}_${randomUUID().replaceAll("-", "").slice(0, 8)}`;
   ownsDockerContainer = true;
   try {
-    execFileSync(
-      "docker",
-      [
-        "run",
-        "-d",
-        "--name",
-        dockerContainer,
-        "-e",
-        "POSTGRES_PASSWORD=postgres",
-        dockerImage,
-        "-c",
-        "shared_preload_libraries=pg_cron,pg_net,pg_stat_statements",
-      ],
-      { stdio: "ignore" },
-    );
+    runDocker([
+      "run",
+      "-d",
+      "--name",
+      dockerContainer,
+      "-e",
+      "POSTGRES_PASSWORD=postgres",
+      dockerImage,
+      "-c",
+      "shared_preload_libraries=pg_cron,pg_net,pg_stat_statements",
+    ]);
     let ready = false;
     for (let attempt = 0; attempt < 180; attempt += 1) {
       const check = spawnSync(

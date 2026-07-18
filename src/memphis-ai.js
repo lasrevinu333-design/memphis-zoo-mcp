@@ -409,7 +409,8 @@ function summarizeEvents(events = []) {
     const spansOvernight = Boolean(event.spans_overnight) || (event.end_date && event.end_date > event.event_date);
     const dateText = spansOvernight ? `${event.event_date} to ${event.end_date}` : event.event_date;
     const timeText = spansOvernight ? `${event.start_time} to ${event.end_time} next day` : `${event.start_time} to ${event.end_time}`;
-    return `${event.event_name} in ${event.group_name || event.group_code} on ${dateText} from ${timeText}, ${attendees}.`;
+    const displayLocation = event.display_location || event.venue_name || event.group_name || event.group_code || "Unknown location";
+    return `${event.event_name} at ${displayLocation} on ${dateText} from ${timeText}, ${attendees}.`;
   }).join(" ");
 }
 
@@ -1090,16 +1091,13 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       const area = String(args.area || "").trim();
       const rows = await runReadOnlySql(`
         select e.event_name,
-          case
-            when lg.group_code = 'SPLASH_PAD_RESTROOMS' then 'Splash Pad'
-            when lg.group_code = 'COURTYARD_RESTROOMS' then 'Courtyard'
-            else lg.group_name
-          end as group_name,
-          case
-            when lg.group_code = 'SPLASH_PAD_RESTROOMS' then 'SPLASH_PAD'
-            when lg.group_code = 'COURTYARD_RESTROOMS' then 'COURTYARD'
-            else lg.group_code
-          end as group_code,
+          coalesce(e.event_scope, 'UNKNOWN') as event_scope,
+          e.primary_venue_id,
+          coalesce(nullif(e.display_location, ''), ev.display_name, lg.group_name) as display_location,
+          ev.display_name as venue_name,
+          coalesce(ev.venue_code, lg.group_code) as venue_code,
+          coalesce(nullif(e.display_location, ''), ev.display_name, lg.group_name) as group_name,
+          coalesce(ev.venue_code, lg.group_code) as group_code,
           e.event_date,
           e.end_date,
           to_char(e.start_time, 'HH24:MI:SS') as start_time,
@@ -1109,9 +1107,17 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
           e.notes
         from public.events_app_events e
         join public.location_groups lg on lg.id = e.location_group_id
+        left join public.event_venues ev on ev.id = e.primary_venue_id
         where e.event_date >= current_date
           and e.event_date <= current_date + ${days}
-          ${area ? `and (lg.group_name ilike ${sqlLikeLiteral(area)} or lg.group_code ilike ${sqlLikeLiteral(area)} or lower('${esc(area)}') like '%' || lower(lg.group_name) || '%')` : ""}
+          ${area ? `and (
+            coalesce(nullif(e.display_location, ''), ev.display_name, lg.group_name) ilike ${sqlLikeLiteral(area)}
+            or ev.venue_code ilike ${sqlLikeLiteral(area)}
+            or ev.display_name ilike ${sqlLikeLiteral(area)}
+            or lg.group_name ilike ${sqlLikeLiteral(area)}
+            or lg.group_code ilike ${sqlLikeLiteral(area)}
+            or lower('${esc(area)}') like '%' || lower(coalesce(nullif(e.display_location, ''), ev.display_name, lg.group_name)) || '%'
+          )` : ""}
         order by e.event_date asc, e.start_time asc, e.event_name asc
       `);
       return { events: rows || [] };
@@ -1587,7 +1593,7 @@ export function createMemphisResponder({ runReadOnlySql, runRpc }) {
       const eventArea = areaRow?.group_name === "Event Center" && !/\b(event center|event centre|ec)\b/i.test(text) ? "" : (areaRow?.group_name || "");
       const data = await executeTool("get_upcoming_events", { days: 14, area: eventArea });
       await saveThreadContext(runRpc, threadId, { last_intent: "upcoming_events", last_group_name: areaRow?.group_name || null, last_service_date: relativeServiceDate, last_subject_type: "group", context_json: mergeContextJson(threadContext, { last_question_shape: "upcoming_events", last_subject_kind: "group", last_subject_label: areaRow?.group_name || null }) });
-      return { text: summarizeEvents(data.events), meta: { fallback: true, mode: "local_events", sources: ["events_app_events", "location_groups"] } };
+      return { text: summarizeEvents(data.events), meta: { fallback: true, mode: "local_events", sources: ["events_app_events", "event_venues", "location_groups"] } };
     }
 
     // H3: Use word-boundary regex with maintenance context to avoid misrouting
