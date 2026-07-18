@@ -25880,6 +25880,15 @@
     },
     {
       "backs_constraint": false,
+      "definition": "CREATE INDEX idx_msg_messages_deleted_by_user_id_fkey ON public.msg_messages USING btree (deleted_by_user_id) WHERE (deleted_by_user_id IS NOT NULL)",
+      "index_name": "idx_msg_messages_deleted_by_user_id_fkey",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "msg_messages"
+    },
+    {
+      "backs_constraint": false,
       "definition": "CREATE INDEX idx_msg_messages_deleted_purge ON public.msg_messages USING btree (purge_after, id) WHERE (is_deleted IS TRUE)",
       "index_name": "idx_msg_messages_deleted_purge",
       "is_primary": false,
@@ -26071,6 +26080,15 @@
       "backs_constraint": false,
       "definition": "CREATE INDEX idx_msg_threads_created_by_user_id_fkey ON public.msg_threads USING btree (created_by_user_id)",
       "index_name": "idx_msg_threads_created_by_user_id_fkey",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "msg_threads"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_msg_threads_deleted_by_user_id_fkey ON public.msg_threads USING btree (deleted_by_user_id) WHERE (deleted_by_user_id IS NOT NULL)",
+      "index_name": "idx_msg_threads_deleted_by_user_id_fkey",
       "is_primary": false,
       "is_unique": false,
       "schema_name": "public",
