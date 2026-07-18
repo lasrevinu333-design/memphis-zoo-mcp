@@ -19,6 +19,8 @@ assert.doesNotMatch(indexSource, /create table if not exists public\.system_feed
 assert.match(indexSource, /storage_bucket/);
 assert.match(indexSource, /supabaseAdmin\.storage/);
 assert.match(indexSource, /\/release-manifest/);
+assert.match(indexSource, /app\.use\(\["\/version", "\/release-manifest", "\/health\/dependencies"\]/);
+assert.match(indexSource, /req\.method === "OPTIONS"/);
 assert.match(indexSource, /\/health\/dependencies/);
 assert.match(indexSource, /required_schema_present/);
 assert.match(indexSource, /expired_worker_leases/);
