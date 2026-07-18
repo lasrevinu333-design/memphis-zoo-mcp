@@ -21,17 +21,21 @@ jobs:
         run: |
           set -euo pipefail
           root='https://memphis-zoo-mcp.onrender.com'
-          expected='release-2026.07.17.custodial-repair.1'
+          # Render exposes the immutable deployed Git SHA as release_id. The
+          # semantic app version intentionally changes between coordinated
+          # releases, so a stale hard-coded version would make a successful
+          # deployment poll until timeout and then report a false failure.
+          expected_sha="${GITHUB_SHA}"
           version=''
           moxie_health=''
           for attempt in $(seq 1 60); do
             version="$(curl -fsSL --max-time 40 "$root/version?attempt=$attempt" || true)"
             moxie_health="$(curl -fsSL --max-time 40 "$root/moxie/health?attempt=$attempt" || true)"
             printf 'attempt=%s version=%s moxie_health=%s\n' "$attempt" "$version" "$moxie_health"
-            if grep -Fq "$expected" <<<"$version" && grep -Fq '"auth_required":true' <<<"$moxie_health"; then break; fi
+            if grep -Fq "$expected_sha" <<<"$version" && grep -Fq '"auth_required":true' <<<"$moxie_health"; then break; fi
             sleep 10
           done
-          grep -Fq "$expected" <<<"$version"
+          grep -Fq "$expected_sha" <<<"$version"
           python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["ok"] is True and d["configured"] is True and d["auth_required"] is True' <<<"$moxie_health"
 
           auth_status="$(curl -sS --max-time 40 -o /tmp/passwordless-manager-auth.json -w '%{http_code}' -H 'X-Device-Id: live-manager-access-verifier' "$root/auth-api/session?access_level=full_access")"
@@ -42,7 +46,7 @@ jobs:
             body="$(curl -fsSL --max-time 40 "$root$endpoint")"
             printf '%s %s\n' "$endpoint" "$body"
             grep -Fq '"ok":true' <<<"$body"
-            grep -Fq "$expected" <<<"$body"
+            grep -Fq "$expected_sha" <<<"$body"
           done
 
           root_status="$(curl -sS --max-time 40 -D /tmp/moxie-root.headers -o /tmp/moxie-root.body -w '%{http_code}' "$root/moxie/")"
