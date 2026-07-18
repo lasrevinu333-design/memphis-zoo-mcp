@@ -89,7 +89,7 @@ try {
 
   const threads = await fetch(`${base}/messaging-api/threads?user_id=${USER_ID}&device_id=KIOSK_02`).then((response) => response.json());
   assert.equal(threads.ok, true);
-  assert.ok(rpcCalls.some((call) => call.name === 'msg_get_or_create_memphis_thread'), 'Thread listing must self-heal the Memphis thread');
+  assert.equal(rpcCalls.some((call) => call.name === 'msg_get_or_create_memphis_thread'), false, 'Thread listing must not recreate a conversation the user deleted');
 
   rpcCalls.length = 0;
   messageCounter = 0;

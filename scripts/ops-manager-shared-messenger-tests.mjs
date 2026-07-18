@@ -20,8 +20,7 @@ const sessions = new Map([
 ]);
 
 function userForManager(managerId) {
-  if (managerId === MANAGER_A_ID) return { id: MANAGER_A_USER_ID, display_name: "Manager A" };
-  if (managerId === MANAGER_B_ID) return { id: MANAGER_B_USER_ID, display_name: "Manager B" };
+  if (managerId === MANAGER_A_ID || managerId === MANAGER_B_ID) return { id: MANAGER_A_USER_ID, display_name: "Ops Manager" };
   return null;
 }
 
@@ -30,7 +29,7 @@ async function runRpc(fn, args) {
   if (fn === "msg_ensure_ops_manager_user") {
     const user = userForManager(args.p_manager_id);
     assert.ok(user, "only authenticated manager fixtures may receive a Messenger principal");
-    return { ...user, user_id: user.id, msg_user_id: user.id, role: "manager", is_active: true, ops_manager_id: args.p_manager_id };
+    return { ...user, user_id: user.id, msg_user_id: user.id, role: "manager", is_active: true, messaging_identity_key: "ops_manager_shared_identity_v1" };
   }
   if (fn === "msg_get_or_create_ops_manager_thread") {
     const user = userForManager(args.p_manager_id);
@@ -39,17 +38,17 @@ async function runRpc(fn, args) {
     return { id: SHARED_THREAD_ID, thread_type: "group", title: "Ops Manager Chat", system_key: "ops_manager_shared_chat_v1" };
   }
   if (fn === "msg_get_or_create_memphis_thread") return { id: randomUUID(), thread_type: "bot", title: "Memphis" };
-  if (fn === "msg_send_message") {
+  if (fn === "msg_send_message_as_ops_manager") {
     assert.equal(args.p_thread_id, SHARED_THREAD_ID);
-    assert.ok(participants.has(args.p_sender_user_id));
-    const duplicate = messages.find((row) => row.sender_user_id === args.p_sender_user_id && row.client_message_id === args.p_client_message_id);
+    assert.ok(userForManager(args.p_manager_id));
+    const duplicate = messages.find((row) => row.sender_user_id === MANAGER_A_USER_ID && row.client_message_id === args.p_client_message_id);
     if (duplicate) return duplicate;
-    const sender = args.p_sender_user_id === MANAGER_A_USER_ID ? "Manager A" : "Manager B";
     const row = {
       id: randomUUID(),
       thread_id: SHARED_THREAD_ID,
-      sender_user_id: args.p_sender_user_id,
-      sender_display_name: sender,
+      sender_user_id: MANAGER_A_USER_ID,
+      sender_display_name: "Ops Manager",
+      authenticated_manager_id: args.p_manager_id,
       body: args.p_body,
       message_type: "text",
       client_message_id: args.p_client_message_id,
@@ -68,7 +67,9 @@ async function runRpc(fn, args) {
     if (!row.is_deleted) {
       row.body = "[deleted]";
       row.is_deleted = true;
-      row.updated_at = new Date(Date.now() + 1000).toISOString();
+      row.deleted_at = new Date(Date.now() + 1000).toISOString();
+      row.purge_after = new Date(Date.parse(row.deleted_at) + 14 * 86400000).toISOString();
+      row.updated_at = row.deleted_at;
     }
     return row;
   }
@@ -103,7 +104,7 @@ async function runReadOnlySql(sql) {
       system_key: "ops_manager_shared_chat_v1",
       is_ops_manager_shared: true,
       viewer_can_send: participants.has(viewerUserId),
-      participant_names: [...participants].map((id) => id === MANAGER_A_USER_ID ? "Manager A" : "Manager B").join(", "),
+      participant_names: "Ops Manager",
       unread_count: 0,
       updated_at: new Date().toISOString(),
     }];
@@ -158,12 +159,12 @@ try {
   const bDesktop = await request("manager-b-desktop", "/me/by-device");
   assert.equal(aDesktop.status, 200);
   assert.equal(aPhone.payload.data.msg_user_id, aDesktop.payload.data.msg_user_id, "one manager keeps one sender identity across devices");
-  assert.notEqual(bDesktop.payload.data.msg_user_id, aDesktop.payload.data.msg_user_id, "different managers retain distinct attribution");
+  assert.equal(bDesktop.payload.data.msg_user_id, aDesktop.payload.data.msg_user_id, "all manager sessions share the one public Ops Manager messaging identity");
   assert.equal(aDesktop.payload.data.ops_manager_thread_id, SHARED_THREAD_ID);
   assert.equal(bDesktop.payload.data.ops_manager_thread_id, SHARED_THREAD_ID, "all manager sessions resolve the same room");
 
   const aThreads = await request("manager-a-phone", `/threads?user_id=${MANAGER_A_USER_ID}`);
-  const bThreads = await request("manager-b-desktop", `/threads?user_id=${MANAGER_B_USER_ID}`);
+  const bThreads = await request("manager-b-desktop", `/threads?user_id=${MANAGER_A_USER_ID}`);
   assert.equal(aThreads.payload.data[0].is_ops_manager_shared, true);
   assert.equal(bThreads.payload.data[0].thread_id, SHARED_THREAD_ID);
   assert.equal(aThreads.payload.data[0].viewer_can_send, true);
@@ -190,10 +191,11 @@ try {
   });
   assert.equal(sentA.status, 200, JSON.stringify(sentA.payload));
   assert.equal(retryA.payload.data.id, sentA.payload.data.id, "cross-device retry keeps one logical message");
-  assert.equal(sentB.payload.data.sender_user_id, MANAGER_B_USER_ID);
+  assert.equal(sentB.payload.data.sender_user_id, MANAGER_A_USER_ID);
+  assert.equal(sentB.payload.data.authenticated_manager_id, MANAGER_B_ID, "the server still retains the authenticated manager behind the shared public sender");
   assert.equal(messages.length, 2);
 
-  const visibleToB = await request("manager-b-desktop", `/thread/${SHARED_THREAD_ID}/messages?user_id=${MANAGER_B_USER_ID}&limit=100`);
+  const visibleToB = await request("manager-b-desktop", `/thread/${SHARED_THREAD_ID}/messages?user_id=${MANAGER_A_USER_ID}&limit=100`);
   assert.deepEqual(visibleToB.payload.data.map((row) => row.body), ["Shared room from manager A", "Shared room from manager B"]);
 
   const forgedDelete = await request("manager-a-desktop", `/thread/${SHARED_THREAD_ID}/message/${sentA.payload.data.id}/delete`, {
@@ -210,7 +212,7 @@ try {
   assert.equal(deletedByManagerB.payload.data.is_deleted, true);
   assert.equal(deletedByManagerB.payload.data.body, "[deleted]");
   const deleteCall = rpcCalls.find((call) => call.fn === "msg_delete_message");
-  assert.equal(deleteCall.args.p_request_user_id, MANAGER_B_USER_ID, "server session supplies the deletion actor");
+  assert.equal(deleteCall.args.p_request_user_id, MANAGER_A_USER_ID, "server session supplies the shared public deletion actor");
 
   const deleteRetry = await request("manager-b-desktop", `/thread/${SHARED_THREAD_ID}/message/${sentA.payload.data.id}/delete`, {
     method: "POST",
@@ -221,7 +223,7 @@ try {
   const afterDelete = await request("manager-a-phone", `/thread/${SHARED_THREAD_ID}/messages?limit=100`);
   assert.equal(afterDelete.payload.data.some((row) => row.id === sentA.payload.data.id), false, "deleted messages disappear from every manager device");
 
-  const deleteShared = await request("manager-a-desktop", `/thread/${SHARED_THREAD_ID}/delete`, { method: "POST", body: "{}" });
+  const deleteShared = await request("manager-a-desktop", `/thread/${SHARED_THREAD_ID}/delete`, { method: "POST", body: JSON.stringify({ operation_id: randomUUID() }) });
   assert.equal(deleteShared.status, 409, "the canonical manager room cannot be hidden or deleted");
   const anonymous = await request("", "/me/by-device");
   assert.equal(anonymous.status, 401);

@@ -903,7 +903,7 @@ assert.ok(offShiftThreadReadCalls.find((sql) => /notification_state/i.test(sql))
 
 const EMPLOYEE_USER_ID = '10000000-0000-0000-0000-000000000001';
 const MANAGER_USER_ID = '10000000-0000-0000-0000-000000000002';
-const DIRECT_THREAD_ID = '20000000-0000-0000-0000-000000000001';
+const DIRECT_THREAD_ID = '20000000-0000-4000-8000-000000000001';
 const GROUP_THREAD_ID = '20000000-0000-0000-0000-000000000002';
 const FOREIGN_DIRECT_THREAD_ID = '20000000-0000-0000-0000-000000000003';
 const visibilityReadCalls = [];
@@ -1070,7 +1070,6 @@ const managerMessageSql = visibilityReadCalls.find((sql) => sql.includes(FOREIGN
 assert.ok(managerMessageSql, 'Manager overview message fetch should use the raw thread message visibility query');
 
 let deleteThreadRpcCall = null;
-let permanentDeleteTriggered = false;
 const deleteThreadApp = express();
 deleteThreadApp.use(express.json());
 deleteThreadApp.use('/messaging-api', createTestMessagingRouter({
@@ -1082,13 +1081,22 @@ deleteThreadApp.use('/messaging-api', createTestMessagingRouter({
     if (/from public\.msg_thread_participants/i.test(query)) {
       return [{ '?column?': 1 }];
     }
+    if (/from public\.msg_threads t/i.test(query) && query.includes(DIRECT_THREAD_ID)) {
+      return [{ id: DIRECT_THREAD_ID, thread_type: 'direct', title: null, system_key: null, is_active: true, has_memphis_bot: false }];
+    }
     return [];
   },
   runRpc: async (name, params) => {
-    if (name === 'msg_delete_thread_permanently') permanentDeleteTriggered = true;
-    if (name === 'msg_mark_thread_deleted') {
+    if (name === 'msg_delete_thread') {
       deleteThreadRpcCall = { name, params };
-      return { ok: true, archived_on_device: true, participant_left: false };
+      return {
+        ok: true,
+        deleted: true,
+        thread_id: DIRECT_THREAD_ID,
+        operation_id: '00000000-0000-4000-8000-000000000099',
+        deleted_at: '2026-07-18T18:00:00.000Z',
+        purge_after: '2026-08-01T18:00:00.000Z',
+      };
     }
     return null;
   },
@@ -1102,22 +1110,27 @@ await withServer(deleteThreadApp, async (baseUrl) => {
   const response = await fetch(`${baseUrl}/messaging-api/thread/${DIRECT_THREAD_ID}/delete`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ device_id: 'KIOSK_04' }),
+    body: JSON.stringify({
+      device_id: 'KIOSK_04',
+      operation_id: '00000000-0000-4000-8000-000000000099',
+    }),
   });
   assert.equal(response.status, 200);
   const payload = await response.json();
   assert.equal(payload.ok, true);
+  assert.equal(payload.data.deleted, true);
+  assert.equal(payload.meta.retention_days, 14);
+  assert.equal(payload.meta.deletion, 'all_participants');
 });
 
-assert.equal(permanentDeleteTriggered, false, 'Device conversation archive must not permanently erase shared message history');
 assert.deepEqual(deleteThreadRpcCall, {
-  name: 'msg_mark_thread_deleted',
+  name: 'msg_delete_thread',
   params: {
     p_thread_id: DIRECT_THREAD_ID,
-    p_user_id: EMPLOYEE_USER_ID,
-    p_device_identifier: 'KIOSK_04',
+    p_request_user_id: EMPLOYEE_USER_ID,
+    p_operation_id: '00000000-0000-4000-8000-000000000099',
   },
-}, 'Device conversation archive should be scoped to the viewer/device only and preserve membership');
+}, 'Conversation deletion must be authoritative for all participants and use a stable operation id');
 
 const adminAuditReadCalls = [];
 const adminAuditRpcCalls = [];
