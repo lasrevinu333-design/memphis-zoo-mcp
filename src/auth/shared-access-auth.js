@@ -11,6 +11,7 @@ const MIN_TRUST_TTL_MS = 24 * 60 * 60 * 1000;
 const OPS_TRUST_COOKIE = "memphis_ops_trust";
 const ENROLLMENT_WINDOW_MS = 15 * 60 * 1000;
 const ENROLLMENT_ATTEMPT_LIMIT = 5;
+const SHARED_ENROLLMENT_TTL_SECONDS = 48 * 60 * 60;
 const PAIRING_TOKEN_MIN_TTL_SECONDS = 60;
 const PAIRING_TOKEN_DEFAULT_TTL_SECONDS = 10 * 60;
 const PAIRING_TOKEN_MAX_TTL_SECONDS = 15 * 60;
@@ -22,9 +23,10 @@ const MANAGER_CODE_MIN_TTL_SECONDS = 60;
 const MANAGER_CODE_MAX_TTL_SECONDS = 24 * 60 * 60;
 const MANAGER_CODE_ATTEMPT_LIMIT = 5;
 const MANAGER_CODE_LOCKOUT_SECONDS = 15 * 60;
-const MANAGER_ROLES = new Set(["OPS_MANAGER", "DIRECTOR", "SECURITY_ADMIN"]);
+const MANAGER_ROLES = new Set(["OPS_MANAGER", "CUSTODIAL_MANAGER", "DIRECTOR", "SECURITY_ADMIN"]);
 const enrollmentAttempts = new Map();
 const managerCodeAttempts = new Map();
+const sharedEnrollmentAttempts = new Map();
 
 function safeEqual(a, b) {
   const left = Buffer.from(String(a || ""));
@@ -80,10 +82,8 @@ function normalizeManagerRoles(value) {
     if (MANAGER_ROLES.has(role)) roles.add(role);
   }
   if (!roles.size) roles.add("OPS_MANAGER");
-  if (roles.has("SECURITY_ADMIN")) {
-    roles.add("DIRECTOR");
-    roles.add("OPS_MANAGER");
-  }
+  if (roles.has("CUSTODIAL_MANAGER")) roles.add("OPS_MANAGER");
+  if (roles.has("SECURITY_ADMIN")) roles.add("OPS_MANAGER");
   if (roles.has("DIRECTOR")) roles.add("OPS_MANAGER");
   return Array.from(roles);
 }
@@ -95,7 +95,27 @@ function hasManagerRole(managerOrSession, role) {
 }
 
 function requireManagerAdminRole(managerOrSession) {
-  return hasManagerRole(managerOrSession, "DIRECTOR") || hasManagerRole(managerOrSession, "SECURITY_ADMIN");
+  return hasManagerRole(managerOrSession, "CUSTODIAL_MANAGER");
+}
+
+function sharedEnrollmentWindowPublicView(row) {
+  if (!row) return null;
+  const expiresAt = row.expires_at || null;
+  const active = String(row.status || "") === "active"
+    && !row.disabled_at
+    && (!expiresAt || Date.parse(expiresAt) > Date.now());
+  return {
+    window_id: String(row.window_id || ""),
+    status: active ? "active" : (String(row.status || "inactive") === "active" ? "expired" : String(row.status || "inactive")),
+    created_at: row.created_at || null,
+    expires_at: expiresAt,
+    disabled_at: row.disabled_at || null,
+    disabled_reason: row.disabled_reason || null,
+    enrollment_count: Number(row.enrollment_count || 0),
+    failed_attempt_count: Number(row.failed_attempt_count || 0),
+    last_enrolled_at: row.last_enrolled_at || null,
+    active,
+  };
 }
 
 function managerEnrollmentCodePublicView(row) {
@@ -303,6 +323,14 @@ function managerCodeHash(code, env = process.env) {
   const secret = getSessionSecret(env);
   if (!secret) throw Object.assign(new Error("Ops Manager session secret is not configured."), { status: 503 });
   return hmacHex(secret, `ops-manager-enrollment-code:v1:${normalized}`);
+}
+
+function sharedEnrollmentCodeHash(code, env = process.env) {
+  const normalized = normalizeManagerCode(code);
+  if (!normalized) throw Object.assign(new Error("A valid eight-digit enrollment passcode is required."), { status: 400 });
+  const secret = getSessionSecret(env);
+  if (!secret) throw Object.assign(new Error("Ops Manager session secret is not configured."), { status: 503 });
+  return hmacHex(secret, `ops-manager-shared-48-hour-enrollment:v1:${normalized}`);
 }
 
 function generateManagerCode() {
@@ -687,6 +715,60 @@ async function clearManagerCodeFailures(store, keyHash) {
   managerCodeAttempts.delete(keyHash);
 }
 
+function sharedEnrollmentRateKey(req, env = process.env) {
+  const material = `${requestIp(req) || "unknown"}|${requestUserAgent(req) || "unknown"}|${requestDeviceId(req) || "unknown"}`;
+  return privacyHash(material, env, "shared-enrollment-rate") || sha256Hex(`shared-enrollment-rate:${material}`);
+}
+
+async function readSharedEnrollmentRateLimit(store, keyHash) {
+  if (store?.getSharedEnrollmentRateLimit) return store.getSharedEnrollmentRateLimit(keyHash);
+  const row = sharedEnrollmentAttempts.get(keyHash) || null;
+  if (!row) return null;
+  const first = Date.parse(String(row.first_failed_at || ""));
+  if (Number.isFinite(first) && Date.now() - first >= ENROLLMENT_WINDOW_MS) {
+    sharedEnrollmentAttempts.delete(keyHash);
+    return null;
+  }
+  return row;
+}
+
+async function sharedEnrollmentRateAllowed(store, keyHash, now = Date.now()) {
+  const row = await readSharedEnrollmentRateLimit(store, keyHash);
+  const lockedUntil = Date.parse(String(row?.locked_until || ""));
+  if (Number.isFinite(lockedUntil) && lockedUntil > now) {
+    return { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil((lockedUntil - now) / 1000)), row };
+  }
+  return { allowed: true, retryAfterSeconds: 0, row };
+}
+
+async function recordSharedEnrollmentFailure(store, keyHash, metadata = {}) {
+  if (store?.recordSharedEnrollmentFailure) return store.recordSharedEnrollmentFailure(keyHash, metadata);
+  const now = Date.now();
+  const current = await readSharedEnrollmentRateLimit(store, keyHash);
+  const failureCount = Number(current?.failure_count || 0) + 1;
+  const progressiveSeconds = Math.min(30, 2 ** Math.max(0, failureCount - 1));
+  const row = {
+    key_hash: keyHash,
+    failure_count: failureCount,
+    first_failed_at: current?.first_failed_at || new Date(now).toISOString(),
+    last_failed_at: new Date(now).toISOString(),
+    locked_until: new Date(now + (failureCount >= ENROLLMENT_ATTEMPT_LIMIT
+      ? MANAGER_CODE_LOCKOUT_SECONDS
+      : progressiveSeconds) * 1000).toISOString(),
+    metadata_json: metadata,
+  };
+  sharedEnrollmentAttempts.set(keyHash, row);
+  return row;
+}
+
+async function clearSharedEnrollmentFailures(store, keyHash) {
+  if (store?.clearSharedEnrollmentFailures) {
+    await store.clearSharedEnrollmentFailures(keyHash);
+    return;
+  }
+  sharedEnrollmentAttempts.delete(keyHash);
+}
+
 function normalizeStoreRow(row) {
   if (!row || typeof row !== "object") return null;
   const manager = row.manager && typeof row.manager === "object" ? managerPublicView(row.manager) : null;
@@ -698,6 +780,7 @@ function normalizeStoreRow(row) {
     max_access_level: normalizeOpsAccessLevel(row.max_access_level),
     manager_id: row.manager_id || manager?.manager_id || null,
     manager,
+    shared_enrollment_window_id: row.shared_enrollment_window_id || null,
     platform_summary: row.platform_summary || row.metadata_json?.platform_summary || null,
     created_at: row.created_at || null,
     last_used_at: row.last_used_at || null,
@@ -717,6 +800,7 @@ function trustedDevicePublicView(row) {
     max_access_level: normalized.max_access_level,
     manager_id: normalized.manager_id,
     manager: normalized.manager,
+    shared_enrollment_window_id: normalized.shared_enrollment_window_id,
     platform_summary: normalized.platform_summary,
     created_at: normalized.created_at,
     last_used_at: normalized.last_used_at,
@@ -784,6 +868,107 @@ export function createSupabaseTrustedDeviceStore(supabase) {
   }
   return {
     getManager,
+    async getManagerBySystemKey(systemKey) {
+      const { data, error } = await supabase
+        .from("ops_manager_managers")
+        .select("manager_id,display_name,contact_label,roles,active,revoked_at,revoked_reason,created_at,last_access_at,system_key")
+        .eq("system_key", String(systemKey || ""))
+        .maybeSingle();
+      if (error) throw error;
+      return data ? { ...managerPublicView(data), system_key: data.system_key || null } : null;
+    },
+    async getSharedEnrollmentWindow() {
+      const { data, error } = await supabase
+        .from("ops_manager_shared_enrollment_windows")
+        .select("window_id,status,created_at,expires_at,disabled_at,disabled_reason,enrollment_count,failed_attempt_count,last_enrolled_at")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return sharedEnrollmentWindowPublicView(data);
+    },
+    async createSharedEnrollmentWindow(record = {}) {
+      const { data, error } = await supabase.rpc("ops_manager_create_shared_enrollment_window", {
+        p_code_hash: String(record.code_hash || "").trim().toLowerCase(),
+        p_created_by_manager_id: record.created_by_manager_id,
+        p_created_by_credential_id: record.created_by_credential_id,
+        p_metadata_json: record.metadata_json && typeof record.metadata_json === "object" && !Array.isArray(record.metadata_json)
+          ? record.metadata_json
+          : {},
+      });
+      if (error) throw error;
+      return data;
+    },
+    async disableSharedEnrollmentWindow(windowId, record = {}) {
+      const { data, error } = await supabase.rpc("ops_manager_disable_shared_enrollment_window", {
+        p_window_id: windowId,
+        p_actor_manager_id: record.actor_manager_id,
+        p_actor_credential_id: record.actor_credential_id,
+        p_reason: String(record.reason || "disabled_by_custodial_manager").slice(0, 160),
+      });
+      if (error) throw error;
+      return data;
+    },
+    async consumeSharedEnrollmentWindow(record = {}) {
+      const { data, error } = await supabase.rpc("ops_manager_consume_shared_enrollment_window", {
+        p_code_hash: String(record.code_hash || "").trim().toLowerCase(),
+        p_credential_id: record.credential_id,
+        p_device_id: normalizeDeviceId(record.device_id || ""),
+        p_device_label: normalizeDeviceLabel(record.device_label || ""),
+        p_trust_token_hash: String(record.token_hash || ""),
+        p_user_agent_hash: record.user_agent_hash || null,
+        p_created_ip_hash: record.created_ip_hash || null,
+        p_platform_summary: String(record.platform_summary || "").slice(0, 160) || null,
+        p_expires_at: record.expires_at,
+        p_metadata_json: record.metadata_json && typeof record.metadata_json === "object" && !Array.isArray(record.metadata_json)
+          ? record.metadata_json
+          : {},
+      });
+      if (error) throw error;
+      return data;
+    },
+    async getSharedEnrollmentRateLimit(keyHash) {
+      const { data, error } = await supabase
+        .from("ops_manager_shared_enrollment_rate_limits")
+        .select("key_hash,failure_count,first_failed_at,last_failed_at,locked_until,metadata_json")
+        .eq("key_hash", keyHash)
+        .maybeSingle();
+      if (error) throw error;
+      return data || null;
+    },
+    async recordSharedEnrollmentFailure(keyHash, metadata = {}) {
+      const current = await this.getSharedEnrollmentRateLimit(keyHash);
+      const now = new Date();
+      const first = Date.parse(String(current?.first_failed_at || ""));
+      const withinWindow = Number.isFinite(first) && now.getTime() - first < ENROLLMENT_WINDOW_MS;
+      const failureCount = (withinWindow ? Number(current?.failure_count || 0) : 0) + 1;
+      const progressiveSeconds = Math.min(30, 2 ** Math.max(0, failureCount - 1));
+      const lockedUntil = new Date(now.getTime() + (failureCount >= ENROLLMENT_ATTEMPT_LIMIT
+        ? MANAGER_CODE_LOCKOUT_SECONDS
+        : progressiveSeconds) * 1000).toISOString();
+      const row = {
+        key_hash: keyHash,
+        failure_count: failureCount,
+        first_failed_at: withinWindow ? current.first_failed_at : now.toISOString(),
+        last_failed_at: now.toISOString(),
+        locked_until: lockedUntil,
+        metadata_json: metadata && typeof metadata === "object" && !Array.isArray(metadata) ? metadata : {},
+      };
+      const { data, error } = await supabase
+        .from("ops_manager_shared_enrollment_rate_limits")
+        .upsert(row, { onConflict: "key_hash" })
+        .select("key_hash,failure_count,first_failed_at,last_failed_at,locked_until,metadata_json")
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    async clearSharedEnrollmentFailures(keyHash) {
+      const { error } = await supabase
+        .from("ops_manager_shared_enrollment_rate_limits")
+        .delete()
+        .eq("key_hash", keyHash);
+      if (error) throw error;
+    },
     async createManager(record = {}) {
       const roles = normalizeManagerRoles(record.roles || record.role);
       const insert = {
@@ -1087,12 +1272,24 @@ export function createSupabaseTrustedDeviceStore(supabase) {
     async listTrustedDevices() {
       const { data, error } = await supabase
         .from("ops_manager_trusted_devices")
-        .select("credential_id,device_id,device_label,max_access_level,manager_id,platform_summary,created_at,last_used_at,expires_at,revoked_at,revoked_reason")
+        .select("credential_id,device_id,device_label,max_access_level,manager_id,shared_enrollment_window_id,platform_summary,created_at,last_used_at,expires_at,revoked_at,revoked_reason")
         .order("created_at", { ascending: false });
       if (error) throw error;
       const result = [];
       for (const row of data || []) result.push(trustedDevicePublicView(await hydrateTrustedRow(row)));
       return result.filter(Boolean);
+    },
+    async renameTrustedDevice(credentialId, deviceLabel) {
+      const label = normalizeDeviceLabel(deviceLabel);
+      if (!label) throw Object.assign(new Error("Device label is required."), { status: 400 });
+      const { data, error } = await supabase
+        .from("ops_manager_trusted_devices")
+        .update({ device_label: label })
+        .eq("credential_id", credentialId)
+        .select("credential_id,device_id,device_label,max_access_level,manager_id,shared_enrollment_window_id,platform_summary,created_at,last_used_at,expires_at,revoked_at,revoked_reason")
+        .maybeSingle();
+      if (error) throw error;
+      return trustedDevicePublicView(data);
     },
     async revoke(credentialId, reason = "logout") {
       const { error } = await supabase
@@ -1128,6 +1325,28 @@ export function createSupabaseTrustedDeviceStore(supabase) {
         .select("credential_id,device_id,device_label,max_access_level,manager_id,platform_summary,created_at,last_used_at,expires_at,revoked_at,revoked_reason");
       if (error) throw error;
       return (data || []).map(trustedDevicePublicView).filter(Boolean);
+    },
+    async revokeAllExceptManager(managerId, reason = "revoke_all_non_custodial_manager") {
+      const mutation = {
+        revoked_at: new Date().toISOString(),
+        revoked_reason: String(reason || "revoke_all_non_custodial_manager").slice(0, 160),
+      };
+      const selection = "credential_id,device_id,device_label,max_access_level,manager_id,shared_enrollment_window_id,platform_summary,created_at,last_used_at,expires_at,revoked_at,revoked_reason";
+      const { data: assigned, error: assignedError } = await supabase
+        .from("ops_manager_trusted_devices")
+        .update(mutation)
+        .neq("manager_id", managerId)
+        .is("revoked_at", null)
+        .select(selection);
+      if (assignedError) throw assignedError;
+      const { data: unassigned, error: unassignedError } = await supabase
+        .from("ops_manager_trusted_devices")
+        .update(mutation)
+        .is("manager_id", null)
+        .is("revoked_at", null)
+        .select(selection);
+      if (unassignedError) throw unassignedError;
+      return [...(assigned || []), ...(unassigned || [])].map(trustedDevicePublicView).filter(Boolean);
     },
     async audit(event) {
       const { error } = await supabase.from("ops_manager_auth_events").insert(event);
@@ -1263,6 +1482,275 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
     }
     res.status(200).json({ ok: true, data: { session: result.session } });
   });
+
+  const requireCustodialManager = async (req, res) => {
+    const activeStore = trustedDeviceStoreOrThrow(store);
+    if (!isAllowedManagerInviteOrigin(req, env)) {
+      return { ok: false, sent: true, response: res.status(403).json({ ok: false, error: "This manager request is not allowed from that origin." }) };
+    }
+    const actor = await authenticateTrustedManagerDevice(req, { store: activeStore, env });
+    if (!actor.ok) {
+      sendTrustedManagerAuthFailure(res, actor);
+      return { ok: false, sent: true };
+    }
+    if (!requireManagerAdminRole(actor.session)) {
+      res.status(403).json({ ok: false, error: "Custodial Manager access is required." });
+      return { ok: false, sent: true };
+    }
+    return { ok: true, actor, activeStore };
+  };
+
+  app.get("/auth-api/ops/shared-enrollment", async (req, res) => {
+    try {
+      const auth = await requireCustodialManager(req, res);
+      if (!auth.ok) return;
+      if (!auth.activeStore.getSharedEnrollmentWindow) {
+        throw Object.assign(new Error("Shared enrollment is not available on this deployment."), { status: 503 });
+      }
+      const [window, devices] = await Promise.all([
+        auth.activeStore.getSharedEnrollmentWindow(),
+        auth.activeStore.listTrustedDevices?.() || [],
+      ]);
+      res.status(200).json({
+        ok: true,
+        data: {
+          enrollment_window: window,
+          devices: devices.filter((device) => Boolean(device.shared_enrollment_window_id)),
+          current_credential_id: auth.actor.credentialId,
+          code_retrievable: false,
+          default_ttl_seconds: SHARED_ENROLLMENT_TTL_SECONDS,
+        },
+      });
+    } catch (error) {
+      sendAuthError(res, error, "Shared enrollment status could not be loaded.");
+    }
+  });
+
+  app.post("/auth-api/ops/shared-enrollment", async (req, res) => {
+    try {
+      const auth = await requireCustodialManager(req, res);
+      if (!auth.ok) return;
+      if (!auth.activeStore.createSharedEnrollmentWindow) {
+        throw Object.assign(new Error("Shared enrollment is not available on this deployment."), { status: 503 });
+      }
+      let code = "";
+      let created = null;
+      let lastError = null;
+      for (let attempt = 0; attempt < 12 && !created; attempt += 1) {
+        code = generateManagerCode();
+        try {
+          const candidate = await auth.activeStore.createSharedEnrollmentWindow({
+            code_hash: sharedEnrollmentCodeHash(code, env),
+            created_by_manager_id: auth.actor.session.manager_id,
+            created_by_credential_id: auth.actor.credentialId,
+            metadata_json: {
+              created_from: "manager_device_access",
+              user_agent_hash: privacyHash(requestUserAgent(req), env, "ua"),
+              ip_hash: privacyHash(requestIp(req), env, "ip"),
+            },
+          });
+          if (!candidate?.ok) {
+            const status = Number(candidate?.status) || 500;
+            throw Object.assign(new Error(status === 403 ? "Custodial Manager access is required." : "Shared enrollment window could not be created."), { status });
+          }
+          created = candidate;
+        } catch (error) {
+          lastError = error;
+          if (String(error?.code || "") !== "23505" && !String(error?.message || "").toLowerCase().includes("duplicate")) throw error;
+        }
+      }
+      if (!created) throw Object.assign(lastError || new Error("Shared enrollment window could not be created."), { status: 500 });
+      await auditTrustedDevice(auth.activeStore, authEvent(req, {
+        credentialId: auth.actor.credentialId,
+        deviceId: auth.actor.session.device_id,
+        eventType: "shared_enrollment_window_created",
+        success: true,
+        detail: {
+          window_id: created.window_id,
+          expires_at: created.expires_at,
+          ttl_seconds: SHARED_ENROLLMENT_TTL_SECONDS,
+          replaced_window_id: created.replaced_window_id || null,
+        },
+        env,
+      }));
+      res.status(200).json({
+        ok: true,
+        data: {
+          window_id: created.window_id,
+          passcode: code,
+          display_passcode: formatManagerCode(code),
+          status: created.status,
+          created_at: created.created_at,
+          expires_at: created.expires_at,
+          ttl_seconds: SHARED_ENROLLMENT_TTL_SECONDS,
+          enrollment_count: Number(created.enrollment_count || 0),
+          shown_once: true,
+        },
+      });
+    } catch (error) {
+      sendAuthError(res, error, "Shared enrollment window could not be created.");
+    }
+  });
+
+  app.post("/auth-api/ops/shared-enrollment/:windowId/disable", async (req, res) => {
+    try {
+      const auth = await requireCustodialManager(req, res);
+      if (!auth.ok) return;
+      const windowId = String(req.params?.windowId || "");
+      if (!/^[0-9a-f-]{36}$/i.test(windowId)) throw Object.assign(new Error("windowId must be a UUID."), { status: 400 });
+      const disabled = await auth.activeStore.disableSharedEnrollmentWindow?.(windowId, {
+        actor_manager_id: auth.actor.session.manager_id,
+        actor_credential_id: auth.actor.credentialId,
+        reason: req.body?.reason || "disabled_by_custodial_manager",
+      });
+      if (!disabled?.ok) throw Object.assign(new Error("Shared enrollment window could not be disabled."), { status: Number(disabled?.status) || 500 });
+      await auditTrustedDevice(auth.activeStore, authEvent(req, {
+        credentialId: auth.actor.credentialId,
+        deviceId: auth.actor.session.device_id,
+        eventType: "shared_enrollment_window_disabled",
+        success: true,
+        detail: { window_id: windowId, status: disabled.status },
+        env,
+      }));
+      res.status(200).json({ ok: true, data: { enrollment_window: disabled } });
+    } catch (error) {
+      sendAuthError(res, error, "Shared enrollment window could not be disabled.");
+    }
+  });
+
+  app.post("/auth-api/ops/shared-enrollment/consume", async (req, res) => {
+    const genericError = "That enrollment passcode is invalid, expired, or disabled.";
+    try {
+      const activeStore = trustedDeviceStoreOrThrow(store);
+      if (!isAllowedManagerInviteOrigin(req, env)) {
+        res.status(403).json({ ok: false, error: genericError });
+        return;
+      }
+      const rateKey = sharedEnrollmentRateKey(req, env);
+      const rate = await sharedEnrollmentRateAllowed(activeStore, rateKey);
+      if (!rate.allowed) {
+        res.setHeader?.("Retry-After", String(rate.retryAfterSeconds || 1));
+        res.status(429).json({ ok: false, error: "Too many attempts. Try again later." });
+        return;
+      }
+      if (!activeStore.consumeSharedEnrollmentWindow) {
+        throw Object.assign(new Error("Shared enrollment is not available on this deployment."), { status: 503 });
+      }
+      const code = requestManagerCode(req);
+      if (!code) {
+        const limit = await recordSharedEnrollmentFailure(activeStore, rateKey, { reason: "malformed" });
+        const retryAfter = Math.max(1, Math.ceil((Date.parse(limit.locked_until) - Date.now()) / 1000));
+        res.setHeader?.("Retry-After", String(retryAfter));
+        await auditTrustedDevice(activeStore, authEvent(req, { eventType: "shared_enrollment_failed", success: false, detail: { reason: "malformed" }, env }));
+        res.status(401).json({ ok: false, error: genericError });
+        return;
+      }
+      const deviceId = requestDeviceId(req);
+      if (!deviceId) throw Object.assign(new Error("A stable manager device ID is required."), { status: 400 });
+      const deviceLabel = requestDeviceLabel(req) || deviceId;
+      const credentialId = randomUUID();
+      const secret = randomBytes(32).toString("base64url");
+      const now = new Date();
+      const expiresAt = new Date(now.getTime() + getTrustTtlMs(env)).toISOString();
+      const data = await activeStore.consumeSharedEnrollmentWindow({
+        code_hash: sharedEnrollmentCodeHash(code, env),
+        credential_id: credentialId,
+        device_id: deviceId,
+        device_label: deviceLabel,
+        token_hash: trustTokenHash(secret, env),
+        user_agent_hash: privacyHash(requestUserAgent(req), env, "ua"),
+        created_ip_hash: privacyHash(requestIp(req), env, "ip"),
+        platform_summary: platformSummary(req),
+        expires_at: expiresAt,
+        metadata_json: {
+          enrolled_by: "shared_48_hour_passcode",
+          user_agent_hash: privacyHash(requestUserAgent(req), env, "ua"),
+          ip_hash: privacyHash(requestIp(req), env, "ip"),
+          platform_summary: platformSummary(req),
+        },
+      });
+      if (!data?.ok) {
+        const limit = await recordSharedEnrollmentFailure(activeStore, rateKey, {
+          reason: String(data?.reason || "rejected").slice(0, 80),
+          status: Number(data?.status) || 401,
+        });
+        const retryAfter = Math.max(1, Math.ceil((Date.parse(limit.locked_until) - Date.now()) / 1000));
+        res.setHeader?.("Retry-After", String(retryAfter));
+        await auditTrustedDevice(activeStore, authEvent(req, {
+          eventType: "shared_enrollment_failed",
+          success: false,
+          detail: { reason: String(data?.reason || "rejected").slice(0, 80) },
+          env,
+        }));
+        res.status(Number(limit.failure_count || 0) >= ENROLLMENT_ATTEMPT_LIMIT ? 429 : 401).json({
+          ok: false,
+          error: Number(limit.failure_count || 0) >= ENROLLMENT_ATTEMPT_LIMIT ? "Too many attempts. Try again later." : genericError,
+        });
+        return;
+      }
+      await clearSharedEnrollmentFailures(activeStore, rateKey);
+      setTrustCookie(res, `${credentialId}.${secret}`, env);
+      const manager = data.manager || null;
+      const session = createOpsManagerSession({
+        credentialId,
+        deviceId: data.trusted_device?.device_id || deviceId,
+        manager,
+        accessLevel: "full_access",
+        maximumAccessLevel: "full_access",
+        authMode: "trusted_device",
+        env,
+        now,
+      });
+      await auditTrustedDevice(activeStore, authEvent(req, {
+        credentialId,
+        deviceId,
+        eventType: "device_enrolled_by_shared_passcode",
+        success: true,
+        detail: {
+          window_id: data.window_id || data.trusted_device?.shared_enrollment_window_id || null,
+          manager_id: manager?.manager_id || data.trusted_device?.manager_id || null,
+          assigned_role: "OPS_MANAGER",
+        },
+        env,
+      }));
+      res.status(200).json({
+        ok: true,
+        data: {
+          session,
+          trusted_device: {
+            credential_id: credentialId,
+            device_id: deviceId,
+            device_label: deviceLabel,
+            expires_at: expiresAt,
+            max_access_level: "full_access",
+            manager_id: manager?.manager_id || data.trusted_device?.manager_id || null,
+            shared_enrollment_window_id: data.window_id || data.trusted_device?.shared_enrollment_window_id || null,
+          },
+        },
+      });
+    } catch (error) {
+      if (Number(error?.status) && Number(error.status) < 500) {
+        res.status(Number(error.status)).json({ ok: false, error: genericError });
+        return;
+      }
+      sendAuthError(res, error, "Ops Manager shared enrollment failed.");
+    }
+  });
+
+  const retireLegacyManagerEnrollment = (req, res) => {
+    auditTrustedDevice(store, authEvent(req, {
+      eventType: "legacy_manager_enrollment_route_rejected",
+      success: false,
+      detail: { reason: "shared_48_hour_passcode_required" },
+      env,
+    }));
+    res.status(410).json({ ok: false, error: "This enrollment method is retired. Use the shared 48-hour passcode on the normal Ops Manager Hub URL." });
+  };
+  app.use("/auth-api/ops/managers", retireLegacyManagerEnrollment);
+  app.use("/auth-api/ops/manager-codes", retireLegacyManagerEnrollment);
+  app.use("/auth-api/ops/pairing", retireLegacyManagerEnrollment);
+  app.use("/auth-api/ops/pairing-links", retireLegacyManagerEnrollment);
+  app.use("/auth-api/ops/invitations", retireLegacyManagerEnrollment);
 
   app.get("/auth-api/ops/managers", async (req, res) => {
     try {
@@ -1853,22 +2341,46 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
         return;
       }
       const reason = String(req.body?.reason || "manager_revoke_all").slice(0, 160);
-      const revoked = activeStore.revokeAll ? await activeStore.revokeAll(reason) : [];
+      const revoked = activeStore.revokeAllExceptManager
+        ? await activeStore.revokeAllExceptManager(manager.session.manager_id, reason)
+        : [];
       await auditTrustedDevice(activeStore, authEvent(req, {
         credentialId: manager.credentialId,
         deviceId: manager.session.device_id,
-        eventType: "all_manager_devices_revoked",
+        eventType: "all_non_custodial_manager_devices_revoked",
         success: true,
         detail: { reason, revoked_count: revoked.length },
         env,
       }));
-      clearTrustCookie(res, env);
       res.status(200).json({ ok: true, data: { revoked_count: revoked.length, revoked_devices: revoked } });
     } catch (error) {
-      clearTrustCookie(res, env);
       sendAuthError(res, error, "Trusted manager devices could not be revoked.");
     }
   });
+
+  const renameTrustedDeviceHandler = async (req, res) => {
+    try {
+      const auth = await requireCustodialManager(req, res);
+      if (!auth.ok) return;
+      const credentialId = String(req.params?.credentialId || "").trim();
+      if (!/^[0-9a-f-]{36}$/i.test(credentialId)) throw Object.assign(new Error("A valid trusted-device credential ID is required."), { status: 400 });
+      const renamed = await auth.activeStore.renameTrustedDevice?.(credentialId, req.body?.device_label || req.body?.deviceLabel);
+      if (!renamed) throw Object.assign(new Error("Trusted device was not found."), { status: 404 });
+      await auditTrustedDevice(auth.activeStore, authEvent(req, {
+        credentialId,
+        deviceId: renamed.device_id,
+        eventType: "trusted_manager_device_renamed",
+        success: true,
+        detail: { renamed_by_credential_id: auth.actor.credentialId },
+        env,
+      }));
+      res.status(200).json({ ok: true, data: { device: renamed } });
+    } catch (error) {
+      sendAuthError(res, error, "Trusted manager device could not be renamed.");
+    }
+  };
+  if (typeof app.patch === "function") app.patch("/auth-api/ops/trusted-devices/:credentialId", renameTrustedDeviceHandler);
+  app.post("/auth-api/ops/trusted-devices/:credentialId/rename", renameTrustedDeviceHandler);
 
   app.post("/auth-api/ops/trusted-devices/:credentialId/revoke", async (req, res) => {
     try {
@@ -1884,6 +2396,9 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
       }
       const credentialId = String(req.params?.credentialId || "").trim();
       if (!/^[0-9a-f-]{36}$/i.test(credentialId)) throw Object.assign(new Error("A valid trusted-device credential ID is required."), { status: 400 });
+      if (credentialId === manager.credentialId) {
+        throw Object.assign(new Error("The active Custodial Manager device cannot revoke itself from this page."), { status: 409 });
+      }
       const reason = String(req.body?.reason || "manager_revoke_device").slice(0, 160);
       await activeStore.revoke?.(credentialId, reason);
       await auditTrustedDevice(activeStore, authEvent(req, {
@@ -1894,7 +2409,6 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
         detail: { reason, revoked_by_credential_id: manager.credentialId },
         env,
       }));
-      if (credentialId === manager.credentialId) clearTrustCookie(res, env);
       res.status(200).json({ ok: true, data: { revoked_credential_id: credentialId } });
     } catch (error) {
       sendAuthError(res, error, "Trusted manager device could not be revoked.");
@@ -1908,7 +2422,7 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
       detail: { reason: "one_time_manager_code_required" },
       env,
     }));
-    res.status(410).json({ ok: false, error: "Ops Manager enrollment uses one-time manager codes on the normal Hub URL." });
+    res.status(410).json({ ok: false, error: "Ops Manager enrollment uses the shared 48-hour passcode on the normal Hub URL." });
   });
 
   app.get("/auth-api/session", async (req, res) => {
@@ -2015,8 +2529,10 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
         passwordless_manager_access: config.passwordlessManagerAccess,
         operations_first: config.passwordlessManagerAccess,
         trusted_device_enrollment: !config.passwordlessManagerAccess && Boolean(store),
-        trusted_device_codes: !config.passwordlessManagerAccess && Boolean(store),
-        trusted_device_pairing: !config.passwordlessManagerAccess && Boolean(store),
+        shared_48_hour_enrollment: !config.passwordlessManagerAccess && Boolean(store),
+        shared_enrollment_ttl_seconds: SHARED_ENROLLMENT_TTL_SECONDS,
+        trusted_device_codes: false,
+        trusted_device_pairing: false,
         access_token_ttl_seconds: Math.floor(config.accessTtlMs / 1000),
         trusted_device_ttl_days: Math.floor(config.trustTtlMs / 86_400_000),
       },

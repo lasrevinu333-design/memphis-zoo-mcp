@@ -61,6 +61,7 @@ const MESSAGING_CONTRACT_VERSION = "messaging.v2";
 const SCHEDULE_CONTRACT_VERSION = "schedule.v2";
 const GUEST_REPORTS_CONTRACT_VERSION = "guest-reports.v1";
 const FEEDBACK_CONTRACT_VERSION = "feedback.v1";
+const OPS_MANAGER_AUTH_CONTRACT_VERSION = "ops-manager-auth.v4.shared-48h";
 const CANARY_RESTROOM_CODE = "TETM";
 const CANARY_EXHIBIT_CODE = "TETX";
 const CANARY_DEVICE_ID = "canary-check";
@@ -289,6 +290,7 @@ function buildHealthPayload(area, extra = {}) {
     schedule: SCHEDULE_CONTRACT_VERSION,
     events: EVENTS_CONTRACT_VERSION,
     feedback: FEEDBACK_CONTRACT_VERSION,
+    ops_manager_auth: OPS_MANAGER_AUTH_CONTRACT_VERSION,
   };
   return {
     ok: true,
