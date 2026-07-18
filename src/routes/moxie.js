@@ -834,6 +834,12 @@ function hideModal(){if(clearChatModal)clearChatModal.hidden=true;}
 function saveChat(){if(!history.length){deleteChat();return;}const snap=history.slice(-40);savedChats.unshift({id:String(Date.now()),savedAt:new Date().toISOString(),title:gT(snap),messages:snap});savedChats=savedChats.slice(0,30);pSC2();rSC();deleteChat();}
 function deleteChat(){history.splice(0,history.length);pH2();rH();hideModal();}
 lS();rSC();
+if(clearChatButton)clearChatButton.addEventListener("click",showModal);
+if(saveClearChat)saveClearChat.addEventListener("click",saveChat);
+if(deleteClearChat)deleteClearChat.addEventListener("click",deleteChat);
+if(cancelClearChat)cancelClearChat.addEventListener("click",hideModal);
+if(clearChatModal)clearChatModal.addEventListener("click",(e)=>{if(e.target===clearChatModal)hideModal();});
+document.addEventListener("keydown",(e)=>{if(e.key==="Escape"&&clearChatModal&&!clearChatModal.hidden)hideModal();});
 if(typeof setInterval==="function")setInterval(()=>{if(!chatStateSaving)lS();},3000);
 input.addEventListener("keydown",(e)=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();form.requestSubmit();}});
 form.addEventListener("submit",async(e)=>{
