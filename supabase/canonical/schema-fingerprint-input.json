@@ -11143,6 +11143,19 @@
     },
     {
       "collation_name": null,
+      "column_name": "client_thread_id",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 10,
+      "schema_name": "public",
+      "table_name": "msg_threads"
+    },
+    {
+      "collation_name": null,
       "column_name": "id",
       "comment": null,
       "data_type": "uuid",
@@ -19852,6 +19865,14 @@
       "validated": true
     },
     {
+      "constraint_name": "msg_threads_client_thread_id_format_chk",
+      "constraint_type": "c",
+      "definition": "CHECK (client_thread_id IS NULL OR length(btrim(client_thread_id)) >= 8 AND length(btrim(client_thread_id)) <= 200 AND client_thread_id = btrim(client_thread_id))",
+      "schema_name": "public",
+      "table_name": "msg_threads",
+      "validated": true
+    },
+    {
       "constraint_name": "msg_threads_created_by_user_id_fkey",
       "constraint_type": "f",
       "definition": "FOREIGN KEY (created_by_user_id) REFERENCES msg_users(id) ON DELETE RESTRICT",
@@ -21975,8 +21996,15 @@
       "schema_name": "public"
     },
     {
-      "comment": "Soft-deletes one message idempotently after server-derived sender/manager authorization and advances cross-device reconciliation.",
-      "definition": "CREATE OR REPLACE FUNCTION public.msg_delete_message(p_message_id uuid, p_request_user_id uuid)\n RETURNS msg_messages\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_message public.msg_messages%rowtype;\n  v_request_role text;\n  v_now timestamptz := now();\nbegin\n  if p_message_id is null or p_request_user_id is null then\n    raise exception using errcode = '22023', message = 'Message and authenticated user are required';\n  end if;\n\n  select role into v_request_role\n  from public.msg_users\n  where id = p_request_user_id\n    and is_active is true;\n\n  if v_request_role is null then\n    raise exception using errcode = '42501', message = 'Authenticated messaging user was not found';\n  end if;\n\n  select * into v_message\n  from public.msg_messages\n  where id = p_message_id\n  for update;\n\n  if v_message.id is null then\n    raise exception using errcode = 'P0002', message = 'Message not found';\n  end if;\n\n  if v_message.sender_user_id <> p_request_user_id\n     and v_request_role not in ('manager', 'admin') then\n    raise exception using errcode = '42501', message = 'Only the sender or an Ops Manager can delete this message';\n  end if;\n\n  if v_message.is_deleted is false then\n    update public.msg_messages\n    set is_deleted = true,\n        body = '[deleted]',\n        metadata_json = coalesce(metadata_json, '{}'::jsonb)\n          || jsonb_build_object(\n            'deleted_by', p_request_user_id,\n            'deleted_at', v_now\n          ),\n        updated_at = v_now\n    where id = p_message_id\n    returning * into v_message;\n\n    update public.msg_threads\n    set updated_at = v_now\n    where id = v_message.thread_id;\n  end if;\n\n  return v_message;\nend;\n$function$\n",
+      "comment": "Creates employee or manager groups idempotently from a server-authenticated creator.",
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_create_group_thread_v2(p_created_by_user_id uuid, p_title text, p_member_user_ids uuid[], p_client_thread_id text)\n RETURNS msg_threads\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_thread public.msg_threads%rowtype;\n  v_member_ids uuid[];\n  v_title text;\n  v_client_thread_id text;\nbegin\n  if p_created_by_user_id is null then\n    raise exception using errcode = '22023', message = 'Authenticated group creator is required';\n  end if;\n  if not public.msg_is_runtime_user(p_created_by_user_id) then\n    raise exception using errcode = '42501', message = 'Group creator is not an active Messenger user';\n  end if;\n\n  v_member_ids := array(\n    select distinct member_id\n    from unnest(coalesce(p_member_user_ids, array[]::uuid[])) as selected(member_id)\n    where member_id is not null\n      and member_id <> p_created_by_user_id\n    order by member_id\n  );\n\n  if coalesce(array_length(v_member_ids, 1), 0) < 2 then\n    raise exception using errcode = '22023', message = 'A group requires at least two recipients';\n  end if;\n  if coalesce(array_length(v_member_ids, 1), 0) > 100 then\n    raise exception using errcode = '22023', message = 'A group may contain at most 100 recipients';\n  end if;\n  if exists (\n    select 1\n    from unnest(v_member_ids) as selected(member_id)\n    where not public.msg_is_runtime_user(selected.member_id)\n  ) then\n    raise exception using errcode = '22023', message = 'One or more recipients are invalid or inactive';\n  end if;\n\n  v_title := nullif(left(btrim(coalesce(p_title, '')), 120), '');\n  v_client_thread_id := nullif(btrim(coalesce(p_client_thread_id, '')), '');\n  if v_client_thread_id is null or length(v_client_thread_id) not between 8 and 200 then\n    raise exception using errcode = '22023', message = 'A stable client thread operation id is required';\n  end if;\n\n  insert into public.msg_threads (\n    thread_type,\n    title,\n    created_by_user_id,\n    client_thread_id,\n    is_active\n  ) values (\n    'group',\n    v_title,\n    p_created_by_user_id,\n    v_client_thread_id,\n    true\n  )\n  on conflict (created_by_user_id, client_thread_id)\n    where client_thread_id is not null\n  do nothing\n  returning * into v_thread;\n\n  if v_thread.id is null then\n    select * into v_thread\n    from public.msg_threads\n    where created_by_user_id = p_created_by_user_id\n      and client_thread_id = v_client_thread_id\n    limit 1;\n    if v_thread.id is null then\n      raise exception using errcode = '40001', message = 'Concurrent group creation could not be reconciled';\n    end if;\n    return v_thread;\n  end if;\n\n  insert into public.msg_thread_participants (thread_id, user_id)\n  values (v_thread.id, p_created_by_user_id)\n  on conflict (thread_id, user_id)\n  do update set left_at = null;\n\n  insert into public.msg_thread_participants (thread_id, user_id)\n  select v_thread.id, member_id\n  from unnest(v_member_ids) as selected(member_id)\n  on conflict (thread_id, user_id)\n  do update set left_at = null;\n\n  return v_thread;\nend\n$function$\n",
+      "function_name": "msg_create_group_thread_v2",
+      "identity_arguments": "p_created_by_user_id uuid, p_title text, p_member_user_ids uuid[], p_client_thread_id text",
+      "schema_name": "public"
+    },
+    {
+      "comment": "Idempotently soft-deletes one authorized message and recomputes its conversation cursor so every device removes it.",
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_delete_message(p_message_id uuid, p_request_user_id uuid)\n RETURNS msg_messages\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_message public.msg_messages%rowtype;\n  v_request_role text;\n  v_now timestamptz := clock_timestamp();\nbegin\n  if p_message_id is null or p_request_user_id is null then\n    raise exception using errcode = '22023', message = 'Message and authenticated user are required';\n  end if;\n\n  select role into v_request_role\n  from public.msg_users\n  where id = p_request_user_id\n    and is_active is true;\n\n  if v_request_role is null or not public.msg_is_runtime_user(p_request_user_id) then\n    raise exception using errcode = '42501', message = 'Authenticated messaging user was not found';\n  end if;\n\n  select * into v_message\n  from public.msg_messages\n  where id = p_message_id\n  for update;\n\n  if v_message.id is null then\n    raise exception using errcode = 'P0002', message = 'Message not found';\n  end if;\n\n  if v_message.sender_user_id <> p_request_user_id\n     and v_request_role not in ('manager', 'admin') then\n    raise exception using errcode = '42501', message = 'Only the sender or an Ops Manager can delete this message';\n  end if;\n\n  if v_message.is_deleted is false then\n    update public.msg_messages\n    set is_deleted = true,\n        body = '[deleted]',\n        metadata_json = coalesce(metadata_json, '{}'::jsonb)\n          || jsonb_build_object(\n            'deleted_by', p_request_user_id,\n            'deleted_at', v_now\n          ),\n        updated_at = v_now\n    where id = p_message_id\n    returning * into v_message;\n\n    update public.msg_threads t\n    set last_message_at = (\n          select max(m.sent_at)\n          from public.msg_messages m\n          where m.thread_id = v_message.thread_id\n            and m.is_deleted is false\n        ),\n        updated_at = v_now\n    where t.id = v_message.thread_id;\n  end if;\n\n  return v_message;\nend\n$function$\n",
       "function_name": "msg_delete_message",
       "identity_arguments": "p_message_id uuid, p_request_user_id uuid",
       "schema_name": "public"
@@ -22021,6 +22049,13 @@
       "definition": "CREATE OR REPLACE FUNCTION public.msg_get_memphis_user_id()\n RETURNS uuid\n LANGUAGE sql\n STABLE\nAS $function$\n  select mu.id\n  from public.msg_users mu\n  where mu.display_name = 'Memphis'\n    and mu.role = 'bot'\n    and mu.is_active = true\n  limit 1;\n$function$\n",
       "function_name": "msg_get_memphis_user_id",
       "identity_arguments": "",
+      "schema_name": "public"
+    },
+    {
+      "comment": "Returns the canonical all-active-staff Custodial Team conversation and reconciles membership.",
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_get_or_create_custodial_team_thread(p_created_by_user_id uuid)\n RETURNS msg_threads\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_thread public.msg_threads%rowtype;\nbegin\n  if p_created_by_user_id is null or not public.msg_is_runtime_user(p_created_by_user_id) then\n    raise exception using errcode = '42501', message = 'An active authenticated Messenger user is required';\n  end if;\n\n  perform pg_advisory_xact_lock(hashtextextended('msg:custodial_team_chat_v1', 0));\n\n  select * into v_thread\n  from public.msg_threads\n  where system_key = 'custodial_team_chat_v1'\n  limit 1\n  for update;\n\n  if v_thread.id is null then\n    insert into public.msg_threads (\n      thread_type,\n      title,\n      created_by_user_id,\n      system_key,\n      is_active\n    ) values (\n      'group',\n      'Custodial Team',\n      p_created_by_user_id,\n      'custodial_team_chat_v1',\n      true\n    )\n    returning * into v_thread;\n  elsif v_thread.is_active is false or v_thread.title is distinct from 'Custodial Team' then\n    update public.msg_threads\n    set is_active = true,\n        title = 'Custodial Team',\n        updated_at = now()\n    where id = v_thread.id\n    returning * into v_thread;\n  end if;\n\n  insert into public.msg_thread_participants (thread_id, user_id)\n  select v_thread.id, mu.id\n  from public.msg_users mu\n  where mu.is_active is true\n    and mu.role <> 'bot'\n    and public.msg_is_runtime_user(mu.id)\n  on conflict (thread_id, user_id)\n  do update set left_at = null;\n\n  update public.msg_thread_participants tp\n  set left_at = coalesce(tp.left_at, now())\n  where tp.thread_id = v_thread.id\n    and not exists (\n      select 1\n      from public.msg_users mu\n      where mu.id = tp.user_id\n        and mu.is_active is true\n        and mu.role <> 'bot'\n        and public.msg_is_runtime_user(mu.id)\n    );\n\n  return v_thread;\nend\n$function$\n",
+      "function_name": "msg_get_or_create_custodial_team_thread",
+      "identity_arguments": "p_created_by_user_id uuid",
       "schema_name": "public"
     },
     {
@@ -22129,8 +22164,8 @@
       "schema_name": "public"
     },
     {
-      "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.msg_mark_thread_deleted(p_thread_id uuid, p_user_id uuid, p_device_identifier text DEFAULT NULL::text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_hidden_before timestamptz := clock_timestamp();\n  v_requested_device text := nullif(btrim(coalesce(p_device_identifier, '')), '');\n  v_canonical_device text;\n  v_deleted_count integer := 0;\nbegin\n  if p_thread_id is null or p_user_id is null then\n    raise exception 'thread_id and user_id are required.';\n  end if;\n  if not public.msg_is_runtime_user(p_user_id) then\n    raise exception 'User is not an active custodial Messenger identity.';\n  end if;\n  if not exists (\n    select 1\n    from public.msg_thread_participants tp\n    where tp.thread_id = p_thread_id\n      and tp.user_id = p_user_id\n      and tp.left_at is null\n  ) then\n    raise exception 'User is not an active participant in this thread.';\n  end if;\n\n  if v_requested_device is not null then\n    select d.device_id into v_canonical_device\n    from public.devices d\n    where d.active = true\n      and upper(btrim(d.device_id)) = upper(v_requested_device)\n    limit 1;\n\n    if v_canonical_device is null then\n      select d.device_id into v_canonical_device\n      from public.device_aliases da\n      join public.devices d on d.id = da.canonical_device_id and d.active = true\n      where da.active = true\n        and upper(btrim(da.alias_identifier)) = upper(v_requested_device)\n      limit 1;\n    end if;\n  end if;\n\n  v_canonical_device := coalesce(v_canonical_device, v_requested_device);\n  if v_canonical_device is null then\n    raise exception 'device_identifier is required.';\n  end if;\n\n  insert into public.msg_thread_visibility(\n    thread_id, user_id, device_identifier, hidden_before, created_at, updated_at\n  ) values (\n    p_thread_id, p_user_id, v_canonical_device, v_hidden_before, now(), now()\n  )\n  on conflict(thread_id, user_id, device_identifier)\n  do update set hidden_before = excluded.hidden_before, updated_at = now();\n\n  insert into public.msg_message_deletions(message_id, user_id, deleted_at)\n  select m.id, p_user_id, v_hidden_before\n  from public.msg_messages m\n  where m.thread_id = p_thread_id\n    and m.is_deleted = false\n    and coalesce(m.sent_at, m.created_at) <= v_hidden_before\n  on conflict(message_id, user_id)\n  do update set deleted_at = excluded.deleted_at;\n  get diagnostics v_deleted_count = row_count;\n\n  update public.msg_thread_participants\n  set left_at = v_hidden_before\n  where thread_id = p_thread_id\n    and user_id = p_user_id\n    and left_at is null;\n\n  update public.msg_threads\n  set updated_at = now()\n  where id = p_thread_id;\n\n  return jsonb_build_object(\n    'ok', true,\n    'thread_id', p_thread_id,\n    'user_id', p_user_id,\n    'device_identifier', v_canonical_device,\n    'hidden_before', v_hidden_before,\n    'deleted_message_count', v_deleted_count,\n    'participant_left', true\n  );\nend\n$function$\n",
+      "comment": "Archives a non-system conversation on one authenticated device without removing membership or messages.",
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_mark_thread_deleted(p_thread_id uuid, p_user_id uuid, p_device_identifier text DEFAULT NULL::text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_hidden_before timestamptz := clock_timestamp();\n  v_requested_device text := nullif(btrim(coalesce(p_device_identifier, '')), '');\n  v_canonical_device text;\n  v_role text;\n  v_system_key text;\nbegin\n  if p_thread_id is null or p_user_id is null then\n    raise exception using errcode = '22023', message = 'Thread and authenticated user are required';\n  end if;\n  select role into v_role\n  from public.msg_users\n  where id = p_user_id\n    and is_active is true;\n  if v_role is null or not public.msg_is_runtime_user(p_user_id) then\n    raise exception using errcode = '42501', message = 'User is not an active Messenger identity';\n  end if;\n\n  select system_key into v_system_key\n  from public.msg_threads\n  where id = p_thread_id\n    and is_active is true;\n  if not found then\n    raise exception using errcode = 'P0002', message = 'Active conversation not found';\n  end if;\n  if v_system_key in ('ops_manager_shared_chat_v1', 'custodial_team_chat_v1') then\n    raise exception using errcode = '23514', message = 'Required shared conversations cannot be archived';\n  end if;\n  if v_role not in ('manager', 'admin') and not exists (\n    select 1\n    from public.msg_thread_participants tp\n    where tp.thread_id = p_thread_id\n      and tp.user_id = p_user_id\n      and tp.left_at is null\n  ) then\n    raise exception using errcode = '42501', message = 'User is not an active participant in this conversation';\n  end if;\n\n  if v_requested_device is not null then\n    select d.device_id into v_canonical_device\n    from public.devices d\n    where d.active is true\n      and upper(btrim(d.device_id)) = upper(v_requested_device)\n    union all\n    select d.device_id\n    from public.device_aliases da\n    join public.devices d on d.id = da.canonical_device_id and d.active is true\n    where da.active is true\n      and upper(btrim(da.alias_identifier)) = upper(v_requested_device)\n    limit 1;\n  end if;\n  v_canonical_device := coalesce(v_canonical_device, v_requested_device);\n  if v_canonical_device is null then\n    raise exception using errcode = '22023', message = 'A canonical device identifier is required';\n  end if;\n\n  insert into public.msg_thread_visibility (\n    thread_id,\n    user_id,\n    device_identifier,\n    hidden_before,\n    created_at,\n    updated_at\n  ) values (\n    p_thread_id,\n    p_user_id,\n    v_canonical_device,\n    v_hidden_before,\n    now(),\n    now()\n  )\n  on conflict (thread_id, user_id, device_identifier)\n  do update set hidden_before = excluded.hidden_before,\n                updated_at = now();\n\n  update public.msg_threads\n  set updated_at = now()\n  where id = p_thread_id;\n\n  return jsonb_build_object(\n    'ok', true,\n    'thread_id', p_thread_id,\n    'user_id', p_user_id,\n    'device_identifier', v_canonical_device,\n    'hidden_before', v_hidden_before,\n    'archived_on_device', true,\n    'participant_left', false\n  );\nend\n$function$\n",
       "function_name": "msg_mark_thread_deleted",
       "identity_arguments": "p_thread_id uuid, p_user_id uuid, p_device_identifier text",
       "schema_name": "public"
@@ -25840,6 +25875,15 @@
     },
     {
       "backs_constraint": false,
+      "definition": "CREATE INDEX idx_msg_thread_visibility_user_device_thread ON public.msg_thread_visibility USING btree (user_id, upper(btrim(device_identifier)), thread_id, hidden_before DESC)",
+      "index_name": "idx_msg_thread_visibility_user_device_thread",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "msg_thread_visibility"
+    },
+    {
+      "backs_constraint": false,
       "definition": "CREATE INDEX idx_msg_thread_visibility_user_id_fkey ON public.msg_thread_visibility USING btree (user_id)",
       "index_name": "idx_msg_thread_visibility_user_id_fkey",
       "is_primary": false,
@@ -25888,6 +25932,15 @@
       "definition": "CREATE UNIQUE INDEX msg_threads_pkey ON public.msg_threads USING btree (id)",
       "index_name": "msg_threads_pkey",
       "is_primary": true,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "msg_threads"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE UNIQUE INDEX uq_msg_threads_creator_client_thread_id ON public.msg_threads USING btree (created_by_user_id, client_thread_id) WHERE (client_thread_id IS NOT NULL)",
+      "index_name": "uq_msg_threads_creator_client_thread_id",
+      "is_primary": false,
       "is_unique": true,
       "schema_name": "public",
       "table_name": "msg_threads"
@@ -28104,6 +28157,14 @@
       "schema_name": "public"
     },
     {
+      "function_name": "msg_create_group_thread_v2",
+      "grantee": "service_role",
+      "identity_arguments": "p_created_by_user_id uuid, p_title text, p_member_user_ids uuid[], p_client_thread_id text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
       "function_name": "msg_delete_message",
       "grantee": "service_role",
       "identity_arguments": "p_message_id uuid, p_request_user_id uuid",
@@ -28155,6 +28216,14 @@
       "function_name": "msg_get_memphis_user_id",
       "grantee": "service_role",
       "identity_arguments": "",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "msg_get_or_create_custodial_team_thread",
+      "grantee": "service_role",
+      "identity_arguments": "p_created_by_user_id uuid",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"

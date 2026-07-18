@@ -907,7 +907,7 @@ const DIRECT_THREAD_ID = '20000000-0000-0000-0000-000000000001';
 const GROUP_THREAD_ID = '20000000-0000-0000-0000-000000000002';
 const FOREIGN_DIRECT_THREAD_ID = '20000000-0000-0000-0000-000000000003';
 const visibilityReadCalls = [];
-let unexpectedGroupRpc = false;
+let employeeGroupRpcCall = null;
 const visibilityApp = express();
 visibilityApp.use(express.json());
 visibilityApp.use('/messaging-api', createTestMessagingRouter({
@@ -1006,8 +1006,11 @@ visibilityApp.use('/messaging-api', createTestMessagingRouter({
     }
     return [];
   },
-  runRpc: async (name) => {
-    if (name === 'msg_create_group_thread') unexpectedGroupRpc = true;
+  runRpc: async (name, args) => {
+    if (name === 'msg_create_group_thread_v2') {
+      employeeGroupRpcCall = { name, args };
+      return { id: GROUP_THREAD_ID, thread_type: 'group', title: args.p_title, client_thread_id: args.p_client_thread_id };
+    }
     return null;
   },
   buildHealthPayload: (area, extra) => ({ ok: true, area, ...extra }),
@@ -1038,20 +1041,23 @@ await withServer(visibilityApp, async (baseUrl) => {
   assert.equal(foreignMessages.ok, true);
   assert.equal(foreignMessages.data.length, 1, 'Manager overview devices should be able to inspect foreign threads');
 
-  const blockedGroup = await fetch(`${baseUrl}/messaging-api/thread/group`, {
+  const employeeGroup = await fetch(`${baseUrl}/messaging-api/thread/group`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       created_by_user_id: EMPLOYEE_USER_ID,
       device_id: 'KIOSK_04',
       title: 'Everyone',
-      member_user_ids: ['50000000-0000-0000-0000-000000000001', '50000000-0000-0000-0000-000000000002'],
+      member_user_ids: ['50000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000002'],
+      client_thread_id: 'thread:employee-group-regression',
     }),
   });
-  assert.equal(blockedGroup.status, 400, 'Employee devices must be blocked from creating multi-person group threads');
+  assert.equal(employeeGroup.status, 200, 'Employee devices may create authorized multi-person group threads');
 });
 
-assert.equal(unexpectedGroupRpc, false, 'Blocked employee group-thread attempts must not hit the create-group RPC');
+assert.equal(employeeGroupRpcCall?.args?.p_created_by_user_id, EMPLOYEE_USER_ID, 'Employee group creator is derived from the authenticated device');
+assert.deepEqual(employeeGroupRpcCall?.args?.p_member_user_ids, ['50000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000002']);
+assert.equal(employeeGroupRpcCall?.args?.p_client_thread_id, 'thread:employee-group-regression');
 const employeeThreadSql = visibilityReadCalls.find((sql) => sql.includes('from public.msg_threads t') && sql.includes('and tp.viewer_is_participant = true'));
 assert.ok(employeeThreadSql, 'Employee thread list should stay participant-scoped at the API layer');
 assert.doesNotMatch(employeeThreadSql, /t\.thread_type in \('direct', 'bot'\)/, 'Employee thread list must not hide participant group threads anymore');
@@ -1082,7 +1088,7 @@ deleteThreadApp.use('/messaging-api', createTestMessagingRouter({
     if (name === 'msg_delete_thread_permanently') permanentDeleteTriggered = true;
     if (name === 'msg_mark_thread_deleted') {
       deleteThreadRpcCall = { name, params };
-      return { ok: true };
+      return { ok: true, archived_on_device: true, participant_left: false };
     }
     return null;
   },
@@ -1103,7 +1109,7 @@ await withServer(deleteThreadApp, async (baseUrl) => {
   assert.equal(payload.ok, true);
 });
 
-assert.equal(permanentDeleteTriggered, false, 'Device thread delete must not permanently erase shared message history');
+assert.equal(permanentDeleteTriggered, false, 'Device conversation archive must not permanently erase shared message history');
 assert.deepEqual(deleteThreadRpcCall, {
   name: 'msg_mark_thread_deleted',
   params: {
@@ -1111,7 +1117,7 @@ assert.deepEqual(deleteThreadRpcCall, {
     p_user_id: EMPLOYEE_USER_ID,
     p_device_identifier: 'KIOSK_04',
   },
-}, 'Device thread delete should mark the thread deleted for the viewer/device only');
+}, 'Device conversation archive should be scoped to the viewer/device only and preserve membership');
 
 const adminAuditReadCalls = [];
 const adminAuditRpcCalls = [];
