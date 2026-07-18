@@ -36,6 +36,11 @@ const MOXIE_PREFIX = (String(process.env.MOXIE_PREFIX || "/moxie").trim() || "")
 const MOXIE_PUBLIC_URL = String(process.env.MOXIE_PUBLIC_URL || "").trim();
 const MOXIE_MAX_MESSAGE_CHARS = 20_000;
 const MOXIE_SESSION_COOKIE = "moxie_session";
+const MOXIE_CREDENTIAL_KEY = "moxie_web";
+const MOXIE_PASSWORD_MIN_CHARS = 12;
+const MOXIE_PASSWORD_MAX_CHARS = 256;
+const MOXIE_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 14;
+const MOXIE_SCRYPT_OPTIONS = Object.freeze({ N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
 function isProductionLike() {
   return String(process.env.NODE_ENV || "").trim().toLowerCase() === "production"
     || /^(1|true|yes|on)$/i.test(String(process.env.RENDER || process.env.IS_RENDER || "").trim());
@@ -103,27 +108,65 @@ function unsign(token) {
 // Auth helpers
 // ---------------------------------------------------------------------------
 
-function isAuthed(req) {
-  if (!MOXIE_AUTH_REQUIRED) return true;
-  const token = req.cookies?.[MOXIE_SESSION_COOKIE];
-  if (!token) return false;
-  const value = unsign(token);
-  if (!value) return false;
-  const colonIdx = value.lastIndexOf(":");
-  if (colonIdx === -1) return false;
-  const user = value.slice(0, colonIdx);
-  const ts = Number(value.slice(colonIdx + 1));
-  return user === MOXIE_USER && (Date.now() / 1000 - ts) < 60 * 60 * 24 * 14;
+function constantTimeTextEqual(left, right) {
+  const leftDigest = crypto.createHash("sha256").update(String(left ?? ""), "utf8").digest();
+  const rightDigest = crypto.createHash("sha256").update(String(right ?? ""), "utf8").digest();
+  return crypto.timingSafeEqual(leftDigest, rightDigest);
 }
 
-function setSessionCookie(res, req) {
+function parseSession(req) {
+  const token = req.cookies?.[MOXIE_SESSION_COOKIE];
+  if (!token) return null;
+  const value = unsign(token);
+  if (!value) return null;
+
+  try {
+    const parsed = JSON.parse(value);
+    if (parsed?.v !== 2 || parsed?.u !== MOXIE_USER) return null;
+    const issuedAt = Number(parsed.iat);
+    const credentialVersion = Number(parsed.cv);
+    if (!Number.isFinite(issuedAt) || !Number.isInteger(credentialVersion) || credentialVersion < 0) return null;
+    if ((Date.now() / 1000 - issuedAt) >= MOXIE_SESSION_MAX_AGE_SECONDS) return null;
+    return { token, format: "v2", user: parsed.u, issuedAt, credentialVersion };
+  } catch {
+    // Compatibility for sessions issued before durable credential rotation.
+    const colonIdx = value.lastIndexOf(":");
+    if (colonIdx === -1) return null;
+    const user = value.slice(0, colonIdx);
+    const issuedAt = Number(value.slice(colonIdx + 1));
+    if (user !== MOXIE_USER || !Number.isFinite(issuedAt)) return null;
+    if ((Date.now() / 1000 - issuedAt) >= MOXIE_SESSION_MAX_AGE_SECONDS) return null;
+    return { token, format: "legacy", user, issuedAt, credentialVersion: 0 };
+  }
+}
+
+function setSessionCookie(res, req, credentialVersion = 0) {
   if (!MOXIE_AUTH_REQUIRED) return;
   const secure = req.secure || req.headers["x-forwarded-proto"]?.split(",")[0]?.trim() === "https";
-  res.cookie(MOXIE_SESSION_COOKIE, sign(`${MOXIE_USER}:${Math.floor(Date.now() / 1000)}`), {
+  const sessionPayload = JSON.stringify({
+    v: 2,
+    u: MOXIE_USER,
+    iat: Math.floor(Date.now() / 1000),
+    cv: Number(credentialVersion || 0),
+    nonce: crypto.randomBytes(16).toString("base64url"),
+  });
+  res.cookie(MOXIE_SESSION_COOKIE, sign(sessionPayload), {
     httpOnly: true, secure, sameSite: "Lax",
-    maxAge: 60 * 60 * 24 * 14 * 1000,
+    maxAge: MOXIE_SESSION_MAX_AGE_SECONDS * 1000,
     path: MOXIE_PREFIX || "/",
   });
+}
+
+function csrfTokenForSession(req) {
+  const token = req.cookies?.[MOXIE_SESSION_COOKIE];
+  if (!token) return "";
+  return crypto.createHmac("sha256", MOXIE_COOKIE_SECRET).update(`moxie-csrf:${token}`).digest("base64url");
+}
+
+function hasValidCsrf(req) {
+  const expected = csrfTokenForSession(req);
+  const received = String(req.get("X-Moxie-CSRF") || "");
+  return Boolean(expected && received && constantTimeTextEqual(expected, received));
 }
 
 function clearSessionCookie(res, req) {
@@ -144,6 +187,94 @@ export function prefixed(p) {
 // ---------------------------------------------------------------------------
 // Supabase helpers
 // ---------------------------------------------------------------------------
+
+function deriveMoxiePassword(password, saltHex) {
+  return new Promise((resolve, reject) => {
+    crypto.scrypt(
+      String(password),
+      Buffer.from(String(saltHex), "hex"),
+      64,
+      MOXIE_SCRYPT_OPTIONS,
+      (error, derivedKey) => error ? reject(error) : resolve(Buffer.from(derivedKey)),
+    );
+  });
+}
+
+async function createMoxiePasswordDigest(password) {
+  const salt = crypto.randomBytes(32).toString("hex");
+  const hash = (await deriveMoxiePassword(password, salt)).toString("hex");
+  return { salt, hash };
+}
+
+async function dbGetAuthCredential(supabase) {
+  const { data, error } = await supabase
+    .from("moxie_auth_credentials")
+    .select("credential_key,password_salt,password_hash,password_version,updated_at")
+    .eq("credential_key", MOXIE_CREDENTIAL_KEY)
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+async function verifyStoredMoxiePassword(password, credential) {
+  const salt = String(credential?.password_salt || "");
+  const expectedHash = String(credential?.password_hash || "");
+  if (!/^[0-9a-f]{64}$/.test(salt) || !/^[0-9a-f]{128}$/.test(expectedHash)) {
+    throw new Error("Moxie credential storage is invalid.");
+  }
+  const actualHash = await deriveMoxiePassword(password, salt);
+  return crypto.timingSafeEqual(actualHash, Buffer.from(expectedHash, "hex"));
+}
+
+async function authenticateMoxiePassword(supabase, password) {
+  const candidate = String(password ?? "");
+  if (!candidate || candidate.length > MOXIE_PASSWORD_MAX_CHARS) {
+    return { ok: false, credentialVersion: 0, source: "invalid" };
+  }
+  const credential = await dbGetAuthCredential(supabase);
+  if (credential) {
+    const ok = await verifyStoredMoxiePassword(candidate, credential);
+    return { ok, credentialVersion: Number(credential.password_version || 0), source: "database" };
+  }
+  return {
+    ok: Boolean(MOXIE_PASSWORD) && constantTimeTextEqual(candidate, MOXIE_PASSWORD),
+    credentialVersion: 0,
+    source: "bootstrap",
+  };
+}
+
+async function dbRotateMoxieCredential(supabase, { expectedVersion, password, updatedBy }) {
+  const digest = await createMoxiePasswordDigest(password);
+  const { data, error } = await supabase.rpc("rotate_moxie_auth_credential", {
+    p_credential_key: MOXIE_CREDENTIAL_KEY,
+    p_expected_version: expectedVersion,
+    p_password_salt: digest.salt,
+    p_password_hash: digest.hash,
+    p_updated_by: updatedBy,
+  });
+  if (error) {
+    if (error.code === "40001" || /changed concurrently/i.test(String(error.message || ""))) {
+      error.status = 409;
+    }
+    throw error;
+  }
+  const result = Array.isArray(data) ? data[0] : data;
+  const passwordVersion = Number(result?.password_version || 0);
+  if (!Number.isInteger(passwordVersion) || passwordVersion < 1) {
+    throw new Error("Moxie password rotation did not return a valid credential version.");
+  }
+  return { passwordVersion, updatedAt: result?.updated_at || null };
+}
+
+async function isAuthed(req, supabase) {
+  if (!MOXIE_AUTH_REQUIRED) return true;
+  const session = parseSession(req);
+  if (!session) return false;
+  const credential = await dbGetAuthCredential(supabase);
+  if (!credential) return session.credentialVersion === 0;
+  return session.format === "v2"
+    && session.credentialVersion === Number(credential.password_version || 0);
+}
 
 async function dbGetNotes(supabase) {
   const { data, error } = await supabase.from("annie_log_notes").select("*").order("created_at", { ascending: false }).limit(200);
@@ -631,6 +762,39 @@ export function createMoxieRouter({ supabase, staticDir }) {
     return router;
   }
 
+  const passwordChangeFailures = new Map();
+  const passwordChangeWindowMs = 15 * 60 * 1000;
+  const passwordChangeMaxFailures = 5;
+
+  function passwordChangeAttemptKey(req) {
+    const address = String(req.ip || req.socket?.remoteAddress || "unknown");
+    const sessionToken = String(req.cookies?.[MOXIE_SESSION_COOKIE] || "no-session");
+    return crypto.createHash("sha256").update(`${address}:${sessionToken}`).digest("hex");
+  }
+
+  function passwordChangeLimit(req) {
+    const key = passwordChangeAttemptKey(req);
+    const now = Date.now();
+    const existing = passwordChangeFailures.get(key);
+    if (!existing || now - existing.windowStartedAt >= passwordChangeWindowMs) {
+      const fresh = { failures: 0, windowStartedAt: now, lockedUntil: 0 };
+      passwordChangeFailures.set(key, fresh);
+      return { key, state: fresh, retryAfterSeconds: 0 };
+    }
+    const retryAfterSeconds = existing.lockedUntil > now
+      ? Math.max(1, Math.ceil((existing.lockedUntil - now) / 1000))
+      : 0;
+    return { key, state: existing, retryAfterSeconds };
+  }
+
+  function recordPasswordChangeFailure(limit) {
+    limit.state.failures += 1;
+    if (limit.state.failures >= passwordChangeMaxFailures) {
+      limit.state.lockedUntil = Date.now() + passwordChangeWindowMs;
+    }
+    passwordChangeFailures.set(limit.key, limit.state);
+  }
+
   // Serve static assets
   if (staticDir) {
     router.use("/assets", express.static(staticDir, { maxAge: "1d" }));
@@ -667,19 +831,27 @@ export function createMoxieRouter({ supabase, staticDir }) {
   });
 
   // --- Login ---
-  router.get("/login", (req, res) => {
-    if (isAuthed(req)) return res.redirect(303, prefixed("/"));
-    const notice = String(req.query?.logged_out || "") === "1" ? "Signed out. Enter the password to open Moxie again." : "";
-    res.status(200).send(loginPage(false, notice));
+  router.get("/login", async (req, res) => {
+    try {
+      if (await isAuthed(req, supabase)) return res.redirect(303, prefixed("/"));
+      const notice = String(req.query?.logged_out || "") === "1" ? "Signed out. Enter the password to open Moxie again." : "";
+      res.status(200).send(loginPage(false, notice));
+    } catch {
+      res.status(503).send(pageShell("Moxie — Temporarily unavailable", `<div class="wrap"><div class="panel" style="padding:24px"><div class="brand">Moxie is temporarily unavailable</div><p class="hint">The private credential store could not be reached. Please try again shortly.</p></div></div>`));
+    }
   });
 
-  router.post("/login", (req, res) => {
-    const pw = String(req.body?.password || "");
-    if (pw === MOXIE_PASSWORD) {
-      setSessionCookie(res, req);
-      return res.redirect(303, prefixed("/"));
+  router.post("/login", async (req, res) => {
+    try {
+      const authentication = await authenticateMoxiePassword(supabase, req.body?.password);
+      if (authentication.ok) {
+        setSessionCookie(res, req, authentication.credentialVersion);
+        return res.redirect(303, prefixed("/"));
+      }
+      res.status(401).send(loginPage(true));
+    } catch {
+      res.status(503).send(pageShell("Moxie — Temporarily unavailable", `<div class="wrap"><div class="panel" style="padding:24px"><div class="brand">Moxie is temporarily unavailable</div><p class="hint">The private credential store could not be reached. No sign-in attempt was accepted.</p></div></div>`));
     }
-    res.status(401).send(loginPage(true));
   });
 
   router.get("/logout", (req, res) => {
@@ -689,10 +861,14 @@ export function createMoxieRouter({ supabase, staticDir }) {
 
   // --- Auth gate ---
   const publicPaths = new Set(["/login", "/health"]);
-  router.use((req, res, next) => {
+  router.use(async (req, res, next) => {
     if (publicPaths.has(req.path) || req.path.startsWith("/assets")) return next();
-    if (!isAuthed(req)) return res.redirect(prefixed("/login"));
-    next();
+    try {
+      if (!await isAuthed(req, supabase)) return res.redirect(prefixed("/login"));
+      next();
+    } catch {
+      res.status(503).send(pageShell("Moxie — Temporarily unavailable", `<div class="wrap"><div class="panel" style="padding:24px"><div class="brand">Moxie is temporarily unavailable</div><p class="hint">The private credential store could not be reached. Access remains locked until it recovers.</p></div></div>`));
+    }
   });
 
   // --- Index (chat) ---
@@ -1016,8 +1192,66 @@ export function createMoxieRouter({ supabase, staticDir }) {
   });
 
   // --- Workspace settings ---
-  router.get("/settings", (_req, res) => {
-    res.send(pageShell("Moxie — Settings", buildSettingsPage()));
+  router.get("/settings", (req, res) => {
+    res.send(pageShell("Moxie — Settings", buildSettingsPage(csrfTokenForSession(req))));
+  });
+
+  router.post("/settings/password", async (req, res) => {
+    if (!hasValidCsrf(req)) {
+      return res.status(403).json({ ok: false, error: "The secure form expired. Reload Settings and try again." });
+    }
+
+    const limit = passwordChangeLimit(req);
+    if (limit.retryAfterSeconds > 0) {
+      res.setHeader("Retry-After", String(limit.retryAfterSeconds));
+      return res.status(429).json({ ok: false, error: "Too many unsuccessful attempts. Try again later." });
+    }
+
+    const currentPassword = String(req.body?.current_password ?? "");
+    const newPassword = String(req.body?.new_password ?? "");
+    const confirmation = String(req.body?.confirm_password ?? "");
+    if (newPassword.length < MOXIE_PASSWORD_MIN_CHARS || newPassword.length > MOXIE_PASSWORD_MAX_CHARS) {
+      return res.status(422).json({ ok: false, error: `New password must be ${MOXIE_PASSWORD_MIN_CHARS}–${MOXIE_PASSWORD_MAX_CHARS} characters.` });
+    }
+    if (newPassword !== confirmation) {
+      return res.status(422).json({ ok: false, error: "New password and confirmation do not match." });
+    }
+    if (constantTimeTextEqual(currentPassword, newPassword)) {
+      return res.status(422).json({ ok: false, error: "Choose a new password that is different from the current password." });
+    }
+
+    try {
+      const authentication = await authenticateMoxiePassword(supabase, currentPassword);
+      if (!authentication.ok) {
+        recordPasswordChangeFailure(limit);
+        const locked = limit.state.lockedUntil > Date.now();
+        if (locked) res.setHeader("Retry-After", String(Math.ceil(passwordChangeWindowMs / 1000)));
+        return res.status(locked ? 429 : 400).json({
+          ok: false,
+          error: locked
+            ? "Too many unsuccessful attempts. Try again later."
+            : "Current password is incorrect.",
+        });
+      }
+
+      const rotation = await dbRotateMoxieCredential(supabase, {
+        expectedVersion: authentication.credentialVersion,
+        password: newPassword,
+        updatedBy: MOXIE_USER,
+      });
+      passwordChangeFailures.delete(limit.key);
+      setSessionCookie(res, req, rotation.passwordVersion);
+      return res.status(200).json({
+        ok: true,
+        password_version: rotation.passwordVersion,
+        message: "Password changed. This browser remains signed in; older Moxie sessions were signed out.",
+      });
+    } catch (error) {
+      if (error?.status === 409) {
+        return res.status(409).json({ ok: false, error: "The password changed in another session. Reload and try again." });
+      }
+      return res.status(503).json({ ok: false, error: "The password could not be changed safely. Nothing was updated." });
+    }
   });
 
   // Preserve old bookmarks without restoring the removed, nonfunctional
@@ -1156,7 +1390,8 @@ form.addEventListener("submit",async(e)=>{
 </script>`;
 }
 
-function buildSettingsPage() {
+function buildSettingsPage(csrfToken) {
+  const csrf = jsonForInlineScript(String(csrfToken || ""));
   return `
 <div class="wrap">
   <header>
@@ -1164,12 +1399,57 @@ function buildSettingsPage() {
     <div class="header-actions"><a class="button-link" href="${prefixed("/")}">Back to chat</a><a class="button-link" href="${prefixed("/log")}">Annie's Log</a><a class="button-link" href="${prefixed("/reminders")}">Reminders</a><a class="button-link" href="${prefixed("/contacts")}">Contacts</a></div>
   </header>
   <div class="panel settings" style="max-width:760px;margin:0 auto;padding:24px">
-    <h2 style="margin-top:0">Private workspace</h2>
+    <h2 style="margin-top:0">Change Moxie password</h2>
+    <p class="hint">Use at least ${MOXIE_PASSWORD_MIN_CHARS} characters. A longer passphrase is welcome. Changing the password signs out every older Moxie session while keeping this browser signed in.</p>
+    <form id="moxie-password-form" autocomplete="off" style="margin-top:18px;display:flex;flex-direction:column;gap:10px">
+      <label class="hint" for="moxie-current-password">Current password</label>
+      <input id="moxie-current-password" type="password" autocomplete="current-password" required maxlength="${MOXIE_PASSWORD_MAX_CHARS}">
+      <label class="hint" for="moxie-new-password">New password</label>
+      <input id="moxie-new-password" type="password" autocomplete="new-password" required minlength="${MOXIE_PASSWORD_MIN_CHARS}" maxlength="${MOXIE_PASSWORD_MAX_CHARS}">
+      <label class="hint" for="moxie-confirm-password">Confirm new password</label>
+      <input id="moxie-confirm-password" type="password" autocomplete="new-password" required minlength="${MOXIE_PASSWORD_MIN_CHARS}" maxlength="${MOXIE_PASSWORD_MAX_CHARS}">
+      <button id="moxie-password-submit" type="submit">Change password</button>
+      <div id="moxie-password-status" class="hint" role="status" aria-live="polite"></div>
+    </form>
+    <hr style="border:0;border-top:1px solid #26375d;margin:24px 0">
+    <h2>Private workspace</h2>
     <p class="hint">Moxie's chat, Annie's Log, reminders, and contacts share one protected workspace. Protected pages are not stored in the browser cache after sign-out.</p>
-    <p class="hint">Access credentials are managed securely by the deployed service. This page does not expose or pretend to rotate a credential that the service cannot persist.</p>
     <div class="header-actions" style="margin-top:20px"><a class="button-link" href="${prefixed("/logout")}">Sign out of Moxie</a></div>
   </div>
-</div>`;
+</div>
+<script>
+(()=>{
+  const endpoint=${JSON.stringify(prefixed("/settings/password"))};
+  const csrf=${csrf};
+  const form=document.getElementById("moxie-password-form");
+  const current=document.getElementById("moxie-current-password");
+  const next=document.getElementById("moxie-new-password");
+  const confirm=document.getElementById("moxie-confirm-password");
+  const submit=document.getElementById("moxie-password-submit");
+  const status=document.getElementById("moxie-password-status");
+  form.addEventListener("submit",async(event)=>{
+    event.preventDefault();
+    if(submit.disabled)return;
+    if(next.value!==confirm.value){status.textContent="New password and confirmation do not match.";status.style.color="#ff8fa3";return;}
+    if(next.value.length<${MOXIE_PASSWORD_MIN_CHARS}){status.textContent="New password must be at least ${MOXIE_PASSWORD_MIN_CHARS} characters.";status.style.color="#ff8fa3";return;}
+    const payload={current_password:current.value,new_password:next.value,confirm_password:confirm.value};
+    current.value="";next.value="";confirm.value="";
+    submit.disabled=true;status.textContent="Changing password securely…";status.style.color="#c1cdeb";
+    try{
+      const response=await fetch(endpoint,{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json","X-Moxie-CSRF":csrf},body:JSON.stringify(payload)});
+      const result=await response.json().catch(()=>({}));
+      status.textContent=result.message||result.error||"The password could not be changed.";
+      status.style.color=response.ok?"#7dff9e":"#ff8fa3";
+    }catch{
+      status.textContent="The password could not be changed. Nothing was updated.";
+      status.style.color="#ff8fa3";
+    }finally{
+      payload.current_password="";payload.new_password="";payload.confirm_password="";
+      submit.disabled=false;current.focus();
+    }
+  });
+})();
+</script>`;
 }
 
 function buildLogPage(notes, reminders, suggested) {

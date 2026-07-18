@@ -45,13 +45,14 @@ assert.match(queryAwareContext, /Maria Lopez/);
 assert.match(queryAwareContext, /restroom water valve/);
 
 function makeSupabaseStub() {
-  const state = { id: "default", history: [], saved_chats: [], updated_at: "2026-07-16T00:00:00.000Z" };
+  const state = { id: "default", history: [], saved_chats: [], revision: 1, updated_at: "2026-07-16T00:00:00.000Z" };
   const tables = {
     annie_log_notes: [],
     annie_log_reminders: [],
     annie_log_suggested_reminders: [],
     annie_contacts: [],
     annie_suggested_contacts: [],
+    moxie_auth_credentials: [],
   };
   const seededTime = "2026-07-18T12:00:00.000Z";
 
@@ -63,7 +64,7 @@ function makeSupabaseStub() {
 
   return {
     from(table) {
-      assert.ok(String(table).startsWith("annie_"), `unexpected Moxie table: ${table}`);
+      assert.ok(String(table).startsWith("annie_") || table === "moxie_auth_credentials", `unexpected Moxie table: ${table}`);
       const filters = [];
       let orderSpec = null;
       let pending = null;
@@ -115,6 +116,9 @@ function makeSupabaseStub() {
           if (row) return Promise.resolve({ data: row, error: null });
           return Promise.resolve({ data: null, error: { code: "PGRST116", message: "not found" } });
         },
+        maybeSingle() {
+          return Promise.resolve({ data: currentRows()[0] || null, error: null });
+        },
         upsert(payload) {
           if (table === "annie_chat_state") {
             Object.assign(state, payload);
@@ -146,6 +150,28 @@ function makeSupabaseStub() {
         },
       };
       return query;
+    },
+    async rpc(name, args) {
+      assert.equal(name, "rotate_moxie_auth_credential", `unexpected Moxie RPC: ${name}`);
+      const rows = tables.moxie_auth_credentials;
+      const existing = rows.find((row) => row.credential_key === args.p_credential_key);
+      const expectedVersion = Number(args.p_expected_version);
+      if ((expectedVersion === 0 && existing) || (expectedVersion > 0 && Number(existing?.password_version) !== expectedVersion)) {
+        return { data: null, error: { code: "40001", message: "Moxie credential changed concurrently" } };
+      }
+      const passwordVersion = expectedVersion + 1;
+      const updatedAt = "2026-07-18T12:01:00.000Z";
+      const payload = {
+        credential_key: args.p_credential_key,
+        password_salt: args.p_password_salt,
+        password_hash: args.p_password_hash,
+        password_version: passwordVersion,
+        updated_by: args.p_updated_by,
+        updated_at: updatedAt,
+      };
+      if (existing) Object.assign(existing, payload);
+      else rows.push({ created_at: updatedAt, ...payload });
+      return { data: [{ password_version: passwordVersion, updated_at: updatedAt }], error: null };
     },
     __tables: tables,
   };
@@ -218,7 +244,7 @@ try {
   assert.match(setCookie, /HttpOnly/i);
   assert.match(setCookie, /SameSite=Lax/i);
   assert.match(setCookie, /Path=\/moxie/i);
-  const cookie = setCookie.split(";")[0];
+  let cookie = setCookie.split(";")[0];
 
   response = await fetch(`${base}/moxie/`, { headers: { Cookie: cookie } });
   assert.equal(response.status, 200);
@@ -336,8 +362,103 @@ try {
   assert.equal(response.status, 200);
   const settingsHtml = await response.text();
   assert.match(settingsHtml, /Moxie Settings/);
+  assert.match(settingsHtml, /id="moxie-password-form"/);
+  assert.match(settingsHtml, /id="moxie-current-password"/);
+  assert.match(settingsHtml, /id="moxie-new-password"/);
+  assert.match(settingsHtml, /id="moxie-confirm-password"/);
+  assert.match(settingsHtml, /Change password/);
   assert.match(settingsHtml, /Private workspace/);
   assert.match(settingsHtml, /Sign out of Moxie/);
+  assert.doesNotMatch(settingsHtml, /test-moxie-password/);
+  assert.doesNotMatch(settingsHtml, /localStorage|sessionStorage/);
+  const csrfMatch = settingsHtml.match(/const csrf=("[^"]+");/);
+  assert.ok(csrfMatch, "Settings must bind a session-specific CSRF token");
+  const csrf = JSON.parse(csrfMatch[1]);
+
+  response = await fetch(`${base}/moxie/settings/password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: cookie },
+    body: JSON.stringify({
+      current_password: "test-moxie-password",
+      new_password: "new-test-moxie-passphrase-2026",
+      confirm_password: "new-test-moxie-passphrase-2026",
+    }),
+  });
+  assert.equal(response.status, 403, "password change must require session-bound CSRF");
+
+  response = await fetch(`${base}/moxie/settings/password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: cookie, "X-Moxie-CSRF": csrf },
+    body: JSON.stringify({
+      current_password: "wrong-current-password",
+      new_password: "new-test-moxie-passphrase-2026",
+      confirm_password: "new-test-moxie-passphrase-2026",
+    }),
+  });
+  assert.equal(response.status, 400);
+  assert.match((await response.json()).error, /current password is incorrect/i);
+
+  response = await fetch(`${base}/moxie/settings/password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: cookie, "X-Moxie-CSRF": csrf },
+    body: JSON.stringify({
+      current_password: "test-moxie-password",
+      new_password: "too-short",
+      confirm_password: "too-short",
+    }),
+  });
+  assert.equal(response.status, 422);
+
+  response = await fetch(`${base}/moxie/settings/password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: cookie, "X-Moxie-CSRF": csrf },
+    body: JSON.stringify({
+      current_password: "test-moxie-password",
+      new_password: "new-test-moxie-passphrase-2026",
+      confirm_password: "new-test-moxie-passphrase-2026",
+    }),
+  });
+  assert.equal(response.status, 200);
+  const changed = await response.json();
+  assert.equal(changed.ok, true);
+  assert.equal(changed.password_version, 1);
+  const rotatedSetCookie = String(response.headers.get("set-cookie") || "");
+  assert.match(rotatedSetCookie, /^moxie_session=/);
+  assert.match(rotatedSetCookie, /HttpOnly/i);
+  assert.match(rotatedSetCookie, /SameSite=Lax/i);
+  assert.match(rotatedSetCookie, /Path=\/moxie/i);
+  const rotatedCookie = rotatedSetCookie.split(";")[0];
+  const credential = supabaseStub.__tables.moxie_auth_credentials[0];
+  assert.equal(credential.credential_key, "moxie_web");
+  assert.equal(credential.password_version, 1);
+  assert.match(credential.password_salt, /^[0-9a-f]{64}$/);
+  assert.match(credential.password_hash, /^[0-9a-f]{128}$/);
+  assert.doesNotMatch(JSON.stringify(credential), /test-moxie-password|new-test-moxie-passphrase-2026/);
+
+  response = await fetch(`${base}/moxie/`, { headers: { Cookie: cookie }, redirect: "manual" });
+  assert.equal(response.status, 302, "password rotation must revoke the previous Moxie session");
+  assert.equal(response.headers.get("location"), "/moxie/login");
+  response = await fetch(`${base}/moxie/`, { headers: { Cookie: rotatedCookie } });
+  assert.equal(response.status, 200, "the changing browser must remain signed in with its rotated session");
+
+  response = await fetch(`${base}/moxie/login`, {
+    method: "POST",
+    redirect: "manual",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ password: "test-moxie-password" }),
+  });
+  assert.equal(response.status, 401, "the bootstrap password must stop working after the first rotation");
+
+  response = await fetch(`${base}/moxie/login`, {
+    method: "POST",
+    redirect: "manual",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ password: "new-test-moxie-passphrase-2026" }),
+  });
+  assert.equal(response.status, 303);
+  assert.equal(response.headers.get("location"), "/moxie/");
+  assert.match(String(response.headers.get("set-cookie") || ""), /^moxie_session=/);
+  cookie = rotatedCookie;
 
   response = await fetch(`${base}/moxie/password`, { headers: { Cookie: cookie }, redirect: "manual" });
   assert.equal(response.status, 303);
@@ -369,6 +490,9 @@ try {
   assert.match(indexSource, /app\.use\(MOXIE_MOUNT_PATH,\s*createMoxieRouter/);
   assert.match(indexSource, /public\/moxie-assets/);
   assert.match(routeSource, /isProductionLike\(\)[\s\S]*MOXIE_AUTH_REQUIRED/);
+  assert.match(routeSource, /crypto\.scrypt/);
+  assert.match(routeSource, /rotate_moxie_auth_credential/);
+  assert.match(routeSource, /router\.post\("\/settings\/password"/);
   assert.match(routeSource, /clearSessionCookie\(res, req\)/);
   assert.match(routeSource, /Cache-Control", "no-store/);
   const shortcutSource = templateSource.match(/function shortcutTile[\s\S]*?\n}/)?.[0] || "";

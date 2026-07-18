@@ -158,7 +158,35 @@ async function verifyDockerConcurrency(database) {
   if (successfulSaves.length !== 1 || conflictedSaves.length !== 1) {
     throw new Error(`Moxie compare-and-swap did not produce one winner and one conflict: ${JSON.stringify(saves)}`);
   }
-  console.log("verified 10-way exact finish, two-worker outbox claims, restart lease recovery, and two-browser Moxie CAS");
+
+  dockerPsql(database, `
+    select * from public.rotate_moxie_auth_credential(
+      'moxie-rebuild-test', 0, repeat('a', 64), repeat('b', 128), 'empty-database-rebuild'
+    );
+  `);
+  const rotateSql = (saltCharacter, hashCharacter) => `
+    select password_version from public.rotate_moxie_auth_credential(
+      'moxie-rebuild-test', 1, repeat('${saltCharacter}', 64), repeat('${hashCharacter}', 128), 'empty-database-rebuild'
+    );
+  `;
+  const rotations = await Promise.all([
+    dockerPsqlConcurrent(database, rotateSql("c", "d")),
+    dockerPsqlConcurrent(database, rotateSql("e", "f")),
+  ]);
+  const successfulRotations = rotations.filter((result) => result.status === 0 && outputLines(result).includes("2"));
+  const conflictedRotations = rotations.filter((result) => result.status !== 0 && /changed concurrently/i.test(result.stderr));
+  if (successfulRotations.length !== 1 || conflictedRotations.length !== 1) {
+    throw new Error(`Moxie credential rotation did not produce one winner and one conflict: ${JSON.stringify(rotations)}`);
+  }
+  const rotationState = dockerPsql(database, `
+    select count(*)::text || '|' || min(password_version)::text || '|' ||
+           bool_and(password_salt ~ '^[0-9a-f]{64}$')::text || '|' ||
+           bool_and(password_hash ~ '^[0-9a-f]{128}$')::text
+    from public.moxie_auth_credentials
+    where credential_key = 'moxie-rebuild-test';
+  `).trim();
+  if (rotationState !== "1|2|true|true") throw new Error(`Moxie credential rotation invariant failed: ${rotationState}`);
+  console.log("verified 10-way exact finish, two-worker outbox claims, restart lease recovery, two-browser Moxie CAS, and atomic Moxie password rotation");
 }
 
 function runDocker(args, options = {}) {
@@ -190,6 +218,8 @@ function assertRebuildInvariants(result) {
   if (result.memphis_outbox_rpc !== true) failures.push("Targeted Memphis outbox claim RPC is missing");
   if (result.feedback_image_backup !== true) failures.push("Legacy feedback image recovery table is missing");
   if (result.moxie_revision !== true) failures.push("Moxie revision/CAS column is missing");
+  if (result.moxie_password_rotation !== true) failures.push("Atomic Moxie password rotation RPC is missing");
+  if (result.moxie_rotation_public_execute !== false) failures.push("Moxie password rotation RPC is executable by public/anonymous/authenticated roles");
   if (failures.length) throw new Error(`Empty-database invariants failed:\n- ${failures.join("\n- ")}`);
 }
 
@@ -416,7 +446,11 @@ if (dockerContainer) {
         'notification_outbox', to_regclass('public.operational_notification_jobs') is not null,
         'memphis_outbox_rpc', to_regprocedure('public.claim_operational_notification_job_by_key(text,text,integer)') is not null,
         'feedback_image_backup', to_regclass('public.system_feedback_legacy_image_backups') is not null,
-        'moxie_revision', exists(select 1 from information_schema.columns where table_schema='public' and table_name='annie_chat_state' and column_name='revision')
+        'moxie_revision', exists(select 1 from information_schema.columns where table_schema='public' and table_name='annie_chat_state' and column_name='revision'),
+        'moxie_password_rotation', to_regprocedure('public.rotate_moxie_auth_credential(text,integer,text,text,text)') is not null,
+        'moxie_rotation_public_execute', has_function_privilege('public', 'public.rotate_moxie_auth_credential(text,integer,text,text,text)', 'EXECUTE')
+          or has_function_privilege('anon', 'public.rotate_moxie_auth_credential(text,integer,text,text,text)', 'EXECUTE')
+          or has_function_privilege('authenticated', 'public.rotate_moxie_auth_credential(text,integer,text,text,text)', 'EXECUTE')
       )::text;
       `,
     ).trim().split("\n").find((line) => line.trim().startsWith("{"));
@@ -488,7 +522,11 @@ try {
         to_regclass('public.operational_notification_jobs') is not null as notification_outbox,
         to_regprocedure('public.claim_operational_notification_job_by_key(text,text,integer)') is not null as memphis_outbox_rpc,
         to_regclass('public.system_feedback_legacy_image_backups') is not null as feedback_image_backup,
-        exists(select 1 from information_schema.columns where table_schema='public' and table_name='annie_chat_state' and column_name='revision') as moxie_revision
+        exists(select 1 from information_schema.columns where table_schema='public' and table_name='annie_chat_state' and column_name='revision') as moxie_revision,
+        to_regprocedure('public.rotate_moxie_auth_credential(text,integer,text,text,text)') is not null as moxie_password_rotation,
+        has_function_privilege('public', 'public.rotate_moxie_auth_credential(text,integer,text,text,text)', 'EXECUTE')
+          or has_function_privilege('anon', 'public.rotate_moxie_auth_credential(text,integer,text,text,text)', 'EXECUTE')
+          or has_function_privilege('authenticated', 'public.rotate_moxie_auth_credential(text,integer,text,text,text)', 'EXECUTE') as moxie_rotation_public_execute
     `);
     assertRebuildInvariants(counts.rows[0]);
     console.log(JSON.stringify({ ok: true, database: databaseName, migrations: migrationFiles.length, ...counts.rows[0] }, null, 2));

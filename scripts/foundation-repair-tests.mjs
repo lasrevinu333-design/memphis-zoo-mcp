@@ -33,7 +33,10 @@ assert.match(windowRoute, /trigger_auto_ignored/);
 assert.match(schedule, /router\.post\("\/generate-range", requireSchedulePin/);
 
 assert.doesNotMatch(moxie, /if\(r\.ok\)\{msg\.textContent="Password changed/);
-assert.doesNotMatch(moxie, /router\.post\("\/settings\/password"/);
+assert.match(moxie, /router\.post\("\/settings\/password"/);
+assert.match(moxie, /crypto\.scrypt/);
+assert.match(moxie, /rotate_moxie_auth_credential/);
+assert.doesNotMatch(moxie, /does not expose or pretend to rotate/);
 assert.doesNotMatch(moxie, /id="settingsModal"/);
 assert.match(moxie, /expectedRevision:sharedRevision/);
 assert.match(moxie, /r\.status===409/);
