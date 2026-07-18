@@ -1,9 +1,9 @@
 {
-  "release_id": "release-2026.07.18.custodial-v3.1",
-  "frontend_commit_sha": "c9aeb20049359710fe41a5ec47e4cd3a7a3a4890",
+  "release_id": "release-2026.07.18.custodial-v3.2",
+  "frontend_commit_sha": "7f88e6969f89dcfe377b81ee121ab6fa6b999da0",
   "frontend_commit_state": "coordinated_v3_frontend",
-  "backend_minimum_version": "release-2026.07.18.custodial-v3.1",
-  "schema_fingerprint": "515fec756d4475f7b1ab1d301d20dc6c8059b7c8a3c0fa23800dbbaac1b9e6e5",
+  "backend_minimum_version": "release-2026.07.18.custodial-v3.2",
+  "schema_fingerprint": "529727b02856fa26ceefc4c9d795ac5b951ddf6d7518b0d0f5b3493c299ebdd1",
   "api_contract_versions": {
     "scan": "scan.v2",
     "dashboard": "dashboard.v1",
