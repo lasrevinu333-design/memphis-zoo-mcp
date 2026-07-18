@@ -8,7 +8,7 @@ const TEST_ZOO_GROUP_ID = "20000000-0000-4000-8000-000000000000";
 const TEST_ZOO_VENUE_ID = "10000000-0000-4000-8000-000000000000";
 const TEST_RESTROOM_GROUP_ID = "30000000-0000-4000-8000-000000000001";
 
-function buildApp({ writeCalls = [], readCalls = [] } = {}) {
+function buildApp({ writeCalls = [], readCalls = [], writeResults = {} } = {}) {
   const app = express();
   app.use(express.json());
   app.use("/admin-api/events", createEventsAdminRouter({
@@ -100,7 +100,7 @@ function buildApp({ writeCalls = [], readCalls = [] } = {}) {
     },
     runWriteSql: async (name, sql) => {
       writeCalls.push({ name, sql });
-      return [];
+      return Object.prototype.hasOwnProperty.call(writeResults, name) ? writeResults[name] : [];
     },
     buildHealthPayload: (area, extra) => ({ ok: true, area, ...extra }),
     appVersion: "test",
@@ -164,6 +164,37 @@ assert.match(createCall.sql, /'SINGLE_VENUE'/, "legacy location_group_id should 
 assert.match(createCall.sql, new RegExp(`${TEST_VENUE_ID.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}'::uuid`), "legacy event-group input should resolve to the event venue id");
 assert.match(createCall.sql, /Catering, extra trash, restroom check before dinner and after dessert/);
 assert.doesNotMatch(createCall.sql, /Operational flags/i);
+
+await withServer(buildApp({
+  writeResults: {
+    events_app_create: {
+      id: "70000000-0000-4000-8000-000000000001",
+      event_name: "Object Return Event",
+      event_scope: "SINGLE_VENUE",
+      display_location: "Event Center",
+      operation_id: "70000000-0000-4000-8000-000000000002",
+    },
+  },
+}), async (baseUrl) => {
+  const response = await fetch(`${baseUrl}/admin-api/events/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      operation_id: "70000000-0000-4000-8000-000000000002",
+      event_name: "Object Return Event",
+      location_group_id: TEST_GROUP_ID,
+      event_date: "2026-06-12",
+      start_time: "17:30",
+      end_time: "20:00",
+      created_by: "contract test",
+    }),
+  });
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.ok, true);
+  assert.equal(payload.data.id, "70000000-0000-4000-8000-000000000001", "create response must include the server-issued event id when write RPC returns a single row object");
+  assert.equal(payload.data.operation_id, "70000000-0000-4000-8000-000000000002", "create response must preserve the idempotency operation id from the authoritative row");
+});
 
 const numericNotesWriteCalls = [];
 await withServer(buildApp({ writeCalls: numericNotesWriteCalls }), async (baseUrl) => {
@@ -353,6 +384,40 @@ assert.ok(updateCall, "event update SQL should run");
 assert.match(updateCall.sql, /for update/i, "event update should lock the intended event row");
 assert.match(updateCall.sql, /insert into public\.events_app_event_history/i, "event update should append correction history");
 assert.match(updateCall.sql, /event_scope = 'ZOO_WIDE'/i, "event update should write canonical event scope");
+
+await withServer(buildApp({
+  writeResults: {
+    events_app_update: {
+      id: "60000000-0000-4000-8000-000000000001",
+      event_name: "Updated Members Night",
+      event_scope: "ZOO_WIDE",
+      display_location: "Zoo Footprint",
+      notes: "Updated through single-row write RPC return.",
+      revision: 2,
+    },
+  },
+}), async (baseUrl) => {
+  const response = await fetch(`${baseUrl}/admin-api/events/60000000-0000-4000-8000-000000000001`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      event_name: "Updated Members Night",
+      event_scope: "ZOO_WIDE",
+      event_date: "2026-07-17",
+      start_time: "18:00",
+      end_time: "20:30",
+      notes: "Updated through single-row write RPC return.",
+      created_by: "contract test",
+      overridden_by: "contract editor",
+    }),
+  });
+  assert.equal(response.status, 200, "single-row write RPC update result should be treated as the updated row");
+  const payload = await response.json();
+  assert.equal(payload.ok, true);
+  assert.equal(payload.data.id, "60000000-0000-4000-8000-000000000001");
+  assert.equal(payload.data.revision, 2);
+  assert.equal(payload.data.notes, "Updated through single-row write RPC return.");
+});
 
 const notificationReadCalls = [];
 const notificationWriteCalls = [];
