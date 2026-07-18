@@ -8,7 +8,7 @@ const TEST_ZOO_GROUP_ID = "20000000-0000-4000-8000-000000000000";
 const TEST_ZOO_VENUE_ID = "10000000-0000-4000-8000-000000000000";
 const TEST_RESTROOM_GROUP_ID = "30000000-0000-4000-8000-000000000001";
 
-function buildApp({ writeCalls = [], readCalls = [], writeResults = {} } = {}) {
+function buildApp({ writeCalls = [], readCalls = [], writeResults = {}, eventRows = [] } = {}) {
   const app = express();
   app.use(express.json());
   app.use("/admin-api/events", createEventsAdminRouter({
@@ -58,6 +58,9 @@ function buildApp({ writeCalls = [], readCalls = [], writeResults = {} } = {}) {
             active: true,
           },
         ];
+      }
+      if (/from public\.events_app_events/i.test(sql)) {
+        return eventRows;
       }
       return [
         {
@@ -194,6 +197,44 @@ await withServer(buildApp({
   assert.equal(payload.ok, true);
   assert.equal(payload.data.id, "70000000-0000-4000-8000-000000000001", "create response must include the server-issued event id when write RPC returns a single row object");
   assert.equal(payload.data.operation_id, "70000000-0000-4000-8000-000000000002", "create response must preserve the idempotency operation id from the authoritative row");
+});
+
+await withServer(buildApp({
+  writeResults: {
+    events_app_create: {
+      ok: true,
+      name: "events_app_create",
+      executed_at: "2026-07-18T03:00:00Z",
+    },
+  },
+  eventRows: [
+    {
+      id: "70000000-0000-4000-8000-000000000011",
+      event_name: "Envelope Return Event",
+      event_scope: "SINGLE_VENUE",
+      display_location: "Event Center",
+      operation_id: "70000000-0000-4000-8000-000000000012",
+    },
+  ],
+}), async (baseUrl) => {
+  const response = await fetch(`${baseUrl}/admin-api/events/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      operation_id: "70000000-0000-4000-8000-000000000012",
+      event_name: "Envelope Return Event",
+      location_group_id: TEST_GROUP_ID,
+      event_date: "2026-06-12",
+      start_time: "17:30",
+      end_time: "20:00",
+      created_by: "contract test",
+    }),
+  });
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.ok, true);
+  assert.equal(payload.data.id, "70000000-0000-4000-8000-000000000011", "create response must read back the authoritative event row when the write executor returns only an execution envelope");
+  assert.equal(payload.data.operation_id, "70000000-0000-4000-8000-000000000012");
 });
 
 const numericNotesWriteCalls = [];
@@ -417,6 +458,47 @@ await withServer(buildApp({
   assert.equal(payload.data.id, "60000000-0000-4000-8000-000000000001");
   assert.equal(payload.data.revision, 2);
   assert.equal(payload.data.notes, "Updated through single-row write RPC return.");
+});
+
+await withServer(buildApp({
+  writeResults: {
+    events_app_update: {
+      ok: true,
+      name: "events_app_update",
+      executed_at: "2026-07-18T03:00:00Z",
+    },
+  },
+  eventRows: [
+    {
+      id: "60000000-0000-4000-8000-000000000002",
+      event_name: "Updated Members Night",
+      event_scope: "ZOO_WIDE",
+      display_location: "Zoo Footprint",
+      notes: "Updated through authoritative readback.",
+      revision: 3,
+    },
+  ],
+}), async (baseUrl) => {
+  const response = await fetch(`${baseUrl}/admin-api/events/60000000-0000-4000-8000-000000000002`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      event_name: "Updated Members Night",
+      event_scope: "ZOO_WIDE",
+      event_date: "2026-07-17",
+      start_time: "18:00",
+      end_time: "20:30",
+      notes: "Updated through authoritative readback.",
+      created_by: "contract test",
+      overridden_by: "contract editor",
+    }),
+  });
+  assert.equal(response.status, 200, "write envelope update result should be followed by an authoritative readback");
+  const payload = await response.json();
+  assert.equal(payload.ok, true);
+  assert.equal(payload.data.id, "60000000-0000-4000-8000-000000000002");
+  assert.equal(payload.data.revision, 3);
+  assert.equal(payload.data.notes, "Updated through authoritative readback.");
 });
 
 const notificationReadCalls = [];
