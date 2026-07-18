@@ -1,10 +1,11 @@
 import express from "express";
+import { randomUUID } from "node:crypto";
 import { makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
 import { getGeminiDiagnostics } from "./utils/gemini-config.js";
 import { createMemphisResponder } from "./services/index.js";
 import { resolveCanonicalDevice } from "./device-identity.js";
 
-export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPayload, requireDeviceAccess, requireOpsManagerAuth: suppliedOpsManagerAuth, appVersion, releaseId, contractVersion }) {
+export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPayload, requireDeviceAccess, requireOpsManagerAuth: suppliedOpsManagerAuth, registerOperationalJobHandler, appVersion, releaseId, contractVersion }) {
   const router = express.Router();
   const memphisResponder = createMemphisResponder({ runReadOnlySql, runRpc });
   const requireOpsManagerAuth = suppliedOpsManagerAuth || makeOpsAccessMiddleware();
@@ -17,8 +18,17 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     return String(req?.body?.device_id || req?.body?.deviceId || req?.query?.device_id || req?.query?.device || req?.header?.("x-device-id") || "").trim();
   }
 
-  function finishMessagingIdentity(req, res, next) {
-    if (req.memphisAuth) { next(); return; }
+  async function finishMessagingIdentity(req, res, next) {
+    if (req.memphisAuth) {
+      try {
+        const identity = await getManagerMessagingIdentity(req.memphisAuth);
+        req.memphisMessagingManager = { identity };
+        next();
+      } catch (error) {
+        res.status(error?.status || 401).json({ ok: false, error: error?.message || "Manager messaging identity failed." });
+      }
+      return;
+    }
     const canonicalDeviceId = String(req.memphisDevice?.canonical_device_id || req.memphisDevice?.device_id || requestDeviceId(req)).trim();
     if (!canonicalDeviceId) {
       res.status(401).json({ ok: false, error: "device_id is required." });
@@ -78,12 +88,23 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
   const OFF_SHIFT_NOTIFICATION_OVERRIDE_SETTING_KEY = "off_shift_employee_notifications_override_enabled";
 
   function fail(res, error, fallback = "Messaging request failed") {
-    res.status(400).json({ ok: false, error: error?.message || fallback });
+    const requested = Number(error?.status || error?.statusCode || 400);
+    const status = requested >= 400 && requested <= 599 ? requested : 400;
+    res.status(status).json({ ok: false, error: error?.message || fallback });
   }
 
   function esc(value) {
     if (value == null) return "null";
     return String(value).replace(/'/g, "''");
+  }
+
+  function isUuid(value) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || "").trim())
+      || /^00000000-0000-0000-0000-000000000000$/i.test(String(value || "").trim());
+  }
+
+  function waitFor(milliseconds) {
+    return new Promise((resolve) => setTimeout(resolve, milliseconds));
   }
 
   function getGeminiDiagnosticsForMessaging() {
@@ -113,9 +134,42 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     };
   }
 
-  async function resolveViewerContext({ userId = "", deviceId = "" } = {}) {
+  async function getManagerMessagingIdentity(managerSession = {}) {
+    const managerId = String(managerSession?.manager_id || "").trim();
+    if (!isUuid(managerId)) throw Object.assign(new Error("Authenticated manager identity is required for Messenger."), { status: 401 });
+    const data = await runRpc("msg_ensure_ops_manager_user", { p_manager_id: managerId });
+    const row = Array.isArray(data) ? data[0] : data;
+    const userId = String(row?.msg_user_id || row?.user_id || row?.id || "").trim();
+    if (!isUuid(userId)) throw Object.assign(new Error("Authenticated manager has no server messaging principal."), { status: 403 });
+    return {
+      ...row,
+      msg_user_id: userId,
+      user_id: userId,
+      role: "manager",
+      manager_id: managerId,
+      display_name: String(row?.display_name || managerSession?.manager_display_name || "Ops Manager"),
+      canonical_device_id: String(managerSession?.device_id || managerSession?.credential_id || "manager-session"),
+      identity_source: "trusted_manager_session",
+    };
+  }
+
+  async function resolveViewerContext({ userId = "", deviceId = "", managerSession = null } = {}) {
     const normalizedUserId = String(userId || "").trim();
     const normalizedDeviceId = String(deviceId || "").trim();
+    if (managerSession) {
+      const identity = await getManagerMessagingIdentity(managerSession);
+      const effectiveUserId = String(identity.msg_user_id).trim();
+      if (normalizedUserId && normalizedUserId !== effectiveUserId) {
+        throw Object.assign(new Error("A manager session cannot impersonate another Messenger user."), { status: 403 });
+      }
+      return {
+        identity,
+        effectiveUserId,
+        deviceId: String(managerSession.device_id || managerSession.credential_id || "manager-session"),
+        isManagerOverview: true,
+        authenticatedManager: true,
+      };
+    }
     if (!normalizedDeviceId) throw new Error("device_id is required.");
     const identity = await getViewerIdentity(normalizedDeviceId);
     const effectiveUserId = String(identity?.msg_user_id || normalizedUserId || "").trim();
@@ -139,7 +193,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       return null;
     }
     try {
-      return await resolveViewerContext({ userId, deviceId });
+      return await resolveViewerContext({ userId, deviceId, managerSession: req.memphisAuth || null });
     } catch (error) {
       res.status(401).json({ ok: false, error: error?.message || "Unauthorized." });
       return null;
@@ -712,6 +766,45 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     `;
   }
 
+  function buildThreadChangesSql({ viewerUserId = "", managerOverview = false, after, afterId, limit = 100 }) {
+    const viewer = esc(viewerUserId);
+    const cursorTime = esc(after);
+    const cursorId = esc(afterId);
+    const visibilityClause = managerOverview
+      ? "true"
+      : `exists (
+          select 1 from public.msg_thread_participants tp
+          where tp.thread_id = t.id
+            and tp.user_id = '${viewer}'::uuid
+            and tp.left_at is null
+        )`;
+    return `
+      select thread_id, changed_at
+      from (
+        select
+          t.id as thread_id,
+          greatest(
+            t.created_at,
+            t.updated_at,
+            coalesce(t.last_message_at, t.created_at),
+            coalesce((
+              select max(greatest(coalesce(r.delivered_at, r.queued_at), coalesce(r.read_at, r.queued_at), coalesce(r.acknowledged_at, r.queued_at)))
+              from public.msg_receipts r
+              join public.msg_messages rm on rm.id = r.message_id
+              where rm.thread_id = t.id
+                and r.user_id = '${viewer}'::uuid
+            ), t.created_at)
+          ) as changed_at
+        from public.msg_threads t
+        where t.is_active = true
+          and ${visibilityClause}
+      ) visible_threads
+      where (changed_at, thread_id) > ('${cursorTime}'::timestamptz, '${cursorId}'::uuid)
+      order by changed_at asc, thread_id asc
+      limit ${Math.min(Math.max(Number(limit) || 100, 1), 200)}
+    `;
+  }
+
   function buildThreadMessagesSql({ threadId = "", viewerUserId = "", managerOverview = false, before = null, beforeId = null, limit = 100 }) {
     const viewer = esc(viewerUserId);
     const thread = esc(threadId);
@@ -751,6 +844,40 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       ) newest_page
       order by coalesce(sent_at, created_at) asc, id asc
       ) thread_messages
+    `;
+  }
+
+  function buildThreadUpdatesSql({ threadId = "", viewerUserId = "", managerOverview = false, after, afterId, limit = 100 }) {
+    const viewer = esc(viewerUserId);
+    const thread = esc(threadId);
+    const cursorTime = esc(after);
+    const cursorId = esc(afterId);
+    const visibilityClause = managerOverview
+      ? "true"
+      : "exists (select 1 from public.msg_thread_participants tp where tp.thread_id = t.id and tp.user_id = '" + viewer + "'::uuid and tp.left_at is null)";
+    return `
+      select * from (
+      select
+        m.id,
+        m.thread_id,
+        m.sender_user_id,
+        sender.display_name as sender_display_name,
+        m.message_type,
+        m.body,
+        m.metadata_json,
+        m.sent_at,
+        m.created_at
+      from public.msg_messages m
+      join public.msg_threads t on t.id = m.thread_id
+      left join public.msg_users sender on sender.id = m.sender_user_id
+      where m.thread_id = '${thread}'::uuid
+        and t.is_active = true
+        and ${visibilityClause}
+        and m.is_deleted = false
+        and (coalesce(m.sent_at, m.created_at), m.id) > ('${cursorTime}'::timestamptz, '${cursorId}'::uuid)
+      order by coalesce(m.sent_at, m.created_at) asc, m.id asc
+      limit ${Math.min(Math.max(Number(limit) || 100, 1), 200)}
+      ) thread_updates
     `;
   }
 
@@ -925,19 +1052,84 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       p_client_message_id: normalizedClientMessageId || null,
     });
 
+    const replyKey = `memphis-reply:${userMessage?.id || normalizedClientMessageId || thread.id}`;
+    const claim = await runRpc("claim_operational_notification_job_by_key", {
+      p_job_key: replyKey,
+      p_worker_id: `messaging-request-${process.pid}-${randomUUID()}`,
+      p_lease_seconds: 120,
+    });
+    const claimedJob = Array.isArray(claim) ? claim[0] : claim;
+    let botMessage = null;
+    let botPending = false;
+    if (claimedJob?.job_id) {
+      try {
+        const result = await processMemphisBotReplyJob(claimedJob);
+        botMessage = result?.bot_message || null;
+        await runRpc("finish_operational_notification_job", {
+          p_job_id: claimedJob.job_id,
+          p_lease_token: claimedJob.lease_token,
+          p_succeeded: true,
+          p_error: null,
+          p_retry_seconds: 30,
+        });
+      } catch (error) {
+        await runRpc("finish_operational_notification_job", {
+          p_job_id: claimedJob.job_id,
+          p_lease_token: claimedJob.lease_token,
+          p_succeeded: false,
+          p_error: String(error?.message || "Memphis reply failed").slice(0, 2000),
+          p_retry_seconds: 30,
+        }).catch(() => {});
+        botPending = true;
+      }
+    } else {
+      botMessage = await findMemphisBotMessage(replyKey);
+      botPending = !botMessage;
+    }
+
+    return { thread, user_message: userMessage, bot_message: botMessage, bot_pending: botPending };
+  }
+
+  async function findMemphisBotMessage(replyKey) {
+    const rows = await runReadOnlySql(`
+      select id, thread_id, sender_user_id, message_type, body, metadata_json,
+             client_message_id, sent_at, created_at
+      from public.msg_messages
+      where client_message_id = '${esc(replyKey)}'
+        and is_deleted is false
+      limit 1
+    `);
+    return Array.isArray(rows) && rows.length ? rows[0] : null;
+  }
+
+  async function processMemphisBotReplyJob(job = {}) {
+    const sourceMessageId = String(job.source_id || job.payload_json?.message_id || "").trim();
+    if (!isUuid(sourceMessageId)) throw new Error("Memphis background job is missing its source message.");
+    const sourceRows = await runReadOnlySql(`
+      select m.id, m.thread_id, m.sender_user_id, m.body, m.metadata_json,
+             coalesce(m.metadata_json->>'device_id','') as device_id
+      from public.msg_messages m
+      where m.id = '${esc(sourceMessageId)}'::uuid
+        and m.is_deleted is false
+      limit 1
+    `);
+    const source = Array.isArray(sourceRows) && sourceRows.length ? sourceRows[0] : null;
+    if (!source) throw new Error("Memphis source message no longer exists.");
+    const replyKey = `memphis-reply:${source.id}`;
+    const existing = await findMemphisBotMessage(replyKey);
+    if (existing) return { bot_message: existing, replayed: true };
+
     const memphisRows = await runReadOnlySql("select public.msg_get_memphis_user_id() as memphis_user_id");
     const memphisUserId = Array.isArray(memphisRows) && memphisRows.length ? memphisRows[0].memphis_user_id : null;
-    if (!memphisUserId) throw new Error("Memphis bot identity not found.");
-
+    if (!isUuid(memphisUserId)) throw new Error("Memphis bot identity not found.");
     const { reply } = await buildMemphisReply({
-      userId: normalizedUserId,
-      deviceId: normalizedDeviceId,
-      threadId: thread.id,
-      body: normalizedBody,
+      userId: source.sender_user_id,
+      deviceId: source.device_id,
+      threadId: source.thread_id,
+      body: source.body,
     });
-    const replyKey = `memphis-reply:${userMessage?.id || normalizedClientMessageId || thread.id}`;
     const botMessage = await runRpc("msg_send_message", {
-      p_thread_id: thread.id,
+      p_thread_id: source.thread_id,
       p_sender_user_id: memphisUserId,
       p_body: String(reply?.text || "Memphis could not produce an answer."),
       p_message_type: "bot_response",
@@ -945,13 +1137,16 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         channel: "memphis",
         ai: true,
         client_message_id: replyKey,
-        reply_to_message_id: userMessage?.id || null,
+        reply_to_message_id: source.id,
         ...(reply?.meta && typeof reply.meta === "object" ? reply.meta : {}),
       },
       p_client_message_id: replyKey,
     });
+    return { bot_message: botMessage, replayed: false };
+  }
 
-    return { thread, user_message: userMessage, bot_message: botMessage };
+  if (typeof registerOperationalJobHandler === "function") {
+    registerOperationalJobHandler("memphis_bot_reply", processMemphisBotReplyJob);
   }
 
   router.get("/health", (_req, res) => {
@@ -989,8 +1184,8 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
   router.get("/me/by-device", requireDeviceOrOpsAuth, async (req, res) => {
     try {
       const deviceId = String(req.query.device_id || "").trim();
-      if (!deviceId) throw new Error("device_id is required.");
-      const data = req.memphisMessagingDevice?.identity || await getViewerIdentity(deviceId);
+      if (!deviceId && !req.memphisAuth) throw new Error("device_id is required.");
+      const data = req.memphisMessagingManager?.identity || req.memphisMessagingDevice?.identity || await getViewerIdentity(deviceId);
       res.status(200).json({ ok: true, data, meta: messagingMeta() });
     } catch (error) {
       fail(res, error, "Device identity lookup failed");
@@ -1001,7 +1196,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     try {
       const requestedUserId = String(req.query.user_id || "").trim();
       const deviceId = String(req.query.device_id || req.header("x-device-id") || "").trim();
-      const viewer = await resolveViewerContext({ userId: requestedUserId, deviceId });
+      const viewer = await resolveViewerContext({ userId: requestedUserId, deviceId, managerSession: req.memphisAuth || null });
       const rows = await runReadOnlySql(`select * from public.msg_list_users('${esc(viewer.effectiveUserId)}'::uuid)`);
       res.status(200).json({ ok: true, data: rows || [], meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
@@ -1013,11 +1208,11 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     try {
       const userId = String(req.query.user_id || "").trim();
       const deviceId = String(req.query.device_id || "").trim();
-      const viewer = await resolveViewerContext({ userId, deviceId });
+      const viewer = await resolveViewerContext({ userId, deviceId, managerSession: req.memphisAuth || null });
       await runRpc("msg_get_or_create_memphis_thread", { p_user_id: viewer.effectiveUserId });
-      const notificationState = deviceId ? await getDeviceNotificationState(deviceId) : null;
+      const notificationState = deviceId && !req.memphisAuth ? await getDeviceNotificationState(deviceId) : null;
       const suppressedNotificationState = notificationState ? phoneSuppressedNotificationState(notificationState) : null;
-      const suppressUnreadForPhone = deviceId && shouldSuppressPhoneNotificationPayloads(notificationState);
+      const suppressUnreadForPhone = deviceId && !req.memphisAuth && shouldSuppressPhoneNotificationPayloads(notificationState);
       const sql = buildThreadListSql({ viewerUserId: viewer.effectiveUserId, managerOverview: viewer.isManagerOverview });
       const rows = await runReadOnlySql(sql);
       const data = (Array.isArray(rows) ? rows : []).map((row) => suppressUnreadForPhone
@@ -1026,6 +1221,60 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       res.status(200).json({ ok: true, data, meta: messagingMeta(suppressedNotificationState ? notificationStateMeta(suppressedNotificationState) : {}) });
     } catch (error) {
       fail(res, error, "Thread list failed");
+    }
+  });
+
+  router.get("/threads/updates", requireDeviceOrOpsAuth, async (req, res) => {
+    const startedAt = Date.now();
+    let clientGone = false;
+    const markGone = () => { clientGone = true; };
+    req.once("aborted", markGone);
+    res.once("close", markGone);
+    try {
+      const userId = String(req.query.user_id || "").trim();
+      const deviceId = String(req.query.device_id || "").trim();
+      const after = String(req.query.after || "").trim();
+      const afterId = String(req.query.after_id || "").trim();
+      const requestSequence = Math.max(0, Number.parseInt(String(req.query.request_seq || "0"), 10) || 0);
+      const waitMs = Math.min(Math.max(Number.parseInt(String(req.query.wait_ms || "20000"), 10) || 20000, 0), 25000);
+      const limit = Math.min(Math.max(Number.parseInt(String(req.query.limit || "100"), 10) || 100, 1), 200);
+      if (!after || Number.isNaN(Date.parse(after))) throw Object.assign(new Error("A valid server thread cursor is required."), { status: 422 });
+      if (!isUuid(afterId)) throw Object.assign(new Error("A valid cursor thread id is required."), { status: 422 });
+      const viewer = await resolveViewerContext({ userId, deviceId, managerSession: req.memphisAuth || null });
+      let rows = [];
+      do {
+        rows = await runReadOnlySql(buildThreadChangesSql({
+          viewerUserId: viewer.effectiveUserId,
+          managerOverview: viewer.isManagerOverview,
+          after,
+          afterId,
+          limit,
+        }));
+        if ((Array.isArray(rows) && rows.length) || clientGone || Date.now() - startedAt >= waitMs) break;
+        await waitFor(Math.min(1000, Math.max(100, waitMs - (Date.now() - startedAt))));
+      } while (!clientGone);
+      if (clientGone || res.headersSent) return;
+      const data = Array.isArray(rows) ? rows : [];
+      const last = data[data.length - 1] || null;
+      res.status(200).json({
+        ok: true,
+        data,
+        meta: messagingMeta({
+          transport: "cursor_long_poll",
+          request_sequence: requestSequence,
+          waited_ms: Date.now() - startedAt,
+          has_more: data.length >= limit,
+          next_cursor: last
+            ? { after: last.changed_at, after_id: last.thread_id }
+            : { after, after_id: afterId },
+        }),
+      });
+    } catch (error) {
+      if (clientGone || res.headersSent) return;
+      res.status(error?.status || 400).json({ ok: false, error: error?.message || "Thread updates failed" });
+    } finally {
+      req.off("aborted", markGone);
+      res.off("close", markGone);
     }
   });
 
@@ -1231,6 +1480,10 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
 
   router.post("/device-notifications/ack", requireWritableDeviceOrOpsAuth, async (req, res) => {
     try {
+      if (req.memphisAuth) {
+        res.status(403).json({ ok: false, error: "Manager sessions cannot acknowledge an employee device notification." });
+        return;
+      }
       const requestedDeviceId = String(req.body?.device_id || req.body?.deviceId || req.header("x-device-id") || "").trim();
       const notificationKey = String(req.body?.notification_key || req.body?.notificationKey || "").trim();
       const notificationType = String(req.body?.notification_type || req.body?.notificationType || "notification").trim().toLowerCase();
@@ -1267,6 +1520,68 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   });
 
+  // Cursor-based incremental reconciliation is the authoritative live-update
+  // path. It uses the same authenticated viewer boundary as the full message
+  // page, returns stable (created_at, id) ordering, and holds an empty request
+  // briefly so clients do not need blind two-second polling.
+  router.get("/thread/:threadId/updates", requireDeviceOrOpsAuth, async (req, res) => {
+    const startedAt = Date.now();
+    let clientGone = false;
+    const markGone = () => { clientGone = true; };
+    req.once("aborted", markGone);
+    res.once("close", markGone);
+    try {
+      const threadId = String(req.params.threadId || "").trim();
+      const userId = String(req.query.user_id || "").trim();
+      const deviceId = String(req.query.device_id || "").trim();
+      const after = String(req.query.after || "").trim();
+      const afterId = String(req.query.after_id || "").trim();
+      const requestSequence = Math.max(0, Number.parseInt(String(req.query.request_seq || "0"), 10) || 0);
+      const waitMs = Math.min(Math.max(Number.parseInt(String(req.query.wait_ms || "20000"), 10) || 20000, 0), 25000);
+      const limit = Math.min(Math.max(Number.parseInt(String(req.query.limit || "100"), 10) || 100, 1), 200);
+      if (!isUuid(threadId)) throw Object.assign(new Error("A valid thread id is required."), { status: 422 });
+      if (!after || Number.isNaN(Date.parse(after))) throw Object.assign(new Error("A valid server message cursor is required."), { status: 422 });
+      if (!isUuid(afterId)) throw Object.assign(new Error("A valid cursor message id is required."), { status: 422 });
+      const viewer = await resolveViewerContext({ userId, deviceId, managerSession: req.memphisAuth || null });
+      let rows = [];
+      do {
+        rows = await runReadOnlySql(buildThreadUpdatesSql({
+          threadId,
+          viewerUserId: viewer.effectiveUserId,
+          managerOverview: viewer.isManagerOverview,
+          after,
+          afterId,
+          limit,
+        }));
+        if ((Array.isArray(rows) && rows.length) || clientGone || Date.now() - startedAt >= waitMs) break;
+        await waitFor(Math.min(1000, Math.max(100, waitMs - (Date.now() - startedAt))));
+      } while (!clientGone);
+      if (clientGone || res.headersSent) return;
+      const data = Array.isArray(rows) ? rows : [];
+      const last = data[data.length - 1] || null;
+      res.status(200).json({
+        ok: true,
+        data,
+        meta: messagingMeta({
+          transport: "cursor_long_poll",
+          request_sequence: requestSequence,
+          waited_ms: Date.now() - startedAt,
+          has_more: data.length >= limit,
+          next_cursor: last ? {
+            after: last.sent_at || last.created_at,
+            after_id: last.id,
+          } : { after, after_id: afterId },
+        }),
+      });
+    } catch (error) {
+      if (clientGone || res.headersSent) return;
+      res.status(error?.status || 400).json({ ok: false, error: error?.message || "Thread updates failed" });
+    } finally {
+      req.off("aborted", markGone);
+      res.off("close", markGone);
+    }
+  });
+
   router.get("/thread/:threadId/messages", requireDeviceOrOpsAuth, async (req, res) => {
     try {
       const threadId = String(req.params.threadId || "").trim();
@@ -1275,7 +1590,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const limit = Number.parseInt(String(req.query.limit || 100), 10) || 100;
       const before = req.query.before ? String(req.query.before).trim() : "";
       const beforeId = req.query.before_id ? String(req.query.before_id).trim() : "";
-      const viewer = await resolveViewerContext({ userId, deviceId });
+      const viewer = await resolveViewerContext({ userId, deviceId, managerSession: req.memphisAuth || null });
       const rows = await runReadOnlySql(buildThreadMessagesSql({ threadId, viewerUserId: viewer.effectiveUserId, managerOverview: viewer.isManagerOverview, before, beforeId, limit }));
       res.status(200).json({ ok: true, data: rows || [], meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
@@ -1288,7 +1603,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const createdByUserId = String(req.body?.created_by_user_id || "").trim();
       const otherUserId = String(req.body?.other_user_id || "").trim();
       const deviceId = String(req.body?.device_id || "").trim();
-      const viewer = await resolveViewerContext({ userId: createdByUserId, deviceId });
+      const viewer = await resolveViewerContext({ userId: createdByUserId, deviceId, managerSession: req.memphisAuth || null });
       if (!otherUserId) throw new Error("other_user_id is required.");
       if (viewer.effectiveUserId === otherUserId) throw new Error("Pick someone else to message.");
       const data = await runRpc("msg_get_or_create_direct_thread", { p_user_a: viewer.effectiveUserId, p_user_b: otherUserId });
@@ -1306,7 +1621,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const memberUserIds = Array.isArray(req.body?.member_user_ids)
         ? req.body.member_user_ids.map((x) => String(x || "").trim()).filter(Boolean)
         : [];
-      const viewer = await resolveViewerContext({ userId: createdByUserId, deviceId });
+      const viewer = await resolveViewerContext({ userId: createdByUserId, deviceId, managerSession: req.memphisAuth || null });
       if (!viewer.isManagerOverview) throw new Error("Employee devices can only start one-person direct conversations.");
       const data = await runRpc("msg_create_group_thread", {
         p_created_by_user_id: viewer.effectiveUserId,
@@ -1328,7 +1643,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const metadataJson = req.body?.metadata_json && typeof req.body.metadata_json === "object" ? req.body.metadata_json : {};
       const clientMessageId = String(req.body?.client_message_id || req.body?.clientMessageId || metadataJson.client_message_id || "").trim();
       const deviceId = String(req.body?.device_id || req.body?.deviceId || "").trim();
-      const viewer = await resolveViewerContext({ userId: senderUserId, deviceId });
+      const viewer = await resolveViewerContext({ userId: senderUserId, deviceId, managerSession: req.memphisAuth || null });
       if (senderUserId && viewer.effectiveUserId !== senderUserId) {
         res.status(403).json({ ok: false, error: "Sender user ID must match the authenticated viewer." });
         return;
@@ -1374,7 +1689,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const threadId = String(req.params.threadId || "").trim();
       if (!threadId) throw new Error("threadId is required.");
       const deviceId = String(req.body?.device_id || req.body?.deviceId || "").trim();
-      const viewer = await resolveViewerContext({ deviceId });
+      const viewer = await resolveViewerContext({ deviceId, managerSession: req.memphisAuth || null });
       if (!viewer.isManagerOverview) {
         const isParticipant = await isThreadParticipant(threadId, viewer.effectiveUserId);
         if (!isParticipant) {
@@ -1398,7 +1713,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const threadId = String(req.params.threadId || "").trim();
       const userId = String(req.body?.user_id || "").trim();
       const deviceId = String(req.body?.device_id || req.body?.deviceId || "").trim();
-      const viewer = await resolveViewerContext({ userId, deviceId });
+      const viewer = await resolveViewerContext({ userId, deviceId, managerSession: req.memphisAuth || null });
       if (userId && viewer.effectiveUserId !== userId) {
         res.status(403).json({ ok: false, error: "Read acknowledgement user ID must match the authenticated viewer." });
         return;
@@ -1414,7 +1729,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     try {
       const requestedUserId = String(req.body?.user_id || "").trim();
       const deviceId = String(req.body?.device_id || req.body?.deviceId || req.header("x-device-id") || "").trim();
-      const viewer = await resolveViewerContext({ userId: requestedUserId, deviceId });
+      const viewer = await resolveViewerContext({ userId: requestedUserId, deviceId, managerSession: req.memphisAuth || null });
       const data = await runRpc("msg_get_or_create_memphis_thread", { p_user_id: viewer.effectiveUserId });
       res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
@@ -1502,7 +1817,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const clientMessageId = String(req.body?.client_message_id || req.body?.clientMessageId || "").trim();
       if (!body) throw new Error("body is required.");
 
-      const viewer = await resolveViewerContext({ userId: requestedUserId, deviceId });
+      const viewer = await resolveViewerContext({ userId: requestedUserId, deviceId, managerSession: req.memphisAuth || null });
       const canonicalDeviceId = String(viewer.identity?.canonical_device_id || deviceId).trim();
       const data = await sendMemphisConversationMessage({
         userId: viewer.effectiveUserId,
@@ -1523,12 +1838,12 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const title = req.body?.title == null ? null : String(req.body.title);
       const body = String(req.body?.body || "");
       const deviceId = String(req.body?.device_id || req.body?.deviceId || "").trim();
-      const viewer = await resolveViewerContext({ userId: senderUserId, deviceId });
+      const viewer = await resolveViewerContext({ userId: senderUserId, deviceId, managerSession: req.memphisAuth || null });
       if (!viewer.isManagerOverview) {
         res.status(403).json({ ok: false, error: "Broadcast requires a manager device." });
         return;
       }
-      const data = await runRpc("msg_send_broadcast", { p_sender_user_id: senderUserId, p_title: title, p_body: body });
+      const data = await runRpc("msg_send_broadcast", { p_sender_user_id: viewer.effectiveUserId, p_title: title, p_body: body });
       res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Send broadcast failed");
