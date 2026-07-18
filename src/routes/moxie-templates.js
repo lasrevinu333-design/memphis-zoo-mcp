@@ -97,13 +97,29 @@ a{color:#b9d0ff}
 .login button,.settings button{padding:10px 22px;border-radius:11px;border:1px solid #4a5e91;background:#314a7a;color:#f3f6ff;font-weight:800;font-size:1rem;cursor:pointer;font-family:inherit}
 .login button:hover,.settings button:hover{background:#3d5a8e}
 .log-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;padding:18px}
+.annie-log-wrap{max-width:1180px}
+.log-mission{margin:0 18px 0;padding:14px 16px;color:#dbe5ff;line-height:1.45}
+.log-grid-wide{grid-template-columns:1fr;padding-bottom:0}
 .log-card{background:#0b1020;border:1px solid #26375d;border-radius:14px;padding:16px}
+.intake-card{background:linear-gradient(180deg,rgba(22,37,68,.95),rgba(11,16,32,.96));border-color:#4a5e91}
 .log-card h3{margin:0 0 10px;font-size:1.1rem}
 .log-card textarea{width:100%;min-height:80px;padding:10px;border-radius:10px;border:1px solid #314472;background:#0d1426;color:#f3f6ff;font-family:inherit;font-size:.95rem;resize:vertical}
 .log-card textarea:focus{outline:none;border-color:#6a8bff}
-.log-card input[type=text]{width:100%;margin-top:8px;padding:8px;border-radius:8px;border:1px solid #314472;background:#0d1426;color:#f3f6ff;font-family:inherit}
+.log-card input[type=text],.log-card select{width:100%;margin-top:6px;padding:9px 10px;border-radius:9px;border:1px solid #314472;background:#0d1426;color:#f3f6ff;font-family:inherit}
+.log-card input[type=file]{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
+.log-form{display:flex;flex-direction:column;gap:10px}
+.log-form-grid{display:grid;grid-template-columns:1fr 1fr 1.2fr;gap:12px}
+.log-form label{font-weight:800;color:#dbe5ff;font-size:.9rem}
+.intake-textarea{min-height:220px!important}
+.log-option-row{display:flex;gap:14px;flex-wrap:wrap;color:#c1cdeb;font-size:.9rem}
+.log-option-row label{display:flex;align-items:center;gap:7px;font-weight:700}
+.log-action-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .log-card button{margin-top:8px;padding:8px 16px;border-radius:10px;border:1px solid #4a5e91;background:#26375d;color:#dbe5ff;font-weight:700;cursor:pointer;font-family:inherit}
 .log-card button:hover{background:#314a7a}
+.file-import-button{display:inline-flex;align-items:center;justify-content:center;margin-top:8px;padding:8px 16px;border-radius:10px;border:1px solid #4a5e91;background:#162544;color:#dbe5ff;font-weight:800;cursor:pointer}
+.file-import-button:hover{background:#1e3358}
+.log-result{margin-top:6px;padding:12px;border-radius:12px;border:1px solid #2d6a4f;background:#102719;color:#d7ffe2;white-space:pre-wrap;line-height:1.45}
+.log-result.is-error{border-color:#8a3445;background:#2a1320;color:#ffd5dc}
 .log-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:10px}
 .log-item{background:#0d1426;border:1px solid #26375d;border-radius:12px;padding:12px}
 .log-item .log-meta{font-size:.75rem;color:#7a8bb5;margin-top:6px}
@@ -118,7 +134,7 @@ a{color:#b9d0ff}
 .contact-form input{padding:10px;border-radius:10px;border:1px solid #314472;background:#0d1426;color:#f3f6ff;font-size:.95rem;font-family:inherit}
 .contact-form button{padding:10px 20px;border-radius:10px;border:1px solid #4a5e91;background:#26375d;color:#dbe5ff;font-weight:700;cursor:pointer;align-self:flex-start;font-family:inherit}
 @media(max-width:1200px){.chat-main{grid-template-columns:1fr}.saved-chats-rail,.chat-tools{display:none}}
-@media(max-width:700px){.wrap{padding:12px}.chat-wrap{width:100%;max-width:100%}.log-grid,.contacts-grid{grid-template-columns:1fr}}
+@media(max-width:700px){.wrap{padding:12px}.chat-wrap{width:100%;max-width:100%}.log-grid,.contacts-grid,.log-form-grid{grid-template-columns:1fr}.log-mission{margin:0 12px}.intake-textarea{min-height:180px!important}}
 ${extraHead}
 </style>
 </head>

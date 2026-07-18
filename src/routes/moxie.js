@@ -201,8 +201,9 @@ async function dbGetContacts(supabase) {
   return data || [];
 }
 
-async function dbAddContact(supabase, { id, name, phone, email, notes }) {
-  const { error } = await supabase.from("annie_contacts").insert({ id, name: name || "", phone: phone || "", email: email || "", notes: notes || "", source: "manual" });
+async function dbAddContact(supabase, { id, name, phone, email, notes, source = "manual" }) {
+  const safeSource = ["manual", "suggested", "import"].includes(String(source || "")) ? source : "manual";
+  const { error } = await supabase.from("annie_contacts").insert({ id, name: name || "", phone: phone || "", email: email || "", notes: notes || "", source: safeSource });
   if (error) throw error;
 }
 
@@ -247,6 +248,165 @@ async function dbSaveChatState(supabase, { history, saved_chats }) {
     id: "default", history: history || [], saved_chats: saved_chats || [], updated_at: new Date().toISOString(),
   });
   if (error) throw error;
+}
+
+// ---------------------------------------------------------------------------
+// Annie's Log intake parsing
+// ---------------------------------------------------------------------------
+
+const ANNIE_LOG_NOTE_MAX_CHARS = 5000;
+const ANNIE_LOG_INTAKE_MAX_CHARS = 20000;
+const INTAKE_SOURCE_TYPES = new Set(["conversation", "email", "call", "text", "vendor", "maintenance", "operations", "document", "other"]);
+const PHONE_RE = /(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}(?:\s*(?:x|ext\.?)\s*\d{1,6})?/gi;
+const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+const TITLE_WORD_RE = /\b(?:director|manager|supervisor|lead|coordinator|assistant|admin|administrator|chief|officer|operations?|ops|maintenance|facilities|vendor|contractor|technician|tech|worker|plumber|electrician|inspector|department|dept|city|zoo|custodial|security|grounds|restaurant|keeper|curator)\b/i;
+const ACTION_WORD_RE = /\b(?:please|pls|need(?:s|ed)?|follow(?: |-)?up|call|email|text|send|schedule|confirm|check|repair|replace|order|pick up|meet|remind|remember|todo|to do|action|next step|by\b|before\b|due\b)\b/i;
+
+function clipText(value, max, suffix = "… [truncated]") {
+  const text = String(value || "").trim();
+  if (text.length <= max) return text;
+  return text.slice(0, Math.max(0, max - suffix.length)).trimEnd() + suffix;
+}
+
+function normalizePhone(value) {
+  const raw = String(value || "");
+  const digits = (raw.match(/\d/g) || []).join("");
+  if (digits.length === 11 && digits.startsWith("1")) return digits.slice(1);
+  return digits;
+}
+
+function normalizeName(value) {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function cleanContactName(value) {
+  let text = String(value || "")
+    .replace(/\b(?:from|to|cc|bcc|contact|name|caller|sender)\s*:/ig, " ")
+    .replace(EMAIL_RE, " ")
+    .replace(PHONE_RE, " ")
+    .replace(/\b(?:mobile|cell|phone|office|work|direct|main|ext|email)\b\s*:*/ig, " ")
+    .replace(/[<>()[\]{}]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  text = text.split(/\s+(?:at|from|with)\s+/i)[0]?.trim() || text;
+  text = text.split(/\s[-–—|]\s/)[0]?.trim() || text;
+  text = text.replace(/^(?:mr|mrs|ms|dr)\.?\s+/i, "").trim();
+  if (!/[a-z]/i.test(text) || /\d/.test(text) || text.length < 4 || text.length > 80) return "";
+  const words = text.split(/\s+/).filter(Boolean);
+  if (words.length < 2 || words.length > 5) return "";
+  const bad = /\b(?:subject|re|fw|fwd|sent|received|attached|attachment|invoice|quote|estimate|thanks|hello|hi|hey|regards)\b/i;
+  if (bad.test(text)) return "";
+  return words.map(w => w.length <= 3 && /^[A-Z]+$/.test(w) ? w : w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+}
+
+function inferContactTitle(parts) {
+  for (const part of parts) {
+    const text = String(part || "").replace(EMAIL_RE, " ").replace(PHONE_RE, " ").replace(/\s+/g, " ").trim();
+    if (text && TITLE_WORD_RE.test(text) && text.length <= 120) return text;
+  }
+  return "";
+}
+
+export function extractContactsFromText(input) {
+  const text = clipText(input, ANNIE_LOG_INTAKE_MAX_CHARS, "");
+  const contacts = [];
+  const seen = new Set();
+  const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  const candidateLines = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (PHONE_RE.test(line) || EMAIL_RE.test(line)) candidateLines.push(line);
+    PHONE_RE.lastIndex = 0;
+    EMAIL_RE.lastIndex = 0;
+  }
+
+  for (const line of candidateLines) {
+    const phones = Array.from(line.matchAll(PHONE_RE)).map(m => m[0].trim());
+    const emails = Array.from(line.matchAll(EMAIL_RE)).map(m => m[0].trim().toLowerCase());
+    if (!phones.length && !emails.length) continue;
+    const parts = line.split(/\s*(?:,|;|\||\s[-–—]\s)\s*/).map(p => p.trim()).filter(Boolean);
+    const name = cleanContactName(parts[0]) || cleanContactName(line);
+    if (!name) continue;
+    const title = inferContactTitle(parts.slice(1));
+    const phone = phones[0] || "";
+    const email = emails[0] || "";
+    const key = `${normalizeName(name)}|${normalizePhone(phone)}|${email}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    contacts.push({
+      name,
+      title,
+      phone,
+      email,
+      notes: title ? `Imported title: ${title}` : "Imported from Annie's Log intake",
+    });
+    if (contacts.length >= 12) break;
+  }
+  return contacts;
+}
+
+function dueHintFromLine(line) {
+  const match = String(line || "").match(/\b(?:by|before|due|on)\s+([A-Za-z]+(?:day)?|\d{1,2}\/\d{1,2}(?:\/\d{2,4})?|\d{1,2}-\d{1,2}(?:-\d{2,4})?|today|tomorrow|next week|this week)(?:\b|,|\.|;)/i)
+    || String(line || "").match(/\b(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next week|this week)\b/i);
+  return match ? match[1] : "";
+}
+
+export function extractRemindersFromText(input) {
+  const text = clipText(input, ANNIE_LOG_INTAKE_MAX_CHARS, "");
+  const reminders = [];
+  const seen = new Set();
+  const lines = text.split(/\r?\n|(?<=[.!?])\s+/).map(line => line.replace(/^[\s>*•-]+/, "").trim()).filter(Boolean);
+  for (const line of lines) {
+    if (line.length < 8 || line.length > 360 || !ACTION_WORD_RE.test(line)) continue;
+    const content = clipText(line.replace(/\s+/g, " "), 500, "");
+    const due = clipText(dueHintFromLine(line), 200, "");
+    const fp = reminderFingerprint(content, due);
+    if (seen.has(fp)) continue;
+    seen.add(fp);
+    reminders.push({ content, due, fingerprint: fp });
+    if (reminders.length >= 10) break;
+  }
+  return reminders;
+}
+
+function contactExists(existingContacts, candidate) {
+  const email = String(candidate.email || "").toLowerCase();
+  const phone = normalizePhone(candidate.phone);
+  const name = normalizeName(candidate.name);
+  return (existingContacts || []).some(c => {
+    if (email && String(c.email || "").toLowerCase() === email) return true;
+    if (phone && normalizePhone(c.phone) === phone) return true;
+    return name && normalizeName(c.name) === name;
+  });
+}
+
+function reminderExists(existingReminders, candidate) {
+  const fp = candidate.fingerprint || reminderFingerprint(candidate.content, candidate.due);
+  return (existingReminders || []).some(r => String(r.fingerprint || "") === fp);
+}
+
+function formatIntakeNote({ sourceType, sourceLabel, subject, content, contacts, reminders }) {
+  const lines = [];
+  lines.push(`Source: ${sourceType || "conversation"}`);
+  if (sourceLabel) lines.push(`From / people: ${sourceLabel}`);
+  if (subject) lines.push(`Subject / context: ${subject}`);
+  lines.push(`Captured: ${new Date().toISOString()}`);
+  if (contacts?.length) {
+    lines.push("");
+    lines.push("Detected contacts:");
+    for (const c of contacts.slice(0, 8)) {
+      lines.push(`- ${c.name}${c.title ? ` — ${c.title}` : ""}${c.phone ? ` — ${c.phone}` : ""}${c.email ? ` — ${c.email}` : ""}`);
+    }
+  }
+  if (reminders?.length) {
+    lines.push("");
+    lines.push("Detected action items:");
+    for (const r of reminders.slice(0, 8)) lines.push(`- ${r.content}${r.due ? ` (due: ${r.due})` : ""}`);
+  }
+  lines.push("");
+  lines.push("Original intake:");
+  lines.push(content);
+  return clipText(lines.join("\n"), ANNIE_LOG_NOTE_MAX_CHARS);
 }
 
 // ---------------------------------------------------------------------------
@@ -317,8 +477,62 @@ function moxieSystemPrompt(logContext) {
   return prompt;
 }
 
-function buildLogContext(notes, reminders) {
+function queryTerms(query) {
+  const stop = new Set(["about", "after", "again", "also", "annie", "anything", "from", "have", "know", "look", "moxie", "need", "notes", "please", "remind", "show", "tell", "that", "their", "there", "thing", "this", "what", "when", "where", "which", "with"]);
+  return Array.from(new Set(String(query || "").toLowerCase().match(/[a-z0-9]{3,}/g) || [])).filter(term => !stop.has(term)).slice(0, 12);
+}
+
+function scoreTextForTerms(text, terms) {
+  const haystack = normalizeLogKey(text);
+  return terms.reduce((score, term) => score + (haystack.includes(term) ? 1 : 0), 0);
+}
+
+function contactContextLine(contact) {
+  const pieces = [contact.name || "Unnamed contact"];
+  if (contact.phone) pieces.push(contact.phone);
+  if (contact.email) pieces.push(contact.email);
+  if (contact.notes) pieces.push(String(contact.notes).slice(0, 160));
+  return pieces.join(" — ");
+}
+
+export function buildLogContext(notes, reminders, contacts = [], query = "") {
   const parts = [];
+  const terms = queryTerms(query);
+  if (terms.length > 0) {
+    const matchedNotes = (notes || [])
+      .map(n => ({ item: n, score: scoreTextForTerms(n.content, terms) }))
+      .filter(row => row.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5)
+      .map(row => row.item);
+    const matchedReminders = (reminders || [])
+      .map(r => ({ item: r, score: scoreTextForTerms(`${r.content} ${r.due}`, terms) }))
+      .filter(row => row.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 6)
+      .map(row => row.item);
+    const matchedContacts = (contacts || [])
+      .map(c => ({ item: c, score: scoreTextForTerms(`${c.name} ${c.phone} ${c.email} ${c.notes}`, terms) }))
+      .filter(row => row.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 6)
+      .map(row => row.item);
+    if (matchedNotes.length || matchedReminders.length || matchedContacts.length) {
+      parts.push(`Query-matched private memory for: "${query.slice(0, 160)}"`);
+      if (matchedContacts.length) {
+        parts.push("Matching contacts:");
+        for (const c of matchedContacts) parts.push(`- ${contactContextLine(c)}`);
+      }
+      if (matchedReminders.length) {
+        parts.push("Matching reminders:");
+        for (const r of matchedReminders) parts.push(`- ${r.content}${r.due ? ` (due: ${r.due})` : ""}${r.done ? " [done]" : ""}`);
+      }
+      if (matchedNotes.length) {
+        parts.push("Matching notes:");
+        for (const n of matchedNotes) parts.push(`- ${(n.content || "").slice(0, 260)}`);
+      }
+    }
+  }
   const openReminders = (reminders || []).filter(r => !r.done);
   if (openReminders.length > 0) {
     parts.push("Open reminders:");
@@ -332,6 +546,11 @@ function buildLogContext(notes, reminders) {
     for (const n of recentNotes) {
       parts.push(`- ${(n.content || "").slice(0, 200)}`);
     }
+  }
+  const recentContacts = (contacts || []).slice(0, 5);
+  if (recentContacts.length > 0) {
+    parts.push("Recent contacts:");
+    for (const c of recentContacts) parts.push(`- ${contactContextLine(c)}`);
   }
   return parts.length > 0 ? parts.join("\n") : "";
 }
@@ -491,7 +710,9 @@ export function createMoxieRouter({ supabase, staticDir }) {
 
       const notes = await dbGetNotes(supabase);
       const reminders = await dbGetReminders(supabase);
-      const logContext = buildLogContext(notes, reminders);
+      const contacts = await dbGetContacts(supabase);
+      const latestUserQuery = [...clean].reverse().find(m => m.role === "user")?.content || "";
+      const logContext = buildLogContext(notes, reminders, contacts, latestUserQuery);
       const systemPrompt = moxieSystemPrompt(logContext);
       const apiMessages = [{ role: "system", content: systemPrompt }, ...clean.filter(m => m.role !== "system")];
 
@@ -547,6 +768,85 @@ export function createMoxieRouter({ supabase, staticDir }) {
       const id = crypto.randomBytes(6).toString("hex");
       await dbAddNote(supabase, id, content.trim().slice(0, 5000));
       res.json({ ok: true, id });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  router.post("/log/intake", async (req, res) => {
+    try {
+      const body = req.body || {};
+      const content = clipText(body.content, ANNIE_LOG_INTAKE_MAX_CHARS, "");
+      if (!content || typeof content !== "string" || !content.trim()) {
+        return res.status(400).json({ error: "content required" });
+      }
+      const sourceType = INTAKE_SOURCE_TYPES.has(String(body.source_type || "").toLowerCase())
+        ? String(body.source_type).toLowerCase()
+        : "conversation";
+      const sourceLabel = clipText(body.source_label, 160, "");
+      const subject = clipText(body.subject, 180, "");
+      const saveNote = body.save_note !== false;
+      const addContacts = body.add_contacts !== false;
+      const createReminders = body.create_reminders !== false;
+      const extractedContacts = extractContactsFromText([sourceLabel, subject, content].filter(Boolean).join("\n"));
+      const extractedReminders = extractRemindersFromText(content);
+      const existingContacts = addContacts ? await dbGetContacts(supabase) : [];
+      const existingReminders = createReminders ? await dbGetReminders(supabase) : [];
+      const contactsAdded = [];
+      const contactsSkipped = [];
+      if (addContacts) {
+        for (const contact of extractedContacts) {
+          if (contactExists(existingContacts.concat(contactsAdded), contact)) {
+            contactsSkipped.push(contact);
+            continue;
+          }
+          const id = crypto.randomBytes(6).toString("hex");
+          const notes = [
+            contact.notes,
+            sourceType ? `Source type: ${sourceType}` : "",
+            sourceLabel ? `Source: ${sourceLabel}` : "",
+            subject ? `Context: ${subject}` : "",
+          ].filter(Boolean).join("\n");
+          await dbAddContact(supabase, { id, name: contact.name, phone: contact.phone, email: contact.email, notes: clipText(notes, 1000, ""), source: "import" });
+          contactsAdded.push({ ...contact, id });
+        }
+      }
+      const remindersAdded = [];
+      const remindersSkipped = [];
+      if (createReminders) {
+        for (const reminder of extractedReminders) {
+          if (reminderExists(existingReminders.concat(remindersAdded), reminder)) {
+            remindersSkipped.push(reminder);
+            continue;
+          }
+          const id = crypto.randomBytes(6).toString("hex");
+          await dbAddReminder(supabase, { id, content: reminder.content, due: reminder.due, fingerprint: reminder.fingerprint });
+          remindersAdded.push({ ...reminder, id });
+        }
+      }
+      let noteId = "";
+      if (saveNote) {
+        noteId = crypto.randomBytes(6).toString("hex");
+        await dbAddNote(supabase, noteId, formatIntakeNote({
+          sourceType,
+          sourceLabel,
+          subject,
+          content,
+          contacts: extractedContacts,
+          reminders: extractedReminders,
+        }));
+      }
+      res.json({
+        ok: true,
+        noteId,
+        sourceType,
+        contactsDetected: extractedContacts,
+        contactsAdded,
+        contactsSkipped,
+        remindersDetected: extractedReminders,
+        remindersAdded,
+        remindersSkipped,
+      });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
@@ -864,19 +1164,45 @@ form.addEventListener("submit",async(e)=>{
 
 function buildLogPage(notes, reminders, suggested) {
   const esc = s => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-  const notesHtml = notes.map(n => `<div class="log-item"><div>${esc(n.content).replace(/\n/g,"<br>")}</div><div class="log-meta">${n.created_at}</div><div class="log-actions"><button onclick="fetch(${JSON.stringify(prefixed("/log/note/"))}+'${n.id}',{method:'DELETE'}).then(()=>location.reload())">Delete</button></div></div>`).join("");
+  const notesHtml = notes.map(n => `<div class="log-item"><div>${esc(n.content).replace(/\n/g,"<br>")}</div><div class="log-meta">${esc(n.created_at)}</div><div class="log-actions"><button data-delete-note="${esc(n.id)}" type="button">Delete</button></div></div>`).join("");
   const openReminders = (reminders || []).filter(r => !r.done);
   const doneReminders = (reminders || []).filter(r => r.done);
-  const remindersHtml = openReminders.map(r => `<div class="log-item"><div><strong>${esc(r.content)}</strong>${r.due?` <span class="hint">(due: ${esc(r.due)})</span>`:""}</div><div class="log-meta">${r.created_at}</div><div class="log-actions"><button onclick="fetch(${JSON.stringify(prefixed("/log/reminder/"))}+'${r.id}/complete',{method:'POST'}).then(()=>location.reload())">Done</button><button onclick="fetch(${JSON.stringify(prefixed("/log/reminder/"))}+'${r.id}',{method:'DELETE'}).then(()=>location.reload())">Delete</button></div></div>`).join("");
-  const doneHtml = doneReminders.map(r => `<div class="log-item" style="opacity:.6"><div><s>${esc(r.content)}</s></div><div class="log-meta">Done: ${r.done_at||""}</div><div class="log-actions"><button onclick="fetch(${JSON.stringify(prefixed("/log/reminder/"))}+'${r.id}',{method:'DELETE'}).then(()=>location.reload())">Delete</button></div></div>`).join("");
-  const suggestedHtml = (suggested||[]).map(s => `<div class="log-item"><div><strong>${esc(s.content)}</strong>${s.due?` <span class="hint">(due: ${esc(s.due)})</span>`:""}</div><div class="log-meta">Suggested</div><div class="log-actions"><button onclick="fetch(${JSON.stringify(prefixed("/log/suggested/"))}+'${s.id}/confirm',{method:'POST'}).then(()=>location.reload())">Add</button><button onclick="fetch(${JSON.stringify(prefixed("/log/suggested/"))}+'${s.id}/dismiss',{method:'POST'}).then(()=>location.reload())">Dismiss</button></div></div>`).join("");
+  const remindersHtml = openReminders.map(r => `<div class="log-item"><div><strong>${esc(r.content)}</strong>${r.due?` <span class="hint">(due: ${esc(r.due)})</span>`:""}</div><div class="log-meta">${esc(r.created_at)}</div><div class="log-actions"><button data-complete-reminder="${esc(r.id)}" type="button">Done</button><button data-delete-reminder="${esc(r.id)}" type="button">Delete</button></div></div>`).join("");
+  const doneHtml = doneReminders.map(r => `<div class="log-item" style="opacity:.6"><div><s>${esc(r.content)}</s></div><div class="log-meta">Done: ${esc(r.done_at||"")}</div><div class="log-actions"><button data-delete-reminder="${esc(r.id)}" type="button">Delete</button></div></div>`).join("");
+  const suggestedHtml = (suggested||[]).map(s => `<div class="log-item"><div><strong>${esc(s.content)}</strong>${s.due?` <span class="hint">(due: ${esc(s.due)})</span>`:""}</div><div class="log-meta">Suggested</div><div class="log-actions"><button data-confirm-suggestion="${esc(s.id)}" type="button">Add</button><button data-dismiss-suggestion="${esc(s.id)}" type="button">Dismiss</button></div></div>`).join("");
 
   return `
-<div class="wrap">
-  <header><div class="brand-with-icon">${logIconImg()}<div><div class="brand">Annie's Log</div><div class="hint">Daily notes, reminders, and Moxie's working memory.</div></div></div><div class="header-actions"><a class="button-link" href="${prefixed("/")}">Back to chat</a><a class="button-link" href="${prefixed("/password")}">Settings</a><a class="hint" href="${prefixed("/logout")}">logout</a></div></header>
+<div class="wrap annie-log-wrap">
+  <header><div class="brand-with-icon">${logIconImg()}<div><div class="brand">Annie's Log</div><div class="hint">Daily notes, pasted communications, reminders, contacts, and Moxie's working memory.</div></div></div><div class="header-actions"><a class="button-link" href="${prefixed("/")}">Back to chat</a><a class="button-link" href="${prefixed("/contacts")}">Contacts</a><a class="button-link" href="${prefixed("/reminders")}">Reminders</a><a class="button-link" href="${prefixed("/password")}">Settings</a><a class="hint" href="${prefixed("/logout")}">logout</a></div></header>
+  <div class="panel log-mission"><strong>Central intake:</strong> paste an email, call note, text message, vendor update, city maintenance note, or department handoff. Annie's Log saves the source, auto-adds contacts when it sees names with phone/email details, and turns likely follow-ups into reminders.</div>
+  <div class="log-grid log-grid-wide">
+    <div class="log-card intake-card">
+      <h3>Paste or import communication</h3>
+      <p class="hint">Best for emails, texts, call notes, vendor updates, city maintenance messages, department handoffs, and copied document text. For PDF or Word documents, copy the useful text and paste it here.</p>
+      <form id="intake-form" class="log-form">
+        <div class="log-form-grid">
+          <label>Source type<select id="intake-source-type"><option value="conversation">Conversation</option><option value="email">Email</option><option value="call">Call</option><option value="text">Text message</option><option value="vendor">Vendor</option><option value="maintenance">City maintenance</option><option value="operations">Zoo operations</option><option value="document">Document text</option><option value="other">Other</option></select></label>
+          <label>From / people<input id="intake-source-label" type="text" placeholder="Clayton, City Maintenance, vendor name…"></label>
+          <label>Subject / context<input id="intake-subject" type="text" placeholder="Door repair, invoice, staffing question…"></label>
+        </div>
+        <textarea id="intake-content" class="intake-textarea" maxlength="${ANNIE_LOG_INTAKE_MAX_CHARS}" placeholder="Paste the message, email, call notes, or document text here…"></textarea>
+        <div class="log-option-row">
+          <label><input id="intake-save-note" type="checkbox" checked> Save source to daily log</label>
+          <label><input id="intake-add-contacts" type="checkbox" checked> Auto-add detected contacts</label>
+          <label><input id="intake-create-reminders" type="checkbox" checked> Create likely follow-up reminders</label>
+        </div>
+        <div class="log-action-row">
+          <button id="process-intake-button" type="submit">Process into Annie's Log</button>
+          <label class="file-import-button" for="intake-file">Import text file</label>
+          <input id="intake-file" type="file" accept=".txt,.md,.csv,text/plain,text/markdown,text/csv">
+        </div>
+        <div id="intake-result" class="log-result" hidden></div>
+      </form>
+    </div>
+  </div>
   <div class="log-grid">
-    <div class="log-card"><h3>New note</h3><textarea id="note-content" placeholder="Write a note…"></textarea><button onclick="fetch(${JSON.stringify(prefixed("/log/note"))},{method:'POST',headers:{"Content-Type":"application/json"},body:JSON.stringify({content:document.getElementById("note-content").value})}).then(r=>r.json()).then(()=>location.reload())">Add note</button></div>
-    <div class="log-card"><h3>New reminder</h3><textarea id="reminder-content" placeholder="Remind me to…"></textarea><input id="reminder-due" placeholder="Due (optional)" style="width:100%;margin-top:8px;padding:8px;border-radius:8px;border:1px solid #314472;background:#0d1426;color:#f3f6ff"><button onclick="fetch(${JSON.stringify(prefixed("/log/reminder"))},{method:'POST',headers:{"Content-Type":"application/json"},body:JSON.stringify({content:document.getElementById("reminder-content").value,due:document.getElementById("reminder-due").value})}).then(r=>r.json()).then(()=>location.reload())" style="margin-top:8px">Add reminder</button></div>
+    <div class="log-card"><h3>Quick note</h3><form id="note-form" class="log-form"><textarea id="note-content" maxlength="${ANNIE_LOG_NOTE_MAX_CHARS}" placeholder="Write a daily note, decision, detail, or observation…"></textarea><button type="submit">Add note</button></form></div>
+    <div class="log-card"><h3>Quick reminder</h3><form id="reminder-form" class="log-form"><textarea id="reminder-content" maxlength="500" placeholder="Remind me to…"></textarea><input id="reminder-due" type="text" maxlength="200" placeholder="Due (optional): tomorrow, Friday 10 AM, next week…"><button type="submit">Add reminder</button></form></div>
   </div>
   <div class="log-grid">
     <div class="log-card"><h3>Notes</h3><div class="log-list">${notesHtml||'<p class="hint">No notes yet.</p>'}</div></div>
@@ -886,16 +1212,42 @@ function buildLogPage(notes, reminders, suggested) {
     <div class="log-card"><h3>Suggested reminders</h3><div class="log-list">${suggestedHtml||'<p class="hint">No suggestions.</p>'}</div></div>
     <div class="log-card"><h3>Completed</h3><div class="log-list">${doneHtml||'<p class="hint">No completed reminders.</p>'}</div></div>
   </div>
-</div>`;
+</div>
+<script>
+const logEndpoints=${JSON.stringify({
+  intake: prefixed("/log/intake"),
+  note: prefixed("/log/note"),
+  reminder: prefixed("/log/reminder"),
+  suggested: prefixed("/log/suggested"),
+})};
+const byId=(id)=>document.getElementById(id);
+async function postJson(url,payload){const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload||{})});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||r.statusText);return d;}
+async function deleteJson(url){const r=await fetch(url,{method:"DELETE"});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||r.statusText);return d;}
+function showResult(text,isError=false){const box=byId("intake-result");if(!box)return;box.hidden=false;box.classList.toggle("is-error",!!isError);box.textContent=text;}
+function clearInputs(ids){ids.forEach(id=>{const el=byId(id);if(el)el.value="";});}
+const intakeFile=byId("intake-file");
+if(intakeFile)intakeFile.addEventListener("change",async(e)=>{const file=e.target.files&&e.target.files[0];if(!file)return;if(file.size>1000000){showResult("Text import is limited to 1 MB. Copy and paste the relevant section instead.",true);return;}try{const text=await file.text();byId("intake-content").value=text;if(byId("intake-subject")&&!byId("intake-subject").value)byId("intake-subject").value=file.name;if(byId("intake-source-type"))byId("intake-source-type").value="document";showResult("Imported text from "+file.name+". Review it, then press Process into Annie's Log.");}catch(err){showResult("Could not read that file: "+err.message,true);}});
+const intakeForm=byId("intake-form");
+if(intakeForm)intakeForm.addEventListener("submit",async(e)=>{e.preventDefault();const btn=byId("process-intake-button");if(btn)btn.disabled=true;try{const data=await postJson(logEndpoints.intake,{source_type:byId("intake-source-type").value,source_label:byId("intake-source-label").value,subject:byId("intake-subject").value,content:byId("intake-content").value,save_note:byId("intake-save-note").checked,add_contacts:byId("intake-add-contacts").checked,create_reminders:byId("intake-create-reminders").checked});const contactNames=(data.contactsAdded||[]).map(c=>c.name).filter(Boolean).join(", ");const reminderTexts=(data.remindersAdded||[]).map(r=>r.content).filter(Boolean).join(" | ");const lines=["Captured into Annie's Log.",data.noteId?"Note saved: yes":"Note saved: no","Contacts detected: "+(data.contactsDetected||[]).length,"Contacts added: "+(contactNames||"0"),"Contacts already present: "+(data.contactsSkipped||[]).length,"Reminders added: "+(reminderTexts||"0"),"Reminders already present: "+(data.remindersSkipped||[]).length];showResult(lines.join("\\n"));setTimeout(()=>location.reload(),1200);}catch(err){showResult(err.message,true);}finally{if(btn)btn.disabled=false;}});
+const noteForm=byId("note-form");
+if(noteForm)noteForm.addEventListener("submit",async(e)=>{e.preventDefault();const content=byId("note-content").value.trim();if(!content)return;await postJson(logEndpoints.note,{content});clearInputs(["note-content"]);location.reload();});
+const reminderForm=byId("reminder-form");
+if(reminderForm)reminderForm.addEventListener("submit",async(e)=>{e.preventDefault();const content=byId("reminder-content").value.trim();if(!content)return;await postJson(logEndpoints.reminder,{content,due:byId("reminder-due").value});clearInputs(["reminder-content","reminder-due"]);location.reload();});
+document.querySelectorAll("[data-delete-note]").forEach(btn=>btn.addEventListener("click",async()=>{await deleteJson(logEndpoints.note+"/"+encodeURIComponent(btn.dataset.deleteNote));location.reload();}));
+document.querySelectorAll("[data-complete-reminder]").forEach(btn=>btn.addEventListener("click",async()=>{await postJson(logEndpoints.reminder+"/"+encodeURIComponent(btn.dataset.completeReminder)+"/complete",{});location.reload();}));
+document.querySelectorAll("[data-delete-reminder]").forEach(btn=>btn.addEventListener("click",async()=>{await deleteJson(logEndpoints.reminder+"/"+encodeURIComponent(btn.dataset.deleteReminder));location.reload();}));
+document.querySelectorAll("[data-confirm-suggestion]").forEach(btn=>btn.addEventListener("click",async()=>{await postJson(logEndpoints.suggested+"/"+encodeURIComponent(btn.dataset.confirmSuggestion)+"/confirm",{});location.reload();}));
+document.querySelectorAll("[data-dismiss-suggestion]").forEach(btn=>btn.addEventListener("click",async()=>{await postJson(logEndpoints.suggested+"/"+encodeURIComponent(btn.dataset.dismissSuggestion)+"/dismiss",{});location.reload();}));
+</script>`;
 }
 
 function buildRemindersPage(reminders, suggested) {
   const esc = s => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   const openReminders = (reminders || []).filter(r => !r.done);
   const doneReminders = (reminders || []).filter(r => r.done);
-  const openHtml = openReminders.map(r => `<div class="log-item"><div><strong>${esc(r.content)}</strong>${r.due?` <span class="hint">(due: ${esc(r.due)})</span>`:""}</div><div class="log-meta">${r.created_at}</div><div class="log-actions"><button onclick="fetch(${JSON.stringify(prefixed("/log/reminder/"))}+'${r.id}/complete',{method:'POST'}).then(()=>location.reload())">Done</button><button onclick="fetch(${JSON.stringify(prefixed("/log/reminder/"))}+'${r.id}',{method:'DELETE'}).then(()=>location.reload())">Delete</button></div></div>`).join("");
-  const doneHtml = doneReminders.map(r => `<div class="log-item" style="opacity:.6"><div><s>${esc(r.content)}</s></div><div class="log-meta">Done: ${r.done_at||""}</div></div>`).join("");
-  const suggestedHtml = (suggested||[]).map(s => `<div class="log-item"><div><strong>${esc(s.content)}</strong>${s.due?` <span class="hint">(due: ${esc(s.due)})</span>`:""}</div><div class="log-meta">Suggested</div><div class="log-actions"><button onclick="fetch(${JSON.stringify(prefixed("/log/suggested/"))}+'${s.id}/confirm',{method:'POST'}).then(()=>location.reload())">Add</button><button onclick="fetch(${JSON.stringify(prefixed("/log/suggested/"))}+'${s.id}/dismiss',{method:'POST'}).then(()=>location.reload())">Dismiss</button></div></div>`).join("");
+  const openHtml = openReminders.map(r => `<div class="log-item"><div><strong>${esc(r.content)}</strong>${r.due?` <span class="hint">(due: ${esc(r.due)})</span>`:""}</div><div class="log-meta">${esc(r.created_at)}</div><div class="log-actions"><button data-complete-reminder="${esc(r.id)}" type="button">Done</button><button data-delete-reminder="${esc(r.id)}" type="button">Delete</button></div></div>`).join("");
+  const doneHtml = doneReminders.map(r => `<div class="log-item" style="opacity:.6"><div><s>${esc(r.content)}</s></div><div class="log-meta">Done: ${esc(r.done_at||"")}</div><div class="log-actions"><button data-delete-reminder="${esc(r.id)}" type="button">Delete</button></div></div>`).join("");
+  const suggestedHtml = (suggested||[]).map(s => `<div class="log-item"><div><strong>${esc(s.content)}</strong>${s.due?` <span class="hint">(due: ${esc(s.due)})</span>`:""}</div><div class="log-meta">Suggested</div><div class="log-actions"><button data-confirm-suggestion="${esc(s.id)}" type="button">Add</button><button data-dismiss-suggestion="${esc(s.id)}" type="button">Dismiss</button></div></div>`).join("");
 
   return `
 <div class="wrap">
@@ -906,25 +1258,52 @@ function buildRemindersPage(reminders, suggested) {
   </div>
   <div class="log-grid">
     <div class="log-card"><h3>Completed</h3><div class="log-list">${doneHtml||'<p class="hint">No completed reminders.</p>'}</div></div>
-    <div class="log-card"><h3>New reminder</h3><textarea id="r-content" placeholder="Remind me to…"></textarea><input id="r-due" placeholder="Due (optional)" style="width:100%;margin-top:8px;padding:8px;border-radius:8px;border:1px solid #314472;background:#0d1426;color:#f3f6ff"><button onclick="fetch(${JSON.stringify(prefixed("/log/reminder"))},{method:'POST',headers:{"Content-Type":"application/json"},body:JSON.stringify({content:document.getElementById("r-content").value,due:document.getElementById("r-due").value})}).then(r=>r.json()).then(()=>location.reload())" style="margin-top:8px">Add reminder</button></div>
+    <div class="log-card"><h3>New reminder</h3><form id="reminders-page-form" class="log-form"><textarea id="r-content" maxlength="500" placeholder="Remind me to…"></textarea><input id="r-due" type="text" maxlength="200" placeholder="Due (optional)"><button type="submit">Add reminder</button></form></div>
   </div>
-</div>`;
+</div>
+<script>
+const reminderEndpoints=${JSON.stringify({
+  reminder: prefixed("/log/reminder"),
+  suggested: prefixed("/log/suggested"),
+})};
+async function reminderPostJson(url,payload){const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload||{})});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||r.statusText);return d;}
+async function reminderDeleteJson(url){const r=await fetch(url,{method:"DELETE"});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||r.statusText);return d;}
+const remindersPageForm=document.getElementById("reminders-page-form");
+if(remindersPageForm)remindersPageForm.addEventListener("submit",async(e)=>{e.preventDefault();const content=document.getElementById("r-content").value.trim();if(!content)return;await reminderPostJson(reminderEndpoints.reminder,{content,due:document.getElementById("r-due").value});location.reload();});
+document.querySelectorAll("[data-complete-reminder]").forEach(btn=>btn.addEventListener("click",async()=>{await reminderPostJson(reminderEndpoints.reminder+"/"+encodeURIComponent(btn.dataset.completeReminder)+"/complete",{});location.reload();}));
+document.querySelectorAll("[data-delete-reminder]").forEach(btn=>btn.addEventListener("click",async()=>{await reminderDeleteJson(reminderEndpoints.reminder+"/"+encodeURIComponent(btn.dataset.deleteReminder));location.reload();}));
+document.querySelectorAll("[data-confirm-suggestion]").forEach(btn=>btn.addEventListener("click",async()=>{await reminderPostJson(reminderEndpoints.suggested+"/"+encodeURIComponent(btn.dataset.confirmSuggestion)+"/confirm",{});location.reload();}));
+document.querySelectorAll("[data-dismiss-suggestion]").forEach(btn=>btn.addEventListener("click",async()=>{await reminderPostJson(reminderEndpoints.suggested+"/"+encodeURIComponent(btn.dataset.dismissSuggestion)+"/dismiss",{});location.reload();}));
+</script>`;
 }
 
 function buildContactsPage(contacts, suggested) {
   const esc = s => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-  const contactsHtml = (contacts||[]).map(c => `<div class="log-item"><div><strong>${esc(c.name)}</strong></div>${c.phone?`<div class="hint">📞 ${esc(c.phone)}</div>`:""}${c.email?`<div class="hint">✉️ ${esc(c.email)}</div>`:""}${c.notes?`<div class="hint">${esc(c.notes)}</div>`:""}<div class="log-meta">${c.created_at}</div><div class="log-actions"><button onclick="if(confirm('Delete this contact?'))fetch(${JSON.stringify(prefixed("/contacts/"))}+'${c.id}',{method:'DELETE'}).then(()=>location.reload())">Delete</button></div></div>`).join("");
-  const suggestedHtml = (suggested||[]).map(s => `<div class="log-item"><div><strong>${esc(s.name)}</strong></div>${s.phone?`<div class="hint">📞 ${esc(s.phone)}</div>`:""}${s.email?`<div class="hint">✉️ ${esc(s.email)}</div>`:""}<div class="log-meta">Suggested</div><div class="log-actions"><button onclick="fetch(${JSON.stringify(prefixed("/contacts/suggested/"))}+'${s.id}/confirm',{method:'POST'}).then(()=>location.reload())">Add</button><button onclick="fetch(${JSON.stringify(prefixed("/contacts/suggested/"))}+'${s.id}/dismiss',{method:'POST'}).then(()=>location.reload())">Dismiss</button></div></div>`).join("");
+  const contactsHtml = (contacts||[]).map(c => `<div class="log-item"><div><strong>${esc(c.name)}</strong></div>${c.phone?`<div class="hint">📞 ${esc(c.phone)}</div>`:""}${c.email?`<div class="hint">✉️ ${esc(c.email)}</div>`:""}${c.notes?`<div class="hint">${esc(c.notes)}</div>`:""}<div class="log-meta">${esc(c.created_at)}</div><div class="log-actions"><button data-delete-contact="${esc(c.id)}" type="button">Delete</button></div></div>`).join("");
+  const suggestedHtml = (suggested||[]).map(s => `<div class="log-item"><div><strong>${esc(s.name)}</strong></div>${s.phone?`<div class="hint">📞 ${esc(s.phone)}</div>`:""}${s.email?`<div class="hint">✉️ ${esc(s.email)}</div>`:""}<div class="log-meta">Suggested</div><div class="log-actions"><button data-confirm-contact-suggestion="${esc(s.id)}" type="button">Add</button><button data-dismiss-contact-suggestion="${esc(s.id)}" type="button">Dismiss</button></div></div>`).join("");
 
   return `
 <div class="wrap">
   <header><div class="brand-with-icon">${contactsIconImg()}<div><div class="brand">Annie's Contacts</div><div class="hint">Contact book with manual entry and Moxie suggestions.</div></div></div><div class="header-actions"><a class="button-link" href="${prefixed("/")}">Back to chat</a><a class="button-link" href="${prefixed("/log")}">Annie's Log</a><a class="button-link" href="${prefixed("/reminders")}">Reminders</a><a class="hint" href="${prefixed("/logout")}">logout</a></div></header>
   <div class="log-grid">
-    <div class="log-card"><h3>Add contact</h3><div class="contact-form"><input id="c-name" placeholder="Name"><input id="c-phone" placeholder="Phone"><input id="c-email" placeholder="Email"><input id="c-notes" placeholder="Notes"><button onclick="fetch(${JSON.stringify(prefixed("/contacts"))},{method:'POST',headers:{"Content-Type":"application/json"},body:JSON.stringify({name:document.getElementById("c-name").value,phone:document.getElementById("c-phone").value,email:document.getElementById("c-email").value,notes:document.getElementById("c-notes").value})}).then(r=>r.json()).then(()=>location.reload())">Add</button></div></div>
+    <div class="log-card"><h3>Add contact</h3><form id="contacts-page-form" class="contact-form"><input id="c-name" type="text" placeholder="Name"><input id="c-phone" type="text" placeholder="Phone"><input id="c-email" type="text" placeholder="Email"><input id="c-notes" type="text" placeholder="Notes"><button type="submit">Add</button></form></div>
     <div class="log-card"><h3>Suggested contacts</h3><div class="log-list">${suggestedHtml||'<p class="hint">No suggestions.</p>'}</div></div>
   </div>
   <div class="log-grid">
     <div class="log-card" style="grid-column:1/-1"><h3>Contacts</h3><div class="log-list">${contactsHtml||'<p class="hint">No contacts yet.</p>'}</div></div>
   </div>
-</div>`;
+</div>
+<script>
+const contactEndpoints=${JSON.stringify({
+  contacts: prefixed("/contacts"),
+  suggested: prefixed("/contacts/suggested"),
+})};
+async function contactPostJson(url,payload){const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload||{})});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||r.statusText);return d;}
+async function contactDeleteJson(url){const r=await fetch(url,{method:"DELETE"});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||r.statusText);return d;}
+const contactsPageForm=document.getElementById("contacts-page-form");
+if(contactsPageForm)contactsPageForm.addEventListener("submit",async(e)=>{e.preventDefault();const name=document.getElementById("c-name").value.trim();if(!name)return;await contactPostJson(contactEndpoints.contacts,{name,phone:document.getElementById("c-phone").value,email:document.getElementById("c-email").value,notes:document.getElementById("c-notes").value});location.reload();});
+document.querySelectorAll("[data-delete-contact]").forEach(btn=>btn.addEventListener("click",async()=>{if(!confirm("Delete this contact?"))return;await contactDeleteJson(contactEndpoints.contacts+"/"+encodeURIComponent(btn.dataset.deleteContact));location.reload();}));
+document.querySelectorAll("[data-confirm-contact-suggestion]").forEach(btn=>btn.addEventListener("click",async()=>{await contactPostJson(contactEndpoints.suggested+"/"+encodeURIComponent(btn.dataset.confirmContactSuggestion)+"/confirm",{});location.reload();}));
+document.querySelectorAll("[data-dismiss-contact-suggestion]").forEach(btn=>btn.addEventListener("click",async()=>{await contactPostJson(contactEndpoints.suggested+"/"+encodeURIComponent(btn.dataset.dismissContactSuggestion)+"/dismiss",{});location.reload();}));
+</script>`;
 }

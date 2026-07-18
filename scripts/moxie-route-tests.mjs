@@ -10,26 +10,144 @@ process.env.MOXIE_GEMINI_API_KEY = "test-only-key";
 process.env.MOXIE_PREFIX = "/moxie";
 process.env.MOXIE_AUTH_REQUIRED = "true";
 
-const { createMoxieRouter } = await import("../src/routes/moxie.js");
+const {
+  buildLogContext,
+  createMoxieRouter,
+  extractContactsFromText,
+  extractRemindersFromText,
+} = await import("../src/routes/moxie.js");
+
+const sampleIntake = [
+  "From: Maria Lopez - City Maintenance Supervisor - (901) 555-1234 - maria.lopez@memphistn.gov",
+  "Please follow up with Maria tomorrow about the restroom water valve.",
+].join("\n");
+
+const parsedContacts = extractContactsFromText(sampleIntake);
+assert.equal(parsedContacts.length, 1, "Annie intake should find named contacts with phone/email details");
+assert.equal(parsedContacts[0].name, "Maria Lopez");
+assert.equal(parsedContacts[0].phone, "(901) 555-1234");
+assert.equal(parsedContacts[0].email, "maria.lopez@memphistn.gov");
+assert.match(parsedContacts[0].title, /City Maintenance Supervisor/);
+
+const parsedReminders = extractRemindersFromText(sampleIntake);
+assert.equal(parsedReminders.length, 1, "Annie intake should find likely follow-up reminders");
+assert.match(parsedReminders[0].content, /follow up with Maria/i);
+assert.equal(parsedReminders[0].due, "tomorrow");
+
+const queryAwareContext = buildLogContext(
+  [{ content: "Maria said the restroom water valve needs a city maintenance update.", created_at: "2026-07-18T00:00:00.000Z" }],
+  [{ content: "Follow up with Maria about the restroom water valve.", due: "tomorrow", done: false }],
+  [{ name: "Maria Lopez", phone: "(901) 555-1234", email: "maria.lopez@memphistn.gov", notes: "City Maintenance Supervisor" }],
+  "What do we know about Maria and the water valve?",
+);
+assert.match(queryAwareContext, /Query-matched private memory/);
+assert.match(queryAwareContext, /Maria Lopez/);
+assert.match(queryAwareContext, /restroom water valve/);
 
 function makeSupabaseStub() {
   const state = { id: "default", history: [], saved_chats: [], updated_at: "2026-07-16T00:00:00.000Z" };
+  const tables = {
+    annie_log_notes: [],
+    annie_log_reminders: [],
+    annie_log_suggested_reminders: [],
+    annie_contacts: [],
+    annie_suggested_contacts: [],
+  };
+  const seededTime = "2026-07-18T12:00:00.000Z";
+
+  function rowsFor(table) {
+    if (table === "annie_chat_state") return [state];
+    if (!tables[table]) tables[table] = [];
+    return tables[table];
+  }
+
   return {
     from(table) {
       assert.ok(String(table).startsWith("annie_"), `unexpected Moxie table: ${table}`);
+      const filters = [];
+      let orderSpec = null;
+      let pending = null;
+
+      function currentRows() {
+        let rows = rowsFor(table).filter((row) => filters.every(([field, value]) => row[field] === value));
+        if (orderSpec) {
+          rows = rows.slice().sort((a, b) => {
+            const av = a[orderSpec.field] || "";
+            const bv = b[orderSpec.field] || "";
+            if (av === bv) return 0;
+            const result = av > bv ? 1 : -1;
+            return orderSpec.ascending ? result : -result;
+          });
+        } else {
+          rows = rows.slice();
+        }
+        return rows;
+      }
+
+      async function executePending() {
+        if (!pending) return { data: currentRows(), error: null };
+        const targetRows = currentRows();
+        if (pending.type === "update") {
+          for (const row of targetRows) Object.assign(row, pending.payload, { updated_at: pending.payload.updated_at || row.updated_at || seededTime });
+        }
+        if (pending.type === "delete") {
+          const doomed = new Set(targetRows);
+          tables[table] = rowsFor(table).filter((row) => !doomed.has(row));
+        }
+        return { data: targetRows, error: null };
+      }
+
       const query = {
         select() { return query; },
-        eq() { return query; },
-        order() { return query; },
-        limit() { return Promise.resolve({ data: [], error: null }); },
-        single() { return Promise.resolve({ data: state, error: null }); },
-        upsert(payload) { Object.assign(state, payload); return Promise.resolve({ data: state, error: null }); },
-        insert() { return Promise.resolve({ data: null, error: null }); },
-        update() { return query; },
-        delete() { return query; },
+        eq(field, value) {
+          filters.push([field, value]);
+          return pending ? executePending() : query;
+        },
+        order(field, options = {}) {
+          orderSpec = { field, ascending: options.ascending !== false };
+          return query;
+        },
+        limit(limitCount) {
+          return Promise.resolve({ data: currentRows().slice(0, limitCount), error: null });
+        },
+        single() {
+          const row = currentRows()[0];
+          if (row) return Promise.resolve({ data: row, error: null });
+          return Promise.resolve({ data: null, error: { code: "PGRST116", message: "not found" } });
+        },
+        upsert(payload) {
+          if (table === "annie_chat_state") {
+            Object.assign(state, payload);
+            return Promise.resolve({ data: state, error: null });
+          }
+          const rows = rowsFor(table);
+          const existing = rows.find((row) => row.id && payload.id && row.id === payload.id);
+          if (existing) Object.assign(existing, payload, { updated_at: seededTime });
+          else rows.push({ ...payload, created_at: payload.created_at || seededTime, updated_at: payload.updated_at || seededTime });
+          return Promise.resolve({ data: payload, error: null });
+        },
+        insert(payload) {
+          const rows = rowsFor(table);
+          const inserted = (Array.isArray(payload) ? payload : [payload]).map((row) => ({
+            created_at: seededTime,
+            updated_at: seededTime,
+            ...row,
+          }));
+          rows.push(...inserted);
+          return Promise.resolve({ data: inserted, error: null });
+        },
+        update(payload) {
+          pending = { type: "update", payload };
+          return query;
+        },
+        delete() {
+          pending = { type: "delete" };
+          return query;
+        },
       };
       return query;
     },
+    __tables: tables,
   };
 }
 
@@ -37,7 +155,8 @@ const app = express();
 app.use(express.json());
 const staticDir = fileURLToPath(new URL("../public/moxie-assets/", import.meta.url));
 assert.equal(existsSync(staticDir), true, "Moxie asset directory must exist");
-app.use("/moxie", createMoxieRouter({ supabase: makeSupabaseStub(), staticDir }));
+const supabaseStub = makeSupabaseStub();
+app.use("/moxie", createMoxieRouter({ supabase: supabaseStub, staticDir }));
 
 const server = await new Promise((resolve) => {
   const instance = app.listen(0, "127.0.0.1", () => resolve(instance));
@@ -140,6 +259,74 @@ try {
     assert.equal(response.status, 200, `${asset} must be served from the static Moxie asset path`);
     assert.match(String(response.headers.get("content-type") || ""), /^image\//);
   }
+
+  response = await fetch(`${base}/moxie/log`, { headers: { Cookie: cookie } });
+  assert.equal(response.status, 200);
+  const logHtml = await response.text();
+  assert.match(logHtml, /Paste or import communication/);
+  assert.match(logHtml, /id="intake-form"/);
+  assert.match(logHtml, /id="intake-file" type="file"/);
+  assert.match(logHtml, /Process into Annie's Log/);
+  assert.match(logHtml, /Auto-add detected contacts/);
+  assert.match(logHtml, /Create likely follow-up reminders/);
+  assert.doesNotMatch(logHtml, /onclick=/);
+  assert.doesNotMatch(logHtml, /r\.json\(\)\)\.then/);
+
+  response = await fetch(`${base}/moxie/log/intake`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: cookie },
+    body: JSON.stringify({
+      source_type: "maintenance",
+      source_label: "City Maintenance",
+      subject: "Water valve",
+      content: sampleIntake,
+    }),
+  });
+  assert.equal(response.status, 200);
+  const intakeResult = await response.json();
+  assert.equal(intakeResult.ok, true);
+  assert.ok(intakeResult.noteId);
+  assert.equal(intakeResult.contactsDetected.length, 1);
+  assert.equal(intakeResult.contactsAdded.length, 1);
+  assert.equal(intakeResult.contactsAdded[0].name, "Maria Lopez");
+  assert.equal(intakeResult.remindersDetected.length, 1);
+  assert.equal(intakeResult.remindersAdded.length, 1);
+  assert.match(intakeResult.remindersAdded[0].content, /follow up with Maria/i);
+  assert.equal(supabaseStub.__tables.annie_contacts.length, 1);
+  assert.equal(supabaseStub.__tables.annie_log_reminders.length, 1);
+  assert.equal(supabaseStub.__tables.annie_log_notes.length, 1);
+
+  response = await fetch(`${base}/moxie/log/intake`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Cookie: cookie },
+    body: JSON.stringify({
+      source_type: "maintenance",
+      source_label: "City Maintenance",
+      subject: "Water valve",
+      content: sampleIntake,
+    }),
+  });
+  assert.equal(response.status, 200);
+  const duplicateIntake = await response.json();
+  assert.equal(duplicateIntake.contactsAdded.length, 0, "duplicate contact must not be inserted");
+  assert.equal(duplicateIntake.contactsSkipped.length, 1);
+  assert.equal(duplicateIntake.remindersAdded.length, 0, "duplicate reminder must not be inserted");
+  assert.equal(duplicateIntake.remindersSkipped.length, 1);
+
+  response = await fetch(`${base}/moxie/contacts`, { headers: { Cookie: cookie } });
+  assert.equal(response.status, 200);
+  const contactsHtml = await response.text();
+  assert.match(contactsHtml, /Maria Lopez/);
+  assert.match(contactsHtml, /City Maintenance Supervisor/);
+  assert.match(contactsHtml, /id="contacts-page-form"/);
+  assert.doesNotMatch(contactsHtml, /onclick=/);
+
+  response = await fetch(`${base}/moxie/reminders`, { headers: { Cookie: cookie } });
+  assert.equal(response.status, 200);
+  const remindersHtml = await response.text();
+  assert.match(remindersHtml, /Follow up with Maria/i);
+  assert.match(remindersHtml, /id="reminders-page-form"/);
+  assert.doesNotMatch(remindersHtml, /onclick=/);
 
   response = await fetch(`${base}/moxie/logout`, {
     redirect: "manual",
