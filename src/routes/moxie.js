@@ -1277,7 +1277,7 @@ function buildChatPage(chatState) {
 <div class="wrap chat-wrap">
   <header>
     <div class="brand-with-avatar">${moxieAvatarImg()}<div class="moxie-tagline"><div class="brand">Moxie</div><div class="hint">Annie's private work assistant with a local log, reminders, and contacts</div></div></div>
-    <div class="header-actions"><a class="button-link" href="${escapeHtml(MOXIE_OPS_HUB_URL)}">Back to Ops Hub</a><span class="pill">private beta</span><a class="hint" href="${prefixed("/logout")}">logout</a></div>
+    <div class="header-actions"><a class="ops-hub-link" href="${escapeHtml(MOXIE_OPS_HUB_URL)}">Back to Ops Hub</a><span class="pill">private beta</span><a class="hint" href="${prefixed("/logout")}">logout</a></div>
   </header>
   <div class="chat-main">
     <aside class="saved-chats-rail" aria-label="Saved chats">
@@ -1396,7 +1396,7 @@ function buildSettingsPage(csrfToken) {
 <div class="wrap">
   <header>
     <div class="brand-with-icon">${settingsIconImg()}<div><div class="brand">Moxie Settings</div><div class="hint">Private workspace access and navigation.</div></div></div>
-    <div class="header-actions"><a class="button-link" href="${prefixed("/")}">Back to chat</a><a class="button-link" href="${prefixed("/log")}">Annie's Log</a><a class="button-link" href="${prefixed("/reminders")}">Reminders</a><a class="button-link" href="${prefixed("/contacts")}">Contacts</a></div>
+    <div class="header-actions"><a class="ops-hub-link" href="${escapeHtml(MOXIE_OPS_HUB_URL)}">Back to Ops Hub</a><a class="button-link" href="${prefixed("/")}">Back to chat</a><a class="button-link" href="${prefixed("/log")}">Annie's Log</a><a class="button-link" href="${prefixed("/reminders")}">Reminders</a><a class="button-link" href="${prefixed("/contacts")}">Contacts</a></div>
   </header>
   <div class="panel settings" style="max-width:760px;margin:0 auto;padding:24px">
     <h2 style="margin-top:0">Change Moxie password</h2>
@@ -1463,7 +1463,7 @@ function buildLogPage(notes, reminders, suggested) {
 
   return `
 <div class="wrap annie-log-wrap">
-  <header><div class="brand-with-icon">${logIconImg()}<div><div class="brand">Annie's Log</div><div class="hint">Daily notes, pasted communications, reminders, contacts, and Moxie's working memory.</div></div></div><div class="header-actions"><a class="button-link" href="${prefixed("/")}">Back to chat</a><a class="button-link" href="${prefixed("/contacts")}">Contacts</a><a class="button-link" href="${prefixed("/reminders")}">Reminders</a><a class="hint" href="${prefixed("/logout")}">logout</a></div></header>
+  <header><div class="brand-with-icon">${logIconImg()}<div><div class="brand">Annie's Log</div><div class="hint">Daily notes, pasted communications, reminders, contacts, and Moxie's working memory.</div></div></div><div class="header-actions"><a class="ops-hub-link" href="${escapeHtml(MOXIE_OPS_HUB_URL)}">Back to Ops Hub</a><a class="button-link" href="${prefixed("/")}">Back to chat</a><a class="button-link" href="${prefixed("/contacts")}">Contacts</a><a class="button-link" href="${prefixed("/reminders")}">Reminders</a><a class="hint" href="${prefixed("/logout")}">logout</a></div></header>
   <div class="panel log-mission"><strong>Central intake:</strong> paste an email, call note, text message, vendor update, city maintenance note, or department handoff. Annie's Log saves the source, auto-adds contacts when it sees names with phone/email details, and turns likely follow-ups into reminders.</div>
   <div class="log-grid log-grid-wide">
     <div class="log-card intake-card">
@@ -1541,7 +1541,7 @@ function buildRemindersPage(reminders, suggested) {
 
   return `
 <div class="wrap">
-  <header><div class="brand-with-icon">${reminderIconImg()}<div><div class="brand">Annie's Reminders</div><div class="hint">Reminder inbox for saved nudges and suggested follow-ups.</div></div></div><div class="header-actions"><a class="button-link" href="${prefixed("/")}">Back to chat</a><a class="button-link" href="${prefixed("/log")}">Annie's Log</a><a class="button-link" href="${prefixed("/contacts")}">Contacts</a><a class="hint" href="${prefixed("/logout")}">logout</a></div></header>
+  <header><div class="brand-with-icon">${reminderIconImg()}<div><div class="brand">Annie's Reminders</div><div class="hint">Reminder inbox for saved nudges and suggested follow-ups.</div></div></div><div class="header-actions"><a class="ops-hub-link" href="${escapeHtml(MOXIE_OPS_HUB_URL)}">Back to Ops Hub</a><a class="button-link" href="${prefixed("/")}">Back to chat</a><a class="button-link" href="${prefixed("/log")}">Annie's Log</a><a class="button-link" href="${prefixed("/contacts")}">Contacts</a><a class="hint" href="${prefixed("/logout")}">logout</a></div></header>
   <div class="log-grid">
     <div class="log-card"><h3>Open reminders</h3><div class="log-list">${openHtml||'<p class="hint">No open reminders.</p>'}</div></div>
     <div class="log-card"><h3>Suggested</h3><div class="log-list">${suggestedHtml||'<p class="hint">No suggestions.</p>'}</div></div>
@@ -1574,7 +1574,7 @@ function buildContactsPage(contacts, suggested) {
 
   return `
 <div class="wrap">
-  <header><div class="brand-with-icon">${contactsIconImg()}<div><div class="brand">Annie's Contacts</div><div class="hint">Contact book with manual entry and Moxie suggestions.</div></div></div><div class="header-actions"><a class="button-link" href="${prefixed("/")}">Back to chat</a><a class="button-link" href="${prefixed("/log")}">Annie's Log</a><a class="button-link" href="${prefixed("/reminders")}">Reminders</a><a class="hint" href="${prefixed("/logout")}">logout</a></div></header>
+  <header><div class="brand-with-icon">${contactsIconImg()}<div><div class="brand">Annie's Contacts</div><div class="hint">Contact book with manual entry and Moxie suggestions.</div></div></div><div class="header-actions"><a class="ops-hub-link" href="${escapeHtml(MOXIE_OPS_HUB_URL)}">Back to Ops Hub</a><a class="button-link" href="${prefixed("/")}">Back to chat</a><a class="button-link" href="${prefixed("/log")}">Annie's Log</a><a class="button-link" href="${prefixed("/reminders")}">Reminders</a><a class="hint" href="${prefixed("/logout")}">logout</a></div></header>
   <div class="log-grid">
     <div class="log-card"><h3>Add contact</h3><form id="contacts-page-form" class="contact-form"><input id="c-name" type="text" placeholder="Name"><input id="c-phone" type="text" placeholder="Phone"><input id="c-email" type="text" placeholder="Email"><input id="c-notes" type="text" placeholder="Notes"><button type="submit">Add</button></form></div>
     <div class="log-card"><h3>Suggested contacts</h3><div class="log-list">${suggestedHtml||'<p class="hint">No suggestions.</p>'}</div></div>
