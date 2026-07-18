@@ -56,6 +56,13 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
+function jsonForInlineScript(value) {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+}
+
 // Gemini config — reuse the same env vars as Memphis AI
 const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 const GEMINI_MODEL = String(
@@ -240,14 +247,21 @@ async function dbDismissSuggestedContact(supabase, id) {
 async function dbGetChatState(supabase) {
   const { data, error } = await supabase.from("annie_chat_state").select("*").eq("id", "default").single();
   if (error && error.code !== "PGRST116") throw error;
-  return data || { id: "default", history: [], saved_chats: [], updated_at: new Date().toISOString() };
+  return data || { id: "default", history: [], saved_chats: [], revision: 1, updated_at: new Date().toISOString() };
 }
 
-async function dbSaveChatState(supabase, { history, saved_chats }) {
-  const { error } = await supabase.from("annie_chat_state").upsert({
-    id: "default", history: history || [], saved_chats: saved_chats || [], updated_at: new Date().toISOString(),
+async function dbSaveChatState(supabase, { history, saved_chats, expected_revision }) {
+  const { data, error } = await supabase.rpc("moxie_save_chat_state", {
+    p_expected_revision: Number.isInteger(expected_revision) ? expected_revision : null,
+    p_history: Array.isArray(history) ? history : [],
+    p_saved_chats: Array.isArray(saved_chats) ? saved_chats : [],
   });
-  if (error) throw error;
+  if (error) {
+    const conflict = error.code === "40001" || /changed in another browser/i.test(String(error.message || ""));
+    if (conflict) error.status = 409;
+    throw error;
+  }
+  return Array.isArray(data) ? data[0] : data;
 }
 
 // ---------------------------------------------------------------------------
@@ -597,8 +611,7 @@ export async function callGemini(messages) {
 
 import {
   pageShell, loginPage, logIconImg, reminderIconImg, contactsIconImg,
-  settingsIconImg, moxieAvatarImg, logButtonLink, reminderButtonLink,
-  contactsButtonLink, settingsButtonLink,
+  moxieAvatarImg,
 } from "./moxie-templates.js";
 
 // ---------------------------------------------------------------------------
@@ -728,7 +741,12 @@ export function createMoxieRouter({ supabase, staticDir }) {
   router.get("/chat/state", async (req, res) => {
     try {
       const state = await dbGetChatState(supabase);
-      res.json(state);
+      res.json({
+        history: Array.isArray(state.history) ? state.history : [],
+        savedChats: Array.isArray(state.saved_chats) ? state.saved_chats : [],
+        revision: Number(state.revision || 1),
+        updatedAt: state.updated_at || null,
+      });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
@@ -736,12 +754,24 @@ export function createMoxieRouter({ supabase, staticDir }) {
 
   router.put("/chat/state", async (req, res) => {
     try {
-      const { history, saved_chats } = req.body || {};
-      await dbSaveChatState(supabase, { history, saved_chats });
-      const state = await dbGetChatState(supabase);
-      res.json(state);
+      const { history, savedChats, saved_chats, expectedRevision, expected_revision } = req.body || {};
+      const expected = Number(expectedRevision ?? expected_revision);
+      if (!Number.isInteger(expected) || expected < 1) {
+        return res.status(422).json({ error: "expectedRevision is required." });
+      }
+      const state = await dbSaveChatState(supabase, {
+        history,
+        saved_chats: savedChats ?? saved_chats,
+        expected_revision: expected,
+      });
+      res.json({
+        history: Array.isArray(state?.history) ? state.history : [],
+        savedChats: Array.isArray(state?.saved_chats) ? state.saved_chats : [],
+        revision: Number(state?.revision || 1),
+        updatedAt: state?.updated_at || null,
+      });
     } catch (err) {
-      res.status(500).json({ error: err.message });
+      res.status(err?.status || 500).json({ error: err.message });
     }
   });
 
@@ -972,57 +1002,6 @@ export function createMoxieRouter({ supabase, staticDir }) {
     }
   });
 
-  // --- Settings (password change) ---
-  router.get("/password", (req, res) => {
-    const body = `
-<div class="wrap"><div class="panel settings">
-  <header><div><div class="brand">Settings</div><div class="hint">Change Moxie's web sign-in password.</div></div><div class="header-actions"><a class="button-link" href="${prefixed("/")}">Back to chat</a><a class="hint" href="${prefixed("/logout")}">logout</a></div></header>
-  <form id="pwform" style="margin-top:18px;display:flex;flex-direction:column;gap:10px">
-    <label class="hint" for="oldpw">Current password</label>
-    <input type="password" id="oldpw" name="old_password" required>
-    <label class="hint" for="newpw">New password</label>
-    <input type="password" id="newpw" name="new_password" required minlength="8">
-    <label class="hint" for="confirmpw">Confirm new password</label>
-    <input type="password" id="confirmpw" name="confirm_password" required minlength="8">
-    <button type="submit">Change password</button>
-    <div id="pwmsg" class="hint" style="margin-top:8px"></div>
-  </form>
-</div></div>
-<script>
-document.getElementById("pwform").addEventListener("submit",async(e)=>{
-  e.preventDefault();
-  const oldpw=document.getElementById("oldpw").value;
-  const newpw=document.getElementById("newpw").value;
-  const confirmpw=document.getElementById("confirmpw").value;
-  const msg=document.getElementById("pwmsg");
-  if(newpw!==confirmpw){msg.textContent="New passwords don't match.";msg.style.color="#ff8fa3";return;}
-  if(newpw.length<8){msg.textContent="Password must be at least 8 characters.";msg.style.color="#ff8fa3";return;}
-  try{
-    const r=await fetch(${JSON.stringify(prefixed("/password"))},{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({old_password:oldpw,new_password:newpw})});
-    const d=await r.json();
-    if(r.ok&&d?.changed===true){msg.textContent="Password changed. Use it next time you sign in.";msg.style.color="#7dff9e";document.getElementById("pwform").reset();}
-    else{msg.textContent=d.error||d.note||"No password was changed.";msg.style.color="#ff8fa3";}
-  }catch(err){msg.textContent="Error: "+err.message;msg.style.color="#ff8fa3";}
-});
-</script>`;
-    res.send(pageShell("Moxie — Settings", body));
-  });
-
-  router.post("/password", (req, res) => {
-    if (!MOXIE_AUTH_REQUIRED) {
-      res.status(409).json({ ok: false, changed: false, auth_required: false, error: "Moxie sign-in is disabled on this release, so there is no active password to rotate." });
-      return;
-    }
-    const { old_password, new_password } = req.body || {};
-    if (String(old_password || "") !== MOXIE_PASSWORD) {
-      return res.status(403).json({ error: "Current password is incorrect" });
-    }
-    if (!new_password || String(new_password).length < 8) {
-      return res.status(400).json({ error: "New password must be at least 8 characters" });
-    }
-    res.status(409).json({ error: "Persistent password rotation is not enabled on this release." });
-  });
-
   // --- Reminders page ---
   router.get("/reminders", async (req, res) => {
     try {
@@ -1043,9 +1022,10 @@ document.getElementById("pwform").addEventListener("submit",async(e)=>{
 // ---------------------------------------------------------------------------
 
 function buildChatPage(chatState) {
-  const history = JSON.stringify(chatState?.history || []);
-  const savedChats = JSON.stringify(chatState?.saved_chats || []);
-  const updatedAt = JSON.stringify(chatState?.updated_at || "");
+  const history = jsonForInlineScript(chatState?.history || []);
+  const savedChats = jsonForInlineScript(chatState?.saved_chats || []);
+  const updatedAt = jsonForInlineScript(chatState?.updated_at || "");
+  const revision = Number(chatState?.revision || 1);
 
   return `
 <div class="wrap chat-wrap">
@@ -1067,14 +1047,6 @@ function buildChatPage(chatState) {
         <div class="composer-main"><textarea id="input" placeholder="Type a message… (Shift+Enter for newline)" maxlength="${MOXIE_MAX_MESSAGE_CHARS}"></textarea><button id="send" type="submit">Send</button></div>
       </form>
     </div>
-    <aside class="chat-tools" aria-label="Moxie quick actions">
-      <section class="quick-actions-section annie-actions-section" aria-labelledby="annie-actions-title">
-        <h2 id="annie-actions-title" class="shortcut-section-title">Annie personal shortcuts</h2>
-        <div class="quick-actions-cluster annie-actions-grid">
-          ${logButtonLink()}${reminderButtonLink()}${contactsButtonLink()}${settingsButtonLink()}
-        </div>
-      </section>
-    </aside>
   </div>
 </div>
 <div id="clear-chat-modal" class="chat-modal" hidden role="dialog" aria-modal="true" aria-labelledby="clear-chat-title">
@@ -1106,7 +1078,9 @@ const cancelClearChat=document.getElementById("cancel-clear-chat");
 let history=${history};
 let savedChats=${savedChats};
 let lastSharedUpdatedAt=${updatedAt};
+let sharedRevision=${revision};
 let chatStateSaving=false;
+let chatStateSaveChain=Promise.resolve(true);
 function nT(v){if(typeof v!=="string"||!v.trim())return"";const p=new Date(v);return Number.isNaN(p.getTime())?"":v;}
 function tN(){return new Date().toISOString();}
 function fT(v){const t=nT(v);if(!t)return"";try{return new Date(t).toLocaleString([],{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});}catch(e){return t;}}
@@ -1114,10 +1088,10 @@ function vM(msgs){return(Array.isArray(msgs)?msgs:[]).filter(m=>m&&["user","assi
 function vC(chats){return(Array.isArray(chats)?chats:[]).filter(c=>c&&Array.isArray(c.messages)).slice(0,30);}
 function pH(){try{localStorage.setItem(storageKey,JSON.stringify(history.slice(-40)));}catch(e){}}
 function pSC(){try{localStorage.setItem(savedChatsStorageKey,JSON.stringify(savedChats.slice(0,30)));}catch(e){}}
-async function pS(){try{chatStateSaving=true;const r=await fetch(chatStateEndpoint,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({history:history.slice(-40),savedChats:savedChats.slice(0,30)})});const d=await r.json();if(r.ok&&d&&typeof d.updatedAt==="string")lastSharedUpdatedAt=d.updatedAt;}catch(e){}finally{chatStateSaving=false;}}
-async function lS(render=true){try{const r=await fetch(chatStateEndpoint,{method:"GET",headers:{"Accept":"application/json"},cache:"no-store"});const d=await r.json();if(!r.ok||!d||(!Array.isArray(d.history)&&!Array.isArray(d.savedChats)))return false;const sh=vM(d.history);const sc=vC(d.savedChats);if(!d.updatedAt&&!sh.length&&!sc.length)return false;if(d.updatedAt&&d.updatedAt===lastSharedUpdatedAt)return true;history.splice(0,history.length,...sh);savedChats=sc;lastSharedUpdatedAt=d.updatedAt||lastSharedUpdatedAt;pH();pSC();if(render){rH();rSC();}return true;}catch(e){return false;}}
-function pH2(){pH();pS();}
-function pSC2(){pSC();pS();}
+async function pS(){const nextHistory=history.slice(-40);const nextSaved=savedChats.slice(0,30);chatStateSaveChain=chatStateSaveChain.then(async()=>{try{chatStateSaving=true;const r=await fetch(chatStateEndpoint,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({history:nextHistory,savedChats:nextSaved,expectedRevision:sharedRevision})});const d=await r.json();if(!r.ok){if(r.status===409){await lS(true);window.alert("Moxie changed in another browser. The latest chat was reloaded; please try again.");}return false;}sharedRevision=Number(d.revision||sharedRevision);lastSharedUpdatedAt=d.updatedAt||lastSharedUpdatedAt;return true;}catch(e){return false;}finally{chatStateSaving=false;}});return chatStateSaveChain;}
+async function lS(render=true){try{const r=await fetch(chatStateEndpoint,{method:"GET",headers:{"Accept":"application/json"},cache:"no-store"});const d=await r.json();if(!r.ok||!d||(!Array.isArray(d.history)&&!Array.isArray(d.savedChats)))return false;const nextRevision=Number(d.revision||0);if(nextRevision&&nextRevision===sharedRevision)return true;const sh=vM(d.history);const sc=vC(d.savedChats);history.splice(0,history.length,...sh);savedChats=sc;sharedRevision=nextRevision||sharedRevision;lastSharedUpdatedAt=d.updatedAt||lastSharedUpdatedAt;pH();pSC();if(render){rH();rSC();}return true;}catch(e){return false;}}
+function pH2(){pH();return pS();}
+function pSC2(){pSC();return pS();}
 function gT(msgs=history){const f=(msgs||[]).find(m=>m&&m.role==="user"&&typeof m.content==="string"&&m.content.trim());return(f?f.content:"Saved chat").replace(/\\s+/g," ").trim().slice(0,46)||"Saved chat";}
 function rSC(){if(!savedChatsList)return;savedChatsList.innerHTML="";if(!savedChats.length){const e=document.createElement("p");e.className="empty-saved-chats";e.textContent='Saved chats will appear here when Annie chooses "Save & clear."';savedChatsList.appendChild(e);return;}savedChats.forEach(c=>{const item=document.createElement("div");item.className="saved-chat-item";item.dataset.chatId=c.id;const oB=document.createElement("button");oB.type="button";oB.className="saved-chat-open";oB.setAttribute("aria-label","Open saved chat "+(c.title||"Saved chat"));const t=document.createElement("span");t.textContent=c.title||"Saved chat";const d=document.createElement("span");d.className="saved-chat-date";try{d.textContent=new Date(c.savedAt||c.id).toLocaleString();}catch(e){d.textContent="Saved";}oB.appendChild(t);oB.appendChild(d);oB.addEventListener("click",()=>{history.splice(0,history.length,...vM(c.messages||[]));pH2();rH();});const dB=document.createElement("button");dB.type="button";dB.className="saved-chat-delete";dB.textContent="×";dB.setAttribute("aria-label","Delete saved chat "+(c.title||"Saved chat"));dB.addEventListener("click",(e)=>{e.stopPropagation();e.preventDefault();savedChats=savedChats.filter(i=>i&&i.id!==c.id);pSC2();rSC();});item.appendChild(oB);item.appendChild(dB);savedChatsList.appendChild(item);});}
 function rH(){messagesEl.querySelectorAll(".msg").forEach(n=>n.remove());history.forEach(item=>add(item.role,item.content,false,[],item.createdAt||""));}
@@ -1127,8 +1101,8 @@ function aCB(div,txt){if(!div||!["user","assistant"].some(r=>String(div.classNam
 function add(role,text,save=true,atts=[],ct=""){const div=document.createElement("div");div.className="msg "+role;const ts=nT(ct)||(save?tN():"");div.textContent=text;aCB(div,text);aTS(div,ts);messagesEl.appendChild(div);messagesEl.scrollTop=messagesEl.scrollHeight;if(save){const msg={role,content:text};if(ts)msg.createdAt=ts;history.push(msg);pH2();}}
 function showModal(){if(clearChatModal)clearChatModal.hidden=false;}
 function hideModal(){if(clearChatModal)clearChatModal.hidden=true;}
-function saveChat(){if(!history.length){deleteChat();return;}const snap=history.slice(-40);savedChats.unshift({id:String(Date.now()),savedAt:new Date().toISOString(),title:gT(snap),messages:snap});savedChats=savedChats.slice(0,30);pSC2();rSC();deleteChat();}
-function deleteChat(){history.splice(0,history.length);pH2();rH();hideModal();}
+async function saveChat(){if(!history.length){await deleteChat();return;}const snap=history.slice(-40);savedChats.unshift({id:String(Date.now()),savedAt:new Date().toISOString(),title:gT(snap),messages:snap});savedChats=savedChats.slice(0,30);pSC();rSC();await deleteChat();}
+async function deleteChat(){const previous=history.slice();history.splice(0,history.length);pH();rH();if(deleteClearChat)deleteClearChat.disabled=true;if(saveClearChat)saveClearChat.disabled=true;const saved=await pS();if(!saved&&history.length===0){history.splice(0,history.length,...previous);pH();rH();window.alert("Moxie could not clear the chat. Nothing was deleted; please try again.");}if(deleteClearChat)deleteClearChat.disabled=false;if(saveClearChat)saveClearChat.disabled=false;if(saved)hideModal();}
 lS();rSC();
 if(clearChatButton)clearChatButton.addEventListener("click",showModal);
 if(saveClearChat)saveClearChat.addEventListener("click",saveChat);
@@ -1173,7 +1147,7 @@ function buildLogPage(notes, reminders, suggested) {
 
   return `
 <div class="wrap annie-log-wrap">
-  <header><div class="brand-with-icon">${logIconImg()}<div><div class="brand">Annie's Log</div><div class="hint">Daily notes, pasted communications, reminders, contacts, and Moxie's working memory.</div></div></div><div class="header-actions"><a class="button-link" href="${prefixed("/")}">Back to chat</a><a class="button-link" href="${prefixed("/contacts")}">Contacts</a><a class="button-link" href="${prefixed("/reminders")}">Reminders</a><a class="button-link" href="${prefixed("/password")}">Settings</a><a class="hint" href="${prefixed("/logout")}">logout</a></div></header>
+  <header><div class="brand-with-icon">${logIconImg()}<div><div class="brand">Annie's Log</div><div class="hint">Daily notes, pasted communications, reminders, contacts, and Moxie's working memory.</div></div></div><div class="header-actions"><a class="button-link" href="${prefixed("/")}">Back to chat</a><a class="button-link" href="${prefixed("/contacts")}">Contacts</a><a class="button-link" href="${prefixed("/reminders")}">Reminders</a><a class="hint" href="${prefixed("/logout")}">logout</a></div></header>
   <div class="panel log-mission"><strong>Central intake:</strong> paste an email, call note, text message, vendor update, city maintenance note, or department handoff. Annie's Log saves the source, auto-adds contacts when it sees names with phone/email details, and turns likely follow-ups into reminders.</div>
   <div class="log-grid log-grid-wide">
     <div class="log-card intake-card">
