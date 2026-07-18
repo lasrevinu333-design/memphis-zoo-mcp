@@ -691,8 +691,9 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     return resolveCanonicalDevice({ runReadOnlySql, deviceIdentifier: normalizedDeviceId });
   }
 
-  function buildThreadListSql({ viewerUserId = "", managerOverview = false }) {
+  function buildThreadListSql({ viewerUserId = "", deviceIdentifier = "", managerOverview = false }) {
     const viewer = esc(viewerUserId);
+    const device = esc(deviceIdentifier);
     const visibilityClause = managerOverview
       ? "true"
       : "tp.viewer_is_participant = true";
@@ -701,7 +702,16 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       : "coalesce(u.unread_count, 0)";
     return `
       select * from (
-      with thread_participants as (
+      with viewer_visibility as (
+        select distinct on (tv.thread_id)
+          tv.thread_id,
+          tv.hidden_before
+        from public.msg_thread_visibility tv
+        where tv.user_id = '${viewer}'::uuid
+          and upper(btrim(coalesce(tv.device_identifier, ''))) = upper(btrim('${device}'))
+        order by tv.thread_id, tv.hidden_before desc
+      ),
+      thread_participants as (
         select
           tp.thread_id,
           count(*) filter (where tp.left_at is null) as participant_count,
@@ -745,6 +755,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         t.thread_type,
         t.system_key,
         (t.system_key = 'ops_manager_shared_chat_v1') as is_ops_manager_shared,
+        (t.system_key = 'custodial_team_chat_v1') as is_custodial_team,
         case
           when t.thread_type = 'bot' then coalesce(nullif(t.title, ''), 'Memphis')
           when t.thread_type = 'direct' then coalesce(nullif(tp.other_participant_names, ''), nullif(tp.participant_names, ''), 'Direct')
@@ -767,18 +778,29 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       join thread_participants tp on tp.thread_id = t.id
       left join last_messages lm on lm.thread_id = t.id
       left join unread u on u.thread_id = t.id
+      left join viewer_visibility vv on vv.thread_id = t.id
       where t.is_active = true
         and ${visibilityClause}
+        and (
+          t.system_key in ('ops_manager_shared_chat_v1', 'custodial_team_chat_v1')
+          or vv.thread_id is null
+          or coalesce(lm.last_message_at, t.created_at) > vv.hidden_before
+        )
       order by
-        case when t.system_key = 'ops_manager_shared_chat_v1' then 0 else 1 end,
+        case
+          when t.system_key = 'ops_manager_shared_chat_v1' then 0
+          when t.system_key = 'custodial_team_chat_v1' then 1
+          else 2
+        end,
         coalesce(lm.last_message_at, t.last_message_at, t.updated_at, t.created_at) desc nulls last,
         t.created_at desc
       ) thread_rows
     `;
   }
 
-  function buildThreadChangesSql({ viewerUserId = "", managerOverview = false, after, afterId, limit = 100 }) {
+  function buildThreadChangesSql({ viewerUserId = "", deviceIdentifier = "", managerOverview = false, after, afterId, limit = 100 }) {
     const viewer = esc(viewerUserId);
+    const device = esc(deviceIdentifier);
     const cursorTime = esc(after);
     const cursorId = esc(afterId);
     const visibilityClause = managerOverview
@@ -790,6 +812,15 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
             and tp.left_at is null
         )`;
     return `
+      with viewer_visibility as (
+        select distinct on (tv.thread_id)
+          tv.thread_id,
+          tv.hidden_before
+        from public.msg_thread_visibility tv
+        where tv.user_id = '${viewer}'::uuid
+          and upper(btrim(coalesce(tv.device_identifier, ''))) = upper(btrim('${device}'))
+        order by tv.thread_id, tv.hidden_before desc
+      )
       select thread_id, changed_at
       from (
         select
@@ -807,8 +838,14 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
             ), t.created_at)
           ) as changed_at
         from public.msg_threads t
+        left join viewer_visibility vv on vv.thread_id = t.id
         where t.is_active = true
           and ${visibilityClause}
+          and (
+            t.system_key in ('ops_manager_shared_chat_v1', 'custodial_team_chat_v1')
+            or vv.thread_id is null
+            or coalesce(t.last_message_at, t.created_at) > vv.hidden_before
+          )
       ) visible_threads
       where (changed_at, thread_id) > ('${cursorTime}'::timestamptz, '${cursorId}'::uuid)
       order by changed_at asc, thread_id asc
@@ -849,6 +886,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       left join public.msg_users sender on sender.id = m.sender_user_id
       where m.thread_id = '${thread}'::uuid
         and t.is_active = true
+        and m.is_deleted is false
         and ${visibilityClause}
         ${beforeSql}
       order by coalesce(m.sent_at, m.created_at) desc, m.id desc
@@ -1226,7 +1264,12 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const notificationState = deviceId && !req.memphisAuth ? await getDeviceNotificationState(deviceId) : null;
       const suppressedNotificationState = notificationState ? phoneSuppressedNotificationState(notificationState) : null;
       const suppressUnreadForPhone = deviceId && !req.memphisAuth && shouldSuppressPhoneNotificationPayloads(notificationState);
-      const sql = buildThreadListSql({ viewerUserId: viewer.effectiveUserId, managerOverview: viewer.isManagerOverview });
+      const canonicalViewerDevice = String(viewer.identity?.canonical_device_id || viewer.deviceId || deviceId).trim();
+      const sql = buildThreadListSql({
+        viewerUserId: viewer.effectiveUserId,
+        deviceIdentifier: canonicalViewerDevice,
+        managerOverview: viewer.isManagerOverview,
+      });
       const rows = await runReadOnlySql(sql);
       const data = (Array.isArray(rows) ? rows : []).map((row) => suppressUnreadForPhone
         ? { ...row, unread_count: 0 }
@@ -1254,10 +1297,12 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       if (!after || Number.isNaN(Date.parse(after))) throw Object.assign(new Error("A valid server thread cursor is required."), { status: 422 });
       if (!isUuid(afterId)) throw Object.assign(new Error("A valid cursor thread id is required."), { status: 422 });
       const viewer = await resolveViewerContext({ userId, deviceId, managerSession: req.memphisAuth || null });
+      const canonicalViewerDevice = String(viewer.identity?.canonical_device_id || viewer.deviceId || deviceId).trim();
       let rows = [];
       do {
         rows = await runReadOnlySql(buildThreadChangesSql({
           viewerUserId: viewer.effectiveUserId,
+          deviceIdentifier: canonicalViewerDevice,
           managerOverview: viewer.isManagerOverview,
           after,
           afterId,
@@ -1620,6 +1665,14 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       if (!otherUserId) throw new Error("other_user_id is required.");
       if (viewer.effectiveUserId === otherUserId) throw new Error("Pick someone else to message.");
       const data = await runRpc("msg_get_or_create_direct_thread", { p_user_a: viewer.effectiveUserId, p_user_b: otherUserId });
+      const thread = Array.isArray(data) ? data[0] : data;
+      const threadId = String(thread?.id || thread?.thread_id || "").trim();
+      if (!isUuid(threadId)) throw Object.assign(new Error("Direct conversation could not be resolved."), { status: 502 });
+      await runRpc("msg_restore_thread_visibility", {
+        p_thread_id: threadId,
+        p_user_id: viewer.effectiveUserId,
+        p_device_identifier: String(viewer.identity?.canonical_device_id || viewer.deviceId || deviceId).trim(),
+      });
       res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Create direct thread failed");
@@ -1631,19 +1684,48 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const createdByUserId = String(req.body?.created_by_user_id || "").trim();
       const deviceId = String(req.body?.device_id || "").trim();
       const title = req.body?.title == null ? null : String(req.body.title);
+      const clientThreadId = String(req.body?.client_thread_id || req.body?.clientThreadId || "").trim();
       const memberUserIds = Array.isArray(req.body?.member_user_ids)
         ? req.body.member_user_ids.map((x) => String(x || "").trim()).filter(Boolean)
         : [];
       const viewer = await resolveViewerContext({ userId: createdByUserId, deviceId, managerSession: req.memphisAuth || null });
-      if (!viewer.isManagerOverview) throw new Error("Employee devices can only start one-person direct conversations.");
-      const data = await runRpc("msg_create_group_thread", {
+      const uniqueMembers = [...new Set(memberUserIds)];
+      if (uniqueMembers.length < 2) throw Object.assign(new Error("Choose at least two people for a group conversation."), { status: 422 });
+      if (uniqueMembers.length > 100) throw Object.assign(new Error("A group may contain at most 100 recipients."), { status: 422 });
+      if (uniqueMembers.some((memberId) => !isUuid(memberId))) throw Object.assign(new Error("Every selected recipient must be valid."), { status: 422 });
+      if (!clientThreadId || clientThreadId.length > 200) throw Object.assign(new Error("A stable group operation id is required."), { status: 422 });
+      const data = await runRpc("msg_create_group_thread_v2", {
         p_created_by_user_id: viewer.effectiveUserId,
         p_title: title,
-        p_member_user_ids: memberUserIds
+        p_member_user_ids: uniqueMembers,
+        p_client_thread_id: clientThreadId,
       });
       res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Create group thread failed");
+    }
+  });
+
+  router.post("/thread/team", requireWritableDeviceOrOpsAuth, async (req, res) => {
+    try {
+      const requestedUserId = String(req.body?.created_by_user_id || req.body?.user_id || "").trim();
+      const deviceId = String(req.body?.device_id || req.body?.deviceId || "").trim();
+      const viewer = await resolveViewerContext({ userId: requestedUserId, deviceId, managerSession: req.memphisAuth || null });
+      const data = await runRpc("msg_get_or_create_custodial_team_thread", {
+        p_created_by_user_id: viewer.effectiveUserId,
+      });
+      const thread = Array.isArray(data) ? data[0] : data;
+      const threadId = String(thread?.id || thread?.thread_id || "").trim();
+      if (!isUuid(threadId) || String(thread?.system_key || "") !== "custodial_team_chat_v1") {
+        throw Object.assign(new Error("The Custodial Team conversation could not be resolved."), { status: 502 });
+      }
+      res.status(200).json({
+        ok: true,
+        data,
+        meta: messagingMeta({ audience: "all_active_staff", canonical: true }),
+      });
+    } catch (error) {
+      fail(res, error, "Open Custodial Team conversation failed");
     }
   });
 
@@ -1735,7 +1817,12 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         p_message_id: messageId,
         p_request_user_id: viewer.effectiveUserId,
       });
-      res.status(200).json({ ok: true, data, meta: messagingMeta({ deletion: "soft", authoritative: true }) });
+      const deleted = Array.isArray(data) ? data[0] : data;
+      if (!deleted || String(deleted.id || "") !== messageId || deleted.is_deleted !== true || String(deleted.body || "") !== "[deleted]") {
+        res.status(502).json({ ok: false, error: "The database did not confirm message deletion." });
+        return;
+      }
+      res.status(200).json({ ok: true, data: deleted, meta: messagingMeta({ deletion: "soft", authoritative: true }) });
     } catch (error) {
       fail(res, error, "Delete message failed");
     }
@@ -1748,8 +1835,8 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const deviceId = String(req.body?.device_id || req.body?.deviceId || "").trim();
       const viewer = await resolveViewerContext({ deviceId, managerSession: req.memphisAuth || null });
       const thread = await getThreadIdentity(threadId);
-      if (thread?.system_key === "ops_manager_shared_chat_v1") {
-        res.status(409).json({ ok: false, error: "The shared Ops Manager chat stays available on every manager device." });
+      if (["ops_manager_shared_chat_v1", "custodial_team_chat_v1"].includes(String(thread?.system_key || ""))) {
+        res.status(409).json({ ok: false, error: "Required shared conversations stay available on every authorized device." });
         return;
       }
       if (!viewer.isManagerOverview) {
@@ -1762,9 +1849,14 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const data = await runRpc("msg_mark_thread_deleted", {
         p_thread_id: threadId,
         p_user_id: viewer.effectiveUserId,
-        p_device_identifier: viewer.deviceId,
+        p_device_identifier: String(viewer.identity?.canonical_device_id || viewer.deviceId || deviceId).trim(),
       });
-      res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+      const archived = Array.isArray(data) ? data[0] : data;
+      if (!archived || archived.archived_on_device !== true || archived.participant_left !== false) {
+        res.status(502).json({ ok: false, error: "The database did not confirm device archive state." });
+        return;
+      }
+      res.status(200).json({ ok: true, data: archived, meta: messagingMeta({ archive: "per_device", membership_preserved: true }) });
     } catch (error) {
       fail(res, error, "Delete thread failed");
     }

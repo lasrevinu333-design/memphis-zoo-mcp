@@ -108,7 +108,7 @@ async function runReadOnlySql(sql) {
       updated_at: new Date().toISOString(),
     }];
   }
-  if (/thread_messages/i.test(sql)) return [...messages];
+  if (/thread_messages/i.test(sql)) return messages.filter((message) => !message.is_deleted);
   return [];
 }
 
@@ -133,7 +133,7 @@ app.use("/messaging-api", createMessagingRouter({
   requireOpsManagerAuth: managerBoundary,
   appVersion: "test",
   releaseId: "test",
-  contractVersion: "messaging.v3",
+  contractVersion: "messaging.v4",
 }));
 
 const server = createServer(app);
@@ -219,8 +219,7 @@ try {
   assert.equal(deleteRetry.status, 200, "message deletion is idempotent");
   assert.equal(messages.length, 2, "soft deletion never duplicates or hard-deletes the row");
   const afterDelete = await request("manager-a-phone", `/thread/${SHARED_THREAD_ID}/messages?limit=100`);
-  assert.equal(afterDelete.payload.data[0].is_deleted, true, "other manager devices receive the deletion tombstone");
-  assert.equal(afterDelete.payload.data[0].body, "[deleted]");
+  assert.equal(afterDelete.payload.data.some((row) => row.id === sentA.payload.data.id), false, "deleted messages disappear from every manager device");
 
   const deleteShared = await request("manager-a-desktop", `/thread/${SHARED_THREAD_ID}/delete`, { method: "POST", body: "{}" });
   assert.equal(deleteShared.status, 409, "the canonical manager room cannot be hidden or deleted");

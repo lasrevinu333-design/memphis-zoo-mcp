@@ -221,6 +221,44 @@ async function verifyDockerConcurrency(database) {
          and u.ops_manager_id is not null)::text;
   `).trim();
   if (sharedRoomState !== "1|10") throw new Error(`Shared Ops Manager room invariant failed: ${sharedRoomState}`);
+  const teamRoomCalls = await Promise.all(Array.from({ length: 10 }, (_, index) => {
+    const managerId = `00000000-0000-4000-8000-${String(9001 + index).padStart(12, "0")}`;
+    return dockerPsqlConcurrent(database, `select id from public.msg_get_or_create_custodial_team_thread((select id from public.msg_users where ops_manager_id='${managerId}'::uuid));`);
+  }));
+  if (teamRoomCalls.some((result) => result.status !== 0)) {
+    throw new Error(`Concurrent Custodial Team room reconciliation failed:\n${teamRoomCalls.map((item) => item.stderr).filter(Boolean).join("\n")}`);
+  }
+  const teamRoomIds = teamRoomCalls.flatMap(outputLines);
+  if (teamRoomIds.length !== 10 || new Set(teamRoomIds).size !== 1) {
+    throw new Error(`Concurrent all-staff requests did not converge on one room: ${JSON.stringify(teamRoomIds)}`);
+  }
+  const groupOperationCalls = await Promise.all([
+    dockerPsqlConcurrent(database, `select id from public.msg_create_group_thread_v2(
+      (select id from public.msg_users where ops_manager_id='00000000-0000-4000-8000-000000009001'::uuid),
+      'Concurrent Employee Group',
+      array[
+        (select id from public.msg_users where ops_manager_id='00000000-0000-4000-8000-000000009002'::uuid),
+        (select id from public.msg_users where ops_manager_id='00000000-0000-4000-8000-000000009003'::uuid)
+      ],
+      'thread:concurrent-empty-db-group'
+    );`),
+    dockerPsqlConcurrent(database, `select id from public.msg_create_group_thread_v2(
+      (select id from public.msg_users where ops_manager_id='00000000-0000-4000-8000-000000009001'::uuid),
+      'Concurrent Employee Group',
+      array[
+        (select id from public.msg_users where ops_manager_id='00000000-0000-4000-8000-000000009002'::uuid),
+        (select id from public.msg_users where ops_manager_id='00000000-0000-4000-8000-000000009003'::uuid)
+      ],
+      'thread:concurrent-empty-db-group'
+    );`),
+  ]);
+  if (groupOperationCalls.some((result) => result.status !== 0)) {
+    throw new Error(`Concurrent idempotent group creation failed:\n${groupOperationCalls.map((item) => item.stderr).filter(Boolean).join("\n")}`);
+  }
+  const groupIds = groupOperationCalls.flatMap(outputLines);
+  if (groupIds.length !== 2 || new Set(groupIds).size !== 1) {
+    throw new Error(`Concurrent group retries produced multiple conversations: ${JSON.stringify(groupIds)}`);
+  }
   const deletionMessageId = dockerPsql(database, `
     select id from public.msg_send_message(
       (select id from public.msg_threads where system_key = 'ops_manager_shared_chat_v1'),
@@ -241,7 +279,7 @@ async function verifyDockerConcurrency(database) {
     from public.msg_messages where id = '${deletionMessageId}'::uuid;
   `).trim();
   if (deletionState !== "1|true|[deleted]|true") throw new Error(`Concurrent message deletion invariant failed: ${deletionState}`);
-  console.log("verified 10-way exact finish, two-worker outbox claims, restart lease recovery, two-browser Moxie CAS, atomic Moxie password rotation, 10-manager shared-room convergence, and concurrent idempotent message deletion");
+  console.log("verified 10-way exact finish, two-worker outbox claims, restart lease recovery, two-browser Moxie CAS, atomic Moxie password rotation, 10-manager shared-room convergence, all-staff convergence, idempotent group creation, and concurrent idempotent message deletion");
 }
 
 function runDocker(args, options = {}) {
@@ -269,6 +307,10 @@ function assertRebuildInvariants(result) {
   if (result.exact_finish_rpc !== true) failures.push("Exact session finish RPC is missing");
   if (result.manager_messaging_rpc !== true) failures.push("Server-derived manager messaging RPC is missing");
   if (result.manager_shared_messaging_rpc !== true) failures.push("Canonical shared Ops Manager messaging RPC is missing");
+  if (result.custodial_team_messaging_rpc !== true) failures.push("Canonical all-staff messaging RPC is missing");
+  if (result.employee_group_messaging_rpc !== true) failures.push("Idempotent employee group messaging RPC is missing");
+  if (result.thread_client_operation !== true) failures.push("Stable group operation identity column is missing");
+  if (result.team_or_group_public_execute !== false) failures.push("Team/group creation RPC is executable by public/anonymous/authenticated roles");
   if (result.message_change_cursor !== true) failures.push("Message cross-device change cursor is missing");
   if (result.message_delete_public_execute !== false) failures.push("Message deletion RPC is executable by public/anonymous/authenticated roles");
   if (result.message_audit !== true) failures.push("Immutable message audit table is missing");
@@ -301,6 +343,10 @@ declare
   v_manager_user_b public.msg_users%rowtype;
   v_shared_thread_a public.msg_threads%rowtype;
   v_shared_thread_b public.msg_threads%rowtype;
+  v_team_thread public.msg_threads%rowtype;
+  v_group_thread_a public.msg_threads%rowtype;
+  v_group_thread_b public.msg_threads%rowtype;
+  v_archive jsonb;
   v_message public.msg_messages%rowtype;
 begin
   v_start := public.tool_start_session_v2(
@@ -428,8 +474,71 @@ begin
   ) then
     raise exception 'Immutable manager message audit was not written in the message transaction';
   end if;
-  insert into public.msg_users(id, display_name, role, is_active)
-  values ('00000000-0000-4000-8000-00000000f116', 'Rebuild Ordinary Employee', 'employee', true);
+  insert into public.employees(id, employee_code, display_name, active, role)
+  values ('00000000-0000-4000-8000-00000000f117', 'EMP99117', 'Rebuild Ordinary Employee', true, 'staff');
+  insert into public.msg_users(id, employee_id, display_name, role, is_active)
+  values (
+    '00000000-0000-4000-8000-00000000f116',
+    '00000000-0000-4000-8000-00000000f117',
+    'Rebuild Ordinary Employee',
+    'employee',
+    true
+  );
+  insert into public.msg_device_assignments(device_identifier, msg_user_id, is_active)
+  values ('REBUILD-MESSENGER-EMPLOYEE', '00000000-0000-4000-8000-00000000f116', true);
+  v_team_thread := public.msg_get_or_create_custodial_team_thread('00000000-0000-4000-8000-00000000f116');
+  if v_team_thread.system_key <> 'custodial_team_chat_v1'
+     or (select count(*) from public.msg_threads where system_key='custodial_team_chat_v1') <> 1
+     or not exists (
+       select 1 from public.msg_thread_participants
+       where thread_id=v_team_thread.id
+         and user_id='00000000-0000-4000-8000-00000000f116'::uuid
+         and left_at is null
+     ) then
+    raise exception 'Canonical Custodial Team room was not created for the employee';
+  end if;
+  v_group_thread_a := public.msg_create_group_thread_v2(
+    '00000000-0000-4000-8000-00000000f116',
+    'Employee-created rebuild group',
+    array[v_manager_user.id, v_manager_user_b.id],
+    'thread:empty-db-employee-group'
+  );
+  v_group_thread_b := public.msg_create_group_thread_v2(
+    '00000000-0000-4000-8000-00000000f116',
+    'Employee-created rebuild group',
+    array[v_manager_user.id, v_manager_user_b.id],
+    'thread:empty-db-employee-group'
+  );
+  if v_group_thread_a.id <> v_group_thread_b.id
+     or (select count(*) from public.msg_threads where client_thread_id='thread:empty-db-employee-group') <> 1
+     or (select count(*) from public.msg_thread_participants where thread_id=v_group_thread_a.id and left_at is null) <> 3 then
+    raise exception 'Employee group creation was not idempotent and exact';
+  end if;
+  v_archive := public.msg_mark_thread_deleted(
+    v_group_thread_a.id,
+    '00000000-0000-4000-8000-00000000f116',
+    'REBUILD-FINISH-DEVICE'
+  );
+  if (v_archive ->> 'archived_on_device')::boolean is not true
+     or (v_archive ->> 'participant_left')::boolean is not false
+     or not exists (
+       select 1 from public.msg_thread_participants
+       where thread_id=v_group_thread_a.id
+         and user_id='00000000-0000-4000-8000-00000000f116'::uuid
+         and left_at is null
+     ) then
+    raise exception 'Conversation archive removed membership or failed confirmation: %', v_archive;
+  end if;
+  begin
+    perform public.msg_mark_thread_deleted(
+      v_team_thread.id,
+      '00000000-0000-4000-8000-00000000f116',
+      'REBUILD-FINISH-DEVICE'
+    );
+    raise exception 'Required Custodial Team room was incorrectly archivable';
+  exception when check_violation then
+    null;
+  end;
   begin
     perform public.msg_delete_message(v_message.id, '00000000-0000-4000-8000-00000000f116');
     raise exception 'Ordinary employee deleted another sender''s message';
@@ -545,6 +654,15 @@ if (dockerContainer) {
         'exact_finish_rpc', to_regprocedure('public.tool_finish_session_exact(text,text,uuid,timestamp with time zone)') is not null,
         'manager_messaging_rpc', to_regprocedure('public.msg_ensure_ops_manager_user(uuid)') is not null,
         'manager_shared_messaging_rpc', to_regprocedure('public.msg_get_or_create_ops_manager_thread(uuid)') is not null,
+        'custodial_team_messaging_rpc', to_regprocedure('public.msg_get_or_create_custodial_team_thread(uuid)') is not null,
+        'employee_group_messaging_rpc', to_regprocedure('public.msg_create_group_thread_v2(uuid,text,uuid[],text)') is not null,
+        'thread_client_operation', exists(select 1 from information_schema.columns where table_schema='public' and table_name='msg_threads' and column_name='client_thread_id'),
+        'team_or_group_public_execute', has_function_privilege('public', 'public.msg_get_or_create_custodial_team_thread(uuid)', 'EXECUTE')
+          or has_function_privilege('anon', 'public.msg_get_or_create_custodial_team_thread(uuid)', 'EXECUTE')
+          or has_function_privilege('authenticated', 'public.msg_get_or_create_custodial_team_thread(uuid)', 'EXECUTE')
+          or has_function_privilege('public', 'public.msg_create_group_thread_v2(uuid,text,uuid[],text)', 'EXECUTE')
+          or has_function_privilege('anon', 'public.msg_create_group_thread_v2(uuid,text,uuid[],text)', 'EXECUTE')
+          or has_function_privilege('authenticated', 'public.msg_create_group_thread_v2(uuid,text,uuid[],text)', 'EXECUTE'),
         'message_change_cursor', exists(select 1 from information_schema.columns where table_schema='public' and table_name='msg_messages' and column_name='updated_at'),
         'message_delete_public_execute', has_function_privilege('public', 'public.msg_delete_message(uuid,uuid)', 'EXECUTE')
           or has_function_privilege('anon', 'public.msg_delete_message(uuid,uuid)', 'EXECUTE')
@@ -626,6 +744,15 @@ try {
         to_regprocedure('public.tool_finish_session_exact(text,text,uuid,timestamp with time zone)') is not null as exact_finish_rpc,
         to_regprocedure('public.msg_ensure_ops_manager_user(uuid)') is not null as manager_messaging_rpc,
         to_regprocedure('public.msg_get_or_create_ops_manager_thread(uuid)') is not null as manager_shared_messaging_rpc,
+        to_regprocedure('public.msg_get_or_create_custodial_team_thread(uuid)') is not null as custodial_team_messaging_rpc,
+        to_regprocedure('public.msg_create_group_thread_v2(uuid,text,uuid[],text)') is not null as employee_group_messaging_rpc,
+        exists(select 1 from information_schema.columns where table_schema='public' and table_name='msg_threads' and column_name='client_thread_id') as thread_client_operation,
+        has_function_privilege('public', 'public.msg_get_or_create_custodial_team_thread(uuid)', 'EXECUTE')
+          or has_function_privilege('anon', 'public.msg_get_or_create_custodial_team_thread(uuid)', 'EXECUTE')
+          or has_function_privilege('authenticated', 'public.msg_get_or_create_custodial_team_thread(uuid)', 'EXECUTE')
+          or has_function_privilege('public', 'public.msg_create_group_thread_v2(uuid,text,uuid[],text)', 'EXECUTE')
+          or has_function_privilege('anon', 'public.msg_create_group_thread_v2(uuid,text,uuid[],text)', 'EXECUTE')
+          or has_function_privilege('authenticated', 'public.msg_create_group_thread_v2(uuid,text,uuid[],text)', 'EXECUTE') as team_or_group_public_execute,
         exists(select 1 from information_schema.columns where table_schema='public' and table_name='msg_messages' and column_name='updated_at') as message_change_cursor,
         has_function_privilege('public', 'public.msg_delete_message(uuid,uuid)', 'EXECUTE')
           or has_function_privilege('anon', 'public.msg_delete_message(uuid,uuid)', 'EXECUTE')
