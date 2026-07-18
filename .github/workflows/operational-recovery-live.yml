@@ -96,7 +96,7 @@ jobs:
           window="$(curl -fsSL --max-time 40 "$root/schedule-api/generation-window?days=14")"
           python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; assert d["days"]==14 and d["ready_days"]==14 and d["missing_days"]==0; assert d["auto_generation"]["trigger_auto_ignored"] is False' <<<"$window"
 
-          future_date="$(python3 -c 'from datetime import date,timedelta; print((date.today()+timedelta(days=13)).isoformat())')"
+          future_date="$(python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; assert d["window"]; print(d["window"][-1]["service_date"])' <<<"$window")"
           audit="$(curl -fsSL --max-time 40 "$root/schedule-api/audit/day?service_date=$future_date")"
           python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; assert d["ok"] is True and d["readiness_status"]=="ready" and d["readiness_ok"] is True' <<<"$audit"
 
