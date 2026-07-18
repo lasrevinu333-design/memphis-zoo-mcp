@@ -3,7 +3,6 @@ import express from "express";
 import { createMemphisResponder } from "../src/memphis-ai.js";
 import { createMessagingRouter } from "../src/messaging-api.js";
 import { findLocationCode, hasLocationKeyword } from "../src/ai/memphis-ai-intent.js";
-import { createGeminiAdminSession } from "../src/auth/gemini-admin-auth.js";
 
 process.env.GEMINI_API_KEY = "";
 process.env.MEMPHIS_GEMINI_API_KEY = "";
@@ -1114,15 +1113,6 @@ assert.deepEqual(deleteThreadRpcCall, {
   },
 }, 'Device thread delete should mark the thread deleted for the viewer/device only');
 
-const originalAuthEnv = {
-  MOXIE_WEB_PASSWORD: process.env.MOXIE_WEB_PASSWORD,
-  MOXIE_COOKIE_SECRET: process.env.MOXIE_COOKIE_SECRET,
-  GEMINI_ADMIN_SESSION_SECRET: process.env.GEMINI_ADMIN_SESSION_SECRET,
-};
-process.env.MOXIE_WEB_PASSWORD = 'memzoo';
-process.env.MOXIE_COOKIE_SECRET = 'memphis-test-cookie-secret';
-process.env.GEMINI_ADMIN_SESSION_SECRET = 'memphis-test-gemini-secret';
-
 const adminAuditReadCalls = [];
 const adminAuditRpcCalls = [];
 const adminAuditApp = express();
@@ -1152,58 +1142,20 @@ adminAuditApp.use('/messaging-api', createTestMessagingRouter({
   contractVersion: 'messaging.v1',
 }));
 
-const legacyOpsToken = 'retired-ops-token';
-const legacyCustodianToken = 'retired-custodian-token';
-const geminiAuditSession = createGeminiAdminSession();
-
 await withServer(adminAuditApp, async (baseUrl) => {
-  const noAuth = await fetch(`${baseUrl}/messaging-api/memphis/admin/audit`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ body: 'audit everything', device_id: 'OPS_DEVICE' }),
-  });
-  assert.equal(noAuth.status, 401, 'Gemini admin audit must require the Gemini password token');
-
-  const custodianAuth = await fetch(`${baseUrl}/messaging-api/memphis/admin/audit`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${legacyCustodianToken}`, 'X-Device-Id': 'OPS_DEVICE' },
-    body: JSON.stringify({ body: 'audit everything', device_id: 'OPS_DEVICE' }),
-  });
-  assert.equal(custodianAuth.status, 401, 'Retired custodial bearer tokens must not access Gemini admin audit');
-
-  const opsAuth = await fetch(`${baseUrl}/messaging-api/memphis/admin/audit`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${legacyOpsToken}`, 'X-Device-Id': 'OPS_DEVICE' },
-    body: JSON.stringify({ body: 'Run audits, drift checks, stale-data checks, and ops-efficiency recommendations.', device_id: 'OPS_DEVICE' }),
-  });
-  assert.equal(opsAuth.status, 401, 'Open Ops Manager access must not bypass the Gemini password gate');
-
-  const geminiAuth = await fetch(`${baseUrl}/messaging-api/memphis/admin/audit`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${geminiAuditSession.token}`, 'X-Device-Id': 'OPS_DEVICE' },
-    body: JSON.stringify({ body: 'Run audits, drift checks, stale-data checks, and ops-efficiency recommendations.', device_id: 'OPS_DEVICE' }),
-  });
-  assert.equal(geminiAuth.status, 200, 'Gemini password session should access read-only Gemini admin audit');
-  const payload = await geminiAuth.json();
-  assert.equal(payload.ok, true);
-  assert.equal(payload.meta.read_only, true);
-  assert.equal(payload.data.diagnostics.route.intent, 'admin_upkeep_audit');
-  assert.match(payload.data.report, /Device \/ employee drift/i);
-  assert.match(payload.data.report, /Old message data/i);
-  assert.match(payload.data.report, /Schedule operations/i);
-  assert.match(payload.data.report, /Dashboard attention/i);
-  assert.match(payload.data.report, /Change control: this console can recommend upkeep only/i);
+  for (const path of ['runtime', 'diagnose', 'audit', 'run']) {
+    const response = await fetch(`${baseUrl}/messaging-api/memphis/admin/${path}`, {
+      method: path === 'runtime' ? 'GET' : 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer retired-gemini-token' },
+      body: path === 'runtime' ? undefined : JSON.stringify({ body: 'retired route probe', device_id: 'OPS_DEVICE' }),
+    });
+    assert.equal(response.status, 410, `Legacy Gemini admin ${path} route must be retired`);
+    const payload = await response.json();
+    assert.match(payload.error, /retired/i);
+  }
 });
 
-assert.equal(adminAuditRpcCalls.length, 0, 'Read-only Gemini admin audit must not call write-capable RPC helpers');
-assert.ok(adminAuditReadCalls.some((sql) => /v_admin_health_snapshot/i.test(sql)), 'Admin audit should inspect dashboard health snapshot');
-assert.ok(adminAuditReadCalls.some((sql) => /current_attendance_state/i.test(sql)), 'Admin audit should inspect attendance freshness');
-assert.ok(adminAuditReadCalls.some((sql) => /msg_messages/i.test(sql) && /older_than_90d/i.test(sql)), 'Admin audit should inspect stale Messenger data');
-assert.ok(adminAuditReadCalls.some((sql) => /schedule_generation_runs/i.test(sql)), 'Admin audit should inspect schedule run health');
+assert.equal(adminAuditRpcCalls.length, 0, 'Retired Gemini routes must not call write-capable RPC helpers');
+assert.equal(adminAuditReadCalls.length, 0, 'Retired Gemini routes must not query operational data');
 
-for (const [key, value] of Object.entries(originalAuthEnv)) {
-  if (value === undefined) delete process.env[key];
-  else process.env[key] = value;
-}
-
-console.log(JSON.stringify({ ok: true, route_cases: routeCases.length, reply_cases: replyCases.length, false_location_code_cases: falseLocationCodeCases.length, device_event_reminder_contract: true, off_shift_notification_guard_contract: true, off_shift_location_notification_guard_contract: true, location_identity_mismatch_guard_contract: true, device_location_status_reminder_contract: true, thread_visibility_contract: true, admin_audit_contract: true }, null, 2));
+console.log(JSON.stringify({ ok: true, route_cases: routeCases.length, reply_cases: replyCases.length, false_location_code_cases: falseLocationCodeCases.length, device_event_reminder_contract: true, off_shift_notification_guard_contract: true, off_shift_location_notification_guard_contract: true, location_identity_mismatch_guard_contract: true, device_location_status_reminder_contract: true, thread_visibility_contract: true, retired_gemini_admin_routes: true }, null, 2));

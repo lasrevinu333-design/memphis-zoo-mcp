@@ -45,8 +45,10 @@ Render production must have at least one valid Ops/Admin credential before prote
 | Name | Required | Purpose |
 |---|---:|---|
 | `GEMINI_API_KEY` | Recommended | Gemini API key for Memphis AI. |
+| `GEMINI_CONSOLE_API_KEY` | Optional dedicated key | Dedicated key for the trusted-manager Gemini Console. Falls back to the existing approved Gemini key chain. |
 | `GOOGLE_API_KEY` | Optional fallback | Alternate Gemini API key variable. |
 | `MEMPHIS_GEMINI_MODEL` | No | Model override for Memphis AI. |
+| `GEMINI_CONSOLE_MODEL` | No | Model override for the Gemini Console. Defaults to the approved `gemini-2.5-flash` model. |
 | `GEMINI_MODEL` | No | General model fallback. |
 
 ## Moxie — Annie's Private Assistant

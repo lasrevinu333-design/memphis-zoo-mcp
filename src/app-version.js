@@ -1,4 +1,4 @@
-export const APP_VERSION = "release-2026.07.18.auth-shared-48h.1";
+export const APP_VERSION = "release-2026.07.18.gemini-console.1";
 export const RELEASE_ID = String(
   process.env.RENDER_GIT_COMMIT
     || process.env.GIT_COMMIT

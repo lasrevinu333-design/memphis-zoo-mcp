@@ -1,6 +1,5 @@
 import express from "express";
 import { makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
-import { makeGeminiAdminMiddleware } from "./auth/gemini-admin-auth.js";
 import { getGeminiDiagnostics } from "./utils/gemini-config.js";
 import { createMemphisResponder } from "./services/index.js";
 import { resolveCanonicalDevice } from "./device-identity.js";
@@ -9,7 +8,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
   const router = express.Router();
   const memphisResponder = createMemphisResponder({ runReadOnlySql, runRpc });
   const requireOpsManagerAuth = suppliedOpsManagerAuth || makeOpsAccessMiddleware();
-  const requireGeminiAdminAuth = makeGeminiAdminMiddleware();
+  const retiredGeminiAdminRoute = (_req, res) => res.status(410).json({ ok: false, error: "This diagnostic route is retired. Use /gemini-api." });
 
   // All employee messaging access flows through the canonical device credential
   // boundary. Manager bearer sessions may inspect the same routes, but read-only
@@ -959,7 +958,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     res.status(200).json(buildHealthPayload("messaging", { contract_version: contractVersion, memphis: getGeminiDiagnosticsForMessaging() }));
   });
 
-  router.get("/memphis/admin/runtime", requireGeminiAdminAuth, async (req, res) => {
+  router.get("/memphis/admin/runtime", retiredGeminiAdminRoute, async (req, res) => {
     try {
       res.status(200).json({
         ok: true,
@@ -1443,7 +1442,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   });
 
-  router.post("/memphis/admin/diagnose", requireGeminiAdminAuth, async (req, res) => {
+  router.post("/memphis/admin/diagnose", retiredGeminiAdminRoute, async (req, res) => {
     try {
       const body = String(req.body?.body || req.body?.message || "").trim();
       const deviceId = String(req.body?.device_id || req.memphisAuth?.device_id || "").trim();
@@ -1456,7 +1455,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   });
 
-  router.post("/memphis/admin/audit", requireGeminiAdminAuth, async (req, res) => {
+  router.post("/memphis/admin/audit", retiredGeminiAdminRoute, async (req, res) => {
     try {
       const body = String(req.body?.body || req.body?.message || "").trim();
       const audit = await runGeminiAdminAudit({ prompt: body, auth: req.memphisAuth || null });
@@ -1466,7 +1465,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   });
 
-  router.post("/memphis/admin/run", requireGeminiAdminAuth, async (req, res) => {
+  router.post("/memphis/admin/run", retiredGeminiAdminRoute, async (req, res) => {
     try {
       const body = String(req.body?.body || req.body?.message || "").trim();
       const deviceId = String(req.body?.device_id || req.memphisAuth?.device_id || "").trim();
