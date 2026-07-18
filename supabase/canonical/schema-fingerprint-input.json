@@ -171,6 +171,19 @@
     },
     {
       "collation_name": null,
+      "column_name": "revision",
+      "comment": null,
+      "data_type": "bigint",
+      "default_expression": "1",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 5,
+      "schema_name": "public",
+      "table_name": "annie_chat_state"
+    },
+    {
+      "collation_name": null,
       "column_name": "id",
       "comment": null,
       "data_type": "text",
@@ -5527,6 +5540,71 @@
     },
     {
       "collation_name": null,
+      "column_name": "status",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": "'SCHEDULED'::text",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 31,
+      "schema_name": "public",
+      "table_name": "events_app_events"
+    },
+    {
+      "collation_name": null,
+      "column_name": "cancelled_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 32,
+      "schema_name": "public",
+      "table_name": "events_app_events"
+    },
+    {
+      "collation_name": null,
+      "column_name": "cancelled_by",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 33,
+      "schema_name": "public",
+      "table_name": "events_app_events"
+    },
+    {
+      "collation_name": null,
+      "column_name": "cancellation_reason",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 34,
+      "schema_name": "public",
+      "table_name": "events_app_events"
+    },
+    {
+      "collation_name": null,
+      "column_name": "archived_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 35,
+      "schema_name": "public",
+      "table_name": "events_app_events"
+    },
+    {
+      "collation_name": null,
       "column_name": "id",
       "comment": null,
       "data_type": "uuid",
@@ -7251,6 +7329,32 @@
       "identity_kind": "",
       "not_null": true,
       "ordinal_position": 14,
+      "schema_name": "public",
+      "table_name": "guest_cleanliness_reports"
+    },
+    {
+      "collation_name": null,
+      "column_name": "operation_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": "gen_random_uuid()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 15,
+      "schema_name": "public",
+      "table_name": "guest_cleanliness_reports"
+    },
+    {
+      "collation_name": null,
+      "column_name": "request_fingerprint",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 16,
       "schema_name": "public",
       "table_name": "guest_cleanliness_reports"
     },
@@ -10298,6 +10402,136 @@
     },
     {
       "collation_name": null,
+      "column_name": "audit_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": "gen_random_uuid()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 1,
+      "schema_name": "public",
+      "table_name": "msg_message_audit"
+    },
+    {
+      "collation_name": null,
+      "column_name": "message_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 2,
+      "schema_name": "public",
+      "table_name": "msg_message_audit"
+    },
+    {
+      "collation_name": null,
+      "column_name": "thread_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 3,
+      "schema_name": "public",
+      "table_name": "msg_message_audit"
+    },
+    {
+      "collation_name": null,
+      "column_name": "sender_user_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 4,
+      "schema_name": "public",
+      "table_name": "msg_message_audit"
+    },
+    {
+      "collation_name": null,
+      "column_name": "sender_ops_manager_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 5,
+      "schema_name": "public",
+      "table_name": "msg_message_audit"
+    },
+    {
+      "collation_name": null,
+      "column_name": "client_message_id",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 6,
+      "schema_name": "public",
+      "table_name": "msg_message_audit"
+    },
+    {
+      "collation_name": null,
+      "column_name": "message_type",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 7,
+      "schema_name": "public",
+      "table_name": "msg_message_audit"
+    },
+    {
+      "collation_name": null,
+      "column_name": "sender_display_name",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 8,
+      "schema_name": "public",
+      "table_name": "msg_message_audit"
+    },
+    {
+      "collation_name": null,
+      "column_name": "sender_role",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 9,
+      "schema_name": "public",
+      "table_name": "msg_message_audit"
+    },
+    {
+      "collation_name": null,
+      "column_name": "created_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "now()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 10,
+      "schema_name": "public",
+      "table_name": "msg_message_audit"
+    },
+    {
+      "collation_name": null,
       "column_name": "id",
       "comment": null,
       "data_type": "uuid",
@@ -11000,6 +11234,19 @@
     },
     {
       "collation_name": null,
+      "column_name": "ops_manager_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 10,
+      "schema_name": "public",
+      "table_name": "msg_users"
+    },
+    {
+      "collation_name": null,
       "column_name": "id",
       "comment": null,
       "data_type": "uuid",
@@ -11101,6 +11348,227 @@
       "ordinal_position": 8,
       "schema_name": "public",
       "table_name": "operating_hours"
+    },
+    {
+      "collation_name": null,
+      "column_name": "job_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": "gen_random_uuid()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 1,
+      "schema_name": "public",
+      "table_name": "operational_notification_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "job_key",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 2,
+      "schema_name": "public",
+      "table_name": "operational_notification_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "job_type",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 3,
+      "schema_name": "public",
+      "table_name": "operational_notification_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "source_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 4,
+      "schema_name": "public",
+      "table_name": "operational_notification_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "status",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": "'pending'::text",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 5,
+      "schema_name": "public",
+      "table_name": "operational_notification_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "attempts",
+      "comment": null,
+      "data_type": "integer",
+      "default_expression": "0",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 6,
+      "schema_name": "public",
+      "table_name": "operational_notification_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "max_attempts",
+      "comment": null,
+      "data_type": "integer",
+      "default_expression": "12",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 7,
+      "schema_name": "public",
+      "table_name": "operational_notification_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "available_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "now()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 8,
+      "schema_name": "public",
+      "table_name": "operational_notification_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "leased_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 9,
+      "schema_name": "public",
+      "table_name": "operational_notification_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "leased_until",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 10,
+      "schema_name": "public",
+      "table_name": "operational_notification_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "lease_token",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 11,
+      "schema_name": "public",
+      "table_name": "operational_notification_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "worker_id",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 12,
+      "schema_name": "public",
+      "table_name": "operational_notification_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "completed_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 13,
+      "schema_name": "public",
+      "table_name": "operational_notification_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "last_error",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 14,
+      "schema_name": "public",
+      "table_name": "operational_notification_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "payload_json",
+      "comment": null,
+      "data_type": "jsonb",
+      "default_expression": "'{}'::jsonb",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 15,
+      "schema_name": "public",
+      "table_name": "operational_notification_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "created_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "now()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 16,
+      "schema_name": "public",
+      "table_name": "operational_notification_jobs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "updated_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "now()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 17,
+      "schema_name": "public",
+      "table_name": "operational_notification_jobs"
     },
     {
       "collation_name": null,
@@ -15693,6 +16161,19 @@
     },
     {
       "collation_name": null,
+      "column_name": "finish_operation_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 15,
+      "schema_name": "public",
+      "table_name": "sessions"
+    },
+    {
+      "collation_name": null,
       "column_name": "id",
       "comment": null,
       "data_type": "uuid",
@@ -15937,6 +16418,123 @@
       "ordinal_position": 19,
       "schema_name": "public",
       "table_name": "system_feedback_items"
+    },
+    {
+      "collation_name": null,
+      "column_name": "operation_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": "gen_random_uuid()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 20,
+      "schema_name": "public",
+      "table_name": "system_feedback_items"
+    },
+    {
+      "collation_name": null,
+      "column_name": "request_fingerprint",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 21,
+      "schema_name": "public",
+      "table_name": "system_feedback_items"
+    },
+    {
+      "collation_name": null,
+      "column_name": "feedback_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 1,
+      "schema_name": "public",
+      "table_name": "system_feedback_legacy_image_backups"
+    },
+    {
+      "collation_name": null,
+      "column_name": "metadata_json",
+      "comment": null,
+      "data_type": "jsonb",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 2,
+      "schema_name": "public",
+      "table_name": "system_feedback_legacy_image_backups"
+    },
+    {
+      "collation_name": null,
+      "column_name": "metadata_sha256",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 3,
+      "schema_name": "public",
+      "table_name": "system_feedback_legacy_image_backups"
+    },
+    {
+      "collation_name": null,
+      "column_name": "backed_up_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "now()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 4,
+      "schema_name": "public",
+      "table_name": "system_feedback_legacy_image_backups"
+    },
+    {
+      "collation_name": null,
+      "column_name": "migrated_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 5,
+      "schema_name": "public",
+      "table_name": "system_feedback_legacy_image_backups"
+    },
+    {
+      "collation_name": null,
+      "column_name": "storage_bucket",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 6,
+      "schema_name": "public",
+      "table_name": "system_feedback_legacy_image_backups"
+    },
+    {
+      "collation_name": null,
+      "column_name": "storage_path",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 7,
+      "schema_name": "public",
+      "table_name": "system_feedback_legacy_image_backups"
     },
     {
       "collation_name": null,
@@ -17638,7 +18236,7 @@
     {
       "constraint_name": "events_app_event_history_event_id_fkey",
       "constraint_type": "f",
-      "definition": "FOREIGN KEY (event_id) REFERENCES events_app_events(id) ON DELETE CASCADE",
+      "definition": "FOREIGN KEY (event_id) REFERENCES events_app_events(id) ON DELETE RESTRICT",
       "schema_name": "public",
       "table_name": "events_app_event_history",
       "validated": true
@@ -17743,6 +18341,14 @@
       "constraint_name": "events_app_events_single_venue_check",
       "constraint_type": "c",
       "definition": "CHECK (event_scope <> 'SINGLE_VENUE'::text OR primary_venue_id IS NOT NULL)",
+      "schema_name": "public",
+      "table_name": "events_app_events",
+      "validated": true
+    },
+    {
+      "constraint_name": "events_app_events_status_check",
+      "constraint_type": "c",
+      "definition": "CHECK (status = ANY (ARRAY['SCHEDULED'::text, 'CANCELLED'::text, 'ARCHIVED'::text]))",
       "schema_name": "public",
       "table_name": "events_app_events",
       "validated": true
@@ -18207,6 +18813,14 @@
       "constraint_name": "guest_cleanliness_reports_pkey",
       "constraint_type": "p",
       "definition": "PRIMARY KEY (id)",
+      "schema_name": "public",
+      "table_name": "guest_cleanliness_reports",
+      "validated": true
+    },
+    {
+      "constraint_name": "guest_cleanliness_reports_request_fingerprint_check",
+      "constraint_type": "c",
+      "definition": "CHECK (request_fingerprint IS NULL OR request_fingerprint ~ '^[0-9a-f]{64}$'::text)",
       "schema_name": "public",
       "table_name": "guest_cleanliness_reports",
       "validated": true
@@ -18988,6 +19602,54 @@
       "validated": true
     },
     {
+      "constraint_name": "msg_message_audit_message_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (message_id) REFERENCES msg_messages(id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "msg_message_audit",
+      "validated": true
+    },
+    {
+      "constraint_name": "msg_message_audit_message_id_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (message_id)",
+      "schema_name": "public",
+      "table_name": "msg_message_audit",
+      "validated": true
+    },
+    {
+      "constraint_name": "msg_message_audit_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (audit_id)",
+      "schema_name": "public",
+      "table_name": "msg_message_audit",
+      "validated": true
+    },
+    {
+      "constraint_name": "msg_message_audit_sender_ops_manager_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (sender_ops_manager_id) REFERENCES ops_manager_managers(manager_id) ON DELETE SET NULL",
+      "schema_name": "public",
+      "table_name": "msg_message_audit",
+      "validated": true
+    },
+    {
+      "constraint_name": "msg_message_audit_sender_user_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (sender_user_id) REFERENCES msg_users(id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "msg_message_audit",
+      "validated": true
+    },
+    {
+      "constraint_name": "msg_message_audit_thread_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (thread_id) REFERENCES msg_threads(id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "msg_message_audit",
+      "validated": true
+    },
+    {
       "constraint_name": "msg_message_deletions_message_id_fkey",
       "constraint_type": "f",
       "definition": "FOREIGN KEY (message_id) REFERENCES msg_messages(id) ON DELETE CASCADE",
@@ -19212,6 +19874,14 @@
       "validated": true
     },
     {
+      "constraint_name": "msg_users_ops_manager_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (ops_manager_id) REFERENCES ops_manager_managers(manager_id) ON DELETE SET NULL",
+      "schema_name": "public",
+      "table_name": "msg_users",
+      "validated": true
+    },
+    {
       "constraint_name": "msg_users_pkey",
       "constraint_type": "p",
       "definition": "PRIMARY KEY (id)",
@@ -19241,6 +19911,54 @@
       "definition": "PRIMARY KEY (id)",
       "schema_name": "public",
       "table_name": "operating_hours",
+      "validated": true
+    },
+    {
+      "constraint_name": "operational_notification_jobs_attempts_check",
+      "constraint_type": "c",
+      "definition": "CHECK (attempts >= 0 AND max_attempts >= 1 AND max_attempts <= 100)",
+      "schema_name": "public",
+      "table_name": "operational_notification_jobs",
+      "validated": true
+    },
+    {
+      "constraint_name": "operational_notification_jobs_job_key_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (job_key)",
+      "schema_name": "public",
+      "table_name": "operational_notification_jobs",
+      "validated": true
+    },
+    {
+      "constraint_name": "operational_notification_jobs_key_length",
+      "constraint_type": "c",
+      "definition": "CHECK (length(job_key) >= 1 AND length(job_key) <= 240)",
+      "schema_name": "public",
+      "table_name": "operational_notification_jobs",
+      "validated": true
+    },
+    {
+      "constraint_name": "operational_notification_jobs_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (job_id)",
+      "schema_name": "public",
+      "table_name": "operational_notification_jobs",
+      "validated": true
+    },
+    {
+      "constraint_name": "operational_notification_jobs_status_check",
+      "constraint_type": "c",
+      "definition": "CHECK (status = ANY (ARRAY['pending'::text, 'leased'::text, 'completed'::text, 'dead'::text]))",
+      "schema_name": "public",
+      "table_name": "operational_notification_jobs",
+      "validated": true
+    },
+    {
+      "constraint_name": "operational_notification_jobs_type_length",
+      "constraint_type": "c",
+      "definition": "CHECK (length(job_type) >= 1 AND length(job_type) <= 100)",
+      "schema_name": "public",
+      "table_name": "operational_notification_jobs",
       "validated": true
     },
     {
@@ -20572,6 +21290,46 @@
       "validated": true
     },
     {
+      "constraint_name": "system_feedback_items_request_fingerprint_check",
+      "constraint_type": "c",
+      "definition": "CHECK (request_fingerprint IS NULL OR request_fingerprint ~ '^[0-9a-f]{64}$'::text)",
+      "schema_name": "public",
+      "table_name": "system_feedback_items",
+      "validated": true
+    },
+    {
+      "constraint_name": "system_feedback_legacy_image_backups_feedback_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (feedback_id) REFERENCES system_feedback_items(id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "system_feedback_legacy_image_backups",
+      "validated": true
+    },
+    {
+      "constraint_name": "system_feedback_legacy_image_backups_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (feedback_id)",
+      "schema_name": "public",
+      "table_name": "system_feedback_legacy_image_backups",
+      "validated": true
+    },
+    {
+      "constraint_name": "system_feedback_legacy_image_backups_sha256_check",
+      "constraint_type": "c",
+      "definition": "CHECK (metadata_sha256 ~ '^[0-9a-f]{64}$'::text)",
+      "schema_name": "public",
+      "table_name": "system_feedback_legacy_image_backups",
+      "validated": true
+    },
+    {
+      "constraint_name": "system_feedback_legacy_image_backups_storage_pair_check",
+      "constraint_type": "c",
+      "definition": "CHECK ((storage_bucket IS NULL) = (storage_path IS NULL))",
+      "schema_name": "public",
+      "table_name": "system_feedback_legacy_image_backups",
+      "validated": true
+    },
+    {
       "constraint_name": "system_logs_device_id_fkey",
       "constraint_type": "f",
       "definition": "FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE SET NULL",
@@ -20774,6 +21532,20 @@
       "definition": "CREATE OR REPLACE FUNCTION public.claim_event_notification(p_event_id uuid, p_employee_id uuid, p_msg_user_id uuid, p_notification_kind text, p_scheduled_for_local text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_kind text := nullif(btrim(coalesce(p_notification_kind, '')), '');\n  v_scheduled timestamp;\n  v_existing public.events_app_notification_log%rowtype;\nbegin\n  if p_event_id is null or p_employee_id is null or p_msg_user_id is null then\n    raise exception 'event_id, employee_id, and msg_user_id are required';\n  end if;\n  if v_kind is null or length(v_kind) > 120 then\n    raise exception 'notification_kind is required and must be at most 120 characters';\n  end if;\n  begin\n    v_scheduled := p_scheduled_for_local::timestamp;\n  exception when others then\n    raise exception 'scheduled_for_local is invalid';\n  end;\n\n  perform pg_advisory_xact_lock(hashtextextended('event-reminder:' || p_event_id::text || ':' || p_employee_id::text, 0));\n\n  select log.* into v_existing\n  from public.events_app_notification_log log\n  where log.event_id = p_event_id\n    and log.employee_id = p_employee_id\n    and log.status in ('sent', 'sending')\n    and (log.status = 'sent' or log.updated_at > now() - interval '10 minutes')\n  order by case when log.status = 'sent' then 0 else 1 end, log.updated_at desc\n  limit 1;\n\n  if found then\n    return jsonb_build_object(\n      'claimed', false,\n      'reason', case when v_existing.status = 'sent' then 'event_already_notified' else 'event_notification_in_flight' end,\n      'notification_kind', v_existing.notification_kind,\n      'response_message_id', v_existing.response_message_id,\n      'status', v_existing.status\n    );\n  end if;\n\n  insert into public.events_app_notification_log(\n    event_id, employee_id, msg_user_id, notification_kind, scheduled_for_local,\n    sent_at, status, notes, created_at, updated_at\n  ) values (\n    p_event_id, p_employee_id, p_msg_user_id, v_kind, v_scheduled,\n    now(), 'sending', 'Claimed before message delivery', now(), now()\n  )\n  on conflict (event_id, employee_id, notification_kind) do update set\n    msg_user_id = excluded.msg_user_id,\n    scheduled_for_local = excluded.scheduled_for_local,\n    sent_at = now(),\n    status = 'sending',\n    response_message_id = null,\n    notes = 'Retry claimed before message delivery',\n    updated_at = now()\n  where public.events_app_notification_log.status = 'error'\n     or (public.events_app_notification_log.status = 'sending'\n         and public.events_app_notification_log.updated_at <= now() - interval '10 minutes')\n  returning * into v_existing;\n\n  if not found then\n    select log.* into v_existing\n    from public.events_app_notification_log log\n    where log.event_id = p_event_id\n      and log.employee_id = p_employee_id\n      and log.notification_kind = v_kind\n    limit 1;\n    return jsonb_build_object(\n      'claimed', false,\n      'reason', 'notification_already_claimed',\n      'response_message_id', v_existing.response_message_id,\n      'status', v_existing.status\n    );\n  end if;\n\n  return jsonb_build_object(\n    'claimed', true,\n    'reason', 'claim_created',\n    'notification_kind', v_kind,\n    'log_id', v_existing.id,\n    'status', v_existing.status\n  );\nend\n$function$\n",
       "function_name": "claim_event_notification",
       "identity_arguments": "p_event_id uuid, p_employee_id uuid, p_msg_user_id uuid, p_notification_kind text, p_scheduled_for_local text",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.claim_operational_notification_job_by_key(p_job_key text, p_worker_id text, p_lease_seconds integer DEFAULT 90)\n RETURNS operational_notification_jobs\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_row public.operational_notification_jobs;\nbegin\n  if nullif(btrim(p_job_key), '') is null or nullif(btrim(p_worker_id), '') is null then\n    raise exception 'job key and worker id are required';\n  end if;\n  update public.operational_notification_jobs j\n  set status = 'leased',\n      attempts = j.attempts + 1,\n      leased_at = now(),\n      leased_until = now() + make_interval(secs => greatest(15, least(coalesce(p_lease_seconds, 90), 900))),\n      lease_token = gen_random_uuid(),\n      worker_id = left(p_worker_id, 160),\n      updated_at = now()\n  where j.job_key = btrim(p_job_key)\n    and (\n      (j.status = 'pending' and j.available_at <= now())\n      or (j.status = 'leased' and j.leased_until < now())\n    )\n    and j.attempts < j.max_attempts\n  returning j.* into v_row;\n  return v_row;\nend;\n$function$\n",
+      "function_name": "claim_operational_notification_job_by_key",
+      "identity_arguments": "p_job_key text, p_worker_id text, p_lease_seconds integer",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.claim_operational_notification_jobs(p_worker_id text, p_limit integer DEFAULT 10, p_lease_seconds integer DEFAULT 90)\n RETURNS SETOF operational_notification_jobs\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\nbegin\n  if nullif(btrim(p_worker_id), '') is null then\n    raise exception 'worker id is required';\n  end if;\n  return query\n  with candidates as (\n    select j.job_id\n    from public.operational_notification_jobs j\n    where (\n      (j.status = 'pending' and j.available_at <= now())\n      or (j.status = 'leased' and j.leased_until < now())\n    )\n      and j.attempts < j.max_attempts\n    order by j.available_at, j.created_at, j.job_id\n    for update skip locked\n    limit greatest(1, least(coalesce(p_limit, 10), 100))\n  )\n  update public.operational_notification_jobs j\n  set status = 'leased',\n      attempts = j.attempts + 1,\n      leased_at = now(),\n      leased_until = now() + make_interval(secs => greatest(15, least(coalesce(p_lease_seconds, 90), 900))),\n      lease_token = gen_random_uuid(),\n      worker_id = left(p_worker_id, 160),\n      updated_at = now()\n  from candidates c\n  where j.job_id = c.job_id\n  returning j.*;\nend;\n$function$\n",
+      "function_name": "claim_operational_notification_jobs",
+      "identity_arguments": "p_worker_id text, p_limit integer, p_lease_seconds integer",
       "schema_name": "public"
     },
     {
@@ -21009,6 +21781,13 @@
     },
     {
       "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.finish_operational_notification_job(p_job_id uuid, p_lease_token uuid, p_succeeded boolean, p_error text DEFAULT NULL::text, p_retry_seconds integer DEFAULT 30)\n RETURNS operational_notification_jobs\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_row public.operational_notification_jobs;\nbegin\n  update public.operational_notification_jobs j\n  set status = case\n        when p_succeeded then 'completed'\n        when j.attempts >= j.max_attempts then 'dead'\n        else 'pending'\n      end,\n      completed_at = case when p_succeeded then now() else null end,\n      available_at = case when p_succeeded then j.available_at else now() + make_interval(secs => greatest(5, least(coalesce(p_retry_seconds, 30), 3600))) end,\n      leased_at = null,\n      leased_until = null,\n      lease_token = null,\n      worker_id = null,\n      last_error = case when p_succeeded then null else left(coalesce(p_error, 'notification failed'), 2000) end,\n      updated_at = now()\n  where j.job_id = p_job_id\n    and j.status = 'leased'\n    and j.lease_token = p_lease_token\n  returning j.* into v_row;\n  if v_row.job_id is null then\n    raise exception 'notification job lease is no longer authoritative';\n  end if;\n  return v_row;\nend;\n$function$\n",
+      "function_name": "finish_operational_notification_job",
+      "identity_arguments": "p_job_id uuid, p_lease_token uuid, p_succeeded boolean, p_error text, p_retry_seconds integer",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
       "definition": "CREATE OR REPLACE FUNCTION public.finish_session(p_location_code text, p_device_id text)\n RETURNS TABLE(session_uuid text, location_name text, employee_name text, device_id text, status text, started_at timestamp with time zone, ended_at timestamp with time zone, duration_minutes integer, duration_display text)\n LANGUAGE plpgsql\nAS $function$\ndeclare\n  v_location_id uuid;\n  v_location_name text;\n  v_device_pk uuid;\n  v_session_id uuid;\n  v_session_uuid text;\n  v_employee_name text;\n  v_started_at timestamptz;\n  v_ended_at timestamptz := now();\n  v_duration_minutes integer;\n  v_duration_display text;\n  v_resolved_location_code text := public.resolve_scan_location_code(p_location_code);\nbegin\n  select l.id, l.location_name\n    into v_location_id, v_location_name\n  from public.locations l\n  where l.location_code = v_resolved_location_code\n    and l.active = true\n  limit 1;\n\n  if v_location_id is null then\n    raise exception 'Active location not found for code: %', p_location_code;\n  end if;\n\n  select d.id\n    into v_device_pk\n  from public.devices d\n  where d.device_id = p_device_id\n    and d.active = true\n  limit 1;\n\n  if v_device_pk is null then\n    raise exception 'Active device not found: %', p_device_id;\n  end if;\n\n  select\n    s.id,\n    s.session_uuid,\n    e.display_name,\n    s.started_at\n  into\n    v_session_id,\n    v_session_uuid,\n    v_employee_name,\n    v_started_at\n  from public.sessions s\n  join public.employees e on e.id = s.employee_id\n  where s.location_id = v_location_id\n    and s.device_id = v_device_pk\n    and s.status = 'active'\n  order by s.started_at desc\n  limit 1;\n\n  if v_session_id is null then\n    raise exception 'No active session found for location % and device %', coalesce(v_resolved_location_code, p_location_code), p_device_id;\n  end if;\n\n  v_duration_minutes := greatest(0, round(extract(epoch from (v_ended_at - v_started_at)) / 60.0));\n  v_duration_display := v_duration_minutes::text || ' min';\n\n  update public.sessions\n  set\n    status = 'pending_submit',\n    ended_at = v_ended_at,\n    duration_minutes = v_duration_minutes,\n    duration_display = v_duration_display,\n    updated_at = now()\n  where id = v_session_id;\n\n  insert into public.session_events (\n    session_id,\n    event_type,\n    actor_type,\n    actor_ref,\n    details_json\n  )\n  values (\n    v_session_id,\n    'session_finished',\n    'device',\n    p_device_id,\n    jsonb_build_object(\n      'location_code', coalesce(v_resolved_location_code, p_location_code),\n      'scan_input_code', p_location_code,\n      'device_id', p_device_id,\n      'duration_minutes', v_duration_minutes\n    )\n  );\n\n  insert into public.system_logs (\n    level,\n    source,\n    message,\n    session_id,\n    location_id,\n    device_id\n  )\n  values (\n    'INFO',\n    'finish_session',\n    'Session moved to pending_submit',\n    v_session_id,\n    v_location_id,\n    v_device_pk\n  );\n\n  return query\n  select\n    v_session_uuid,\n    v_location_name,\n    v_employee_name,\n    p_device_id,\n    'pending_submit'::text,\n    v_started_at,\n    v_ended_at,\n    v_duration_minutes,\n    v_duration_display;\nend;\n$function$\n",
       "function_name": "finish_session",
       "identity_arguments": "p_location_code text, p_device_id text",
@@ -21128,9 +21907,23 @@
     },
     {
       "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.moxie_save_chat_state(p_expected_revision bigint, p_history jsonb, p_saved_chats jsonb)\n RETURNS annie_chat_state\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_row public.annie_chat_state;\nbegin\n  if p_expected_revision is null or p_expected_revision < 1 then\n    raise exception using errcode = '22023', message = 'expected revision is required';\n  end if;\n  if jsonb_typeof(coalesce(p_history, '[]'::jsonb)) <> 'array'\n     or jsonb_typeof(coalesce(p_saved_chats, '[]'::jsonb)) <> 'array' then\n    raise exception 'chat state must contain arrays';\n  end if;\n  insert into public.annie_chat_state(id, history, saved_chats, revision, updated_at)\n  values ('default', coalesce(p_history, '[]'::jsonb), coalesce(p_saved_chats, '[]'::jsonb), 1, now())\n  on conflict (id) do nothing;\n  update public.annie_chat_state\n  set history = coalesce(p_history, '[]'::jsonb),\n      saved_chats = coalesce(p_saved_chats, '[]'::jsonb),\n      revision = revision + 1,\n      updated_at = now()\n  where id = 'default'\n    and revision = p_expected_revision\n  returning * into v_row;\n  if v_row.id is null then\n    raise exception using errcode = '40001', message = 'Moxie chat state changed in another browser.';\n  end if;\n  return v_row;\nend;\n$function$\n",
+      "function_name": "moxie_save_chat_state",
+      "identity_arguments": "p_expected_revision bigint, p_history jsonb, p_saved_chats jsonb",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
       "definition": "CREATE OR REPLACE FUNCTION public.msg_acknowledge_message(p_message_id uuid, p_user_id uuid, p_device_identifier text)\n RETURNS msg_receipts\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare v_receipt public.msg_receipts%rowtype;\nbegin\n  update public.msg_receipts set delivered_at=coalesce(delivered_at,now()),displayed_at=coalesce(displayed_at,now()),read_at=coalesce(read_at,now()),acknowledged_at=coalesce(acknowledged_at,now()),delivery_device_identifier=nullif(btrim(coalesce(p_device_identifier,'')),'')\n  where message_id=p_message_id and user_id=p_user_id returning * into v_receipt;\n  if not found then raise exception 'Message receipt not found.'; end if; return v_receipt;\nend;\n$function$\n",
       "function_name": "msg_acknowledge_message",
       "identity_arguments": "p_message_id uuid, p_user_id uuid, p_device_identifier text",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_audit_persisted_message()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\nbegin\n  insert into public.msg_message_audit(\n    message_id, thread_id, sender_user_id, sender_ops_manager_id,\n    client_message_id, message_type, sender_display_name, sender_role, created_at\n  )\n  select\n    new.id, new.thread_id, new.sender_user_id, u.ops_manager_id,\n    new.client_message_id, new.message_type, u.display_name, u.role, new.created_at\n  from public.msg_users u\n  where u.id = new.sender_user_id\n  on conflict (message_id) do nothing;\n  return new;\nend;\n$function$\n",
+      "function_name": "msg_audit_persisted_message",
+      "identity_arguments": "",
       "schema_name": "public"
     },
     {
@@ -21163,9 +21956,23 @@
     },
     {
       "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_enqueue_background_work()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\nbegin\n  if lower(coalesce(new.metadata_json->>'channel','')) = 'memphis'\n     and lower(coalesce(new.metadata_json->>'ai','false')) not in ('true','1','yes')\n     and new.message_type <> 'bot_response' then\n    insert into public.operational_notification_jobs(job_key, job_type, source_id, payload_json)\n    values (\n      'memphis-reply:' || new.id::text,\n      'memphis_bot_reply',\n      new.id,\n      jsonb_build_object('message_id', new.id, 'thread_id', new.thread_id, 'sender_user_id', new.sender_user_id)\n    )\n    on conflict (job_key) do nothing;\n  end if;\n  return new;\nend;\n$function$\n",
+      "function_name": "msg_enqueue_background_work",
+      "identity_arguments": "",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
       "definition": "CREATE OR REPLACE FUNCTION public.msg_ensure_employee_memphis_threads()\n RETURNS integer\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  r record;\n  v_count integer := 0;\nbegin\n  for r in\n    select u.id\n    from public.msg_users u\n    where u.is_active = true\n      and u.role = 'employee'\n    order by u.id\n  loop\n    perform public.msg_get_or_create_memphis_thread(r.id);\n    v_count := v_count + 1;\n  end loop;\n  return v_count;\nend\n$function$\n",
       "function_name": "msg_ensure_employee_memphis_threads",
       "identity_arguments": "",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_ensure_ops_manager_user(p_manager_id uuid)\n RETURNS msg_users\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_manager public.ops_manager_managers%rowtype;\n  v_user public.msg_users%rowtype;\n  v_display_name text;\nbegin\n  if p_manager_id is null then\n    raise exception using errcode = '22023', message = 'Authenticated manager id is required';\n  end if;\n  perform pg_advisory_xact_lock(hashtextextended('manager-messaging-user:' || p_manager_id::text, 0));\n  select * into v_manager\n  from public.ops_manager_managers\n  where manager_id = p_manager_id\n    and active is true\n    and revoked_at is null\n  for update;\n  if v_manager.manager_id is null then\n    raise exception using errcode = '42501', message = 'Active authenticated manager was not found';\n  end if;\n\n  select * into v_user\n  from public.msg_users\n  where ops_manager_id = p_manager_id\n  limit 1;\n  if v_user.id is not null then\n    if v_user.is_active is false or v_user.role <> 'manager' then\n      update public.msg_users\n      set is_active = true, role = 'manager', updated_at = now()\n      where id = v_user.id\n      returning * into v_user;\n    end if;\n    return v_user;\n  end if;\n\n  select * into v_user\n  from public.msg_users\n  where ops_manager_id is null\n    and is_active is true\n    and role in ('manager','ops','ops_manager','operations_manager')\n    and lower(btrim(display_name)) = lower(btrim(v_manager.display_name))\n  order by created_at, id\n  limit 1\n  for update;\n  if v_user.id is not null then\n    update public.msg_users\n    set ops_manager_id = p_manager_id, role = 'manager', updated_at = now()\n    where id = v_user.id\n    returning * into v_user;\n    return v_user;\n  end if;\n\n  v_display_name := btrim(v_manager.display_name);\n  if exists (select 1 from public.msg_users where lower(btrim(display_name)) = lower(v_display_name)) then\n    v_display_name := left(v_display_name, 80) || ' · Ops Manager';\n  end if;\n  if exists (select 1 from public.msg_users where lower(btrim(display_name)) = lower(v_display_name)) then\n    v_display_name := left(v_display_name, 68) || ' · ' || left(p_manager_id::text, 8);\n  end if;\n  insert into public.msg_users(display_name, role, is_active, ops_manager_id)\n  values (v_display_name, 'manager', true, p_manager_id)\n  returning * into v_user;\n  return v_user;\nend;\n$function$\n",
+      "function_name": "msg_ensure_ops_manager_user",
+      "identity_arguments": "p_manager_id uuid",
       "schema_name": "public"
     },
     {
@@ -22230,6 +23037,13 @@
       "definition": "CREATE OR REPLACE FUNCTION public.tool_finish_session(p_location_code text, p_device_id text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_resolved_code text := public.resolve_scan_location_code(p_location_code);\n  v_device_pk uuid;\n  v_canonical_device_id text;\n  v_existing record;\n  v_finished record;\nbegin\n  select d.id, d.device_id\n    into v_device_pk, v_canonical_device_id\n  from public.device_aliases da\n  join public.devices d on d.id = da.canonical_device_id and d.active = true\n  where da.active = true\n    and upper(btrim(da.alias_identifier)) = upper(btrim(p_device_id))\n  union all\n  select d.id, d.device_id\n  from public.devices d\n  where d.active = true\n    and upper(btrim(d.device_id)) = upper(btrim(p_device_id))\n  limit 1;\n\n  if v_device_pk is null then\n    raise exception 'Active device not found: %', p_device_id;\n  end if;\n\n  select s.session_uuid, s.client_session_id, l.location_name,\n         e.display_name as employee_name, d.device_id, s.status,\n         s.started_at, s.ended_at, s.duration_minutes, s.duration_display,\n         s.completion_source, l.location_type, l.form_type\n    into v_existing\n  from public.sessions s\n  join public.locations l on l.id = s.location_id\n  join public.employees e on e.id = s.employee_id\n  join public.devices d on d.id = s.device_id\n  where s.device_id = v_device_pk\n    and l.location_code = v_resolved_code\n    and s.status in ('active','pending_submit','closed','cancelled')\n  order by s.started_at desc\n  limit 1;\n\n  if v_existing.session_uuid is null then\n    raise exception 'No session found for location % and device %', coalesce(v_resolved_code,p_location_code), v_canonical_device_id;\n  end if;\n\n  if v_existing.status = 'cancelled' then\n    return jsonb_build_object(\n      'session_uuid', v_existing.session_uuid,\n      'client_session_id', v_existing.client_session_id,\n      'location_name', v_existing.location_name,\n      'employee_name', v_existing.employee_name,\n      'device_id', v_existing.device_id,\n      'status', 'cancelled',\n      'started_at', v_existing.started_at,\n      'ended_at', v_existing.ended_at,\n      'duration_minutes', v_existing.duration_minutes,\n      'duration_display', v_existing.duration_display,\n      'completion_source', v_existing.completion_source,\n      'location_type', v_existing.location_type,\n      'form_type', v_existing.form_type,\n      'replayed', true,\n      'terminal', true,\n      'discard_local_workflow', true,\n      'reason', 'session_cancelled_without_authoritative_completion'\n    );\n  end if;\n\n  if v_existing.status in ('pending_submit','closed') then\n    return jsonb_build_object(\n      'session_uuid', v_existing.session_uuid,\n      'client_session_id', v_existing.client_session_id,\n      'location_name', v_existing.location_name,\n      'employee_name', v_existing.employee_name,\n      'device_id', v_existing.device_id,\n      'status', v_existing.status,\n      'started_at', v_existing.started_at,\n      'ended_at', v_existing.ended_at,\n      'duration_minutes', v_existing.duration_minutes,\n      'duration_display', v_existing.duration_display,\n      'completion_source', v_existing.completion_source,\n      'location_type', v_existing.location_type,\n      'form_type', v_existing.form_type,\n      'replayed', true\n    );\n  end if;\n\n  select * into v_finished\n  from public.finish_session(p_location_code, v_canonical_device_id)\n  limit 1;\n\n  return jsonb_build_object(\n    'session_uuid', v_finished.session_uuid,\n    'location_name', v_finished.location_name,\n    'employee_name', v_finished.employee_name,\n    'device_id', v_finished.device_id,\n    'status', v_finished.status,\n    'started_at', v_finished.started_at,\n    'ended_at', v_finished.ended_at,\n    'duration_minutes', v_finished.duration_minutes,\n    'duration_display', v_finished.duration_display,\n    'location_type', v_existing.location_type,\n    'form_type', v_existing.form_type,\n    'replayed', false\n  );\nend\n$function$\n",
       "function_name": "tool_finish_session",
       "identity_arguments": "p_location_code text, p_device_id text",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.tool_finish_session_exact(p_session_identifier text, p_device_id text, p_finish_operation_id uuid, p_client_ended_at timestamp with time zone DEFAULT NULL::timestamp with time zone)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_identifier text := nullif(btrim(coalesce(p_session_identifier, '')), '');\n  v_device_pk uuid;\n  v_canonical_device_id text;\n  v_session public.sessions%rowtype;\n  v_location public.locations%rowtype;\n  v_employee public.employees%rowtype;\n  v_ended_at timestamptz;\n  v_duration_minutes integer;\n  v_replayed boolean := false;\nbegin\n  if v_identifier is null then\n    raise exception using errcode = '22023', message = 'p_session_identifier is required';\n  end if;\n  if p_finish_operation_id is null then\n    raise exception using errcode = '22023', message = 'p_finish_operation_id is required';\n  end if;\n\n  select d.id, d.device_id\n    into v_device_pk, v_canonical_device_id\n  from public.device_aliases da\n  join public.devices d on d.id = da.canonical_device_id and d.active is true\n  where da.active is true\n    and upper(btrim(da.alias_identifier)) = upper(btrim(p_device_id))\n  union all\n  select d.id, d.device_id\n  from public.devices d\n  where d.active is true\n    and upper(btrim(d.device_id)) = upper(btrim(p_device_id))\n  limit 1;\n\n  if v_device_pk is null then\n    raise exception 'Active device not found: %', p_device_id;\n  end if;\n\n  if exists (\n    select 1 from public.sessions s\n    where s.finish_operation_id = p_finish_operation_id\n      and s.session_uuid <> v_identifier\n      and coalesce(s.client_session_id, '') <> v_identifier\n  ) then\n    raise exception using errcode = '23505', message = 'Finish operation id is already bound to another session';\n  end if;\n\n  select s.* into v_session\n  from public.sessions s\n  where (s.session_uuid = v_identifier or s.client_session_id = v_identifier)\n    and s.device_id = v_device_pk\n  order by case when s.session_uuid = v_identifier then 0 else 1 end\n  for update\n  limit 1;\n\n  if v_session.id is null then\n    raise exception 'Session not found for exact server/client identifier and device: %', v_identifier;\n  end if;\n\n  select * into v_location from public.locations where id = v_session.location_id;\n  select * into v_employee from public.employees where id = v_session.employee_id;\n\n  if v_session.status = 'cancelled' then\n    return jsonb_build_object(\n      'session_uuid', v_session.session_uuid,\n      'client_session_id', v_session.client_session_id,\n      'status', 'cancelled',\n      'terminal', true,\n      'discard_local_workflow', true,\n      'replayed', true\n    );\n  end if;\n\n  if v_session.status not in ('active', 'pending_submit', 'closed') then\n    raise exception 'Session % cannot transition from status %', v_session.session_uuid, v_session.status;\n  end if;\n\n  if v_session.finish_operation_id is not null\n     and v_session.finish_operation_id <> p_finish_operation_id then\n    raise exception using errcode = '23505', message = 'Session was already finished by another operation id';\n  end if;\n\n  if v_session.status = 'active' then\n    -- Server time is authoritative. The client timestamp is intentionally not\n    -- used to calculate operational duration.\n    v_ended_at := now();\n    v_duration_minutes := greatest(0, round(extract(epoch from (v_ended_at - v_session.started_at)) / 60.0));\n    update public.sessions s\n    set status = 'pending_submit',\n        ended_at = v_ended_at,\n        duration_minutes = v_duration_minutes,\n        duration_display = v_duration_minutes::text || ' min',\n        finish_operation_id = p_finish_operation_id,\n        updated_at = now()\n    where s.id = v_session.id\n    returning * into v_session;\n  else\n    v_replayed := v_session.finish_operation_id = p_finish_operation_id;\n    if v_session.finish_operation_id is null then\n      update public.sessions s\n      set finish_operation_id = p_finish_operation_id,\n          updated_at = now()\n      where s.id = v_session.id\n      returning * into v_session;\n    end if;\n  end if;\n\n  return jsonb_build_object(\n    'session_uuid', v_session.session_uuid,\n    'client_session_id', v_session.client_session_id,\n    'location_name', v_location.location_name,\n    'employee_name', v_employee.display_name,\n    'device_id', v_canonical_device_id,\n    'status', v_session.status,\n    'started_at', v_session.started_at,\n    'ended_at', v_session.ended_at,\n    'duration_minutes', v_session.duration_minutes,\n    'duration_display', v_session.duration_display,\n    'location_type', v_location.location_type,\n    'form_type', v_location.form_type,\n    'finish_operation_id', coalesce(v_session.finish_operation_id, p_finish_operation_id),\n    'client_ended_at_received', p_client_ended_at is not null,\n    'replayed', v_replayed\n  );\nend;\n$function$\n",
+      "function_name": "tool_finish_session_exact",
+      "identity_arguments": "p_session_identifier text, p_device_id text, p_finish_operation_id uuid, p_client_ended_at timestamp with time zone",
       "schema_name": "public"
     },
     {
@@ -23727,6 +24541,15 @@
     },
     {
       "backs_constraint": false,
+      "definition": "CREATE INDEX idx_events_app_events_status_date ON public.events_app_events USING btree (status, event_date, start_time, id)",
+      "index_name": "idx_events_app_events_status_date",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "events_app_events"
+    },
+    {
+      "backs_constraint": false,
       "definition": "CREATE INDEX idx_events_app_events_venue_ids_gin ON public.events_app_events USING gin (venue_ids)",
       "index_name": "idx_events_app_events_venue_ids_gin",
       "is_primary": false,
@@ -24082,6 +24905,15 @@
       "index_name": "idx_guest_cleanliness_reports_submitted_at",
       "is_primary": false,
       "is_unique": false,
+      "schema_name": "public",
+      "table_name": "guest_cleanliness_reports"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE UNIQUE INDEX uq_guest_cleanliness_reports_operation_id ON public.guest_cleanliness_reports USING btree (operation_id)",
+      "index_name": "uq_guest_cleanliness_reports_operation_id",
+      "is_primary": false,
+      "is_unique": true,
       "schema_name": "public",
       "table_name": "guest_cleanliness_reports"
     },
@@ -24744,6 +25576,42 @@
     },
     {
       "backs_constraint": false,
+      "definition": "CREATE INDEX idx_msg_message_audit_manager_created ON public.msg_message_audit USING btree (sender_ops_manager_id, created_at DESC, audit_id) WHERE (sender_ops_manager_id IS NOT NULL)",
+      "index_name": "idx_msg_message_audit_manager_created",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "msg_message_audit"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_msg_message_audit_sender_created ON public.msg_message_audit USING btree (sender_user_id, created_at DESC, audit_id)",
+      "index_name": "idx_msg_message_audit_sender_created",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "msg_message_audit"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX msg_message_audit_message_id_key ON public.msg_message_audit USING btree (message_id)",
+      "index_name": "msg_message_audit_message_id_key",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "msg_message_audit"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX msg_message_audit_pkey ON public.msg_message_audit USING btree (audit_id)",
+      "index_name": "msg_message_audit_pkey",
+      "is_primary": true,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "msg_message_audit"
+    },
+    {
+      "backs_constraint": false,
       "definition": "CREATE INDEX idx_msg_message_deletions_message ON public.msg_message_deletions USING btree (message_id)",
       "index_name": "idx_msg_message_deletions_message",
       "is_primary": false,
@@ -24777,6 +25645,15 @@
       "is_unique": true,
       "schema_name": "public",
       "table_name": "msg_message_deletions"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_msg_messages_thread_cursor ON public.msg_messages USING btree (thread_id, sent_at DESC, id DESC) WHERE (is_deleted IS FALSE)",
+      "index_name": "idx_msg_messages_thread_cursor",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "msg_messages"
     },
     {
       "backs_constraint": false,
@@ -25014,6 +25891,15 @@
     },
     {
       "backs_constraint": false,
+      "definition": "CREATE UNIQUE INDEX uq_msg_users_ops_manager_id ON public.msg_users USING btree (ops_manager_id) WHERE (ops_manager_id IS NOT NULL)",
+      "index_name": "uq_msg_users_ops_manager_id",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "msg_users"
+    },
+    {
+      "backs_constraint": false,
       "definition": "CREATE INDEX idx_operating_hours_date ON public.operating_hours USING btree (operating_date)",
       "index_name": "idx_operating_hours_date",
       "is_primary": false,
@@ -25038,6 +25924,42 @@
       "is_unique": true,
       "schema_name": "public",
       "table_name": "operating_hours"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_operational_notification_jobs_claim ON public.operational_notification_jobs USING btree (status, available_at, created_at, job_id) WHERE (status = ANY (ARRAY['pending'::text, 'leased'::text]))",
+      "index_name": "idx_operational_notification_jobs_claim",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "operational_notification_jobs"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_operational_notification_jobs_source ON public.operational_notification_jobs USING btree (job_type, source_id, created_at DESC)",
+      "index_name": "idx_operational_notification_jobs_source",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "operational_notification_jobs"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX operational_notification_jobs_job_key_key ON public.operational_notification_jobs USING btree (job_key)",
+      "index_name": "operational_notification_jobs_job_key_key",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "operational_notification_jobs"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX operational_notification_jobs_pkey ON public.operational_notification_jobs USING btree (job_id)",
+      "index_name": "operational_notification_jobs_pkey",
+      "is_primary": true,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "operational_notification_jobs"
     },
     {
       "backs_constraint": false,
@@ -26139,6 +27061,15 @@
     },
     {
       "backs_constraint": false,
+      "definition": "CREATE UNIQUE INDEX uq_sessions_finish_operation_id ON public.sessions USING btree (finish_operation_id) WHERE (finish_operation_id IS NOT NULL)",
+      "index_name": "uq_sessions_finish_operation_id",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "sessions"
+    },
+    {
+      "backs_constraint": false,
       "definition": "CREATE UNIQUE INDEX uq_sessions_open_device ON public.sessions USING btree (device_id) WHERE (status = ANY (ARRAY['active'::text, 'pending_submit'::text]))",
       "index_name": "uq_sessions_open_device",
       "is_primary": false,
@@ -26217,6 +27148,24 @@
       "is_unique": true,
       "schema_name": "public",
       "table_name": "system_feedback_items"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE UNIQUE INDEX uq_system_feedback_items_operation_id ON public.system_feedback_items USING btree (operation_id)",
+      "index_name": "uq_system_feedback_items_operation_id",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "system_feedback_items"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX system_feedback_legacy_image_backups_pkey ON public.system_feedback_legacy_image_backups USING btree (feedback_id)",
+      "index_name": "system_feedback_legacy_image_backups_pkey",
+      "is_primary": true,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "system_feedback_legacy_image_backups"
     },
     {
       "backs_constraint": false,
@@ -26625,6 +27574,22 @@
       "schema_name": "public"
     },
     {
+      "function_name": "claim_operational_notification_job_by_key",
+      "grantee": "service_role",
+      "identity_arguments": "p_job_key text, p_worker_id text, p_lease_seconds integer",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "claim_operational_notification_jobs",
+      "grantee": "service_role",
+      "identity_arguments": "p_worker_id text, p_limit integer, p_lease_seconds integer",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
       "function_name": "close_maintenance_ticket",
       "grantee": "service_role",
       "identity_arguments": "p_ticket_id uuid, p_closed_by text, p_close_notes text",
@@ -26889,6 +27854,14 @@
       "schema_name": "public"
     },
     {
+      "function_name": "finish_operational_notification_job",
+      "grantee": "service_role",
+      "identity_arguments": "p_job_id uuid, p_lease_token uuid, p_succeeded boolean, p_error text, p_retry_seconds integer",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
       "function_name": "finish_session",
       "grantee": "service_role",
       "identity_arguments": "p_location_code text, p_device_id text",
@@ -27025,9 +27998,25 @@
       "schema_name": "public"
     },
     {
+      "function_name": "moxie_save_chat_state",
+      "grantee": "service_role",
+      "identity_arguments": "p_expected_revision bigint, p_history jsonb, p_saved_chats jsonb",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
       "function_name": "msg_acknowledge_message",
       "grantee": "service_role",
       "identity_arguments": "p_message_id uuid, p_user_id uuid, p_device_identifier text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "msg_audit_persisted_message",
+      "grantee": "service_role",
+      "identity_arguments": "",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -27065,9 +28054,25 @@
       "schema_name": "public"
     },
     {
+      "function_name": "msg_enqueue_background_work",
+      "grantee": "service_role",
+      "identity_arguments": "",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
       "function_name": "msg_ensure_employee_memphis_threads",
       "grantee": "service_role",
       "identity_arguments": "",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "msg_ensure_ops_manager_user",
+      "grantee": "service_role",
+      "identity_arguments": "p_manager_id uuid",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -28284,6 +29289,14 @@
       "function_name": "tool_finish_session",
       "grantee": "service_role",
       "identity_arguments": "p_location_code text, p_device_id text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "tool_finish_session_exact",
+      "grantee": "service_role",
+      "identity_arguments": "p_session_identifier text, p_device_id text, p_finish_operation_id uuid, p_client_ended_at timestamp with time zone",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -32140,6 +33153,55 @@
       "is_grantable": "NO",
       "privilege_type": "DELETE",
       "schema_name": "public",
+      "table_name": "msg_message_audit"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "INSERT",
+      "schema_name": "public",
+      "table_name": "msg_message_audit"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "REFERENCES",
+      "schema_name": "public",
+      "table_name": "msg_message_audit"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "msg_message_audit"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "TRIGGER",
+      "schema_name": "public",
+      "table_name": "msg_message_audit"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "TRUNCATE",
+      "schema_name": "public",
+      "table_name": "msg_message_audit"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "UPDATE",
+      "schema_name": "public",
+      "table_name": "msg_message_audit"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "DELETE",
+      "schema_name": "public",
       "table_name": "msg_message_deletions"
     },
     {
@@ -32526,6 +33588,55 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "operating_hours"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "DELETE",
+      "schema_name": "public",
+      "table_name": "operational_notification_jobs"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "INSERT",
+      "schema_name": "public",
+      "table_name": "operational_notification_jobs"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "REFERENCES",
+      "schema_name": "public",
+      "table_name": "operational_notification_jobs"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "operational_notification_jobs"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "TRIGGER",
+      "schema_name": "public",
+      "table_name": "operational_notification_jobs"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "TRUNCATE",
+      "schema_name": "public",
+      "table_name": "operational_notification_jobs"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "UPDATE",
+      "schema_name": "public",
+      "table_name": "operational_notification_jobs"
     },
     {
       "grantee": "service_role",
@@ -33996,6 +35107,55 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "system_feedback_items"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "DELETE",
+      "schema_name": "public",
+      "table_name": "system_feedback_legacy_image_backups"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "INSERT",
+      "schema_name": "public",
+      "table_name": "system_feedback_legacy_image_backups"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "REFERENCES",
+      "schema_name": "public",
+      "table_name": "system_feedback_legacy_image_backups"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "system_feedback_legacy_image_backups"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "TRIGGER",
+      "schema_name": "public",
+      "table_name": "system_feedback_legacy_image_backups"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "TRUNCATE",
+      "schema_name": "public",
+      "table_name": "system_feedback_legacy_image_backups"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "UPDATE",
+      "schema_name": "public",
+      "table_name": "system_feedback_legacy_image_backups"
     },
     {
       "grantee": "service_role",
@@ -36111,6 +37271,15 @@
       "rls_enabled": true,
       "rls_forced": true,
       "schema_name": "public",
+      "table_name": "msg_message_audit"
+    },
+    {
+      "comment": null,
+      "partition_key": null,
+      "relation_kind": "r",
+      "rls_enabled": true,
+      "rls_forced": true,
+      "schema_name": "public",
       "table_name": "msg_message_deletions"
     },
     {
@@ -36175,6 +37344,15 @@
       "rls_forced": true,
       "schema_name": "public",
       "table_name": "operating_hours"
+    },
+    {
+      "comment": null,
+      "partition_key": null,
+      "relation_kind": "r",
+      "rls_enabled": true,
+      "rls_forced": true,
+      "schema_name": "public",
+      "table_name": "operational_notification_jobs"
     },
     {
       "comment": "Privacy-preserving authentication audit events. IP and user agent values are stored only as HMAC hashes.",
@@ -36453,6 +37631,15 @@
       "rls_enabled": true,
       "rls_forced": true,
       "schema_name": "public",
+      "table_name": "system_feedback_legacy_image_backups"
+    },
+    {
+      "comment": null,
+      "partition_key": null,
+      "relation_kind": "r",
+      "rls_enabled": true,
+      "rls_forced": true,
+      "schema_name": "public",
       "table_name": "system_logs"
     },
     {
@@ -36709,11 +37896,25 @@
       "trigger_name": "trg_sync_migration_log_summary"
     },
     {
+      "definition": "CREATE TRIGGER trg_msg_enqueue_background_work AFTER INSERT ON msg_messages FOR EACH ROW EXECUTE FUNCTION msg_enqueue_background_work()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "msg_messages",
+      "trigger_name": "trg_msg_enqueue_background_work"
+    },
+    {
       "definition": "CREATE TRIGGER trg_msg_memphis_pre_generate_schedule AFTER INSERT ON msg_messages FOR EACH ROW EXECUTE FUNCTION msg_memphis_pre_generate_schedule()",
       "enabled": "O",
       "schema_name": "public",
       "table_name": "msg_messages",
       "trigger_name": "trg_msg_memphis_pre_generate_schedule"
+    },
+    {
+      "definition": "CREATE TRIGGER trg_msg_message_immutable_audit AFTER INSERT ON msg_messages FOR EACH ROW EXECUTE FUNCTION msg_audit_persisted_message()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "msg_messages",
+      "trigger_name": "trg_msg_message_immutable_audit"
     },
     {
       "definition": "CREATE TRIGGER trg_msg_threads_set_updated_at BEFORE UPDATE ON msg_threads FOR EACH ROW EXECUTE FUNCTION msg_set_updated_at()",

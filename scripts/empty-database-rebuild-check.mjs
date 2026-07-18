@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import pg from "pg";
@@ -43,6 +43,124 @@ function dockerPsql(database, sql) {
   return result.stdout;
 }
 
+function dockerPsqlConcurrent(database, sql) {
+  const user = process.env.SCHEMA_REBUILD_DOCKER_USER || "supabase_admin";
+  return new Promise((resolveResult) => {
+    const child = spawn(
+      "docker",
+      ["exec", "-i", dockerContainer, "psql", "-v", "ON_ERROR_STOP=1", "-At", "-U", user, "-d", database, "-c", sql],
+      { stdio: ["ignore", "pipe", "pipe"] },
+    );
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => { stdout += chunk; });
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.on("close", (status) => resolveResult({ status, stdout, stderr }));
+  });
+}
+
+function outputLines(result) {
+  return String(result.stdout || "").split("\n").map((line) => line.trim()).filter(Boolean);
+}
+
+async function verifyDockerConcurrency(database) {
+  dockerPsql(database, `
+    insert into public.employees(id, employee_code, display_name, active, role)
+    values ('00000000-0000-4000-8000-00000000f201', 'CONCURRENT-FINISH', 'Concurrent Finish Test', true, 'staff');
+    insert into public.locations(id, location_code, location_name, location_type, form_type, active)
+    values ('00000000-0000-4000-8000-00000000f202', 'CONCURRENT_FINISH', 'Concurrent Finish Location', 'restroom', 'restroom', true);
+    insert into public.devices(id, device_id, device_name, active, assigned_employee_id)
+    values ('00000000-0000-4000-8000-00000000f203', 'CONCURRENT-FINISH-DEVICE', 'Concurrent Finish Device', true, '00000000-0000-4000-8000-00000000f201');
+    select public.tool_start_session_v2(
+      'CONCURRENT_FINISH', 'CONCURRENT-FINISH-DEVICE',
+      '00000000-0000-4000-8000-00000000f204', now() - interval '5 minutes',
+      'rebuild-concurrency-start'
+    );
+  `);
+  const finishSql = `
+    select public.tool_finish_session_exact(
+      '00000000-0000-4000-8000-00000000f204',
+      'CONCURRENT-FINISH-DEVICE',
+      '00000000-0000-4000-8000-00000000f205',
+      now()
+    ) ->> 'session_uuid';
+  `;
+  const finishes = await Promise.all(Array.from({ length: 10 }, () => dockerPsqlConcurrent(database, finishSql)));
+  if (finishes.some((result) => result.status !== 0)) {
+    throw new Error(`Concurrent exact finishes failed:\n${finishes.map((item) => item.stderr).filter(Boolean).join("\n")}`);
+  }
+  const sessionIds = finishes.flatMap(outputLines);
+  if (sessionIds.length !== 10 || new Set(sessionIds).size !== 1) {
+    throw new Error(`Concurrent exact finishes did not converge on one session: ${JSON.stringify(sessionIds)}`);
+  }
+  const finishState = dockerPsql(database, `
+    select count(*)::text || '|' || count(distinct finish_operation_id)::text || '|' || min(status)
+    from public.sessions
+    where client_session_id = '00000000-0000-4000-8000-00000000f204';
+  `).trim();
+  if (finishState !== "1|1|pending_submit") throw new Error(`Concurrent exact finish invariant failed: ${finishState}`);
+
+  dockerPsql(database, `
+    insert into public.operational_notification_jobs(job_key, job_type, source_id, payload_json)
+    select 'rebuild-concurrency-job:' || value, 'rebuild_test', gen_random_uuid(), jsonb_build_object('ordinal', value)
+    from generate_series(1, 20) value;
+  `);
+  const claimSql = (worker) => `select job_id from public.claim_operational_notification_jobs('${worker}', 10, 90);`;
+  const claims = await Promise.all([
+    dockerPsqlConcurrent(database, claimSql("rebuild-worker-a")),
+    dockerPsqlConcurrent(database, claimSql("rebuild-worker-b")),
+  ]);
+  if (claims.some((result) => result.status !== 0)) {
+    throw new Error(`Concurrent notification claims failed:\n${claims.map((item) => item.stderr).filter(Boolean).join("\n")}`);
+  }
+  const claimSets = claims.map(outputLines);
+  const claimedIds = claimSets.flat();
+  if (claimSets.some((ids) => ids.length !== 10) || claimedIds.length !== 20 || new Set(claimedIds).size !== 20) {
+    throw new Error(`Concurrent notification workers overlapped or lost work: ${JSON.stringify(claimSets)}`);
+  }
+  dockerPsql(database, `
+    insert into public.operational_notification_jobs(job_key, job_type, source_id, payload_json)
+    values ('rebuild-memphis-restart', 'memphis_bot_reply', gen_random_uuid(), '{"test":true}'::jsonb);
+  `);
+  const firstLease = JSON.parse(dockerPsql(database, `
+    select row_to_json(j)::text
+    from public.claim_operational_notification_job_by_key('rebuild-memphis-restart','restart-worker-a',15) j;
+  `).trim());
+  dockerPsql(database, `update public.operational_notification_jobs set leased_until=now()-interval '1 second' where job_key='rebuild-memphis-restart';`);
+  const recoveredLease = JSON.parse(dockerPsql(database, `
+    select row_to_json(j)::text
+    from public.claim_operational_notification_job_by_key('rebuild-memphis-restart','restart-worker-b',15) j;
+  `).trim());
+  if (firstLease.lease_token === recoveredLease.lease_token || Number(recoveredLease.attempts) !== 2) {
+    throw new Error("Expired Memphis job lease was not recovered with a new authoritative token.");
+  }
+  const staleFinish = spawnSync("docker", ["exec", "-i", dockerContainer, "psql", "-v", "ON_ERROR_STOP=1", "-At", "-U", process.env.SCHEMA_REBUILD_DOCKER_USER || "supabase_admin", "-d", database, "-c",
+    `select public.finish_operational_notification_job('${firstLease.job_id}'::uuid,'${firstLease.lease_token}'::uuid,true,null,30);`], { encoding: "utf8" });
+  if (staleFinish.status === 0 || !/lease is no longer authoritative/i.test(staleFinish.stderr)) {
+    throw new Error("A stale worker was allowed to finalize a recovered Memphis job lease.");
+  }
+  dockerPsql(database, `select public.finish_operational_notification_job('${recoveredLease.job_id}'::uuid,'${recoveredLease.lease_token}'::uuid,true,null,30);`);
+
+  dockerPsql(database, `
+    insert into public.annie_chat_state(id, history, saved_chats, revision, updated_at)
+    values ('default', '[]'::jsonb, '[]'::jsonb, 1, now())
+    on conflict (id) do update set history='[]'::jsonb, saved_chats='[]'::jsonb, revision=1, updated_at=now();
+  `);
+  const saveSql = (value) => `
+    select (public.moxie_save_chat_state(1, '[{"role":"user","text":"${value}"}]'::jsonb, '[]'::jsonb)).revision;
+  `;
+  const saves = await Promise.all([
+    dockerPsqlConcurrent(database, saveSql("browser-a")),
+    dockerPsqlConcurrent(database, saveSql("browser-b")),
+  ]);
+  const successfulSaves = saves.filter((result) => result.status === 0);
+  const conflictedSaves = saves.filter((result) => result.status !== 0 && /changed in another browser/i.test(result.stderr));
+  if (successfulSaves.length !== 1 || conflictedSaves.length !== 1) {
+    throw new Error(`Moxie compare-and-swap did not produce one winner and one conflict: ${JSON.stringify(saves)}`);
+  }
+  console.log("verified 10-way exact finish, two-worker outbox claims, restart lease recovery, and two-browser Moxie CAS");
+}
+
 function runDocker(args, options = {}) {
   const result = spawnSync("docker", args, {
     encoding: "utf8",
@@ -59,6 +177,125 @@ function runDocker(args, options = {}) {
   return result.stdout;
 }
 
+function assertRebuildInvariants(result) {
+  const failures = [];
+  if (Number(result.members_night_rows) !== 1) failures.push("Members Night restoration row count must equal 1");
+  if (Number(result.members_night_history_rows) !== 2) failures.push("Members Night correction/recovery history count must equal 2");
+  if (String(result.members_night_status || "") !== "ARCHIVED") failures.push("Members Night must be retained as ARCHIVED history");
+  if (result.history_delete_rule !== "r") failures.push("Event history foreign key must use ON DELETE RESTRICT");
+  if (result.exact_finish_rpc !== true) failures.push("Exact session finish RPC is missing");
+  if (result.manager_messaging_rpc !== true) failures.push("Server-derived manager messaging RPC is missing");
+  if (result.message_audit !== true) failures.push("Immutable message audit table is missing");
+  if (result.notification_outbox !== true) failures.push("Operational notification outbox is missing");
+  if (result.memphis_outbox_rpc !== true) failures.push("Targeted Memphis outbox claim RPC is missing");
+  if (result.feedback_image_backup !== true) failures.push("Legacy feedback image recovery table is missing");
+  if (result.moxie_revision !== true) failures.push("Moxie revision/CAS column is missing");
+  if (failures.length) throw new Error(`Empty-database invariants failed:\n- ${failures.join("\n- ")}`);
+}
+
+const exactFinishFunctionalSql = `
+begin;
+insert into public.employees(id, employee_code, display_name, active, role)
+values ('00000000-0000-4000-8000-00000000f101', 'REBUILD-FINISH', 'Rebuild Finish Test', true, 'staff');
+insert into public.locations(id, location_code, location_name, location_type, form_type, active)
+values ('00000000-0000-4000-8000-00000000f102', 'REBUILD_FINISH', 'Rebuild Finish Location', 'restroom', 'restroom', true);
+insert into public.devices(id, device_id, device_name, active, assigned_employee_id)
+values ('00000000-0000-4000-8000-00000000f103', 'REBUILD-FINISH-DEVICE', 'Rebuild Finish Device', true, '00000000-0000-4000-8000-00000000f101');
+do $functional_test$
+declare
+  v_start jsonb;
+  v_finish jsonb;
+  v_replay jsonb;
+  v_session_uuid text;
+  v_manager_user public.msg_users%rowtype;
+  v_message public.msg_messages%rowtype;
+begin
+  v_start := public.tool_start_session_v2(
+    'REBUILD_FINISH',
+    'REBUILD-FINISH-DEVICE',
+    '00000000-0000-4000-8000-00000000f104',
+    now() - interval '5 minutes',
+    'rebuild-functional-start'
+  );
+  v_session_uuid := v_start ->> 'session_uuid';
+  if v_session_uuid is null or v_start ->> 'status' <> 'active' then
+    raise exception 'Exact finish functional start did not create an active session: %', v_start;
+  end if;
+  v_finish := public.tool_finish_session_exact(
+    v_session_uuid,
+    'REBUILD-FINISH-DEVICE',
+    '00000000-0000-4000-8000-00000000f105',
+    now() - interval '1 minute'
+  );
+  if v_finish ->> 'status' <> 'pending_submit' or (v_finish ->> 'replayed')::boolean is not false then
+    raise exception 'First exact finish did not produce one authoritative transition: %', v_finish;
+  end if;
+  v_replay := public.tool_finish_session_exact(
+    v_session_uuid,
+    'REBUILD-FINISH-DEVICE',
+    '00000000-0000-4000-8000-00000000f105',
+    now() - interval '1 minute'
+  );
+  if v_replay ->> 'status' <> 'pending_submit' or (v_replay ->> 'replayed')::boolean is not true then
+    raise exception 'Exact finish replay was not recognized idempotently: %', v_replay;
+  end if;
+  begin
+    perform public.tool_finish_session_exact(
+      v_session_uuid,
+      'REBUILD-FINISH-DEVICE',
+      '00000000-0000-4000-8000-00000000f106',
+      now()
+    );
+    raise exception 'A second finish operation id was incorrectly accepted';
+  exception when unique_violation then
+    null;
+  end;
+  if (select count(*) from public.sessions where session_uuid = v_session_uuid) <> 1 then
+    raise exception 'Exact finish functional check produced a duplicate session';
+  end if;
+
+  insert into public.ops_manager_managers(manager_id, display_name, roles, active)
+  values ('00000000-0000-4000-8000-00000000f107', 'Rebuild Messaging Manager', array['OPS_MANAGER','CUSTODIAL_MANAGER']::text[], true);
+  v_manager_user := public.msg_ensure_ops_manager_user('00000000-0000-4000-8000-00000000f107');
+  if v_manager_user.ops_manager_id <> '00000000-0000-4000-8000-00000000f107'::uuid
+     or v_manager_user.role <> 'manager' then
+    raise exception 'Manager messaging principal was not server-derived correctly: %', row_to_json(v_manager_user);
+  end if;
+  insert into public.msg_threads(id, thread_type, title, created_by_user_id, is_active)
+  values ('00000000-0000-4000-8000-00000000f108', 'group', 'Rebuild messaging authority', v_manager_user.id, true);
+  insert into public.msg_thread_participants(thread_id, user_id)
+  values ('00000000-0000-4000-8000-00000000f108', v_manager_user.id);
+  v_message := public.msg_send_message(
+    '00000000-0000-4000-8000-00000000f108', v_manager_user.id,
+    'Manager authority audit test', 'text', '{}'::jsonb,
+    '00000000-0000-4000-8000-00000000f109'
+  );
+  if not exists (
+    select 1 from public.msg_message_audit a
+    where a.message_id = v_message.id
+      and a.sender_user_id = v_manager_user.id
+      and a.sender_ops_manager_id = '00000000-0000-4000-8000-00000000f107'::uuid
+  ) then
+    raise exception 'Immutable manager message audit was not written in the message transaction';
+  end if;
+  v_message := public.msg_send_message(
+    '00000000-0000-4000-8000-00000000f108', v_manager_user.id,
+    'Durable Memphis job test', 'text', '{"channel":"memphis","device_id":"REBUILD-FINISH-DEVICE"}'::jsonb,
+    '00000000-0000-4000-8000-00000000f110'
+  );
+  if not exists (
+    select 1 from public.operational_notification_jobs j
+    where j.job_key = 'memphis-reply:' || v_message.id::text
+      and j.job_type = 'memphis_bot_reply'
+      and j.status = 'pending'
+  ) then
+    raise exception 'Memphis background work was not committed with the user message';
+  end if;
+end
+$functional_test$;
+rollback;
+`;
+
 if (dockerImage) {
   dockerContainer = `mz_schema_rebuild_${Date.now()}_${randomUUID().replaceAll("-", "").slice(0, 8)}`;
   ownsDockerContainer = true;
@@ -68,6 +305,8 @@ if (dockerImage) {
       "-d",
       "--name",
       dockerContainer,
+      "--tmpfs",
+      "/var/lib/postgresql/data:rw,size=1g",
       "-e",
       "POSTGRES_PASSWORD=postgres",
       dockerImage,
@@ -119,17 +358,33 @@ if (dockerContainer) {
       dockerPsql(targetDatabase, sql);
       console.log(`applied ${file}`);
     }
+    dockerPsql(targetDatabase, exactFinishFunctionalSql);
+    console.log("verified exact session finish transition and idempotent replay");
+    await verifyDockerConcurrency(targetDatabase);
     const counts = dockerPsql(
       targetDatabase,
       `
       select json_build_object(
         'tables', (select count(*)::int from information_schema.tables where table_schema='public' and table_type='BASE TABLE'),
         'functions', (select count(*)::int from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public'),
-        'views', (select count(*)::int from information_schema.views where table_schema='public')
+        'views', (select count(*)::int from information_schema.views where table_schema='public'),
+        'members_night_rows', (select count(*)::int from public.events_app_events where id='8204c7d4-b4bd-4417-b43d-b7fe2ced5e16'::uuid and event_scope='ZOO_WIDE' and display_location='Zoo Footprint'),
+        'members_night_history_rows', (select count(*)::int from public.events_app_event_history where event_id='8204c7d4-b4bd-4417-b43d-b7fe2ced5e16'::uuid),
+        'members_night_status', (select status from public.events_app_events where id='8204c7d4-b4bd-4417-b43d-b7fe2ced5e16'::uuid),
+        'history_delete_rule', (select confdeltype::text from pg_constraint where conname='events_app_event_history_event_id_fkey' and conrelid='public.events_app_event_history'::regclass),
+        'exact_finish_rpc', to_regprocedure('public.tool_finish_session_exact(text,text,uuid,timestamp with time zone)') is not null,
+        'manager_messaging_rpc', to_regprocedure('public.msg_ensure_ops_manager_user(uuid)') is not null,
+        'message_audit', to_regclass('public.msg_message_audit') is not null,
+        'notification_outbox', to_regclass('public.operational_notification_jobs') is not null,
+        'memphis_outbox_rpc', to_regprocedure('public.claim_operational_notification_job_by_key(text,text,integer)') is not null,
+        'feedback_image_backup', to_regclass('public.system_feedback_legacy_image_backups') is not null,
+        'moxie_revision', exists(select 1 from information_schema.columns where table_schema='public' and table_name='annie_chat_state' and column_name='revision')
       )::text;
       `,
     ).trim().split("\n").find((line) => line.trim().startsWith("{"));
-    console.log(JSON.stringify({ ok: true, database: targetDatabase, migrations: migrationFiles.length, counts: JSON.parse(counts) }, null, 2));
+    const rebuildResult = JSON.parse(counts);
+    assertRebuildInvariants(rebuildResult);
+    console.log(JSON.stringify({ ok: true, database: targetDatabase, migrations: migrationFiles.length, counts: rebuildResult }, null, 2));
   } finally {
     try {
       if (!ownsDockerContainer && !keepDatabase) {
@@ -178,12 +433,26 @@ try {
       await db.query(sql);
       console.log(`applied ${file}`);
     }
+    await db.query(exactFinishFunctionalSql);
+    console.log("verified exact session finish transition and idempotent replay");
     const counts = await db.query(`
       select
         (select count(*)::int from information_schema.tables where table_schema='public' and table_type='BASE TABLE') as tables,
         (select count(*)::int from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public') as functions,
-        (select count(*)::int from information_schema.views where table_schema='public') as views
+        (select count(*)::int from information_schema.views where table_schema='public') as views,
+        (select count(*)::int from public.events_app_events where id='8204c7d4-b4bd-4417-b43d-b7fe2ced5e16'::uuid and event_scope='ZOO_WIDE' and display_location='Zoo Footprint') as members_night_rows,
+        (select count(*)::int from public.events_app_event_history where event_id='8204c7d4-b4bd-4417-b43d-b7fe2ced5e16'::uuid) as members_night_history_rows,
+        (select status from public.events_app_events where id='8204c7d4-b4bd-4417-b43d-b7fe2ced5e16'::uuid) as members_night_status,
+        (select confdeltype::text from pg_constraint where conname='events_app_event_history_event_id_fkey' and conrelid='public.events_app_event_history'::regclass) as history_delete_rule,
+        to_regprocedure('public.tool_finish_session_exact(text,text,uuid,timestamp with time zone)') is not null as exact_finish_rpc,
+        to_regprocedure('public.msg_ensure_ops_manager_user(uuid)') is not null as manager_messaging_rpc,
+        to_regclass('public.msg_message_audit') is not null as message_audit,
+        to_regclass('public.operational_notification_jobs') is not null as notification_outbox,
+        to_regprocedure('public.claim_operational_notification_job_by_key(text,text,integer)') is not null as memphis_outbox_rpc,
+        to_regclass('public.system_feedback_legacy_image_backups') is not null as feedback_image_backup,
+        exists(select 1 from information_schema.columns where table_schema='public' and table_name='annie_chat_state' and column_name='revision') as moxie_revision
     `);
+    assertRebuildInvariants(counts.rows[0]);
     console.log(JSON.stringify({ ok: true, database: databaseName, migrations: migrationFiles.length, ...counts.rows[0] }, null, 2));
   } finally {
     await db.end().catch(() => {});

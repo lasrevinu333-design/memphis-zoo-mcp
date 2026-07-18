@@ -382,30 +382,10 @@ function normalizeEventPayload(payload = {}, referenceData = {}) {
   };
 }
 
-function getEventsLocalIsoDate() {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: EVENTS_TIME_ZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
-  const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${byType.year}-${byType.month}-${byType.day}`;
-}
-
-async function purgeExpiredEvents() {
-  const client = getEventsSupabaseClient();
-  const today = getEventsLocalIsoDate();
-  const { error } = await client
-    .from("events_app_events")
-    .delete()
-    .lt("end_date", today);
-  if (error) throw new Error(error.message || "Event purge failed.");
-}
-
 async function listUpcomingEvents(runReadOnlySql) {
   const rows = await runReadOnlySql(buildEventResponseSelectSql(
-    `coalesce(e.end_date, e.event_date) >= (now() at time zone '${EVENTS_TIME_ZONE}')::date`,
+    `coalesce(e.status, 'SCHEDULED') = 'SCHEDULED'
+     and coalesce(e.end_date, e.event_date) >= (now() at time zone '${EVENTS_TIME_ZONE}')::date`,
     `order by e.event_date asc, e.start_time asc, e.event_name asc`
   ));
   return Array.isArray(rows) ? rows : [];
@@ -420,6 +400,11 @@ function buildEventResponseSelectSql(whereSql, suffixSql = "") {
       e.event_name,
       e.event_name as event_title,
       coalesce(e.event_scope, 'UNKNOWN') as event_scope,
+      coalesce(e.status, 'SCHEDULED') as status,
+      e.cancelled_at,
+      e.cancelled_by,
+      e.cancellation_reason,
+      e.archived_at,
       e.primary_venue_id,
       e.venue_ids,
       e.display_location,
@@ -776,16 +761,40 @@ async function updateEventRecord(runReadOnlySql, runWriteSql, eventId, payload) 
   throw new Error("Event not found.");
 }
 
-async function deleteEventRecord(runWriteSql, eventId) {
+async function deleteEventRecord(runWriteSql, eventId, actor = "Input Console", reason = "Event cancelled from Event Input Console.") {
   const normalizedId = String(eventId || "").trim();
   if (!isUuid(normalizedId)) throw new Error("A valid event id is required.");
-  const client = getEventsSupabaseClient();
-  const { error } = await client
-    .from("events_app_events")
-    .delete()
-    .eq("id", normalizedId);
-  if (error) throw new Error(error.message || "Event delete failed.");
-  return { id: normalizedId, deleted: true };
+  const rows = normalizeWriteResultRows(await runWriteSql("events_app_cancel", `
+    with before_row as (
+      select e.*, to_jsonb(e.*) as previous_record
+      from public.events_app_events e
+      where e.id = ${sqlLiteral(normalizedId)}::uuid
+      for update
+    ), updated as (
+      update public.events_app_events e
+      set status = 'CANCELLED',
+          cancelled_at = coalesce(e.cancelled_at, now()),
+          cancelled_by = ${sqlLiteral(String(actor || "Input Console").slice(0, 200))},
+          cancellation_reason = ${sqlLiteral(String(reason || "Event cancelled.").slice(0, 1000))},
+          revision = coalesce(e.revision, 1) + 1,
+          updated_at = now()
+      from before_row
+      where e.id = before_row.id
+      returning e.*, before_row.previous_record
+    ), history as (
+      insert into public.events_app_event_history(event_id, action, actor, reason, previous_record, new_record, created_at)
+      select id, 'cancel', ${sqlLiteral(String(actor || "Input Console").slice(0, 200))},
+             ${sqlLiteral(String(reason || "Event cancelled.").slice(0, 1000))},
+             previous_record, to_jsonb(updated.*) - 'previous_record', now()
+      from updated
+      returning id
+    )
+    select id, status, cancelled_at, cancelled_by, cancellation_reason, revision
+    from updated;
+  `));
+  const row = rows.find((item) => item?.id);
+  if (!row) throw Object.assign(new Error("Event not found."), { status: 404 });
+  return { ...row, deleted: false, cancelled: true };
 }
 
 function formatEventTimeRange(eventRow) {
@@ -999,6 +1008,7 @@ async function getPendingNotifications(runReadOnlySql) {
       from params p
       join public.events_app_events e
         on e.event_date between p.local_now::date and (p.local_now::date + 3)
+       and coalesce(e.status, 'SCHEDULED') = 'SCHEDULED'
       join public.location_groups lg on lg.id = e.location_group_id
       left join public.event_venues ev on ev.id = e.primary_venue_id
       cross join lateral unnest(
@@ -1130,17 +1140,6 @@ export function createEventMaintenanceController({ runReadOnlySql, runWriteSql, 
       running = false;
       lastFinishedAt = new Date().toISOString();
     }
-  }
-
-  // Purge expired events on a timer instead of on every GET request
-  const PURGE_INTERVAL_MS = Math.max(60_000, Number.parseInt(String(process.env.EVENTS_PURGE_INTERVAL_MS || "300000"), 10) || 300000);
-  if (typeof runWriteSql === "function") {
-    const purgeTimer = setInterval(() => {
-      purgeExpiredEvents(runWriteSql).catch((error) => {
-        console.error("events purge timer failed:", error);
-      });
-    }, PURGE_INTERVAL_MS);
-    purgeTimer.unref?.();
   }
 
   return {
@@ -1430,7 +1429,12 @@ export function createEventsAdminRouter({
 
   router.delete("/:eventId", typeof requireAdminApiWrite === "function" ? requireAdminApiWrite : (_req, _res, next) => next(), async (req, res) => {
     try {
-      const result = await deleteEventRecord(runWriteSql, req.params.eventId);
+      const result = await deleteEventRecord(
+        runWriteSql,
+        req.params.eventId,
+        req.body?.cancelled_by || req.body?.actor || "Input Console",
+        req.body?.reason || "Event cancelled from Event Input Console.",
+      );
       res.status(200).json({
         ok: true,
         data: result,
