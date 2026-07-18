@@ -141,6 +141,10 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     const row = Array.isArray(data) ? data[0] : data;
     const userId = String(row?.msg_user_id || row?.user_id || row?.id || "").trim();
     if (!isUuid(userId)) throw Object.assign(new Error("Authenticated manager has no server messaging principal."), { status: 403 });
+    const sharedThreadData = await runRpc("msg_get_or_create_ops_manager_thread", { p_manager_id: managerId });
+    const sharedThread = Array.isArray(sharedThreadData) ? sharedThreadData[0] : sharedThreadData;
+    const sharedThreadId = String(sharedThread?.thread_id || sharedThread?.id || "").trim();
+    if (!isUuid(sharedThreadId)) throw Object.assign(new Error("The shared Ops Manager chat is unavailable."), { status: 503 });
     return {
       ...row,
       msg_user_id: userId,
@@ -150,6 +154,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       display_name: String(row?.display_name || managerSession?.manager_display_name || "Ops Manager"),
       canonical_device_id: String(managerSession?.device_id || managerSession?.credential_id || "manager-session"),
       identity_source: "trusted_manager_session",
+      ops_manager_thread_id: sharedThreadId,
     };
   }
 
@@ -220,6 +225,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         t.id,
         t.thread_type,
         t.title,
+        t.system_key,
         t.is_active,
         exists (
           select 1
@@ -737,6 +743,8 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         t.id as thread_id,
         t.updated_at,
         t.thread_type,
+        t.system_key,
+        (t.system_key = 'ops_manager_shared_chat_v1') as is_ops_manager_shared,
         case
           when t.thread_type = 'bot' then coalesce(nullif(t.title, ''), 'Memphis')
           when t.thread_type = 'direct' then coalesce(nullif(tp.other_participant_names, ''), nullif(tp.participant_names, ''), 'Direct')
@@ -761,7 +769,10 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       left join unread u on u.thread_id = t.id
       where t.is_active = true
         and ${visibilityClause}
-      order by coalesce(lm.last_message_at, t.last_message_at, t.updated_at, t.created_at) desc nulls last, t.created_at desc
+      order by
+        case when t.system_key = 'ops_manager_shared_chat_v1' then 0 else 1 end,
+        coalesce(lm.last_message_at, t.last_message_at, t.updated_at, t.created_at) desc nulls last,
+        t.created_at desc
       ) thread_rows
     `;
   }
@@ -830,14 +841,15 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         m.body,
         m.metadata_json,
         m.sent_at,
-        m.created_at
+        m.created_at,
+        m.updated_at,
+        m.is_deleted
       from public.msg_messages m
       join public.msg_threads t on t.id = m.thread_id
       left join public.msg_users sender on sender.id = m.sender_user_id
       where m.thread_id = '${thread}'::uuid
         and t.is_active = true
         and ${visibilityClause}
-        and m.is_deleted = false
         ${beforeSql}
       order by coalesce(m.sent_at, m.created_at) desc, m.id desc
       limit ${Math.min(Math.max(Number(limit) || 100, 1), 200)}
@@ -866,16 +878,17 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         m.body,
         m.metadata_json,
         m.sent_at,
-        m.created_at
+        m.created_at,
+        m.updated_at,
+        m.is_deleted
       from public.msg_messages m
       join public.msg_threads t on t.id = m.thread_id
       left join public.msg_users sender on sender.id = m.sender_user_id
       where m.thread_id = '${thread}'::uuid
         and t.is_active = true
         and ${visibilityClause}
-        and m.is_deleted = false
-        and (coalesce(m.sent_at, m.created_at), m.id) > ('${cursorTime}'::timestamptz, '${cursorId}'::uuid)
-      order by coalesce(m.sent_at, m.created_at) asc, m.id asc
+        and (m.updated_at, m.id) > ('${cursorTime}'::timestamptz, '${cursorId}'::uuid)
+      order by m.updated_at asc, m.id asc
       limit ${Math.min(Math.max(Number(limit) || 100, 1), 200)}
       ) thread_updates
     `;
@@ -1568,7 +1581,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
           waited_ms: Date.now() - startedAt,
           has_more: data.length >= limit,
           next_cursor: last ? {
-            after: last.sent_at || last.created_at,
+            after: last.updated_at || last.sent_at || last.created_at,
             after_id: last.id,
           } : { after, after_id: afterId },
         }),
@@ -1684,12 +1697,61 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   });
 
+  router.post("/thread/:threadId/message/:messageId/delete", requireWritableDeviceOrOpsAuth, async (req, res) => {
+    try {
+      const threadId = String(req.params.threadId || "").trim();
+      const messageId = String(req.params.messageId || "").trim();
+      const requestedUserId = String(req.body?.user_id || "").trim();
+      const deviceId = String(req.body?.device_id || req.body?.deviceId || "").trim();
+      if (!isUuid(threadId) || !isUuid(messageId)) {
+        res.status(422).json({ ok: false, error: "Valid thread and message ids are required." });
+        return;
+      }
+      const viewer = await resolveViewerContext({ userId: requestedUserId, deviceId, managerSession: req.memphisAuth || null });
+      if (requestedUserId && requestedUserId !== viewer.effectiveUserId) {
+        res.status(403).json({ ok: false, error: "Message deletion user must match the authenticated viewer." });
+        return;
+      }
+      const messageRows = await runReadOnlySql(`
+        select m.id, m.thread_id, m.sender_user_id, m.is_deleted
+        from public.msg_messages m
+        join public.msg_threads t on t.id = m.thread_id
+        where m.id = '${esc(messageId)}'::uuid
+          and m.thread_id = '${esc(threadId)}'::uuid
+          and t.is_active is true
+        limit 1
+      `);
+      const message = Array.isArray(messageRows) ? messageRows[0] : null;
+      if (!message) {
+        res.status(404).json({ ok: false, error: "Message was not found in this conversation." });
+        return;
+      }
+      const isParticipant = await isThreadParticipant(threadId, viewer.effectiveUserId);
+      if (!isParticipant && !viewer.isManagerOverview) {
+        res.status(403).json({ ok: false, error: "Authenticated viewer is not a participant in this conversation." });
+        return;
+      }
+      const data = await runRpc("msg_delete_message", {
+        p_message_id: messageId,
+        p_request_user_id: viewer.effectiveUserId,
+      });
+      res.status(200).json({ ok: true, data, meta: messagingMeta({ deletion: "soft", authoritative: true }) });
+    } catch (error) {
+      fail(res, error, "Delete message failed");
+    }
+  });
+
   router.post("/thread/:threadId/delete", requireWritableDeviceOrOpsAuth, async (req, res) => {
     try {
       const threadId = String(req.params.threadId || "").trim();
       if (!threadId) throw new Error("threadId is required.");
       const deviceId = String(req.body?.device_id || req.body?.deviceId || "").trim();
       const viewer = await resolveViewerContext({ deviceId, managerSession: req.memphisAuth || null });
+      const thread = await getThreadIdentity(threadId);
+      if (thread?.system_key === "ops_manager_shared_chat_v1") {
+        res.status(409).json({ ok: false, error: "The shared Ops Manager chat stays available on every manager device." });
+        return;
+      }
       if (!viewer.isManagerOverview) {
         const isParticipant = await isThreadParticipant(threadId, viewer.effectiveUserId);
         if (!isParticipant) {

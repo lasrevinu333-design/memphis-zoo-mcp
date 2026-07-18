@@ -7,6 +7,7 @@ const MANAGER_ID = "00000000-0000-4000-8000-000000000701";
 const MANAGER_USER_ID = "00000000-0000-4000-8000-000000000702";
 const FORGED_EMPLOYEE_ID = "00000000-0000-4000-8000-000000000703";
 const THREAD_ID = "00000000-0000-4000-8000-000000000704";
+const SHARED_THREAD_ID = "00000000-0000-4000-8000-000000000707";
 const calls = [];
 
 async function runRpc(fn, args) {
@@ -15,8 +16,14 @@ async function runRpc(fn, args) {
     assert.equal(args.p_manager_id, MANAGER_ID);
     return { id: MANAGER_USER_ID, user_id: MANAGER_USER_ID, display_name: "Authority Test Manager", role: "manager", is_active: true, ops_manager_id: MANAGER_ID };
   }
+  if (fn === "msg_get_or_create_ops_manager_thread") {
+    assert.equal(args.p_manager_id, MANAGER_ID);
+    return { id: SHARED_THREAD_ID, thread_type: "group", title: "Ops Manager Chat", system_key: "ops_manager_shared_chat_v1" };
+  }
   if (fn === "msg_send_broadcast") return { id: "broadcast-test", sender_user_id: args.p_sender_user_id };
+  if (fn === "msg_create_group_thread") return { id: THREAD_ID, created_by_user_id: args.p_created_by_user_id, title: args.p_title };
   if (fn === "msg_send_message") return { id: "message-test", sender_user_id: args.p_sender_user_id };
+  if (fn === "msg_delete_message") return { id: args.p_message_id, is_deleted: true, deleted_by: args.p_request_user_id };
   if (fn === "msg_mark_thread_read") return { marked: true, user_id: args.p_user_id };
   return {};
 }
@@ -79,6 +86,12 @@ try {
   const forgedRead = await post(`/messaging-api/thread/${THREAD_ID}/read`, { user_id: FORGED_EMPLOYEE_ID });
   assert.equal(forgedRead.status, 403);
 
+  const forgedDelete = await post(`/messaging-api/thread/${THREAD_ID}/message/00000000-0000-4000-8000-000000000708/delete`, {
+    user_id: FORGED_EMPLOYEE_ID,
+  });
+  assert.equal(forgedDelete.status, 403);
+  assert.equal(calls.some((call) => call.fn === "msg_delete_message"), false);
+
   const forgedBroadcast = await post("/messaging-api/broadcast", {
     sender_user_id: FORGED_EMPLOYEE_ID,
     title: "Forged",
@@ -90,6 +103,28 @@ try {
   assert.equal(validBroadcast.status, 200);
   const broadcastCall = calls.find((call) => call.fn === "msg_send_broadcast");
   assert.equal(broadcastCall.args.p_sender_user_id, MANAGER_USER_ID);
+
+  const selectedRecipients = [
+    "00000000-0000-4000-8000-000000000711",
+    "00000000-0000-4000-8000-000000000712",
+    "00000000-0000-4000-8000-000000000713",
+  ];
+  const managerGroup = await post("/messaging-api/thread/group", {
+    created_by_user_id: MANAGER_USER_ID,
+    title: "Custodial Team",
+    member_user_ids: selectedRecipients,
+  });
+  assert.equal(managerGroup.status, 200);
+  const groupCall = calls.find((call) => call.fn === "msg_create_group_thread");
+  assert.equal(groupCall.args.p_created_by_user_id, MANAGER_USER_ID, "group creator is server-derived");
+  assert.deepEqual(groupCall.args.p_member_user_ids, selectedRecipients, "all selected recipients are preserved exactly once");
+
+  const forgedGroupCreator = await post("/messaging-api/thread/group", {
+    created_by_user_id: FORGED_EMPLOYEE_ID,
+    title: "Forged role",
+    member_user_ids: selectedRecipients,
+  });
+  assert.equal(forgedGroupCreator.status, 403, "a browser cannot choose the group creator or role");
 
   const deviceAck = await post("/messaging-api/device-notifications/ack", {
     device_id: "FORGED_EMPLOYEE_DEVICE",

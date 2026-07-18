@@ -70,8 +70,8 @@ export function buildReleaseManifest({ appVersion, releaseId, contracts = {} } =
       gemini_console: ["indexeddb-outbox-v1"],
     },
     minimum_supported: {
-      frontend_version: "release-2026.07.18.custodial-v3.2",
-      backend_version: "release-2026.07.18.custodial-v3.4",
+      frontend_version: "release-2026.07.18.custodial-v3.5",
+      backend_version: "release-2026.07.18.custodial-v3.5",
     },
     build_time: String(process.env.BUILD_TIME || process.env.RENDER_BUILD_TIMESTAMP || "source-controlled"),
   };
