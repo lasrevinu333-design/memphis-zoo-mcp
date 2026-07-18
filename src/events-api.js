@@ -714,13 +714,19 @@ function buildEventUpdateSql(eventId, record) {
      select * from updated;`;
 }
 
+function normalizeWriteResultRows(result) {
+  if (Array.isArray(result)) return result.filter(Boolean);
+  if (result && typeof result === "object") return [result];
+  return [];
+}
+
 async function createEventRecord(runReadOnlySql, runWriteSql, payload) {
   const referenceData = await getEventReferenceData(runReadOnlySql);
   const record = normalizeEventPayload(payload, referenceData);
-  const rows = await runWriteSql(
+  const rows = normalizeWriteResultRows(await runWriteSql(
     "events_app_create",
     buildEventInsertSql(record)
-  );
+  ));
   if (Array.isArray(rows) && rows.length) return { ...record, ...rows[0] };
   return record;
 }
@@ -730,7 +736,7 @@ async function updateEventRecord(runReadOnlySql, runWriteSql, eventId, payload) 
   if (!isUuid(normalizedId)) throw new Error("A valid event id is required.");
   const referenceData = await getEventReferenceData(runReadOnlySql);
   const record = normalizeEventPayload({ ...payload, manually_overridden: true }, referenceData);
-  const rows = await runWriteSql("events_app_update", buildEventUpdateSql(normalizedId, record));
+  const rows = normalizeWriteResultRows(await runWriteSql("events_app_update", buildEventUpdateSql(normalizedId, record)));
   if (!Array.isArray(rows) || !rows.length) throw new Error("Event not found.");
   return { ...record, ...rows[0], previous_record: undefined };
 }
