@@ -1,8 +1,8 @@
 {
-  "release_id": "release-2026.07.18.custodial-v3.9",
-  "frontend_commit_sha": "dcccc1673592b1f370e022aea07c8c1415408171",
-  "frontend_commit_state": "coordinated_v3_9_scan_wake_recovery_frontend",
-  "backend_minimum_version": "release-2026.07.18.custodial-v3.9",
+  "release_id": "release-2026.07.18.custodial-v3.10",
+  "frontend_commit_sha": "e844c48c4a699915a5bafa8ff87be2ab46431c88",
+  "frontend_commit_state": "coordinated_v3_10_phone_navigation_identity_frontend",
+  "backend_minimum_version": "release-2026.07.18.custodial-v3.10",
   "schema_fingerprint": "3021092f7438c651ece9920418ca4110cf44dfa28edb621f0cc43cbb8def085e",
   "api_contract_versions": {
     "scan": "scan.v2",
