@@ -20,6 +20,7 @@ const foundationRepair = [
   'supabase/migrations/20260716193606_foundation_repair_schedule_window.sql',
   'supabase/migrations/20260716193627_foundation_repair_schedule_cron.sql',
 ].map(read).join('\n');
+const gpsMotionHardening = read('supabase/migrations/20260719231728_gps_proximity_motion_hardening.sql');
 const packageJson = JSON.parse(read('package.json'));
 
 assert.equal(packageJson.scripts?.['test:foundation'], 'node scripts/scheduler-alerts-gps-foundation-tests.mjs');
@@ -79,6 +80,7 @@ assert.match(indexSource, /app\.post\("\/scan-api\/rpc", requireDeviceOrOpsAcces
 assert.match(indexSource, /tool_commit_cleaning_workflow/);
 assert.match(indexSource, /tool_report_device_sync_status/);
 assert.match(indexSource, /tool_evaluate_location_proximity/);
+assert.match(indexSource, /tool_evaluate_location_proximity_v2/);
 assert.match(indexSource, /canonicalizeScanArguments/);
 assert.match(indexSource, /run_application_write/);
 assert.match(indexSource, /async function runWriteSql\(namePrefix, sql\)[\s\S]{0,500}client\.rpc\("run_application_write"/);
@@ -124,6 +126,22 @@ assert.match(migration, /create or replace function public\.tool_evaluate_locati
 assert.match(migration, /'work_position_check'/);
 assert.match(migration, /v_result := 'away'; v_badge_color := 'red'/);
 assert.doesNotMatch(migration, /alter table public\.locations add column if not exists latitude/);
+assert.match(gpsMotionHardening, /create or replace function public\.evaluate_location_proximity_v2/i);
+assert.match(gpsMotionHardening, /p_observed_at timestamptz/i);
+assert.match(gpsMotionHardening, /gps_max_observation_age_seconds/i);
+assert.match(gpsMotionHardening, /gps_future_tolerance_seconds/i);
+assert.match(gpsMotionHardening, /gps_boundary_hysteresis_m/i);
+assert.match(gpsMotionHardening, /gps_max_human_speed_mps/i);
+assert.match(gpsMotionHardening, /v_result := 'stale'/i);
+assert.match(gpsMotionHardening, /v_result := 'future_clock'/i);
+assert.match(gpsMotionHardening, /v_result := 'boundary_uncertain'/i);
+assert.match(gpsMotionHardening, /v_result := 'implausible_jump'/i);
+assert.match(gpsMotionHardening, /v_status_observed_at := least\(v_observed_at, v_now\)/i, 'future phone clocks must not pin current status ahead of valid readings');
+assert.match(gpsMotionHardening, /v_motion_distance_m - greatest\(coalesce\(p_accuracy_m, 0\), 0\) - greatest\(coalesce\(v_previous_accuracy_m, 0\), 0\)/i, 'GPS accuracy uncertainty must be removed before implausible-motion classification');
+assert.match(gpsMotionHardening, /where excluded\.observed_at >= coalesce\(device_location_proximity_status\.observed_at/i, 'offline replay must not replace a newer device-location status');
+assert.match(gpsMotionHardening, /on conflict\(client_event_id\) where client_event_id is not null do nothing/i, 'concurrent duplicate GPS event IDs must converge without a unique-constraint failure');
+assert.match(gpsMotionHardening, /never changes cleaning session authority/i);
+assert.match(gpsMotionHardening, /revoke all on function public\.tool_evaluate_location_proximity_v2[\s\S]*from public, anon, authenticated/i);
 
 console.log(JSON.stringify({
   ok: true,
