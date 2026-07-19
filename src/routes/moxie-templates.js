@@ -160,7 +160,7 @@ export function loginPage(err = false, notice = "") {
 <div class="wrap"><div class="panel login">
   <div class="brand" style="margin-bottom:18px">Moxie</div>
   <div class="hint" style="margin-bottom:18px">Annie's private work assistant</div>
-  <a class="ops-hub-link" href="https://lasrevinu333-design.github.io/Engine/start_page1.html" style="margin-bottom:18px">Back to Ops Hub</a>
+  <a class="ops-hub-link" href="https://lasrevinu333-design.github.io/Engine/start_page1.html" style="margin-bottom:18px">Back</a>
   ${notice ? `<div style="color:#7dff9e;margin-bottom:12px;font-weight:700">${esc(notice)}</div>` : ""}
   ${err ? '<div style="color:#ff8fa3;margin-bottom:12px;font-weight:700">Wrong password. Try again.</div>' : ""}
   <form id="moxie-login-form" method="post" action="/moxie/login" autocomplete="off">
