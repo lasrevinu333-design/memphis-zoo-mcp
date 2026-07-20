@@ -105,6 +105,118 @@ async function verifyDockerConcurrency(database) {
   if (finishState !== "1|1|pending_submit") throw new Error(`Concurrent exact finish invariant failed: ${finishState}`);
 
   dockerPsql(database, `
+    insert into public.locations(id, location_code, location_name, location_type, form_type, active)
+    values ('00000000-0000-4000-8000-00000000f211', 'GPS_HARDENING', 'GPS Hardening Test', 'restroom', 'restroom', true);
+    insert into public.devices(id, device_id, device_name, active)
+    values ('00000000-0000-4000-8000-00000000f212', 'GPS-HARDENING-DEVICE', 'GPS Hardening Device', true);
+    insert into public.location_proximity_settings(location_id, latitude, longitude, coordinate_source, coordinate_confidence, active)
+    values ('00000000-0000-4000-8000-00000000f211', 35.1495, -90.0490, 'empty_database_rebuild', 'test', true);
+  `);
+  const gpsResults = [];
+  const runIsolatedGpsEvaluation = (clientEventId, latitude, observedAtSql) => {
+    dockerPsql(database, `
+      delete from public.device_location_proximity_status
+      where device_id='00000000-0000-4000-8000-00000000f212'::uuid
+        and location_id='00000000-0000-4000-8000-00000000f211'::uuid;
+    `);
+    return dockerPsql(database, `
+      select public.tool_evaluate_location_proximity_v2(
+        'GPS_HARDENING','GPS-HARDENING-DEVICE',${latitude},-90.0490,8,null,
+        '${clientEventId}','${clientEventId}',${observedAtSql}
+      )->>'result';
+    `).trim();
+  };
+  gpsResults.push(runIsolatedGpsEvaluation('rebuild-gps-current', 35.1495, 'now()'));
+  gpsResults.push(runIsolatedGpsEvaluation('rebuild-gps-stale', 35.1495, "now()-interval '10 minutes'"));
+  gpsResults.push(runIsolatedGpsEvaluation('rebuild-gps-future', 35.1495, "now()+interval '10 minutes'"));
+  gpsResults.push(runIsolatedGpsEvaluation('rebuild-gps-boundary', 35.15107, 'now()'));
+  const gpsState = gpsResults.join('|');
+  if (gpsState !== "near|stale|future_clock|boundary_uncertain") {
+    throw new Error(`GPS freshness/boundary invariants failed: ${gpsState}`);
+  }
+  dockerPsql(database, `
+    delete from public.device_location_proximity_status
+    where device_id='00000000-0000-4000-8000-00000000f212'::uuid
+      and location_id='00000000-0000-4000-8000-00000000f211'::uuid;
+    select public.tool_evaluate_location_proximity_v2(
+      'GPS_HARDENING','GPS-HARDENING-DEVICE',35.1495,-90.0490,8,null,
+      'rebuild-gps-future-recovery-bad','rebuild-gps-future-recovery-bad',now()+interval '10 minutes'
+    );
+    select pg_sleep(0.01);
+    select public.tool_evaluate_location_proximity_v2(
+      'GPS_HARDENING','GPS-HARDENING-DEVICE',35.1495,-90.0490,8,null,
+      'rebuild-gps-future-recovery-good','rebuild-gps-future-recovery-good',now()
+    );
+  `);
+  const futureRecoveryState = dockerPsql(database, `
+    select result || '|' || (observed_at <= evaluated_at)::text || '|' || (metadata_json ? 'reported_observed_at')::text
+    from public.device_location_proximity_status
+    where device_id='00000000-0000-4000-8000-00000000f212'::uuid
+      and location_id='00000000-0000-4000-8000-00000000f211'::uuid
+      and session_uuid='';
+  `).trim();
+  if (futureRecoveryState !== "near|true|true") {
+    throw new Error(`Future phone clock prevented recovery to a current GPS reading: ${futureRecoveryState}`);
+  }
+  dockerPsql(database, `
+    delete from public.device_location_proximity_status
+    where device_id='00000000-0000-4000-8000-00000000f212'::uuid
+      and location_id='00000000-0000-4000-8000-00000000f211'::uuid;
+    select public.tool_evaluate_location_proximity_v2(
+      'GPS_HARDENING','GPS-HARDENING-DEVICE',35.1495,-90.0490,8,null,
+      'rebuild-gps-motion-origin','rebuild-gps-motion-origin',now()-interval '10 seconds'
+    );
+  `);
+  const motionResult = dockerPsql(database, `
+    select public.tool_evaluate_location_proximity_v2(
+      'GPS_HARDENING','GPS-HARDENING-DEVICE',35.1695,-90.0490,8,null,
+      'rebuild-gps-motion-jump','rebuild-gps-motion-jump',now()
+    )->>'result';
+  `).trim();
+  if (motionResult !== "implausible_jump") throw new Error(`Implausible GPS motion was accepted: ${motionResult}`);
+
+  dockerPsql(database, `
+    delete from public.device_location_proximity_status
+    where device_id='00000000-0000-4000-8000-00000000f212'::uuid
+      and location_id='00000000-0000-4000-8000-00000000f211'::uuid;
+    select public.tool_evaluate_location_proximity_v2(
+      'GPS_HARDENING','GPS-HARDENING-DEVICE',35.1495,-90.0490,8,null,
+      'rebuild-gps-newest','rebuild-gps-newest',now()
+    );
+    select public.tool_evaluate_location_proximity_v2(
+      'GPS_HARDENING','GPS-HARDENING-DEVICE',35.1695,-90.0490,8,null,
+      'rebuild-gps-old-replay','rebuild-gps-old-replay',now()-interval '10 minutes'
+    );
+  `);
+  const replayState = dockerPsql(database, `
+    select result || '|' || (observed_at > now()-interval '1 minute')::text
+    from public.device_location_proximity_status
+    where device_id='00000000-0000-4000-8000-00000000f212'::uuid
+      and location_id='00000000-0000-4000-8000-00000000f211'::uuid
+      and session_uuid='';
+  `).trim();
+  if (replayState !== "near|true") throw new Error(`Stale offline GPS replay replaced current status: ${replayState}`);
+
+  const duplicateGpsSql = `
+    select public.tool_evaluate_location_proximity_v2(
+      'GPS_HARDENING','GPS-HARDENING-DEVICE',35.1495,-90.0490,8,null,
+      'rebuild-gps-concurrent-duplicate','rebuild-gps-concurrent-duplicate',now()
+    )->>'scan_event_id';
+  `;
+  const duplicateGpsCalls = await Promise.all(Array.from({ length: 10 }, () => dockerPsqlConcurrent(database, duplicateGpsSql)));
+  if (duplicateGpsCalls.some((result) => result.status !== 0)) {
+    throw new Error(`Concurrent duplicate GPS events failed:\n${duplicateGpsCalls.map((item) => item.stderr).filter(Boolean).join("\n")}`);
+  }
+  const duplicateGpsIds = duplicateGpsCalls.flatMap(outputLines);
+  if (duplicateGpsIds.length !== 10 || new Set(duplicateGpsIds).size !== 1) {
+    throw new Error(`Concurrent duplicate GPS events did not converge: ${JSON.stringify(duplicateGpsIds)}`);
+  }
+  const duplicateGpsCount = dockerPsql(database, `
+    select count(*) from public.scan_events where client_event_id='rebuild-gps-concurrent-duplicate';
+  `).trim();
+  if (duplicateGpsCount !== "1") throw new Error(`Concurrent GPS event produced ${duplicateGpsCount} rows instead of one.`);
+
+  dockerPsql(database, `
     insert into public.operational_notification_jobs(job_key, job_type, source_id, payload_json)
     select 'rebuild-concurrency-job:' || value, 'rebuild_test', gen_random_uuid(), jsonb_build_object('ordinal', value)
     from generate_series(1, 20) value;
@@ -319,7 +431,7 @@ async function verifyDockerConcurrency(database) {
     from public.msg_messages where id = '${deletionMessageId}'::uuid;
   `).trim();
   if (deletionState !== "1|true|[deleted]|true") throw new Error(`Concurrent message deletion invariant failed: ${deletionState}`);
-  console.log("verified 10-way exact finish, two-worker outbox claims, restart lease recovery, two-browser Moxie CAS, atomic Moxie password rotation, 10-manager shared-identity convergence, retired automatic team room, idempotent ordinary group creation, concurrent conversation deletion, and concurrent message deletion");
+  console.log("verified 10-way exact finish, GPS freshness/boundary/motion/replay/duplicate handling, two-worker outbox claims, restart lease recovery, two-browser Moxie CAS, atomic Moxie password rotation, 10-manager shared-identity convergence, retired automatic team room, idempotent ordinary group creation, concurrent conversation deletion, and concurrent message deletion");
 }
 
 function runDocker(args, options = {}) {
@@ -363,6 +475,9 @@ function assertRebuildInvariants(result) {
   if (result.moxie_revision !== true) failures.push("Moxie revision/CAS column is missing");
   if (result.moxie_password_rotation !== true) failures.push("Atomic Moxie password rotation RPC is missing");
   if (result.moxie_rotation_public_execute !== false) failures.push("Moxie password rotation RPC is executable by public/anonymous/authenticated roles");
+  if (result.gps_v2_rpc !== true) failures.push("GPS v2 evidence RPC is missing");
+  if (result.gps_v2_columns !== true) failures.push("GPS v2 observation/motion columns are missing");
+  if (result.gps_v2_public_execute !== false) failures.push("GPS v2 evidence RPC is executable by public/anonymous/authenticated roles");
   if (failures.length) throw new Error(`Empty-database invariants failed:\n- ${failures.join("\n- ")}`);
 }
 
@@ -757,7 +872,14 @@ if (dockerContainer) {
         'moxie_password_rotation', to_regprocedure('public.rotate_moxie_auth_credential(text,integer,text,text,text)') is not null,
         'moxie_rotation_public_execute', has_function_privilege('public', 'public.rotate_moxie_auth_credential(text,integer,text,text,text)', 'EXECUTE')
           or has_function_privilege('anon', 'public.rotate_moxie_auth_credential(text,integer,text,text,text)', 'EXECUTE')
-          or has_function_privilege('authenticated', 'public.rotate_moxie_auth_credential(text,integer,text,text,text)', 'EXECUTE')
+          or has_function_privilege('authenticated', 'public.rotate_moxie_auth_credential(text,integer,text,text,text)', 'EXECUTE'),
+        'gps_v2_rpc', to_regprocedure('public.tool_evaluate_location_proximity_v2(text,text,numeric,numeric,numeric,text,text,text,timestamp with time zone)') is not null,
+        'gps_v2_columns', exists(select 1 from information_schema.columns where table_schema='public' and table_name='device_location_proximity_status' and column_name='observed_at')
+          and exists(select 1 from information_schema.columns where table_schema='public' and table_name='device_location_proximity_status' and column_name='observation_age_seconds')
+          and exists(select 1 from information_schema.columns where table_schema='public' and table_name='device_location_proximity_status' and column_name='motion_speed_mps'),
+        'gps_v2_public_execute', has_function_privilege('public', 'public.tool_evaluate_location_proximity_v2(text,text,numeric,numeric,numeric,text,text,text,timestamp with time zone)', 'EXECUTE')
+          or has_function_privilege('anon', 'public.tool_evaluate_location_proximity_v2(text,text,numeric,numeric,numeric,text,text,text,timestamp with time zone)', 'EXECUTE')
+          or has_function_privilege('authenticated', 'public.tool_evaluate_location_proximity_v2(text,text,numeric,numeric,numeric,text,text,text,timestamp with time zone)', 'EXECUTE')
       )::text;
       `,
     ).trim().split("\n").find((line) => line.trim().startsWith("{"));
@@ -851,7 +973,14 @@ try {
         to_regprocedure('public.rotate_moxie_auth_credential(text,integer,text,text,text)') is not null as moxie_password_rotation,
         has_function_privilege('public', 'public.rotate_moxie_auth_credential(text,integer,text,text,text)', 'EXECUTE')
           or has_function_privilege('anon', 'public.rotate_moxie_auth_credential(text,integer,text,text,text)', 'EXECUTE')
-          or has_function_privilege('authenticated', 'public.rotate_moxie_auth_credential(text,integer,text,text,text)', 'EXECUTE') as moxie_rotation_public_execute
+          or has_function_privilege('authenticated', 'public.rotate_moxie_auth_credential(text,integer,text,text,text)', 'EXECUTE') as moxie_rotation_public_execute,
+        to_regprocedure('public.tool_evaluate_location_proximity_v2(text,text,numeric,numeric,numeric,text,text,text,timestamp with time zone)') is not null as gps_v2_rpc,
+        exists(select 1 from information_schema.columns where table_schema='public' and table_name='device_location_proximity_status' and column_name='observed_at')
+          and exists(select 1 from information_schema.columns where table_schema='public' and table_name='device_location_proximity_status' and column_name='observation_age_seconds')
+          and exists(select 1 from information_schema.columns where table_schema='public' and table_name='device_location_proximity_status' and column_name='motion_speed_mps') as gps_v2_columns,
+        has_function_privilege('public', 'public.tool_evaluate_location_proximity_v2(text,text,numeric,numeric,numeric,text,text,text,timestamp with time zone)', 'EXECUTE')
+          or has_function_privilege('anon', 'public.tool_evaluate_location_proximity_v2(text,text,numeric,numeric,numeric,text,text,text,timestamp with time zone)', 'EXECUTE')
+          or has_function_privilege('authenticated', 'public.tool_evaluate_location_proximity_v2(text,text,numeric,numeric,numeric,text,text,text,timestamp with time zone)', 'EXECUTE') as gps_v2_public_execute
     `);
     assertRebuildInvariants(counts.rows[0]);
     console.log(JSON.stringify({ ok: true, database: databaseName, migrations: migrationFiles.length, ...counts.rows[0] }, null, 2));

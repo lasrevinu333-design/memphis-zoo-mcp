@@ -150,6 +150,11 @@ assert.match(restroomAssignmentSql, /coalesce\(dsa\.coverage_purpose, ''\) <> 'l
 const restroomUpdateSqlStart = source.indexOf("async function rebalanceRestroomAssignments");
 const restroomUpdateSqlEnd = source.indexOf("async function applyLunchCoverageAfterRestroomRebalance", restroomUpdateSqlStart);
 const restroomUpdateSql = source.slice(restroomUpdateSqlStart, restroomUpdateSqlEnd);
+assert.match(source, /RESTROOM_REBALANCE_IMPLEMENTATION_MODE\s*=\s*"dynamic_route_fit_load_balancing"/, "runtime must identify the active route-fit/load balancing implementation honestly");
+assert.doesNotMatch(restroomUpdateSql, /static_pdf_templates_control_0945_phase/, "runtime must not return before the tested rebalance planner executes");
+assert.match(restroomUpdateSql, /const activeRoster = await listActiveRosterForRestroomRebalance/, "runtime must load the active roster before planning");
+assert.match(restroomUpdateSql, /const plan = buildRestroomRebalancePlan\(assignments, activeRoster, routeFitRows\)/, "runtime must execute the tested route-fit/load planner");
+assert.match(restroomUpdateSql, /pg_advisory_xact_lock\(hashtextextended/, "concurrent cron/manual rebalances must serialize in PostgreSQL");
 assert.match(restroomUpdateSql, /not\s+public\.sch_is_employee_location_group_restricted/i, "restroom rebalance write must have a DB-side restriction guard");
 assert.match(restroomUpdateSql, /dsa\.service_date\s*=\s*'\$\{esc\(serviceDate\)\}'::date/, "restroom rebalance write must be scoped to the requested service date");
 assert.match(restroomUpdateSql, /dsa\.status\s*=\s*'ASSIGNED'/, "restroom rebalance write must only update currently assigned rows");

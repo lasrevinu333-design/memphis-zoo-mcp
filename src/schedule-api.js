@@ -24,7 +24,7 @@ const PTO_GEMINI_TIMEOUT_MS = Math.max(1000, Number.parseInt(String(process.env.
 const PTO_GEMINI_MAX_OUTPUT_TOKENS = Math.max(256, Number.parseInt(String(process.env.SCHEDULE_GEMINI_MAX_OUTPUT_TOKENS || "1200"), 10) || 1200);
 
 const RESTROOM_REBALANCE_TIME = String(process.env.RESTROOM_REBALANCE_TIME || "09:45:00").trim() || "09:45:00";
-const RESTROOM_REBALANCE_IMPLEMENTATION_MODE = "static_template_controlled";
+const RESTROOM_REBALANCE_IMPLEMENTATION_MODE = "dynamic_route_fit_load_balancing";
 const RESTROOM_REBALANCE_SOURCE = "restroom_rebalance_0945";
 const RESTROOM_REBALANCE_NOTE = "9:45 restroom rebalance: moved only as needed to spread restroom load evenly while staying near the current route.";
 const RESTROOM_REBALANCE_TZ = "America/Chicago";
@@ -1781,15 +1781,6 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
   }
 
   async function rebalanceRestroomAssignments(serviceDate) {
-    return {
-      service_date: serviceDate,
-      scheduled_time: RESTROOM_REBALANCE_TIME,
-      implementation_mode: RESTROOM_REBALANCE_IMPLEMENTATION_MODE,
-      applied: false,
-      reason: "static_pdf_templates_control_0945_phase",
-      moved_count: 0,
-      moves: [],
-    };
     if (typeof runWriteSql !== "function") return { applied: false, reason: "write_path_unavailable", moved_count: 0, moves: [] };
 
     const activeRoster = await listActiveRosterForRestroomRebalance(serviceDate);
@@ -1798,7 +1789,12 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
     const plan = buildRestroomRebalancePlan(assignments, activeRoster, routeFitRows);
 
     if (!plan.applied || !plan.moves?.length) {
-      return { service_date: serviceDate, scheduled_time: RESTROOM_REBALANCE_TIME, ...plan };
+      return {
+        service_date: serviceDate,
+        scheduled_time: RESTROOM_REBALANCE_TIME,
+        implementation_mode: RESTROOM_REBALANCE_IMPLEMENTATION_MODE,
+        ...plan,
+      };
     }
 
     const valuesSql = plan.moves.map((move) => `(
@@ -1810,11 +1806,14 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
     )`).join(",\n");
 
     const writeResult = await runWriteSql("restroom_rebalance_0945", `
-      with moved(assignment_id, from_employee_id, to_employee_id, to_employee_name, from_employee_name) as (
+      with operation_lock as (
+        select pg_advisory_xact_lock(hashtextextended('${esc(RESTROOM_REBALANCE_SOURCE)}:${esc(serviceDate)}', 0))
+      ), moved(assignment_id, from_employee_id, to_employee_id, to_employee_name, from_employee_name) as (
         values ${valuesSql}
       ), eligible as (
         select moved.*
         from moved
+        cross join operation_lock
         join public.daily_schedule_assignments dsa on dsa.id = moved.assignment_id
         join public.daily_work_roster r on r.service_date = dsa.service_date
           and r.employee_id = moved.to_employee_id
@@ -1868,6 +1867,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
     return {
       service_date: serviceDate,
       scheduled_time: RESTROOM_REBALANCE_TIME,
+      implementation_mode: RESTROOM_REBALANCE_IMPLEMENTATION_MODE,
       ...plan,
       planned_moved_count: plan.moves.length,
       moved_count: appliedMoves.length,

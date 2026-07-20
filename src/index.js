@@ -53,7 +53,8 @@ const SCAN_RPC_ALLOWLIST = new Set([
   "tool_record_scan_event",
   "tool_commit_cleaning_workflow",
   "tool_report_device_sync_status",
-  "tool_evaluate_location_proximity"
+  "tool_evaluate_location_proximity",
+  "tool_evaluate_location_proximity_v2"
 ]);
 
 const SCAN_CONTRACT_VERSION = "scan.v2";
@@ -209,6 +210,7 @@ function canonicalizeScanArguments(fn, args, device) {
       "tool_record_scan_event",
       "tool_report_device_sync_status",
       "tool_evaluate_location_proximity",
+      "tool_evaluate_location_proximity_v2",
     ].includes(fn)) canonicalArgs.p_device_identifier = canonicalDeviceId;
   }
 
