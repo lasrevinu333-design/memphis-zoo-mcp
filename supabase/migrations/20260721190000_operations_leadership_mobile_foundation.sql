@@ -84,7 +84,7 @@ begin
 
   select id into v_legacy_msg_user from public.msg_users where ops_manager_id is null and lower(btrim(display_name))='ops manager' and role='manager' order by created_at limit 1;
   if v_legacy_msg_user is not null then
-    update public.msg_users set display_name='Legacy Shared Ops Manager',is_active=false,active=false,updated_at=now(),messaging_identity_key=coalesce(messaging_identity_key,'legacy_shared_ops_manager') where id=v_legacy_msg_user;
+    update public.msg_users set display_name='Legacy Shared Ops Manager',is_active=false,updated_at=now(),messaging_identity_key=coalesce(messaging_identity_key,'legacy_shared_ops_manager') where id=v_legacy_msg_user;
   end if;
 
   perform public.msg_ensure_ops_manager_user(v_jennifer); perform public.msg_ensure_ops_manager_user(v_brandy); perform public.msg_ensure_ops_manager_user(v_haley); perform public.msg_ensure_ops_manager_user(v_eric_m); perform public.msg_ensure_ops_manager_user(v_eric);
