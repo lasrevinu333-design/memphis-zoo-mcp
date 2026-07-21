@@ -1,0 +1,27 @@
+name: Operations Leadership Mobile Foundation
+
+on:
+  pull_request:
+    paths:
+      - 'src/leadership-bootstrap.js'
+      - 'src/mcp-schema-bootstrap.js'
+      - 'supabase/migrations/20260721190000_operations_leadership_mobile_foundation.sql'
+      - 'scripts/operations-leadership-mobile-contract-tests.mjs'
+      - 'package.json'
+  workflow_dispatch:
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:operations-leadership-mobile
+      - run: npm run test:messaging
+      - run: npm run test:messaging-manager-authority
+      - run: npm run test:device-credentials
