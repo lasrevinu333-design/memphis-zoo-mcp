@@ -26,11 +26,12 @@ assert.match(migration, /public_viewer_dashboard_snapshot/);
 assert.doesNotMatch(migration, /update\s+public\.msg_messages\s+set\s+sender_user_id/i, "historical senders must not be rewritten");
 assert.match(bootstrap, /\/mobile-auth-api\/enroll/);
 assert.match(bootstrap, /\/mobile-auth-api\/session/);
+assert.match(bootstrap, /\/leadership-api\/managers\/:managerId\/enrollment-code/);
 assert.match(bootstrap, /\/moxie-mobile-api\/chat/);
 assert.match(bootstrap, /\/viewer-api\/dashboard/);
 assert.match(bootstrap, /capacitor:\/\/localhost/);
 assert.match(bootstrap, /replace\(\/\[’‘\]\/g, "'"\)/);
-assert.match(bootstrap, /retireLegacyManagerEnrollment/);
+assert.doesNotMatch(bootstrap, /express\.application\.use\s*=/, "leadership routes must not revive retired browser routes through a global Express hook");
 assert.match(schemaBootstrap, /installLeadershipHttpRoutes/);
 assert.match(authSource, /app\.post\("\/auth-api\/ops\/manager-codes\/consume"/);
 
@@ -55,8 +56,9 @@ function queryResult(data) {
   return {
     data, error: null,
     select() { return this; }, eq() { return this; }, is() { return this; }, order() { return this; }, limit() { return this; },
-    gte() { return this; }, lte() { return this; },
+    gte() { return this; }, lte() { return this; }, update() { return this; }, insert() { return this; }, delete() { return this; },
     maybeSingle() { return Promise.resolve({ data: Array.isArray(data) ? data[0] : data, error: null }); },
+    single() { return Promise.resolve({ data: Array.isArray(data) ? data[0] : data, error: null }); },
     then(resolve) { return Promise.resolve({ data, error: null }).then(resolve); },
   };
 }
