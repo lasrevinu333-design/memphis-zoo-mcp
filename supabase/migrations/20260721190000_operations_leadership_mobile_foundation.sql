@@ -17,16 +17,16 @@ create index if not exists idx_ops_manager_managers_leadership on public.ops_man
 
 do $leadership$
 declare
-  v_eric uuid; v_jennifer uuid; v_brandy uuid; v_haley uuid; v_eric_m uuid; v_shared uuid;
+  v_eric uuid; v_jennifer uuid; v_annie uuid; v_brandy uuid; v_haley uuid; v_eric_m uuid; v_shared uuid;
   v_legacy_msg_user uuid; v_thread uuid;
 begin
   select manager_id into v_eric from public.ops_manager_managers where system_key='eric_custodial_manager' order by created_at limit 1;
   if v_eric is null then
     insert into public.ops_manager_managers(display_name,contact_label,roles,active,metadata_json,system_key,job_title,department_key,leadership_sort_order,is_system_principal)
-    values('Eric Operle','Custodial Manager',array['OPS_MANAGER','CUSTODIAL_MANAGER','SECURITY_ADMIN']::text[],true,jsonb_build_object('canonical_leadership_roster',true),'eric_custodial_manager','Custodial Manager','custodial',50,false)
+    values('Eric Operle','Custodial Manager',array['OPS_MANAGER','CUSTODIAL_MANAGER','SECURITY_ADMIN']::text[],true,jsonb_build_object('canonical_leadership_roster',true),'eric_custodial_manager','Custodial Manager','custodial',60,false)
     returning manager_id into v_eric;
   else
-    update public.ops_manager_managers set display_name='Eric Operle',contact_label='Custodial Manager',job_title='Custodial Manager',department_key='custodial',leadership_sort_order=50,is_system_principal=false,roles=array['OPS_MANAGER','CUSTODIAL_MANAGER','SECURITY_ADMIN']::text[],active=true,revoked_at=null,revoked_reason=null,metadata_json=coalesce(metadata_json,'{}')||jsonb_build_object('canonical_leadership_roster',true,'canonicalized_at',now()) where manager_id=v_eric;
+    update public.ops_manager_managers set display_name='Eric Operle',contact_label='Custodial Manager',job_title='Custodial Manager',department_key='custodial',leadership_sort_order=60,is_system_principal=false,roles=array['OPS_MANAGER','CUSTODIAL_MANAGER','SECURITY_ADMIN']::text[],active=true,revoked_at=null,revoked_reason=null,metadata_json=coalesce(metadata_json,'{}')||jsonb_build_object('canonical_leadership_roster',true,'canonicalized_at',now()) where manager_id=v_eric;
   end if;
 
   select manager_id into v_jennifer from public.ops_manager_managers where system_key='jennifer_sheffield_director_operations' limit 1;
@@ -39,6 +39,18 @@ begin
     returning manager_id into v_jennifer;
   else
     update public.ops_manager_managers set display_name='Jennifer Sheffield',contact_label='Director of Operations',job_title='Director of Operations',department_key='operations',leadership_sort_order=10,is_system_principal=false,system_key='jennifer_sheffield_director_operations',roles=array['DIRECTOR']::text[],active=true,revoked_at=null,revoked_reason=null,metadata_json=coalesce(metadata_json,'{}')||jsonb_build_object('canonical_leadership_roster',true,'canonicalized_at',now()) where manager_id=v_jennifer;
+  end if;
+
+  select manager_id into v_annie from public.ops_manager_managers where system_key='annie_feist_operations_admin' limit 1;
+  if v_annie is null then
+    select manager_id into v_annie from public.ops_manager_managers where lower(btrim(display_name))='annie feist' order by case when active=true and revoked_at is null then 0 else 1 end,created_at limit 1;
+  end if;
+  if v_annie is null then
+    insert into public.ops_manager_managers(display_name,contact_label,roles,active,metadata_json,system_key,job_title,department_key,leadership_sort_order,is_system_principal)
+    values('Annie Feist','Operations Admin',array['OPS_MANAGER']::text[],true,jsonb_build_object('canonical_leadership_roster',true,'moxie_access',true),'annie_feist_operations_admin','Operations Admin','operations_admin',15,false)
+    returning manager_id into v_annie;
+  else
+    update public.ops_manager_managers set display_name='Annie Feist',contact_label='Operations Admin',job_title='Operations Admin',department_key='operations_admin',leadership_sort_order=15,is_system_principal=false,system_key='annie_feist_operations_admin',roles=array['OPS_MANAGER']::text[],active=true,revoked_at=null,revoked_reason=null,metadata_json=coalesce(metadata_json,'{}')||jsonb_build_object('canonical_leadership_roster',true,'moxie_access',true,'canonicalized_at',now()) where manager_id=v_annie;
   end if;
 
   select manager_id into v_brandy from public.ops_manager_managers where system_key='brandy_gull_horticulture_manager' limit 1;
@@ -80,15 +92,15 @@ begin
   end if;
 
   update public.ops_manager_managers m set active=false,revoked_at=coalesce(m.revoked_at,now()),revoked_reason=coalesce(m.revoked_reason,'quarantined_duplicate_or_test_identity_20260721'),is_system_principal=true,metadata_json=coalesce(m.metadata_json,'{}')||jsonb_build_object('quarantined_at',now(),'quarantine_reason','duplicate_or_test_identity')
-  where m.manager_id not in(v_eric,v_jennifer,v_brandy,v_haley,v_eric_m) and (lower(m.display_name) like 'codex %' or lower(m.display_name) like '% test %' or lower(m.display_name) like '% probe %' or lower(m.display_name) like 'eric self text invite test%' or lower(btrim(m.display_name)) in('eric operle','jennifer sheffield','shared ops manager enrollment'));
+  where m.manager_id not in(v_eric,v_jennifer,v_annie,v_brandy,v_haley,v_eric_m) and (lower(m.display_name) like 'codex %' or lower(m.display_name) like '% test %' or lower(m.display_name) like '% probe %' or lower(m.display_name) like 'eric self text invite test%' or lower(btrim(m.display_name)) in('eric operle','jennifer sheffield','shared ops manager enrollment'));
 
   select id into v_legacy_msg_user from public.msg_users where ops_manager_id is null and lower(btrim(display_name))='ops manager' and role='manager' order by created_at limit 1;
   if v_legacy_msg_user is not null then
     update public.msg_users set display_name='Legacy Shared Ops Manager',is_active=false,updated_at=now(),messaging_identity_key=coalesce(messaging_identity_key,'legacy_shared_ops_manager') where id=v_legacy_msg_user;
   end if;
 
-  perform public.msg_ensure_ops_manager_user(v_jennifer); perform public.msg_ensure_ops_manager_user(v_brandy); perform public.msg_ensure_ops_manager_user(v_haley); perform public.msg_ensure_ops_manager_user(v_eric_m); perform public.msg_ensure_ops_manager_user(v_eric);
-  perform public.msg_get_or_create_ops_manager_thread(v_jennifer); perform public.msg_get_or_create_ops_manager_thread(v_brandy); perform public.msg_get_or_create_ops_manager_thread(v_haley); perform public.msg_get_or_create_ops_manager_thread(v_eric_m); perform public.msg_get_or_create_ops_manager_thread(v_eric);
+  perform public.msg_ensure_ops_manager_user(v_jennifer); perform public.msg_ensure_ops_manager_user(v_annie); perform public.msg_ensure_ops_manager_user(v_brandy); perform public.msg_ensure_ops_manager_user(v_haley); perform public.msg_ensure_ops_manager_user(v_eric_m); perform public.msg_ensure_ops_manager_user(v_eric);
+  perform public.msg_get_or_create_ops_manager_thread(v_jennifer); perform public.msg_get_or_create_ops_manager_thread(v_annie); perform public.msg_get_or_create_ops_manager_thread(v_brandy); perform public.msg_get_or_create_ops_manager_thread(v_haley); perform public.msg_get_or_create_ops_manager_thread(v_eric_m); perform public.msg_get_or_create_ops_manager_thread(v_eric);
   select id into v_thread from public.msg_threads where system_key='ops_manager_shared_chat_v1' limit 1;
   if v_thread is not null then
     update public.msg_threads set title='Operations Leadership Chat',updated_at=now(),is_active=true,thread_type='group' where id=v_thread;
