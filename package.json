@@ -44,6 +44,7 @@
     "test:schema-fingerprint": "node scripts/schema-fingerprint-check.mjs",
     "schema:fingerprint:refresh": "node scripts/refresh-schema-fingerprint.mjs",
     "test:empty-db-rebuild": "node scripts/empty-database-rebuild-check.mjs",
+    "test:operations-leadership-mobile": "node scripts/operations-leadership-mobile-contract-tests.mjs",
     "device-security:password": "node scripts/device-security-password-admin.mjs"
   },
   "dependencies": {
