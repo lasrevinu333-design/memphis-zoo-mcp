@@ -73,9 +73,9 @@ jobs:
           container="$(sed -n 's/.*"retained_test_container":"\([^"]*\)".*/\1/p' /tmp/memphis-schema-rebuild.log | tail -n 1)"
           test -n "$container"
           trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
-          SHARED_ENROLLMENT_TEST_DOCKER_CONTAINER="$container" \
-            SHARED_ENROLLMENT_TEST_DATABASE=postgres \
-            npm run --silent test:manager-shared-enrollment-db
+          OPERATIONS_LEADERSHIP_TEST_DOCKER_CONTAINER="$container" \
+            OPERATIONS_LEADERSHIP_TEST_DATABASE=postgres \
+            npm run --silent test:operations-leadership-mobile-db
           GEMINI_CONSOLE_TEST_DOCKER_CONTAINER="$container" \
             GEMINI_CONSOLE_TEST_DATABASE=postgres \
             npm run --silent test:gemini-console-db
