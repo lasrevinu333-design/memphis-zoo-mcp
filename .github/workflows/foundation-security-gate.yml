@@ -35,6 +35,7 @@ jobs:
           node --check src/auth/shared-access-auth.js
           node --check src/auth/mcp-connector-auth.js
           node --check src/leadership-bootstrap.js
+          node --check src/manager-notifications.js
           node --check src/annie-moxie-bootstrap.js
           npm audit --omit=dev --audit-level=high
       - name: Authentication and integration contracts
@@ -42,6 +43,7 @@ jobs:
           set -euo pipefail
           npm run --silent test:auth
           npm run --silent test:operations-leadership-mobile
+          npm run --silent test:manager-notifications
           npm run --silent test:messaging
           npm run --silent test:moxie-route
           npm run --silent test:schedule-source-type
