@@ -11,6 +11,7 @@ import { getToolManifest } from "./mcp/tool-manifest.js";
 import { normalizeMcpServerName } from "./mcp/create-mcp-server.js";
 import { RELEASE_ID } from "./app-version.js";
 import { makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
+import { installAnnieMoxieRoutes } from "./annie-moxie-bootstrap.js";
 import { installLeadershipHttpRoutes } from "./leadership-bootstrap.js";
 
 /**
@@ -19,11 +20,6 @@ import { installLeadershipHttpRoutes } from "./leadership-bootstrap.js";
  * This file intentionally starts before src/index.js. It keeps the existing
  * Express app, routes, /mcp transport, /sse transport, dashboard APIs, scan
  * APIs, messaging APIs, and event APIs untouched.
- *
- * It performs three guarded bootstrap jobs:
- *   - replaces legacy MCP tool registration with the modular MCP tool layer
- *   - adds read-only HTTP diagnostic routes before Express starts listening
- *   - installs Operations Leadership, public Viewer, and mobile Moxie routes
  */
 
 const MODULAR_TOOL_NAMES = new Set([
@@ -58,6 +54,9 @@ function installHttpDiagnostics(app) {
     enumerable: false,
     configurable: false,
   });
+  // Install the narrower Annie/Eric Moxie authorization first so these exact
+  // routes are authoritative before the generic leadership compatibility layer.
+  installAnnieMoxieRoutes(app);
   installLeadershipHttpRoutes(app);
   app.get("/mcp-tools.json", requireOpsManagerAuth, (_req, res) => {
     res.status(200).json(getToolManifest({ includePlanned: true }));
