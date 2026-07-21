@@ -41,7 +41,7 @@ jobs:
             test:messaging-manager-authority test:moxie-route test:schedule-source-type \
             test:device-credentials test:operational-recovery test:foundation-repair \
             test:custodial-repair test:device-security-app test:gemini-console test:schema-fingerprint \
-            test:operations-leadership-mobile; do
+            test:operations-leadership-mobile test:manager-notifications; do
             echo "===== npm run $command =====" | tee -a /tmp/backend-release-contracts.log
             npm run --silent "$command" 2>&1 | tee -a /tmp/backend-release-contracts.log
             status=${PIPESTATUS[0]}
