@@ -26,8 +26,12 @@ jobs:
           set -euo pipefail
           cat .batch/backend.* | base64 -d | gzip -dc > /tmp/manager-notification-batch.patch
           patch -p1 --forward --batch < /tmp/manager-notification-batch.patch
+          git checkout HEAD -- \
+            .github/workflows/foundation-security-gate.yml \
+            .github/workflows/operations-leadership-mobile-foundation.yml \
+            .github/workflows/release-diagnostic.yml \
+            .github/workflows/apply-manager-notification-batch.yml
           rm -rf .batch
-          rm -f .github/workflows/apply-manager-notification-batch.yml
           git diff --check
       - name: Commit batch to pull-request branch
         shell: bash
