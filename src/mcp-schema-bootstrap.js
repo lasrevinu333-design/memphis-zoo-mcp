@@ -11,6 +11,7 @@ import { getToolManifest } from "./mcp/tool-manifest.js";
 import { normalizeMcpServerName } from "./mcp/create-mcp-server.js";
 import { RELEASE_ID } from "./app-version.js";
 import { makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
+import { installLeadershipHttpRoutes } from "./leadership-bootstrap.js";
 
 /**
  * Compatibility/bootstrap layer for the Memphis Zoo MCP server.
@@ -19,9 +20,10 @@ import { makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
  * Express app, routes, /mcp transport, /sse transport, dashboard APIs, scan
  * APIs, messaging APIs, and event APIs untouched.
  *
- * It currently does two small bootstrap jobs:
+ * It performs three guarded bootstrap jobs:
  *   - replaces legacy MCP tool registration with the modular MCP tool layer
  *   - adds read-only HTTP diagnostic routes before Express starts listening
+ *   - installs Operations Leadership, public Viewer, and mobile Moxie routes
  */
 
 const MODULAR_TOOL_NAMES = new Set([
@@ -50,19 +52,16 @@ function getAppInfo() {
 
 function installHttpDiagnostics(app) {
   if (!app || app.__memphisHttpDiagnosticsInstalled) return;
-
   const requireOpsManagerAuth = makeOpsAccessMiddleware();
-
   Object.defineProperty(app, "__memphisHttpDiagnosticsInstalled", {
     value: true,
     enumerable: false,
     configurable: false,
   });
-
+  installLeadershipHttpRoutes(app);
   app.get("/mcp-tools.json", requireOpsManagerAuth, (_req, res) => {
     res.status(200).json(getToolManifest({ includePlanned: true }));
   });
-
   app.get("/status/deep", requireOpsManagerAuth, (_req, res) => {
     const env = validateRuntimeEnv({ strict: false });
     res.status(env.ok ? 200 : 503).json({
@@ -76,14 +75,12 @@ function installHttpDiagnostics(app) {
 }
 
 const originalListen = express.application?.listen;
-
 if (typeof originalListen === "function" && !express.application.__memphisDiagnosticsListenPatched) {
   Object.defineProperty(express.application, "__memphisDiagnosticsListenPatched", {
     value: true,
     enumerable: false,
     configurable: false,
   });
-
   express.application.listen = function patchedListen(...args) {
     installHttpDiagnostics(this);
     return originalListen.apply(this, args);
@@ -92,93 +89,45 @@ if (typeof originalListen === "function" && !express.application.__memphisDiagno
 
 function ensureModularTools(server) {
   if (server.__memphisModularToolsRegistered) return;
-
   Object.defineProperty(server, "__memphisModularToolsRegistered", {
     value: true,
     enumerable: false,
     configurable: false,
   });
-
   const appInfo = getAppInfo();
-
   registerMcpTool(
     server,
     "ping",
     {
       description: "Basic MCP liveness check.",
-      inputSchema: {
-        message: z.string().optional(),
-      },
+      inputSchema: { message: z.string().optional() },
     },
-    async ({ message } = {}) => {
-      return textResponse(`MCP server is alive. ${message || ""}`.trim());
-    }
+    async ({ message } = {}) => textResponse(`MCP server is alive. ${message || ""}`.trim())
   );
-
-  registerServerTools(server, {
-    getAppInfo: () => appInfo,
-  });
-
+  registerServerTools(server, { getAppInfo: () => appInfo });
   registerGithubTools(server);
   registerSupabaseTools(server);
 }
 
-// M14: Monkey-patching McpServer.prototype.tool — this is intentional and guarded.
-// The patch intercepts tool registration to automatically wire up modular schema/bootstrap tools.
-// Guard: __memphisSchemaBootstrapApplied prevents double-patching if module is imported multiple times.
 const originalTool = McpServer.prototype.tool;
-
 if (typeof originalTool === "function" && !McpServer.prototype.__memphisSchemaBootstrapApplied) {
   Object.defineProperty(McpServer.prototype, "__memphisSchemaBootstrapApplied", {
     value: true,
     enumerable: false,
     configurable: false,
   });
-
   McpServer.prototype.tool = function patchedTool(name, schemaOrDescription, schemaOrCallback, maybeCallback) {
     if (MODULAR_TOOL_NAMES.has(name)) {
       ensureModularTools(this);
       return undefined;
     }
-
     const canRegister = typeof this.registerTool === "function";
-
-    if (
-      canRegister &&
-      arguments.length === 3 &&
-      schemaOrDescription &&
-      typeof schemaOrDescription === "object" &&
-      typeof schemaOrCallback === "function"
-    ) {
-      return this.registerTool(
-        name,
-        {
-          title: name,
-          inputSchema: schemaOrDescription,
-        },
-        schemaOrCallback
-      );
+    if (canRegister && arguments.length === 3 && schemaOrDescription && typeof schemaOrDescription === "object" && typeof schemaOrCallback === "function") {
+      return this.registerTool(name, { title: name, inputSchema: schemaOrDescription }, schemaOrCallback);
     }
-
-    if (
-      canRegister &&
-      arguments.length === 4 &&
-      typeof schemaOrDescription === "string" &&
-      schemaOrCallback &&
-      typeof schemaOrCallback === "object" &&
-      typeof maybeCallback === "function"
-    ) {
-      return this.registerTool(
-        name,
-        {
-          title: name,
-          description: schemaOrDescription,
-          inputSchema: schemaOrCallback,
-        },
-        maybeCallback
-      );
+    if (canRegister && arguments.length === 4 && typeof schemaOrDescription === "string" && schemaOrCallback && typeof schemaOrCallback === "object" && typeof maybeCallback === "function") {
+      return this.registerTool(name, { title: name, description: schemaOrDescription, inputSchema: schemaOrCallback }, maybeCallback);
     }
-
     return originalTool.apply(this, arguments);
   };
 }
