@@ -326,6 +326,9 @@ async function verifyDockerConcurrency(database) {
   const sharedRoomState = dockerPsql(database, `
     with room as (
       select id from public.msg_threads where system_key = 'ops_manager_shared_chat_v1'
+    ), concurrent_managers as (
+      select ('00000000-0000-4000-8000-' || lpad((9000 + value)::text, 12, '0'))::uuid as manager_id
+      from generate_series(1, 10) value
     )
     select
       (select count(*) from room)::text || '|' ||
@@ -334,11 +337,15 @@ async function verifyDockerConcurrency(database) {
        join public.msg_users u on u.id = p.user_id
        where p.thread_id = (select id from room)
          and p.left_at is null
-         and u.messaging_identity_key = 'ops_manager_shared_identity_v1')::text || '|' ||
-      (select count(*) from public.msg_users where is_active is true and role='manager')::text;
+         and u.ops_manager_id in (select manager_id from concurrent_managers))::text || '|' ||
+      (select count(*)
+       from public.msg_users u
+       where u.is_active is true
+         and u.role='manager'
+         and u.ops_manager_id in (select manager_id from concurrent_managers))::text;
   `).trim();
-  if (sharedRoomState !== "1|1|1") throw new Error(`Shared Ops Manager identity/room invariant failed: ${sharedRoomState}`);
-  const teamRoomCall = await dockerPsqlConcurrent(database, `select id from public.msg_get_or_create_custodial_team_thread((select id from public.msg_users where messaging_identity_key='ops_manager_shared_identity_v1'));`);
+  if (sharedRoomState !== "1|10|10") throw new Error(`Named Ops Manager identity/room invariant failed: ${sharedRoomState}`);
+  const teamRoomCall = await dockerPsqlConcurrent(database, `select id from public.msg_get_or_create_custodial_team_thread((select id from public.msg_users where ops_manager_id='00000000-0000-4000-8000-000000009001'::uuid));`);
   if (teamRoomCall.status === 0 || !/retired/i.test(teamRoomCall.stderr)) {
     throw new Error(`Retired Custodial Team room entry point did not fail closed: ${teamRoomCall.stderr}`);
   }
@@ -420,8 +427,8 @@ async function verifyDockerConcurrency(database) {
     );
   `).trim();
   const deletionCalls = await Promise.all([
-    dockerPsqlConcurrent(database, `select id from public.msg_delete_message('${deletionMessageId}'::uuid, (select id from public.msg_users where messaging_identity_key='ops_manager_shared_identity_v1'));`),
-    dockerPsqlConcurrent(database, `select id from public.msg_delete_message('${deletionMessageId}'::uuid, (select id from public.msg_users where messaging_identity_key='ops_manager_shared_identity_v1'));`),
+    dockerPsqlConcurrent(database, `select id from public.msg_delete_message('${deletionMessageId}'::uuid, (select id from public.msg_users where ops_manager_id='00000000-0000-4000-8000-000000009001'::uuid));`),
+    dockerPsqlConcurrent(database, `select id from public.msg_delete_message('${deletionMessageId}'::uuid, (select id from public.msg_users where ops_manager_id='00000000-0000-4000-8000-000000009001'::uuid));`),
   ]);
   if (deletionCalls.some((result) => result.status !== 0)) {
     throw new Error(`Concurrent message deletion failed:\n${deletionCalls.map((item) => item.stderr).filter(Boolean).join("\n")}`);
@@ -431,7 +438,7 @@ async function verifyDockerConcurrency(database) {
     from public.msg_messages where id = '${deletionMessageId}'::uuid;
   `).trim();
   if (deletionState !== "1|true|[deleted]|true") throw new Error(`Concurrent message deletion invariant failed: ${deletionState}`);
-  console.log("verified 10-way exact finish, GPS freshness/boundary/motion/replay/duplicate handling, two-worker outbox claims, restart lease recovery, two-browser Moxie CAS, atomic Moxie password rotation, 10-manager shared-identity convergence, retired automatic team room, idempotent ordinary group creation, concurrent conversation deletion, and concurrent message deletion");
+  console.log("verified 10-way exact finish, GPS freshness/boundary/motion/replay/duplicate handling, two-worker outbox claims, restart lease recovery, two-browser Moxie CAS, atomic Moxie password rotation, 10-manager named-identity convergence, retired automatic team room, idempotent ordinary group creation, concurrent conversation deletion, and concurrent message deletion");
 }
 
 function runDocker(args, options = {}) {
@@ -591,11 +598,11 @@ begin
   insert into public.ops_manager_managers(manager_id, display_name, roles, active)
   values ('00000000-0000-4000-8000-00000000f107', 'Rebuild Messaging Manager', array['OPS_MANAGER','CUSTODIAL_MANAGER']::text[], true);
   v_manager_user := public.msg_ensure_ops_manager_user('00000000-0000-4000-8000-00000000f107');
-  if v_manager_user.messaging_identity_key <> 'ops_manager_shared_identity_v1'
-     or v_manager_user.ops_manager_id is not null
-     or v_manager_user.display_name <> 'Ops Manager'
+  if v_manager_user.messaging_identity_key is not null
+     or v_manager_user.ops_manager_id <> '00000000-0000-4000-8000-00000000f107'::uuid
+     or v_manager_user.display_name <> 'Rebuild Messaging Manager'
      or v_manager_user.role <> 'manager' then
-    raise exception 'Shared manager messaging principal was not server-derived correctly: %', row_to_json(v_manager_user);
+    raise exception 'Named manager messaging principal was not server-derived correctly: %', row_to_json(v_manager_user);
   end if;
   v_shared_thread_a := public.msg_get_or_create_ops_manager_thread('00000000-0000-4000-8000-00000000f107');
   v_message := public.msg_send_message_as_ops_manager(
@@ -607,12 +614,24 @@ begin
   values ('00000000-0000-4000-8000-00000000f115', 'Rebuild Messaging Manager Two', array['OPS_MANAGER']::text[], true);
   v_manager_user_b := public.msg_ensure_ops_manager_user('00000000-0000-4000-8000-00000000f115');
   v_shared_thread_b := public.msg_get_or_create_ops_manager_thread('00000000-0000-4000-8000-00000000f115');
-  if v_manager_user.id <> v_manager_user_b.id
+  if v_manager_user.id = v_manager_user_b.id
+     or v_manager_user_b.ops_manager_id <> '00000000-0000-4000-8000-00000000f115'::uuid
+     or v_manager_user_b.display_name <> 'Rebuild Messaging Manager Two'
      or v_shared_thread_a.id <> v_shared_thread_b.id
      or v_shared_thread_a.system_key <> 'ops_manager_shared_chat_v1'
-     or (select count(*) from public.msg_thread_participants where thread_id = v_shared_thread_a.id and left_at is null) <> 1
-     or (select count(*) from public.msg_users where is_active is true and role='manager') <> 1 then
-    raise exception 'Ops Managers did not reconcile into one canonical public identity and shared room';
+     or not exists (
+       select 1 from public.msg_thread_participants
+       where thread_id = v_shared_thread_a.id and user_id = v_manager_user.id and left_at is null
+     )
+     or not exists (
+       select 1 from public.msg_thread_participants
+       where thread_id = v_shared_thread_a.id and user_id = v_manager_user_b.id and left_at is null
+     )
+     or (select count(*) from public.msg_users where is_active is true and role='manager' and ops_manager_id in (
+       '00000000-0000-4000-8000-00000000f107'::uuid,
+       '00000000-0000-4000-8000-00000000f115'::uuid
+     )) <> 2 then
+    raise exception 'Named Ops Managers did not retain distinct identities in the shared room';
   end if;
   if not exists (
     select 1 from public.msg_message_audit a

@@ -16,7 +16,7 @@
     "test:restroom-rebalance-route": "node scripts/restroom-rebalance-route-tests.mjs",
     "test:ai-intent": "node scripts/smoke-ai-intent.mjs",
     "test:messaging": "node scripts/memphis-messaging-regression-tests.mjs",
-    "test:auth": "node scripts/manager-shared-48-hour-enrollment-tests.mjs",
+    "test:auth": "node scripts/operations-leadership-mobile-contract-tests.mjs",
     "test:device-popups": "node scripts/device-popup-fully-kiosk-test.mjs",
     "test:thursday-demo": "node scripts/thursday-notification-presentation-tests.mjs",
     "test:leadership-demo": "node scripts/demo-leadership-blank-schedule-tests.mjs",
@@ -29,9 +29,6 @@
     "test:messaging-recovery": "node scripts/memphis-messaging-route-recovery-tests.mjs",
     "test:messaging-incremental": "node scripts/messaging-incremental-sync-tests.mjs",
     "test:messaging-manager-authority": "node scripts/messaging-manager-authority-tests.mjs",
-    "test:ops-manager-shared-messenger": "node scripts/ops-manager-shared-messenger-tests.mjs",
-    "test:manager-shared-enrollment": "node scripts/manager-shared-48-hour-enrollment-tests.mjs",
-    "test:manager-shared-enrollment-db": "node scripts/manager-shared-enrollment-database-tests.mjs",
     "test:gemini-console": "node scripts/gemini-console-foundation-tests.mjs",
     "test:gemini-console-db": "node scripts/gemini-console-database-tests.mjs",
     "test:device-security-app": "node scripts/device-security-app-tests.mjs",
@@ -44,7 +41,10 @@
     "test:schema-fingerprint": "node scripts/schema-fingerprint-check.mjs",
     "schema:fingerprint:refresh": "node scripts/refresh-schema-fingerprint.mjs",
     "test:empty-db-rebuild": "node scripts/empty-database-rebuild-check.mjs",
-    "device-security:password": "node scripts/device-security-password-admin.mjs"
+    "test:operations-leadership-mobile": "node scripts/operations-leadership-mobile-contract-tests.mjs",
+    "test:operations-leadership-mobile-db": "node scripts/operations-leadership-mobile-database-tests.mjs",
+    "device-security:password": "node scripts/device-security-password-admin.mjs",
+    "test:manager-notifications": "node scripts/manager-notification-contract-tests.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.18.0",
