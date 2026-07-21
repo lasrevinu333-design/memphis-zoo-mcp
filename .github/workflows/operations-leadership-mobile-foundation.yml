@@ -4,9 +4,11 @@ on:
   pull_request:
     paths:
       - 'src/leadership-bootstrap.js'
+      - 'src/annie-moxie-bootstrap.js'
       - 'src/mcp-schema-bootstrap.js'
       - 'supabase/migrations/20260721190000_operations_leadership_mobile_foundation.sql'
       - 'scripts/operations-leadership-mobile-contract-tests.mjs'
+      - 'scripts/operations-leadership-mobile-database-tests.mjs'
       - 'package.json'
       - '.github/workflows/operations-leadership-mobile-foundation.yml'
   workflow_dispatch:
@@ -26,7 +28,7 @@ jobs:
       - run: npm run test:messaging
       - run: npm run test:messaging-manager-authority
       - run: npm run test:device-credentials
-      - name: Rebuild migrations in a disposable database
+      - name: Rebuild migrations and verify named leadership database
         id: schema_rebuild
         continue-on-error: true
         env:
@@ -34,7 +36,14 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
+          export SCHEMA_REBUILD_KEEP_DATABASE=1
           npm run --silent test:empty-db-rebuild 2>&1 | tee /tmp/operations-leadership-schema-rebuild.log
+          container="$(sed -n 's/.*"retained_test_container":"\([^"]*\)".*/\1/p' /tmp/operations-leadership-schema-rebuild.log | tail -n 1)"
+          test -n "$container"
+          trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
+          OPERATIONS_LEADERSHIP_TEST_DOCKER_CONTAINER="$container" \
+            OPERATIONS_LEADERSHIP_TEST_DATABASE=postgres \
+            npm run --silent test:operations-leadership-mobile-db 2>&1 | tee -a /tmp/operations-leadership-schema-rebuild.log
       - name: Upload schema rebuild log
         if: always()
         uses: actions/upload-artifact@v4
