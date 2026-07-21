@@ -4,16 +4,9 @@ import { createClient } from "@supabase/supabase-js";
 import { createOpsManagerSession, makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
 import { callGemini } from "./routes/moxie.js";
 
-const RETIRED_NAMED_ROUTES = new Set([
-  "/auth-api/ops/managers",
-  "/auth-api/ops/manager-codes",
-  "/auth-api/ops/pairing",
-  "/auth-api/ops/pairing-links",
-  "/auth-api/ops/invitations",
-]);
-
 // iPhone smart punctuation previously made “Who’s working?” miss the roster
-// handler even though "Who's working?" succeeded.
+// handler even though "Who's working?" succeeded. Normalize only common
+// user-entered prompt fields at JSON parsing time.
 const originalJson = express.json;
 if (typeof originalJson === "function" && !express.__memphisSmartPunctuationJsonPatched) {
   Object.defineProperty(express, "__memphisSmartPunctuationJsonPatched", { value: true });
@@ -35,19 +28,6 @@ if (typeof originalJson === "function" && !express.__memphisSmartPunctuationJson
         next();
       });
     };
-  };
-}
-
-// A prior release mounted a blanket 410 middleware before the still-valid
-// named-manager routes. Skip only that obsolete registration.
-const originalUse = express.application?.use;
-if (typeof originalUse === "function" && !express.application.__memphisLeadershipUsePatched) {
-  Object.defineProperty(express.application, "__memphisLeadershipUsePatched", { value: true });
-  express.application.use = function leadershipAwareUse(...args) {
-    const route = typeof args[0] === "string" ? args[0] : "";
-    const handler = typeof args[1] === "function" ? args[1] : null;
-    if (RETIRED_NAMED_ROUTES.has(route) && handler?.name === "retireLegacyManagerEnrollment") return this;
-    return originalUse.apply(this, args);
   };
 }
 
@@ -109,7 +89,7 @@ function nativeCredential(req) {
   const credentialId = raw.slice(0, dot);
   const secret = raw.slice(dot + 1);
   return /^[0-9a-f-]{36}$/i.test(credentialId) && /^[A-Za-z0-9_-]{32,}$/.test(secret)
-    ? { credentialId, secret, raw }
+    ? { credentialId, secret }
     : null;
 }
 function trustTtlMs(env) {
@@ -120,6 +100,14 @@ function hasRole(session, role) {
   const wanted = String(role || "").trim().toUpperCase();
   return Array.isArray(session?.roles) && session.roles.some((item) => String(item || "").trim().toUpperCase() === wanted);
 }
+function enrollmentRole(manager = {}) {
+  const roles = Array.isArray(manager.roles) ? manager.roles.map((role) => String(role).toUpperCase()) : [];
+  if (roles.includes("DIRECTOR")) return "DIRECTOR";
+  if (roles.includes("SECURITY_ADMIN")) return "SECURITY_ADMIN";
+  return "OPS_MANAGER";
+}
+function generateManagerCode() { return String(crypto.randomInt(0, 100_000_000)).padStart(8, "0"); }
+function formatManagerCode(code) { return `${code.slice(0, 4)} ${code.slice(4)}`; }
 function fail(res, error, fallback) {
   res.status(Number(error?.status) || 500).json({ ok: false, error: String(error?.message || fallback).slice(0, 1000) });
 }
@@ -140,7 +128,9 @@ async function workspace(db) {
   ]);
   for (const result of [notes, reminders, contacts, chat]) if (result.error) throw result.error;
   return {
-    notes: notes.data || [], reminders: reminders.data || [], contacts: contacts.data || [],
+    notes: notes.data || [],
+    reminders: reminders.data || [],
+    contacts: contacts.data || [],
     chat: chat.data || { id: "default", history: [], saved_chats: [], revision: 1, updated_at: new Date().toISOString() },
   };
 }
@@ -161,7 +151,7 @@ export function installLeadershipHttpRoutes(app, { env = process.env, supabase =
   const configured = (_req, res, next) => db ? next() : res.status(503).json({ ok: false, error: "Database connection is not configured." });
   const requireCustodial = (req, res, next) => requireManager(req, res, () => hasRole(req.memphisAuth, "CUSTODIAL_MANAGER")
     ? next()
-    : res.status(403).json({ ok: false, error: "Custodial Manager access is required for Moxie." }));
+    : res.status(403).json({ ok: false, error: "Custodial Manager access is required." }));
 
   async function authenticateNative(req) {
     const parts = nativeCredential(req);
@@ -181,7 +171,15 @@ export function installLeadershipHttpRoutes(app, { env = process.env, supabase =
     const manager = managerResult.data;
     if (!manager || manager.active !== true || manager.revoked_at || manager.is_system_principal) return { ok: false, status: 403, error: "This leadership identity is inactive." };
     await db.from("ops_manager_trusted_devices").update({ last_used_at: new Date().toISOString() }).eq("credential_id", device.credential_id);
-    const session = createOpsManagerSession({ credentialId: device.credential_id, deviceId: device.device_id, manager, authMode: "trusted_device", accessLevel: "full_access", maximumAccessLevel: device.max_access_level || "full_access", env });
+    const session = createOpsManagerSession({
+      credentialId: device.credential_id,
+      deviceId: device.device_id,
+      manager,
+      authMode: "trusted_device",
+      accessLevel: "full_access",
+      maximumAccessLevel: device.max_access_level || "full_access",
+      env,
+    });
     return { ok: true, manager, device, session };
   }
 
@@ -222,7 +220,11 @@ export function installLeadershipHttpRoutes(app, { env = process.env, supabase =
     try {
       const auth = await authenticateNative(req);
       if (!auth.ok) return res.status(auth.status).json({ ok: false, error: auth.error });
-      res.json({ ok: true, data: { session: auth.session, manager: auth.manager, trusted_device: { credential_id: auth.device.credential_id, device_id: auth.device.device_id, device_label: auth.device.device_label, expires_at: auth.device.expires_at } } });
+      res.json({ ok: true, data: {
+        session: auth.session,
+        manager: auth.manager,
+        trusted_device: { credential_id: auth.device.credential_id, device_id: auth.device.device_id, device_label: auth.device.device_label, expires_at: auth.device.expires_at },
+      } });
     } catch (error) { fail(res, error, "App session could not be refreshed."); }
   });
 
@@ -234,7 +236,14 @@ export function installLeadershipHttpRoutes(app, { env = process.env, supabase =
     } catch (error) { fail(res, error, "App logout failed."); }
   });
 
-  app.get("/leadership-api/health", (_req, res) => res.status(db ? 200 : 503).json({ ok: Boolean(db), area: "operations-leadership", named_manager_enrollment: true, shared_manager_enrollment: false, mobile_origins: ["https://localhost", "capacitor://localhost"] }));
+  app.get("/leadership-api/health", (_req, res) => res.status(db ? 200 : 503).json({
+    ok: Boolean(db),
+    area: "operations-leadership",
+    named_manager_enrollment: true,
+    shared_manager_enrollment: false,
+    mobile_origins: ["https://localhost", "capacitor://localhost"],
+  }));
+
   app.get("/leadership-api/roster", configured, requireManager, async (req, res) => {
     try {
       const result = await db.from("ops_manager_managers")
@@ -246,6 +255,55 @@ export function installLeadershipHttpRoutes(app, { env = process.env, supabase =
     } catch (error) { fail(res, error, "Leadership roster could not be loaded."); }
   });
 
+  app.post("/leadership-api/managers/:managerId/enrollment-code", configured, requireCustodial, async (req, res) => {
+    try {
+      const managerId = String(req.params?.managerId || "").trim();
+      if (!/^[0-9a-f-]{36}$/i.test(managerId)) return res.status(400).json({ ok: false, error: "A valid leadership manager ID is required." });
+      const targetResult = await db.from("ops_manager_managers")
+        .select("manager_id,display_name,job_title,contact_label,roles,active,revoked_at,is_system_principal")
+        .eq("manager_id", managerId).maybeSingle();
+      if (targetResult.error) throw targetResult.error;
+      const manager = targetResult.data;
+      if (!manager || manager.active !== true || manager.revoked_at || manager.is_system_principal) return res.status(404).json({ ok: false, error: "Active leadership identity not found." });
+      const secret = sessionSecret(env);
+      if (!secret) return res.status(503).json({ ok: false, error: "Manager session signing is not configured." });
+      const ttlSeconds = Math.max(60, Math.min(3600, Number(req.body?.ttl_seconds) || 900));
+      const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
+      const roleSnapshot = enrollmentRole(manager);
+      await db.from("ops_manager_enrollment_codes")
+        .update({ status: "revoked", revoked_at: new Date().toISOString(), revoked_reason: "replaced_by_new_personal_code" })
+        .eq("manager_id", managerId).eq("status", "active").is("consumed_at", null).is("revoked_at", null);
+      let inserted = null;
+      let code = "";
+      for (let attempt = 0; attempt < 12 && !inserted; attempt += 1) {
+        code = generateManagerCode();
+        const result = await db.from("ops_manager_enrollment_codes").insert({
+          manager_id: managerId,
+          code_hash: hmacHex(secret, `ops-manager-enrollment-code:v1:${code}`),
+          role_snapshot: roleSnapshot,
+          created_by_manager_id: req.memphisAuth.manager_id,
+          created_by_credential_id: req.memphisAuth.credential_id || null,
+          expires_at: expiresAt,
+          max_attempts: 5,
+          metadata_json: { created_from: "operations_leadership_mobile_app", intended_for: manager.display_name },
+        }).select("id,manager_id,role_snapshot,created_at,expires_at,max_attempts").single();
+        if (!result.error) inserted = result.data;
+        else if (String(result.error.code || "") !== "23505") throw result.error;
+      }
+      if (!inserted) throw Object.assign(new Error("A unique personal enrollment code could not be generated."), { status: 500 });
+      res.json({ ok: true, data: {
+        code_id: inserted.id,
+        one_time_code: code,
+        display_code: formatManagerCode(code),
+        expires_at: inserted.expires_at,
+        ttl_seconds: ttlSeconds,
+        max_attempts: inserted.max_attempts,
+        role_snapshot: inserted.role_snapshot,
+        manager,
+      } });
+    } catch (error) { fail(res, error, "Personal manager code could not be generated."); }
+  });
+
   app.get("/viewer-api/dashboard", configured, async (_req, res) => {
     try {
       const result = await db.rpc("public_viewer_dashboard_snapshot");
@@ -254,6 +312,7 @@ export function installLeadershipHttpRoutes(app, { env = process.env, supabase =
       res.json({ ok: true, data: Array.isArray(result.data) ? result.data[0] : (result.data || {}) });
     } catch (error) { fail(res, error, "Public dashboard is temporarily unavailable."); }
   });
+
   app.get("/viewer-api/events", configured, async (req, res) => {
     try {
       const days = Math.max(1, Math.min(180, Number(req.query?.days) || 60));
@@ -273,6 +332,7 @@ export function installLeadershipHttpRoutes(app, { env = process.env, supabase =
     try { res.json({ ok: true, data: await workspace(db) }); }
     catch (error) { fail(res, error, "Moxie workspace could not be loaded."); }
   });
+
   app.post("/moxie-mobile-api/chat", configured, requireCustodial, async (req, res) => {
     try {
       const messages = (Array.isArray(req.body?.messages) ? req.body.messages : []).slice(-20)
@@ -284,11 +344,16 @@ export function installLeadershipHttpRoutes(app, { env = process.env, supabase =
       res.json({ ok: true, data: { content: result.content } });
     } catch (error) { fail(res, error, "Moxie chat failed."); }
   });
+
   app.put("/moxie-mobile-api/chat-state", configured, requireCustodial, async (req, res) => {
     try {
       const expected = Number(req.body?.expected_revision ?? req.body?.expectedRevision);
       if (!Number.isInteger(expected) || expected < 1) return res.status(422).json({ ok: false, error: "expected_revision is required." });
-      const result = await db.rpc("moxie_save_chat_state", { p_expected_revision: expected, p_history: Array.isArray(req.body?.history) ? req.body.history.slice(-40) : [], p_saved_chats: Array.isArray(req.body?.saved_chats ?? req.body?.savedChats) ? (req.body.saved_chats ?? req.body.savedChats).slice(0, 30) : [] });
+      const result = await db.rpc("moxie_save_chat_state", {
+        p_expected_revision: expected,
+        p_history: Array.isArray(req.body?.history) ? req.body.history.slice(-40) : [],
+        p_saved_chats: Array.isArray(req.body?.saved_chats ?? req.body?.savedChats) ? (req.body.saved_chats ?? req.body.savedChats).slice(0, 30) : [],
+      });
       if (result.error) throw result.error;
       res.json({ ok: true, data: Array.isArray(result.data) ? result.data[0] : result.data });
     } catch (error) {
