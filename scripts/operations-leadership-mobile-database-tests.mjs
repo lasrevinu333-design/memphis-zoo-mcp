@@ -102,4 +102,34 @@ assert.equal(consumed.trusted_device.manager_id, annieId);
 assert.equal(await sql(`select manager_id::text from public.ops_manager_trusted_devices where credential_id='${credentialId}'::uuid;`), annieId);
 assert.equal(await sql(`select status from public.ops_manager_enrollment_codes where id='${codeId}'::uuid;`), "used");
 
+
+await sql(`insert into public.ops_manager_notification_preferences(credential_id,manager_id)
+  values ('${credentialId}'::uuid,'${annieId}'::uuid);`);
+const notificationDefaults = await json(`(
+  select jsonb_build_object(
+    'messages_enabled',messages_enabled,
+    'event_reminders_enabled',event_reminders_enabled,
+    'due_soon_enabled',due_soon_enabled,
+    'overdue_enabled',overdue_enabled
+  )
+  from public.ops_manager_notification_preferences
+  where credential_id='${credentialId}'::uuid
+)`);
+assert.deepEqual(notificationDefaults, {
+  messages_enabled: true,
+  event_reminders_enabled: false,
+  due_soon_enabled: false,
+  overdue_enabled: false,
+});
+await sql(`insert into public.ops_manager_push_devices(credential_id,manager_id,device_id,platform,fcm_token)
+  values ('${credentialId}'::uuid,'${annieId}'::uuid,'annie-android-acceptance','android','${"fcm-test-token-" + "x".repeat(40)}');`);
+const ericId = await sql("select manager_id from public.ops_manager_managers where system_key='eric_custodial_manager';");
+const leadershipThreadId = await sql("select id from public.msg_threads where system_key='ops_manager_shared_chat_v1';");
+const notificationMessageId = await sql(`select (public.msg_send_message_as_ops_manager('${ericId}'::uuid,'${leadershipThreadId}'::uuid,'Named manager push acceptance','text','{}'::jsonb,'db-notification-acceptance')).id;`);
+assert.match(notificationMessageId, /^[0-9a-f-]{36}$/i);
+assert.equal(await sql(`select u.display_name from public.msg_messages m join public.msg_users u on u.id=m.sender_user_id where m.id='${notificationMessageId}'::uuid;`), "Eric Operle");
+assert.equal(await sql(`select count(*) from public.ops_manager_notification_queue where source_id='${notificationMessageId}'::uuid and credential_id='${credentialId}'::uuid and notification_type='message';`), "1");
+await sql("select public.ops_manager_enqueue_scheduled_notifications(now());");
+assert.equal(await sql(`select count(*) from public.ops_manager_notification_queue where credential_id='${credentialId}'::uuid and notification_type in ('event_digest','location_digest');`), "0");
+
 console.log("OPERATIONS_LEADERSHIP_MOBILE_DATABASE_PASS");

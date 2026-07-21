@@ -15,6 +15,140 @@ alter table public.ops_manager_managers drop constraint if exists ops_manager_ma
 alter table public.ops_manager_managers add constraint ops_manager_managers_leadership_sort_order check (leadership_sort_order between 1 and 9999);
 create index if not exists idx_ops_manager_managers_leadership on public.ops_manager_managers(is_system_principal,active,leadership_sort_order,display_name);
 
+-- Restore one durable Messenger principal per named leadership account. A
+-- previous compatibility migration intentionally collapsed all managers into
+-- one generic sender; that made person-level Messenger identity impossible.
+-- Historical shared messages remain attached to the quarantined legacy
+-- principal, while all new messages are attributed to the authenticated name.
+create or replace function public.msg_ensure_ops_manager_user(
+  p_manager_id uuid
+) returns public.msg_users
+language plpgsql
+security definer
+set search_path=pg_catalog,public
+as $named_manager_user$
+declare
+  v_manager public.ops_manager_managers%rowtype;
+  v_user public.msg_users%rowtype;
+  v_display_name text;
+begin
+  if p_manager_id is null then
+    raise exception using errcode='22023',message='Authenticated leadership manager id is required';
+  end if;
+  perform pg_advisory_xact_lock(hashtextextended('named-manager-messenger:'||p_manager_id::text,0));
+  select * into v_manager
+  from public.ops_manager_managers
+  where manager_id=p_manager_id
+    and active=true
+    and revoked_at is null
+    and is_system_principal=false
+  for update;
+  if v_manager.manager_id is null then
+    raise exception using errcode='42501',message='Active named leadership identity was not found';
+  end if;
+
+  select * into v_user
+  from public.msg_users
+  where ops_manager_id=p_manager_id
+  order by created_at,id
+  limit 1
+  for update;
+
+  if v_user.id is null then
+    select * into v_user
+    from public.msg_users
+    where ops_manager_id is null
+      and lower(btrim(display_name))=lower(btrim(v_manager.display_name))
+      and coalesce(messaging_identity_key,'')<>'ops_manager_shared_identity_v1'
+    order by is_active desc,created_at,id
+    limit 1
+    for update;
+    if v_user.id is not null then
+      update public.msg_users
+      set ops_manager_id=p_manager_id,
+          display_name=btrim(v_manager.display_name),
+          role='manager',
+          is_active=true,
+          messaging_identity_key=null,
+          updated_at=now()
+      where id=v_user.id
+      returning * into v_user;
+    end if;
+  end if;
+
+  if v_user.id is null then
+    v_display_name:=btrim(v_manager.display_name);
+    if exists(select 1 from public.msg_users where lower(btrim(display_name))=lower(v_display_name)) then
+      v_display_name:=left(v_display_name,80)||' · Leadership';
+    end if;
+    insert into public.msg_users(display_name,role,is_active,ops_manager_id,messaging_identity_key)
+    values(v_display_name,'manager',true,p_manager_id,null)
+    returning * into v_user;
+  elsif v_user.is_active is false or v_user.role<>'manager' or v_user.display_name is distinct from btrim(v_manager.display_name) then
+    -- Prefer the exact real name. The fallback preserves startup if an old
+    -- unrelated row still owns that globally unique display name.
+    begin
+      update public.msg_users
+      set display_name=btrim(v_manager.display_name),role='manager',is_active=true,
+          messaging_identity_key=null,updated_at=now()
+      where id=v_user.id
+      returning * into v_user;
+    exception when unique_violation then
+      update public.msg_users
+      set role='manager',is_active=true,messaging_identity_key=null,updated_at=now()
+      where id=v_user.id
+      returning * into v_user;
+    end;
+  end if;
+  return v_user;
+end
+$named_manager_user$;
+
+create or replace function public.msg_send_message_as_ops_manager(
+  p_manager_id uuid,
+  p_thread_id uuid,
+  p_body text,
+  p_message_type text default 'text',
+  p_metadata_json jsonb default '{}'::jsonb,
+  p_client_message_id text default null
+) returns public.msg_messages
+language plpgsql
+security definer
+set search_path=pg_catalog,public,extensions
+as $named_manager_send$
+declare
+  v_manager public.ops_manager_managers%rowtype;
+  v_user public.msg_users%rowtype;
+  v_message public.msg_messages%rowtype;
+begin
+  select * into v_manager from public.ops_manager_managers
+  where manager_id=p_manager_id and active=true and revoked_at is null and is_system_principal=false;
+  if v_manager.manager_id is null then
+    raise exception using errcode='42501',message='Active named leadership identity was not found';
+  end if;
+  v_user:=public.msg_ensure_ops_manager_user(p_manager_id);
+  v_message:=public.msg_send_message(
+    p_thread_id,v_user.id,p_body,p_message_type,
+    (coalesce(p_metadata_json,'{}'::jsonb)-'authenticated_ops_manager_id')
+      ||jsonb_build_object('authenticated_ops_manager_id',p_manager_id),
+    p_client_message_id
+  );
+  update public.msg_message_audit
+  set sender_ops_manager_id=p_manager_id,
+      sender_user_id=v_user.id,
+      sender_display_name=v_manager.display_name,
+      sender_role='manager'
+  where message_id=v_message.id;
+  return v_message;
+end
+$named_manager_send$;
+
+revoke all on function public.msg_ensure_ops_manager_user(uuid) from public,anon,authenticated;
+grant execute on function public.msg_ensure_ops_manager_user(uuid) to service_role;
+revoke all on function public.msg_send_message_as_ops_manager(uuid,uuid,text,text,jsonb,text) from public,anon,authenticated;
+grant execute on function public.msg_send_message_as_ops_manager(uuid,uuid,text,text,jsonb,text) to service_role;
+
+
 do $leadership$
 declare
   v_eric uuid; v_jennifer uuid; v_annie uuid; v_brandy uuid; v_haley uuid; v_eric_m uuid; v_shared uuid;
@@ -98,6 +232,7 @@ begin
   if v_legacy_msg_user is not null then
     update public.msg_users set display_name='Legacy Shared Ops Manager',is_active=false,updated_at=now(),messaging_identity_key=coalesce(messaging_identity_key,'legacy_shared_ops_manager') where id=v_legacy_msg_user;
   end if;
+
 
   perform public.msg_ensure_ops_manager_user(v_jennifer); perform public.msg_ensure_ops_manager_user(v_annie); perform public.msg_ensure_ops_manager_user(v_brandy); perform public.msg_ensure_ops_manager_user(v_haley); perform public.msg_ensure_ops_manager_user(v_eric_m); perform public.msg_ensure_ops_manager_user(v_eric);
   perform public.msg_get_or_create_ops_manager_thread(v_jennifer); perform public.msg_get_or_create_ops_manager_thread(v_annie); perform public.msg_get_or_create_ops_manager_thread(v_brandy); perform public.msg_get_or_create_ops_manager_thread(v_haley); perform public.msg_get_or_create_ops_manager_thread(v_eric_m); perform public.msg_get_or_create_ops_manager_thread(v_eric);

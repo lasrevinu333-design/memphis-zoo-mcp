@@ -13,6 +13,7 @@ import { RELEASE_ID } from "./app-version.js";
 import { makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
 import { installAnnieMoxieRoutes } from "./annie-moxie-bootstrap.js";
 import { installLeadershipHttpRoutes } from "./leadership-bootstrap.js";
+import { installManagerNotificationRoutes } from "./manager-notifications.js";
 
 /**
  * Compatibility/bootstrap layer for the Memphis Zoo MCP server.
@@ -58,6 +59,7 @@ function installHttpDiagnostics(app) {
   // routes are authoritative before the generic leadership compatibility layer.
   installAnnieMoxieRoutes(app);
   installLeadershipHttpRoutes(app);
+  installManagerNotificationRoutes(app);
   app.get("/mcp-tools.json", requireOpsManagerAuth, (_req, res) => {
     res.status(200).json(getToolManifest({ includePlanned: true }));
   });
