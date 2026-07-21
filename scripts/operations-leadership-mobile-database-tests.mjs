@@ -27,13 +27,15 @@ const roster = await json(`(
     'job_title',job_title,
     'department_key',department_key,
     'roles',roles,
-    'system_key',system_key
+    'system_key',system_key,
+    'metadata_json',metadata_json
   ) order by leadership_sort_order,display_name)
   from public.ops_manager_managers
   where active=true and revoked_at is null and is_system_principal=false
 )`);
 assert.deepEqual(roster.map((row) => row.display_name), [
   "Jennifer Sheffield",
+  "Annie Feist",
   "Brandy Gull",
   "Haley Lejman",
   "Eric McKenney",
@@ -41,12 +43,15 @@ assert.deepEqual(roster.map((row) => row.display_name), [
 ]);
 assert.deepEqual(roster.map((row) => row.job_title), [
   "Director of Operations",
+  "Operations Admin",
   "Horticulture Manager",
   "Water Quality Manager",
   "Facilities Maintenance Manager",
   "Custodial Manager",
 ]);
 assert.deepEqual(roster.find((row) => row.display_name === "Jennifer Sheffield").roles, ["DIRECTOR"], "Jennifer must not be stored as an Ops Manager");
+assert.equal(roster.find((row) => row.display_name === "Annie Feist").system_key, "annie_feist_operations_admin");
+assert.equal(roster.find((row) => row.display_name === "Annie Feist").metadata_json.moxie_access, true);
 assert.ok(roster.find((row) => row.display_name === "Eric Operle").roles.includes("CUSTODIAL_MANAGER"));
 assert.ok(roster.find((row) => row.display_name === "Eric Operle").roles.includes("SECURITY_ADMIN"));
 
@@ -71,8 +76,8 @@ const thread = await json(`(
   limit 1
 )`);
 assert.equal(thread.title, "Operations Leadership Chat");
-assert.equal(Number(thread.active_named_participants), 5);
-assert.equal(await sql("select count(*) from public.msg_users where ops_manager_id in(select manager_id from public.ops_manager_managers where active=true and revoked_at is null and is_system_principal=false) and is_active=true;"), "5");
+assert.equal(Number(thread.active_named_participants), 6);
+assert.equal(await sql("select count(*) from public.msg_users where ops_manager_id in(select manager_id from public.ops_manager_managers where active=true and revoked_at is null and is_system_principal=false) and is_active=true;"), "6");
 assert.equal(await sql("select count(*) from public.msg_users where display_name='Legacy Shared Ops Manager' and is_active=false;"), "1");
 
 const publicSnapshot = await json("public.public_viewer_dashboard_snapshot()");
@@ -82,16 +87,16 @@ for (const forbidden of ["employee", "device", "notes", "ticket", "feedback"]) {
 assert.ok(Object.hasOwn(publicSnapshot, "locations_total"));
 assert.ok(Object.hasOwn(publicSnapshot, "cleanings_completed_today"));
 
-const brandyId = await sql("select manager_id from public.ops_manager_managers where system_key='brandy_gull_horticulture_manager';");
-assert.match(brandyId, /^[0-9a-f-]{36}$/i);
+const annieId = await sql("select manager_id from public.ops_manager_managers where system_key='annie_feist_operations_admin';");
+assert.match(annieId, /^[0-9a-f-]{36}$/i);
 const codeId = randomUUID();
 const credentialId = randomUUID();
-await sql(`insert into public.ops_manager_enrollment_codes(id,manager_id,code_hash,role_snapshot,expires_at,max_attempts,metadata_json) values ('${codeId}'::uuid,'${brandyId}'::uuid,'${"b".repeat(64)}','OPS_MANAGER',now()+interval '15 minutes',5,'{"database_acceptance":true}'::jsonb);`);
-const consumed = await json(`public.ops_manager_consume_enrollment_code('${"b".repeat(64)}','${credentialId}'::uuid,'brandy-acceptance-phone','Brandy Acceptance Phone','${"c".repeat(64)}',null,null,'iPhone app',now()+interval '1 day','{"database_acceptance":true}'::jsonb)`);
+await sql(`insert into public.ops_manager_enrollment_codes(id,manager_id,code_hash,role_snapshot,expires_at,max_attempts,metadata_json) values ('${codeId}'::uuid,'${annieId}'::uuid,'${"b".repeat(64)}','OPS_MANAGER',now()+interval '15 minutes',5,'{"database_acceptance":true}'::jsonb);`);
+const consumed = await json(`public.ops_manager_consume_enrollment_code('${"b".repeat(64)}','${credentialId}'::uuid,'annie-android-acceptance','Annie Personal Android','${"c".repeat(64)}',null,null,'Android app',now()+interval '1 day','{"database_acceptance":true}'::jsonb)`);
 assert.equal(consumed.ok, true);
-assert.equal(consumed.manager.display_name, "Brandy Gull");
-assert.equal(consumed.trusted_device.manager_id, brandyId);
-assert.equal(await sql(`select manager_id::text from public.ops_manager_trusted_devices where credential_id='${credentialId}'::uuid;`), brandyId);
+assert.equal(consumed.manager.display_name, "Annie Feist");
+assert.equal(consumed.trusted_device.manager_id, annieId);
+assert.equal(await sql(`select manager_id::text from public.ops_manager_trusted_devices where credential_id='${credentialId}'::uuid;`), annieId);
 assert.equal(await sql(`select status from public.ops_manager_enrollment_codes where id='${codeId}'::uuid;`), "used");
 
 console.log("OPERATIONS_LEADERSHIP_MOBILE_DATABASE_PASS");
