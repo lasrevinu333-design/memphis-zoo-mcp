@@ -21,6 +21,7 @@ async function json(statement) {
   return JSON.parse(output.split("\n").at(-1));
 }
 
+const canonicalFilter = `metadata_json @> '{"canonical_leadership_roster":true}'::jsonb`;
 const roster = await json(`(
   select jsonb_agg(jsonb_build_object(
     'display_name',display_name,
@@ -32,6 +33,7 @@ const roster = await json(`(
   ) order by leadership_sort_order,display_name)
   from public.ops_manager_managers
   where active=true and revoked_at is null and is_system_principal=false
+    and ${canonicalFilter}
 )`);
 assert.deepEqual(roster.map((row) => row.display_name), [
   "Jennifer Sheffield",
@@ -63,12 +65,13 @@ const thread = await json(`(
   select jsonb_build_object(
     'title',t.title,
     'system_key',t.system_key,
-    'active_named_participants',(
+    'canonical_participants',(
       select count(*) from public.msg_thread_participants p
       join public.msg_users u on u.id=p.user_id
       join public.ops_manager_managers m on m.manager_id=u.ops_manager_id
       where p.thread_id=t.id and p.left_at is null and u.is_active=true
         and m.active=true and m.revoked_at is null and m.is_system_principal=false
+        and m.metadata_json @> '{"canonical_leadership_roster":true}'::jsonb
     )
   )
   from public.msg_threads t
@@ -76,8 +79,8 @@ const thread = await json(`(
   limit 1
 )`);
 assert.equal(thread.title, "Operations Leadership Chat");
-assert.equal(Number(thread.active_named_participants), 6);
-assert.equal(await sql("select count(*) from public.msg_users where ops_manager_id in(select manager_id from public.ops_manager_managers where active=true and revoked_at is null and is_system_principal=false) and is_active=true;"), "6");
+assert.equal(Number(thread.canonical_participants), 6);
+assert.equal(await sql("select count(*) from public.msg_users u join public.ops_manager_managers m on m.manager_id=u.ops_manager_id where m.active=true and m.revoked_at is null and m.is_system_principal=false and m.metadata_json @> '{\"canonical_leadership_roster\":true}'::jsonb and u.is_active=true;"), "6");
 assert.equal(await sql("select count(*) from public.msg_users where display_name='Legacy Shared Ops Manager' and is_active=false;"), "1");
 
 const publicSnapshot = await json("public.public_viewer_dashboard_snapshot()");
