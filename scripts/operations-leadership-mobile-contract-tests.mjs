@@ -4,22 +4,25 @@ import express from "express";
 import { installLeadershipHttpRoutes } from "../src/leadership-bootstrap.js";
 
 const root = new URL("../", import.meta.url);
-const [bootstrap, schemaBootstrap, migration, authSource] = await Promise.all([
+const [bootstrap, annieMoxie, schemaBootstrap, migration, authSource] = await Promise.all([
   readFile(new URL("src/leadership-bootstrap.js", root), "utf8"),
+  readFile(new URL("src/annie-moxie-bootstrap.js", root), "utf8"),
   readFile(new URL("src/mcp-schema-bootstrap.js", root), "utf8"),
   readFile(new URL("supabase/migrations/20260721190000_operations_leadership_mobile_foundation.sql", root), "utf8"),
   readFile(new URL("src/auth/shared-access-auth.js", root), "utf8"),
 ]);
 
 for (const required of [
+  "Jennifer Sheffield", "Director of Operations",
+  "Annie Feist", "Operations Admin",
   "Brandy Gull", "Horticulture Manager",
   "Haley Lejman", "Water Quality Manager",
   "Eric McKenney", "Facilities Maintenance Manager",
-  "Jennifer Sheffield", "Director of Operations",
   "Eric Operle", "Custodial Manager",
 ]) assert.ok(migration.includes(required), `migration must include ${required}`);
 
 assert.match(migration, /Operations Leadership Chat/);
+assert.match(migration, /annie_feist_operations_admin/);
 assert.match(migration, /Legacy Shared Ops Manager/);
 assert.match(migration, /shared_identity_quarantined_20260721/);
 assert.match(migration, /public_viewer_dashboard_snapshot/);
@@ -27,11 +30,13 @@ assert.doesNotMatch(migration, /update\s+public\.msg_messages\s+set\s+sender_use
 assert.match(bootstrap, /\/mobile-auth-api\/enroll/);
 assert.match(bootstrap, /\/mobile-auth-api\/session/);
 assert.match(bootstrap, /\/leadership-api\/managers\/:managerId\/enrollment-code/);
-assert.match(bootstrap, /\/moxie-mobile-api\/chat/);
 assert.match(bootstrap, /\/viewer-api\/dashboard/);
 assert.match(bootstrap, /capacitor:\/\/localhost/);
 assert.match(bootstrap, /replace\(\/\[’‘\]\/g, "'"\)/);
 assert.doesNotMatch(bootstrap, /express\.application\.use\s*=/, "leadership routes must not revive retired browser routes through a global Express hook");
+assert.match(annieMoxie, /Moxie access is limited to Annie Feist and Eric Operle/);
+assert.match(annieMoxie, /annie_feist_operations_admin/);
+assert.match(schemaBootstrap, /installAnnieMoxieRoutes/);
 assert.match(schemaBootstrap, /installLeadershipHttpRoutes/);
 assert.match(authSource, /app\.post\("\/auth-api\/ops\/manager-codes\/consume"/);
 
