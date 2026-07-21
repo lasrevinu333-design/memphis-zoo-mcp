@@ -8,12 +8,13 @@ on:
       - 'supabase/migrations/20260721190000_operations_leadership_mobile_foundation.sql'
       - 'scripts/operations-leadership-mobile-contract-tests.mjs'
       - 'package.json'
+      - '.github/workflows/operations-leadership-mobile-foundation.yml'
   workflow_dispatch:
 
 jobs:
   contract:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -25,3 +26,23 @@ jobs:
       - run: npm run test:messaging
       - run: npm run test:messaging-manager-authority
       - run: npm run test:device-credentials
+      - name: Rebuild migrations in a disposable database
+        id: schema_rebuild
+        continue-on-error: true
+        env:
+          SCHEMA_REBUILD_DOCKER_IMAGE: supabase/postgres:17.6.1.143
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run --silent test:empty-db-rebuild 2>&1 | tee /tmp/operations-leadership-schema-rebuild.log
+      - name: Upload schema rebuild log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: operations-leadership-schema-rebuild-log
+          path: /tmp/operations-leadership-schema-rebuild.log
+          if-no-files-found: error
+      - name: Enforce schema rebuild result
+        if: always()
+        shell: bash
+        run: test "${{ steps.schema_rebuild.outcome }}" = "success"
