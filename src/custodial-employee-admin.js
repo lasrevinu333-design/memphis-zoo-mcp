@@ -5,6 +5,7 @@ import { makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
 const NATIVE_ENROLL_ATTEMPTS = new Map();
 const NATIVE_ENROLL_WINDOW_MS = 15 * 60 * 1000;
 const NATIVE_ENROLL_LIMIT = 8;
+const EMPLOYEE_ENROLLMENT_TTL_MS = 30 * 60 * 1000;
 
 function envText(env, key) { return String(env?.[key] || "").trim(); }
 function clip(value, max = 1000) { return String(value ?? "").trim().slice(0, max); }
@@ -33,7 +34,7 @@ function setCors(req, res, env) {
   if (origin && allowedOrigins(env).has(origin)) res.setHeader("Access-Control-Allow-Origin", origin);
   res.setHeader("Access-Control-Allow-Credentials", "true");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Device-Id, X-Device-Credential, X-Memphis-App-Edition, Idempotency-Key");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Device-Id, X-Device-Credential, X-Memphis-Device-Credential, X-Memphis-App-Edition, Idempotency-Key");
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("Vary", "Origin");
 }
@@ -46,6 +47,8 @@ function normalizeDeviceId(value) {
   if (/^KIOSK_[2-9]$/.test(raw)) return `KIOSK_0${raw.slice(7)}`;
   return raw;
 }
+function validKioskId(value) { return /^KIOSK_(0[2-9]|10)$/.test(normalizeDeviceId(value)); }
+function validUuid(value) { return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || "").trim()); }
 function serviceSecret(env) {
   const value = envText(env, "DEVICE_CREDENTIAL_SECRET") || envText(env, "OPS_MANAGER_SESSION_SECRET") || envText(env, "SUPABASE_SERVICE_ROLE_KEY");
   if (!value) throw Object.assign(new Error("Device credential signing is not configured."), { status: 503 });
@@ -113,14 +116,101 @@ async function loadPhoneAdminSnapshot(db) {
   };
 }
 
+function legacySnapshot(snapshot) {
+  const assignedByEmployee = new Map((snapshot.phones || []).filter((phone) => phone.assigned_employee_id).map((phone) => [phone.assigned_employee_id, phone.device_id]));
+  return {
+    devices: (snapshot.phones || []).map((phone) => ({
+      ...phone,
+      employee_name: phone.assigned_employee?.display_name || null,
+      employee_code: phone.assigned_employee?.employee_code || null,
+      employee_active: phone.assigned_employee?.active === true,
+    })),
+    employees: (snapshot.employees || []).filter((employee) => employee.active === true).map((employee) => ({
+      ...employee,
+      assigned_device_id: assignedByEmployee.get(employee.id) || null,
+    })),
+    recent_changes: snapshot.recent_changes || [],
+    generated_at: snapshot.generated_at,
+  };
+}
+
 async function resolveNativeDevice(db, identifier) {
   const normalized = normalizeDeviceId(identifier);
-  if (!/^KIOSK_(0[2-9]|10)$/.test(normalized)) return null;
+  if (!validKioskId(normalized)) return null;
   const direct = await db.from("devices")
     .select("id,device_id,device_name,active,assigned_employee_id,employees!devices_assigned_employee_id_fkey(id,employee_code,display_name,active,role)")
     .eq("device_id", normalized).maybeSingle();
   if (direct.error) throw direct.error;
   return direct.data || null;
+}
+
+async function createEmployee(db, req, values = {}) {
+  const result = await db.rpc("custodial_create_employee", {
+    p_display_name: clip(values.display_name, 160),
+    p_employee_code: clip(values.employee_code, 32) || null,
+    p_notes: clip(values.notes, 2000) || null,
+    p_changed_by_manager_id: req.memphisAuth.manager_id,
+  });
+  if (result.error) throw result.error;
+  return result.data;
+}
+
+async function setEmployeeStatus(db, req, employeeId, active, values = {}) {
+  const result = await db.rpc("custodial_set_employee_active", {
+    p_employee_id: employeeId,
+    p_active: active === true,
+    p_changed_by_manager_id: req.memphisAuth.manager_id,
+    p_reason: clip(values.reason, 500) || null,
+    p_release_devices: values.release_devices !== false,
+  });
+  if (result.error) throw result.error;
+  return result.data;
+}
+
+async function assignDevice(db, req, deviceId, employeeId, values = {}) {
+  const result = await db.rpc("custodial_assign_employee_device", {
+    p_device_identifier: normalizeDeviceId(deviceId),
+    p_employee_id: employeeId || null,
+    p_changed_by_manager_id: req.memphisAuth.manager_id,
+    p_reason: clip(values.reason, 500) || null,
+    p_move_existing: values.move_existing === true,
+  });
+  if (result.error) throw result.error;
+  return result.data;
+}
+
+async function issueEmployeeEnrollmentCode(db, env, req, deviceId) {
+  const device = await resolveNativeDevice(db, deviceId);
+  const employee = Array.isArray(device?.employees) ? device.employees[0] : device?.employees;
+  if (!device || device.active !== true || !device.assigned_employee_id || employee?.active !== true || !/^EMP\d+$/i.test(String(employee?.employee_code || ""))) {
+    throw Object.assign(new Error("Assign this phone to an active employee before generating an app code."), { status: 409 });
+  }
+  const code = String(crypto.randomInt(0, 100_000_000)).padStart(8, "0");
+  const expiresAt = new Date(Date.now() + EMPLOYEE_ENROLLMENT_TTL_MS).toISOString();
+  const result = await db.rpc("device_auth_issue_enrollment_code", {
+    p_device_id: device.id,
+    p_code_hash: enrollmentCodeHash(env, device.id, code),
+    p_created_by: String(req.memphisAuth.manager_id || req.memphisAuth.manager_display_name || "custodial_manager"),
+    p_expires_at: expiresAt,
+    p_metadata_json: {
+      purpose: "native_custodial_app_enrollment",
+      canonical_device_id: device.device_id,
+      employee_id: employee.id,
+      employee_name: employee.display_name,
+      max_uses: 1,
+    },
+  });
+  if (result.error) throw result.error;
+  return {
+    enrollment_code: code,
+    display_code: `${code.slice(0, 4)} ${code.slice(4)}`,
+    enrollment_id: result.data?.enrollment_id || null,
+    expires_at: result.data?.expires_at || expiresAt,
+    max_uses: 1,
+    device_id: device.device_id,
+    device_name: device.device_name,
+    employee: { id: employee.id, employee_code: employee.employee_code, display_name: employee.display_name },
+  };
 }
 
 export function installCustodialEmployeeAdminRoutes(app, { env = process.env, supabase = null } = {}) {
@@ -133,7 +223,7 @@ export function installCustodialEmployeeAdminRoutes(app, { env = process.env, su
     ? next()
     : res.status(403).json({ ok: false, error: "Custodial Manager access is required." }));
 
-  for (const prefix of ["/custodial-admin-api", "/custodial-device-auth"]) {
+  for (const prefix of ["/custodial-admin-api", "/custodial-device-auth", "/leadership-api/phone-assignments"]) {
     app.use(prefix, (req, res, next) => {
       setCors(req, res, env);
       if (req.method === "OPTIONS") return res.sendStatus(200);
@@ -147,31 +237,15 @@ export function installCustodialEmployeeAdminRoutes(app, { env = process.env, su
   });
 
   app.post("/custodial-admin-api/employees", configured, requireCustodial, async (req, res) => {
-    try {
-      const result = await db.rpc("custodial_create_employee", {
-        p_display_name: clip(req.body?.display_name, 160),
-        p_employee_code: clip(req.body?.employee_code, 32) || null,
-        p_notes: clip(req.body?.notes, 2000) || null,
-        p_changed_by_manager_id: req.memphisAuth.manager_id,
-      });
-      if (result.error) throw result.error;
-      res.status(201).json({ ok: true, data: result.data });
-    } catch (error) { fail(res, error, "Employee could not be created."); }
+    try { res.status(201).json({ ok: true, data: await createEmployee(db, req, req.body || {}) }); }
+    catch (error) { fail(res, error, "Employee could not be created."); }
   });
 
   app.patch("/custodial-admin-api/employees/:employeeId/status", configured, requireCustodial, async (req, res) => {
     try {
       const employeeId = String(req.params?.employeeId || "").trim();
-      if (!/^[0-9a-f-]{36}$/i.test(employeeId)) return res.status(400).json({ ok: false, error: "A valid employee ID is required." });
-      const result = await db.rpc("custodial_set_employee_active", {
-        p_employee_id: employeeId,
-        p_active: req.body?.active === true,
-        p_changed_by_manager_id: req.memphisAuth.manager_id,
-        p_reason: clip(req.body?.reason, 500) || null,
-        p_release_devices: req.body?.release_devices !== false,
-      });
-      if (result.error) throw result.error;
-      res.json({ ok: true, data: result.data });
+      if (!validUuid(employeeId)) return res.status(400).json({ ok: false, error: "A valid employee ID is required." });
+      res.json({ ok: true, data: await setEmployeeStatus(db, req, employeeId, req.body?.active === true, req.body || {}) });
     } catch (error) { fail(res, error, "Employee status could not be changed."); }
   });
 
@@ -179,24 +253,80 @@ export function installCustodialEmployeeAdminRoutes(app, { env = process.env, su
     try {
       const deviceId = normalizeDeviceId(req.params?.deviceId || req.body?.device_id);
       const employeeId = String(req.body?.employee_id || "").trim();
-      if (!/^KIOSK_(0[2-9]|10)$/.test(deviceId)) return res.status(400).json({ ok: false, error: "Choose KIOSK_02 through KIOSK_10." });
-      if (employeeId && !/^[0-9a-f-]{36}$/i.test(employeeId)) return res.status(400).json({ ok: false, error: "A valid employee ID is required." });
-      const result = await db.rpc("custodial_assign_employee_device", {
-        p_device_identifier: deviceId,
-        p_employee_id: employeeId || null,
-        p_changed_by_manager_id: req.memphisAuth.manager_id,
-        p_reason: clip(req.body?.reason, 500) || null,
-        p_move_existing: req.body?.move_existing === true,
-      });
-      if (result.error) throw result.error;
-      res.json({ ok: true, data: result.data });
+      if (!validKioskId(deviceId)) return res.status(400).json({ ok: false, error: "Choose KIOSK_02 through KIOSK_10." });
+      if (employeeId && !validUuid(employeeId)) return res.status(400).json({ ok: false, error: "A valid employee ID is required." });
+      const current = await resolveNativeDevice(db, deviceId);
+      const expected = String(req.body?.expected_current_employee_id || "").trim();
+      if (expected && String(current?.assigned_employee_id || "") !== expected) return res.status(409).json({ ok: false, error: "This phone assignment changed. Refresh and try again." });
+      const previousId = current?.assigned_employee_id || null;
+      const assignment = await assignDevice(db, req, deviceId, employeeId || null, req.body || {});
+      let formerEmployee = null;
+      if (req.body?.deactivate_previous === true && previousId && previousId !== employeeId) {
+        formerEmployee = await setEmployeeStatus(db, req, previousId, false, { reason: req.body?.reason || "Phone reassigned to replacement employee", release_devices: true });
+      }
+      res.json({ ok: true, data: { ...assignment, former_employee_status: formerEmployee } });
     } catch (error) { fail(res, error, "Phone assignment could not be changed."); }
+  });
+
+  app.post("/custodial-admin-api/devices/:deviceId/enrollment-code", configured, requireCustodial, async (req, res) => {
+    try { res.json({ ok: true, data: await issueEmployeeEnrollmentCode(db, env, req, req.params?.deviceId) }); }
+    catch (error) { fail(res, error, "Employee app enrollment code could not be generated."); }
+  });
+
+  // Compatibility routes keep already-installed manager test builds working while
+  // the unified Phone Assignments screen rolls out.
+  app.get("/leadership-api/phone-assignments", configured, requireCustodial, async (_req, res) => {
+    try { res.json({ ok: true, data: legacySnapshot(await loadPhoneAdminSnapshot(db)) }); }
+    catch (error) { fail(res, error, "Employee phones could not be loaded."); }
+  });
+
+  app.post("/leadership-api/phone-assignments/:deviceId", configured, requireCustodial, async (req, res) => {
+    try {
+      const requestedDevice = normalizeDeviceId(req.params?.deviceId);
+      const createsOnly = String(req.params?.deviceId || "").trim().toLowerCase() === "unassigned";
+      let employee = null;
+      let employeeId = String(req.body?.employee_id || "").trim() || null;
+      if (clip(req.body?.new_employee_name, 160)) {
+        const created = await createEmployee(db, req, { display_name: req.body.new_employee_name, notes: "Created from Phone Assignments" });
+        employee = created?.employee || created;
+        employeeId = employee?.id || null;
+      }
+      if (employeeId && !validUuid(employeeId)) return res.status(400).json({ ok: false, error: "A valid employee ID is required." });
+      if (createsOnly) {
+        if (!employee) return res.status(400).json({ ok: false, error: "Enter a new employee name." });
+        return res.status(201).json({ ok: true, data: { employee, device: null } });
+      }
+      if (!validKioskId(requestedDevice)) return res.status(400).json({ ok: false, error: "Choose KIOSK_02 through KIOSK_10." });
+      const current = await resolveNativeDevice(db, requestedDevice);
+      const expected = String(req.body?.expected_current_employee_id || "").trim();
+      if (expected && String(current?.assigned_employee_id || "") !== expected) return res.status(409).json({ ok: false, error: "This phone assignment changed. Refresh and try again." });
+      const previousId = current?.assigned_employee_id || null;
+      const assignment = await assignDevice(db, req, requestedDevice, employeeId, {
+        reason: employee ? `Assigned to newly created employee ${employee.display_name}` : "Phone assignment updated",
+        move_existing: false,
+      });
+      if (!employee && employeeId) {
+        const employeeResult = await db.from("employees").select("id,employee_code,display_name,active,role").eq("id", employeeId).maybeSingle();
+        if (employeeResult.error) throw employeeResult.error;
+        employee = employeeResult.data;
+      }
+      let formerEmployee = null;
+      if (req.body?.deactivate_previous === true && previousId && previousId !== employeeId) {
+        formerEmployee = await setEmployeeStatus(db, req, previousId, false, { reason: "Employment ended during phone reassignment", release_devices: true });
+      }
+      res.json({ ok: true, data: { employee: employee || null, device: assignment?.device || assignment, assignment, former_employee_status: formerEmployee } });
+    } catch (error) { fail(res, error, "Phone assignment could not be changed."); }
+  });
+
+  app.post("/leadership-api/phone-assignments/:deviceId/enrollment-code", configured, requireCustodial, async (req, res) => {
+    try { res.json({ ok: true, data: await issueEmployeeEnrollmentCode(db, env, req, req.params?.deviceId) }); }
+    catch (error) { fail(res, error, "Employee app enrollment code could not be generated."); }
   });
 
   app.post("/custodial-device-auth/enroll", configured, async (req, res) => {
     const origin = String(req.headers?.origin || "").trim();
     const edition = String(req.headers?.["x-memphis-app-edition"] || "").trim().toLowerCase();
-    if (!["https://localhost", "capacitor://localhost", "ionic://localhost"].includes(origin) || edition !== "custodial") {
+    if (!["https://localhost", "http://localhost", "capacitor://localhost", "ionic://localhost"].includes(origin) || edition !== "custodial") {
       return res.status(403).json({ ok: false, error: "Native custodial app enrollment is required." });
     }
     const deviceId = normalizeDeviceId(req.body?.device_id || req.headers?.["x-device-id"]);
