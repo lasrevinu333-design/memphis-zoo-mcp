@@ -424,6 +424,10 @@ const DEFAULT_CORS_ORIGINS = [
   "https://memphis-zoo-mcp.onrender.com",
   "https://lasrevinu333-design.github.io",
   "https://nousresearch.github.io",
+  "https://localhost",
+  "http://localhost",
+  "capacitor://localhost",
+  "ionic://localhost",
 ];
 const CORS_ORIGINS_SET = new Set([...ALLOWED_CORS_ORIGINS, ...DEFAULT_CORS_ORIGINS]);
 const TRUSTED_DEVICE_CORS_HEADERS = [
@@ -433,6 +437,7 @@ const TRUSTED_DEVICE_CORS_HEADERS = [
   "X-Device-Id",
   "X-Device-Label",
   "X-Device-Credential",
+  "X-Memphis-Device-Credential",
   "X-Device-Security-CSRF",
   "X-Admin-Key",
   "X-Ops-Access-Key",
