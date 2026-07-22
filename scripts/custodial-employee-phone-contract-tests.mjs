@@ -2,12 +2,15 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const root = new URL("../", import.meta.url);
-const [routeSource, bootstrapSource, migrationSource, packageSource] = await Promise.all([
+const [routeSource, bootstrapSource, migrationFoundation, migrationAssignment, migrationStatus, packageSource] = await Promise.all([
   readFile(new URL("src/custodial-employee-admin.js", root), "utf8"),
   readFile(new URL("src/mcp-schema-bootstrap.js", root), "utf8"),
-  readFile(new URL("supabase/migrations/20260722143000_custodial_employee_phone_management.sql", root), "utf8"),
+  readFile(new URL("supabase/migrations/20260722143000_custodial_employee_phone_foundation.sql", root), "utf8"),
+  readFile(new URL("supabase/migrations/20260722143100_custodial_employee_phone_assignment.sql", root), "utf8"),
+  readFile(new URL("supabase/migrations/20260722143200_custodial_employee_status_management.sql", root), "utf8"),
   readFile(new URL("package.json", root), "utf8"),
 ]);
+const migrationSource = `${migrationFoundation}\n${migrationAssignment}\n${migrationStatus}`;
 
 for (const endpoint of [
   "/custodial-admin-api/employee-phones",
