@@ -89,7 +89,6 @@ begin
 
   update public.msg_users
   set is_active = p_active,
-      active = p_active,
       display_name = v_employee.display_name,
       updated_at = now()
   where employee_id = v_employee.id;
