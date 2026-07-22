@@ -23,7 +23,7 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
-          set +e
+          set -euo pipefail
           root='https://memphis-zoo-mcp.onrender.com'
           expected='4701428a6f795a437d894622b56459822a73d431'
           log=/tmp/render-event-integrity-live-audit.log
@@ -63,9 +63,17 @@ jobs:
             tail -n 30 "$log" | grep -Fq "$expected"
           done
 
-          request GET '/events-api/events?from=2026-07-22&to=2026-08-22'
+          request GET /events-api/health
           test "$LAST_STATUS" = 200
-          tail -n 60 "$log" | grep -Fq '"ok":true'
+          tail -n 50 "$log" | grep -Fq '"ok":true'
+          tail -n 50 "$log" | grep -Fq '"contract_version":"events.v3"'
+          ! tail -n 50 "$log" | grep -Fq '"last_result":{"ok":false'
+          ! tail -n 50 "$log" | grep -Fiq 'notification kind'
+
+          request GET /events-api/
+          test "$LAST_STATUS" = 200
+          tail -n 80 "$log" | grep -Fq '"ok":true'
+          tail -n 80 "$log" | grep -Fq '"contract_version":"events.v3"'
 
           request GET /custodial-admin-api/employee-phones
           case "$LAST_STATUS" in 401|403) ;; *) echo "Expected protected employee-phones route, got $LAST_STATUS" | tee -a "$log"; exit 1 ;; esac
