@@ -1,0 +1,87 @@
+name: Render Live Release Diagnostics
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Probe the deployed Render service
+        id: probe
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          root='https://memphis-zoo-mcp.onrender.com'
+          expected='50b3be10508469157d214fe00e1a7d132fd828f6'
+          log=/tmp/render-live-diagnostics.log
+          : > "$log"
+
+          request() {
+            method="$1"; path="$2"; shift 2
+            headers="/tmp/headers.$$"; body="/tmp/body.$$"
+            status="$(curl -sS --max-time 60 -X "$method" -D "$headers" -o "$body" -w '%{http_code}' "$@" "$root$path" || printf '000')"
+            printf '\n=== %s %s ===\nstatus=%s\n' "$method" "$path" "$status" | tee -a "$log"
+            cat "$headers" >> "$log" 2>/dev/null || true
+            printf '\n' >> "$log"
+            cat "$body" | tee -a "$log" 2>/dev/null || true
+            printf '\n' >> "$log"
+            rm -f "$headers" "$body"
+            LAST_STATUS="$status"
+          }
+
+          deployed=0
+          for attempt in $(seq 1 60); do
+            request GET "/version?attempt=$attempt"
+            if grep -Fq "$expected" "$log"; then deployed=1; break; fi
+            sleep 10
+          done
+          test "$deployed" = 1
+
+          request GET /health/dependencies
+          test "$LAST_STATUS" = 200
+          tail -n 30 "$log" | grep -Fq '"ok":true'
+          tail -n 30 "$log" | grep -Fq '"database_reachable":true'
+          tail -n 30 "$log" | grep -Fq '"required_schema_present":true'
+
+          for path in /scan-api/health /schedule-api/health /messaging-api/health /dashboard-api/health; do
+            request GET "$path"
+            test "$LAST_STATUS" = 200
+            tail -n 25 "$log" | grep -Fq '"ok":true'
+            tail -n 25 "$log" | grep -Fq "$expected"
+          done
+
+          request GET /custodial-admin-api/employee-phones
+          case "$LAST_STATUS" in 401|403) ;; *) echo "Expected protected employee-phones route, got $LAST_STATUS" | tee -a "$log"; exit 1 ;; esac
+
+          request POST /custodial-device-auth/enroll -H 'Origin: https://example.invalid' -H 'Content-Type: application/json' --data '{"device_id":"KIOSK_02","enrollment_code":"00000000"}'
+          test "$LAST_STATUS" = 403
+          tail -n 25 "$log" | grep -Fq 'Native custodial app enrollment is required.'
+
+          request OPTIONS /custodial-admin-api/employee-phones -H 'Origin: https://localhost' -H 'Access-Control-Request-Method: GET'
+          test "$LAST_STATUS" = 200
+          grep -Fqi 'access-control-allow-origin: https://localhost' "$log"
+
+          request GET /messaging-api/me/by-device
+          case "$LAST_STATUS" in 401|403) ;; *) echo "Expected Messenger auth boundary, got $LAST_STATUS" | tee -a "$log"; exit 1 ;; esac
+
+          echo RENDER_LIVE_RELEASE_DIAGNOSTICS_PASS | tee -a "$log"
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: render-live-diagnostics
+          path: /tmp/render-live-diagnostics.log
+          if-no-files-found: error
+          retention-days: 14
+      - name: Enforce probe result
+        if: always()
+        run: test "${{ steps.probe.outcome }}" = success
