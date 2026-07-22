@@ -40,9 +40,9 @@ await sql(`
   values ('${employeeId}'::uuid,'EMP999998','Event Integrity Test Employee',true,'staff','disposable database acceptance')
   on conflict(id) do update set active=true;
 
-  insert into public.msg_users(id,employee_id,display_name,role,is_active,active)
-  values ('${userId}'::uuid,'${employeeId}'::uuid,'Event Integrity Test Employee','employee',true,true)
-  on conflict(id) do update set is_active=true,active=true;
+  insert into public.msg_users(id,employee_id,display_name,role,is_active)
+  values ('${userId}'::uuid,'${employeeId}'::uuid,'Event Integrity Test Employee','employee',true)
+  on conflict(id) do update set is_active=true;
 
   insert into public.events_app_events(
     id,event_name,location_group_id,event_date,end_date,start_time,end_time,
