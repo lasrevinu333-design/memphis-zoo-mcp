@@ -29,6 +29,22 @@ async function runRpc(fn, args) {
 }
 
 async function runReadOnlySql(sql) {
+  if (/from public\.msg_users u[\s\S]*join public\.ops_manager_managers m/i.test(sql)) {
+    return [{
+      msg_user_id: MANAGER_USER_ID,
+      manager_id: MANAGER_ID,
+      manager_display_name: "Authority Test Manager",
+      job_title: "Director of Test Operations",
+      department_key: "operations",
+      manager_roles: ["DIRECTOR"],
+    }];
+  }
+  if (/msg_list_users/i.test(sql)) {
+    return [
+      { id: MANAGER_USER_ID, display_name: "Authority Test Manager", role: "manager", is_active: true },
+      { id: FORGED_EMPLOYEE_ID, display_name: "Authority Test Employee", role: "employee", is_active: true },
+    ];
+  }
   if (/select m\.id, m\.thread_id, m\.sender_user_id, m\.is_deleted/i.test(sql)) {
     return [{ id: "00000000-0000-4000-8000-000000000708", thread_id: THREAD_ID, sender_user_id: MANAGER_USER_ID, is_deleted: false }];
   }
@@ -76,8 +92,25 @@ async function post(path, body) {
   });
   return { status: response.status, body: await response.json() };
 }
+async function get(path) {
+  const response = await fetch(`${origin}${path}`);
+  return { status: response.status, body: await response.json() };
+}
 
 try {
+  const identity = await get("/messaging-api/me/by-device");
+  assert.equal(identity.status, 200);
+  assert.equal(identity.body.data.display_name, "Authority Test Manager");
+  assert.equal(identity.body.data.role_title, "Director of Test Operations");
+  assert.equal(identity.body.data.department_key, "operations");
+
+  const users = await get("/messaging-api/users");
+  assert.equal(users.status, 200);
+  const managerContact = users.body.data.find((row) => row.id === MANAGER_USER_ID);
+  assert.equal(managerContact.role_title, "Director of Test Operations");
+  assert.equal(managerContact.job_title, "Director of Test Operations");
+  const employeeContact = users.body.data.find((row) => row.id === FORGED_EMPLOYEE_ID);
+  assert.equal(employeeContact.role_title, "Employee");
   const forgedMessage = await post(`/messaging-api/thread/${THREAD_ID}/message`, {
     sender_user_id: FORGED_EMPLOYEE_ID,
     body: "forged",
