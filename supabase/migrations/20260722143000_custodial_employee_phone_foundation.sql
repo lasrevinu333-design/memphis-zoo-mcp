@@ -118,8 +118,8 @@ begin
   values (v_code, v_name, true, 'staff', nullif(btrim(coalesce(p_notes, '')), ''))
   returning * into v_employee;
 
-  insert into public.msg_users(employee_id, display_name, role, is_active, active)
-  values (v_employee.id, v_employee.display_name, 'employee', true, true)
+  insert into public.msg_users(employee_id, display_name, role, is_active)
+  values (v_employee.id, v_employee.display_name, 'employee', true)
   returning * into v_user;
 
   insert into public.custodial_employee_status_history(
