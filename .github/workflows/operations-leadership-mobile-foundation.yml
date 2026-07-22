@@ -13,6 +13,7 @@ on:
       - 'supabase/migrations/20260722143000_custodial_employee_phone_foundation.sql'
       - 'supabase/migrations/20260722143100_custodial_employee_phone_assignment.sql'
       - 'supabase/migrations/20260722143200_custodial_employee_status_management.sql'
+      - 'supabase/migrations/20260722143300_retire_forced_operations_leadership_thread.sql'
       - 'scripts/operations-leadership-mobile-contract-tests.mjs'
       - 'scripts/manager-notification-contract-tests.mjs'
       - 'scripts/operations-leadership-mobile-database-tests.mjs'
