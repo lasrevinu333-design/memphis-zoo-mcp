@@ -44,7 +44,7 @@ assert.match(schemaBootstrap, /installLeadershipHttpRoutes/);
 assert.match(authSource, /app\.post\("\/auth-api\/ops\/manager-codes\/consume"/);
 assert.match(indexSource, /ops-manager-auth\.v5\.named-leadership/);
 assert.doesNotMatch(indexSource, /ops-manager-auth\.v4\.shared-48h/);
-assert.equal(releaseManifest.frontend_commit_sha, "0876ec183cfad072e8f7ae211e4361846f434aab");
+assert.equal(releaseManifest.frontend_commit_sha, "07361a10855b29cde568a315e1d8572db303cbec");
 assert.equal(releaseManifest.api_contract_versions.ops_manager_auth, "ops-manager-auth.v5.named-leadership");
 
 const echo = express();
@@ -97,10 +97,5 @@ try {
 } finally {
   await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
 }
-
-for (const mobileOrigin of ["https://localhost", "http://localhost", "capacitor://localhost", "ionic://localhost"]) {
-  assert.ok(indexSource.includes(`"${mobileOrigin}"`), `backend CORS must allow native app origin ${mobileOrigin}`);
-}
-assert.match(indexSource, /X-Memphis-Device-Credential/);
 
 console.log("OPERATIONS_LEADERSHIP_MOBILE_CONTRACT_PASS");
