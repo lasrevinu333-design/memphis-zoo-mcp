@@ -67,7 +67,8 @@ await replaceExact(path,
 
   async function firebaseManagementRequest(pathname) {
     const token = await accessToken(FIREBASE_READ_SCOPE);
-    const response = await fetch(\`\${FIREBASE_MANAGEMENT_BASE}\${pathname.startsWith("/") ? pathname : `/${pathname}`}\`, {
+    const target = \`\${FIREBASE_MANAGEMENT_BASE}\${pathname.startsWith("/") ? pathname : "/" + pathname}\`;
+    const response = await fetch(target, {
       headers: { Authorization: \`Bearer \${token}\`, Accept: "application/json" },
     });
     const payload = await response.json().catch(() => null);
