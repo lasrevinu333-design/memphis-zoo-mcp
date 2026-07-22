@@ -22,6 +22,7 @@ const eventId = '00000000-0000-4000-8000-00000000e901';
 const employeeId = '00000000-0000-4000-8000-00000000e902';
 const userId = '00000000-0000-4000-8000-00000000e903';
 const groupId = '00000000-0000-4000-8000-00000000e904';
+const venueId = '00000000-0000-4000-8000-00000000e905';
 
 const constraint = await sql(`select pg_get_constraintdef(oid) from pg_constraint where conrelid='public.events_app_notification_log'::regclass and conname='events_app_notification_log_kind_check';`);
 assert.match(constraint, /event_reminder/, 'database constraint must accept the worker canonical kind');
@@ -40,6 +41,16 @@ await sql(`
   )
   on conflict(id) do update set active=true,eligible_event_venue=true,event_venue=true;
 
+  insert into public.event_venues(
+    id,venue_code,display_name,event_scope,location_group_id,
+    eligible_event_venue,eligible_event_scope,aliases,active,metadata_json
+  ) values (
+    '${venueId}'::uuid,'EVENT_INTEGRITY_TEST_VENUE','Event Integrity Test Venue',
+    'SINGLE_VENUE','${groupId}'::uuid,true,false,array['Event Integrity Test Venue']::text[],true,
+    '{"database_acceptance":true}'::jsonb
+  )
+  on conflict(id) do update set eligible_event_venue=true,active=true;
+
   insert into public.employees(id,employee_code,display_name,active,role,notes)
   values ('${employeeId}'::uuid,'EMP999998','Event Integrity Test Employee',true,'staff','disposable database acceptance')
   on conflict(id) do update set active=true;
@@ -54,9 +65,9 @@ await sql(`
     status,event_scope,coverage_location_ids,display_location
   ) values (
     '${eventId}'::uuid,'Event Integrity Database Acceptance','${groupId}'::uuid,
-    '${groupId}'::uuid,array['${groupId}'::uuid],date '2030-01-02',date '2030-01-02',
+    '${venueId}'::uuid,array['${venueId}'::uuid],date '2030-01-02',date '2030-01-02',
     time '10:00',time '11:00',10,'Database acceptance event','database-test',
-    'SCHEDULED','SINGLE_VENUE',array['${groupId}'::uuid],'Event Integrity Test Group'
+    'SCHEDULED','SINGLE_VENUE',array['${groupId}'::uuid],'Event Integrity Test Venue'
   )
   on conflict(id) do update set status='SCHEDULED';
 
