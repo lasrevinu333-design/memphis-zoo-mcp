@@ -1,0 +1,71 @@
+name: Event Integrity Diagnostics
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: event-integrity-diagnostics-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install exact dependencies
+        run: npm ci --ignore-scripts
+      - name: Run source contract
+        shell: bash
+        run: |
+          set +e
+          mkdir -p event-integrity-evidence
+          npm run --silent test:event-integrity 2>&1 | tee event-integrity-evidence/source.log
+          printf '%s\n' "${PIPESTATUS[0]}" > event-integrity-evidence/source-status.txt
+      - name: Rebuild database and run event integrity acceptance
+        shell: bash
+        env:
+          SCHEMA_REBUILD_DOCKER_IMAGE: supabase/postgres:17.6.1.143
+        run: |
+          set +e
+          export SCHEMA_REBUILD_KEEP_DATABASE=1
+          npm run --silent test:empty-db-rebuild 2>&1 | tee event-integrity-evidence/schema-rebuild.log
+          rebuild_status=${PIPESTATUS[0]}
+          printf '%s\n' "$rebuild_status" > event-integrity-evidence/rebuild-status.txt
+          if [[ "$rebuild_status" = "0" ]]; then
+            container="$(sed -n 's/.*"retained_test_container":"\([^"]*\)".*/\1/p' event-integrity-evidence/schema-rebuild.log | tail -n 1)"
+            if [[ -n "$container" ]]; then
+              EVENT_INTEGRITY_TEST_DOCKER_CONTAINER="$container" \
+                EVENT_INTEGRITY_TEST_DATABASE=postgres \
+                npm run --silent test:event-integrity-db 2>&1 | tee event-integrity-evidence/database.log
+              printf '%s\n' "${PIPESTATUS[0]}" > event-integrity-evidence/database-status.txt
+              docker rm -f "$container" >/dev/null 2>&1 || true
+            else
+              printf 'retained container not found\n' | tee event-integrity-evidence/database.log
+              printf '1\n' > event-integrity-evidence/database-status.txt
+            fi
+          else
+            printf '1\n' > event-integrity-evidence/database-status.txt
+          fi
+          exit 0
+      - name: Upload complete event integrity evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: event-integrity-diagnostics
+          path: event-integrity-evidence
+          retention-days: 14
+      - name: Enforce results
+        shell: bash
+        run: |
+          test "$(cat event-integrity-evidence/source-status.txt)" = "0"
+          test "$(cat event-integrity-evidence/rebuild-status.txt)" = "0"
+          test "$(cat event-integrity-evidence/database-status.txt)" = "0"
