@@ -1,0 +1,47 @@
+name: Event Delete Source Diagnostics
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: event-delete-source-diagnostics-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  trace:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Trace every event deletion and expiration caller
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p event-delete-source-diagnostics
+          {
+            echo '=== direct table references ==='
+            rg -n -C 8 'events_app_events' src scripts package.json render.yaml Dockerfile* . 2>/dev/null || true
+            echo
+            echo '=== delete calls and end-date filters ==='
+            rg -n -C 8 '\.delete\(|delete\s+from|end_date|event_date' src scripts 2>/dev/null || true
+            echo
+            echo '=== timers and maintenance ==='
+            rg -n -C 8 'setInterval|setTimeout|maintenance|retention|expire|cleanup|purge' src scripts 2>/dev/null || true
+            echo
+            echo '=== multiline suspicious Supabase calls ==='
+            rg -n -U -C 6 'from\(["'"']events_app_events["'"']\)[\s\S]{0,400}?delete\(' . 2>/dev/null || true
+            rg -n -U -C 6 'delete\([\s\S]{0,400}?end_date' . 2>/dev/null || true
+          } | tee event-delete-source-diagnostics/source-trace.log
+      - name: Upload source trace
+        uses: actions/upload-artifact@v4
+        with:
+          name: event-delete-source-diagnostics
+          path: event-delete-source-diagnostics
+          retention-days: 14
