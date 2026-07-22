@@ -98,4 +98,9 @@ try {
   await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
 }
 
+for (const mobileOrigin of ["https://localhost", "http://localhost", "capacitor://localhost", "ionic://localhost"]) {
+  assert.ok(indexSource.includes(`"${mobileOrigin}"`), `backend CORS must allow native app origin ${mobileOrigin}`);
+}
+assert.match(indexSource, /X-Memphis-Device-Credential/);
+
 console.log("OPERATIONS_LEADERSHIP_MOBILE_CONTRACT_PASS");
