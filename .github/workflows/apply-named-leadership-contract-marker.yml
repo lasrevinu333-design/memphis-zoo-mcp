@@ -1,0 +1,62 @@
+name: Apply Named Leadership Contract Marker
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'src/index.js'
+      - 'release/frontend-release-manifest.json'
+      - 'scripts/operations-leadership-mobile-contract-tests.mjs'
+      - '.github/workflows/apply-named-leadership-contract-marker.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Replace retired contract marker
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs=require('fs');
+          const path='src/index.js';
+          const old='ops-manager-auth.v4.shared-48h';
+          const next='ops-manager-auth.v5.named-leadership';
+          let source=fs.readFileSync(path,'utf8');
+          const matches=source.split(old).length-1;
+          if(matches!==1) throw new Error(`Expected exactly one retired contract marker, found ${matches}.`);
+          source=source.replace(old,next);
+          fs.writeFileSync(path,source);
+          NODE
+          node --check src/index.js
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run --silent test:operations-leadership-mobile
+          git diff --check
+      - name: Commit marker update
+        shell: bash
+        env:
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- src/index.js; then
+            echo 'Contract marker already current.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/index.js
+          git commit -m 'release: publish named leadership auth contract marker'
+          git push origin HEAD:"$HEAD_BRANCH"
