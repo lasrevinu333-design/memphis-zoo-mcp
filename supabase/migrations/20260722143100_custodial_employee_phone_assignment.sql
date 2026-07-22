@@ -64,15 +64,14 @@ begin
       if exists (select 1 from public.msg_users where lower(btrim(display_name)) = lower(v_new_employee.display_name)) then
         raise exception using errcode = '23505', message = 'Messenger already contains a different user with this employee name.';
       end if;
-      insert into public.msg_users(employee_id, display_name, role, is_active, active)
-      values (v_new_employee.id, v_new_employee.display_name, 'employee', true, true)
+      insert into public.msg_users(employee_id, display_name, role, is_active)
+      values (v_new_employee.id, v_new_employee.display_name, 'employee', true)
       returning * into v_new_user;
     else
       update public.msg_users
       set display_name = v_new_employee.display_name,
           role = 'employee',
           is_active = true,
-          active = true,
           updated_at = now()
       where id = v_new_user.id
       returning * into v_new_user;
