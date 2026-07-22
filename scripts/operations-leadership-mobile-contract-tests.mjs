@@ -44,7 +44,7 @@ assert.match(schemaBootstrap, /installLeadershipHttpRoutes/);
 assert.match(authSource, /app\.post\("\/auth-api\/ops\/manager-codes\/consume"/);
 assert.match(indexSource, /ops-manager-auth\.v5\.named-leadership/);
 assert.doesNotMatch(indexSource, /ops-manager-auth\.v4\.shared-48h/);
-assert.equal(releaseManifest.frontend_commit_sha, "ae61ae988429a5476a25e08eb520ec30f45bffcc");
+assert.equal(releaseManifest.frontend_commit_sha, "0876ec183cfad072e8f7ae211e4361846f434aab");
 assert.equal(releaseManifest.api_contract_versions.ops_manager_auth, "ops-manager-auth.v5.named-leadership");
 
 const echo = express();
