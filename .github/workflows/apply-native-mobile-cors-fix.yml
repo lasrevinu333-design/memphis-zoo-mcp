@@ -1,0 +1,46 @@
+name: Apply Native Mobile CORS Fix
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'scripts/apply-native-mobile-cors-fix.mjs'
+      - '.github/workflows/apply-native-mobile-cors-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply exact native mobile CORS transformation
+        run: node scripts/apply-native-mobile-cors-fix.mjs
+      - name: Verify source and contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check src/index.js
+          npm ci --ignore-scripts
+          npm run --silent test:operations-leadership-mobile
+          git diff --check
+      - name: Commit transformed backend
+        shell: bash
+        env:
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/index.js scripts/operations-leadership-mobile-contract-tests.mjs
+          git commit -m 'fix: allow native manager app API origins'
+          git push origin HEAD:"$HEAD_BRANCH"
