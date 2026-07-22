@@ -13,6 +13,7 @@ import { RELEASE_ID } from "./app-version.js";
 import { makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
 import { installAnnieMoxieRoutes } from "./annie-moxie-bootstrap.js";
 import { installLeadershipHttpRoutes } from "./leadership-bootstrap.js";
+import { installCustodialEmployeeAdminRoutes } from "./custodial-employee-admin.js";
 import { installManagerNotificationRoutes } from "./manager-notifications.js";
 
 /**
@@ -55,10 +56,11 @@ function installHttpDiagnostics(app) {
     enumerable: false,
     configurable: false,
   });
-  // Install the narrower Annie/Eric Moxie authorization first so these exact
-  // routes are authoritative before the generic leadership compatibility layer.
+  // Install narrower role-specific routes first so they remain authoritative
+  // before the generic leadership compatibility layer and legacy app routes.
   installAnnieMoxieRoutes(app);
   installLeadershipHttpRoutes(app);
+  installCustodialEmployeeAdminRoutes(app);
   installManagerNotificationRoutes(app);
   app.get("/mcp-tools.json", requireOpsManagerAuth, (_req, res) => {
     res.status(200).json(getToolManifest({ includePlanned: true }));

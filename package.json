@@ -43,6 +43,8 @@
     "test:empty-db-rebuild": "node scripts/empty-database-rebuild-check.mjs",
     "test:operations-leadership-mobile": "node scripts/operations-leadership-mobile-contract-tests.mjs",
     "test:operations-leadership-mobile-db": "node scripts/operations-leadership-mobile-database-tests.mjs",
+    "test:custodial-employee-phones": "node scripts/custodial-employee-phone-contract-tests.mjs",
+    "test:custodial-employee-phones-db": "node scripts/custodial-employee-phone-database-tests.mjs",
     "device-security:password": "node scripts/device-security-password-admin.mjs",
     "test:manager-notifications": "node scripts/manager-notification-contract-tests.mjs"
   },
