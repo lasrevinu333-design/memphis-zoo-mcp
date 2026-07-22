@@ -17,7 +17,7 @@ async function json(statement) {
   const output = await sql(`select (${statement})::text;`);
   return JSON.parse(output.split("\n").at(-1));
 }
-const eric = await sql("select manager_id from public.ops_manager_managers where active=true and revoked_at is null and is_system_principal=false and 'CUSTODIAL_MANAGER'=any(roles) order by case when system_key='eric_custodial_manager' then 0 else 1 end,created_at limit 1;");
+const eric = await sql("select manager_id from public.ops_manager_managers where lower(btrim(display_name))='eric operle' and active=true and revoked_at is null order by case when system_key='eric_custodial_manager' then 0 else 1 end,created_at limit 1;");
 assert.match(eric, /^[0-9a-f-]{36}$/i);
 const devicePk = await sql("select id from public.devices where device_id='KIOSK_10';");
 assert.match(devicePk, /^[0-9a-f-]{36}$/i);
