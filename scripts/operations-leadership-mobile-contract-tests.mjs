@@ -4,13 +4,16 @@ import express from "express";
 import { installLeadershipHttpRoutes } from "../src/leadership-bootstrap.js";
 
 const root = new URL("../", import.meta.url);
-const [bootstrap, annieMoxie, schemaBootstrap, migration, authSource] = await Promise.all([
+const [bootstrap, annieMoxie, schemaBootstrap, migration, authSource, indexSource, releaseManifestSource] = await Promise.all([
   readFile(new URL("src/leadership-bootstrap.js", root), "utf8"),
   readFile(new URL("src/annie-moxie-bootstrap.js", root), "utf8"),
   readFile(new URL("src/mcp-schema-bootstrap.js", root), "utf8"),
   readFile(new URL("supabase/migrations/20260721190000_operations_leadership_mobile_foundation.sql", root), "utf8"),
   readFile(new URL("src/auth/shared-access-auth.js", root), "utf8"),
+  readFile(new URL("src/index.js", root), "utf8"),
+  readFile(new URL("release/frontend-release-manifest.json", root), "utf8"),
 ]);
+const releaseManifest = JSON.parse(releaseManifestSource);
 
 for (const required of [
   "Jennifer Sheffield", "Director of Operations",
@@ -39,6 +42,10 @@ assert.match(annieMoxie, /annie_feist_operations_admin/);
 assert.match(schemaBootstrap, /installAnnieMoxieRoutes/);
 assert.match(schemaBootstrap, /installLeadershipHttpRoutes/);
 assert.match(authSource, /app\.post\("\/auth-api\/ops\/manager-codes\/consume"/);
+assert.match(indexSource, /ops-manager-auth\.v5\.named-leadership/);
+assert.doesNotMatch(indexSource, /ops-manager-auth\.v4\.shared-48h/);
+assert.equal(releaseManifest.frontend_commit_sha, "ae61ae988429a5476a25e08eb520ec30f45bffcc");
+assert.equal(releaseManifest.api_contract_versions.ops_manager_auth, "ops-manager-auth.v5.named-leadership");
 
 const echo = express();
 echo.use(express.json());
