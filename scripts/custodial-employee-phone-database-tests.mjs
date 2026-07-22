@@ -23,7 +23,11 @@ await sql(`insert into public.ops_manager_managers(manager_id,display_name,job_t
   on conflict(manager_id) do update set active=true,revoked_at=null,roles=excluded.roles;`);
 const eric = await sql(`select manager_id from public.ops_manager_managers where manager_id='${managerId}'::uuid and active=true and revoked_at is null;`);
 assert.equal(eric, managerId);
-const devicePk = await sql("select id from public.devices where device_id='KIOSK_10';");
+const deviceId = "00000000-0000-4000-8000-00000000f302";
+await sql(`insert into public.devices(id,device_id,device_name,active,assigned_employee_id)
+  values ('${deviceId}'::uuid,'KIOSK_10','Unassigned KIOSK_10',true,null)
+  on conflict(device_id) do update set active=true,updated_at=now();`);
+const devicePk = await sql("select id from public.devices where device_id='KIOSK_10' and active=true;");
 assert.match(devicePk, /^[0-9a-f-]{36}$/i);
 const credentialBefore = await sql(`select coalesce(string_agg(credential_id::text,',' order by credential_id::text),'') from public.device_auth_credentials where device_id='${devicePk}'::uuid and revoked_at is null;`);
 const created = await json(`public.custodial_create_employee('Database Phone Test Employee',null,'disposable database acceptance','${eric}'::uuid)`);
