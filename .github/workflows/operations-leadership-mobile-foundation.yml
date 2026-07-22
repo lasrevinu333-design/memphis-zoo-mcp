@@ -4,14 +4,21 @@ on:
   pull_request:
     paths:
       - 'src/leadership-bootstrap.js'
+      - 'src/custodial-employee-admin.js'
       - 'src/manager-notifications.js'
       - 'src/annie-moxie-bootstrap.js'
       - 'src/mcp-schema-bootstrap.js'
       - 'supabase/migrations/20260721190000_operations_leadership_mobile_foundation.sql'
       - 'supabase/migrations/20260721203000_manager_mobile_notifications.sql'
+      - 'supabase/migrations/20260722143000_custodial_employee_phone_foundation.sql'
+      - 'supabase/migrations/20260722143100_custodial_employee_phone_assignment.sql'
+      - 'supabase/migrations/20260722143200_custodial_employee_status_management.sql'
+      - 'supabase/migrations/20260722143300_retire_forced_operations_leadership_thread.sql'
       - 'scripts/operations-leadership-mobile-contract-tests.mjs'
       - 'scripts/manager-notification-contract-tests.mjs'
       - 'scripts/operations-leadership-mobile-database-tests.mjs'
+      - 'scripts/custodial-employee-phone-contract-tests.mjs'
+      - 'scripts/custodial-employee-phone-database-tests.mjs'
       - 'package.json'
       - '.github/workflows/operations-leadership-mobile-foundation.yml'
   workflow_dispatch:
@@ -29,6 +36,7 @@ jobs:
       - run: npm ci
       - run: npm run test:operations-leadership-mobile
       - run: npm run test:manager-notifications
+      - run: npm run test:custodial-employee-phones
       - run: npm run test:messaging
       - run: npm run test:messaging-manager-authority
       - run: npm run test:device-credentials
@@ -48,6 +56,9 @@ jobs:
           OPERATIONS_LEADERSHIP_TEST_DOCKER_CONTAINER="$container" \
             OPERATIONS_LEADERSHIP_TEST_DATABASE=postgres \
             npm run --silent test:operations-leadership-mobile-db 2>&1 | tee -a /tmp/operations-leadership-schema-rebuild.log
+          CUSTODIAL_PHONE_TEST_DOCKER_CONTAINER="$container" \
+            CUSTODIAL_PHONE_TEST_DATABASE=postgres \
+            npm run --silent test:custodial-employee-phones-db 2>&1 | tee -a /tmp/operations-leadership-schema-rebuild.log
       - name: Upload schema rebuild log
         if: always()
         uses: actions/upload-artifact@v4

@@ -59,6 +59,7 @@ jobs:
           npm run --silent test:operational-recovery
           npm run --silent test:foundation-repair
           npm run --silent test:custodial-repair
+          npm run --silent test:custodial-employee-phones
           npm run --silent test:device-security-app
           npm run --silent test:gemini-console
           npm run --silent test:schema-fingerprint
@@ -76,6 +77,9 @@ jobs:
           OPERATIONS_LEADERSHIP_TEST_DOCKER_CONTAINER="$container" \
             OPERATIONS_LEADERSHIP_TEST_DATABASE=postgres \
             npm run --silent test:operations-leadership-mobile-db
+          CUSTODIAL_PHONE_TEST_DOCKER_CONTAINER="$container" \
+            CUSTODIAL_PHONE_TEST_DATABASE=postgres \
+            npm run --silent test:custodial-employee-phones-db
           GEMINI_CONSOLE_TEST_DOCKER_CONTAINER="$container" \
             GEMINI_CONSOLE_TEST_DATABASE=postgres \
             npm run --silent test:gemini-console-db
