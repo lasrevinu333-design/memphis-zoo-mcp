@@ -17,8 +17,12 @@ async function json(statement) {
   const output = await sql(`select (${statement})::text;`);
   return JSON.parse(output.split("\n").at(-1));
 }
-const eric = await sql("select manager_id from public.ops_manager_managers where lower(btrim(display_name))='eric operle' and active=true and revoked_at is null order by case when system_key='eric_custodial_manager' then 0 else 1 end,created_at limit 1;");
-assert.match(eric, /^[0-9a-f-]{36}$/i);
+const managerId = "00000000-0000-4000-8000-00000000f301";
+await sql(`insert into public.ops_manager_managers(manager_id,display_name,job_title,department_key,roles,active,is_system_principal,metadata_json)
+  values ('${managerId}'::uuid,'Custodial Phone Database Test Manager','Custodial Manager','custodial',array['OPS_MANAGER','CUSTODIAL_MANAGER','SECURITY_ADMIN']::text[],true,false,'{"database_acceptance":true}'::jsonb)
+  on conflict(manager_id) do update set active=true,revoked_at=null,roles=excluded.roles;`);
+const eric = await sql(`select manager_id from public.ops_manager_managers where manager_id='${managerId}'::uuid and active=true and revoked_at is null;`);
+assert.equal(eric, managerId);
 const devicePk = await sql("select id from public.devices where device_id='KIOSK_10';");
 assert.match(devicePk, /^[0-9a-f-]{36}$/i);
 const credentialBefore = await sql(`select coalesce(string_agg(credential_id::text,',' order by credential_id::text),'') from public.device_auth_credentials where device_id='${devicePk}'::uuid and revoked_at is null;`);
