@@ -134,6 +134,56 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     };
   }
 
+  function messagingRoleTitle(row = {}) {
+    const explicit = String(row.role_title || row.job_title || "").trim();
+    if (explicit) return explicit;
+    const role = String(row.role || "").trim().toLowerCase();
+    if (role === "bot") return "Memphis";
+    if (["manager", "ops", "ops_manager", "operations_manager", "ops manager", "operations manager"].includes(role)) return "Operations Leadership";
+    return "Employee";
+  }
+
+  async function getLeadershipProfilesForMessagingUsers(userIds = []) {
+    const ids = [...new Set((Array.isArray(userIds) ? userIds : []).map((value) => String(value || "").trim()).filter(isUuid))];
+    if (!ids.length) return new Map();
+    const rows = await runReadOnlySql(`
+      select
+        u.id as msg_user_id,
+        m.manager_id,
+        m.display_name as manager_display_name,
+        m.job_title,
+        m.department_key,
+        m.roles as manager_roles
+      from public.msg_users u
+      join public.ops_manager_managers m on m.manager_id = u.ops_manager_id
+      where u.id in (${ids.map((id) => `'${esc(id)}'::uuid`).join(",")})
+        and u.is_active = true
+        and m.active = true
+        and m.revoked_at is null
+        and m.is_system_principal = false
+    `);
+    return new Map((Array.isArray(rows) ? rows : []).map((row) => [String(row.msg_user_id || "").trim(), row]));
+  }
+
+  async function getLeadershipProfileForMessagingUser(userId = "") {
+    return (await getLeadershipProfilesForMessagingUsers([userId])).get(String(userId || "").trim()) || null;
+  }
+
+  async function enrichMessagingUsers(rows = []) {
+    const users = Array.isArray(rows) ? rows : [];
+    const profiles = await getLeadershipProfilesForMessagingUsers(users.map((row) => row?.id));
+    return users.map((row) => {
+      const profile = profiles.get(String(row?.id || "").trim()) || null;
+      return {
+        ...row,
+        role_title: messagingRoleTitle({ ...row, ...(profile || {}) }),
+        job_title: String(profile?.job_title || "").trim() || null,
+        department_key: String(profile?.department_key || "").trim() || null,
+        manager_roles: Array.isArray(profile?.manager_roles) ? profile.manager_roles : null,
+      };
+    });
+  }
+
   async function getManagerMessagingIdentity(managerSession = {}) {
     const managerId = String(managerSession?.manager_id || "").trim();
     if (!isUuid(managerId)) throw Object.assign(new Error("Authenticated manager identity is required for Messenger."), { status: 401 });
@@ -141,17 +191,22 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     const row = Array.isArray(data) ? data[0] : data;
     const userId = String(row?.msg_user_id || row?.user_id || row?.id || "").trim();
     if (!isUuid(userId)) throw Object.assign(new Error("Authenticated manager has no server messaging principal."), { status: 403 });
+    const leadershipProfile = await getLeadershipProfileForMessagingUser(userId);
     const sharedThreadData = await runRpc("msg_get_or_create_ops_manager_thread", { p_manager_id: managerId });
     const sharedThread = Array.isArray(sharedThreadData) ? sharedThreadData[0] : sharedThreadData;
     const sharedThreadId = String(sharedThread?.thread_id || sharedThread?.id || "").trim();
-    if (!isUuid(sharedThreadId)) throw Object.assign(new Error("The shared Ops Manager chat is unavailable."), { status: 503 });
+    if (!isUuid(sharedThreadId)) throw Object.assign(new Error("The Operations Leadership chat is unavailable."), { status: 503 });
     return {
       ...row,
       msg_user_id: userId,
       user_id: userId,
       role: "manager",
       manager_id: managerId,
-      display_name: String(row?.display_name || managerSession?.manager_display_name || "Ops Manager"),
+      display_name: String(leadershipProfile?.manager_display_name || row?.display_name || managerSession?.manager_display_name || "Operations Leadership"),
+      role_title: messagingRoleTitle({ ...row, ...(leadershipProfile || {}) }),
+      job_title: String(leadershipProfile?.job_title || "").trim() || null,
+      department_key: String(leadershipProfile?.department_key || "").trim() || null,
+      manager_roles: Array.isArray(leadershipProfile?.manager_roles) ? leadershipProfile.manager_roles : [],
       canonical_device_id: String(managerSession?.device_id || managerSession?.credential_id || "manager-session"),
       identity_source: "trusted_manager_session",
       ops_manager_thread_id: sharedThreadId,
@@ -1226,8 +1281,9 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const requestedUserId = String(req.query.user_id || "").trim();
       const deviceId = String(req.query.device_id || req.header("x-device-id") || "").trim();
       const viewer = await resolveViewerContext({ userId: requestedUserId, deviceId, managerSession: req.memphisAuth || null });
-      const rows = await runReadOnlySql(`select * from public.msg_list_users('${esc(viewer.effectiveUserId)}'::uuid)`);
-      res.status(200).json({ ok: true, data: rows || [], meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+      const baseRows = await runReadOnlySql(`select * from public.msg_list_users('${esc(viewer.effectiveUserId)}'::uuid)`);
+      const rows = await enrichMessagingUsers(baseRows);
+      res.status(200).json({ ok: true, data: rows, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Messaging users failed");
     }
