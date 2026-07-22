@@ -32,9 +32,13 @@ assert.doesNotMatch(retentionDefinition, /delete\s+from\s+public\.events_app_eve
 assert.doesNotMatch(retentionDefinition, /delete\s+from\s+public\.events_app_event_history/i, 'retention must not delete event history');
 
 await sql(`
-  insert into public.location_groups(id,group_code,group_name,active,eligible_custodial_coverage,eligible_staffing_assignment)
-  values ('${groupId}'::uuid,'EVENT_INTEGRITY_TEST_GROUP','Event Integrity Test Group',true,true,true)
-  on conflict(id) do update set active=true;
+  insert into public.location_groups(
+    id,group_code,group_name,active,eligible_event_venue,event_venue,
+    eligible_custodial_coverage,eligible_staffing_assignment
+  ) values (
+    '${groupId}'::uuid,'EVENT_INTEGRITY_TEST_GROUP','Event Integrity Test Group',true,true,true,true,true
+  )
+  on conflict(id) do update set active=true,eligible_event_venue=true,event_venue=true;
 
   insert into public.employees(id,employee_code,display_name,active,role,notes)
   values ('${employeeId}'::uuid,'EMP999998','Event Integrity Test Employee',true,'staff','disposable database acceptance')
@@ -45,12 +49,14 @@ await sql(`
   on conflict(id) do update set is_active=true;
 
   insert into public.events_app_events(
-    id,event_name,location_group_id,event_date,end_date,start_time,end_time,
-    attendee_count,notes,created_by,status,event_scope,coverage_location_ids
+    id,event_name,location_group_id,primary_venue_id,venue_ids,
+    event_date,end_date,start_time,end_time,attendee_count,notes,created_by,
+    status,event_scope,coverage_location_ids,display_location
   ) values (
     '${eventId}'::uuid,'Event Integrity Database Acceptance','${groupId}'::uuid,
-    date '2030-01-02',date '2030-01-02',time '10:00',time '11:00',10,
-    'Database acceptance event','database-test','SCHEDULED','SINGLE_VENUE',array['${groupId}'::uuid]
+    '${groupId}'::uuid,array['${groupId}'::uuid],date '2030-01-02',date '2030-01-02',
+    time '10:00',time '11:00',10,'Database acceptance event','database-test',
+    'SCHEDULED','SINGLE_VENUE',array['${groupId}'::uuid],'Event Integrity Test Group'
   )
   on conflict(id) do update set status='SCHEDULED';
 
