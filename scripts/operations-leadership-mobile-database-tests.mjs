@@ -65,6 +65,7 @@ const thread = await json(`(
   select jsonb_build_object(
     'title',t.title,
     'system_key',t.system_key,
+    'is_active',t.is_active,
     'canonical_participants',(
       select count(*) from public.msg_thread_participants p
       join public.msg_users u on u.id=p.user_id
@@ -78,7 +79,8 @@ const thread = await json(`(
   where t.system_key='ops_manager_shared_chat_v1'
   limit 1
 )`);
-assert.equal(thread.title, "Operations Leadership Chat");
+assert.equal(thread.title, "Operations Leadership Chat (Retired)");
+assert.equal(thread.is_active, false, "the unrequested automatic leadership room must stay archived");
 assert.equal(Number(thread.canonical_participants), 6);
 assert.equal(await sql("select count(*) from public.msg_users u join public.ops_manager_managers m on m.manager_id=u.ops_manager_id where m.active=true and m.revoked_at is null and m.is_system_principal=false and m.metadata_json @> '{\"canonical_leadership_roster\":true}'::jsonb and u.is_active=true;"), "6");
 assert.equal(await sql("select count(*) from public.msg_users where display_name='Legacy Shared Ops Manager' and is_active=false;"), "1");
@@ -101,7 +103,6 @@ assert.equal(consumed.manager.display_name, "Annie Feist");
 assert.equal(consumed.trusted_device.manager_id, annieId);
 assert.equal(await sql(`select manager_id::text from public.ops_manager_trusted_devices where credential_id='${credentialId}'::uuid;`), annieId);
 assert.equal(await sql(`select status from public.ops_manager_enrollment_codes where id='${codeId}'::uuid;`), "used");
-
 
 await sql(`insert into public.ops_manager_notification_preferences(credential_id,manager_id)
   values ('${credentialId}'::uuid,'${annieId}'::uuid);`);
