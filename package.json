@@ -13,6 +13,8 @@
     "test:events-api": "node scripts/events-api-contract-tests.mjs",
     "test:event-integrity": "node scripts/event-notification-retention-contract-tests.mjs",
     "test:event-integrity-db": "node scripts/event-notification-retention-database-tests.mjs",
+    "test:operational-analytics": "node scripts/operational-analytics-contract-tests.mjs",
+    "test:operational-analytics-db": "node scripts/operational-analytics-database-tests.mjs",
     "test:feedback": "node scripts/feedback-contract-tests.mjs",
     "test:schedule-ai": "node scripts/schedule-ai-tests.mjs",
     "test:restroom-rebalance-route": "node scripts/restroom-rebalance-route-tests.mjs",
