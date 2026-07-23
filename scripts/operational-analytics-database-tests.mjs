@@ -115,8 +115,8 @@ await sql(`
     'Database Inspector','Resolved for acceptance','manager'
   from generate_series(1,3) with ordinality as occurrence(value,ordinality);
 
-  insert into public.msg_users(id,employee_id,display_name,role,is_active,active,messaging_identity_key)
-  values ('${msgUserId}'::uuid,'${employeeFastId}'::uuid,'Analytics Tammy','employee',true,true,'analytics-tammy');
+  insert into public.msg_users(id,employee_id,display_name,role,is_active,messaging_identity_key)
+  values ('${msgUserId}'::uuid,'${employeeFastId}'::uuid,'Analytics Tammy','employee',true,'analytics-tammy');
   insert into public.msg_threads(id,thread_type,title,created_by_user_id,is_active,client_thread_id)
   values ('${msgThreadId}'::uuid,'direct','Analytics Retention Thread','${msgUserId}'::uuid,true,'analytics-retention-thread');
   insert into public.msg_thread_participants(thread_id,user_id) values ('${msgThreadId}'::uuid,'${msgUserId}'::uuid);
