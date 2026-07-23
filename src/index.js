@@ -1701,6 +1701,11 @@ function createMcpServer({ readOnly = false } = {}) {
     name: process.env.APP_NAME || "Memphis Zoo MCP",
     version: APP_VERSION,
   });
+  Object.defineProperty(server, "__memphisReadOnly", {
+    value: Boolean(readOnly),
+    enumerable: false,
+    configurable: false,
+  });
 
   function textToolResponse(text) {
     return {
