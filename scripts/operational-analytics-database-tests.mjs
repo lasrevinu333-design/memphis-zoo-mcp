@@ -16,11 +16,10 @@ async function sql(statement) {
     "exec", container, "psql", "-v", "ON_ERROR_STOP=1", "-At",
     "-U", "supabase_admin", "-d", database, "-c", command,
   ], { maxBuffer: 16 * 1024 * 1024 });
-  return stdout.trim();
+  return String(stdout || "").split("\n").map((line) => line.trim()).filter(Boolean).at(-1) || "";
 }
 async function json(statement) {
-  const output = await sql(`select (${statement})::text;`);
-  return JSON.parse(output.split("\n").at(-1));
+  return JSON.parse(await sql(`select (${statement})::text;`));
 }
 
 const ids = {
