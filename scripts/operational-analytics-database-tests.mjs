@@ -11,9 +11,10 @@ if (!/^mz_schema_rebuild_[a-zA-Z0-9_]+$/.test(container) || !/^(postgres|mz_sche
 }
 
 async function sql(statement) {
+  const command = `set timezone='America/Chicago';\n${statement}`;
   const { stdout } = await execFileAsync("docker", [
     "exec", container, "psql", "-v", "ON_ERROR_STOP=1", "-At",
-    "-U", "supabase_admin", "-d", database, "-c", statement,
+    "-U", "supabase_admin", "-d", database, "-c", command,
   ], { maxBuffer: 16 * 1024 * 1024 });
   return stdout.trim();
 }
