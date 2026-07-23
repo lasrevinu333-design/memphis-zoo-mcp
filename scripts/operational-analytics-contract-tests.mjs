@@ -38,7 +38,7 @@ assert.match(ordered, /^[0-9a-f]{64}$/);
 const operationId = "10000000-0000-4000-8000-000000000001";
 const sessionId = "20000000-0000-4000-8000-000000000001";
 const managerId = "30000000-0000-4000-8000-000000000001";
-const payload = normalizeInspectionPayload({
+const input = {
   session_id: sessionId,
   overall_score: 94,
   appearance_score: 96,
@@ -48,10 +48,13 @@ const payload = normalizeInspectionPayload({
   safety_score: 98,
   findings: [{ category: "detail", note: "Baseboards clean" }],
   notes: "Strong inspection result.",
-}, {
+};
+const auth = {
   manager_id: managerId,
   manager_display_name: "Test Custodial Manager",
-}, operationId);
+};
+const payload = normalizeInspectionPayload(input, auth, operationId);
+const replayPayload = normalizeInspectionPayload(input, auth, operationId);
 assert.equal(payload.operation_id, operationId);
 assert.equal(payload.session_id, sessionId);
 assert.equal(payload.inspector_manager_id, managerId);
@@ -59,11 +62,14 @@ assert.equal(payload.inspector_name_snapshot, "Test Custodial Manager");
 assert.equal(payload.overall_score, 94);
 assert.equal(payload.pass_threshold, 85);
 assert.equal(payload.critical_failure, false);
+assert.equal(payload.inspected_at, undefined, "unspecified inspection time must use the database default rather than a retry-changing client timestamp");
+assert.equal(payload.request_fingerprint, replayPayload.request_fingerprint, "identical retries must have the same fingerprint");
 assert.match(payload.request_fingerprint, /^[0-9a-f]{64}$/);
 
 assert.throws(() => normalizeInspectionPayload({ session_id: sessionId, overall_score: 101 }, {}, operationId), /between 0 and 100/i);
 assert.throws(() => normalizeInspectionPayload({ session_id: "bad", overall_score: 90 }, {}, operationId), /valid session_id/i);
 assert.throws(() => normalizeInspectionPayload({ session_id: sessionId, overall_score: 90 }, {}, "bad"), /Idempotency-Key/i);
 assert.throws(() => normalizeInspectionPayload({ session_id: sessionId, overall_score: 90, findings_json: "bad" }, {}, operationId), /array or object/i);
+assert.throws(() => normalizeInspectionPayload({ session_id: sessionId, overall_score: 90, inspection_type: "whatever" }, {}, operationId), /inspection_type is invalid/i);
 
 console.log("OPERATIONAL_ANALYTICS_SOURCE_CONTRACT_PASS");
