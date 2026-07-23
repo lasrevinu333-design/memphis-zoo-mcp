@@ -61,6 +61,7 @@ const SCAN_CONTRACT_VERSION = "scan.v2";
 const DASHBOARD_CONTRACT_VERSION = "dashboard.v1";
 const MESSAGING_CONTRACT_VERSION = "messaging.v5";
 const SCHEDULE_CONTRACT_VERSION = "schedule.v2";
+const OPERATIONAL_ANALYTICS_CONTRACT_VERSION = "operational-analytics.v1";
 const GUEST_REPORTS_CONTRACT_VERSION = "guest-reports.v1";
 const FEEDBACK_CONTRACT_VERSION = "feedback.v1";
 const OPS_MANAGER_AUTH_CONTRACT_VERSION = "ops-manager-auth.v5.named-leadership";
@@ -349,6 +350,7 @@ function buildHealthPayload(area, extra = {}) {
     dashboard: DASHBOARD_CONTRACT_VERSION,
     messaging: MESSAGING_CONTRACT_VERSION,
     schedule: SCHEDULE_CONTRACT_VERSION,
+    operational_analytics: OPERATIONAL_ANALYTICS_CONTRACT_VERSION,
     events: EVENTS_CONTRACT_VERSION,
     feedback: FEEDBACK_CONTRACT_VERSION,
     ops_manager_auth: OPS_MANAGER_AUTH_CONTRACT_VERSION,
