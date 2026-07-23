@@ -109,6 +109,12 @@ function ensureModularTools(server) {
     },
     async ({ message } = {}) => textResponse(`MCP server is alive. ${message || ""}`.trim())
   );
+
+  // src/index.js marks each request-scoped server before the first tool is
+  // registered. Anonymous sessions stop here; privileged adapters are never
+  // constructed and their credentials cannot be reached through MCP.
+  if (server.__memphisReadOnly) return;
+
   registerServerTools(server, { getAppInfo: () => appInfo });
   registerGithubTools(server);
   registerSupabaseTools(server);
