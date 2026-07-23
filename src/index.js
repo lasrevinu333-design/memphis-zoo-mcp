@@ -94,8 +94,10 @@ function registerOperationalNotificationJobHandler(jobType, handler) {
 
 const requireOpsManagerAuth = makeOpsAccessMiddleware({ trustedDeviceStore: opsTrustedDeviceStore });
 const requireOpsManagerWrite = makeOpsAccessMiddleware({ requireWrite: true, trustedDeviceStore: opsTrustedDeviceStore });
-// MCP_CONNECTOR_TOKEN is accepted by makeMcpConnectorMiddleware for service-to-service MCP clients.
+// Streamable HTTP permits a tokenless, least-privilege handshake so ChatGPT can stay connected.
+// Legacy SSE remains token-only because its follow-up /messages request uses a separate HTTP request.
 const requireMcpAuth = makeMcpConnectorMiddleware();
+const requireLegacyMcpAuth = makeMcpConnectorMiddleware({ allowReadOnlyNoAuth: false });
 const requireEmployeeDeviceCredential = makeDeviceCredentialMiddleware({
   supabase: supabaseAdmin,
   runReadOnlySql,
@@ -1694,7 +1696,7 @@ async function runCanaryChecks() {
   };
 }
 
-function createMcpServer() {
+function createMcpServer({ readOnly = false } = {}) {
   const server = new McpServer({
     name: process.env.APP_NAME || "Memphis Zoo MCP",
     version: APP_VERSION,
@@ -1807,6 +1809,18 @@ function createMcpServer() {
   server.tool("ping", { message: z.string().optional() }, async ({ message }) => {
     return textToolResponse(`MCP server is alive. ${message || ""}`.trim());
   });
+
+  if (readOnly) {
+    server.tool("server_connection_diagnostic", {}, async () => {
+      return jsonToolResponse({
+        ...buildHealthPayload("mcp-connection"),
+        access: "read_only",
+        privileged_tools_exposed: false,
+        note: "GitHub, database, and migration tools require privileged connector authorization.",
+      });
+    });
+    return server;
+  }
 
   server.tool("github_debug_config", {}, async () => {
     const owner = process.env.GITHUB_OWNER || null;
@@ -2686,17 +2700,17 @@ app.post("/scan-api/rpc", requireDeviceOrOpsAccess, requireScanRpcAuthorization,
   }
 });
 app.get("/", (_req, res) => { res.status(200).send("Memphis Zoo MCP server is running."); });
-// C2: MCP endpoint — uses Ops Manager access middleware.
-// This protects arbitrary SQL execution (supabase_sql_read, supabase_migration_apply) and all MCP tools.
+// MCP transport accepts a tokenless read-only handshake; privileged GitHub and Supabase tools
+// are registered only when connector-token authentication succeeds.
 app.get("/mcp", requireMcpAuth, (_req, res) => { res.status(405).send("GET not supported on /mcp for this server."); });
 app.options("/mcp", (_req, res) => { res.sendStatus(200); });
 app.post("/mcp", requireMcpAuth, async (req, res) => {
   let server;
-  try { server = createMcpServer(); const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined }); res.on("close", () => { transport.close(); try { server.close(); } catch {} }); await server.connect(transport); await transport.handleRequest(req, res, req.body); }
+  try { server = createMcpServer({ readOnly: Boolean(req.memphisMcpAuth?.read_only) }); const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined }); res.on("close", () => { transport.close(); try { server.close(); } catch {} }); await server.connect(transport); await transport.handleRequest(req, res, req.body); }
   catch (error) { console.error("MCP request failed:", error); if (!res.headersSent) { res.status(500).json({ jsonrpc: "2.0", error: { code: -32603, message: "Internal server error" }, id: null }); } }
 });
 const sseTransports = new Map();
-app.get("/sse", requireMcpAuth, async (req, res) => {
+app.get("/sse", requireLegacyMcpAuth, async (req, res) => {
   let server;
   try {
     server = createMcpServer();
@@ -2711,7 +2725,7 @@ app.get("/sse", requireMcpAuth, async (req, res) => {
   }
   catch (error) { console.error("SSE connection failed:", error); if (!res.headersSent) res.status(500).send("SSE connection failed"); }
 });
-app.post("/messages", requireMcpAuth, async (req, res) => {
+app.post("/messages", requireLegacyMcpAuth, async (req, res) => {
   try {
     const sessionId = String(req.query.sessionId || req.query.session_id || "").trim();
     if (!sessionId) { res.status(400).send("sessionId is required"); return; }
