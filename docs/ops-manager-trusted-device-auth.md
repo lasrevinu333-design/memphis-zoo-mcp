@@ -16,4 +16,4 @@ Production configuration:
 
 For transition only, enrollment falls back to the existing Gemini or Moxie password when `OPS_MANAGER_PASSWORD` is absent. Set the dedicated variable and rotate it after the first deployment.
 
-MCP never accepts an Ops Manager token. `MCP_CONNECTOR_TOKEN` is mandatory and independently scoped.
+MCP never accepts an Ops Manager token. A dedicated `MCP_CONNECTOR_TOKEN` remains available for strict service and legacy SSE clients; Streamable HTTP access follows the separately documented full/read-only tokenless connector policy.

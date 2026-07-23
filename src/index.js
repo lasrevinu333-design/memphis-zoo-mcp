@@ -94,10 +94,14 @@ function registerOperationalNotificationJobHandler(jobType, handler) {
 
 const requireOpsManagerAuth = makeOpsAccessMiddleware({ trustedDeviceStore: opsTrustedDeviceStore });
 const requireOpsManagerWrite = makeOpsAccessMiddleware({ requireWrite: true, trustedDeviceStore: opsTrustedDeviceStore });
-// Streamable HTTP permits a tokenless, least-privilege handshake so ChatGPT can stay connected.
+// Streamable HTTP defaults to the full connector tool set so connected ChatGPT
+// sessions can read and write without a second credential prompt.
 // Legacy SSE remains token-only because its follow-up /messages request uses a separate HTTP request.
 const requireMcpAuth = makeMcpConnectorMiddleware();
-const requireLegacyMcpAuth = makeMcpConnectorMiddleware({ allowReadOnlyNoAuth: false });
+const requireLegacyMcpAuth = makeMcpConnectorMiddleware({
+  allowFullNoAuth: false,
+  allowReadOnlyNoAuth: false,
+});
 const requireEmployeeDeviceCredential = makeDeviceCredentialMiddleware({
   supabase: supabaseAdmin,
   runReadOnlySql,
@@ -1699,7 +1703,7 @@ async function runCanaryChecks() {
 function createMcpServer({ readOnly = false } = {}) {
   const server = new McpServer({
     name: process.env.APP_NAME || "Memphis Zoo MCP",
-    version: APP_VERSION,
+    version: RELEASE_ID,
   });
   Object.defineProperty(server, "__memphisReadOnly", {
     value: Boolean(readOnly),
@@ -2705,8 +2709,8 @@ app.post("/scan-api/rpc", requireDeviceOrOpsAccess, requireScanRpcAuthorization,
   }
 });
 app.get("/", (_req, res) => { res.status(200).send("Memphis Zoo MCP server is running."); });
-// MCP transport accepts a tokenless read-only handshake; privileged GitHub and Supabase tools
-// are registered only when connector-token authentication succeeds.
+// Streamable HTTP accepts connected ChatGPT sessions with the full GitHub and
+// Supabase tool set by default. Legacy SSE remains token-only.
 app.get("/mcp", requireMcpAuth, (_req, res) => { res.status(405).send("GET not supported on /mcp for this server."); });
 app.options("/mcp", (_req, res) => { res.sendStatus(200); });
 app.post("/mcp", requireMcpAuth, async (req, res) => {

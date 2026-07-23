@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import {
   authenticateMcpConnectorRequest,
+  isMcpFullNoAuthEnabled,
   isMcpReadOnlyNoAuthEnabled,
   makeMcpConnectorMiddleware,
 } from "../src/auth/mcp-connector-auth.js";
@@ -28,23 +29,35 @@ function authenticate(headers, options = {}) {
   });
 }
 
+assert.equal(isMcpFullNoAuthEnabled({}), true);
+assert.equal(isMcpFullNoAuthEnabled({ MCP_ALLOW_FULL_NOAUTH: "false" }), false);
+assert.equal(isMcpFullNoAuthEnabled({ MCP_ALLOW_FULL_NOAUTH: "0" }), false);
 assert.equal(isMcpReadOnlyNoAuthEnabled({}), true);
 assert.equal(isMcpReadOnlyNoAuthEnabled({ MCP_ALLOW_READONLY_NOAUTH: "false" }), false);
 assert.equal(isMcpReadOnlyNoAuthEnabled({ MCP_ALLOW_READONLY_NOAUTH: "0" }), false);
 
-const anonymous = authenticate({});
-assert.equal(anonymous.ok, true);
-assert.equal(anonymous.auth_source, "noauth_readonly");
-assert.equal(anonymous.session.role, "connector_readonly");
-assert.equal(anonymous.session.read_only, true);
+const anonymousFull = authenticate({});
+assert.equal(anonymousFull.ok, true);
+assert.equal(anonymousFull.auth_source, "noauth_full");
+assert.equal(anonymousFull.session.role, "connector_service");
+assert.equal(anonymousFull.session.read_only, false);
 
-const anonymousDisabled = authenticate({}, { allowReadOnlyNoAuth: false });
+const anonymousReadOnly = authenticate({}, { allowFullNoAuth: false });
+assert.equal(anonymousReadOnly.ok, true);
+assert.equal(anonymousReadOnly.auth_source, "noauth_readonly");
+assert.equal(anonymousReadOnly.session.role, "connector_readonly");
+assert.equal(anonymousReadOnly.session.read_only, true);
+
+const anonymousDisabled = authenticate({}, {
+  allowFullNoAuth: false,
+  allowReadOnlyNoAuth: false,
+});
 assert.equal(anonymousDisabled.ok, false);
 assert.equal(anonymousDisabled.status, 401);
 
 const wrongBearer = authenticate({ authorization: "Bearer definitely-wrong" });
 assert.equal(wrongBearer.ok, false);
-assert.equal(wrongBearer.status, 401, "A bad credential must not downgrade to anonymous mode.");
+assert.equal(wrongBearer.status, 401, "A bad credential must not downgrade to tokenless access.");
 
 const correctBearer = authenticate({ authorization: `Bearer ${TOKEN}` });
 assert.equal(correctBearer.ok, true);
@@ -58,14 +71,24 @@ assert.equal(correctCustomHeader.session.role, "connector_service");
 const unconfiguredAnonymous = authenticateMcpConnectorRequest(request(), {
   env: {},
   now: NOW,
-  allowReadOnlyNoAuth: true,
 });
 assert.equal(unconfiguredAnonymous.ok, true);
-assert.equal(unconfiguredAnonymous.session.read_only, true);
+assert.equal(unconfiguredAnonymous.auth_source, "noauth_full");
+assert.equal(unconfiguredAnonymous.session.read_only, false);
+
+const unconfiguredReadOnly = authenticateMcpConnectorRequest(request(), {
+  env: {},
+  now: NOW,
+  allowFullNoAuth: false,
+  allowReadOnlyNoAuth: true,
+});
+assert.equal(unconfiguredReadOnly.ok, true);
+assert.equal(unconfiguredReadOnly.session.read_only, true);
 
 const unconfiguredStrict = authenticateMcpConnectorRequest(request(), {
   env: {},
   now: NOW,
+  allowFullNoAuth: false,
   allowReadOnlyNoAuth: false,
 });
 assert.equal(unconfiguredStrict.ok, false);
@@ -75,16 +98,15 @@ const middlewareRequest = request();
 let nextCalled = false;
 const middleware = makeMcpConnectorMiddleware({
   env: { MCP_CONNECTOR_TOKEN: TOKEN },
-  allowReadOnlyNoAuth: true,
 });
 middleware(
   middlewareRequest,
   {
     status() {
-      throw new Error("Anonymous read-only middleware should not reject the request.");
+      throw new Error("Default full-access middleware should not reject the request.");
     },
     json() {
-      throw new Error("Anonymous read-only middleware should not write an error response.");
+      throw new Error("Default full-access middleware should not write an error response.");
     },
   },
   () => {
@@ -92,13 +114,39 @@ middleware(
   }
 );
 assert.equal(nextCalled, true);
-assert.equal(middlewareRequest.memphisMcpAuth.read_only, true);
-assert.equal(middlewareRequest.memphisAuth.read_only, true);
+assert.equal(middlewareRequest.memphisMcpAuth.read_only, false);
+assert.equal(middlewareRequest.memphisAuth.read_only, false);
+assert.equal(middlewareRequest.memphisMcpAuth.source, "noauth_full");
+
+const readOnlyMiddlewareRequest = request();
+let readOnlyNextCalled = false;
+const readOnlyMiddleware = makeMcpConnectorMiddleware({
+  env: { MCP_CONNECTOR_TOKEN: TOKEN },
+  allowFullNoAuth: false,
+  allowReadOnlyNoAuth: true,
+});
+readOnlyMiddleware(
+  readOnlyMiddlewareRequest,
+  {
+    status() {
+      throw new Error("Explicit read-only middleware should not reject the request.");
+    },
+    json() {
+      throw new Error("Explicit read-only middleware should not write an error response.");
+    },
+  },
+  () => {
+    readOnlyNextCalled = true;
+  }
+);
+assert.equal(readOnlyNextCalled, true);
+assert.equal(readOnlyMiddlewareRequest.memphisMcpAuth.read_only, true);
+assert.equal(readOnlyMiddlewareRequest.memphisAuth.read_only, true);
 
 const indexSource = await readFile(new URL("../src/index.js", import.meta.url), "utf8");
 assert.match(indexSource, /function createMcpServer\(\{ readOnly = false \} = \{\}\)/);
 assert.match(indexSource, /createMcpServer\(\{ readOnly: Boolean\(req\.memphisMcpAuth\?\.read_only\) \}\)/);
-assert.match(indexSource, /makeMcpConnectorMiddleware\(\{ allowReadOnlyNoAuth: false \}\)/);
+assert.match(indexSource, /makeMcpConnectorMiddleware\(\{\s*allowFullNoAuth: false,\s*allowReadOnlyNoAuth: false,\s*\}\)/);
 
 const markerStart = indexSource.indexOf('Object.defineProperty(server, "__memphisReadOnly"');
 const firstToolRegistration = indexSource.indexOf('server.tool("ping"', markerStart);
@@ -115,7 +163,7 @@ const bootstrapSource = await readFile(new URL("../src/mcp-schema-bootstrap.js",
 const bootstrapGuard = bootstrapSource.indexOf("if (server.__memphisReadOnly) return;");
 const bootstrapGithub = bootstrapSource.indexOf("registerGithubTools(server);", bootstrapGuard);
 const bootstrapSupabase = bootstrapSource.indexOf("registerSupabaseTools(server);", bootstrapGuard);
-assert.ok(bootstrapGuard > 0, "Bootstrap must enforce the request-scoped read-only marker.");
+assert.ok(bootstrapGuard > 0, "The optional read-only mode must remain isolated in the bootstrap.");
 assert.ok(bootstrapGithub > bootstrapGuard, "GitHub tools must be registered after the bootstrap guard.");
 assert.ok(bootstrapSupabase > bootstrapGuard, "Supabase tools must be registered after the bootstrap guard.");
 
