@@ -1703,7 +1703,7 @@ async function runCanaryChecks() {
 function createMcpServer({ readOnly = false } = {}) {
   const server = new McpServer({
     name: process.env.APP_NAME || "Memphis Zoo MCP",
-    version: APP_VERSION,
+    version: RELEASE_ID,
   });
   Object.defineProperty(server, "__memphisReadOnly", {
     value: Boolean(readOnly),
