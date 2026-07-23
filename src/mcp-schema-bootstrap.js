@@ -15,6 +15,7 @@ import { installAnnieMoxieRoutes } from "./annie-moxie-bootstrap.js";
 import { installLeadershipHttpRoutes } from "./leadership-bootstrap.js";
 import { installCustodialEmployeeAdminRoutes } from "./custodial-employee-admin.js";
 import { installManagerNotificationRoutes } from "./manager-notifications.js";
+import { installOperationalAnalyticsRoutes } from "./operational-analytics-api.js";
 
 /**
  * Compatibility/bootstrap layer for the Memphis Zoo MCP server.
@@ -62,6 +63,7 @@ function installHttpDiagnostics(app) {
   installLeadershipHttpRoutes(app);
   installCustodialEmployeeAdminRoutes(app);
   installManagerNotificationRoutes(app);
+  installOperationalAnalyticsRoutes(app);
   app.get("/mcp-tools.json", requireOpsManagerAuth, (_req, res) => {
     res.status(200).json(getToolManifest({ includePlanned: true }));
   });
