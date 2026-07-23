@@ -63,6 +63,47 @@ for (const objectName of ["cleaning_inspections", "v_cleaning_session_facts", "v
   assert.equal(await sql(`select (to_regclass('public.${objectName}') is not null)::text;`), "true", `${objectName} must exist`);
 }
 
+assert.equal(
+  await sql(`
+    select count(*)
+    from pg_proc p
+    join pg_namespace n on n.oid=p.pronamespace
+    where n.nspname='public'
+      and p.proname in ('cleaning_inspections_set_snapshot','events_app_delete_retention_guard')
+      and (
+        has_function_privilege('public',p.oid,'EXECUTE')
+        or has_function_privilege('anon',p.oid,'EXECUTE')
+        or has_function_privilege('authenticated',p.oid,'EXECUTE')
+      );
+  `),
+  "0",
+  "trigger-only security-definer functions must not be exposed as RPCs",
+);
+assert.equal(
+  await sql(`
+    select count(*)
+    from pg_proc p
+    join pg_namespace n on n.oid=p.pronamespace
+    where n.nspname='public'
+      and p.proname in ('cleaning_inspections_set_snapshot','events_app_delete_retention_guard')
+      and has_function_privilege('service_role',p.oid,'EXECUTE');
+  `),
+  "2",
+  "service_role must retain trigger helper execution",
+);
+assert.equal(
+  await sql(`
+    select coalesce(array_to_string(p.proconfig,','),'')
+    from pg_proc p
+    join pg_namespace n on n.oid=p.pronamespace
+    where n.nspname='public'
+      and p.proname='mz_retention_setting_int'
+      and pg_get_function_identity_arguments(p.oid)='p_key text, p_default integer, p_min integer, p_max integer';
+  `),
+  "search_path=pg_catalog, public",
+  "retention setting helper must use a fixed search path",
+);
+
 await sql(`
   insert into public.locations(id,location_code,location_name,location_type,form_type,active)
   values ('${ids.location}','ANALYTICS_TETON','Analytics Teton','exhibit','exhibit',true);

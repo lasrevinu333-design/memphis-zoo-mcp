@@ -7,6 +7,7 @@ const root = new URL("../", import.meta.url);
 const read = (path) => readFileSync(new URL(path, root), "utf8");
 const migration = read("supabase/migrations/20260722233500_operational_retention_and_analytics.sql");
 const historyGuard = read("supabase/migrations/20260722233600_event_retention_history_guard.sql");
+const securityHardening = read("supabase/migrations/20260723111020_v17_trigger_privilege_hardening.sql");
 const api = read("src/operational-analytics-api.js");
 const bootstrap = read("src/mcp-schema-bootstrap.js");
 
@@ -23,6 +24,22 @@ assert.match(migration, /v_cleaning_performance_comparison/i, "employee/location
 assert.match(migration, /v_maintenance_ticket_trends/i, "ticket recurrence view is required");
 assert.doesNotMatch(migration, /delete from public\.sessions/i, "routine retention must never delete cleaning sessions");
 assert.doesNotMatch(migration, /delete from public\.maintenance_tickets/i, "routine retention must never delete ticket history");
+
+assert.match(
+  securityHardening,
+  /revoke all on function public\.cleaning_inspections_set_snapshot\(\)\s+from public,anon,authenticated/i,
+  "inspection trigger helper must not be a public RPC",
+);
+assert.match(
+  securityHardening,
+  /revoke all on function public\.events_app_delete_retention_guard\(\)\s+from public,anon,authenticated/i,
+  "event retention trigger helper must not be a public RPC",
+);
+assert.match(
+  securityHardening,
+  /alter function public\.mz_retention_setting_int\(text,integer,integer,integer\)\s+set search_path to 'pg_catalog','public'/i,
+  "retention setting helper must use a fixed search path",
+);
 
 assert.match(api, /\/analytics-api\/cleaning-performance/, "cleaning comparison endpoint is required");
 assert.match(api, /\/analytics-api\/ticket-trends/, "ticket trend endpoint is required");
