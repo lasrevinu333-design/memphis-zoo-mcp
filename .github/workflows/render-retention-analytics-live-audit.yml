@@ -1,0 +1,100 @@
+name: Render Retention and Analytics Live Audit
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: render-retention-analytics-live-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for and verify the deployed Render release
+        id: probe
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          root='https://memphis-zoo-mcp.onrender.com'
+          expected='81ceb5312aadec278bec80cbd9ef736bd1292515'
+          log=/tmp/render-retention-analytics-live-audit.log
+          : > "$log"
+
+          request() {
+            method="$1"; path="$2"; shift 2
+            headers="/tmp/headers.$$"; body="/tmp/body.$$"
+            status="$(curl -sS --max-time 60 -X "$method" -D "$headers" -o "$body" -w '%{http_code}' "$@" "$root$path")"
+            printf '\n=== %s %s ===\nstatus=%s\n' "$method" "$path" "$status" | tee -a "$log"
+            cat "$headers" >> "$log" 2>/dev/null || true
+            printf '\n' >> "$log"
+            cat "$body" | tee -a "$log" 2>/dev/null || true
+            printf '\n' >> "$log"
+            rm -f "$headers" "$body"
+            LAST_STATUS="$status"
+          }
+
+          deployed=0
+          for attempt in $(seq 1 90); do
+            request GET "/version?attempt=$attempt"
+            if tail -n 40 "$log" | grep -Fq "$expected"; then deployed=1; break; fi
+            sleep 10
+          done
+          test "$deployed" = 1
+
+          request GET /health/dependencies
+          test "$LAST_STATUS" = 200
+          tail -n 60 "$log" | grep -Fq '"ok":true'
+          tail -n 60 "$log" | grep -Fq '"database_reachable":true'
+          tail -n 60 "$log" | grep -Fq '"required_schema_present":true'
+
+          for path in /scan-api/health /schedule-api/health /messaging-api/health /dashboard-api/health /events-api/health; do
+            request GET "$path"
+            test "$LAST_STATUS" = 200
+            tail -n 60 "$log" | grep -Fq '"ok":true'
+            tail -n 60 "$log" | grep -Fq "$expected"
+          done
+
+          request GET /analytics-api/health
+          test "$LAST_STATUS" = 200
+          tail -n 60 "$log" | grep -Fq '"ok":true'
+          tail -n 60 "$log" | grep -Fq '"contract_version":"operational-analytics.v1"'
+          tail -n 60 "$log" | grep -Fq '"event_retention_days":14'
+          tail -n 60 "$log" | grep -Fq '"deleted_message_retention_days":14'
+          tail -n 60 "$log" | grep -Fq '"cleaning_history":"preserved"'
+          tail -n 60 "$log" | grep -Fq '"maintenance_ticket_history":"preserved"'
+
+          for path in /analytics-api/cleaning-performance /analytics-api/ticket-trends /analytics-api/session-facts /analytics-api/inspections; do
+            request GET "$path"
+            case "$LAST_STATUS" in 401|403) ;; *) echo "Expected protected analytics route, got $LAST_STATUS for $path" | tee -a "$log"; exit 1 ;; esac
+          done
+
+          request POST /analytics-api/inspections -H 'Content-Type: application/json' --data '{}'
+          case "$LAST_STATUS" in 401|403) ;; *) echo "Expected protected inspection write, got $LAST_STATUS" | tee -a "$log"; exit 1 ;; esac
+
+          request OPTIONS /analytics-api/cleaning-performance \
+            -H 'Origin: capacitor://localhost' \
+            -H 'Access-Control-Request-Method: GET'
+          test "$LAST_STATUS" = 200
+          grep -Fqi 'access-control-allow-origin: capacitor://localhost' "$log"
+
+          echo RENDER_RETENTION_ANALYTICS_LIVE_AUDIT_PASS | tee -a "$log"
+      - name: Upload live evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: render-retention-analytics-live-audit
+          path: /tmp/render-retention-analytics-live-audit.log
+          if-no-files-found: error
+          retention-days: 14
+      - name: Enforce probe result
+        if: always()
+        run: test "${{ steps.probe.outcome }}" = success
