@@ -55,6 +55,8 @@ const child = spawn(process.execPath, ["src/mcp-schema-bootstrap.js"], {
     PORT: String(port),
     MCP_ALLOW_FULL_NOAUTH: "true",
     MCP_ALLOW_READONLY_NOAUTH: "true",
+    SUPABASE_URL: "http://127.0.0.1:9",
+    SUPABASE_SERVICE_ROLE_KEY: "mcp-transport-test-service-role",
     EVENT_MAINTENANCE_SWEEP_MS: "0",
     FEEDBACK_REMINDER_SWEEP_MS: "0",
     OPERATIONAL_NOTIFICATION_SWEEP_MS: "0",
