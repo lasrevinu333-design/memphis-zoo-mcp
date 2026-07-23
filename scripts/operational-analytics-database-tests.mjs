@@ -111,7 +111,7 @@ await sql(`
     '${completionSlowId}'::uuid,'${sessionSlowId}'::uuid,'${locationId}'::uuid,'${employeeSlowId}'::uuid,'${deviceSlowId}'::uuid,
     'completion_form','closed','Stall 2 toilet not flushing','Toilet not flushing properly','toilet','Stall 2',
     false,jsonb_build_object('analytics_acceptance',true,'occurrence',ordinality),'ANALYTICS_TETON','Analytics Teton',
-    'Analytics Sherita',now()-make_interval(days=>ordinality-1),now()-make_interval(days=>ordinality-1)+interval '2 hours',
+    'Analytics Sherita',now()-((ordinality-1)::integer*interval '1 day'),now()-((ordinality-1)::integer*interval '1 day')+interval '2 hours',
     'Database Inspector','Resolved for acceptance','manager'
   from generate_series(1,3) with ordinality as occurrence(value,ordinality);
 
