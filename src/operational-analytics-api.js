@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
 
 const CONTRACT_VERSION = "operational-analytics.v1";
+const INSPECTION_TYPES = new Set(["manager_spot_check", "formal", "follow_up", "complaint_response", "training_coaching"]);
 
 function envText(env, key) { return String(env?.[key] || "").trim(); }
 function clip(value, max = 2000) { return String(value ?? "").trim().slice(0, max); }
@@ -79,13 +80,21 @@ export function normalizeInspectionPayload(values = {}, auth = {}, idempotencyKe
   if (!Array.isArray(findings) && (!findings || typeof findings !== "object")) {
     throw Object.assign(new Error("findings_json must be an array or object."), { status: 422 });
   }
+  const inspectionType = clip(values.inspection_type || "manager_spot_check", 80);
+  if (!INSPECTION_TYPES.has(inspectionType)) {
+    throw Object.assign(new Error("inspection_type is invalid."), { status: 422 });
+  }
+  const providedInspectedAt = values.inspected_at ?? values.inspectedAt ?? null;
+  if (providedInspectedAt != null && !Number.isFinite(Date.parse(String(providedInspectedAt)))) {
+    throw Object.assign(new Error("inspected_at must be a valid timestamp."), { status: 422 });
+  }
 
   const normalized = {
     operation_id: operationId,
     session_id: sessionId,
     inspector_manager_id: validUuid(auth.manager_id) ? auth.manager_id : null,
     inspector_name_snapshot: clip(auth.manager_display_name || auth.display_name || values.inspector_name || "Custodial Manager", 200) || "Custodial Manager",
-    inspection_type: clip(values.inspection_type || "manager_spot_check", 80),
+    inspection_type: inspectionType,
     rubric_version: clip(values.rubric_version || "custodial-v1", 80),
     overall_score: boundedInt(values.overall_score ?? values.overallScore, { required: true, name: "overall_score" }),
     appearance_score: boundedInt(values.appearance_score ?? values.appearanceScore, { name: "appearance_score" }),
@@ -98,11 +107,8 @@ export function normalizeInspectionPayload(values = {}, auth = {}, idempotencyKe
     follow_up_required: values.follow_up_required === true || values.followUpRequired === true,
     findings_json: findings,
     notes: clip(values.notes, 8000) || null,
-    inspected_at: values.inspected_at || values.inspectedAt || new Date().toISOString(),
   };
-  if (!Number.isFinite(Date.parse(String(normalized.inspected_at)))) {
-    throw Object.assign(new Error("inspected_at must be a valid timestamp."), { status: 422 });
-  }
+  if (providedInspectedAt != null) normalized.inspected_at = new Date(providedInspectedAt).toISOString();
 
   normalized.request_fingerprint = stableFingerprint({
     ...normalized,
@@ -186,7 +192,7 @@ export function installOperationalAnalyticsRoutes(app, { env = process.env, supa
       }
       if (req.query?.date_to) {
         if (!validIsoDate(req.query.date_to)) throw Object.assign(new Error("date_to must be YYYY-MM-DD."), { status: 422 });
-        query = query.lt("started_at", `${req.query.date_to}T23:59:59.999-06:00`);
+        query = query.lte("started_at", `${req.query.date_to}T23:59:59.999-06:00`);
       }
       query = query.order("started_at", { ascending: false }).limit(normalizeLimit(req.query?.limit, 250, 1000));
       const result = await query;
