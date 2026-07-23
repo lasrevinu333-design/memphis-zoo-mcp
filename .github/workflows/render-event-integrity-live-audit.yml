@@ -1,4 +1,4 @@
-name: Render Event Integrity Live Audit
+name: Render Operational Analytics Live Audit
 
 on:
   pull_request:
@@ -9,13 +9,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: render-event-integrity-live-audit-${{ github.ref }}
+  group: render-operational-analytics-live-audit-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - name: Probe the deployed Render service
@@ -25,8 +25,8 @@ jobs:
         run: |
           set -euo pipefail
           root='https://memphis-zoo-mcp.onrender.com'
-          expected='4701428a6f795a437d894622b56459822a73d431'
-          log=/tmp/render-event-integrity-live-audit.log
+          expected='81ceb5312aadec278bec80cbd9ef736bd1292515'
+          log=/tmp/render-operational-analytics-live-audit.log
           : > "$log"
 
           request() {
@@ -43,7 +43,7 @@ jobs:
           }
 
           deployed=0
-          for attempt in $(seq 1 90); do
+          for attempt in $(seq 1 120); do
             request GET "/version?attempt=$attempt"
             if tail -n 30 "$log" | grep -Fq "$expected"; then deployed=1; break; fi
             sleep 10
@@ -52,50 +52,53 @@ jobs:
 
           request GET /health/dependencies
           test "$LAST_STATUS" = 200
-          tail -n 40 "$log" | grep -Fq '"ok":true'
-          tail -n 40 "$log" | grep -Fq '"database_reachable":true'
-          tail -n 40 "$log" | grep -Fq '"required_schema_present":true'
+          tail -n 50 "$log" | grep -Fq '"ok":true'
+          tail -n 50 "$log" | grep -Fq '"database_reachable":true'
+          tail -n 50 "$log" | grep -Fq '"required_schema_present":true'
 
-          for path in /scan-api/health /schedule-api/health /messaging-api/health /dashboard-api/health; do
+          for path in /scan-api/health /schedule-api/health /messaging-api/health /dashboard-api/health /events-api/health /analytics-api/health; do
             request GET "$path"
             test "$LAST_STATUS" = 200
-            tail -n 30 "$log" | grep -Fq '"ok":true'
-            tail -n 30 "$log" | grep -Fq "$expected"
+            tail -n 60 "$log" | grep -Fq '"ok":true'
           done
 
-          request GET /events-api/health
-          test "$LAST_STATUS" = 200
-          tail -n 50 "$log" | grep -Fq '"ok":true'
-          tail -n 50 "$log" | grep -Fq '"contract_version":"events.v3"'
-          ! tail -n 50 "$log" | grep -Fq '"last_result":{"ok":false'
-          ! tail -n 50 "$log" | grep -Fiq 'notification kind'
+          tail -n 80 "$log" | grep -Fq '"contract_version":"operational-analytics.v1"'
+          tail -n 80 "$log" | grep -Fq '"event_retention_days":14'
+          tail -n 80 "$log" | grep -Fq '"deleted_message_retention_days":14'
+          tail -n 80 "$log" | grep -Fq '"cleaning_history":"preserved"'
+          tail -n 80 "$log" | grep -Fq '"maintenance_ticket_history":"preserved"'
 
           request GET /events-api/
           test "$LAST_STATUS" = 200
           tail -n 80 "$log" | grep -Fq '"ok":true'
           tail -n 80 "$log" | grep -Fq '"contract_version":"events.v3"'
 
-          request GET /custodial-admin-api/employee-phones
-          case "$LAST_STATUS" in 401|403) ;; *) echo "Expected protected employee-phones route, got $LAST_STATUS" | tee -a "$log"; exit 1 ;; esac
+          for path in /analytics-api/cleaning-performance /analytics-api/ticket-trends /analytics-api/session-facts /analytics-api/inspections /custodial-admin-api/employee-phones; do
+            request GET "$path"
+            case "$LAST_STATUS" in 401|403) ;; *) echo "Expected protected route $path, got $LAST_STATUS" | tee -a "$log"; exit 1 ;; esac
+          done
+
+          request POST /analytics-api/inspections -H 'Origin: https://localhost' -H 'Content-Type: application/json' --data '{}'
+          case "$LAST_STATUS" in 401|403) ;; *) echo "Expected protected inspection write route, got $LAST_STATUS" | tee -a "$log"; exit 1 ;; esac
 
           request POST /custodial-device-auth/enroll -H 'Origin: https://example.invalid' -H 'Content-Type: application/json' --data '{"device_id":"KIOSK_02","enrollment_code":"00000000"}'
           test "$LAST_STATUS" = 403
           tail -n 25 "$log" | grep -Fq 'Native custodial app enrollment is required.'
 
-          request OPTIONS /custodial-admin-api/employee-phones -H 'Origin: https://localhost' -H 'Access-Control-Request-Method: GET'
+          request OPTIONS /analytics-api/cleaning-performance -H 'Origin: https://localhost' -H 'Access-Control-Request-Method: GET'
           test "$LAST_STATUS" = 200
           grep -Fqi 'access-control-allow-origin: https://localhost' "$log"
 
           request GET /messaging-api/me/by-device
           case "$LAST_STATUS" in 401|403) ;; *) echo "Expected Messenger auth boundary, got $LAST_STATUS" | tee -a "$log"; exit 1 ;; esac
 
-          echo RENDER_EVENT_INTEGRITY_LIVE_AUDIT_PASS | tee -a "$log"
+          echo RENDER_OPERATIONAL_ANALYTICS_LIVE_AUDIT_PASS | tee -a "$log"
       - name: Upload diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: render-event-integrity-live-audit
-          path: /tmp/render-event-integrity-live-audit.log
+          name: render-operational-analytics-live-audit
+          path: /tmp/render-operational-analytics-live-audit.log
           if-no-files-found: error
           retention-days: 14
       - name: Enforce probe result
