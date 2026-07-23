@@ -6,12 +6,14 @@ import { normalizeInspectionPayload, stableFingerprint } from "../src/operationa
 const root = new URL("../", import.meta.url);
 const read = (path) => readFileSync(new URL(path, root), "utf8");
 const migration = read("supabase/migrations/20260722233500_operational_retention_and_analytics.sql");
+const historyGuard = read("supabase/migrations/20260722233600_event_retention_history_guard.sql");
 const api = read("src/operational-analytics-api.js");
 const bootstrap = read("src/mcp-schema-bootstrap.js");
 
 assert.match(migration, /retention_event_days','14'::jsonb/i, "event retention must be exactly 14 days");
 assert.match(migration, /events_app_delete_retention_guard/i, "legacy broad event deletes need a database retention guard");
-assert.match(migration, /on delete cascade/i, "event history and notification children must leave with an expired event");
+assert.match(historyGuard, /on delete restrict/i, "event history must stay protected from accidental parent cascades");
+assert.match(historyGuard, /delete from public\.events_app_event_history where event_id=old\.id/i, "expired event history must be removed only inside the approved retention guard");
 assert.match(migration, /events_app_purge_expired/i, "expired events need an explicit batch purge function");
 assert.match(migration, /mz-events-expired-retention-hourly/i, "expired event purge must be scheduled independently of legacy retention");
 assert.match(migration, /Only messages or conversations explicitly deleted by a user/i, "message retention description must not imply active messages are age-purged");
