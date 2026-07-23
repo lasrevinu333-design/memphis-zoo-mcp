@@ -1,0 +1,67 @@
+name: Operational Analytics Diagnostics
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/operational-analytics-api.js'
+      - 'src/mcp-schema-bootstrap.js'
+      - 'scripts/operational-analytics-*.mjs'
+      - 'supabase/migrations/20260722233500_operational_retention_and_analytics.sql'
+      - 'supabase/migrations/20260722233600_event_retention_history_guard.sql'
+      - '.github/workflows/operational-analytics-diagnostics.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Source contracts
+        id: source
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run --silent test:operational-analytics 2>&1 | tee /tmp/operational-analytics-source.log
+      - name: Rebuild database and run retention/analytics acceptance
+        id: database
+        continue-on-error: true
+        env:
+          SCHEMA_REBUILD_DOCKER_IMAGE: supabase/postgres:17.6.1.143
+        shell: bash
+        run: |
+          set -o pipefail
+          export SCHEMA_REBUILD_KEEP_DATABASE=1
+          npm run --silent test:empty-db-rebuild 2>&1 | tee /tmp/operational-analytics-rebuild.log
+          container="$(sed -n 's/.*"retained_test_container":"\([^"]*\)".*/\1/p' /tmp/operational-analytics-rebuild.log | tail -n 1)"
+          test -n "$container"
+          trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
+          OPERATIONAL_ANALYTICS_TEST_DOCKER_CONTAINER="$container" \
+            OPERATIONAL_ANALYTICS_TEST_DATABASE=postgres \
+            npm run --silent test:operational-analytics-db 2>&1 | tee /tmp/operational-analytics-database.log
+      - name: Upload complete evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: operational-analytics-diagnostics
+          path: |
+            /tmp/operational-analytics-source.log
+            /tmp/operational-analytics-rebuild.log
+            /tmp/operational-analytics-database.log
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Enforce results
+        if: always()
+        run: |
+          test "${{ steps.source.outcome }}" = success
+          test "${{ steps.database.outcome }}" = success
