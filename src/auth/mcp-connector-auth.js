@@ -11,6 +11,11 @@ export function getMcpConnectorToken(env = process.env) {
   return String(env?.MCP_CONNECTOR_TOKEN || "").trim();
 }
 
+export function isMcpFullNoAuthEnabled(env = process.env) {
+  const value = String(env?.MCP_ALLOW_FULL_NOAUTH ?? "true").trim().toLowerCase();
+  return !["0", "false", "no", "off"].includes(value);
+}
+
 export function isMcpReadOnlyNoAuthEnabled(env = process.env) {
   const value = String(env?.MCP_ALLOW_READONLY_NOAUTH ?? "true").trim().toLowerCase();
   return !["0", "false", "no", "off"].includes(value);
@@ -27,11 +32,11 @@ export function requestMcpConnectorToken(req) {
   return "";
 }
 
-function createConnectorSession({ now = new Date() } = {}) {
+function createConnectorSession({ now = new Date(), authMode = "connector_token" } = {}) {
   return {
     role: "connector_service",
-    auth_mode: "connector_token",
-    token_name: "MCP_CONNECTOR_TOKEN",
+    auth_mode: authMode,
+    token_name: authMode === "connector_token" ? "MCP_CONNECTOR_TOKEN" : null,
     read_only: false,
     issued_at: now.toISOString(),
   };
@@ -51,15 +56,26 @@ export function authenticateMcpConnectorRequest(
   {
     env = process.env,
     now = new Date(),
+    allowFullNoAuth = isMcpFullNoAuthEnabled(env),
     allowReadOnlyNoAuth = isMcpReadOnlyNoAuthEnabled(env),
   } = {}
 ) {
   const configuredConnectorToken = getMcpConnectorToken(env);
   const providedConnectorToken = requestMcpConnectorToken(req);
 
-  // ChatGPT custom apps do not send customer-defined API-key headers. Permit a
-  // tokenless handshake only in an explicitly read-only tool mode. A presented
-  // but incorrect token is never downgraded to anonymous access.
+  // ChatGPT custom apps do not consistently send customer-defined API-key
+  // headers. Streamable HTTP therefore defaults to the full connector tool set.
+  // Operators can disable full tokenless access with MCP_ALLOW_FULL_NOAUTH=false,
+  // which falls back to the existing read-only mode. A presented but incorrect
+  // token is never downgraded to tokenless access.
+  if (!providedConnectorToken && allowFullNoAuth) {
+    return {
+      ok: true,
+      session: createConnectorSession({ now, authMode: "noauth_full" }),
+      auth_source: "noauth_full",
+    };
+  }
+
   if (!providedConnectorToken && allowReadOnlyNoAuth) {
     return {
       ok: true,
@@ -86,11 +102,12 @@ export function authenticateMcpConnectorRequest(
 export function makeMcpConnectorMiddleware(
   {
     env = process.env,
+    allowFullNoAuth = isMcpFullNoAuthEnabled(env),
     allowReadOnlyNoAuth = isMcpReadOnlyNoAuthEnabled(env),
   } = {}
 ) {
   return function requireMcpConnectorAuth(req, res, next) {
-    const result = authenticateMcpConnectorRequest(req, { env, allowReadOnlyNoAuth });
+    const result = authenticateMcpConnectorRequest(req, { env, allowFullNoAuth, allowReadOnlyNoAuth });
     if (!result.ok) {
       res.status(result.status || 401).json({ ok: false, error: result.error || "Unauthorized" });
       return;
