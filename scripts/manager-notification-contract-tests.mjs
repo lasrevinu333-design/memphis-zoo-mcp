@@ -88,10 +88,20 @@ globalThis.fetch = async (input, init = {}) => {
   if (url === "https://oauth2.googleapis.com/token") {
     return new Response(JSON.stringify({ access_token: "test-firebase-oauth-token", expires_in: 3600 }), { status: 200, headers: { "Content-Type": "application/json" } });
   }
+  if (url.endsWith("/projects/memphis-zoo-custodial-program/androidApps") && String(init.method || "GET") === "POST") {
+    const body = JSON.parse(String(init.body || "{}"));
+    assert.equal(body.packageName, "org.memphiszoo.custodial");
+    assert.equal(body.displayName, "Memphis Zoo Custodial");
+    return new Response(JSON.stringify({ name: "operations/provision-custodial" }), { status: 200, headers: { "Content-Type": "application/json" } });
+  }
+  if (url.endsWith("/operations/provision-custodial")) {
+    custodialProvisioned = true;
+    return new Response(JSON.stringify({ done: true, response: { appId: "1:123456789:android:custodial" } }), { status: 200, headers: { "Content-Type": "application/json" } });
+  }
   if (url.endsWith("/projects/memphis-zoo-custodial-program/androidApps?pageSize=100")) {
     return new Response(JSON.stringify({ apps: [
       { name: "projects/memphis-zoo-custodial-program/androidApps/1:123456789:android:test", appId: "1:123456789:android:test", packageName: "org.memphiszoo.ops", state: "ACTIVE" },
-      { name: "projects/memphis-zoo-custodial-program/androidApps/1:123456789:android:custodial", appId: "1:123456789:android:custodial", packageName: "org.memphiszoo.custodial", state: "ACTIVE" },
+      ...(custodialProvisioned ? [{ name: "projects/memphis-zoo-custodial-program/androidApps/1:123456789:android:custodial", appId: "1:123456789:android:custodial", packageName: "org.memphiszoo.custodial", state: "ACTIVE" }] : []),
     ] }), { status: 200, headers: { "Content-Type": "application/json" } });
   }
   if (url.endsWith("/projects/memphis-zoo-custodial-program/androidApps/1:123456789:android:test/config")) {
