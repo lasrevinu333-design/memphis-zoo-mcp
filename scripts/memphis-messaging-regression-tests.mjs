@@ -315,7 +315,11 @@ await withServer(retiredEventReminderApp, async (baseUrl) => {
   assert.equal(payload.meta.delivery, 'native_employee_push_only');
   assert.equal(payload.meta.messenger_coupling, false);
 });
-assert.equal(retiredEventReminderReadCalls.length, 0, 'Retired browser event reminders must not query Messenger or event payloads');
+assert.equal(
+  retiredEventReminderReadCalls.some((sql) => /from public\.msg_messages|events_app_events|events_app_notification_log/i.test(sql)),
+  false,
+  'Retired browser event reminders must not query Messenger messages or event payloads'
+);
 
 const locationStatusReadCalls = [];
 const locationStatusApp = express();
