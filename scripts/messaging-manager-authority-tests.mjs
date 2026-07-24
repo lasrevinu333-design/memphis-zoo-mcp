@@ -23,7 +23,6 @@ async function runRpc(fn, args) {
   if (fn === "msg_send_broadcast") return { id: "broadcast-test", sender_user_id: args.p_sender_user_id };
   if (fn === "msg_create_group_thread_v2") return { id: THREAD_ID, created_by_user_id: args.p_created_by_user_id, title: args.p_title, client_thread_id: args.p_client_thread_id };
   if (fn === "msg_send_message") return { id: "message-test", sender_user_id: args.p_sender_user_id };
-  if (fn === "msg_delete_message") return { id: args.p_message_id, is_deleted: true, deleted_by: args.p_request_user_id };
   if (fn === "msg_mark_thread_read") return { marked: true, user_id: args.p_user_id };
   return {};
 }
@@ -122,15 +121,12 @@ try {
   const forgedRead = await post(`/messaging-api/thread/${THREAD_ID}/read`, { user_id: FORGED_EMPLOYEE_ID });
   assert.equal(forgedRead.status, 403);
 
-  const forgedDelete = await post(`/messaging-api/thread/${THREAD_ID}/message/00000000-0000-4000-8000-000000000708/delete`, {
+  const retiredMessageDelete = await post(`/messaging-api/thread/${THREAD_ID}/message/00000000-0000-4000-8000-000000000708/delete`, {
     user_id: FORGED_EMPLOYEE_ID,
   });
-  assert.equal(forgedDelete.status, 403);
+  assert.equal(retiredMessageDelete.status, 410);
+  assert.match(retiredMessageDelete.body.error, /delete the conversation/i);
   assert.equal(calls.some((call) => call.fn === "msg_delete_message"), false);
-
-  const unconfirmedDelete = await post(`/messaging-api/thread/${THREAD_ID}/message/00000000-0000-4000-8000-000000000708/delete`, {});
-  assert.equal(unconfirmedDelete.status, 502, "HTTP success from the RPC is not enough without a canonical deletion row");
-  assert.match(unconfirmedDelete.body.error, /did not confirm message deletion/i);
 
   const forgedBroadcast = await post("/messaging-api/broadcast", {
     sender_user_id: FORGED_EMPLOYEE_ID,
