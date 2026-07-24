@@ -38,12 +38,14 @@ create table if not exists public.employee_push_registrations (
   last_error text null,
   metadata_json jsonb not null default '{}'::jsonb check (jsonb_typeof(metadata_json)='object'),
   updated_at timestamptz not null default now(),
-  unique (credential_id,assignment_epoch),
-  unique (token_hash)
+  unique (credential_id,assignment_epoch)
 );
 
 create index if not exists idx_employee_push_registrations_active
   on public.employee_push_registrations(employee_id,device_id,assignment_epoch,last_seen_at desc)
+  where active=true and revoked_at is null;
+create unique index if not exists uq_employee_push_registrations_active_token
+  on public.employee_push_registrations(token_hash)
   where active=true and revoked_at is null;
 
 create table if not exists public.event_push_instances (
