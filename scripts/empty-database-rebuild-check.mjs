@@ -407,38 +407,34 @@ async function verifyDockerConcurrency(database) {
     dockerPsqlConcurrent(database, `select public.msg_delete_thread('${deletionThreadId}'::uuid,'00000000-0000-4000-8000-000000009111'::uuid,'00000000-0000-4000-8000-000000009903'::uuid);`),
   ]);
   if (threadDeletionCalls.some((result) => result.status !== 0)) {
-    throw new Error(`Concurrent conversation deletion failed:\n${threadDeletionCalls.map((item) => item.stderr).filter(Boolean).join("\n")}`);
+    throw new Error(`Concurrent user-scoped conversation removal failed:\n${threadDeletionCalls.map((item) => item.stderr).filter(Boolean).join("\n")}`);
   }
   const threadDeletionState = dockerPsql(database, `
-    select count(*)::text || '|' || bool_and(is_active is false)::text || '|' ||
-           bool_and(deletion_operation_id='00000000-0000-4000-8000-000000009903'::uuid)::text || '|' ||
-           (select bool_and(is_deleted and purge_after=deleted_at+interval '14 days') from public.msg_messages where thread_id='${deletionThreadId}'::uuid)::text
-    from public.msg_threads where id='${deletionThreadId}'::uuid;
+    select
+      (select is_active::text from public.msg_threads where id='${deletionThreadId}'::uuid) || '|' ||
+      (select count(*)::text from public.msg_thread_deletion_operations where operation_id='00000000-0000-4000-8000-000000009903'::uuid) || '|' ||
+      (select count(*)::text from public.msg_thread_visibility where thread_id='${deletionThreadId}'::uuid and user_id='00000000-0000-4000-8000-000000009111'::uuid and device_identifier is null) || '|' ||
+      (select bool_and(is_deleted is false)::text from public.msg_messages where thread_id='${deletionThreadId}'::uuid);
   `).trim();
-  if (threadDeletionState !== "1|true|true|true") {
-    throw new Error(`Concurrent conversation deletion invariant failed: ${threadDeletionState}`);
+  if (threadDeletionState !== "true|1|1|true") {
+    throw new Error(`Concurrent user-scoped conversation removal invariant failed: ${threadDeletionState}`);
   }
   const deletionMessageId = dockerPsql(database, `
     select id from public.msg_send_message_as_ops_manager(
       '00000000-0000-4000-8000-000000009001'::uuid,
       (select id from public.msg_threads where system_key = 'ops_manager_shared_chat_v1'),
-      'Concurrent deletion test', 'text', '{}'::jsonb,
+      'Retired individual deletion test', 'text', '{}'::jsonb,
       '00000000-0000-4000-8000-000000009901'
     );
   `).trim();
-  const deletionCalls = await Promise.all([
-    dockerPsqlConcurrent(database, `select id from public.msg_delete_message('${deletionMessageId}'::uuid, (select id from public.msg_users where ops_manager_id='00000000-0000-4000-8000-000000009001'::uuid));`),
-    dockerPsqlConcurrent(database, `select id from public.msg_delete_message('${deletionMessageId}'::uuid, (select id from public.msg_users where ops_manager_id='00000000-0000-4000-8000-000000009001'::uuid));`),
-  ]);
-  if (deletionCalls.some((result) => result.status !== 0)) {
-    throw new Error(`Concurrent message deletion failed:\n${deletionCalls.map((item) => item.stderr).filter(Boolean).join("\n")}`);
+  const retiredMessageDelete = await dockerPsqlConcurrent(
+    database,
+    `select id from public.msg_delete_message('${deletionMessageId}'::uuid, (select id from public.msg_users where ops_manager_id='00000000-0000-4000-8000-000000009001'::uuid));`
+  );
+  if (retiredMessageDelete.status === 0 || !/Individual-message deletion is retired/i.test(retiredMessageDelete.stderr)) {
+    throw new Error(`Individual-message deletion did not fail closed: ${retiredMessageDelete.stderr}`);
   }
-  const deletionState = dockerPsql(database, `
-    select count(*)::text || '|' || bool_and(is_deleted)::text || '|' || min(body) || '|' || bool_and(updated_at >= created_at)::text
-    from public.msg_messages where id = '${deletionMessageId}'::uuid;
-  `).trim();
-  if (deletionState !== "1|true|[deleted]|true") throw new Error(`Concurrent message deletion invariant failed: ${deletionState}`);
-  console.log("verified 10-way exact finish, GPS freshness/boundary/motion/replay/duplicate handling, two-worker outbox claims, restart lease recovery, two-browser Moxie CAS, atomic Moxie password rotation, 10-manager named-identity convergence, retired automatic team room, idempotent ordinary group creation, concurrent conversation deletion, and concurrent message deletion");
+  console.log("verified 10-way exact finish, GPS freshness/boundary/motion/replay/duplicate handling, two-worker outbox claims, restart lease recovery, two-browser Moxie CAS, atomic Moxie password rotation, 10-manager named-identity convergence, retired automatic team room, idempotent ordinary group creation, concurrent user-scoped conversation removal, and retired individual-message deletion");
 }
 
 function runDocker(args, options = {}) {
@@ -727,10 +723,17 @@ begin
     '00000000-0000-4000-8000-00000000f122'
   );
   if (v_delete->>'deleted')::boolean is not true
+     or v_delete->>'deletion_scope' <> 'user'
      or (v_delete->>'replayed')::boolean is not false
-     or (select is_active from public.msg_threads where id=v_group_thread_a.id) is not false
-     or exists (select 1 from public.msg_messages where thread_id=v_group_thread_a.id and is_deleted is false) then
-    raise exception 'Conversation deletion was not authoritative for all participants: %',v_delete;
+     or (select is_active from public.msg_threads where id=v_group_thread_a.id) is not true
+     or exists (select 1 from public.msg_messages where thread_id=v_group_thread_a.id and is_deleted is true)
+     or not exists (
+       select 1 from public.msg_thread_visibility
+       where thread_id=v_group_thread_a.id
+         and user_id='00000000-0000-4000-8000-00000000f116'::uuid
+         and device_identifier is null
+     ) then
+    raise exception 'Conversation removal was not user-scoped: %',v_delete;
   end if;
   v_delete := public.msg_delete_thread(
     v_group_thread_a.id,
@@ -738,36 +741,42 @@ begin
     '00000000-0000-4000-8000-00000000f122'
   );
   if (v_delete->>'replayed')::boolean is not true then
-    raise exception 'Conversation delete retry was not idempotent: %',v_delete;
+    raise exception 'Conversation removal retry was not idempotent: %',v_delete;
   end if;
+
+  begin
+    perform public.msg_delete_message(v_message.id, v_manager_user_b.id);
+    raise exception 'Retired individual-message deletion was accepted';
+  exception when feature_not_supported then
+    null;
+  end;
+
+  insert into public.msg_users(id,display_name,role,is_active)
+  values ('00000000-0000-4000-8000-00000000f123','Empty DB Messenger Admin','admin',true)
+  on conflict(id) do update set role='admin',is_active=true;
+
+  v_delete := public.msg_admin_tombstone_thread(
+    v_group_thread_a.id,
+    '00000000-0000-4000-8000-00000000f123',
+    '00000000-0000-4000-8000-00000000f124'
+  );
+  if (v_delete->>'deleted')::boolean is not true
+     or v_delete->>'deletion_scope' <> 'global'
+     or (select is_active from public.msg_threads where id=v_group_thread_a.id) is not false
+     or exists (select 1 from public.msg_messages where thread_id=v_group_thread_a.id and is_deleted is false) then
+    raise exception 'Admin global tombstone was not authoritative: %',v_delete;
+  end if;
+
   v_purge := public.msg_purge_deleted_content(((v_delete->>'deleted_at')::timestamptz)+interval '13 days',1000);
   if not exists (select 1 from public.msg_threads where id=v_group_thread_a.id)
      or not exists (select 1 from public.msg_messages where thread_id=v_group_thread_a.id) then
-    raise exception 'Deleted content was purged before the exact 14-day retention completed';
+    raise exception 'Globally tombstoned content was purged before the exact 14-day retention completed';
   end if;
   v_purge := public.msg_purge_deleted_content(((v_delete->>'deleted_at')::timestamptz)+interval '15 days',1000);
   if exists (select 1 from public.msg_threads where id=v_group_thread_a.id)
      or exists (select 1 from public.msg_messages where thread_id=v_group_thread_a.id)
      or not exists (select 1 from public.msg_messages where id=v_old_message.id and is_deleted is false) then
-    raise exception 'Retention purge removed ordinary old history or failed to purge explicitly deleted content: %',v_purge;
-  end if;
-  begin
-    perform public.msg_delete_message(v_message.id, '00000000-0000-4000-8000-00000000f116');
-    raise exception 'Ordinary employee deleted another sender''s message';
-  exception when insufficient_privilege then
-    null;
-  end;
-  v_message := public.msg_delete_message(v_message.id, v_manager_user_b.id);
-  if v_message.is_deleted is not true
-     or v_message.body <> '[deleted]'
-     or v_message.deleted_at is null
-     or v_message.purge_after <> v_message.deleted_at + interval '14 days'
-     or (select count(*) from public.msg_messages where id = v_message.id) <> 1 then
-    raise exception 'Manager message soft-delete did not preserve one authoritative tombstone: %', row_to_json(v_message);
-  end if;
-  v_message := public.msg_delete_message(v_message.id, v_manager_user_b.id);
-  if v_message.is_deleted is not true or (select count(*) from public.msg_messages where id = v_message.id) <> 1 then
-    raise exception 'Message soft-delete retry was not idempotent';
+    raise exception 'Retention purge removed ordinary old history or failed to purge an admin tombstone: %',v_purge;
   end if;
   v_message := public.msg_send_message(
     '00000000-0000-4000-8000-00000000f108', v_manager_user.id,
