@@ -15,6 +15,7 @@ import { installAnnieMoxieRoutes } from "./annie-moxie-bootstrap.js";
 import { installLeadershipHttpRoutes } from "./leadership-bootstrap.js";
 import { installCustodialEmployeeAdminRoutes } from "./custodial-employee-admin.js";
 import { installManagerNotificationRoutes } from "./manager-notifications.js";
+import { installEmployeeNotificationRoutes } from "./employee-notifications.js";
 import { installOperationalAnalyticsRoutes } from "./operational-analytics-api.js";
 
 /**
