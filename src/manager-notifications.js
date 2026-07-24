@@ -196,7 +196,7 @@ export function createPushRuntime({ db, env }) {
     return value;
   }
 
-  async function send(job, pushDevice) {
+  async function send(job, pushDevice, { channelId = "operations" } = {}) {
     const token = await accessToken(PUSH_SCOPE);
     const response = await fetch(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(account.project_id)}/messages:send`, {
       method: "POST",
