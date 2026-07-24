@@ -128,7 +128,7 @@ function currentIdentity(req) {
   return { managerId, credentialId, deviceId };
 }
 
-function createPushRuntime({ db, env }) {
+export function createPushRuntime({ db, env }) {
   const account = parseServiceAccount(env);
   const workerId = `manager-push-${process.pid}-${crypto.randomUUID()}`;
   const oauthByScope = new Map();
