@@ -2709,8 +2709,9 @@ app.post("/scan-api/rpc", requireDeviceOrOpsAccess, requireScanRpcAuthorization,
   }
 });
 app.get("/", (_req, res) => { res.status(200).send("Memphis Zoo MCP server is running."); });
-// Streamable HTTP accepts connected ChatGPT sessions with the full GitHub and
-// Supabase tool set by default. Legacy SSE remains token-only.
+// Streamable HTTP is tokenless read-only by default. Full GitHub and Supabase
+// tools require the connector token or an explicit unsafe operator override.
+// Legacy SSE remains token-only.
 app.get("/mcp", requireMcpAuth, (_req, res) => { res.status(405).send("GET not supported on /mcp for this server."); });
 app.options("/mcp", (_req, res) => { res.sendStatus(200); });
 app.post("/mcp", requireMcpAuth, async (req, res) => {

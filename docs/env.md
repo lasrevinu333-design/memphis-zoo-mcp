@@ -15,12 +15,12 @@ This document lists the environment variables used by the Memphis Zoo MCP backen
 | Name | Required | Purpose |
 |---|---:|---|
 | `MCP_CONNECTOR_TOKEN` | Recommended | Dedicated bearer/custom-header token for service clients and strict legacy SSE access. |
-| `MCP_ALLOW_FULL_NOAUTH` | No | Tokenless Streamable HTTP access to the complete GitHub and Supabase MCP tool set. Defaults to `true` for the connected ChatGPT app. Set `false` to fall back to read-only access. |
+| `MCP_ALLOW_FULL_NOAUTH` | No | Unsafe tokenless Streamable HTTP access to the complete GitHub and Supabase MCP tool set. Defaults to `false`. Strict production health fails when enabled. |
 | `MCP_ALLOW_READONLY_NOAUTH` | No | Tokenless diagnostic/read-only fallback when full no-auth access is disabled. Defaults to `true`. |
 
-MCP access precedence is: a valid presented connector token receives full access; a presented invalid token is rejected; a tokenless request receives full access when `MCP_ALLOW_FULL_NOAUTH` is enabled, otherwise read-only access when `MCP_ALLOW_READONLY_NOAUTH` is enabled, otherwise it is rejected. Legacy SSE explicitly disables both tokenless modes.
+MCP access precedence is: a valid presented connector token receives full access; a presented invalid token is rejected; a tokenless request receives read-only access by default, or full access only when the unsafe `MCP_ALLOW_FULL_NOAUTH` override is explicitly enabled. Legacy SSE explicitly disables both tokenless modes.
 
-The production `/mcp` URL is public. Enabling full tokenless access therefore authorizes any client that reaches that endpoint, not only the ChatGPT UI. Repository allowlists, dry-run defaults, expected-SHA checks, and migration-size limits still apply.
+The production `/mcp` URL is public. Enabling full tokenless access authorizes any client that reaches that endpoint, not only the ChatGPT UI. Repository allowlists, dry-run defaults, expected-SHA checks, and migration-size limits reduce blast radius but are not authentication.
 
 ## GitHub
 
