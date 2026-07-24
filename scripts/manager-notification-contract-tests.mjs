@@ -70,6 +70,11 @@ const androidConfig = {
   client: [{ client_info: { mobilesdk_app_id: "1:123456789:android:test", android_client_info: { package_name: "org.memphiszoo.ops" } }, api_key: [{ current_key: "test-firebase-client-key" }] }],
   configuration_version: "1",
 };
+const custodialAndroidConfig = {
+  project_info: { project_number: "123456789", project_id: "memphis-zoo-custodial-program" },
+  client: [{ client_info: { mobilesdk_app_id: "1:123456789:android:custodial", android_client_info: { package_name: "org.memphiszoo.custodial" } }, api_key: [{ current_key: "test-firebase-client-key" }] }],
+  configuration_version: "1",
+};
 const iosConfig = `<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>GOOGLE_APP_ID</key><string>1:123456789:ios:test</string><key>BUNDLE_ID</key><string>org.memphiszoo.ops</string><key>PROJECT_ID</key><string>memphis-zoo-custodial-program</string></dict></plist>`;
 const originalFetch = globalThis.fetch;
 const calls = [];
