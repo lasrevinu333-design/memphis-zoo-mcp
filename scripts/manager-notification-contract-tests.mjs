@@ -22,6 +22,8 @@ assert.match(moduleSource, /FIREBASE_SERVICE_ACCOUNT_JSON/);
 assert.match(moduleSource, /fcm\.googleapis\.com\/v1\/projects/);
 assert.match(moduleSource, /firebase\.googleapis\.com\/v1beta1/);
 assert.match(moduleSource, /firebase\.readonly/);
+assert.match(moduleSource, /cloud-platform/);
+assert.match(moduleSource, /method: "POST"/);
 assert.match(moduleSource, /configFileContents/);
 assert.match(moduleSource, /google-services\.json/);
 assert.match(moduleSource, /GoogleService-Info\.plist/);
