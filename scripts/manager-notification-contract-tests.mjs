@@ -133,6 +133,13 @@ try {
   assert.match(androidResponse.headers.get("content-disposition") || "", /google-services\.json/);
   assert.deepEqual(await androidResponse.json(), androidConfig);
 
+  const custodialAndroidResponse = await originalFetch(`${base}/manager-notifications-api/client-config/android?app_identifier=org.memphiszoo.custodial`);
+  assert.equal(custodialAndroidResponse.status, 200);
+  assert.deepEqual(await custodialAndroidResponse.json(), custodialAndroidConfig);
+
+  const rejectedAndroidResponse = await originalFetch(`${base}/manager-notifications-api/client-config/android?app_identifier=org.example.unapproved`);
+  assert.equal(rejectedAndroidResponse.status, 400);
+
   const androidMetadataResponse = await originalFetch(`${base}/manager-notifications-api/client-config/android?format=json`);
   const androidMetadata = await androidMetadataResponse.json();
   assert.equal(androidMetadata.ok, true);
