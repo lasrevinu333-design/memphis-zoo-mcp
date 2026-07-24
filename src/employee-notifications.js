@@ -122,9 +122,19 @@ export function installEmployeeNotificationRoutes(app, {
     try {
       const enqueued = await db.rpc('mz_enqueue_employee_event_pushes', { p_now: new Date().toISOString() });
       if (enqueued.error) throw enqueued.error;
-      const claimed = await db.rpc('claim_operational_notification_jobs', { p_worker_id: workerId, p_limit: limit, p_lease_seconds: 120 });
-      if (claimed.error) throw claimed.error;
-      const jobs = (Array.isArray(claimed.data) ? claimed.data : []).filter((job) => job.job_type === 'employee_event_push');
+      const ready = await db.from('operational_notification_jobs').select('job_key')
+        .eq('job_type', 'employee_event_push').in('status', ['pending', 'leased'])
+        .lte('available_at', new Date().toISOString()).order('available_at').limit(limit);
+      if (ready.error) throw ready.error;
+      const jobs = [];
+      for (const candidate of ready.data || []) {
+        const claimed = await db.rpc('claim_operational_notification_job_by_key', {
+          p_job_key: candidate.job_key, p_worker_id: workerId, p_lease_seconds: 120,
+        });
+        if (claimed.error) throw claimed.error;
+        const job = Array.isArray(claimed.data) ? claimed.data[0] : claimed.data;
+        if (job?.job_type === 'employee_event_push') jobs.push(job);
+      }
       for (const job of jobs) {
         let succeeded = false;
         let errorMessage = null;
