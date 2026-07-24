@@ -41,6 +41,7 @@ jobs:
           npm run --silent test:events-parser
           npm run --silent test:events-api
           npm run --silent test:event-integrity
+          npm run --silent test:batch2
           npm run --silent test:operational-analytics
           npm run --silent test:feedback
           npm run --silent test:schedule-ai
@@ -88,6 +89,9 @@ jobs:
           EVENT_INTEGRITY_TEST_DOCKER_CONTAINER="$container" \
             EVENT_INTEGRITY_TEST_DATABASE=postgres \
             npm run --silent test:event-integrity-db
+          BATCH2_TEST_DOCKER_CONTAINER="$container" \
+            BATCH2_TEST_DATABASE=postgres \
+            npm run --silent test:batch2-db
           OPERATIONAL_ANALYTICS_TEST_DOCKER_CONTAINER="$container" \
             OPERATIONAL_ANALYTICS_TEST_DATABASE=postgres \
             npm run --silent test:operational-analytics-db

@@ -47,6 +47,8 @@ jobs:
           npm run --silent test:manager-notifications
           npm run --silent test:custodial-employee-phones
           npm run --silent test:messaging
+          npm run --silent test:messaging-manager-authority
+          npm run --silent test:batch2
           npm run --silent test:moxie-route
           npm run --silent test:schedule-source-type
           npm run --silent test:foundation

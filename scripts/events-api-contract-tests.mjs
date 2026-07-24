@@ -515,24 +515,23 @@ const maintenance = createEventMaintenanceController({
   },
   runRpc: async (name, params) => {
     rpcCalls.push({ name, params });
+    if (name === "mz_enqueue_employee_event_pushes") {
+      return { ok: true, enqueued: 2 };
+    }
     return null;
   },
 });
-await maintenance.runMaintenance("contract_test");
-const notificationSql = notificationReadCalls.find((sql) => /candidate_notifications/i.test(sql));
-assert.ok(notificationSql, "event maintenance should query pending event reminders");
-assert.match(notificationSql, /'event_reminder'::text as notification_kind/, "event maintenance should create one canonical reminder kind per event");
-assert.doesNotMatch(notificationSql, /three_days_out|two_days_out|day_of_event|day_before|morning_of|shift_plus_fifteen/, "legacy multi-cadence event reminder kinds must not remain in the pending query");
-assert.match(notificationSql, /interval '15 minutes'/, "event reminders should become eligible 15 minutes after owner clock-in\/coverage start");
-assert.match(notificationSql, /oa\.assignment_date = p\.local_now::date/, "event reminders should use the final owner assignment for today, not the future event-date owner");
-assert.match(notificationSql, /e\.event_date between p\.local_now::date and \(p\.local_now::date \+ 3\)/, "one event reminder may be delivered during the three-day operating look-ahead");
-assert.match(notificationSql, /log\.notification_kind = 'event_reminder'/, "event reminder dedupe must use the one canonical reminder kind");
-assert.match(notificationSql, /coalesce\(dsa\.coverage_purpose, 'area_owner'\) = 'area_owner'/, "event reminders should stay tied to area-owner rows after PTO\/absence\/CoverAll adjustments");
-assert.match(notificationSql, /e\.coverage_location_ids/i, "event reminders should target explicit coverage locations");
-assert.match(notificationSql, /cross join lateral unnest/i, "event reminders should expand coverage target locations explicitly");
-assert.match(notificationSql, /array_length\(e\.coverage_location_ids, 1\)/i, "event reminders should prefer coverage locations when present");
-assert.match(notificationSql, /coalesce\(e\.event_scope, 'UNKNOWN'\) = 'ZOO_WIDE' then '\{\}'::uuid\[\]/i, "zoo-wide events without coverage must not notify every legacy area owner");
-assert.doesNotMatch(notificationSql, /oa\.location_group_id\s*=\s*e\.location_group_id/i, "event reminders must not reconstruct the venue from the legacy location_group_id");
+const maintenanceResult = await maintenance.runMaintenance("contract_test");
+const nativePushRpc = rpcCalls.find((call) => call.name === "mz_enqueue_employee_event_pushes");
+assert.ok(nativePushRpc, "event maintenance should enqueue native employee push notifications");
+assert.ok(nativePushRpc.params.p_now, "native employee enqueue should receive one authoritative timestamp");
+assert.equal(maintenanceResult.delivery, "native_employee_push_only");
+assert.equal(maintenanceResult.messenger_coupling, false);
+assert.equal(maintenanceResult.processed, 2);
+assert.equal(notificationReadCalls.some((sql) => /candidate_notifications/i.test(sql)), false,
+  "event maintenance must not query the legacy Messenger reminder candidate path");
+assert.equal(rpcCalls.some((call) => call.name.startsWith("msg_")), false,
+  "event maintenance must not call Messenger RPCs");
 const scanAlertRpc = rpcCalls.find((call) => call.name === "sch_queue_due_scan_alerts");
 assert.ok(scanAlertRpc, "event maintenance should queue due scan alerts");
 assert.deepEqual(scanAlertRpc.params, {

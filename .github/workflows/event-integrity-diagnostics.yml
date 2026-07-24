@@ -29,7 +29,10 @@ jobs:
         run: |
           set +e
           mkdir -p event-integrity-evidence
-          npm run --silent test:event-integrity 2>&1 | tee event-integrity-evidence/source.log
+          {
+            npm run --silent test:event-integrity
+            npm run --silent test:batch2
+          } 2>&1 | tee event-integrity-evidence/source.log
           printf '%s\n' "${PIPESTATUS[0]}" > event-integrity-evidence/source-status.txt
       - name: Rebuild database and run event integrity acceptance
         shell: bash
@@ -44,9 +47,14 @@ jobs:
           if [[ "$rebuild_status" = "0" ]]; then
             container="$(sed -n 's/.*"retained_test_container":"\([^"]*\)".*/\1/p' event-integrity-evidence/schema-rebuild.log | tail -n 1)"
             if [[ -n "$container" ]]; then
-              EVENT_INTEGRITY_TEST_DOCKER_CONTAINER="$container" \
-                EVENT_INTEGRITY_TEST_DATABASE=postgres \
-                npm run --silent test:event-integrity-db 2>&1 | tee event-integrity-evidence/database.log
+              {
+                EVENT_INTEGRITY_TEST_DOCKER_CONTAINER="$container" \
+                  EVENT_INTEGRITY_TEST_DATABASE=postgres \
+                  npm run --silent test:event-integrity-db
+                BATCH2_TEST_DOCKER_CONTAINER="$container" \
+                  BATCH2_TEST_DATABASE=postgres \
+                  npm run --silent test:batch2-db
+              } 2>&1 | tee event-integrity-evidence/database.log
               printf '%s\n' "${PIPESTATUS[0]}" > event-integrity-evidence/database-status.txt
               docker rm -f "$container" >/dev/null 2>&1 || true
             else

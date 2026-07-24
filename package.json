@@ -52,7 +52,9 @@
     "test:custodial-employee-phones-db": "node scripts/custodial-employee-phone-database-tests.mjs",
     "device-security:password": "node scripts/device-security-password-admin.mjs",
     "test:manager-notifications": "node scripts/manager-notification-contract-tests.mjs",
-    "test:employee-notifications": "node scripts/employee-notification-contract-tests.mjs"
+    "test:employee-notifications": "node scripts/employee-notification-contract-tests.mjs",
+    "test:batch2": "node scripts/batch-2-event-messenger-cutover-tests.mjs",
+    "test:batch2-db": "node scripts/batch-2-event-messenger-cutover-database-tests.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.18.0",

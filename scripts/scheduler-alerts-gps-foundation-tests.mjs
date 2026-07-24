@@ -92,21 +92,27 @@ assert.doesNotMatch(indexSource, /eventMaintenanceController\.kick\("schedule_ap
 assert.match(indexSource, /eventMaintenanceController\.kick\("scheduled_worker"\)/);
 assert.match(indexSource, /where se\.event_type = 'work_position_check'/);
 
-assert.match(eventsSource, /const normalizedKind = "event_reminder"/);
-assert.match(eventsSource, /claim_event_notification/);
-assert.match(eventsSource, /finalize_event_notification/);
-assert.match(eventsSource, /client_message_id:\s*notificationKey/);
+assert.match(eventsSource, /mz_enqueue_employee_event_pushes/);
+assert.match(eventsSource, /native_employee_push_only/);
+assert.match(eventsSource, /messenger_coupling:\s*false/);
+assert.doesNotMatch(eventsSource, /claim_event_notification/);
+assert.doesNotMatch(eventsSource, /finalize_event_notification/);
+assert.doesNotMatch(eventsSource, /msg_send_message/);
+assert.doesNotMatch(eventsSource, /client_message_id:\s*notificationKey/);
 assert.doesNotMatch(eventsSource, /events_admin_list/);
 assert.doesNotMatch(eventsSource, /events_admin_create_before/);
 assert.doesNotMatch(eventsSource, /kind = "day_of_event"/);
 
 assert.match(messagingSource, /router\.get\("\/device-event-reminders", requireDeviceOrOpsAuth/);
+assert.match(messagingSource, /retired:\s*true/);
+assert.match(messagingSource, /delivery:\s*"native_employee_push_only"/);
+assert.match(messagingSource, /messenger_coupling:\s*false/);
 assert.match(messagingSource, /router\.get\("\/device-location-status-reminders", requireDeviceOrOpsAuth/);
 assert.match(messagingSource, /router\.post\("\/device-notifications\/ack", requireWritableDeviceOrOpsAuth/);
-assert.match(messagingSource, /a\.acknowledged_at is not null/);
-assert.match(messagingSource, /notification_kind', ''\) = 'event_reminder'/);
-assert.match(messagingSource, /notification_key/);
-assert.match(messagingSource, /msg_acknowledge_message/);
+assert.doesNotMatch(
+  messagingSource.match(/router\.get\("\/device-event-reminders"[\s\S]*?router\.get\("\/device-location-status-reminders"/)?.[0] || '',
+  /from public\.msg_messages|events_app_events|events_app_notification_log/
+);
 
 assert.match(migration, /create table if not exists public\.device_aliases/);
 assert.match(migration, /create table if not exists public\.device_sync_status/);
@@ -153,7 +159,7 @@ console.log(JSON.stringify({
     'atomic_scan_workflow',
     'scheduled_event_worker',
     'schedule_readiness_read_only_guard',
-    'one_event_reminder_reservation',
+    'native_employee_event_push_cutover',
     'durable_notification_acknowledgement',
     'authoritative_offsite_gps_contract',
     'scheduler_static_and_exception_audit_contract',

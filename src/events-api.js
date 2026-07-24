@@ -18,9 +18,7 @@ function getEventsSupabaseClient() {
 
 const EVENTS_TIME_ZONE = "America/Chicago";
 const EVENTS_CONTRACT_VERSION = "events.v3";
-const DAY_BEFORE_NOTIFICATION_TIME = "08:00:00";
 const EVENT_MAINTENANCE_COOLDOWN_MS = 20 * 1000;
-const MAX_NOTIFICATIONS_PER_RUN = 50;
 const MAX_SCAN_ALERTS_PER_RUN = 50;
 const SCAN_ALERT_COOLDOWN_MINUTES = 30;
 const SCAN_ALERT_MANAGER_ESCALATION_GRACE_MINUTES = 30;
@@ -797,253 +795,20 @@ async function deleteEventRecord(runWriteSql, eventId, actor = "Input Console", 
   return { ...row, deleted: false, cancelled: true };
 }
 
-function formatEventTimeRange(eventRow) {
-  const start = String(eventRow?.start_time || "").slice(0, 5) || "unknown";
-  const end = String(eventRow?.end_time || "").slice(0, 5) || "unknown";
-  const spansOvernight = String(eventRow?.end_date || eventRow?.event_date || "") > String(eventRow?.event_date || "");
-  return spansOvernight ? `${start} – ${end} next day` : `${start} – ${end}`;
-}
-
-function extractCustodialNotes(notes = "") {
-  const raw = String(notes || "").trim();
-  if (!raw) return "";
-  const chunks = raw
-    .split(/(?:\r?\n)+|[;•]+/)
-    .map((part) => part.trim())
-    .filter(Boolean);
-  const custodialChunks = chunks.filter((part) => /trash|garbage|can\b|cans\b|box\b|boxes\b|restroom|bathroom|clean|custod|liner|supply|sweep|mop|sanitize/i.test(part));
-  return (custodialChunks.length ? custodialChunks : []).join("; ");
-}
-
-function buildNotificationBody(eventRow) {
-  const area = eventRow.display_location || eventRow.venue_name || eventRow.group_name || eventRow.group_code || "Assigned area";
-  const attendees = eventRow.attendee_count == null ? "unknown" : String(eventRow.attendee_count);
-  const custodialNotes = extractCustodialNotes(eventRow.notes);
-  const dateLabel = String(eventRow?.end_date || eventRow?.event_date || "") > String(eventRow?.event_date || "")
-    ? `${eventRow.event_date} to ${eventRow.end_date}`
-    : eventRow.event_date;
-  const lines = [
-    `Event reminder: ${eventRow.event_name}`,
-    "",
-    `Location: ${area}`,
-    `Date: ${dateLabel}`,
-    `Time: ${formatEventTimeRange(eventRow)}`,
-    `Expected attendance: ${attendees}`,
-  ];
-  if (custodialNotes) lines.push("", `Custodial notes: ${custodialNotes}`);
-  return lines.join("\n").trim();
-}
-
-async function sendEventNotification({ runRpc, runWriteSql, eventRow, assignmentRow, memphisUserId, kind = "event_reminder" }) {
-  void runWriteSql;
-  void kind;
-  const msgUserId = String(assignmentRow.msg_user_id || "").trim();
-  if (!msgUserId) return { ok: false, status: "skipped", notes: "Missing msg_user_id" };
-
-  const normalizedKind = "event_reminder";
-  const notificationKey = `event:${eventRow.id}:${msgUserId}`;
-  const scheduledForLocal = `${assignmentRow.assignment_date || eventRow.event_date} ${assignmentRow.coverage_start || "00:00:00"}`;
-  const claim = await runRpc("claim_event_notification", {
-    p_event_id: eventRow.id,
-    p_employee_id: assignmentRow.employee_id,
-    p_msg_user_id: msgUserId,
-    p_notification_kind: normalizedKind,
-    p_scheduled_for_local: scheduledForLocal,
-  });
-
-  if (!claim?.claimed) {
-    return {
-      ok: true,
-      status: claim?.status === "sent" ? "already_sent" : "already_reserved",
-      reason: claim?.reason || "notification_already_claimed",
-      response_message_id: claim?.response_message_id || null,
-      notification_key: notificationKey,
-    };
+async function enqueueNativeEventNotifications(runRpc) {
+  if (typeof runRpc !== "function") {
+    return { ok: true, skipped: true, reason: "runRpc_missing", enqueued: 0 };
   }
 
-  let threadId = null;
   try {
-    const thread = await runRpc("msg_get_or_create_memphis_thread", { p_user_id: msgUserId });
-    threadId = thread?.id || null;
-    const body = buildNotificationBody(eventRow);
-    const message = await runRpc("msg_send_message", {
-      p_thread_id: thread.id,
-      p_sender_user_id: memphisUserId,
-      p_body: body,
-      p_message_type: "bot_response",
-      p_metadata_json: {
-        channel: "memphis",
-        source: "events_app",
-        event_id: eventRow.id,
-        notification_kind: normalizedKind,
-        notification_key: notificationKey,
-        location_group_id: eventRow.location_group_id,
-        client_message_id: notificationKey,
-      },
+    const result = await runRpc("mz_enqueue_employee_event_pushes", {
+      p_now: new Date().toISOString(),
     });
-
-    await runRpc("finalize_event_notification", {
-      p_event_id: eventRow.id,
-      p_employee_id: assignmentRow.employee_id,
-      p_notification_kind: normalizedKind,
-      p_status: "sent",
-      p_thread_id: thread.id,
-      p_response_message_id: message?.id || null,
-      p_notes: body,
-    });
-
-    const deviceIdentifiers = Array.isArray(assignmentRow.device_identifiers)
-      ? assignmentRow.device_identifiers.map((value) => String(value || "").trim()).filter(Boolean)
-      : [String(assignmentRow.device_identifier || "").trim()].filter(Boolean);
-    for (const deviceIdentifier of deviceIdentifiers) {
-      try {
-        await runRpc("msg_unhide_thread_for_device", {
-          p_thread_id: thread.id,
-          p_device_identifier: deviceIdentifier,
-        });
-      } catch (_error) {}
-    }
-
-    return {
-      ok: true,
-      status: "sent",
-      thread_id: thread.id,
-      response_message_id: message?.id || null,
-      notification_key: notificationKey,
-    };
+    return result || { ok: true, enqueued: 0 };
   } catch (error) {
-    try {
-      await runRpc("finalize_event_notification", {
-        p_event_id: eventRow.id,
-        p_employee_id: assignmentRow.employee_id,
-        p_notification_kind: normalizedKind,
-        p_status: "error",
-        p_thread_id: threadId,
-        p_response_message_id: null,
-        p_notes: String(error?.message || "Event notification failed").slice(0, 2000),
-      });
-    } catch (_finalizeError) {}
-    throw error;
+    console.error("native employee event enqueue failed:", error);
+    return { ok: false, error: error?.message || "Native employee event enqueue failed", enqueued: 0 };
   }
-}
-
-async function getPendingNotifications(runReadOnlySql) {
-  const rows = await runReadOnlySql(`
-    with params as (
-      select (now() at time zone '${EVENTS_TIME_ZONE}') as local_now
-    ),
-    owner_assignments as (
-      select
-        dga.assignment_date,
-        dga.location_group_id,
-        dga.assigned_employee_id as employee_id,
-        dga.coverage_start,
-        dga.coverage_end,
-        'daily_group_assignments'::text as assignment_source
-      from public.daily_group_assignments dga
-      where dga.active = true
-        and dga.assigned_employee_id is not null
-
-      union all
-
-      select
-        dsa.service_date as assignment_date,
-        dsa.location_group_id,
-        dsa.assigned_employee_id as employee_id,
-        dsa.coverage_start,
-        dsa.coverage_end,
-        'daily_schedule_assignments'::text as assignment_source
-      from public.daily_schedule_assignments dsa
-      where dsa.assigned_employee_id is not null
-        and coalesce(dsa.coverage_purpose, 'area_owner') = 'area_owner'
-        and not exists (
-          select 1
-          from public.daily_group_assignments dga
-          where dga.assignment_date = dsa.service_date
-            and dga.location_group_id = dsa.location_group_id
-            and dga.active = true
-            and dga.assigned_employee_id is not null
-        )
-    ),
-    msg_devices as (
-      select
-        mda.msg_user_id,
-        coalesce(
-          array_agg(distinct mda.device_identifier)
-            filter (where mda.device_identifier is not null and btrim(mda.device_identifier) <> ''),
-          array[]::text[]
-        ) as device_identifiers
-      from public.msg_device_assignments mda
-      where mda.is_active = true
-      group by mda.msg_user_id
-    ),
-    candidate_notifications as (
-      select
-        e.id,
-        e.event_name,
-        coalesce(e.event_scope, 'UNKNOWN') as event_scope,
-        coalesce(nullif(e.display_location, ''), ev.display_name, lg.group_name) as display_location,
-        e.primary_venue_id,
-        e.coverage_location_ids,
-        e.location_group_id,
-        e.event_date,
-        e.end_date,
-        e.start_time,
-        e.end_time,
-        e.attendee_count,
-        e.notes,
-        coalesce(ev.venue_code, lg.group_code) as group_code,
-        coalesce(nullif(e.display_location, ''), ev.display_name, lg.group_name) as group_name,
-        emp.id as employee_id,
-        emp.display_name as employee_name,
-        mu.id as msg_user_id,
-        coalesce(md.device_identifiers, array[]::text[]) as device_identifiers,
-        oa.assignment_date,
-        oa.coverage_start,
-        oa.coverage_end,
-        oa.assignment_source,
-        'event_reminder'::text as notification_kind,
-        (oa.assignment_date::timestamp + coalesce(oa.coverage_start, time '00:00:00') + interval '15 minutes') as scheduled_for_local,
-        public.msg_get_memphis_user_id() as memphis_user_id
-      from params p
-      join public.events_app_events e
-        on e.event_date between p.local_now::date and (p.local_now::date + 3)
-       and coalesce(e.status, 'SCHEDULED') = 'SCHEDULED'
-      join public.location_groups lg on lg.id = e.location_group_id
-      left join public.event_venues ev on ev.id = e.primary_venue_id
-      cross join lateral unnest(
-        case
-          when coalesce(array_length(e.coverage_location_ids, 1), 0) > 0 then e.coverage_location_ids
-          when coalesce(e.event_scope, 'UNKNOWN') = 'ZOO_WIDE' then '{}'::uuid[]
-          else array[e.location_group_id]::uuid[]
-        end
-      ) as event_targets(location_group_id)
-      join owner_assignments oa
-        on oa.location_group_id = event_targets.location_group_id
-       and oa.assignment_date = p.local_now::date
-      join public.employees emp on emp.id = oa.employee_id and emp.active = true
-      join public.msg_users mu on mu.employee_id = emp.id and mu.is_active = true
-      left join msg_devices md on md.msg_user_id = mu.id
-      where p.local_now >= (oa.assignment_date::timestamp + coalesce(oa.coverage_start, time '00:00:00') + interval '15 minutes')
-        and not exists (
-          select 1
-          from public.events_app_notification_log log
-          where log.event_id = e.id
-            and log.employee_id = emp.id
-            and log.notification_kind = 'event_reminder'
-            and (
-              log.status in ('sending', 'sent')
-              or log.updated_at > now() - interval '5 minutes'
-            )
-        )
-    )
-    select *
-    from candidate_notifications
-    order by scheduled_for_local asc, event_date asc, event_name asc
-    limit ${MAX_NOTIFICATIONS_PER_RUN}
-  `);
-
-  return Array.isArray(rows) ? rows : [];
 }
 
 async function queueDueScanAlerts(runRpc) {
@@ -1100,35 +865,18 @@ export function createEventMaintenanceController({ runReadOnlySql, runWriteSql, 
     lastStartedAt = new Date(now).toISOString();
     try {
       const scheduleSync = { ok: true, skipped: true, reason: "events_are_reminders_only" };
-      const pending = await getPendingNotifications(runReadOnlySql);
-      const notificationResults = [];
-      if (pending.length) {
-        const memphisUserId = pending[0]?.memphis_user_id || null;
-        if (memphisUserId) {
-          for (const row of pending) {
-            const outcome = await sendEventNotification({
-              runRpc,
-              runWriteSql,
-              eventRow: row,
-              assignmentRow: row,
-              memphisUserId,
-              kind: row.notification_kind,
-            });
-            notificationResults.push({
-              event_id: row.id,
-              event_name: row.event_name,
-              employee_id: row.employee_id,
-              employee_name: row.employee_name,
-              notification_kind: row.notification_kind,
-              result: outcome,
-            });
-          }
-        } else {
-          notificationResults.push({ ok: false, error: "missing_memphis_user_id" });
-        }
-      }
+      const nativeEventPushes = await enqueueNativeEventNotifications(runRpc);
       const scanAlerts = await queueDueScanAlerts(runRpc);
-      const result = { ok: true, reason, processed: pending.length, notification_results: notificationResults, schedule_sync: scheduleSync, scan_alerts: scanAlerts };
+      const result = {
+        ok: nativeEventPushes?.ok !== false && scanAlerts?.ok !== false,
+        reason,
+        processed: Number(nativeEventPushes?.enqueued || 0),
+        delivery: "native_employee_push_only",
+        messenger_coupling: false,
+        native_event_pushes: nativeEventPushes,
+        schedule_sync: scheduleSync,
+        scan_alerts: scanAlerts,
+      };
       lastResult = result;
       return result;
     } catch (error) {
