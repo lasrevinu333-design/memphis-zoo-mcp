@@ -284,7 +284,7 @@ export function createPushRuntime({ db, env }) {
     }
   }
 
-  return { configured: Boolean(account), projectId: account?.project_id || null, getClientConfig, sweep };
+  return { configured: Boolean(account), projectId: account?.project_id || null, getClientConfig, send, sweep };
 }
 
 export function installManagerNotificationRoutes(app, { env = process.env, supabase = null } = {}) {
