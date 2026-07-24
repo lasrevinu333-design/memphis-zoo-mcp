@@ -6,6 +6,7 @@ const read = (path) => readFileSync(new URL(path, root), 'utf8');
 const eventsApi = read('src/events-api.js');
 const messagingApi = read('src/messaging-api.js');
 const migration = read('supabase/migrations/20260724020000_event_messenger_cutover_deletion_semantics.sql');
+const advisorIndex = read('supabase/migrations/20260724023000_msg_thread_deletion_operations_user_index.sql');
 
 assert.match(eventsApi, /mz_enqueue_employee_event_pushes/);
 assert.match(eventsApi, /native_employee_push_only/);
@@ -50,5 +51,7 @@ assert.match(migration, /Event notifications are native-only and cannot create M
 assert.match(migration, /legacy_event_chat_tombstone/);
 assert.match(migration, /purge_after=coalesce\(purge_after,coalesce\(deleted_at,now\(\)\)\+interval '14 days'\)/);
 assert.doesNotMatch(migration, /grant execute on function public\.msg_delete_thread\(uuid,uuid,uuid\) to (?:anon|authenticated|public)/);
+assert.match(advisorIndex, /idx_msg_thread_deletion_operations_user/);
+assert.match(advisorIndex, /msg_thread_deletion_operations\(user_id,deleted_at desc\)/);
 
 console.log('BATCH_2_EVENT_MESSENGER_CUTOVER_CONTRACTS_PASS');
