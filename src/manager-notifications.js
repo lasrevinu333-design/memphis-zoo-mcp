@@ -208,7 +208,7 @@ export function createPushRuntime({ db, env }) {
           data: stringifyData(job.data_json),
           android: {
             priority: "high",
-            notification: { channel_id: "operations", sound: "default", default_vibrate_timings: true },
+            notification: { channel_id: channelId, sound: "default", default_vibrate_timings: true },
           },
           apns: {
             headers: { "apns-priority": "10" },
