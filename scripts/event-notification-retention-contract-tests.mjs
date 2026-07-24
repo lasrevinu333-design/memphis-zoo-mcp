@@ -5,13 +5,18 @@ const root = new URL('../', import.meta.url);
 const read = (path) => readFileSync(new URL(path, root), 'utf8');
 const eventsApi = read('src/events-api.js');
 const migration = read('supabase/migrations/20260722224000_event_notification_retention_integrity.sql');
+const cutover = read('supabase/migrations/20260724020000_event_messenger_cutover_deletion_semantics.sql');
 
-assert.match(eventsApi, /'event_reminder'::text as notification_kind/,
-  'the events worker must emit the canonical event_reminder value');
-assert.match(eventsApi, /p_notification_kind:\s*normalizedKind/,
-  'the claim RPC must receive the same canonical value used by the pending query');
-assert.match(eventsApi, /log\.notification_kind = 'event_reminder'/,
-  'dedupe must use the canonical event reminder value');
+assert.match(eventsApi, /mz_enqueue_employee_event_pushes/,
+  'the events worker must enqueue the native employee notification ledger');
+assert.match(eventsApi, /native_employee_push_only/,
+  'event maintenance must advertise native-only delivery');
+assert.doesNotMatch(eventsApi, /msg_get_or_create_memphis_thread|msg_send_message|msg_unhide_thread_for_device/,
+  'the event worker must have zero Messenger RPC coupling');
+assert.match(cutover, /trg_mz_reject_event_messenger_message/,
+  'the database must reject new events_app Messenger rows');
+assert.match(cutover, /legacy_event_chat_tombstone/,
+  'legacy event-generated chat content must enter the 14-day tombstone flow');
 
 assert.match(migration, /events_app_notification_log_kind_check/,
   'the schema migration must own the notification-kind domain');
