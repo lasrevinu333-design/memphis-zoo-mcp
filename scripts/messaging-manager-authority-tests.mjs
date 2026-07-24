@@ -23,6 +23,17 @@ async function runRpc(fn, args) {
   if (fn === "msg_send_broadcast") return { id: "broadcast-test", sender_user_id: args.p_sender_user_id };
   if (fn === "msg_create_group_thread_v2") return { id: THREAD_ID, created_by_user_id: args.p_created_by_user_id, title: args.p_title, client_thread_id: args.p_client_thread_id };
   if (fn === "msg_send_message") return { id: "message-test", sender_user_id: args.p_sender_user_id };
+  if (fn === "msg_delete_message") {
+    return {
+      id: "00000000-0000-4000-8000-000000000708",
+      thread_id: THREAD_ID,
+      sender_user_id: MANAGER_USER_ID,
+      body: "[deleted]",
+      is_deleted: true,
+      deleted_at: "2026-07-24T18:00:00.000Z",
+      purge_after: "2026-08-07T18:00:00.000Z",
+    };
+  }
   if (fn === "msg_mark_thread_read") return { marked: true, user_id: args.p_user_id };
   return {};
 }
@@ -121,12 +132,22 @@ try {
   const forgedRead = await post(`/messaging-api/thread/${THREAD_ID}/read`, { user_id: FORGED_EMPLOYEE_ID });
   assert.equal(forgedRead.status, 403);
 
-  const retiredMessageDelete = await post(`/messaging-api/thread/${THREAD_ID}/message/00000000-0000-4000-8000-000000000708/delete`, {
+  const forgedMessageDelete = await post(`/messaging-api/thread/${THREAD_ID}/message/00000000-0000-4000-8000-000000000708/delete`, {
     user_id: FORGED_EMPLOYEE_ID,
   });
-  assert.equal(retiredMessageDelete.status, 410);
-  assert.match(retiredMessageDelete.body.error, /delete the conversation/i);
-  assert.equal(calls.some((call) => call.fn === "msg_delete_message"), false);
+  assert.equal(forgedMessageDelete.status, 403);
+  assert.match(forgedMessageDelete.body.error, /derived from authenticated server identity/i);
+  assert.equal(calls.some((call) => call.fn === "msg_delete_message"), false, "forged actor input must fail before the database RPC");
+
+  const authoritativeMessageDelete = await post(`/messaging-api/thread/${THREAD_ID}/message/00000000-0000-4000-8000-000000000708/delete`, {});
+  assert.equal(authoritativeMessageDelete.status, 200);
+  assert.equal(authoritativeMessageDelete.body.data.is_deleted, true);
+  assert.equal(authoritativeMessageDelete.body.meta.retention_hours, 336);
+  const deleteCall = calls.find((call) => call.fn === "msg_delete_message");
+  assert.deepEqual(deleteCall.args, {
+    p_message_id: "00000000-0000-4000-8000-000000000708",
+    p_request_user_id: MANAGER_USER_ID,
+  });
 
   const forgedBroadcast = await post("/messaging-api/broadcast", {
     sender_user_id: FORGED_EMPLOYEE_ID,

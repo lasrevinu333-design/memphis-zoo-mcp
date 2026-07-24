@@ -82,10 +82,21 @@ await rejectsSql(
   `select public.msg_delete_thread('${globalThread}'::uuid,'${userA}'::uuid,'${opUser}'::uuid);`,
   /already used for another target/i
 );
-await rejectsSql(
-  `select public.msg_delete_message('${oldMessage}'::uuid,'${userA}'::uuid);`,
-  /Individual-message deletion is retired/i
-);
+const messageDelete = JSON.parse(await sql(`
+  select row_to_json(m)::text
+  from public.msg_delete_message('${oldMessage}'::uuid,'${userA}'::uuid) m;
+`));
+assert.equal(messageDelete.is_deleted, true);
+assert.equal(messageDelete.body, '[deleted]');
+assert.equal(await sql(`
+  select extract(epoch from (purge_after-deleted_at))::bigint
+  from public.msg_messages where id='${oldMessage}'::uuid;
+`), String(336 * 60 * 60));
+const messageDeleteRetry = JSON.parse(await sql(`
+  select row_to_json(m)::text
+  from public.msg_delete_message('${oldMessage}'::uuid,'${userA}'::uuid) m;
+`));
+assert.equal(messageDeleteRetry.deleted_at, messageDelete.deleted_at, 'message deletion replay is idempotent');
 
 await sql(`
   select public.msg_send_message(

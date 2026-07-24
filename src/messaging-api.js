@@ -300,6 +300,21 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     return Array.isArray(rows) && rows.length ? rows[0] : null;
   }
 
+  async function getMessageIdentity(messageId, threadId) {
+    const normalizedMessageId = String(messageId || "").trim();
+    const normalizedThreadId = String(threadId || "").trim();
+    if (!isUuid(normalizedMessageId) || !isUuid(normalizedThreadId)) return null;
+    const rows = await runReadOnlySql(`
+      select m.id, m.thread_id, m.sender_user_id, m.is_deleted,
+             m.deleted_at, m.purge_after
+      from public.msg_messages m
+      where m.id = '${esc(normalizedMessageId)}'::uuid
+        and m.thread_id = '${esc(normalizedThreadId)}'::uuid
+      limit 1
+    `);
+    return Array.isArray(rows) && rows.length ? rows[0] : null;
+  }
+
   function isMemphisThread(thread = {}) {
     return String(thread?.thread_type || "").trim().toLowerCase() === "bot"
       || thread?.has_memphis_bot === true
@@ -1771,11 +1786,60 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   });
 
-  router.post("/thread/:threadId/message/:messageId/delete", requireWritableDeviceOrOpsAuth, async (_req, res) => {
-    res.status(410).json({
-      ok: false,
-      error: "Individual-message deletion is retired. Delete the conversation instead.",
-    });
+  router.post("/thread/:threadId/message/:messageId/delete", requireWritableDeviceOrOpsAuth, async (req, res) => {
+    try {
+      const threadId = String(req.params.threadId || "").trim();
+      const messageId = String(req.params.messageId || "").trim();
+      if (!isUuid(threadId) || !isUuid(messageId)) {
+        res.status(422).json({ ok: false, error: "Valid thread and message ids are required." });
+        return;
+      }
+      const suppliedActorKeys = ["user_id", "userId", "request_user_id", "deleted_by_user_id", "sender_user_id"]
+        .filter((key) => Object.prototype.hasOwnProperty.call(req.body || {}, key));
+      if (suppliedActorKeys.length) {
+        res.status(403).json({ ok: false, error: "The message-deletion actor is derived from authenticated server identity and cannot be supplied by the client." });
+        return;
+      }
+      const deviceId = String(req.body?.device_id || req.body?.deviceId || "").trim();
+      const viewer = await resolveViewerContext({ deviceId, managerSession: req.memphisAuth || null });
+      const message = await getMessageIdentity(messageId, threadId);
+      if (!message || String(message.thread_id || "") !== threadId) {
+        res.status(404).json({ ok: false, error: "Message was not found in this conversation." });
+        return;
+      }
+      const isParticipant = await isThreadParticipant(threadId, viewer.effectiveUserId);
+      if (!isParticipant && !viewer.isManagerOverview) {
+        res.status(403).json({ ok: false, error: "Device must be a participant in this conversation." });
+        return;
+      }
+      if (!viewer.isManagerOverview && String(message.sender_user_id || "") !== viewer.effectiveUserId) {
+        res.status(403).json({ ok: false, error: "Only the sender or an Ops Manager can delete this message." });
+        return;
+      }
+      const data = await runRpc("msg_delete_message", {
+        p_message_id: messageId,
+        p_request_user_id: viewer.effectiveUserId,
+      });
+      const deleted = Array.isArray(data) ? data[0] : data;
+      const deletedAt = Date.parse(String(deleted?.deleted_at || ""));
+      const purgeAfter = Date.parse(String(deleted?.purge_after || ""));
+      if (!deleted
+          || String(deleted.id || "") !== messageId
+          || String(deleted.thread_id || "") !== threadId
+          || deleted.is_deleted !== true
+          || !Number.isFinite(deletedAt)
+          || purgeAfter - deletedAt !== 336 * 60 * 60 * 1000) {
+        res.status(502).json({ ok: false, error: "The database did not confirm exact message deletion and retention." });
+        return;
+      }
+      res.status(200).json({
+        ok: true,
+        data: deleted,
+        meta: messagingMeta({ deletion: "all_participants", authoritative: true, retention_hours: 336 }),
+      });
+    } catch (error) {
+      fail(res, error, "Delete message failed");
+    }
   });
 
   router.post("/thread/:threadId/delete", requireWritableDeviceOrOpsAuth, async (req, res) => {

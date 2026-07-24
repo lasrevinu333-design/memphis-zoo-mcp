@@ -428,14 +428,22 @@ async function verifyDockerConcurrency(database) {
       '00000000-0000-4000-8000-000000009901'
     );
   `).trim();
-  const retiredMessageDelete = await dockerPsqlConcurrent(
+  const messageDelete = await dockerPsqlConcurrent(
     database,
     `select id from public.msg_delete_message('${deletionMessageId}'::uuid, (select id from public.msg_users where ops_manager_id='00000000-0000-4000-8000-000000009001'::uuid));`
   );
-  if (retiredMessageDelete.status === 0 || !/Individual-message deletion is retired/i.test(retiredMessageDelete.stderr)) {
-    throw new Error(`Individual-message deletion did not fail closed: ${retiredMessageDelete.stderr}`);
+  if (messageDelete.status !== 0 || messageDelete.stdout.trim() !== deletionMessageId) {
+    throw new Error(`Authorized individual-message deletion failed: ${messageDelete.stderr || messageDelete.stdout}`);
   }
-  console.log("verified 10-way exact finish, GPS freshness/boundary/motion/replay/duplicate handling, two-worker outbox claims, restart lease recovery, two-browser Moxie CAS, atomic Moxie password rotation, 10-manager named-identity convergence, retired automatic team room, idempotent ordinary group creation, concurrent user-scoped conversation removal, and retired individual-message deletion");
+  const messageDeletionState = dockerPsql(database, `
+    select is_deleted::text || '|' || body || '|' ||
+      extract(epoch from (purge_after-deleted_at))::bigint::text
+    from public.msg_messages where id='${deletionMessageId}'::uuid;
+  `).trim();
+  if (messageDeletionState !== "true|[deleted]|1209600") {
+    throw new Error(`Authorized message deletion retention invariant failed: ${messageDeletionState}`);
+  }
+  console.log("verified 10-way exact finish, GPS freshness/boundary/motion/replay/duplicate handling, two-worker outbox claims, restart lease recovery, two-browser Moxie CAS, atomic Moxie password rotation, 10-manager named-identity convergence, retired automatic team room, idempotent ordinary group creation, concurrent user-scoped conversation removal, and authorized 336-hour individual-message deletion");
 }
 
 function runDocker(args, options = {}) {
@@ -510,6 +518,7 @@ declare
   v_delete jsonb;
   v_purge jsonb;
   v_message public.msg_messages%rowtype;
+  v_employee_message public.msg_messages%rowtype;
   v_old_message public.msg_messages%rowtype;
 begin
   v_start := public.tool_start_session_v2(
@@ -693,6 +702,30 @@ begin
      or (select count(*) from public.msg_thread_participants where thread_id=v_group_thread_a.id and left_at is null) <> 3 then
     raise exception 'Employee group creation was not idempotent and exact';
   end if;
+  v_employee_message := public.msg_send_message(
+    v_group_thread_a.id,
+    '00000000-0000-4000-8000-00000000f116',
+    'Employee-owned deletion authorization test','text','{}'::jsonb,
+    '00000000-0000-4000-8000-00000000f125'
+  );
+  begin
+    perform public.msg_delete_message(
+      v_employee_message.id,
+      '00000000-0000-4000-8000-00000000f119'
+    );
+    raise exception 'A non-sender employee deleted another employee message';
+  exception when insufficient_privilege then
+    null;
+  end;
+  v_employee_message := public.msg_delete_message(
+    v_employee_message.id,
+    '00000000-0000-4000-8000-00000000f116'
+  );
+  if v_employee_message.is_deleted is not true
+     or v_employee_message.deleted_by_user_id <> '00000000-0000-4000-8000-00000000f116'::uuid
+     or v_employee_message.purge_after <> v_employee_message.deleted_at + interval '336 hours' then
+    raise exception 'The authenticated sender could not delete their own message exactly: %',row_to_json(v_employee_message);
+  end if;
   begin
     perform public.msg_mark_thread_deleted(
       v_group_thread_a.id,
@@ -727,7 +760,12 @@ begin
      or v_delete->>'deletion_scope' <> 'user'
      or (v_delete->>'replayed')::boolean is not false
      or (select is_active from public.msg_threads where id=v_group_thread_a.id) is not true
-     or exists (select 1 from public.msg_messages where thread_id=v_group_thread_a.id and is_deleted is true)
+     or not exists (
+       select 1 from public.msg_messages
+       where thread_id=v_group_thread_a.id
+         and body='Disposable deleted conversation content'
+         and is_deleted is false
+     )
      or not exists (
        select 1 from public.msg_thread_visibility
        where thread_id=v_group_thread_a.id
@@ -745,12 +783,13 @@ begin
     raise exception 'Conversation removal retry was not idempotent: %',v_delete;
   end if;
 
-  begin
-    perform public.msg_delete_message(v_message.id, v_manager_user_b.id);
-    raise exception 'Retired individual-message deletion was accepted';
-  exception when feature_not_supported then
-    null;
-  end;
+  v_message := public.msg_delete_message(v_message.id, v_manager_user_b.id);
+  if v_message.is_deleted is not true
+     or v_message.body <> '[deleted]'
+     or v_message.deleted_by_user_id <> v_manager_user_b.id
+     or v_message.purge_after <> v_message.deleted_at + interval '336 hours' then
+    raise exception 'Authorized manager message deletion did not preserve exact retention: %',row_to_json(v_message);
+  end if;
 
   insert into public.msg_users(id,display_name,role,is_active)
   values ('00000000-0000-4000-8000-00000000f123','Empty DB Messenger Admin','admin',true)

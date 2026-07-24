@@ -35,7 +35,7 @@ for (const file of files) {
 }
 assert.equal(markerVersions.length, 97, 'all 97 squashed production ledger versions must retain a CLI marker');
 assert.equal(new Set([...markerVersions, ...authoritativeRecentVersions]).size, 135, 'the repository must model all 135 authoritative production ledger versions exactly once');
-assert.equal(versions.length, 138, 'only native-delivery reconciliation, lifecycle integrity, and shared-scan recovery may be pending beyond the 135-version production ledger');
+assert.equal(versions.length, 139, 'only native-delivery reconciliation, lifecycle integrity, shared-scan recovery, and authorized message deletion may be pending beyond the 135-version production ledger');
 
 const nativeDelivery = await readFile(new URL('supabase/migrations/20260724010000_native_employee_event_delivery.sql', root), 'utf8');
 assert.match(nativeDelivery, /if not exists \([\s\S]*devices_assignment_epoch_positive/i);
@@ -43,5 +43,6 @@ assert.match(nativeDelivery, /if not exists \([\s\S]*events_app_events_audience_
 assert.ok(versions.includes('20260724010000'), 'native employee delivery ledger reconciliation must remain deployable and idempotent');
 assert.ok(versions.includes('20260724145808'), 'lifecycle integrity migration must follow the reconciled historical chain');
 assert.ok(versions.includes('20260724173912'), 'shared scan and recovery integrity migration must follow lifecycle integrity');
+assert.ok(versions.includes('20260724223021'), 'authorized message deletion must follow the third-audit candidate migration chain');
 
 console.log('MIGRATION_PROVENANCE_CONTRACT_PASS');
