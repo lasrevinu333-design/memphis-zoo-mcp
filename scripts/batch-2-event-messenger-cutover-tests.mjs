@@ -38,6 +38,7 @@ assert.match(migration, /create table if not exists public\.msg_thread_deletion_
 assert.match(migration, /alter table public\.msg_thread_deletion_operations force row level security/);
 assert.match(migration, /deletion_scope in \('user','global'\)/);
 assert.match(migration, /operation_id=p_operation_id/);
+assert.match(migration, /pg_advisory_xact_lock\(hashtextextended\(p_operation_id::text,0\)\)/);
 assert.match(migration, /Deletion operation id was already used for another target/);
 assert.match(migration, /device_identifier is null/);
 assert.match(migration, /memphis_generation_ended/);
