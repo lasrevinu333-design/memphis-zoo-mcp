@@ -64,6 +64,8 @@ jobs:
           npm run --silent test:custodial-repair
           npm run --silent test:custodial-employee-phones
           npm run --silent test:migration-provenance
+          npm run --silent test:third-audit-repairs
+          npm run --silent test:backup-storage-roundtrip
           npm run --silent test:device-security-app
           npm run --silent test:gemini-console
           npm run --silent test:schema-fingerprint
@@ -96,3 +98,9 @@ jobs:
           OPERATIONAL_ANALYTICS_TEST_DOCKER_CONTAINER="$container" \
             OPERATIONAL_ANALYTICS_TEST_DATABASE=postgres \
             npm run --silent test:operational-analytics-db
+          SHARED_SCAN_TEST_DOCKER_CONTAINER="$container" \
+            SHARED_SCAN_TEST_DATABASE=postgres \
+            npm run --silent test:shared-device-scan-db
+          BACKUP_RESTORE_TEST_DOCKER_CONTAINER="$container" \
+            BACKUP_RESTORE_TEST_DATABASE=postgres \
+            npm run --silent test:backup-database-roundtrip

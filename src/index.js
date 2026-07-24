@@ -228,7 +228,7 @@ function canonicalizeScanArguments(fn, args, device) {
   return canonicalArgs;
 }
 
-function prepareScanRpcCall(fn, args) {
+function prepareScanRpcCall(fn, args, { opsSession = null } = {}) {
   const normalizedFn = String(fn || "").trim();
   const nextArgs = { ...(args && typeof args === "object" ? args : {}) };
   if (normalizedFn === "tool_start_session") {
@@ -258,6 +258,36 @@ function prepareScanRpcCall(fn, args) {
     }
     nextArgs.p_client_session_id = clientSessionId;
     if (!nextArgs.p_correlation_id) nextArgs.p_correlation_id = `scan-start:${clientSessionId}`;
+    const selectedEmployeeId = String(nextArgs.p_selected_employee_id || "").trim();
+    if (selectedEmployeeId) {
+      if (!opsSession || opsSession.read_only === true || opsSession.access_level !== "full_access" || !isUuid(opsSession.manager_id)) {
+        const error = new Error("Full Ops Manager authentication is required to select an employee for shared-device scanning.");
+        error.status = 403;
+        throw error;
+      }
+      if (String(nextArgs.p_device_id || "").trim().toUpperCase() !== "KIOSK_01") {
+        const error = new Error("Shared employee selection is allowed only on KIOSK_01.");
+        error.status = 403;
+        throw error;
+      }
+      if (!isUuid(selectedEmployeeId)) {
+        const error = new Error("p_selected_employee_id must be an employee UUID.");
+        error.status = 422;
+        throw error;
+      }
+      return {
+        fn: "tool_start_shared_session_v1",
+        args: {
+          p_location_code: nextArgs.p_location_code,
+          p_device_id: "KIOSK_01",
+          p_selected_employee_id: selectedEmployeeId,
+          p_client_session_id: clientSessionId,
+          p_client_started_at: nextArgs.p_client_started_at || null,
+          p_actor_manager_id: opsSession.manager_id,
+          p_correlation_id: nextArgs.p_correlation_id,
+        },
+      };
+    }
   }
   if (normalizedFn === "tool_finish_session") {
     const sessionIdentifier = String(nextArgs.p_session_uuid || nextArgs.p_client_session_id || "").trim();
@@ -315,6 +345,28 @@ function prepareScanRpcCall(fn, args) {
       throw error;
     }
     if (!nextArgs.p_correlation_id) nextArgs.p_correlation_id = `scan-commit:${clientSessionId}:${clientCompletionId}`;
+    if (String(nextArgs.p_device_id || "").trim().toUpperCase() === "KIOSK_01") {
+      if (!opsSession || opsSession.read_only === true || opsSession.access_level !== "full_access" || !isUuid(opsSession.manager_id)) {
+        const error = new Error("Full Ops Manager authentication is required to complete KIOSK_01 shared-device work.");
+        error.status = 403;
+        throw error;
+      }
+      return {
+        fn: "tool_commit_shared_cleaning_workflow_v1",
+        args: {
+          p_client_session_id: clientSessionId,
+          p_client_completion_id: clientCompletionId,
+          p_device_id: "KIOSK_01",
+          p_location_code: nextArgs.p_location_code,
+          p_client_started_at: nextArgs.p_client_started_at || null,
+          p_client_ended_at: nextArgs.p_client_ended_at || null,
+          p_response_json: nextArgs.p_response_json || {},
+          p_scan_evidence: nextArgs.p_scan_evidence || [],
+          p_actor_manager_id: opsSession.manager_id,
+          p_correlation_id: nextArgs.p_correlation_id,
+        },
+      };
+    }
   }
   return { fn: normalizedFn, args: nextArgs };
 }
@@ -2707,7 +2759,7 @@ app.post("/scan-api/rpc", requireDeviceOrOpsAccess, requireScanRpcAuthorization,
       return;
     }
     const args = canonicalizeScanArguments(fn, req.body?.args, req.memphisDevice);
-    const prepared = prepareScanRpcCall(fn, args);
+    const prepared = prepareScanRpcCall(fn, args, { opsSession: req.memphisAuth || null });
     const data = await runRpc(prepared.fn, prepared.args);
     res.status(200).json({
       ok: true,

@@ -54,6 +54,10 @@
     "test:manager-notifications": "node scripts/manager-notification-contract-tests.mjs",
     "test:employee-notifications": "node scripts/employee-notification-contract-tests.mjs",
     "test:migration-provenance": "node scripts/migration-provenance-contract-tests.mjs",
+    "test:third-audit-repairs": "node scripts/third-audit-repair-contract-tests.mjs",
+    "test:shared-device-scan-db": "node scripts/shared-device-scan-database-tests.mjs",
+    "test:backup-storage-roundtrip": "node scripts/backup-storage-roundtrip-tests.mjs",
+    "test:backup-database-roundtrip": "node scripts/backup-database-roundtrip-tests.mjs",
     "test:batch2": "node scripts/batch-2-event-messenger-cutover-tests.mjs",
     "test:batch2-db": "node scripts/batch-2-event-messenger-cutover-database-tests.mjs"
   },

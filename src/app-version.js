@@ -1,4 +1,4 @@
-export const APP_VERSION = "release-2026.07.24.custodial-v3.15";
+export const APP_VERSION = "release-2026.07.24.custodial-v3.16";
 export const RELEASE_ID = String(
   process.env.RENDER_GIT_COMMIT
     || process.env.GIT_COMMIT
