@@ -770,6 +770,13 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         join public.msg_users mu on mu.id = tp.user_id and mu.is_active = true
         group by tp.thread_id
       ),
+      user_visibility as (
+        select v.thread_id, max(v.hidden_before) as hidden_before, max(v.updated_at) as updated_at
+        from public.msg_thread_visibility v
+        where v.user_id = '${viewer}'::uuid
+          and v.device_identifier is null
+        group by v.thread_id
+      ),
       last_messages as (
         select distinct on (m.thread_id)
           m.thread_id,
@@ -781,7 +788,9 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
           sender.display_name as last_sender_name
         from public.msg_messages m
         left join public.msg_users sender on sender.id = m.sender_user_id
+        left join user_visibility vis on vis.thread_id = m.thread_id
         where m.is_deleted = false
+          and coalesce(m.sent_at,m.created_at) > coalesce(vis.hidden_before,'-infinity'::timestamptz)
         order by m.thread_id, coalesce(m.sent_at, m.created_at) desc, m.created_at desc, m.id desc
       ),
       unread as (
@@ -790,7 +799,9 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
           count(*)::int as unread_count
         from public.msg_messages m
         left join public.msg_receipts r on r.message_id = m.id and r.user_id = '${viewer}'::uuid
+        left join user_visibility vis on vis.thread_id = m.thread_id
         where m.is_deleted = false
+          and coalesce(m.sent_at,m.created_at) > coalesce(vis.hidden_before,'-infinity'::timestamptz)
           and m.sender_user_id is distinct from '${viewer}'::uuid
           and r.read_at is null
         group by m.thread_id
@@ -823,8 +834,10 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       join thread_participants tp on tp.thread_id = t.id
       left join last_messages lm on lm.thread_id = t.id
       left join unread u on u.thread_id = t.id
+      left join user_visibility vis on vis.thread_id = t.id
       where t.is_active = true
         and ${visibilityClause}
+        and (vis.hidden_before is null or lm.last_message_id is not null)
       order by
         case
           when t.system_key = 'ops_manager_shared_chat_v1' then 0
@@ -843,11 +856,19 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     const cursorId = esc(afterId);
     const visibilityClause = managerOverview
       ? "true"
-      : `exists (
-          select 1 from public.msg_thread_participants tp
-          where tp.thread_id = t.id
-            and tp.user_id = '${viewer}'::uuid
-            and tp.left_at is null
+      : `(
+          exists (
+            select 1 from public.msg_thread_participants tp
+            where tp.thread_id = t.id
+              and tp.user_id = '${viewer}'::uuid
+              and tp.left_at is null
+          )
+          or exists (
+            select 1 from public.msg_thread_visibility v
+            where v.thread_id = t.id
+              and v.user_id = '${viewer}'::uuid
+              and v.device_identifier is null
+          )
         )`;
     return `
       select thread_id, changed_at
@@ -864,7 +885,14 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
               join public.msg_messages rm on rm.id = r.message_id
               where rm.thread_id = t.id
                 and r.user_id = '${viewer}'::uuid
-            ), t.created_at)
+            ), t.created_at),
+            coalesce((
+              select max(v.updated_at)
+              from public.msg_thread_visibility v
+              where v.thread_id=t.id
+                and v.user_id='${viewer}'::uuid
+                and v.device_identifier is null
+            ),t.created_at)
           ) as changed_at
         from public.msg_threads t
         where (t.is_active = true or t.deleted_at is not null)
@@ -911,6 +939,13 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         and (t.is_active = true or t.deleted_at is not null)
         and m.is_deleted is false
         and ${visibilityClause}
+        and coalesce(m.sent_at,m.created_at) > coalesce((
+          select max(v.hidden_before)
+          from public.msg_thread_visibility v
+          where v.thread_id=t.id
+            and v.user_id='${viewer}'::uuid
+            and v.device_identifier is null
+        ),'-infinity'::timestamptz)
         ${beforeSql}
       order by coalesce(m.sent_at, m.created_at) desc, m.id desc
       limit ${Math.min(Math.max(Number(limit) || 100, 1), 200)}
@@ -948,6 +983,13 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       where m.thread_id = '${thread}'::uuid
         and (t.is_active = true or t.deleted_at is not null)
         and ${visibilityClause}
+        and coalesce(m.sent_at,m.created_at) > coalesce((
+          select max(v.hidden_before)
+          from public.msg_thread_visibility v
+          where v.thread_id=t.id
+            and v.user_id='${viewer}'::uuid
+            and v.device_identifier is null
+        ),'-infinity'::timestamptz)
         and (m.updated_at, m.id) > ('${cursorTime}'::timestamptz, '${cursorId}'::uuid)
       order by m.updated_at asc, m.id asc
       limit ${Math.min(Math.max(Number(limit) || 100, 1), 200)}
@@ -1369,91 +1411,16 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   });
 
-  router.get("/device-event-reminders", requireDeviceOrOpsAuth, async (req, res) => {
-    try {
-      const deviceId = String(req.query.device_id || "").trim();
-      const limit = Math.min(Math.max(Number.parseInt(String(req.query.limit || 5), 10) || 5, 1), 20);
-      if (!deviceId) throw new Error("device_id is required.");
-      const canonicalDeviceId = String(req.memphisMessagingDevice?.identity?.canonical_device_id || deviceId).trim();
-      const notificationState = await getDeviceNotificationState(canonicalDeviceId);
-      const suppressedNotificationState = phoneSuppressedNotificationState(notificationState);
-      if (notificationState?.is_employee_device !== true) {
-        res.status(200).json({ ok: true, data: [], meta: messagingMeta(notificationStateMeta(suppressedNotificationState)) });
-        return;
-      }
-      const silent = shouldSilenceDeviceNotifications(notificationState);
-      const presentationDemoOnly = shouldQueryPresentationDemosWhenSilent(notificationState);
-      if (silent && !presentationDemoOnly) {
-        res.status(200).json({ ok: true, data: [], meta: messagingMeta(notificationStateMeta(notificationState)) });
-        return;
-      }
-      const presentationDemoClause = presentationDemoOnly
-        ? `and coalesce(m.metadata_json->>'presentation_demo', '') = 'true'
-            and coalesce(nullif(m.metadata_json->>'target_device_id', ''), '${esc(canonicalDeviceId)}') = '${esc(canonicalDeviceId)}'`
-        : "";
-      const rows = await runReadOnlySql(`
-        select *
-        from (
-          with device_user as (
-            select mu.id as msg_user_id, mu.display_name, mda.device_identifier
-            from public.msg_device_assignments mda
-            join public.msg_users mu on mu.id = mda.msg_user_id
-            where mda.device_identifier = '${esc(canonicalDeviceId)}'
-              and mda.is_active = true
-              and mu.is_active = true
-            limit 1
-          )
-          select
-            m.id as message_id,
-            m.thread_id,
-            du.msg_user_id,
-            du.display_name,
-            m.body,
-            m.message_type,
-            m.metadata_json,
-            m.sent_at,
-            m.created_at,
-            r.delivered_at,
-            r.displayed_at,
-            r.read_at,
-            r.acknowledged_at,
-            coalesce(
-              nullif(m.metadata_json->>'notification_key',''),
-              ('event:' || coalesce(nullif(m.metadata_json->>'event_id',''), m.id::text) || ':' || du.msg_user_id::text)
-            ) as notification_key
-          from device_user du
-          join public.msg_thread_participants tp
-            on tp.user_id = du.msg_user_id
-           and tp.left_at is null
-          join public.msg_messages m
-            on m.thread_id = tp.thread_id
-           and m.is_deleted = false
-          left join public.msg_receipts r
-            on r.message_id = m.id
-           and r.user_id = du.msg_user_id
-          where coalesce(m.metadata_json->>'source', '') = 'events_app'
-            and coalesce(m.metadata_json->>'notification_kind', '') = 'event_reminder'
-            ${presentationDemoClause}
-            and coalesce(r.acknowledged_at, r.read_at) is null
-            and not exists (
-              select 1
-              from public.device_notification_acknowledgements a
-              where upper(btrim(a.device_identifier)) = upper(btrim('${esc(canonicalDeviceId)}'))
-                and a.notification_key = coalesce(
-                  nullif(m.metadata_json->>'notification_key',''),
-                  ('event:' || coalesce(nullif(m.metadata_json->>'event_id',''), m.id::text) || ':' || du.msg_user_id::text)
-                )
-                and a.acknowledged_at is not null
-            )
-            and m.sent_at >= now() - interval '4 days'
-          order by m.sent_at desc, m.created_at desc
-          limit ${limit}
-        ) event_reminders
-      `);
-      res.status(200).json({ ok: true, data: rows || [], meta: messagingMeta(notificationStateMeta(notificationState)) });
-    } catch (error) {
-      fail(res, error, "Device event reminders failed");
-    }
+  router.get("/device-event-reminders", requireDeviceOrOpsAuth, async (_req, res) => {
+    res.status(200).json({
+      ok: true,
+      data: [],
+      meta: messagingMeta({
+        retired: true,
+        delivery: "native_employee_push_only",
+        messenger_coupling: false,
+      }),
+    });
   });
 
   router.get("/device-location-status-reminders", requireDeviceOrOpsAuth, async (req, res) => {
@@ -1701,11 +1668,6 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const thread = Array.isArray(data) ? data[0] : data;
       const threadId = String(thread?.id || thread?.thread_id || "").trim();
       if (!isUuid(threadId)) throw Object.assign(new Error("Direct conversation could not be resolved."), { status: 502 });
-      await runRpc("msg_restore_thread_visibility", {
-        p_thread_id: threadId,
-        p_user_id: viewer.effectiveUserId,
-        p_device_identifier: String(viewer.identity?.canonical_device_id || viewer.deviceId || deviceId).trim(),
-      });
       res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Create direct thread failed");
@@ -1808,62 +1770,11 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   });
 
-  router.post("/thread/:threadId/message/:messageId/delete", requireWritableDeviceOrOpsAuth, async (req, res) => {
-    try {
-      const threadId = String(req.params.threadId || "").trim();
-      const messageId = String(req.params.messageId || "").trim();
-      const requestedUserId = String(req.body?.user_id || "").trim();
-      const deviceId = String(req.body?.device_id || req.body?.deviceId || "").trim();
-      if (!isUuid(threadId) || !isUuid(messageId)) {
-        res.status(422).json({ ok: false, error: "Valid thread and message ids are required." });
-        return;
-      }
-      const viewer = await resolveViewerContext({ userId: requestedUserId, deviceId, managerSession: req.memphisAuth || null });
-      if (requestedUserId && requestedUserId !== viewer.effectiveUserId) {
-        res.status(403).json({ ok: false, error: "Message deletion user must match the authenticated viewer." });
-        return;
-      }
-      const messageRows = await runReadOnlySql(`
-        select m.id, m.thread_id, m.sender_user_id, m.is_deleted
-        from public.msg_messages m
-        join public.msg_threads t on t.id = m.thread_id
-        where m.id = '${esc(messageId)}'::uuid
-          and m.thread_id = '${esc(threadId)}'::uuid
-          and t.is_active is true
-        limit 1
-      `);
-      const message = Array.isArray(messageRows) ? messageRows[0] : null;
-      if (!message) {
-        res.status(404).json({ ok: false, error: "Message was not found in this conversation." });
-        return;
-      }
-      const isParticipant = await isThreadParticipant(threadId, viewer.effectiveUserId);
-      if (!isParticipant && !viewer.isManagerOverview) {
-        res.status(403).json({ ok: false, error: "Authenticated viewer is not a participant in this conversation." });
-        return;
-      }
-      const data = await runRpc("msg_delete_message", {
-        p_message_id: messageId,
-        p_request_user_id: viewer.effectiveUserId,
-      });
-      const deleted = Array.isArray(data) ? data[0] : data;
-      if (!deleted
-          || String(deleted.id || "") !== messageId
-          || deleted.is_deleted !== true
-          || String(deleted.body || "") !== "[deleted]"
-          || !deleted.deleted_at
-          || !deleted.purge_after) {
-        res.status(502).json({ ok: false, error: "The database did not confirm message deletion." });
-        return;
-      }
-      res.status(200).json({
-        ok: true,
-        data: deleted,
-        meta: messagingMeta({ deletion: "immediate_hidden_then_hard_purge", retention_days: 14, authoritative: true }),
-      });
-    } catch (error) {
-      fail(res, error, "Delete message failed");
-    }
+  router.post("/thread/:threadId/message/:messageId/delete", requireWritableDeviceOrOpsAuth, async (_req, res) => {
+    res.status(410).json({
+      ok: false,
+      error: "Individual-message deletion is retired. Delete the conversation instead.",
+    });
   });
 
   router.post("/thread/:threadId/delete", requireWritableDeviceOrOpsAuth, async (req, res) => {
@@ -1901,18 +1812,74 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       if (!deleted
           || deleted.deleted !== true
           || String(deleted.thread_id || "") !== threadId
+          || deleted.deletion_scope !== "user"
           || !deleted.deleted_at
-          || !deleted.purge_after) {
-        res.status(502).json({ ok: false, error: "The database did not confirm conversation deletion." });
+          || !deleted.deleted_through) {
+        res.status(502).json({ ok: false, error: "The database did not confirm user-scoped conversation removal." });
         return;
       }
       res.status(200).json({
         ok: true,
         data: deleted,
-        meta: messagingMeta({ deletion: "all_participants", retention_days: 14, authoritative: true }),
+        meta: messagingMeta({
+          deletion: "current_user_only",
+          authoritative: true,
+          old_history_restores: false,
+          memphis_starts_clean: deleted.memphis_generation_ended === true,
+        }),
       });
     } catch (error) {
+      if (/operation id was already used/i.test(String(error?.message || ""))) {
+        res.status(409).json({ ok: false, error: error.message });
+        return;
+      }
       fail(res, error, "Delete thread failed");
+    }
+  });
+
+  router.post("/thread/:threadId/admin-tombstone", requireWritableDeviceOrOpsAuth, async (req, res) => {
+    try {
+      if (!req.memphisAuth) {
+        res.status(403).json({ ok: false, error: "A named admin session is required." });
+        return;
+      }
+      const threadId = String(req.params.threadId || "").trim();
+      const operationId = String(req.body?.operation_id || req.body?.operationId || "").trim();
+      if (!isUuid(threadId) || !isUuid(operationId)) {
+        res.status(422).json({ ok: false, error: "Valid thread and deletion operation ids are required." });
+        return;
+      }
+      const viewer = await resolveViewerContext({ managerSession: req.memphisAuth });
+      const data = await runRpc("msg_admin_tombstone_thread", {
+        p_thread_id: threadId,
+        p_request_user_id: viewer.effectiveUserId,
+        p_operation_id: operationId,
+      });
+      const deleted = Array.isArray(data) ? data[0] : data;
+      if (!deleted
+          || deleted.deleted !== true
+          || String(deleted.thread_id || "") !== threadId
+          || deleted.deletion_scope !== "global"
+          || !deleted.deleted_at
+          || !deleted.purge_after) {
+        res.status(502).json({ ok: false, error: "The database did not confirm the admin tombstone." });
+        return;
+      }
+      res.status(200).json({
+        ok: true,
+        data: deleted,
+        meta: messagingMeta({
+          deletion: "admin_global_tombstone",
+          retention_days: 14,
+          authoritative: true,
+        }),
+      });
+    } catch (error) {
+      if (/operation id was already used/i.test(String(error?.message || ""))) {
+        res.status(409).json({ ok: false, error: error.message });
+        return;
+      }
+      fail(res, error, "Admin tombstone failed");
     }
   });
 
