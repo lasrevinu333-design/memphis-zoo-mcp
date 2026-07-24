@@ -31,8 +31,10 @@ assert.doesNotMatch(migration, /delete\s+from\s+public\.events_app_event_history
 console.log(JSON.stringify({
   ok: true,
   checked: [
-    'worker_schema_notification_kind_agreement',
-    'canonical_dedupe_kind',
+    'native_employee_push_cutover',
+    'zero_messenger_coupling',
+    'database_event_chat_guard',
+    'legacy_event_chat_tombstone',
     'legacy_retention_noop',
     'event_history_preservation',
   ],
