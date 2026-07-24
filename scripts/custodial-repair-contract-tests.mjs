@@ -8,7 +8,7 @@ const deviceAuthSource = readFileSync("src/auth/device-credential-auth.js", "utf
 const releaseManifestSource = readFileSync("src/release-manifest.js", "utf8");
 const frontendReleaseManifest = JSON.parse(readFileSync("release/frontend-release-manifest.json", "utf8"));
 const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
-const migration = readFileSync("supabase/migrations/20260717161000_custodial_foundation_repair_delta.sql", "utf8");
+const migration = readFileSync("supabase/migrations/20260717170035_custodial_foundation_repair_delta.sql", "utf8");
 
 assert.match(indexSource, /tool_start_session_v2/);
 assert.match(indexSource, /p_client_session_id is required for scan start idempotency/);

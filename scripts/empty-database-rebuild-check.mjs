@@ -22,6 +22,7 @@ if (adminUrl && !/(localhost|127\.0\.0\.1|memphis-rebuild|schema-rebuild|test|ci
 }
 
 const root = resolve(new URL("..", import.meta.url).pathname);
+const baselinePath = resolve(root, "supabase/baseline/production_baseline.sql");
 const migrationsDir = resolve(root, "supabase/migrations");
 const migrationFiles = readdirSync(migrationsDir).filter((name) => name.endsWith(".sql")).sort();
 const requestedDatabaseName = String(process.env.SCHEMA_REBUILD_DATABASE_NAME || "").trim();
@@ -853,6 +854,8 @@ if (dockerContainer) {
     execFileSync("docker", ["inspect", dockerContainer], { stdio: "ignore" });
     const targetDatabase = ownsDockerContainer ? "postgres" : databaseName;
     if (!ownsDockerContainer) dockerPsql("postgres", `create database ${quoteIdentifier(databaseName)};`);
+    dockerPsql(targetDatabase, readFileSync(baselinePath, "utf8"));
+    console.log("applied production rebuild baseline");
     for (const file of migrationFiles) {
       const sql = readFileSync(resolve(migrationsDir, file), "utf8");
       dockerPsql(targetDatabase, sql);
@@ -954,9 +957,11 @@ try {
   adminConnected = true;
   await admin.query(`create database ${pg.escapeIdentifier(databaseName)}`);
   const db = new Client({ connectionString: databaseUrlFor(databaseName) });
-  await db.connect();
+    await db.connect();
   try {
     await db.query("set statement_timeout = 0");
+    await db.query(readFileSync(baselinePath, "utf8"));
+    console.log("applied production rebuild baseline");
     for (const file of migrationFiles) {
       const sql = readFileSync(resolve(migrationsDir, file), "utf8");
       await db.query(sql);

@@ -24,6 +24,7 @@ import { makeMcpConnectorMiddleware } from "./auth/mcp-connector-auth.js";
 import { installDeviceCredentialRoutes, makeDeviceCredentialMiddleware } from "./auth/device-credential-auth.js";
 import { runReadOnlySql as runSupabaseReadOnlySql } from "./supabase/read.js";
 import { createGeminiConsoleRouter } from "./gemini-console-api.js";
+import { getRuntimeEnv } from "./config/env.js";
 
 const app = express();
 app.use(express.json({ limit: "10mb" }));
@@ -2304,25 +2305,44 @@ app.get("/health/dependencies", async (req, res) => {
         to_regclass('public.sessions') is not null as sessions_table,
         to_regclass('public.msg_messages') is not null as messages_table,
         to_regclass('public.operational_notification_jobs') is not null as notification_outbox_table,
+        to_regclass('public.employee_push_registrations') is not null as employee_push_registrations_table,
+        to_regclass('public.event_push_instances') is not null as event_push_instances_table,
         to_regclass('public.msg_message_audit') is not null as message_audit_table,
         to_regprocedure('public.tool_finish_session_exact(text,text,uuid,timestamp with time zone)') is not null as exact_finish_rpc,
         to_regprocedure('public.msg_ensure_ops_manager_user(uuid)') is not null as manager_messaging_rpc,
         to_regprocedure('public.claim_operational_notification_jobs(text,integer,integer)') is not null as worker_claim_rpc,
+        to_regprocedure('public.mz_register_employee_push(uuid,text,text,text,text,text)') is not null as employee_push_register_rpc,
+        to_regprocedure('public.mz_enqueue_employee_event_pushes(timestamp with time zone)') is not null as employee_push_enqueue_rpc,
         (select count(*)::int from public.operational_notification_jobs where status in ('pending','leased')) as notification_backlog,
         (select count(*)::int from public.operational_notification_jobs where status = 'dead') as notification_dead_letters,
-        (select count(*)::int from public.operational_notification_jobs where status = 'leased' and leased_until < now()) as expired_worker_leases
+        (select count(*)::int from public.operational_notification_jobs where status = 'leased' and leased_until < now()) as expired_worker_leases,
+        (select count(*)::int from public.employee_push_registrations where active is true and revoked_at is null) as active_employee_push_registrations,
+        (select count(*)::int from public.event_push_instances where state in ('pending','leased','failed')) as employee_push_backlog,
+        (select count(*)::int from public.event_push_instances where state = 'failed') as employee_push_failures,
+        (select count(*)::int from public.employee_push_registrations where revoked_reason = 'invalid_fcm_token') as invalid_employee_push_tokens
     `);
     const dependencies = rows?.[0] || {};
     const requiredSchemaPresent = [
       "sessions_table",
       "messages_table",
       "notification_outbox_table",
+      "employee_push_registrations_table",
+      "event_push_instances_table",
       "message_audit_table",
       "exact_finish_rpc",
       "manager_messaging_rpc",
       "worker_claim_rpc",
+      "employee_push_register_rpc",
+      "employee_push_enqueue_rpc",
     ].every((key) => dependencies[key] === true);
-    const ok = dependencies.database_reachable === true && requiredSchemaPresent;
+    const notificationRuntime = getRuntimeEnv().notifications;
+    const notificationQueuesHealthy = Number(dependencies.expired_worker_leases || 0) === 0
+      && Number(dependencies.employee_push_failures || 0) === 0;
+    const ok = dependencies.database_reachable === true
+      && requiredSchemaPresent
+      && notificationRuntime.firebase_configured
+      && notificationRuntime.employee_worker_enabled
+      && notificationQueuesHealthy;
     res.status(ok ? 200 : 503).json(buildHealthPayload("dependencies", {
       ok,
       process_alive: true,
@@ -2333,6 +2353,14 @@ app.get("/health/dependencies", async (req, res) => {
         backlog: Number(dependencies.notification_backlog || 0),
         dead_letters: Number(dependencies.notification_dead_letters || 0),
         expired_leases: Number(dependencies.expired_worker_leases || 0),
+      },
+      employee_notifications: {
+        provider_configured: notificationRuntime.firebase_configured,
+        worker_enabled: notificationRuntime.employee_worker_enabled,
+        active_registrations: Number(dependencies.active_employee_push_registrations || 0),
+        backlog: Number(dependencies.employee_push_backlog || 0),
+        failures: Number(dependencies.employee_push_failures || 0),
+        permanently_revoked_tokens: Number(dependencies.invalid_employee_push_tokens || 0),
       },
       schema_fingerprint: buildReleaseManifest({ appVersion: APP_VERSION, releaseId: RELEASE_ID }).schema.fingerprint,
     }));

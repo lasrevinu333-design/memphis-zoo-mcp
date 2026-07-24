@@ -37,6 +37,7 @@ jobs:
       - run: npm run test:operations-leadership-mobile
       - run: npm run test:manager-notifications
       - run: npm run test:custodial-employee-phones
+      - run: npm run test:migration-provenance
       - run: npm run test:messaging
       - run: npm run test:messaging-manager-authority
       - run: npm run test:device-credentials

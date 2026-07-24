@@ -200,8 +200,15 @@ export function createPushRuntime({ db, env }) {
     return value;
   }
 
-  async function send(job, pushDevice, { channelId = "operations" } = {}) {
+  async function send(job, pushDevice, {
+    channelId = "operations",
+    ttlSeconds = 6 * 60 * 60,
+    collapseKey = null,
+  } = {}) {
     const token = await accessToken(PUSH_SCOPE);
+    const boundedTtl = int(ttlSeconds, 6 * 60 * 60, 60, 28 * 24 * 60 * 60);
+    const normalizedCollapseKey = clip(collapseKey, 64) || null;
+    const apnsExpiration = String(Math.floor(Date.now() / 1000) + boundedTtl);
     const response = await fetch(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(account.project_id)}/messages:send`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -212,10 +219,16 @@ export function createPushRuntime({ db, env }) {
           data: stringifyData(job.data_json),
           android: {
             priority: "high",
+            ttl: `${boundedTtl}s`,
+            ...(normalizedCollapseKey ? { collapse_key: normalizedCollapseKey } : {}),
             notification: { channel_id: channelId, sound: "default", default_vibrate_timings: true },
           },
           apns: {
-            headers: { "apns-priority": "10" },
+            headers: {
+              "apns-priority": "10",
+              "apns-expiration": apnsExpiration,
+              ...(normalizedCollapseKey ? { "apns-collapse-id": normalizedCollapseKey } : {}),
+            },
             payload: { aps: { sound: "default", badge: 1 } },
           },
         },

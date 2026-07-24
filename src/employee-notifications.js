@@ -4,7 +4,7 @@ import { makeDeviceCredentialMiddleware } from './auth/device-credential-auth.js
 
 const runtimeByApp = new WeakMap();
 const API_PREFIX = '/employee-notifications-api';
-const SWEEP_MS = 15_000;
+const DEFAULT_SWEEP_MS = 15_000;
 
 function createSupabase(env) {
   const url = String(env.SUPABASE_URL || '').trim();
@@ -28,6 +28,14 @@ function fail(res, error) {
   const status = error?.status || (/not found/i.test(message) ? 404 : /credential|assigned|unauthor/i.test(message) ? 403 : /required|valid/i.test(message) ? 422 : 500);
   res.status(status).json({ ok: false, error: message });
 }
+function assertDb(result, action) {
+  if (result?.error) {
+    const error = new Error(`${action}: ${result.error.message || 'database mutation failed'}`);
+    error.cause = result.error;
+    throw error;
+  }
+  return result;
+}
 
 export function installEmployeeNotificationRoutes(app, {
   env = process.env,
@@ -38,6 +46,10 @@ export function installEmployeeNotificationRoutes(app, {
   const db = supabase || createSupabase(env);
   const requireEmployee = makeDeviceCredentialMiddleware({ supabase: db });
   const workerId = `employee-event-push-${process.pid}-${crypto.randomUUID()}`;
+  const configuredSweepMs = Number(env.EMPLOYEE_NOTIFICATION_SWEEP_MS);
+  const sweepMs = Number.isFinite(configuredSweepMs)
+    ? Math.max(0, Math.min(Math.trunc(configuredSweepMs), 300_000))
+    : DEFAULT_SWEEP_MS;
   let inFlight = false;
 
   app.use(API_PREFIX, (req, res, next) => {
@@ -137,17 +149,21 @@ export function installEmployeeNotificationRoutes(app, {
       }
       for (const job of jobs) {
         let succeeded = false;
+        let terminal = false;
         let errorMessage = null;
         let providerMessageId = null;
+        let instance = null;
+        let registration = null;
         try {
           const instanceResult = await db.from('event_push_instances').select('*,events_app_events(event_name,display_location)')
             .eq('instance_id', job.source_id).single();
           if (instanceResult.error) throw instanceResult.error;
-          const instance = instanceResult.data;
+          instance = instanceResult.data;
           const registrationResult = await db.from('employee_push_registrations').select('*')
             .eq('credential_id', instance.credential_id).eq('assignment_epoch', instance.assignment_epoch)
             .eq('active', true).is('revoked_at', null).single();
           if (registrationResult.error) throw registrationResult.error;
+          registration = registrationResult.data;
           const event = instance.events_app_events || {};
           providerMessageId = await pushRuntime.send({
             title: instance.notification_kind === 'day_before' ? 'Event tomorrow' : 'Assigned event reminder',
@@ -159,21 +175,44 @@ export function installEmployeeNotificationRoutes(app, {
               notification_kind: instance.notification_kind,
               route: `events.html?event_id=${instance.event_id}`,
             },
-          }, registrationResult.data, { channelId: 'employee-events' });
+          }, registration, {
+            channelId: 'employee-events',
+            ttlSeconds: instance.notification_kind === 'day_before' ? 36 * 60 * 60 : 6 * 60 * 60,
+            collapseKey: instance.notification_key,
+          });
           succeeded = true;
-          await db.from('event_push_instances').update({
+          assertDb(await db.from('event_push_instances').update({
             state: 'sent', sent_at: new Date().toISOString(), provider_message_id: providerMessageId, last_error: null, updated_at: new Date().toISOString(),
-          }).eq('instance_id', instance.instance_id);
-          await db.from('employee_push_registrations').update({
+          }).eq('instance_id', instance.instance_id), 'record employee notification delivery');
+          assertDb(await db.from('employee_push_registrations').update({
             last_successful_delivery_at: new Date().toISOString(), last_error: null, updated_at: new Date().toISOString(),
-          }).eq('registration_id', registrationResult.data.registration_id);
+          }).eq('registration_id', registration.registration_id), 'record employee push registration success');
         } catch (error) {
           errorMessage = clip(error?.message || 'FCM provider request failed.', 2000);
-          await db.from('event_push_instances').update({ state: 'failed', last_error: errorMessage, updated_at: new Date().toISOString() }).eq('instance_id', job.source_id);
+          const providerAccepted = Boolean(providerMessageId);
+          terminal = error?.permanent === true || providerAccepted;
+          if (error?.permanent === true && registration?.registration_id) {
+            assertDb(await db.from('employee_push_registrations').update({
+              active: false,
+              revoked_at: new Date().toISOString(),
+              revoked_reason: 'invalid_fcm_token',
+              last_error: errorMessage,
+              updated_at: new Date().toISOString(),
+            }).eq('registration_id', registration.registration_id), 'revoke invalid employee push token');
+          }
+          assertDb(await db.from('event_push_instances').update({
+            state: providerAccepted ? 'sent' : terminal ? 'cancelled' : 'failed',
+            ...(providerAccepted ? {
+              sent_at: new Date().toISOString(),
+              provider_message_id: providerMessageId,
+            } : terminal ? { cancelled_at: new Date().toISOString() } : {}),
+            last_error: errorMessage,
+            updated_at: new Date().toISOString(),
+          }).eq('instance_id', job.source_id), 'record employee notification failure');
         }
-        const finished = await db.rpc('finish_operational_notification_job', {
+        const finished = await db.rpc('finish_operational_notification_job_v2', {
           p_job_id: job.job_id, p_lease_token: job.lease_token, p_succeeded: succeeded,
-          p_error: errorMessage, p_retry_seconds: 120,
+          p_error: errorMessage, p_retry_seconds: 120, p_terminal: terminal,
         });
         if (finished.error) throw finished.error;
       }
@@ -181,9 +220,11 @@ export function installEmployeeNotificationRoutes(app, {
     } finally { inFlight = false; }
   }
 
-  const timer = setInterval(() => { void sweep().catch((error) => console.error('employee event push sweep failed:', error)); }, SWEEP_MS);
-  timer.unref?.();
-  const runtime = { sweep, configured: Boolean(db && pushRuntime?.configured) };
+  if (sweepMs > 0) {
+    const timer = setInterval(() => { void sweep().catch((error) => console.error('employee event push sweep failed:', error)); }, sweepMs);
+    timer.unref?.();
+  }
+  const runtime = { sweep, configured: Boolean(db && pushRuntime?.configured && sweepMs > 0), sweepMs };
   runtimeByApp.set(app, runtime);
   return runtime;
 }

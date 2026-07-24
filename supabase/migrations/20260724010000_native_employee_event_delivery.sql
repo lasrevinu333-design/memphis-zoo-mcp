@@ -3,18 +3,38 @@ begin;
 alter table public.devices
   add column if not exists assignment_epoch bigint not null default 1;
 
-alter table public.devices
-  add constraint devices_assignment_epoch_positive
-  check (assignment_epoch > 0) not valid;
+do $constraints$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.devices'::regclass
+      and conname = 'devices_assignment_epoch_positive'
+  ) then
+    alter table public.devices
+      add constraint devices_assignment_epoch_positive
+      check (assignment_epoch > 0) not valid;
+  end if;
+end
+$constraints$;
 alter table public.devices validate constraint devices_assignment_epoch_positive;
 
 alter table public.events_app_events
   add column if not exists audience_scope text not null default 'assigned_location',
   add column if not exists audience_employee_ids uuid[] not null default '{}'::uuid[];
 
-alter table public.events_app_events
-  add constraint events_app_events_audience_scope_check
-  check (audience_scope in ('assigned_location','specific_employees','all_working_employees')) not valid;
+do $constraints$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.events_app_events'::regclass
+      and conname = 'events_app_events_audience_scope_check'
+  ) then
+    alter table public.events_app_events
+      add constraint events_app_events_audience_scope_check
+      check (audience_scope in ('assigned_location','specific_employees','all_working_employees')) not valid;
+  end if;
+end
+$constraints$;
 alter table public.events_app_events validate constraint events_app_events_audience_scope_check;
 
 create table if not exists public.employee_push_registrations (

@@ -14,7 +14,7 @@ const liveMyScheduleRebalancePath = path.resolve("sql/2026-06-30_my_schedule_liv
 const exceptionLunchGuardMigrationPath = path.resolve("sql/2026-06-10_scheduler_exception_lunch_guards.sql");
 const responseOnlyStaleLunchRepairPath = path.resolve("sql/2026-06-10_repair_response_only_stale_lunch_rows.sql");
 const restoreOpenOwnerRowsPath = path.resolve("sql/2026-06-10_restore_scheduler_open_owner_rows.sql");
-const productionBaselinePath = path.resolve("supabase/migrations/00000000000000_production_baseline.sql");
+const productionBaselinePath = path.resolve("supabase/baseline/production_baseline.sql");
 
 function extractFunction(name) {
   const startToken = `function ${name}(`;

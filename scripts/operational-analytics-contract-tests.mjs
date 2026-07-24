@@ -5,9 +5,10 @@ import { normalizeInspectionPayload, stableFingerprint } from "../src/operationa
 
 const root = new URL("../", import.meta.url);
 const read = (path) => readFileSync(new URL(path, root), "utf8");
-const migration = read("supabase/migrations/20260722233500_operational_retention_and_analytics.sql");
-const historyGuard = read("supabase/migrations/20260722233600_event_retention_history_guard.sql");
-const securityHardening = read("supabase/migrations/20260723111020_v17_trigger_privilege_hardening.sql");
+const migration = read("supabase/migrations/20260723004728_operational_retention_and_analytics.sql");
+const historyGuard = read("supabase/migrations/20260723004749_event_retention_history_guard.sql");
+const securityHardening = read("supabase/migrations/20260723111542_v17_trigger_privilege_hardening.sql");
+const lifecycleIntegrity = read("supabase/migrations/20260724145808_lifecycle_integrity_repairs.sql");
 const api = read("src/operational-analytics-api.js");
 const bootstrap = read("src/mcp-schema-bootstrap.js");
 
@@ -24,6 +25,21 @@ assert.match(migration, /v_cleaning_performance_comparison/i, "employee/location
 assert.match(migration, /v_maintenance_ticket_trends/i, "ticket recurrence view is required");
 assert.doesNotMatch(migration, /delete from public\.sessions/i, "routine retention must never delete cleaning sessions");
 assert.doesNotMatch(migration, /delete from public\.maintenance_tickets/i, "routine retention must never delete ticket history");
+assert.match(
+  lifecycleIntegrity,
+  /new\.purge_after := new\.deleted_at \+ interval '336 hours'/i,
+  "Messenger retention must be enforced as exactly 336 elapsed hours",
+);
+assert.match(
+  lifecycleIntegrity,
+  /before insert or update of is_deleted, deleted_at, purge_after[\s\S]*on public\.msg_messages/i,
+  "message writes must pass through the elapsed-retention trigger",
+);
+assert.match(
+  lifecycleIntegrity,
+  /before insert or update of is_active, deleted_at, purge_after[\s\S]*on public\.msg_threads/i,
+  "thread writes must pass through the elapsed-retention trigger",
+);
 
 assert.match(
   securityHardening,

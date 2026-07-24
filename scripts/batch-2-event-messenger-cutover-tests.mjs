@@ -5,8 +5,8 @@ const root = new URL('../', import.meta.url);
 const read = (path) => readFileSync(new URL(path, root), 'utf8');
 const eventsApi = read('src/events-api.js');
 const messagingApi = read('src/messaging-api.js');
-const migration = read('supabase/migrations/20260724020000_event_messenger_cutover_deletion_semantics.sql');
-const advisorIndex = read('supabase/migrations/20260724023000_msg_thread_deletion_operations_user_index.sql');
+const migration = read('supabase/migrations/20260724015534_event_messenger_cutover_deletion_semantics.sql');
+const advisorIndex = read('supabase/migrations/20260724020041_msg_thread_deletion_operations_user_index.sql');
 
 assert.match(eventsApi, /mz_enqueue_employee_event_pushes/);
 assert.match(eventsApi, /native_employee_push_only/);

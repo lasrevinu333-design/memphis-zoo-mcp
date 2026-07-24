@@ -130,6 +130,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       ...rows[0],
       requested_device_id: normalizedDeviceId,
       canonical_device_id: canonicalDeviceId,
+      assignment_epoch: Number(device?.assignment_epoch || 0) || null,
       matched_by: device?.matched_by || "messenger_assignment",
     };
   }
