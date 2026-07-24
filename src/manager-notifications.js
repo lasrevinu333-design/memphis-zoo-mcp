@@ -6,6 +6,7 @@ const DEFAULT_TIME_ZONE = "America/Chicago";
 const DEFAULT_SWEEP_MS = 15_000;
 const PUSH_SCOPE = "https://www.googleapis.com/auth/firebase.messaging";
 const FIREBASE_READ_SCOPE = "https://www.googleapis.com/auth/firebase.readonly";
+const FIREBASE_PROVISION_SCOPE = "https://www.googleapis.com/auth/cloud-platform";
 const TOKEN_AUDIENCE = "https://oauth2.googleapis.com/token";
 const FIREBASE_MANAGEMENT_BASE = "https://firebase.googleapis.com/v1beta1";
 const DEFAULT_ANDROID_PACKAGE = "org.memphiszoo.ops";
