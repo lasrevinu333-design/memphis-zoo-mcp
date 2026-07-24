@@ -290,49 +290,12 @@ await withServer(threadMetadataApp, async (baseUrl) => {
 });
 assert.ok(threadMetadataReadCalls.some((sql) => /last_message_metadata_json/i.test(sql)), 'Thread metadata fallback should be covered by thread SQL');
 
-const reminderReadCalls = [];
-const reminderApp = express();
-reminderApp.use(express.json());
-reminderApp.use('/messaging-api', createTestMessagingRouter({
+const retiredEventReminderReadCalls = [];
+const retiredEventReminderApp = express();
+retiredEventReminderApp.use(express.json());
+retiredEventReminderApp.use('/messaging-api', createTestMessagingRouter({
   runReadOnlySql: async (sql) => {
-    const query = String(sql || '');
-    reminderReadCalls.push(query);
-    if (/msg_get_user_by_device/i.test(query)) {
-      return [{
-        msg_user_id: '00000000-0000-0000-0000-000000000088',
-        display_name: 'Event Owner',
-        role: 'employee',
-        canonical_device_id: 'device-123',
-      }];
-    }
-    if (/notification_state/i.test(query)) {
-      return [{
-        requested_device_id: 'device-123',
-        device_id: 'device-123',
-        msg_user_id: '00000000-0000-0000-0000-000000000088',
-        display_name: 'Event Owner',
-        role: 'employee',
-        employee_id: '30000000-0000-0000-0000-000000000088',
-        is_employee_device: true,
-        notifications_silent: false,
-        silent_reason: 'on_shift',
-      }];
-    }
-    if (/from public\.msg_device_assignments/i.test(query) && /metadata_json->>'source'/i.test(query)) {
-      return [{
-        message_id: '00000000-0000-0000-0000-000000000099',
-        thread_id: THREAD_ID,
-        msg_user_id: '00000000-0000-0000-0000-000000000088',
-        display_name: 'Event Owner',
-        body: 'Two-day event reminder: Donor Dinner is scheduled in Event Center.',
-        message_type: 'bot_response',
-        metadata_json: { source: 'events_app', notification_kind: 'event_reminder', notification_key: 'event:test:owner' },
-        sent_at: '2026-06-04T13:15:00Z',
-        created_at: '2026-06-04T13:15:00Z',
-        delivered_at: null,
-        read_at: null,
-      }];
-    }
+    retiredEventReminderReadCalls.push(String(sql || ''));
     return [];
   },
   runRpc: async () => null,
@@ -342,266 +305,17 @@ reminderApp.use('/messaging-api', createTestMessagingRouter({
   contractVersion: 'messaging.v1',
 }));
 
-await withServer(reminderApp, async (baseUrl) => {
+await withServer(retiredEventReminderApp, async (baseUrl) => {
   const response = await fetch(`${baseUrl}/messaging-api/device-event-reminders?device_id=device-123&limit=2`);
   assert.equal(response.status, 200);
   const payload = await response.json();
   assert.equal(payload.ok, true);
-  assert.equal(payload.data.length, 1);
-  assert.equal(payload.data[0].metadata_json.notification_kind, 'event_reminder');
+  assert.deepEqual(payload.data, []);
+  assert.equal(payload.meta.retired, true);
+  assert.equal(payload.meta.delivery, 'native_employee_push_only');
+  assert.equal(payload.meta.messenger_coupling, false);
 });
-const reminderSql = reminderReadCalls.find((sql) => /metadata_json->>'source'/i.test(sql));
-assert.ok(reminderSql, 'device event reminder route should query reminders by mapped device after notification-state check');
-assert.match(reminderSql, /msg_device_assignments/, 'device reminder route should resolve the active device assignment');
-assert.match(reminderSql, /metadata_json->>'source'.*= 'events_app'/s, 'device reminder route should only return event-app messages');
-assert.match(reminderSql, /metadata_json->>'notification_kind'.*= 'event_reminder'/s, 'device reminder route should return only the canonical one-per-event reminder kind');
-assert.doesNotMatch(reminderSql, /three_days_out|two_days_out|day_of_event|day_before|morning_of/, 'legacy cadence reminders must not be replayed by employee devices');
-assert.match(reminderSql, /coalesce\(r\.acknowledged_at, r\.read_at\) is null/, 'device reminder route should only return unacknowledged reminders');
-
-const notificationGuardReadCalls = [];
-let notificationGuardQueriedMessages = false;
-const notificationGuardApp = express();
-notificationGuardApp.use(express.json());
-notificationGuardApp.use('/messaging-api', createTestMessagingRouter({
-  runReadOnlySql: async (sql) => {
-    const query = String(sql || '');
-    notificationGuardReadCalls.push(query);
-    if (/msg_get_user_by_device/i.test(query)) {
-      return [{
-        msg_user_id: '00000000-0000-0000-0000-000000000077',
-        display_name: 'Off Shift Employee',
-        role: 'employee',
-        canonical_device_id: 'KIOSK_99',
-      }];
-    }
-    if (/notification_state/i.test(query)) {
-      return [{
-        requested_device_id: 'KIOSK_99',
-        device_id: 'KIOSK_99',
-        device_name: 'Off Shift Employee',
-        msg_user_id: '00000000-0000-0000-0000-000000000077',
-        display_name: 'Off Shift Employee',
-        role: 'employee',
-        employee_id: '30000000-0000-0000-0000-000000000099',
-        employee_name: 'Off Shift Employee',
-        service_date: SERVICE_DATE,
-        local_now: `${SERVICE_DATE}T07:30:00`,
-        shift_start: '08:30:00',
-        shift_end: '17:30:00',
-        shift_start_local: `${SERVICE_DATE}T08:30:00`,
-        shift_end_local: `${SERVICE_DATE}T17:30:00`,
-        is_employee_device: true,
-        override_enabled: false,
-        notifications_silent: true,
-        silent_reason: 'scheduled_shift_not_started',
-      }];
-    }
-    if (/metadata_json->>'source'/i.test(query) || /v_location_dashboard_status/i.test(query)) {
-      notificationGuardQueriedMessages = true;
-    }
-    return [];
-  },
-  runRpc: async () => null,
-  buildHealthPayload: (area, extra) => ({ ok: true, area, ...extra }),
-  appVersion: 'test',
-  releaseId: 'test',
-  contractVersion: 'messaging.v1',
-}));
-
-await withServer(notificationGuardApp, async (baseUrl) => {
-  const response = await fetch(`${baseUrl}/messaging-api/device-event-reminders?device_id=KIOSK_99&limit=2`);
-  assert.equal(response.status, 200);
-  const payload = await response.json();
-  assert.equal(payload.ok, true);
-  assert.deepEqual(payload.data, [], 'Off-shift employee devices should receive no event reminder payloads');
-  assert.equal(payload.meta.notification_state.notifications_silent, true);
-  assert.equal(payload.meta.notification_state.silent_reason, 'scheduled_shift_not_started');
-  assert.equal(Object.prototype.hasOwnProperty.call(payload.meta.notification_state, 'employee_name'), false, 'Public reminder metadata must not expose employee identity');
-  assert.equal(Object.prototype.hasOwnProperty.call(payload.meta.notification_state, 'shift_start'), false, 'Public reminder metadata must not expose shift times');
-
-  const publicStateResponse = await fetch(`${baseUrl}/messaging-api/device-notification-state?device_id=KIOSK_99&local_now=${encodeURIComponent(`${SERVICE_DATE}T07:30:00`)}`);
-  assert.equal(publicStateResponse.status, 404, 'Raw device notification state must not be exposed as a public unauthenticated route');
-});
-assert.equal(notificationGuardQueriedMessages, true, 'Off-shift notification guard may query only presentation-demo reminders so staged tests still play after hours');
-const offShiftReminderSql = notificationGuardReadCalls.find((sql) => /metadata_json->>'source'/i.test(sql));
-assert.ok(offShiftReminderSql, 'Off-shift devices should still check for explicitly targeted presentation demo payloads');
-assert.match(offShiftReminderSql, /metadata_json->>'presentation_demo'/, 'Off-shift reminder query must be constrained to presentation demo payloads');
-assert.match(offShiftReminderSql, /metadata_json->>'target_device_id'/, 'Presentation demo bypass must stay scoped to the target device');
-const notificationStateSql = notificationGuardReadCalls.find((sql) => /notification_state/i.test(sql));
-assert.ok(notificationStateSql, 'Notification guard should query device notification state');
-assert.match(notificationStateSql, /p\.local_now < \(p\.service_date \+ r\.shift_start\)/, 'Notification guard should silence employee devices before shift start');
-assert.match(notificationStateSql, /p\.local_now >= \(p\.service_date \+ r\.shift_end\)/, 'Notification guard should silence employee devices after shift end');
-assert.match(notificationStateSql, /when r\.id is null then true/, 'Notification guard should silence employee devices with no active roster shift');
-assert.match(notificationStateSql, /when r\.shift_start is null or r\.shift_end is null then true/, 'Notification guard should silence employee devices with invalid roster shift windows');
-assert.match(notificationStateSql, /invalid_roster_shift_window/, 'Notification guard should report invalid roster shift windows');
-assert.match(notificationStateSql, /when i\.employee_id is null then true/, 'Notification guard should fail closed for employee devices with no employee mapping');
-assert.match(notificationStateSql, /not in \('manager', 'bot', 'ops', 'ops_manager', 'operations_manager'\)/, 'Notification guard should not silence manager/bot/ops devices by shift state');
-assert.match(notificationStateSql, /scheduled_shift_not_started/, 'Notification guard should report before-shift silence reason');
-
-const managerDeviceReminderReadCalls = [];
-let managerDeviceReminderQueriedMessages = false;
-const managerDeviceReminderApp = express();
-managerDeviceReminderApp.use(express.json());
-managerDeviceReminderApp.use('/messaging-api', createTestMessagingRouter({
-  runReadOnlySql: async (sql) => {
-    const query = String(sql || '');
-    managerDeviceReminderReadCalls.push(query);
-    if (/notification_state/i.test(query)) {
-      return [{
-        requested_device_id: 'KIOSK_01',
-        device_id: 'KIOSK_01',
-        device_name: 'Ops Manager phone',
-        msg_user_id: '00000000-0000-0000-0000-000000000001',
-        display_name: 'Ops Manager',
-        role: 'manager',
-        employee_id: null,
-        is_employee_device: false,
-        notifications_silent: false,
-        silent_reason: 'not_employee_device',
-      }];
-    }
-    if (/metadata_json->>'source'/i.test(query)) {
-      managerDeviceReminderQueriedMessages = true;
-      return [{
-        message_id: '00000000-0000-0000-0000-000000000099',
-        thread_id: THREAD_ID,
-        msg_user_id: '00000000-0000-0000-0000-000000000001',
-        display_name: 'Ops Manager',
-        body: 'Demo event reminder should not ring the manager overview phone.',
-        message_type: 'bot_response',
-        metadata_json: { source: 'events_app', notification_kind: 'morning_of', presentation_demo: true },
-        sent_at: '2026-06-11T03:55:00Z',
-        created_at: '2026-06-11T03:55:00Z',
-        delivered_at: null,
-        read_at: null,
-      }];
-    }
-    return [];
-  },
-  runRpc: async () => null,
-  buildHealthPayload: (area, extra) => ({ ok: true, area, ...extra }),
-  appVersion: 'test',
-  releaseId: 'test',
-  contractVersion: 'messaging.v1',
-}));
-
-await withServer(managerDeviceReminderApp, async (baseUrl) => {
-  const response = await fetch(`${baseUrl}/messaging-api/device-event-reminders?device_id=KIOSK_01&limit=5`);
-  assert.equal(response.status, 200);
-  const payload = await response.json();
-  assert.equal(payload.ok, true);
-  assert.deepEqual(payload.data, [], 'Manager/ops overview devices should never receive phone event-reminder payloads');
-  assert.equal(payload.meta.notification_state.silent_reason, 'not_employee_device');
-});
-assert.equal(managerDeviceReminderQueriedMessages, false, 'Manager/ops overview reminder guard must stop before querying reminder payloads');
-assert.ok(managerDeviceReminderReadCalls.find((sql) => /notification_state/i.test(sql)), 'Manager/ops reminder guard should query notification state');
-
-const presentationDemoOffShiftReadCalls = [];
-const presentationDemoOffShiftApp = express();
-presentationDemoOffShiftApp.use(express.json());
-presentationDemoOffShiftApp.use('/messaging-api', createTestMessagingRouter({
-  runReadOnlySql: async (sql) => {
-    const query = String(sql || '');
-    presentationDemoOffShiftReadCalls.push(query);
-    if (/notification_state/i.test(query)) {
-      return [{
-        requested_device_id: 'KIOSK_03',
-        device_id: 'KIOSK_03',
-        device_name: 'Leadership demo phone',
-        msg_user_id: '00000000-0000-0000-0000-000000000033',
-        display_name: 'Jennifer Sheffield',
-        role: 'admin',
-        employee_id: '30000000-0000-0000-0000-000000000033',
-        employee_name: 'Jennifer Sheffield',
-        is_employee_device: true,
-        notifications_silent: true,
-        silent_reason: 'no_active_roster_shift',
-      }];
-    }
-    if (/metadata_json->>'source'/i.test(query)) {
-      assert.match(query, /metadata_json->>'presentation_demo'/, 'Silent demo query must only fetch presentation demos');
-      return [{
-        message_id: '00000000-0000-0000-0000-000000000033',
-        thread_id: THREAD_ID,
-        msg_user_id: '00000000-0000-0000-0000-000000000033',
-        display_name: 'Jennifer Sheffield',
-        body: "Jennifer, demo assigned location alert: East Admin Women's Restroom is overdue on your route.",
-        message_type: 'bot_response',
-        metadata_json: {
-          source: 'events_app',
-          notification_kind: 'morning_of',
-          presentation_demo: true,
-          demo_alert_kind: 'location_status',
-          target_device_id: 'KIOSK_03',
-          location_name: "East Admin Women's Restroom",
-          status_code: 'overdue'
-        },
-        sent_at: '2026-06-11T03:37:45Z',
-        created_at: '2026-06-11T03:37:45Z',
-        delivered_at: null,
-        read_at: null,
-      }];
-    }
-    return [];
-  },
-  runRpc: async () => null,
-  buildHealthPayload: (area, extra) => ({ ok: true, area, ...extra }),
-  appVersion: 'test',
-  releaseId: 'test',
-  contractVersion: 'messaging.v1',
-}));
-
-await withServer(presentationDemoOffShiftApp, async (baseUrl) => {
-  const response = await fetch(`${baseUrl}/messaging-api/device-event-reminders?device_id=KIOSK_03&limit=2`);
-  assert.equal(response.status, 200);
-  const payload = await response.json();
-  assert.equal(payload.ok, true);
-  assert.equal(payload.meta.notification_state.notifications_silent, true);
-  assert.equal(payload.meta.notification_state.silent_reason, 'no_active_roster_shift');
-  assert.equal(payload.data.length, 1, 'Explicit presentation demo reminders must still be returned after hours/no roster so demo phones play the real alert body');
-  assert.equal(payload.data[0].metadata_json.presentation_demo, true);
-  assert.equal(payload.data[0].metadata_json.demo_alert_kind, 'location_status');
-});
-assert.ok(presentationDemoOffShiftReadCalls.some((sql) => /metadata_json->>'presentation_demo'/i.test(sql)), 'Presentation demo bypass should be covered by SQL guard');
-
-const missingEmployeeMappingReadCalls = [];
-let missingEmployeeMappingQueriedMessages = false;
-const missingEmployeeMappingApp = express();
-missingEmployeeMappingApp.use(express.json());
-missingEmployeeMappingApp.use('/messaging-api', createTestMessagingRouter({
-  runReadOnlySql: async (sql) => {
-    const query = String(sql || '');
-    missingEmployeeMappingReadCalls.push(query);
-    if (/notification_state/i.test(query)) {
-      return [{
-        requested_device_id: 'KIOSK_UNMAPPED',
-        device_id: 'KIOSK_UNMAPPED',
-        role: 'employee',
-        employee_id: null,
-        is_employee_device: true,
-        notifications_silent: true,
-        silent_reason: 'no_employee_mapping',
-      }];
-    }
-    if (/metadata_json->>'source'/i.test(query)) missingEmployeeMappingQueriedMessages = true;
-    return [];
-  },
-  runRpc: async () => null,
-  buildHealthPayload: (area, extra) => ({ ok: true, area, ...extra }),
-  appVersion: 'test',
-  releaseId: 'test',
-  contractVersion: 'messaging.v1',
-}));
-
-await withServer(missingEmployeeMappingApp, async (baseUrl) => {
-  const response = await fetch(`${baseUrl}/messaging-api/device-event-reminders?device_id=KIOSK_UNMAPPED&limit=2`);
-  assert.equal(response.status, 200);
-  const payload = await response.json();
-  assert.deepEqual(payload.data, [], 'Employee devices with no employee mapping should fail closed');
-  assert.equal(payload.meta.notification_state.notifications_silent, true);
-  assert.equal(payload.meta.notification_state.silent_reason, 'no_employee_mapping');
-});
-assert.equal(missingEmployeeMappingQueriedMessages, false, 'Unmapped employee devices must not query reminder payloads');
+assert.equal(retiredEventReminderReadCalls.length, 0, 'Retired browser event reminders must not query Messenger or event payloads');
 
 const locationStatusReadCalls = [];
 const locationStatusApp = express();
@@ -1092,10 +806,12 @@ deleteThreadApp.use('/messaging-api', createTestMessagingRouter({
       return {
         ok: true,
         deleted: true,
+        deletion_scope: 'user',
         thread_id: DIRECT_THREAD_ID,
         operation_id: '00000000-0000-4000-8000-000000000099',
         deleted_at: '2026-07-18T18:00:00.000Z',
-        purge_after: '2026-08-01T18:00:00.000Z',
+        deleted_through: '2026-07-18T18:00:00.000Z',
+        memphis_generation_ended: false,
       };
     }
     return null;
@@ -1119,8 +835,10 @@ await withServer(deleteThreadApp, async (baseUrl) => {
   const payload = await response.json();
   assert.equal(payload.ok, true);
   assert.equal(payload.data.deleted, true);
-  assert.equal(payload.meta.retention_days, 14);
-  assert.equal(payload.meta.deletion, 'all_participants');
+  assert.equal(payload.data.deletion_scope, 'user');
+  assert.equal(payload.meta.deletion, 'current_user_only');
+  assert.equal(payload.meta.authoritative, true);
+  assert.equal(payload.meta.old_history_restores, false);
 });
 
 assert.deepEqual(deleteThreadRpcCall, {
@@ -1130,7 +848,7 @@ assert.deepEqual(deleteThreadRpcCall, {
     p_request_user_id: EMPLOYEE_USER_ID,
     p_operation_id: '00000000-0000-4000-8000-000000000099',
   },
-}, 'Conversation deletion must be authoritative for all participants and use a stable operation id');
+}, 'Conversation removal must be user-scoped, authoritative, and use a stable operation id');
 
 const adminAuditReadCalls = [];
 const adminAuditRpcCalls = [];
