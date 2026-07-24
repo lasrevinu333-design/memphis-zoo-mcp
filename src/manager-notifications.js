@@ -6,7 +6,6 @@ const DEFAULT_TIME_ZONE = "America/Chicago";
 const DEFAULT_SWEEP_MS = 15_000;
 const PUSH_SCOPE = "https://www.googleapis.com/auth/firebase.messaging";
 const FIREBASE_READ_SCOPE = "https://www.googleapis.com/auth/firebase.readonly";
-const FIREBASE_PROVISION_SCOPE = "https://www.googleapis.com/auth/cloud-platform";
 const TOKEN_AUDIENCE = "https://oauth2.googleapis.com/token";
 const FIREBASE_MANAGEMENT_BASE = "https://firebase.googleapis.com/v1beta1";
 const DEFAULT_ANDROID_PACKAGE = "org.memphiszoo.ops";
@@ -152,50 +151,19 @@ export function createPushRuntime({ db, env }) {
     return value.token;
   }
 
-  async function firebaseManagementRequest(pathname, { method = "GET", scope = FIREBASE_READ_SCOPE, body = null } = {}) {
-    const token = await accessToken(scope);
+  async function firebaseManagementRequest(pathname) {
+    const token = await accessToken(FIREBASE_READ_SCOPE);
     const target = `${FIREBASE_MANAGEMENT_BASE}${pathname.startsWith("/") ? pathname : "/" + pathname}`;
-    const headers = { Authorization: `Bearer ${token}`, Accept: "application/json" };
-    if (body !== null) headers["Content-Type"] = "application/json";
     const response = await fetch(target, {
-      method,
-      headers,
-      ...(body !== null ? { body: JSON.stringify(body) } : {}),
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
     });
     const payload = await response.json().catch(() => null);
     if (!response.ok) {
       const error = new Error(payload?.error?.message || `Firebase Management API returned HTTP ${response.status}.`);
-      error.status = response.status;
+      error.status = response.status === 404 ? 404 : 502;
       throw error;
     }
     return payload || {};
-  }
-
-  async function waitForFirebaseOperation(operation) {
-    if (!operation?.name) throw Object.assign(new Error("Firebase did not return a provisioning operation."), { status: 502 });
-    for (let attempt = 0; attempt < 20; attempt += 1) {
-      const state = await firebaseManagementRequest(`/${operation.name}`, { scope: FIREBASE_PROVISION_SCOPE });
-      if (state?.error?.message) throw Object.assign(new Error(state.error.message), { status: 502 });
-      if (state?.done === true) return state;
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-    }
-    throw Object.assign(new Error("Firebase Android app provisioning timed out."), { status: 504 });
-  }
-
-  async function provisionCustodialAndroidApp(packageName) {
-    try {
-      const operation = await firebaseManagementRequest(
-        `/projects/${encodeURIComponent(account.project_id)}/androidApps`,
-        {
-          method: "POST",
-          scope: FIREBASE_PROVISION_SCOPE,
-          body: { packageName, displayName: "Memphis Zoo Custodial" },
-        },
-      );
-      await waitForFirebaseOperation(operation);
-    } catch (error) {
-      if (error?.status !== 409) throw error;
-    }
   }
 
   async function getClientConfig(platform, appIdentifier = null) {
@@ -212,15 +180,9 @@ export function createPushRuntime({ db, env }) {
     const collection = android ? 'androidApps' : 'iosApps';
     const matchField = android ? 'packageName' : 'bundleId';
     const expected = requested || envText(env, android ? 'FIREBASE_ANDROID_PACKAGE' : 'FIREBASE_IOS_BUNDLE') || (android ? DEFAULT_ANDROID_PACKAGE : DEFAULT_IOS_BUNDLE);
-    let list = await firebaseManagementRequest(`/projects/${encodeURIComponent(account.project_id)}/${collection}?pageSize=100`);
-    let apps = Array.isArray(list.apps) ? list.apps : [];
-    let firebaseApp = apps.find((item) => item?.state !== 'DELETED' && String(item?.[matchField] || '').trim() === expected);
-    if (!firebaseApp && android && expected === 'org.memphiszoo.custodial') {
-      await provisionCustodialAndroidApp(expected);
-      list = await firebaseManagementRequest(`/projects/${encodeURIComponent(account.project_id)}/${collection}?pageSize=100`);
-      apps = Array.isArray(list.apps) ? list.apps : [];
-      firebaseApp = apps.find((item) => item?.state !== 'DELETED' && String(item?.[matchField] || '').trim() === expected);
-    }
+    const list = await firebaseManagementRequest(`/projects/${encodeURIComponent(account.project_id)}/${collection}?pageSize=100`);
+    const apps = Array.isArray(list.apps) ? list.apps : [];
+    const firebaseApp = apps.find((item) => item?.state !== 'DELETED' && String(item?.[matchField] || '').trim() === expected);
     if (!firebaseApp?.name || !firebaseApp?.appId) throw Object.assign(new Error(`No Firebase ${normalized} app is registered for ${expected}.`), { status: 404 });
     const artifact = await firebaseManagementRequest(`/${firebaseApp.name}/config`);
     const contentsBase64 = String(artifact?.configFileContents || '').trim();
