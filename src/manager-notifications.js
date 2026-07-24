@@ -179,7 +179,7 @@ export function createPushRuntime({ db, env }) {
     if (cached?.expiresAt > Date.now()) return cached.value;
     const collection = android ? 'androidApps' : 'iosApps';
     const matchField = android ? 'packageName' : 'bundleId';
-    const expected = envText(env, android ? 'FIREBASE_ANDROID_PACKAGE' : 'FIREBASE_IOS_BUNDLE') || (android ? DEFAULT_ANDROID_PACKAGE : DEFAULT_IOS_BUNDLE);
+    const expected = requested || envText(env, android ? 'FIREBASE_ANDROID_PACKAGE' : 'FIREBASE_IOS_BUNDLE') || (android ? DEFAULT_ANDROID_PACKAGE : DEFAULT_IOS_BUNDLE);
     const list = await firebaseManagementRequest(`/projects/${encodeURIComponent(account.project_id)}/${collection}?pageSize=100`);
     const apps = Array.isArray(list.apps) ? list.apps : [];
     const firebaseApp = apps.find((item) => item?.state !== 'DELETED' && String(item?.[matchField] || '').trim() === expected);
