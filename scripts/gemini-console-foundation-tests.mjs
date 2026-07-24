@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { buildGeminiSystemInstruction, isExplicitRepairAuthorization, validateGeminiAttachment } from "../src/gemini-console-api.js";
 
 const read=(path)=>readFileSync(new URL(`../${path}`,import.meta.url),"utf8");
-const migration=read("supabase/migrations/20260718075000_gemini_console_professional_foundation.sql");
+const migration=read("supabase/migrations/20260718081916_gemini_console_professional_foundation.sql");
 const router=read("src/gemini-console-api.js");
 const index=read("src/index.js");
 const messaging=read("src/messaging-api.js");

@@ -3,36 +3,46 @@
 import { createHash } from "node:crypto";
 import {
   chmodSync,
-  createWriteStream,
+  copyFileSync,
   mkdirSync,
   readdirSync,
   readFileSync,
   statSync,
   writeFileSync,
 } from "node:fs";
-import { basename, dirname, join, relative, resolve } from "node:path";
-import { finished } from "node:stream/promises";
+import { execFile } from "node:child_process";
+import { join, relative, resolve } from "node:path";
+import { promisify } from "node:util";
 
+const execFileAsync = promisify(execFile);
 const projectRef = String(process.env.SUPABASE_PROJECT_REF || "").trim();
 const secret = String(process.env.SUPABASE_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+const databaseUrl = String(process.env.SUPABASE_DB_URL || process.env.DATABASE_URL || "").trim();
 const backupDir = resolve(String(process.env.BACKUP_DIR || "").trim());
 const sourceDir = process.env.BACKUP_SOURCE_DIR ? resolve(String(process.env.BACKUP_SOURCE_DIR).trim()) : "";
 const includeData = String(process.env.INCLUDE_DATA || "true").toLowerCase() !== "false";
-const pageSize = Math.max(100, Math.min(1000, Number(process.env.BACKUP_PAGE_SIZE || 1000)));
+const includeStorage = String(process.env.INCLUDE_STORAGE || "true").toLowerCase() !== "false";
 
 if (!sourceDir && (!projectRef || !/^[a-z0-9]{20}$/.test(projectRef))) {
   throw new Error("SUPABASE_PROJECT_REF must be the 20-character project reference.");
 }
 if (!sourceDir && !secret) throw new Error("SUPABASE_SECRET is required.");
+if (!sourceDir && includeData && !databaseUrl) {
+  throw new Error("SUPABASE_DB_URL is required for a transactionally consistent data backup.");
+}
 if (!process.env.BACKUP_DIR) throw new Error("BACKUP_DIR is required.");
 
 const baseUrl = `https://${projectRef}.supabase.co`;
 const rpcUrl = `${baseUrl}/rest/v1/rpc/run_sql_readonly`;
 const startedAt = new Date().toISOString();
+const replaySourceSummary = sourceDir
+  ? JSON.parse(readFileSync(join(sourceDir, "backup-summary.json"), "utf8"))
+  : null;
 
 mkdirSync(backupDir, { recursive: true, mode: 0o700 });
 mkdirSync(join(backupDir, "inventory"), { recursive: true, mode: 0o700 });
 mkdirSync(join(backupDir, "data"), { recursive: true, mode: 0o700 });
+mkdirSync(join(backupDir, "storage", "objects"), { recursive: true, mode: 0o700 });
 
 function stableJson(value) {
   if (Array.isArray(value)) return value.map(stableJson);
@@ -583,67 +593,138 @@ writeFileSync(join(backupDir, "schema.sql"), baselineSql, { mode: 0o600 });
 writeFileSync(join(backupDir, "schema-fingerprint.txt"), `${fingerprint}\n`, { mode: 0o600 });
 writeJson(join(backupDir, "schema-fingerprint-input.json"), fingerprintInput);
 
-const primaryKeys = new Map();
-for (const constraint of inventory.constraints.filter((item) => item.constraint_type === "p")) {
-  const match = constraint.definition.match(/^PRIMARY KEY \((.+)\)$/i);
-  if (match) primaryKeys.set(constraint.table_name, match[1]);
+const databaseDumpPath = join(backupDir, "data", "public-database.dump");
+if (includeData) {
+  if (sourceDir) {
+    const sourceDump = join(sourceDir, "data", "public-database.dump");
+    if (!statSync(sourceDump).isFile()) throw new Error("Replay backup is missing data/public-database.dump.");
+    copyFileSync(sourceDump, databaseDumpPath);
+  } else {
+    console.error("[backup] transactionally consistent public database snapshot");
+    await execFileAsync(
+      "pg_dump",
+      [
+        "--format=custom",
+        "--compress=9",
+        "--no-owner",
+        "--no-privileges",
+        "--schema=public",
+        "--serializable-deferrable",
+        `--file=${databaseDumpPath}`,
+      ],
+      {
+        env: { ...process.env, PGDATABASE: databaseUrl },
+        maxBuffer: 8 * 1024 * 1024,
+      },
+    );
+  }
+  chmodSync(databaseDumpPath, 0o600);
 }
 
-const countSelects = inventory.tables.map(
-  (table) => `select ${quoteLiteral(table.table_name)} as table_name, count(*)::bigint as row_count from ${qualified(table.schema_name, table.table_name)}`,
-);
-const countsBefore = sourceDir
-  ? JSON.parse(readFileSync(join(sourceDir, "table-counts-before.json"), "utf8"))
-  : countSelects.length
-    ? await rpc(countSelects.join(" union all "))
-    : [];
-writeJson(join(backupDir, "table-counts-before.json"), countsBefore);
+function storageMetadataFingerprint(rows) {
+  return createHash("sha256")
+    .update(JSON.stringify(stableJson(rows.map((row) => ({
+      id: row.id,
+      bucket_id: row.bucket_id,
+      name: row.name,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      metadata: row.metadata,
+      user_metadata: row.user_metadata,
+    })))))
+    .digest("hex");
+}
 
-if (includeData) {
-  for (const table of inventory.tables) {
-    const outputPath = join(backupDir, "data", `${table.table_name}.jsonl`);
-    const stream = createWriteStream(outputPath, { flags: "w", mode: 0o600 });
-    let offset = 0;
-    for (;;) {
-      const params = new URLSearchParams({ select: "*", limit: String(pageSize), offset: String(offset) });
-      const primaryKey = primaryKeys.get(table.table_name);
-      if (primaryKey && !primaryKey.includes(",") && !primaryKey.includes("(") && !primaryKey.includes(" ")) {
-        params.set("order", `${primaryKey.replaceAll('"', '')}.asc`);
+async function listStorageMetadata() {
+  return rpc(`
+    select o.id, o.bucket_id, o.name, o.created_at, o.updated_at,
+           o.last_accessed_at, o.metadata, o.user_metadata
+    from storage.objects o
+    order by o.bucket_id, o.name, o.id
+  `);
+}
+
+async function listStorageBuckets() {
+  const rows = await rpc("select to_jsonb(b) as bucket from storage.buckets b order by b.id");
+  return rows.map((row) => row.bucket);
+}
+
+function storageObjectUrl(bucket, name) {
+  const bucketPath = encodeURIComponent(String(bucket));
+  const objectPath = String(name).split("/").map((part) => encodeURIComponent(part)).join("/");
+  return `${baseUrl}/storage/v1/object/authenticated/${bucketPath}/${objectPath}`;
+}
+
+let storageObjects = [];
+let storageBuckets = [];
+let storageBytes = 0;
+let storageMetadataHash = null;
+if (includeStorage) {
+  if (sourceDir) {
+    storageObjects = JSON.parse(readFileSync(join(sourceDir, "storage-object-manifest.json"), "utf8"));
+    storageBuckets = JSON.parse(readFileSync(join(sourceDir, "storage-bucket-manifest.json"), "utf8"));
+    for (const item of storageObjects) {
+      const sourceObject = join(sourceDir, "storage", "objects", item.archive_name);
+      const destinationObject = join(backupDir, "storage", "objects", item.archive_name);
+      copyFileSync(sourceObject, destinationObject);
+      chmodSync(destinationObject, 0o600);
+      const bytes = readFileSync(destinationObject);
+      const hash = createHash("sha256").update(bytes).digest("hex");
+      if (hash !== item.sha256 || bytes.length !== Number(item.bytes)) {
+        throw new Error(`Replay Storage object failed integrity verification: ${item.bucket_id}/${item.name}`);
       }
-      const response = await fetch(`${baseUrl}/rest/v1/${encodeURIComponent(table.table_name)}?${params}`, {
-        headers: { apikey: secret, Authorization: `Bearer ${secret}`, Accept: "application/json" },
-      });
-      const body = await response.text();
-      if (!response.ok) {
-        stream.destroy();
-        throw new Error(`Data backup failed for ${table.table_name} (${response.status}): ${body.slice(0, 500)}`);
-      }
-      const rows = JSON.parse(body);
-      if (!Array.isArray(rows)) throw new Error(`Data backup for ${table.table_name} returned non-array data.`);
-      for (const row of rows) stream.write(`${JSON.stringify(row)}\n`);
-      if (rows.length < pageSize) break;
-      offset += rows.length;
+      storageBytes += bytes.length;
     }
-    stream.end();
-    await finished(stream);
-    chmodSync(outputPath, 0o600);
+    storageMetadataHash = String(replaySourceSummary?.storage_metadata_sha256 || "") || null;
+  } else {
+    console.error("[backup] private and public Storage objects");
+    storageBuckets = await listStorageBuckets();
+    const metadataBefore = await listStorageMetadata();
+    storageMetadataHash = storageMetadataFingerprint(metadataBefore);
+    for (const row of metadataBefore) {
+      const response = await fetch(storageObjectUrl(row.bucket_id, row.name), {
+        headers: { apikey: secret, Authorization: `Bearer ${secret}` },
+      });
+      if (!response.ok) {
+        const body = await response.text();
+        throw new Error(`Storage backup failed for ${row.bucket_id}/${row.name} (${response.status}): ${body.slice(0, 300)}`);
+      }
+      const bytes = Buffer.from(await response.arrayBuffer());
+      const sha256 = createHash("sha256").update(bytes).digest("hex");
+      const archiveName = `${createHash("sha256").update(`${row.bucket_id}\0${row.name}`).digest("hex")}.object`;
+      const outputPath = join(backupDir, "storage", "objects", archiveName);
+      writeFileSync(outputPath, bytes, { mode: 0o600 });
+      chmodSync(outputPath, 0o600);
+      const expectedSize = Number(row.metadata?.size);
+      if (Number.isFinite(expectedSize) && expectedSize >= 0 && expectedSize !== bytes.length) {
+        throw new Error(`Storage object size changed during backup: ${row.bucket_id}/${row.name}`);
+      }
+      storageObjects.push({
+        id: row.id,
+        bucket_id: row.bucket_id,
+        name: row.name,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        metadata: row.metadata,
+        user_metadata: row.user_metadata,
+        archive_name: archiveName,
+        bytes: bytes.length,
+        sha256,
+      });
+      storageBytes += bytes.length;
+    }
+    const metadataAfter = await listStorageMetadata();
+    const bucketsAfter = await listStorageBuckets();
+    if (
+      storageMetadataFingerprint(metadataAfter) !== storageMetadataHash
+      || JSON.stringify(stableJson(bucketsAfter)) !== JSON.stringify(stableJson(storageBuckets))
+    ) {
+      throw new Error("storage_metadata_changed_during_backup");
+    }
   }
 }
-
-const countsAfter = sourceDir
-  ? JSON.parse(readFileSync(join(sourceDir, "table-counts-after.json"), "utf8"))
-  : countSelects.length
-    ? await rpc(countSelects.join(" union all "))
-    : [];
-writeJson(join(backupDir, "table-counts-after.json"), countsAfter);
-
-const countMap = (rows) => new Map(rows.map((row) => [row.table_name, String(row.row_count)]));
-const beforeMap = countMap(countsBefore);
-const afterMap = countMap(countsAfter);
-const changedCounts = [...new Set([...beforeMap.keys(), ...afterMap.keys()])]
-  .filter((table) => beforeMap.get(table) !== afterMap.get(table))
-  .map((table) => ({ table, before: beforeMap.get(table), after: afterMap.get(table) }));
-writeJson(join(backupDir, "table-count-changes.json"), changedCounts);
+writeJson(join(backupDir, "storage-object-manifest.json"), storageObjects);
+writeJson(join(backupDir, "storage-bucket-manifest.json"), storageBuckets);
 
 function walkFiles(directory) {
   const result = [];
@@ -667,6 +748,7 @@ const summary = {
   started_at: startedAt,
   completed_at: new Date().toISOString(),
   backup_directory: backupDir,
+  source_project_ref: sourceDir ? (replaySourceSummary?.source_project_ref || null) : projectRef,
   schema_fingerprint: fingerprint,
   table_count: inventory.tables.length,
   view_count: inventory.views.length,
@@ -674,7 +756,14 @@ const summary = {
   policy_count: inventory.policies.length,
   trigger_count: inventory.triggers.length,
   data_backup_included: includeData,
-  tables_with_count_changes_during_backup: changedCounts,
+  database_snapshot_format: includeData ? "pg_dump-custom-serializable-deferrable" : null,
+  database_snapshot_file: includeData ? "data/public-database.dump" : null,
+  storage_backup_included: includeStorage,
+  storage_object_count: storageObjects.length,
+  storage_bucket_count: storageBuckets.length,
+  storage_bytes: storageBytes,
+  storage_metadata_sha256: storageMetadataHash,
+  storage_consistency_verified: includeStorage,
   backup_bytes: walkFiles(backupDir).reduce((total, path) => total + statSync(path).size, 0),
 };
 writeJson(join(backupDir, "backup-summary.json"), summary);

@@ -37,6 +37,7 @@ const ids = {
   thread: "00000000-0000-4000-8000-00000000a113",
   oldMessage: "00000000-0000-4000-8000-00000000a114",
   recentMessage: "00000000-0000-4000-8000-00000000a115",
+  dstMessage: "00000000-0000-4000-8000-00000000a118",
   oldEvent: "00000000-0000-4000-8000-00000000a116",
   recentEvent: "00000000-0000-4000-8000-00000000a117",
 };
@@ -202,7 +203,10 @@ await sql(`
     ('${ids.oldMessage}','${ids.thread}','${msgUserId}','text','[deleted]','{}',now()-interval '15 days',now()-interval '15 days',true,
       'analytics-old-deleted-message',now()-interval '15 days',now()-interval '15 days','${msgUserId}',now()-interval '1 day'),
     ('${ids.recentMessage}','${ids.thread}','${msgUserId}','text','[deleted]','{}',now()-interval '13 days',now()-interval '13 days',true,
-      'analytics-recent-deleted-message',now()-interval '13 days',now()-interval '13 days','${msgUserId}',now()+interval '1 day');
+      'analytics-recent-deleted-message',now()-interval '13 days',now()-interval '13 days','${msgUserId}',now()+interval '1 day'),
+    ('${ids.dstMessage}','${ids.thread}','${msgUserId}','text','[deleted]','{}','2026-10-20T01:05:00-05:00','2026-10-20T01:05:00-05:00',true,
+      'analytics-dst-deleted-message','2026-10-20T01:05:00-05:00','2026-10-20T01:05:00-05:00','${msgUserId}',
+      '2026-10-20T01:05:00-05:00'::timestamptz + interval '14 days');
 `);
 
 const venue = (await sql(`
@@ -245,6 +249,18 @@ assert.equal(messagePurge.retention_days, 14);
 assert.equal(await sql(`select count(*) from public.msg_messages where id='${ids.oldMessage}';`), "0");
 assert.equal(await sql(`select count(*) from public.msg_message_audit where message_id='${ids.oldMessage}';`), "0");
 assert.equal(await sql(`select count(*) from public.msg_messages where id='${ids.recentMessage}';`), "1");
+assert.equal(
+  await sql(`select extract(epoch from (purge_after-deleted_at))/3600
+    from public.msg_messages where id='${ids.dstMessage}';`),
+  "336.0000000000000000",
+  "Messenger retention must remain exactly 336 elapsed hours across the fall DST transition",
+);
+assert.equal(
+  await sql(`select purge_after='2026-11-03T00:05:00-06:00'::timestamptz
+    from public.msg_messages where id='${ids.dstMessage}';`),
+  "t",
+  "Messenger retention must land on the elapsed-hour deadline, not the Memphis calendar-day deadline",
+);
 
 assert.equal(await sql(`select count(*) from public.sessions where id in ('${ids.fastSession}','${ids.slowSession}');`), "2");
 assert.equal(await sql(`select count(*) from public.completion_responses where id in ('${ids.fastCompletion}','${ids.slowCompletion}');`), "2");

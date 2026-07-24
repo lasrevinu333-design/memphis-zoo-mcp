@@ -13,9 +13,11 @@ const migrationFiles = [
   '20260716194539_foundation_repair_legacy_ledger_rollup.sql',
 ];
 function migrationUrl(name) {
+  const legacy = new URL(`../supabase/legacy_migrations/${name}`, import.meta.url);
+  if (existsSync(legacy)) return legacy;
   const current = new URL(`../supabase/migrations/${name}`, import.meta.url);
   if (existsSync(current)) return current;
-  return new URL(`../supabase/legacy_migrations/${name}`, import.meta.url);
+  return legacy;
 }
 const migration = migrationFiles
   .map((name) => readFileSync(migrationUrl(name), 'utf8'))

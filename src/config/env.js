@@ -16,6 +16,21 @@ function present(name) {
   return Boolean(read(name));
 }
 
+function firebaseServiceAccountConfigured() {
+  const raw = read("FIREBASE_SERVICE_ACCOUNT_JSON") || read("GOOGLE_SERVICE_ACCOUNT_JSON");
+  if (!raw) return false;
+  const candidates = [raw];
+  try { candidates.push(Buffer.from(raw, "base64").toString("utf8")); } catch {}
+  return candidates.some((candidate) => {
+    try {
+      const parsed = JSON.parse(candidate);
+      return Boolean(parsed?.client_email && parsed?.private_key && (parsed?.project_id || read("FIREBASE_PROJECT_ID")));
+    } catch {
+      return false;
+    }
+  });
+}
+
 export function getRuntimeEnv() {
   const githubRepo = read("GITHUB_REPO");
   const githubAllowedRepos = readCsv("GITHUB_ALLOWED_REPOS", githubRepo);
@@ -44,6 +59,13 @@ export function getRuntimeEnv() {
       gemini_key_source: gemini.gemini_key_source,
       model: gemini.memphis_model,
     },
+    notifications: {
+      firebase_configured: firebaseServiceAccountConfigured(),
+      firebase_project_id_present: present("FIREBASE_PROJECT_ID")
+        || present("FIREBASE_SERVICE_ACCOUNT_JSON")
+        || present("GOOGLE_SERVICE_ACCOUNT_JSON"),
+      employee_worker_enabled: read("EMPLOYEE_NOTIFICATION_SWEEP_MS", "15000") !== "0",
+    },
   };
 }
 
@@ -60,6 +82,11 @@ export function validateRuntimeEnv({ strict = false } = {}) {
 
   if (!env.ai.gemini_configured) {
     warnings.push("GEMINI_API_KEY or GOOGLE_API_KEY is missing. Memphis AI will use fallback replies.");
+  }
+  if (!env.notifications.firebase_configured) {
+    const message = "FIREBASE_SERVICE_ACCOUNT_JSON or GOOGLE_SERVICE_ACCOUNT_JSON is missing. Native manager and employee notifications cannot be delivered.";
+    if (strict && env.app.node_env === "production") errors.push(message);
+    else warnings.push(message);
   }
 
   if (!strict && errors.length) {

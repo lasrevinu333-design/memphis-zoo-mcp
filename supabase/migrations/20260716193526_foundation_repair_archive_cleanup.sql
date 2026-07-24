@@ -1,0 +1,1 @@
+-- Ledger marker: schema is contained in supabase/baseline/production_baseline.sql.

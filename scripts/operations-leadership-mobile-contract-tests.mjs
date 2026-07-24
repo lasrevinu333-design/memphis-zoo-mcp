@@ -8,7 +8,7 @@ const [bootstrap, annieMoxie, schemaBootstrap, migration, authSource, indexSourc
   readFile(new URL("src/leadership-bootstrap.js", root), "utf8"),
   readFile(new URL("src/annie-moxie-bootstrap.js", root), "utf8"),
   readFile(new URL("src/mcp-schema-bootstrap.js", root), "utf8"),
-  readFile(new URL("supabase/migrations/20260721190000_operations_leadership_mobile_foundation.sql", root), "utf8"),
+  readFile(new URL("supabase/migrations/20260721212246_operations_leadership_mobile_foundation_schema.sql", root), "utf8"),
   readFile(new URL("src/auth/shared-access-auth.js", root), "utf8"),
   readFile(new URL("src/index.js", root), "utf8"),
   readFile(new URL("release/frontend-release-manifest.json", root), "utf8"),

@@ -39,7 +39,10 @@ function setCors(req, res, env) {
   res.setHeader("Vary", "Origin");
 }
 function fail(res, error, fallback = "Custodial employee administration failed.") {
-  const status = Number(error?.status || error?.statusCode) || (/permission|access/i.test(String(error?.message || "")) ? 403 : 500);
+  const message = String(error?.message || "");
+  const status = Number(error?.status || error?.statusCode)
+    || (/assignment changed|operation_id was already used|already assigned/i.test(message) ? 409
+      : /permission|access/i.test(message) ? 403 : 500);
   res.status(Math.max(400, Math.min(599, status))).json({ ok: false, error: clip(error?.message || fallback, 1000) });
 }
 function normalizeDeviceId(value) {
@@ -179,6 +182,55 @@ async function assignDevice(db, req, deviceId, employeeId, values = {}) {
   return result.data;
 }
 
+async function reassignEmployeePhone(db, req, deviceId, values = {}) {
+  const operationId = String(values.operation_id || values.operationId || "").trim();
+  if (!validUuid(operationId)) {
+    throw Object.assign(new Error("A stable UUID operation_id is required."), { status: 422 });
+  }
+  if (!Object.prototype.hasOwnProperty.call(values, "expected_current_employee_id")) {
+    throw Object.assign(new Error("expected_current_employee_id is required; use null when the phone is unassigned."), { status: 422 });
+  }
+  const expected = values.expected_current_employee_id == null || values.expected_current_employee_id === ""
+    ? null
+    : String(values.expected_current_employee_id).trim();
+  if (expected && !validUuid(expected)) {
+    throw Object.assign(new Error("expected_current_employee_id must be a UUID or null."), { status: 422 });
+  }
+  const employeeId = values.employee_id == null || values.employee_id === ""
+    ? null
+    : String(values.employee_id).trim();
+  if (employeeId && !validUuid(employeeId)) {
+    throw Object.assign(new Error("A valid employee ID is required."), { status: 422 });
+  }
+  const result = await db.rpc("custodial_reassign_employee_phone", {
+    p_operation_id: operationId,
+    p_device_identifier: normalizeDeviceId(deviceId),
+    p_expected_current_employee_id: expected,
+    p_employee_id: employeeId,
+    p_new_employee_name: clip(values.new_employee_name, 160) || null,
+    p_changed_by_manager_id: req.memphisAuth.manager_id,
+    p_reason: clip(values.reason, 500) || null,
+    p_move_existing: values.move_existing === true,
+    p_deactivate_previous: values.deactivate_previous === true,
+  });
+  if (result.error) throw result.error;
+  return result.data;
+}
+
+async function createEmployeeIdempotent(db, req, values = {}) {
+  const operationId = String(values.operation_id || values.operationId || "").trim();
+  if (!validUuid(operationId)) {
+    throw Object.assign(new Error("A stable UUID operation_id is required."), { status: 422 });
+  }
+  const result = await db.rpc("custodial_create_employee_idempotent", {
+    p_operation_id: operationId,
+    p_display_name: clip(values.new_employee_name || values.display_name, 160),
+    p_changed_by_manager_id: req.memphisAuth.manager_id,
+  });
+  if (result.error) throw result.error;
+  return result.data;
+}
+
 async function issueEmployeeEnrollmentCode(db, env, req, deviceId) {
   const device = await resolveNativeDevice(db, deviceId);
   const employee = Array.isArray(device?.employees) ? device.employees[0] : device?.employees;
@@ -252,19 +304,8 @@ export function installCustodialEmployeeAdminRoutes(app, { env = process.env, su
   app.put("/custodial-admin-api/devices/:deviceId/assignment", configured, requireCustodial, async (req, res) => {
     try {
       const deviceId = normalizeDeviceId(req.params?.deviceId || req.body?.device_id);
-      const employeeId = String(req.body?.employee_id || "").trim();
       if (!validKioskId(deviceId)) return res.status(400).json({ ok: false, error: "Choose KIOSK_02 through KIOSK_10." });
-      if (employeeId && !validUuid(employeeId)) return res.status(400).json({ ok: false, error: "A valid employee ID is required." });
-      const current = await resolveNativeDevice(db, deviceId);
-      const expected = String(req.body?.expected_current_employee_id || "").trim();
-      if (expected && String(current?.assigned_employee_id || "") !== expected) return res.status(409).json({ ok: false, error: "This phone assignment changed. Refresh and try again." });
-      const previousId = current?.assigned_employee_id || null;
-      const assignment = await assignDevice(db, req, deviceId, employeeId || null, req.body || {});
-      let formerEmployee = null;
-      if (req.body?.deactivate_previous === true && previousId && previousId !== employeeId) {
-        formerEmployee = await setEmployeeStatus(db, req, previousId, false, { reason: req.body?.reason || "Phone reassigned to replacement employee", release_devices: true });
-      }
-      res.json({ ok: true, data: { ...assignment, former_employee_status: formerEmployee } });
+      res.json({ ok: true, data: await reassignEmployeePhone(db, req, deviceId, req.body || {}) });
     } catch (error) { fail(res, error, "Phone assignment could not be changed."); }
   });
 
@@ -284,37 +325,17 @@ export function installCustodialEmployeeAdminRoutes(app, { env = process.env, su
     try {
       const requestedDevice = normalizeDeviceId(req.params?.deviceId);
       const createsOnly = String(req.params?.deviceId || "").trim().toLowerCase() === "unassigned";
-      let employee = null;
-      let employeeId = String(req.body?.employee_id || "").trim() || null;
-      if (clip(req.body?.new_employee_name, 160)) {
-        const created = await createEmployee(db, req, { display_name: req.body.new_employee_name, notes: "Created from Phone Assignments" });
-        employee = created?.employee || created;
-        employeeId = employee?.id || null;
-      }
-      if (employeeId && !validUuid(employeeId)) return res.status(400).json({ ok: false, error: "A valid employee ID is required." });
       if (createsOnly) {
-        if (!employee) return res.status(400).json({ ok: false, error: "Enter a new employee name." });
-        return res.status(201).json({ ok: true, data: { employee, device: null } });
+        if (!clip(req.body?.new_employee_name, 160)) return res.status(400).json({ ok: false, error: "Enter a new employee name." });
+        return res.status(201).json({ ok: true, data: await createEmployeeIdempotent(db, req, req.body || {}) });
       }
       if (!validKioskId(requestedDevice)) return res.status(400).json({ ok: false, error: "Choose KIOSK_02 through KIOSK_10." });
-      const current = await resolveNativeDevice(db, requestedDevice);
-      const expected = String(req.body?.expected_current_employee_id || "").trim();
-      if (expected && String(current?.assigned_employee_id || "") !== expected) return res.status(409).json({ ok: false, error: "This phone assignment changed. Refresh and try again." });
-      const previousId = current?.assigned_employee_id || null;
-      const assignment = await assignDevice(db, req, requestedDevice, employeeId, {
-        reason: employee ? `Assigned to newly created employee ${employee.display_name}` : "Phone assignment updated",
-        move_existing: false,
-      });
-      if (!employee && employeeId) {
-        const employeeResult = await db.from("employees").select("id,employee_code,display_name,active,role").eq("id", employeeId).maybeSingle();
-        if (employeeResult.error) throw employeeResult.error;
-        employee = employeeResult.data;
-      }
-      let formerEmployee = null;
-      if (req.body?.deactivate_previous === true && previousId && previousId !== employeeId) {
-        formerEmployee = await setEmployeeStatus(db, req, previousId, false, { reason: "Employment ended during phone reassignment", release_devices: true });
-      }
-      res.json({ ok: true, data: { employee: employee || null, device: assignment?.device || assignment, assignment, former_employee_status: formerEmployee } });
+      res.json({ ok: true, data: await reassignEmployeePhone(db, req, requestedDevice, {
+        ...req.body,
+        reason: req.body?.reason || (clip(req.body?.new_employee_name, 160)
+          ? `Assigned to newly created employee ${clip(req.body.new_employee_name, 160)}`
+          : "Phone assignment updated"),
+      }) });
     } catch (error) { fail(res, error, "Phone assignment could not be changed."); }
   });
 

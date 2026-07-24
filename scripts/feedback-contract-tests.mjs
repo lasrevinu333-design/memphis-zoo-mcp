@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 
 const repoRoot = resolve(import.meta.dirname, "..");
 const apiSource = readFileSync(resolve(repoRoot, "src/index.js"), "utf8");
-const reliabilityMigration = readFileSync(resolve(repoRoot, "supabase/migrations/20260718103215_custodial_v3_reliability_and_retention.sql"), "utf8");
+const reliabilityMigration = readFileSync(resolve(repoRoot, "supabase/migrations/20260718124426_custodial_v3_reliability_and_retention.sql"), "utf8");
 const engineRoot = [process.env.ENGINE_FIXTURE_ROOT, resolve(repoRoot, "../Engine"), "/home/eric/Projects/memphis-zoo/Engine"]
   .filter(Boolean)
   .find((candidate) => existsSync(resolve(candidate, "system-feedback.html")));

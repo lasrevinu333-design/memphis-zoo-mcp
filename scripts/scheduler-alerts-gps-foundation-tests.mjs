@@ -15,12 +15,8 @@ const scheduleSource = read('src/schedule-api.js');
 const messagingSource = read('src/messaging-api.js');
 const eventsSource = read('src/events-api.js');
 const migration = read('sql/2026-07-14_scheduler_notifications_gps_foundation.sql');
-const foundationRepair = [
-  'supabase/migrations/20260716193547_foundation_repair_schedule_audit.sql',
-  'supabase/migrations/20260716193606_foundation_repair_schedule_window.sql',
-  'supabase/migrations/20260716193627_foundation_repair_schedule_cron.sql',
-].map(read).join('\n');
-const gpsMotionHardening = read('supabase/migrations/20260719231728_gps_proximity_motion_hardening.sql');
+const foundationRepair = read('supabase/baseline/production_baseline.sql');
+const gpsMotionHardening = read('supabase/migrations/20260719235243_gps_proximity_motion_hardening_20260719.sql');
 const packageJson = JSON.parse(read('package.json'));
 
 assert.equal(packageJson.scripts?.['test:foundation'], 'node scripts/scheduler-alerts-gps-foundation-tests.mjs');

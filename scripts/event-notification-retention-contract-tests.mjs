@@ -4,8 +4,8 @@ import { readFileSync } from 'node:fs';
 const root = new URL('../', import.meta.url);
 const read = (path) => readFileSync(new URL(path, root), 'utf8');
 const eventsApi = read('src/events-api.js');
-const migration = read('supabase/migrations/20260722224000_event_notification_retention_integrity.sql');
-const cutover = read('supabase/migrations/20260724020000_event_messenger_cutover_deletion_semantics.sql');
+const migration = read('supabase/migrations/20260722230915_event_notification_retention_integrity.sql');
+const cutover = read('supabase/migrations/20260724015534_event_messenger_cutover_deletion_semantics.sql');
 
 assert.match(eventsApi, /mz_enqueue_employee_event_pushes/,
   'the events worker must enqueue the native employee notification ledger');

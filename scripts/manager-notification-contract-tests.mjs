@@ -7,7 +7,7 @@ import { installManagerNotificationRoutes } from "../src/manager-notifications.j
 const root = new URL("../", import.meta.url);
 const [moduleSource, migration, bootstrap] = await Promise.all([
   readFile(new URL("src/manager-notifications.js", root), "utf8"),
-  readFile(new URL("supabase/migrations/20260721203000_manager_mobile_notifications.sql", root), "utf8"),
+  readFile(new URL("supabase/migrations/20260721212552_manager_mobile_notifications_schema.sql", root), "utf8"),
   readFile(new URL("src/mcp-schema-bootstrap.js", root), "utf8"),
 ]);
 

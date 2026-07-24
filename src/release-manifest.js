@@ -65,7 +65,7 @@ export function buildReleaseManifest({ appVersion, releaseId, contracts = {} } =
     },
     api_contract_versions: contracts,
     queue_compatibility_versions: {
-      scan: ["legacy-local-storage", "indexeddb-v1", "indexeddb-v2", "indexeddb-v3", "indexeddb-v4"],
+      scan: ["legacy-local-storage", "indexeddb-v1", "indexeddb-v2", "indexeddb-v3", "indexeddb-v4", "indexeddb-v5"],
       messaging: ["local-storage-outbox-v1"],
       gemini_console: ["indexeddb-outbox-v1"],
     },
