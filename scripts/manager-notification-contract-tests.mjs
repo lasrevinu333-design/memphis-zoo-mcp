@@ -94,6 +94,9 @@ globalThis.fetch = async (input, init = {}) => {
   if (url.endsWith("/projects/memphis-zoo-custodial-program/androidApps/1:123456789:android:test/config")) {
     return new Response(JSON.stringify({ configFilename: "google-services.json", configFileContents: Buffer.from(JSON.stringify(androidConfig)).toString("base64") }), { status: 200, headers: { "Content-Type": "application/json" } });
   }
+  if (url.endsWith("/projects/memphis-zoo-custodial-program/androidApps/1:123456789:android:custodial/config")) {
+    return new Response(JSON.stringify({ configFilename: "google-services.json", configFileContents: Buffer.from(JSON.stringify(custodialAndroidConfig)).toString("base64") }), { status: 200, headers: { "Content-Type": "application/json" } });
+  }
   if (url.endsWith("/projects/memphis-zoo-custodial-program/iosApps?pageSize=100")) {
     return new Response(JSON.stringify({ apps: [{ name: "projects/memphis-zoo-custodial-program/iosApps/1:123456789:ios:test", appId: "1:123456789:ios:test", bundleId: "org.memphiszoo.ops", state: "ACTIVE" }] }), { status: 200, headers: { "Content-Type": "application/json" } });
   }
