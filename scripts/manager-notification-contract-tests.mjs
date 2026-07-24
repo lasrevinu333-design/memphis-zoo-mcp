@@ -86,7 +86,10 @@ globalThis.fetch = async (input, init = {}) => {
     return new Response(JSON.stringify({ access_token: "test-firebase-oauth-token", expires_in: 3600 }), { status: 200, headers: { "Content-Type": "application/json" } });
   }
   if (url.endsWith("/projects/memphis-zoo-custodial-program/androidApps?pageSize=100")) {
-    return new Response(JSON.stringify({ apps: [{ name: "projects/memphis-zoo-custodial-program/androidApps/1:123456789:android:test", appId: "1:123456789:android:test", packageName: "org.memphiszoo.ops", state: "ACTIVE" }] }), { status: 200, headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ apps: [
+      { name: "projects/memphis-zoo-custodial-program/androidApps/1:123456789:android:test", appId: "1:123456789:android:test", packageName: "org.memphiszoo.ops", state: "ACTIVE" },
+      { name: "projects/memphis-zoo-custodial-program/androidApps/1:123456789:android:custodial", appId: "1:123456789:android:custodial", packageName: "org.memphiszoo.custodial", state: "ACTIVE" },
+    ] }), { status: 200, headers: { "Content-Type": "application/json" } });
   }
   if (url.endsWith("/projects/memphis-zoo-custodial-program/androidApps/1:123456789:android:test/config")) {
     return new Response(JSON.stringify({ configFilename: "google-services.json", configFileContents: Buffer.from(JSON.stringify(androidConfig)).toString("base64") }), { status: 200, headers: { "Content-Type": "application/json" } });
