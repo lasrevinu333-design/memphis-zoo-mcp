@@ -212,9 +212,15 @@ export function createPushRuntime({ db, env }) {
     const collection = android ? 'androidApps' : 'iosApps';
     const matchField = android ? 'packageName' : 'bundleId';
     const expected = requested || envText(env, android ? 'FIREBASE_ANDROID_PACKAGE' : 'FIREBASE_IOS_BUNDLE') || (android ? DEFAULT_ANDROID_PACKAGE : DEFAULT_IOS_BUNDLE);
-    const list = await firebaseManagementRequest(`/projects/${encodeURIComponent(account.project_id)}/${collection}?pageSize=100`);
-    const apps = Array.isArray(list.apps) ? list.apps : [];
-    const firebaseApp = apps.find((item) => item?.state !== 'DELETED' && String(item?.[matchField] || '').trim() === expected);
+    let list = await firebaseManagementRequest(`/projects/${encodeURIComponent(account.project_id)}/${collection}?pageSize=100`);
+    let apps = Array.isArray(list.apps) ? list.apps : [];
+    let firebaseApp = apps.find((item) => item?.state !== 'DELETED' && String(item?.[matchField] || '').trim() === expected);
+    if (!firebaseApp && android && expected === 'org.memphiszoo.custodial') {
+      await provisionCustodialAndroidApp(expected);
+      list = await firebaseManagementRequest(`/projects/${encodeURIComponent(account.project_id)}/${collection}?pageSize=100`);
+      apps = Array.isArray(list.apps) ? list.apps : [];
+      firebaseApp = apps.find((item) => item?.state !== 'DELETED' && String(item?.[matchField] || '').trim() === expected);
+    }
     if (!firebaseApp?.name || !firebaseApp?.appId) throw Object.assign(new Error(`No Firebase ${normalized} app is registered for ${expected}.`), { status: 404 });
     const artifact = await firebaseManagementRequest(`/${firebaseApp.name}/config`);
     const contentsBase64 = String(artifact?.configFileContents || '').trim();
