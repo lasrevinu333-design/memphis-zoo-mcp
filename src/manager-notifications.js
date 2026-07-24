@@ -128,7 +128,7 @@ function currentIdentity(req) {
   return { managerId, credentialId, deviceId };
 }
 
-function createPushRuntime({ db, env }) {
+export function createPushRuntime({ db, env }) {
   const account = parseServiceAccount(env);
   const workerId = `manager-push-${process.pid}-${crypto.randomUUID()}`;
   const oauthByScope = new Map();
@@ -166,16 +166,20 @@ function createPushRuntime({ db, env }) {
     return payload || {};
   }
 
-  async function getClientConfig(platform) {
+  async function getClientConfig(platform, appIdentifier = null) {
     if (!account) throw Object.assign(new Error("Firebase client configuration is unavailable."), { status: 503 });
     const normalized = String(platform || "").trim().toLowerCase();
     if (!['android','ios'].includes(normalized)) throw Object.assign(new Error("Firebase client platform must be android or ios."), { status: 400 });
-    const cached = clientConfigCache.get(normalized);
-    if (cached?.expiresAt > Date.now()) return cached.value;
     const android = normalized === 'android';
+    const requested = String(appIdentifier || '').trim();
+    const allowedIdentifiers = new Set([android ? DEFAULT_ANDROID_PACKAGE : DEFAULT_IOS_BUNDLE, 'org.memphiszoo.custodial']);
+    if (requested && !allowedIdentifiers.has(requested)) throw Object.assign(new Error(`Firebase app identifier is not allowed: ${requested}.`), { status: 400 });
+    const cacheKey = `${normalized}:${requested || 'default'}`;
+    const cached = clientConfigCache.get(cacheKey);
+    if (cached?.expiresAt > Date.now()) return cached.value;
     const collection = android ? 'androidApps' : 'iosApps';
     const matchField = android ? 'packageName' : 'bundleId';
-    const expected = envText(env, android ? 'FIREBASE_ANDROID_PACKAGE' : 'FIREBASE_IOS_BUNDLE') || (android ? DEFAULT_ANDROID_PACKAGE : DEFAULT_IOS_BUNDLE);
+    const expected = requested || envText(env, android ? 'FIREBASE_ANDROID_PACKAGE' : 'FIREBASE_IOS_BUNDLE') || (android ? DEFAULT_ANDROID_PACKAGE : DEFAULT_IOS_BUNDLE);
     const list = await firebaseManagementRequest(`/projects/${encodeURIComponent(account.project_id)}/${collection}?pageSize=100`);
     const apps = Array.isArray(list.apps) ? list.apps : [];
     const firebaseApp = apps.find((item) => item?.state !== 'DELETED' && String(item?.[matchField] || '').trim() === expected);
@@ -192,11 +196,11 @@ function createPushRuntime({ db, env }) {
       filename: String(artifact.configFilename || (android ? 'google-services.json' : 'GoogleService-Info.plist')),
       contents_base64: contentsBase64,
     };
-    clientConfigCache.set(normalized, { value, expiresAt: Date.now() + 60 * 60 * 1000 });
+    clientConfigCache.set(cacheKey, { value, expiresAt: Date.now() + 60 * 60 * 1000 });
     return value;
   }
 
-  async function send(job, pushDevice) {
+  async function send(job, pushDevice, { channelId = "operations" } = {}) {
     const token = await accessToken(PUSH_SCOPE);
     const response = await fetch(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(account.project_id)}/messages:send`, {
       method: "POST",
@@ -208,7 +212,7 @@ function createPushRuntime({ db, env }) {
           data: stringifyData(job.data_json),
           android: {
             priority: "high",
-            notification: { channel_id: "operations", sound: "default", default_vibrate_timings: true },
+            notification: { channel_id: channelId, sound: "default", default_vibrate_timings: true },
           },
           apns: {
             headers: { "apns-priority": "10" },
@@ -284,7 +288,7 @@ function createPushRuntime({ db, env }) {
     }
   }
 
-  return { configured: Boolean(account), projectId: account?.project_id || null, getClientConfig, sweep };
+  return { configured: Boolean(account), projectId: account?.project_id || null, getClientConfig, send, sweep };
 }
 
 export function installManagerNotificationRoutes(app, { env = process.env, supabase = null } = {}) {
@@ -332,7 +336,7 @@ export function installManagerNotificationRoutes(app, { env = process.env, supab
 
   app.get("/manager-notifications-api/client-config/:platform", async (req, res) => {
     try {
-      const config = await runtime.getClientConfig(req.params?.platform);
+      const config = await runtime.getClientConfig(req.params?.platform, req.query?.app_identifier);
       const raw = Buffer.from(config.contents_base64, "base64");
       if (!raw.length) throw Object.assign(new Error("Firebase client configuration was empty."), { status: 502 });
       if (String(req.query?.format || "").toLowerCase() === "json") {

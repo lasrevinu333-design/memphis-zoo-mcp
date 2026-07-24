@@ -15,6 +15,7 @@ import { installAnnieMoxieRoutes } from "./annie-moxie-bootstrap.js";
 import { installLeadershipHttpRoutes } from "./leadership-bootstrap.js";
 import { installCustodialEmployeeAdminRoutes } from "./custodial-employee-admin.js";
 import { installManagerNotificationRoutes } from "./manager-notifications.js";
+import { installEmployeeNotificationRoutes } from "./employee-notifications.js";
 import { installOperationalAnalyticsRoutes } from "./operational-analytics-api.js";
 
 /**
@@ -62,7 +63,8 @@ function installHttpDiagnostics(app) {
   installAnnieMoxieRoutes(app);
   installLeadershipHttpRoutes(app);
   installCustodialEmployeeAdminRoutes(app);
-  installManagerNotificationRoutes(app);
+  const managerNotificationRuntime = installManagerNotificationRoutes(app);
+  installEmployeeNotificationRoutes(app, { pushRuntime: managerNotificationRuntime });
   installOperationalAnalyticsRoutes(app);
   app.get("/mcp-tools.json", requireOpsManagerAuth, (_req, res) => {
     res.status(200).json(getToolManifest({ includePlanned: true }));

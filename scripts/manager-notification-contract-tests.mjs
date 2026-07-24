@@ -70,6 +70,11 @@ const androidConfig = {
   client: [{ client_info: { mobilesdk_app_id: "1:123456789:android:test", android_client_info: { package_name: "org.memphiszoo.ops" } }, api_key: [{ current_key: "test-firebase-client-key" }] }],
   configuration_version: "1",
 };
+const custodialAndroidConfig = {
+  project_info: { project_number: "123456789", project_id: "memphis-zoo-custodial-program" },
+  client: [{ client_info: { mobilesdk_app_id: "1:123456789:android:custodial", android_client_info: { package_name: "org.memphiszoo.custodial" } }, api_key: [{ current_key: "test-firebase-client-key" }] }],
+  configuration_version: "1",
+};
 const iosConfig = `<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>GOOGLE_APP_ID</key><string>1:123456789:ios:test</string><key>BUNDLE_ID</key><string>org.memphiszoo.ops</string><key>PROJECT_ID</key><string>memphis-zoo-custodial-program</string></dict></plist>`;
 const originalFetch = globalThis.fetch;
 const calls = [];
@@ -81,10 +86,16 @@ globalThis.fetch = async (input, init = {}) => {
     return new Response(JSON.stringify({ access_token: "test-firebase-oauth-token", expires_in: 3600 }), { status: 200, headers: { "Content-Type": "application/json" } });
   }
   if (url.endsWith("/projects/memphis-zoo-custodial-program/androidApps?pageSize=100")) {
-    return new Response(JSON.stringify({ apps: [{ name: "projects/memphis-zoo-custodial-program/androidApps/1:123456789:android:test", appId: "1:123456789:android:test", packageName: "org.memphiszoo.ops", state: "ACTIVE" }] }), { status: 200, headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ apps: [
+      { name: "projects/memphis-zoo-custodial-program/androidApps/1:123456789:android:test", appId: "1:123456789:android:test", packageName: "org.memphiszoo.ops", state: "ACTIVE" },
+      { name: "projects/memphis-zoo-custodial-program/androidApps/1:123456789:android:custodial", appId: "1:123456789:android:custodial", packageName: "org.memphiszoo.custodial", state: "ACTIVE" },
+    ] }), { status: 200, headers: { "Content-Type": "application/json" } });
   }
   if (url.endsWith("/projects/memphis-zoo-custodial-program/androidApps/1:123456789:android:test/config")) {
     return new Response(JSON.stringify({ configFilename: "google-services.json", configFileContents: Buffer.from(JSON.stringify(androidConfig)).toString("base64") }), { status: 200, headers: { "Content-Type": "application/json" } });
+  }
+  if (url.endsWith("/projects/memphis-zoo-custodial-program/androidApps/1:123456789:android:custodial/config")) {
+    return new Response(JSON.stringify({ configFilename: "google-services.json", configFileContents: Buffer.from(JSON.stringify(custodialAndroidConfig)).toString("base64") }), { status: 200, headers: { "Content-Type": "application/json" } });
   }
   if (url.endsWith("/projects/memphis-zoo-custodial-program/iosApps?pageSize=100")) {
     return new Response(JSON.stringify({ apps: [{ name: "projects/memphis-zoo-custodial-program/iosApps/1:123456789:ios:test", appId: "1:123456789:ios:test", bundleId: "org.memphiszoo.ops", state: "ACTIVE" }] }), { status: 200, headers: { "Content-Type": "application/json" } });
@@ -121,6 +132,13 @@ try {
   assert.equal(androidResponse.status, 200);
   assert.match(androidResponse.headers.get("content-disposition") || "", /google-services\.json/);
   assert.deepEqual(await androidResponse.json(), androidConfig);
+
+  const custodialAndroidResponse = await originalFetch(`${base}/manager-notifications-api/client-config/android?app_identifier=org.memphiszoo.custodial`);
+  assert.equal(custodialAndroidResponse.status, 200);
+  assert.deepEqual(await custodialAndroidResponse.json(), custodialAndroidConfig);
+
+  const rejectedAndroidResponse = await originalFetch(`${base}/manager-notifications-api/client-config/android?app_identifier=org.example.unapproved`);
+  assert.equal(rejectedAndroidResponse.status, 400);
 
   const androidMetadataResponse = await originalFetch(`${base}/manager-notifications-api/client-config/android?format=json`);
   const androidMetadata = await androidMetadataResponse.json();
