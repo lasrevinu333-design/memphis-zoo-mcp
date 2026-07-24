@@ -61,6 +61,8 @@ begin
       message='Thread, authenticated user, and deletion operation are required';
   end if;
 
+  perform pg_advisory_xact_lock(hashtextextended(p_operation_id::text,0));
+
   select * into v_existing
   from public.msg_thread_deletion_operations
   where operation_id=p_operation_id;
@@ -203,6 +205,8 @@ begin
     raise exception using errcode='22023',
       message='Thread, authenticated admin, and deletion operation are required';
   end if;
+
+  perform pg_advisory_xact_lock(hashtextextended(p_operation_id::text,0));
 
   select * into v_existing
   from public.msg_thread_deletion_operations
