@@ -2700,7 +2700,7 @@ app.post("/scan-api/rpc", requireDeviceOrOpsAccess, requireScanRpcAuthorization,
         ? 404
         : /invalid|required|cannot|must|too (?:old|far|large)|exceeds/i.test(message)
           ? 422
-      : /already has|already bound|manager recovery|required review|transition/i.test(message)
+      : /already has|already bound|does not belong|manager recovery|required review|transition/i.test(message)
         ? 409
       : /unauthor|not assigned|another device/i.test(message)
         ? 403
