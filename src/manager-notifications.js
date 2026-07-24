@@ -170,9 +170,13 @@ export function createPushRuntime({ db, env }) {
     if (!account) throw Object.assign(new Error("Firebase client configuration is unavailable."), { status: 503 });
     const normalized = String(platform || "").trim().toLowerCase();
     if (!['android','ios'].includes(normalized)) throw Object.assign(new Error("Firebase client platform must be android or ios."), { status: 400 });
-    const cached = clientConfigCache.get(normalized);
-    if (cached?.expiresAt > Date.now()) return cached.value;
     const android = normalized === 'android';
+    const requested = String(appIdentifier || '').trim();
+    const allowedIdentifiers = new Set([android ? DEFAULT_ANDROID_PACKAGE : DEFAULT_IOS_BUNDLE, 'org.memphiszoo.custodial']);
+    if (requested && !allowedIdentifiers.has(requested)) throw Object.assign(new Error(`Firebase app identifier is not allowed: ${requested}.`), { status: 400 });
+    const cacheKey = `${normalized}:${requested || 'default'}`;
+    const cached = clientConfigCache.get(cacheKey);
+    if (cached?.expiresAt > Date.now()) return cached.value;
     const collection = android ? 'androidApps' : 'iosApps';
     const matchField = android ? 'packageName' : 'bundleId';
     const expected = envText(env, android ? 'FIREBASE_ANDROID_PACKAGE' : 'FIREBASE_IOS_BUNDLE') || (android ? DEFAULT_ANDROID_PACKAGE : DEFAULT_IOS_BUNDLE);
