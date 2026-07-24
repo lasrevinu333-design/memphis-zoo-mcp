@@ -166,7 +166,7 @@ export function createPushRuntime({ db, env }) {
     return payload || {};
   }
 
-  async function getClientConfig(platform) {
+  async function getClientConfig(platform, appIdentifier = null) {
     if (!account) throw Object.assign(new Error("Firebase client configuration is unavailable."), { status: 503 });
     const normalized = String(platform || "").trim().toLowerCase();
     if (!['android','ios'].includes(normalized)) throw Object.assign(new Error("Firebase client platform must be android or ios."), { status: 400 });
