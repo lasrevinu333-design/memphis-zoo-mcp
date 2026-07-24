@@ -167,6 +167,8 @@ try {
   assert.match(iosResponse.headers.get("content-disposition") || "", /GoogleService-Info\.plist/);
   assert.equal(await iosResponse.text(), iosConfig);
   assert.ok(calls.some((call) => call.url.includes("firebase.googleapis.com/v1beta1/projects/memphis-zoo-custodial-program/androidApps")));
+  assert.ok(calls.some((call) => call.method === "POST" && call.url.endsWith("/projects/memphis-zoo-custodial-program/androidApps")));
+  assert.ok(calls.some((call) => call.url.endsWith("/operations/provision-custodial")));
   assert.ok(calls.some((call) => call.authorization === "Bearer test-firebase-oauth-token"));
 } finally {
   globalThis.fetch = originalFetch;
