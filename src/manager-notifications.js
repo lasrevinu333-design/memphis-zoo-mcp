@@ -336,7 +336,7 @@ export function installManagerNotificationRoutes(app, { env = process.env, supab
 
   app.get("/manager-notifications-api/client-config/:platform", async (req, res) => {
     try {
-      const config = await runtime.getClientConfig(req.params?.platform);
+      const config = await runtime.getClientConfig(req.params?.platform, req.query?.app_identifier);
       const raw = Buffer.from(config.contents_base64, "base64");
       if (!raw.length) throw Object.assign(new Error("Firebase client configuration was empty."), { status: 502 });
       if (String(req.query?.format || "").toLowerCase() === "json") {
