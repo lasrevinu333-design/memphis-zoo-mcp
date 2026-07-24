@@ -78,6 +78,7 @@ const custodialAndroidConfig = {
 const iosConfig = `<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>GOOGLE_APP_ID</key><string>1:123456789:ios:test</string><key>BUNDLE_ID</key><string>org.memphiszoo.ops</string><key>PROJECT_ID</key><string>memphis-zoo-custodial-program</string></dict></plist>`;
 const originalFetch = globalThis.fetch;
 const calls = [];
+let custodialProvisioned = false;
 globalThis.fetch = async (input, init = {}) => {
   const url = String(input);
   if (/^https?:\/\/127\.0\.0\.1/.test(url)) return originalFetch(input, init);
