@@ -152,19 +152,50 @@ export function createPushRuntime({ db, env }) {
     return value.token;
   }
 
-  async function firebaseManagementRequest(pathname) {
-    const token = await accessToken(FIREBASE_READ_SCOPE);
+  async function firebaseManagementRequest(pathname, { method = "GET", scope = FIREBASE_READ_SCOPE, body = null } = {}) {
+    const token = await accessToken(scope);
     const target = `${FIREBASE_MANAGEMENT_BASE}${pathname.startsWith("/") ? pathname : "/" + pathname}`;
+    const headers = { Authorization: `Bearer ${token}`, Accept: "application/json" };
+    if (body !== null) headers["Content-Type"] = "application/json";
     const response = await fetch(target, {
-      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      method,
+      headers,
+      ...(body !== null ? { body: JSON.stringify(body) } : {}),
     });
     const payload = await response.json().catch(() => null);
     if (!response.ok) {
       const error = new Error(payload?.error?.message || `Firebase Management API returned HTTP ${response.status}.`);
-      error.status = response.status === 404 ? 404 : 502;
+      error.status = response.status;
       throw error;
     }
     return payload || {};
+  }
+
+  async function waitForFirebaseOperation(operation) {
+    if (!operation?.name) throw Object.assign(new Error("Firebase did not return a provisioning operation."), { status: 502 });
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const state = await firebaseManagementRequest(`/${operation.name}`, { scope: FIREBASE_PROVISION_SCOPE });
+      if (state?.error?.message) throw Object.assign(new Error(state.error.message), { status: 502 });
+      if (state?.done === true) return state;
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+    throw Object.assign(new Error("Firebase Android app provisioning timed out."), { status: 504 });
+  }
+
+  async function provisionCustodialAndroidApp(packageName) {
+    try {
+      const operation = await firebaseManagementRequest(
+        `/projects/${encodeURIComponent(account.project_id)}/androidApps`,
+        {
+          method: "POST",
+          scope: FIREBASE_PROVISION_SCOPE,
+          body: { packageName, displayName: "Memphis Zoo Custodial" },
+        },
+      );
+      await waitForFirebaseOperation(operation);
+    } catch (error) {
+      if (error?.status !== 409) throw error;
+    }
   }
 
   async function getClientConfig(platform, appIdentifier = null) {
