@@ -196,7 +196,7 @@ export function createPushRuntime({ db, env }) {
       filename: String(artifact.configFilename || (android ? 'google-services.json' : 'GoogleService-Info.plist')),
       contents_base64: contentsBase64,
     };
-    clientConfigCache.set(normalized, { value, expiresAt: Date.now() + 60 * 60 * 1000 });
+    clientConfigCache.set(cacheKey, { value, expiresAt: Date.now() + 60 * 60 * 1000 });
     return value;
   }
 
