@@ -19,11 +19,10 @@ const productionBaselinePath = path.resolve("supabase/migrations/00000000000000_
 function extractFunction(name) {
   const startToken = `function ${name}(`;
   const asyncStartToken = `async function ${name}(`;
-  let start = source.indexOf(startToken);
-  let asyncPrefix = "";
+  let start = source.indexOf(asyncStartToken);
+  let asyncPrefix = start >= 0 ? "async " : "";
   if (start < 0) {
-    start = source.indexOf(asyncStartToken);
-    asyncPrefix = "async ";
+    start = source.indexOf(startToken);
   }
   if (start < 0) throw new Error(`Could not find function ${name}`);
   const signatureStart = source.indexOf("(", start);
@@ -85,6 +84,7 @@ const needed = [
   "matchLocationGroup",
   "summarizeOpenAndOverloadedGroups",
   "buildFallbackSchedulerRecommendations",
+  "parsePtoReportText",
 ];
 
 const context = {
@@ -115,6 +115,34 @@ vm.createContext(context);
 for (const name of needed) {
   vm.runInContext(extractFunction(name), context, { filename: scheduleApiPath });
 }
+
+const amyPto = context.parsePtoReportText("July 30, 2026 Thursday Smith, Amy Approved");
+assert.equal(amyPto.detected_rows.length, 1, "PTO parser must retain first names beginning with uppercase A");
+assert.equal(amyPto.import_rows[0]?.employee_name, "Smith, Amy");
+
+const mixedPto = context.parsePtoReportText([
+  "July 30, 2026 Thursday Smith, Amy Approved",
+  "July 31, 2026 Friday Jones, Bob Submitted",
+].join("\n"));
+assert.deepEqual(
+  Array.from(mixedPto.detected_rows, (row) => row.employee_name),
+  ["Smith, Amy", "Jones, Bob"],
+  "one A-name row must not be silently dropped from a mixed PTO report",
+);
+
+const aiFallbackContext = {
+  parsePtoReportText() { throw new Error("No PTO rows were detected in the report text."); },
+  shouldUseGeminiForPto() { return true; },
+  async tryGeminiParsePtoReportText() {
+    return { ok: true, rows: [{ employee_name: "Amy Smith", start_date: "2026-07-30", end_date: "2026-07-30" }] };
+  },
+  chooseBestPtoParse(local, rows) { return { ...local, import_rows: rows, provider: "gemini" }; },
+};
+vm.createContext(aiFallbackContext);
+vm.runInContext(extractFunction("aiParsePtoReportText"), aiFallbackContext, { filename: scheduleApiPath });
+const aiFallbackPto = await aiFallbackContext.aiParsePtoReportText("unrecognized but non-empty PTO report layout");
+assert.equal(aiFallbackPto.provider, "gemini", "AI PTO parsing must remain reachable when the local parser detects no rows");
+assert.equal(aiFallbackPto.import_rows.length, 1);
 
 assert.equal(context.normalizePossibleDate("May 14, 2026"), "2026-05-14");
 assert.equal(context.normalizePossibleDate("May 14 2026"), "2026-05-14");

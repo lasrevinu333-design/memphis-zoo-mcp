@@ -481,6 +481,9 @@ function assertRebuildInvariants(result) {
   if (result.gps_v2_rpc !== true) failures.push("GPS v2 evidence RPC is missing");
   if (result.gps_v2_columns !== true) failures.push("GPS v2 observation/motion columns are missing");
   if (result.gps_v2_public_execute !== false) failures.push("GPS v2 evidence RPC is executable by public/anonymous/authenticated roles");
+  if (result.employee_history_rls_hardened !== true) failures.push("Employee audit history tables do not have enabled and forced RLS");
+  if (result.employee_history_browser_privileges !== false) failures.push("Employee audit history tables are accessible to browser roles");
+  if (Number(result.employee_history_service_policies) !== 2) failures.push("Employee audit history service-role policies are incomplete");
   if (failures.length) throw new Error(`Empty-database invariants failed:\n- ${failures.join("\n- ")}`);
 }
 
@@ -907,7 +910,25 @@ if (dockerContainer) {
           and exists(select 1 from information_schema.columns where table_schema='public' and table_name='device_location_proximity_status' and column_name='motion_speed_mps'),
         'gps_v2_public_execute', has_function_privilege('public', 'public.tool_evaluate_location_proximity_v2(text,text,numeric,numeric,numeric,text,text,text,timestamp with time zone)', 'EXECUTE')
           or has_function_privilege('anon', 'public.tool_evaluate_location_proximity_v2(text,text,numeric,numeric,numeric,text,text,text,timestamp with time zone)', 'EXECUTE')
-          or has_function_privilege('authenticated', 'public.tool_evaluate_location_proximity_v2(text,text,numeric,numeric,numeric,text,text,text,timestamp with time zone)', 'EXECUTE')
+          or has_function_privilege('authenticated', 'public.tool_evaluate_location_proximity_v2(text,text,numeric,numeric,numeric,text,text,text,timestamp with time zone)', 'EXECUTE'),
+        'employee_history_rls_hardened', not exists(
+          select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace
+          where n.nspname='public'
+            and c.relname in ('custodial_employee_device_assignment_history','custodial_employee_status_history')
+            and not (c.relrowsecurity and c.relforcerowsecurity)
+        ),
+        'employee_history_browser_privileges', exists(
+          select 1 from information_schema.table_privileges
+          where table_schema='public'
+            and table_name in ('custodial_employee_device_assignment_history','custodial_employee_status_history')
+            and grantee in ('PUBLIC','anon','authenticated')
+        ),
+        'employee_history_service_policies', (
+          select count(*)::int from pg_policies
+          where schemaname='public'
+            and tablename in ('custodial_employee_device_assignment_history','custodial_employee_status_history')
+            and roles @> array['service_role']::name[]
+        )
       )::text;
       `,
     ).trim().split("\n").find((line) => line.trim().startsWith("{"));
@@ -1008,7 +1029,25 @@ try {
           and exists(select 1 from information_schema.columns where table_schema='public' and table_name='device_location_proximity_status' and column_name='motion_speed_mps') as gps_v2_columns,
         has_function_privilege('public', 'public.tool_evaluate_location_proximity_v2(text,text,numeric,numeric,numeric,text,text,text,timestamp with time zone)', 'EXECUTE')
           or has_function_privilege('anon', 'public.tool_evaluate_location_proximity_v2(text,text,numeric,numeric,numeric,text,text,text,timestamp with time zone)', 'EXECUTE')
-          or has_function_privilege('authenticated', 'public.tool_evaluate_location_proximity_v2(text,text,numeric,numeric,numeric,text,text,text,timestamp with time zone)', 'EXECUTE') as gps_v2_public_execute
+          or has_function_privilege('authenticated', 'public.tool_evaluate_location_proximity_v2(text,text,numeric,numeric,numeric,text,text,text,timestamp with time zone)', 'EXECUTE') as gps_v2_public_execute,
+        not exists(
+          select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace
+          where n.nspname='public'
+            and c.relname in ('custodial_employee_device_assignment_history','custodial_employee_status_history')
+            and not (c.relrowsecurity and c.relforcerowsecurity)
+        ) as employee_history_rls_hardened,
+        exists(
+          select 1 from information_schema.table_privileges
+          where table_schema='public'
+            and table_name in ('custodial_employee_device_assignment_history','custodial_employee_status_history')
+            and grantee in ('PUBLIC','anon','authenticated')
+        ) as employee_history_browser_privileges,
+        (
+          select count(*)::int from pg_policies
+          where schemaname='public'
+            and tablename in ('custodial_employee_device_assignment_history','custodial_employee_status_history')
+            and roles @> array['service_role']::name[]
+        ) as employee_history_service_policies
     `);
     assertRebuildInvariants(counts.rows[0]);
     console.log(JSON.stringify({ ok: true, database: databaseName, migrations: migrationFiles.length, ...counts.rows[0] }, null, 2));

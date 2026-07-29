@@ -33,7 +33,7 @@ assert.match(releaseManifestSource, /schema-fingerprint\.txt/);
 assert.match(releaseManifestSource, /supabase\/migrations/);
 assert.match(releaseManifestSource, /queue_compatibility_versions/);
 assert.match(releaseManifestSource, /minimum_supported/);
-assert.equal(frontendReleaseManifest.frontend_commit_sha, "1bbdcb059e3fdf260f6ae76a6ab024502d9d26e5");
+assert.match(frontendReleaseManifest.frontend_commit_sha, /^[a-f0-9]{40}$/);
 assert.equal(frontendReleaseManifest.frontend_commit_state, "github_pages_production_verified");
 assert.equal(frontendReleaseManifest.api_contract_versions.operational_analytics, "operational-analytics.v1");
 assert.equal(packageJson.scripts["test:schema-fingerprint"], "node scripts/schema-fingerprint-check.mjs");

@@ -1,0 +1,54 @@
+name: Production disaster-recovery backup
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 7 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Require configured recovery secrets
+        run: |
+          test -n "$SUPABASE_PROJECT_REF"
+          test -n "$SUPABASE_DB_URL"
+          test -n "$SUPABASE_SERVICE_ROLE_KEY"
+          test -n "$BACKUP_ENCRYPTION_PASSPHRASE"
+      - name: Capture coherent database and Storage archive
+        env:
+          BACKUP_DIR: ${{ runner.temp }}/memphis-zoo-backup
+        run: npm run backup:production
+      - name: Verify restore archive without applying writes
+        env:
+          RESTORE_SOURCE_DIR: ${{ runner.temp }}/memphis-zoo-backup
+        run: npm run restore:verify
+      - name: Encrypt archive
+        env:
+          BACKUP_DIR: ${{ runner.temp }}/memphis-zoo-backup
+          ARCHIVE_PATH: ${{ runner.temp }}/memphis-zoo-backup.tar.gz
+          ENCRYPTED_PATH: ${{ runner.temp }}/memphis-zoo-backup.tar.gz.enc
+        run: |
+          tar -C "$BACKUP_DIR" -czf "$ARCHIVE_PATH" .
+          openssl enc -aes-256-cbc -salt -pbkdf2 -iter 250000 -in "$ARCHIVE_PATH" -out "$ENCRYPTED_PATH" -pass env:BACKUP_ENCRYPTION_PASSPHRASE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: memphis-zoo-disaster-recovery-${{ github.run_id }}
+          path: ${{ runner.temp }}/memphis-zoo-backup.tar.gz.enc
+          retention-days: 14
+          if-no-files-found: error

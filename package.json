@@ -54,10 +54,16 @@
     "test:manager-notifications": "node scripts/manager-notification-contract-tests.mjs",
     "test:employee-notifications": "node scripts/employee-notification-contract-tests.mjs",
     "test:batch2": "node scripts/batch-2-event-messenger-cutover-tests.mjs",
-    "test:batch2-db": "node scripts/batch-2-event-messenger-cutover-database-tests.mjs"
+    "test:batch2-db": "node scripts/batch-2-event-messenger-cutover-database-tests.mjs",
+    "release:live:check": "node scripts/live-release-alignment-check.mjs",
+    "backup:production": "node scripts/production-backup.mjs",
+    "restore:verify": "node scripts/production-restore.mjs",
+    "restore:production": "RESTORE_APPLY=true node scripts/production-restore.mjs",
+    "test:audit3-repairs": "node scripts/audit3-repair-contract-tests.mjs",
+    "test:audit3-restore-drill": "node scripts/production-restore-drill.mjs"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.18.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@supabase/supabase-js": "^2.103.2",
     "argon2": "^0.44.0",
     "dotenv": "^17.2.3",
@@ -66,5 +72,8 @@
     "octokit": "^5.0.3",
     "pg": "^8.21.0",
     "zod": "^4.1.12"
+  },
+  "overrides": {
+    "@hono/node-server": "2.0.12"
   }
 }

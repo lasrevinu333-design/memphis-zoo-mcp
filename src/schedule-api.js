@@ -2249,7 +2249,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
   function parsePtoReportText(reportText = "") {
     const text = String(reportText || "").replace(/\r/g, " ").replace(/\n/g, " ").replace(/\s+/g, " ").trim();
     if (!text) throw new Error("report_text is required.");
-    const rowPattern = /(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{1,2}),\s+(\d{4})\s+(Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday)\s+([^,]+,\s*[^A\d]+?(?:\s+[A-Z])?)\s+(Approved|Submitted|Cancelled|Refused)\b/g;
+    const rowPattern = /(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{1,2}),\s+(\d{4})\s+(Sunday|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday)\s+([^,]+,\s*[^\d]+?(?:\s+[A-Z])?)\s+(Approved|Submitted|Cancelled|Refused)\b/g;
     const rows = [];
     let match;
     while ((match = rowPattern.exec(text)) !== null) {
@@ -2446,13 +2446,32 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
   }
 
   async function aiParsePtoReportText(reportText = "") {
-    const local = parsePtoReportText(reportText);
+    let local;
+    let localError = null;
+    try {
+      local = parsePtoReportText(reportText);
+    } catch (error) {
+      if (!String(reportText || "").trim()) throw error;
+      localError = error;
+      local = {
+        detected_rows: [],
+        kept_rows: [],
+        import_rows: [],
+        provider: "local-parser",
+        providers_used: ["local-parser"],
+        fallback_count: 0,
+      };
+    }
     if (!shouldUseGeminiForPto(local)) return local;
     try {
       const geminiResult = await tryGeminiParsePtoReportText(reportText, local);
-      if (!geminiResult?.ok || !Array.isArray(geminiResult.rows)) return local;
+      if (!geminiResult?.ok || !Array.isArray(geminiResult.rows)) {
+        if (localError) throw localError;
+        return local;
+      }
       return chooseBestPtoParse(local, geminiResult.rows);
-    } catch {
+    } catch (error) {
+      if (localError) throw localError;
       return local;
     }
   }

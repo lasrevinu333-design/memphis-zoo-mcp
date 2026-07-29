@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import express from "express";
-import { createEventMaintenanceController, createEventsAdminRouter } from "../src/events-api.js";
+import { createEventMaintenanceController, createEventsAdminRouter, createEventsPublicRouter } from "../src/events-api.js";
 
 const TEST_GROUP_ID = "00000000-0000-4000-8000-000000000001";
 const TEST_VENUE_ID = "10000000-0000-4000-8000-000000000001";
@@ -125,6 +125,55 @@ async function withServer(app, fn) {
     await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   }
 }
+
+function buildPublicApp(eventRows = []) {
+  const app = express();
+  app.use("/dashboard-api/events", createEventsPublicRouter({
+    runReadOnlySql: async (sql) => /from public\.events_app_events/i.test(sql) ? eventRows : [],
+    runWriteSql: async () => [],
+    buildHealthPayload: (area, extra) => ({ ok: true, area, ...extra }),
+    appVersion: "test",
+    releaseId: "test",
+    maintenanceController: { getStatus: () => null },
+  }));
+  return app;
+}
+
+await withServer(buildPublicApp([{
+  id: "80000000-0000-4000-8000-000000000001",
+  event_name: "Public Event",
+  event_title: "Public Event",
+  event_date: "2026-08-01",
+  end_date: "2026-08-01",
+  start_time: "10:00:00",
+  end_time: "12:00:00",
+  spans_overnight: false,
+  attendee_count: 100,
+  display_location: "Event Center",
+  venue_name: "Event Center",
+  status: "SCHEDULED",
+  event_timezone: "America/Chicago",
+  notes: "Internal staffing note",
+  created_by: "Private Manager",
+  overridden_by: "Private Editor",
+  parse_reason: "Internal parser reason",
+  parser_confidence: "high",
+  coverage_location_ids: [TEST_RESTROOM_GROUP_ID],
+  staffing_area_ids: [TEST_GROUP_ID],
+  source_location_text: "source payload",
+}]), async (baseUrl) => {
+  const response = await fetch(`${baseUrl}/dashboard-api/events`);
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.deepEqual(Object.keys(payload.data[0]).sort(), [
+    "attendee_count", "display_location", "end_date", "end_time", "event_date", "event_name",
+    "event_timezone", "event_title", "id", "spans_overnight", "start_time", "status", "venue_name",
+  ]);
+  for (const privateField of [
+    "notes", "created_by", "overridden_by", "parse_reason", "parser_confidence",
+    "coverage_location_ids", "staffing_area_ids", "source_location_text",
+  ]) assert.equal(privateField in payload.data[0], false, `public event leaked ${privateField}`);
+});
 
 await withServer(buildApp(), async (baseUrl) => {
   const response = await fetch(`${baseUrl}/admin-api/events/parse-test`, {

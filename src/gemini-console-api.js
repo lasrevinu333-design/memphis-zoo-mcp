@@ -203,6 +203,7 @@ export function createGeminiConsoleRouter({
   appVersion,
   releaseId,
   schemaFingerprint,
+  backendCommit = "unknown",
   frontendCommit = "unknown",
 } = {}) {
   if (typeof requireOpsManagerAuth !== "function") throw new Error("Gemini Console requires trusted manager authentication.");
@@ -333,7 +334,7 @@ export function createGeminiConsoleRouter({
       p_authorization_message_id: userMessage.message_id,
       p_operation_id: userMessage.client_message_id,
       p_release_id: releaseId,
-      p_backend_commit: releaseId,
+      p_backend_commit: backendCommit,
       p_frontend_commit: frontendCommit,
       p_schema_fingerprint: schemaFingerprint,
       p_correlation_id: correlationId,

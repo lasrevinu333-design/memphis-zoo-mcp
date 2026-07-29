@@ -17,6 +17,7 @@ import { installCustodialEmployeeAdminRoutes } from "./custodial-employee-admin.
 import { installManagerNotificationRoutes } from "./manager-notifications.js";
 import { installEmployeeNotificationRoutes } from "./employee-notifications.js";
 import { installOperationalAnalyticsRoutes } from "./operational-analytics-api.js";
+import { runReadOnlySql as runSupabaseReadOnlySql } from "./supabase/read.js";
 
 /**
  * Compatibility/bootstrap layer for the Memphis Zoo MCP server.
@@ -50,6 +51,11 @@ function getAppInfo() {
   };
 }
 
+async function runEmployeeNotificationReadSql(sql) {
+  const result = await runSupabaseReadOnlySql({ sql });
+  return result.rows;
+}
+
 function installHttpDiagnostics(app) {
   if (!app || app.__memphisHttpDiagnosticsInstalled) return;
   const requireOpsManagerAuth = makeOpsAccessMiddleware();
@@ -64,7 +70,10 @@ function installHttpDiagnostics(app) {
   installLeadershipHttpRoutes(app);
   installCustodialEmployeeAdminRoutes(app);
   const managerNotificationRuntime = installManagerNotificationRoutes(app);
-  installEmployeeNotificationRoutes(app, { pushRuntime: managerNotificationRuntime });
+  installEmployeeNotificationRoutes(app, {
+    pushRuntime: managerNotificationRuntime,
+    runReadOnlySql: runEmployeeNotificationReadSql,
+  });
   installOperationalAnalyticsRoutes(app);
   app.get("/mcp-tools.json", requireOpsManagerAuth, (_req, res) => {
     res.status(200).json(getToolManifest({ includePlanned: true }));

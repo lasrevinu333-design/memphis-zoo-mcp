@@ -33,10 +33,12 @@ export function installEmployeeNotificationRoutes(app, {
   env = process.env,
   supabase = null,
   pushRuntime = null,
+  runReadOnlySql = null,
 } = {}) {
   if (!app || runtimeByApp.has(app)) return runtimeByApp.get(app) || null;
   const db = supabase || createSupabase(env);
-  const requireEmployee = makeDeviceCredentialMiddleware({ supabase: db });
+  const authReadConfigured = typeof runReadOnlySql === 'function';
+  const requireEmployee = makeDeviceCredentialMiddleware({ supabase: db, runReadOnlySql });
   const workerId = `employee-event-push-${process.pid}-${crypto.randomUUID()}`;
   let inFlight = false;
 
@@ -45,14 +47,29 @@ export function installEmployeeNotificationRoutes(app, {
     if (req.method === 'OPTIONS') return res.sendStatus(200);
     next();
   });
-  app.get(`${API_PREFIX}/health`, (_req, res) => {
-    res.status(db && pushRuntime?.configured ? 200 : 503).json({
-      ok: Boolean(db && pushRuntime?.configured),
+  app.get(`${API_PREFIX}/health`, async (_req, res) => {
+    let databaseReachable = false;
+    if (db && authReadConfigured) {
+      try {
+        const rows = await runReadOnlySql('select true as employee_notification_auth_ready');
+        databaseReachable = rows?.[0]?.employee_notification_auth_ready === true;
+      } catch {
+        databaseReachable = false;
+      }
+    }
+    const ok = Boolean(db && pushRuntime?.configured && authReadConfigured && databaseReachable);
+    res.status(ok ? 200 : 503).json({
+      ok,
       contract_version: 'employee-event-push.v1',
       provider: 'fcm',
       messenger_fallback: false,
       notification_kinds: ['day_before', 'shift_plus_15'],
       swipe_dismissal: 'local_only',
+      dependencies: {
+        database_reachable: databaseReachable,
+        device_auth_resolver_configured: authReadConfigured,
+        push_provider_configured: Boolean(pushRuntime?.configured),
+      },
     });
   });
 
