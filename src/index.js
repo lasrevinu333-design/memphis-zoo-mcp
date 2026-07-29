@@ -24,6 +24,7 @@ import { makeMcpConnectorMiddleware } from "./auth/mcp-connector-auth.js";
 import { installDeviceCredentialRoutes, makeDeviceCredentialMiddleware } from "./auth/device-credential-auth.js";
 import { runReadOnlySql as runSupabaseReadOnlySql } from "./supabase/read.js";
 import { createGeminiConsoleRouter } from "./gemini-console-api.js";
+import { createGeminiControlledRepairWorker } from "./gemini-controlled-worker.js";
 
 const app = express();
 app.use(express.json({ limit: "10mb" }));
@@ -39,6 +40,15 @@ const supabaseAdmin =
         auth: { persistSession: false, autoRefreshToken: false },
       })
     : null;
+const BACKEND_COMMIT_SHA = String(
+  process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || process.env.SOURCE_VERSION || "unknown"
+).trim() || "unknown";
+const geminiControlledRepairWorker = createGeminiControlledRepairWorker({
+  supabase: supabaseAdmin,
+  releaseId: RELEASE_ID,
+  backendCommit: BACKEND_COMMIT_SHA,
+});
+geminiControlledRepairWorker.start();
 const opsTrustedDeviceStore = createSupabaseTrustedDeviceStore(supabaseAdmin);
 
 const SCAN_RPC_ALLOWLIST = new Set([
@@ -2280,6 +2290,7 @@ app.use(
     appVersion: APP_VERSION,
     releaseId: RELEASE_ID,
     schemaFingerprint: buildReleaseManifest({ appVersion: APP_VERSION, releaseId: RELEASE_ID }).schema.fingerprint,
+    backendCommit: BACKEND_COMMIT_SHA,
     frontendCommit: process.env.FRONTEND_COMMIT_SHA || "unknown",
   }),
 );

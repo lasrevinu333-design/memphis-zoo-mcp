@@ -389,6 +389,26 @@ async function listUpcomingEvents(runReadOnlySql) {
   return Array.isArray(rows) ? rows : [];
 }
 
+const PUBLIC_EVENT_FIELDS = Object.freeze([
+  "id",
+  "event_name",
+  "event_title",
+  "event_date",
+  "end_date",
+  "start_time",
+  "end_time",
+  "spans_overnight",
+  "attendee_count",
+  "display_location",
+  "venue_name",
+  "status",
+  "event_timezone",
+]);
+
+function toPublicEvent(event = {}) {
+  return Object.fromEntries(PUBLIC_EVENT_FIELDS.map((field) => [field, event[field] ?? null]));
+}
+
 function buildEventResponseSelectSql(whereSql, suffixSql = "") {
   const where = String(whereSql || "").trim();
   const suffix = String(suffixSql || "").trim();
@@ -918,7 +938,7 @@ export function createEventsPublicRouter({
 
   router.get("/", async (_req, res) => {
     try {
-      const events = await listUpcomingEvents(runReadOnlySql);
+      const events = (await listUpcomingEvents(runReadOnlySql)).map(toPublicEvent);
       res.status(200).json({
         ok: true,
         data: events,
