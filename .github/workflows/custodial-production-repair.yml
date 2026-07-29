@@ -43,6 +43,7 @@ jobs:
           npm run --silent test:event-integrity
           npm run --silent test:batch2
           npm run --silent test:operational-analytics
+          npm run --silent test:audit4-repairs
           npm run --silent test:feedback
           npm run --silent test:schedule-ai
           npm run --silent test:ai-intent

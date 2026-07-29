@@ -25,6 +25,7 @@ import { installDeviceCredentialRoutes, makeDeviceCredentialMiddleware } from ".
 import { runReadOnlySql as runSupabaseReadOnlySql } from "./supabase/read.js";
 import { createGeminiConsoleRouter } from "./gemini-console-api.js";
 import { createGeminiControlledRepairWorker } from "./gemini-controlled-worker.js";
+import { normalizeAttendanceRecord, toNullableNonNegativeInteger } from "./attendance-state.js";
 
 const app = express();
 app.use(express.json({ limit: "10mb" }));
@@ -82,6 +83,7 @@ const CANARY_DEVICE_ID = "canary-check";
 const ATTENDANCE_SOURCE_URL = String(process.env.ND_MEMZOO_ATTENDANCE_URL || "https://nd.memzoo.org").trim();
 const ATTENDANCE_TIMEOUT_MS = toSafeInt(process.env.ND_MEMZOO_ATTENDANCE_TIMEOUT_MS, 8000);
 const ATTENDANCE_CACHE_MS = toSafeInt(process.env.ND_MEMZOO_ATTENDANCE_CACHE_MS, 60000);
+const ATTENDANCE_STALE_AFTER_MS = toSafeInt(process.env.ND_MEMZOO_ATTENDANCE_STALE_AFTER_MS, 60 * 60 * 1000);
 const ATTENDANCE_CF_CLEARANCE = String(process.env.ND_MEMZOO_CF_CLEARANCE || "").trim();
 const FEEDBACK_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 const FEEDBACK_IMAGE_BUCKET = String(process.env.FEEDBACK_IMAGE_BUCKET || "system-feedback-private").trim();
@@ -632,12 +634,6 @@ function toSafeNonNegativeInt(value, fallback = 0) {
   return parsed;
 }
 
-function toNullableInt(value) {
-  if (value == null || value === "") return null;
-  const parsed = Number.parseInt(String(value), 10);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
 function sqlLiteral(value) {
   if (value == null) return "null";
   return `'${String(value).replace(/'/g, "''")}'`;
@@ -691,33 +687,6 @@ function parseAttendanceHtml(html) {
   };
 }
 
-function normalizeAttendanceRecord(row) {
-  if (!row) return null;
-  const attendance = toNullableInt(row.attendance);
-  const lastYear = toNullableInt(row.last_year);
-  const planned = toNullableInt(row.planned);
-  const yesterday = toNullableInt(row.yesterday);
-  const yesterdayPlan = toNullableInt(row.yesterday_plan);
-  if (attendance == null && lastYear == null && planned == null && yesterday == null && yesterdayPlan == null) {
-    return null;
-  }
-  return {
-    attendance,
-    last_year: lastYear,
-    planned,
-    yesterday,
-    yesterday_plan: yesterdayPlan,
-    parse_method: row.parse_method || "stored_state",
-    source_url: row.source_url || null,
-    source: row.source || null,
-    content_type: row.content_type || null,
-    fetched_at: row.fetched_at || null,
-    updated_at: row.updated_at || null,
-    cached: false,
-    stale: false,
-  };
-}
-
 async function loadStoredAttendance() {
   const rows = await runReadOnlySql(`
     select attendance, last_year, planned, yesterday, yesterday_plan, source, fetched_at, updated_at
@@ -726,20 +695,30 @@ async function loadStoredAttendance() {
     limit 1
   `);
   if (!Array.isArray(rows) || rows.length === 0) return null;
-  return normalizeAttendanceRecord(rows[0]);
+  return normalizeAttendanceRecord(rows[0], { staleAfterMs: ATTENDANCE_STALE_AFTER_MS });
 }
 
 async function persistAttendanceState(payload = {}) {
-  const attendance = toNullableInt(payload.attendance);
-  const lastYear = toNullableInt(payload.last_year);
-  const planned = toNullableInt(payload.planned);
-  const yesterday = toNullableInt(payload.yesterday);
-  const yesterdayPlan = toNullableInt(payload.yesterday_plan);
+  const attendance = toNullableNonNegativeInteger(payload.attendance);
+  const lastYear = toNullableNonNegativeInteger(payload.last_year);
+  const planned = toNullableNonNegativeInteger(payload.planned);
+  const yesterday = toNullableNonNegativeInteger(payload.yesterday);
+  const yesterdayPlan = toNullableNonNegativeInteger(payload.yesterday_plan);
   const source = payload.source == null ? null : String(payload.source);
   const fetchedAt = payload.fetched_at == null ? null : String(payload.fetched_at);
 
   if (attendance == null) {
-    throw new Error("attendance is required and must be an integer.");
+    throw Object.assign(new Error("attendance is required and must be a nonnegative integer."), { status: 422 });
+  }
+  for (const [name, original, normalized] of [
+    ["last_year", payload.last_year, lastYear],
+    ["planned", payload.planned, planned],
+    ["yesterday", payload.yesterday, yesterday],
+    ["yesterday_plan", payload.yesterday_plan, yesterdayPlan],
+  ]) {
+    if (original != null && original !== "" && normalized == null) {
+      throw Object.assign(new Error(`${name} must be a nonnegative integer when provided.`), { status: 422 });
+    }
   }
 
   await runWriteSql(
@@ -2581,12 +2560,21 @@ app.get("/dashboard-api/canary", async (_req, res) => {
 app.get("/dashboard-api/current-attendance", async (_req, res) => {
   try {
     const stored = await loadStoredAttendance();
-    if (stored) {
+    if (stored && !stored.stale) {
       res.status(200).json({ ok: true, data: stored, meta: { version: APP_VERSION, release_id: RELEASE_ID, mode: "stored" } });
       return;
     }
-    const data = await fetchCurrentAttendance();
-    res.status(200).json({ ok: true, data, meta: { version: APP_VERSION, release_id: RELEASE_ID, mode: "scrape" } });
+    try {
+      const data = await fetchCurrentAttendance({ force: Boolean(stored) });
+      res.status(200).json({ ok: true, data, meta: { version: APP_VERSION, release_id: RELEASE_ID, mode: "scrape_fallback" } });
+    } catch (error) {
+      if (!stored) throw error;
+      res.status(200).json({
+        ok: true,
+        data: { ...stored, stale: true, warning: error?.message || stored.warning || "Attendance source refresh failed." },
+        meta: { version: APP_VERSION, release_id: RELEASE_ID, mode: "stale_stored_fallback" },
+      });
+    }
   }
   catch (error) { console.error("current attendance fetch failed:", error); res.status(502).json({ ok: false, error: error.message || "Current attendance fetch failed", source_url: ATTENDANCE_SOURCE_URL }); }
 });

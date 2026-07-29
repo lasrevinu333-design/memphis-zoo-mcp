@@ -19573,6 +19573,14 @@
       "validated": true
     },
     {
+      "constraint_name": "cleaning_inspections_failed_requires_follow_up",
+      "constraint_type": "c",
+      "definition": "CHECK (follow_up_required OR NOT critical_failure AND overall_score >= pass_threshold)",
+      "schema_name": "public",
+      "table_name": "cleaning_inspections",
+      "validated": true
+    },
+    {
       "constraint_name": "cleaning_inspections_findings_shape",
       "constraint_type": "c",
       "definition": "CHECK (jsonb_typeof(findings_json) = ANY (ARRAY['array'::text, 'object'::text]))",
@@ -19632,6 +19640,14 @@
       "constraint_name": "cleaning_inspections_pkey",
       "constraint_type": "p",
       "definition": "PRIMARY KEY (id)",
+      "schema_name": "public",
+      "table_name": "cleaning_inspections",
+      "validated": true
+    },
+    {
+      "constraint_name": "cleaning_inspections_rubric_nonblank",
+      "constraint_type": "c",
+      "definition": "CHECK (length(btrim(rubric_version)) > 0)",
       "schema_name": "public",
       "table_name": "cleaning_inspections",
       "validated": true
@@ -19773,6 +19789,14 @@
       "validated": true
     },
     {
+      "constraint_name": "current_attendance_state_attendance_nonnegative",
+      "constraint_type": "c",
+      "definition": "CHECK (attendance IS NULL OR attendance >= 0)",
+      "schema_name": "public",
+      "table_name": "current_attendance_state",
+      "validated": true
+    },
+    {
       "constraint_name": "current_attendance_state_id_check",
       "constraint_type": "c",
       "definition": "CHECK (id = 1)",
@@ -19781,9 +19805,41 @@
       "validated": true
     },
     {
+      "constraint_name": "current_attendance_state_last_year_nonnegative",
+      "constraint_type": "c",
+      "definition": "CHECK (last_year IS NULL OR last_year >= 0)",
+      "schema_name": "public",
+      "table_name": "current_attendance_state",
+      "validated": true
+    },
+    {
       "constraint_name": "current_attendance_state_pkey",
       "constraint_type": "p",
       "definition": "PRIMARY KEY (id)",
+      "schema_name": "public",
+      "table_name": "current_attendance_state",
+      "validated": true
+    },
+    {
+      "constraint_name": "current_attendance_state_planned_nonnegative",
+      "constraint_type": "c",
+      "definition": "CHECK (planned IS NULL OR planned >= 0)",
+      "schema_name": "public",
+      "table_name": "current_attendance_state",
+      "validated": true
+    },
+    {
+      "constraint_name": "current_attendance_state_yesterday_nonnegative",
+      "constraint_type": "c",
+      "definition": "CHECK (yesterday IS NULL OR yesterday >= 0)",
+      "schema_name": "public",
+      "table_name": "current_attendance_state",
+      "validated": true
+    },
+    {
+      "constraint_name": "current_attendance_state_yesterday_plan_nonnegative",
+      "constraint_type": "c",
+      "definition": "CHECK (yesterday_plan IS NULL OR yesterday_plan >= 0)",
       "schema_name": "public",
       "table_name": "current_attendance_state",
       "validated": true
@@ -24745,7 +24801,7 @@
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.cleaning_inspections_set_snapshot()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_session record;\n  v_inspector_name text;\nbegin\n  if tg_op='UPDATE' then\n    if new.operation_id is distinct from old.operation_id then\n      raise exception using errcode='23514',message='Inspection operation_id is immutable';\n    end if;\n    if new.session_id is distinct from old.session_id then\n      raise exception using errcode='23514',message='Inspection session_id is immutable';\n    end if;\n  end if;\n\n  select\n    s.location_id,s.employee_id,s.started_at,s.ended_at,s.duration_minutes,s.status,\n    l.location_code,l.location_name,e.display_name employee_name\n  into v_session\n  from public.sessions s\n  join public.locations l on l.id=s.location_id\n  join public.employees e on e.id=s.employee_id\n  where s.id=new.session_id;\n\n  if not found then\n    raise exception using errcode='P0002',message='Cleaning session was not found';\n  end if;\n  if v_session.status not in ('pending_submit','closed') then\n    raise exception using errcode='23514',message='Only a finished cleaning session can be inspected';\n  end if;\n\n  new.location_id:=v_session.location_id;\n  new.employee_id:=v_session.employee_id;\n  new.employee_name_snapshot:=v_session.employee_name;\n  new.location_code_snapshot:=v_session.location_code;\n  new.location_name_snapshot:=v_session.location_name;\n  new.session_started_at:=v_session.started_at;\n  new.session_ended_at:=v_session.ended_at;\n  new.session_duration_minutes:=coalesce(\n    v_session.duration_minutes,\n    case when v_session.ended_at is not null\n      then greatest(0,ceil(extract(epoch from (v_session.ended_at-v_session.started_at))/60.0)::integer)\n      else null end\n  );\n\n  if new.inspector_manager_id is not null then\n    select m.display_name into v_inspector_name\n    from public.ops_manager_managers m\n    where m.manager_id=new.inspector_manager_id\n      and m.active=true and m.revoked_at is null and m.is_system_principal=false;\n    if not found then\n      raise exception using errcode='23503',message='Active inspector manager was not found';\n    end if;\n    new.inspector_name_snapshot:=v_inspector_name;\n  else\n    new.inspector_name_snapshot:=coalesce(nullif(btrim(new.inspector_name_snapshot),''),'Custodial Manager');\n  end if;\n\n  new.updated_at:=clock_timestamp();\n  return new;\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.cleaning_inspections_set_snapshot()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_session record;\n  v_inspector_name text;\nbegin\n  if tg_op='UPDATE' then\n    if new.operation_id is distinct from old.operation_id then\n      raise exception using errcode='23514',message='Inspection operation_id is immutable';\n    end if;\n    if new.session_id is distinct from old.session_id then\n      raise exception using errcode='23514',message='Inspection session_id is immutable';\n    end if;\n  end if;\n\n  select\n    s.location_id,s.employee_id,s.started_at,s.ended_at,s.duration_minutes,s.status,\n    l.location_code,l.location_name,e.display_name employee_name\n  into v_session\n  from public.sessions s\n  join public.locations l on l.id=s.location_id\n  join public.employees e on e.id=s.employee_id\n  where s.id=new.session_id;\n\n  if not found then\n    raise exception using errcode='P0002',message='Cleaning session was not found';\n  end if;\n  if v_session.status not in ('pending_submit','closed') then\n    raise exception using errcode='23514',message='Only a finished cleaning session can be inspected';\n  end if;\n  if new.inspected_at<coalesce(v_session.ended_at,v_session.started_at) then\n    raise exception using errcode='23514',message='Inspection time cannot be before the cleaning session finished';\n  end if;\n  if new.inspected_at>clock_timestamp()+interval '5 minutes' then\n    raise exception using errcode='23514',message='Inspection time cannot be in the future';\n  end if;\n\n  new.location_id:=v_session.location_id;\n  new.employee_id:=v_session.employee_id;\n  new.employee_name_snapshot:=v_session.employee_name;\n  new.location_code_snapshot:=v_session.location_code;\n  new.location_name_snapshot:=v_session.location_name;\n  new.session_started_at:=v_session.started_at;\n  new.session_ended_at:=v_session.ended_at;\n  new.session_duration_minutes:=coalesce(\n    v_session.duration_minutes,\n    case when v_session.ended_at is not null\n      then greatest(0,ceil(extract(epoch from (v_session.ended_at-v_session.started_at))/60.0)::integer)\n      else null end\n  );\n\n  if new.inspector_manager_id is not null then\n    select m.display_name into v_inspector_name\n    from public.ops_manager_managers m\n    where m.manager_id=new.inspector_manager_id\n      and m.active=true and m.revoked_at is null and m.is_system_principal=false;\n    if not found then\n      raise exception using errcode='23503',message='Active inspector manager was not found';\n    end if;\n    new.inspector_name_snapshot:=v_inspector_name;\n  else\n    new.inspector_name_snapshot:=coalesce(nullif(btrim(new.inspector_name_snapshot),''),'Custodial Manager');\n  end if;\n\n  new.updated_at:=clock_timestamp();\n  return new;\nend\n$function$\n",
       "function_name": "cleaning_inspections_set_snapshot",
       "identity_arguments": "",
       "schema_name": "public"
@@ -25291,7 +25347,7 @@
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.msg_ensure_ops_manager_user(p_manager_id uuid)\n RETURNS msg_users\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_manager public.ops_manager_managers%rowtype;\n  v_user public.msg_users%rowtype;\n  v_display_name text;\nbegin\n  if p_manager_id is null then\n    raise exception using errcode='22023',message='Authenticated leadership manager id is required';\n  end if;\n  perform pg_advisory_xact_lock(hashtextextended('named-manager-messenger:'||p_manager_id::text,0));\n  select * into v_manager\n  from public.ops_manager_managers\n  where manager_id=p_manager_id\n    and active=true\n    and revoked_at is null\n    and is_system_principal=false\n  for update;\n  if v_manager.manager_id is null then\n    raise exception using errcode='42501',message='Active named leadership identity was not found';\n  end if;\n\n  select * into v_user\n  from public.msg_users\n  where ops_manager_id=p_manager_id\n  order by created_at,id\n  limit 1\n  for update;\n\n  if v_user.id is null then\n    select * into v_user\n    from public.msg_users\n    where ops_manager_id is null\n      and lower(btrim(display_name))=lower(btrim(v_manager.display_name))\n      and coalesce(messaging_identity_key,'')<>'ops_manager_shared_identity_v1'\n    order by is_active desc,created_at,id\n    limit 1\n    for update;\n    if v_user.id is not null then\n      update public.msg_users\n      set ops_manager_id=p_manager_id,\n          display_name=btrim(v_manager.display_name),\n          role='manager',\n          is_active=true,\n          messaging_identity_key=null,\n          updated_at=now()\n      where id=v_user.id\n      returning * into v_user;\n    end if;\n  end if;\n\n  if v_user.id is null then\n    v_display_name:=btrim(v_manager.display_name);\n    if exists(select 1 from public.msg_users where lower(btrim(display_name))=lower(v_display_name)) then\n      v_display_name:=left(v_display_name,80)||' · Leadership';\n    end if;\n    insert into public.msg_users(display_name,role,is_active,ops_manager_id,messaging_identity_key)\n    values(v_display_name,'manager',true,p_manager_id,null)\n    returning * into v_user;\n  elsif v_user.is_active is false or v_user.role<>'manager' or v_user.display_name is distinct from btrim(v_manager.display_name) then\n    -- Prefer the exact real name. The fallback preserves startup if an old\n    -- unrelated row still owns that globally unique display name.\n    begin\n      update public.msg_users\n      set display_name=btrim(v_manager.display_name),role='manager',is_active=true,\n          messaging_identity_key=null,updated_at=now()\n      where id=v_user.id\n      returning * into v_user;\n    exception when unique_violation then\n      update public.msg_users\n      set role='manager',is_active=true,messaging_identity_key=null,updated_at=now()\n      where id=v_user.id\n      returning * into v_user;\n    end;\n  end if;\n  return v_user;\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_ensure_ops_manager_user(p_manager_id uuid)\n RETURNS msg_users\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_manager public.ops_manager_managers%rowtype;\n  v_user public.msg_users%rowtype;\n  v_display_name text;\nbegin\n  if p_manager_id is null then\n    raise exception using errcode='22023',message='Authenticated leadership manager id is required';\n  end if;\n  perform pg_advisory_xact_lock(hashtextextended('named-manager-messenger:'||p_manager_id::text,0));\n  select * into v_manager\n  from public.ops_manager_managers\n  where manager_id=p_manager_id\n    and active=true\n    and revoked_at is null\n    and is_system_principal=false\n  for update;\n  if v_manager.manager_id is null then\n    raise exception using errcode='42501',message='Active named leadership identity was not found';\n  end if;\n\n  select * into v_user\n  from public.msg_users\n  where ops_manager_id=p_manager_id\n  order by created_at,id\n  limit 1\n  for update;\n\n  if v_user.id is null then\n    select * into v_user\n    from public.msg_users\n    where ops_manager_id is null\n      and lower(btrim(display_name))=lower(btrim(v_manager.display_name))\n      and coalesce(messaging_identity_key,'')<>'ops_manager_shared_identity_v1'\n    order by is_active desc,created_at,id\n    limit 1\n    for update;\n    if v_user.id is not null then\n      update public.msg_users\n      set ops_manager_id=p_manager_id,\n          display_name=btrim(v_manager.display_name),\n          role='manager',\n          is_active=true,\n          messaging_identity_key=null,\n          updated_at=now()\n      where id=v_user.id\n      returning * into v_user;\n    end if;\n  end if;\n\n  if v_user.id is null then\n    v_display_name:=btrim(v_manager.display_name);\n    if exists(select 1 from public.msg_users where lower(btrim(display_name))=lower(v_display_name)) then\n      v_display_name:=left(v_display_name,80)||' · Leadership';\n    end if;\n    insert into public.msg_users(display_name,role,is_active,ops_manager_id,messaging_identity_key)\n    values(v_display_name,'manager',true,p_manager_id,null)\n    returning * into v_user;\n  elsif v_user.is_active is false or v_user.role<>'manager' or v_user.display_name is distinct from btrim(v_manager.display_name) then\n    begin\n      update public.msg_users\n      set display_name=btrim(v_manager.display_name),role='manager',is_active=true,\n          messaging_identity_key=null,updated_at=now()\n      where id=v_user.id\n      returning * into v_user;\n    exception when unique_violation then\n      update public.msg_users\n      set role='manager',is_active=true,messaging_identity_key=null,updated_at=now()\n      where id=v_user.id\n      returning * into v_user;\n    end;\n  end if;\n  return v_user;\nend\n$function$\n",
       "function_name": "msg_ensure_ops_manager_user",
       "identity_arguments": "p_manager_id uuid",
       "schema_name": "public"
@@ -25333,7 +25389,7 @@
     },
     {
       "comment": "Compatibility-only bootstrap RPC. Returns the archived inactive Operations Leadership room and never reactivates it.",
-      "definition": "CREATE OR REPLACE FUNCTION public.msg_get_or_create_ops_manager_thread(p_manager_id uuid)\n RETURNS msg_threads\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_manager public.ops_manager_managers%rowtype;\n  v_user public.msg_users%rowtype;\n  v_thread public.msg_threads%rowtype;\nbegin\n  if p_manager_id is null then\n    raise exception using errcode='22023',message='Authenticated leadership manager id is required';\n  end if;\n\n  select * into v_manager\n  from public.ops_manager_managers\n  where manager_id=p_manager_id\n    and active=true\n    and revoked_at is null\n    and is_system_principal=false\n    and roles && array['OPS_MANAGER','CUSTODIAL_MANAGER','DIRECTOR','SECURITY_ADMIN']::text[];\n  if v_manager.manager_id is null then\n    raise exception using errcode='42501',message='Active authenticated Operations Leadership identity was not found';\n  end if;\n\n  v_user:=public.msg_ensure_ops_manager_user(p_manager_id);\n  perform pg_advisory_xact_lock(hashtextextended('operations-leadership-chat-v1-retired',0));\n  select * into v_thread\n  from public.msg_threads\n  where system_key='ops_manager_shared_chat_v1'\n  order by created_at,id\n  limit 1\n  for update;\n\n  if v_thread.id is null then\n    insert into public.msg_threads(thread_type,title,created_by_user_id,is_active,system_key)\n    values('group','Operations Leadership Chat (Retired)',v_user.id,false,'ops_manager_shared_chat_v1')\n    returning * into v_thread;\n  else\n    update public.msg_threads\n    set is_active=false,\n        thread_type='group',\n        title='Operations Leadership Chat (Retired)',\n        updated_at=now()\n    where id=v_thread.id\n    returning * into v_thread;\n  end if;\n\n  -- Preserve the historical participant/audit relationship without exposing an\n  -- active room in thread listings.  This also keeps old message ownership\n  -- intelligible if the archived record is inspected later.\n  insert into public.msg_thread_participants(thread_id,user_id,joined_at,left_at)\n  values(v_thread.id,v_user.id,now(),null)\n  on conflict(thread_id,user_id) do update\n    set left_at=null\n    where public.msg_thread_participants.left_at is not null;\n\n  return v_thread;\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_get_or_create_ops_manager_thread(p_manager_id uuid)\n RETURNS msg_threads\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_manager public.ops_manager_managers%rowtype;\n  v_user public.msg_users%rowtype;\n  v_thread public.msg_threads%rowtype;\nbegin\n  if p_manager_id is null then\n    raise exception using errcode='22023',message='Authenticated leadership manager id is required';\n  end if;\n\n  select * into v_manager\n  from public.ops_manager_managers\n  where manager_id=p_manager_id\n    and active=true\n    and revoked_at is null\n    and is_system_principal=false\n    and roles && array['OPS_MANAGER','CUSTODIAL_MANAGER','DIRECTOR','SECURITY_ADMIN']::text[];\n  if v_manager.manager_id is null then\n    raise exception using errcode='42501',message='Active authenticated Operations Leadership identity was not found';\n  end if;\n\n  v_user:=public.msg_ensure_ops_manager_user(p_manager_id);\n  perform pg_advisory_xact_lock(hashtextextended('operations-leadership-chat-v1-retired',0));\n  select * into v_thread\n  from public.msg_threads\n  where system_key='ops_manager_shared_chat_v1'\n  order by created_at,id\n  limit 1\n  for update;\n\n  if v_thread.id is null then\n    insert into public.msg_threads(thread_type,title,created_by_user_id,is_active,system_key)\n    values('group','Operations Leadership Chat (Retired)',v_user.id,false,'ops_manager_shared_chat_v1')\n    returning * into v_thread;\n  else\n    update public.msg_threads\n    set is_active=false,\n        thread_type='group',\n        title='Operations Leadership Chat (Retired)',\n        updated_at=now()\n    where id=v_thread.id\n    returning * into v_thread;\n  end if;\n\n  insert into public.msg_thread_participants(thread_id,user_id,joined_at,left_at)\n  values(v_thread.id,v_user.id,now(),null)\n  on conflict(thread_id,user_id) do update\n    set left_at=null\n    where public.msg_thread_participants.left_at is not null;\n\n  return v_thread;\nend\n$function$\n",
       "function_name": "msg_get_or_create_ops_manager_thread",
       "identity_arguments": "p_manager_id uuid",
       "schema_name": "public"
@@ -31168,30 +31224,6 @@
       ],
       "schema_name": "public",
       "table_name": "cleaning_inspections",
-      "using_expression": "true"
-    },
-    {
-      "check_expression": "true",
-      "command_code": "*",
-      "permissive": true,
-      "policy_name": "custodial_employee_device_assignment_history_service_all",
-      "roles": [
-        "service_role"
-      ],
-      "schema_name": "public",
-      "table_name": "custodial_employee_device_assignment_history",
-      "using_expression": "true"
-    },
-    {
-      "check_expression": "true",
-      "command_code": "*",
-      "permissive": true,
-      "policy_name": "custodial_employee_status_history_service_all",
-      "roles": [
-        "service_role"
-      ],
-      "schema_name": "public",
-      "table_name": "custodial_employee_status_history",
       "using_expression": "true"
     },
     {
@@ -40094,6 +40126,55 @@
       "is_grantable": "NO",
       "privilege_type": "DELETE",
       "schema_name": "public",
+      "table_name": "v_cleaning_inspection_coverage"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "INSERT",
+      "schema_name": "public",
+      "table_name": "v_cleaning_inspection_coverage"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "REFERENCES",
+      "schema_name": "public",
+      "table_name": "v_cleaning_inspection_coverage"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "v_cleaning_inspection_coverage"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "TRIGGER",
+      "schema_name": "public",
+      "table_name": "v_cleaning_inspection_coverage"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "TRUNCATE",
+      "schema_name": "public",
+      "table_name": "v_cleaning_inspection_coverage"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "UPDATE",
+      "schema_name": "public",
+      "table_name": "v_cleaning_inspection_coverage"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "DELETE",
+      "schema_name": "public",
       "table_name": "v_cleaning_performance_comparison"
     },
     {
@@ -41575,8 +41656,8 @@
       "comment": null,
       "partition_key": null,
       "relation_kind": "r",
-      "rls_enabled": true,
-      "rls_forced": true,
+      "rls_enabled": false,
+      "rls_forced": false,
       "schema_name": "public",
       "table_name": "custodial_employee_device_assignment_history"
     },
@@ -41584,8 +41665,8 @@
       "comment": null,
       "partition_key": null,
       "relation_kind": "r",
-      "rls_enabled": true,
-      "rls_forced": true,
+      "rls_enabled": false,
+      "rls_forced": false,
       "schema_name": "public",
       "table_name": "custodial_employee_status_history"
     },
@@ -42373,7 +42454,7 @@
       "table_name": "ops_manager_notification_preferences"
     },
     {
-      "comment": "Durable manager mobile push queue with leasing, retry and delivery audit state.",
+      "comment": null,
       "partition_key": null,
       "relation_kind": "r",
       "rls_enabled": true,
@@ -43033,6 +43114,13 @@
       "relation_kind": "v",
       "schema_name": "public",
       "view_name": "v_approved_devices"
+    },
+    {
+      "comment": "Rolling 30-day production quality-inspection coverage with an explicit operational target and attention state.",
+      "definition": " WITH finished AS (\n         SELECT s.id,\n            COALESCE(s.ended_at, s.started_at) AS finished_at\n           FROM sessions s\n          WHERE (s.status = ANY (ARRAY['pending_submit'::text, 'closed'::text])) AND COALESCE(s.ended_at, s.started_at) >= (now() - '30 days'::interval)\n        ), coverage AS (\n         SELECT count(*)::integer AS completed_session_count,\n            count(*) FILTER (WHERE (EXISTS ( SELECT 1\n                   FROM cleaning_inspections i\n                  WHERE i.session_id = f.id)))::integer AS inspected_session_count,\n            count(*) FILTER (WHERE NOT (EXISTS ( SELECT 1\n                   FROM cleaning_inspections i\n                  WHERE i.session_id = f.id)))::integer AS uninspected_session_count,\n            max(f.finished_at) AS latest_completed_session_at\n           FROM finished f\n        ), policy AS (\n         SELECT COALESCE(( SELECT (system_settings.setting_value #>> '{}'::text[])::numeric AS \"numeric\"\n                   FROM system_settings\n                  WHERE system_settings.setting_key = 'inspection_coverage_target_pct'::text), 20::numeric) AS target_pct\n        )\n SELECT c.completed_session_count,\n    c.inspected_session_count,\n    c.uninspected_session_count,\n        CASE\n            WHEN c.completed_session_count = 0 THEN 0::numeric\n            ELSE round(c.inspected_session_count::numeric * 100.0 / c.completed_session_count::numeric, 1)\n        END AS inspection_coverage_pct,\n    p.target_pct AS inspection_coverage_target_pct,\n    c.completed_session_count > 0 AND (c.inspected_session_count::numeric * 100.0 / c.completed_session_count::numeric) < p.target_pct AS needs_attention,\n    c.latest_completed_session_at,\n    ( SELECT max(i.inspected_at) AS max\n           FROM cleaning_inspections i) AS latest_inspection_at,\n    30 AS window_days\n   FROM coverage c\n     CROSS JOIN policy p;",
+      "relation_kind": "v",
+      "schema_name": "public",
+      "view_name": "v_cleaning_inspection_coverage"
     },
     {
       "comment": "Employee-by-location cleaning duration, issue, and inspection comparison with location baselines.",

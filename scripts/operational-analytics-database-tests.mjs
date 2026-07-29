@@ -59,7 +59,7 @@ assert.deepEqual(policy, {
 assert.equal(await sql(`select count(*) from pg_trigger where tgrelid='public.events_app_events'::regclass and tgname='trg_events_app_delete_retention_guard' and not tgisinternal;`), "1");
 assert.equal(await sql(`select count(*) from cron.job where jobname='mz-events-expired-retention-hourly' and active=true;`), "1");
 assert.equal(await sql(`select confdeltype from pg_constraint where conrelid='public.events_app_event_history'::regclass and conname='events_app_event_history_event_id_fkey';`), "r");
-for (const objectName of ["cleaning_inspections", "v_cleaning_session_facts", "v_cleaning_performance_comparison", "v_maintenance_ticket_trends"]) {
+for (const objectName of ["cleaning_inspections", "v_cleaning_session_facts", "v_cleaning_performance_comparison", "v_maintenance_ticket_trends", "v_cleaning_inspection_coverage"]) {
   assert.equal(await sql(`select (to_regclass('public.${objectName}') is not null)::text;`), "true", `${objectName} must exist`);
 }
 
@@ -149,6 +149,58 @@ await sql(`
     'Database Inspector','Resolved for acceptance','manager'
   from generate_series(1,3) with ordinality as occurrence(value,ordinality);
 `);
+
+assert.equal(await sql(`select count(*) from pg_constraint where conrelid='public.current_attendance_state'::regclass and conname like 'current_attendance_state_%_nonnegative' and convalidated;`), "5");
+assert.equal(await sql(`select count(*) from pg_constraint where conrelid='public.cleaning_inspections'::regclass and conname in ('cleaning_inspections_rubric_nonblank','cleaning_inspections_failed_requires_follow_up') and convalidated;`), "2");
+await sql(`
+  do $audit4_integrity$
+  begin
+    begin
+      insert into public.current_attendance_state(id,attendance) values (1,-1);
+      raise exception 'negative attendance unexpectedly accepted';
+    exception when check_violation then null;
+    end;
+    begin
+      insert into public.cleaning_inspections(
+        operation_id,request_fingerprint,session_id,inspector_name_snapshot,
+        overall_score,pass_threshold,critical_failure,follow_up_required,inspected_at
+      ) values (
+        '10000000-0000-4000-8000-00000000a120','${"c".repeat(64)}','${ids.fastSession}','Database Inspector',
+        70,85,false,false,now()
+      );
+      raise exception 'failed inspection without follow-up unexpectedly accepted';
+    exception when check_violation then null;
+    end;
+    begin
+      insert into public.cleaning_inspections(
+        operation_id,request_fingerprint,session_id,inspector_name_snapshot,
+        overall_score,pass_threshold,critical_failure,follow_up_required,inspected_at
+      ) values (
+        '10000000-0000-4000-8000-00000000a121','${"d".repeat(64)}','${ids.fastSession}','Database Inspector',
+        95,85,false,false,now()-interval '2 hours'
+      );
+      raise exception 'pre-session inspection time unexpectedly accepted';
+    exception when check_violation then null;
+    end;
+    begin
+      insert into public.cleaning_inspections(
+        operation_id,request_fingerprint,session_id,inspector_name_snapshot,
+        overall_score,pass_threshold,critical_failure,follow_up_required,inspected_at
+      ) values (
+        '10000000-0000-4000-8000-00000000a122','${"e".repeat(64)}','${ids.fastSession}','Database Inspector',
+        95,85,false,false,now()+interval '10 minutes'
+      );
+      raise exception 'future inspection time unexpectedly accepted';
+    exception when check_violation then null;
+    end;
+  end
+  $audit4_integrity$;
+`);
+
+const coverage = await json(`(select to_jsonb(v) from public.v_cleaning_inspection_coverage v)`);
+assert.equal(coverage.completed_session_count >= 2, true);
+assert.equal(coverage.inspected_session_count >= 2, true);
+assert.equal(Number(coverage.inspection_coverage_pct) > 0, true);
 
 const comparison = await json(`(
   select jsonb_agg(to_jsonb(v) order by employee_name)

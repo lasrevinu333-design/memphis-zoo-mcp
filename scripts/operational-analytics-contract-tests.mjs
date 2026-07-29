@@ -45,6 +45,7 @@ assert.match(api, /\/analytics-api\/cleaning-performance/, "cleaning comparison 
 assert.match(api, /\/analytics-api\/ticket-trends/, "ticket trend endpoint is required");
 assert.match(api, /\/analytics-api\/session-facts/, "session fact endpoint is required");
 assert.match(api, /\/analytics-api\/inspections/, "inspection read/write endpoints are required");
+assert.match(api, /\/analytics-api\/inspection-coverage/, "inspection coverage must be visible to operations managers");
 assert.match(api, /CUSTODIAL_MANAGER/, "personnel analytics must require Custodial Manager authority");
 assert.match(api, /Idempotency-Key/, "inspection writes must be idempotent");
 assert.match(bootstrap, /installOperationalAnalyticsRoutes/, "analytics routes must be installed before the legacy app starts");
@@ -90,5 +91,7 @@ assert.throws(() => normalizeInspectionPayload({ session_id: "bad", overall_scor
 assert.throws(() => normalizeInspectionPayload({ session_id: sessionId, overall_score: 90 }, {}, "bad"), /Idempotency-Key/i);
 assert.throws(() => normalizeInspectionPayload({ session_id: sessionId, overall_score: 90, findings_json: "bad" }, {}, operationId), /array or object/i);
 assert.throws(() => normalizeInspectionPayload({ session_id: sessionId, overall_score: 90, inspection_type: "whatever" }, {}, operationId), /inspection_type is invalid/i);
+assert.equal(normalizeInspectionPayload({ session_id: sessionId, overall_score: 70 }, {}, operationId).follow_up_required, true, "failed inspections require follow-up");
+assert.equal(normalizeInspectionPayload({ session_id: sessionId, overall_score: 95, critical_failure: true }, {}, operationId).follow_up_required, true, "critical failures require follow-up");
 
 console.log("OPERATIONAL_ANALYTICS_SOURCE_CONTRACT_PASS");

@@ -4,6 +4,7 @@ import { makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
 
 const CONTRACT_VERSION = "operational-analytics.v1";
 const INSPECTION_TYPES = new Set(["manager_spot_check", "formal", "follow_up", "complaint_response", "training_coaching"]);
+const OPERATIONAL_TIME_ZONE = "America/Chicago";
 
 function envText(env, key) { return String(env?.[key] || "").trim(); }
 function clip(value, max = 2000) { return String(value ?? "").trim().slice(0, max); }
@@ -41,7 +42,7 @@ function setCors(req, res, env) {
 function fail(res, error, fallback = "Operational analytics request failed.") {
   const message = clip(error?.message || fallback, 1000);
   const status = Number(error?.status || error?.statusCode)
-    || (/not found/i.test(message) ? 404 : /required|invalid|must be|between/i.test(message) ? 422 : /access|permission/i.test(message) ? 403 : 500);
+    || (/not found/i.test(message) ? 404 : /required|invalid|must be|between|cannot|only a finished/i.test(message) ? 422 : /access|permission/i.test(message) ? 403 : 500);
   res.status(Math.max(400, Math.min(599, status))).json({ ok: false, error: message });
 }
 function boundedInt(value, { min = 0, max = 100, required = false, name = "value" } = {}) {
@@ -58,6 +59,39 @@ function boundedInt(value, { min = 0, max = 100, required = false, name = "value
 function normalizeLimit(value, fallback = 100, max = 1000) {
   const parsed = Number.parseInt(String(value || fallback), 10);
   return Number.isFinite(parsed) ? Math.max(1, Math.min(max, parsed)) : fallback;
+}
+
+function calendarDateParts(value) {
+  if (!validIsoDate(value)) throw Object.assign(new Error("Date must be YYYY-MM-DD."), { status: 422 });
+  const [year, month, day] = String(value).split("-").map(Number);
+  const check = new Date(Date.UTC(year, month - 1, day));
+  if (check.getUTCFullYear() !== year || check.getUTCMonth() !== month - 1 || check.getUTCDate() !== day) {
+    throw Object.assign(new Error("Date must be a real calendar date."), { status: 422 });
+  }
+  return { year, month, day };
+}
+
+function addCalendarDays(value, days) {
+  const { year, month, day } = calendarDateParts(value);
+  const next = new Date(Date.UTC(year, month - 1, day + days));
+  return `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, "0")}-${String(next.getUTCDate()).padStart(2, "0")}`;
+}
+
+export function chicagoDateStartIso(value) {
+  const desiredParts = calendarDateParts(value);
+  const desired = Date.UTC(desiredParts.year, desiredParts.month - 1, desiredParts.day);
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: OPERATIONAL_TIME_ZONE,
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+  });
+  let guess = desired;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const parts = Object.fromEntries(formatter.formatToParts(new Date(guess)).filter((part) => part.type !== "literal").map((part) => [part.type, Number(part.value)]));
+    const represented = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
+    guess += desired - represented;
+  }
+  return new Date(guess).toISOString();
 }
 function stableJson(value) {
   if (Array.isArray(value)) return value.map(stableJson);
@@ -89,6 +123,9 @@ export function normalizeInspectionPayload(values = {}, auth = {}, idempotencyKe
     throw Object.assign(new Error("inspected_at must be a valid timestamp."), { status: 422 });
   }
 
+  const overallScore = boundedInt(values.overall_score ?? values.overallScore, { required: true, name: "overall_score" });
+  const passThreshold = boundedInt(values.pass_threshold ?? values.passThreshold ?? 85, { required: true, name: "pass_threshold" });
+  const criticalFailure = values.critical_failure === true || values.criticalFailure === true;
   const normalized = {
     operation_id: operationId,
     session_id: sessionId,
@@ -96,15 +133,15 @@ export function normalizeInspectionPayload(values = {}, auth = {}, idempotencyKe
     inspector_name_snapshot: clip(auth.manager_display_name || auth.display_name || values.inspector_name || "Custodial Manager", 200) || "Custodial Manager",
     inspection_type: inspectionType,
     rubric_version: clip(values.rubric_version || "custodial-v1", 80),
-    overall_score: boundedInt(values.overall_score ?? values.overallScore, { required: true, name: "overall_score" }),
+    overall_score: overallScore,
     appearance_score: boundedInt(values.appearance_score ?? values.appearanceScore, { name: "appearance_score" }),
     sanitation_score: boundedInt(values.sanitation_score ?? values.sanitationScore, { name: "sanitation_score" }),
     supplies_score: boundedInt(values.supplies_score ?? values.suppliesScore, { name: "supplies_score" }),
     detail_score: boundedInt(values.detail_score ?? values.detailScore, { name: "detail_score" }),
     safety_score: boundedInt(values.safety_score ?? values.safetyScore, { name: "safety_score" }),
-    pass_threshold: boundedInt(values.pass_threshold ?? values.passThreshold ?? 85, { required: true, name: "pass_threshold" }),
-    critical_failure: values.critical_failure === true || values.criticalFailure === true,
-    follow_up_required: values.follow_up_required === true || values.followUpRequired === true,
+    pass_threshold: passThreshold,
+    critical_failure: criticalFailure,
+    follow_up_required: values.follow_up_required === true || values.followUpRequired === true || criticalFailure || overallScore < passThreshold,
     findings_json: findings,
     notes: clip(values.notes, 8000) || null,
   };
@@ -188,11 +225,11 @@ export function installOperationalAnalyticsRoutes(app, { env = process.env, supa
       if (req.query?.location_code) query = query.eq("location_code", clip(req.query.location_code, 80).toUpperCase());
       if (req.query?.date_from) {
         if (!validIsoDate(req.query.date_from)) throw Object.assign(new Error("date_from must be YYYY-MM-DD."), { status: 422 });
-        query = query.gte("started_at", `${req.query.date_from}T00:00:00-06:00`);
+        query = query.gte("started_at", chicagoDateStartIso(req.query.date_from));
       }
       if (req.query?.date_to) {
         if (!validIsoDate(req.query.date_to)) throw Object.assign(new Error("date_to must be YYYY-MM-DD."), { status: 422 });
-        query = query.lte("started_at", `${req.query.date_to}T23:59:59.999-06:00`);
+        query = query.lt("started_at", chicagoDateStartIso(addCalendarDays(req.query.date_to, 1)));
       }
       query = query.order("started_at", { ascending: false }).limit(normalizeLimit(req.query?.limit, 250, 1000));
       const result = await query;
@@ -212,6 +249,14 @@ export function installOperationalAnalyticsRoutes(app, { env = process.env, supa
       if (result.error) throw result.error;
       res.json({ ok: true, data: result.data || [], meta: { contract_version: CONTRACT_VERSION } });
     } catch (error) { fail(res, error, "Cleaning inspections could not be loaded."); }
+  });
+
+  app.get("/analytics-api/inspection-coverage", configured, requireCustodial, async (_req, res) => {
+    try {
+      const result = await db.from("v_cleaning_inspection_coverage").select("*").single();
+      if (result.error) throw result.error;
+      res.json({ ok: true, data: result.data, meta: { contract_version: CONTRACT_VERSION, timezone: OPERATIONAL_TIME_ZONE } });
+    } catch (error) { fail(res, error, "Inspection coverage could not be loaded."); }
   });
 
   app.post("/analytics-api/inspections", configured, requireCustodial, async (req, res) => {
