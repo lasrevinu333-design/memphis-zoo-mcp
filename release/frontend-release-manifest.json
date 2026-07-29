@@ -3,7 +3,7 @@
   "frontend_commit_sha": "bad3c563d56fc9762acbfd2668c82299017c8a6e",
   "frontend_commit_state": "github_pages_production_verified",
   "backend_minimum_version": "release-2026.07.19.custodial-v3.12",
-  "schema_fingerprint": "26998da9d09bc24754089f7da2d3764b26ea3e7dbd16ccea6fc3ed19791de16f",
+  "schema_fingerprint": "348256783eba8af3118732d5839e9b0cb011a37b9aff31206ac05b9d36be6fc4",
   "api_contract_versions": {
     "scan": "scan.v2",
     "dashboard": "dashboard.v1",
