@@ -20,6 +20,7 @@ const { Client } = pg;
 const projectRef = String(process.env.SUPABASE_PROJECT_REF || "").trim();
 const secret = String(process.env.SUPABASE_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
 const databaseUrl = String(process.env.SUPABASE_DB_URL || process.env.DATABASE_URL || "").trim();
+const databaseCaCertPath = String(process.env.SUPABASE_DB_CA_CERT_PATH || "").trim();
 const backupDirInput = String(process.env.BACKUP_DIR || "").trim();
 const backupDir = backupDirInput ? resolve(backupDirInput) : "";
 const pageSize = Math.max(100, Math.min(5000, Number(process.env.BACKUP_PAGE_SIZE || 1000)));
@@ -82,7 +83,13 @@ function objectKey(bucket, name) {
   return createHash("sha256").update(`${bucket}\0${name}`).digest("hex");
 }
 
-const client = new Client({ connectionString: databaseUrl, application_name: "memphis-zoo-consistent-backup" });
+const client = new Client({
+  connectionString: databaseUrl,
+  application_name: "memphis-zoo-consistent-backup",
+  ...(databaseCaCertPath ? {
+    ssl: { ca: readFileSync(resolve(databaseCaCertPath), "utf8"), rejectUnauthorized: true },
+  } : {}),
+});
 const tableCatalog = [];
 const storageObjects = [];
 const storageBuckets = [];

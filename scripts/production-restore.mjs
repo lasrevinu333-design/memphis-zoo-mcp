@@ -13,6 +13,7 @@ const sourceDir = sourceInput ? resolve(sourceInput) : "";
 const projectRef = String(process.env.SUPABASE_PROJECT_REF || "").trim();
 const confirmedRef = String(process.env.RESTORE_CONFIRM_PROJECT_REF || "").trim();
 const databaseUrl = String(process.env.SUPABASE_DB_URL || process.env.DATABASE_URL || "").trim();
+const databaseCaCertPath = String(process.env.SUPABASE_DB_CA_CERT_PATH || "").trim();
 const secret = String(process.env.SUPABASE_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
 const apply = String(process.env.RESTORE_APPLY || "false").toLowerCase() === "true";
 
@@ -72,7 +73,13 @@ if (!/^[a-z0-9]{20}$/.test(projectRef) || confirmedRef !== projectRef) {
 }
 if (!databaseUrl || !secret) throw new Error("SUPABASE_DB_URL and SUPABASE_SERVICE_ROLE_KEY are required for restore apply.");
 
-const db = new Client({ connectionString: databaseUrl, application_name: "memphis-zoo-disaster-restore" });
+const db = new Client({
+  connectionString: databaseUrl,
+  application_name: "memphis-zoo-disaster-restore",
+  ...(databaseCaCertPath ? {
+    ssl: { ca: readFileSync(resolve(databaseCaCertPath), "utf8"), rejectUnauthorized: true },
+  } : {}),
+});
 await db.connect();
 try {
   await db.query("begin");
