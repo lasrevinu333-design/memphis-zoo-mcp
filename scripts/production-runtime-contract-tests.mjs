@@ -29,5 +29,11 @@ assert.match(monitor, /dead_letters/);
 assert.match(monitor, /expired_leases/);
 assert.match(monitor, /version\['version'\] == frontend\['release_id'\]/,
   "the monitor must reject frontend/backend release drift");
+assert.match(monitor, /frontend-deployment-manifest\.json/,
+  "the monitor must load the live Pages deployment identity");
+assert.match(monitor, /version\['release_manifest'\]\['frontend'\]\['commit_sha'\] == deployment\['frontend_commit_sha'\]/,
+  "the monitor must reject exact frontend deployment commit drift");
+assert.match(monitor, /deployment\['schema_fingerprint'\] == frontend\['schema_fingerprint'\]/,
+  "the monitor must reject deployment schema drift");
 
 console.log(JSON.stringify({ ok: true, production_runtime_contract: "passed" }, null, 2));
