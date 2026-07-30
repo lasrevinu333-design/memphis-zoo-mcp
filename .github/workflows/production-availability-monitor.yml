@@ -1,0 +1,70 @@
+name: Production Availability Monitor
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-availability-monitor
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Enforce live dependency health and four-second response budget
+        shell: bash
+        run: |
+          set -euo pipefail
+          backend='https://memphis-zoo-mcp.onrender.com'
+          frontend='https://lasrevinu333-design.github.io/Engine'
+
+          curl -fsSL --max-time 4 \
+            -w '%{time_total}\n' \
+            -o /tmp/health.json \
+            "$backend/health?probe=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            > /tmp/backend-latency.txt
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          health = json.loads(Path('/tmp/health.json').read_text())
+          latency = float(Path('/tmp/backend-latency.txt').read_text().strip())
+          assert health['ok'] is True, health
+          assert health['database_reachable'] is True, health
+          assert health['required_schema_present'] is True, health
+          assert health['worker']['dead_letters'] == 0, health
+          assert health['worker']['expired_leases'] == 0, health
+          assert latency <= 4.0, f'backend health exceeded four seconds: {latency:.3f}s'
+          print(f'backend_health_ok latency={latency:.3f}s')
+          PY
+
+          curl -fsSL --max-time 4 \
+            -w '%{time_total}\n' \
+            -o /tmp/version.json \
+            "$backend/version?probe=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            > /tmp/version-latency.txt
+          curl -fsSL --max-time 4 \
+            -w '%{time_total}\n' \
+            -o /tmp/frontend-manifest.json \
+            "$frontend/frontend-release-manifest.json?probe=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            > /tmp/frontend-latency.txt
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          version = json.loads(Path('/tmp/version.json').read_text())
+          frontend = json.loads(Path('/tmp/frontend-manifest.json').read_text())
+          version_latency = float(Path('/tmp/version-latency.txt').read_text().strip())
+          frontend_latency = float(Path('/tmp/frontend-latency.txt').read_text().strip())
+          assert version['ok'] is True, version
+          assert version['version'] == frontend['release_id'], (version, frontend)
+          assert version_latency <= 4.0, f'version exceeded four seconds: {version_latency:.3f}s'
+          assert frontend_latency <= 4.0, f'frontend exceeded four seconds: {frontend_latency:.3f}s'
+          print(f'release_alignment_ok release={frontend["release_id"]} backend={version_latency:.3f}s frontend={frontend_latency:.3f}s')
+          PY

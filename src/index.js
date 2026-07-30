@@ -2450,7 +2450,7 @@ app.use(
 );
 app.use("/dashboard-api/events", createEventsPublicRouter({ runReadOnlySql, runWriteSql, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController }));
 app.use("/admin-api/events", createEventsAdminRouter({ runReadOnlySql, runWriteSql, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController, requireAdminApiAuth: requireOpsManagerAuth, requireAdminApiWrite: requireOpsManagerWrite }));
-app.use(["/version", "/release-manifest", "/health/dependencies"], (req, res, next) => {
+app.use(["/version", "/release-manifest", "/health", "/health/dependencies"], (req, res, next) => {
   setPublicDashboardCors(res, req);
   if (req.method === "OPTIONS") {
     res.sendStatus(200);
@@ -2460,7 +2460,7 @@ app.use(["/version", "/release-manifest", "/health/dependencies"], (req, res, ne
 });
 app.get("/version", (_req, res) => { setPublicDashboardCors(res, _req); res.status(200).json(buildHealthPayload("version")); });
 app.get("/release-manifest", (_req, res) => { setPublicDashboardCors(res, _req); res.status(200).json(buildReleaseManifest({ appVersion: APP_VERSION, releaseId: RELEASE_ID, contracts: buildHealthPayload("contracts").contracts })); });
-app.get("/health/dependencies", async (req, res) => {
+app.get(["/health", "/health/dependencies"], async (req, res) => {
   setPublicDashboardCors(res, req);
   try {
     const rows = await runReadOnlySql(`
@@ -2983,7 +2983,7 @@ if (OPERATIONAL_NOTIFICATION_SWEEP_MS > 0) {
     runOperationalNotificationWorker({ limit: 10 }).catch((error) => console.error("operational notification worker failed:", error));
   }, OPERATIONAL_NOTIFICATION_SWEEP_MS).unref?.();
 }
-app.listen(port, () => {
+const httpServer = app.listen(port, () => {
   console.log("Memphis Zoo MCP server initialized.");
   console.log(`App version: ${APP_VERSION}`);
   console.log(`Listening on http://localhost:${port}`);
@@ -3005,3 +3005,34 @@ app.listen(port, () => {
   console.log("Scan API endpoint: /scan-api");
   runOperationalNotificationWorker({ limit: 10 }).catch((error) => console.error("operational notification startup sweep failed:", error));
 });
+
+let shutdownStarted = false;
+async function gracefulShutdown(signal) {
+  if (shutdownStarted) return;
+  shutdownStarted = true;
+  console.log(`[shutdown] ${signal} received; draining active connections.`);
+
+  for (const { transport, server } of sseTransports.values()) {
+    try { transport.close(); } catch {}
+    try { server.close(); } catch {}
+  }
+  sseTransports.clear();
+  try { await geminiControlledRepairWorker.stop(); } catch (error) {
+    console.error("[shutdown] Gemini worker stop failed:", error);
+  }
+
+  const forcedExit = setTimeout(() => {
+    console.error("[shutdown] Grace period expired; forcing process exit.");
+    process.exit(1);
+  }, 25_000);
+  forcedExit.unref?.();
+
+  httpServer.close((error) => {
+    if (error) console.error("[shutdown] HTTP server close failed:", error);
+    else console.log("[shutdown] HTTP server drained cleanly.");
+    process.exit(error ? 1 : 0);
+  });
+}
+
+process.once("SIGTERM", () => { gracefulShutdown("SIGTERM"); });
+process.once("SIGINT", () => { gracefulShutdown("SIGINT"); });
