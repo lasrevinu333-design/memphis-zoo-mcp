@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 const source = readFileSync(new URL("../src/index.js", import.meta.url), "utf8");
 const releaseManifestSource = readFileSync(new URL("../src/release-manifest.js", import.meta.url), "utf8");
 const monitor = readFileSync(new URL("../.github/workflows/production-availability-monitor.yml", import.meta.url), "utf8");
+const warmBridgeMigration = readFileSync(new URL("../supabase/migrations/20260730221607_production_availability_warm_bridge.sql", import.meta.url), "utf8");
 
 assert.match(source, /app\.get\(\["\/health", "\/health\/dependencies"\]/,
   "canonical /health must execute the dependency-aware readiness check");
@@ -35,5 +36,13 @@ assert.match(monitor, /version\['release_manifest'\]\['frontend'\]\['commit_sha'
   "the monitor must reject exact frontend deployment commit drift");
 assert.match(monitor, /deployment\['schema_fingerprint'\] == frontend\['schema_fingerprint'\]/,
   "the monitor must reject deployment schema drift");
+assert.match(warmBridgeMigration, /mz-render-availability-warm-bridge/,
+  "the temporary Render warm bridge must have a stable cron identity");
+assert.match(warmBridgeMigration, /'\*\/10 \* \* \* \*'/,
+  "the temporary warm bridge must request health inside Render's idle interval");
+assert.match(warmBridgeMigration, /net\.http_get/,
+  "the temporary warm bridge must use Supabase's asynchronous HTTP client");
+assert.match(warmBridgeMigration, /timeout_milliseconds\s*:=\s*4000/,
+  "the temporary warm bridge must enforce the response-start budget");
 
 console.log(JSON.stringify({ ok: true, production_runtime_contract: "passed" }, null, 2));
