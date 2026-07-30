@@ -1,0 +1,59 @@
+name: Phone Automated Production Handoff Monitor
+
+on:
+  schedule:
+    - cron: "7,22,37,52 * * * *"
+  workflow_dispatch:
+    inputs:
+      enforce:
+        description: Fail unless every automated phone gate passes
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phone-automated-production-handoff-monitor
+  cancel-in-progress: true
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.23.1'
+          cache: npm
+      - name: Install exact dependencies
+        run: npm ci --ignore-scripts
+      - name: Verify evaluator contracts
+        run: npm run --silent test:phone-readiness
+      - name: Evaluate production phone evidence
+        id: readiness
+        continue-on-error: ${{ github.event_name != 'workflow_dispatch' || inputs.enforce != true }}
+        shell: bash
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_DB_CA_CERT_PATH: ${{ github.workspace }}/.github/certs/prod-ca-2021.crt
+          PHONE_READINESS_ENFORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.enforce || false }}
+          PHONE_READINESS_MAX_STALE_MINUTES: '15'
+          PHONE_READINESS_ACTIVITY_WINDOW_HOURS: '24'
+        run: |
+          set -euo pipefail
+          node scripts/phone-production-readiness.mjs | tee phone-readiness-report.json
+          {
+            echo '```json'
+            cat phone-readiness-report.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: phone-production-readiness-${{ github.run_id }}
+          path: phone-readiness-report.json
+          retention-days: 14
+          if-no-files-found: warn

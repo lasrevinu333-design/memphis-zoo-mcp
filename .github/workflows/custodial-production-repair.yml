@@ -66,6 +66,7 @@ jobs:
           npm run --silent test:foundation-repair
           npm run --silent test:custodial-repair
           npm run --silent test:custodial-employee-phones
+          npm run --silent test:phone-readiness
           npm run --silent test:device-security-app
           npm run --silent test:gemini-console
           npm run --silent test:schema-fingerprint
