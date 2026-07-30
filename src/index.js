@@ -26,9 +26,18 @@ import { runReadOnlySql as runSupabaseReadOnlySql } from "./supabase/read.js";
 import { createGeminiConsoleRouter } from "./gemini-console-api.js";
 import { createGeminiControlledRepairWorker } from "./gemini-controlled-worker.js";
 import { normalizeAttendanceRecord, toNullableNonNegativeInteger } from "./attendance-state.js";
+import {
+  guestFeatureState,
+  normalizeFeedbackInput,
+  normalizeGuestReportInput,
+  signExpiringFeedbackToken,
+  verifyExpiringFeedbackToken,
+} from "./public-submission-controls.js";
 
 const app = express();
+app.set("trust proxy", 1);
 app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: false, limit: "32kb" }));
 
 const MOXIE_MOUNT_PATH = (String(process.env.MOXIE_PREFIX || "/moxie").trim() || "/moxie").replace(/\/+$/, "") || "/moxie";
 const MOXIE_STATIC_DIR = fileURLToPath(new URL("../public/moxie-assets/", import.meta.url));
@@ -73,8 +82,8 @@ const DASHBOARD_CONTRACT_VERSION = "dashboard.v1";
 const MESSAGING_CONTRACT_VERSION = "messaging.v5";
 const SCHEDULE_CONTRACT_VERSION = "schedule.v2";
 const OPERATIONAL_ANALYTICS_CONTRACT_VERSION = "operational-analytics.v1";
-const GUEST_REPORTS_CONTRACT_VERSION = "guest-reports.v1";
-const FEEDBACK_CONTRACT_VERSION = "feedback.v1";
+const GUEST_REPORTS_CONTRACT_VERSION = "guest-reports.v2.approval-gated";
+const FEEDBACK_CONTRACT_VERSION = "feedback.v2.json-triage";
 const OPS_MANAGER_AUTH_CONTRACT_VERSION = "ops-manager-auth.v5.named-leadership";
 const GEMINI_CONSOLE_CONTRACT_VERSION = "gemini-console.v2";
 const CANARY_RESTROOM_CODE = "TETM";
@@ -89,6 +98,8 @@ const FEEDBACK_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 const FEEDBACK_IMAGE_BUCKET = String(process.env.FEEDBACK_IMAGE_BUCKET || "system-feedback-private").trim();
 const FEEDBACK_REMINDER_SWEEP_MS = toSafeNonNegativeInt(process.env.FEEDBACK_REMINDER_SWEEP_MS, 60000);
 const FEEDBACK_REMINDER_MAX_COUNT = toSafeInt(process.env.FEEDBACK_REMINDER_MAX_COUNT, 3);
+const FEEDBACK_LINK_TTL_MS = toSafeInt(process.env.FEEDBACK_LINK_TTL_MS, 7 * 24 * 60 * 60 * 1000);
+const GUEST_FEATURE = guestFeatureState(process.env);
 const OPERATIONAL_NOTIFICATION_WORKER_ID = `render-${process.pid}-${randomUUID()}`;
 const OPERATIONAL_NOTIFICATION_SWEEP_MS = toSafeNonNegativeInt(process.env.OPERATIONAL_NOTIFICATION_SWEEP_MS, 15_000);
 let attendanceCache = { data: null, fetched_at_ms: 0 };
@@ -102,6 +113,35 @@ function registerOperationalNotificationJobHandler(jobType, handler) {
   const normalizedType = String(jobType || "").trim();
   if (!normalizedType || typeof handler !== "function") throw new Error("A durable operational job handler is required.");
   operationalNotificationJobHandlers.set(normalizedType, handler);
+}
+
+function requireGuestIssuesApproved(req, res, next) {
+  if (!GUEST_FEATURE.enabled) {
+    res.status(503).json({
+      ok: false,
+      error: "Guest cleanliness reporting is awaiting Memphis Zoo approval.",
+      code: "guest_feature_not_approved",
+      feature: GUEST_FEATURE,
+    });
+    return;
+  }
+  next();
+}
+
+function requireGuestMarketingReviewAuth(req, res, next) {
+  if (!GUEST_FEATURE.enabled) return requireGuestIssuesApproved(req, res, next);
+  const configured = String(process.env.GUEST_MARKETING_REVIEW_SECRET || "").trim();
+  if (!configured) {
+    res.status(503).json({ ok: false, error: "The Memphis Zoo Marketing review integration is not configured.", code: "marketing_review_not_configured" });
+    return;
+  }
+  const supplied = String(req.get("x-guest-marketing-review-secret") || "").trim();
+  if (!supplied || !safeStringEqual(supplied, configured)) {
+    res.status(401).json({ ok: false, error: "Unauthorized" });
+    return;
+  }
+  req.guestMarketingReview = { actor: "marketing_review_integration" };
+  next();
 }
 
 const requireOpsManagerAuth = makeOpsAccessMiddleware({ trustedDeviceStore: opsTrustedDeviceStore });
@@ -144,35 +184,52 @@ function requireScanRpcAuthorization(req, res, next) {
   next();
 }
 
-// Simple in-memory rate limiter: max 10 requests per minute per IP
+// Durable public-ingest limiter. Raw IP addresses are never persisted.
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX = 10;
-const rateLimitBuckets = new Map();
 
-function rateLimit(req, res, next) {
-  const ip = String(req.headers["x-forwarded-for"] || req.ip || req.socket?.remoteAddress || "unknown").split(",")[0].trim();
-  const now = Date.now();
-  let bucket = rateLimitBuckets.get(ip);
-  if (!bucket || now - bucket.windowStart > RATE_LIMIT_WINDOW_MS) {
-    bucket = { windowStart: now, count: 0 };
-    rateLimitBuckets.set(ip, bucket);
-  }
-  bucket.count += 1;
-  if (bucket.count > RATE_LIMIT_MAX) {
-    res.status(429).json({ ok: false, error: "Rate limit exceeded. Try again in a minute." });
-    return;
-  }
-  next();
+function publicSubmissionRateLimit(scope) {
+  return async (req, res, next) => {
+    try {
+      const ip = String(req.ip || req.socket?.remoteAddress || "unknown").trim();
+      const bucketKey = createHmac("sha256", getFeedbackLinkSecret()).update(`${scope}:${ip}`).digest("hex");
+      await runWriteSql(
+        `public_${scope}_rate_limit`,
+        `insert into public.public_submission_rate_limits(bucket_key,scope,window_started_at,request_count,updated_at)
+         values (${sqlLiteral(bucketKey)},${sqlLiteral(scope)},now(),1,now())
+         on conflict(bucket_key) do update
+         set scope=excluded.scope,
+             window_started_at=case
+               when public.public_submission_rate_limits.window_started_at <= now() - interval '60 seconds' then now()
+               else public.public_submission_rate_limits.window_started_at
+             end,
+             request_count=case
+               when public.public_submission_rate_limits.window_started_at <= now() - interval '60 seconds' then 1
+               else public.public_submission_rate_limits.request_count + 1
+             end,
+             updated_at=now()
+         ;`
+      );
+      const rows = await runReadOnlySql(
+        `select request_count from public.public_submission_rate_limits where bucket_key=${sqlLiteral(bucketKey)} limit 1`
+      );
+      const count = Number(rows?.[0]?.request_count);
+      if (!Number.isFinite(count) || count > RATE_LIMIT_MAX) {
+        res.setHeader("Retry-After", "60");
+        res.status(429).json({ ok: false, error: "Rate limit exceeded. Try again in a minute." });
+        return;
+      }
+      next();
+    } catch (error) {
+      console.error(`${scope} submission rate limit failed:`, error?.message || error);
+      res.status(503).json({ ok: false, error: "Submission protection is temporarily unavailable." });
+    }
+  };
 }
 
 // Purge stale rate limit buckets periodically
 setInterval(() => {
   const now = Date.now();
-  for (const [ip, bucket] of rateLimitBuckets) {
-    if (now - bucket.windowStart > RATE_LIMIT_WINDOW_MS * 2) {
-      rateLimitBuckets.delete(ip);
-    }
-  }
   for (const [key, bucket] of scanRateLimitBuckets) {
     if (now - bucket.windowStart > RATE_LIMIT_WINDOW_MS * 2) {
       scanRateLimitBuckets.delete(key);
@@ -550,27 +607,16 @@ function getFeedbackLinkSecret() {
 }
 
 function signFeedbackLinkToken(feedbackId, purpose = "ack") {
-  const id = String(feedbackId || "").trim();
-  const secret = getFeedbackLinkSecret();
-  if (!id || !secret) return "";
-  const payload = Buffer.from(JSON.stringify({ v: 1, purpose, feedback_id: id }), "utf8").toString("base64url");
-  const signature = createHmac("sha256", secret).update(payload).digest("base64url");
-  return `${payload}.${signature}`;
+  return signExpiringFeedbackToken({
+    secret: getFeedbackLinkSecret(),
+    feedbackId,
+    purpose,
+    ttlMs: FEEDBACK_LINK_TTL_MS,
+  });
 }
 
 function verifyFeedbackLinkToken(token, feedbackId, purpose = "ack") {
-  const secret = getFeedbackLinkSecret();
-  const raw = String(token || "").trim();
-  const [payload, signature, extra] = raw.split(".");
-  if (!secret || !payload || !signature || extra !== undefined) return false;
-  const expected = createHmac("sha256", secret).update(payload).digest("base64url");
-  if (!safeStringEqual(signature, expected)) return false;
-  try {
-    const decoded = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
-    return decoded?.v === 1 && decoded?.purpose === purpose && String(decoded?.feedback_id || "") === String(feedbackId || "");
-  } catch {
-    return false;
-  }
+  return verifyExpiringFeedbackToken({ secret: getFeedbackLinkSecret(), token, feedbackId, purpose });
 }
 
 function requireFeedbackSignedLinkOrOps(purpose) {
@@ -901,13 +947,31 @@ async function createGuestCleanlinessReport({ operationId, requestFingerprint, l
     },
     submitted_via: "guest_qr",
   };
-  const rows = await runWriteSql(
+  const existingRows = await runReadOnlySql(`
+    select id, operation_id, request_fingerprint, location_code, location_name,
+           issue_type, severity, notes, status, source, submitted_at, resolved_at,
+           notification_status, notified_employee_user_id, notified_ops_count,
+           marketing_review_status, marketing_reviewed_at, marketing_reviewed_by,
+           marketing_review_notes, dispatched_at, resolved_by, metadata_json
+    from public.guest_cleanliness_reports
+    where operation_id=${sqlLiteral(operationId)}::uuid
+    limit 1
+  `);
+  if (existingRows?.[0]) {
+    if (existingRows[0].request_fingerprint && existingRows[0].request_fingerprint !== requestFingerprint) {
+      throw Object.assign(new Error("operation_id conflicts with another guest report submission."), { status: 409 });
+    }
+    return { ...existingRows[0], newly_inserted: false };
+  }
+  const reportId = randomUUID();
+  await runWriteSql(
     "guest_cleanliness_report_insert",
-    `with inserted as (
-       insert into public.guest_cleanliness_reports (
-         operation_id, request_fingerprint, location_code, location_name,
-         issue_type, severity, notes, metadata_json
+    `insert into public.guest_cleanliness_reports (
+         id, operation_id, request_fingerprint, location_code, location_name,
+         issue_type, severity, notes, status, marketing_review_status,
+         notification_status, metadata_json
        ) values (
+         ${sqlLiteral(reportId)}::uuid,
          ${sqlLiteral(operationId)}::uuid,
          ${sqlLiteral(requestFingerprint)},
          ${sqlLiteral(location.location_code)},
@@ -915,36 +979,28 @@ async function createGuestCleanlinessReport({ operationId, requestFingerprint, l
          ${sqlLiteral(issue)},
          ${sqlLiteral(level)},
          ${sqlLiteral(noteText)},
+         'pending_marketing_review',
+         'pending',
+         'awaiting_marketing_review',
          ${sqlLiteral(JSON.stringify(metadata))}::jsonb
        )
-       on conflict (operation_id) do nothing
-       returning *, true as newly_inserted
-     ), authoritative as (
-       select * from inserted
-       union all
-       select existing.*, false as newly_inserted
-       from public.guest_cleanliness_reports existing
-       where existing.operation_id = ${sqlLiteral(operationId)}::uuid
-         and not exists (select 1 from inserted)
-     ), queued as (
-       insert into public.operational_notification_jobs(job_key, job_type, source_id, payload_json)
-       select 'guest-report:' || id::text, 'guest_cleanliness_report', id,
-              jsonb_build_object('operation_id', operation_id)
-       from authoritative
-       on conflict (job_key) do nothing
-       returning job_id
-     )
-     select id, operation_id, request_fingerprint, location_code, location_name,
-            issue_type, severity, notes, status, source, submitted_at, resolved_at,
-            notification_status, notified_employee_user_id, notified_ops_count,
-            metadata_json, newly_inserted
-     from authoritative`
+       on conflict (operation_id) do nothing`
   );
+  const rows = await runReadOnlySql(`
+    select id, operation_id, request_fingerprint, location_code, location_name,
+           issue_type, severity, notes, status, source, submitted_at, resolved_at,
+           notification_status, notified_employee_user_id, notified_ops_count,
+           marketing_review_status, marketing_reviewed_at, marketing_reviewed_by,
+           marketing_review_notes, dispatched_at, resolved_by, metadata_json
+    from public.guest_cleanliness_reports
+    where operation_id=${sqlLiteral(operationId)}::uuid
+    limit 1
+  `);
   if (!Array.isArray(rows) || !rows.length) throw new Error("Guest report could not be created.");
   if (rows[0].request_fingerprint && rows[0].request_fingerprint !== requestFingerprint) {
     throw Object.assign(new Error("operation_id conflicts with another guest report submission."), { status: 409 });
   }
-  return rows[0];
+  return { ...rows[0], newly_inserted: rows[0].id === reportId };
 }
 
 function buildGuestReportNotificationBody(report, ownerName) {
@@ -1009,6 +1065,7 @@ async function notifyGuestReportRecipients({ report, currentOwner, opsRecipients
        set notification_status = ${sqlLiteral(notificationStatus)},
            notified_employee_user_id = ${sqlLiteral(notified.employee_user_id)}${notified.employee_user_id ? "::uuid" : ""},
            notified_ops_count = ${Number(notified.ops_count || 0)},
+           dispatched_at = case when ${Number(totalSucceeded)} > 0 then now() else dispatched_at end,
            metadata_json = coalesce(metadata_json, '{}'::jsonb) || ${sqlLiteral(JSON.stringify({ notification_errors: notified.errors }))}::jsonb
      where id = ${sqlLiteral(report.id)}::uuid`
   );
@@ -1021,7 +1078,9 @@ async function getGuestCleanlinessReportById(reportId) {
   const rows = await runReadOnlySql(`
     select id, operation_id, location_code, location_name, issue_type, severity, notes,
            status, source, submitted_at, resolved_at, notification_status,
-           notified_employee_user_id, notified_ops_count, metadata_json
+           notified_employee_user_id, notified_ops_count, marketing_review_status,
+           marketing_reviewed_at, marketing_reviewed_by, marketing_review_notes,
+           dispatched_at, resolved_by, metadata_json
     from public.guest_cleanliness_reports
     where id = ${sqlLiteral(reportId)}::uuid
     limit 1
@@ -1032,6 +1091,9 @@ async function getGuestCleanlinessReportById(reportId) {
 
 async function processGuestCleanlinessNotificationJob(job) {
   const report = await getGuestCleanlinessReportById(job.source_id);
+  if (report.status !== "open" || report.marketing_review_status !== "approved") {
+    throw new Error("Guest report has not completed Marketing approval.");
+  }
   const currentOwnerRows = await runReadOnlySql(`select * from public.sch_get_current_owner(${sqlLiteral(report.location_code)}, now())`);
   const currentOwner = Array.isArray(currentOwnerRows) && currentOwnerRows.length ? currentOwnerRows[0] : null;
   const opsRecipients = await resolveOpsManagerRecipients();
@@ -1095,16 +1157,18 @@ async function runOperationalNotificationWorker({ limit = 10 } = {}) {
   }
 }
 
-async function listGuestCleanlinessReports({ status, locationCode, limit = 100, publicFieldsOnly = false } = {}) {
+async function listGuestCleanlinessReports({ status, locationCode, marketingReviewStatus, limit = 100, publicFieldsOnly = false } = {}) {
   const filters = [];
   if (status) filters.push(`status = ${sqlLiteral(String(status).trim().toLowerCase())}`);
   if (locationCode) filters.push(`upper(location_code) = ${sqlLiteral(String(locationCode).trim().toUpperCase())}`);
+  if (marketingReviewStatus) filters.push(`marketing_review_status = ${sqlLiteral(String(marketingReviewStatus).trim().toLowerCase())}`);
   const where = filters.length ? `where ${filters.join(" and ")}` : "";
   const projection = publicFieldsOnly
     ? "id, location_code, location_name, issue_type, severity, status, submitted_at, resolved_at"
     : `id, operation_id, location_code, location_name, issue_type, severity, notes, status, source,
        submitted_at, resolved_at, notification_status, notified_employee_user_id,
-       notified_ops_count, metadata_json`;
+       notified_ops_count, marketing_review_status, marketing_reviewed_at,
+       marketing_reviewed_by, marketing_review_notes, dispatched_at, resolved_by, metadata_json`;
   const rows = await runReadOnlySql(`
     select ${projection}
     from public.guest_cleanliness_reports
@@ -1113,6 +1177,84 @@ async function listGuestCleanlinessReports({ status, locationCode, limit = 100, 
     limit ${Math.max(1, Math.min(500, Number(limit) || 100))}
   `);
   return Array.isArray(rows) ? rows : [];
+}
+
+async function reviewGuestCleanlinessReport(reportId, { action, actor, notes = null } = {}) {
+  if (!isUuid(reportId)) throw Object.assign(new Error("Guest report id is invalid."), { status: 422 });
+  const normalizedAction = String(action || "").trim().toLowerCase();
+  if (!["approve", "reject"].includes(normalizedAction)) throw Object.assign(new Error("action must be approve or reject."), { status: 422 });
+  const reviewedBy = String(actor || "authenticated_manager").trim().slice(0, 160) || "authenticated_manager";
+  const reviewNotes = notes == null ? null : String(notes).trim().slice(0, 2000) || null;
+  const before = await getGuestCleanlinessReportById(reportId);
+  if (before.status !== "pending_marketing_review" || before.marketing_review_status !== "pending") {
+    throw Object.assign(new Error("Guest report is not awaiting Marketing review."), { status: 409 });
+  }
+  if (normalizedAction === "approve") {
+    await runWriteSql(
+      "guest_marketing_approve",
+      `update public.guest_cleanliness_reports
+         set marketing_review_status='approved',
+             marketing_reviewed_at=now(),
+             marketing_reviewed_by=${sqlLiteral(reviewedBy)},
+             marketing_review_notes=${sqlLiteral(reviewNotes)},
+             status='open',
+             notification_status='pending'
+         where id=${sqlLiteral(reportId)}::uuid
+           and status='pending_marketing_review'
+           and marketing_review_status='pending';
+       insert into public.operational_notification_jobs(job_key,job_type,source_id,payload_json)
+         select 'guest-report:' || id::text,'guest_cleanliness_report',id,
+                jsonb_build_object('operation_id',operation_id,'marketing_approved',true)
+         from public.guest_cleanliness_reports
+         where id=${sqlLiteral(reportId)}::uuid
+           and status='open'
+           and marketing_review_status='approved'
+         on conflict(job_key) do nothing;`
+    );
+  } else {
+    await runWriteSql(
+      "guest_marketing_reject",
+      `update public.guest_cleanliness_reports
+       set marketing_review_status='rejected',
+           marketing_reviewed_at=now(),
+           marketing_reviewed_by=${sqlLiteral(reviewedBy)},
+           marketing_review_notes=${sqlLiteral(reviewNotes)},
+           status='rejected',
+           resolved_at=now(),
+           resolved_by=${sqlLiteral(reviewedBy)},
+           notification_status='not_dispatched'
+       where id=${sqlLiteral(reportId)}::uuid
+         and status='pending_marketing_review'
+         and marketing_review_status='pending'`
+    );
+  }
+  const reviewed = await getGuestCleanlinessReportById(reportId);
+  if (reviewed.marketing_review_status !== (normalizedAction === "approve" ? "approved" : "rejected")) {
+    throw Object.assign(new Error("Guest Marketing review did not complete."), { status: 409 });
+  }
+  return reviewed;
+}
+
+async function resolveGuestCleanlinessReport(reportId, { actor, notes = null } = {}) {
+  if (!isUuid(reportId)) throw Object.assign(new Error("Guest report id is invalid."), { status: 422 });
+  const resolvedBy = String(actor || "authenticated_manager").trim().slice(0, 160) || "authenticated_manager";
+  const closeNotes = notes == null ? null : String(notes).trim().slice(0, 2000) || null;
+  const before = await getGuestCleanlinessReportById(reportId);
+  if (before.status !== "open" || before.marketing_review_status !== "approved") {
+    throw Object.assign(new Error("Only an approved open guest report can be resolved."), { status: 409 });
+  }
+  await runWriteSql(
+    "guest_report_resolve",
+    `update public.guest_cleanliness_reports
+     set status='resolved',resolved_at=now(),resolved_by=${sqlLiteral(resolvedBy)},
+         metadata_json=coalesce(metadata_json,'{}'::jsonb) || ${sqlLiteral(JSON.stringify({ resolution_notes: closeNotes }))}::jsonb
+     where id=${sqlLiteral(reportId)}::uuid
+       and status='open'
+       and marketing_review_status='approved'`
+  );
+  const resolved = await getGuestCleanlinessReportById(reportId);
+  if (resolved.status !== "resolved") throw Object.assign(new Error("Guest report resolution did not complete."), { status: 409 });
+  return resolved;
 }
 
 async function ensureSystemFeedbackSchema() {
@@ -1323,17 +1465,11 @@ function summarizeSystemFeedback({ category, priority, message, hubContext, subm
 }
 
 async function createSystemFeedbackItem(payload = {}) {
-  const category = normalizeFeedbackCategory(payload.category);
-  const priority = normalizeFeedbackPriority(payload.priority);
-  const message = String(payload.message || payload.body || "").trim();
-  const submittedBy = String(payload.submitted_by || payload.name || "").trim() || null;
-  const hubContext = String(payload.hub_context || payload.hub || "unknown").trim().toLowerCase() || "unknown";
-  const deviceId = String(payload.device_id || payload.device || "").trim() || null;
-  const pageUrl = String(payload.page_url || payload.url || "").trim().slice(0, 1000) || null;
+  const normalized = normalizeFeedbackInput(payload);
+  const { category, priority, message, submittedBy, hubContext, deviceId, pageUrl } = normalized;
   const feedbackId = randomUUID();
   const operationId = String(payload.operation_id || payload.operationId || "").trim();
   if (!isUuid(operationId)) throw Object.assign(new Error("operation_id must be a UUID."), { status: 422 });
-  if (!message) throw Object.assign(new Error("message is required."), { status: 422 });
   const validatedImage = validateSystemFeedbackImageAttachment(payload.image_attachment || payload.image || null);
   const requestFingerprint = stableRequestFingerprint({
     category,
@@ -1514,6 +1650,31 @@ async function acknowledgeSystemFeedbackItem(feedbackId, acknowledgedBy = "ops_m
      where id = ${sqlLiteral(feedbackId)}::uuid`
   );
   return getSystemFeedbackItemById(feedbackId);
+}
+
+async function setSystemFeedbackStatus(feedbackId, status, actor = "ops_manager") {
+  if (!isUuid(feedbackId)) throw Object.assign(new Error("feedback id is invalid."), { status: 422 });
+  const normalizedStatus = String(status || "").trim().toLowerCase();
+  if (!["acknowledged", "resolved"].includes(normalizedStatus)) throw Object.assign(new Error("status must be acknowledged or resolved."), { status: 422 });
+  const changedBy = String(actor || "ops_manager").trim().slice(0, 160) || "ops_manager";
+  const before = await getSystemFeedbackItemById(feedbackId);
+  if (["closed", "resolved"].includes(before.status)) {
+    throw Object.assign(new Error("Feedback item is already resolved or unavailable."), { status: 409 });
+  }
+  await runWriteSql(
+    "system_feedback_status",
+    `update public.system_feedback_items
+     set status=${sqlLiteral(normalizedStatus)},
+         acknowledged_at=case when ${sqlLiteral(normalizedStatus)}='acknowledged' then now() else acknowledged_at end,
+         acknowledged_by=case when ${sqlLiteral(normalizedStatus)}='acknowledged' then ${sqlLiteral(changedBy)} else acknowledged_by end,
+         updated_at=now(),
+         metadata_json=coalesce(metadata_json,'{}'::jsonb) || ${sqlLiteral(JSON.stringify({ status_changed_via: "manager_feedback_inbox", status_changed_by: changedBy }))}::jsonb
+     where id=${sqlLiteral(feedbackId)}::uuid
+       and status not in ('closed','resolved')`
+  );
+  const changed = await getSystemFeedbackItemById(feedbackId);
+  if (changed.status !== normalizedStatus) throw Object.assign(new Error("Feedback status update did not complete."), { status: 409 });
+  return changed;
 }
 
 async function listSystemFeedbackReminderDueItems({ limit = 25 } = {}) {
@@ -2375,8 +2536,10 @@ app.get("/feedback-api/image/:feedbackId", requireFeedbackSignedLinkOrOps("image
 app.get("/feedback-api/acknowledge/:feedbackId", requireFeedbackSignedLinkOrOps("ack"), async (req, res) => {
   try {
     await ensureSystemFeedbackSchema();
-    const item = await acknowledgeSystemFeedbackItem(String(req.params.feedbackId || ""), req.query.by || "ops_manager");
-    res.status(200).send(`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Feedback acknowledged</title><style>body{font-family:Arial,sans-serif;background:#111827;color:#f8fafc;display:grid;place-items:center;min-height:100vh;margin:0}.card{max-width:620px;padding:28px;border-radius:24px;background:rgba(8,17,29,.92);border:1px solid rgba(255,255,255,.14)}.ok{color:#84c341;font-weight:900}</style></head><body><main class="card"><div class="ok">Acknowledged</div><h1>Program feedback will stop reminding you.</h1><p>${escapeHtml(item.summary || item.message || item.id)}</p></main></body></html>`);
+    const item = await getSystemFeedbackItemById(String(req.params.feedbackId || ""));
+    const token = String(req.query.token || "");
+    res.setHeader("Cache-Control", "no-store");
+    res.status(200).send(`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Confirm feedback acknowledgement</title><style>body{font-family:Arial,sans-serif;background:#111827;color:#f8fafc;display:grid;place-items:center;min-height:100vh;margin:0}.card{max-width:620px;padding:28px;border-radius:24px;background:rgba(8,17,29,.92);border:1px solid rgba(255,255,255,.14)}button{min-height:48px;border:0;border-radius:999px;padding:0 20px;background:#84c341;color:#102106;font-weight:900}</style></head><body><main class="card"><h1>Confirm acknowledgement</h1><p>${escapeHtml(item.summary || item.message || item.id)}</p><form method="post"><input type="hidden" name="token" value="${escapeHtml(token)}"><button type="submit">Acknowledge feedback</button></form></main></body></html>`);
   } catch (error) {
     res.status(404).send(error?.message || "Feedback acknowledgement failed");
   }
@@ -2384,8 +2547,16 @@ app.get("/feedback-api/acknowledge/:feedbackId", requireFeedbackSignedLinkOrOps(
 app.post("/feedback-api/acknowledge/:feedbackId", requireFeedbackSignedLinkOrOps("ack"), async (req, res) => {
   try {
     await ensureSystemFeedbackSchema();
-    const item = await acknowledgeSystemFeedbackItem(String(req.params.feedbackId || ""), req.body?.acknowledged_by || req.body?.by || "ops_manager");
-    res.status(200).json({ ok: true, data: item, meta: { version: APP_VERSION, release_id: RELEASE_ID, contract_version: FEEDBACK_CONTRACT_VERSION } });
+    const actor = req.feedbackSignedLink
+      ? "confirmed_signed_feedback_link"
+      : String(req.memphisAuth?.manager_display_name || req.memphisAuth?.manager_id || "ops_manager");
+    const item = await acknowledgeSystemFeedbackItem(String(req.params.feedbackId || ""), actor);
+    if (/application\/json/i.test(String(req.get("accept") || "")) || /application\/json/i.test(String(req.get("content-type") || ""))) {
+      res.status(200).json({ ok: true, data: item, meta: { version: APP_VERSION, release_id: RELEASE_ID, contract_version: FEEDBACK_CONTRACT_VERSION } });
+      return;
+    }
+    res.setHeader("Cache-Control", "no-store");
+    res.status(200).send(`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Feedback acknowledged</title></head><body><main><h1>Feedback acknowledged</h1><p>${escapeHtml(item.summary || item.id)}</p></main></body></html>`);
   } catch (error) {
     res.status(500).json({ ok: false, error: error?.message || "Feedback acknowledgement failed" });
   }
@@ -2399,7 +2570,7 @@ app.post("/feedback-api/reminders/run", async (req, res) => {
     res.status(500).json({ ok: false, error: error?.message || "Feedback reminder sweep failed" });
   }
 });
-app.post("/feedback-api/submit", rateLimit, async (req, res) => {
+app.post("/feedback-api/submit", publicSubmissionRateLimit("feedback"), async (req, res) => {
   try {
     await ensureSystemFeedbackSchema();
     const operationId = requestOperationId(req);
@@ -2434,7 +2605,10 @@ app.post("/feedback-api/submit", rateLimit, async (req, res) => {
     res.status(error?.status || 500).json({ ok: false, error: error?.message || "System feedback submit failed" });
   }
 });
-app.get("/guest-api/locations/:locationCode", async (req, res) => {
+app.get("/guest-api/status", (_req, res) => {
+  res.status(200).json({ ok: true, data: GUEST_FEATURE, meta: { version: APP_VERSION, release_id: RELEASE_ID, contract_version: GUEST_REPORTS_CONTRACT_VERSION } });
+});
+app.get("/guest-api/locations/:locationCode", requireGuestIssuesApproved, async (req, res) => {
   try {
     const location = await resolveGuestReportLocation(req.params.locationCode);
     res.status(200).json({ ok: true, data: location, meta: { version: APP_VERSION, release_id: RELEASE_ID, contract_version: GUEST_REPORTS_CONTRACT_VERSION } });
@@ -2442,26 +2616,10 @@ app.get("/guest-api/locations/:locationCode", async (req, res) => {
     res.status(404).json({ ok: false, error: error?.message || "Location lookup failed" });
   }
 });
-app.post("/guest-api/report-cleanliness", rateLimit, async (req, res) => {
+app.post("/guest-api/report-cleanliness", requireGuestIssuesApproved, publicSubmissionRateLimit("guest"), async (req, res) => {
   try {
     await ensureGuestReportsSchema();
-    const locationCode = String(req.body?.location_code || req.body?.code || "").trim();
-    const issueType = String(req.body?.issue_type || req.body?.issue || "").trim();
-    const severity = String(req.body?.severity || "normal").trim();
-    const notes = req.body?.notes == null ? null : String(req.body.notes);
-    const reporter = {
-      name: req.body?.guest_name ?? req.body?.name ?? null,
-      phone: req.body?.guest_phone ?? req.body?.phone ?? null,
-      email: req.body?.guest_email ?? req.body?.email ?? null,
-    };
-    if (!locationCode) {
-      res.status(400).json({ ok: false, error: "location_code is required." });
-      return;
-    }
-    if (!issueType) {
-      res.status(400).json({ ok: false, error: "issue_type is required." });
-      return;
-    }
+    const { locationCode, issueType, severity, notes, reporter } = normalizeGuestReportInput(req.body || {});
     const location = await resolveGuestReportLocation(locationCode);
     const operationId = requestOperationId(req);
     const requestFingerprint = stableRequestFingerprint({
@@ -2500,10 +2658,9 @@ app.post("/guest-api/report-cleanliness", rateLimit, async (req, res) => {
       notification_status: report.notification_status,
       newly_inserted: report.newly_inserted,
     };
-    runOperationalNotificationWorker({ limit: 10 }).catch((error) => console.error("operational notification worker kick failed:", error));
     res.status(report.newly_inserted === false ? 200 : 202).json({
       ok: true,
-      data: { report: safeReport, location, notification: { status: "pending" } },
+      data: { report: safeReport, location, notification: { status: "awaiting_marketing_review" } },
       meta: { version: APP_VERSION, release_id: RELEASE_ID, contract_version: GUEST_REPORTS_CONTRACT_VERSION },
     });
   } catch (error) {
@@ -2511,7 +2668,7 @@ app.post("/guest-api/report-cleanliness", rateLimit, async (req, res) => {
     res.status(error?.status || 500).json({ ok: false, error: error?.message || "Guest cleanliness report failed" });
   }
 });
-app.get("/guest-api/locations/:locationCode/issues", async (req, res) => {
+app.get("/guest-api/locations/:locationCode/issues", requireGuestIssuesApproved, async (req, res) => {
   try {
     await ensureGuestReportsSchema();
     const location = await resolveGuestReportLocation(req.params.locationCode);
@@ -2526,17 +2683,52 @@ app.get("/guest-api/locations/:locationCode/issues", async (req, res) => {
     res.status(error?.status || 404).json({ ok: false, error: error?.message || "Guest issue list failed" });
   }
 });
-app.get("/dashboard-api/guest-cleanliness-issues", requireOpsManagerAuth, async (req, res) => {
+app.get("/dashboard-api/guest-cleanliness-issues", requireOpsManagerAuth, requireGuestIssuesApproved, async (req, res) => {
   try {
     await ensureGuestReportsSchema();
     const status = req.query.status ? String(req.query.status) : "";
     const locationCode = req.query.location_code ? String(req.query.location_code) : "";
     const limit = req.query.limit ? Number(req.query.limit) : 100;
-    const rows = await listGuestCleanlinessReports({ status, locationCode, limit });
+    const rows = await listGuestCleanlinessReports({ status, locationCode, marketingReviewStatus: "approved", limit });
     res.status(200).json({ ok: true, data: rows, meta: { version: APP_VERSION, release_id: RELEASE_ID, contract_version: GUEST_REPORTS_CONTRACT_VERSION } });
   } catch (error) {
     console.error("guest cleanliness issue list failed:", error);
     res.status(500).json({ ok: false, error: error?.message || "Guest cleanliness issue list failed" });
+  }
+});
+app.get("/marketing-api/guest-cleanliness-issues", requireGuestMarketingReviewAuth, async (req, res) => {
+  try {
+    await ensureGuestReportsSchema();
+    const rows = await listGuestCleanlinessReports({
+      status: "pending_marketing_review",
+      marketingReviewStatus: "pending",
+      limit: req.query.limit ? Number(req.query.limit) : 100,
+    });
+    res.status(200).json({ ok: true, data: rows, meta: { version: APP_VERSION, release_id: RELEASE_ID, contract_version: GUEST_REPORTS_CONTRACT_VERSION } });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error?.message || "Guest Marketing review queue failed" });
+  }
+});
+app.post("/marketing-api/guest-cleanliness-issues/:reportId/review", requireGuestMarketingReviewAuth, async (req, res) => {
+  try {
+    const item = await reviewGuestCleanlinessReport(String(req.params.reportId || ""), {
+      action: req.body?.action,
+      notes: req.body?.notes,
+      actor: req.guestMarketingReview.actor,
+    });
+    if (item.status === "open") runOperationalNotificationWorker({ limit: 10 }).catch((error) => console.error("guest dispatch worker kick failed:", error));
+    res.status(200).json({ ok: true, data: item, meta: { version: APP_VERSION, release_id: RELEASE_ID, contract_version: GUEST_REPORTS_CONTRACT_VERSION } });
+  } catch (error) {
+    res.status(error?.status || 500).json({ ok: false, error: error?.message || "Guest Marketing review failed" });
+  }
+});
+app.post("/dashboard-api/guest-cleanliness-issues/:reportId/resolve", requireOpsManagerWrite, requireGuestIssuesApproved, async (req, res) => {
+  try {
+    const actor = String(req.memphisAuth?.manager_display_name || req.memphisAuth?.manager_id || "authenticated_manager");
+    const item = await resolveGuestCleanlinessReport(String(req.params.reportId || ""), { actor, notes: req.body?.notes });
+    res.status(200).json({ ok: true, data: item, meta: { version: APP_VERSION, release_id: RELEASE_ID, contract_version: GUEST_REPORTS_CONTRACT_VERSION } });
+  } catch (error) {
+    res.status(error?.status || 500).json({ ok: false, error: error?.message || "Guest report resolution failed" });
   }
 });
 app.get("/dashboard-api/system-feedback", requireOpsManagerAuth, async (req, res) => {
@@ -2551,6 +2743,15 @@ app.get("/dashboard-api/system-feedback", requireOpsManagerAuth, async (req, res
   } catch (error) {
     console.error("system feedback list failed:", error);
     res.status(500).json({ ok: false, error: error?.message || "System feedback list failed" });
+  }
+});
+app.post("/dashboard-api/system-feedback/:feedbackId/status", requireOpsManagerWrite, async (req, res) => {
+  try {
+    const actor = String(req.memphisAuth?.manager_display_name || req.memphisAuth?.manager_id || "authenticated_manager");
+    const item = await setSystemFeedbackStatus(String(req.params.feedbackId || ""), req.body?.status, actor);
+    res.status(200).json({ ok: true, data: item, meta: { version: APP_VERSION, release_id: RELEASE_ID, contract_version: FEEDBACK_CONTRACT_VERSION } });
+  } catch (error) {
+    res.status(error?.status || 500).json({ ok: false, error: error?.message || "Feedback status update failed" });
   }
 });
 app.get("/dashboard-api/canary", async (_req, res) => {

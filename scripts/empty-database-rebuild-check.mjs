@@ -817,7 +817,9 @@ if (dockerImage) {
       "shared_preload_libraries=pg_cron,pg_net,pg_stat_statements",
     ]);
     let ready = false;
-    for (let attempt = 0; attempt < 180; attempt += 1) {
+    // Supabase's PostgreSQL image performs substantial first-boot initialization.
+    // Busy developer workstations can legitimately need more than three minutes.
+    for (let attempt = 0; attempt < 600; attempt += 1) {
       const check = spawnSync(
         "docker",
         ["exec", dockerContainer, "psql", "-At", "-U", "supabase_admin", "-d", "postgres", "-c", "select 1"],
