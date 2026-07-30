@@ -55,7 +55,10 @@ export function buildReleaseManifest({ appVersion, releaseId, contracts = {} } =
       runtime_release_id: releaseId,
     },
     frontend: {
-      commit_sha: String(process.env.FRONTEND_COMMIT_SHA || frontendManifest?.frontend_commit_sha || "unknown"),
+      // A coordinated release records the exact deployed frontend commit in
+      // source control. Prefer that immutable record over a hosting variable
+      // that can lag behind a GitHub Pages deployment.
+      commit_sha: String(frontendManifest?.frontend_commit_sha || process.env.FRONTEND_COMMIT_SHA || "unknown"),
       manifest: frontendManifest,
     },
     schema: {

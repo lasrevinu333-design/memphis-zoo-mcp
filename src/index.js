@@ -2445,7 +2445,7 @@ app.use(
     releaseId: RELEASE_ID,
     schemaFingerprint: buildReleaseManifest({ appVersion: APP_VERSION, releaseId: RELEASE_ID }).schema.fingerprint,
     backendCommit: BACKEND_COMMIT_SHA,
-    frontendCommit: process.env.FRONTEND_COMMIT_SHA || "unknown",
+    frontendCommit: buildReleaseManifest({ appVersion: APP_VERSION, releaseId: RELEASE_ID }).frontend.commit_sha,
   }),
 );
 app.use("/dashboard-api/events", createEventsPublicRouter({ runReadOnlySql, runWriteSql, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController }));

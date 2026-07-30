@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const source = readFileSync(new URL("../src/index.js", import.meta.url), "utf8");
+const releaseManifestSource = readFileSync(new URL("../src/release-manifest.js", import.meta.url), "utf8");
 const monitor = readFileSync(new URL("../.github/workflows/production-availability-monitor.yml", import.meta.url), "utf8");
 
 assert.match(source, /app\.get\(\["\/health", "\/health\/dependencies"\]/,
@@ -15,6 +16,8 @@ assert.match(source, /geminiControlledRepairWorker\.stop\(\)/,
   "background repair work must stop during shutdown");
 assert.match(source, /httpServer\.close/,
   "active HTTP work must drain during shutdown");
+assert.match(releaseManifestSource, /frontendManifest\?\.frontend_commit_sha \|\| process\.env\.FRONTEND_COMMIT_SHA/,
+  "the coordinated source manifest must outrank stale hosting metadata");
 
 assert.match(monitor, /cron: "\*\/10 \* \* \* \*"/,
   "the availability bridge must probe inside Render's idle interval");
