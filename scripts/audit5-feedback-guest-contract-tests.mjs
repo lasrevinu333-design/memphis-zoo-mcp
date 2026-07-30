@@ -32,6 +32,7 @@ assert.equal(verifyExpiringFeedbackToken({ secret: "test-secret", token, feedbac
 assert.equal(verifyExpiringFeedbackToken({ secret: "test-secret", token, feedbackId: "feedback-id", purpose: "image", now }), false);
 
 assert.match(api, /app\.get\("\/guest-api\/status"/);
+assert.match(api, /guest_reports: GUEST_REPORTS_CONTRACT_VERSION/);
 assert.match(api, /app\.post\("\/guest-api\/report-cleanliness", requireGuestIssuesApproved, publicSubmissionRateLimit\("guest"\)/);
 assert.match(api, /app\.post\("\/feedback-api\/submit", publicSubmissionRateLimit\("feedback"\)/);
 assert.match(api, /public_submission_rate_limits/);

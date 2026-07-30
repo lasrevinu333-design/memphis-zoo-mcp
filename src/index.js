@@ -427,6 +427,7 @@ function buildHealthPayload(area, extra = {}) {
     schedule: SCHEDULE_CONTRACT_VERSION,
     operational_analytics: OPERATIONAL_ANALYTICS_CONTRACT_VERSION,
     events: EVENTS_CONTRACT_VERSION,
+    guest_reports: GUEST_REPORTS_CONTRACT_VERSION,
     feedback: FEEDBACK_CONTRACT_VERSION,
     ops_manager_auth: OPS_MANAGER_AUTH_CONTRACT_VERSION,
     gemini_console: GEMINI_CONSOLE_CONTRACT_VERSION,
