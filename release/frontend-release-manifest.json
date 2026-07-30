@@ -1,6 +1,6 @@
 {
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "62d4692f984371172b9283eaa8c84c8277170c1b",
+  "frontend_commit_sha": "4cd38b4dd5c3f38ebe96b0d52524b097d93e6175",
   "frontend_commit_state": "github_pages_production_verified",
   "backend_minimum_version": "release-2026.07.19.custodial-v3.12",
   "schema_fingerprint": "82a173e6e45bdba58222921e88d12676f6c3f7935902e6e9dca3a48ca06cb178",
