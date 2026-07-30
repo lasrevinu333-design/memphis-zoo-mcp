@@ -36,6 +36,17 @@ import {
 
 const app = express();
 app.set("trust proxy", 1);
+app.disable("x-powered-by");
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()");
+  if (String(req.headers["x-forwarded-proto"] || req.protocol || "").toLowerCase() === "https") {
+    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  }
+  next();
+});
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: false, limit: "32kb" }));
 
@@ -81,6 +92,7 @@ const SCAN_CONTRACT_VERSION = "scan.v2";
 const DASHBOARD_CONTRACT_VERSION = "dashboard.v1";
 const MESSAGING_CONTRACT_VERSION = "messaging.v5";
 const SCHEDULE_CONTRACT_VERSION = "schedule.v2";
+const COVERALL_ASSIGNMENTS_CONTRACT_VERSION = "coverall-assignments.v2.secure-links";
 const OPERATIONAL_ANALYTICS_CONTRACT_VERSION = "operational-analytics.v1";
 const GUEST_REPORTS_CONTRACT_VERSION = "guest-reports.v2.approval-gated";
 const FEEDBACK_CONTRACT_VERSION = "feedback.v2.json-triage";
@@ -425,6 +437,7 @@ function buildHealthPayload(area, extra = {}) {
     dashboard: DASHBOARD_CONTRACT_VERSION,
     messaging: MESSAGING_CONTRACT_VERSION,
     schedule: SCHEDULE_CONTRACT_VERSION,
+    coverall_assignments: COVERALL_ASSIGNMENTS_CONTRACT_VERSION,
     operational_analytics: OPERATIONAL_ANALYTICS_CONTRACT_VERSION,
     events: EVENTS_CONTRACT_VERSION,
     guest_reports: GUEST_REPORTS_CONTRACT_VERSION,
@@ -2417,7 +2430,7 @@ app.use("/admin-api", (req, res, next) => { setAdminApiCors(res, req); if (req.m
 app.use("/dashboard-api", (req, res, next) => { setPublicDashboardCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/scan-api", (req, res, next) => { setScanApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/messaging-api", (req, res, next) => { setMessagingApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); }, createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPayload, requireDeviceAccess: requireDeviceOrOpsAccess, requireOpsManagerAuth, registerOperationalJobHandler: registerOperationalNotificationJobHandler, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: MESSAGING_CONTRACT_VERSION }));
-app.use("/schedule-api", (req, res, next) => { setScheduleApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); }, createScheduleRouter({ runReadOnlySql, runRpc, runWriteSql, buildHealthPayload, requireAdminApiAuth: requireOpsManagerWrite, requireOpsManagerAuth, requireDeviceAccess: requireDeviceOrOpsAccess, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: SCHEDULE_CONTRACT_VERSION }));
+app.use("/schedule-api", (req, res, next) => { setScheduleApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); }, createScheduleRouter({ runReadOnlySql, runRpc, runWriteSql, buildHealthPayload, requireAdminApiAuth: requireOpsManagerWrite, requireOpsManagerAuth, requireDeviceAccess: requireDeviceOrOpsAccess, publicTrafficRateLimit: publicSubmissionRateLimit, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: SCHEDULE_CONTRACT_VERSION }));
 app.use("/guest-api", (req, res, next) => { setGuestApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/feedback-api", (req, res, next) => { setFeedbackApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use(

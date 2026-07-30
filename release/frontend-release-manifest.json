@@ -1,14 +1,15 @@
 {
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "81386c22175c1c273473ca6b79e6d3135117262d",
+  "frontend_commit_sha": "21272b7189296b28fc48932dff841bfe193b07f2",
   "frontend_commit_state": "github_pages_production_verified",
   "backend_minimum_version": "release-2026.07.19.custodial-v3.12",
-  "schema_fingerprint": "537d649ccd5e04b8f840d8be2b06945b3812faa55e5d46a14080b241ef191948",
+  "schema_fingerprint": "82a173e6e45bdba58222921e88d12676f6c3f7935902e6e9dca3a48ca06cb178",
   "api_contract_versions": {
     "scan": "scan.v2",
     "dashboard": "dashboard.v1",
     "messaging": "messaging.v5",
     "schedule": "schedule.v2",
+    "coverall_assignments": "coverall-assignments.v2.secure-links",
     "operational_analytics": "operational-analytics.v1",
     "events": "events.v3",
     "ops_manager_auth": "ops-manager-auth.v5.named-leadership",

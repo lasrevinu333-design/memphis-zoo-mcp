@@ -1,4 +1,5 @@
 import express from "express";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { getGeminiApiKey } from "./utils/gemini-config.js";
 import { resolveCanonicalDevice } from "./device-identity.js";
 import { consolidateScheduleItems } from "./schedule-display.js";
@@ -557,6 +558,7 @@ export function createScheduleRouter({
   requireAdminApiAuth,
   requireOpsManagerAuth,
   requireDeviceAccess,
+  publicTrafficRateLimit,
   appVersion,
   releaseId,
   contractVersion,
@@ -565,6 +567,9 @@ export function createScheduleRouter({
   const requireSchedulePin = requireAdminApiAuth;
   const requireManagerRead = requireOpsManagerAuth || requireAdminApiAuth || ((_req, _res, next) => next());
   const requireEmployeeDevice = typeof requireDeviceAccess === "function" ? requireDeviceAccess : ((_req, _res, next) => next());
+  const limitPublicCoverAll = typeof publicTrafficRateLimit === "function"
+    ? publicTrafficRateLimit("coverall_assignment")
+    : ((_req, _res, next) => next());
 
   function requestHasDeviceIdentity(req) {
     return Boolean(String(req.query?.device_id || req.query?.device || req.header?.("x-device-id") || "").trim());
@@ -1157,61 +1162,136 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
     return COVERALL_SLOT_CODES.includes(raw) ? raw : "";
   }
 
-  function coverAllDisplayName(slotCode) {
-    return `CoverAll_${String(slotCode || "").split("_").pop() || "01"}`;
+  function coverAllPublicPath(serviceDate, slotCode, lang = "en", accessToken = "") {
+    const token = String(accessToken || "").trim();
+    if (!/^[A-Za-z0-9_-]{43,128}$/.test(token)) throw new Error("A secure CoverAll access token is required.");
+    return `/schedule-api/coverall/assignment?service_date=${encodeURIComponent(serviceDate)}&slot=${encodeURIComponent(slotCode)}&lang=${encodeURIComponent(lang)}&access_token=${encodeURIComponent(token)}`;
   }
 
-  function coverAllPublicPath(serviceDate, slotCode, lang = "en") {
-    return `/schedule-api/coverall/assignment?service_date=${encodeURIComponent(serviceDate)}&slot=${encodeURIComponent(slotCode)}&lang=${encodeURIComponent(lang)}`;
-  }
-
-  async function ensureCoverAllSlots() {
-    if (typeof runWriteSql !== "function") throw new Error("CoverAll write path is not configured.");
-    const valuesSql = COVERALL_SLOT_CODES.map((slotCode) => `(
-      '${esc(slotCode)}',
-      '${esc(coverAllDisplayName(slotCode))}',
-      true,
-      'staff',
-      'Third-party CoverAll custodial slot. Used for extra event/traffic help or 3+ absence escalation.'
-    )`).join(",\n");
-
-    await runWriteSql("coverall_slots_seed", `
-      insert into public.employees (employee_code, display_name, active, role, notes)
-      values ${valuesSql}
-      on conflict (employee_code) do update set
-        display_name = excluded.display_name,
-        active = true,
-        role = 'staff',
-        notes = excluded.notes,
-        updated_at = now();
-    `);
-
+  async function getCoverAllSlots() {
     const rows = await runReadOnlySql(`
       select id as employee_id, display_name, employee_code
       from public.employees
       where employee_code in (${COVERALL_SLOT_CODES.map((slotCode) => `'${esc(slotCode)}'`).join(",")})
       order by employee_code
     `);
-    if (!Array.isArray(rows) || rows.length < COVERALL_SLOT_CODES.length) throw new Error("Could not create or find all CoverAll employee slots.");
+    if (!Array.isArray(rows) || rows.length < COVERALL_SLOT_CODES.length) {
+      throw Object.assign(new Error("CoverAll employee slots are not provisioned. Apply the source-controlled migration."), { status: 503 });
+    }
     return rows;
   }
 
   async function getCoverAllEmployee() {
-    const slots = await ensureCoverAllSlots();
+    const slots = await getCoverAllSlots();
     return slots[0];
   }
 
   async function getCoverAllSlotByCode(slotCode) {
     const normalized = normalizeCoverAllSlotCode(slotCode);
     if (!normalized) throw new Error("slot must be COVERALL_01, COVERALL_02, COVERALL_03, or COVERALL_04.");
-    const slots = await ensureCoverAllSlots();
+    const slots = await getCoverAllSlots();
     const slot = slots.find((row) => String(row.employee_code || "").toUpperCase() === normalized);
     if (!slot) throw new Error(`CoverAll slot not found: ${normalized}`);
     return slot;
   }
 
+  function normalizeCoverAllAccessToken(value) {
+    const token = String(value || "").trim();
+    if (!/^[A-Za-z0-9_-]{43,128}$/.test(token)) {
+      throw Object.assign(new Error("This CoverAll assignment link is invalid or expired."), { status: 403, code: "coverall_link_invalid" });
+    }
+    return token;
+  }
+
+  function coverAllAccessTokenHash(token) {
+    return createHash("sha256").update(normalizeCoverAllAccessToken(token)).digest("hex");
+  }
+
+  function coverAllLinkTtlHours(value) {
+    const parsed = Number.parseInt(String(value ?? "24"), 10);
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 168) {
+      throw Object.assign(new Error("ttl_hours must be between 1 and 168."), { status: 422 });
+    }
+    return parsed;
+  }
+
+  function setCoverAllAssignmentSecurityHeaders(res) {
+    res.setHeader("Cache-Control", "no-store, private, max-age=0");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    res.setHeader("Content-Security-Policy", "default-src 'none'; img-src https://lasrevinu333-design.github.io data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'");
+    res.setHeader("Referrer-Policy", "no-referrer");
+  }
+
+  async function authorizeCoverAllAssignmentLink({ serviceDate, slotCode, accessToken }) {
+    const tokenHash = coverAllAccessTokenHash(accessToken);
+    const rows = await runReadOnlySql(`
+      select id, service_date::text as service_date, slot_code, expires_at
+      from public.coverall_assignment_links
+      where token_hash = '${esc(tokenHash)}'
+        and service_date = '${esc(serviceDate)}'::date
+        and slot_code = '${esc(slotCode)}'
+        and revoked_at is null
+        and expires_at > now()
+      limit 1
+    `);
+    if (!Array.isArray(rows) || !rows.length) {
+      throw Object.assign(new Error("This CoverAll assignment link is invalid or expired."), { status: 403, code: "coverall_link_invalid" });
+    }
+    return rows[0];
+  }
+
+  async function issueCoverAllAssignmentLink({ serviceDate, slotCode, lang, ttlHours, actor }) {
+    const slot = await getCoverAllSlotByCode(slotCode);
+    const token = randomBytes(32).toString("base64url");
+    const tokenHash = coverAllAccessTokenHash(token);
+    const linkId = randomUUID();
+    const expiresAt = new Date(Date.now() + coverAllLinkTtlHours(ttlHours) * 60 * 60 * 1000).toISOString();
+    const createdBy = String(actor || "authenticated_manager").trim().slice(0, 160) || "authenticated_manager";
+    const result = await runWriteSql("coverall_assignment_link_issue", `
+      with revoked as (
+        update public.coverall_assignment_links
+        set revoked_at = now(), revoked_by = '${esc(createdBy)}'
+        where service_date = '${esc(serviceDate)}'::date
+          and slot_code = '${esc(slot.employee_code)}'
+          and revoked_at is null
+        returning id
+      ), inserted as (
+        insert into public.coverall_assignment_links(id,token_hash,service_date,slot_code,created_by,expires_at)
+        values ('${esc(linkId)}'::uuid,'${esc(tokenHash)}','${esc(serviceDate)}'::date,'${esc(slot.employee_code)}','${esc(createdBy)}','${esc(expiresAt)}'::timestamptz)
+        returning id,service_date,slot_code,created_at,expires_at
+      )
+      select * from inserted
+    `);
+    const row = Array.isArray(result) ? result[0] : null;
+    if (!row?.id) throw new Error("The secure CoverAll assignment link could not be created.");
+    const publicOrigin = String(process.env.SCHEDULE_PUBLIC_BASE_URL || process.env.PUBLIC_BASE_URL || "https://memphis-zoo-mcp.onrender.com").replace(/\/+$/, "");
+    const normalizedLang = String(lang || "en").toLowerCase() === "es" ? "es" : "en";
+    return {
+      link_id: row.id,
+      service_date: String(row.service_date || serviceDate).slice(0, 10),
+      slot_code: row.slot_code || slot.employee_code,
+      expires_at: row.expires_at || expiresAt,
+      assignment_url: `${publicOrigin}${coverAllPublicPath(serviceDate, slot.employee_code, normalizedLang, token)}`,
+    };
+  }
+
+  async function revokeCoverAllAssignmentLinks({ serviceDate, slotCode, actor }) {
+    await getCoverAllSlotByCode(slotCode);
+    const revokedBy = String(actor || "authenticated_manager").trim().slice(0, 160) || "authenticated_manager";
+    const result = await runWriteSql("coverall_assignment_link_revoke", `
+      update public.coverall_assignment_links
+      set revoked_at = now(), revoked_by = '${esc(revokedBy)}'
+      where service_date = '${esc(serviceDate)}'::date
+        and slot_code = '${esc(slotCode)}'
+        and revoked_at is null
+      returning id
+    `);
+    return Array.isArray(result) ? result.length : 0;
+  }
+
   async function listCoverAllSlotsForDate(serviceDate) {
-    const slots = await ensureCoverAllSlots();
+    const slots = await getCoverAllSlots();
     const rosterRows = await runReadOnlySql(`
       select r.employee_id, r.active, to_char(r.shift_start, 'HH24:MI:SS') as shift_start,
              to_char(r.shift_end, 'HH24:MI:SS') as shift_end, r.source_type, r.notes
@@ -1232,15 +1312,14 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
         shift_end: roster?.shift_end || null,
         source_type: roster?.source_type || null,
         notes: roster?.notes || null,
-        assignment_url_en: coverAllPublicPath(serviceDate, slotCode, "en"),
-        assignment_url_es: coverAllPublicPath(serviceDate, slotCode, "es"),
+        secure_link_required: true,
       };
     });
   }
 
   async function publishCoverAllSlotsForDate(serviceDate, inputSlots = [], { regenerate = true, restoreStatic = true, rebalance = true } = {}) {
     if (!Array.isArray(inputSlots)) throw new Error("slots must be an array.");
-    const slots = await ensureCoverAllSlots();
+    const slots = await getCoverAllSlots();
     const byCode = new Map(slots.map((slot) => [String(slot.employee_code || "").toUpperCase(), slot]));
     const operations = [];
 
@@ -3984,11 +4063,49 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
     }
   });
 
-  router.get("/coverall/assignment", async (req, res) => {
+  router.post("/coverall/links", requireSchedulePin, async (req, res) => {
+    try {
+      const serviceDate = requireDate(req.body?.service_date || req.body?.date || (await getServiceDate()));
+      const slotCode = normalizeCoverAllSlotCode(req.body?.slot || req.body?.slot_code || req.body?.employee_code);
+      if (!slotCode) throw Object.assign(new Error("slot_code must be COVERALL_01 through COVERALL_04."), { status: 422 });
+      const actor = String(req.memphisAuth?.manager_display_name || req.memphisAuth?.manager_id || "authenticated_manager");
+      const data = await issueCoverAllAssignmentLink({
+        serviceDate,
+        slotCode,
+        lang: req.body?.lang,
+        ttlHours: req.body?.ttl_hours,
+        actor,
+      });
+      res.setHeader("Cache-Control", "no-store");
+      res.status(201).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+    } catch (error) {
+      fail(res, error, "Secure CoverAll assignment link creation failed");
+    }
+  });
+
+  router.post("/coverall/links/revoke", requireSchedulePin, async (req, res) => {
+    try {
+      const serviceDate = requireDate(req.body?.service_date || req.body?.date || (await getServiceDate()));
+      const slotCode = normalizeCoverAllSlotCode(req.body?.slot || req.body?.slot_code || req.body?.employee_code);
+      if (!slotCode) throw Object.assign(new Error("slot_code must be COVERALL_01 through COVERALL_04."), { status: 422 });
+      const actor = String(req.memphisAuth?.manager_display_name || req.memphisAuth?.manager_id || "authenticated_manager");
+      const revokedCount = await revokeCoverAllAssignmentLinks({ serviceDate, slotCode, actor });
+      res.setHeader("Cache-Control", "no-store");
+      res.status(200).json({ ok: true, data: { service_date: serviceDate, slot_code: slotCode, revoked_count: revokedCount }, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
+    } catch (error) {
+      fail(res, error, "Secure CoverAll assignment link revocation failed");
+    }
+  });
+
+  router.get("/coverall/assignment", limitPublicCoverAll, async (req, res) => {
+    setCoverAllAssignmentSecurityHeaders(res);
     try {
       const serviceDate = requireDate(req.query.service_date || req.query.date || (await getServiceDate()));
       const slotCode = normalizeCoverAllSlotCode(req.query.slot || req.query.slot_code || req.query.employee_code || "COVERALL_01");
+      if (!slotCode) throw Object.assign(new Error("This CoverAll assignment link is invalid or expired."), { status: 403, code: "coverall_link_invalid" });
       const lang = String(req.query.lang || "en").trim().toLowerCase() === "es" ? "es" : "en";
+      const accessToken = normalizeCoverAllAccessToken(req.query.access_token || req.query.token);
+      await authorizeCoverAllAssignmentLink({ serviceDate, slotCode, accessToken });
       const slot = await getCoverAllSlotByCode(slotCode);
       const shiftRows = await runReadOnlySql(`
         select to_char(shift_start, 'HH24:MI') as shift_start, to_char(shift_end, 'HH24:MI') as shift_end
@@ -4032,8 +4149,8 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
         };
       });
       const publicOrigin = String(process.env.SCHEDULE_PUBLIC_BASE_URL || process.env.PUBLIC_BASE_URL || "https://memphis-zoo-mcp.onrender.com").replace(/\/+$/, "");
-      const enUrl = `${publicOrigin}${coverAllPublicPath(serviceDate, slot.employee_code, "en")}`;
-      const esUrl = `${publicOrigin}${coverAllPublicPath(serviceDate, slot.employee_code, "es")}`;
+      const enUrl = `${publicOrigin}${coverAllPublicPath(serviceDate, slot.employee_code, "en", accessToken)}`;
+      const esUrl = `${publicOrigin}${coverAllPublicPath(serviceDate, slot.employee_code, "es", accessToken)}`;
       const t = lang === "es"
         ? { title: "Asignaciones de CoverAll", shift: "Turno", areas: "Áreas asignadas", restrooms: "Baños públicos", other: "Exhibiciones", none: "No hay asignaciones publicadas todavía.", language: "English", notice: "Revise sus áreas asignadas. No hay acceso a otras herramientas." }
         : { title: "CoverAll Assignments", shift: "Shift", areas: "Assigned areas", restrooms: "Public restrooms", other: "Exhibits", none: "No assignments posted yet.", language: "Español", notice: "Review your assigned areas. No access to other tools is provided." };
@@ -4059,14 +4176,16 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
 </style>
 </head>
 <body>
-  <header class="top"><a class="lang" href="${htmlEscape(switchUrl)}" onclick="window.location.href=this.href; return false;">${htmlEscape(t.language)}</a><div class="eyebrow">${htmlEscape(t.title)}</div><h1>${htmlEscape(slot.display_name || slot.employee_code)}</h1><div class="shift">${htmlEscape(t.shift)}: ${htmlEscape(data?.shift?.start || "—")} - ${htmlEscape(data?.shift?.end || "—")}</div><div class="pill">${htmlEscape(serviceDate)}</div></header>
+  <header class="top"><a class="lang" href="${htmlEscape(switchUrl)}">${htmlEscape(t.language)}</a><div class="eyebrow">${htmlEscape(t.title)}</div><h1>${htmlEscape(slot.display_name || slot.employee_code)}</h1><div class="shift">${htmlEscape(t.shift)}: ${htmlEscape(data?.shift?.start || "—")} - ${htmlEscape(data?.shift?.end || "—")}</div><div class="pill">${htmlEscape(serviceDate)}</div></header>
   <main class="wrap"><div class="notice">${htmlEscape(t.notice)}</div><section class="card"><h2>${htmlEscape(t.restrooms)}</h2><ul>${renderItems(restroomItems)}</ul></section><section class="card"><h2>${htmlEscape(t.other)}</h2><ul>${renderItems(otherItems)}</ul></section><div class="meta">${htmlEscape(slot.employee_code)} • ${htmlEscape(serviceDate)}</div></main>
 </body>
 </html>`;
       res.setHeader("Content-Type", "text/html; charset=utf-8");
       res.status(200).send(html);
     } catch (error) {
-      res.status(400).send(`<!doctype html><html><body style="font-family:system-ui;padding:20px"><h1>CoverAll schedule unavailable</h1><p>${htmlEscape(error?.message || "Schedule unavailable")}</p></body></html>`);
+      const status = Number(error?.status) || 400;
+      const safeMessage = status === 403 ? "This CoverAll assignment link is invalid or expired." : "The CoverAll schedule is temporarily unavailable.";
+      res.status(status).send(`<!doctype html><html><body style="font-family:system-ui;padding:20px"><h1>CoverAll schedule unavailable</h1><p>${htmlEscape(safeMessage)}</p></body></html>`);
     }
   });
 
