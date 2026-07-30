@@ -5,8 +5,7 @@
   "type": "module",
   "main": "src/index.js",
   "scripts": {
-    "start": "node src/mcp-schema-bootstrap.js",
-    "start:bootstrap": "node src/mcp-schema-bootstrap.js",
+    "start": "node src/index.js",
     "start:direct": "node src/index.js",
     "smoke": "node scripts/smoke.mjs",
     "test:events-parser": "node scripts/events-parser-tests.mjs",

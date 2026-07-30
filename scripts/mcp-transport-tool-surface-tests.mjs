@@ -20,7 +20,7 @@ async function reservePort() {
 }
 
 async function waitForServer(url, child, logs) {
-  // Full bootstrap imports the complete application graph; allow headroom on a
+  // The canonical entry point imports the complete application graph; allow headroom on a
   // loaded workstation and slower CI runners before classifying startup as dead.
   for (let attempt = 0; attempt < 300; attempt += 1) {
     if (child.exitCode != null) {
@@ -49,7 +49,7 @@ async function withTimeout(promise, milliseconds, label) {
 const port = await reservePort();
 let stdout = "";
 let stderr = "";
-const child = spawn(process.execPath, ["src/mcp-schema-bootstrap.js"], {
+const child = spawn(process.execPath, ["src/index.js"], {
   cwd: process.cwd(),
   env: {
     ...process.env,

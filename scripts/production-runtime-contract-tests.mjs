@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 const source = readFileSync(new URL("../src/index.js", import.meta.url), "utf8");
 const releaseManifestSource = readFileSync(new URL("../src/release-manifest.js", import.meta.url), "utf8");
 const monitor = readFileSync(new URL("../.github/workflows/production-availability-monitor.yml", import.meta.url), "utf8");
 const warmBridgeMigration = readFileSync(new URL("../supabase/migrations/20260730221607_production_availability_warm_bridge.sql", import.meta.url), "utf8");
+const packageManifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 
 assert.match(source, /app\.get\(\["\/health", "\/health\/dependencies"\]/,
   "canonical /health must execute the dependency-aware readiness check");
@@ -17,6 +18,14 @@ assert.match(source, /geminiControlledRepairWorker\.stop\(\)/,
   "background repair work must stop during shutdown");
 assert.match(source, /httpServer\.close/,
   "active HTTP work must drain during shutdown");
+assert.equal(packageManifest.scripts.start, "node src/index.js",
+  "production must start the canonical application directly");
+assert.equal(existsSync(new URL("../src/mcp-schema-bootstrap.js", import.meta.url)), false,
+  "prototype-interception schema bootstrap must not return");
+assert.equal(existsSync(new URL("../src/mcp-readonly-bootstrap.js", import.meta.url)), false,
+  "prototype-interception read-only bootstrap must not return");
+assert.doesNotMatch(source, /prototype\.(?:tool|listen)\s*=/,
+  "canonical production startup must not alter framework prototypes");
 assert.match(releaseManifestSource, /frontendManifest\?\.frontend_commit_sha \|\| process\.env\.FRONTEND_COMMIT_SHA/,
   "the coordinated source manifest must outrank stale hosting metadata");
 

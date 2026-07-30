@@ -2,11 +2,8 @@ import "dotenv/config";
 import { createHash, createHmac, randomUUID, timingSafeEqual } from "crypto";
 import express from "express";
 import { fileURLToPath } from "node:url";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
-import { z } from "zod";
-import { Octokit } from "octokit";
 import { createClient } from "@supabase/supabase-js";
 import {
   EVENTS_CONTRACT_VERSION,
@@ -25,6 +22,15 @@ import { installDeviceCredentialRoutes, makeDeviceCredentialMiddleware } from ".
 import { runReadOnlySql as runSupabaseReadOnlySql } from "./supabase/read.js";
 import { createGeminiConsoleRouter } from "./gemini-console-api.js";
 import { createGeminiControlledRepairWorker } from "./gemini-controlled-worker.js";
+import { createMcpServer as createCanonicalMcpServer } from "./mcp/create-mcp-server.js";
+import { getToolManifest } from "./mcp/tool-manifest.js";
+import { validateRuntimeEnv } from "./config/env.js";
+import { installAnnieMoxieRoutes } from "./annie-moxie-bootstrap.js";
+import { installLeadershipHttpRoutes } from "./leadership-bootstrap.js";
+import { installCustodialEmployeeAdminRoutes } from "./custodial-employee-admin.js";
+import { installManagerNotificationRoutes } from "./manager-notifications.js";
+import { installEmployeeNotificationRoutes } from "./employee-notifications.js";
+import { installOperationalAnalyticsRoutes } from "./operational-analytics-api.js";
 import { normalizeAttendanceRecord, toNullableNonNegativeInteger } from "./attendance-state.js";
 import {
   guestFeatureState,
@@ -52,8 +58,6 @@ app.use(express.urlencoded({ extended: false, limit: "32kb" }));
 
 const MOXIE_MOUNT_PATH = (String(process.env.MOXIE_PREFIX || "/moxie").trim() || "/moxie").replace(/\/+$/, "") || "/moxie";
 const MOXIE_STATIC_DIR = fileURLToPath(new URL("../public/moxie-assets/", import.meta.url));
-
-const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
 
 const supabaseAdmin =
   process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -457,51 +461,11 @@ function buildHealthPayload(area, extra = {}) {
   };
 }
 
-function getAllowedGithubRepos(defaultRepo) {
-  const raw = process.env.GITHUB_ALLOWED_REPOS || defaultRepo;
-  return Array.from(
-    new Set(
-      String(raw || "")
-        .split(",")
-        .map((repoName) => repoName.trim())
-        .filter(Boolean)
-    )
-  );
-}
-
-function getGithubConfig(targetRepo) {
-  const owner = process.env.GITHUB_OWNER;
-  const defaultRepo = process.env.GITHUB_REPO;
-  const token = process.env.GITHUB_TOKEN;
-
-  if (!owner || !defaultRepo || !token) {
-    throw new Error("GitHub is not configured. Check GITHUB_OWNER, GITHUB_REPO, and GITHUB_TOKEN in .env.");
-  }
-
-  const allowedRepos = getAllowedGithubRepos(defaultRepo);
-  const repo = (targetRepo || defaultRepo).trim();
-
-  if (!allowedRepos.includes(repo)) {
-    throw new Error(`Repo \"${repo}\" is not allowed. Allowed repos: ${allowedRepos.join(", ")}`);
-  }
-
-  return { owner, repo, defaultRepo, allowedRepos };
-}
-
 function getSupabaseConfig() {
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY || !supabaseAdmin) {
     throw new Error("Supabase is not configured. Check SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env.");
   }
   return supabaseAdmin;
-}
-
-function normalizeGithubPath(path) {
-  return String(path || "").trim().replace(/^\/+/, "");
-}
-
-function getGithubErrorDetail(error) {
-  if (error?.status) return `status=${error.status} ${error.message}`;
-  return error?.message || "Unknown GitHub error";
 }
 
 function normalizeDashboardCloser(value) {
@@ -1865,554 +1829,12 @@ async function runCanaryChecks() {
 }
 
 function createMcpServer({ readOnly = false } = {}) {
-  const server = new McpServer({
-    name: process.env.APP_NAME || "Memphis Zoo MCP",
+  return createCanonicalMcpServer({
+    name: process.env.APP_NAME,
     version: RELEASE_ID,
+    releaseId: RELEASE_ID,
+    readOnly,
   });
-  Object.defineProperty(server, "__memphisReadOnly", {
-    value: Boolean(readOnly),
-    enumerable: false,
-    configurable: false,
-  });
-
-  function textToolResponse(text) {
-    return {
-      content: [
-        {
-          type: "text",
-          text: String(text),
-        },
-      ],
-    };
-  }
-
-  function jsonToolResponse(value) {
-    return textToolResponse(JSON.stringify(value, null, 2));
-  }
-
-  function normalizeToolRepoInput(repoInput) {
-    const raw = String(repoInput || "").trim();
-    if (!raw) return undefined;
-
-    if (raw.includes("/")) {
-      const [owner, repo, ...extra] = raw.split("/");
-      if (!owner || !repo || extra.length > 0) {
-        throw new Error(`Invalid repo "${raw}". Expected repo name or owner/repo.`);
-      }
-
-      if (process.env.GITHUB_OWNER && owner !== process.env.GITHUB_OWNER) {
-        throw new Error(
-          `Repo owner "${owner}" is not allowed. This server is configured for "${process.env.GITHUB_OWNER}".`
-        );
-      }
-
-      return repo;
-    }
-
-    return raw;
-  }
-
-  function getGithubToolConfig(repoInput) {
-    return getGithubConfig(normalizeToolRepoInput(repoInput));
-  }
-
-  function normalizeGithubToolPath(path, options = {}) {
-    const clean = normalizeGithubPath(path);
-
-    if (!clean && options.requireFilePath) {
-      throw new Error("path is required.");
-    }
-
-    const parts = clean.split("/").filter(Boolean);
-    if (parts.some((part) => part === "." || part === "..")) {
-      throw new Error("Path cannot contain '.' or '..' segments.");
-    }
-
-    return parts.join("/");
-  }
-
-  function getGithubRef(ref) {
-    return String(ref || process.env.GITHUB_BRANCH || "main").trim() || "main";
-  }
-
-  function decodeGithubContent(base64Content) {
-    return Buffer.from(String(base64Content || "").replace(/\n/g, ""), "base64");
-  }
-
-  function encodeGithubContent(content) {
-    return Buffer.from(String(content), "utf8").toString("base64");
-  }
-
-  function looksBinary(buffer) {
-    return buffer.includes(0);
-  }
-
-  async function getGithubContentOrNull({ repo, path, ref }) {
-    const { owner, repo: resolvedRepo } = getGithubToolConfig(repo);
-
-    try {
-      const response = await octokit.rest.repos.getContent({
-        owner,
-        repo: resolvedRepo,
-        path,
-        ref: getGithubRef(ref),
-      });
-
-      return response.data;
-    } catch (error) {
-      if (error?.status === 404) return null;
-      throw error;
-    }
-  }
-
-  function assertGithubFile(contentResult, path) {
-    if (!contentResult) {
-      throw new Error(`File not found: ${path}`);
-    }
-
-    if (Array.isArray(contentResult)) {
-      throw new Error(`"${path}" is a directory, not a file.`);
-    }
-
-    if (contentResult.type !== "file") {
-      throw new Error(`"${path}" is not a file. GitHub type: ${contentResult.type}`);
-    }
-  }
-
-  server.tool("ping", { message: z.string().optional() }, async ({ message }) => {
-    return textToolResponse(`MCP server is alive. ${message || ""}`.trim());
-  });
-
-  if (readOnly) {
-    server.tool("server_connection_diagnostic", {}, async () => {
-      return jsonToolResponse({
-        ...buildHealthPayload("mcp-connection"),
-        access: "read_only",
-        privileged_tools_exposed: false,
-        note: "GitHub, database, and migration tools require privileged connector authorization.",
-      });
-    });
-    return server;
-  }
-
-  server.tool("github_debug_config", {}, async () => {
-    const owner = process.env.GITHUB_OWNER || null;
-    const defaultRepo = process.env.GITHUB_REPO || null;
-
-    return jsonToolResponse({
-      ok: true,
-      github_token_present: Boolean(process.env.GITHUB_TOKEN),
-      github_owner: owner,
-      github_repo: defaultRepo,
-      github_allowed_repos: getAllowedGithubRepos(defaultRepo),
-      github_branch: process.env.GITHUB_BRANCH || "main",
-      supabase_configured: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY),
-      app_version: APP_VERSION,
-      release_id: RELEASE_ID,
-      node_version: process.version,
-      added_tools: [
-        "github_restore_file_from_ref"
-      ],
-    });
-  });
-
-  server.tool(
-    "github_list_directory",
-    {
-      repo: z.string().optional(),
-      path: z.string().optional(),
-      ref: z.string().optional(),
-      recursive: z.boolean().optional(),
-      max_entries: z.number().int().positive().max(10000).optional(),
-    },
-    async ({ repo, path = "", ref, recursive = false, max_entries = 500 }) => {
-      const { owner, repo: resolvedRepo } = getGithubToolConfig(repo);
-      const resolvedPath = normalizeGithubToolPath(path);
-      const resolvedRef = getGithubRef(ref);
-      const maxEntries = Number.isFinite(max_entries) ? max_entries : 500;
-
-      if (recursive) {
-        const treeResponse = await octokit.rest.git.getTree({
-          owner,
-          repo: resolvedRepo,
-          tree_sha: resolvedRef,
-          recursive: "true",
-        });
-
-        const prefix = resolvedPath ? `${resolvedPath}/` : "";
-
-        const entries = treeResponse.data.tree
-          .filter((item) => {
-            if (!resolvedPath) return true;
-            return item.path === resolvedPath || String(item.path || "").startsWith(prefix);
-          })
-          .slice(0, maxEntries)
-          .map((item) => ({
-            path: item.path,
-            type: item.type === "blob" ? "file" : item.type === "tree" ? "directory" : item.type,
-            size: item.size ?? null,
-            sha: item.sha,
-            url: item.url,
-          }));
-
-        return jsonToolResponse({
-          ok: true,
-          repo: `${owner}/${resolvedRepo}`,
-          ref: resolvedRef,
-          path: resolvedPath,
-          recursive: true,
-          truncated: entries.length >= maxEntries,
-          count: entries.length,
-          entries,
-        });
-      }
-
-      const response = await octokit.rest.repos.getContent({
-        owner,
-        repo: resolvedRepo,
-        path: resolvedPath,
-        ref: resolvedRef,
-      });
-
-      const result = response.data;
-
-      if (Array.isArray(result)) {
-        return jsonToolResponse({
-          ok: true,
-          repo: `${owner}/${resolvedRepo}`,
-          ref: resolvedRef,
-          path: resolvedPath,
-          count: result.length,
-          entries: result.map((item) => ({
-            name: item.name,
-            path: item.path,
-            type: item.type,
-            size: item.size,
-            sha: item.sha,
-            html_url: item.html_url,
-          })),
-        });
-      }
-
-      return jsonToolResponse({
-        ok: true,
-        repo: `${owner}/${resolvedRepo}`,
-        ref: resolvedRef,
-        name: result.name,
-        path: result.path,
-        type: result.type,
-        size: result.size,
-        sha: result.sha,
-        html_url: result.html_url,
-      });
-    }
-  );
-
-  server.tool(
-    "github_read_file",
-    {
-      repo: z.string().optional(),
-      path: z.string().min(1),
-      ref: z.string().optional(),
-      format: z.enum(["text", "json", "base64"]).optional(),
-      max_bytes: z.number().int().positive().max(10_000_000).optional(),
-    },
-    async ({ repo, path, ref, format = "json", max_bytes = 1_000_000 }) => {
-      const { owner, repo: resolvedRepo } = getGithubToolConfig(repo);
-      const resolvedPath = normalizeGithubToolPath(path, { requireFilePath: true });
-      const resolvedRef = getGithubRef(ref);
-      const maxBytes = Number.isFinite(max_bytes) ? max_bytes : 1_000_000;
-
-      const contentResult = await getGithubContentOrNull({
-        repo: resolvedRepo,
-        path: resolvedPath,
-        ref: resolvedRef,
-      });
-
-      assertGithubFile(contentResult, resolvedPath);
-
-      if (contentResult.size > maxBytes) {
-        throw new Error(
-          `File is too large to read safely. Size: ${contentResult.size} bytes. Limit: ${maxBytes} bytes.`
-        );
-      }
-
-      if (format === "base64") {
-        return jsonToolResponse({
-          ok: true,
-          repo: `${owner}/${resolvedRepo}`,
-          ref: resolvedRef,
-          path: contentResult.path,
-          name: contentResult.name,
-          sha: contentResult.sha,
-          size: contentResult.size,
-          encoding: "base64",
-          html_url: contentResult.html_url,
-          content: contentResult.content,
-        });
-      }
-
-      const buffer = decodeGithubContent(contentResult.content);
-
-      if (looksBinary(buffer)) {
-        throw new Error(`File appears to be binary. Use format: "base64" if you need raw content.`);
-      }
-
-      const fileText = buffer.toString("utf8");
-
-      if (format === "text") {
-        return textToolResponse(fileText);
-      }
-
-      return jsonToolResponse({
-        ok: true,
-        repo: `${owner}/${resolvedRepo}`,
-        ref: resolvedRef,
-        path: contentResult.path,
-        name: contentResult.name,
-        sha: contentResult.sha,
-        size: contentResult.size,
-        encoding: "utf8",
-        html_url: contentResult.html_url,
-        content: fileText,
-      });
-    }
-  );
-
-  server.tool(
-    "github_write_file",
-    {
-      repo: z.string().optional(),
-      path: z.string().min(1),
-      content: z.string(),
-      commit_message: z.string().min(1),
-      branch: z.string().optional(),
-      overwrite: z.boolean().optional(),
-      dry_run: z.boolean().optional(),
-    },
-    async ({
-      repo,
-      path,
-      content,
-      commit_message,
-      branch,
-      overwrite = false,
-      dry_run = false,
-    }) => {
-      const { owner, repo: resolvedRepo } = getGithubToolConfig(repo);
-      const resolvedPath = normalizeGithubToolPath(path, { requireFilePath: true });
-      const targetBranch = getGithubRef(branch);
-
-      const existing = await getGithubContentOrNull({
-        repo: resolvedRepo,
-        path: resolvedPath,
-        ref: targetBranch,
-      });
-
-      if (existing && Array.isArray(existing)) {
-        throw new Error(`"${resolvedPath}" is a directory, not a file.`);
-      }
-
-      if (existing && !overwrite) {
-        throw new Error(
-          `File already exists: ${resolvedPath}. Use github_update_file, or set overwrite: true.`
-        );
-      }
-
-      if (dry_run) {
-        return jsonToolResponse({
-          ok: true,
-          dry_run: true,
-          action: existing ? "would_overwrite" : "would_create",
-          repo: `${owner}/${resolvedRepo}`,
-          branch: targetBranch,
-          path: resolvedPath,
-          previous_sha: existing?.sha || null,
-          new_content_bytes: Buffer.byteLength(content, "utf8"),
-          commit_message,
-        });
-      }
-
-      const request = {
-        owner,
-        repo: resolvedRepo,
-        path: resolvedPath,
-        message: commit_message,
-        content: encodeGithubContent(content),
-        branch: targetBranch,
-      };
-
-      if (existing?.sha) {
-        request.sha = existing.sha;
-      }
-
-      const response = await octokit.rest.repos.createOrUpdateFileContents(request);
-
-      return jsonToolResponse({
-        ok: true,
-        message: existing ? "File overwritten." : "File created.",
-        action: existing ? "overwrite" : "create",
-        repo: `${owner}/${resolvedRepo}`,
-        branch: targetBranch,
-        path: resolvedPath,
-        previous_sha: existing?.sha || null,
-        new_sha: response.data.content?.sha || null,
-        commit_url: response.data.commit?.html_url || null,
-        file_url: response.data.content?.html_url || null,
-      });
-    }
-  );
-
-  server.tool(
-    "github_update_file",
-    {
-      repo: z.string().optional(),
-      path: z.string().min(1),
-      content: z.string(),
-      commit_message: z.string().min(1),
-      branch: z.string().optional(),
-      expected_sha: z.string().optional(),
-      dry_run: z.boolean().optional(),
-    },
-    async ({
-      repo,
-      path,
-      content,
-      commit_message,
-      branch,
-      expected_sha,
-      dry_run = false,
-    }) => {
-      const { owner, repo: resolvedRepo } = getGithubToolConfig(repo);
-      const resolvedPath = normalizeGithubToolPath(path, { requireFilePath: true });
-      const targetBranch = getGithubRef(branch);
-
-      const existing = await getGithubContentOrNull({
-        repo: resolvedRepo,
-        path: resolvedPath,
-        ref: targetBranch,
-      });
-
-      assertGithubFile(existing, resolvedPath);
-
-      if (expected_sha && existing.sha !== expected_sha) {
-        throw new Error(
-          [
-            "Refusing to update because expected_sha does not match current file SHA.",
-            `Path: ${resolvedPath}`,
-            `Expected: ${expected_sha}`,
-            `Current:  ${existing.sha}`,
-            "Read the file again, inspect the current content, then retry with the current SHA.",
-          ].join("\n")
-        );
-      }
-
-      const oldContent = decodeGithubContent(existing.content).toString("utf8");
-
-      if (oldContent === content) {
-        return jsonToolResponse({
-          ok: true,
-          message: "No update needed. Content is unchanged.",
-          repo: `${owner}/${resolvedRepo}`,
-          branch: targetBranch,
-          path: resolvedPath,
-          sha: existing.sha,
-          file_url: existing.html_url,
-        });
-      }
-
-      if (dry_run) {
-        return jsonToolResponse({
-          ok: true,
-          dry_run: true,
-          action: "would_update",
-          repo: `${owner}/${resolvedRepo}`,
-          branch: targetBranch,
-          path: resolvedPath,
-          current_sha: existing.sha,
-          old_content_bytes: Buffer.byteLength(oldContent, "utf8"),
-          new_content_bytes: Buffer.byteLength(content, "utf8"),
-          old_line_count: oldContent.split("\n").length,
-          new_line_count: content.split("\n").length,
-          commit_message,
-        });
-      }
-
-      const response = await octokit.rest.repos.createOrUpdateFileContents({
-        owner,
-        repo: resolvedRepo,
-        path: resolvedPath,
-        message: commit_message,
-        content: encodeGithubContent(content),
-        sha: existing.sha,
-        branch: targetBranch,
-      });
-
-      return jsonToolResponse({
-        ok: true,
-        message: "File updated.",
-        action: "update",
-        repo: `${owner}/${resolvedRepo}`,
-        branch: targetBranch,
-        path: resolvedPath,
-        previous_sha: existing.sha,
-        new_sha: response.data.content?.sha || null,
-        commit_url: response.data.commit?.html_url || null,
-        file_url: response.data.content?.html_url || null,
-      });
-    }
-  );
-
-
-
-  server.tool(
-    "supabase_sql_read",
-    {
-      sql: z.string().min(1),
-    },
-    async ({ sql }) => {
-      const rows = await runReadOnlySql(sql);
-
-      return jsonToolResponse({
-        ok: true,
-        rowCount: Array.isArray(rows) ? rows.length : null,
-        rows,
-      });
-    }
-  );
-
-  server.tool(
-    "supabase_migration_apply",
-    {
-      name: z.string().min(1),
-      sql: z.string().min(1),
-    },
-    async ({ name, sql }) => {
-      const client = getSupabaseConfig();
-      const migrationName = String(name || "").trim();
-      const migrationSql = String(sql || "").trim();
-
-      if (!migrationName) throw new Error("Migration name is required.");
-      if (!migrationSql) throw new Error("Migration SQL is required.");
-
-      const { data, error } = await client.rpc("run_sql_migration", {
-        p_name: migrationName,
-        p_sql: migrationSql,
-      });
-
-      if (error) {
-        throw new Error(error.message || "run_sql_migration failed");
-      }
-
-      return jsonToolResponse({
-        ok: true,
-        name: migrationName,
-        data,
-      });
-    }
-  );
-
-  return server;
 }
 
 installSharedAuthRoutes(app, { setCors: setAdminApiCors, supabase: supabaseAdmin, trustedDeviceStore: opsTrustedDeviceStore });
@@ -2422,6 +1844,37 @@ installDeviceCredentialRoutes(app, {
   runReadOnlySql,
   requireOpsAuth: requireOpsManagerAuth,
   requireOpsWrite: requireOpsManagerWrite,
+});
+
+// Production integrations are installed explicitly at their canonical route
+// boundary. Startup must never depend on prototype interception or import-order
+// side effects.
+installAnnieMoxieRoutes(app, { supabase: supabaseAdmin });
+installLeadershipHttpRoutes(app, { supabase: supabaseAdmin });
+installCustodialEmployeeAdminRoutes(app, { supabase: supabaseAdmin });
+const managerNotificationRuntime = installManagerNotificationRoutes(app, { supabase: supabaseAdmin });
+installEmployeeNotificationRoutes(app, {
+  supabase: supabaseAdmin,
+  pushRuntime: managerNotificationRuntime,
+  runReadOnlySql: async (sql) => runSupabaseReadOnlySql({ sql }).then((result) => result.rows),
+});
+installOperationalAnalyticsRoutes(app, { supabase: supabaseAdmin });
+app.get("/mcp-tools.json", requireOpsManagerAuth, (_req, res) => {
+  res.status(200).json(getToolManifest({ includePlanned: true }));
+});
+app.get("/status/deep", requireOpsManagerAuth, (_req, res) => {
+  const env = validateRuntimeEnv({ strict: false });
+  res.status(env.ok ? 200 : 503).json({
+    ok: env.ok,
+    app: {
+      name: process.env.APP_NAME || "memphis-zoo-mcp",
+      version: RELEASE_ID,
+      release_id: RELEASE_ID,
+    },
+    env,
+    tools: getToolManifest({ includePlanned: true }),
+    generated_at: new Date().toISOString(),
+  });
 });
 
 app.use(MOXIE_MOUNT_PATH, createMoxieRouter({ supabase: supabaseAdmin, staticDir: MOXIE_STATIC_DIR }));

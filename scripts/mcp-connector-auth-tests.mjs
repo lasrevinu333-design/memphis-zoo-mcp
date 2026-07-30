@@ -148,23 +148,15 @@ assert.match(indexSource, /function createMcpServer\(\{ readOnly = false \} = \{
 assert.match(indexSource, /createMcpServer\(\{ readOnly: Boolean\(req\.memphisMcpAuth\?\.read_only\) \}\)/);
 assert.match(indexSource, /makeMcpConnectorMiddleware\(\{\s*allowFullNoAuth: false,\s*allowReadOnlyNoAuth: false,\s*\}\)/);
 
-const markerStart = indexSource.indexOf('Object.defineProperty(server, "__memphisReadOnly"');
-const firstToolRegistration = indexSource.indexOf('server.tool("ping"', markerStart);
-assert.ok(markerStart > 0 && firstToolRegistration > markerStart, "The access-mode marker must exist before bootstrap-triggering tool registration.");
-
-const boundaryStart = indexSource.indexOf("if (readOnly) {");
-const boundaryEnd = indexSource.indexOf('server.tool("github_debug_config"', boundaryStart);
+const factorySource = await readFile(new URL("../src/mcp/create-mcp-server.js", import.meta.url), "utf8");
+const boundaryStart = factorySource.indexOf("if (options.readOnly === true)");
+const boundaryEnd = factorySource.indexOf("registerServerTools(server", boundaryStart);
 assert.ok(boundaryStart > 0 && boundaryEnd > boundaryStart, "Read-only boundary must precede privileged tool registration.");
-const boundary = indexSource.slice(boundaryStart, boundaryEnd);
+const boundary = factorySource.slice(boundaryStart, boundaryEnd);
 assert.match(boundary, /privileged_tools_exposed: false/);
 assert.match(boundary, /return server;/);
-
-const bootstrapSource = await readFile(new URL("../src/mcp-schema-bootstrap.js", import.meta.url), "utf8");
-const bootstrapGuard = bootstrapSource.indexOf("if (server.__memphisReadOnly) return;");
-const bootstrapGithub = bootstrapSource.indexOf("registerGithubTools(server);", bootstrapGuard);
-const bootstrapSupabase = bootstrapSource.indexOf("registerSupabaseTools(server);", bootstrapGuard);
-assert.ok(bootstrapGuard > 0, "The optional read-only mode must remain isolated in the bootstrap.");
-assert.ok(bootstrapGithub > bootstrapGuard, "GitHub tools must be registered after the bootstrap guard.");
-assert.ok(bootstrapSupabase > bootstrapGuard, "Supabase tools must be registered after the bootstrap guard.");
+assert.ok(factorySource.indexOf("registerGithubTools(server);", boundaryEnd) > boundaryEnd, "GitHub tools must be registered after the read-only boundary.");
+assert.ok(factorySource.indexOf("registerSupabaseTools(server);", boundaryEnd) > boundaryEnd, "Supabase tools must be registered after the read-only boundary.");
+assert.doesNotMatch(indexSource + factorySource, /prototype\.tool\s*=/, "MCP registration must not depend on prototype interception.");
 
 console.log("MCP connector authentication tests passed.");

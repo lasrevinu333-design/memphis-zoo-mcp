@@ -4,10 +4,10 @@ import express from 'express';
 import { installEmployeeNotificationRoutes } from '../src/employee-notifications.js';
 
 const root = new URL('../', import.meta.url);
-const [source, manager, bootstrap, migration] = await Promise.all([
+const [source, manager, indexSource, migration] = await Promise.all([
   readFile(new URL('src/employee-notifications.js', root), 'utf8'),
   readFile(new URL('src/manager-notifications.js', root), 'utf8'),
-  readFile(new URL('src/mcp-schema-bootstrap.js', root), 'utf8'),
+  readFile(new URL('src/index.js', root), 'utf8'),
   readFile(new URL('supabase/migrations/20260724010000_native_employee_event_delivery.sql', root), 'utf8'),
 ]);
 
@@ -27,7 +27,7 @@ assert.match(source, /notification_key/);
 assert.match(manager, /export function createPushRuntime/);
 assert.match(manager, /channel_id: channelId/);
 assert.match(manager, /getClientConfig, send, sweep/);
-assert.match(bootstrap, /installEmployeeNotificationRoutes\(app, \{[\s\S]*runReadOnlySql: runEmployeeNotificationReadSql/);
+assert.match(indexSource, /installEmployeeNotificationRoutes\(app, \{[\s\S]*runReadOnlySql:[\s\S]*runSupabaseReadOnlySql/);
 
 for (const contract of [
   'employee_push_registrations',

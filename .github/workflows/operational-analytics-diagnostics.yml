@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths:
       - 'src/operational-analytics-api.js'
-      - 'src/mcp-schema-bootstrap.js'
+      - 'src/index.js'
       - 'scripts/operational-analytics-*.mjs'
       - 'supabase/migrations/20260722233500_operational_retention_and_analytics.sql'
       - 'supabase/migrations/20260722233600_event_retention_history_guard.sql'

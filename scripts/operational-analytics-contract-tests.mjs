@@ -9,7 +9,7 @@ const migration = read("supabase/migrations/20260722233500_operational_retention
 const historyGuard = read("supabase/migrations/20260722233600_event_retention_history_guard.sql");
 const securityHardening = read("supabase/migrations/20260723111020_v17_trigger_privilege_hardening.sql");
 const api = read("src/operational-analytics-api.js");
-const bootstrap = read("src/mcp-schema-bootstrap.js");
+const indexSource = read("src/index.js");
 
 assert.match(migration, /retention_event_days','14'::jsonb/i, "event retention must be exactly 14 days");
 assert.match(migration, /events_app_delete_retention_guard/i, "legacy broad event deletes need a database retention guard");
@@ -48,7 +48,7 @@ assert.match(api, /\/analytics-api\/inspections/, "inspection read/write endpoin
 assert.match(api, /\/analytics-api\/inspection-coverage/, "inspection coverage must be visible to operations managers");
 assert.match(api, /CUSTODIAL_MANAGER/, "personnel analytics must require Custodial Manager authority");
 assert.match(api, /Idempotency-Key/, "inspection writes must be idempotent");
-assert.match(bootstrap, /installOperationalAnalyticsRoutes/, "analytics routes must be installed before the legacy app starts");
+assert.match(indexSource, /installOperationalAnalyticsRoutes\(app/, "analytics routes must be installed explicitly in the canonical application");
 
 const ordered = stableFingerprint({ alpha: 1, beta: { y: 2, x: 1 } });
 const reordered = stableFingerprint({ beta: { x: 1, y: 2 }, alpha: 1 });

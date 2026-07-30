@@ -164,7 +164,7 @@ Routes are mounted under:
 
 ## Diagnostic routes
 
-These are installed by the compatibility bootstrap before Express starts listening.
+These are installed explicitly by the canonical Express application before it starts listening.
 
 | Method | Path | Purpose |
 |---|---|---|

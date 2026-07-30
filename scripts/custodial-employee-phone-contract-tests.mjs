@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const root = new URL("../", import.meta.url);
-const [routeSource, bootstrapSource, migrationFoundation, migrationAssignment, migrationStatus, migrationHardening, packageSource] = await Promise.all([
+const [routeSource, indexSource, migrationFoundation, migrationAssignment, migrationStatus, migrationHardening, packageSource] = await Promise.all([
   readFile(new URL("src/custodial-employee-admin.js", root), "utf8"),
-  readFile(new URL("src/mcp-schema-bootstrap.js", root), "utf8"),
+  readFile(new URL("src/index.js", root), "utf8"),
   readFile(new URL("supabase/migrations/20260722143000_custodial_employee_phone_foundation.sql", root), "utf8"),
   readFile(new URL("supabase/migrations/20260722143100_custodial_employee_phone_assignment.sql", root), "utf8"),
   readFile(new URL("supabase/migrations/20260722143200_custodial_employee_status_management.sql", root), "utf8"),
@@ -27,7 +27,7 @@ assert.match(routeSource, /device_credential/);
 assert.match(routeSource, /custodial_assign_employee_device/);
 assert.match(routeSource, /custodial_set_employee_active/);
 assert.match(routeSource, /custodial_create_employee/);
-assert.match(bootstrapSource, /installCustodialEmployeeAdminRoutes/);
+assert.match(indexSource, /installCustodialEmployeeAdminRoutes\(app/);
 assert.match(migrationSource, /custodial_employee_device_assignment_history/);
 assert.match(migrationSource, /custodial_employee_status_history/);
 assert.match(migrationSource, /create or replace function public\.custodial_assign_employee_device/i);

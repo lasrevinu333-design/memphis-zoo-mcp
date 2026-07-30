@@ -7,7 +7,7 @@ on:
       - 'src/custodial-employee-admin.js'
       - 'src/manager-notifications.js'
       - 'src/annie-moxie-bootstrap.js'
-      - 'src/mcp-schema-bootstrap.js'
+      - 'src/index.js'
       - 'supabase/migrations/20260721190000_operations_leadership_mobile_foundation.sql'
       - 'supabase/migrations/20260721203000_manager_mobile_notifications.sql'
       - 'supabase/migrations/20260722143000_custodial_employee_phone_foundation.sql'

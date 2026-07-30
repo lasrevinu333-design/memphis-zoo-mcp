@@ -7,7 +7,7 @@ This rebuild is staged so the deployed server stays bootable after each change. 
 1. Keep Render startup stable.
 2. Keep `/mcp`, `/sse`, dashboard, admin, scan, messaging, schedule, and events routes working.
 3. Continue reducing remaining `src/index.js` runtime responsibilities after smoke coverage is strong.
-4. Replace bootstrap schema patching with direct `registerTool` usage once deployed schemas are verified without the compatibility layer.
+4. Keep direct `registerTool` composition and explicit route installation free of prototype interception.
 5. Keep safer GitHub reads and writes active: batch reads, repo tree, diff previews, patch-style updates, dry runs, and SHA checks.
 6. Keep startup and smoke diagnostics aligned with the manifest.
 7. Keep documentation for routes, env vars, and tools aligned with code.
@@ -23,7 +23,8 @@ This rebuild is staged so the deployed server stays bootable after each change. 
 - `src/ai/index.js` is the Memphis AI helper barrel used by `src/memphis-ai.js` and smoke tests.
 - `src/services/index.js` is the service barrel used by `src/messaging-api.js` and smoke tests for Memphis responder access.
 - `src/mcp/schemas.js` centralizes modular MCP input schemas for ping, server, GitHub, and Supabase tools.
-- `package.json` keeps production `start` on the bootstrap path while exposing `start:bootstrap` and `start:direct` for controlled verification.
+- `package.json` starts the canonical `src/index.js` entry point directly.
+- MCP schemas and production routes are composed explicitly; the former prototype-interception bootstraps have been removed.
 
 ## Safety rules
 
@@ -76,7 +77,7 @@ Goals:
 - Use `server.registerTool(...)` directly.
 - Preserve existing `/mcp` Streamable HTTP behavior.
 - Keep `/sse` legacy behavior until it is intentionally retired.
-- Remove `src/mcp-schema-bootstrap.js` only after schemas expose correctly.
+- Direct `registerTool` schemas expose correctly without an interception layer.
 
 Exit criteria:
 
@@ -197,13 +198,12 @@ Exit criteria:
 - Existing admin routes still enforce auth.
 - No route disappears without a replacement.
 
-## Phase 7: Cleanup
+## Phase 7: Cleanup — completed 2026-07-30
 
-- Remove compatibility bootstraps.
-- Restore `npm start` to `node src/index.js` if schemas are clean without bootstrap.
-- Update docs.
-- Run smoke tests.
-- Verify Render deploy.
+- Compatibility bootstraps removed.
+- `npm start` restored to `node src/index.js`.
+- Documentation and direct-registration contracts updated.
+- Smoke, MCP transport, and deployment verification are required by the production gate.
 
 ## Recovery
 

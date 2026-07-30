@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { pingInputSchema } from "./schemas.js";
 import { registerMcpTool } from "./register.js";
-import { textResponse } from "./responses.js";
+import { jsonResponse, textResponse } from "./responses.js";
 import { registerGithubTools } from "./github-tools.js";
 import { registerSupabaseTools } from "./supabase-tools.js";
 import { registerServerTools } from "./server-tools.js";
@@ -38,6 +38,24 @@ export function createMcpServer(options = {}) {
       return textResponse(`MCP server is alive. ${message || ""}`.trim());
     }
   );
+
+  if (options.readOnly === true) {
+    registerMcpTool(
+      server,
+      "server_connection_diagnostic",
+      {
+        description: "Describe the restricted MCP connection without exposing privileged adapters.",
+        inputSchema: {},
+      },
+      async () => jsonResponse({
+        ok: true,
+        access: "read_only",
+        privileged_tools_exposed: false,
+        app: appInfo,
+      }),
+    );
+    return server;
+  }
 
   registerServerTools(server, {
     getAppInfo: () => appInfo,

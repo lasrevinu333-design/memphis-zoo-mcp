@@ -5,10 +5,10 @@ import express from "express";
 import { installManagerNotificationRoutes } from "../src/manager-notifications.js";
 
 const root = new URL("../", import.meta.url);
-const [moduleSource, migration, bootstrap] = await Promise.all([
+const [moduleSource, migration, indexSource] = await Promise.all([
   readFile(new URL("src/manager-notifications.js", root), "utf8"),
   readFile(new URL("supabase/migrations/20260721203000_manager_mobile_notifications.sql", root), "utf8"),
-  readFile(new URL("src/mcp-schema-bootstrap.js", root), "utf8"),
+  readFile(new URL("src/index.js", root), "utf8"),
 ]);
 
 for (const route of [
@@ -28,7 +28,7 @@ assert.match(moduleSource, /GoogleService-Info\.plist/);
 assert.match(moduleSource, /notificationActionPerformed|data_json/);
 assert.match(moduleSource, /makeOpsAccessMiddleware/);
 assert.doesNotMatch(moduleSource, /employee-hub|KIOSK_\d|device credential/i, "manager notification runtime must not target employee kiosk devices");
-assert.match(bootstrap, /installManagerNotificationRoutes/);
+assert.match(indexSource, /installManagerNotificationRoutes\(app/);
 
 assert.match(migration, /messages_enabled boolean not null default true/);
 assert.match(migration, /event_reminders_enabled boolean not null default false/);
