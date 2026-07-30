@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import express from "express";
 
@@ -16,6 +16,22 @@ const {
   extractContactsFromText,
   extractRemindersFromText,
 } = await import("../src/routes/moxie.js");
+
+const productionMoxieAssets = [
+  "moxie-avatar.jpg",
+  "frog-on-log-writing-pad.png",
+  "reminders-woodland-animal.png",
+  "contacts-creekside-animal.png",
+  "settings-woodland-cog.png",
+  "ops-dashboard.png",
+  "ops-schedule.png",
+  "ops-events.png",
+  "ops-messaging.png",
+];
+for (const asset of productionMoxieAssets) {
+  const bytes = statSync(new URL(`../public/moxie-assets/${asset}`, import.meta.url)).size;
+  assert.ok(bytes < 400_000, `${asset} must stay below the 400 KB production response budget (received ${bytes})`);
+}
 
 const sampleIntake = [
   "From: Maria Lopez - City Maintenance Supervisor - (901) 555-1234 - maria.lopez@memphistn.gov",
@@ -279,13 +295,7 @@ try {
   response = await fetch(`${base}/moxie`, { headers: { Cookie: cookie }, redirect: "manual" });
   assert.equal(response.status, 200, "authenticated trailing-slash-free path must render Moxie");
 
-  for (const asset of [
-    "moxie-avatar.jpg",
-    "frog-on-log-writing-pad.png",
-    "reminders-woodland-animal.png",
-    "contacts-creekside-animal.png",
-    "settings-woodland-cog.png",
-  ]) {
+  for (const asset of productionMoxieAssets) {
     response = await fetch(`${base}/moxie/assets/${asset}`);
     assert.equal(response.status, 200, `${asset} must be served from the static Moxie asset path`);
     assert.match(String(response.headers.get("content-type") || ""), /^image\//);

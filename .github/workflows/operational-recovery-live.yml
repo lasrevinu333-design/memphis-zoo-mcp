@@ -92,12 +92,13 @@ jobs:
           grep -Fq 'Signed out. Enter the password to open Moxie again.' /tmp/moxie-signed-out.html
 
           for asset in moxie-avatar.jpg frog-on-log-writing-pad.png reminders-woodland-animal.png contacts-creekside-animal.png settings-woodland-cog.png ops-dashboard.png ops-schedule.png ops-events.png ops-messaging.png; do
-            status="$(curl -sS --max-time 40 -D "/tmp/$asset.headers" -o "/tmp/$asset" -w '%{http_code}' "$root/moxie/assets/$asset")"
+            status="$(curl -fsS --retry 3 --retry-all-errors --retry-delay 2 --max-time 40 -D "/tmp/$asset.headers" -o "/tmp/$asset" -w '%{http_code}' "$root/moxie/assets/$asset")"
             bytes="$(wc -c < "/tmp/$asset" | tr -d ' ')"
             printf '%s status=%s bytes=%s\n' "$asset" "$status" "$bytes"
             test "$status" = '200'
             grep -Eiq '^content-type: image/' "/tmp/$asset.headers"
             test "$bytes" -gt 500
+            test "$bytes" -lt 400000
           done
 
           device_status="$(curl -fsSL --max-time 40 -H 'X-Device-Id: KIOSK_02' "$root/device-auth/status?device_id=KIOSK_02")"
