@@ -61,7 +61,8 @@
     "restore:production": "RESTORE_APPLY=true node scripts/production-restore.mjs",
     "test:audit3-repairs": "node scripts/audit3-repair-contract-tests.mjs",
     "test:audit3-restore-drill": "node scripts/production-restore-drill.mjs",
-    "test:audit4-repairs": "node scripts/audit4-repair-contract-tests.mjs"
+    "test:audit4-repairs": "node scripts/audit4-repair-contract-tests.mjs",
+    "test:audit5-repairs": "node scripts/audit5-feedback-guest-contract-tests.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",

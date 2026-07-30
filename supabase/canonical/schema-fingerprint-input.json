@@ -8637,7 +8637,7 @@
       "column_name": "status",
       "comment": null,
       "data_type": "text",
-      "default_expression": "'open'::text",
+      "default_expression": "'pending_marketing_review'::text",
       "generated_kind": "",
       "identity_kind": "",
       "not_null": true,
@@ -8689,7 +8689,7 @@
       "column_name": "notification_status",
       "comment": null,
       "data_type": "text",
-      "default_expression": "'pending'::text",
+      "default_expression": "'awaiting_marketing_review'::text",
       "generated_kind": "",
       "identity_kind": "",
       "not_null": true,
@@ -8759,6 +8759,84 @@
       "identity_kind": "",
       "not_null": false,
       "ordinal_position": 16,
+      "schema_name": "public",
+      "table_name": "guest_cleanliness_reports"
+    },
+    {
+      "collation_name": null,
+      "column_name": "marketing_review_status",
+      "comment": "Marketing-first approval gate. Only approved reports may be dispatched to Operations Managers and the current location custodian.",
+      "data_type": "text",
+      "default_expression": "'pending'::text",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 17,
+      "schema_name": "public",
+      "table_name": "guest_cleanliness_reports"
+    },
+    {
+      "collation_name": null,
+      "column_name": "marketing_reviewed_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 18,
+      "schema_name": "public",
+      "table_name": "guest_cleanliness_reports"
+    },
+    {
+      "collation_name": null,
+      "column_name": "marketing_reviewed_by",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 19,
+      "schema_name": "public",
+      "table_name": "guest_cleanliness_reports"
+    },
+    {
+      "collation_name": null,
+      "column_name": "marketing_review_notes",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 20,
+      "schema_name": "public",
+      "table_name": "guest_cleanliness_reports"
+    },
+    {
+      "collation_name": null,
+      "column_name": "dispatched_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 21,
+      "schema_name": "public",
+      "table_name": "guest_cleanliness_reports"
+    },
+    {
+      "collation_name": null,
+      "column_name": "resolved_by",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 22,
       "schema_name": "public",
       "table_name": "guest_cleanliness_reports"
     },
@@ -16070,6 +16148,71 @@
     },
     {
       "collation_name": null,
+      "column_name": "bucket_key",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 1,
+      "schema_name": "public",
+      "table_name": "public_submission_rate_limits"
+    },
+    {
+      "collation_name": null,
+      "column_name": "scope",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 2,
+      "schema_name": "public",
+      "table_name": "public_submission_rate_limits"
+    },
+    {
+      "collation_name": null,
+      "column_name": "window_started_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 3,
+      "schema_name": "public",
+      "table_name": "public_submission_rate_limits"
+    },
+    {
+      "collation_name": null,
+      "column_name": "request_count",
+      "comment": null,
+      "data_type": "integer",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 4,
+      "schema_name": "public",
+      "table_name": "public_submission_rate_limits"
+    },
+    {
+      "collation_name": null,
+      "column_name": "updated_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "now()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 5,
+      "schema_name": "public",
+      "table_name": "public_submission_rate_limits"
+    },
+    {
+      "collation_name": null,
       "column_name": "release_id",
       "comment": null,
       "data_type": "text",
@@ -21709,6 +21852,46 @@
       "validated": true
     },
     {
+      "constraint_name": "guest_cleanliness_reports_issue_type_check",
+      "constraint_type": "c",
+      "definition": "CHECK (length(btrim(issue_type)) >= 1 AND length(btrim(issue_type)) <= 160)",
+      "schema_name": "public",
+      "table_name": "guest_cleanliness_reports",
+      "validated": true
+    },
+    {
+      "constraint_name": "guest_cleanliness_reports_marketing_notes_length_check",
+      "constraint_type": "c",
+      "definition": "CHECK (marketing_review_notes IS NULL OR length(marketing_review_notes) <= 2000)",
+      "schema_name": "public",
+      "table_name": "guest_cleanliness_reports",
+      "validated": true
+    },
+    {
+      "constraint_name": "guest_cleanliness_reports_marketing_review_check",
+      "constraint_type": "c",
+      "definition": "CHECK (marketing_review_status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text]))",
+      "schema_name": "public",
+      "table_name": "guest_cleanliness_reports",
+      "validated": true
+    },
+    {
+      "constraint_name": "guest_cleanliness_reports_metadata_contact_check",
+      "constraint_type": "c",
+      "definition": "CHECK (length(COALESCE((metadata_json -> 'reporter'::text) ->> 'name'::text, ''::text)) <= 160 AND length(COALESCE((metadata_json -> 'reporter'::text) ->> 'phone'::text, ''::text)) <= 40 AND length(COALESCE((metadata_json -> 'reporter'::text) ->> 'email'::text, ''::text)) <= 320 AND length(COALESCE(metadata_json ->> 'ip'::text, ''::text)) <= 64 AND length(COALESCE(metadata_json ->> 'user_agent'::text, ''::text)) <= 500)",
+      "schema_name": "public",
+      "table_name": "guest_cleanliness_reports",
+      "validated": true
+    },
+    {
+      "constraint_name": "guest_cleanliness_reports_notes_length_check",
+      "constraint_type": "c",
+      "definition": "CHECK (notes IS NULL OR length(notes) <= 2000)",
+      "schema_name": "public",
+      "table_name": "guest_cleanliness_reports",
+      "validated": true
+    },
+    {
       "constraint_name": "guest_cleanliness_reports_pkey",
       "constraint_type": "p",
       "definition": "PRIMARY KEY (id)",
@@ -21720,6 +21903,22 @@
       "constraint_name": "guest_cleanliness_reports_request_fingerprint_check",
       "constraint_type": "c",
       "definition": "CHECK (request_fingerprint IS NULL OR request_fingerprint ~ '^[0-9a-f]{64}$'::text)",
+      "schema_name": "public",
+      "table_name": "guest_cleanliness_reports",
+      "validated": true
+    },
+    {
+      "constraint_name": "guest_cleanliness_reports_severity_check",
+      "constraint_type": "c",
+      "definition": "CHECK (severity = ANY (ARRAY['normal'::text, 'high'::text, 'urgent'::text]))",
+      "schema_name": "public",
+      "table_name": "guest_cleanliness_reports",
+      "validated": true
+    },
+    {
+      "constraint_name": "guest_cleanliness_reports_status_check",
+      "constraint_type": "c",
+      "definition": "CHECK (status = ANY (ARRAY['pending_marketing_review'::text, 'open'::text, 'resolved'::text, 'rejected'::text]))",
       "schema_name": "public",
       "table_name": "guest_cleanliness_reports",
       "validated": true
@@ -24053,6 +24252,38 @@
       "validated": true
     },
     {
+      "constraint_name": "public_submission_rate_limits_bucket_check",
+      "constraint_type": "c",
+      "definition": "CHECK (bucket_key ~ '^[0-9a-f]{64}$'::text)",
+      "schema_name": "public",
+      "table_name": "public_submission_rate_limits",
+      "validated": true
+    },
+    {
+      "constraint_name": "public_submission_rate_limits_count_check",
+      "constraint_type": "c",
+      "definition": "CHECK (request_count >= 1 AND request_count <= 100000)",
+      "schema_name": "public",
+      "table_name": "public_submission_rate_limits",
+      "validated": true
+    },
+    {
+      "constraint_name": "public_submission_rate_limits_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (bucket_key)",
+      "schema_name": "public",
+      "table_name": "public_submission_rate_limits",
+      "validated": true
+    },
+    {
+      "constraint_name": "public_submission_rate_limits_scope_check",
+      "constraint_type": "c",
+      "definition": "CHECK (scope = ANY (ARRAY['feedback'::text, 'guest'::text]))",
+      "schema_name": "public",
+      "table_name": "public_submission_rate_limits",
+      "validated": true
+    },
+    {
       "constraint_name": "release_deployment_manifest_backend_sha",
       "constraint_type": "c",
       "definition": "CHECK (backend_commit ~ '^[0-9a-f]{40}$'::text)",
@@ -24541,6 +24772,30 @@
       "validated": true
     },
     {
+      "constraint_name": "system_feedback_items_category_check",
+      "constraint_type": "c",
+      "definition": "CHECK (length(btrim(category)) >= 1 AND length(btrim(category)) <= 80 AND category ~ '^[a-z0-9_]+$'::text)",
+      "schema_name": "public",
+      "table_name": "system_feedback_items",
+      "validated": true
+    },
+    {
+      "constraint_name": "system_feedback_items_identity_lengths_check",
+      "constraint_type": "c",
+      "definition": "CHECK (length(COALESCE(submitted_by, ''::text)) <= 160 AND length(hub_context) <= 80 AND length(COALESCE(device_id, ''::text)) <= 160 AND length(COALESCE(page_url, ''::text)) <= 1000 AND length(COALESCE(summary, ''::text)) <= 500)",
+      "schema_name": "public",
+      "table_name": "system_feedback_items",
+      "validated": true
+    },
+    {
+      "constraint_name": "system_feedback_items_message_length_check",
+      "constraint_type": "c",
+      "definition": "CHECK (length(btrim(message)) >= 1 AND length(btrim(message)) <= 12000)",
+      "schema_name": "public",
+      "table_name": "system_feedback_items",
+      "validated": true
+    },
+    {
       "constraint_name": "system_feedback_items_pkey",
       "constraint_type": "p",
       "definition": "PRIMARY KEY (id)",
@@ -24549,9 +24804,25 @@
       "validated": true
     },
     {
+      "constraint_name": "system_feedback_items_priority_check",
+      "constraint_type": "c",
+      "definition": "CHECK (priority = ANY (ARRAY['low'::text, 'normal'::text, 'high'::text, 'urgent'::text]))",
+      "schema_name": "public",
+      "table_name": "system_feedback_items",
+      "validated": true
+    },
+    {
       "constraint_name": "system_feedback_items_request_fingerprint_check",
       "constraint_type": "c",
       "definition": "CHECK (request_fingerprint IS NULL OR request_fingerprint ~ '^[0-9a-f]{64}$'::text)",
+      "schema_name": "public",
+      "table_name": "system_feedback_items",
+      "validated": true
+    },
+    {
+      "constraint_name": "system_feedback_items_status_check",
+      "constraint_type": "c",
+      "definition": "CHECK (status = ANY (ARRAY['new'::text, 'acknowledged'::text, 'resolved'::text, 'closed'::text, 'reminder_exhausted'::text]))",
       "schema_name": "public",
       "table_name": "system_feedback_items",
       "validated": true
@@ -24696,10 +24967,26 @@
     },
     {
       "active": true,
+      "command": "select public.redact_stale_guest_report_contact(now());",
+      "database": "postgres",
+      "jobname": "mz-guest-contact-retention-daily",
+      "schedule": "35 3 * * *",
+      "username": "migration_owner"
+    },
+    {
+      "active": true,
       "command": "select public.msg_purge_deleted_content(now(),1000);",
       "database": "postgres",
       "jobname": "mz-message-deleted-retention-hourly",
       "schedule": "18 * * * *",
+      "username": "migration_owner"
+    },
+    {
+      "active": true,
+      "command": "select public.purge_stale_public_submission_rate_limits(now());",
+      "database": "postgres",
+      "jobname": "mz-public-submission-rate-limit-cleanup-hourly",
+      "schedule": "42 * * * *",
       "username": "migration_owner"
     },
     {
@@ -25746,9 +26033,30 @@
     },
     {
       "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.purge_stale_public_submission_rate_limits(p_now timestamp with time zone DEFAULT now())\n RETURNS integer\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_changed integer := 0;\nbegin\n  delete from public.public_submission_rate_limits\n  where updated_at < p_now - interval '10 minutes';\n  get diagnostics v_changed=row_count;\n  return v_changed;\nend;\n$function$\n",
+      "function_name": "purge_stale_public_submission_rate_limits",
+      "identity_arguments": "p_now timestamp with time zone",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
       "definition": "CREATE OR REPLACE FUNCTION public.record_scan_event(p_location_code text, p_device_identifier text, p_event_type text, p_result text DEFAULT NULL::text, p_notes text DEFAULT NULL::text, p_payload_json jsonb DEFAULT '{}'::jsonb, p_client_event_id text DEFAULT NULL::text)\n RETURNS jsonb\n LANGUAGE plpgsql\nAS $function$\ndeclare\n  v_location_id uuid;\n  v_device_pk uuid;\n  v_event_id uuid;\nbegin\n  if p_client_event_id is not null then\n    select se.id\n      into v_event_id\n    from public.scan_events se\n    where se.client_event_id = p_client_event_id\n    limit 1;\n\n    if v_event_id is not null then\n      return jsonb_build_object(\n        'ok', true,\n        'scan_event_id', v_event_id,\n        'location_code', p_location_code,\n        'device_identifier', p_device_identifier,\n        'event_type', p_event_type,\n        'result', p_result,\n        'replayed', true\n      );\n    end if;\n  end if;\n\n  select l.id\n    into v_location_id\n  from public.locations l\n  where l.location_code = p_location_code\n  limit 1;\n\n  select d.id\n    into v_device_pk\n  from public.devices d\n  where d.device_id = p_device_identifier\n  limit 1;\n\n  insert into public.scan_events (\n    location_id,\n    location_code,\n    device_id,\n    device_identifier,\n    event_type,\n    result,\n    notes,\n    payload_json,\n    client_event_id\n  )\n  values (\n    v_location_id,\n    p_location_code,\n    v_device_pk,\n    p_device_identifier,\n    p_event_type,\n    p_result,\n    p_notes,\n    coalesce(p_payload_json, '{}'::jsonb),\n    p_client_event_id\n  )\n  returning id into v_event_id;\n\n  return jsonb_build_object(\n    'ok', true,\n    'scan_event_id', v_event_id,\n    'location_code', p_location_code,\n    'device_identifier', p_device_identifier,\n    'event_type', p_event_type,\n    'result', p_result,\n    'replayed', false\n  );\nend;\n$function$\n",
       "function_name": "record_scan_event",
       "identity_arguments": "p_location_code text, p_device_identifier text, p_event_type text, p_result text, p_notes text, p_payload_json jsonb, p_client_event_id text",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.redact_guest_report_contact_on_terminal()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\nbegin\n  if new.status in ('resolved','rejected') and old.status is distinct from new.status then\n    new.metadata_json := (coalesce(new.metadata_json,'{}'::jsonb) - 'reporter' - 'ip' - 'user_agent')\n      || jsonb_build_object('guest_contact_redacted_at',now());\n  end if;\n  return new;\nend;\n$function$\n",
+      "function_name": "redact_guest_report_contact_on_terminal",
+      "identity_arguments": "",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.redact_stale_guest_report_contact(p_now timestamp with time zone DEFAULT now())\n RETURNS integer\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_changed integer := 0;\nbegin\n  update public.guest_cleanliness_reports\n  set metadata_json=(coalesce(metadata_json,'{}'::jsonb) - 'reporter' - 'ip' - 'user_agent')\n      || jsonb_build_object('guest_contact_redacted_at',p_now,'guest_contact_redaction_reason','retention_limit'),\n      marketing_review_notes=case\n        when status='pending_marketing_review' then coalesce(marketing_review_notes,'Guest contact removed after the 30-day privacy retention limit.')\n        else marketing_review_notes\n      end\n  where submitted_at < p_now - interval '30 days'\n    and (\n      metadata_json ? 'reporter'\n      or metadata_json ? 'ip'\n      or metadata_json ? 'user_agent'\n    );\n  get diagnostics v_changed=row_count;\n  return v_changed;\nend;\n$function$\n",
+      "function_name": "redact_stale_guest_report_contact",
+      "identity_arguments": "p_now timestamp with time zone",
       "schema_name": "public"
     },
     {
@@ -30349,6 +30657,24 @@
       "table_name": "ops_manager_weekly_schedules"
     },
     {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_public_submission_rate_limits_updated ON public.public_submission_rate_limits USING btree (updated_at)",
+      "index_name": "idx_public_submission_rate_limits_updated",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "public_submission_rate_limits"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX public_submission_rate_limits_pkey ON public.public_submission_rate_limits USING btree (bucket_key)",
+      "index_name": "public_submission_rate_limits_pkey",
+      "is_primary": true,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "public_submission_rate_limits"
+    },
+    {
       "backs_constraint": true,
       "definition": "CREATE UNIQUE INDEX release_deployment_manifest_pkey ON public.release_deployment_manifest USING btree (release_id)",
       "index_name": "release_deployment_manifest_pkey",
@@ -32619,9 +32945,33 @@
       "schema_name": "public"
     },
     {
+      "function_name": "purge_stale_public_submission_rate_limits",
+      "grantee": "service_role",
+      "identity_arguments": "p_now timestamp with time zone",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
       "function_name": "record_scan_event",
       "grantee": "service_role",
       "identity_arguments": "p_location_code text, p_device_identifier text, p_event_type text, p_result text, p_notes text, p_payload_json jsonb, p_client_event_id text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "redact_guest_report_contact_on_terminal",
+      "grantee": "service_role",
+      "identity_arguments": "",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "redact_stale_guest_report_contact",
+      "grantee": "service_role",
+      "identity_arguments": "p_now timestamp with time zone",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -39048,6 +39398,55 @@
       "is_grantable": "NO",
       "privilege_type": "DELETE",
       "schema_name": "public",
+      "table_name": "public_submission_rate_limits"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "INSERT",
+      "schema_name": "public",
+      "table_name": "public_submission_rate_limits"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "REFERENCES",
+      "schema_name": "public",
+      "table_name": "public_submission_rate_limits"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "public_submission_rate_limits"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "TRIGGER",
+      "schema_name": "public",
+      "table_name": "public_submission_rate_limits"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "TRUNCATE",
+      "schema_name": "public",
+      "table_name": "public_submission_rate_limits"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "UPDATE",
+      "schema_name": "public",
+      "table_name": "public_submission_rate_limits"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "DELETE",
+      "schema_name": "public",
       "table_name": "release_deployment_manifest"
     },
     {
@@ -42535,6 +42934,15 @@
       "table_name": "ops_manager_weekly_schedules"
     },
     {
+      "comment": "Durable, service-only public submission throttles; bucket keys are HMACs and never store raw IP addresses.",
+      "partition_key": null,
+      "relation_kind": "r",
+      "rls_enabled": true,
+      "rls_forced": true,
+      "schema_name": "public",
+      "table_name": "public_submission_rate_limits"
+    },
+    {
       "comment": null,
       "partition_key": null,
       "relation_kind": "r",
@@ -42936,6 +43344,13 @@
       "schema_name": "public",
       "table_name": "gemini_console_repair_jobs",
       "trigger_name": "trg_gemini_console_require_live_worker"
+    },
+    {
+      "definition": "CREATE TRIGGER trg_redact_guest_report_contact_on_terminal BEFORE UPDATE ON guest_cleanliness_reports FOR EACH ROW EXECUTE FUNCTION redact_guest_report_contact_on_terminal()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "guest_cleanliness_reports",
+      "trigger_name": "trg_redact_guest_report_contact_on_terminal"
     },
     {
       "definition": "CREATE TRIGGER trg_sch_guard_restricted_location_coverage_template BEFORE INSERT OR UPDATE OF location_id, day_of_week, assigned_employee_id ON location_coverage_templates FOR EACH ROW EXECUTE FUNCTION sch_guard_restricted_location_coverage_template()",

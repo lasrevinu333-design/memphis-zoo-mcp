@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 const repoRoot = resolve(import.meta.dirname, "..");
 const apiSource = readFileSync(resolve(repoRoot, "src/index.js"), "utf8");
 const reliabilityMigration = readFileSync(resolve(repoRoot, "supabase/migrations/20260718103215_custodial_v3_reliability_and_retention.sql"), "utf8");
-const engineRoot = [process.env.ENGINE_FIXTURE_ROOT, resolve(repoRoot, "../Engine"), "/home/eric/Projects/memphis-zoo/Engine"]
+const engineRoot = [process.env.ENGINE_FIXTURE_ROOT, resolve(repoRoot, "../frontend"), resolve(repoRoot, "../Engine"), "/home/eric/Projects/memphis-zoo/Engine"]
   .filter(Boolean)
   .find((candidate) => existsSync(resolve(candidate, "system-feedback.html")));
 const feedbackHtml = engineRoot ? readFileSync(resolve(engineRoot, "system-feedback.html"), "utf8") : "";
@@ -23,9 +23,11 @@ function assertMatches(source, pattern, message) {
 // frontend regression gate.
 if (feedbackHtml) {
   assertMatches(feedbackHtml, /type=["']file["'][^>]+accept=["']image\//i, "feedback form should expose an image-only file input");
-  assertMatches(feedbackHtml, /Import image/i, "feedback form should label the upload action as Import image");
+  assertMatches(feedbackHtml, /Add Image/i, "feedback form should expose the image upload action");
   assertContains(feedbackHtml, "image_attachment", "feedback submit payload should include optional image_attachment");
   assertContains(feedbackHtml, "readAsDataURL", "feedback image upload should encode the selected image for JSON submit");
+  assertContains(feedbackHtml, "'Content-Type': 'application/json'", "feedback should submit image metadata as JSON");
+  assert.ok(!feedbackHtml.includes("new FormData"), "feedback submit must not send unsupported multipart form data");
 }
 
 // Backend: image attachment must be validated, stored privately, referenced by
@@ -43,6 +45,7 @@ assertMatches(apiSource, /feedback-api\/image\/:feedbackId/, "backend should exp
 assertContains(apiSource, "last_feedback_reminder_at", "schema may retain legacy reminder timestamp for compatibility");
 assertContains(apiSource, "feedback_reminder_count", "schema may retain legacy reminder count for compatibility");
 assertMatches(apiSource, /feedback-api\/acknowledge\/:feedbackId/, "backend should expose an acknowledgement endpoint");
+assertMatches(apiSource, /dashboard-api\/system-feedback\/:feedbackId\/status/, "backend should expose manager feedback triage actions");
 assertMatches(apiSource, /status\s*=\s*'acknowledged'/i, "acknowledgement should mark the feedback item as acknowledged");
 const feedbackSubmitBlock = apiSource.slice(apiSource.indexOf('app.post("/feedback-api/submit"'), apiSource.indexOf('app.get("/guest-api/locations'));
 assert.ok(feedbackSubmitBlock.includes("dashboard_only"), "feedback submit should report dashboard-only notification handling");

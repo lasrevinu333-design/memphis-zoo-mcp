@@ -20,7 +20,9 @@ async function reservePort() {
 }
 
 async function waitForServer(url, child, logs) {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
+  // Full bootstrap imports the complete application graph; allow headroom on a
+  // loaded workstation and slower CI runners before classifying startup as dead.
+  for (let attempt = 0; attempt < 300; attempt += 1) {
     if (child.exitCode != null) {
       throw new Error(`MCP test server exited early with code ${child.exitCode}.\n${logs()}`);
     }

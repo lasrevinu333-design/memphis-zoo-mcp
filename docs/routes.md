@@ -39,7 +39,10 @@ Route factories for messaging, schedule, and events are re-exported from `src/ro
 | `GET` | `/dashboard-api/canary` | Dashboard canary checks. |
 | `GET` | `/dashboard-api/current-attendance` | Attendance payload. |
 | `GET` | `/dashboard-api/summary` | Dashboard summary. |
-| `GET` | `/dashboard-api/guest-cleanliness-issues` | List guest-submitted cleanliness reports for hub/dashboard display. |
+| `GET` | `/dashboard-api/guest-cleanliness-issues` | List Marketing-approved guest reports for authenticated Operations display. |
+| `POST` | `/dashboard-api/guest-cleanliness-issues/:reportId/resolve` | Resolve an approved guest report and redact guest contact data. |
+| `GET` | `/dashboard-api/system-feedback` | List submitted program feedback for authenticated manager triage. |
+| `POST` | `/dashboard-api/system-feedback/:feedbackId/status` | Acknowledge or resolve program feedback from manager triage. |
 | `POST` | `/dashboard-api/close-ticket` | Dashboard maintenance ticket close. |
 | Various | `/dashboard-api/events` | Public event routes. |
 
@@ -48,16 +51,27 @@ Route factories for messaging, schedule, and events are re-exported from `src/ro
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/feedback-api/health` | Program feedback API health. |
-| `POST` | `/feedback-api/submit` | Submit implementation feedback from manager or employee hubs. |
-| `GET` | `/dashboard-api/system-feedback` | List submitted program feedback for dashboard/triage display. |
+| `POST` | `/feedback-api/submit` | Submit bounded JSON implementation feedback, with an optional JSON image attachment, from manager or employee hubs. |
+| `GET` | `/feedback-api/image/:feedbackId` | Retrieve a private feedback attachment through manager authentication or an expiring signed link. |
+| `GET` | `/feedback-api/acknowledge/:feedbackId` | Show a non-mutating acknowledgement confirmation page through manager authentication or an expiring signed link. |
+| `POST` | `/feedback-api/acknowledge/:feedbackId` | Confirm feedback acknowledgement; signed-link actors are server-assigned. |
 
 ## Guest API
 
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/guest-api/health` | Guest-report API health. |
-| `GET` | `/guest-api/locations/:locationCode` | Resolve a guest-report location by code. |
-| `POST` | `/guest-api/report-cleanliness` | Submit a guest cleanliness issue tied to a location QR. |
+| `GET` | `/guest-api/status` | Public approval state; disabled by default until Memphis Zoo approval and QR rollout. |
+| `GET` | `/guest-api/locations/:locationCode` | Resolve a guest-report location by code only when the feature is approved. |
+| `POST` | `/guest-api/report-cleanliness` | Submit a bounded guest cleanliness issue into the Marketing-first queue only when approved. |
+| `GET` | `/guest-api/locations/:locationCode/issues` | List approved open reports for one guest-report location. |
+
+## Marketing API
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/marketing-api/guest-cleanliness-issues` | Read the pending guest-report queue with guest details after feature approval and Marketing integration setup. |
+| `POST` | `/marketing-api/guest-cleanliness-issues/:reportId/review` | Approve or reject a guest report; approval queues dispatch to Ops Managers and the currently assigned custodian. |
 
 ## Scan API
 
