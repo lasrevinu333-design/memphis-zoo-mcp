@@ -9,6 +9,10 @@ const releaseManifestSource = readFileSync("src/release-manifest.js", "utf8");
 const frontendReleaseManifest = JSON.parse(readFileSync("release/frontend-release-manifest.json", "utf8"));
 const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
 const migration = readFileSync("supabase/migrations/20260717161000_custodial_foundation_repair_delta.sql", "utf8");
+const foreignKeyIndexMigration = readFileSync(
+  "supabase/migrations/20260730222357_index_remaining_foreign_keys.sql",
+  "utf8",
+);
 
 assert.match(indexSource, /tool_start_session_v2/);
 assert.match(indexSource, /p_client_session_id is required for scan start idempotency/);
@@ -47,6 +51,41 @@ assert.match(deviceAuthSource, /\["enforce-ready", "enforce"\]\.includes\(reques
 assert.match(migration, /'enforce-ready'::text/);
 assert.match(migration, /requires_physical_acceptance/);
 assert.match(migration, /storage\.buckets/);
+
+assert.match(foreignKeyIndexMigration, /set lock_timeout = '5s'/);
+assert.match(foreignKeyIndexMigration, /set statement_timeout = '30s'/);
+assert.equal(
+  (foreignKeyIndexMigration.match(/create index if not exists/gi) || []).length,
+  21,
+);
+for (const [table, column] of [
+  ["cleaning_inspections", "inspector_manager_id"],
+  ["custodial_employee_device_assignment_history", "previous_employee_id"],
+  ["custodial_employee_device_assignment_history", "changed_by_manager_id"],
+  ["custodial_employee_status_history", "changed_by_manager_id"],
+  ["device_auth_enrollment_codes", "revoked_by_manager_id"],
+  ["employee_push_registrations", "device_id"],
+  ["event_default_rules", "primary_venue_id"],
+  ["event_push_instances", "credential_id"],
+  ["event_push_instances", "device_id"],
+  ["event_push_instances", "employee_id"],
+  ["gemini_console_repair_jobs", "approving_credential_id"],
+  ["gemini_console_repair_jobs", "authorization_message_id"],
+  ["msg_message_audit", "thread_id"],
+  ["ops_manager_device_security_config", "rotated_by_manager_id"],
+  ["ops_manager_device_security_sessions", "credential_id"],
+  ["ops_manager_enrollment_codes", "consumed_credential_id"],
+  ["ops_manager_enrollment_codes", "created_by_credential_id"],
+  ["ops_manager_notification_queue", "manager_id"],
+  ["ops_manager_security_code_events", "credential_id"],
+  ["ops_manager_security_code_events", "manager_id"],
+  ["ops_manager_security_code_events", "target_device_id"],
+]) {
+  assert.match(
+    foreignKeyIndexMigration,
+    new RegExp(`on public\\.${table} \\(${column}\\)`, "i"),
+  );
+}
 
 assert.match(messagingSource, /order by coalesce\(m\.sent_at, m\.created_at\) desc, m\.id desc/);
 assert.match(messagingSource, /order by coalesce\(sent_at, created_at\) asc, id asc/);
