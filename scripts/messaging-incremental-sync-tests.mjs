@@ -95,6 +95,12 @@ try {
     after_id: MESSAGE_ID,
   });
 
+  response = await fetch(`${base}/me/by-device`, { headers: { "X-Device-Id": DEVICE_ID } });
+  assert.equal(response.status, 200, "the authenticated device header must satisfy identity lookup without a duplicate query parameter");
+  payload = await response.json();
+  assert.equal(payload.ok, true);
+  assert.equal(payload.data.canonical_device_id, DEVICE_ID);
+
   response = await fetch(`${base}/threads/updates?${query}`);
   assert.equal(response.status, 200);
   payload = await response.json();
