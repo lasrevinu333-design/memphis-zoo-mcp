@@ -1309,8 +1309,8 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
 
   router.get("/me/by-device", requireDeviceOrOpsAuth, async (req, res) => {
     try {
-      const deviceId = String(req.query.device_id || "").trim();
-      if (!deviceId && !req.memphisAuth) throw new Error("device_id is required.");
+      const deviceId = String(req.query.device_id || req.memphisMessagingDevice?.deviceId || req.header("x-device-id") || "").trim();
+      if (!deviceId && !req.memphisAuth && !req.memphisMessagingDevice?.identity) throw new Error("device_id is required.");
       const data = req.memphisMessagingManager?.identity || req.memphisMessagingDevice?.identity || await getViewerIdentity(deviceId);
       res.status(200).json({ ok: true, data, meta: messagingMeta() });
     } catch (error) {
