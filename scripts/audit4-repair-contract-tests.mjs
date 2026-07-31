@@ -11,6 +11,7 @@ import { chicagoDateStartIso, normalizeInspectionPayload } from "../src/operatio
 const root = new URL("../", import.meta.url);
 const read = (path) => readFileSync(new URL(path, root), "utf8");
 const migration = read("supabase/migrations/20260729215914_audit4_attendance_inspection_integrity.sql");
+const spotCheckPolicy = read("supabase/migrations/20260731141831_inspection_spot_check_policy.sql");
 const indexSource = read("src/index.js");
 const analyticsSource = read("src/operational-analytics-api.js");
 
@@ -54,5 +55,15 @@ for (const pattern of [
   /with \(security_invoker=true\)/i,
   /revoke all on table public\.v_cleaning_inspection_coverage from public,anon,authenticated/i,
 ]) assert.match(migration, pattern);
+
+for (const pattern of [
+  /inspection_policy_mode[\s\S]*manager_spot_check/i,
+  /inspection_coverage_target_pct[\s\S]*'0'::jsonb/i,
+  /no per-session quota/i,
+  /no minimum percentage/i,
+  /on conflict\(setting_key\) do update/i,
+]) assert.match(spotCheckPolicy, pattern);
+assert.doesNotMatch(spotCheckPolicy, /inspection_coverage_target_pct[\s\S]{0,200}'20'::jsonb/i);
+assert.doesNotMatch(spotCheckPolicy, /create or replace view/i, "spot-check policy must not rewrite the stable analytics schema");
 
 console.log("AUDIT4_REPAIR_CONTRACT_PASS");
