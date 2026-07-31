@@ -25163,6 +25163,14 @@
       "username": "migration_owner"
     },
     {
+      "active": false,
+      "command": "\n      select net.http_get(\n        url := 'https://memphis-zoo-mcp.onrender.com/health',\n        params := jsonb_build_object('probe', 'supabase-cron'),\n        headers := jsonb_build_object('User-Agent', 'memphis-zoo-availability-bridge/1.0'),\n        timeout_milliseconds := 4000\n      ) as request_id;\n    ",
+      "database": "postgres",
+      "jobname": "mz-render-availability-warm-bridge",
+      "schedule": "*/10 * * * *",
+      "username": "migration_owner"
+    },
+    {
       "active": true,
       "command": "select public.sch_ensure_schedule_window(public.sch_service_date(now()), 14, 'scheduled_rolling_window_readiness');",
       "database": "postgres",
@@ -27303,6 +27311,15 @@
     },
     {
       "backs_constraint": false,
+      "definition": "CREATE INDEX idx_cleaning_inspections_inspector_manager_id_fkey ON public.cleaning_inspections USING btree (inspector_manager_id)",
+      "index_name": "idx_cleaning_inspections_inspector_manager_id_fkey",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "cleaning_inspections"
+    },
+    {
+      "backs_constraint": false,
       "definition": "CREATE INDEX idx_cleaning_inspections_location ON public.cleaning_inspections USING btree (location_id, inspected_at DESC)",
       "index_name": "idx_cleaning_inspections_location",
       "is_primary": false,
@@ -27492,6 +27509,15 @@
     },
     {
       "backs_constraint": false,
+      "definition": "CREATE INDEX idx_cust_device_history_changed_by_manager_id_fkey ON public.custodial_employee_device_assignment_history USING btree (changed_by_manager_id)",
+      "index_name": "idx_cust_device_history_changed_by_manager_id_fkey",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "custodial_employee_device_assignment_history"
+    },
+    {
+      "backs_constraint": false,
       "definition": "CREATE INDEX idx_custodial_employee_device_history_device_time ON public.custodial_employee_device_assignment_history USING btree (device_id, changed_at DESC)",
       "index_name": "idx_custodial_employee_device_history_device_time",
       "is_primary": false,
@@ -27509,11 +27535,29 @@
       "table_name": "custodial_employee_device_assignment_history"
     },
     {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_custodial_employee_device_history_previous_employee_id_fkey ON public.custodial_employee_device_assignment_history USING btree (previous_employee_id)",
+      "index_name": "idx_custodial_employee_device_history_previous_employee_id_fkey",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "custodial_employee_device_assignment_history"
+    },
+    {
       "backs_constraint": true,
       "definition": "CREATE UNIQUE INDEX custodial_employee_status_history_pkey ON public.custodial_employee_status_history USING btree (status_change_id)",
       "index_name": "custodial_employee_status_history_pkey",
       "is_primary": true,
       "is_unique": true,
+      "schema_name": "public",
+      "table_name": "custodial_employee_status_history"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_cust_status_history_changed_by_manager_id_fkey ON public.custodial_employee_status_history USING btree (changed_by_manager_id)",
+      "index_name": "idx_cust_status_history_changed_by_manager_id_fkey",
+      "is_primary": false,
+      "is_unique": false,
       "schema_name": "public",
       "table_name": "custodial_employee_status_history"
     },
@@ -27791,6 +27835,15 @@
       "backs_constraint": false,
       "definition": "CREATE INDEX idx_device_auth_enrollment_codes_consumed_by_credential_id_fkey ON public.device_auth_enrollment_codes USING btree (consumed_by_credential_id)",
       "index_name": "idx_device_auth_enrollment_codes_consumed_by_credential_id_fkey",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_codes"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_device_auth_enrollment_codes_revoked_by_manager_id_fkey ON public.device_auth_enrollment_codes USING btree (revoked_by_manager_id)",
+      "index_name": "idx_device_auth_enrollment_codes_revoked_by_manager_id_fkey",
       "is_primary": false,
       "is_unique": false,
       "schema_name": "public",
@@ -28329,6 +28382,15 @@
     },
     {
       "backs_constraint": false,
+      "definition": "CREATE INDEX idx_employee_push_registrations_device_id_fkey ON public.employee_push_registrations USING btree (device_id)",
+      "index_name": "idx_employee_push_registrations_device_id_fkey",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "employee_push_registrations"
+    },
+    {
+      "backs_constraint": false,
       "definition": "CREATE UNIQUE INDEX uq_employee_push_registrations_active_token ON public.employee_push_registrations USING btree (token_hash) WHERE ((active = true) AND (revoked_at IS NULL))",
       "index_name": "uq_employee_push_registrations_active_token",
       "is_primary": false,
@@ -28544,6 +28606,15 @@
       "table_name": "event_default_rules"
     },
     {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_event_default_rules_primary_venue_id_fkey ON public.event_default_rules USING btree (primary_venue_id)",
+      "index_name": "idx_event_default_rules_primary_venue_id_fkey",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "event_default_rules"
+    },
+    {
       "backs_constraint": true,
       "definition": "CREATE UNIQUE INDEX event_push_instances_event_id_event_revision_service_date_e_key ON public.event_push_instances USING btree (event_id, event_revision, service_date, employee_id, device_id, assignment_epoch, notification_kind)",
       "index_name": "event_push_instances_event_id_event_revision_service_date_e_key",
@@ -28567,6 +28638,33 @@
       "index_name": "event_push_instances_pkey",
       "is_primary": true,
       "is_unique": true,
+      "schema_name": "public",
+      "table_name": "event_push_instances"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_event_push_instances_credential_id_fkey ON public.event_push_instances USING btree (credential_id)",
+      "index_name": "idx_event_push_instances_credential_id_fkey",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "event_push_instances"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_event_push_instances_device_id_fkey ON public.event_push_instances USING btree (device_id)",
+      "index_name": "idx_event_push_instances_device_id_fkey",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "event_push_instances"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_event_push_instances_employee_id_fkey ON public.event_push_instances USING btree (employee_id)",
+      "index_name": "idx_event_push_instances_employee_id_fkey",
+      "is_primary": false,
+      "is_unique": false,
       "schema_name": "public",
       "table_name": "event_push_instances"
     },
@@ -29008,6 +29106,24 @@
       "index_name": "gemini_console_repair_jobs_proposal_id_key",
       "is_primary": false,
       "is_unique": true,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_gemini_console_repair_jobs_approving_credential_id_fkey ON public.gemini_console_repair_jobs USING btree (approving_credential_id)",
+      "index_name": "idx_gemini_console_repair_jobs_approving_credential_id_fkey",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_gemini_console_repair_jobs_authorization_message_id_fkey ON public.gemini_console_repair_jobs USING btree (authorization_message_id)",
+      "index_name": "idx_gemini_console_repair_jobs_authorization_message_id_fkey",
+      "is_primary": false,
+      "is_unique": false,
       "schema_name": "public",
       "table_name": "gemini_console_repair_jobs"
     },
@@ -29813,6 +29929,15 @@
       "table_name": "msg_message_audit"
     },
     {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_msg_message_audit_thread_id_fkey ON public.msg_message_audit USING btree (thread_id)",
+      "index_name": "idx_msg_message_audit_thread_id_fkey",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "msg_message_audit"
+    },
+    {
       "backs_constraint": true,
       "definition": "CREATE UNIQUE INDEX msg_message_audit_message_id_key ON public.msg_message_audit USING btree (message_id)",
       "index_name": "msg_message_audit_message_id_key",
@@ -30344,6 +30469,15 @@
       "table_name": "ops_manager_auth_events"
     },
     {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_ops_device_security_config_rotated_by_manager_id_fkey ON public.ops_manager_device_security_config USING btree (rotated_by_manager_id)",
+      "index_name": "idx_ops_device_security_config_rotated_by_manager_id_fkey",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "ops_manager_device_security_config"
+    },
+    {
       "backs_constraint": true,
       "definition": "CREATE UNIQUE INDEX ops_manager_device_security_config_pkey ON public.ops_manager_device_security_config USING btree (singleton)",
       "index_name": "ops_manager_device_security_config_pkey",
@@ -30365,6 +30499,15 @@
       "backs_constraint": false,
       "definition": "CREATE INDEX idx_ops_manager_device_security_sessions_active ON public.ops_manager_device_security_sessions USING btree (manager_id, credential_id, expires_at) WHERE (revoked_at IS NULL)",
       "index_name": "idx_ops_manager_device_security_sessions_active",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "ops_manager_device_security_sessions"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_ops_manager_device_security_sessions_credential_id_fkey ON public.ops_manager_device_security_sessions USING btree (credential_id)",
+      "index_name": "idx_ops_manager_device_security_sessions_credential_id_fkey",
       "is_primary": false,
       "is_unique": false,
       "schema_name": "public",
@@ -30417,8 +30560,26 @@
     },
     {
       "backs_constraint": false,
+      "definition": "CREATE INDEX idx_ops_manager_enrollment_codes_consumed_credential_id_fkey ON public.ops_manager_enrollment_codes USING btree (consumed_credential_id)",
+      "index_name": "idx_ops_manager_enrollment_codes_consumed_credential_id_fkey",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "ops_manager_enrollment_codes"
+    },
+    {
+      "backs_constraint": false,
       "definition": "CREATE INDEX idx_ops_manager_enrollment_codes_created_by ON public.ops_manager_enrollment_codes USING btree (created_by_manager_id, created_at DESC) WHERE (created_by_manager_id IS NOT NULL)",
       "index_name": "idx_ops_manager_enrollment_codes_created_by",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "ops_manager_enrollment_codes"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_ops_manager_enrollment_codes_created_by_credential_id_fkey ON public.ops_manager_enrollment_codes USING btree (created_by_credential_id)",
+      "index_name": "idx_ops_manager_enrollment_codes_created_by_credential_id_fkey",
       "is_primary": false,
       "is_unique": false,
       "schema_name": "public",
@@ -30527,6 +30688,15 @@
       "backs_constraint": false,
       "definition": "CREATE INDEX idx_ops_manager_notification_queue_credential ON public.ops_manager_notification_queue USING btree (credential_id, created_at DESC)",
       "index_name": "idx_ops_manager_notification_queue_credential",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "ops_manager_notification_queue"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_ops_manager_notification_queue_manager_id_fkey ON public.ops_manager_notification_queue USING btree (manager_id)",
+      "index_name": "idx_ops_manager_notification_queue_manager_id_fkey",
       "is_primary": false,
       "is_unique": false,
       "schema_name": "public",
@@ -30648,6 +30818,33 @@
       "is_unique": true,
       "schema_name": "public",
       "table_name": "ops_manager_push_devices"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_ops_manager_security_code_events_credential_id_fkey ON public.ops_manager_security_code_events USING btree (credential_id)",
+      "index_name": "idx_ops_manager_security_code_events_credential_id_fkey",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "ops_manager_security_code_events"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_ops_manager_security_code_events_manager_id_fkey ON public.ops_manager_security_code_events USING btree (manager_id)",
+      "index_name": "idx_ops_manager_security_code_events_manager_id_fkey",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "ops_manager_security_code_events"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_ops_manager_security_code_events_target_device_id_fkey ON public.ops_manager_security_code_events USING btree (target_device_id)",
+      "index_name": "idx_ops_manager_security_code_events_target_device_id_fkey",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "ops_manager_security_code_events"
     },
     {
       "backs_constraint": true,

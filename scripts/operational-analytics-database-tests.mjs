@@ -201,6 +201,9 @@ const coverage = await json(`(select to_jsonb(v) from public.v_cleaning_inspecti
 assert.equal(coverage.completed_session_count >= 2, true);
 assert.equal(coverage.inspected_session_count >= 2, true);
 assert.equal(Number(coverage.inspection_coverage_pct) > 0, true);
+assert.equal(Number(coverage.inspection_coverage_target_pct), 0);
+assert.equal(coverage.needs_attention, false);
+assert.equal(await sql(`select setting_value #>> '{}' from public.system_settings where setting_key='inspection_policy_mode';`), "manager_spot_check");
 
 const comparison = await json(`(
   select jsonb_agg(to_jsonb(v) order by employee_name)
@@ -288,7 +291,7 @@ assert.equal(await sql(`select count(*) from public.events_app_event_history whe
 await sql(`update public.events_app_events set event_date=current_date-14,end_date=current_date-14 where id='${ids.recentEvent}';`);
 const eventPurge = await json(`public.events_app_purge_expired(now(),500)`);
 assert.equal(eventPurge.retention_days, 14);
-assert.equal(eventPurge.deleted_events, 1);
+assert.equal(eventPurge.deleted_events >= 1, true, "the purge may also remove older production-baseline fixtures");
 assert.equal(await sql(`select count(*) from public.events_app_events where id='${ids.recentEvent}';`), "0");
 assert.equal(await sql(`select count(*) from public.events_app_event_history where event_id='${ids.recentEvent}';`), "0");
 
