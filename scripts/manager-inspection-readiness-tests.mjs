@@ -1,11 +1,20 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   HUMAN_CONFIRMATION_REQUIREMENT,
   MANAGER_INSPECTION_QUERY,
   evaluateManagerInspectionReadiness,
 } from "./manager-inspection-readiness.mjs";
+
+const root = resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
+const workflow = readFileSync(
+  resolve(root, ".github/workflows/manager-inspection-readiness-monitor.yml"),
+  "utf8",
+);
 
 const nowMs = Date.parse("2026-07-31T00:30:00.000Z");
 const notBefore = "2026-07-30T23:45:00.000Z";
@@ -68,6 +77,12 @@ assert.match(MANAGER_INSPECTION_QUERY, /left join public\.sessions/i);
 assert.match(MANAGER_INSPECTION_QUERY, /left join public\.ops_manager_managers/i);
 assert.doesNotMatch(MANAGER_INSPECTION_QUERY, /\binsert\b|\bupdate\b|\bdelete\b/i);
 assert.match(HUMAN_CONFIRMATION_REQUIREMENT, /automation cannot independently prove/i);
+assert.doesNotMatch(
+  workflow,
+  /continue-on-error/,
+  "monitor infrastructure and query failures must fail the workflow",
+);
+assert.match(workflow, /MANAGER_INSPECTION_ENFORCE:/);
 
 assert.throws(() => evaluateManagerInspectionReadiness([], { notBefore: "bad", nowMs }), /valid timestamp/i);
 
