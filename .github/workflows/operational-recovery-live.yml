@@ -42,12 +42,24 @@ jobs:
           test "$auth_status" = '401'
           grep -Eiq 'manager|auth|denied|unauthorized|password' /tmp/passwordless-manager-auth.json
 
-          for endpoint in /scan-api/health /schedule-api/health /messaging-api/health /dashboard-api/health; do
-            body="$(curl -fsSL --max-time 40 "$root$endpoint")"
-            printf '%s %s\n' "$endpoint" "$body"
-            grep -Fq '"ok":true' <<<"$body"
-            grep -Fq "$expected_sha" <<<"$body"
+          # Render can briefly route consecutive requests to different
+          # revisions during a rolling deployment. Require every health
+          # endpoint to converge on this commit before enforcing the result.
+          operational_endpoints=(/scan-api/health /schedule-api/health /messaging-api/health /dashboard-api/health)
+          all_endpoints_current=false
+          for rollout_attempt in $(seq 1 60); do
+            all_endpoints_current=true
+            for endpoint in "${operational_endpoints[@]}"; do
+              body="$(curl -fsSL --max-time 40 "$root$endpoint?rollout_attempt=$rollout_attempt" || true)"
+              printf 'rollout_attempt=%s %s %s\n' "$rollout_attempt" "$endpoint" "$body"
+              if ! grep -Fq '"ok":true' <<<"$body" || ! grep -Fq "$expected_sha" <<<"$body"; then
+                all_endpoints_current=false
+              fi
+            done
+            if [ "$all_endpoints_current" = true ]; then break; fi
+            sleep 10
           done
+          test "$all_endpoints_current" = true
 
           dependencies="$(curl -fsSL --max-time 40 "$root/health/dependencies")"
           python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["ok"] is True and d["database_reachable"] is True and d["required_schema_present"] is True and d["worker"]["durable_database_leases"] is True' <<<"$dependencies"

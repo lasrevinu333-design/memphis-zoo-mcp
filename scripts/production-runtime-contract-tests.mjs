@@ -5,6 +5,7 @@ import { existsSync, readFileSync } from "node:fs";
 const source = readFileSync(new URL("../src/index.js", import.meta.url), "utf8");
 const releaseManifestSource = readFileSync(new URL("../src/release-manifest.js", import.meta.url), "utf8");
 const monitor = readFileSync(new URL("../.github/workflows/production-availability-monitor.yml", import.meta.url), "utf8");
+const operationalLiveMonitor = readFileSync(new URL("../.github/workflows/operational-recovery-live.yml", import.meta.url), "utf8");
 const warmBridgeCreateMigration = readFileSync(new URL("../supabase/migrations/20260730221607_production_availability_warm_bridge.sql", import.meta.url), "utf8");
 const warmBridgeRetirementMigration = readFileSync(new URL("../supabase/migrations/20260731003221_deactivate_render_free_tier_warm_bridge.sql", import.meta.url), "utf8");
 const packageManifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
@@ -46,6 +47,12 @@ assert.match(monitor, /version\['release_manifest'\]\['frontend'\]\['commit_sha'
   "the monitor must reject exact frontend deployment commit drift");
 assert.match(monitor, /deployment\['schema_fingerprint'\] == frontend\['schema_fingerprint'\]/,
   "the monitor must reject deployment schema drift");
+assert.match(operationalLiveMonitor, /rollout_attempt=\$rollout_attempt/,
+  "live operational acceptance must bypass caches while Render revisions converge");
+assert.match(operationalLiveMonitor, /all_endpoints_current=false[\s\S]*for rollout_attempt in \$\(seq 1 60\)/,
+  "live operational acceptance must tolerate rolling-deployment routing");
+assert.match(operationalLiveMonitor, /test "\$all_endpoints_current" = true/,
+  "live operational acceptance must still reject endpoints that never reach the expected commit");
 assert.match(warmBridgeCreateMigration, /mz-render-availability-warm-bridge/,
   "the historical Render warm bridge must retain a stable cron identity");
 assert.match(warmBridgeCreateMigration, /'\*\/10 \* \* \* \*'/,
