@@ -60,6 +60,7 @@ for (const invalid of [
   { manager_revoked_at: "2026-07-30T23:00:00.000Z" },
   { is_system_principal: true },
   { session_status: "active" },
+  { session_ended_at: "2026-07-30T23:40:00.000Z" },
   { current_session_location_id: "20000000-0000-4000-8000-000000000005" },
   { current_session_employee_id: "20000000-0000-4000-8000-000000000006" },
   { inspected_at: "2026-07-30T23:40:00.000Z" },

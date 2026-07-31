@@ -40,7 +40,7 @@ limit 100
 `;
 
 export const HUMAN_CONFIRMATION_REQUIREMENT =
-  "A manager must confirm that the accepted database record represents an inspection they physically performed; automation cannot independently prove the physical act.";
+  "A manager must confirm that the accepted database record represents an inspection they physically performed on the linked post-repair cleaning session; automation cannot independently prove the physical act.";
 
 const GENERIC_OR_TEST_IDENTITY = /(?:^custodial manager$|\btest\b|\bfixture\b|\bdemo\b|\bsample\b|\bmock\b)/i;
 
@@ -83,6 +83,9 @@ export function evaluateManagerInspectionReadiness(rows, {
       gaps.push("linked cleaning session is not completed");
     }
     if (!row.session_ended_at) gaps.push("linked cleaning session has no completion timestamp");
+    else if (!Number.isFinite(sessionEndedAtMs) || sessionEndedAtMs < notBeforeMs) {
+      gaps.push("linked cleaning session predates the acceptance window");
+    }
     if (!sameId(row.location_id, row.current_session_location_id)) gaps.push("inspection location does not match the session");
     if (!sameId(row.employee_id, row.current_session_employee_id)) gaps.push("inspection employee does not match the session");
     if (!Number.isFinite(createdAtMs) || createdAtMs < notBeforeMs) gaps.push("inspection record predates the acceptance window");
