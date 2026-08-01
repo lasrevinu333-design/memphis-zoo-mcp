@@ -34,6 +34,12 @@ function listSqlFiles(dir) {
   }
 }
 
+export function schemaTransitionFields(frontendManifest) {
+  return frontendManifest?.schema_transition
+    ? { schema_transition: frontendManifest.schema_transition }
+    : {};
+}
+
 export function buildReleaseManifest({ appVersion, releaseId, contracts = {} } = {}) {
   const canonicalFingerprintPath = join(repoRoot, "supabase/canonical/schema-fingerprint.txt");
   const frontendManifestPath = join(repoRoot, "release/frontend-release-manifest.json");
@@ -43,7 +49,7 @@ export function buildReleaseManifest({ appVersion, releaseId, contracts = {} } =
 
   return {
     release_id: String(process.env.MEMPHIS_RELEASE_ID || appVersion || releaseId || "").trim(),
-    schema_transition: frontendManifest?.schema_transition || null,
+    ...schemaTransitionFields(frontendManifest),
     backend: {
       commit_sha: String(
         process.env.RENDER_GIT_COMMIT

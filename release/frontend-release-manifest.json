@@ -1,15 +1,9 @@
 {
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "689417961b38e0570cbffcaecc15417fbbae70d9",
+  "frontend_commit_sha": "dc24a5d9585fcd6b2bccb9122c33d332983def57",
   "frontend_commit_state": "github_pages_production_verified",
   "backend_minimum_version": "release-2026.07.19.custodial-v3.12",
   "schema_fingerprint": "ce9466f03953076840ff4e35d998713cced8f22c791fb8b11dacdc8c070c4caf",
-  "schema_transition": {
-    "transition_id": "custodial-atomic-offline-completion-20260801",
-    "from_fingerprint": "52b53bf279e67cb71f85a652cc669d44350716146603132f7e8be5c7de5e30cf",
-    "to_fingerprint": "ce9466f03953076840ff4e35d998713cced8f22c791fb8b11dacdc8c070c4caf",
-    "expires_at": "2026-08-08T23:59:59Z"
-  },
   "api_contract_versions": {
     "scan": "scan.v2",
     "dashboard": "dashboard.v1",
