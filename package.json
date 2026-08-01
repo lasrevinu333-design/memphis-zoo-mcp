@@ -42,6 +42,7 @@
     "test:operational-recovery": "node scripts/operational-recovery-tests.mjs",
     "test:foundation-repair": "node scripts/foundation-repair-tests.mjs",
     "test:custodial-repair": "node scripts/custodial-repair-contract-tests.mjs",
+    "test:custodial-atomic-commit-db": "node scripts/custodial-atomic-commit-database-tests.mjs",
     "test:schema-fingerprint": "node scripts/schema-fingerprint-check.mjs",
     "test:schema-transition": "node scripts/schema-transition-contract-tests.mjs",
     "schema:fingerprint:refresh": "node scripts/refresh-schema-fingerprint.mjs",

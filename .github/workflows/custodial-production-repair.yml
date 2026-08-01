@@ -89,6 +89,9 @@ jobs:
           CUSTODIAL_PHONE_TEST_DOCKER_CONTAINER="$container" \
             CUSTODIAL_PHONE_TEST_DATABASE=postgres \
             npm run --silent test:custodial-employee-phones-db
+          CUSTODIAL_ATOMIC_COMMIT_TEST_DOCKER_CONTAINER="$container" \
+            CUSTODIAL_ATOMIC_COMMIT_TEST_DATABASE=postgres \
+            npm run --silent test:custodial-atomic-commit-db
           GEMINI_CONSOLE_TEST_DOCKER_CONTAINER="$container" \
             GEMINI_CONSOLE_TEST_DATABASE=postgres \
             npm run --silent test:gemini-console-db
