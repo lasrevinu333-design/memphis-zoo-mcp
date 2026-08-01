@@ -3590,6 +3590,97 @@
     },
     {
       "collation_name": null,
+      "column_name": "operation_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 1,
+      "schema_name": "public",
+      "table_name": "device_auth_removal_operations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "device_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 2,
+      "schema_name": "public",
+      "table_name": "device_auth_removal_operations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "credential_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 3,
+      "schema_name": "public",
+      "table_name": "device_auth_removal_operations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "status",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": "'removed'::text",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 4,
+      "schema_name": "public",
+      "table_name": "device_auth_removal_operations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "result_json",
+      "comment": null,
+      "data_type": "jsonb",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 5,
+      "schema_name": "public",
+      "table_name": "device_auth_removal_operations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "removed_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 6,
+      "schema_name": "public",
+      "table_name": "device_auth_removal_operations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "created_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "now()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 7,
+      "schema_name": "public",
+      "table_name": "device_auth_removal_operations"
+    },
+    {
+      "collation_name": null,
       "column_name": "device_id",
       "comment": null,
       "data_type": "uuid",
@@ -20955,6 +21046,54 @@
       "validated": true
     },
     {
+      "constraint_name": "device_auth_removal_operations_credential_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (credential_id) REFERENCES device_auth_credentials(credential_id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "device_auth_removal_operations",
+      "validated": true
+    },
+    {
+      "constraint_name": "device_auth_removal_operations_credential_id_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (credential_id)",
+      "schema_name": "public",
+      "table_name": "device_auth_removal_operations",
+      "validated": true
+    },
+    {
+      "constraint_name": "device_auth_removal_operations_device_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "device_auth_removal_operations",
+      "validated": true
+    },
+    {
+      "constraint_name": "device_auth_removal_operations_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (operation_id)",
+      "schema_name": "public",
+      "table_name": "device_auth_removal_operations",
+      "validated": true
+    },
+    {
+      "constraint_name": "device_auth_removal_operations_result_check",
+      "constraint_type": "c",
+      "definition": "CHECK (jsonb_typeof(result_json) = 'object'::text)",
+      "schema_name": "public",
+      "table_name": "device_auth_removal_operations",
+      "validated": true
+    },
+    {
+      "constraint_name": "device_auth_removal_operations_status_check",
+      "constraint_type": "c",
+      "definition": "CHECK (status = 'removed'::text)",
+      "schema_name": "public",
+      "table_name": "device_auth_removal_operations",
+      "validated": true
+    },
+    {
       "constraint_name": "device_location_proximity_status_device_id_fkey",
       "constraint_type": "f",
       "definition": "FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE",
@@ -25828,6 +25967,13 @@
       "schema_name": "public"
     },
     {
+      "comment": "Atomically authenticates and removes one custodial credential, reconciles push delivery state, audits the action, and permits only credential-bound terminal replay.",
+      "definition": "CREATE OR REPLACE FUNCTION public.device_auth_remove_custodial_credential(p_operation_id uuid, p_device_id uuid, p_credential_id uuid, p_token_hash text, p_now timestamp with time zone DEFAULT now())\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_operation public.device_auth_removal_operations%rowtype;\n  v_credential public.device_auth_credentials%rowtype;\n  v_device_identifier text;\n  v_push_registrations integer := 0;\n  v_event_instances integer := 0;\n  v_notification_jobs integer := 0;\n  v_claimed_jobs integer := 0;\n  v_result jsonb;\nbegin\n  if p_operation_id is null or p_device_id is null or p_credential_id is null\n     or p_token_hash is null or length(p_token_hash) <> 64 or p_now is null then\n    raise exception using\n      errcode = '22023',\n      message = 'operation, device, and credential proof are required';\n  end if;\n\n  -- A stable operation lock makes concurrent response-loss retries deterministic\n  -- even before the terminal operation row exists.\n  perform pg_advisory_xact_lock(\n    hashtextextended('custodial-device-removal:' || p_operation_id::text, 0)\n  );\n\n  select * into v_operation\n  from public.device_auth_removal_operations\n  where operation_id = p_operation_id\n  for update;\n\n  if v_operation.operation_id is not null then\n    -- Revocation is intentionally ignored only for this exact terminal replay.\n    -- The caller must still prove the original credential ID and one-way hash.\n    select * into v_credential\n    from public.device_auth_credentials\n    where credential_id = p_credential_id\n      and device_id = p_device_id\n      and token_hash = p_token_hash\n    for update;\n\n    if v_credential.credential_id is null\n       or v_operation.credential_id <> p_credential_id\n       or v_operation.device_id <> p_device_id then\n      return jsonb_build_object('ok', false, 'reason', 'operation_conflict');\n    end if;\n\n    return v_operation.result_json || jsonb_build_object(\n      'ok', true,\n      'replayed', true\n    );\n  end if;\n\n  select * into v_credential\n  from public.device_auth_credentials\n  where credential_id = p_credential_id\n  for update;\n\n  if v_credential.credential_id is null\n     or v_credential.device_id <> p_device_id\n     or v_credential.token_hash <> p_token_hash then\n    return jsonb_build_object('ok', false, 'reason', 'credential_mismatch');\n  end if;\n  if v_credential.revoked_at is not null then\n    return jsonb_build_object('ok', false, 'reason', 'credential_revoked');\n  end if;\n  if v_credential.expires_at <= p_now then\n    return jsonb_build_object('ok', false, 'reason', 'credential_expired');\n  end if;\n  if v_credential.confirmed_at is null then\n    return jsonb_build_object('ok', false, 'reason', 'credential_unconfirmed');\n  end if;\n\n  select device_id into v_device_identifier\n  from public.devices\n  where id = p_device_id;\n  if v_device_identifier is null\n     or v_device_identifier !~ '^KIOSK_(0[2-9]|10)$' then\n    return jsonb_build_object('ok', false, 'reason', 'device_not_eligible');\n  end if;\n\n  with changed as (\n    update public.employee_push_registrations\n       set active = false,\n           revoked_at = coalesce(revoked_at, p_now),\n           revoked_reason = 'custodial_device_removed',\n           last_error = 'custodial_device_removed',\n           updated_at = p_now\n     where credential_id = p_credential_id\n       and (active = true or revoked_at is null)\n    returning registration_id\n  )\n  select count(*)::integer into v_push_registrations from changed;\n\n  with changed as (\n    update public.event_push_instances\n       set state = 'cancelled',\n           cancelled_at = coalesce(cancelled_at, p_now),\n           last_error = 'custodial_device_removed',\n           updated_at = p_now\n     where credential_id = p_credential_id\n       and state in ('pending', 'leased')\n    returning instance_id\n  )\n  select count(*)::integer into v_event_instances from changed;\n\n  -- Active lease proof is retained on a terminally cancelled claimed job. This\n  -- lets the owning worker call finish_operational_notification_job_terminal,\n  -- while every claim path rejects the now-dead row after a restart.\n  with candidates as (\n    select job_id, status as previous_status\n    from public.operational_notification_jobs\n    where job_type in ('employee_event_push', 'employee_native_push')\n      and status in ('pending', 'leased')\n      and payload_json->>'credential_id' = p_credential_id::text\n    for update\n  ), changed as (\n    update public.operational_notification_jobs job\n       set status = 'dead',\n           completed_at = coalesce(job.completed_at, p_now),\n           last_error = 'custodial_device_removed',\n           updated_at = p_now\n      from candidates\n     where job.job_id = candidates.job_id\n    returning candidates.previous_status\n  )\n  select count(*)::integer,\n         (count(*) filter (where previous_status = 'leased'))::integer\n    into v_notification_jobs, v_claimed_jobs\n  from changed;\n\n  update public.device_auth_credentials\n     set revoked_at = p_now,\n         revoked_reason = 'custodial_device_removed'\n   where credential_id = p_credential_id;\n\n  v_result := jsonb_build_object(\n    'ok', true,\n    'removed', true,\n    'replayed', false,\n    'status', 'removed',\n    'operation_id', p_operation_id,\n    'credential_id', p_credential_id,\n    'device_id', v_device_identifier,\n    'removed_at', p_now,\n    'push_registrations_deactivated', v_push_registrations,\n    'event_push_instances_cancelled', v_event_instances,\n    'notification_jobs_cancelled', v_notification_jobs,\n    'claimed_notification_jobs_cancelled', v_claimed_jobs\n  );\n\n  insert into public.device_auth_removal_operations(\n    operation_id, device_id, credential_id, status, result_json, removed_at\n  ) values (\n    p_operation_id, p_device_id, p_credential_id, 'removed', v_result, p_now\n  );\n\n  insert into public.device_auth_events(\n    device_id, credential_id, event_type, success, reason, presented_identifier, metadata_json\n  ) values (\n    p_device_id,\n    p_credential_id,\n    'custodial_device_removed',\n    true,\n    'client_requested_removal',\n    null,\n    jsonb_build_object(\n      'operation_id', p_operation_id,\n      'push_registrations_deactivated', v_push_registrations,\n      'event_push_instances_cancelled', v_event_instances,\n      'notification_jobs_cancelled', v_notification_jobs,\n      'claimed_notification_jobs_cancelled', v_claimed_jobs\n    )\n  );\n\n  return v_result;\nend\n$function$\n",
+      "function_name": "device_auth_remove_custodial_credential",
+      "identity_arguments": "p_operation_id uuid, p_device_id uuid, p_credential_id uuid, p_token_hash text, p_now timestamp with time zone",
+      "schema_name": "public"
+    },
+    {
       "comment": null,
       "definition": "CREATE OR REPLACE FUNCTION public.device_heartbeat(p_device_id text, p_notes text DEFAULT NULL::text)\n RETURNS jsonb\n LANGUAGE plpgsql\nAS $function$\ndeclare\n  v_device_pk uuid;\n  v_device_name text;\n  v_now timestamptz := now();\nbegin\n  select d.id, d.device_name\n    into v_device_pk, v_device_name\n  from public.devices d\n  where d.device_id = p_device_id\n  limit 1;\n\n  if v_device_pk is null then\n    raise exception 'Device not found: %', p_device_id;\n  end if;\n\n  update public.devices\n  set\n    last_seen_at = v_now,\n    notes = coalesce(p_notes, notes),\n    updated_at = now()\n  where id = v_device_pk;\n\n  insert into public.system_logs (\n    level,\n    source,\n    message,\n    device_id\n  )\n  values (\n    'INFO',\n    'device_heartbeat',\n    'Device heartbeat received',\n    v_device_pk\n  );\n\n  return jsonb_build_object(\n    'device_id', p_device_id,\n    'device_name', v_device_name,\n    'last_seen_at', v_now,\n    'ok', true\n  );\nend;\n$function$\n",
       "function_name": "device_heartbeat",
@@ -28344,6 +28490,33 @@
     },
     {
       "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX device_auth_removal_operations_credential_id_key ON public.device_auth_removal_operations USING btree (credential_id)",
+      "index_name": "device_auth_removal_operations_credential_id_key",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "device_auth_removal_operations"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX device_auth_removal_operations_pkey ON public.device_auth_removal_operations USING btree (operation_id)",
+      "index_name": "device_auth_removal_operations_pkey",
+      "is_primary": true,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "device_auth_removal_operations"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_device_auth_removal_operations_device_recent ON public.device_auth_removal_operations USING btree (device_id, removed_at DESC, operation_id)",
+      "index_name": "idx_device_auth_removal_operations_device_recent",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "device_auth_removal_operations"
+    },
+    {
+      "backs_constraint": true,
       "definition": "CREATE UNIQUE INDEX device_location_proximity_status_pkey ON public.device_location_proximity_status USING btree (device_id, location_id, session_uuid)",
       "index_name": "device_location_proximity_status_pkey",
       "is_primary": true,
@@ -30828,6 +31001,15 @@
     },
     {
       "backs_constraint": false,
+      "definition": "CREATE INDEX idx_operational_notification_jobs_employee_credential_open ON public.operational_notification_jobs USING btree (((payload_json ->> 'credential_id'::text)), status) WHERE ((job_type = ANY (ARRAY['employee_event_push'::text, 'employee_native_push'::text])) AND (status = ANY (ARRAY['pending'::text, 'leased'::text])))",
+      "index_name": "idx_operational_notification_jobs_employee_credential_open",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "operational_notification_jobs"
+    },
+    {
+      "backs_constraint": false,
       "definition": "CREATE INDEX idx_operational_notification_jobs_source ON public.operational_notification_jobs USING btree (job_type, source_id, created_at DESC)",
       "index_name": "idx_operational_notification_jobs_source",
       "is_primary": false,
@@ -32995,6 +33177,14 @@
       "function_name": "device_auth_issue_enrollment_code",
       "grantee": "service_role",
       "identity_arguments": "p_device_id uuid, p_code_hash text, p_created_by text, p_expires_at timestamp with time zone, p_metadata_json jsonb",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "device_auth_remove_custodial_credential",
+      "grantee": "service_role",
+      "identity_arguments": "p_operation_id uuid, p_device_id uuid, p_credential_id uuid, p_token_hash text, p_now timestamp with time zone",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -36211,6 +36401,55 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "device_auth_policy"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "DELETE",
+      "schema_name": "public",
+      "table_name": "device_auth_removal_operations"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "INSERT",
+      "schema_name": "public",
+      "table_name": "device_auth_removal_operations"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "REFERENCES",
+      "schema_name": "public",
+      "table_name": "device_auth_removal_operations"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "device_auth_removal_operations"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "TRIGGER",
+      "schema_name": "public",
+      "table_name": "device_auth_removal_operations"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "TRUNCATE",
+      "schema_name": "public",
+      "table_name": "device_auth_removal_operations"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "UPDATE",
+      "schema_name": "public",
+      "table_name": "device_auth_removal_operations"
     },
     {
       "grantee": "service_role",
@@ -43209,6 +43448,15 @@
       "rls_forced": true,
       "schema_name": "public",
       "table_name": "device_auth_policy"
+    },
+    {
+      "comment": "Immutable terminal replay records for authenticated native custodial device removal. No plaintext credentials are stored.",
+      "partition_key": null,
+      "relation_kind": "r",
+      "rls_enabled": true,
+      "rls_forced": true,
+      "schema_name": "public",
+      "table_name": "device_auth_removal_operations"
     },
     {
       "comment": null,

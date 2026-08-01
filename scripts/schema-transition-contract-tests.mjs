@@ -6,9 +6,10 @@ import { assertSchemaAlignment } from "../src/schema-transition.js";
 
 const PREVIOUS = "ce9466f03953076840ff4e35d998713cced8f22c791fb8b11dacdc8c070c4caf";
 const CURRENT = "544d11f47f1f4a960fcf49d13bba53c736d78fe4fe9d225c996c84311d442ad0";
+const BACKEND_TARGET = "c6742e500c2a5d3767f1d886bb5937167eab42730f8271eec76b427a10c5f302";
 const FUTURE = "2".repeat(64);
 const OUTSIDE = "3".repeat(64);
-const ENGINE_MAIN_SHA = "9c307aa845c4dabd121e35da0f00543dc27954c6";
+const ENGINE_MAIN_SHA = "4a6f14b2a967270e70973d521110e49a7f95f412";
 const NOW = Date.parse("2026-08-01T00:00:00Z");
 const RETIRED_TRANSITION = {
   transition_id: "custodial-native-security-build11-20260801",
@@ -20,6 +21,12 @@ const FUTURE_TRANSITION = {
   transition_id: "future-schema-transition-test",
   from_fingerprint: CURRENT,
   to_fingerprint: FUTURE,
+  expires_at: "2026-08-14T23:59:59Z",
+};
+const ACTIVE_TRANSITION = {
+  transition_id: "custodial-native-vault-removal-build11-20260801",
+  from_fingerprint: CURRENT,
+  to_fingerprint: BACKEND_TARGET,
   expires_at: "2026-08-14T23:59:59Z",
 };
 
@@ -41,21 +48,48 @@ function fixtures({ backendFingerprint = CURRENT, frontendFingerprint = CURRENT,
 const sourceManifest = JSON.parse(readFileSync(new URL("../release/frontend-release-manifest.json", import.meta.url), "utf8"));
 assert.equal(sourceManifest.frontend_commit_sha, ENGINE_MAIN_SHA,
   "the backend copy must pin the exact verified Engine main commit");
-assert.equal(sourceManifest.schema_fingerprint, CURRENT, "the backend copy must record the reconciled frontend fingerprint");
-assert.equal(Object.hasOwn(sourceManifest, "schema_transition"), false,
-  "the completed transition key must be absent from the backend copy");
+assert.equal(sourceManifest.schema_fingerprint, CURRENT,
+  "the backend copy must retain the currently deployed frontend fingerprint during transition");
+assert.equal(Object.hasOwn(sourceManifest, "schema_transition"), true,
+  "the backend copy must retain the active transition key");
+assert.deepEqual(sourceManifest.schema_transition, ACTIVE_TRANSITION,
+  "the backend copy must declare the coordinated removal transition exactly");
 
 const backendRelease = buildReleaseManifest({ appVersion: "test-release" });
 assert.equal(backendRelease.frontend.commit_sha, ENGINE_MAIN_SHA);
-assert.equal(backendRelease.schema.fingerprint, CURRENT, "the backend must preserve the reconciled production fingerprint");
+assert.equal(backendRelease.schema.fingerprint, BACKEND_TARGET,
+  "the backend must publish the rebuilt production fingerprint");
 assert.equal(backendRelease.frontend.manifest.schema_fingerprint, CURRENT);
-assert.equal(Object.hasOwn(backendRelease, "schema_transition"), false,
-  "the backend runtime manifest must not publish a retired transition key");
+assert.equal(Object.hasOwn(backendRelease, "schema_transition"), true,
+  "the backend runtime manifest must publish the active transition key");
+assert.deepEqual(backendRelease.schema_transition, ACTIVE_TRANSITION,
+  "the backend runtime manifest must publish the coordinated removal transition exactly");
 assert.deepEqual(schemaTransitionFields({ schema_transition: FUTURE_TRANSITION }), { schema_transition: FUTURE_TRANSITION },
   "an active future transition must still be forwarded exactly");
 const inactiveTransitionFields = schemaTransitionFields({ schema_transition: null });
 assert.equal(Object.hasOwn(inactiveTransitionFields, "schema_transition"), false,
   "an inactive transition key must not be serialized as null or undefined");
+
+const engineStagedTransition = assertSchemaAlignment(fixtures({
+  backendTransition: null,
+  frontendTransition: ACTIVE_TRANSITION,
+  deploymentTransition: ACTIVE_TRANSITION,
+}));
+assert.equal(engineStagedTransition.mode, "declared",
+  "Engine may stage the active transition while all deployed primary fingerprints remain identical");
+
+const backendRemovalTransition = assertSchemaAlignment(fixtures({
+  backendFingerprint: BACKEND_TARGET,
+  frontendFingerprint: CURRENT,
+  deploymentFingerprint: CURRENT,
+  backendTransition: ACTIVE_TRANSITION,
+  frontendTransition: ACTIVE_TRANSITION,
+  deploymentTransition: ACTIVE_TRANSITION,
+}));
+assert.equal(backendRemovalTransition.mode, "transition",
+  "the backend removal migration must remain aligned with the staged Engine transition");
+assert.deepEqual(backendRemovalTransition.transition, ACTIVE_TRANSITION,
+  "the post-backend alignment must preserve the exact active transition contract");
 
 const exact = assertSchemaAlignment(fixtures({ backendTransition: null, frontendTransition: null, deploymentTransition: null }));
 assert.deepEqual(exact, { mode: "exact", fingerprint: CURRENT, transition: null });

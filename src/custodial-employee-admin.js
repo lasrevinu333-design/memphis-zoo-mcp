@@ -79,6 +79,18 @@ function enrollmentOperationId(req) {
   }
   return value;
 }
+function removalOperationId(req) {
+  const bodyValue = String(req.body?.operation_id || req.body?.operationId || "").trim();
+  const headerValue = String(req.headers?.["idempotency-key"] || "").trim();
+  if (bodyValue && headerValue && bodyValue !== headerValue) {
+    throw Object.assign(new Error("operation_id and Idempotency-Key must match."), { status: 409, code: "removal_operation_conflict" });
+  }
+  const value = bodyValue || headerValue;
+  if (!validUuid(value)) {
+    throw Object.assign(new Error("A stable UUID operation_id or Idempotency-Key is required."), { status: 400, code: "removal_operation_id_required" });
+  }
+  return value;
+}
 function enrollmentResultKey(env) {
   return Buffer.from(crypto.hkdfSync(
     "sha256",
@@ -572,12 +584,58 @@ export function installCustodialEmployeeAdminRoutes(app, { env = process.env, su
 
   app.post("/custodial-device-auth/enrollment-operations/:operationId/confirm", configured, completeEnrollmentOperation("confirm"));
   app.post("/custodial-device-auth/enrollment-operations/:operationId/cancel", configured, completeEnrollmentOperation("cancel"));
+
+  app.post("/custodial-device-auth/remove", configured, async (req, res) => {
+    if (!isNativeCustodialRequest(req)) {
+      return res.status(403).json({ ok: false, code: "native_custodial_app_required", error: "Native custodial app authorization is required." });
+    }
+    try {
+      const operationId = removalOperationId(req);
+      const deviceId = normalizeDeviceId(req.body?.device_id || req.headers?.["x-device-id"]);
+      const device = await resolveNativeDevice(db, deviceId);
+      const credential = nativeCredentialParts(req);
+      if (!device || !credential) {
+        return res.status(401).json({ ok: false, code: "credential_required", error: "An enrolled custodial device credential is required." });
+      }
+
+      const result = await db.rpc("device_auth_remove_custodial_credential", {
+        p_operation_id: operationId,
+        p_device_id: device.id,
+        p_credential_id: credential.credentialId,
+        p_token_hash: tokenHash(env, credential.secret),
+      });
+      if (result.error) throw result.error;
+      if (!result.data?.ok) {
+        const reason = String(result.data?.reason || "credential_mismatch");
+        const conflict = reason === "operation_conflict";
+        return res.status(conflict ? 409 : 401).json({
+          ok: false,
+          code: conflict ? "removal_operation_conflict" : reason,
+          error: conflict
+            ? "This operation ID belongs to another credential or device."
+            : "The custodial device removal request could not be authenticated.",
+        });
+      }
+      return res.json({ ok: true, data: result.data });
+    } catch (error) {
+      const status = Number(error?.status) || 503;
+      if (status >= 500) console.warn("custodial device removal failed:", error?.message || error);
+      return res.status(status).json({
+        ok: false,
+        code: error?.code || "custodial_device_removal_failed",
+        error: status >= 500
+          ? "Custodial device removal failed."
+          : clip(error?.message || "Custodial device removal failed.", 1000),
+      });
+    }
+  });
 }
 
 export const custodialEmployeeAdminInternals = Object.freeze({
   normalizeDeviceId,
   validKioskId,
   enrollmentOperationId,
+  removalOperationId,
   encryptEnrollmentResult,
   decryptEnrollmentResult,
   nativeCredentialParts,
