@@ -43,6 +43,7 @@ export function buildReleaseManifest({ appVersion, releaseId, contracts = {} } =
 
   return {
     release_id: String(process.env.MEMPHIS_RELEASE_ID || appVersion || releaseId || "").trim(),
+    schema_transition: frontendManifest?.schema_transition || null,
     backend: {
       commit_sha: String(
         process.env.RENDER_GIT_COMMIT

@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
+import { assertSchemaAlignment } from "../src/schema-transition.js";
 
-const frontendUrl = process.env.FRONTEND_DEPLOYMENT_MANIFEST_URL
+const frontendReleaseUrl = process.env.FRONTEND_RELEASE_MANIFEST_URL
+  || "https://lasrevinu333-design.github.io/Engine/frontend-release-manifest.json";
+const frontendDeploymentUrl = process.env.FRONTEND_DEPLOYMENT_MANIFEST_URL
   || "https://lasrevinu333-design.github.io/Engine/frontend-deployment-manifest.json";
 const backendUrl = process.env.BACKEND_RELEASE_MANIFEST_URL
   || "https://memphis-zoo-mcp.onrender.com/release-manifest";
@@ -29,22 +32,26 @@ async function verifyForwardFrontendRelease(baseline, deployed) {
   return comparison.status;
 }
 
-const [frontend, backend] = await Promise.all([
-  fetchJson(frontendUrl, "frontend deployment manifest"),
+const [frontend, deployment, backend] = await Promise.all([
+  fetchJson(frontendReleaseUrl, "frontend release manifest"),
+  fetchJson(frontendDeploymentUrl, "frontend deployment manifest"),
   fetchJson(backendUrl, "backend release manifest"),
 ]);
 
-assert.match(frontend.frontend_commit_sha || "", /^[a-f0-9]{40}$/, "frontend deployment commit is invalid");
+assert.match(deployment.frontend_commit_sha || "", /^[a-f0-9]{40}$/, "frontend deployment commit is invalid");
 assert.match(backend.backend?.commit_sha || "", /^[a-f0-9]{40}$/, "backend deployment commit is invalid");
-const frontendCommitState = await verifyForwardFrontendRelease(backend.frontend?.commit_sha, frontend.frontend_commit_sha);
+const frontendCommitState = await verifyForwardFrontendRelease(backend.frontend?.commit_sha, deployment.frontend_commit_sha);
 assert.equal(backend.release_id, frontend.release_id, "frontend and backend release ids differ");
-assert.equal(backend.schema?.fingerprint, frontend.schema_fingerprint, "frontend and backend schema fingerprints differ");
+assert.equal(deployment.release_id, frontend.release_id, "frontend release and deployment ids differ");
+const schemaAlignment = assertSchemaAlignment({ backendManifest: backend, frontendManifest: frontend, deploymentManifest: deployment });
 
 console.log(JSON.stringify({
   ok: true,
   release_id: backend.release_id,
   backend_commit_sha: backend.backend.commit_sha,
-  frontend_commit_sha: frontend.frontend_commit_sha,
+  frontend_commit_sha: deployment.frontend_commit_sha,
   frontend_commit_state: frontendCommitState,
+  schema_alignment_mode: schemaAlignment.mode,
+  schema_transition_id: schemaAlignment.transition?.transition_id || null,
   schema_fingerprint: backend.schema.fingerprint,
 }, null, 2));
