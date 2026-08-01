@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { generateKeyPairSync } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import express from "express";
-import { installManagerNotificationRoutes } from "../src/manager-notifications.js";
+import { createPushRuntime, installManagerNotificationRoutes } from "../src/manager-notifications.js";
 
 const root = new URL("../", import.meta.url);
 const [moduleSource, migration, indexSource] = await Promise.all([
@@ -81,7 +81,7 @@ const calls = [];
 globalThis.fetch = async (input, init = {}) => {
   const url = String(input);
   if (/^https?:\/\/127\.0\.0\.1/.test(url)) return originalFetch(input, init);
-  calls.push({ url, method: String(init.method || "GET"), authorization: String(init.headers?.Authorization || init.headers?.authorization || "") });
+  calls.push({ url, method: String(init.method || "GET"), authorization: String(init.headers?.Authorization || init.headers?.authorization || ""), body: String(init.body || "") });
   if (url === "https://oauth2.googleapis.com/token") {
     return new Response(JSON.stringify({ access_token: "test-firebase-oauth-token", expires_in: 3600 }), { status: 200, headers: { "Content-Type": "application/json" } });
   }
@@ -102,6 +102,9 @@ globalThis.fetch = async (input, init = {}) => {
   }
   if (url.endsWith("/projects/memphis-zoo-custodial-program/iosApps/1:123456789:ios:test/config")) {
     return new Response(JSON.stringify({ configFilename: "GoogleService-Info.plist", configFileContents: Buffer.from(iosConfig).toString("base64") }), { status: 200, headers: { "Content-Type": "application/json" } });
+  }
+  if (url.endsWith("/v1/projects/memphis-zoo-custodial-program/messages:send")) {
+    return new Response(JSON.stringify({ name: "projects/memphis-zoo-custodial-program/messages/test-provider-id" }), { status: 200, headers: { "Content-Type": "application/json" } });
   }
   return new Response(JSON.stringify({ error: { message: `Unexpected test URL: ${url}` } }), { status: 500, headers: { "Content-Type": "application/json" } });
 };
@@ -155,6 +158,24 @@ try {
   assert.equal(await iosResponse.text(), iosConfig);
   assert.ok(calls.some((call) => call.url.includes("firebase.googleapis.com/v1beta1/projects/memphis-zoo-custodial-program/androidApps")));
   assert.ok(calls.some((call) => call.authorization === "Bearer test-firebase-oauth-token"));
+
+  const pushRuntime = createPushRuntime({
+    db: {},
+    env: {
+      FIREBASE_SERVICE_ACCOUNT_JSON: JSON.stringify({
+        type: "service_account",
+        project_id: "memphis-zoo-custodial-program",
+        client_email: "firebase-adminsdk-test@memphis-zoo-custodial-program.iam.gserviceaccount.com",
+        private_key: privateKey,
+      }),
+    },
+  });
+  await pushRuntime.send({ title: "Event", body: "Event body", data_json: { notification_type: "event" } }, { fcm_token: "test-fcm-token" }, { channelId: "employee-events" });
+  await pushRuntime.send({ title: "Message", body: "Message body", data_json: { notification_type: "message" } }, { fcm_token: "test-fcm-token" }, { channelId: "employee-messages" });
+  const sentPushes = calls.filter((call) => call.url.endsWith("/messages:send")).map((call) => JSON.parse(call.body));
+  assert.equal(sentPushes.at(-2).message.android.collapse_key, "memphis-employee-events");
+  assert.equal(sentPushes.at(-1).message.android.collapse_key, "memphis-employee-messages");
+  assert.notEqual(sentPushes.at(-2).message.android.collapse_key, sentPushes.at(-1).message.android.collapse_key);
 } finally {
   globalThis.fetch = originalFetch;
   await new Promise((resolve, reject) => configuredServer.close((error) => error ? reject(error) : resolve()));

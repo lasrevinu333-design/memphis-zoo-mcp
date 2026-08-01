@@ -202,6 +202,7 @@ export function createPushRuntime({ db, env }) {
 
   async function send(job, pushDevice, { channelId = "operations" } = {}) {
     const token = await accessToken(PUSH_SCOPE);
+    const collapseKey = `memphis-${clip(channelId, 48).toLowerCase().replace(/[^a-z0-9_-]+/g, "-") || "operations"}`;
     const response = await fetch(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(account.project_id)}/messages:send`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -212,6 +213,7 @@ export function createPushRuntime({ db, env }) {
           data: stringifyData(job.data_json),
           android: {
             priority: "high",
+            collapse_key: collapseKey,
             notification: { channel_id: channelId, sound: "default", default_vibrate_timings: true },
           },
           apns: {
