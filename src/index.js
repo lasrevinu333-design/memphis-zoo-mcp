@@ -1857,6 +1857,7 @@ installEmployeeNotificationRoutes(app, {
   supabase: supabaseAdmin,
   pushRuntime: managerNotificationRuntime,
   runReadOnlySql: async (sql) => runSupabaseReadOnlySql({ sql }).then((result) => result.rows),
+  requireManager: requireOpsManagerWrite,
 });
 installOperationalAnalyticsRoutes(app, { supabase: supabaseAdmin });
 app.get("/mcp-tools.json", requireOpsManagerAuth, (_req, res) => {

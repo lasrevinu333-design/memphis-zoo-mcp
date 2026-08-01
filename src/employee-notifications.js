@@ -22,13 +22,49 @@ function credentialId(req) {
       || '',
   ).trim();
 }
-export const employeeNotificationInternals = Object.freeze({ credentialId });
+const EMPLOYEE_TEST_KINDS = new Set(['event', 'message', 'due_soon', 'overdue']);
+function buildManagerTestNotification(kind, { runId, deviceIdentifier }) {
+  const notificationKey = `manager-test:${runId}:${kind}:${deviceIdentifier}`;
+  if (kind === 'event') return {
+    channel_id: 'employee-events',
+    title: 'Assigned event reminder',
+    body: 'Custodial notification verification — Memphis Zoo',
+    data_json: {
+      kind: 'employee_event', notification_type: 'event', notification_kind: 'test',
+      notification_key: notificationKey, route: 'events.html?hub=employee', test_delivery: true,
+    },
+  };
+  if (kind === 'message') return {
+    channel_id: 'employee-messages',
+    title: 'Operations Manager',
+    body: 'Notification verification message for this custodial phone.',
+    data_json: {
+      kind: 'employee_message', notification_type: 'message',
+      notification_key: notificationKey, route: 'messages.html?hub=employee', test_delivery: true,
+    },
+  };
+  const overdue = kind === 'overdue';
+  return {
+    channel_id: overdue ? 'employee-overdue' : 'employee-due-soon',
+    title: `Notification Test Location is ${overdue ? 'overdue' : 'due soon'}`,
+    body: overdue
+      ? 'Notification Test Location on your assigned route needs attention now.'
+      : 'Notification Test Location on your assigned route is approaching its cleaning window.',
+    data_json: {
+      kind: 'employee_location_status', notification_type: 'location_status',
+      notification_key: notificationKey, status_code: kind,
+      location_name: 'Notification Test Location', route: 'employee-schedule.html?hub=employee',
+      test_delivery: true,
+    },
+  };
+}
+export const employeeNotificationInternals = Object.freeze({ credentialId, buildManagerTestNotification });
 function setCors(req, res) {
   const allowed = new Set(['https://lasrevinu333-design.github.io', 'https://localhost', 'capacitor://localhost']);
   const origin = String(req.headers.origin || '').trim();
   if (allowed.has(origin)) res.setHeader('Access-Control-Allow-Origin', origin);
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,DELETE,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Device-Id, X-Device-Credential, X-Memphis-Device-Credential');
+  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Device-Id, X-Device-Credential, X-Memphis-Device-Credential');
   res.setHeader('Vary', 'Origin');
 }
 function fail(res, error) {
@@ -42,11 +78,15 @@ export function installEmployeeNotificationRoutes(app, {
   supabase = null,
   pushRuntime = null,
   runReadOnlySql = null,
+  requireManager = null,
 } = {}) {
   if (!app || runtimeByApp.has(app)) return runtimeByApp.get(app) || null;
   const db = supabase || createSupabase(env);
   const authReadConfigured = typeof runReadOnlySql === 'function';
   const requireEmployee = makeDeviceCredentialMiddleware({ supabase: db, runReadOnlySql });
+  const requireManagerWrite = typeof requireManager === 'function'
+    ? requireManager
+    : (_req, res) => res.status(503).json({ ok: false, error: 'Manager authorization is not configured.' });
   const workerId = `employee-native-push-${process.pid}-${crypto.randomUUID()}`;
   let inFlight = false;
 
@@ -138,6 +178,82 @@ export function installEmployeeNotificationRoutes(app, {
       });
       if (result.error) throw result.error;
       res.status(200).json({ ok: true, data: { opened: true } });
+    } catch (error) { fail(res, error); }
+  });
+
+  app.post(`${API_PREFIX}/test`, requireManagerWrite, async (req, res) => {
+    try {
+      if (!db || !pushRuntime?.configured) {
+        throw Object.assign(new Error('Employee push delivery is not configured.'), { status: 503 });
+      }
+      const deviceIdentifier = clip(req.body?.device_id, 80).toUpperCase();
+      if (!/^KIOSK_(0[2-9]|10)$/.test(deviceIdentifier)) {
+        throw Object.assign(new Error('A canonical custodial KIOSK device ID is required.'), { status: 422 });
+      }
+      const requestedKinds = Array.isArray(req.body?.kinds) && req.body.kinds.length
+        ? [...new Set(req.body.kinds.map((value) => clip(value, 40).toLowerCase()))]
+        : [...EMPLOYEE_TEST_KINDS];
+      if (requestedKinds.some((kind) => !EMPLOYEE_TEST_KINDS.has(kind))) {
+        throw Object.assign(new Error('Notification kinds must be event, message, due_soon, or overdue.'), { status: 422 });
+      }
+      const deviceResult = await db.from('devices')
+        .select('id,device_id,device_name,assigned_employee_id,assignment_epoch')
+        .eq('device_id', deviceIdentifier).eq('active', true).single();
+      if (deviceResult.error) throw deviceResult.error;
+      const device = deviceResult.data;
+      if (!device?.assigned_employee_id || !Number.isSafeInteger(Number(device.assignment_epoch))) {
+        throw Object.assign(new Error('The target phone does not have an active employee assignment.'), { status: 409 });
+      }
+      const registrationResult = await db.from('employee_push_registrations')
+        .select('registration_id,credential_id,device_id,employee_id,assignment_epoch,last_seen_at')
+        .eq('device_id', device.id).eq('employee_id', device.assigned_employee_id)
+        .eq('assignment_epoch', Number(device.assignment_epoch))
+        .eq('active', true).is('revoked_at', null)
+        .order('last_seen_at', { ascending: false }).limit(1).maybeSingle();
+      if (registrationResult.error) throw registrationResult.error;
+      const registration = registrationResult.data;
+      if (!registration) {
+        throw Object.assign(new Error('The target phone has not registered for employee notifications.'), { status: 409 });
+      }
+      const runId = crypto.randomUUID();
+      const now = new Date().toISOString();
+      const jobs = requestedKinds.map((kind) => {
+        const notification = buildManagerTestNotification(kind, { runId, deviceIdentifier });
+        return {
+          job_key: `employee-manager-test:${runId}:${kind}:${registration.credential_id}`,
+          job_type: 'employee_native_push',
+          source_id: crypto.randomUUID(),
+          available_at: now,
+          payload_json: {
+            credential_id: registration.credential_id,
+            employee_id: registration.employee_id,
+            device_id: registration.device_id,
+            device_identifier: deviceIdentifier,
+            assignment_epoch: Number(registration.assignment_epoch),
+            channel_id: notification.channel_id,
+            title: notification.title,
+            body: notification.body,
+            data_json: notification.data_json,
+          },
+        };
+      });
+      const inserted = await db.from('operational_notification_jobs')
+        .insert(jobs).select('job_id,job_key,status,payload_json');
+      if (inserted.error) throw inserted.error;
+      const delivery = await sweep({ limit: Math.max(25, jobs.length) });
+      res.status(202).json({ ok: true, data: {
+        run_id: runId,
+        device_id: deviceIdentifier,
+        kinds: requestedKinds,
+        jobs: (inserted.data || []).map((job) => ({
+          job_id: job.job_id,
+          job_key: job.job_key,
+          status: job.status,
+          channel_id: job.payload_json?.channel_id,
+          notification_type: job.payload_json?.data_json?.notification_type,
+        })),
+        delivery,
+      } });
     } catch (error) { fail(res, error); }
   });
 
