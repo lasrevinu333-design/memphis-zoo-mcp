@@ -39,7 +39,7 @@ export function installEmployeeNotificationRoutes(app, {
   const db = supabase || createSupabase(env);
   const authReadConfigured = typeof runReadOnlySql === 'function';
   const requireEmployee = makeDeviceCredentialMiddleware({ supabase: db, runReadOnlySql });
-  const workerId = `employee-event-push-${process.pid}-${crypto.randomUUID()}`;
+  const workerId = `employee-native-push-${process.pid}-${crypto.randomUUID()}`;
   let inFlight = false;
 
   app.use(API_PREFIX, (req, res, next) => {
@@ -60,10 +60,10 @@ export function installEmployeeNotificationRoutes(app, {
     const ok = Boolean(db && pushRuntime?.configured && authReadConfigured && databaseReachable);
     res.status(ok ? 200 : 503).json({
       ok,
-      contract_version: 'employee-event-push.v1',
+      contract_version: 'employee-native-push.v2',
       provider: 'fcm',
       messenger_fallback: false,
-      notification_kinds: ['day_before', 'shift_plus_15'],
+      notification_kinds: ['event_day_before', 'event_shift_plus_15', 'message', 'due_soon', 'overdue'],
       swipe_dismissal: 'local_only',
       dependencies: {
         database_reachable: databaseReachable,
@@ -137,11 +137,16 @@ export function installEmployeeNotificationRoutes(app, {
     if (!db || !pushRuntime?.configured || inFlight) return { ok: false, skipped: inFlight ? 'in_flight' : 'not_configured' };
     inFlight = true;
     try {
-      const enqueued = await db.rpc('mz_enqueue_employee_event_pushes', { p_now: new Date().toISOString() });
-      if (enqueued.error) throw enqueued.error;
+      const now = new Date().toISOString();
+      const [eventsEnqueued, locationsEnqueued] = await Promise.all([
+        db.rpc('mz_enqueue_employee_event_pushes', { p_now: now }),
+        db.rpc('mz_enqueue_employee_location_pushes', { p_now: now }),
+      ]);
+      if (eventsEnqueued.error) throw eventsEnqueued.error;
+      if (locationsEnqueued.error) throw locationsEnqueued.error;
       const ready = await db.from('operational_notification_jobs').select('job_key')
-        .eq('job_type', 'employee_event_push').in('status', ['pending', 'leased'])
-        .lte('available_at', new Date().toISOString()).order('available_at').limit(limit);
+        .in('job_type', ['employee_event_push', 'employee_native_push']).in('status', ['pending', 'leased'])
+        .lte('available_at', now).order('available_at').limit(limit);
       if (ready.error) throw ready.error;
       const jobs = [];
       for (const candidate of ready.data || []) {
@@ -150,43 +155,80 @@ export function installEmployeeNotificationRoutes(app, {
         });
         if (claimed.error) throw claimed.error;
         const job = Array.isArray(claimed.data) ? claimed.data[0] : claimed.data;
-        if (job?.job_type === 'employee_event_push') jobs.push(job);
+        if (['employee_event_push', 'employee_native_push'].includes(job?.job_type)) jobs.push(job);
       }
       for (const job of jobs) {
         let succeeded = false;
         let errorMessage = null;
         let providerMessageId = null;
+        let registration = null;
         try {
-          const instanceResult = await db.from('event_push_instances').select('*,events_app_events(event_name,display_location)')
-            .eq('instance_id', job.source_id).single();
-          if (instanceResult.error) throw instanceResult.error;
-          const instance = instanceResult.data;
+          let credential;
+          let assignmentEpoch;
+          let push;
+          let channelId;
+          let eventInstance = null;
+          if (job.job_type === 'employee_event_push') {
+            const instanceResult = await db.from('event_push_instances').select('*,events_app_events(event_name,display_location)')
+              .eq('instance_id', job.source_id).single();
+            if (instanceResult.error) throw instanceResult.error;
+            eventInstance = instanceResult.data;
+            const event = eventInstance.events_app_events || {};
+            credential = eventInstance.credential_id;
+            assignmentEpoch = eventInstance.assignment_epoch;
+            channelId = 'employee-events';
+            push = {
+              title: eventInstance.notification_kind === 'day_before' ? 'Event tomorrow' : 'Assigned event reminder',
+              body: `${event.event_name || 'Zoo event'}${event.display_location ? ` — ${event.display_location}` : ''}`,
+              data_json: {
+                kind: 'employee_event',
+                notification_type: 'event',
+                event_id: eventInstance.event_id,
+                notification_key: eventInstance.notification_key,
+                notification_kind: eventInstance.notification_kind,
+                route: `events.html?hub=employee&event_id=${eventInstance.event_id}`,
+              },
+            };
+          } else {
+            const payload = job.payload_json && typeof job.payload_json === 'object' ? job.payload_json : {};
+            credential = clip(payload.credential_id, 80);
+            assignmentEpoch = Number(payload.assignment_epoch);
+            channelId = clip(payload.channel_id, 80) || 'employee-messages';
+            push = {
+              title: clip(payload.title, 180) || 'Memphis Zoo',
+              body: clip(payload.body, 1000) || 'You have a new notification.',
+              data_json: payload.data_json && typeof payload.data_json === 'object' ? payload.data_json : {},
+            };
+          }
+          if (!credential || !Number.isSafeInteger(assignmentEpoch) || assignmentEpoch < 1) {
+            throw new Error('Employee native push job is missing its assignment-bound recipient.');
+          }
           const registrationResult = await db.from('employee_push_registrations').select('*')
-            .eq('credential_id', instance.credential_id).eq('assignment_epoch', instance.assignment_epoch)
+            .eq('credential_id', credential).eq('assignment_epoch', assignmentEpoch)
             .eq('active', true).is('revoked_at', null).single();
           if (registrationResult.error) throw registrationResult.error;
-          const event = instance.events_app_events || {};
-          providerMessageId = await pushRuntime.send({
-            title: instance.notification_kind === 'day_before' ? 'Event tomorrow' : 'Assigned event reminder',
-            body: `${event.event_name || 'Zoo event'}${event.display_location ? ` — ${event.display_location}` : ''}`,
-            data_json: {
-              kind: 'employee_event',
-              event_id: instance.event_id,
-              notification_key: instance.notification_key,
-              notification_kind: instance.notification_kind,
-              route: `events.html?event_id=${instance.event_id}`,
-            },
-          }, registrationResult.data, { channelId: 'employee-events' });
+          registration = registrationResult.data;
+          providerMessageId = await pushRuntime.send(push, registration, { channelId });
           succeeded = true;
-          await db.from('event_push_instances').update({
-            state: 'sent', sent_at: new Date().toISOString(), provider_message_id: providerMessageId, last_error: null, updated_at: new Date().toISOString(),
-          }).eq('instance_id', instance.instance_id);
+          if (eventInstance) {
+            await db.from('event_push_instances').update({
+              state: 'sent', sent_at: new Date().toISOString(), provider_message_id: providerMessageId, last_error: null, updated_at: new Date().toISOString(),
+            }).eq('instance_id', eventInstance.instance_id);
+          }
           await db.from('employee_push_registrations').update({
             last_successful_delivery_at: new Date().toISOString(), last_error: null, updated_at: new Date().toISOString(),
-          }).eq('registration_id', registrationResult.data.registration_id);
+          }).eq('registration_id', registration.registration_id);
         } catch (error) {
           errorMessage = clip(error?.message || 'FCM provider request failed.', 2000);
-          await db.from('event_push_instances').update({ state: 'failed', last_error: errorMessage, updated_at: new Date().toISOString() }).eq('instance_id', job.source_id);
+          if (registration?.registration_id) {
+            const registrationUpdate = error?.permanent
+              ? { active: false, revoked_at: new Date().toISOString(), revoked_reason: 'push_token_rejected', last_error: errorMessage, updated_at: new Date().toISOString() }
+              : { last_error: errorMessage, updated_at: new Date().toISOString() };
+            await db.from('employee_push_registrations').update(registrationUpdate).eq('registration_id', registration.registration_id);
+          }
+          if (job.job_type === 'employee_event_push') {
+            await db.from('event_push_instances').update({ state: 'failed', last_error: errorMessage, updated_at: new Date().toISOString() }).eq('instance_id', job.source_id);
+          }
         }
         const finished = await db.rpc('finish_operational_notification_job', {
           p_job_id: job.job_id, p_lease_token: job.lease_token, p_succeeded: succeeded,
@@ -194,11 +236,15 @@ export function installEmployeeNotificationRoutes(app, {
         });
         if (finished.error) throw finished.error;
       }
-      return { ok: true, enqueued: enqueued.data, claimed: jobs.length };
+      return {
+        ok: true,
+        enqueued: { events: eventsEnqueued.data, locations: locationsEnqueued.data },
+        claimed: jobs.length,
+      };
     } finally { inFlight = false; }
   }
 
-  const timer = setInterval(() => { void sweep().catch((error) => console.error('employee event push sweep failed:', error)); }, SWEEP_MS);
+  const timer = setInterval(() => { void sweep().catch((error) => console.error('employee native push sweep failed:', error)); }, SWEEP_MS);
   timer.unref?.();
   const runtime = { sweep, configured: Boolean(db && pushRuntime?.configured) };
   runtimeByApp.set(app, runtime);
