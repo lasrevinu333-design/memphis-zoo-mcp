@@ -13,6 +13,10 @@ const atomicCommitMigration = readFileSync(
   "supabase/migrations/20260801131340_custodial_atomic_offline_completion_identity.sql",
   "utf8",
 );
+const schemaReconciliationMigration = readFileSync(
+  "supabase/migrations/20260801134430_reconcile_canonical_schema_security_metadata.sql",
+  "utf8",
+);
 const foreignKeyIndexMigration = readFileSync(
   "supabase/migrations/20260730222357_index_remaining_foreign_keys.sql",
   "utf8",
@@ -87,6 +91,50 @@ assert.match(
 assert.match(
   atomicCommitMigration,
   /grant execute on function public\.commit_cleaning_workflow[\s\S]*to postgres, service_role/i,
+);
+
+for (const functionName of [
+  "msg_ensure_ops_manager_user",
+  "msg_get_or_create_ops_manager_thread",
+]) {
+  assert.match(
+    schemaReconciliationMigration,
+    new RegExp(`create or replace function public\\.${functionName}`, "i"),
+  );
+  assert.match(
+    schemaReconciliationMigration,
+    new RegExp(`revoke all on function public\\.${functionName}[\\s\\S]*from public, anon, authenticated`, "i"),
+  );
+  assert.match(
+    schemaReconciliationMigration,
+    new RegExp(`grant execute on function public\\.${functionName}[\\s\\S]*to service_role`, "i"),
+  );
+}
+assert.match(schemaReconciliationMigration, /set search_path=pg_catalog,public/);
+assert.match(schemaReconciliationMigration, /set local lock_timeout = '5s'/i);
+assert.match(schemaReconciliationMigration, /set local statement_timeout = '60s'/i);
+assert.match(schemaReconciliationMigration, /Prefer the exact real name/);
+assert.match(schemaReconciliationMigration, /Preserve the historical participant\/audit relationship/);
+for (const tableName of [
+  "custodial_employee_device_assignment_history",
+  "custodial_employee_status_history",
+]) {
+  assert.match(
+    schemaReconciliationMigration,
+    new RegExp(`alter table public\\.${tableName}[\\s\\S]*enable row level security`, "i"),
+  );
+  assert.match(
+    schemaReconciliationMigration,
+    new RegExp(`alter table public\\.${tableName}[\\s\\S]*force row level security`, "i"),
+  );
+  assert.match(
+    schemaReconciliationMigration,
+    new RegExp(`create policy ${tableName}_service_all[\\s\\S]*to service_role[\\s\\S]*using \\(true\\)[\\s\\S]*with check \\(true\\)`, "i"),
+  );
+}
+assert.match(
+  schemaReconciliationMigration,
+  /comment on table public\.ops_manager_notification_queue is\s+'Durable manager mobile push queue with leasing, retry and delivery audit state\.'/i,
 );
 
 assert.match(foreignKeyIndexMigration, /set lock_timeout = '5s'/);
