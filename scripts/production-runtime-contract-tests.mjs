@@ -43,8 +43,10 @@ assert.match(monitor, /version\['version'\] == frontend\['release_id'\]/,
   "the monitor must reject frontend/backend release drift");
 assert.match(monitor, /frontend-deployment-manifest\.json/,
   "the monitor must load the live Pages deployment identity");
-assert.match(monitor, /version\['release_manifest'\]\['frontend'\]\['commit_sha'\] == deployment\['frontend_commit_sha'\]/,
-  "the monitor must reject exact frontend deployment commit drift");
+assert.match(monitor, /comparison\['status'\] in \('identical', 'ahead'\)/,
+  "the monitor must accept only the baseline frontend commit or a verified forward release");
+assert.match(monitor, /api\.github\.com\/repos\/lasrevinu333-design\/Engine\/compare/,
+  "the monitor must prove frontend ancestry through the canonical GitHub repository");
 assert.match(monitor, /deployment\['schema_fingerprint'\] == frontend\['schema_fingerprint'\]/,
   "the monitor must reject deployment schema drift");
 assert.match(operationalLiveMonitor, /rollout_attempt=\$rollout_attempt/,
