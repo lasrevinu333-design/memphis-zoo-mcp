@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { buildReleaseManifest } from "../src/release-manifest.js";
+import { buildReleaseManifest, schemaTransitionFields } from "../src/release-manifest.js";
 import { assertSchemaAlignment } from "../src/schema-transition.js";
 
 const OLD = "52b53bf279e67cb71f85a652cc669d44350716146603132f7e8be5c7de5e30cf";
@@ -31,15 +31,16 @@ function fixtures({ backendFingerprint = OLD, frontendFingerprint = OLD, deploym
 
 const sourceManifest = JSON.parse(readFileSync(new URL("../release/frontend-release-manifest.json", import.meta.url), "utf8"));
 assert.equal(sourceManifest.schema_fingerprint, NEW, "the schema release must declare the rebuilt production fingerprint");
-assert.deepEqual(sourceManifest.schema_transition, TRANSITION, "the bridge transition contract changed");
-assert.deepEqual(Object.keys(sourceManifest.schema_transition), [
-  "transition_id", "from_fingerprint", "to_fingerprint", "expires_at",
-]);
+assert.equal(Object.hasOwn(sourceManifest, "schema_transition"), false, "the completed source transition must be retired");
 
 const backendRelease = buildReleaseManifest({ appVersion: "test-release" });
 assert.equal(backendRelease.schema.fingerprint, NEW, "the backend must publish the rebuilt production fingerprint");
 assert.equal(backendRelease.frontend.manifest.schema_fingerprint, NEW);
-assert.deepEqual(backendRelease.schema_transition, TRANSITION, "the backend must publish the source-controlled transition contract");
+assert.equal(Object.hasOwn(backendRelease, "schema_transition"), false, "the completed runtime transition must be retired");
+assert.deepEqual(schemaTransitionFields({ schema_transition: TRANSITION }), { schema_transition: TRANSITION },
+  "an active future transition must still be forwarded exactly");
+assert.deepEqual(schemaTransitionFields({ schema_transition: null }), {},
+  "an inactive transition must not be serialized as null");
 
 const exact = assertSchemaAlignment(fixtures({ backendTransition: null, frontendTransition: null, deploymentTransition: null }));
 assert.equal(exact.mode, "exact");
@@ -51,6 +52,15 @@ for (const declaration of ["backendTransition", "frontendTransition", "deploymen
   oneSided.deploymentManifest.schema_transition = declaration === "deploymentTransition" ? clone(TRANSITION) : null;
   assert.equal(assertSchemaAlignment(oneSided).mode, "declared", `${declaration} must be safe while primaries remain identical`);
 }
+
+const frontendCleanupLag = fixtures({
+  backendFingerprint: NEW,
+  frontendFingerprint: NEW,
+  deploymentFingerprint: NEW,
+  backendTransition: null,
+});
+assert.equal(assertSchemaAlignment(frontendCleanupLag).mode, "declared",
+  "cleanup must remain healthy while only the two frontend manifests still declare the transition");
 
 assert.equal(assertSchemaAlignment(fixtures()).mode, "declared");
 assert.equal(assertSchemaAlignment(fixtures({ backendFingerprint: NEW })).mode, "transition");
