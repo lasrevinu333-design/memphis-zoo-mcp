@@ -86,6 +86,8 @@ jobs:
           fi
           python3 - <<'PY'
           import json
+          import re
+          from datetime import datetime, timezone
           from pathlib import Path
 
           version = json.loads(Path('/tmp/version.json').read_text())
@@ -99,10 +101,54 @@ jobs:
           assert version['version'] == frontend['release_id'], (version, frontend)
           assert deployment['release_id'] == frontend['release_id'], (deployment, frontend)
           assert comparison['status'] in ('identical', 'ahead'), comparison
-          assert version['release_manifest']['schema']['fingerprint'] == frontend['schema_fingerprint'], (version, frontend)
-          assert deployment['schema_fingerprint'] == frontend['schema_fingerprint'], (deployment, frontend)
+
+          backend_manifest = version['release_manifest']
+          primary_fingerprints = {
+              'backend': backend_manifest['schema']['fingerprint'],
+              'frontend release': frontend['schema_fingerprint'],
+              'frontend deployment': deployment['schema_fingerprint'],
+          }
+          for label, fingerprint in primary_fingerprints.items():
+              assert re.fullmatch(r'[a-f0-9]{64}', fingerprint or ''), (label, fingerprint)
+
+          transitions = {
+              'backend': backend_manifest.get('schema_transition'),
+              'frontend release': frontend.get('schema_transition'),
+              'frontend deployment': deployment.get('schema_transition'),
+          }
+          declared = [(label, transition) for label, transition in transitions.items() if transition is not None]
+          distinct_primary = set(primary_fingerprints.values())
+          transition_keys = {'transition_id', 'from_fingerprint', 'to_fingerprint', 'expires_at'}
+
+          if len(distinct_primary) == 1 and not declared:
+              assert version['release_manifest']['schema']['fingerprint'] == frontend['schema_fingerprint'], (version, frontend)
+              assert deployment['schema_fingerprint'] == frontend['schema_fingerprint'], (deployment, frontend)
+              schema_alignment_mode = 'exact'
+              transition_id = None
+          else:
+              for label, transition in declared:
+                  assert isinstance(transition, dict), (label, transition)
+                  assert set(transition) == transition_keys, (label, transition)
+                  assert re.fullmatch(r'[a-z0-9](?:[a-z0-9.-]{0,126}[a-z0-9])?', transition['transition_id']), (label, transition)
+                  assert re.fullmatch(r'[a-f0-9]{64}', transition['from_fingerprint']), (label, transition)
+                  assert re.fullmatch(r'[a-f0-9]{64}', transition['to_fingerprint']), (label, transition)
+                  assert transition['from_fingerprint'] != transition['to_fingerprint'], (label, transition)
+                  expires_at = datetime.strptime(transition['expires_at'], '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc)
+                  remaining_seconds = (expires_at - datetime.now(timezone.utc)).total_seconds()
+                  assert 0 < remaining_seconds <= 14 * 24 * 60 * 60, (label, transition)
+              assert declared, (primary_fingerprints, transitions)
+              assert all(transition == declared[0][1] for _, transition in declared[1:]), transitions
+              if len(distinct_primary) > 1:
+                  assert len(declared) == len(transitions), transitions
+              transition = declared[0][1]
+              allowed_fingerprints = {transition['from_fingerprint'], transition['to_fingerprint']}
+              assert len(allowed_fingerprints) == 2, transition
+              assert all(fingerprint in allowed_fingerprints for fingerprint in primary_fingerprints.values()), (primary_fingerprints, transition)
+              schema_alignment_mode = 'declared' if len(distinct_primary) == 1 else 'transition'
+              transition_id = transition['transition_id']
+
           assert version_latency <= 4.0, f'version exceeded four seconds: {version_latency:.3f}s'
           assert frontend_latency <= 4.0, f'frontend exceeded four seconds: {frontend_latency:.3f}s'
           assert deployment_latency <= 4.0, f'frontend deployment manifest exceeded four seconds: {deployment_latency:.3f}s'
-          print(f'release_alignment_ok release={frontend["release_id"]} frontend_commit={deployment["frontend_commit_sha"]} backend={version_latency:.3f}s frontend={frontend_latency:.3f}s deployment={deployment_latency:.3f}s')
+          print(f'release_alignment_ok release={frontend["release_id"]} frontend_commit={deployment["frontend_commit_sha"]} schema_mode={schema_alignment_mode} transition={transition_id or "none"} backend={version_latency:.3f}s frontend={frontend_latency:.3f}s deployment={deployment_latency:.3f}s')
           PY
