@@ -4,14 +4,22 @@ import { readFileSync } from "node:fs";
 import { buildReleaseManifest, schemaTransitionFields } from "../src/release-manifest.js";
 import { assertSchemaAlignment } from "../src/schema-transition.js";
 
-const OLD = "ce9466f03953076840ff4e35d998713cced8f22c791fb8b11dacdc8c070c4caf";
-const NEW = "544d11f47f1f4a960fcf49d13bba53c736d78fe4fe9d225c996c84311d442ad0";
-const THIRD = "3".repeat(64);
+const PREVIOUS = "ce9466f03953076840ff4e35d998713cced8f22c791fb8b11dacdc8c070c4caf";
+const CURRENT = "544d11f47f1f4a960fcf49d13bba53c736d78fe4fe9d225c996c84311d442ad0";
+const FUTURE = "2".repeat(64);
+const OUTSIDE = "3".repeat(64);
+const ENGINE_MAIN_SHA = "9c307aa845c4dabd121e35da0f00543dc27954c6";
 const NOW = Date.parse("2026-08-01T00:00:00Z");
-const TRANSITION = {
+const RETIRED_TRANSITION = {
   transition_id: "custodial-native-security-build11-20260801",
-  from_fingerprint: OLD,
-  to_fingerprint: NEW,
+  from_fingerprint: PREVIOUS,
+  to_fingerprint: CURRENT,
+  expires_at: "2026-08-14T23:59:59Z",
+};
+const FUTURE_TRANSITION = {
+  transition_id: "future-schema-transition-test",
+  from_fingerprint: CURRENT,
+  to_fingerprint: FUTURE,
   expires_at: "2026-08-14T23:59:59Z",
 };
 
@@ -19,8 +27,9 @@ function clone(value) {
   return value == null ? value : structuredClone(value);
 }
 
-function fixtures({ backendFingerprint = OLD, frontendFingerprint = OLD, deploymentFingerprint = OLD,
-  backendTransition = TRANSITION, frontendTransition = TRANSITION, deploymentTransition = TRANSITION } = {}) {
+function fixtures({ backendFingerprint = CURRENT, frontendFingerprint = CURRENT, deploymentFingerprint = CURRENT,
+  backendTransition = FUTURE_TRANSITION, frontendTransition = FUTURE_TRANSITION,
+  deploymentTransition = FUTURE_TRANSITION } = {}) {
   return {
     backendManifest: { schema: { fingerprint: backendFingerprint }, schema_transition: clone(backendTransition) },
     frontendManifest: { schema_fingerprint: frontendFingerprint, schema_transition: clone(frontendTransition) },
@@ -30,77 +39,124 @@ function fixtures({ backendFingerprint = OLD, frontendFingerprint = OLD, deploym
 }
 
 const sourceManifest = JSON.parse(readFileSync(new URL("../release/frontend-release-manifest.json", import.meta.url), "utf8"));
-assert.equal(sourceManifest.schema_fingerprint, OLD, "the backend copy must retain the currently deployed frontend fingerprint during transition");
-assert.deepEqual(sourceManifest.schema_transition, TRANSITION, "the backend copy must declare the coordinated schema transition exactly");
+assert.equal(sourceManifest.frontend_commit_sha, ENGINE_MAIN_SHA,
+  "the backend copy must pin the exact verified Engine main commit");
+assert.equal(sourceManifest.schema_fingerprint, CURRENT, "the backend copy must record the reconciled frontend fingerprint");
+assert.equal(Object.hasOwn(sourceManifest, "schema_transition"), false,
+  "the completed transition key must be absent from the backend copy");
 
 const backendRelease = buildReleaseManifest({ appVersion: "test-release" });
-assert.equal(backendRelease.schema.fingerprint, NEW, "the backend must publish the rebuilt production fingerprint");
-assert.equal(backendRelease.frontend.manifest.schema_fingerprint, OLD);
-assert.deepEqual(backendRelease.schema_transition, TRANSITION, "the runtime manifest must forward the transition while frontend and backend fingerprints differ");
-assert.deepEqual(schemaTransitionFields({ schema_transition: TRANSITION }), { schema_transition: TRANSITION },
+assert.equal(backendRelease.frontend.commit_sha, ENGINE_MAIN_SHA);
+assert.equal(backendRelease.schema.fingerprint, CURRENT, "the backend must preserve the reconciled production fingerprint");
+assert.equal(backendRelease.frontend.manifest.schema_fingerprint, CURRENT);
+assert.equal(Object.hasOwn(backendRelease, "schema_transition"), false,
+  "the backend runtime manifest must not publish a retired transition key");
+assert.deepEqual(schemaTransitionFields({ schema_transition: FUTURE_TRANSITION }), { schema_transition: FUTURE_TRANSITION },
   "an active future transition must still be forwarded exactly");
-assert.deepEqual(schemaTransitionFields({ schema_transition: null }), {},
-  "an inactive transition must not be serialized as null");
+const inactiveTransitionFields = schemaTransitionFields({ schema_transition: null });
+assert.equal(Object.hasOwn(inactiveTransitionFields, "schema_transition"), false,
+  "an inactive transition key must not be serialized as null or undefined");
 
 const exact = assertSchemaAlignment(fixtures({ backendTransition: null, frontendTransition: null, deploymentTransition: null }));
-assert.equal(exact.mode, "exact");
+assert.deepEqual(exact, { mode: "exact", fingerprint: CURRENT, transition: null });
 
-for (const declaration of ["backendTransition", "frontendTransition", "deploymentTransition"]) {
-  const oneSided = fixtures({ backendTransition: null, frontendTransition: null, deploymentTransition: null });
-  oneSided.backendManifest.schema_transition = declaration === "backendTransition" ? clone(TRANSITION) : null;
-  oneSided.frontendManifest.schema_transition = declaration === "frontendTransition" ? clone(TRANSITION) : null;
-  oneSided.deploymentManifest.schema_transition = declaration === "deploymentTransition" ? clone(TRANSITION) : null;
-  assert.equal(assertSchemaAlignment(oneSided).mode, "declared", `${declaration} must be safe while primaries remain identical`);
+for (let declarationMask = 1; declarationMask < 8; declarationMask += 1) {
+  const declarations = {
+    backendTransition: declarationMask & 1 ? FUTURE_TRANSITION : null,
+    frontendTransition: declarationMask & 2 ? FUTURE_TRANSITION : null,
+    deploymentTransition: declarationMask & 4 ? FUTURE_TRANSITION : null,
+  };
+  assert.equal(assertSchemaAlignment(fixtures(declarations)).mode, "declared",
+    `matching primaries must permit transition declaration mask ${declarationMask}`);
 }
 
-const frontendCleanupLag = fixtures({
-  backendFingerprint: NEW,
-  frontendFingerprint: NEW,
-  deploymentFingerprint: NEW,
+assert.equal(assertSchemaAlignment(fixtures({ backendFingerprint: FUTURE })).mode, "transition");
+assert.equal(assertSchemaAlignment(fixtures({ frontendFingerprint: FUTURE, deploymentFingerprint: FUTURE })).mode, "transition");
+
+const liveBeforeEngineAdvance = assertSchemaAlignment(fixtures({
+  backendFingerprint: CURRENT,
+  frontendFingerprint: PREVIOUS,
+  deploymentFingerprint: PREVIOUS,
+  backendTransition: RETIRED_TRANSITION,
+  frontendTransition: RETIRED_TRANSITION,
+  deploymentTransition: RETIRED_TRANSITION,
+}));
+assert.equal(liveBeforeEngineAdvance.mode, "transition");
+
+const engineAdvance = assertSchemaAlignment(fixtures({
+  backendFingerprint: CURRENT,
+  frontendFingerprint: CURRENT,
+  deploymentFingerprint: CURRENT,
+  backendTransition: RETIRED_TRANSITION,
+  frontendTransition: RETIRED_TRANSITION,
+  deploymentTransition: RETIRED_TRANSITION,
+}));
+assert.equal(engineAdvance.mode, "declared",
+  "Engine may advance all primaries while retaining the coordinated retired bridge");
+
+const backendRetiresFirst = assertSchemaAlignment(fixtures({
   backendTransition: null,
-});
-assert.equal(assertSchemaAlignment(frontendCleanupLag).mode, "declared",
-  "cleanup must remain healthy while only the two frontend manifests still declare the transition");
+  frontendTransition: RETIRED_TRANSITION,
+  deploymentTransition: RETIRED_TRANSITION,
+}));
+assert.equal(backendRetiresFirst.mode, "declared",
+  "backend cleanup must stay green while Engine still declares the retired bridge");
 
-assert.equal(assertSchemaAlignment(fixtures()).mode, "declared");
-assert.equal(assertSchemaAlignment(fixtures({ backendFingerprint: NEW })).mode, "transition");
-assert.equal(assertSchemaAlignment(fixtures({ frontendFingerprint: NEW, deploymentFingerprint: NEW })).mode, "transition");
-
-assert.throws(() => assertSchemaAlignment(fixtures({
-  backendFingerprint: NEW,
+const frontendRetiresFirst = assertSchemaAlignment(fixtures({
+  backendTransition: RETIRED_TRANSITION,
+  frontendTransition: null,
   deploymentTransition: null,
-})), /every manifest/);
+}));
+assert.equal(frontendRetiresFirst.mode, "declared",
+  "frontend cleanup must stay green while the backend still declares the retired bridge");
+
+const backendCleanup = assertSchemaAlignment(fixtures({
+  backendTransition: null,
+  frontendTransition: null,
+  deploymentTransition: null,
+}));
+assert.deepEqual(backendCleanup, { mode: "exact", fingerprint: CURRENT, transition: null },
+  "backend cleanup must restore exact alignment without changing the canonical fingerprint");
+
+for (const [missingLabel, missingTransition] of [
+  ["backend", { backendTransition: null }],
+  ["frontend", { frontendTransition: null }],
+  ["deployment", { deploymentTransition: null }],
+]) {
+  assert.throws(() => assertSchemaAlignment(fixtures({ backendFingerprint: FUTURE, ...missingTransition })),
+    /every manifest/, `schema drift must reject a missing ${missingLabel} declaration`);
+}
 assert.throws(() => assertSchemaAlignment(fixtures({
-  backendFingerprint: THIRD,
+  backendFingerprint: OUTSIDE,
 })), /outside the transition/);
 assert.throws(() => assertSchemaAlignment(fixtures({
-  frontendTransition: { ...TRANSITION, transition_id: "different-transition" },
+  frontendTransition: { ...FUTURE_TRANSITION, transition_id: "different-transition" },
 })), /contracts differ/);
 assert.throws(() => assertSchemaAlignment(fixtures({
-  backendTransition: { ...TRANSITION, unexpected: true },
-  frontendTransition: { ...TRANSITION, unexpected: true },
-  deploymentTransition: { ...TRANSITION, unexpected: true },
+  backendTransition: { ...FUTURE_TRANSITION, unexpected: true },
+  frontendTransition: { ...FUTURE_TRANSITION, unexpected: true },
+  deploymentTransition: { ...FUTURE_TRANSITION, unexpected: true },
 })), /unexpected shape/);
 assert.throws(() => assertSchemaAlignment(fixtures({
-  backendTransition: { ...TRANSITION, expires_at: "2026-07-31T23:59:59Z" },
-  frontendTransition: { ...TRANSITION, expires_at: "2026-07-31T23:59:59Z" },
-  deploymentTransition: { ...TRANSITION, expires_at: "2026-07-31T23:59:59Z" },
+  backendTransition: { ...FUTURE_TRANSITION, expires_at: "2026-07-31T23:59:59Z" },
+  frontendTransition: { ...FUTURE_TRANSITION, expires_at: "2026-07-31T23:59:59Z" },
+  deploymentTransition: { ...FUTURE_TRANSITION, expires_at: "2026-07-31T23:59:59Z" },
 })), /expired/);
 assert.throws(() => assertSchemaAlignment(fixtures({
-  backendTransition: { ...TRANSITION, expires_at: "2026-08-16T00:00:01Z" },
-  frontendTransition: { ...TRANSITION, expires_at: "2026-08-16T00:00:01Z" },
-  deploymentTransition: { ...TRANSITION, expires_at: "2026-08-16T00:00:01Z" },
+  backendTransition: { ...FUTURE_TRANSITION, expires_at: "2026-08-16T00:00:01Z" },
+  frontendTransition: { ...FUTURE_TRANSITION, expires_at: "2026-08-16T00:00:01Z" },
+  deploymentTransition: { ...FUTURE_TRANSITION, expires_at: "2026-08-16T00:00:01Z" },
 })), /14-day transition window/);
 assert.throws(() => assertSchemaAlignment(fixtures({
-  backendTransition: { ...TRANSITION, to_fingerprint: OLD },
-  frontendTransition: { ...TRANSITION, to_fingerprint: OLD },
-  deploymentTransition: { ...TRANSITION, to_fingerprint: OLD },
+  backendTransition: { ...FUTURE_TRANSITION, to_fingerprint: CURRENT },
+  frontendTransition: { ...FUTURE_TRANSITION, to_fingerprint: CURRENT },
+  deploymentTransition: { ...FUTURE_TRANSITION, to_fingerprint: CURRENT },
 })), /distinct fingerprints/);
 assert.throws(() => assertSchemaAlignment(fixtures({
   backendTransition: null,
   frontendTransition: null,
   deploymentTransition: null,
-  deploymentFingerprint: NEW,
+  deploymentFingerprint: FUTURE,
 })), /without a transition contract/);
 
 const liveCheckSource = readFileSync(new URL("./live-release-alignment-check.mjs", import.meta.url), "utf8");
@@ -108,8 +164,12 @@ const monitorSource = readFileSync(new URL("../.github/workflows/production-avai
 assert.match(liveCheckSource, /assertSchemaAlignment/);
 assert.match(liveCheckSource, /FRONTEND_RELEASE_MANIFEST_URL/);
 assert.match(liveCheckSource, /FRONTEND_DEPLOYMENT_MANIFEST_URL/);
-assert.match(monitorSource, /len\(declared\) == len\(transitions\)/,
-  "live drift must require all three transition declarations");
+assert.match(monitorSource,
+  /if len\(distinct_primary\) > 1:\s+assert len\(declared\) == len\(transitions\), transitions/,
+  "only live drift must require all three transition declarations");
+assert.match(monitorSource,
+  /schema_alignment_mode = 'declared' if len\(distinct_primary\) == 1 else 'transition'/,
+  "the monitor must preserve one-sided cleanup while all primary fingerprints match");
 assert.match(monitorSource, /remaining_seconds <= 14 \* 24 \* 60 \* 60/,
   "live transitions must have an intrinsic maximum remaining lifetime");
 assert.match(monitorSource, /all\(fingerprint in allowed_fingerprints/,
