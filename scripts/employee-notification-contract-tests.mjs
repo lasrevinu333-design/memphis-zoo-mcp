@@ -63,6 +63,9 @@ assert.ok(Object.values(testNotifications).every((item) => item.data_json.test_d
 assert.match(source, /\$\{API_PREFIX\}\/test`, requireManagerWrite/);
 assert.match(source, /job_type: 'employee_native_push'/);
 assert.match(indexSource, /installEmployeeNotificationRoutes\(app, \{[\s\S]*requireManager: requireOpsManagerWrite/);
+assert.match(indexSource, /installEmployeeNotificationRoutes\(app, \{[\s\S]*registerOperationalJobHandler: registerOperationalNotificationJobHandler/);
+assert.match(source, /registerOperationalJobHandler\('employee_event_push', deliverClaimedJob\)/);
+assert.match(source, /registerOperationalJobHandler\('employee_native_push', deliverClaimedJob\)/);
 assert.match(source, /device_auth_resolver_configured: authReadConfigured/);
 assert.match(source, /employee_notification_auth_ready/);
 assert.match(source, /claim_operational_notification_job_by_key/);
@@ -109,6 +112,17 @@ for (const contract of [
 assert.match(nativeKindsMigration, /status\.status_code in \('due_soon','overdue'\)/);
 assert.match(nativeKindsMigration, /job_type in \('employee_event_push','employee_native_push'\)/);
 assert.doesNotMatch(nativeKindsMigration, /messenger_fallback|presentation_demo/);
+
+const registeredWorkerTypes = [];
+installEmployeeNotificationRoutes(express(), {
+  supabase: {},
+  pushRuntime: { configured: true },
+  registerOperationalJobHandler: (jobType, handler) => {
+    assert.equal(typeof handler, 'function');
+    registeredWorkerTypes.push(jobType);
+  },
+});
+assert.deepEqual(registeredWorkerTypes.sort(), ['employee_event_push', 'employee_native_push']);
 
 async function checkHealth(options) {
   const app = express();
