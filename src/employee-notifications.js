@@ -13,8 +13,16 @@ function createSupabase(env) {
 }
 function clip(value, max) { return String(value ?? '').trim().slice(0, max); }
 function credentialId(req) {
-  return String(req.memphisDevice?.credential_id || req.memphisDevice?.credentialId || req.memphisAuth?.credential_id || '').trim();
+  return String(
+    req.memphisDeviceCredential?.credential_id
+      || req.memphisDeviceAuth?.credential?.credential_id
+      || req.memphisDevice?.credential_id
+      || req.memphisDevice?.credentialId
+      || req.memphisAuth?.credential_id
+      || '',
+  ).trim();
 }
+export const employeeNotificationInternals = Object.freeze({ credentialId });
 function setCors(req, res) {
   const allowed = new Set(['https://lasrevinu333-design.github.io', 'https://localhost', 'capacitor://localhost']);
   const origin = String(req.headers.origin || '').trim();

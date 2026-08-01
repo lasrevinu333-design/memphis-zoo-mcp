@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import express from 'express';
-import { installEmployeeNotificationRoutes } from '../src/employee-notifications.js';
+import {
+  employeeNotificationInternals,
+  installEmployeeNotificationRoutes,
+} from '../src/employee-notifications.js';
 
 const root = new URL('../', import.meta.url);
 const [source, manager, indexSource, migration, nativeKindsMigration] = await Promise.all([
@@ -23,6 +26,22 @@ for (const kind of ['event_day_before', 'event_shift_plus_15', 'message', 'due_s
   assert.ok(source.includes(`'${kind}'`), `missing native employee notification kind ${kind}`);
 }
 assert.match(source, /makeDeviceCredentialMiddleware\(\{ supabase: db, runReadOnlySql \}\)/);
+const canonicalCredentialId = '55555555-5555-4555-8555-555555555555';
+assert.equal(
+  employeeNotificationInternals.credentialId({
+    memphisDeviceCredential: { credential_id: canonicalCredentialId },
+    memphisDevice: { credential_id: 'wrong-device-shape' },
+  }),
+  canonicalCredentialId,
+  'employee push registration must consume the credential object populated by device-auth middleware',
+);
+assert.equal(
+  employeeNotificationInternals.credentialId({
+    memphisDeviceAuth: { credential: { credential_id: canonicalCredentialId } },
+  }),
+  canonicalCredentialId,
+  'employee push registration must retain the canonical auth-result fallback',
+);
 assert.match(source, /device_auth_resolver_configured: authReadConfigured/);
 assert.match(source, /employee_notification_auth_ready/);
 assert.match(source, /claim_operational_notification_job_by_key/);
