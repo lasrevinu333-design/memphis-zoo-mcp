@@ -16,7 +16,7 @@ const [source, manager, indexSource, migration, nativeKindsMigration] = await Pr
 ]);
 
 assert.match(source, /const API_PREFIX = ['"]\/employee-notifications-api['"]/);
-for (const route of ['register', 'events', 'opened']) {
+for (const route of ['register', 'events', 'opened', 'test']) {
   assert.ok(source.includes(`\${API_PREFIX}/${route}`), `missing ${route} route registration`);
 }
 
@@ -42,6 +42,27 @@ assert.equal(
   canonicalCredentialId,
   'employee push registration must retain the canonical auth-result fallback',
 );
+const testNotifications = Object.fromEntries(
+  ['event', 'message', 'due_soon', 'overdue'].map((kind) => [
+    kind,
+    employeeNotificationInternals.buildManagerTestNotification(kind, {
+      runId: '66666666-6666-4666-8666-666666666666',
+      deviceIdentifier: 'KIOSK_08',
+    }),
+  ]),
+);
+assert.equal(testNotifications.event.channel_id, 'employee-events');
+assert.equal(testNotifications.event.data_json.kind, 'employee_event');
+assert.equal(testNotifications.message.channel_id, 'employee-messages');
+assert.equal(testNotifications.message.data_json.kind, 'employee_message');
+assert.equal(testNotifications.due_soon.channel_id, 'employee-due-soon');
+assert.equal(testNotifications.due_soon.data_json.status_code, 'due_soon');
+assert.equal(testNotifications.overdue.channel_id, 'employee-overdue');
+assert.equal(testNotifications.overdue.data_json.status_code, 'overdue');
+assert.ok(Object.values(testNotifications).every((item) => item.data_json.test_delivery === true));
+assert.match(source, /\$\{API_PREFIX\}\/test`, requireManagerWrite/);
+assert.match(source, /job_type: 'employee_native_push'/);
+assert.match(indexSource, /installEmployeeNotificationRoutes\(app, \{[\s\S]*requireManager: requireOpsManagerWrite/);
 assert.match(source, /device_auth_resolver_configured: authReadConfigured/);
 assert.match(source, /employee_notification_auth_ready/);
 assert.match(source, /claim_operational_notification_job_by_key/);
