@@ -359,7 +359,7 @@ export function createSupabaseDeviceCredentialStore(supabase) {
     async findCredential(credentialId) {
       const { data, error } = await supabase
         .from("device_auth_credentials")
-        .select("credential_id,device_id,token_hash,device_label,created_at,confirmed_at,last_used_at,expires_at,revoked_at,revoked_reason")
+        .select("credential_id,device_id,token_hash,device_label,created_at,confirmed_at,last_used_at,expires_at,revoked_at,revoked_reason,metadata_json")
         .eq("credential_id", credentialId)
         .maybeSingle();
       if (error) throw error;
@@ -617,6 +617,34 @@ export async function authenticateDeviceCredentialRequest(req, {
       && safeEqual(row.token_hash, tokenHash(parts.secret, env))
     );
     if (valid) {
+      const metadata = row?.metadata_json;
+      const operationBound = Boolean(
+        metadata
+        && typeof metadata === "object"
+        && !Array.isArray(metadata)
+        && (
+          Object.prototype.hasOwnProperty.call(metadata, "enrollment_operation_id")
+          || Object.prototype.hasOwnProperty.call(metadata, "enrollment_flow")
+        )
+      );
+      if (!row.confirmed_at && operationBound) {
+        await audit(store, authEvent(req, device, {
+          credentialId: row.credential_id,
+          eventType: "device_auth_failed",
+          success: false,
+          reason: "enrollment_operation_unconfirmed",
+          env,
+        }));
+        return {
+          ok: false,
+          status: 409,
+          code: "device_enrollment_confirmation_required",
+          error: "Secure local credential storage must be confirmed before employee services can be used.",
+          device,
+          policy_mode: policy.mode,
+          enrollment_required: true,
+        };
+      }
       const nowIso = now.toISOString();
       const fingerprintPatch = {
         last_used_at: nowIso,
@@ -1062,6 +1090,8 @@ export function installDeviceCredentialRoutes(app, {
       }));
     } catch (error) {
       console.warn("device credential logout failed:", error?.message || error);
+      res.status(503).json({ ok: false, code: "device_logout_failed", error: "Device logout could not be durably recorded." });
+      return;
     }
     clearDeviceCredentialCookie(res, req, env);
     res.status(200).json({ ok: true, data: { logged_out: true } });

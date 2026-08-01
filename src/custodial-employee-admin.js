@@ -6,6 +6,8 @@ const NATIVE_ENROLL_ATTEMPTS = new Map();
 const NATIVE_ENROLL_WINDOW_MS = 15 * 60 * 1000;
 const NATIVE_ENROLL_LIMIT = 8;
 const EMPLOYEE_ENROLLMENT_TTL_MS = 30 * 60 * 1000;
+const ENROLLMENT_RESULT_TTL_MS = 30 * 60 * 1000;
+const ENROLLMENT_RESULT_ENCRYPTION = "aes-256-gcm.v1";
 
 function envText(env, key) { return String(env?.[key] || "").trim(); }
 function clip(value, max = 1000) { return String(value ?? "").trim().slice(0, max); }
@@ -59,6 +61,92 @@ function hmacHex(env, purpose, value) {
 }
 function enrollmentCodeHash(env, devicePk, code) { return hmacHex(env, "device-enrollment", `${devicePk}:${code}`); }
 function tokenHash(env, secret) { return hmacHex(env, "device-token", secret); }
+function isNativeCustodialRequest(req) {
+  const origin = String(req.headers?.origin || "").trim();
+  const edition = String(req.headers?.["x-memphis-app-edition"] || "").trim().toLowerCase();
+  return ["https://localhost", "http://localhost", "capacitor://localhost", "ionic://localhost"].includes(origin)
+    && edition === "custodial";
+}
+function enrollmentOperationId(req) {
+  const bodyValue = String(req.body?.operation_id || req.body?.operationId || "").trim();
+  const headerValue = String(req.headers?.["idempotency-key"] || "").trim();
+  if (bodyValue && headerValue && bodyValue !== headerValue) {
+    throw Object.assign(new Error("operation_id and Idempotency-Key must match."), { status: 409, code: "enrollment_operation_conflict" });
+  }
+  const value = bodyValue || headerValue;
+  if (!validUuid(value)) {
+    throw Object.assign(new Error("A stable UUID operation_id or Idempotency-Key is required."), { status: 400, code: "enrollment_operation_id_required" });
+  }
+  return value;
+}
+function enrollmentResultKey(env) {
+  return Buffer.from(crypto.hkdfSync(
+    "sha256",
+    Buffer.from(serviceSecret(env), "utf8"),
+    Buffer.from("memphis-zoo-custodial-enrollment-result", "utf8"),
+    Buffer.from(ENROLLMENT_RESULT_ENCRYPTION, "utf8"),
+    32,
+  ));
+}
+function enrollmentResultAad(operationId) {
+  return Buffer.from(`memphis-zoo:custodial-enrollment:${operationId}:${ENROLLMENT_RESULT_ENCRYPTION}`, "utf8");
+}
+function encryptEnrollmentResult(env, operationId, value) {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", enrollmentResultKey(env), iv);
+  cipher.setAAD(enrollmentResultAad(operationId));
+  const ciphertext = Buffer.concat([cipher.update(JSON.stringify(value), "utf8"), cipher.final()]);
+  return {
+    encryptionVersion: ENROLLMENT_RESULT_ENCRYPTION,
+    ciphertext: ciphertext.toString("base64url"),
+    iv: iv.toString("base64url"),
+    authTag: cipher.getAuthTag().toString("base64url"),
+  };
+}
+function decryptEnrollmentResult(env, operationId, value = {}) {
+  if (String(value.encryption_version || "") !== ENROLLMENT_RESULT_ENCRYPTION) {
+    throw Object.assign(new Error("The resumable enrollment result uses an unsupported encryption version."), { status: 503, code: "enrollment_result_unavailable" });
+  }
+  try {
+    const decipher = crypto.createDecipheriv(
+      "aes-256-gcm",
+      enrollmentResultKey(env),
+      Buffer.from(String(value.result_iv || ""), "base64url"),
+    );
+    decipher.setAAD(enrollmentResultAad(operationId));
+    decipher.setAuthTag(Buffer.from(String(value.result_auth_tag || ""), "base64url"));
+    const plaintext = Buffer.concat([
+      decipher.update(Buffer.from(String(value.result_ciphertext || ""), "base64url")),
+      decipher.final(),
+    ]).toString("utf8");
+    const parsed = JSON.parse(plaintext);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("invalid enrollment result");
+    return parsed;
+  } catch (error) {
+    throw Object.assign(new Error("The resumable enrollment result could not be authenticated."), {
+      status: 503,
+      code: "enrollment_result_unavailable",
+      cause: error,
+    });
+  }
+}
+function nativeCredentialParts(req) {
+  const authorization = String(req.headers?.authorization || "").trim();
+  const match = authorization.match(/^Device\s+(.+)$/i);
+  const raw = String(
+    match?.[1]
+      || req.headers?.["x-device-credential"]
+      || req.headers?.["x-memphis-device-credential"]
+      || "",
+  ).trim();
+  const dot = raw.indexOf(".");
+  if (dot <= 0) return null;
+  const credentialId = raw.slice(0, dot);
+  const secret = raw.slice(dot + 1);
+  return validUuid(credentialId) && /^[A-Za-z0-9_-]{32,}$/.test(secret)
+    ? { credentialId, secret }
+    : null;
+}
 function nativeAttemptKey(req, deviceId) {
   const ip = String(req.headers?.["x-forwarded-for"] || req.ip || req.socket?.remoteAddress || "unknown").split(",")[0].trim();
   return `${ip}|${deviceId || "unknown"}`;
@@ -323,53 +411,174 @@ export function installCustodialEmployeeAdminRoutes(app, { env = process.env, su
     catch (error) { fail(res, error, "Employee app enrollment code could not be generated."); }
   });
 
-  app.post("/custodial-device-auth/enroll", configured, async (req, res) => {
-    const origin = String(req.headers?.origin || "").trim();
-    const edition = String(req.headers?.["x-memphis-app-edition"] || "").trim().toLowerCase();
-    if (!["https://localhost", "http://localhost", "capacitor://localhost", "ionic://localhost"].includes(origin) || edition !== "custodial") {
-      return res.status(403).json({ ok: false, error: "Native custodial app enrollment is required." });
+  const nativeEnrollment = (expectedFlow) => async (req, res) => {
+    if (!isNativeCustodialRequest(req)) {
+      return res.status(403).json({ ok: false, code: "native_custodial_app_required", error: "Native custodial app enrollment is required." });
     }
     const deviceId = normalizeDeviceId(req.body?.device_id || req.headers?.["x-device-id"]);
     const attempt = consumeNativeAttempt(req, deviceId);
     if (!attempt.allowed) {
       res.setHeader("Retry-After", String(attempt.retryAfter));
-      return res.status(429).json({ ok: false, error: "Too many enrollment attempts." });
+      return res.status(429).json({ ok: false, code: "device_enrollment_rate_limited", error: "Too many enrollment attempts." });
     }
     try {
+      const operationId = enrollmentOperationId(req);
+      const requestedFlow = String(req.body?.flow || expectedFlow).trim().toLowerCase();
+      if (requestedFlow !== expectedFlow) {
+        throw Object.assign(new Error(`Use /${expectedFlow === "recovery" ? "recover" : "enroll"} for the ${expectedFlow} flow.`), {
+          status: 409,
+          code: "enrollment_operation_conflict",
+        });
+      }
       const device = await resolveNativeDevice(db, deviceId);
       const employee = Array.isArray(device?.employees) ? device.employees[0] : device?.employees;
       if (!device || device.active !== true || !device.assigned_employee_id || employee?.active !== true || !/^EMP\d+$/i.test(String(employee?.employee_code || ""))) {
-        return res.status(401).json({ ok: false, error: "This phone must be assigned to an active employee before enrollment." });
+        return res.status(401).json({ ok: false, code: "device_not_eligible", error: "This phone must be assigned to an active employee before enrollment." });
       }
       const code = String(req.body?.enrollment_code || req.body?.code || "").replace(/\D/g, "").slice(0, 8);
-      if (!/^\d{8}$/.test(code)) return res.status(400).json({ ok: false, error: "Enter the eight-digit enrollment code." });
+      if (!/^\d{8}$/.test(code)) {
+        return res.status(400).json({ ok: false, code: "invalid_enrollment_code", error: "Enter the eight-digit enrollment code." });
+      }
+
+      const expired = await db.rpc("device_auth_expire_custodial_enrollment_operations", {
+        p_now: new Date().toISOString(),
+        p_limit: 100,
+      });
+      if (expired.error) throw expired.error;
+
       const credentialId = crypto.randomUUID();
       const refreshSecret = crypto.randomBytes(32).toString("base64url");
       const expiresAt = new Date(Date.now() + 3650 * 86400000).toISOString();
-      const consumed = await db.rpc("device_auth_consume_enrollment_code", {
+      const resumeExpiresAt = new Date(Date.now() + ENROLLMENT_RESULT_TTL_MS).toISOString();
+      const candidateResult = {
+        device_credential: `${credentialId}.${refreshSecret}`,
+        credential_id: credentialId,
+        credential_expires_at: expiresAt,
+        device_id: device.device_id,
+        device_name: device.device_name,
+        employee: { id: employee.id, employee_code: employee.employee_code, display_name: employee.display_name },
+      };
+      const encrypted = encryptEnrollmentResult(env, operationId, candidateResult);
+      const consumed = await db.rpc("device_auth_consume_enrollment_operation", {
+        p_operation_id: operationId,
+        p_flow: expectedFlow,
         p_device_id: device.id,
         p_code_hash: enrollmentCodeHash(env, device.id, code),
+        p_request_fingerprint: hmacHex(env, "custodial-enrollment-operation-request", `${expectedFlow}:${device.id}:${code}`),
         p_credential_id: credentialId,
         p_token_hash: tokenHash(env, refreshSecret),
         p_device_label: clip(req.body?.device_label, 160) || `${device.device_id} Custodial App`,
         p_expires_at: expiresAt,
+        p_result_ciphertext: encrypted.ciphertext,
+        p_result_iv: encrypted.iv,
+        p_result_auth_tag: encrypted.authTag,
+        p_result_expires_at: resumeExpiresAt,
+        p_encryption_version: encrypted.encryptionVersion,
         p_user_agent_hash: hmacHex(env, "privacy-ua", String(req.headers?.["user-agent"] || "")),
         p_ip_hash: null,
-        p_metadata_json: { enrolled_by: "native_custodial_app", canonical_device_id: device.device_id },
+        p_metadata_json: {
+          enrolled_by: "native_custodial_app",
+          canonical_device_id: device.device_id,
+          enrollment_flow: expectedFlow,
+        },
       });
       if (consumed.error) throw consumed.error;
-      if (!consumed.data?.ok) return res.status(401).json({ ok: false, error: "The enrollment code is invalid or expired." });
+      if (!consumed.data?.ok) {
+        const reason = String(consumed.data?.reason || "invalid_or_expired");
+        const conflict = reason === "operation_conflict";
+        const unavailable = ["operation_confirmed", "operation_cancelled", "operation_expired", "credential_unavailable"].includes(reason);
+        return res.status(conflict || unavailable ? 409 : 401).json({
+          ok: false,
+          code: conflict ? "enrollment_operation_conflict" : (unavailable ? reason : "invalid_enrollment_code"),
+          error: conflict
+            ? "This operation ID belongs to a different enrollment request."
+            : (unavailable ? "This enrollment operation is no longer resumable." : "The enrollment code is invalid or expired."),
+        });
+      }
+      const result = decryptEnrollmentResult(env, operationId, consumed.data);
+      const resultParts = String(result.device_credential || "").split(".", 2);
+      if (result.credential_id !== consumed.data.credential_id || resultParts[0] !== consumed.data.credential_id) {
+        throw Object.assign(new Error("The enrollment operation result did not match its authoritative credential."), {
+          status: 503,
+          code: "enrollment_result_unavailable",
+        });
+      }
       NATIVE_ENROLL_ATTEMPTS.delete(attempt.key);
       res.json({ ok: true, data: {
-        device_credential: `${credentialId}.${refreshSecret}`,
-        credential_expires_at: consumed.data?.expires_at || expiresAt,
-        device_id: device.device_id,
-        device_name: device.device_name,
-        employee: { id: employee.id, employee_code: employee.employee_code, display_name: employee.display_name },
+        operation_id: operationId,
+        flow: expectedFlow,
+        replayed: consumed.data.replayed === true,
+        resume_expires_at: consumed.data.resume_expires_at,
+        ...result,
+        credential_expires_at: consumed.data.credential_expires_at || result.credential_expires_at,
       } });
     } catch (error) {
       const invalid = /invalid|expired|enrollment code/i.test(String(error?.message || ""));
-      fail(res, Object.assign(error, { status: invalid ? 401 : (error?.status || 500) }), "Custodial app enrollment failed.");
+      const status = invalid ? 401 : (error?.status || 500);
+      res.status(status).json({
+        ok: false,
+        code: error?.code || (invalid ? "invalid_enrollment_code" : "custodial_enrollment_failed"),
+        error: invalid ? "The enrollment code is invalid or expired." : clip(error?.message || "Custodial app enrollment failed.", 1000),
+      });
     }
-  });
+  };
+
+  app.post("/custodial-device-auth/enroll", configured, nativeEnrollment("enrollment"));
+  app.post("/custodial-device-auth/recover", configured, nativeEnrollment("recovery"));
+
+  const completeEnrollmentOperation = (action) => async (req, res) => {
+    if (!isNativeCustodialRequest(req)) {
+      return res.status(403).json({ ok: false, code: "native_custodial_app_required", error: "Native custodial app authorization is required." });
+    }
+    try {
+      const operationId = String(req.params?.operationId || "").trim();
+      if (!validUuid(operationId)) {
+        return res.status(400).json({ ok: false, code: "invalid_operation_id", error: "A valid enrollment operation ID is required." });
+      }
+      const deviceId = normalizeDeviceId(req.body?.device_id || req.headers?.["x-device-id"]);
+      const device = await resolveNativeDevice(db, deviceId);
+      const credential = nativeCredentialParts(req);
+      if (!device || !credential) {
+        return res.status(401).json({ ok: false, code: "credential_required", error: "The enrollment operation credential is required." });
+      }
+      const rpcName = action === "confirm"
+        ? "device_auth_confirm_enrollment_operation"
+        : "device_auth_cancel_enrollment_operation";
+      const result = await db.rpc(rpcName, {
+        p_operation_id: operationId,
+        p_device_id: device.id,
+        p_credential_id: credential.credentialId,
+        p_token_hash: tokenHash(env, credential.secret),
+      });
+      if (result.error) throw result.error;
+      if (!result.data?.ok) {
+        const reason = String(result.data?.reason || "operation_not_found");
+        const conflict = reason === "operation_confirmed";
+        return res.status(conflict ? 409 : 401).json({
+          ok: false,
+          code: reason,
+          error: conflict ? "A confirmed enrollment operation must be removed through device logout." : "The enrollment operation could not be authenticated.",
+        });
+      }
+      return res.json({ ok: true, data: result.data });
+    } catch (error) {
+      return res.status(error?.status || 503).json({
+        ok: false,
+        code: error?.code || `enrollment_operation_${action}_failed`,
+        error: clip(error?.message || `Enrollment operation ${action} failed.`, 1000),
+      });
+    }
+  };
+
+  app.post("/custodial-device-auth/enrollment-operations/:operationId/confirm", configured, completeEnrollmentOperation("confirm"));
+  app.post("/custodial-device-auth/enrollment-operations/:operationId/cancel", configured, completeEnrollmentOperation("cancel"));
 }
+
+export const custodialEmployeeAdminInternals = Object.freeze({
+  normalizeDeviceId,
+  validKioskId,
+  enrollmentOperationId,
+  encryptEnrollmentResult,
+  decryptEnrollmentResult,
+  nativeCredentialParts,
+});
