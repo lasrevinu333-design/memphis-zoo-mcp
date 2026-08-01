@@ -30,15 +30,15 @@ function fixtures({ backendFingerprint = OLD, frontendFingerprint = OLD, deploym
 }
 
 const sourceManifest = JSON.parse(readFileSync(new URL("../release/frontend-release-manifest.json", import.meta.url), "utf8"));
-assert.equal(sourceManifest.schema_fingerprint, OLD, "the bridge must not advance the frontend primary fingerprint");
+assert.equal(sourceManifest.schema_fingerprint, NEW, "the schema release must declare the rebuilt production fingerprint");
 assert.deepEqual(sourceManifest.schema_transition, TRANSITION, "the bridge transition contract changed");
 assert.deepEqual(Object.keys(sourceManifest.schema_transition), [
   "transition_id", "from_fingerprint", "to_fingerprint", "expires_at",
 ]);
 
 const backendRelease = buildReleaseManifest({ appVersion: "test-release" });
-assert.equal(backendRelease.schema.fingerprint, OLD, "the bridge must not advance the backend primary fingerprint");
-assert.equal(backendRelease.frontend.manifest.schema_fingerprint, OLD);
+assert.equal(backendRelease.schema.fingerprint, NEW, "the backend must publish the rebuilt production fingerprint");
+assert.equal(backendRelease.frontend.manifest.schema_fingerprint, NEW);
 assert.deepEqual(backendRelease.schema_transition, TRANSITION, "the backend must publish the source-controlled transition contract");
 
 const exact = assertSchemaAlignment(fixtures({ backendTransition: null, frontendTransition: null, deploymentTransition: null }));
