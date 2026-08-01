@@ -9,6 +9,14 @@ const releaseManifestSource = readFileSync("src/release-manifest.js", "utf8");
 const frontendReleaseManifest = JSON.parse(readFileSync("release/frontend-release-manifest.json", "utf8"));
 const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
 const migration = readFileSync("supabase/migrations/20260717161000_custodial_foundation_repair_delta.sql", "utf8");
+const atomicCommitMigration = readFileSync(
+  "supabase/migrations/20260801131340_custodial_atomic_offline_completion_identity.sql",
+  "utf8",
+);
+const schemaReconciliationMigration = readFileSync(
+  "supabase/migrations/20260801134430_reconcile_canonical_schema_security_metadata.sql",
+  "utf8",
+);
 const foreignKeyIndexMigration = readFileSync(
   "supabase/migrations/20260730222357_index_remaining_foreign_keys.sql",
   "utf8",
@@ -51,6 +59,83 @@ assert.match(deviceAuthSource, /\["enforce-ready", "enforce"\]\.includes\(reques
 assert.match(migration, /'enforce-ready'::text/);
 assert.match(migration, /requires_physical_acceptance/);
 assert.match(migration, /storage\.buckets/);
+
+assert.match(atomicCommitMigration, /create or replace function public\.commit_cleaning_workflow/i);
+assert.match(atomicCommitMigration, /v_session_location_id uuid/i);
+assert.match(atomicCommitMigration, /v_session_device_pk uuid/i);
+assert.match(atomicCommitMigration, /v_session_employee_id uuid/i);
+assert.match(
+  atomicCommitMigration,
+  /v_session_location_id, v_session_device_pk, v_session_employee_id\s+from public\.sessions/i,
+  "optional session lookup must write only to session identity variables",
+);
+assert.doesNotMatch(
+  atomicCommitMigration,
+  /v_location_id, v_device_pk, v_employee_id\s+from public\.sessions/i,
+  "optional session lookup must not clobber freshly resolved identity",
+);
+assert.match(
+  atomicCommitMigration,
+  /v_existing_client_completion_id is distinct from v_client_completion_id/i,
+  "a completed session must reject a different completion identifier",
+);
+assert.match(
+  atomicCommitMigration,
+  /'client_completion_id', v_existing_client_completion_id/i,
+  "session replay must return the stored completion identifier",
+);
+assert.match(
+  atomicCommitMigration,
+  /revoke all on function public\.commit_cleaning_workflow[\s\S]*from public, anon, authenticated/i,
+);
+assert.match(
+  atomicCommitMigration,
+  /grant execute on function public\.commit_cleaning_workflow[\s\S]*to postgres, service_role/i,
+);
+
+for (const functionName of [
+  "msg_ensure_ops_manager_user",
+  "msg_get_or_create_ops_manager_thread",
+]) {
+  assert.match(
+    schemaReconciliationMigration,
+    new RegExp(`create or replace function public\\.${functionName}`, "i"),
+  );
+  assert.match(
+    schemaReconciliationMigration,
+    new RegExp(`revoke all on function public\\.${functionName}[\\s\\S]*from public, anon, authenticated`, "i"),
+  );
+  assert.match(
+    schemaReconciliationMigration,
+    new RegExp(`grant execute on function public\\.${functionName}[\\s\\S]*to service_role`, "i"),
+  );
+}
+assert.match(schemaReconciliationMigration, /set search_path=pg_catalog,public/);
+assert.match(schemaReconciliationMigration, /set local lock_timeout = '5s'/i);
+assert.match(schemaReconciliationMigration, /set local statement_timeout = '60s'/i);
+assert.match(schemaReconciliationMigration, /Prefer the exact real name/);
+assert.match(schemaReconciliationMigration, /Preserve the historical participant\/audit relationship/);
+for (const tableName of [
+  "custodial_employee_device_assignment_history",
+  "custodial_employee_status_history",
+]) {
+  assert.match(
+    schemaReconciliationMigration,
+    new RegExp(`alter table public\\.${tableName}[\\s\\S]*enable row level security`, "i"),
+  );
+  assert.match(
+    schemaReconciliationMigration,
+    new RegExp(`alter table public\\.${tableName}[\\s\\S]*force row level security`, "i"),
+  );
+  assert.match(
+    schemaReconciliationMigration,
+    new RegExp(`create policy ${tableName}_service_all[\\s\\S]*to service_role[\\s\\S]*using \\(true\\)[\\s\\S]*with check \\(true\\)`, "i"),
+  );
+}
+assert.match(
+  schemaReconciliationMigration,
+  /comment on table public\.ops_manager_notification_queue is\s+'Durable manager mobile push queue with leasing, retry and delivery audit state\.'/i,
+);
 
 assert.match(foreignKeyIndexMigration, /set lock_timeout = '5s'/);
 assert.match(foreignKeyIndexMigration, /set statement_timeout = '30s'/);
