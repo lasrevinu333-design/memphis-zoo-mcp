@@ -66,6 +66,8 @@ jobs:
           npm run --silent test:foundation-repair
           npm run --silent test:custodial-repair
           npm run --silent test:custodial-employee-phones
+          npm run --silent test:custodial-enrollment-security
+          npm run --silent test:employee-notifications
           npm run --silent test:phone-readiness
           npm run --silent test:device-security-app
           npm run --silent test:gemini-console
@@ -89,6 +91,9 @@ jobs:
           CUSTODIAL_PHONE_TEST_DOCKER_CONTAINER="$container" \
             CUSTODIAL_PHONE_TEST_DATABASE=postgres \
             npm run --silent test:custodial-employee-phones-db
+          CUSTODIAL_ENROLLMENT_TEST_DOCKER_CONTAINER="$container" \
+            CUSTODIAL_ENROLLMENT_TEST_DATABASE=postgres \
+            npm run --silent test:custodial-enrollment-security-db
           CUSTODIAL_ATOMIC_COMMIT_TEST_DOCKER_CONTAINER="$container" \
             CUSTODIAL_ATOMIC_COMMIT_TEST_DATABASE=postgres \
             npm run --silent test:custodial-atomic-commit-db

@@ -3161,6 +3161,240 @@
     },
     {
       "collation_name": null,
+      "column_name": "operation_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 1,
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_operations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "device_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 2,
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_operations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "credential_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 3,
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_operations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "enrollment_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 4,
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_operations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "flow",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 5,
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_operations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "request_fingerprint",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 6,
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_operations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "status",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": "'committed'::text",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 7,
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_operations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "encryption_version",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 8,
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_operations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "result_ciphertext",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 9,
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_operations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "result_iv",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 10,
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_operations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "result_auth_tag",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 11,
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_operations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "resume_expires_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 12,
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_operations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "confirmed_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 13,
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_operations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "cancelled_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 14,
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_operations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "expired_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 15,
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_operations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "metadata_json",
+      "comment": null,
+      "data_type": "jsonb",
+      "default_expression": "'{}'::jsonb",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 16,
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_operations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "created_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "now()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 17,
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_operations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "updated_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "now()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 18,
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_operations"
+    },
+    {
+      "collation_name": null,
       "column_name": "id",
       "comment": null,
       "data_type": "uuid",
@@ -20569,6 +20803,86 @@
       "validated": true
     },
     {
+      "constraint_name": "device_auth_enrollment_operations_credential_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (credential_id) REFERENCES device_auth_credentials(credential_id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_operations",
+      "validated": true
+    },
+    {
+      "constraint_name": "device_auth_enrollment_operations_credential_id_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (credential_id)",
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_operations",
+      "validated": true
+    },
+    {
+      "constraint_name": "device_auth_enrollment_operations_device_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_operations",
+      "validated": true
+    },
+    {
+      "constraint_name": "device_auth_enrollment_operations_enrollment_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (enrollment_id) REFERENCES device_auth_enrollment_codes(enrollment_id) ON DELETE SET NULL",
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_operations",
+      "validated": true
+    },
+    {
+      "constraint_name": "device_auth_enrollment_operations_fingerprint_check",
+      "constraint_type": "c",
+      "definition": "CHECK (length(request_fingerprint) = 64)",
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_operations",
+      "validated": true
+    },
+    {
+      "constraint_name": "device_auth_enrollment_operations_flow_check",
+      "constraint_type": "c",
+      "definition": "CHECK (flow = ANY (ARRAY['enrollment'::text, 'recovery'::text]))",
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_operations",
+      "validated": true
+    },
+    {
+      "constraint_name": "device_auth_enrollment_operations_metadata_check",
+      "constraint_type": "c",
+      "definition": "CHECK (jsonb_typeof(metadata_json) = 'object'::text)",
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_operations",
+      "validated": true
+    },
+    {
+      "constraint_name": "device_auth_enrollment_operations_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (operation_id)",
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_operations",
+      "validated": true
+    },
+    {
+      "constraint_name": "device_auth_enrollment_operations_result_check",
+      "constraint_type": "c",
+      "definition": "CHECK (status = 'committed'::text AND encryption_version IS NOT NULL AND result_ciphertext IS NOT NULL AND result_iv IS NOT NULL AND result_auth_tag IS NOT NULL OR status <> 'committed'::text AND result_ciphertext IS NULL AND result_iv IS NULL AND result_auth_tag IS NULL)",
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_operations",
+      "validated": true
+    },
+    {
+      "constraint_name": "device_auth_enrollment_operations_status_check",
+      "constraint_type": "c",
+      "definition": "CHECK (status = ANY (ARRAY['committed'::text, 'confirmed'::text, 'cancelled'::text, 'expired'::text]))",
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_operations",
+      "validated": true
+    },
+    {
       "constraint_name": "device_auth_events_credential_id_fkey",
       "constraint_type": "f",
       "definition": "FOREIGN KEY (credential_id) REFERENCES device_auth_credentials(credential_id) ON DELETE SET NULL",
@@ -25124,6 +25438,14 @@
   "cron_jobs": [
     {
       "active": true,
+      "command": "select public.device_auth_expire_custodial_enrollment_operations(now(),500);",
+      "database": "postgres",
+      "jobname": "mz-custodial-enrollment-operation-expiry",
+      "schedule": "*/5 * * * *",
+      "username": "migration_owner"
+    },
+    {
+      "active": true,
       "command": "select public.events_app_purge_expired(now(),500);",
       "database": "postgres",
       "jobname": "mz-events-expired-retention-hourly",
@@ -25458,6 +25780,20 @@
     },
     {
       "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.device_auth_cancel_enrollment_operation(p_operation_id uuid, p_device_id uuid, p_credential_id uuid, p_token_hash text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_now timestamptz:=clock_timestamp();\n  v_operation public.device_auth_enrollment_operations%rowtype;\n  v_credential public.device_auth_credentials%rowtype;\nbegin\n  if p_operation_id is null or p_device_id is null or p_credential_id is null\n     or p_token_hash is null or length(p_token_hash)<>64 then\n    raise exception using errcode='22023',message='operation and credential proof are required';\n  end if;\n  perform pg_advisory_xact_lock(hashtextextended('custodial-enrollment-operation:'||p_operation_id::text,0));\n  select * into v_operation from public.device_auth_enrollment_operations\n   where operation_id=p_operation_id for update;\n  if v_operation.operation_id is null\n     or v_operation.device_id<>p_device_id\n     or v_operation.credential_id<>p_credential_id then\n    return jsonb_build_object('ok',false,'reason','operation_not_found');\n  end if;\n  select * into v_credential from public.device_auth_credentials\n   where credential_id=p_credential_id and device_id=p_device_id and token_hash=p_token_hash;\n  if v_credential.credential_id is null then\n    return jsonb_build_object('ok',false,'reason','credential_mismatch');\n  end if;\n  if v_operation.status='confirmed' then\n    return jsonb_build_object('ok',false,'reason','operation_confirmed');\n  end if;\n  if v_operation.status in ('cancelled','expired') then\n    return jsonb_build_object('ok',true,'replayed',true,'status',v_operation.status,'operation_id',p_operation_id,'credential_id',p_credential_id);\n  end if;\n\n  update public.device_auth_credentials\n     set revoked_at=coalesce(revoked_at,v_now),\n         revoked_reason=case when revoked_at is null then 'enrollment_operation_cancelled' else revoked_reason end\n   where credential_id=p_credential_id;\n  update public.device_auth_enrollment_operations\n     set status='cancelled',cancelled_at=v_now,\n         result_ciphertext=null,result_iv=null,result_auth_tag=null,updated_at=v_now\n   where operation_id=p_operation_id;\n  insert into public.device_auth_events(device_id,credential_id,event_type,success,reason,metadata_json)\n  values (p_device_id,p_credential_id,'custodial_enrollment_operation_cancelled',true,'client_cancelled',jsonb_build_object('operation_id',p_operation_id));\n  return jsonb_build_object('ok',true,'replayed',false,'status','cancelled','operation_id',p_operation_id,'credential_id',p_credential_id);\nend\n$function$\n",
+      "function_name": "device_auth_cancel_enrollment_operation",
+      "identity_arguments": "p_operation_id uuid, p_device_id uuid, p_credential_id uuid, p_token_hash text",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.device_auth_confirm_enrollment_operation(p_operation_id uuid, p_device_id uuid, p_credential_id uuid, p_token_hash text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_now timestamptz:=clock_timestamp();\n  v_operation public.device_auth_enrollment_operations%rowtype;\n  v_credential public.device_auth_credentials%rowtype;\nbegin\n  if p_operation_id is null or p_device_id is null or p_credential_id is null\n     or p_token_hash is null or length(p_token_hash)<>64 then\n    raise exception using errcode='22023',message='operation and credential proof are required';\n  end if;\n  perform pg_advisory_xact_lock(hashtextextended('custodial-enrollment-operation:'||p_operation_id::text,0));\n  select * into v_operation from public.device_auth_enrollment_operations\n   where operation_id=p_operation_id for update;\n  if v_operation.operation_id is null\n     or v_operation.device_id<>p_device_id\n     or v_operation.credential_id<>p_credential_id then\n    return jsonb_build_object('ok',false,'reason','operation_not_found');\n  end if;\n  select * into v_credential from public.device_auth_credentials\n   where credential_id=p_credential_id and device_id=p_device_id and token_hash=p_token_hash;\n  if v_credential.credential_id is null then\n    return jsonb_build_object('ok',false,'reason','credential_mismatch');\n  end if;\n  if v_operation.status='confirmed' then\n    return jsonb_build_object(\n      'ok',true,'replayed',true,'status','confirmed','operation_id',p_operation_id,\n      'credential_id',p_credential_id,\n      'credential_active',(v_credential.revoked_at is null and v_credential.expires_at>v_now)\n    );\n  end if;\n  if v_operation.status<>'committed' then\n    return jsonb_build_object('ok',false,'reason','operation_'||v_operation.status);\n  end if;\n  if v_operation.resume_expires_at<=v_now then\n    update public.device_auth_credentials\n       set revoked_at=coalesce(revoked_at,v_now),\n           revoked_reason=case when revoked_at is null then 'enrollment_operation_unconfirmed_timeout' else revoked_reason end\n     where credential_id=p_credential_id;\n    update public.device_auth_enrollment_operations\n       set status='expired',expired_at=coalesce(expired_at,v_now),\n           result_ciphertext=null,result_iv=null,result_auth_tag=null,updated_at=v_now\n     where operation_id=p_operation_id;\n    return jsonb_build_object('ok',false,'reason','operation_expired');\n  end if;\n  if v_credential.revoked_at is not null or v_credential.expires_at<=v_now then\n    update public.device_auth_enrollment_operations\n       set status='cancelled',cancelled_at=coalesce(cancelled_at,v_now),\n           result_ciphertext=null,result_iv=null,result_auth_tag=null,updated_at=v_now\n     where operation_id=p_operation_id;\n    return jsonb_build_object('ok',false,'reason','credential_unavailable');\n  end if;\n\n  update public.device_auth_credentials\n     set confirmed_at=coalesce(confirmed_at,v_now),last_used_at=coalesce(last_used_at,v_now)\n   where credential_id=p_credential_id;\n  update public.device_auth_enrollment_operations\n     set status='confirmed',confirmed_at=v_now,\n         result_ciphertext=null,result_iv=null,result_auth_tag=null,updated_at=v_now\n   where operation_id=p_operation_id;\n  insert into public.device_auth_events(device_id,credential_id,event_type,success,metadata_json)\n  values (p_device_id,p_credential_id,'custodial_enrollment_operation_confirmed',true,jsonb_build_object('operation_id',p_operation_id));\n  return jsonb_build_object(\n    'ok',true,'replayed',false,'status','confirmed','operation_id',p_operation_id,\n    'credential_id',p_credential_id,'credential_active',true\n  );\nend\n$function$\n",
+      "function_name": "device_auth_confirm_enrollment_operation",
+      "identity_arguments": "p_operation_id uuid, p_device_id uuid, p_credential_id uuid, p_token_hash text",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
       "definition": "CREATE OR REPLACE FUNCTION public.device_auth_consume_enrollment_code(p_device_id uuid, p_code_hash text, p_credential_id uuid, p_token_hash text, p_device_label text, p_expires_at timestamp with time zone, p_user_agent_hash text DEFAULT NULL::text, p_ip_hash text DEFAULT NULL::text, p_metadata_json jsonb DEFAULT '{}'::jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_code public.device_auth_enrollment_codes%rowtype;\n  v_now timestamptz := now();\n  v_credential public.device_auth_credentials%rowtype;\nbegin\n  if p_device_id is null then raise exception 'device_id is required'; end if;\n  if p_code_hash is null or length(p_code_hash) <> 64 then raise exception 'valid code_hash is required'; end if;\n  if p_credential_id is null then raise exception 'credential_id is required'; end if;\n  if p_token_hash is null or length(p_token_hash) <> 64 then raise exception 'valid token_hash is required'; end if;\n  if p_expires_at is null or p_expires_at <= v_now then raise exception 'future expires_at is required'; end if;\n\n  select *\n    into v_code\n  from public.device_auth_enrollment_codes c\n  where c.device_id = p_device_id\n    and c.consumed_at is null\n    and c.revoked_at is null\n    and c.status = 'active'\n  for update;\n\n  if not found then\n    return jsonb_build_object('ok', false, 'reason', 'missing');\n  end if;\n  if v_code.expires_at <= v_now then\n    update public.device_auth_enrollment_codes c\n    set status = 'expired'\n    where c.enrollment_id = v_code.enrollment_id;\n    return jsonb_build_object('ok', false, 'reason', 'expired', 'enrollment_id', v_code.enrollment_id);\n  end if;\n  if v_code.code_hash <> p_code_hash then\n    update public.device_auth_enrollment_codes c\n    set failed_attempts = least(10, c.failed_attempts + 1),\n        last_failed_at = v_now\n    where c.enrollment_id = v_code.enrollment_id;\n    return jsonb_build_object('ok', false, 'reason', 'invalid', 'enrollment_id', v_code.enrollment_id);\n  end if;\n\n  update public.device_auth_credentials dc\n  set revoked_at = v_now,\n      revoked_reason = 'replaced_by_new_enrollment'\n  where dc.device_id = p_device_id\n    and dc.revoked_at is null;\n\n  insert into public.device_auth_credentials(\n    credential_id, device_id, token_hash, device_label, user_agent_hash,\n    created_ip_hash, expires_at, metadata_json\n  ) values (\n    p_credential_id, p_device_id, p_token_hash, nullif(left(coalesce(p_device_label,''),160),''),\n    p_user_agent_hash, p_ip_hash, p_expires_at, coalesce(p_metadata_json,'{}'::jsonb)\n  )\n  returning * into v_credential;\n\n  update public.device_auth_enrollment_codes c\n  set consumed_at = v_now,\n      consumed_by_credential_id = p_credential_id,\n      use_count = 1,\n      status = 'used'\n  where c.enrollment_id = v_code.enrollment_id;\n\n  return jsonb_build_object(\n    'ok', true,\n    'enrollment_id', v_code.enrollment_id,\n    'credential_id', v_credential.credential_id,\n    'expires_at', v_credential.expires_at\n  );\nend;\n$function$\n",
       "function_name": "device_auth_consume_enrollment_code",
       "identity_arguments": "p_device_id uuid, p_code_hash text, p_credential_id uuid, p_token_hash text, p_device_label text, p_expires_at timestamp with time zone, p_user_agent_hash text, p_ip_hash text, p_metadata_json jsonb",
@@ -25465,9 +25801,23 @@
     },
     {
       "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.device_auth_consume_enrollment_operation(p_operation_id uuid, p_flow text, p_device_id uuid, p_code_hash text, p_request_fingerprint text, p_credential_id uuid, p_token_hash text, p_device_label text, p_expires_at timestamp with time zone, p_result_ciphertext text, p_result_iv text, p_result_auth_tag text, p_result_expires_at timestamp with time zone, p_encryption_version text, p_user_agent_hash text DEFAULT NULL::text, p_ip_hash text DEFAULT NULL::text, p_metadata_json jsonb DEFAULT '{}'::jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_now timestamptz:=clock_timestamp();\n  v_operation public.device_auth_enrollment_operations%rowtype;\n  v_code public.device_auth_enrollment_codes%rowtype;\n  v_credential public.device_auth_credentials%rowtype;\n  v_failed_attempts integer;\nbegin\n  if p_operation_id is null or p_device_id is null or p_credential_id is null then\n    raise exception using errcode='22023',message='operation_id, device_id, and credential_id are required';\n  end if;\n  if p_flow not in ('enrollment','recovery') then\n    raise exception using errcode='22023',message='flow must be enrollment or recovery';\n  end if;\n  if p_code_hash is null or length(p_code_hash)<>64\n     or p_request_fingerprint is null or length(p_request_fingerprint)<>64\n     or p_token_hash is null or length(p_token_hash)<>64 then\n    raise exception using errcode='22023',message='valid enrollment hashes are required';\n  end if;\n  if p_expires_at is null or p_expires_at<=v_now then\n    raise exception using errcode='22023',message='future credential expiry is required';\n  end if;\n  if p_result_expires_at is null\n     or p_result_expires_at<=v_now\n     or p_result_expires_at>v_now+interval '1 hour' then\n    raise exception using errcode='22023',message='resumable result expiry must be within one hour';\n  end if;\n  if nullif(btrim(coalesce(p_encryption_version,'')),'') is null\n     or length(coalesce(p_result_ciphertext,''))<32\n     or length(coalesce(p_result_ciphertext,''))>16384\n     or length(coalesce(p_result_iv,'')) not between 12 and 128\n     or length(coalesce(p_result_auth_tag,'')) not between 16 and 128 then\n    raise exception using errcode='22023',message='valid encrypted enrollment result is required';\n  end if;\n\n  perform pg_advisory_xact_lock(hashtextextended('custodial-enrollment-operation:'||p_operation_id::text,0));\n\n  select * into v_operation\n  from public.device_auth_enrollment_operations\n  where operation_id=p_operation_id\n  for update;\n\n  if v_operation.operation_id is not null then\n    if v_operation.device_id<>p_device_id\n       or v_operation.flow<>p_flow\n       or v_operation.request_fingerprint<>p_request_fingerprint then\n      return jsonb_build_object('ok',false,'reason','operation_conflict');\n    end if;\n\n    if v_operation.status='committed' and v_operation.resume_expires_at<=v_now then\n      update public.device_auth_credentials\n         set revoked_at=coalesce(revoked_at,v_now),\n             revoked_reason=case when revoked_at is null then 'enrollment_operation_unconfirmed_timeout' else revoked_reason end\n       where credential_id=v_operation.credential_id;\n      update public.device_auth_enrollment_operations\n         set status='expired',expired_at=coalesce(expired_at,v_now),\n             result_ciphertext=null,result_iv=null,result_auth_tag=null,updated_at=v_now\n       where operation_id=v_operation.operation_id\n       returning * into v_operation;\n      return jsonb_build_object('ok',false,'reason','operation_expired','operation_id',v_operation.operation_id);\n    end if;\n\n    if v_operation.status='committed' then\n      select * into v_credential\n      from public.device_auth_credentials\n      where credential_id=v_operation.credential_id\n        and device_id=v_operation.device_id\n        and revoked_at is null\n        and expires_at>v_now;\n      if v_credential.credential_id is null then\n        update public.device_auth_enrollment_operations\n           set status='cancelled',cancelled_at=coalesce(cancelled_at,v_now),\n               result_ciphertext=null,result_iv=null,result_auth_tag=null,updated_at=v_now\n         where operation_id=v_operation.operation_id;\n        return jsonb_build_object('ok',false,'reason','credential_unavailable','operation_id',v_operation.operation_id);\n      end if;\n      return jsonb_build_object(\n        'ok',true,'replayed',true,'status',v_operation.status,\n        'operation_id',v_operation.operation_id,'flow',v_operation.flow,\n        'credential_id',v_operation.credential_id,\n        'credential_expires_at',v_credential.expires_at,\n        'resume_expires_at',v_operation.resume_expires_at,\n        'encryption_version',v_operation.encryption_version,\n        'result_ciphertext',v_operation.result_ciphertext,\n        'result_iv',v_operation.result_iv,\n        'result_auth_tag',v_operation.result_auth_tag\n      );\n    end if;\n\n    return jsonb_build_object(\n      'ok',false,'reason','operation_'||v_operation.status,\n      'operation_id',v_operation.operation_id,'credential_id',v_operation.credential_id\n    );\n  end if;\n\n  perform 1 from public.devices where id=p_device_id for update;\n  if not found then\n    raise exception using errcode='P0002',message='device was not found';\n  end if;\n\n  select * into v_code\n  from public.device_auth_enrollment_codes\n  where device_id=p_device_id and consumed_at is null and revoked_at is null\n  order by created_at desc\n  limit 1\n  for update;\n\n  if v_code.enrollment_id is null or v_code.expires_at<=v_now then\n    if v_code.enrollment_id is not null then\n      update public.device_auth_enrollment_codes\n         set revoked_at=coalesce(revoked_at,v_now),\n             metadata_json=metadata_json||jsonb_build_object('revoked_reason','expired')\n       where enrollment_id=v_code.enrollment_id;\n    end if;\n    return jsonb_build_object('ok',false,'reason','invalid_or_expired');\n  end if;\n\n  if v_code.failed_attempts>=10 then\n    update public.device_auth_enrollment_codes\n       set revoked_at=coalesce(revoked_at,v_now),\n           metadata_json=metadata_json||jsonb_build_object('revoked_reason','attempt_limit')\n     where enrollment_id=v_code.enrollment_id;\n    return jsonb_build_object('ok',false,'reason','invalid_or_expired');\n  end if;\n\n  if v_code.code_hash<>p_code_hash then\n    v_failed_attempts:=least(v_code.failed_attempts+1,10);\n    update public.device_auth_enrollment_codes\n       set failed_attempts=v_failed_attempts,last_failed_at=v_now,\n           revoked_at=case when v_failed_attempts>=10 then v_now else revoked_at end,\n           metadata_json=case when v_failed_attempts>=10\n             then metadata_json||jsonb_build_object('revoked_reason','attempt_limit')\n             else metadata_json end\n     where enrollment_id=v_code.enrollment_id;\n    insert into public.device_auth_events(\n      device_id,credential_id,event_type,success,reason,ip_hash,user_agent_hash,metadata_json\n    ) values (\n      p_device_id,null,'custodial_enrollment_operation_failed',false,'invalid_code',\n      p_ip_hash,p_user_agent_hash,\n      jsonb_build_object('operation_id',p_operation_id,'flow',p_flow,'enrollment_id',v_code.enrollment_id,'failed_attempts',v_failed_attempts)\n    );\n    return jsonb_build_object('ok',false,'reason','invalid_or_expired');\n  end if;\n\n  update public.device_auth_credentials\n     set revoked_at=v_now,revoked_reason='re_enrolled'\n   where device_id=p_device_id and revoked_at is null;\n\n  insert into public.device_auth_credentials(\n    credential_id,device_id,token_hash,device_label,\n    user_agent_hash,created_ip_hash,last_user_agent_hash,last_ip_hash,\n    metadata_json,confirmed_at,last_used_at,expires_at\n  ) values (\n    p_credential_id,p_device_id,p_token_hash,\n    nullif(left(btrim(coalesce(p_device_label,'')),160),''),\n    p_user_agent_hash,p_ip_hash,p_user_agent_hash,p_ip_hash,\n    coalesce(p_metadata_json,'{}'::jsonb)||jsonb_build_object('enrollment_operation_id',p_operation_id,'enrollment_flow',p_flow),\n    null,null,p_expires_at\n  ) returning * into v_credential;\n\n  update public.device_auth_enrollment_codes\n     set consumed_at=v_now,consumed_by_credential_id=v_credential.credential_id\n   where enrollment_id=v_code.enrollment_id;\n\n  insert into public.device_auth_enrollment_operations(\n    operation_id,device_id,credential_id,enrollment_id,flow,request_fingerprint,status,\n    encryption_version,result_ciphertext,result_iv,result_auth_tag,resume_expires_at,metadata_json\n  ) values (\n    p_operation_id,p_device_id,v_credential.credential_id,v_code.enrollment_id,p_flow,p_request_fingerprint,'committed',\n    left(p_encryption_version,80),p_result_ciphertext,p_result_iv,p_result_auth_tag,p_result_expires_at,\n    coalesce(p_metadata_json,'{}'::jsonb)\n  ) returning * into v_operation;\n\n  insert into public.device_auth_events(\n    device_id,credential_id,event_type,success,reason,ip_hash,user_agent_hash,metadata_json\n  ) values (\n    p_device_id,v_credential.credential_id,'custodial_enrollment_operation_committed',true,null,\n    p_ip_hash,p_user_agent_hash,\n    coalesce(p_metadata_json,'{}'::jsonb)||jsonb_build_object(\n      'operation_id',p_operation_id,'flow',p_flow,'enrollment_id',v_code.enrollment_id,\n      'resume_expires_at',p_result_expires_at\n    )\n  );\n\n  return jsonb_build_object(\n    'ok',true,'replayed',false,'status','committed',\n    'operation_id',v_operation.operation_id,'flow',v_operation.flow,\n    'credential_id',v_credential.credential_id,\n    'credential_expires_at',v_credential.expires_at,\n    'resume_expires_at',v_operation.resume_expires_at,\n    'encryption_version',v_operation.encryption_version,\n    'result_ciphertext',v_operation.result_ciphertext,\n    'result_iv',v_operation.result_iv,\n    'result_auth_tag',v_operation.result_auth_tag\n  );\nend\n$function$\n",
+      "function_name": "device_auth_consume_enrollment_operation",
+      "identity_arguments": "p_operation_id uuid, p_flow text, p_device_id uuid, p_code_hash text, p_request_fingerprint text, p_credential_id uuid, p_token_hash text, p_device_label text, p_expires_at timestamp with time zone, p_result_ciphertext text, p_result_iv text, p_result_auth_tag text, p_result_expires_at timestamp with time zone, p_encryption_version text, p_user_agent_hash text, p_ip_hash text, p_metadata_json jsonb",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
       "definition": "CREATE OR REPLACE FUNCTION public.device_auth_evaluate_and_enforce()\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_active_devices integer;\n  v_confirmed_devices integer;\n  v_mode text;\n  v_changed boolean := false;\nbegin\n  select count(*) into v_active_devices\n  from public.devices d\n  where d.active = true and d.device_id ~ '^KIOSK_(0[2-9]|10)$';\n\n  select count(distinct c.device_id) into v_confirmed_devices\n  from public.device_auth_credentials c\n  join public.devices d on d.id = c.device_id\n  where d.active = true\n    and d.device_id ~ '^KIOSK_(0[2-9]|10)$'\n    and c.confirmed_at is not null\n    and c.revoked_at is null\n    and c.expires_at > now();\n\n  select coalesce(\n    (select p.mode from public.device_auth_policy p where p.singleton = true limit 1),\n    (select trim(both '\"' from s.setting_value::text) from public.system_settings s where s.setting_key = 'device_auth_rollout_mode' limit 1),\n    'observe'\n  ) into v_mode;\n\n  if v_mode = 'enroll' and v_active_devices = 9 and v_confirmed_devices = v_active_devices then\n    insert into public.device_auth_policy(singleton, mode, updated_by, updated_at)\n    values (true, 'enforce-ready', 'device_auth_evaluate_and_enforce', now())\n    on conflict (singleton) do update\n      set mode = excluded.mode,\n          updated_by = excluded.updated_by,\n          updated_at = excluded.updated_at;\n\n    update public.system_settings\n    set setting_value = '\"enforce-ready\"'::jsonb,\n        description = 'All expected employee kiosks have confirmed credentials. Physical acceptance is still required before enforce.',\n        updated_at = now()\n    where setting_key = 'device_auth_rollout_mode';\n\n    insert into public.release_validation_runs(release_id, area, status, details_json)\n    values(\n      'custodial-foundation-repair-20260717',\n      'device_credential_enforce_ready',\n      'pass',\n      jsonb_build_object(\n        'active_employee_devices', v_active_devices,\n        'confirmed_devices', v_confirmed_devices,\n        'previous_mode', v_mode,\n        'new_mode', 'enforce-ready',\n        'requires_physical_acceptance', true,\n        'evaluated_at', now()\n      )\n    );\n    v_mode := 'enforce-ready';\n    v_changed := true;\n  end if;\n\n  return jsonb_build_object(\n    'active_employee_devices', v_active_devices,\n    'confirmed_devices', v_confirmed_devices,\n    'mode', v_mode,\n    'changed', v_changed,\n    'physical_acceptance_required_for_enforce', true\n  );\nend\n$function$\n",
       "function_name": "device_auth_evaluate_and_enforce",
       "identity_arguments": "",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.device_auth_expire_custodial_enrollment_operations(p_now timestamp with time zone DEFAULT now(), p_limit integer DEFAULT 100)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_count integer:=0;\nbegin\n  with expired as (\n    select operation_id,credential_id\n    from public.device_auth_enrollment_operations\n    where status='committed' and resume_expires_at<=p_now\n    order by resume_expires_at,operation_id\n    for update skip locked\n    limit greatest(1,least(coalesce(p_limit,100),1000))\n  ), revoked as (\n    update public.device_auth_credentials credential\n       set revoked_at=coalesce(credential.revoked_at,p_now),\n           revoked_reason=case when credential.revoked_at is null then 'enrollment_operation_unconfirmed_timeout' else credential.revoked_reason end\n      from expired\n     where credential.credential_id=expired.credential_id\n    returning credential.credential_id\n  ), finalized as (\n    update public.device_auth_enrollment_operations operation\n       set status='expired',expired_at=coalesce(operation.expired_at,p_now),\n           result_ciphertext=null,result_iv=null,result_auth_tag=null,updated_at=p_now\n      from expired\n     where operation.operation_id=expired.operation_id\n    returning operation.operation_id\n  )\n  select count(*) into v_count from finalized;\n  return jsonb_build_object('ok',true,'expired',v_count,'checked_at',p_now);\nend\n$function$\n",
+      "function_name": "device_auth_expire_custodial_enrollment_operations",
+      "identity_arguments": "p_now timestamp with time zone, p_limit integer",
       "schema_name": "public"
     },
     {
@@ -25566,6 +25916,13 @@
       "definition": "CREATE OR REPLACE FUNCTION public.finish_operational_notification_job(p_job_id uuid, p_lease_token uuid, p_succeeded boolean, p_error text DEFAULT NULL::text, p_retry_seconds integer DEFAULT 30)\n RETURNS operational_notification_jobs\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_row public.operational_notification_jobs;\nbegin\n  update public.operational_notification_jobs j\n  set status = case\n        when p_succeeded then 'completed'\n        when j.attempts >= j.max_attempts then 'dead'\n        else 'pending'\n      end,\n      completed_at = case when p_succeeded then now() else null end,\n      available_at = case when p_succeeded then j.available_at else now() + make_interval(secs => greatest(5, least(coalesce(p_retry_seconds, 30), 3600))) end,\n      leased_at = null,\n      leased_until = null,\n      lease_token = null,\n      worker_id = null,\n      last_error = case when p_succeeded then null else left(coalesce(p_error, 'notification failed'), 2000) end,\n      updated_at = now()\n  where j.job_id = p_job_id\n    and j.status = 'leased'\n    and j.lease_token = p_lease_token\n  returning j.* into v_row;\n  if v_row.job_id is null then\n    raise exception 'notification job lease is no longer authoritative';\n  end if;\n  return v_row;\nend;\n$function$\n",
       "function_name": "finish_operational_notification_job",
       "identity_arguments": "p_job_id uuid, p_lease_token uuid, p_succeeded boolean, p_error text, p_retry_seconds integer",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.finish_operational_notification_job_terminal(p_job_id uuid, p_lease_token uuid, p_error text)\n RETURNS operational_notification_jobs\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_row public.operational_notification_jobs%rowtype;\nbegin\n  select * into v_row from public.operational_notification_jobs where job_id=p_job_id for update;\n  if v_row.job_id is null\n     or v_row.lease_token is distinct from p_lease_token\n     or v_row.status not in ('leased','dead') then\n    raise exception 'notification job lease is no longer authoritative';\n  end if;\n  update public.operational_notification_jobs\n     set status='dead',completed_at=coalesce(completed_at,now()),\n         leased_at=null,leased_until=null,lease_token=null,worker_id=null,\n         last_error=left(coalesce(p_error,'notification recipient is no longer authorized'),2000),\n         updated_at=now()\n   where job_id=p_job_id\n   returning * into v_row;\n  return v_row;\nend\n$function$\n",
+      "function_name": "finish_operational_notification_job_terminal",
+      "identity_arguments": "p_job_id uuid, p_lease_token uuid, p_error text",
       "schema_name": "public"
     },
     {
@@ -26088,6 +26445,13 @@
     },
     {
       "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.mz_reconcile_employee_push_credential_state()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_reason text;\nbegin\n  if new.revoked_at is null and new.expires_at>clock_timestamp() then\n    return new;\n  end if;\n  v_reason:=case when new.revoked_at is not null then 'device_credential_revoked' else 'device_credential_expired' end;\n  update public.employee_push_registrations\n     set active=false,revoked_at=coalesce(revoked_at,clock_timestamp()),revoked_reason=v_reason,updated_at=clock_timestamp()\n   where credential_id=new.credential_id and (active=true or revoked_at is null);\n  update public.event_push_instances\n     set state='cancelled',cancelled_at=coalesce(cancelled_at,clock_timestamp()),last_error=v_reason,updated_at=clock_timestamp()\n   where credential_id=new.credential_id and state in ('pending','leased');\n  update public.operational_notification_jobs\n     set status='dead',completed_at=coalesce(completed_at,clock_timestamp()),last_error=v_reason,updated_at=clock_timestamp()\n   where job_type in ('employee_event_push','employee_native_push')\n     and status in ('pending','leased')\n     and payload_json->>'credential_id'=new.credential_id::text\n     and (status='pending' or leased_until<clock_timestamp());\n  return new;\nend\n$function$\n",
+      "function_name": "mz_reconcile_employee_push_credential_state",
+      "identity_arguments": "",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
       "definition": "CREATE OR REPLACE FUNCTION public.mz_register_employee_push(p_credential_id uuid, p_token text, p_token_hash text, p_platform text, p_app_version text DEFAULT NULL::text, p_app_build text DEFAULT NULL::text)\n RETURNS employee_push_registrations\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_device public.devices%rowtype;\n  v_result public.employee_push_registrations%rowtype;\nbegin\n  select d.* into v_device\n    from public.device_auth_credentials c\n    join public.devices d on d.id=c.device_id\n   where c.credential_id=p_credential_id\n     and c.confirmed_at is not null and c.revoked_at is null and c.expires_at>now()\n     and d.active=true\n   for update of d;\n  if v_device.id is null or v_device.assigned_employee_id is null then\n    raise exception using errcode='42501',message='Credential is not assigned to an active employee device.';\n  end if;\n  if p_platform not in ('android','ios') or length(btrim(coalesce(p_token,'')))<20 then\n    raise exception using errcode='22023',message='A valid FCM token and platform are required.';\n  end if;\n\n  update public.employee_push_registrations\n     set active=false,revoked_at=now(),revoked_reason='token_rotated',updated_at=now()\n   where device_id=v_device.id and active=true and revoked_at is null\n     and (credential_id<>p_credential_id or assignment_epoch<>v_device.assignment_epoch or token_hash<>p_token_hash);\n\n  insert into public.employee_push_registrations(\n    device_id,credential_id,employee_id,assignment_epoch,platform,fcm_token,token_hash,\n    app_version,app_build,active,registered_at,last_seen_at,revoked_at,revoked_reason,last_error,updated_at\n  ) values (\n    v_device.id,p_credential_id,v_device.assigned_employee_id,v_device.assignment_epoch,p_platform,p_token,p_token_hash,\n    nullif(left(coalesce(p_app_version,''),80),''),nullif(left(coalesce(p_app_build,''),120),''),\n    true,now(),now(),null,null,null,now()\n  )\n  on conflict(credential_id,assignment_epoch) do update set\n    employee_id=excluded.employee_id,platform=excluded.platform,fcm_token=excluded.fcm_token,\n    token_hash=excluded.token_hash,app_version=excluded.app_version,app_build=excluded.app_build,\n    active=true,registered_at=now(),last_seen_at=now(),revoked_at=null,revoked_reason=null,last_error=null,updated_at=now()\n  returning * into v_result;\n  return v_result;\nend\n$function$\n",
       "function_name": "mz_register_employee_push",
       "identity_arguments": "p_credential_id uuid, p_token text, p_token_hash text, p_platform text, p_app_version text, p_app_build text",
@@ -26098,6 +26462,13 @@
       "definition": "CREATE OR REPLACE FUNCTION public.mz_reject_event_messenger_message()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\nbegin\n  if lower(coalesce(new.metadata_json->>'source',''))='events_app' then\n    raise exception using\n      errcode='23514',\n      message='Event notifications are native-only and cannot create Messenger messages';\n  end if;\n  return new;\nend\n$function$\n",
       "function_name": "mz_reject_event_messenger_message",
       "identity_arguments": "",
+      "schema_name": "public"
+    },
+    {
+      "comment": "Fail-closed final recipient resolution for employee FCM delivery. Reconciles stale registrations against current credential, device, employee, and assignment state.",
+      "definition": "CREATE OR REPLACE FUNCTION public.mz_resolve_employee_push_delivery(p_credential_id uuid, p_assignment_epoch bigint, p_now timestamp with time zone DEFAULT now())\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_registration public.employee_push_registrations%rowtype;\n  v_credential public.device_auth_credentials%rowtype;\n  v_device public.devices%rowtype;\n  v_employee_active boolean;\n  v_reason text;\nbegin\n  if p_credential_id is null or p_assignment_epoch is null or p_assignment_epoch<1 then\n    raise exception using errcode='22023',message='credential and assignment epoch are required';\n  end if;\n\n  select * into v_registration\n  from public.employee_push_registrations\n  where credential_id=p_credential_id and assignment_epoch=p_assignment_epoch\n  order by active desc,last_seen_at desc\n  limit 1\n  for update;\n\n  select * into v_credential from public.device_auth_credentials\n   where credential_id=p_credential_id;\n  if v_credential.credential_id is not null then\n    select * into v_device from public.devices where id=v_credential.device_id;\n  end if;\n  if v_registration.registration_id is not null then\n    select active into v_employee_active from public.employees where id=v_registration.employee_id;\n  end if;\n\n  v_reason:=case\n    when v_registration.registration_id is null then 'push_registration_missing'\n    when v_credential.credential_id is null then 'device_credential_missing'\n    when v_credential.revoked_at is not null then 'device_credential_revoked'\n    when v_credential.expires_at<=p_now then 'device_credential_expired'\n    when v_credential.confirmed_at is null then 'device_credential_unconfirmed'\n    when v_registration.active is not true or v_registration.revoked_at is not null then 'push_registration_revoked'\n    when v_device.id is null or v_device.id<>v_registration.device_id or v_credential.device_id<>v_registration.device_id then 'device_credential_device_mismatch'\n    when v_device.active is not true then 'device_inactive'\n    when v_device.assigned_employee_id is null or v_device.assigned_employee_id<>v_registration.employee_id then 'employee_assignment_superseded'\n    when v_device.assignment_epoch<>v_registration.assignment_epoch or v_device.assignment_epoch<>p_assignment_epoch then 'assignment_epoch_superseded'\n    when v_employee_active is not true then 'employee_inactive'\n    else null\n  end;\n\n  if v_reason is not null then\n    if v_registration.registration_id is not null and (v_registration.active=true or v_registration.revoked_at is null) then\n      update public.employee_push_registrations\n         set active=false,revoked_at=coalesce(revoked_at,p_now),revoked_reason=v_reason,updated_at=p_now\n       where registration_id=v_registration.registration_id;\n    end if;\n    update public.event_push_instances\n       set state='cancelled',cancelled_at=coalesce(cancelled_at,p_now),last_error=v_reason,updated_at=p_now\n     where credential_id=p_credential_id and assignment_epoch=p_assignment_epoch and state in ('pending','leased');\n    update public.operational_notification_jobs\n       set status='dead',completed_at=coalesce(completed_at,p_now),last_error=v_reason,updated_at=p_now\n     where job_type in ('employee_event_push','employee_native_push')\n       and status in ('pending','leased')\n       and payload_json->>'credential_id'=p_credential_id::text\n       and payload_json->>'assignment_epoch'=p_assignment_epoch::text\n       and (status='pending' or leased_until<p_now);\n    return jsonb_build_object('ok',false,'terminal',true,'reason',v_reason);\n  end if;\n\n  return jsonb_build_object(\n    'ok',true,'checked_at',p_now,\n    'registration',to_jsonb(v_registration),\n    'credential_id',p_credential_id,\n    'device_id',v_registration.device_id,\n    'employee_id',v_registration.employee_id,\n    'assignment_epoch',v_registration.assignment_epoch\n  );\nend\n$function$\n",
+      "function_name": "mz_resolve_employee_push_delivery",
+      "identity_arguments": "p_credential_id uuid, p_assignment_epoch bigint, p_now timestamp with time zone",
       "schema_name": "public"
     },
     {
@@ -27889,6 +28260,42 @@
       "is_unique": true,
       "schema_name": "public",
       "table_name": "device_auth_enrollment_codes"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX device_auth_enrollment_operations_credential_id_key ON public.device_auth_enrollment_operations USING btree (credential_id)",
+      "index_name": "device_auth_enrollment_operations_credential_id_key",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_operations"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX device_auth_enrollment_operations_pkey ON public.device_auth_enrollment_operations USING btree (operation_id)",
+      "index_name": "device_auth_enrollment_operations_pkey",
+      "is_primary": true,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_operations"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_device_auth_enrollment_operations_device_recent ON public.device_auth_enrollment_operations USING btree (device_id, created_at DESC)",
+      "index_name": "idx_device_auth_enrollment_operations_device_recent",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_operations"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_device_auth_enrollment_operations_expiry ON public.device_auth_enrollment_operations USING btree (resume_expires_at, operation_id) WHERE (status = 'committed'::text)",
+      "index_name": "idx_device_auth_enrollment_operations_expiry",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_operations"
     },
     {
       "backs_constraint": true,
@@ -32537,6 +32944,22 @@
       "schema_name": "public"
     },
     {
+      "function_name": "device_auth_cancel_enrollment_operation",
+      "grantee": "service_role",
+      "identity_arguments": "p_operation_id uuid, p_device_id uuid, p_credential_id uuid, p_token_hash text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "device_auth_confirm_enrollment_operation",
+      "grantee": "service_role",
+      "identity_arguments": "p_operation_id uuid, p_device_id uuid, p_credential_id uuid, p_token_hash text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
       "function_name": "device_auth_consume_enrollment_code",
       "grantee": "service_role",
       "identity_arguments": "p_device_id uuid, p_code_hash text, p_credential_id uuid, p_token_hash text, p_device_label text, p_expires_at timestamp with time zone, p_user_agent_hash text, p_ip_hash text, p_metadata_json jsonb",
@@ -32545,9 +32968,25 @@
       "schema_name": "public"
     },
     {
+      "function_name": "device_auth_consume_enrollment_operation",
+      "grantee": "service_role",
+      "identity_arguments": "p_operation_id uuid, p_flow text, p_device_id uuid, p_code_hash text, p_request_fingerprint text, p_credential_id uuid, p_token_hash text, p_device_label text, p_expires_at timestamp with time zone, p_result_ciphertext text, p_result_iv text, p_result_auth_tag text, p_result_expires_at timestamp with time zone, p_encryption_version text, p_user_agent_hash text, p_ip_hash text, p_metadata_json jsonb",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
       "function_name": "device_auth_evaluate_and_enforce",
       "grantee": "service_role",
       "identity_arguments": "",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "device_auth_expire_custodial_enrollment_operations",
+      "grantee": "service_role",
+      "identity_arguments": "p_now timestamp with time zone, p_limit integer",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -32660,6 +33099,14 @@
       "function_name": "finish_operational_notification_job",
       "grantee": "service_role",
       "identity_arguments": "p_job_id uuid, p_lease_token uuid, p_succeeded boolean, p_error text, p_retry_seconds integer",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "finish_operational_notification_job_terminal",
+      "grantee": "service_role",
+      "identity_arguments": "p_job_id uuid, p_lease_token uuid, p_error text",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -33257,6 +33704,14 @@
       "schema_name": "public"
     },
     {
+      "function_name": "mz_reconcile_employee_push_credential_state",
+      "grantee": "service_role",
+      "identity_arguments": "",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
       "function_name": "mz_register_employee_push",
       "grantee": "service_role",
       "identity_arguments": "p_credential_id uuid, p_token text, p_token_hash text, p_platform text, p_app_version text, p_app_build text",
@@ -33268,6 +33723,14 @@
       "function_name": "mz_reject_event_messenger_message",
       "grantee": "service_role",
       "identity_arguments": "",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "mz_resolve_employee_push_delivery",
+      "grantee": "service_role",
+      "identity_arguments": "p_credential_id uuid, p_assignment_epoch bigint, p_now timestamp with time zone",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -35601,6 +36064,55 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "device_auth_enrollment_codes"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "DELETE",
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_operations"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "INSERT",
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_operations"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "REFERENCES",
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_operations"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_operations"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "TRIGGER",
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_operations"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "TRUNCATE",
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_operations"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "UPDATE",
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_operations"
     },
     {
       "grantee": "service_role",
@@ -42672,6 +43184,15 @@
       "table_name": "device_auth_enrollment_codes"
     },
     {
+      "comment": "Short-lived AES-GCM ciphertext for idempotent native custodial enrollment response recovery. Plaintext device credentials are never stored here.",
+      "partition_key": null,
+      "relation_kind": "r",
+      "rls_enabled": true,
+      "rls_forced": true,
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_operations"
+    },
+    {
       "comment": "Privacy-preserving device authentication audit events.",
       "partition_key": null,
       "relation_kind": "r",
@@ -43741,6 +44262,13 @@
       "schema_name": "public",
       "table_name": "daily_schedule_assignments",
       "trigger_name": "trg_sch_guard_restricted_daily_assignment"
+    },
+    {
+      "definition": "CREATE TRIGGER trg_mz_reconcile_employee_push_credential_state AFTER UPDATE OF revoked_at, expires_at ON device_auth_credentials FOR EACH ROW WHEN (old.revoked_at IS DISTINCT FROM new.revoked_at OR old.expires_at IS DISTINCT FROM new.expires_at) EXECUTE FUNCTION mz_reconcile_employee_push_credential_state()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "device_auth_credentials",
+      "trigger_name": "trg_mz_reconcile_employee_push_credential_state"
     },
     {
       "definition": "CREATE TRIGGER trg_devices_assignment_epoch BEFORE UPDATE OF assigned_employee_id ON devices FOR EACH ROW EXECUTE FUNCTION mz_revoke_stale_employee_push_registrations()",

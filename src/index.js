@@ -1102,6 +1102,7 @@ async function runOperationalNotificationWorker({ limit = 10 } = {}) {
     for (const job of jobs) {
       let succeeded = false;
       let errorMessage = null;
+      let terminal = false;
       try {
         if (job.job_type === "guest_cleanliness_report") {
           await processGuestCleanlinessNotificationJob(job);
@@ -1113,16 +1114,25 @@ async function runOperationalNotificationWorker({ limit = 10 } = {}) {
         succeeded = true;
       } catch (error) {
         errorMessage = String(error?.message || "Operational notification failed.").slice(0, 2000);
+        terminal = error?.terminal === true;
       }
       const retrySeconds = Math.min(3600, Math.max(15, 15 * (2 ** Math.min(8, Number(job.attempts || 1) - 1))));
-      await runRpc("finish_operational_notification_job", {
-        p_job_id: job.job_id,
-        p_lease_token: job.lease_token,
-        p_succeeded: succeeded,
-        p_error: errorMessage,
-        p_retry_seconds: retrySeconds,
-      });
-      results.push({ job_id: job.job_id, succeeded, error: errorMessage });
+      if (terminal) {
+        await runRpc("finish_operational_notification_job_terminal", {
+          p_job_id: job.job_id,
+          p_lease_token: job.lease_token,
+          p_error: errorMessage,
+        });
+      } else {
+        await runRpc("finish_operational_notification_job", {
+          p_job_id: job.job_id,
+          p_lease_token: job.lease_token,
+          p_succeeded: succeeded,
+          p_error: errorMessage,
+          p_retry_seconds: retrySeconds,
+        });
+      }
+      results.push({ job_id: job.job_id, succeeded, terminal, error: errorMessage });
     }
     return {
       ok: true,

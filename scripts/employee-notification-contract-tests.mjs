@@ -162,4 +162,91 @@ assert.equal(missingAuthResolver.status, 503);
 assert.equal(missingAuthResolver.body.ok, false);
 assert.equal(missingAuthResolver.body.dependencies.device_auth_resolver_configured, false);
 
+const claimedJob = {
+  job_id: '77777777-7777-4777-8777-777777777771',
+  job_key: 'employee-message:revocation-boundary',
+  job_type: 'employee_native_push',
+  source_id: '77777777-7777-4777-8777-777777777772',
+  lease_token: '77777777-7777-4777-8777-777777777773',
+  payload_json: {
+    credential_id: canonicalCredentialId,
+    employee_id: '77777777-7777-4777-8777-777777777774',
+    device_id: '77777777-7777-4777-8777-777777777775',
+    assignment_epoch: 4,
+    channel_id: 'employee-messages',
+    title: 'Revocation boundary',
+    body: 'This must not cross a revoked credential boundary.',
+    data_json: { notification_type: 'message' },
+  },
+};
+const authorizedRegistration = {
+  registration_id: '77777777-7777-4777-8777-777777777776',
+  credential_id: canonicalCredentialId,
+  employee_id: claimedJob.payload_json.employee_id,
+  device_id: claimedJob.payload_json.device_id,
+  assignment_epoch: 4,
+  fcm_token: `contract-fcm-${'x'.repeat(40)}`,
+  active: true,
+};
+
+let sendCount = 0;
+let resolveCount = 0;
+let credentialRevoked = false;
+const revokeAfterClaimDb = {
+  async rpc(name) {
+    assert.equal(name, 'mz_resolve_employee_push_delivery');
+    resolveCount += 1;
+    return credentialRevoked
+      ? { data: { ok: false, terminal: true, reason: 'device_credential_revoked' }, error: null }
+      : { data: { ok: true, registration: authorizedRegistration }, error: null };
+  },
+};
+const revokeAfterClaimRuntime = installEmployeeNotificationRoutes(express(), {
+  supabase: revokeAfterClaimDb,
+  pushRuntime: {
+    configured: true,
+    async send() { sendCount += 1; return 'provider-message-must-not-exist'; },
+  },
+  beforeFinalDeliveryCheck: async () => { credentialRevoked = true; },
+});
+await assert.rejects(
+  () => revokeAfterClaimRuntime.deliverClaimedJob(claimedJob),
+  (error) => error?.terminal === true && error?.code === 'device_credential_revoked',
+  'revocation after claim and before send must be a terminal delivery outcome',
+);
+assert.equal(resolveCount, 2, 'delivery must revalidate once after claim and once immediately before FCM');
+assert.equal(sendCount, 0, 'FCM must not be called after credential revocation');
+
+let preClaimResolveCount = 0;
+const revokedBeforeClaimRuntime = installEmployeeNotificationRoutes(express(), {
+  supabase: {
+    async rpc(name) {
+      assert.equal(name, 'mz_resolve_employee_push_delivery');
+      preClaimResolveCount += 1;
+      return { data: { ok: false, terminal: true, reason: 'device_credential_expired' }, error: null };
+    },
+  },
+  pushRuntime: {
+    configured: true,
+    async send() { sendCount += 1; return 'provider-message-must-not-exist'; },
+  },
+});
+await assert.rejects(
+  () => revokedBeforeClaimRuntime.deliverClaimedJob(claimedJob),
+  (error) => error?.terminal === true && error?.code === 'device_credential_expired',
+  'a job claimed after credential expiry must fail closed',
+);
+// Restarting a worker against the same durable job must repeat the authority
+// check and remain terminal instead of attempting provider delivery.
+await assert.rejects(
+  () => revokedBeforeClaimRuntime.deliverClaimedJob(claimedJob),
+  (error) => error?.terminal === true && error?.code === 'device_credential_expired',
+);
+assert.equal(preClaimResolveCount, 2);
+assert.equal(sendCount, 0);
+
+assert.match(source, /resolveAuthorizedDelivery\(credential, assignmentEpoch\)[\s\S]*beforeFinalDeliveryCheck[\s\S]*resolveAuthorizedDelivery\(credential, assignmentEpoch\)/);
+assert.match(source, /finish_operational_notification_job_terminal/);
+assert.match(indexSource, /error\?\.terminal === true[\s\S]*finish_operational_notification_job_terminal/);
+
 console.log('EMPLOYEE_NATIVE_NOTIFICATION_CONTRACT_PASS');

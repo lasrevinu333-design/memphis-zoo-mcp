@@ -22,6 +22,14 @@ function credentialId(req) {
       || '',
   ).trim();
 }
+function terminalDeliveryError(reason) {
+  const normalized = clip(reason, 160) || 'employee_push_recipient_superseded';
+  const error = new Error(`Employee push delivery cancelled: ${normalized}.`);
+  error.code = normalized;
+  error.terminal = true;
+  error.permanent = true;
+  return error;
+}
 const EMPLOYEE_TEST_KINDS = new Set(['event', 'message', 'due_soon', 'overdue']);
 function buildManagerTestNotification(kind, { runId, deviceIdentifier }) {
   const notificationKey = `manager-test:${runId}:${kind}:${deviceIdentifier}`;
@@ -58,7 +66,7 @@ function buildManagerTestNotification(kind, { runId, deviceIdentifier }) {
     },
   };
 }
-export const employeeNotificationInternals = Object.freeze({ credentialId, buildManagerTestNotification });
+export const employeeNotificationInternals = Object.freeze({ credentialId, buildManagerTestNotification, terminalDeliveryError });
 function setCors(req, res) {
   const allowed = new Set(['https://lasrevinu333-design.github.io', 'https://localhost', 'capacitor://localhost']);
   const origin = String(req.headers.origin || '').trim();
@@ -80,6 +88,7 @@ export function installEmployeeNotificationRoutes(app, {
   runReadOnlySql = null,
   requireManager = null,
   registerOperationalJobHandler = null,
+  beforeFinalDeliveryCheck = null,
 } = {}) {
   if (!app || runtimeByApp.has(app)) return runtimeByApp.get(app) || null;
   const db = supabase || createSupabase(env);
@@ -90,6 +99,21 @@ export function installEmployeeNotificationRoutes(app, {
     : (_req, res) => res.status(503).json({ ok: false, error: 'Manager authorization is not configured.' });
   const workerId = `employee-native-push-${process.pid}-${crypto.randomUUID()}`;
   let inFlight = false;
+
+  async function resolveAuthorizedDelivery(credential, assignmentEpoch) {
+    const result = await db.rpc('mz_resolve_employee_push_delivery', {
+      p_credential_id: credential,
+      p_assignment_epoch: assignmentEpoch,
+      p_now: new Date().toISOString(),
+    });
+    if (result.error) throw result.error;
+    if (!result.data?.ok) throw terminalDeliveryError(result.data?.reason);
+    const registration = result.data.registration;
+    if (!registration?.registration_id || !registration?.fcm_token) {
+      throw terminalDeliveryError('push_registration_missing');
+    }
+    return registration;
+  }
 
   app.use(API_PREFIX, (req, res, next) => {
     setCors(req, res);
@@ -303,11 +327,14 @@ export function installEmployeeNotificationRoutes(app, {
       if (!credential || !Number.isSafeInteger(assignmentEpoch) || assignmentEpoch < 1) {
         throw new Error('Employee native push job is missing its assignment-bound recipient.');
       }
-      const registrationResult = await db.from('employee_push_registrations').select('*')
-        .eq('credential_id', credential).eq('assignment_epoch', assignmentEpoch)
-        .eq('active', true).is('revoked_at', null).single();
-      if (registrationResult.error) throw registrationResult.error;
-      registration = registrationResult.data;
+      // A job can outlive either its credential or employee assignment.  Check
+      // once after claim, then again immediately before the provider boundary.
+      // The database resolver also reconciles stale registration state.
+      registration = await resolveAuthorizedDelivery(credential, assignmentEpoch);
+      if (typeof beforeFinalDeliveryCheck === 'function') {
+        await beforeFinalDeliveryCheck({ job, credential, assignmentEpoch, registration });
+      }
+      registration = await resolveAuthorizedDelivery(credential, assignmentEpoch);
       const providerMessageId = await pushRuntime.send(push, registration, { channelId });
       if (eventInstance) {
         await db.from('event_push_instances').update({
@@ -320,14 +347,22 @@ export function installEmployeeNotificationRoutes(app, {
       return { provider_message_id: providerMessageId };
     } catch (error) {
       const errorMessage = clip(error?.message || 'FCM provider request failed.', 2000);
-      if (registration?.registration_id) {
+      const authorityTerminal = error?.terminal === true;
+      if (registration?.registration_id && !authorityTerminal) {
         const registrationUpdate = error?.permanent
           ? { active: false, revoked_at: new Date().toISOString(), revoked_reason: 'push_token_rejected', last_error: errorMessage, updated_at: new Date().toISOString() }
           : { last_error: errorMessage, updated_at: new Date().toISOString() };
         await db.from('employee_push_registrations').update(registrationUpdate).eq('registration_id', registration.registration_id);
       }
       if (job.job_type === 'employee_event_push') {
-        await db.from('event_push_instances').update({ state: 'failed', last_error: errorMessage, updated_at: new Date().toISOString() }).eq('instance_id', job.source_id);
+        const eventUpdate = error?.terminal === true
+          ? { state: 'cancelled', cancelled_at: new Date().toISOString(), last_error: errorMessage, updated_at: new Date().toISOString() }
+          : { state: 'failed', last_error: errorMessage, updated_at: new Date().toISOString() };
+        await db.from('event_push_instances').update(eventUpdate).eq('instance_id', job.source_id);
+      }
+      if (error?.permanent === true && !authorityTerminal) {
+        error.terminal = true;
+        error.code ||= 'push_token_rejected';
       }
       throw error;
     }
@@ -360,16 +395,22 @@ export function installEmployeeNotificationRoutes(app, {
       for (const job of jobs) {
         let succeeded = false;
         let errorMessage = null;
+        let terminal = false;
         try {
           await deliverClaimedJob(job);
           succeeded = true;
         } catch (error) {
           errorMessage = clip(error?.message || 'FCM provider request failed.', 2000);
+          terminal = error?.terminal === true;
         }
-        const finished = await db.rpc('finish_operational_notification_job', {
-          p_job_id: job.job_id, p_lease_token: job.lease_token, p_succeeded: succeeded,
-          p_error: errorMessage, p_retry_seconds: 120,
-        });
+        const finished = terminal
+          ? await db.rpc('finish_operational_notification_job_terminal', {
+            p_job_id: job.job_id, p_lease_token: job.lease_token, p_error: errorMessage,
+          })
+          : await db.rpc('finish_operational_notification_job', {
+            p_job_id: job.job_id, p_lease_token: job.lease_token, p_succeeded: succeeded,
+            p_error: errorMessage, p_retry_seconds: 120,
+          });
         if (finished.error) throw finished.error;
       }
       return {
@@ -387,7 +428,7 @@ export function installEmployeeNotificationRoutes(app, {
 
   const timer = setInterval(() => { void sweep().catch((error) => console.error('employee native push sweep failed:', error)); }, SWEEP_MS);
   timer.unref?.();
-  const runtime = { sweep, configured: Boolean(db && pushRuntime?.configured) };
+  const runtime = { sweep, deliverClaimedJob, configured: Boolean(db && pushRuntime?.configured) };
   runtimeByApp.set(app, runtime);
   return runtime;
 }

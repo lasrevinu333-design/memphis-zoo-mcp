@@ -4,15 +4,15 @@ import { readFileSync } from "node:fs";
 import { buildReleaseManifest, schemaTransitionFields } from "../src/release-manifest.js";
 import { assertSchemaAlignment } from "../src/schema-transition.js";
 
-const OLD = "52b53bf279e67cb71f85a652cc669d44350716146603132f7e8be5c7de5e30cf";
-const NEW = "ce9466f03953076840ff4e35d998713cced8f22c791fb8b11dacdc8c070c4caf";
+const OLD = "ce9466f03953076840ff4e35d998713cced8f22c791fb8b11dacdc8c070c4caf";
+const NEW = "544d11f47f1f4a960fcf49d13bba53c736d78fe4fe9d225c996c84311d442ad0";
 const THIRD = "3".repeat(64);
 const NOW = Date.parse("2026-08-01T00:00:00Z");
 const TRANSITION = {
-  transition_id: "custodial-atomic-offline-completion-20260801",
+  transition_id: "custodial-native-security-build11-20260801",
   from_fingerprint: OLD,
   to_fingerprint: NEW,
-  expires_at: "2026-08-08T23:59:59Z",
+  expires_at: "2026-08-14T23:59:59Z",
 };
 
 function clone(value) {
@@ -30,13 +30,13 @@ function fixtures({ backendFingerprint = OLD, frontendFingerprint = OLD, deploym
 }
 
 const sourceManifest = JSON.parse(readFileSync(new URL("../release/frontend-release-manifest.json", import.meta.url), "utf8"));
-assert.equal(sourceManifest.schema_fingerprint, NEW, "the schema release must declare the rebuilt production fingerprint");
-assert.equal(Object.hasOwn(sourceManifest, "schema_transition"), false, "the completed source transition must be retired");
+assert.equal(sourceManifest.schema_fingerprint, OLD, "the backend copy must retain the currently deployed frontend fingerprint during transition");
+assert.deepEqual(sourceManifest.schema_transition, TRANSITION, "the backend copy must declare the coordinated schema transition exactly");
 
 const backendRelease = buildReleaseManifest({ appVersion: "test-release" });
 assert.equal(backendRelease.schema.fingerprint, NEW, "the backend must publish the rebuilt production fingerprint");
-assert.equal(backendRelease.frontend.manifest.schema_fingerprint, NEW);
-assert.equal(Object.hasOwn(backendRelease, "schema_transition"), false, "the completed runtime transition must be retired");
+assert.equal(backendRelease.frontend.manifest.schema_fingerprint, OLD);
+assert.deepEqual(backendRelease.schema_transition, TRANSITION, "the runtime manifest must forward the transition while frontend and backend fingerprints differ");
 assert.deepEqual(schemaTransitionFields({ schema_transition: TRANSITION }), { schema_transition: TRANSITION },
   "an active future transition must still be forwarded exactly");
 assert.deepEqual(schemaTransitionFields({ schema_transition: null }), {},

@@ -1,9 +1,15 @@
 {
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "dc24a5d9585fcd6b2bccb9122c33d332983def57",
+  "frontend_commit_sha": "b3c205a3a7622ecc52cc88ad84f6c5ee9a1d3d94",
   "frontend_commit_state": "github_pages_production_verified",
   "backend_minimum_version": "release-2026.07.19.custodial-v3.12",
   "schema_fingerprint": "ce9466f03953076840ff4e35d998713cced8f22c791fb8b11dacdc8c070c4caf",
+  "schema_transition": {
+    "transition_id": "custodial-native-security-build11-20260801",
+    "from_fingerprint": "ce9466f03953076840ff4e35d998713cced8f22c791fb8b11dacdc8c070c4caf",
+    "to_fingerprint": "544d11f47f1f4a960fcf49d13bba53c736d78fe4fe9d225c996c84311d442ad0",
+    "expires_at": "2026-08-14T23:59:59Z"
+  },
   "api_contract_versions": {
     "scan": "scan.v2",
     "dashboard": "dashboard.v1",

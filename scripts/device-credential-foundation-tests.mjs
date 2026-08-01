@@ -81,13 +81,15 @@ function resolver(sql) {
 }
 
 function storeFor({ mode = "enroll", credential = null } = {}) {
-  const audit = [];
+  const auditEvents = [];
+  const touches = [];
   return {
-    audit,
+    auditEvents,
+    touches,
     async getPolicy() { return { mode, updated_at: null, updated_by: null }; },
     async findCredential() { return credential; },
-    async touchCredential() {},
-    async audit(event) { audit.push(event); },
+    async touchCredential(credentialId, patch) { touches.push({ credentialId, patch }); },
+    async audit(event) { auditEvents.push(event); },
     async consumeEnrollmentCode(args) { return { ok: true, ...args, expires_at: args.expiresAt }; },
     async issueEnrollmentCode(args) { return { enrollment_id: "44444444-4444-4444-8444-444444444444", device_id: args.devicePk, expires_at: args.expiresAt }; },
     async revokeCredential() { return null; },
@@ -136,6 +138,37 @@ assert.equal(result.ok, true);
 assert.equal(result.credentialed, true);
 assert.equal(result.device.canonical_device_id, "KIOSK_06");
 
+const enrollmentOperationId = "56565656-5656-4565-8565-565656565656";
+const operationCredential = {
+  ...credential,
+  confirmed_at: null,
+  metadata_json: {
+    enrollment_operation_id: enrollmentOperationId,
+    enrollment_flow: "enrollment",
+  },
+};
+const unconfirmedOperationStore = storeFor({ mode: "enforce", credential: operationCredential });
+result = await authenticateDeviceCredentialRequest(request({ cookie }), {
+  env, store: unconfirmedOperationStore, runReadOnlySql: resolver,
+  now: new Date("2026-07-15T21:00:00.000Z"),
+});
+assert.equal(result.ok, false, "an operation-bound credential must not auto-confirm through an ordinary employee request");
+assert.equal(result.status, 409);
+assert.equal(result.code, "device_enrollment_confirmation_required");
+assert.equal(unconfirmedOperationStore.touches.length, 0, "ordinary auth must not persist confirmation for an operation-bound credential");
+assert.equal(unconfirmedOperationStore.auditEvents.at(-1)?.reason, "enrollment_operation_unconfirmed");
+
+const confirmedOperationStore = storeFor({
+  mode: "enforce",
+  credential: { ...operationCredential, confirmed_at: "2026-07-15T20:59:00.000Z" },
+});
+result = await authenticateDeviceCredentialRequest(request({ cookie }), {
+  env, store: confirmedOperationStore, runReadOnlySql: resolver,
+  now: new Date("2026-07-15T21:00:00.000Z"),
+});
+assert.equal(result.ok, true, "the explicit confirmation boundary must activate the same credential");
+assert.equal(result.credentialed, true);
+
 result = await authenticateDeviceCredentialRequest(request({ deviceId: "KIOSK_07", cookie }), {
   env, store: storeFor({ mode: "enforce", credential }), runReadOnlySql: resolver,
   now: new Date("2026-07-15T21:00:00.000Z"),
@@ -159,6 +192,23 @@ await middleware(request(), {
 assert.equal(middlewareNext, true);
 assert.equal(middlewareStatus, 200);
 assert.equal(middlewarePayload, null);
+
+let unconfirmedMiddlewareNext = false;
+let unconfirmedMiddlewareStatus = 200;
+let unconfirmedMiddlewarePayload = null;
+const unconfirmedEmployeeMiddleware = makeDeviceCredentialMiddleware({
+  env,
+  store: storeFor({ mode: "enforce", credential: operationCredential }),
+  runReadOnlySql: resolver,
+});
+await unconfirmedEmployeeMiddleware(request({ cookie }), {
+  setHeader() {},
+  status(code) { unconfirmedMiddlewareStatus = code; return this; },
+  json(payload) { unconfirmedMiddlewarePayload = payload; return this; },
+}, () => { unconfirmedMiddlewareNext = true; });
+assert.equal(unconfirmedMiddlewareNext, false, "employee and push-registration routes must not run before explicit confirmation");
+assert.equal(unconfirmedMiddlewareStatus, 409);
+assert.equal(unconfirmedMiddlewarePayload.code, "device_enrollment_confirmation_required");
 
 function fakeApp() {
   const routes = new Map();
@@ -208,6 +258,12 @@ const logoutHandler = app.routes.get("POST /device-auth/logout").at(-1);
 const logoutWithoutHeader = responseCapture();
 await logoutHandler(request({ deviceId: "" }), logoutWithoutHeader);
 assert.equal(logoutWithoutHeader.code, 400, "logout must require the preflight-protected X-Device-Id header");
+
+routeStore.revokeByTokenHash = async () => { throw new Error("injected durable revocation failure"); };
+const failedLogout = responseCapture();
+await logoutHandler(request({ cookie }), failedLogout);
+assert.equal(failedLogout.code, 503, "local credential removal must wait for durable server revocation");
+assert.equal(failedLogout.payload.code, "device_logout_failed");
 
 const enrollHandler = app.routes.get("POST /device-auth/enroll").at(-1);
 const enrollRes = responseCapture();

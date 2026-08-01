@@ -52,6 +52,8 @@
     "test:operations-leadership-mobile-db": "node scripts/operations-leadership-mobile-database-tests.mjs",
     "test:custodial-employee-phones": "node scripts/custodial-employee-phone-contract-tests.mjs",
     "test:custodial-employee-phones-db": "node scripts/custodial-employee-phone-database-tests.mjs",
+    "test:custodial-enrollment-security": "node scripts/custodial-enrollment-security-contract-tests.mjs",
+    "test:custodial-enrollment-security-db": "node scripts/custodial-enrollment-security-database-tests.mjs",
     "test:phone-readiness": "node scripts/phone-production-readiness-tests.mjs",
     "phone:readiness": "node scripts/phone-production-readiness.mjs",
     "test:manager-inspection-readiness": "node scripts/manager-inspection-readiness-tests.mjs",
