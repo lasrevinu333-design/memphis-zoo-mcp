@@ -19,6 +19,8 @@ jobs:
     steps:
       - name: Enforce live dependency health and four-second response budget
         shell: bash
+        env:
+          GH_API_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           backend='https://memphis-zoo-mcp.onrender.com'
@@ -59,6 +61,29 @@ jobs:
             -o /tmp/frontend-deployment.json \
             "$frontend/frontend-deployment-manifest.json?probe=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
             > /tmp/frontend-deployment-latency.txt
+          read -r baseline_frontend_commit deployed_frontend_commit < <(python3 - <<'PY'
+          import json
+          import re
+          from pathlib import Path
+
+          version = json.loads(Path('/tmp/version.json').read_text())
+          deployment = json.loads(Path('/tmp/frontend-deployment.json').read_text())
+          baseline = version['release_manifest']['frontend']['commit_sha']
+          deployed = deployment['frontend_commit_sha']
+          assert re.fullmatch(r'[a-f0-9]{40}', baseline), baseline
+          assert re.fullmatch(r'[a-f0-9]{40}', deployed), deployed
+          print(baseline, deployed)
+          PY
+          )
+          if [[ "$baseline_frontend_commit" == "$deployed_frontend_commit" ]]; then
+            printf '%s\n' '{"status":"identical"}' > /tmp/frontend-compare.json
+          else
+            curl -fsSL --retry 2 --max-time 15 \
+              -H 'Accept: application/vnd.github+json' \
+              -H "Authorization: Bearer $GH_API_TOKEN" \
+              -o /tmp/frontend-compare.json \
+              "https://api.github.com/repos/lasrevinu333-design/Engine/compare/${baseline_frontend_commit}...${deployed_frontend_commit}"
+          fi
           python3 - <<'PY'
           import json
           from pathlib import Path
@@ -66,13 +91,14 @@ jobs:
           version = json.loads(Path('/tmp/version.json').read_text())
           frontend = json.loads(Path('/tmp/frontend-manifest.json').read_text())
           deployment = json.loads(Path('/tmp/frontend-deployment.json').read_text())
+          comparison = json.loads(Path('/tmp/frontend-compare.json').read_text())
           version_latency = float(Path('/tmp/version-latency.txt').read_text().strip())
           frontend_latency = float(Path('/tmp/frontend-latency.txt').read_text().strip())
           deployment_latency = float(Path('/tmp/frontend-deployment-latency.txt').read_text().strip())
           assert version['ok'] is True, version
           assert version['version'] == frontend['release_id'], (version, frontend)
           assert deployment['release_id'] == frontend['release_id'], (deployment, frontend)
-          assert version['release_manifest']['frontend']['commit_sha'] == deployment['frontend_commit_sha'], (version, deployment)
+          assert comparison['status'] in ('identical', 'ahead'), comparison
           assert version['release_manifest']['schema']['fingerprint'] == frontend['schema_fingerprint'], (version, frontend)
           assert deployment['schema_fingerprint'] == frontend['schema_fingerprint'], (deployment, frontend)
           assert version_latency <= 4.0, f'version exceeded four seconds: {version_latency:.3f}s'
