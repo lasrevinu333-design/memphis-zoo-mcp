@@ -794,6 +794,61 @@ begin
   ) then
     raise exception 'Memphis background work was not committed with the user message';
   end if;
+
+  insert into public.employees(id,employee_code,display_name,active,role)
+  values
+    ('00000000-0000-4000-8000-00000000f301','EMP9901','Native Push Recipient',true,'staff'),
+    ('00000000-0000-4000-8000-00000000f302','EMP9902','Native Push Sender',true,'staff');
+  insert into public.devices(id,device_id,device_name,active,assigned_employee_id)
+  values (
+    '00000000-0000-4000-8000-00000000f303','NATIVE-PUSH-REBUILD','Native Push Rebuild Device',true,
+    '00000000-0000-4000-8000-00000000f301'
+  );
+  insert into public.device_auth_credentials(
+    credential_id,device_id,token_hash,device_label,confirmed_at,expires_at
+  ) values (
+    '00000000-0000-4000-8000-00000000f304','00000000-0000-4000-8000-00000000f303',
+    repeat('a',64),'Native Push Rebuild Credential',now(),now()+interval '1 day'
+  );
+  insert into public.employee_push_registrations(
+    registration_id,device_id,credential_id,employee_id,assignment_epoch,platform,fcm_token,token_hash
+  ) values (
+    '00000000-0000-4000-8000-00000000f305','00000000-0000-4000-8000-00000000f303',
+    '00000000-0000-4000-8000-00000000f304','00000000-0000-4000-8000-00000000f301',
+    1,'android','rebuild-native-fcm-token-1234567890',repeat('b',64)
+  );
+  insert into public.msg_users(id,employee_id,display_name,role,is_active)
+  values
+    ('00000000-0000-4000-8000-00000000f306','00000000-0000-4000-8000-00000000f301','Native Push Recipient','employee',true),
+    ('00000000-0000-4000-8000-00000000f307','00000000-0000-4000-8000-00000000f302','Native Push Sender','employee',true);
+  insert into public.msg_threads(id,thread_type,title,created_by_user_id,is_active)
+  values (
+    '00000000-0000-4000-8000-00000000f308','direct','Native push functional test',
+    '00000000-0000-4000-8000-00000000f307',true
+  );
+  insert into public.msg_thread_participants(thread_id,user_id)
+  values
+    ('00000000-0000-4000-8000-00000000f308','00000000-0000-4000-8000-00000000f306'),
+    ('00000000-0000-4000-8000-00000000f308','00000000-0000-4000-8000-00000000f307');
+  v_message := public.msg_send_message(
+    '00000000-0000-4000-8000-00000000f308','00000000-0000-4000-8000-00000000f307',
+    'Native employee message push functional test','text','{}'::jsonb,
+    '00000000-0000-4000-8000-00000000f309'
+  );
+  if not exists (
+    select 1 from public.operational_notification_jobs job
+    where job.job_key='employee-message-push:'||v_message.id::text||':00000000-0000-4000-8000-00000000f304'
+      and job.job_type='employee_native_push'
+      and job.status='pending'
+      and job.payload_json->>'channel_id'='employee-messages'
+      and job.payload_json->'data_json'->>'kind'='employee_message'
+      and job.payload_json->'data_json'->>'thread_id'='00000000-0000-4000-8000-00000000f308'
+  ) then
+    raise exception 'Employee Messenger insert did not atomically queue the assignment-bound native push';
+  end if;
+  if coalesce((public.mz_enqueue_employee_location_pushes(now())->>'ok')::boolean,false) is not true then
+    raise exception 'Employee location-state native push sweep did not execute successfully';
+  end if;
 end
 $functional_test$;
 rollback;

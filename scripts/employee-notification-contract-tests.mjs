@@ -4,11 +4,12 @@ import express from 'express';
 import { installEmployeeNotificationRoutes } from '../src/employee-notifications.js';
 
 const root = new URL('../', import.meta.url);
-const [source, manager, indexSource, migration] = await Promise.all([
+const [source, manager, indexSource, migration, nativeKindsMigration] = await Promise.all([
   readFile(new URL('src/employee-notifications.js', root), 'utf8'),
   readFile(new URL('src/manager-notifications.js', root), 'utf8'),
   readFile(new URL('src/index.js', root), 'utf8'),
   readFile(new URL('supabase/migrations/20260724010000_native_employee_event_delivery.sql', root), 'utf8'),
+  readFile(new URL('supabase/migrations/20260731211500_native_employee_message_location_push.sql', root), 'utf8'),
 ]);
 
 assert.match(source, /const API_PREFIX = ['"]\/employee-notifications-api['"]/);
@@ -17,13 +18,21 @@ for (const route of ['register', 'events', 'opened']) {
 }
 
 assert.match(source, /messenger_fallback: false/);
+assert.match(source, /employee-native-push\.v2/);
+for (const kind of ['event_day_before', 'event_shift_plus_15', 'message', 'due_soon', 'overdue']) {
+  assert.ok(source.includes(`'${kind}'`), `missing native employee notification kind ${kind}`);
+}
 assert.match(source, /makeDeviceCredentialMiddleware\(\{ supabase: db, runReadOnlySql \}\)/);
 assert.match(source, /device_auth_resolver_configured: authReadConfigured/);
 assert.match(source, /employee_notification_auth_ready/);
 assert.match(source, /claim_operational_notification_job_by_key/);
 assert.doesNotMatch(source, /claim_operational_notification_jobs/);
-assert.match(source, /channelId: 'employee-events'/);
+assert.match(source, /channelId = 'employee-events'/);
+assert.match(source, /employee_native_push/);
+assert.match(source, /mz_enqueue_employee_location_pushes/);
+assert.match(source, /payload\.channel_id/);
 assert.match(source, /notification_key/);
+assert.match(source, /error\?\.permanent[\s\S]*push_token_rejected/);
 assert.match(manager, /export function createPushRuntime/);
 assert.match(manager, /channel_id: channelId/);
 assert.match(manager, /getClientConfig, send, sweep/);
@@ -45,6 +54,21 @@ assert.match(migration, /08:00:00 America\/Chicago/);
 assert.match(migration, /shift_start::text\|\|' America\/Chicago'\)::timestamptz \+ interval '15 minutes'/);
 assert.match(migration, /status='dead'/);
 assert.doesNotMatch(migration, /operational_notification_jobs[\s\S]{0,240}status='cancelled'/);
+
+for (const contract of [
+  'mz_enqueue_employee_message_push',
+  'trg_mz_enqueue_employee_message_push',
+  'mz_enqueue_employee_location_pushes',
+  'employee_native_push',
+  'employee-messages',
+  'employee-due-soon',
+  'employee-overdue',
+  'device_notification_acknowledgements',
+  'assignment_epoch',
+]) assert.ok(nativeKindsMigration.includes(contract), `missing native employee push contract ${contract}`);
+assert.match(nativeKindsMigration, /status\.status_code in \('due_soon','overdue'\)/);
+assert.match(nativeKindsMigration, /job_type in \('employee_event_push','employee_native_push'\)/);
+assert.doesNotMatch(nativeKindsMigration, /messenger_fallback|presentation_demo/);
 
 async function checkHealth(options) {
   const app = express();
@@ -84,4 +108,4 @@ assert.equal(missingAuthResolver.status, 503);
 assert.equal(missingAuthResolver.body.ok, false);
 assert.equal(missingAuthResolver.body.dependencies.device_auth_resolver_configured, false);
 
-console.log('EMPLOYEE_EVENT_NOTIFICATION_CONTRACT_PASS');
+console.log('EMPLOYEE_NATIVE_NOTIFICATION_CONTRACT_PASS');
