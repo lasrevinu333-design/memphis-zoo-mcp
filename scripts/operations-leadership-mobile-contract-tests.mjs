@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import express from "express";
+import { createOpsManagerSession } from "../src/auth/shared-access-auth.js";
 import { installLeadershipHttpRoutes } from "../src/leadership-bootstrap.js";
 
 const root = new URL("../", import.meta.url);
@@ -81,8 +82,34 @@ const fakeSupabase = {
   },
   from: () => queryResult([]),
 };
+const authEnv = { OPS_MANAGER_SESSION_SECRET: "test-secret" };
+const readOnlyToken = createOpsManagerSession({
+  deviceId: "ops-read-only-contract",
+  manager: {
+    manager_id: "62000000-0000-4000-8000-000000000001",
+    display_name: "Read-only Contract",
+    roles: ["CUSTODIAL_MANAGER"],
+  },
+  authMode: "operations_first",
+  accessLevel: "read_only",
+  maximumAccessLevel: "read_only",
+  env: authEnv,
+}).token;
+const fullAccessToken = createOpsManagerSession({
+  deviceId: "ops-full-access-contract",
+  manager: {
+    manager_id: "62000000-0000-4000-8000-000000000002",
+    display_name: "Full-access Contract",
+    roles: ["CUSTODIAL_MANAGER"],
+  },
+  authMode: "operations_first",
+  accessLevel: "full_access",
+  maximumAccessLevel: "full_access",
+  env: authEnv,
+}).token;
 const app = express();
-installLeadershipHttpRoutes(app, { supabase: fakeSupabase, env: { OPS_MANAGER_SESSION_SECRET: "test-secret" } });
+app.use(express.json());
+installLeadershipHttpRoutes(app, { supabase: fakeSupabase, env: authEnv });
 const server = app.listen(0, "127.0.0.1");
 await new Promise((resolve) => server.once("listening", resolve));
 try {
@@ -94,6 +121,27 @@ try {
   assert.equal(dashboard.ok, true);
   assert.equal(dashboard.data.locations_total, 47);
   assert.equal(JSON.stringify(dashboard).includes("employee"), false);
+  const deniedMutation = await fetch(`${base}/moxie-mobile-api/notes`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${readOnlyToken}`, "content-type": "application/json" },
+    body: JSON.stringify({ content: "must not be written" }),
+  });
+  const deniedMutationBody = await deniedMutation.json();
+  assert.equal(deniedMutation.status, 403,
+    `read-only Manager sessions must not mutate Moxie resources: ${JSON.stringify(deniedMutationBody)}`);
+  const deniedEnrollmentCode = await fetch(`${base}/leadership-api/managers/62000000-0000-4000-8000-000000000003/enrollment-code`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${readOnlyToken}`, "content-type": "application/json" },
+    body: "{}",
+  });
+  assert.equal(deniedEnrollmentCode.status, 403,
+    "read-only Manager sessions must not create manager enrollment credentials");
+  const acceptedMutation = await fetch(`${base}/moxie-mobile-api/notes`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${fullAccessToken}`, "content-type": "application/json" },
+    body: JSON.stringify({ content: "full access contract" }),
+  });
+  assert.equal(acceptedMutation.status, 201, "full-access Custodial Manager must retain Moxie mutation authority");
 } finally {
   await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
 }

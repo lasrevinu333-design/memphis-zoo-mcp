@@ -49,6 +49,8 @@ assert.match(api, /\/analytics-api\/inspection-coverage/, "inspection coverage m
 assert.match(api, /CUSTODIAL_MANAGER/, "personnel analytics must require Custodial Manager authority");
 assert.match(api, /Idempotency-Key/, "inspection writes must be idempotent");
 assert.match(indexSource, /installOperationalAnalyticsRoutes\(app/, "analytics routes must be installed explicitly in the canonical application");
+assert.match(api, /app\.post\("\/analytics-api\/inspections", configured, requireCustodialWrite/,
+  "inspection mutations must reject read-only Manager sessions at the backend boundary");
 
 const ordered = stableFingerprint({ alpha: 1, beta: { y: 2, x: 1 } });
 const reordered = stableFingerprint({ beta: { x: 1, y: 2 }, alpha: 1 });

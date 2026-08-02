@@ -50,6 +50,32 @@ The production `/mcp` URL is public. Enabling full tokenless access therefore au
 | `OPS_MANAGER_SESSION_SECRET` | Recommended | HMAC secret used to sign Ops Manager bearer sessions. If unset, the backend falls back to existing secret material; set this explicitly on Render before public use. |
 | `OPS_AUTH_OPEN_MODE` | Local/dev only | Explicit local development open mode. Ignored on Render/production and must not be used for public deployments. |
 
+### Native Ops Manager device authority v2
+
+The Android and iOS Ops Manager apps use hardware-backed signing/wrapping keys
+and platform attestation. Keep the feature disabled until its forward-only
+database migration is present and every required value below passes strict
+runtime validation.
+
+| Name | Required | Purpose |
+|---|---:|---|
+| `MANAGER_V2_ENABLED` | Yes to expose v2 | Feature gate for `/manager-device-auth/v2/*`; defaults closed. |
+| `MANAGER_V2_SERVER_SECRET` | **Yes when enabled** | Stable, dedicated secret (at least 32 bytes) for credential verifiers, idempotency fingerprints, challenges, session-token verifiers, and privacy-preserving rate keys. Rotating it intentionally invalidates every v2 device credential and session. |
+| `SUPABASE_DB_URL` or `DATABASE_URL` | **Yes when enabled** | Direct PostgreSQL connection used for serializable device-authority transactions. |
+| `SUPABASE_DB_CA_CERT_PATH` | **Yes for remote PostgreSQL** | PEM CA bundle used with hostname verification. `sslmode=require` and certificate-validation downgrades are rejected. |
+| `MANAGER_V2_ATTESTATION_POLICY_JSON` | **Yes when enabled** | Exact allowlist for Android package/signing certificates/builds and iOS App ID/environment/categories/bundle versions. The server derives a policy fingerprint, so a change invalidates outstanding attestation challenges and cached verdicts. |
+| `GOOGLE_PLAY_INTEGRITY_SERVICE_ACCOUNT_JSON` | **Yes when Android is allowed** | Google service-account JSON used only by the backend to decode Play Integrity verdicts. |
+| `MANAGER_V2_SWEEP_INTERVAL_MS` | No | Expired operation/session/nonce sweep interval, bounded to 30–300 seconds. |
+
+The iOS `app_id` must be the deployed App Attest identity in the form
+`<real-10-character-TeamID>.org.memphiszoo.ops`. Test or golden-vector Team IDs
+must never be copied into production. Android policy must name the exact
+production package, production signing-certificate SHA-256 digest, minimum
+version code, and—when used—the explicit allowed-version set. Treat the policy
+and CA bundle as deployment-controlled configuration. Never commit the Google
+service-account JSON, a credential-bearing database URL, the server secret, or
+any private key material.
+
 Render production must have at least one valid Ops/Admin credential before protected routes are publicly usable. If keys were missing while public routes were reachable, generate fresh keys and rotate any previously shared public-link/admin keys before enabling the deployment.
 
 ## Memphis AI / Gemini

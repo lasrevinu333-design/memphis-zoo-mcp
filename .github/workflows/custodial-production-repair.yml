@@ -51,6 +51,7 @@ jobs:
           npm run --silent test:ai-intent
           npm run --silent test:messaging
           npm run --silent test:auth
+          npm run --silent test:manager-device-auth-v2
           npm run --silent test:dashboard
           npm run --silent test:scheduler-overhaul
           npm run --silent test:sch2-publish
@@ -116,3 +117,4 @@ jobs:
           OPERATIONAL_ANALYTICS_TEST_DOCKER_CONTAINER="$container" \
             OPERATIONAL_ANALYTICS_TEST_DATABASE=postgres \
             npm run --silent test:operational-analytics-db
+          npm run --silent test:manager-device-auth-v2-db

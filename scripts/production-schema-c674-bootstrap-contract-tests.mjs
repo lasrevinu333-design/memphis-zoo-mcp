@@ -21,7 +21,6 @@ import {
   validateBackupEvidence,
   validateSingleOwnerAuthorization,
 } from "./production-schema-c674-github-evidence.mjs";
-import { fingerprintSchemaCatalog } from "./schema-fingerprint-catalog.mjs";
 
 const root = resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 const migrationPath = resolve(root, "supabase", "migrations", BOOTSTRAP.migration_file);
@@ -59,9 +58,10 @@ try {
   rmSync(isolated, { recursive: true, force: true });
 }
 
-const canonical = JSON.parse(readFileSync(resolve(root, "supabase", "canonical", "schema-fingerprint-input.json"), "utf8"));
-assert.equal(fingerprintSchemaCatalog(canonical).fingerprint, BOOTSTRAP.to_fingerprint,
-  "production verifier must use the canonical catalog normalization and hash");
+assert.match(runnerSource, /fingerprintSchemaCatalog/,
+  "the historical production verifier must retain canonical catalog normalization");
+assert.match(runnerSource, /physical\.fingerprint, BOOTSTRAP\.to_fingerprint/,
+  "the historical production verifier must retain its immutable c674 target assertion");
 
 assert.match(workflow, /^on:\n  workflow_dispatch:/m);
 assert.doesNotMatch(workflow, /^\s+(?:push|pull_request|schedule):/m,

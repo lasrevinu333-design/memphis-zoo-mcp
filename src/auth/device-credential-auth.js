@@ -909,7 +909,7 @@ export function installDeviceCredentialRoutes(app, {
     }
   });
 
-  app.post("/admin-api/device-security/unlock", requireOpsAuth, async (req, res) => {
+  app.post("/admin-api/device-security/unlock", requireOpsWrite, async (req, res) => {
     try {
       if (!(await hasAuthoritativeSecurityAdminRole(req, store))) {
         await auditDeviceSecurity(store, req, { eventType: "device_security_unlock_denied", success: false, reason: "not_security_admin", env });
@@ -963,7 +963,7 @@ export function installDeviceCredentialRoutes(app, {
     }
   });
 
-  app.post("/admin-api/device-security/lock", requireOpsAuth, async (req, res) => {
+  app.post("/admin-api/device-security/lock", requireOpsWrite, async (req, res) => {
     try {
       const parts = deviceSecuritySessionParts(req);
       if (parts) await store.revokeDeviceSecuritySession?.(parts.sessionId, "manual_lock");
@@ -975,7 +975,7 @@ export function installDeviceCredentialRoutes(app, {
     }
   });
 
-  app.post("/admin-api/device-security/sessions/revoke-all", requireOpsAuth, requireDeviceSecurity, async (_req, res) => {
+  app.post("/admin-api/device-security/sessions/revoke-all", requireOpsWrite, requireDeviceSecurity, async (_req, res) => {
     try {
       const revoked = await store.revokeAllDeviceSecuritySessions?.("security_admin_revoke_all");
       res.status(200).json({ ok: true, data: { revoked_count: revoked?.length || 0 } });

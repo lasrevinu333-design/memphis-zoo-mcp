@@ -135,11 +135,16 @@ async function workspace(db) {
   };
 }
 
-export function installLeadershipHttpRoutes(app, { env = process.env, supabase = null } = {}) {
+export function installLeadershipHttpRoutes(app, {
+  env = process.env,
+  supabase = null,
+  managerV2SessionValidator = null,
+} = {}) {
   if (!app || app.__memphisLeadershipRoutesInstalled) return;
   Object.defineProperty(app, "__memphisLeadershipRoutesInstalled", { value: true });
   const db = supabase || createSupabase(env);
-  const requireManager = makeOpsAccessMiddleware({ supabase: db });
+  const requireManager = makeOpsAccessMiddleware({ env, supabase: db, managerV2SessionValidator });
+  const requireManagerWrite = makeOpsAccessMiddleware({ env, supabase: db, requireWrite: true, managerV2SessionValidator });
 
   for (const prefix of ["/leadership-api", "/mobile-auth-api", "/moxie-mobile-api", "/viewer-api"]) {
     app.use(prefix, (req, res, next) => {
@@ -149,10 +154,10 @@ export function installLeadershipHttpRoutes(app, { env = process.env, supabase =
     });
   }
   const configured = (_req, res, next) => db ? next() : res.status(503).json({ ok: false, error: "Database connection is not configured." });
-  const requireCustodial = (req, res, next) => requireManager(req, res, () => hasRole(req.memphisAuth, "CUSTODIAL_MANAGER")
+  const requireCustodial = (req, res, next) => requireManagerWrite(req, res, () => hasRole(req.memphisAuth, "CUSTODIAL_MANAGER")
     ? next()
     : res.status(403).json({ ok: false, error: "Custodial Manager access is required." }));
-  const requireMoxie = (req, res, next) => requireManager(req, res, async () => {
+  const authorizeMoxie = (requireAccess) => (req, res, next) => requireAccess(req, res, async () => {
     try {
       if (hasRole(req.memphisAuth, "CUSTODIAL_MANAGER")) return next();
       const result = await db.from("ops_manager_managers")
@@ -165,6 +170,8 @@ export function installLeadershipHttpRoutes(app, { env = process.env, supabase =
       res.status(403).json({ ok: false, error: "Moxie access is limited to Annie Feist and the Custodial Manager." });
     } catch (error) { fail(res, error, "Moxie authorization failed."); }
   });
+  const requireMoxie = authorizeMoxie(requireManager);
+  const requireMoxieWrite = authorizeMoxie(requireManagerWrite);
 
   async function authenticateNative(req) {
     const parts = nativeCredential(req);
@@ -346,7 +353,7 @@ export function installLeadershipHttpRoutes(app, { env = process.env, supabase =
     catch (error) { fail(res, error, "Moxie workspace could not be loaded."); }
   });
 
-  app.post("/moxie-mobile-api/chat", configured, requireMoxie, async (req, res) => {
+  app.post("/moxie-mobile-api/chat", configured, requireMoxieWrite, async (req, res) => {
     try {
       const messages = (Array.isArray(req.body?.messages) ? req.body.messages : []).slice(-20)
         .filter((m) => m && ["user", "assistant"].includes(m.role) && typeof m.content === "string")
@@ -358,7 +365,7 @@ export function installLeadershipHttpRoutes(app, { env = process.env, supabase =
     } catch (error) { fail(res, error, "Moxie chat failed."); }
   });
 
-  app.put("/moxie-mobile-api/chat-state", configured, requireMoxie, async (req, res) => {
+  app.put("/moxie-mobile-api/chat-state", configured, requireMoxieWrite, async (req, res) => {
     try {
       const expected = Number(req.body?.expected_revision ?? req.body?.expectedRevision);
       if (!Number.isInteger(expected) || expected < 1) return res.status(422).json({ ok: false, error: "expected_revision is required." });
@@ -376,7 +383,7 @@ export function installLeadershipHttpRoutes(app, { env = process.env, supabase =
   });
 
   const simpleResource = (path, table, max, requiredField) => {
-    app.post(path, configured, requireMoxie, async (req, res) => {
+    app.post(path, configured, requireMoxieWrite, async (req, res) => {
       try {
         const row = { id: crypto.randomBytes(6).toString("hex") };
         for (const [field, limit] of Object.entries(max)) if (req.body?.[field] !== undefined) row[field] = clip(req.body[field], limit);
@@ -387,7 +394,7 @@ export function installLeadershipHttpRoutes(app, { env = process.env, supabase =
         res.status(201).json({ ok: true, data: row });
       } catch (error) { fail(res, error, "Moxie item could not be saved."); }
     });
-    app.delete(`${path}/:id`, configured, requireMoxie, async (req, res) => {
+    app.delete(`${path}/:id`, configured, requireMoxieWrite, async (req, res) => {
       try {
         const result = await db.from(table).delete().eq("id", clip(req.params?.id, 80));
         if (result.error) throw result.error;

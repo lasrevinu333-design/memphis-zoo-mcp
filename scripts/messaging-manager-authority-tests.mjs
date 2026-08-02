@@ -54,6 +54,7 @@ async function runReadOnlySql(sql) {
   return [];
 }
 
+let managerReadOnly = false;
 function managerBoundary(req, _res, next) {
   req.memphisAuth = {
     manager_id: MANAGER_ID,
@@ -61,7 +62,7 @@ function managerBoundary(req, _res, next) {
     credential_id: "00000000-0000-4000-8000-000000000705",
     device_id: "authority-test-manager-browser",
     roles: ["CUSTODIAL_MANAGER", "OPS_MANAGER"],
-    read_only: false,
+    read_only: managerReadOnly,
   };
   next();
 }
@@ -171,6 +172,18 @@ try {
   });
   assert.equal(deviceAck.status, 403);
   assert.match(deviceAck.body.error, /manager sessions cannot acknowledge/i);
+
+  managerReadOnly = true;
+  const callsBeforeReadOnlyDiagnostic = calls.length;
+  const readOnlyDiagnostic = await post("/messaging-api/memphis/diagnose", {
+    user_id: MANAGER_USER_ID,
+    body: "This must not create a thread or invoke AI.",
+  });
+  assert.equal(readOnlyDiagnostic.status, 403);
+  assert.match(readOnlyDiagnostic.body.error, /read-only/i);
+  assert.equal(calls.length, callsBeforeReadOnlyDiagnostic,
+    "read-only diagnostics must stop before any durable RPC or responder work");
+  managerReadOnly = false;
 
   assert.equal(calls.some((call) => call.fn === "msg_send_message"), false);
   assert.equal(calls.some((call) => call.fn === "msg_mark_thread_read"), false);

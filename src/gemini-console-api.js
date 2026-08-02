@@ -199,6 +199,7 @@ export function createGeminiConsoleRouter({
   supabase,
   runReadOnlySql,
   requireOpsManagerAuth,
+  requireOpsManagerWrite,
   buildHealthPayload,
   appVersion,
   releaseId,
@@ -207,8 +208,13 @@ export function createGeminiConsoleRouter({
   frontendCommit = "unknown",
 } = {}) {
   if (typeof requireOpsManagerAuth !== "function") throw new Error("Gemini Console requires trusted manager authentication.");
+  if (typeof requireOpsManagerWrite !== "function") throw new Error("Gemini Console requires trusted manager write authorization.");
   const router = express.Router();
-  router.use(requireOpsManagerAuth);
+  router.use((req, res, next) => (
+    new Set(["GET", "HEAD"]).has(req.method)
+      ? requireOpsManagerAuth(req, res, next)
+      : requireOpsManagerWrite(req, res, next)
+  ));
   if (!supabase) {
     router.use((_req, res) => res.status(503).json({ ok: false, error: "Gemini Console storage is not configured." }));
     return router;

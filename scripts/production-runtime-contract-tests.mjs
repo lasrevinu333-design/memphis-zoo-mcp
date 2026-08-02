@@ -20,6 +20,12 @@ assert.match(source, /geminiControlledRepairWorker\.stop\(\)/,
   "background repair work must stop during shutdown");
 assert.match(source, /httpServer\.close/,
   "active HTTP work must drain during shutdown");
+assert.match(source,
+  /function requireFeedbackSignedLinkOrOps\(purpose, \{ requireWrite = false \} = \{\}\)[\s\S]*const requireManager = requireWrite \? requireOpsManagerWrite : requireOpsManagerAuth;[\s\S]*requireManager\(req, res, next\);/,
+  "feedback manager fallbacks must cross the durable manager-session authority boundary");
+assert.match(source,
+  /app\.post\("\/feedback-api\/acknowledge\/:feedbackId", requireFeedbackSignedLinkOrOps\("ack", \{ requireWrite: true \}\)/,
+  "manager feedback acknowledgement must reject read-only sessions");
 assert.equal(packageManifest.scripts.start, "node src/index.js",
   "production must start the canonical application directly");
 assert.equal(existsSync(new URL("../src/mcp-schema-bootstrap.js", import.meta.url)), false,

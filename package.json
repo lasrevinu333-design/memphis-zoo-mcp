@@ -60,6 +60,8 @@
     "test:phone-readiness": "node scripts/phone-production-readiness-tests.mjs",
     "phone:readiness": "node scripts/phone-production-readiness.mjs",
     "test:manager-inspection-readiness": "node scripts/manager-inspection-readiness-tests.mjs",
+    "test:manager-device-auth-v2": "node scripts/generate-manager-device-auth-v2-golden.mjs --check && node scripts/manager-device-auth-v2-crypto-tests.mjs && node scripts/manager-device-auth-v2-attestation-tests.mjs && node scripts/manager-device-auth-v2-service-tests.mjs && node scripts/manager-device-auth-v2-route-tests.mjs && node scripts/manager-device-auth-v2-shared-auth-tests.mjs && node scripts/manager-device-auth-v2-env-tests.mjs",
+    "test:manager-device-auth-v2-db": "node scripts/manager-device-auth-v2-database-tests.mjs",
     "manager-inspection:readiness": "node scripts/manager-inspection-readiness.mjs",
     "device-security:password": "node scripts/device-security-password-admin.mjs",
     "test:manager-notifications": "node scripts/manager-notification-contract-tests.mjs",
