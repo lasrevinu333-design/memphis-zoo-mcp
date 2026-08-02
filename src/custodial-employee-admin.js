@@ -317,11 +317,16 @@ export function installCustodialEmployeeAdminRoutes(app, { env = process.env, su
   if (!app || app.__custodialEmployeeAdminRoutesInstalled) return;
   Object.defineProperty(app, "__custodialEmployeeAdminRoutesInstalled", { value: true });
   const db = supabase || createSupabase(env);
-  const requireManager = makeOpsAccessMiddleware({ supabase: db });
+  const requireManagerRead = makeOpsAccessMiddleware({ env, supabase: db });
+  const requireManagerWrite = makeOpsAccessMiddleware({ env, supabase: db, requireWrite: true });
   const configured = (_req, res, next) => db ? next() : res.status(503).json({ ok: false, error: "Database connection is not configured." });
-  const requireCustodial = (req, res, next) => requireManager(req, res, () => hasRole(req.memphisAuth, "CUSTODIAL_MANAGER")
-    ? next()
-    : res.status(403).json({ ok: false, error: "Custodial Manager access is required." }));
+  const requireCustodialRole = (requireManager) => (req, res, next) => requireManager(req, res, () => (
+    hasRole(req.memphisAuth, "CUSTODIAL_MANAGER")
+      ? next()
+      : res.status(403).json({ ok: false, error: "Custodial Manager access is required." })
+  ));
+  const requireCustodialRead = requireCustodialRole(requireManagerRead);
+  const requireCustodialWrite = requireCustodialRole(requireManagerWrite);
 
   for (const prefix of ["/custodial-admin-api", "/custodial-device-auth", "/leadership-api/phone-assignments"]) {
     app.use(prefix, (req, res, next) => {
@@ -331,17 +336,17 @@ export function installCustodialEmployeeAdminRoutes(app, { env = process.env, su
     });
   }
 
-  app.get("/custodial-admin-api/employee-phones", configured, requireCustodial, async (_req, res) => {
+  app.get("/custodial-admin-api/employee-phones", configured, requireCustodialRead, async (_req, res) => {
     try { res.json({ ok: true, data: await loadPhoneAdminSnapshot(db) }); }
     catch (error) { fail(res, error, "Employee phones could not be loaded."); }
   });
 
-  app.post("/custodial-admin-api/employees", configured, requireCustodial, async (req, res) => {
+  app.post("/custodial-admin-api/employees", configured, requireCustodialWrite, async (req, res) => {
     try { res.status(201).json({ ok: true, data: await createEmployee(db, req, req.body || {}) }); }
     catch (error) { fail(res, error, "Employee could not be created."); }
   });
 
-  app.patch("/custodial-admin-api/employees/:employeeId/status", configured, requireCustodial, async (req, res) => {
+  app.patch("/custodial-admin-api/employees/:employeeId/status", configured, requireCustodialWrite, async (req, res) => {
     try {
       const employeeId = String(req.params?.employeeId || "").trim();
       if (!validUuid(employeeId)) return res.status(400).json({ ok: false, error: "A valid employee ID is required." });
@@ -349,7 +354,7 @@ export function installCustodialEmployeeAdminRoutes(app, { env = process.env, su
     } catch (error) { fail(res, error, "Employee status could not be changed."); }
   });
 
-  app.put("/custodial-admin-api/devices/:deviceId/assignment", configured, requireCustodial, async (req, res) => {
+  app.put("/custodial-admin-api/devices/:deviceId/assignment", configured, requireCustodialWrite, async (req, res) => {
     try {
       const deviceId = normalizeDeviceId(req.params?.deviceId || req.body?.device_id);
       const employeeId = String(req.body?.employee_id || "").trim();
@@ -368,19 +373,19 @@ export function installCustodialEmployeeAdminRoutes(app, { env = process.env, su
     } catch (error) { fail(res, error, "Phone assignment could not be changed."); }
   });
 
-  app.post("/custodial-admin-api/devices/:deviceId/enrollment-code", configured, requireCustodial, async (req, res) => {
+  app.post("/custodial-admin-api/devices/:deviceId/enrollment-code", configured, requireCustodialWrite, async (req, res) => {
     try { res.json({ ok: true, data: await issueEmployeeEnrollmentCode(db, env, req, req.params?.deviceId) }); }
     catch (error) { fail(res, error, "Employee app enrollment code could not be generated."); }
   });
 
   // Compatibility routes keep already-installed manager test builds working while
   // the unified Phone Assignments screen rolls out.
-  app.get("/leadership-api/phone-assignments", configured, requireCustodial, async (_req, res) => {
+  app.get("/leadership-api/phone-assignments", configured, requireCustodialRead, async (_req, res) => {
     try { res.json({ ok: true, data: legacySnapshot(await loadPhoneAdminSnapshot(db)) }); }
     catch (error) { fail(res, error, "Employee phones could not be loaded."); }
   });
 
-  app.post("/leadership-api/phone-assignments/:deviceId", configured, requireCustodial, async (req, res) => {
+  app.post("/leadership-api/phone-assignments/:deviceId", configured, requireCustodialWrite, async (req, res) => {
     try {
       const requestedDevice = normalizeDeviceId(req.params?.deviceId);
       const createsOnly = String(req.params?.deviceId || "").trim().toLowerCase() === "unassigned";
@@ -418,7 +423,7 @@ export function installCustodialEmployeeAdminRoutes(app, { env = process.env, su
     } catch (error) { fail(res, error, "Phone assignment could not be changed."); }
   });
 
-  app.post("/leadership-api/phone-assignments/:deviceId/enrollment-code", configured, requireCustodial, async (req, res) => {
+  app.post("/leadership-api/phone-assignments/:deviceId/enrollment-code", configured, requireCustodialWrite, async (req, res) => {
     try { res.json({ ok: true, data: await issueEmployeeEnrollmentCode(db, env, req, req.params?.deviceId) }); }
     catch (error) { fail(res, error, "Employee app enrollment code could not be generated."); }
   });
