@@ -1,9 +1,9 @@
 {
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "c1f606125aeb8de3c367f2d435f513c496b9b99b",
+  "frontend_commit_sha": "3518cb3d2b454a05edfe55ecfc5ee98d7e021d09",
   "frontend_commit_state": "github_pages_production_verified",
   "backend_minimum_version": "release-2026.07.19.custodial-v3.12",
-  "schema_fingerprint": "544d11f47f1f4a960fcf49d13bba53c736d78fe4fe9d225c996c84311d442ad0",
+  "schema_fingerprint": "c6742e500c2a5d3767f1d886bb5937167eab42730f8271eec76b427a10c5f302",
   "schema_transition": {
     "transition_id": "custodial-native-vault-removal-build11-20260801",
     "from_fingerprint": "544d11f47f1f4a960fcf49d13bba53c736d78fe4fe9d225c996c84311d442ad0",

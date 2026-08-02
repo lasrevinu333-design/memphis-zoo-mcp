@@ -9,7 +9,7 @@ const CURRENT = "544d11f47f1f4a960fcf49d13bba53c736d78fe4fe9d225c996c84311d442ad
 const BACKEND_TARGET = "c6742e500c2a5d3767f1d886bb5937167eab42730f8271eec76b427a10c5f302";
 const FUTURE = "2".repeat(64);
 const OUTSIDE = "3".repeat(64);
-const ENGINE_MAIN_SHA = "c1f606125aeb8de3c367f2d435f513c496b9b99b";
+const ENGINE_MAIN_SHA = "3518cb3d2b454a05edfe55ecfc5ee98d7e021d09";
 const NOW = Date.parse("2026-08-01T00:00:00Z");
 const RETIRED_TRANSITION = {
   transition_id: "custodial-native-security-build11-20260801",
@@ -48,8 +48,8 @@ function fixtures({ backendFingerprint = CURRENT, frontendFingerprint = CURRENT,
 const sourceManifest = JSON.parse(readFileSync(new URL("../release/frontend-release-manifest.json", import.meta.url), "utf8"));
 assert.equal(sourceManifest.frontend_commit_sha, ENGINE_MAIN_SHA,
   "the backend copy must pin the exact verified Engine main commit");
-assert.equal(sourceManifest.schema_fingerprint, CURRENT,
-  "the backend copy must retain the currently deployed frontend fingerprint during transition");
+assert.equal(sourceManifest.schema_fingerprint, BACKEND_TARGET,
+  "the backend copy must pin the exact deployed frontend fingerprint during transition");
 assert.equal(Object.hasOwn(sourceManifest, "schema_transition"), true,
   "the backend copy must retain the active transition key");
 assert.deepEqual(sourceManifest.schema_transition, ACTIVE_TRANSITION,
@@ -59,7 +59,7 @@ const backendRelease = buildReleaseManifest({ appVersion: "test-release" });
 assert.equal(backendRelease.frontend.commit_sha, ENGINE_MAIN_SHA);
 assert.equal(backendRelease.schema.fingerprint, BACKEND_TARGET,
   "the backend must publish the rebuilt production fingerprint");
-assert.equal(backendRelease.frontend.manifest.schema_fingerprint, CURRENT);
+assert.equal(backendRelease.frontend.manifest.schema_fingerprint, BACKEND_TARGET);
 assert.equal(Object.hasOwn(backendRelease, "schema_transition"), true,
   "the backend runtime manifest must publish the active transition key");
 assert.deepEqual(backendRelease.schema_transition, ACTIVE_TRANSITION,
