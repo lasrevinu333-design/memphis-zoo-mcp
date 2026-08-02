@@ -1,0 +1,160 @@
+name: Production schema c674 bootstrap
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_main_sha:
+        description: Exact 40-character main commit to execute
+        required: true
+        type: string
+      backup_run_id:
+        description: Fresh successful disaster-recovery backup run for this exact commit
+        required: true
+        type: string
+      confirmation:
+        description: Type the exact reviewed migration confirmation shown in the PR
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+  deployments: read
+
+concurrency:
+  group: production-schema-c674-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.23.1'
+      - name: Require exact main-only reviewed inputs
+        env:
+          EXPECTED_MAIN_SHA: ${{ inputs.expected_main_sha }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$EXPECTED_MAIN_SHA" = "$GITHUB_SHA"
+          test "$CONFIRMATION" = "APPLY 20260801195620 f23a5cd53292af904b27d5979c5af2e05bf8c85cc1de64c361f246bb68de8166 544d11f47f1f4a960fcf49d13bba53c736d78fe4fe9d225c996c84311d442ad0 c6742e500c2a5d3767f1d886bb5937167eab42730f8271eec76b427a10c5f302"
+      - name: Verify protected environment and fresh exact-commit backup
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PRODUCTION_BACKUP_RUN_ID: ${{ inputs.backup_run_id }}
+        run: node scripts/production-schema-c674-github-evidence.mjs --evidence-out "${{ runner.temp }}/guard-evidence.json"
+
+  bootstrap:
+    needs: guard
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment:
+      name: production
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.23.1'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Require production environment secrets
+        env:
+          PRODUCTION_SUPABASE_DB_URL: ${{ secrets.PRODUCTION_SUPABASE_DB_URL }}
+          PRODUCTION_SUPABASE_PROJECT_REF: ${{ secrets.PRODUCTION_SUPABASE_PROJECT_REF }}
+        run: |
+          set -euo pipefail
+          test -n "$PRODUCTION_SUPABASE_DB_URL"
+          test -n "$PRODUCTION_SUPABASE_PROJECT_REF"
+      - name: Reverify main tip, protected environment, and fresh backup after approval
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PRODUCTION_BACKUP_RUN_ID: ${{ inputs.backup_run_id }}
+        run: |
+          set -euo pipefail
+          mkdir -p "${{ runner.temp }}/schema-c674-evidence"
+          node scripts/production-schema-c674-github-evidence.mjs \
+            --evidence-out "${{ runner.temp }}/schema-c674-evidence/github-evidence.json"
+      - name: Build isolated single-file migration directory
+        env:
+          ISOLATED_DIR: ${{ runner.temp }}/schema-c674-isolated/supabase/migrations
+        run: |
+          set -euo pipefail
+          install -d -m 0700 "$ISOLATED_DIR"
+          install -m 0600 \
+            supabase/migrations/20260801195620_custodial_device_removal_operation.sql \
+            "$ISOLATED_DIR/20260801195620_custodial_device_removal_operation.sql"
+          shopt -s nullglob dotglob
+          entries=("$ISOLATED_DIR"/*)
+          test "${#entries[@]}" -eq 1
+          test "$(sha256sum "${entries[0]}" | cut -d' ' -f1)" = \
+            "f23a5cd53292af904b27d5979c5af2e05bf8c85cc1de64c361f246bb68de8166"
+      - name: Dry-run exact migration and assert cardinality
+        env:
+          PRODUCTION_SUPABASE_DB_URL: ${{ secrets.PRODUCTION_SUPABASE_DB_URL }}
+          PRODUCTION_SUPABASE_PROJECT_REF: ${{ secrets.PRODUCTION_SUPABASE_PROJECT_REF }}
+          PRODUCTION_SUPABASE_DB_CA_CERT_PATH: ${{ github.workspace }}/.github/certs/prod-ca-2021.crt
+        run: |
+          set -euo pipefail
+          node scripts/production-schema-c674-bootstrap.mjs \
+            --mode dry-run \
+            --migration-dir "${{ runner.temp }}/schema-c674-isolated/supabase/migrations" \
+            --evidence-out "${{ runner.temp }}/schema-c674-evidence/dry-run.json"
+          node -e '
+            const fs = require("node:fs");
+            const evidence = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+            if (!evidence.ok || evidence.mode !== "dry-run" || !evidence.would_apply ||
+                evidence.migration.migration_count !== 1 ||
+                evidence.migration.sha256 !== "f23a5cd53292af904b27d5979c5af2e05bf8c85cc1de64c361f246bb68de8166" ||
+                evidence.before.physical.fingerprint !== "544d11f47f1f4a960fcf49d13bba53c736d78fe4fe9d225c996c84311d442ad0") process.exit(1);
+          ' "${{ runner.temp }}/schema-c674-evidence/dry-run.json"
+      - name: Reverify exact main and backup immediately before apply
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PRODUCTION_BACKUP_RUN_ID: ${{ inputs.backup_run_id }}
+        run: |
+          set -euo pipefail
+          node scripts/production-schema-c674-github-evidence.mjs \
+            --evidence-out "${{ runner.temp }}/schema-c674-evidence/pre-apply-github-evidence.json"
+      - name: Apply exactly one reviewed migration atomically
+        id: apply
+        env:
+          PRODUCTION_SUPABASE_DB_URL: ${{ secrets.PRODUCTION_SUPABASE_DB_URL }}
+          PRODUCTION_SUPABASE_PROJECT_REF: ${{ secrets.PRODUCTION_SUPABASE_PROJECT_REF }}
+          PRODUCTION_SUPABASE_DB_CA_CERT_PATH: ${{ github.workspace }}/.github/certs/prod-ca-2021.crt
+          PRODUCTION_SCHEMA_BOOTSTRAP_APPLY: '20260801195620'
+        run: |
+          set -euo pipefail
+          node scripts/production-schema-c674-bootstrap.mjs \
+            --mode apply \
+            --migration-dir "${{ runner.temp }}/schema-c674-isolated/supabase/migrations" \
+            --evidence-out "${{ runner.temp }}/schema-c674-evidence/apply.json"
+      - name: Independently post-verify catalog, ledger, RLS, grants, function, and indexes
+        if: ${{ always() && steps.apply.outcome != 'skipped' }}
+        env:
+          PRODUCTION_SUPABASE_DB_URL: ${{ secrets.PRODUCTION_SUPABASE_DB_URL }}
+          PRODUCTION_SUPABASE_PROJECT_REF: ${{ secrets.PRODUCTION_SUPABASE_PROJECT_REF }}
+          PRODUCTION_SUPABASE_DB_CA_CERT_PATH: ${{ github.workspace }}/.github/certs/prod-ca-2021.crt
+        run: |
+          set -euo pipefail
+          node scripts/production-schema-c674-bootstrap.mjs \
+            --mode verify \
+            --migration-dir "${{ runner.temp }}/schema-c674-isolated/supabase/migrations" \
+            --evidence-out "${{ runner.temp }}/schema-c674-evidence/post-verify.json"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: production-schema-c674-evidence-${{ github.run_id }}
+          path: ${{ runner.temp }}/schema-c674-evidence
+          retention-days: 14
+          if-no-files-found: error
