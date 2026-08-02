@@ -8,11 +8,26 @@ import { pathToFileURL } from "node:url";
 export const BACKUP_WORKFLOW_PATH = ".github/workflows/production-disaster-recovery-backup.yml";
 export const BACKUP_MAX_AGE_MS = 90 * 60 * 1000;
 
-export function validateSingleOwnerAuthorization({ repository, repositoryOwner, actor }) {
+export function validateSingleOwnerAuthorization({
+  repository,
+  repositoryOwner,
+  actor,
+  triggeringActor,
+  runAttempt,
+}) {
   assert.equal(repository, "lasrevinu333-design/memphis-zoo-mcp", "workflow repository is not authorized");
   assert.equal(repositoryOwner, "lasrevinu333-design", "workflow repository owner is not authorized");
   assert.equal(actor, "lasrevinu333-design", "only the repository owner may authorize this bootstrap");
-  return { model: "single-owner-exact-workflow-dispatch", actor, repository_owner: repositoryOwner };
+  assert.equal(triggeringActor, "lasrevinu333-design",
+    "only the repository owner may trigger or rerun this bootstrap");
+  assert.equal(String(runAttempt), "1", "production bootstrap reruns are not authorized");
+  return {
+    model: "single-owner-exact-workflow-dispatch",
+    actor,
+    triggering_actor: triggeringActor,
+    run_attempt: 1,
+    repository_owner: repositoryOwner,
+  };
 }
 
 export function validateBackupEvidence({ workflow, run, artifacts, repository, sha, backupRunId, now = Date.now() }) {
@@ -75,14 +90,16 @@ function requiredEnvironment() {
   const repository = String(process.env.GITHUB_REPOSITORY || "").trim();
   const repositoryOwner = String(process.env.GITHUB_REPOSITORY_OWNER || "").trim();
   const actor = String(process.env.GITHUB_ACTOR || "").trim();
+  const triggeringActor = String(process.env.GITHUB_TRIGGERING_ACTOR || "").trim();
+  const runAttempt = String(process.env.GITHUB_RUN_ATTEMPT || "").trim();
   const sha = String(process.env.GITHUB_SHA || "").trim();
   const backupRunId = String(process.env.PRODUCTION_BACKUP_RUN_ID || "").trim();
   assert.ok(token, "GITHUB_TOKEN is required");
   assert.match(repository, /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/, "GITHUB_REPOSITORY is invalid");
-  validateSingleOwnerAuthorization({ repository, repositoryOwner, actor });
+  validateSingleOwnerAuthorization({ repository, repositoryOwner, actor, triggeringActor, runAttempt });
   assert.match(sha, /^[0-9a-f]{40}$/, "GITHUB_SHA must be an exact commit SHA");
   assert.match(backupRunId, /^[1-9][0-9]*$/, "PRODUCTION_BACKUP_RUN_ID must be numeric");
-  return { token, repository, repositoryOwner, actor, sha, backupRunId };
+  return { token, repository, repositoryOwner, actor, triggeringActor, runAttempt, sha, backupRunId };
 }
 
 function outputEvidence(path, evidence) {
@@ -100,7 +117,16 @@ export async function run(argv = process.argv.slice(2)) {
   assert.deepEqual(argv.slice(0, 1), ["--evidence-out"], "usage: --evidence-out PATH");
   assert.equal(argv.length, 2, "usage: --evidence-out PATH");
   const evidencePath = resolve(argv[1]);
-  const { token, repository, repositoryOwner, actor, sha, backupRunId } = requiredEnvironment();
+  const {
+    token,
+    repository,
+    repositoryOwner,
+    actor,
+    triggeringActor,
+    runAttempt,
+    sha,
+    backupRunId,
+  } = requiredEnvironment();
   const encodedRepository = repository.split("/").map(encodeURIComponent).join("/");
   const repo = await githubJson(`/repos/${encodedRepository}`, token);
   assert.equal(repo.default_branch, "main", "repository default branch must be main");
@@ -131,7 +157,13 @@ export async function run(argv = process.argv.slice(2)) {
     verified_at: new Date().toISOString(),
     repository,
     exact_main_sha: sha,
-    authorization: validateSingleOwnerAuthorization({ repository, repositoryOwner, actor }),
+    authorization: validateSingleOwnerAuthorization({
+      repository,
+      repositoryOwner,
+      actor,
+      triggeringActor,
+      runAttempt,
+    }),
     backup: backupEvidence,
   };
   outputEvidence(evidencePath, evidence);

@@ -7,7 +7,12 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   BOOTSTRAP,
+  EXPECTED_DEFAULT_ACL,
+  EXPECTED_FUNCTION_ACL,
+  EXPECTED_TABLE_ACL,
+  assertExactAcl,
   unwrapReviewedMigration,
+  validateProductionDatabaseUrl,
   validateMigrationDirectory,
 } from "./production-schema-c674-bootstrap.mjs";
 import {
@@ -69,6 +74,8 @@ assert.match(workflow, /if: \$\{\{ always\(\) && steps\.apply\.outcome != 'skipp
   "independent post-verification must run after any attempted apply, including ambiguous failures");
 assert.match(workflow, /test "\$GITHUB_REF" = "refs\/heads\/main"/);
 assert.match(workflow, /test "\$GITHUB_ACTOR" = "lasrevinu333-design"/);
+assert.match(workflow, /test "\$GITHUB_TRIGGERING_ACTOR" = "lasrevinu333-design"/);
+assert.match(workflow, /test "\$GITHUB_RUN_ATTEMPT" = "1"/);
 assert.match(workflow, /test "\$EXPECTED_MAIN_SHA" = "\$GITHUB_SHA"/);
 assert.match(workflow, new RegExp(`APPLY ${BOOTSTRAP.migration_version} ${BOOTSTRAP.migration_sha256} ${BOOTSTRAP.from_fingerprint} ${BOOTSTRAP.to_fingerprint}`));
 assert.match(workflow, /secrets\.SUPABASE_DB_URL/);
@@ -79,18 +86,20 @@ assert.match(workflow, /npm ci --ignore-scripts/);
 assert.match(workflow, /entries=\("\$ISOLATED_DIR"\/\*\)/);
 assert.match(workflow, /test "\$\{#entries\[@\]\}" -eq 1/);
 assert.match(workflow, new RegExp(BOOTSTRAP.migration_sha256));
-const dryRunStep = workflow.indexOf("--mode dry-run");
+const preflightStep = workflow.indexOf("--mode preflight");
 const applyStep = workflow.indexOf("--mode apply");
 const verifyStep = workflow.indexOf("--mode verify");
-assert.ok(dryRunStep > 0 && applyStep > dryRunStep && verifyStep > applyStep,
-  "dry-run, apply, and independent verification must remain ordered");
+assert.ok(preflightStep > 0 && applyStep > preflightStep && verifyStep > applyStep,
+  "read-only preflight, apply, and independent verification must remain ordered");
 const preApplyGithubEvidence = workflow.indexOf("pre-apply-github-evidence.json");
-assert.ok(preApplyGithubEvidence > dryRunStep && preApplyGithubEvidence < applyStep,
+assert.ok(preApplyGithubEvidence > preflightStep && preApplyGithubEvidence < applyStep,
   "exact main tip, environment, and backup evidence must be rechecked immediately before apply");
 assert.doesNotMatch(workflow, /supabase\s+db\s+push|\bpsql\b/,
   "ledger-divergent production bootstrap cannot use db push or ad hoc psql");
 
 assert.match(runnerSource, /begin isolation level serializable/);
+assert.match(runnerSource, /begin isolation level repeatable read read only/,
+  "preflight and independent verification must remain read-only transactions");
 assert.match(runnerSource, /pg_advisory_xact_lock/);
 assert.match(runnerSource, /production connection is not the migration-owning postgres identity/);
 assert.match(runnerSource, /assertBeforeState\(client\)/);
@@ -103,25 +112,120 @@ const transactionalCommit = runnerSource.indexOf('client.query("commit")', trans
 assert.ok(transactionalPostVerify > 0 && transactionalCommit > transactionalPostVerify,
   "transactional postconditions must pass before commit");
 assert.match(runnerSource, /rls_enabled/);
-assert.match(runnerSource, /table_grants/);
-assert.match(runnerSource, /function_grants/);
+assert.match(runnerSource, /pg_default_acl/);
+assert.match(runnerSource, /aclexplode\(coalesce\(c\.relacl, acldefault\('r', c\.relowner\)\)\)/);
+assert.match(runnerSource, /aclexplode\(coalesce\(p\.proacl, acldefault\('f', p\.proowner\)\)\)/);
+assert.match(runnerSource, /operation table contains unreviewed column ACLs/);
+assert.doesNotMatch(runnerSource, /boundIdentity\.includes|includes\(projectRef\)/);
 assert.match(runnerSource, /indisvalid/);
 assert.doesNotMatch(runnerSource, /execFile|spawn|\bpsql\b|supabase\s+db\s+push/);
+
+const projectRef = "a".repeat(20);
+assert.deepEqual(
+  validateProductionDatabaseUrl(
+    `postgresql://postgres:test-password@db.${projectRef}.supabase.co:5432/postgres?sslmode=require`,
+    projectRef,
+  ).safeIdentity,
+  { connection_mode: "direct", database: "postgres", port: 5432 },
+);
+assert.deepEqual(
+  validateProductionDatabaseUrl(
+    `postgres://postgres.${projectRef}:test-password@aws-0-us-east-1.pooler.supabase.com:5432/postgres`,
+    projectRef,
+  ).safeIdentity,
+  { connection_mode: "shared-session-pooler", database: "postgres", port: 5432 },
+);
+assert.throws(() => validateProductionDatabaseUrl(
+  `postgresql://postgres:test-password@db.${projectRef}.supabase.co.attacker.example:5432/postgres`,
+  projectRef,
+), /exact reviewed Supabase endpoint/);
+assert.throws(() => validateProductionDatabaseUrl(
+  `postgresql://postgres.${projectRef}:test-password@db.${projectRef}.supabase.co:5432/postgres`,
+  projectRef,
+), /username must be postgres/);
+assert.throws(() => validateProductionDatabaseUrl(
+  `postgres://postgres.${projectRef}evil:test-password@aws-0-us-east-1.pooler.supabase.com:5432/postgres`,
+  projectRef,
+), /bind exactly/);
+assert.throws(() => validateProductionDatabaseUrl(
+  `postgres://postgres.${projectRef}:test-password@aws-0-us-east-1.pooler.supabase.com:6543/postgres`,
+  projectRef,
+), /port 5432/);
+assert.throws(() => validateProductionDatabaseUrl(
+  `postgresql://postgres:test-password@db.${projectRef}.supabase.co:5432/template1`,
+  projectRef,
+), /select the postgres database/);
+const malformedDatabaseSecret = "postgresql://postgres:password-that-must-not-appear@[invalid-host/postgres";
+assert.throws(() => validateProductionDatabaseUrl(malformedDatabaseSecret, projectRef), (error) => {
+  assert.doesNotMatch(String(error.stack || error), /password-that-must-not-appear/);
+  return /not a well-formed URL/.test(String(error.message));
+});
+assert.doesNotMatch(runnerSource, /project_ref:/,
+  "database evidence must not expose the configured production project reference");
+
+assert.equal(EXPECTED_TABLE_ACL.length, 16);
+assert.equal(EXPECTED_FUNCTION_ACL.length, 2);
+assert.equal(EXPECTED_DEFAULT_ACL.length, 18);
+assertExactAcl(structuredClone(EXPECTED_TABLE_ACL), EXPECTED_TABLE_ACL, "test table ACL");
+assert.throws(() => assertExactAcl([
+  ...structuredClone(EXPECTED_TABLE_ACL),
+  { grantee: "custom_role", privilege_type: "SELECT", is_grantable: false, grantor: "postgres" },
+], EXPECTED_TABLE_ACL, "test table ACL"), /unreviewed grantee/);
+assert.throws(() => assertExactAcl([
+  ...structuredClone(EXPECTED_FUNCTION_ACL),
+  { grantee: "service_role", privilege_type: "UPDATE", is_grantable: false, grantor: "postgres" },
+], EXPECTED_FUNCTION_ACL, "test function ACL"), /unreviewed grantee/);
+assert.throws(() => assertExactAcl([
+  ...structuredClone(EXPECTED_DEFAULT_ACL),
+  {
+    object_type: "r",
+    object_owner: "postgres",
+    schema_name: "public",
+    grantee: "custom_role",
+    privilege_type: "SELECT",
+    is_grantable: false,
+    grantor: "postgres",
+  },
+], EXPECTED_DEFAULT_ACL, "test default ACL"), /unreviewed grantee/);
+const grantOptionAcl = structuredClone(EXPECTED_TABLE_ACL);
+grantOptionAcl[0].is_grantable = true;
+assert.throws(() => assertExactAcl(grantOptionAcl, EXPECTED_TABLE_ACL, "test table ACL"),
+  /grant option/);
 
 assert.deepEqual(validateSingleOwnerAuthorization({
   repository: "lasrevinu333-design/memphis-zoo-mcp",
   repositoryOwner: "lasrevinu333-design",
   actor: "lasrevinu333-design",
+  triggeringActor: "lasrevinu333-design",
+  runAttempt: "1",
 }), {
   model: "single-owner-exact-workflow-dispatch",
   actor: "lasrevinu333-design",
+  triggering_actor: "lasrevinu333-design",
+  run_attempt: 1,
   repository_owner: "lasrevinu333-design",
 });
 assert.throws(() => validateSingleOwnerAuthorization({
   repository: "lasrevinu333-design/memphis-zoo-mcp",
   repositoryOwner: "lasrevinu333-design",
   actor: "another-user",
+  triggeringActor: "lasrevinu333-design",
+  runAttempt: "1",
 }), /only the repository owner/);
+assert.throws(() => validateSingleOwnerAuthorization({
+  repository: "lasrevinu333-design/memphis-zoo-mcp",
+  repositoryOwner: "lasrevinu333-design",
+  actor: "lasrevinu333-design",
+  triggeringActor: "another-user",
+  runAttempt: "1",
+}), /trigger or rerun/);
+assert.throws(() => validateSingleOwnerAuthorization({
+  repository: "lasrevinu333-design/memphis-zoo-mcp",
+  repositoryOwner: "lasrevinu333-design",
+  actor: "lasrevinu333-design",
+  triggeringActor: "lasrevinu333-design",
+  runAttempt: "2",
+}), /reruns are not authorized/);
 
 const now = Date.parse("2026-08-02T07:00:00Z");
 const sha = "7".repeat(40);

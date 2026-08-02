@@ -41,6 +41,42 @@ const EXPECTED_INDEXES = Object.freeze([
 ]);
 const JOB_INDEX = "idx_operational_notification_jobs_employee_credential_open";
 const ADVISORY_LOCK = "memphis-zoo:production-schema-c674-bootstrap:20260801195620";
+const TABLE_ACL_PRIVILEGES = Object.freeze([
+  "DELETE",
+  "INSERT",
+  "MAINTAIN",
+  "REFERENCES",
+  "SELECT",
+  "TRIGGER",
+  "TRUNCATE",
+  "UPDATE",
+]);
+
+function aclRows(grantees, privileges) {
+  return Object.freeze(grantees.flatMap((grantee) => privileges.map((privilege_type) => Object.freeze({
+    grantee,
+    privilege_type,
+    is_grantable: false,
+    grantor: "postgres",
+  }))));
+}
+
+export const EXPECTED_TABLE_ACL = aclRows(["postgres", "service_role"], TABLE_ACL_PRIVILEGES);
+export const EXPECTED_FUNCTION_ACL = aclRows(["postgres", "service_role"], ["EXECUTE"]);
+export const EXPECTED_DEFAULT_ACL = Object.freeze([
+  ...EXPECTED_FUNCTION_ACL.map((row) => Object.freeze({
+    object_type: "f",
+    object_owner: "postgres",
+    schema_name: "public",
+    ...row,
+  })),
+  ...EXPECTED_TABLE_ACL.map((row) => Object.freeze({
+    object_type: "r",
+    object_owner: "postgres",
+    schema_name: "public",
+    ...row,
+  })),
+]);
 
 function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
@@ -94,7 +130,7 @@ function parseArguments(argv) {
   }
   assert.equal(values.size, 3, "--mode, --migration-dir, and --evidence-out are required");
   const mode = values.get("--mode");
-  assert.ok(["dry-run", "apply", "verify"].includes(mode), "--mode must be dry-run, apply, or verify");
+  assert.ok(["preflight", "apply", "verify"].includes(mode), "--mode must be preflight, apply, or verify");
   return {
     mode,
     migrationDirectory: values.get("--migration-dir"),
@@ -102,25 +138,74 @@ function parseArguments(argv) {
   };
 }
 
+export function validateProductionDatabaseUrl(databaseUrlInput, projectRefInput) {
+  const databaseUrl = String(databaseUrlInput || "").trim();
+  const projectRef = String(projectRefInput || "").trim();
+  assert.ok(databaseUrl, "PRODUCTION_SUPABASE_DB_URL is required");
+  assert.ok(/^[a-z0-9]{20}$/.test(projectRef),
+    "PRODUCTION_SUPABASE_PROJECT_REF must be a project reference");
+  let parsed;
+  try {
+    parsed = new URL(databaseUrl);
+  } catch {
+    assert.fail("production database URL is not a well-formed URL");
+  }
+  assert.ok(["postgres:", "postgresql:"].includes(parsed.protocol),
+    "production database URL must use PostgreSQL");
+  assert.equal(parsed.hash, "", "production database URL cannot contain a fragment");
+  assert.equal(parsed.pathname, "/postgres", "production database URL must select the postgres database");
+  assert.equal(parsed.port || "5432", "5432",
+    "production migration connection must use the direct/session port 5432");
+  let username;
+  try {
+    username = decodeURIComponent(parsed.username);
+  } catch {
+    assert.fail("production database username is not valid URL userinfo");
+  }
+  assert.ok(parsed.password, "production database URL must contain a password");
+
+  let connectionMode;
+  if (parsed.hostname === `db.${projectRef}.supabase.co`) {
+    assert.ok(username === "postgres", "direct production database username must be postgres");
+    connectionMode = "direct";
+  } else if (/^aws-[0-9]+-[a-z0-9]+(?:-[a-z0-9]+)*\.pooler\.supabase\.com$/.test(parsed.hostname)) {
+    assert.ok(username === `postgres.${projectRef}`,
+      "shared session-pooler username must bind exactly to the production project");
+    connectionMode = "shared-session-pooler";
+  } else {
+    assert.fail("production database host is not an exact reviewed Supabase endpoint");
+  }
+
+  const permittedParameters = new Set(["sslmode", "sslcert", "sslkey", "sslrootcert"]);
+  for (const key of parsed.searchParams.keys()) {
+    assert.ok(permittedParameters.has(key), `production database URL parameter is not reviewed: ${key}`);
+  }
+  for (const key of permittedParameters) parsed.searchParams.delete(key);
+  return {
+    connectionString: parsed.toString(),
+    projectRef,
+    safeIdentity: Object.freeze({
+      connection_mode: connectionMode,
+      database: "postgres",
+      port: 5432,
+    }),
+  };
+}
+
 function databaseConfiguration() {
   const databaseUrl = String(process.env.PRODUCTION_SUPABASE_DB_URL || "").trim();
   const projectRef = String(process.env.PRODUCTION_SUPABASE_PROJECT_REF || "").trim();
   const caPath = resolve(String(process.env.PRODUCTION_SUPABASE_DB_CA_CERT_PATH || "").trim());
-  assert.ok(databaseUrl, "PRODUCTION_SUPABASE_DB_URL is required");
-  assert.match(projectRef, /^[a-z0-9]{20}$/, "PRODUCTION_SUPABASE_PROJECT_REF must be a project reference");
   assert.ok(process.env.PRODUCTION_SUPABASE_DB_CA_CERT_PATH,
     "PRODUCTION_SUPABASE_DB_CA_CERT_PATH is required");
-  const parsed = new URL(databaseUrl);
-  assert.ok(["postgres:", "postgresql:"].includes(parsed.protocol), "production database URL must use PostgreSQL");
-  const boundIdentity = `${parsed.hostname}:${decodeURIComponent(parsed.username)}`;
-  assert.ok(boundIdentity.includes(projectRef), "database URL is not bound to the configured production project");
-  for (const key of ["sslmode", "sslcert", "sslkey", "sslrootcert"]) parsed.searchParams.delete(key);
+  const validated = validateProductionDatabaseUrl(databaseUrl, projectRef);
   const ca = readFileSync(caPath, "utf8");
   assert.match(ca, /-----BEGIN CERTIFICATE-----/, "production database CA certificate is invalid");
   return {
-    connectionString: parsed.toString(),
+    connectionString: validated.connectionString,
     ssl: { ca, rejectUnauthorized: true },
-    projectRef,
+    projectRef: validated.projectRef,
+    safeIdentity: validated.safeIdentity,
   };
 }
 
@@ -187,8 +272,37 @@ async function assertDatabaseIdentity(client) {
   return result.rows[0];
 }
 
+export function assertExactAcl(actualRows, expectedRows, label) {
+  assert.deepEqual(actualRows, expectedRows,
+    `${label} contains an unreviewed grantee, grantor, privilege, or grant option`);
+  return actualRows;
+}
+
+async function relevantDefaultAcl(client) {
+  const result = await client.query(`
+    select d.defaclobjtype as object_type,
+           pg_get_userbyid(d.defaclrole) as object_owner,
+           coalesce(n.nspname, '<global>') as schema_name,
+           coalesce(grantee.rolname, 'PUBLIC') as grantee,
+           x.privilege_type,
+           x.is_grantable,
+           coalesce(grantor.rolname, 'PUBLIC') as grantor
+      from pg_default_acl d
+      left join pg_namespace n on n.oid = d.defaclnamespace
+      cross join lateral aclexplode(d.defaclacl) x
+      left join pg_roles grantee on grantee.oid = x.grantee
+      left join pg_roles grantor on grantor.oid = x.grantor
+     where pg_get_userbyid(d.defaclrole) = 'postgres'
+       and (d.defaclnamespace = 0 or n.nspname = 'public')
+       and d.defaclobjtype in ('r', 'f')
+     order by object_type, schema_name, grantee, privilege_type, grantor
+  `);
+  return assertExactAcl(result.rows, EXPECTED_DEFAULT_ACL,
+    "postgres public-schema table/function default ACL");
+}
+
 async function assertBeforeState(client) {
-  const [physical, ledger, targets] = await Promise.all([
+  const [physical, ledger, targets, defaultAcl] = await Promise.all([
     physicalState(client),
     ledgerState(client),
     client.query(`
@@ -197,6 +311,7 @@ async function assertBeforeState(client) {
              to_regclass('public.idx_operational_notification_jobs_employee_credential_open')::text as job_index,
              to_regprocedure($1)::text as removal_function
     `, [FUNCTION_SIGNATURE]),
+    relevantDefaultAcl(client),
   ]);
   assert.equal(physical.fingerprint, BOOTSTRAP.from_fingerprint,
     "production physical catalog is not the reviewed 544d11 source state");
@@ -213,11 +328,23 @@ async function assertBeforeState(client) {
     job_index: null,
     removal_function: null,
   }, "target objects are partially present before bootstrap");
-  return { physical, ledger, targets: targets.rows[0] };
+  return { physical, ledger, targets: targets.rows[0], default_acl: defaultAcl };
 }
 
 async function assertAfterState(client, migrationSql, createdBy) {
-  const [physical, ledger, targetLedger, table, tableGrants, indexes, jobIndex, fn, functionGrants] = await Promise.all([
+  const [
+    physical,
+    ledger,
+    targetLedger,
+    table,
+    tableAcl,
+    columnAcl,
+    indexes,
+    jobIndex,
+    fn,
+    functionAcl,
+    defaultAcl,
+  ] = await Promise.all([
     physicalState(client),
     ledgerState(client),
     client.query(`
@@ -229,18 +356,43 @@ async function assertAfterState(client, migrationSql, createdBy) {
     client.query(`
       select c.relrowsecurity as rls_enabled,
              c.relforcerowsecurity as rls_forced,
-             (select count(*)::integer from pg_policy p where p.polrelid = c.oid) as policy_count
+             (select count(*)::integer from pg_policy p where p.polrelid = c.oid) as policy_count,
+             pg_get_userbyid(c.relowner) as object_owner
         from pg_class c
         join pg_namespace n on n.oid = c.relnamespace
        where n.nspname = 'public' and c.relname = 'device_auth_removal_operations'
     `),
     client.query(`
-      select grantee, privilege_type
-        from information_schema.role_table_grants
-       where table_schema = 'public'
-         and table_name = 'device_auth_removal_operations'
-         and grantee in ('PUBLIC', 'anon', 'authenticated', 'service_role')
-       order by grantee, privilege_type
+      select coalesce(grantee.rolname, 'PUBLIC') as grantee,
+             x.privilege_type,
+             x.is_grantable,
+             coalesce(grantor.rolname, 'PUBLIC') as grantor
+        from pg_class c
+        join pg_namespace n on n.oid = c.relnamespace
+        cross join lateral aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) x
+        left join pg_roles grantee on grantee.oid = x.grantee
+        left join pg_roles grantor on grantor.oid = x.grantor
+       where n.nspname = 'public'
+         and c.relname = 'device_auth_removal_operations'
+       order by grantee, x.privilege_type, grantor
+    `),
+    client.query(`
+      select a.attname as column_name,
+             coalesce(grantee.rolname, 'PUBLIC') as grantee,
+             x.privilege_type,
+             x.is_grantable,
+             coalesce(grantor.rolname, 'PUBLIC') as grantor
+        from pg_attribute a
+        join pg_class c on c.oid = a.attrelid
+        join pg_namespace n on n.oid = c.relnamespace
+        cross join lateral aclexplode(a.attacl) x
+        left join pg_roles grantee on grantee.oid = x.grantee
+        left join pg_roles grantor on grantor.oid = x.grantor
+       where n.nspname = 'public'
+         and c.relname = 'device_auth_removal_operations'
+         and a.attnum > 0
+         and not a.attisdropped
+       order by a.attnum, grantee, x.privilege_type, grantor
     `),
     client.query(`
       select i.relname as index_name, ix.indisvalid as is_valid, ix.indisready as is_ready
@@ -261,19 +413,24 @@ async function assertAfterState(client, migrationSql, createdBy) {
     `, [JOB_INDEX]),
     client.query(`
       select p.prosecdef as security_definer,
-             p.proconfig as configuration
+             p.proconfig as configuration,
+             pg_get_userbyid(p.proowner) as object_owner
         from pg_proc p
        where p.oid = to_regprocedure($1)
     `, [FUNCTION_SIGNATURE]),
     client.query(`
-      select coalesce(r.rolname, 'PUBLIC') as grantee, x.privilege_type
+      select coalesce(grantee.rolname, 'PUBLIC') as grantee,
+             x.privilege_type,
+             x.is_grantable,
+             coalesce(grantor.rolname, 'PUBLIC') as grantor
         from pg_proc p
         cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x
-        left join pg_roles r on r.oid = x.grantee
+        left join pg_roles grantee on grantee.oid = x.grantee
+        left join pg_roles grantor on grantor.oid = x.grantor
        where p.oid = to_regprocedure($1)
-         and coalesce(r.rolname, 'PUBLIC') in ('PUBLIC', 'anon', 'authenticated', 'service_role')
-       order by grantee, x.privilege_type
+       order by grantee, x.privilege_type, grantor
     `, [FUNCTION_SIGNATURE]),
+    relevantDefaultAcl(client),
   ]);
 
   assert.equal(physical.fingerprint, BOOTSTRAP.to_fingerprint,
@@ -299,11 +456,10 @@ async function assertAfterState(client, migrationSql, createdBy) {
     rls_enabled: true,
     rls_forced: true,
     policy_count: 0,
-  }, "operation table RLS or grants differ from the reviewed contract");
-  assert.deepEqual(tableGrants.rows, [
-    { grantee: "service_role", privilege_type: "INSERT" },
-    { grantee: "service_role", privilege_type: "SELECT" },
-  ], "operation table grants differ from the reviewed contract");
+    object_owner: "postgres",
+  }, "operation table RLS or owner differs from the reviewed contract");
+  assertExactAcl(tableAcl.rows, EXPECTED_TABLE_ACL, "operation table ACL");
+  assert.deepEqual(columnAcl.rows, [], "operation table contains unreviewed column ACLs");
   assert.deepEqual(indexes.rows.map((rowValue) => rowValue.index_name), EXPECTED_INDEXES,
     "operation table index set differs from the reviewed contract");
   assert.ok(indexes.rows.every((rowValue) => rowValue.is_valid && rowValue.is_ready),
@@ -321,20 +477,21 @@ async function assertAfterState(client, migrationSql, createdBy) {
   assert.deepEqual(fn.rows[0], {
     security_definer: true,
     configuration: ["search_path=pg_catalog, public"],
-  }, "credential-removal function security or grants differ from the reviewed contract");
-  assert.deepEqual(functionGrants.rows, [
-    { grantee: "service_role", privilege_type: "EXECUTE" },
-  ], "credential-removal function grants differ from the reviewed contract");
+    object_owner: "postgres",
+  }, "credential-removal function security or owner differs from the reviewed contract");
+  assertExactAcl(functionAcl.rows, EXPECTED_FUNCTION_ACL, "credential-removal function ACL");
   return {
     physical,
     ledger,
     contract: {
       table: table.rows[0],
-      table_grants: tableGrants.rows,
+      table_acl: tableAcl.rows,
+      column_acl: columnAcl.rows,
       indexes: indexes.rows,
       notification_index: jobIndex.rows[0],
       function: fn.rows[0],
-      function_grants: functionGrants.rows,
+      function_acl: functionAcl.rows,
+      default_acl: defaultAcl,
       ledger_sql_sha256: sha256(row.statements[0]),
     },
   };
@@ -343,7 +500,7 @@ async function assertAfterState(client, migrationSql, createdBy) {
 function workflowIdentity(mode) {
   const repository = String(process.env.GITHUB_REPOSITORY || "").trim();
   const sha = String(process.env.GITHUB_SHA || "").trim();
-  if (mode !== "dry-run") {
+  if (mode !== "preflight") {
     assert.match(repository, /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/, "GITHUB_REPOSITORY is required");
     assert.match(sha, /^[0-9a-f]{40}$/, "GITHUB_SHA is required");
   }
@@ -379,7 +536,7 @@ export async function run(argv = process.argv.slice(2)) {
     ok: false,
     mode,
     generated_at: new Date().toISOString(),
-    project_ref: database.projectRef,
+    database_connection: database.safeIdentity,
     workflow: identity,
     migration: {
       path: basename(migration.path),
@@ -414,9 +571,9 @@ export async function run(argv = process.argv.slice(2)) {
     } else {
       await client.query("begin isolation level repeatable read read only");
       evidence.database_identity = await assertDatabaseIdentity(client);
-      if (mode === "dry-run") {
+      if (mode === "preflight") {
         evidence.before = await assertBeforeState(client);
-        evidence.would_apply = true;
+        evidence.ready_to_apply = true;
       } else {
         evidence.after = await assertAfterState(client, migration.migrationSql, identity.createdBy);
         evidence.verified = true;

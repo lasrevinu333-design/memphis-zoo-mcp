@@ -44,6 +44,8 @@ jobs:
           set -euo pipefail
           test "$GITHUB_REPOSITORY_OWNER" = "lasrevinu333-design"
           test "$GITHUB_ACTOR" = "lasrevinu333-design"
+          test "$GITHUB_TRIGGERING_ACTOR" = "lasrevinu333-design"
+          test "$GITHUB_RUN_ATTEMPT" = "1"
           test "$GITHUB_REF" = "refs/heads/main"
           test "$EXPECTED_MAIN_SHA" = "$GITHUB_SHA"
           test "$CONFIRMATION" = "APPLY 20260801195620 f23a5cd53292af904b27d5979c5af2e05bf8c85cc1de64c361f246bb68de8166 544d11f47f1f4a960fcf49d13bba53c736d78fe4fe9d225c996c84311d442ad0 c6742e500c2a5d3767f1d886bb5937167eab42730f8271eec76b427a10c5f302"
@@ -98,7 +100,7 @@ jobs:
           test "${#entries[@]}" -eq 1
           test "$(sha256sum "${entries[0]}" | cut -d' ' -f1)" = \
             "f23a5cd53292af904b27d5979c5af2e05bf8c85cc1de64c361f246bb68de8166"
-      - name: Dry-run exact migration and assert cardinality
+      - name: Read-only preflight of exact migration and assert cardinality
         env:
           PRODUCTION_SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           PRODUCTION_SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
@@ -106,17 +108,17 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/production-schema-c674-bootstrap.mjs \
-            --mode dry-run \
+            --mode preflight \
             --migration-dir "${{ runner.temp }}/schema-c674-isolated/supabase/migrations" \
-            --evidence-out "${{ runner.temp }}/schema-c674-evidence/dry-run.json"
+            --evidence-out "${{ runner.temp }}/schema-c674-evidence/preflight.json"
           node -e '
             const fs = require("node:fs");
             const evidence = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
-            if (!evidence.ok || evidence.mode !== "dry-run" || !evidence.would_apply ||
+            if (!evidence.ok || evidence.mode !== "preflight" || !evidence.ready_to_apply ||
                 evidence.migration.migration_count !== 1 ||
                 evidence.migration.sha256 !== "f23a5cd53292af904b27d5979c5af2e05bf8c85cc1de64c361f246bb68de8166" ||
                 evidence.before.physical.fingerprint !== "544d11f47f1f4a960fcf49d13bba53c736d78fe4fe9d225c996c84311d442ad0") process.exit(1);
-          ' "${{ runner.temp }}/schema-c674-evidence/dry-run.json"
+          ' "${{ runner.temp }}/schema-c674-evidence/preflight.json"
       - name: Reverify exact main and backup immediately before apply
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -138,7 +140,7 @@ jobs:
             --mode apply \
             --migration-dir "${{ runner.temp }}/schema-c674-isolated/supabase/migrations" \
             --evidence-out "${{ runner.temp }}/schema-c674-evidence/apply.json"
-      - name: Independently post-verify catalog, ledger, RLS, grants, function, and indexes
+      - name: Independently post-verify catalog, ledger, RLS, complete ACLs, function, and indexes
         if: ${{ always() && steps.apply.outcome != 'skipped' }}
         env:
           PRODUCTION_SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
