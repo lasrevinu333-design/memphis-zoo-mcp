@@ -9,7 +9,7 @@ const CURRENT = "544d11f47f1f4a960fcf49d13bba53c736d78fe4fe9d225c996c84311d442ad
 const BACKEND_TARGET = "c6742e500c2a5d3767f1d886bb5937167eab42730f8271eec76b427a10c5f302";
 const FUTURE = "2".repeat(64);
 const OUTSIDE = "3".repeat(64);
-const ENGINE_MAIN_SHA = "a1c0e493feddaf1a6417c31be1b791114dc938d2";
+const ENGINE_MAIN_SHA = "4e1de118551aa263ec884ce2d80d062036003022";
 const NOW = Date.parse("2026-08-01T00:00:00Z");
 const RETIRED_TRANSITION = {
   transition_id: "custodial-native-security-build11-20260801",
