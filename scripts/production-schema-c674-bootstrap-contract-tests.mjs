@@ -14,7 +14,7 @@ import {
   BACKUP_MAX_AGE_MS,
   BACKUP_WORKFLOW_PATH,
   validateBackupEvidence,
-  validateProductionEnvironment,
+  validateSingleOwnerAuthorization,
 } from "./production-schema-c674-github-evidence.mjs";
 import { fingerprintSchemaCatalog } from "./schema-fingerprint-catalog.mjs";
 
@@ -63,16 +63,18 @@ assert.doesNotMatch(workflow, /^\s+(?:push|pull_request|schedule):/m,
   "bootstrap must only be manually dispatchable");
 assert.match(workflow, /group: production-schema-c674-bootstrap/);
 assert.match(workflow, /cancel-in-progress: false/);
-assert.match(workflow, /environment:\n\s+name: production/);
+assert.doesNotMatch(workflow, /^\s*environment:/m,
+  "single-owner repository must not pretend an unprotected environment is an approval gate");
 assert.match(workflow, /if: \$\{\{ always\(\) && steps\.apply\.outcome != 'skipped' \}\}/,
   "independent post-verification must run after any attempted apply, including ambiguous failures");
 assert.match(workflow, /test "\$GITHUB_REF" = "refs\/heads\/main"/);
+assert.match(workflow, /test "\$GITHUB_ACTOR" = "lasrevinu333-design"/);
 assert.match(workflow, /test "\$EXPECTED_MAIN_SHA" = "\$GITHUB_SHA"/);
 assert.match(workflow, new RegExp(`APPLY ${BOOTSTRAP.migration_version} ${BOOTSTRAP.migration_sha256} ${BOOTSTRAP.from_fingerprint} ${BOOTSTRAP.to_fingerprint}`));
-assert.match(workflow, /secrets\.PRODUCTION_SUPABASE_DB_URL/);
-assert.match(workflow, /secrets\.PRODUCTION_SUPABASE_PROJECT_REF/);
-assert.doesNotMatch(workflow, /secrets\.SUPABASE_DB_URL/,
-  "bootstrap must require production-environment-specific database secrets");
+assert.match(workflow, /secrets\.SUPABASE_DB_URL/);
+assert.match(workflow, /secrets\.SUPABASE_PROJECT_REF/);
+assert.doesNotMatch(workflow, /secrets\.PRODUCTION_SUPABASE_/,
+  "bootstrap must use the repository's configured production database secrets");
 assert.match(workflow, /npm ci --ignore-scripts/);
 assert.match(workflow, /entries=\("\$ISOLATED_DIR"\/\*\)/);
 assert.match(workflow, /test "\$\{#entries\[@\]\}" -eq 1/);
@@ -106,34 +108,20 @@ assert.match(runnerSource, /function_grants/);
 assert.match(runnerSource, /indisvalid/);
 assert.doesNotMatch(runnerSource, /execFile|spawn|\bpsql\b|supabase\s+db\s+push/);
 
-const protectedEnvironment = {
-  name: "production",
-  protection_rules: [{
-    type: "required_reviewers",
-    prevent_self_review: true,
-    reviewers: [{ reviewer: { login: "reviewer" } }],
-  }],
-  deployment_branch_policy: { protected_branches: false, custom_branch_policies: true },
-};
-assert.deepEqual(
-  validateProductionEnvironment(protectedEnvironment, [{ name: "main", type: "branch" }], false),
-  { environment: "production", required_reviewer_count: 1, deployment_policy: "main-only" },
-);
-assert.throws(
-  () => validateProductionEnvironment({ ...protectedEnvironment, protection_rules: [] }, [{ name: "main" }], false),
-  /require reviewers/,
-);
-assert.throws(
-  () => validateProductionEnvironment({
-    ...protectedEnvironment,
-    protection_rules: [{ ...protectedEnvironment.protection_rules[0], prevent_self_review: false }],
-  }, [{ name: "main" }], false),
-  /prevent the initiator/,
-);
-assert.throws(
-  () => validateProductionEnvironment(protectedEnvironment, [{ name: "main" }, { name: "release" }], false),
-  /exactly one/,
-);
+assert.deepEqual(validateSingleOwnerAuthorization({
+  repository: "lasrevinu333-design/memphis-zoo-mcp",
+  repositoryOwner: "lasrevinu333-design",
+  actor: "lasrevinu333-design",
+}), {
+  model: "single-owner-exact-workflow-dispatch",
+  actor: "lasrevinu333-design",
+  repository_owner: "lasrevinu333-design",
+});
+assert.throws(() => validateSingleOwnerAuthorization({
+  repository: "lasrevinu333-design/memphis-zoo-mcp",
+  repositoryOwner: "lasrevinu333-design",
+  actor: "another-user",
+}), /only the repository owner/);
 
 const now = Date.parse("2026-08-02T07:00:00Z");
 const sha = "7".repeat(40);
@@ -190,6 +178,8 @@ assert.throws(() => validateBackupEvidence({
   now,
 }), /exact main commit/);
 assert.match(evidenceSource, /workflow commit is no longer the exact main tip/);
+assert.match(evidenceSource, /single-owner-exact-workflow-dispatch/);
+assert.doesNotMatch(evidenceSource, /environments\/production|validateProductionEnvironment/);
 assert.match(evidenceSource, /maximum age is 90 minutes/);
 assert.match(evidenceSource, /sha256:\[0-9a-f\]\{64\}/);
 

@@ -8,33 +8,11 @@ import { pathToFileURL } from "node:url";
 export const BACKUP_WORKFLOW_PATH = ".github/workflows/production-disaster-recovery-backup.yml";
 export const BACKUP_MAX_AGE_MS = 90 * 60 * 1000;
 
-export function validateProductionEnvironment(environment, customPolicies, branchProtected) {
-  assert.equal(environment?.name, "production", "the protected production environment does not exist");
-  const reviewerRule = environment.protection_rules?.find((rule) => rule.type === "required_reviewers");
-  assert.ok(reviewerRule, "production environment must require reviewers");
-  assert.ok(Array.isArray(reviewerRule.reviewers) && reviewerRule.reviewers.length > 0,
-    "production environment must name at least one required reviewer");
-  assert.equal(reviewerRule.prevent_self_review, true,
-    "production environment must prevent the initiator from approving their own deployment");
-  const policy = environment.deployment_branch_policy;
-  assert.ok(policy, "production environment must restrict deployment branches");
-  assert.notEqual(Boolean(policy.protected_branches), Boolean(policy.custom_branch_policies),
-    "production environment must select exactly one deployment branch policy mode");
-  if (policy.protected_branches) {
-    assert.equal(branchProtected, true,
-      "production environment relies on protected branches, but main is not protected");
-  } else {
-    assert.ok(Array.isArray(customPolicies), "custom production branch policies are unavailable");
-    assert.equal(customPolicies.length, 1, "production environment must allow exactly one custom branch policy");
-    assert.equal(customPolicies[0].name, "main", "production environment may only deploy main");
-    assert.ok(["branch", undefined].includes(customPolicies[0].type),
-      "production environment main policy must be a branch policy");
-  }
-  return {
-    environment: environment.name,
-    required_reviewer_count: reviewerRule.reviewers.length,
-    deployment_policy: policy.protected_branches ? "protected-branches" : "main-only",
-  };
+export function validateSingleOwnerAuthorization({ repository, repositoryOwner, actor }) {
+  assert.equal(repository, "lasrevinu333-design/memphis-zoo-mcp", "workflow repository is not authorized");
+  assert.equal(repositoryOwner, "lasrevinu333-design", "workflow repository owner is not authorized");
+  assert.equal(actor, "lasrevinu333-design", "only the repository owner may authorize this bootstrap");
+  return { model: "single-owner-exact-workflow-dispatch", actor, repository_owner: repositoryOwner };
 }
 
 export function validateBackupEvidence({ workflow, run, artifacts, repository, sha, backupRunId, now = Date.now() }) {
@@ -79,7 +57,7 @@ export function validateBackupEvidence({ workflow, run, artifacts, repository, s
   };
 }
 
-async function githubJson(path, token, optional = false) {
+async function githubJson(path, token) {
   const response = await fetch(`https://api.github.com${path}`, {
     headers: {
       Accept: "application/vnd.github+json",
@@ -88,7 +66,6 @@ async function githubJson(path, token, optional = false) {
       "User-Agent": "memphis-zoo-production-schema-c674-bootstrap",
     },
   });
-  if (optional && response.status === 404) return null;
   assert.ok(response.ok, `GitHub evidence request failed with HTTP ${response.status} for ${path}`);
   return response.json();
 }
@@ -96,13 +73,16 @@ async function githubJson(path, token, optional = false) {
 function requiredEnvironment() {
   const token = String(process.env.GITHUB_TOKEN || "").trim();
   const repository = String(process.env.GITHUB_REPOSITORY || "").trim();
+  const repositoryOwner = String(process.env.GITHUB_REPOSITORY_OWNER || "").trim();
+  const actor = String(process.env.GITHUB_ACTOR || "").trim();
   const sha = String(process.env.GITHUB_SHA || "").trim();
   const backupRunId = String(process.env.PRODUCTION_BACKUP_RUN_ID || "").trim();
   assert.ok(token, "GITHUB_TOKEN is required");
   assert.match(repository, /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/, "GITHUB_REPOSITORY is invalid");
+  validateSingleOwnerAuthorization({ repository, repositoryOwner, actor });
   assert.match(sha, /^[0-9a-f]{40}$/, "GITHUB_SHA must be an exact commit SHA");
   assert.match(backupRunId, /^[1-9][0-9]*$/, "PRODUCTION_BACKUP_RUN_ID must be numeric");
-  return { token, repository, sha, backupRunId };
+  return { token, repository, repositoryOwner, actor, sha, backupRunId };
 }
 
 function outputEvidence(path, evidence) {
@@ -120,30 +100,14 @@ export async function run(argv = process.argv.slice(2)) {
   assert.deepEqual(argv.slice(0, 1), ["--evidence-out"], "usage: --evidence-out PATH");
   assert.equal(argv.length, 2, "usage: --evidence-out PATH");
   const evidencePath = resolve(argv[1]);
-  const { token, repository, sha, backupRunId } = requiredEnvironment();
+  const { token, repository, repositoryOwner, actor, sha, backupRunId } = requiredEnvironment();
   const encodedRepository = repository.split("/").map(encodeURIComponent).join("/");
   const repo = await githubJson(`/repos/${encodedRepository}`, token);
   assert.equal(repo.default_branch, "main", "repository default branch must be main");
+  assert.equal(repo.owner?.login, repositoryOwner, "repository ownership changed");
   const mainRef = await githubJson(`/repos/${encodedRepository}/git/ref/heads/main`, token);
   assert.equal(mainRef.object?.type, "commit", "main ref does not resolve to a commit");
   assert.equal(mainRef.object?.sha, sha, "workflow commit is no longer the exact main tip");
-
-  const environment = await githubJson(`/repos/${encodedRepository}/environments/production`, token);
-  const policy = environment.deployment_branch_policy;
-  let customPolicies = [];
-  let branchProtected = false;
-  if (policy?.custom_branch_policies) {
-    const result = await githubJson(
-      `/repos/${encodedRepository}/environments/production/deployment-branch-policies?per_page=100`, token,
-    );
-    assert.equal(result.total_count, result.branch_policies.length,
-      "production branch policy response is incomplete");
-    customPolicies = result.branch_policies;
-  }
-  if (policy?.protected_branches) {
-    branchProtected = Boolean(await githubJson(`/repos/${encodedRepository}/branches/main/protection`, token, true));
-  }
-  const environmentEvidence = validateProductionEnvironment(environment, customPolicies, branchProtected);
 
   const workflow = await githubJson(
     `/repos/${encodedRepository}/actions/workflows/${encodeURIComponent("production-disaster-recovery-backup.yml")}`, token,
@@ -167,7 +131,7 @@ export async function run(argv = process.argv.slice(2)) {
     verified_at: new Date().toISOString(),
     repository,
     exact_main_sha: sha,
-    production_environment: environmentEvidence,
+    authorization: validateSingleOwnerAuthorization({ repository, repositoryOwner, actor }),
     backup: backupEvidence,
   };
   outputEvidence(evidencePath, evidence);
