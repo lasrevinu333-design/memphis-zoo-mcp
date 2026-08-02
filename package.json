@@ -54,6 +54,8 @@
     "test:custodial-employee-phones-db": "node scripts/custodial-employee-phone-database-tests.mjs",
     "test:custodial-enrollment-security": "node scripts/custodial-enrollment-security-contract-tests.mjs",
     "test:custodial-enrollment-security-db": "node scripts/custodial-enrollment-security-database-tests.mjs",
+    "test:custodial-device-removal": "node scripts/custodial-device-removal-contract-tests.mjs",
+    "test:custodial-device-removal-db": "node scripts/custodial-device-removal-database-tests.mjs",
     "test:phone-readiness": "node scripts/phone-production-readiness-tests.mjs",
     "phone:readiness": "node scripts/phone-production-readiness.mjs",
     "test:manager-inspection-readiness": "node scripts/manager-inspection-readiness-tests.mjs",
