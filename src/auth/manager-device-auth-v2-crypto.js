@@ -6,6 +6,8 @@ export const MANAGER_ENVELOPE_ALGORITHM = "ECDH-P256-HKDF-SHA256+A256GCM";
 export const MANAGER_PROOF_PREFIX = "MEMPHIS-MANAGER-DEVICE-AUTH-PROOF-V2";
 export const MANAGER_RESULT_AAD_PREFIX = "MEMPHIS-MANAGER-DEVICE-AUTH-RESULT-AAD-V2";
 export const MANAGER_SESSION_AAD_PREFIX = "MEMPHIS-MANAGER-DEVICE-AUTH-SESSION-AAD-V2";
+export const MANAGER_OPS_SESSION_MIN_BYTES = 32;
+export const MANAGER_OPS_SESSION_MAX_BYTES = 8192;
 
 const P256_ORDER = BigInt("0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551");
 const P256_HALF_ORDER = P256_ORDER >> 1n;
@@ -13,6 +15,7 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3
 const DEVICE_PATTERN = /^ops-app-[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const HEX_64_PATTERN = /^[0-9a-f]{64}$/;
 const BASE64URL_PATTERN = /^[A-Za-z0-9_-]+$/;
+const OPS_SESSION_PATTERN = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
 export const MANAGER_V2_ROLE_ORDER = Object.freeze([
   "OPS_MANAGER",
   "CUSTODIAL_MANAGER",
@@ -165,6 +168,12 @@ export function encodeFields(fields) {
 
 export function sha256Hex(value) {
   return crypto.createHash("sha256").update(value).digest("hex");
+}
+
+export function isCanonicalManagerOpsSession(value) {
+  if (typeof value !== "string" || !OPS_SESSION_PATTERN.test(value)) return false;
+  const bytes = Buffer.byteLength(value, "utf8");
+  return bytes >= MANAGER_OPS_SESSION_MIN_BYTES && bytes <= MANAGER_OPS_SESSION_MAX_BYTES;
 }
 
 export function normalizeManagerPublicJwk(value, field = "public_key") {
@@ -656,8 +665,10 @@ export function sealManagerAuthorizedSessionResult({
   const normalizedRoles = canonicalManagerRoles(roles);
   const normalizedAccess = accessLevel(grantedAccessLevel, "access_level");
   const normalizedExpiry = isoInstant(sessionExpiresAt, "session_expires_at");
-  const token = nfc(sessionToken, "ops_session", 16_384);
-  if (!/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token)) throw contractError("manager_v2_invalid_ops_session");
+  const token = nfc(sessionToken, "ops_session", MANAGER_OPS_SESSION_MAX_BYTES);
+  if (!isCanonicalManagerOpsSession(token)) {
+    throw contractError("manager_v2_invalid_ops_session");
+  }
   return sealToManagerWrappingKey({
     wrappingPublicKeyJwk,
     operationId: normalizedOperation,

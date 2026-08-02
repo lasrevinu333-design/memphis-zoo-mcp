@@ -20,6 +20,7 @@ import {
   createManagerDeviceAuthV2Service,
   managerV2CodeVerifier,
   managerV2CredentialVerifier,
+  managerV2SessionTokenVerifier,
 } from "../src/auth/manager-device-auth-v2-service.js";
 
 const serverSecret = "manager-v2-service-secret-with-more-than-thirty-two-bytes";
@@ -40,6 +41,26 @@ assert.equal(
   managerV2CodeVerifier(codeSecret, code),
   crypto.createHmac("sha256", codeSecret).update(`ops-manager-enrollment-code:v1:${code}`).digest("hex"),
 );
+assert.throws(
+  () => managerV2SessionTokenVerifier(serverSecret, `${"A".repeat(15)}.${"B".repeat(15)}`),
+  (error) => error?.code === "manager_v2_invalid_ops_session" && error?.status === 401,
+);
+assert.doesNotThrow(
+  () => managerV2SessionTokenVerifier(serverSecret, `${"A".repeat(15)}.${"B".repeat(16)}`),
+);
+assert.doesNotThrow(
+  () => managerV2SessionTokenVerifier(serverSecret, `${"A".repeat(4095)}.${"B".repeat(4096)}`),
+);
+for (const invalidSession of [
+  `${"A".repeat(4096)}.${"B".repeat(4096)}`,
+  `${"A".repeat(16)}.${"B".repeat(16)}.extra`,
+  `${"A".repeat(16)}.B\n${"C".repeat(15)}`,
+]) {
+  assert.throws(
+    () => managerV2SessionTokenVerifier(serverSecret, invalidSession),
+    (error) => error?.code === "manager_v2_invalid_ops_session" && error?.status === 401,
+  );
+}
 
 function same(left, right) {
   return crypto.timingSafeEqual(Buffer.from(left), Buffer.from(right));

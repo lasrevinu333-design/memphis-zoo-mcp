@@ -1,7 +1,13 @@
 {
-  "fixture_version": 1,
+  "fixture_version": 2,
   "contract_version": "manager-device-auth.v2",
   "warning": "Public deterministic test material only. Never use these keys or secrets outside tests.",
+  "ops_session_contract": {
+    "minimum_utf8_bytes": 32,
+    "maximum_utf8_bytes": 8192,
+    "pattern": "^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$",
+    "golden_value": "eyJ2IjoyLCJyb2xlIjoib3BzX21hbmFnZXIifQ.WlpaWlpaWlpaWlpaWlpaWlpaWlpaWlpaWlpaWlpaWlo"
+  },
   "identifiers": {
     "operation_id": "10000000-0000-4000-8000-000000000001",
     "credential_id": "10000000-0000-4000-8000-000000000002",
@@ -131,8 +137,8 @@
       "wrapping_key_id": "AhqHzaYXA5MzmDCrsseUsVBGKyfhDhvekx0THjH_xIE",
       "salt": "ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA",
       "iv": "DAwMDAwMDAwMDAwM",
-      "ciphertext": "gdWg0KKrbB_Q7-CC1NHHDbmSV8AqEsCJIRRirJbAUwAN2FQAomKiagmig6AFj-7iz_rkaqJj5aYCdvKktUsrPY62hfjmFBgRsH-oNsT1QphrIfwXkQ6HLtnARoZtfLx45YlrCvy25mudwb_Y4djY04tTsQb1o6GOPigTO94IewvtmcuImcvv4WoBeAqI0_DjlFV8MixFQ_TUzZLWUWTW1zj8Oh-mPVWQkwU-HejBOnpH11DhXACpW8fKiGF0_yKxt0k9d0C5zWUFva1CvYtndZXQwUCZhQws_fULvQBxtkY8TzwLuqDMXcnf4N77Yq5YWh_x-JNIv4-7aVubFwb066PoxmjdFKoZBZ0zJEFkSkHQNduviIsNPbG2-iyMPXi5fE4_9AgcR_MzdtQnDPTsX4CgOqduqeHcYe1fm4WOyKUnTLzVcK4J-vbeluKrWtMuhPjIuLbWvB-cA67zs-LY9Zo4lfCne8mQcOPsQ92f9yhzyCzPBEz6efvmOczQwqi1MFkIAPyFeQufmXEaEq57LS64CsLbGwKZJiZ-hTZKmVxurNl4GGK1ZXOzzwEPhvgkSKZGFGI6HGw695U",
-      "tag": "FjeH69QXig8-4fWBn7uY0A"
+      "ciphertext": "gdWg0KKrbB_Q7-CC1NHHDbmSV8AqEsCJIRRirJbAUwAN2FQAomKiagmig6AFj-7iz_rkaqJj5aYCdvKktUsrPY62hfjmFBgRsH-oNsT1QphrIfwXkQ6HLtnARoZtfLx45YlrCvy25mudwb_Y4djY04tTsQb1o6GOPigTO94IewvtmcuImcvv4WoBeAqI0_DjlFV8MixFQ_TUzZLWUWTW1zj8Oh-mPWqxsV8VL8XLLGgjzQC_Sg6Nd5jHshhap1ah4kQpc2WyyFQo9vEx_Kx4KJX33R3J4lBsrJJX_UwW6gZtNWRL68eNFZi4vIOqBfIYC3ituMIv49S7aVuSEx7876PF8GWbDLJURN4udQEkV0DNNduviJYJILG25ySROXikfFM39AgcWvMzdtQkHuj-Hd_8a_ZgsdefQNxrobqQ74BCM8zGbLx6n5W66YvSK69B5I22ycG-1g2AEceK0ZerkeVah-y1GL_xCZPXeOilxU4E2kCiCTOHVdnLHfjmz-b8ZH8xcZLoWzeyuXE2MINfGRjIBMycJzuiEQBZlQUcl0Qf26oeegbRDQHCuhh2--BIXb4XQi9vXy8_uY3p69s8TH4MdJi56wj2sB5P2nlX1ga8sQqO0OPSUTvtaKQs9aPCxZ5BqyEpn21TtyXyq4833pY4sNpKlQ",
+      "tag": "HRF6oHpJvxoxTB1DdmUT7Q"
     }
   },
   "exact_public_dtos": {
@@ -201,8 +207,8 @@
           "wrapping_key_id": "AhqHzaYXA5MzmDCrsseUsVBGKyfhDhvekx0THjH_xIE",
           "salt": "ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA",
           "iv": "DAwMDAwMDAwMDAwM",
-          "ciphertext": "gdWg0KKrbB_Q7-CC1NHHDbmSV8AqEsCJIRRirJbAUwAN2FQAomKiagmig6AFj-7iz_rkaqJj5aYCdvKktUsrPY62hfjmFBgRsH-oNsT1QphrIfwXkQ6HLtnARoZtfLx45YlrCvy25mudwb_Y4djY04tTsQb1o6GOPigTO94IewvtmcuImcvv4WoBeAqI0_DjlFV8MixFQ_TUzZLWUWTW1zj8Oh-mPVWQkwU-HejBOnpH11DhXACpW8fKiGF0_yKxt0k9d0C5zWUFva1CvYtndZXQwUCZhQws_fULvQBxtkY8TzwLuqDMXcnf4N77Yq5YWh_x-JNIv4-7aVubFwb066PoxmjdFKoZBZ0zJEFkSkHQNduviIsNPbG2-iyMPXi5fE4_9AgcR_MzdtQnDPTsX4CgOqduqeHcYe1fm4WOyKUnTLzVcK4J-vbeluKrWtMuhPjIuLbWvB-cA67zs-LY9Zo4lfCne8mQcOPsQ92f9yhzyCzPBEz6efvmOczQwqi1MFkIAPyFeQufmXEaEq57LS64CsLbGwKZJiZ-hTZKmVxurNl4GGK1ZXOzzwEPhvgkSKZGFGI6HGw695U",
-          "tag": "FjeH69QXig8-4fWBn7uY0A"
+          "ciphertext": "gdWg0KKrbB_Q7-CC1NHHDbmSV8AqEsCJIRRirJbAUwAN2FQAomKiagmig6AFj-7iz_rkaqJj5aYCdvKktUsrPY62hfjmFBgRsH-oNsT1QphrIfwXkQ6HLtnARoZtfLx45YlrCvy25mudwb_Y4djY04tTsQb1o6GOPigTO94IewvtmcuImcvv4WoBeAqI0_DjlFV8MixFQ_TUzZLWUWTW1zj8Oh-mPWqxsV8VL8XLLGgjzQC_Sg6Nd5jHshhap1ah4kQpc2WyyFQo9vEx_Kx4KJX33R3J4lBsrJJX_UwW6gZtNWRL68eNFZi4vIOqBfIYC3ituMIv49S7aVuSEx7876PF8GWbDLJURN4udQEkV0DNNduviJYJILG25ySROXikfFM39AgcWvMzdtQkHuj-Hd_8a_ZgsdefQNxrobqQ74BCM8zGbLx6n5W66YvSK69B5I22ycG-1g2AEceK0ZerkeVah-y1GL_xCZPXeOilxU4E2kCiCTOHVdnLHfjmz-b8ZH8xcZLoWzeyuXE2MINfGRjIBMycJzuiEQBZlQUcl0Qf26oeegbRDQHCuhh2--BIXb4XQi9vXy8_uY3p69s8TH4MdJi56wj2sB5P2nlX1ga8sQqO0OPSUTvtaKQs9aPCxZ5BqyEpn21TtyXyq4833pY4sNpKlQ",
+          "tag": "HRF6oHpJvxoxTB1DdmUT7Q"
         }
       }
     }

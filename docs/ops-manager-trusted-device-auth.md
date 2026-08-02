@@ -56,6 +56,9 @@ deactivation, role changes, expiration, or assignment supersession therefore
 fails closed immediately. Removal atomically revokes credentials and sessions,
 deactivates push registration, cancels eligible queued notifications, retires
 the installation/key generations, and stores an idempotent non-secret receipt.
+The sealed `ops_session` is exactly two non-empty base64url segments separated
+by one period and is bounded to 32–8192 UTF-8 bytes on the backend, Android,
+and iOS.
 
 The canonical native role order is `OPS_MANAGER`, `CUSTODIAL_MANAGER`,
 `DIRECTOR`, `SECURITY_ADMIN`. Any specialized manager role implies

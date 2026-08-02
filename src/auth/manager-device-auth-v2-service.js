@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import {
   MANAGER_DEVICE_AUTH_V2,
+  isCanonicalManagerOpsSession,
   canonicalManagerRoles,
   managerActionBodyDigest,
   managerAttestationChallengeBodyDigest,
@@ -178,7 +179,7 @@ export function managerV2CredentialVerifier(serverSecret, credentialId, credenti
 
 export function managerV2SessionTokenVerifier(serverSecret, token) {
   const value = String(token || "");
-  if (!/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(value) || value.length > 16_384) {
+  if (!isCanonicalManagerOpsSession(value)) {
     throw failure("manager_v2_invalid_ops_session", 401);
   }
   return keyedFingerprint(requireServerSecret(serverSecret), "authorized-session-token", value);

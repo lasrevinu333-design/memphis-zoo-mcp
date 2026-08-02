@@ -5,8 +5,11 @@ import { readFileSync, writeFileSync } from "node:fs";
 import {
   MANAGER_DEVICE_AUTH_V2,
   MANAGER_ENVELOPE_ALGORITHM,
+  MANAGER_OPS_SESSION_MAX_BYTES,
+  MANAGER_OPS_SESSION_MIN_BYTES,
   MANAGER_PROOF_ALGORITHM,
   canonicalManagerRoles,
+  isCanonicalManagerOpsSession,
   managerActionBodyDigest,
   managerAttestationChallengeBodyDigest,
   managerAuthorizedSessionBodyDigest,
@@ -29,6 +32,10 @@ import { managerDeviceAuthV2ServiceInternals } from "../src/auth/manager-device-
 
 const FIXTURE_PATH = new URL("../contracts/manager-device-auth-v2-golden.json", import.meta.url);
 const FIXED_PROOF_SIGNATURE = "8lyTSVaPaNgk52e_M_TyjqwoRptds_oeCLVYbHQWn0Yx1F5-x4OG-EoQR1kDx6I5yWH19JriGS3V5-YzfYgZQw";
+const GOLDEN_OPS_SESSION = "eyJ2IjoyLCJyb2xlIjoib3BzX21hbmFnZXIifQ.WlpaWlpaWlpaWlpaWlpaWlpaWlpaWlpaWlpaWlpaWlo";
+assert.equal(isCanonicalManagerOpsSession(GOLDEN_OPS_SESSION), true);
+assert.ok(Buffer.byteLength(GOLDEN_OPS_SESSION, "utf8") >= MANAGER_OPS_SESSION_MIN_BYTES);
+assert.ok(Buffer.byteLength(GOLDEN_OPS_SESSION, "utf8") <= MANAGER_OPS_SESSION_MAX_BYTES);
 
 function keyPairFromScalar(scalar) {
   const privateBytes = Buffer.alloc(32);
@@ -179,7 +186,7 @@ function buildFixture() {
     operationId,
     sessionId,
     credentialId,
-    sessionToken: "ZXhhbXBsZQ.c2lnbmF0dXJl",
+    sessionToken: GOLDEN_OPS_SESSION,
     deviceId,
     managerId,
     roles,
@@ -272,9 +279,15 @@ function buildFixture() {
   });
 
   return {
-    fixture_version: 1,
+    fixture_version: 2,
     contract_version: MANAGER_DEVICE_AUTH_V2,
     warning: "Public deterministic test material only. Never use these keys or secrets outside tests.",
+    ops_session_contract: {
+      minimum_utf8_bytes: MANAGER_OPS_SESSION_MIN_BYTES,
+      maximum_utf8_bytes: MANAGER_OPS_SESSION_MAX_BYTES,
+      pattern: "^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$",
+      golden_value: GOLDEN_OPS_SESSION,
+    },
     identifiers: {
       operation_id: operationId,
       credential_id: credentialId,

@@ -4,7 +4,10 @@ import crypto from "node:crypto";
 import { readFileSync } from "node:fs";
 import {
   MANAGER_DEVICE_AUTH_V2,
+  MANAGER_OPS_SESSION_MAX_BYTES,
+  MANAGER_OPS_SESSION_MIN_BYTES,
   canonicalManagerRoles,
+  isCanonicalManagerOpsSession,
   managerDeviceAuthV2CryptoInternals,
   managerEnvelopeAad,
   managerEnvelopeInfo,
@@ -16,15 +19,24 @@ import {
   normalizeManagerAttestation,
   normalizeManagerKeyPair,
   normalizeManagerPublicJwk,
+  sealManagerAuthorizedSessionResult,
   verifyManagerProof,
 } from "../src/auth/manager-device-auth-v2-crypto.js";
 
 const fixture = JSON.parse(readFileSync(new URL("../contracts/manager-device-auth-v2-golden.json", import.meta.url), "utf8"));
+const GOLDEN_OPS_SESSION = fixture.ops_session_contract.golden_value;
 const ids = fixture.identifiers;
 const material = fixture.test_only_key_material;
 const keys = normalizeManagerKeyPair(material.signing_public_key_jwk, material.wrapping_public_key_jwk);
 
 assert.equal(fixture.contract_version, MANAGER_DEVICE_AUTH_V2);
+assert.equal(fixture.fixture_version, 2);
+assert.deepEqual(fixture.ops_session_contract, {
+  minimum_utf8_bytes: MANAGER_OPS_SESSION_MIN_BYTES,
+  maximum_utf8_bytes: MANAGER_OPS_SESSION_MAX_BYTES,
+  pattern: "^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$",
+  golden_value: GOLDEN_OPS_SESSION,
+});
 assert.equal(managerJwkThumbprint(keys.signing), material.signing_key_id);
 assert.equal(managerJwkThumbprint(keys.wrapping), material.wrapping_key_id);
 assert.notEqual(keys.signingKeyId, keys.wrappingKeyId);
@@ -35,6 +47,32 @@ assert.throws(() => canonicalManagerRoles(["OPS_MANAGER", "OPS_MANAGER"]), /mana
 assert.throws(() => normalizeManagerPublicJwk({ ...keys.signing, d: "forbidden" }), /manager_v2_invalid_public_key/);
 assert.throws(() => normalizeManagerPublicJwk({ ...keys.signing, x: keys.signing.x.slice(1) }), /manager_v2_invalid_public_key_x/);
 assert.throws(() => normalizeManagerKeyPair(keys.signing, keys.signing), /manager_v2_key_role_reuse/);
+assert.equal(isCanonicalManagerOpsSession(GOLDEN_OPS_SESSION), true);
+assert.equal(isCanonicalManagerOpsSession(`${"A".repeat(15)}.${"B".repeat(15)}`), false);
+assert.equal(isCanonicalManagerOpsSession(`${"A".repeat(4095)}.${"B".repeat(4096)}`), true);
+assert.equal(isCanonicalManagerOpsSession(`${"A".repeat(4096)}.${"B".repeat(4096)}`), false);
+assert.equal(isCanonicalManagerOpsSession(`${"A".repeat(16)}.${"B".repeat(16)}.extra`), false);
+const sessionSealBase = {
+  operationId: ids.operation_id,
+  sessionId: ids.session_id,
+  credentialId: ids.credential_id,
+  deviceId: ids.device_id,
+  managerId: ids.manager_id,
+  roles: fixture.canonical_roles,
+  accessLevel: "full_access",
+  sessionExpiresAt: "2030-01-01T03:19:05.000Z",
+  wrappingPublicKeyJwk: keys.wrapping,
+};
+for (const invalidSession of [
+  "ZXhhbXBsZQ.c2lnbmF0dXJl",
+  `${"A".repeat(4096)}.${"B".repeat(4096)}`,
+  `${"A".repeat(16)}.${"B".repeat(16)}.extra`,
+]) {
+  assert.throws(() => sealManagerAuthorizedSessionResult({
+    ...sessionSealBase,
+    sessionToken: invalidSession,
+  }), /manager_v2_invalid_ops_session/);
+}
 
 const proofInput = managerProofInput({
   method: fixture.proof.method,
@@ -210,15 +248,20 @@ const sessionAad = managerSessionEnvelopeAad({
 });
 assert.equal(sessionAad.toString("hex"), fixture.envelope.session_aad_hex);
 assert.equal(managerSessionEnvelopeInfo(ids.operation_id, session.wrapping_key_id).toString("hex"), fixture.envelope.session_hkdf_info_hex);
-assert.deepEqual(JSON.parse(decryptEnvelope({
+const decryptedSession = JSON.parse(decryptEnvelope({
   envelope: session,
   info: managerSessionEnvelopeInfo(ids.operation_id, session.wrapping_key_id),
   aad: sessionAad,
-})), {
+}));
+assert.equal(isCanonicalManagerOpsSession(decryptedSession.ops_session), true,
+  "the golden session must cross the exact production parser boundary");
+assert.ok(Buffer.byteLength(decryptedSession.ops_session, "utf8") >= MANAGER_OPS_SESSION_MIN_BYTES);
+assert.ok(Buffer.byteLength(decryptedSession.ops_session, "utf8") <= MANAGER_OPS_SESSION_MAX_BYTES);
+assert.deepEqual(decryptedSession, {
   contract_version: MANAGER_DEVICE_AUTH_V2,
   operation_id: ids.operation_id,
   session_id: ids.session_id,
-  ops_session: "ZXhhbXBsZQ.c2lnbmF0dXJl",
+  ops_session: GOLDEN_OPS_SESSION,
   device_id: ids.device_id,
   manager_id: ids.manager_id,
   roles: fixture.canonical_roles,
