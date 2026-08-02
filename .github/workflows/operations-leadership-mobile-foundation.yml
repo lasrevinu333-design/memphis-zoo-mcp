@@ -18,6 +18,7 @@ on:
       - 'scripts/manager-notification-contract-tests.mjs'
       - 'scripts/operations-leadership-mobile-database-tests.mjs'
       - 'scripts/custodial-employee-phone-contract-tests.mjs'
+      - 'scripts/custodial-employee-admin-authorization-tests.mjs'
       - 'scripts/custodial-employee-phone-database-tests.mjs'
       - 'package.json'
       - '.github/workflows/operations-leadership-mobile-foundation.yml'
