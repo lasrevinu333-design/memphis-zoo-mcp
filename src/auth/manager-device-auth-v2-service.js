@@ -56,6 +56,18 @@ function clampAccess(requested, maximum) {
 
 function publicOperation(operation) {
   if (!operation || typeof operation !== "object") throw failure("manager_v2_operation_unavailable", 503);
+  if (operation.preCreateCancellation === true) {
+    const data = {
+      contract_version: MANAGER_DEVICE_AUTH_V2,
+      operation_id: operation.operationId,
+      status: "cancelled",
+      device_id: operation.deviceId,
+      cancelled_at: operation.cancelledAt || operation.updatedAt,
+      result_envelope: null,
+    };
+    if (typeof operation.replayed === "boolean") data.replayed = operation.replayed;
+    return { ok: true, data };
+  }
   const data = {
     contract_version: MANAGER_DEVICE_AUTH_V2,
     operation_id: operation.operationId,
@@ -74,6 +86,7 @@ function publicOperation(operation) {
     data[`${operation.status}_at`] = operation[`${operation.status}At`] || operation.updatedAt;
     data.result_envelope = null;
   }
+  if (typeof operation.replayed === "boolean") data.replayed = operation.replayed;
   return { ok: true, data };
 }
 
@@ -155,7 +168,7 @@ function requireRepository(repository) {
   const methods = [
     "getChallengeByOperation", "createOrRefreshChallenge", "resolveEnrollmentCode",
     "getAttestationVerification", "recordAttestationVerification", "getRecoveryProofAuthority", "getRecoveryInstallation",
-    "getOperation", "createOrReplayEnrollment", "recordActionProof", "confirm", "cancel", "expire",
+    "getOperation", "getCancellation", "createOrReplayEnrollment", "recordActionProof", "confirm", "cancel", "expire",
     "authenticateCredential", "getSession", "createOrReplaySession", "getRemoval", "removeCredential", "sweepExpired",
   ];
   for (const method of methods) if (typeof repository?.[method] !== "function") throw failure("manager_v2_repository_required", 503);
@@ -399,6 +412,7 @@ export function createManagerDeviceAuthV2Service({
       await store.recordActionProof(proofClaim({ verified, operationId, requestFingerprint, resourceKind: "enrollment", current }));
       return publicOperation(existing);
     }
+    if (await store.getCancellation(operationId)) throw failure("manager_v2_operation_cancelled", 409);
     const current = now();
     const challengeRecord = await store.getChallengeByOperation(operationId);
     if (!challengeRecord || challengeRecord.challengeId !== normalizedAttestation.challengeId
@@ -533,10 +547,59 @@ export function createManagerDeviceAuthV2Service({
   }
 
   async function cancel(request) {
-    const { operation, replayed } = await loadAndVerifyAction(request, "cancel");
-    if (operation.status === "confirmed") throw failure("manager_v2_operation_confirmed", 409);
-    if (replayed) return publicOperation(operation);
-    return publicOperation(await store.cancel({ operationId: operation.operationId, at: new Date(now()).toISOString() }));
+    const parsed = actionRequest(request, "cancel");
+    const operationId = managerDeviceAuthV2CryptoInternals.canonicalUuid(parsed.operation_id);
+    const operation = await store.getOperation(operationId);
+    const retainedCancellation = operation ? null : await store.getCancellation(operationId);
+    let challenge = null;
+    let authority = operation || retainedCancellation;
+    if (!authority) {
+      challenge = await store.getChallengeByOperation(operationId);
+      if (!challenge || !new Set(["enroll", "recover"]).has(challenge.purpose)) {
+        throw failure("manager_v2_operation_not_found", 404);
+      }
+      authority = challenge;
+    } else if (operation) {
+      challenge = await store.getChallengeByOperation(operationId);
+      if (!challenge || challenge.challengeId !== operation.attestationChallengeId) {
+        throw failure("manager_v2_operation_unavailable", 503);
+      }
+    }
+    const keys = normalizeManagerKeyPair(authority.signingPublicKeyJwk, authority.wrappingPublicKeyJwk);
+    if (keys.signingKeyId !== authority.signingKeyId || keys.wrappingKeyId !== authority.wrappingKeyId) {
+      throw failure("manager_v2_operation_key_mismatch", 409);
+    }
+    const bodyDigest = managerActionBodyDigest(operationId, "cancel");
+    const requestFingerprint = keyedFingerprint(secretKey, "enrollment-cancel", bodyDigest);
+    const verified = verifyProof({
+      request: parsed,
+      keys,
+      path: `/manager-device-auth/v2/enrollment-operations/${operationId}/cancel`,
+      operationId,
+      bodyDigest,
+    });
+    const challengeAuthority = challenge || retainedCancellation;
+    const current = now();
+    const cancelled = await store.cancel({
+      operationId,
+      at: new Date(current).toISOString(),
+      cancellation: {
+        operationId,
+        challengeId: challengeAuthority.challengeId,
+        challengeGeneration: challengeAuthority.challengeGeneration ?? challengeAuthority.generation,
+        challengeRequestFingerprint: challengeAuthority.challengeRequestFingerprint ?? challengeAuthority.requestFingerprint,
+        actionRequestFingerprint: requestFingerprint,
+        deviceId: authority.deviceId,
+        platform: authority.platform,
+        signingKeyId: keys.signingKeyId,
+        signingPublicKeyJwk: keys.signing,
+        wrappingKeyId: keys.wrappingKeyId,
+        wrappingPublicKeyJwk: keys.wrapping,
+        retainUntil: new Date(current + RETENTION_MILLIS).toISOString(),
+      },
+      proof: proofClaim({ verified, operationId, requestFingerprint, resourceKind: "cancel", current }),
+    });
+    return publicOperation(cancelled);
   }
 
   async function remove(requestValue, deviceCredential, { idempotencyKey } = {}) {

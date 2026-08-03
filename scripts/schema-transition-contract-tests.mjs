@@ -6,7 +6,7 @@ import { assertSchemaAlignment } from "../src/schema-transition.js";
 
 const PREVIOUS = "544d11f47f1f4a960fcf49d13bba53c736d78fe4fe9d225c996c84311d442ad0";
 const CURRENT = "c6742e500c2a5d3767f1d886bb5937167eab42730f8271eec76b427a10c5f302";
-const BACKEND_TARGET = "3ac1e29b479688a9cf6714e74126db3fa4105f6ca25eee0d471ebe182c107107";
+const BACKEND_TARGET = "8b3fa26195f8a00064dbbdaad136eb8bfbd07c2a39cb829101978adcb8c039da";
 const FUTURE = "2".repeat(64);
 const OUTSIDE = "3".repeat(64);
 const ENGINE_MAIN_SHA = "7bc61e39a5ae2fda52c777c8a222f138ee36c5af";

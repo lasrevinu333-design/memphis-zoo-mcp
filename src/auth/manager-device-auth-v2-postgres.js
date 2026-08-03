@@ -115,6 +115,37 @@ function mapOperation(row) {
   };
 }
 
+function mapCancellation(row) {
+  if (!row) return null;
+  return {
+    operationId: row.operation_id,
+    status: row.status,
+    challengeId: row.challenge_id,
+    challengeGeneration: Number(row.challenge_generation),
+    challengeRequestFingerprint: row.challenge_request_fingerprint,
+    actionRequestFingerprint: row.action_request_fingerprint,
+    proofNonce: row.proof_nonce,
+    deviceId: row.device_id,
+    platform: row.platform,
+    signingKeyId: row.signing_key_id,
+    signingPublicKeyJwk: row.signing_public_key_jwk,
+    wrappingKeyId: row.wrapping_key_id,
+    wrappingPublicKeyJwk: row.wrapping_public_key_jwk,
+    cancelledAt: iso(row.cancelled_at),
+    createdAt: iso(row.created_at),
+    updatedAt: iso(row.updated_at),
+    preCreateCancellation: true,
+  };
+}
+
+function exactJwkEqual(left, right) {
+  if (!left || !right || typeof left !== "object" || typeof right !== "object") return false;
+  const names = ["crv", "kty", "x", "y"];
+  return Object.keys(left).sort().join("\u0000") === names.join("\u0000")
+    && Object.keys(right).sort().join("\u0000") === names.join("\u0000")
+    && names.every((name) => left[name] === right[name]);
+}
+
 function mapSession(row) {
   if (!row) return null;
   return {
@@ -252,8 +283,21 @@ export class PostgresManagerDeviceAuthV2Repository {
     return mapChallenge(result.rows[0]);
   }
 
+  async getCancellation(operationId, client = this.pool) {
+    const result = await client.query(
+      `select * from public.ops_manager_device_auth_v2_cancellation_tombstones
+        where operation_id=$1`,
+      [operationId],
+    );
+    return mapCancellation(result.rows[0]);
+  }
+
   async createOrRefreshChallenge({ candidate, proof, rateKey, activeChallengeLimit }) {
     return this.transaction(async (client) => {
+      await client.query("select pg_advisory_xact_lock(hashtextextended($1,0))", [`manager-device-auth-v2-operation:${candidate.operationId}`]);
+      if (await this.getCancellation(candidate.operationId, client)) {
+        throw failure("manager_v2_operation_cancelled", 409);
+      }
       await this.claimProof(client, proof);
       await client.query("select pg_advisory_xact_lock(hashtextextended($1,0))", [`manager-device-auth-v2-challenge:${candidate.operationId}`]);
       const existingResult = await client.query(
@@ -478,8 +522,11 @@ export class PostgresManagerDeviceAuthV2Repository {
 
   async createOrReplayEnrollment({ candidate, proof }) {
     return this.transaction(async (client) => {
-      await this.claimProof(client, proof);
       await client.query("select pg_advisory_xact_lock(hashtextextended($1,0))", [`manager-device-auth-v2-operation:${candidate.operationId}`]);
+      if (await this.getCancellation(candidate.operationId, client)) {
+        throw failure("manager_v2_operation_cancelled", 409);
+      }
+      await this.claimProof(client, proof);
       const existing = await this.getOperation(candidate.operationId, client);
       if (existing) {
         for (const field of ["requestFingerprint", "deviceId", "managerId", "signingKeyId", "wrappingKeyId", "attestationEvidenceDigest"]) {
@@ -836,20 +883,94 @@ export class PostgresManagerDeviceAuthV2Repository {
     }
   }
 
-  async cancel({ operationId, at }) {
+  async cancel({ operationId, at, cancellation, proof }) {
     return this.transaction(async (client) => {
       await client.query("select pg_advisory_xact_lock(hashtextextended($1,0))", [`manager-device-auth-v2-operation:${operationId}`]);
+      if (!cancellation || !proof || cancellation.operationId !== operationId || proof.operationId !== operationId
+          || cancellation.actionRequestFingerprint !== proof.requestFingerprint
+          || cancellation.signingKeyId !== proof.signingKeyId || proof.resourceKind !== "cancel") {
+        throw failure("manager_v2_invalid_cancel_request", 400);
+      }
+      await this.claimProof(client, proof);
       const operation = await this.getOperation(operationId, client);
-      if (!operation) throw failure("manager_v2_operation_not_found", 404);
-      if (operation.status === "confirmed") throw failure("manager_v2_operation_confirmed", 409);
-      if (operation.status !== "pending_confirmation") return operation;
-      await this.terminatePendingOperation(client, operation, "cancelled", at);
+      if (operation) {
+        if (operation.deviceId !== cancellation.deviceId || operation.platform !== cancellation.platform
+            || operation.attestationChallengeId !== cancellation.challengeId
+            || operation.signingKeyId !== cancellation.signingKeyId
+            || operation.wrappingKeyId !== cancellation.wrappingKeyId
+            || !exactJwkEqual(operation.signingPublicKeyJwk, cancellation.signingPublicKeyJwk)
+            || !exactJwkEqual(operation.wrappingPublicKeyJwk, cancellation.wrappingPublicKeyJwk)) {
+          throw failure("manager_v2_operation_conflict", 409);
+        }
+        if (operation.status === "confirmed") throw failure("manager_v2_operation_confirmed", 409);
+        if (operation.status !== "pending_confirmation") return { ...operation, replayed: true };
+        const expired = Date.parse(operation.resumeExpiresAt) <= Date.parse(at);
+        await this.terminatePendingOperation(client, operation, expired ? "expired" : "cancelled", at);
+        await client.query(
+          `insert into public.ops_manager_auth_events(credential_id,device_id,event_type,success,detail_json)
+           values(null,$1,$2,true,jsonb_build_object('operation_id',$3::uuid,'manager_id',$4::uuid))`,
+          [operation.deviceId,
+            expired ? "manager_device_auth_v2_operation_expired" : "manager_device_auth_v2_operation_cancelled",
+            operationId, operation.managerId],
+        );
+        return { ...await this.getOperation(operationId, client), replayed: false };
+      }
+
+      const existing = await this.getCancellation(operationId, client);
+      if (existing) {
+        for (const field of [
+          "challengeId", "challengeGeneration", "challengeRequestFingerprint", "actionRequestFingerprint",
+          "deviceId", "platform", "signingKeyId", "wrappingKeyId",
+        ]) {
+          if (existing[field] !== cancellation[field]) throw failure("manager_v2_operation_conflict", 409);
+        }
+        if (!exactJwkEqual(existing.signingPublicKeyJwk, cancellation.signingPublicKeyJwk)
+            || !exactJwkEqual(existing.wrappingPublicKeyJwk, cancellation.wrappingPublicKeyJwk)) {
+          throw failure("manager_v2_operation_conflict", 409);
+        }
+        return { ...existing, replayed: true };
+      }
+
+      const challengeResult = await client.query(
+        `select * from public.ops_manager_device_auth_v2_attestation_challenges
+          where challenge_id=$1 and operation_id=$2 for update`,
+        [cancellation.challengeId, operationId],
+      );
+      const challenge = mapChallenge(challengeResult.rows[0]);
+      if (!challenge || !new Set(["enroll", "recover"]).has(challenge.purpose)
+          || challenge.generation !== cancellation.challengeGeneration
+          || challenge.requestFingerprint !== cancellation.challengeRequestFingerprint
+          || challenge.deviceId !== cancellation.deviceId || challenge.platform !== cancellation.platform
+          || challenge.signingKeyId !== cancellation.signingKeyId
+          || challenge.wrappingKeyId !== cancellation.wrappingKeyId
+          || !exactJwkEqual(challenge.signingPublicKeyJwk, cancellation.signingPublicKeyJwk)
+          || !exactJwkEqual(challenge.wrappingPublicKeyJwk, cancellation.wrappingPublicKeyJwk)) {
+        throw failure("manager_v2_operation_conflict", 409);
+      }
+      const inserted = await client.query(
+        `insert into public.ops_manager_device_auth_v2_cancellation_tombstones(
+           operation_id,challenge_id,challenge_generation,challenge_request_fingerprint,
+           action_request_fingerprint,proof_nonce,device_id,platform,signing_key_id,
+           signing_public_key_jwk,wrapping_key_id,wrapping_public_key_jwk,status,
+           cancelled_at,created_at,updated_at,retain_until,metadata_json
+         ) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12::jsonb,'cancelled',$13,$13,$13,$14,
+           jsonb_build_object('authority','durable_attestation_challenge','reason','cancelled_before_operation_commit'))
+         returning *`,
+        [operationId, cancellation.challengeId, cancellation.challengeGeneration,
+          cancellation.challengeRequestFingerprint, cancellation.actionRequestFingerprint,
+          proof.nonce, cancellation.deviceId, cancellation.platform, cancellation.signingKeyId,
+          JSON.stringify(cancellation.signingPublicKeyJwk), cancellation.wrappingKeyId,
+          JSON.stringify(cancellation.wrappingPublicKeyJwk), at, cancellation.retainUntil],
+      );
       await client.query(
         `insert into public.ops_manager_auth_events(credential_id,device_id,event_type,success,detail_json)
-         values(null,$1,'manager_device_auth_v2_operation_cancelled',true,jsonb_build_object('operation_id',$2::uuid,'manager_id',$3::uuid))`,
-        [operation.deviceId, operationId, operation.managerId],
+         values(null,$1,'manager_device_auth_v2_cancelled_before_create',true,
+           jsonb_build_object('operation_id',$2::uuid,'challenge_id',$3::uuid,
+             'signing_key_id',$4::text,'wrapping_key_id',$5::text))`,
+        [cancellation.deviceId, operationId, cancellation.challengeId,
+          cancellation.signingKeyId, cancellation.wrappingKeyId],
       );
-      return this.getOperation(operationId, client);
+      return { ...mapCancellation(inserted.rows[0]), replayed: false };
     });
   }
 

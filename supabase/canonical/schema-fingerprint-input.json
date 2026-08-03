@@ -14237,6 +14237,266 @@
     },
     {
       "collation_name": null,
+      "column_name": "operation_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 1,
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_cancellation_tombstones"
+    },
+    {
+      "collation_name": null,
+      "column_name": "identity_kind",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": "'cancelled'::text",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 2,
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_cancellation_tombstones"
+    },
+    {
+      "collation_name": null,
+      "column_name": "contract_version",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": "'manager-device-auth.v2'::text",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 3,
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_cancellation_tombstones"
+    },
+    {
+      "collation_name": null,
+      "column_name": "challenge_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 4,
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_cancellation_tombstones"
+    },
+    {
+      "collation_name": null,
+      "column_name": "challenge_generation",
+      "comment": null,
+      "data_type": "integer",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 5,
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_cancellation_tombstones"
+    },
+    {
+      "collation_name": null,
+      "column_name": "challenge_request_fingerprint",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 6,
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_cancellation_tombstones"
+    },
+    {
+      "collation_name": null,
+      "column_name": "action_request_fingerprint",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 7,
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_cancellation_tombstones"
+    },
+    {
+      "collation_name": null,
+      "column_name": "proof_nonce",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 8,
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_cancellation_tombstones"
+    },
+    {
+      "collation_name": null,
+      "column_name": "device_id",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 9,
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_cancellation_tombstones"
+    },
+    {
+      "collation_name": null,
+      "column_name": "platform",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 10,
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_cancellation_tombstones"
+    },
+    {
+      "collation_name": null,
+      "column_name": "signing_key_id",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 11,
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_cancellation_tombstones"
+    },
+    {
+      "collation_name": null,
+      "column_name": "signing_public_key_jwk",
+      "comment": null,
+      "data_type": "jsonb",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 12,
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_cancellation_tombstones"
+    },
+    {
+      "collation_name": null,
+      "column_name": "wrapping_key_id",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 13,
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_cancellation_tombstones"
+    },
+    {
+      "collation_name": null,
+      "column_name": "wrapping_public_key_jwk",
+      "comment": null,
+      "data_type": "jsonb",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 14,
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_cancellation_tombstones"
+    },
+    {
+      "collation_name": null,
+      "column_name": "status",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": "'cancelled'::text",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 15,
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_cancellation_tombstones"
+    },
+    {
+      "collation_name": null,
+      "column_name": "cancelled_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 16,
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_cancellation_tombstones"
+    },
+    {
+      "collation_name": null,
+      "column_name": "created_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 17,
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_cancellation_tombstones"
+    },
+    {
+      "collation_name": null,
+      "column_name": "updated_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 18,
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_cancellation_tombstones"
+    },
+    {
+      "collation_name": null,
+      "column_name": "retain_until",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 19,
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_cancellation_tombstones"
+    },
+    {
+      "collation_name": null,
+      "column_name": "metadata_json",
+      "comment": null,
+      "data_type": "jsonb",
+      "default_expression": "'{}'::jsonb",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 20,
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_cancellation_tombstones"
+    },
+    {
+      "collation_name": null,
       "column_name": "credential_id",
       "comment": null,
       "data_type": "uuid",
@@ -14858,6 +15118,58 @@
       "ordinal_position": 7,
       "schema_name": "public",
       "table_name": "ops_manager_device_auth_v2_nonces"
+    },
+    {
+      "collation_name": null,
+      "column_name": "operation_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 1,
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_operation_identities"
+    },
+    {
+      "collation_name": null,
+      "column_name": "identity_kind",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 2,
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_operation_identities"
+    },
+    {
+      "collation_name": null,
+      "column_name": "created_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 3,
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_operation_identities"
+    },
+    {
+      "collation_name": null,
+      "column_name": "retain_until",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 4,
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_operation_identities"
     },
     {
       "collation_name": null,
@@ -15506,6 +15818,19 @@
       "identity_kind": "",
       "not_null": true,
       "ordinal_position": 50,
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_operations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "identity_kind",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": "'enrollment'::text",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 51,
       "schema_name": "public",
       "table_name": "ops_manager_device_auth_v2_operations"
     },
@@ -26429,6 +26754,118 @@
       "validated": true
     },
     {
+      "constraint_name": "ops_manager_device_auth_v2_cancel_tombstone_challenge_check",
+      "constraint_type": "c",
+      "definition": "CHECK (challenge_generation >= 1)",
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_cancellation_tombstones",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_device_auth_v2_cancel_tombstone_contract_check",
+      "constraint_type": "c",
+      "definition": "CHECK (contract_version = 'manager-device-auth.v2'::text)",
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_cancellation_tombstones",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_device_auth_v2_cancel_tombstone_device_check",
+      "constraint_type": "c",
+      "definition": "CHECK (device_id ~ '^ops-app-[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'::text AND (platform = ANY (ARRAY['android'::text, 'ios'::text])))",
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_cancellation_tombstones",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_device_auth_v2_cancel_tombstone_hashes_check",
+      "constraint_type": "c",
+      "definition": "CHECK (challenge_request_fingerprint ~ '^[a-f0-9]{64}$'::text AND action_request_fingerprint ~ '^[a-f0-9]{64}$'::text AND proof_nonce ~ '^[A-Za-z0-9_-]{22}$'::text)",
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_cancellation_tombstones",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_device_auth_v2_cancel_tombstone_identity_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (operation_id, identity_kind) REFERENCES ops_manager_device_auth_v2_operation_identities(operation_id, identity_kind) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_cancellation_tombstones",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_device_auth_v2_cancel_tombstone_identity_kind_check",
+      "constraint_type": "c",
+      "definition": "CHECK (identity_kind = 'cancelled'::text)",
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_cancellation_tombstones",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_device_auth_v2_cancel_tombstone_key_ids_check",
+      "constraint_type": "c",
+      "definition": "CHECK (signing_key_id ~ '^[A-Za-z0-9_-]{43}$'::text AND wrapping_key_id ~ '^[A-Za-z0-9_-]{43}$'::text AND signing_key_id <> wrapping_key_id)",
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_cancellation_tombstones",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_device_auth_v2_cancel_tombstone_metadata_check",
+      "constraint_type": "c",
+      "definition": "CHECK (jsonb_typeof(metadata_json) = 'object'::text AND pg_column_size(metadata_json) <= 8192)",
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_cancellation_tombstones",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_device_auth_v2_cancel_tombstone_signing_jwk_check",
+      "constraint_type": "c",
+      "definition": "CHECK (jsonb_typeof(signing_public_key_jwk) = 'object'::text AND signing_public_key_jwk ?& ARRAY['kty'::text, 'crv'::text, 'x'::text, 'y'::text] AND (signing_public_key_jwk - 'kty'::text - 'crv'::text - 'x'::text - 'y'::text) = '{}'::jsonb AND (signing_public_key_jwk ->> 'kty'::text) = 'EC'::text AND (signing_public_key_jwk ->> 'crv'::text) = 'P-256'::text AND (signing_public_key_jwk ->> 'x'::text) ~ '^[A-Za-z0-9_-]{43}$'::text AND (signing_public_key_jwk ->> 'y'::text) ~ '^[A-Za-z0-9_-]{43}$'::text)",
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_cancellation_tombstones",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_device_auth_v2_cancel_tombstone_status_check",
+      "constraint_type": "c",
+      "definition": "CHECK (status = 'cancelled'::text)",
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_cancellation_tombstones",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_device_auth_v2_cancel_tombstone_time_check",
+      "constraint_type": "c",
+      "definition": "CHECK (cancelled_at = created_at AND updated_at = created_at AND retain_until >= (created_at + '90 days'::interval))",
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_cancellation_tombstones",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_device_auth_v2_cancel_tombstone_wrapping_jwk_check",
+      "constraint_type": "c",
+      "definition": "CHECK (jsonb_typeof(wrapping_public_key_jwk) = 'object'::text AND wrapping_public_key_jwk ?& ARRAY['kty'::text, 'crv'::text, 'x'::text, 'y'::text] AND (wrapping_public_key_jwk - 'kty'::text - 'crv'::text - 'x'::text - 'y'::text) = '{}'::jsonb AND (wrapping_public_key_jwk ->> 'kty'::text) = 'EC'::text AND (wrapping_public_key_jwk ->> 'crv'::text) = 'P-256'::text AND (wrapping_public_key_jwk ->> 'x'::text) ~ '^[A-Za-z0-9_-]{43}$'::text AND (wrapping_public_key_jwk ->> 'y'::text) ~ '^[A-Za-z0-9_-]{43}$'::text AND wrapping_public_key_jwk <> signing_public_key_jwk)",
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_cancellation_tombstones",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_device_auth_v2_cancellation_tombs_challenge_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (challenge_id) REFERENCES ops_manager_device_auth_v2_attestation_challenges(challenge_id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_cancellation_tombstones",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_device_auth_v2_cancellation_tombstones_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (operation_id)",
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_cancellation_tombstones",
+      "validated": true
+    },
+    {
       "constraint_name": "ops_manager_device_auth_v2_credential_inst_installation_id_fkey",
       "constraint_type": "f",
       "definition": "FOREIGN KEY (installation_id) REFERENCES ops_manager_device_auth_v2_installations(installation_id) ON DELETE RESTRICT",
@@ -26717,6 +27154,38 @@
       "validated": true
     },
     {
+      "constraint_name": "ops_manager_device_auth_v2_identity_kind_check",
+      "constraint_type": "c",
+      "definition": "CHECK (identity_kind = ANY (ARRAY['enrollment'::text, 'cancelled'::text]))",
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_operation_identities",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_device_auth_v2_identity_retention_check",
+      "constraint_type": "c",
+      "definition": "CHECK (retain_until >= (created_at + '90 days'::interval))",
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_operation_identities",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_device_auth_v2_opera_operation_id_identity_kind_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (operation_id, identity_kind)",
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_operation_identities",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_device_auth_v2_operation_identities_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (operation_id)",
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_operation_identities",
+      "validated": true
+    },
+    {
       "constraint_name": "ops_manager_device_auth_v2_operat_attestation_challenge_id_fkey",
       "constraint_type": "f",
       "definition": "FOREIGN KEY (attestation_challenge_id) REFERENCES ops_manager_device_auth_v2_attestation_challenges(challenge_id) ON DELETE RESTRICT",
@@ -26792,6 +27261,22 @@
       "constraint_name": "ops_manager_device_auth_v2_operation_hashes_check",
       "constraint_type": "c",
       "definition": "CHECK (request_fingerprint ~ '^[a-f0-9]{64}$'::text AND proof_nonce ~ '^[A-Za-z0-9_-]{22}$'::text AND (credential_verifier IS NULL OR credential_verifier ~ '^[a-f0-9]{64}$'::text) AND attestation_evidence_digest ~ '^[a-f0-9]{64}$'::text)",
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_operations",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_device_auth_v2_operation_identity_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (operation_id, identity_kind) REFERENCES ops_manager_device_auth_v2_operation_identities(operation_id, identity_kind) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_operations",
+      "validated": true
+    },
+    {
+      "constraint_name": "ops_manager_device_auth_v2_operation_identity_kind_check",
+      "constraint_type": "c",
+      "definition": "CHECK (identity_kind = 'enrollment'::text)",
       "schema_name": "public",
       "table_name": "ops_manager_device_auth_v2_operations",
       "validated": true
@@ -30060,6 +30545,13 @@
       "definition": "CREATE OR REPLACE FUNCTION public.ops_manager_create_shared_enrollment_window(p_code_hash text, p_created_by_manager_id uuid, p_created_by_credential_id uuid, p_metadata_json jsonb DEFAULT '{}'::jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_actor public.ops_manager_managers%rowtype;\n  v_device public.ops_manager_trusted_devices%rowtype;\n  v_shared_manager public.ops_manager_managers%rowtype;\n  v_old public.ops_manager_shared_enrollment_windows%rowtype;\n  v_new public.ops_manager_shared_enrollment_windows%rowtype;\n  v_now timestamptz := clock_timestamp();\n  v_metadata jsonb := coalesce(p_metadata_json, '{}'::jsonb);\nbegin\n  perform pg_advisory_xact_lock(hashtextextended('ops-manager-shared-enrollment-window', 0));\n\n  if p_code_hash is null or p_code_hash !~ '^[a-f0-9]{64}$' then\n    raise exception 'valid code hash is required';\n  end if;\n  if jsonb_typeof(v_metadata) <> 'object' then\n    raise exception 'metadata_json must be an object';\n  end if;\n\n  select * into v_actor\n  from public.ops_manager_managers\n  where manager_id = p_created_by_manager_id\n  for update;\n\n  if not found or not v_actor.active or v_actor.revoked_at is not null\n     or not ('CUSTODIAL_MANAGER' = any(v_actor.roles)) then\n    return jsonb_build_object('ok', false, 'status', 403, 'reason', 'custodial_manager_required');\n  end if;\n\n  select * into v_device\n  from public.ops_manager_trusted_devices\n  where credential_id = p_created_by_credential_id\n    and manager_id = v_actor.manager_id\n    and revoked_at is null\n    and expires_at > v_now\n  for update;\n\n  if not found then\n    return jsonb_build_object('ok', false, 'status', 403, 'reason', 'active_creator_device_required');\n  end if;\n\n  select * into v_shared_manager\n  from public.ops_manager_managers\n  where system_key = 'shared_ops_manager'\n    and active\n    and revoked_at is null\n  for update;\n\n  if not found or v_shared_manager.roles <> array['OPS_MANAGER']::text[] then\n    return jsonb_build_object('ok', false, 'status', 503, 'reason', 'shared_manager_unavailable');\n  end if;\n\n  select * into v_old\n  from public.ops_manager_shared_enrollment_windows\n  where status = 'active'\n  for update;\n\n  if found then\n    update public.ops_manager_shared_enrollment_windows\n    set status = case when expires_at <= v_now then 'expired' else 'disabled' end,\n        disabled_at = case when expires_at <= v_now then null else v_now end,\n        disabled_by_manager_id = case when expires_at <= v_now then null else v_actor.manager_id end,\n        disabled_by_credential_id = case when expires_at <= v_now then null else v_device.credential_id end,\n        disabled_reason = case when expires_at <= v_now then null else 'replaced_by_new_window' end,\n        metadata_json = metadata_json || jsonb_build_object('closed_at', v_now)\n    where window_id = v_old.window_id;\n  end if;\n\n  insert into public.ops_manager_shared_enrollment_windows (\n    code_hash, manager_id, created_by_manager_id, created_by_credential_id,\n    created_at, expires_at, metadata_json\n  ) values (\n    lower(p_code_hash), v_shared_manager.manager_id, v_actor.manager_id,\n    v_device.credential_id, v_now, v_now + interval '48 hours',\n    v_metadata || jsonb_build_object('role_snapshot', 'OPS_MANAGER')\n  ) returning * into v_new;\n\n  if v_old.window_id is not null and v_old.expires_at > v_now then\n    update public.ops_manager_shared_enrollment_windows\n    set status = 'replaced',\n        replaced_by_window_id = v_new.window_id\n    where window_id = v_old.window_id;\n  end if;\n\n  return jsonb_build_object(\n    'ok', true,\n    'window_id', v_new.window_id,\n    'status', v_new.status,\n    'created_at', v_new.created_at,\n    'expires_at', v_new.expires_at,\n    'enrollment_count', v_new.enrollment_count,\n    'replaced_window_id', v_old.window_id\n  );\nend;\n$function$\n",
       "function_name": "ops_manager_create_shared_enrollment_window",
       "identity_arguments": "p_code_hash text, p_created_by_manager_id uuid, p_created_by_credential_id uuid, p_metadata_json jsonb",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.ops_manager_device_auth_v2_serialize_operation_identity()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_kind text;\n  v_existing_kind text;\n  v_inserted integer;\nbegin\n  v_kind := case\n    when tg_table_name = 'ops_manager_device_auth_v2_operations' then 'enrollment'\n    else 'cancelled'\n  end;\n  if new.identity_kind is distinct from v_kind then\n    raise exception using errcode = '23514', message = 'manager device-auth v2 operation identity kind is invalid';\n  end if;\n\n  select identity_kind into v_existing_kind\n    from public.ops_manager_device_auth_v2_operation_identities\n   where operation_id = new.operation_id;\n  if found then\n    if v_existing_kind is distinct from v_kind then\n      raise exception using errcode = '23514', message = 'manager device-auth v2 operation identity is terminal';\n    end if;\n    return new;\n  end if;\n\n  insert into public.ops_manager_device_auth_v2_operation_identities(\n    operation_id,identity_kind,created_at,retain_until\n  ) values(new.operation_id,v_kind,new.created_at,new.retain_until)\n  on conflict(operation_id) do nothing;\n  get diagnostics v_inserted = row_count;\n  if v_inserted <> 1 then\n    raise exception using errcode = '40001', message = 'manager device-auth v2 operation identity changed concurrently';\n  end if;\n  return new;\nend\n$function$\n",
+      "function_name": "ops_manager_device_auth_v2_serialize_operation_identity",
+      "identity_arguments": "",
       "schema_name": "public"
     },
     {
@@ -34543,6 +35035,42 @@
     },
     {
       "backs_constraint": false,
+      "definition": "CREATE INDEX idx_ops_manager_device_auth_v2_cancel_tombstone_challenge ON public.ops_manager_device_auth_v2_cancellation_tombstones USING btree (challenge_id)",
+      "index_name": "idx_ops_manager_device_auth_v2_cancel_tombstone_challenge",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_cancellation_tombstones"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_ops_manager_device_auth_v2_cancel_tombstone_identity ON public.ops_manager_device_auth_v2_cancellation_tombstones USING btree (operation_id, identity_kind)",
+      "index_name": "idx_ops_manager_device_auth_v2_cancel_tombstone_identity",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_cancellation_tombstones"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_ops_manager_device_auth_v2_cancel_tombstone_retention ON public.ops_manager_device_auth_v2_cancellation_tombstones USING btree (retain_until, operation_id)",
+      "index_name": "idx_ops_manager_device_auth_v2_cancel_tombstone_retention",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_cancellation_tombstones"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX ops_manager_device_auth_v2_cancellation_tombstones_pkey ON public.ops_manager_device_auth_v2_cancellation_tombstones USING btree (operation_id)",
+      "index_name": "ops_manager_device_auth_v2_cancellation_tombstones_pkey",
+      "is_primary": true,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_cancellation_tombstones"
+    },
+    {
+      "backs_constraint": false,
       "definition": "CREATE INDEX idx_ops_manager_device_auth_v2_credential_installation_history ON public.ops_manager_device_auth_v2_credential_installations USING btree (installation_id, linked_at DESC)",
       "index_name": "idx_ops_manager_device_auth_v2_credential_installation_history",
       "is_primary": false,
@@ -34729,6 +35257,42 @@
       "is_unique": true,
       "schema_name": "public",
       "table_name": "ops_manager_device_auth_v2_nonces"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_ops_manager_device_auth_v2_identity_retention ON public.ops_manager_device_auth_v2_operation_identities USING btree (retain_until, operation_id)",
+      "index_name": "idx_ops_manager_device_auth_v2_identity_retention",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_operation_identities"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX ops_manager_device_auth_v2_opera_operation_id_identity_kind_key ON public.ops_manager_device_auth_v2_operation_identities USING btree (operation_id, identity_kind)",
+      "index_name": "ops_manager_device_auth_v2_opera_operation_id_identity_kind_key",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_operation_identities"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX ops_manager_device_auth_v2_operation_identities_pkey ON public.ops_manager_device_auth_v2_operation_identities USING btree (operation_id)",
+      "index_name": "ops_manager_device_auth_v2_operation_identities_pkey",
+      "is_primary": true,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_operation_identities"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_ops_manager_device_auth_v2_operation_identity ON public.ops_manager_device_auth_v2_operations USING btree (operation_id, identity_kind)",
+      "index_name": "idx_ops_manager_device_auth_v2_operation_identity",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_operations"
     },
     {
       "backs_constraint": false,
@@ -48043,6 +48607,15 @@
       "table_name": "ops_manager_device_auth_v2_attestation_verifications"
     },
     {
+      "comment": "Terminal public-key-bound cancellation receipts that prevent credential issuance when cancellation wins before enrollment creation; contains no plaintext secret material.",
+      "partition_key": null,
+      "relation_kind": "r",
+      "rls_enabled": true,
+      "rls_forced": true,
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_cancellation_tombstones"
+    },
+    {
       "comment": null,
       "partition_key": null,
       "relation_kind": "r",
@@ -48077,6 +48650,15 @@
       "rls_forced": true,
       "schema_name": "public",
       "table_name": "ops_manager_device_auth_v2_nonces"
+    },
+    {
+      "comment": "Unique cross-relation operation identities that make enrollment issuance and pre-create cancellation mutually exclusive under every transaction interleaving.",
+      "partition_key": null,
+      "relation_kind": "r",
+      "rls_enabled": true,
+      "rls_forced": true,
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_operation_identities"
     },
     {
       "comment": "Restart-safe Manager native enrollment operations. No plaintext device credential is persisted.",
@@ -48795,6 +49377,20 @@
       "schema_name": "public",
       "table_name": "operating_hours",
       "trigger_name": "trg_operating_hours_updated_at"
+    },
+    {
+      "definition": "CREATE TRIGGER trg_ops_manager_device_auth_v2_cancel_identity BEFORE INSERT ON ops_manager_device_auth_v2_cancellation_tombstones FOR EACH ROW EXECUTE FUNCTION ops_manager_device_auth_v2_serialize_operation_identity()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_cancellation_tombstones",
+      "trigger_name": "trg_ops_manager_device_auth_v2_cancel_identity"
+    },
+    {
+      "definition": "CREATE TRIGGER trg_ops_manager_device_auth_v2_operation_identity BEFORE INSERT ON ops_manager_device_auth_v2_operations FOR EACH ROW EXECUTE FUNCTION ops_manager_device_auth_v2_serialize_operation_identity()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "ops_manager_device_auth_v2_operations",
+      "trigger_name": "trg_ops_manager_device_auth_v2_operation_identity"
     },
     {
       "definition": "CREATE TRIGGER trg_ops_manager_protect_v2_code_reservation BEFORE UPDATE ON ops_manager_enrollment_codes FOR EACH ROW EXECUTE FUNCTION ops_manager_protect_v2_code_reservation()",

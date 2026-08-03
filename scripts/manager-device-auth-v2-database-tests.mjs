@@ -21,6 +21,9 @@ const root = resolve(new URL("..", import.meta.url).pathname);
 const container = `mz_manager_v2_${Date.now()}_${crypto.randomUUID().replaceAll("-", "").slice(0, 8)}`;
 let pool = null;
 let restartPool = null;
+let cancelRacePool = null;
+let createRacePool = null;
+let cancelReplayPool = null;
 
 function docker(args, options = {}) {
   return execFileSync("docker", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, ...options }).trim();
@@ -38,6 +41,20 @@ function dockerPsql(sql) {
 
 async function delay(millis) {
   await new Promise((resolveDelay) => setTimeout(resolveDelay, millis));
+}
+
+async function waitForAdvisoryLockWait(targetPool, applicationName) {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    const waiting = await targetPool.query(
+      `select count(*)::integer as count
+         from pg_stat_activity
+        where application_name=$1 and state='active' and wait_event_type='Lock'`,
+      [applicationName],
+    );
+    if (waiting.rows[0].count > 0) return;
+    await delay(25);
+  }
+  throw new Error(`${applicationName} did not reach the advisory-lock race boundary.`);
 }
 
 function iso(millis) { return new Date(millis).toISOString(); }
@@ -177,6 +194,34 @@ function enrollmentCandidate({
     resultEnvelope,
     createdAt: iso(at),
     retainUntil: iso(at + 91 * 24 * 60 * 60_000),
+  };
+}
+
+function cancellationInput({ operationId, challenge, keys, at, value }) {
+  const actionRequestFingerprint = digest(`cancel:${operationId}`);
+  return {
+    cancellation: {
+      operationId,
+      challengeId: challenge.challengeId,
+      challengeGeneration: challenge.generation,
+      challengeRequestFingerprint: challenge.requestFingerprint,
+      actionRequestFingerprint,
+      deviceId: challenge.deviceId,
+      platform: challenge.platform,
+      signingKeyId: keys.signingKeyId,
+      signingPublicKeyJwk: keys.signing,
+      wrappingKeyId: keys.wrappingKeyId,
+      wrappingPublicKeyJwk: keys.wrapping,
+      retainUntil: iso(at + 91 * 24 * 60 * 60_000),
+    },
+    proof: proofClaim({
+      keys,
+      operationId,
+      value,
+      fingerprint: actionRequestFingerprint,
+      kind: "cancel",
+      at,
+    }),
   };
 }
 
@@ -445,8 +490,185 @@ try {
   `);
   const faultRetry = await restarted.createOrReplayEnrollment({ candidate: faultCandidate, proof: faultProof });
   assert.equal(faultRetry.status, "pending_confirmation");
-  const faultCancelled = await restarted.cancel({ operationId: faultOperationId, at: iso(replacementAt + 1_000) });
+  const faultCancelAt = replacementAt + 1_000;
+  const faultCancelled = await restarted.cancel({
+    operationId: faultOperationId,
+    at: iso(faultCancelAt),
+    ...cancellationInput({
+      operationId: faultOperationId,
+      challenge: faultChallenge.result,
+      keys: faultKeys,
+      at: faultCancelAt,
+      value: 52,
+    }),
+  });
   assert.equal(faultCancelled.status, "cancelled");
+
+  // Deterministically queue cancellation ahead of an enrollment transaction
+  // on the exact advisory lock used in production. Cancellation must commit a
+  // retained tombstone, the already in-flight create must fail (including
+  // after SERIALIZABLE retry), and a fresh pool must replay the same terminal
+  // receipt without consuming the code or creating credential authority.
+  const raceOperationId = uuid();
+  const raceDeviceId = `ops-app-${uuid()}`;
+  const raceCodeId = uuid();
+  const raceCodeHash = digest("manager-v2-cancel-before-create-code");
+  const raceKeys = keyMaterial();
+  const raceAt = replacementAt + 1_500;
+  await seedCode(pool, { id: raceCodeId, managerId, codeHash: raceCodeHash, at: raceAt });
+  const raceChallenge = await createChallenge(restarted, {
+    operationId: raceOperationId,
+    deviceId: raceDeviceId,
+    keys: raceKeys,
+    at: raceAt,
+    rateKey: digest("manager-v2-cancel-before-create-rate"),
+    value: 90,
+  });
+  const raceCandidate = enrollmentCandidate({
+    operationId: raceOperationId,
+    managerId,
+    codeId: raceCodeId,
+    codeHash: raceCodeHash,
+    deviceId: raceDeviceId,
+    keys: raceKeys,
+    challengeId: raceChallenge.result.challengeId,
+    at: raceAt,
+  });
+  const raceEnrollmentProof = proofClaim({
+    keys: raceKeys,
+    operationId: raceOperationId,
+    value: 91,
+    fingerprint: raceCandidate.requestFingerprint,
+    kind: "enrollment",
+    at: raceAt,
+  });
+  const firstRaceCancellation = cancellationInput({
+    operationId: raceOperationId,
+    challenge: raceChallenge.result,
+    keys: raceKeys,
+    at: raceAt + 1,
+    value: 92,
+  });
+  const raceBlocker = await pool.connect();
+  let raceBlockerOpen = true;
+  try {
+    await raceBlocker.query("begin");
+    await raceBlocker.query(
+      "select pg_advisory_xact_lock(hashtextextended($1,0))",
+      [`manager-device-auth-v2-operation:${raceOperationId}`],
+    );
+    cancelRacePool = new Pool({
+      connectionString,
+      max: 2,
+      connectionTimeoutMillis: 10_000,
+      statement_timeout: 20_000,
+      application_name: "mz_manager_v2_cancel_race",
+    });
+    createRacePool = new Pool({
+      connectionString,
+      max: 2,
+      connectionTimeoutMillis: 10_000,
+      statement_timeout: 20_000,
+      application_name: "mz_manager_v2_create_race",
+    });
+    const cancelRepository = new PostgresManagerDeviceAuthV2Repository({ pool: cancelRacePool });
+    const createRepository = new PostgresManagerDeviceAuthV2Repository({ pool: createRacePool });
+    const cancelPromise = cancelRepository.cancel({
+      operationId: raceOperationId,
+      at: iso(raceAt + 1),
+      ...firstRaceCancellation,
+    });
+    await waitForAdvisoryLockWait(pool, "mz_manager_v2_cancel_race");
+    const createPromise = createRepository.createOrReplayEnrollment({
+      candidate: raceCandidate,
+      proof: raceEnrollmentProof,
+    }).then(
+      (value) => ({ value, error: null }),
+      (error) => ({ value: null, error }),
+    );
+    await waitForAdvisoryLockWait(pool, "mz_manager_v2_create_race");
+    await raceBlocker.query("commit");
+    raceBlockerOpen = false;
+    const cancelledBeforeCreate = await cancelPromise;
+    const createOutcome = await createPromise;
+    assert.equal(cancelledBeforeCreate.status, "cancelled");
+    assert.equal(cancelledBeforeCreate.replayed, false);
+    assert.equal(createOutcome.value, null);
+    assert.equal(createOutcome.error?.code, "manager_v2_operation_cancelled");
+  } finally {
+    if (raceBlockerOpen) await raceBlocker.query("rollback").catch(() => null);
+    raceBlocker.release();
+  }
+  await cancelRacePool.end();
+  cancelRacePool = null;
+  await createRacePool.end();
+  createRacePool = null;
+
+  cancelReplayPool = new Pool({
+    connectionString,
+    max: 2,
+    connectionTimeoutMillis: 10_000,
+    statement_timeout: 20_000,
+    application_name: "mz_manager_v2_cancel_replay",
+  });
+  const cancelReplayRepository = new PostgresManagerDeviceAuthV2Repository({ pool: cancelReplayPool });
+  const retainedRaceCancellation = await cancelReplayRepository.getCancellation(raceOperationId);
+  assert.equal(retainedRaceCancellation.status, "cancelled");
+  assert.equal(retainedRaceCancellation.cancelledAt, iso(raceAt + 1));
+  const replayRaceInput = cancellationInput({
+    operationId: raceOperationId,
+    challenge: raceChallenge.result,
+    keys: raceKeys,
+    at: raceAt + 2,
+    value: 93,
+  });
+  const replayedRaceCancellation = await cancelReplayRepository.cancel({
+    operationId: raceOperationId,
+    at: iso(raceAt + 2),
+    ...replayRaceInput,
+  });
+  assert.equal(replayedRaceCancellation.status, "cancelled");
+  assert.equal(replayedRaceCancellation.replayed, true);
+  assert.equal(replayedRaceCancellation.cancelledAt, iso(raceAt + 1));
+  const raceRows = await pool.query(
+    `select
+       (select count(*) from public.ops_manager_device_auth_v2_cancellation_tombstones where operation_id=$1)::integer as tombstones,
+       (select identity_kind from public.ops_manager_device_auth_v2_operation_identities where operation_id=$1) as identity_kind,
+       (select count(*) from public.ops_manager_device_auth_v2_operations where operation_id=$1)::integer as operations,
+       (select count(*) from public.ops_manager_device_auth_v2_installations where installation_id=$2)::integer as installations,
+       (select count(*) from public.ops_manager_device_auth_v2_key_generations where key_generation_id=$3)::integer as generations,
+       (select count(*) from public.ops_manager_device_auth_v2_nonces where operation_id=$1 and resource_kind='enrollment')::integer as enrollment_nonces,
+       (select status from public.ops_manager_enrollment_codes where id=$4) as code_status,
+       (select consumed_at is null from public.ops_manager_device_auth_v2_attestation_challenges where challenge_id=$5) as challenge_unconsumed,
+       (select count(*) from public.ops_manager_auth_events
+         where event_type='manager_device_auth_v2_cancelled_before_create'
+           and detail_json->>'operation_id'=$1::text)::integer as cancel_events`,
+    [raceOperationId, raceCandidate.installationId, raceCandidate.keyGenerationId,
+      raceCodeId, raceChallenge.result.challengeId],
+  );
+  assert.deepEqual(raceRows.rows[0], {
+    tombstones: 1,
+    identity_kind: "cancelled",
+    operations: 0,
+    installations: 0,
+    generations: 0,
+    enrollment_nonces: 0,
+    code_status: "active",
+    challenge_unconsumed: true,
+    cancel_events: 1,
+  });
+  await assert.rejects(
+    () => createChallenge(cancelReplayRepository, {
+      operationId: raceOperationId,
+      deviceId: raceDeviceId,
+      keys: raceKeys,
+      at: raceAt + 3,
+      rateKey: digest("manager-v2-cancel-before-create-rate"),
+      value: 94,
+    }),
+    (error) => error.code === "manager_v2_operation_cancelled" && error.status === 409,
+    "a retained cancellation must reject later challenge/create replay for the same operation UUID",
+  );
 
   const oldCredentialId = uuid();
   await pool.query(
@@ -595,7 +817,18 @@ try {
   )).rows[0].count, 1, "pending recovery must preserve current credential authority");
   assert.deepEqual((await restarted.getOperation(recoveryOperationId)).resultEnvelope, recoveryCandidate.resultEnvelope,
     "a restarted backend must replay the exact durable recovery envelope");
-  const cancelledRecovery = await restarted.cancel({ operationId: recoveryOperationId, at: iso(recoveryAt + 250) });
+  const recoveryCancelAt = recoveryAt + 250;
+  const cancelledRecovery = await restarted.cancel({
+    operationId: recoveryOperationId,
+    at: iso(recoveryCancelAt),
+    ...cancellationInput({
+      operationId: recoveryOperationId,
+      challenge: recoveryChallenge.result,
+      keys: recoveryKeys,
+      at: recoveryCancelAt,
+      value: 74,
+    }),
+  });
   assert.equal(cancelledRecovery.status, "cancelled");
   assert.equal((await pool.query(
     "select status from public.ops_manager_device_auth_v2_installations where installation_id=$1",
@@ -876,6 +1109,9 @@ try {
   } catch {}
   throw error;
 } finally {
+  await cancelReplayPool?.end().catch(() => null);
+  await createRacePool?.end().catch(() => null);
+  await cancelRacePool?.end().catch(() => null);
   await restartPool?.end().catch(() => null);
   await pool?.end().catch(() => null);
   try { docker(["rm", "-f", container]); } catch {}

@@ -11,12 +11,28 @@ const operationId = "20000000-0000-4000-8000-000000000001";
 const deviceId = "ops-app-20000000-0000-4000-8000-000000000002";
 const credential = `20000000-0000-4000-8000-000000000003.${"C".repeat(43)}`;
 const calls = [];
+let cancelCalls = 0;
 const service = {
   async challenge(body, context) { calls.push({ method: "challenge", body, context }); return { ok: true, data: { method: "challenge" } }; },
   async create(body, context) { calls.push({ method: "create", body, context }); return { ok: true, data: { method: "create" } }; },
   async resume(body) { calls.push({ method: "resume", body }); return { ok: true, data: { method: "resume" } }; },
   async confirm(body, value) { calls.push({ method: "confirm", body, credential: value }); return { ok: true, data: { method: "confirm" } }; },
-  async cancel(body) { calls.push({ method: "cancel", body }); return { ok: true, data: { method: "cancel" } }; },
+  async cancel(body) {
+    calls.push({ method: "cancel", body });
+    cancelCalls += 1;
+    return {
+      ok: true,
+      data: {
+        contract_version: "manager-device-auth.v2",
+        operation_id: body.operation_id,
+        status: "cancelled",
+        device_id: deviceId,
+        cancelled_at: "2026-08-03T01:00:00.000Z",
+        result_envelope: null,
+        replayed: cancelCalls > 1,
+      },
+    };
+  },
   async remove(body, value, context) { calls.push({ method: "remove", body, credential: value, context }); return { ok: true, data: { method: "remove" } }; },
   async authorizedSession(body, value, context) { calls.push({ method: "session", body, credential: value, context }); return { ok: true, data: { method: "session" } }; },
   async sweepExpired() { return {}; },
@@ -87,8 +103,22 @@ try {
       operation_id: operationId,
     }, { "idempotency-key": operationId });
     assert.equal(result.response.status, 200);
-    assert.equal(result.body.data.method, action);
+    if (action === "cancel") {
+      assert.equal(result.body.data.contract_version, "manager-device-auth.v2");
+      assert.equal(result.body.data.operation_id, operationId);
+      assert.equal(result.body.data.status, "cancelled");
+      assert.equal(result.body.data.result_envelope, null);
+      assert.equal(result.body.data.replayed, false);
+    } else {
+      assert.equal(result.body.data.method, action);
+    }
   }
+  const cancellationReplay = await post(`/manager-device-auth/v2/enrollment-operations/${operationId}/cancel`, {
+    operation_id: operationId,
+  }, { "idempotency-key": operationId });
+  assert.equal(cancellationReplay.response.status, 200);
+  assert.equal(cancellationReplay.body.data.status, "cancelled");
+  assert.equal(cancellationReplay.body.data.replayed, true);
   const confirmation = await post(`/manager-device-auth/v2/enrollment-operations/${operationId}/confirm`, {
     operation_id: operationId,
   }, { authorization: `Device ${credential}`, "idempotency-key": operationId });

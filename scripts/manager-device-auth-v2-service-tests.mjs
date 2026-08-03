@@ -70,8 +70,9 @@ class FakeRepository {
   constructor(state = null) {
     this.state = state || {
       codes: new Map(), challenges: new Map(), verifications: new Map(), operations: new Map(),
-      credentials: new Map(), sessions: new Map(), removals: new Map(), nonces: new Map(),
+      cancellations: new Map(), credentials: new Map(), sessions: new Map(), removals: new Map(), nonces: new Map(),
     };
+    if (!this.state.cancellations) this.state.cancellations = new Map();
   }
 
   claim(proof) {
@@ -88,6 +89,9 @@ class FakeRepository {
 
   async createOrRefreshChallenge({ candidate, proof }) {
     this.claim(proof);
+    if (this.state.cancellations.has(candidate.operationId)) {
+      throw Object.assign(new Error("cancelled"), { code: "manager_v2_operation_cancelled", status: 409 });
+    }
     const versions = this.state.challenges.get(candidate.operationId) || [];
     const previous = versions.at(-1);
     if (previous) {
@@ -155,9 +159,13 @@ class FakeRepository {
     };
   }
   async getOperation(operationId) { return structuredClone(this.state.operations.get(operationId) || null); }
+  async getCancellation(operationId) { return structuredClone(this.state.cancellations.get(operationId) || null); }
 
   async createOrReplayEnrollment({ candidate, proof }) {
     this.claim(proof);
+    if (this.state.cancellations.has(candidate.operationId)) {
+      throw Object.assign(new Error("cancelled"), { code: "manager_v2_operation_cancelled", status: 409 });
+    }
     const existing = this.state.operations.get(candidate.operationId);
     if (existing) {
       if (existing.requestFingerprint !== candidate.requestFingerprint) throw Object.assign(new Error("conflict"), { code: "manager_v2_operation_conflict", status: 409 });
@@ -205,14 +213,40 @@ class FakeRepository {
     return structuredClone(operation);
   }
 
-  async cancel({ operationId, at }) {
+  async cancel({ operationId, at, cancellation, proof }) {
+    this.claim(proof);
     const operation = this.state.operations.get(operationId);
+    if (!operation) {
+      const existing = this.state.cancellations.get(operationId);
+      if (existing) return { ...structuredClone(existing), replayed: true };
+      const challenge = this.state.challenges.get(operationId)?.at(-1);
+      if (!challenge || challenge.challengeId !== cancellation.challengeId
+          || challenge.generation !== cancellation.challengeGeneration
+          || challenge.requestFingerprint !== cancellation.challengeRequestFingerprint
+          || challenge.deviceId !== cancellation.deviceId || challenge.platform !== cancellation.platform
+          || challenge.signingKeyId !== cancellation.signingKeyId
+          || challenge.wrappingKeyId !== cancellation.wrappingKeyId) {
+        throw Object.assign(new Error("conflict"), { code: "manager_v2_operation_conflict", status: 409 });
+      }
+      const tombstone = {
+        ...structuredClone(cancellation), status: "cancelled", cancelledAt: at, updatedAt: at,
+        preCreateCancellation: true, replayed: false,
+      };
+      this.state.cancellations.set(operationId, tombstone);
+      return structuredClone(tombstone);
+    }
+    if (operation.status === "confirmed") {
+      throw Object.assign(new Error("confirmed"), { code: "manager_v2_operation_confirmed", status: 409 });
+    }
     if (operation.status === "pending_confirmation") {
       operation.status = "cancelled";
       operation.cancelledAt = at;
       operation.updatedAt = at;
       operation.resultEnvelope = null;
       this.state.credentials.get(operation.credentialId).state = "retired";
+      operation.replayed = false;
+    } else {
+      operation.replayed = true;
     }
     return structuredClone(operation);
   }
@@ -483,6 +517,61 @@ function decryptEnrollmentResult(result, wrappingPrivateKey) {
     key.fill(0);
   }
 }
+
+// Cancellation is authoritative as soon as the durable challenge exists. A
+// caller that cannot prove possession of that challenge's pending signing key
+// cannot reserve the UUID, while the legitimate caller receives a terminal
+// result that remains replayable after a backend restart. A later create must
+// fail before consuming the code or creating any credential authority.
+const cancelBeforeCreateOperationId = "30000000-0000-4000-8000-000000000008";
+const cancelBeforeCreateChallenge = await service.challenge(challengeRequest(cancelBeforeCreateOperationId), {
+  idempotencyKey: cancelBeforeCreateOperationId,
+  rateKey: "8".repeat(64),
+});
+const attackerSigning = crypto.generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+await assert.rejects(
+  () => service.cancel(actionRequest(cancelBeforeCreateOperationId, "cancel", attackerSigning.privateKey)),
+  (error) => error.code === "manager_v2_invalid_signature" && error.status === 401,
+  "a mismatched key must not create a cancellation tombstone",
+);
+assert.equal(repository.state.cancellations.has(cancelBeforeCreateOperationId), false);
+const firstPreCreateCancellation = await service.cancel(actionRequest(cancelBeforeCreateOperationId, "cancel"));
+assert.deepEqual(firstPreCreateCancellation, {
+  ok: true,
+  data: {
+    contract_version: MANAGER_DEVICE_AUTH_V2,
+    operation_id: cancelBeforeCreateOperationId,
+    status: "cancelled",
+    device_id: deviceId,
+    cancelled_at: new Date(nowMillis).toISOString(),
+    result_envelope: null,
+    replayed: false,
+  },
+});
+service = createManagerDeviceAuthV2Service({
+  ...serviceOptions,
+  repository: new FakeRepository(repository.state),
+});
+const replayedPreCreateCancellation = await service.cancel(actionRequest(cancelBeforeCreateOperationId, "cancel"));
+assert.equal(replayedPreCreateCancellation.data.status, "cancelled");
+assert.equal(replayedPreCreateCancellation.data.replayed, true);
+await assert.rejects(
+  () => service.create(
+    enrollmentRequest(cancelBeforeCreateOperationId, cancelBeforeCreateChallenge.data.challenge_id),
+    { idempotencyKey: cancelBeforeCreateOperationId, rateKey: "8".repeat(64) },
+  ),
+  (error) => error.code === "manager_v2_operation_cancelled" && error.status === 409,
+);
+assert.equal(repository.state.codes.get(managerV2CodeVerifier(codeSecret, code)).used, false);
+assert.equal(repository.state.operations.has(cancelBeforeCreateOperationId), false);
+assert.equal([...repository.state.credentials.values()].some((item) => item.operationId === cancelBeforeCreateOperationId), false);
+await assert.rejects(
+  () => service.challenge(challengeRequest(cancelBeforeCreateOperationId), {
+    idempotencyKey: cancelBeforeCreateOperationId,
+    rateKey: "8".repeat(64),
+  }),
+  (error) => error.code === "manager_v2_operation_cancelled" && error.status === 409,
+);
 
 const replacementOperationId = "30000000-0000-4000-8000-000000000010";
 const firstChallenge = await service.challenge(challengeRequest(replacementOperationId), {
