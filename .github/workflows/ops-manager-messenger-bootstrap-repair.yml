@@ -27,7 +27,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version-file: .node-version
+          node-version: '22'
           cache: npm
 
       - name: Install exact dependencies
@@ -38,65 +38,49 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           source_path = Path("src/messaging-api.js")
           source = source_path.read_text()
-          old = '''    const leadershipProfile = await getLeadershipProfileForMessagingUser(userId);
-              const sharedThreadData = await runRpc("msg_get_or_create_ops_manager_thread", { p_manager_id: managerId });
-              const sharedThread = Array.isArray(sharedThreadData) ? sharedThreadData[0] : sharedThreadData;
-              const sharedThreadId = String(sharedThread?.thread_id || sharedThread?.id || "").trim();
-              if (!isUuid(sharedThreadId)) throw Object.assign(new Error("The Operations Leadership chat is unavailable."), { status: 503 });
-              return {
-                ...row,
-                msg_user_id: userId,
-                user_id: userId,
-                role: "manager",
-                manager_id: managerId,
-                display_name: String(leadershipProfile?.manager_display_name || row?.display_name || managerSession?.manager_display_name || "Operations Leadership"),
-                role_title: messagingRoleTitle({ ...row, ...(leadershipProfile || {}) }),
-                job_title: String(leadershipProfile?.job_title || "").trim() || null,
-                department_key: String(leadershipProfile?.department_key || "").trim() || null,
-                manager_roles: Array.isArray(leadershipProfile?.manager_roles) ? leadershipProfile.manager_roles : [],
-                canonical_device_id: String(managerSession?.device_id || managerSession?.credential_id || "manager-session"),
-                identity_source: "trusted_manager_session",
-                ops_manager_thread_id: sharedThreadId,
-              };'''.replace("              ", "    ")
-          new = '''    const leadershipProfile = await getLeadershipProfileForMessagingUser(userId);
-              return {
-                ...row,
-                msg_user_id: userId,
-                user_id: userId,
-                role: "manager",
-                manager_id: managerId,
-                display_name: String(leadershipProfile?.manager_display_name || row?.display_name || managerSession?.manager_display_name || "Operations Leadership"),
-                role_title: messagingRoleTitle({ ...row, ...(leadershipProfile || {}) }),
-                job_title: String(leadershipProfile?.job_title || "").trim() || null,
-                department_key: String(leadershipProfile?.department_key || "").trim() || null,
-                manager_roles: Array.isArray(leadershipProfile?.manager_roles) ? leadershipProfile.manager_roles : [],
-                canonical_device_id: String(managerSession?.device_id || managerSession?.credential_id || "manager-session"),
-                identity_source: "trusted_manager_session",
-              };'''.replace("              ", "    ")
-          if source.count(old) != 1:
-              raise SystemExit(f"expected one manager-bootstrap block, found {source.count(old)}")
-          source = source.replace(old, new)
+          fragments = [
+              '    const sharedThreadData = await runRpc("msg_get_or_create_ops_manager_thread", { p_manager_id: managerId });\n',
+              '    const sharedThread = Array.isArray(sharedThreadData) ? sharedThreadData[0] : sharedThreadData;\n',
+              '    const sharedThreadId = String(sharedThread?.thread_id || sharedThread?.id || "").trim();\n',
+              '    if (!isUuid(sharedThreadId)) throw Object.assign(new Error("The Operations Leadership chat is unavailable."), { status: 503 });\n',
+              '      ops_manager_thread_id: sharedThreadId,\n',
+          ]
+          for fragment in fragments:
+              count = source.count(fragment)
+              if count != 1:
+                  raise SystemExit(f"expected one manager-bootstrap fragment, found {count}: {fragment.strip()}")
+              source = source.replace(fragment, "")
           source_path.write_text(source)
 
           authority_path = Path("scripts/messaging-manager-authority-tests.mjs")
           authority = authority_path.read_text()
-          authority = authority.replace('const SHARED_THREAD_ID = "00000000-0000-4000-8000-000000000707";\n', '')
-          retired_rpc = '''  if (fn === "msg_get_or_create_ops_manager_thread") {
-              assert.equal(args.p_manager_id, MANAGER_ID);
-              return { id: SHARED_THREAD_ID, thread_type: "group", title: "Ops Manager Chat", system_key: "ops_manager_shared_chat_v1" };
-            }
-          '''.replace("            ", "  ")
-          if authority.count(retired_rpc) != 1:
-              raise SystemExit(f"expected one retired-room authority fixture, found {authority.count(retired_rpc)}")
-          authority = authority.replace(retired_rpc, '')
+          const_line = 'const SHARED_THREAD_ID = "00000000-0000-4000-8000-000000000707";\n'
+          if authority.count(const_line) != 1:
+              raise SystemExit("shared-thread fixture constant changed")
+          authority = authority.replace(const_line, "")
+          authority, removed = re.subn(
+              r'  if \(fn === "msg_get_or_create_ops_manager_thread"\) \{\n'
+              r'    assert\.equal\(args\.p_manager_id, MANAGER_ID\);\n'
+              r'    return \{ id: SHARED_THREAD_ID, thread_type: "group", title: "Ops Manager Chat", system_key: "ops_manager_shared_chat_v1" \};\n'
+              r'  \}\n',
+              "",
+              authority,
+          )
+          if removed != 1:
+              raise SystemExit(f"expected one retired-room authority fixture, removed {removed}")
           marker = '  assert.equal(identity.body.data.department_key, "operations");\n'
-          addition = marker + '  assert.equal(Object.prototype.hasOwnProperty.call(identity.body.data, "ops_manager_thread_id"), false);\n  assert.equal(calls.some((call) => call.fn === "msg_get_or_create_ops_manager_thread"), false);\n'
           if authority.count(marker) != 1:
               raise SystemExit("authority assertion marker changed")
-          authority = authority.replace(marker, addition)
+          authority = authority.replace(
+              marker,
+              marker
+              + '  assert.equal(Object.prototype.hasOwnProperty.call(identity.body.data, "ops_manager_thread_id"), false);\n'
+              + '  assert.equal(calls.some((call) => call.fn === "msg_get_or_create_ops_manager_thread"), false);\n',
+          )
           authority_path.write_text(authority)
           PY
 
