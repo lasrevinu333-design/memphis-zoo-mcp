@@ -192,10 +192,6 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     const userId = String(row?.msg_user_id || row?.user_id || row?.id || "").trim();
     if (!isUuid(userId)) throw Object.assign(new Error("Authenticated manager has no server messaging principal."), { status: 403 });
     const leadershipProfile = await getLeadershipProfileForMessagingUser(userId);
-    const sharedThreadData = await runRpc("msg_get_or_create_ops_manager_thread", { p_manager_id: managerId });
-    const sharedThread = Array.isArray(sharedThreadData) ? sharedThreadData[0] : sharedThreadData;
-    const sharedThreadId = String(sharedThread?.thread_id || sharedThread?.id || "").trim();
-    if (!isUuid(sharedThreadId)) throw Object.assign(new Error("The Operations Leadership chat is unavailable."), { status: 503 });
     return {
       ...row,
       msg_user_id: userId,
@@ -209,7 +205,6 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       manager_roles: Array.isArray(leadershipProfile?.manager_roles) ? leadershipProfile.manager_roles : [],
       canonical_device_id: String(managerSession?.device_id || managerSession?.credential_id || "manager-session"),
       identity_source: "trusted_manager_session",
-      ops_manager_thread_id: sharedThreadId,
     };
   }
 

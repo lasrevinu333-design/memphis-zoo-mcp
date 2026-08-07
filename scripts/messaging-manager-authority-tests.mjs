@@ -7,7 +7,6 @@ const MANAGER_ID = "00000000-0000-4000-8000-000000000701";
 const MANAGER_USER_ID = "00000000-0000-4000-8000-000000000702";
 const FORGED_EMPLOYEE_ID = "00000000-0000-4000-8000-000000000703";
 const THREAD_ID = "00000000-0000-4000-8000-000000000704";
-const SHARED_THREAD_ID = "00000000-0000-4000-8000-000000000707";
 const calls = [];
 
 async function runRpc(fn, args) {
@@ -15,10 +14,6 @@ async function runRpc(fn, args) {
   if (fn === "msg_ensure_ops_manager_user") {
     assert.equal(args.p_manager_id, MANAGER_ID);
     return { id: MANAGER_USER_ID, user_id: MANAGER_USER_ID, display_name: "Authority Test Manager", role: "manager", is_active: true, ops_manager_id: MANAGER_ID };
-  }
-  if (fn === "msg_get_or_create_ops_manager_thread") {
-    assert.equal(args.p_manager_id, MANAGER_ID);
-    return { id: SHARED_THREAD_ID, thread_type: "group", title: "Ops Manager Chat", system_key: "ops_manager_shared_chat_v1" };
   }
   if (fn === "msg_send_broadcast") return { id: "broadcast-test", sender_user_id: args.p_sender_user_id };
   if (fn === "msg_create_group_thread_v2") return { id: THREAD_ID, created_by_user_id: args.p_created_by_user_id, title: args.p_title, client_thread_id: args.p_client_thread_id };
@@ -102,6 +97,8 @@ try {
   assert.equal(identity.body.data.display_name, "Authority Test Manager");
   assert.equal(identity.body.data.role_title, "Director of Test Operations");
   assert.equal(identity.body.data.department_key, "operations");
+  assert.equal(Object.prototype.hasOwnProperty.call(identity.body.data, "ops_manager_thread_id"), false);
+  assert.equal(calls.some((call) => call.fn === "msg_get_or_create_ops_manager_thread"), false);
 
   const users = await get("/messaging-api/users");
   assert.equal(users.status, 200);
