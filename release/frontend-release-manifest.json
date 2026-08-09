@@ -5,10 +5,10 @@
   "backend_minimum_version": "release-2026.07.19.custodial-v3.12",
   "schema_fingerprint": "c6742e500c2a5d3767f1d886bb5937167eab42730f8271eec76b427a10c5f302",
   "schema_transition": {
-    "transition_id": "custodial-native-vault-removal-build11-20260801",
-    "from_fingerprint": "544d11f47f1f4a960fcf49d13bba53c736d78fe4fe9d225c996c84311d442ad0",
-    "to_fingerprint": "c6742e500c2a5d3767f1d886bb5937167eab42730f8271eec76b427a10c5f302",
-    "expires_at": "2026-08-14T23:59:59Z"
+    "transition_id": "cleaning-inspection-freshness-24h-20260809",
+    "from_fingerprint": "c6742e500c2a5d3767f1d886bb5937167eab42730f8271eec76b427a10c5f302",
+    "to_fingerprint": "45c8e505f2fd5ce553923ce64ed46a49914abe7d2d1fa80aa2f6f866e1d00d7d",
+    "expires_at": "2026-08-22T23:59:59Z"
   },
   "api_contract_versions": {
     "scan": "scan.v2",
