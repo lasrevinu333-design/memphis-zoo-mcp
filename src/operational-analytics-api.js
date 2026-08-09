@@ -161,15 +161,23 @@ async function loadExistingInspection(db, operationId) {
   return result.data || null;
 }
 
-export function installOperationalAnalyticsRoutes(app, { env = process.env, supabase = null } = {}) {
+export function installOperationalAnalyticsRoutes(app, {
+  env = process.env,
+  supabase = null,
+  managerV2SessionValidator = null,
+} = {}) {
   if (!app || app.__operationalAnalyticsRoutesInstalled) return;
   Object.defineProperty(app, "__operationalAnalyticsRoutesInstalled", { value: true });
   const db = supabase || createSupabase(env);
-  const requireManager = makeOpsAccessMiddleware({ supabase: db });
+  const requireManager = makeOpsAccessMiddleware({ env, supabase: db, managerV2SessionValidator });
+  const requireManagerWrite = makeOpsAccessMiddleware({ env, supabase: db, requireWrite: true, managerV2SessionValidator });
   const configured = (_req, res, next) => db ? next() : res.status(503).json({ ok: false, error: "Database connection is not configured." });
-  const requireCustodial = (req, res, next) => requireManager(req, res, () => hasRole(req.memphisAuth, "CUSTODIAL_MANAGER")
-    ? next()
-    : res.status(403).json({ ok: false, error: "Custodial Manager access is required." }));
+  const authorizeCustodial = (requireAccess) => (req, res, next) => requireAccess(req, res,
+    () => hasRole(req.memphisAuth, "CUSTODIAL_MANAGER")
+      ? next()
+      : res.status(403).json({ ok: false, error: "Custodial Manager access is required." }));
+  const requireCustodial = authorizeCustodial(requireManager);
+  const requireCustodialWrite = authorizeCustodial(requireManagerWrite);
 
   app.use("/analytics-api", (req, res, next) => {
     setCors(req, res, env);
@@ -259,7 +267,7 @@ export function installOperationalAnalyticsRoutes(app, { env = process.env, supa
     } catch (error) { fail(res, error, "Inspection coverage could not be loaded."); }
   });
 
-  app.post("/analytics-api/inspections", configured, requireCustodial, async (req, res) => {
+  app.post("/analytics-api/inspections", configured, requireCustodialWrite, async (req, res) => {
     try {
       const payload = normalizeInspectionPayload(req.body || {}, req.memphisAuth || {}, req.get?.("Idempotency-Key") || "");
       const existing = await loadExistingInspection(db, payload.operation_id);

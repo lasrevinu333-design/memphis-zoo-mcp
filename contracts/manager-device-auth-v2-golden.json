@@ -1,0 +1,289 @@
+{
+  "fixture_version": 2,
+  "contract_version": "manager-device-auth.v2",
+  "warning": "Public deterministic test material only. Never use these keys or secrets outside tests.",
+  "ops_session_contract": {
+    "minimum_utf8_bytes": 32,
+    "maximum_utf8_bytes": 8192,
+    "pattern": "^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$",
+    "golden_value": "eyJ2IjoyLCJyb2xlIjoib3BzX21hbmFnZXIifQ.WlpaWlpaWlpaWlpaWlpaWlpaWlpaWlpaWlpaWlpaWlo"
+  },
+  "identifiers": {
+    "operation_id": "10000000-0000-4000-8000-000000000001",
+    "credential_id": "10000000-0000-4000-8000-000000000002",
+    "manager_id": "10000000-0000-4000-8000-000000000003",
+    "device_id": "ops-app-10000000-0000-4000-8000-000000000004",
+    "session_id": "10000000-0000-4000-8000-000000000005",
+    "first_challenge_id": "10000000-0000-4000-8000-000000000006",
+    "replacement_challenge_id": "10000000-0000-4000-8000-000000000007"
+  },
+  "test_only_key_material": {
+    "signing_private_scalar_hex": "0000000000000000000000000000000000000000000000000000000000000001",
+    "wrapping_private_scalar_hex": "0000000000000000000000000000000000000000000000000000000000000002",
+    "ephemeral_private_scalar_hex": "0000000000000000000000000000000000000000000000000000000000000003",
+    "signing_public_key_jwk": {
+      "kty": "EC",
+      "crv": "P-256",
+      "x": "axfR8uEsQkf4vOblY6RA8ncDfYEt6zOg9KE5RdiYwpY",
+      "y": "T-NC4v4af5uO5-tKfA-eFivOM1drMV7Oy7ZAaDe_UfU"
+    },
+    "wrapping_public_key_jwk": {
+      "kty": "EC",
+      "crv": "P-256",
+      "x": "fPJ7GI0DT36KUjgDBLUaw8CJaeJ38hs1pgtI_EdmmXg",
+      "y": "B3dVENuO0EApPZrGn3Qw27p9reY86YIpngS3nSJ4c9E"
+    },
+    "signing_key_id": "xx0BcA-wMohw8atYDJOe6peGModklG2wRHBlXHMvl0M",
+    "wrapping_key_id": "AhqHzaYXA5MzmDCrsseUsVBGKyfhDhvekx0THjH_xIE"
+  },
+  "attestation_examples": {
+    "android": {
+      "provider": "play_integrity",
+      "challenge_id": "10000000-0000-4000-8000-000000000006",
+      "app_id": "org.memphiszoo.ops",
+      "token": "golden-play-integrity-token"
+    },
+    "ios_enroll": {
+      "provider": "apple_app_attest",
+      "challenge_id": "10000000-0000-4000-8000-000000000006",
+      "app_id": "ABCDE12345.org.memphiszoo.ops",
+      "key_id": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE",
+      "attestation_object": "Z29sZGVuLWFwcGxlLWF0dGVzdGF0aW9uLW9iamVjdA"
+    },
+    "ios_assertion": {
+      "provider": "apple_app_attest",
+      "challenge_id": "10000000-0000-4000-8000-000000000006",
+      "app_id": "ABCDE12345.org.memphiszoo.ops",
+      "key_id": "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE",
+      "assertion": "Z29sZGVuLWFwcGxlLWFzc2VydGlvbg",
+      "client_data_hash": "QkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkI"
+    }
+  },
+  "semantic_body_sha256": {
+    "attestation_challenges": {
+      "android_enroll": "e08e8b75740afddb082382c610204f640c48d23735cf943c214a9261d49979db",
+      "android_recover": "73c8065f88ef9f6f18266f2fc0c4be22ad386cbdb04a6b73b05f612c346e84c9",
+      "android_authorized_session": "25b454b2d89f92777b7b2e9eeb81b7e57eb9e2439042688e21b2f65ecfb3b711",
+      "ios_enroll": "de75fa44d7ca958db8fc74c2508fe5b9365e875c60854ebea2a226dc60156df9",
+      "ios_recover": "d5c6228b6be79dc9840522b81a86800b2e8206fb821b088c427ffd2dd57ef5d1",
+      "ios_authorized_session": "a62b0bea20d367efcb4fb79b7a5078076aad01bffc0130595d60983a2deaf4b8"
+    },
+    "enrollment_operations": {
+      "android_enroll": "893e9a3fc59a674a603e2766971661a89896c85ce17e8f192a192521cf0b180d",
+      "android_recover": "498f0650d11e52b4fe652499f16d124d5678345616220e5bfe2dd9c5818f3520",
+      "ios_enroll": "71b84ec71d889c3bd0151a542982335dd29303d9e1959f4f39b8b645359e2f6a",
+      "ios_recover": "a48aed4f5e3762e7158047b15fb9d23864a6dceac2baff8cf3e10b98ba7d1709"
+    },
+    "actions": {
+      "resume": "6f5d324751f7e5a9e8faad7d3da093724b601adc7221035952554692a257e1f5",
+      "confirm": "112a6b260cc4dba4387e263631b0381e990d7e8f6ab38a13994c412b555c5e44",
+      "cancel": "54ac51a51ff64bbcc878daf7f29378a65fb622fc37aaf9ea1accb676e84cb02e"
+    },
+    "removal": "5f9a39bce4ee376903d2593b51c3c00544592bbc1999242d0e2bcc19aac2802c",
+    "authorized_sessions": {
+      "android": "8e324929caa80a181adb27f3277a23ca5da19088537e434027f3da190a6f5bb0",
+      "ios": "4e415ad0e2b4c39e14e32c4ca791cd5336be7cb99ec3e8341b73c5954c10b3d0"
+    }
+  },
+  "proof": {
+    "method": "POST",
+    "path": "/manager-device-auth/v2/enrollment-operations",
+    "issued_at": 1785661200,
+    "nonce": "BwcHBwcHBwcHBwcHBwcHBw",
+    "body_sha256": "893e9a3fc59a674a603e2766971661a89896c85ce17e8f192a192521cf0b180d",
+    "input_hex": "4d454d504849532d4d414e414745522d4445564943452d415554482d50524f4f462d5632363a6d6574686f64343a504f5354343a7061746834353a2f6d616e616765722d6465766963652d617574682f76322f656e726f6c6c6d656e742d6f7065726174696f6e7331323a6f7065726174696f6e5f696433363a31303030303030302d303030302d343030302d383030302d303030303030303030303031393a6973737565645f617431303a31373835363631323030353a6e6f6e636532323a4277634842776348427763484277634842776348427731313a626f64795f73686132353636343a38393365396133666335396136373461363033653237363639373136363161383938393663383563653137653866313932613139323532316366306231383064",
+    "input_base64url": "TUVNUEhJUy1NQU5BR0VSLURFVklDRS1BVVRILVBST09GLVYyNjptZXRob2Q0OlBPU1Q0OnBhdGg0NTovbWFuYWdlci1kZXZpY2UtYXV0aC92Mi9lbnJvbGxtZW50LW9wZXJhdGlvbnMxMjpvcGVyYXRpb25faWQzNjoxMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMDE5Omlzc3VlZF9hdDEwOjE3ODU2NjEyMDA1Om5vbmNlMjI6QndjSEJ3Y0hCd2NIQndjSEJ3Y0hCdzExOmJvZHlfc2hhMjU2NjQ6ODkzZTlhM2ZjNTlhNjc0YTYwM2UyNzY2OTcxNjYxYTg5ODk2Yzg1Y2UxN2U4ZjE5MmExOTI1MjFjZjBiMTgwZA",
+    "value": {
+      "algorithm": "ES256-P1363",
+      "issued_at": 1785661200,
+      "nonce": "BwcHBwcHBwcHBwcHBwcHBw",
+      "signature": "8lyTSVaPaNgk52e_M_TyjqwoRptds_oeCLVYbHQWn0Yx1F5-x4OG-EoQR1kDx6I5yWH19JriGS3V5-YzfYgZQw"
+    }
+  },
+  "envelope": {
+    "algorithm": "ECDH-P256-HKDF-SHA256+A256GCM",
+    "enrollment_hkdf_info_hex": "31363a636f6e74726163745f76657273696f6e32323a6d616e616765722d6465766963652d617574682e763231323a6f7065726174696f6e5f696433363a31303030303030302d303030302d343030302d383030302d30303030303030303030303131353a7772617070696e675f6b65795f696434333a416871487a61595841354d7a6d44437273736555735642474b796668446876656b783054486a485f784945",
+    "enrollment_hkdf_info_base64url": "MTY6Y29udHJhY3RfdmVyc2lvbjIyOm1hbmFnZXItZGV2aWNlLWF1dGgudjIxMjpvcGVyYXRpb25faWQzNjoxMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMDExNTp3cmFwcGluZ19rZXlfaWQ0MzpBaHFIemFZWEE1TXptRENyc3NlVXNWQkdLeWZoRGh2ZWt4MFRIakhfeElF",
+    "enrollment_aad_hex": "4d454d504849532d4d414e414745522d4445564943452d415554482d524553554c542d4141442d563231323a6f7065726174696f6e5f696433363a31303030303030302d303030302d343030302d383030302d30303030303030303030303131333a63726564656e7469616c5f696433363a31303030303030302d303030302d343030302d383030302d303030303030303030303032393a6465766963655f696434343a6f70732d6170702d31303030303030302d303030302d343030302d383030302d30303030303030303030303431303a6d616e616765725f696433363a31303030303030302d303030302d343030302d383030302d30303030303030303030303332313a63726564656e7469616c5f657870697265735f617432343a323033302d30312d30325430333a30343a30352e3030305a31373a726573756d655f657870697265735f617432343a323033302d30312d30315430333a33343a30352e3030305a31353a7772617070696e675f6b65795f696434333a416871487a61595841354d7a6d44437273736555735642474b796668446876656b783054486a485f78494531363a657068656d6572616c5f6b65795f696434333a42337a51554a664c385750514a54336652635f39463835614e6a716f71526b6b2d484d7a77794170375755343a73616c7434333a49434167494341674943416749434167494341674943416749434167494341674943416749434167494341323a697631363a4441774d4441774d4441774d4441774d",
+    "enrollment_aad_base64url": "TUVNUEhJUy1NQU5BR0VSLURFVklDRS1BVVRILVJFU1VMVC1BQUQtVjIxMjpvcGVyYXRpb25faWQzNjoxMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMDExMzpjcmVkZW50aWFsX2lkMzY6MTAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAyOTpkZXZpY2VfaWQ0NDpvcHMtYXBwLTEwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwNDEwOm1hbmFnZXJfaWQzNjoxMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMDMyMTpjcmVkZW50aWFsX2V4cGlyZXNfYXQyNDoyMDMwLTAxLTAyVDAzOjA0OjA1LjAwMFoxNzpyZXN1bWVfZXhwaXJlc19hdDI0OjIwMzAtMDEtMDFUMDM6MzQ6MDUuMDAwWjE1OndyYXBwaW5nX2tleV9pZDQzOkFocUh6YVlYQTVNem1EQ3Jzc2VVc1ZCR0t5ZmhEaHZla3gwVEhqSF94SUUxNjplcGhlbWVyYWxfa2V5X2lkNDM6QjN6UVVKZkw4V1BRSlQzZlJjXzlGODVhTmpxb3FSa2stSE16d3lBcDdXVTQ6c2FsdDQzOklDQWdJQ0FnSUNBZ0lDQWdJQ0FnSUNBZ0lDQWdJQ0FnSUNBZ0lDQWdJQ0EyOml2MTY6REF3TURBd01EQXdNREF3TQ",
+    "session_hkdf_info_hex": "31363a636f6e74726163745f76657273696f6e32323a6d616e616765722d6465766963652d617574682e7632373a707572706f736531383a617574686f72697a65645f73657373696f6e31323a6f7065726174696f6e5f696433363a31303030303030302d303030302d343030302d383030302d30303030303030303030303131353a7772617070696e675f6b65795f696434333a416871487a61595841354d7a6d44437273736555735642474b796668446876656b783054486a485f784945",
+    "session_hkdf_info_base64url": "MTY6Y29udHJhY3RfdmVyc2lvbjIyOm1hbmFnZXItZGV2aWNlLWF1dGgudjI3OnB1cnBvc2UxODphdXRob3JpemVkX3Nlc3Npb24xMjpvcGVyYXRpb25faWQzNjoxMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMDExNTp3cmFwcGluZ19rZXlfaWQ0MzpBaHFIemFZWEE1TXptRENyc3NlVXNWQkdLeWZoRGh2ZWt4MFRIakhfeElF",
+    "session_aad_hex": "4d454d504849532d4d414e414745522d4445564943452d415554482d53455353494f4e2d4141442d563231323a6f7065726174696f6e5f696433363a31303030303030302d303030302d343030302d383030302d30303030303030303030303131303a73657373696f6e5f696433363a31303030303030302d303030302d343030302d383030302d30303030303030303030303531333a63726564656e7469616c5f696433363a31303030303030302d303030302d343030302d383030302d303030303030303030303032393a6465766963655f696434343a6f70732d6170702d31303030303030302d303030302d343030302d383030302d30303030303030303030303431303a6d616e616765725f696433363a31303030303030302d303030302d343030302d383030302d303030303030303030303033353a726f6c657335333a4f50535f4d414e414745522c435553544f4449414c5f4d414e414745522c4449524543544f522c53454355524954595f41444d494e31323a6163636573735f6c6576656c31313a66756c6c5f61636365737331383a73657373696f6e5f657870697265735f617432343a323033302d30312d30315430333a31393a30352e3030305a31353a7772617070696e675f6b65795f696434333a416871487a61595841354d7a6d44437273736555735642474b796668446876656b783054486a485f78494531363a657068656d6572616c5f6b65795f696434333a42337a51554a664c385750514a54336652635f39463835614e6a716f71526b6b2d484d7a77794170375755343a73616c7434333a49434167494341674943416749434167494341674943416749434167494341674943416749434167494341323a697631363a4441774d4441774d4441774d4441774d",
+    "session_aad_base64url": "TUVNUEhJUy1NQU5BR0VSLURFVklDRS1BVVRILVNFU1NJT04tQUFELVYyMTI6b3BlcmF0aW9uX2lkMzY6MTAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAxMTA6c2Vzc2lvbl9pZDM2OjEwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwNTEzOmNyZWRlbnRpYWxfaWQzNjoxMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMDI5OmRldmljZV9pZDQ0Om9wcy1hcHAtMTAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDA0MTA6bWFuYWdlcl9pZDM2OjEwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMzU6cm9sZXM1MzpPUFNfTUFOQUdFUixDVVNUT0RJQUxfTUFOQUdFUixESVJFQ1RPUixTRUNVUklUWV9BRE1JTjEyOmFjY2Vzc19sZXZlbDExOmZ1bGxfYWNjZXNzMTg6c2Vzc2lvbl9leHBpcmVzX2F0MjQ6MjAzMC0wMS0wMVQwMzoxOTowNS4wMDBaMTU6d3JhcHBpbmdfa2V5X2lkNDM6QWhxSHphWVhBNU16bURDcnNzZVVzVkJHS3lmaERodmVreDBUSGpIX3hJRTE2OmVwaGVtZXJhbF9rZXlfaWQ0MzpCM3pRVUpmTDhXUFFKVDNmUmNfOUY4NWFOanFvcVJray1ITXp3eUFwN1dVNDpzYWx0NDM6SUNBZ0lDQWdJQ0FnSUNBZ0lDQWdJQ0FnSUNBZ0lDQWdJQ0FnSUNBZ0lDQTI6aXYxNjpEQXdNREF3TURBd01EQXdN",
+    "sealed_enrollment_result": {
+      "algorithm": "ECDH-P256-HKDF-SHA256+A256GCM",
+      "ephemeral_public_key_jwk": {
+        "kty": "EC",
+        "crv": "P-256",
+        "x": "Xsvk0aYzCkTI9--VHUvxZebGtyHvramF-0FmG8bn_Ww",
+        "y": "hzRkDEmY_343SwbOGmSi7NgqsDY4T7g9mnmxJ6J9UDI"
+      },
+      "ephemeral_key_id": "B3zQUJfL8WPQJT3fRc_9F85aNjqoqRkk-HMzwyAp7WU",
+      "wrapping_key_id": "AhqHzaYXA5MzmDCrsseUsVBGKyfhDhvekx0THjH_xIE",
+      "salt": "ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA",
+      "iv": "DAwMDAwMDAwMDAwM",
+      "ciphertext": "UzgWkwSbsrecWudI7c7ppH1I2CavqfyhfmuB61QVrZzW-xMpT-YsmB-uVHbQRh79dC84POrfv4Ic04R1UkivRVjM6ycgEF7h1upUCRdVaGBBmjgP3BCq4P9_nQ-zySFI-CmfdHC1E9BhVLFxNrMdC4e96dr4cArK_84inj4VKs5xXZj3UputYjcBYlVC1O8Tu3HhYuMlS1533Oq4vrU-0zL-pYJNFAZ-0Y0Rp58caqK43UrxiKlyb9jMK873_wOPO59d2kKuMJGQwt9Ne3FgWNpgnsWjol6W_qnA4ZW-8rjXUeVMqADQKYBqZCqyrmw8G0cr_VcGFMmrM_UcLr1z-CQxsIT2mYyLwl8WRNVxVEB--kXbU5roo5lemVspOqV6O4ji6CEAn_BDgjWNtwYV9cgFtHtHk2ggl6ht6-WapPmehBj_UsYWEYiJNnDUDBX7hsZIEZT9n9KxvdtoJLeK_8inSSfRCXWSkcj8pqWRCEhNpmdGgmIqe0-4rgrTiMGEnDslLovrYq8c5NWfXL2NiHV2XBqSjMhbIYzdJ1V_DbZU0Yc",
+      "tag": "F-1UaF72xhiSuTt6Rg2pQw"
+    },
+    "sealed_authorized_session_result": {
+      "algorithm": "ECDH-P256-HKDF-SHA256+A256GCM",
+      "ephemeral_public_key_jwk": {
+        "kty": "EC",
+        "crv": "P-256",
+        "x": "Xsvk0aYzCkTI9--VHUvxZebGtyHvramF-0FmG8bn_Ww",
+        "y": "hzRkDEmY_343SwbOGmSi7NgqsDY4T7g9mnmxJ6J9UDI"
+      },
+      "ephemeral_key_id": "B3zQUJfL8WPQJT3fRc_9F85aNjqoqRkk-HMzwyAp7WU",
+      "wrapping_key_id": "AhqHzaYXA5MzmDCrsseUsVBGKyfhDhvekx0THjH_xIE",
+      "salt": "ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA",
+      "iv": "DAwMDAwMDAwMDAwM",
+      "ciphertext": "gdWg0KKrbB_Q7-CC1NHHDbmSV8AqEsCJIRRirJbAUwAN2FQAomKiagmig6AFj-7iz_rkaqJj5aYCdvKktUsrPY62hfjmFBgRsH-oNsT1QphrIfwXkQ6HLtnARoZtfLx45YlrCvy25mudwb_Y4djY04tTsQb1o6GOPigTO94IewvtmcuImcvv4WoBeAqI0_DjlFV8MixFQ_TUzZLWUWTW1zj8Oh-mPWqxsV8VL8XLLGgjzQC_Sg6Nd5jHshhap1ah4kQpc2WyyFQo9vEx_Kx4KJX33R3J4lBsrJJX_UwW6gZtNWRL68eNFZi4vIOqBfIYC3ituMIv49S7aVuSEx7876PF8GWbDLJURN4udQEkV0DNNduviJYJILG25ySROXikfFM39AgcWvMzdtQkHuj-Hd_8a_ZgsdefQNxrobqQ74BCM8zGbLx6n5W66YvSK69B5I22ycG-1g2AEceK0ZerkeVah-y1GL_xCZPXeOilxU4E2kCiCTOHVdnLHfjmz-b8ZH8xcZLoWzeyuXE2MINfGRjIBMycJzuiEQBZlQUcl0Qf26oeegbRDQHCuhh2--BIXb4XQi9vXy8_uY3p69s8TH4MdJi56wj2sB5P2nlX1ga8sQqO0OPSUTvtaKQs9aPCxZ5BqyEpn21TtyXyq4833pY4sNpKlQ",
+      "tag": "HRF6oHpJvxoxTB1DdmUT7Q"
+    }
+  },
+  "exact_public_dtos": {
+    "pending_enrollment": {
+      "ok": true,
+      "data": {
+        "contract_version": "manager-device-auth.v2",
+        "operation_id": "10000000-0000-4000-8000-000000000001",
+        "status": "pending_confirmation",
+        "credential_id": "10000000-0000-4000-8000-000000000002",
+        "device_id": "ops-app-10000000-0000-4000-8000-000000000004",
+        "manager_id": "10000000-0000-4000-8000-000000000003",
+        "roles": [
+          "OPS_MANAGER",
+          "CUSTODIAL_MANAGER",
+          "DIRECTOR",
+          "SECURITY_ADMIN"
+        ],
+        "access_level": "full_access",
+        "credential_expires_at": "2030-01-02T03:04:05.000Z",
+        "resume_expires_at": "2030-01-01T03:34:05.000Z",
+        "result_envelope": {
+          "algorithm": "ECDH-P256-HKDF-SHA256+A256GCM",
+          "ephemeral_public_key_jwk": {
+            "kty": "EC",
+            "crv": "P-256",
+            "x": "Xsvk0aYzCkTI9--VHUvxZebGtyHvramF-0FmG8bn_Ww",
+            "y": "hzRkDEmY_343SwbOGmSi7NgqsDY4T7g9mnmxJ6J9UDI"
+          },
+          "ephemeral_key_id": "B3zQUJfL8WPQJT3fRc_9F85aNjqoqRkk-HMzwyAp7WU",
+          "wrapping_key_id": "AhqHzaYXA5MzmDCrsseUsVBGKyfhDhvekx0THjH_xIE",
+          "salt": "ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA",
+          "iv": "DAwMDAwMDAwMDAwM",
+          "ciphertext": "UzgWkwSbsrecWudI7c7ppH1I2CavqfyhfmuB61QVrZzW-xMpT-YsmB-uVHbQRh79dC84POrfv4Ic04R1UkivRVjM6ycgEF7h1upUCRdVaGBBmjgP3BCq4P9_nQ-zySFI-CmfdHC1E9BhVLFxNrMdC4e96dr4cArK_84inj4VKs5xXZj3UputYjcBYlVC1O8Tu3HhYuMlS1533Oq4vrU-0zL-pYJNFAZ-0Y0Rp58caqK43UrxiKlyb9jMK873_wOPO59d2kKuMJGQwt9Ne3FgWNpgnsWjol6W_qnA4ZW-8rjXUeVMqADQKYBqZCqyrmw8G0cr_VcGFMmrM_UcLr1z-CQxsIT2mYyLwl8WRNVxVEB--kXbU5roo5lemVspOqV6O4ji6CEAn_BDgjWNtwYV9cgFtHtHk2ggl6ht6-WapPmehBj_UsYWEYiJNnDUDBX7hsZIEZT9n9KxvdtoJLeK_8inSSfRCXWSkcj8pqWRCEhNpmdGgmIqe0-4rgrTiMGEnDslLovrYq8c5NWfXL2NiHV2XBqSjMhbIYzdJ1V_DbZU0Yc",
+          "tag": "F-1UaF72xhiSuTt6Rg2pQw"
+        }
+      }
+    },
+    "authorized_session": {
+      "ok": true,
+      "data": {
+        "contract_version": "manager-device-auth.v2",
+        "operation_id": "10000000-0000-4000-8000-000000000001",
+        "status": "authorized",
+        "session_id": "10000000-0000-4000-8000-000000000005",
+        "credential_id": "10000000-0000-4000-8000-000000000002",
+        "device_id": "ops-app-10000000-0000-4000-8000-000000000004",
+        "manager_id": "10000000-0000-4000-8000-000000000003",
+        "roles": [
+          "OPS_MANAGER",
+          "CUSTODIAL_MANAGER",
+          "DIRECTOR",
+          "SECURITY_ADMIN"
+        ],
+        "access_level": "full_access",
+        "session_expires_at": "2030-01-01T03:19:05.000Z",
+        "result_envelope": {
+          "algorithm": "ECDH-P256-HKDF-SHA256+A256GCM",
+          "ephemeral_public_key_jwk": {
+            "kty": "EC",
+            "crv": "P-256",
+            "x": "Xsvk0aYzCkTI9--VHUvxZebGtyHvramF-0FmG8bn_Ww",
+            "y": "hzRkDEmY_343SwbOGmSi7NgqsDY4T7g9mnmxJ6J9UDI"
+          },
+          "ephemeral_key_id": "B3zQUJfL8WPQJT3fRc_9F85aNjqoqRkk-HMzwyAp7WU",
+          "wrapping_key_id": "AhqHzaYXA5MzmDCrsseUsVBGKyfhDhvekx0THjH_xIE",
+          "salt": "ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA",
+          "iv": "DAwMDAwMDAwMDAwM",
+          "ciphertext": "gdWg0KKrbB_Q7-CC1NHHDbmSV8AqEsCJIRRirJbAUwAN2FQAomKiagmig6AFj-7iz_rkaqJj5aYCdvKktUsrPY62hfjmFBgRsH-oNsT1QphrIfwXkQ6HLtnARoZtfLx45YlrCvy25mudwb_Y4djY04tTsQb1o6GOPigTO94IewvtmcuImcvv4WoBeAqI0_DjlFV8MixFQ_TUzZLWUWTW1zj8Oh-mPWqxsV8VL8XLLGgjzQC_Sg6Nd5jHshhap1ah4kQpc2WyyFQo9vEx_Kx4KJX33R3J4lBsrJJX_UwW6gZtNWRL68eNFZi4vIOqBfIYC3ituMIv49S7aVuSEx7876PF8GWbDLJURN4udQEkV0DNNduviJYJILG25ySROXikfFM39AgcWvMzdtQkHuj-Hd_8a_ZgsdefQNxrobqQ74BCM8zGbLx6n5W66YvSK69B5I22ycG-1g2AEceK0ZerkeVah-y1GL_xCZPXeOilxU4E2kCiCTOHVdnLHfjmz-b8ZH8xcZLoWzeyuXE2MINfGRjIBMycJzuiEQBZlQUcl0Qf26oeegbRDQHCuhh2--BIXb4XQi9vXy8_uY3p69s8TH4MdJi56wj2sB5P2nlX1ga8sQqO0OPSUTvtaKQs9aPCxZ5BqyEpn21TtyXyq4833pY4sNpKlQ",
+          "tag": "HRF6oHpJvxoxTB1DdmUT7Q"
+        }
+      }
+    }
+  },
+  "canonical_roles": [
+    "OPS_MANAGER",
+    "CUSTODIAL_MANAGER",
+    "DIRECTOR",
+    "SECURITY_ADMIN"
+  ],
+  "challenge_expiry_replacement": {
+    "invariant": "Same operation and request fingerprint; an expired unconsumed generation is superseded exactly once. A consumed generation never rotates.",
+    "first": {
+      "record": {
+        "operationId": "10000000-0000-4000-8000-000000000001",
+        "purpose": "enroll",
+        "requestFingerprint": "32cfb53b3813d04248791de6f42840c054d23cebd6a4d5ae9f1052caef86ca6a",
+        "deviceId": "ops-app-10000000-0000-4000-8000-000000000004",
+        "deviceLabel": "Operations Manager phone",
+        "platform": "android",
+        "provider": "play_integrity",
+        "signingKeyId": "xx0BcA-wMohw8atYDJOe6peGModklG2wRHBlXHMvl0M",
+        "wrappingKeyId": "AhqHzaYXA5MzmDCrsseUsVBGKyfhDhvekx0THjH_xIE",
+        "policyVersion": "manager-device-attestation.v1",
+        "challengeId": "10000000-0000-4000-8000-000000000006",
+        "generation": 1,
+        "proofNonce": "BwcHBwcHBwcHBwcHBwcHBw",
+        "createdAt": "2030-01-01T03:00:00.000Z",
+        "expiresAt": "2030-01-01T03:05:00.000Z",
+        "supersededAt": "2030-01-01T03:05:01.000Z"
+      },
+      "response": {
+        "ok": true,
+        "data": {
+          "contract_version": "manager-device-auth.v2",
+          "operation_id": "10000000-0000-4000-8000-000000000001",
+          "challenge_id": "10000000-0000-4000-8000-000000000006",
+          "provider": "play_integrity",
+          "challenge": "q7H0TbE0Qz1-dkbtfCwaTnzrUzoaGos7g-7vEftFO8Q",
+          "expires_at": "2030-01-01T03:05:00.000Z",
+          "policy_version": "manager-device-attestation.v1"
+        }
+      }
+    },
+    "replacement": {
+      "record": {
+        "operationId": "10000000-0000-4000-8000-000000000001",
+        "purpose": "enroll",
+        "requestFingerprint": "32cfb53b3813d04248791de6f42840c054d23cebd6a4d5ae9f1052caef86ca6a",
+        "deviceId": "ops-app-10000000-0000-4000-8000-000000000004",
+        "deviceLabel": "Operations Manager phone",
+        "platform": "android",
+        "provider": "play_integrity",
+        "signingKeyId": "xx0BcA-wMohw8atYDJOe6peGModklG2wRHBlXHMvl0M",
+        "wrappingKeyId": "AhqHzaYXA5MzmDCrsseUsVBGKyfhDhvekx0THjH_xIE",
+        "policyVersion": "manager-device-attestation.v1",
+        "challengeId": "10000000-0000-4000-8000-000000000007",
+        "generation": 2,
+        "proofNonce": "CAgICAgICAgICAgICAgICA",
+        "createdAt": "2030-01-01T03:05:01.000Z",
+        "expiresAt": "2030-01-01T03:10:01.000Z",
+        "supersededAt": null
+      },
+      "response": {
+        "ok": true,
+        "data": {
+          "contract_version": "manager-device-auth.v2",
+          "operation_id": "10000000-0000-4000-8000-000000000001",
+          "challenge_id": "10000000-0000-4000-8000-000000000007",
+          "provider": "play_integrity",
+          "challenge": "D23o-2EowqxsJsFN695kRm_wyZ7Cbs3PVfgcZYCEE-s",
+          "expires_at": "2030-01-01T03:10:01.000Z",
+          "policy_version": "manager-device-attestation.v1"
+        }
+      }
+    }
+  }
+}

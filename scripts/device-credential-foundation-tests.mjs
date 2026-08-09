@@ -298,6 +298,10 @@ assert.match(moduleSource, /app\.use\("\/admin-api\/device-auth", deviceRouteCor
 assert.match(moduleSource, /An active canonical employee kiosk assignment is required/);
 assert.match(moduleSource, /device_credential_confirmed/);
 assert.match(moduleSource, /X-Device-Id is required/);
+for (const route of ["unlock", "lock", "sessions\\/revoke-all"]) {
+  assert.match(moduleSource, new RegExp(`app\\.post\\(\"\\/admin-api\\/device-security\\/${route}\", requireOpsWrite`),
+    `${route} must reject read-only Ops Manager sessions`);
+}
 assert.doesNotMatch(moduleSource, /res\.status\(200\).*rawToken/s);
 
 const indexSource = read("src/index.js");

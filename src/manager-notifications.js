@@ -293,10 +293,20 @@ export function createPushRuntime({ db, env }) {
   return { configured: Boolean(account), projectId: account?.project_id || null, getClientConfig, send, sweep };
 }
 
-export function installManagerNotificationRoutes(app, { env = process.env, supabase = null } = {}) {
+export function installManagerNotificationRoutes(app, {
+  env = process.env,
+  supabase = null,
+  managerV2SessionValidator = null,
+} = {}) {
   if (!app || runtimeByApp.has(app)) return runtimeByApp.get(app) || null;
   const db = supabase || createSupabase(env);
-  const requireManager = makeOpsAccessMiddleware({ supabase: db });
+  const requireManager = makeOpsAccessMiddleware({ env, supabase: db, managerV2SessionValidator });
+  const requireManagerWrite = makeOpsAccessMiddleware({
+    env,
+    supabase: db,
+    requireWrite: true,
+    managerV2SessionValidator,
+  });
   const runtime = createPushRuntime({ db, env });
   runtimeByApp.set(app, runtime);
 
@@ -367,7 +377,7 @@ export function installManagerNotificationRoutes(app, { env = process.env, supab
     } catch (error) { fail(res, error); }
   });
 
-  app.put("/manager-notifications-api/preferences", configured, requireManager, async (req, res) => {
+  app.put("/manager-notifications-api/preferences", configured, requireManagerWrite, async (req, res) => {
     try {
       const identity = currentIdentity(req);
       const current = await loadPreferences(identity);
@@ -380,7 +390,7 @@ export function installManagerNotificationRoutes(app, { env = process.env, supab
     } catch (error) { fail(res, error, "Notification preferences could not be saved."); }
   });
 
-  app.post("/manager-notifications-api/register", configured, requireManager, async (req, res) => {
+  app.post("/manager-notifications-api/register", configured, requireManagerWrite, async (req, res) => {
     try {
       const identity = currentIdentity(req);
       const token = clip(req.body?.token || req.body?.fcm_token, 4096);
@@ -412,7 +422,7 @@ export function installManagerNotificationRoutes(app, { env = process.env, supab
     } catch (error) { fail(res, error, "Push registration failed."); }
   });
 
-  app.delete("/manager-notifications-api/register", configured, requireManager, async (req, res) => {
+  app.delete("/manager-notifications-api/register", configured, requireManagerWrite, async (req, res) => {
     try {
       const identity = currentIdentity(req);
       const result = await db.from("ops_manager_push_devices").update({
@@ -423,7 +433,7 @@ export function installManagerNotificationRoutes(app, { env = process.env, supab
     } catch (error) { fail(res, error, "Push registration could not be removed."); }
   });
 
-  app.post("/manager-notifications-api/test", configured, requireManager, async (req, res) => {
+  app.post("/manager-notifications-api/test", configured, requireManagerWrite, async (req, res) => {
     try {
       const identity = currentIdentity(req);
       const push = await db.from("ops_manager_push_devices").select("push_device_id").eq("credential_id", identity.credentialId)

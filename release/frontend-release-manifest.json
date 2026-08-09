@@ -3,12 +3,12 @@
   "frontend_commit_sha": "7bc61e39a5ae2fda52c777c8a222f138ee36c5af",
   "frontend_commit_state": "github_pages_production_verified",
   "backend_minimum_version": "release-2026.07.19.custodial-v3.12",
-  "schema_fingerprint": "c6742e500c2a5d3767f1d886bb5937167eab42730f8271eec76b427a10c5f302",
+  "schema_fingerprint": "8b3fa26195f8a00064dbbdaad136eb8bfbd07c2a39cb829101978adcb8c039da",
   "schema_transition": {
-    "transition_id": "custodial-native-vault-removal-build11-20260801",
-    "from_fingerprint": "544d11f47f1f4a960fcf49d13bba53c736d78fe4fe9d225c996c84311d442ad0",
-    "to_fingerprint": "c6742e500c2a5d3767f1d886bb5937167eab42730f8271eec76b427a10c5f302",
-    "expires_at": "2026-08-14T23:59:59Z"
+    "transition_id": "manager-device-auth-v2-authority-20260802",
+    "from_fingerprint": "c6742e500c2a5d3767f1d886bb5937167eab42730f8271eec76b427a10c5f302",
+    "to_fingerprint": "8b3fa26195f8a00064dbbdaad136eb8bfbd07c2a39cb829101978adcb8c039da",
+    "expires_at": "2026-08-15T23:59:59Z"
   },
   "api_contract_versions": {
     "scan": "scan.v2",

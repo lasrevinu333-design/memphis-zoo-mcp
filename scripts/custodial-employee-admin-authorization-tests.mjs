@@ -276,7 +276,8 @@ for (const route of [
     `${route.method} ${route.path} must require write authorization`,
   );
 }
-assert.match(routeSource, /makeOpsAccessMiddleware\(\{ env, supabase: db, requireWrite: true \}\)/);
+assert.match(routeSource,
+  /makeOpsAccessMiddleware\(\{ env, supabase: db, requireWrite: true, managerV2SessionValidator \}\)/);
 
 // Native lifecycle routes act as the employee phone, not as an Ops Manager.
 // Their enrollment-code or device-credential proofs remain purpose-specific;

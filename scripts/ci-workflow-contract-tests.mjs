@@ -37,4 +37,11 @@ for (const name of workflowNames) {
   }
 }
 
+const foundationGate = readFileSync(resolve(workflowDirectory, "foundation-security-gate.yml"), "utf8");
+const productionRepairGate = readFileSync(resolve(workflowDirectory, "custodial-production-repair.yml"), "utf8");
+assert.match(foundationGate, /npm run --silent test:manager-device-auth-v2/,
+  "the required security gate must execute manager device-auth v2 crypto, attestation, route, and lifecycle tests");
+assert.match(productionRepairGate, /npm run --silent test:manager-device-auth-v2-db/,
+  "the production repair gate must execute manager device-auth v2 disposable-database concurrency and restart tests");
+
 console.log(JSON.stringify({ ok: true, workflows_checked: workflowNames.length }, null, 2));

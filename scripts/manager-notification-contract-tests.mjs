@@ -3,6 +3,7 @@ import { generateKeyPairSync } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import express from "express";
 import { createPushRuntime, installManagerNotificationRoutes } from "../src/manager-notifications.js";
+import { createOpsManagerSession } from "../src/auth/shared-access-auth.js";
 
 const root = new URL("../", import.meta.url);
 const [moduleSource, migration, indexSource] = await Promise.all([
@@ -27,6 +28,12 @@ assert.match(moduleSource, /google-services\.json/);
 assert.match(moduleSource, /GoogleService-Info\.plist/);
 assert.match(moduleSource, /notificationActionPerformed|data_json/);
 assert.match(moduleSource, /makeOpsAccessMiddleware/);
+for (const routePattern of [
+  /app\.put\("\/manager-notifications-api\/preferences", configured, requireManagerWrite/,
+  /app\.post\("\/manager-notifications-api\/register", configured, requireManagerWrite/,
+  /app\.delete\("\/manager-notifications-api\/register", configured, requireManagerWrite/,
+  /app\.post\("\/manager-notifications-api\/test", configured, requireManagerWrite/,
+]) assert.match(moduleSource, routePattern, "notification mutations must reject read-only Manager sessions");
 assert.doesNotMatch(moduleSource, /employee-hub|KIOSK_\d|device credential/i, "manager notification runtime must not target employee kiosk devices");
 assert.match(indexSource, /installManagerNotificationRoutes\(app/);
 
@@ -58,6 +65,38 @@ try {
   assert.equal(payload.client_config_artifacts, null);
 } finally {
   await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+}
+
+const readOnlyEnv = { OPS_MANAGER_SESSION_SECRET: "manager-notification-read-only-test-secret" };
+const readOnlyToken = createOpsManagerSession({
+  deviceId: "manager-notification-read-only",
+  authMode: "operations_first",
+  accessLevel: "read_only",
+  maximumAccessLevel: "read_only",
+  env: readOnlyEnv,
+}).token;
+const readOnlyApp = express();
+readOnlyApp.use(express.json());
+installManagerNotificationRoutes(readOnlyApp, { env: readOnlyEnv, supabase: {} });
+const readOnlyServer = readOnlyApp.listen(0, "127.0.0.1");
+await new Promise((resolve) => readOnlyServer.once("listening", resolve));
+try {
+  const base = `http://127.0.0.1:${readOnlyServer.address().port}`;
+  for (const [method, path, body] of [
+    ["PUT", "/manager-notifications-api/preferences", { messages_enabled: false }],
+    ["POST", "/manager-notifications-api/register", { token: "x".repeat(30), platform: "android" }],
+    ["DELETE", "/manager-notifications-api/register", null],
+    ["POST", "/manager-notifications-api/test", {}],
+  ]) {
+    const response = await fetch(`${base}${path}`, {
+      method,
+      headers: { authorization: `Bearer ${readOnlyToken}`, "content-type": "application/json" },
+      ...(body === null ? {} : { body: JSON.stringify(body) }),
+    });
+    assert.equal(response.status, 403, `${method} ${path} must reject a read-only Manager session`);
+  }
+} finally {
+  await new Promise((resolve, reject) => readOnlyServer.close((error) => error ? reject(error) : resolve()));
 }
 
 const { privateKey } = generateKeyPairSync("rsa", {

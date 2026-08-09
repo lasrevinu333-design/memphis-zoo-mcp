@@ -1,4 +1,5 @@
 import { createHash, createHmac, randomBytes, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
+import { MANAGER_V2_ROLE_ORDER } from "./manager-device-auth-v2-crypto.js";
 
 const MEMPHIS_TIME_ZONE = "America/Chicago";
 const OPS_ACCESS_TOKEN_VERSION = 2;
@@ -23,6 +24,8 @@ const MANAGER_CODE_MAX_TTL_SECONDS = 24 * 60 * 60;
 const MANAGER_CODE_ATTEMPT_LIMIT = 5;
 const MANAGER_CODE_LOCKOUT_SECONDS = 15 * 60;
 const MANAGER_ROLES = new Set(["OPS_MANAGER", "CUSTODIAL_MANAGER", "DIRECTOR", "SECURITY_ADMIN"]);
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const MANAGER_V2_DEVICE_PATTERN = /^ops-app-[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const enrollmentAttempts = new Map();
 const managerCodeAttempts = new Map();
 const sharedEnrollmentAttempts = new Map();
@@ -85,6 +88,16 @@ function normalizeManagerRoles(value) {
   if (roles.has("SECURITY_ADMIN")) roles.add("OPS_MANAGER");
   if (roles.has("DIRECTOR")) roles.add("OPS_MANAGER");
   return Array.from(roles);
+}
+
+function canonicalManagerV2Roles(value) {
+  if (!Array.isArray(value) || value.length < 1) return null;
+  const supplied = new Set(value);
+  if (supplied.size !== value.length || [...supplied].some((role) => !MANAGER_V2_ROLE_ORDER.includes(role))) return null;
+  if (["CUSTODIAL_MANAGER", "DIRECTOR", "SECURITY_ADMIN"].some((role) => supplied.has(role))
+      && !supplied.has("OPS_MANAGER")) return null;
+  const canonical = MANAGER_V2_ROLE_ORDER.filter((role) => supplied.has(role));
+  return canonical.length === value.length && canonical.every((role, index) => role === value[index]) ? canonical : null;
 }
 
 function hasManagerRole(managerOrSession, role) {
@@ -255,7 +268,7 @@ function adminApiKey(req) {
   return String(req?.header?.("x-admin-key") || req?.header?.("x-api-key") || "").trim();
 }
 
-function getSessionSecret(env = process.env) {
+export function getSessionSecret(env = process.env) {
   return String(
     env.OPS_MANAGER_SESSION_SECRET
       || env.GEMINI_ADMIN_SESSION_SECRET
@@ -370,7 +383,17 @@ function parseOpsToken(token, { env = process.env, now = new Date() } = {}) {
     return { ok: false, status: 401, error: "Ops Manager access token expired." };
   }
   const accessLevel = normalizeOpsAccessLevel(payload.access_level);
-  const roles = normalizeManagerRoles(payload.roles || payload.manager_roles || []);
+  const roles = payload.auth_mode === "manager_device_auth_v2"
+    ? canonicalManagerV2Roles(payload.roles)
+    : normalizeManagerRoles(payload.roles || payload.manager_roles || []);
+  if (payload.auth_mode === "manager_device_auth_v2") {
+    const authorityEpoch = Number(payload.authority_epoch);
+    if (!UUID_PATTERN.test(String(payload.jti || "")) || !UUID_PATTERN.test(String(payload.credential_id || ""))
+        || !UUID_PATTERN.test(String(payload.manager_id || "")) || !MANAGER_V2_DEVICE_PATTERN.test(String(payload.device_id || ""))
+        || !Number.isSafeInteger(authorityEpoch) || authorityEpoch < 1 || !roles) {
+      return { ok: false, status: 401, error: "Ops Manager authentication required." };
+    }
+  }
   const session = {
     role: "ops_manager",
     manager_id: String(payload.manager_id || ""),
@@ -382,9 +405,11 @@ function parseOpsToken(token, { env = process.env, now = new Date() } = {}) {
     operational_day: String(payload.operational_day || getCSTDate(now)),
     expires_at: new Date(expiresAt).toISOString(),
     auth_mode: String(payload.auth_mode || "trusted_device"),
+    session_id: String(payload.jti || ""),
+    authority_epoch: Number(payload.authority_epoch || 0),
     access_level: accessLevel,
     read_only: accessLevel === "read_only",
-    trusted_device: payload.auth_mode === "trusted_device",
+    trusted_device: new Set(["trusted_device", "manager_device_auth_v2"]).has(payload.auth_mode),
   };
   return { ok: true, session, payload };
 }
@@ -398,9 +423,21 @@ export function createOpsManagerSession({
   authMode = "trusted_device",
   accessLevel = "read_only",
   maximumAccessLevel = "full_access",
+  sessionId = null,
+  authorityEpoch = null,
 } = {}) {
   const normalizedAccessLevel = clampAccessLevel(accessLevel, maximumAccessLevel);
-  const roles = normalizeManagerRoles(manager?.roles || []);
+  const roles = authMode === "manager_device_auth_v2"
+    ? canonicalManagerV2Roles(manager?.roles)
+    : normalizeManagerRoles(manager?.roles || []);
+  if (authMode === "manager_device_auth_v2") {
+    if (!UUID_PATTERN.test(String(sessionId || "")) || !UUID_PATTERN.test(String(credentialId || ""))
+        || !UUID_PATTERN.test(String(manager?.manager_id || "")) || !MANAGER_V2_DEVICE_PATTERN.test(String(deviceId || ""))
+        || !Number.isSafeInteger(Number(authorityEpoch)) || Number(authorityEpoch) < 1
+        || !roles) {
+      throw Object.assign(new Error("Invalid manager device-auth v2 session authority."), { status: 503 });
+    }
+  }
   const expiresAt = now.getTime() + getAccessTtlMs(env);
   const payload = {
     v: OPS_ACCESS_TOKEN_VERSION,
@@ -415,7 +452,8 @@ export function createOpsManagerSession({
     access_level: normalizedAccessLevel,
     iat: now.getTime(),
     exp: expiresAt,
-    jti: randomUUID(),
+    jti: sessionId ? String(sessionId) : randomUUID(),
+    ...(authMode === "manager_device_auth_v2" ? { authority_epoch: Number(authorityEpoch) } : {}),
   };
   return {
     role: payload.role,
@@ -426,9 +464,11 @@ export function createOpsManagerSession({
     device_id: payload.device_id,
     operational_day: payload.operational_day,
     auth_mode: payload.auth_mode,
+    session_id: payload.jti,
+    authority_epoch: Number(payload.authority_epoch || 0),
     access_level: payload.access_level,
     read_only: payload.access_level === "read_only",
-    trusted_device: payload.auth_mode === "trusted_device",
+    trusted_device: new Set(["trusted_device", "manager_device_auth_v2"]).has(payload.auth_mode),
     expires_at: new Date(expiresAt).toISOString(),
     token: signOpsPayload(payload, { env }),
   };
@@ -503,7 +543,47 @@ export function authenticateOpsAccessRequest(req, { env = process.env, now = new
   return { ok: false, status: 401, error: "Ops Manager authentication required." };
 }
 
-export function makeOpsAccessMiddleware({ env = process.env, requireWrite = false, trustedDeviceStore = null, supabase = null } = {}) {
+let managerV2SessionValidatorPromise = null;
+
+async function defaultManagerV2SessionValidator(session, env) {
+  if (!managerV2SessionValidatorPromise) {
+    managerV2SessionValidatorPromise = Promise.all([
+      import("./manager-device-auth-v2-postgres.js"),
+      import("./manager-device-auth-v2-service.js"),
+    ]).then(([{ createPostgresManagerDeviceAuthV2Repository }, { managerV2SessionTokenVerifier }]) => {
+        const repository = createPostgresManagerDeviceAuthV2Repository({ env });
+        const secret = String(env.MANAGER_V2_SERVER_SECRET || "");
+        return (candidate) => repository.validateAuthorizedSession({
+          ...candidate,
+          tokenHash: managerV2SessionTokenVerifier(secret, candidate.token),
+        });
+      })
+      .catch((error) => {
+        managerV2SessionValidatorPromise = null;
+        throw error;
+      });
+  }
+  const validate = await managerV2SessionValidatorPromise;
+  return validate({
+    sessionId: session.session_id,
+    credentialId: session.credential_id,
+    deviceId: session.device_id,
+    managerId: session.manager_id,
+    authorityEpoch: session.authority_epoch,
+    accessLevel: session.access_level,
+    roles: session.roles,
+    token: session.token,
+    at: new Date().toISOString(),
+  });
+}
+
+export function makeOpsAccessMiddleware({
+  env = process.env,
+  requireWrite = false,
+  trustedDeviceStore = null,
+  supabase = null,
+  managerV2SessionValidator = null,
+} = {}) {
   const store = trustedDeviceStore || createSupabaseTrustedDeviceStore(supabase);
   return async function requireOpsAccess(req, res, next) {
     const result = authenticateOpsAccessRequest(req, { env });
@@ -513,12 +593,22 @@ export function makeOpsAccessMiddleware({ env = process.env, requireWrite = fals
     }
     let session = result.session;
     try {
-      const trustedState = await verifySessionAgainstTrustedDeviceStore(session, { store, env });
-      if (!trustedState.ok) {
-        res.status(trustedState.status || 401).json({ ok: false, error: trustedState.error || "Unauthorized" });
-        return;
+      if (session.auth_mode === "manager_device_auth_v2") {
+        const validator = managerV2SessionValidator || ((candidate) => defaultManagerV2SessionValidator(candidate, env));
+        const authoritative = await validator(session);
+        if (!authoritative?.ok) {
+          res.status(authoritative?.status || 401).json({ ok: false, error: "Ops Manager session is no longer authorized." });
+          return;
+        }
+        session = { ...session, ...authoritative.session };
+      } else {
+        const trustedState = await verifySessionAgainstTrustedDeviceStore(session, { store, env });
+        if (!trustedState.ok) {
+          res.status(trustedState.status || 401).json({ ok: false, error: trustedState.error || "Unauthorized" });
+          return;
+        }
+        session = trustedState.session;
       }
-      session = trustedState.session;
     } catch (error) {
       res.status(error?.status || 500).json({ ok: false, error: error?.message || "Ops Manager session verification failed." });
       return;
@@ -830,14 +920,19 @@ async function verifySessionAgainstTrustedDeviceStore(session, { store, env = pr
   if (row.manager && (!row.manager.active || row.manager.revoked_at)) {
     return { ok: false, status: 403, error: "This manager is no longer active." };
   }
+  const managerV2 = session.auth_mode === "manager_device_auth_v2";
+  const trustedManagerId = row.manager_id || row.manager?.manager_id || "";
+  if (managerV2 && (trustedManagerId !== session.manager_id || !canonicalManagerV2Roles(session.roles))) {
+    return { ok: false, status: 401, error: "This manager device session is no longer trusted." };
+  }
   const accessLevel = clampAccessLevel(session.access_level, row.max_access_level);
   return {
     ok: true,
     session: {
       ...session,
-      manager_id: row.manager?.manager_id || row.manager_id || session.manager_id || "",
+      manager_id: managerV2 ? session.manager_id : row.manager?.manager_id || row.manager_id || session.manager_id || "",
       manager_display_name: row.manager?.display_name || session.manager_display_name || "",
-      roles: normalizeManagerRoles(row.manager?.roles || session.roles || []),
+      roles: managerV2 ? session.roles : normalizeManagerRoles(row.manager?.roles || session.roles || []),
       device_id: row.device_id,
       credential_id: row.credential_id,
       access_level: accessLevel,
@@ -1399,7 +1494,12 @@ function sendAuthError(res, error, fallback = "Ops Manager authentication failed
   res.status(error?.status || 500).json({ ok: false, error: error?.message || fallback });
 }
 
-async function authenticateTrustedManagerDevice(req, { store, env = process.env, now = new Date() } = {}) {
+async function authenticateTrustedManagerDevice(req, {
+  store,
+  env = process.env,
+  now = new Date(),
+  managerV2SessionValidator = null,
+} = {}) {
   const activeStore = trustedDeviceStoreOrThrow(store);
   let session = null;
   let trustedRow = null;
@@ -1411,7 +1511,16 @@ async function authenticateTrustedManagerDevice(req, { store, env = process.env,
     if (!explicit.session?.trusted_device) {
       return { ok: false, status: 403, error: "A trusted Ops Manager device is required." };
     }
-    const trustedState = await verifySessionAgainstTrustedDeviceStore(explicit.session, { store: activeStore, env, now });
+    session = explicit.session;
+    if (session.auth_mode === "manager_device_auth_v2") {
+      const validate = managerV2SessionValidator || ((candidate) => defaultManagerV2SessionValidator(candidate, env));
+      const authoritative = await validate(session);
+      if (!authoritative?.ok) {
+        return { ok: false, status: authoritative?.status || 401, error: "Ops Manager session is no longer authorized." };
+      }
+      session = { ...session, ...authoritative.session };
+    }
+    const trustedState = await verifySessionAgainstTrustedDeviceStore(session, { store: activeStore, env, now });
     if (!trustedState.ok) return trustedState;
     session = trustedState.session;
     trustedRow = trustedState.row;
@@ -1452,7 +1561,13 @@ function sendTrustedManagerAuthFailure(res, result) {
   res.status(result?.status || 401).json({ ok: false, error: result?.error || "Trusted Ops Manager device required." });
 }
 
-export function installSharedAuthRoutes(app, { setCors, env = process.env, supabase = null, trustedDeviceStore = null } = {}) {
+export function installSharedAuthRoutes(app, {
+  setCors,
+  env = process.env,
+  supabase = null,
+  trustedDeviceStore = null,
+  managerV2SessionValidator = null,
+} = {}) {
   const applyCors = typeof setCors === "function" ? setCors : (_res) => {};
   const store = trustedDeviceStore || createSupabaseTrustedDeviceStore(supabase);
   app.use("/auth-api", (req, res, next) => {
@@ -1476,7 +1591,7 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
     if (!isAllowedManagerInviteOrigin(req, env)) {
       return { ok: false, sent: true, response: res.status(403).json({ ok: false, error: "This manager request is not allowed from that origin." }) };
     }
-    const actor = await authenticateTrustedManagerDevice(req, { store: activeStore, env });
+    const actor = await authenticateTrustedManagerDevice(req, { store: activeStore, env, managerV2SessionValidator });
     if (!actor.ok) {
       sendTrustedManagerAuthFailure(res, actor);
       return { ok: false, sent: true };
@@ -1743,7 +1858,7 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
   app.get("/auth-api/ops/managers", async (req, res) => {
     try {
       const activeStore = trustedDeviceStoreOrThrow(store);
-      const manager = await authenticateTrustedManagerDevice(req, { store: activeStore, env });
+      const manager = await authenticateTrustedManagerDevice(req, { store: activeStore, env, managerV2SessionValidator });
       if (!manager.ok) { sendTrustedManagerAuthFailure(res, manager); return; }
       if (!requireManagerAdminRole(manager.session)) {
         res.status(403).json({ ok: false, error: "Director or Security Admin manager access is required." });
@@ -1759,7 +1874,7 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
   app.post("/auth-api/ops/managers", async (req, res) => {
     try {
       const activeStore = trustedDeviceStoreOrThrow(store);
-      const creator = await authenticateTrustedManagerDevice(req, { store: activeStore, env });
+      const creator = await authenticateTrustedManagerDevice(req, { store: activeStore, env, managerV2SessionValidator });
       if (!creator.ok) { sendTrustedManagerAuthFailure(res, creator); return; }
       if (!requireManagerAdminRole(creator.session)) {
         res.status(403).json({ ok: false, error: "Director or Security Admin manager access is required." });
@@ -1790,7 +1905,7 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
   const updateManagerHandler = async (req, res) => {
     try {
       const activeStore = trustedDeviceStoreOrThrow(store);
-      const actor = await authenticateTrustedManagerDevice(req, { store: activeStore, env });
+      const actor = await authenticateTrustedManagerDevice(req, { store: activeStore, env, managerV2SessionValidator });
       if (!actor.ok) { sendTrustedManagerAuthFailure(res, actor); return; }
       if (!requireManagerAdminRole(actor.session)) {
         res.status(403).json({ ok: false, error: "Director or Security Admin manager access is required." });
@@ -1819,7 +1934,7 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
   app.post("/auth-api/ops/managers/:managerId/revoke", async (req, res) => {
     try {
       const activeStore = trustedDeviceStoreOrThrow(store);
-      const actor = await authenticateTrustedManagerDevice(req, { store: activeStore, env });
+      const actor = await authenticateTrustedManagerDevice(req, { store: activeStore, env, managerV2SessionValidator });
       if (!actor.ok) { sendTrustedManagerAuthFailure(res, actor); return; }
       if (!requireManagerAdminRole(actor.session)) {
         res.status(403).json({ ok: false, error: "Director or Security Admin manager access is required." });
@@ -1847,7 +1962,7 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
   app.post("/auth-api/ops/managers/:managerId/revoke-sessions", async (req, res) => {
     try {
       const activeStore = trustedDeviceStoreOrThrow(store);
-      const actor = await authenticateTrustedManagerDevice(req, { store: activeStore, env });
+      const actor = await authenticateTrustedManagerDevice(req, { store: activeStore, env, managerV2SessionValidator });
       if (!actor.ok) { sendTrustedManagerAuthFailure(res, actor); return; }
       if (!requireManagerAdminRole(actor.session)) {
         res.status(403).json({ ok: false, error: "Director or Security Admin manager access is required." });
@@ -1866,7 +1981,7 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
   app.post("/auth-api/ops/managers/:managerId/enrollment-codes", async (req, res) => {
     try {
       const activeStore = trustedDeviceStoreOrThrow(store);
-      const actor = await authenticateTrustedManagerDevice(req, { store: activeStore, env });
+      const actor = await authenticateTrustedManagerDevice(req, { store: activeStore, env, managerV2SessionValidator });
       if (!actor.ok) { sendTrustedManagerAuthFailure(res, actor); return; }
       if (!requireManagerAdminRole(actor.session)) {
         res.status(403).json({ ok: false, error: "Director or Security Admin manager access is required." });
@@ -1932,7 +2047,7 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
   app.post("/auth-api/ops/manager-codes/:codeId/revoke", async (req, res) => {
     try {
       const activeStore = trustedDeviceStoreOrThrow(store);
-      const actor = await authenticateTrustedManagerDevice(req, { store: activeStore, env });
+      const actor = await authenticateTrustedManagerDevice(req, { store: activeStore, env, managerV2SessionValidator });
       if (!actor.ok) { sendTrustedManagerAuthFailure(res, actor); return; }
       if (!requireManagerAdminRole(actor.session)) {
         res.status(403).json({ ok: false, error: "Director or Security Admin manager access is required." });
@@ -1958,7 +2073,7 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
   app.post("/auth-api/ops/managers/:managerId/invitations", async (req, res) => {
     try {
       const activeStore = trustedDeviceStoreOrThrow(store);
-      const actor = await authenticateTrustedManagerDevice(req, { store: activeStore, env });
+      const actor = await authenticateTrustedManagerDevice(req, { store: activeStore, env, managerV2SessionValidator });
       if (!actor.ok) { sendTrustedManagerAuthFailure(res, actor); return; }
       if (!requireManagerAdminRole(actor.session)) {
         res.status(403).json({ ok: false, error: "Director or Security Admin manager access is required." });
@@ -2011,7 +2126,7 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
   app.post("/auth-api/ops/invitations/:invitationId/revoke", async (req, res) => {
     try {
       const activeStore = trustedDeviceStoreOrThrow(store);
-      const actor = await authenticateTrustedManagerDevice(req, { store: activeStore, env });
+      const actor = await authenticateTrustedManagerDevice(req, { store: activeStore, env, managerV2SessionValidator });
       if (!actor.ok) { sendTrustedManagerAuthFailure(res, actor); return; }
       if (!requireManagerAdminRole(actor.session)) {
         res.status(403).json({ ok: false, error: "Director or Security Admin manager access is required." });
@@ -2236,7 +2351,7 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
   app.post("/auth-api/ops/pairing-links", async (req, res) => {
     try {
       const activeStore = trustedDeviceStoreOrThrow(store);
-      const manager = await authenticateTrustedManagerDevice(req, { store: activeStore, env });
+      const manager = await authenticateTrustedManagerDevice(req, { store: activeStore, env, managerV2SessionValidator });
       if (!manager.ok) {
         sendTrustedManagerAuthFailure(res, manager);
         return;
@@ -2300,7 +2415,7 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
   app.get("/auth-api/ops/trusted-devices", async (req, res) => {
     try {
       const activeStore = trustedDeviceStoreOrThrow(store);
-      const manager = await authenticateTrustedManagerDevice(req, { store: activeStore, env });
+      const manager = await authenticateTrustedManagerDevice(req, { store: activeStore, env, managerV2SessionValidator });
       if (!manager.ok) {
         sendTrustedManagerAuthFailure(res, manager);
         return;
@@ -2319,7 +2434,7 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
   app.post("/auth-api/ops/trusted-devices/revoke-all", async (req, res) => {
     try {
       const activeStore = trustedDeviceStoreOrThrow(store);
-      const manager = await authenticateTrustedManagerDevice(req, { store: activeStore, env });
+      const manager = await authenticateTrustedManagerDevice(req, { store: activeStore, env, managerV2SessionValidator });
       if (!manager.ok) {
         sendTrustedManagerAuthFailure(res, manager);
         return;
@@ -2373,7 +2488,7 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
   app.post("/auth-api/ops/trusted-devices/:credentialId/revoke", async (req, res) => {
     try {
       const activeStore = trustedDeviceStoreOrThrow(store);
-      const manager = await authenticateTrustedManagerDevice(req, { store: activeStore, env });
+      const manager = await authenticateTrustedManagerDevice(req, { store: activeStore, env, managerV2SessionValidator });
       if (!manager.ok) {
         sendTrustedManagerAuthFailure(res, manager);
         return;
@@ -2421,7 +2536,17 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
           res.status(explicit.status || 401).json({ ok: false, error: explicit.error || "Invalid manager session." });
           return;
         }
-        const trustedState = await verifySessionAgainstTrustedDeviceStore(explicit.session, { store, env });
+        let session = explicit.session;
+        if (session.auth_mode === "manager_device_auth_v2") {
+          const validate = managerV2SessionValidator || ((candidate) => defaultManagerV2SessionValidator(candidate, env));
+          const authoritative = await validate(session);
+          if (!authoritative?.ok) {
+            res.status(authoritative?.status || 401).json({ ok: false, error: "Ops Manager session is no longer authorized." });
+            return;
+          }
+          session = { ...session, ...authoritative.session };
+        }
+        const trustedState = await verifySessionAgainstTrustedDeviceStore(session, { store, env });
         if (!trustedState.ok) {
           res.status(trustedState.status || 401).json({ ok: false, error: trustedState.error || "Invalid manager session." });
           return;

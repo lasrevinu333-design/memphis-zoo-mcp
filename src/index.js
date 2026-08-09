@@ -19,6 +19,7 @@ import { buildReleaseManifest } from "./release-manifest.js";
 import { authenticateOpsAccessRequest, createSupabaseTrustedDeviceStore, installSharedAuthRoutes, makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
 import { makeMcpConnectorMiddleware } from "./auth/mcp-connector-auth.js";
 import { installDeviceCredentialRoutes, makeDeviceCredentialMiddleware } from "./auth/device-credential-auth.js";
+import { installManagerDeviceAuthV2Routes } from "./auth/manager-device-auth-v2-routes.js";
 import { runReadOnlySql as runSupabaseReadOnlySql } from "./supabase/read.js";
 import { createGeminiConsoleRouter } from "./gemini-console-api.js";
 import { createGeminiControlledRepairWorker } from "./gemini-controlled-worker.js";
@@ -75,6 +76,12 @@ const geminiControlledRepairWorker = createGeminiControlledRepairWorker({
 });
 geminiControlledRepairWorker.start();
 const opsTrustedDeviceStore = createSupabaseTrustedDeviceStore(supabaseAdmin);
+let managerDeviceAuthV2Runtime = null;
+
+async function validateManagerDeviceAuthV2Session(session) {
+  if (!managerDeviceAuthV2Runtime) return { ok: false, status: 503 };
+  return managerDeviceAuthV2Runtime.validateAuthorizedSession(session);
+}
 
 const SCAN_RPC_ALLOWLIST = new Set([
   "tool_get_system_settings",
@@ -160,8 +167,15 @@ function requireGuestMarketingReviewAuth(req, res, next) {
   next();
 }
 
-const requireOpsManagerAuth = makeOpsAccessMiddleware({ trustedDeviceStore: opsTrustedDeviceStore });
-const requireOpsManagerWrite = makeOpsAccessMiddleware({ requireWrite: true, trustedDeviceStore: opsTrustedDeviceStore });
+const requireOpsManagerAuth = makeOpsAccessMiddleware({
+  trustedDeviceStore: opsTrustedDeviceStore,
+  managerV2SessionValidator: validateManagerDeviceAuthV2Session,
+});
+const requireOpsManagerWrite = makeOpsAccessMiddleware({
+  requireWrite: true,
+  trustedDeviceStore: opsTrustedDeviceStore,
+  managerV2SessionValidator: validateManagerDeviceAuthV2Session,
+});
 // Streamable HTTP defaults to the full connector tool set so connected ChatGPT
 // sessions can read and write without a second credential prompt.
 // Legacy SSE remains token-only because its follow-up /messages request uses a separate HTTP request.
@@ -597,7 +611,7 @@ function verifyFeedbackLinkToken(token, feedbackId, purpose = "ack") {
   return verifyExpiringFeedbackToken({ secret: getFeedbackLinkSecret(), token, feedbackId, purpose });
 }
 
-function requireFeedbackSignedLinkOrOps(purpose) {
+function requireFeedbackSignedLinkOrOps(purpose, { requireWrite = false } = {}) {
   return (req, res, next) => {
     const feedbackId = String(req.params.feedbackId || "").trim();
     if (verifyFeedbackLinkToken(req.query.token || req.body?.token, feedbackId, purpose)) {
@@ -605,13 +619,8 @@ function requireFeedbackSignedLinkOrOps(purpose) {
       next();
       return;
     }
-    const result = authenticateOpsAccessRequest(req);
-    if (!result.ok) {
-      res.status(result.status || 401).json({ ok: false, error: result.error || "Unauthorized" });
-      return;
-    }
-    req.memphisAuth = result.session;
-    next();
+    const requireManager = requireWrite ? requireOpsManagerWrite : requireOpsManagerAuth;
+    requireManager(req, res, next);
   };
 }
 
@@ -1847,7 +1856,12 @@ function createMcpServer({ readOnly = false } = {}) {
   });
 }
 
-installSharedAuthRoutes(app, { setCors: setAdminApiCors, supabase: supabaseAdmin, trustedDeviceStore: opsTrustedDeviceStore });
+installSharedAuthRoutes(app, {
+  setCors: setAdminApiCors,
+  supabase: supabaseAdmin,
+  trustedDeviceStore: opsTrustedDeviceStore,
+  managerV2SessionValidator: validateManagerDeviceAuthV2Session,
+});
 installDeviceCredentialRoutes(app, {
   setCors: setAdminApiCors,
   supabase: supabaseAdmin,
@@ -1855,14 +1869,27 @@ installDeviceCredentialRoutes(app, {
   requireOpsAuth: requireOpsManagerAuth,
   requireOpsWrite: requireOpsManagerWrite,
 });
+managerDeviceAuthV2Runtime = installManagerDeviceAuthV2Routes(app);
 
 // Production integrations are installed explicitly at their canonical route
 // boundary. Startup must never depend on prototype interception or import-order
 // side effects.
-installAnnieMoxieRoutes(app, { supabase: supabaseAdmin });
-installLeadershipHttpRoutes(app, { supabase: supabaseAdmin });
-installCustodialEmployeeAdminRoutes(app, { supabase: supabaseAdmin });
-const managerNotificationRuntime = installManagerNotificationRoutes(app, { supabase: supabaseAdmin });
+installAnnieMoxieRoutes(app, {
+  supabase: supabaseAdmin,
+  managerV2SessionValidator: validateManagerDeviceAuthV2Session,
+});
+installLeadershipHttpRoutes(app, {
+  supabase: supabaseAdmin,
+  managerV2SessionValidator: validateManagerDeviceAuthV2Session,
+});
+installCustodialEmployeeAdminRoutes(app, {
+  supabase: supabaseAdmin,
+  managerV2SessionValidator: validateManagerDeviceAuthV2Session,
+});
+const managerNotificationRuntime = installManagerNotificationRoutes(app, {
+  supabase: supabaseAdmin,
+  managerV2SessionValidator: validateManagerDeviceAuthV2Session,
+});
 installEmployeeNotificationRoutes(app, {
   supabase: supabaseAdmin,
   pushRuntime: managerNotificationRuntime,
@@ -1870,7 +1897,10 @@ installEmployeeNotificationRoutes(app, {
   requireManager: requireOpsManagerWrite,
   registerOperationalJobHandler: registerOperationalNotificationJobHandler,
 });
-installOperationalAnalyticsRoutes(app, { supabase: supabaseAdmin });
+installOperationalAnalyticsRoutes(app, {
+  supabase: supabaseAdmin,
+  managerV2SessionValidator: validateManagerDeviceAuthV2Session,
+});
 app.get("/mcp-tools.json", requireOpsManagerAuth, (_req, res) => {
   res.status(200).json(getToolManifest({ includePlanned: true }));
 });
@@ -1905,6 +1935,7 @@ app.use(
     supabase: supabaseAdmin,
     runReadOnlySql,
     requireOpsManagerAuth,
+    requireOpsManagerWrite,
     buildHealthPayload,
     appVersion: APP_VERSION,
     releaseId: RELEASE_ID,
@@ -2023,7 +2054,7 @@ app.get("/feedback-api/acknowledge/:feedbackId", requireFeedbackSignedLinkOrOps(
     res.status(404).send(error?.message || "Feedback acknowledgement failed");
   }
 });
-app.post("/feedback-api/acknowledge/:feedbackId", requireFeedbackSignedLinkOrOps("ack"), async (req, res) => {
+app.post("/feedback-api/acknowledge/:feedbackId", requireFeedbackSignedLinkOrOps("ack", { requireWrite: true }), async (req, res) => {
   try {
     await ensureSystemFeedbackSchema();
     const actor = req.feedbackSignedLink
@@ -2484,6 +2515,9 @@ async function gracefulShutdown(signal) {
   sseTransports.clear();
   try { await geminiControlledRepairWorker.stop(); } catch (error) {
     console.error("[shutdown] Gemini worker stop failed:", error);
+  }
+  try { await managerDeviceAuthV2Runtime?.close?.(); } catch (error) {
+    console.error("[shutdown] Manager device-auth v2 stop failed:", error);
   }
 
   const forcedExit = setTimeout(() => {

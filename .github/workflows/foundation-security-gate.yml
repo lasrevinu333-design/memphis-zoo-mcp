@@ -33,6 +33,12 @@ jobs:
           set -euo pipefail
           node --check src/index.js
           node --check src/auth/shared-access-auth.js
+          node --check src/auth/manager-device-auth-v2-apple-app-attest.js
+          node --check src/auth/manager-device-auth-v2-attestation.js
+          node --check src/auth/manager-device-auth-v2-crypto.js
+          node --check src/auth/manager-device-auth-v2-postgres.js
+          node --check src/auth/manager-device-auth-v2-routes.js
+          node --check src/auth/manager-device-auth-v2-service.js
           node --check src/auth/mcp-connector-auth.js
           node --check src/leadership-bootstrap.js
           node --check src/custodial-employee-admin.js
@@ -43,6 +49,7 @@ jobs:
         run: |
           set -euo pipefail
           npm run --silent test:auth
+          npm run --silent test:manager-device-auth-v2
           npm run --silent test:operations-leadership-mobile
           npm run --silent test:manager-notifications
           npm run --silent test:custodial-employee-phones

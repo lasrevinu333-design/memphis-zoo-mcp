@@ -313,12 +313,16 @@ async function issueEmployeeEnrollmentCode(db, env, req, deviceId) {
   };
 }
 
-export function installCustodialEmployeeAdminRoutes(app, { env = process.env, supabase = null } = {}) {
+export function installCustodialEmployeeAdminRoutes(app, {
+  env = process.env,
+  supabase = null,
+  managerV2SessionValidator = null,
+} = {}) {
   if (!app || app.__custodialEmployeeAdminRoutesInstalled) return;
   Object.defineProperty(app, "__custodialEmployeeAdminRoutesInstalled", { value: true });
   const db = supabase || createSupabase(env);
-  const requireManagerRead = makeOpsAccessMiddleware({ env, supabase: db });
-  const requireManagerWrite = makeOpsAccessMiddleware({ env, supabase: db, requireWrite: true });
+  const requireManagerRead = makeOpsAccessMiddleware({ env, supabase: db, managerV2SessionValidator });
+  const requireManagerWrite = makeOpsAccessMiddleware({ env, supabase: db, requireWrite: true, managerV2SessionValidator });
   const configured = (_req, res, next) => db ? next() : res.status(503).json({ ok: false, error: "Database connection is not configured." });
   const requireCustodialRole = (requireManager) => (req, res, next) => requireManager(req, res, () => (
     hasRole(req.memphisAuth, "CUSTODIAL_MANAGER")

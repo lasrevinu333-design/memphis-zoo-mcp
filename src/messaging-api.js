@@ -81,6 +81,16 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       next();
     });
   }
+
+  function requireWritableOpsManager(req, res, next) {
+    requireOpsManagerAuth(req, res, () => {
+      if (req.memphisAuth?.read_only) {
+        res.status(403).json({ ok: false, error: "Read-only Ops Manager access cannot run diagnostics." });
+        return;
+      }
+      next();
+    });
+  }
   const MANAGER_OVERVIEW_DEVICE_IDS = new Set(
     String(process.env.MANAGER_OVERVIEW_DEVICE_IDS || "1e74fe4c-dc20b3b9,KIOSK_01,KIOSK_1")
       .split(",").map((s) => s.trim()).filter(Boolean)
@@ -1912,8 +1922,9 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   });
 
-  // MEDIUM #13: Use requireOpsManagerAuth on diagnose endpoint.
-  router.post("/memphis/diagnose", requireOpsManagerAuth, async (req, res) => {
+  // Diagnostics can create the manager's Memphis thread and invoke the AI
+  // responder, so they are a write-capable operation rather than a read probe.
+  router.post("/memphis/diagnose", requireWritableOpsManager, async (req, res) => {
     try {
       const body = String(req.body?.body || req.body?.message || "").trim();
       const deviceId = String(req.body?.device_id || "").trim();

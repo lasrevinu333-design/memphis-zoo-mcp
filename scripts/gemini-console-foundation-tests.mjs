@@ -2,7 +2,13 @@
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { buildGeminiSystemInstruction, isExplicitRepairAuthorization, validateGeminiAttachment } from "../src/gemini-console-api.js";
+import express from "express";
+import {
+  buildGeminiSystemInstruction,
+  createGeminiConsoleRouter,
+  isExplicitRepairAuthorization,
+  validateGeminiAttachment,
+} from "../src/gemini-console-api.js";
 
 const read=(path)=>readFileSync(new URL(`../${path}`,import.meta.url),"utf8");
 const migration=read("supabase/migrations/20260718075000_gemini_console_professional_foundation.sql");
@@ -53,6 +59,9 @@ assert.match(index,/createGeminiConsoleRouter/);
 assert.match(index,/"\/gemini-api"/);
 assert.match(index,/gemini-console\.v2/);
 assert.match(router,/requireOpsManagerAuth/);
+assert.match(router,/requireOpsManagerWrite/);
+assert.match(router,/new Set\(\["GET", "HEAD"\]\)\.has\(req\.method\)[\s\S]*requireOpsManagerAuth[\s\S]*requireOpsManagerWrite/,
+  "Gemini Console must keep reads available while rejecting every mutation from read-only Manager sessions");
 assert.match(router,/UNTRUSTED ATTACHMENT EVIDENCE/);
 assert.match(router,/client_message_id/);
 assert.match(router,/textSearch\("body"/);
@@ -61,5 +70,48 @@ assert.doesNotMatch(router,/console\.(log|error|warn)/);
 assert.match(messaging,/retiredGeminiAdminRoute/);
 assert.match(sharedAuth,/legacy Gemini password session is retired/);
 assert.doesNotMatch(`${router}\n${index}\n${messaging}`,/from ["']\.\/auth\/gemini-admin-auth\.js["']/);
+
+let reads = 0;
+let writes = 0;
+const authorizationApp = express();
+authorizationApp.use(express.json());
+authorizationApp.use(createGeminiConsoleRouter({
+  supabase: {},
+  runReadOnlySql: async () => [],
+  requireOpsManagerAuth(req, _res, next) {
+    reads += 1;
+    req.memphisAuth = {
+      manager_id: "63000000-0000-4000-8000-000000000001",
+      credential_id: "63000000-0000-4000-8000-000000000002",
+      roles: ["OPS_MANAGER"],
+      access_level: "read_only",
+      read_only: true,
+    };
+    next();
+  },
+  requireOpsManagerWrite(_req, res) {
+    writes += 1;
+    res.status(403).json({ ok: false, error: "Read-only Ops Manager session cannot make changes." });
+  },
+  buildHealthPayload: () => ({}),
+  appVersion: "test",
+  releaseId: "test",
+  schemaFingerprint: "f".repeat(64),
+}));
+const authorizationServer = authorizationApp.listen(0, "127.0.0.1");
+await new Promise((resolve) => authorizationServer.once("listening", resolve));
+try {
+  const base = `http://127.0.0.1:${authorizationServer.address().port}`;
+  assert.equal((await fetch(`${base}/health`)).status, 200, "read-only Manager sessions must retain Gemini Console reads");
+  assert.equal((await fetch(`${base}/conversations`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ client_operation_id: "63000000-0000-4000-8000-000000000003" }),
+  })).status, 403, "read-only Manager sessions must not mutate Gemini Console state");
+  assert.equal(reads, 1);
+  assert.equal(writes, 1);
+} finally {
+  await new Promise((resolve, reject) => authorizationServer.close((error) => error ? reject(error) : resolve()));
+}
 
 console.log("GEMINI_CONSOLE_FOUNDATION_UNIT_AND_SOURCE_CONTRACT_PASS");
