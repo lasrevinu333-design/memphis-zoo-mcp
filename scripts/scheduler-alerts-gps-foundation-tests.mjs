@@ -70,7 +70,9 @@ assert.match(scheduleSource, /Not scheduled to work today\./);
 assert.match(scheduleSource, /No assignment is active at this moment\. Your full-day schedule is shown below\./);
 assert.match(foundationRepair, /sch_ensure_schedule_window/);
 assert.match(foundationRepair, /scheduled_rolling_window_readiness/);
-assert.match(scheduleSource, /nonNegativeInt\(process\.env\.RESTROOM_REBALANCE_SWEEP_MS, 0\)/);
+assert.match(scheduleSource, /resolveRestroomRebalanceScheduler\(process\.env\)/);
+assert.match(scheduleSource, /scheduler:\s*restroomRebalanceScheduler/);
+assert.doesNotMatch(scheduleSource, /explicit_runtime/);
 
 assert.match(indexSource, /const SCAN_CONTRACT_VERSION = "scan\.v2"/);
 assert.match(indexSource, /SCAN_READ_LIMIT_PER_MINUTE[^\n]*120/);

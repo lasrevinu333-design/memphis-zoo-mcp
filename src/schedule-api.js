@@ -40,6 +40,37 @@ function nonNegativeInt(value, fallback = 0) {
   return parsed;
 }
 
+export function resolveRestroomRebalanceScheduler(env = process.env) {
+  const isRenderProduction = String(env.RENDER || "").trim().toLowerCase() === "true"
+    && String(env.NODE_ENV || "").trim().toLowerCase() === "production"
+    && String(env.IS_PULL_REQUEST || "").trim().toLowerCase() !== "true";
+  const configuredValue = String(env.RESTROOM_REBALANCE_SWEEP_MS ?? "").trim();
+  const defaultSweepMs = isRenderProduction ? 60000 : 0;
+  let sweepMs = defaultSweepMs;
+  let source = isRenderProduction ? "render_production_default" : "disabled_by_default";
+
+  if (configuredValue) {
+    const parsed = /^\d+$/.test(configuredValue) ? Number.parseInt(configuredValue, 10) : Number.NaN;
+    if (!Number.isSafeInteger(parsed) || parsed < 0) {
+      sweepMs = 0;
+      source = "invalid_environment_disabled";
+    } else if (parsed > 0 && !isRenderProduction) {
+      sweepMs = 0;
+      source = "non_render_override_rejected";
+    } else {
+      sweepMs = parsed;
+      source = "environment";
+    }
+  }
+
+  return {
+    enabled: sweepMs > 0,
+    sweep_ms: sweepMs,
+    owner: sweepMs > 0 ? "render_production" : "disabled",
+    source,
+  };
+}
+
 function timeToMinutes(value) {
   const match = String(value || "").match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
   if (!match) return null;
@@ -585,7 +616,8 @@ export function createScheduleRouter({
 
   const AUTO_GENERATE_WINDOW_DAYS = 7;
   const AUTO_GENERATE_COOLDOWN_MS = 6 * 60 * 60 * 1000;
-  const RESTROOM_REBALANCE_SWEEP_MS = nonNegativeInt(process.env.RESTROOM_REBALANCE_SWEEP_MS, 0);
+  const restroomRebalanceScheduler = resolveRestroomRebalanceScheduler(process.env);
+  const RESTROOM_REBALANCE_SWEEP_MS = restroomRebalanceScheduler.sweep_ms;
 
   async function assertScheduleReadyForRead(serviceDate) {
     const requested = String(serviceDate || "").trim();
@@ -4794,6 +4826,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
           service_date: serviceDate,
           due_now: isRestroomRebalanceDue(),
           implementation_mode: RESTROOM_REBALANCE_IMPLEMENTATION_MODE,
+          scheduler: restroomRebalanceScheduler,
           state: restroomRebalanceState,
           persistent_completion,
         },
