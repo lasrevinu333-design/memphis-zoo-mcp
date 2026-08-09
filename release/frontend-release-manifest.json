@@ -1,15 +1,9 @@
 {
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "09b1b5007b608c952c03b7ba28c9969ef7aa9bbf",
+  "frontend_commit_sha": "64d3552d7b5cb761fe1963edd2c81af4b4c07a18",
   "frontend_commit_state": "github_pages_production_verified",
   "backend_minimum_version": "release-2026.07.19.custodial-v3.12",
-  "schema_fingerprint": "c6742e500c2a5d3767f1d886bb5937167eab42730f8271eec76b427a10c5f302",
-  "schema_transition": {
-    "transition_id": "cleaning-inspection-freshness-24h-20260809",
-    "from_fingerprint": "c6742e500c2a5d3767f1d886bb5937167eab42730f8271eec76b427a10c5f302",
-    "to_fingerprint": "333ddfc8008ea0b85916de7d491b98c9b8d6a7d45d3a2947d99b4b3bb836ea00",
-    "expires_at": "2026-08-22T23:59:59Z"
-  },
+  "schema_fingerprint": "333ddfc8008ea0b85916de7d491b98c9b8d6a7d45d3a2947d99b4b3bb836ea00",
   "api_contract_versions": {
     "scan": "scan.v2",
     "dashboard": "dashboard.v1",
