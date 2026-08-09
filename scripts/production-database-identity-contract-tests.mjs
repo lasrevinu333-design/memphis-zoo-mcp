@@ -51,11 +51,11 @@ assert.throws(() => validateProductionDatabasePassword("secret-sentinel\nbreak")
 
 assert.equal(extractLegacyDatabasePassword(
   `postgresql://postgres.${"a".repeat(20)}:${encodeURIComponent(password)}`
-  + "@aws-0-us-east-1.pooler.supabase.com:5432/postgres",
+  + "@aws-0-us-east-1.pooler.supabase.com:5432/postgres?sslmode=require",
 ), password);
 assert.throws(() => extractLegacyDatabasePassword(
   `postgresql://postgres.${"a".repeat(20)}:fixture@aws-0-us-east-1.pooler.supabase.com:5432/postgres?options=evil`,
-), /query parameters/);
+), /parameter is not reviewed/);
 assert.throws(() => extractLegacyDatabasePassword(
   `postgresql://postgres.${"a".repeat(20)}:fixture@attacker.example:5432/postgres`,
 ), /not a managed Supabase/);
@@ -104,7 +104,12 @@ assert.match(bridgeWorkflow, /test "\$GITHUB_ACTOR" = "lasrevinu333-design"/);
 assert.match(bridgeWorkflow, /test "\$GITHUB_TRIGGERING_ACTOR" = "lasrevinu333-design"/);
 assert.match(bridgeWorkflow, /test "\$GITHUB_RUN_ATTEMPT" = "1"/);
 assert.match(bridgeWorkflow, /test "\$EXPECTED_MAIN_SHA" = "\$GITHUB_SHA"/);
+assert.match(bridgeWorkflow, /SEAL VERIFIED RQQU DATABASE CREDENTIALS C674 20260809/);
 assert.match(bridgeScript, /crypto_box_seal/);
+assert.match(bridgeScript, /INSPECTION_FRESHNESS_MIGRATION\.from_fingerprint/);
+assert.match(bridgeScript, /memphis-zoo-github-sealed-secrets\.v2/);
+assert.match(bridgeScript, /SUPABASE_DB_PASSWORD/);
+assert.match(bridgeScript, /SUPABASE_DB_URL/);
 assert.doesNotMatch(bridgeScript, /spawnSync|execFile|\bgh\b/);
 assert.match(bridgeWorkflow, /retention-days: 1/);
 assert.doesNotMatch(bridgeWorkflow, /echo.*LEGACY_SUPABASE_DB_URL|echo.*SUPABASE_DB_PASSWORD/);
