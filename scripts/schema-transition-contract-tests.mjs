@@ -4,15 +4,15 @@ import { readFileSync } from "node:fs";
 import { buildReleaseManifest, schemaTransitionFields } from "../src/release-manifest.js";
 import { assertSchemaAlignment } from "../src/schema-transition.js";
 
-const PREVIOUS = "ce9466f03953076840ff4e35d998713cced8f22c791fb8b11dacdc8c070c4caf";
-const CURRENT = "544d11f47f1f4a960fcf49d13bba53c736d78fe4fe9d225c996c84311d442ad0";
-const BACKEND_TARGET = "c6742e500c2a5d3767f1d886bb5937167eab42730f8271eec76b427a10c5f302";
+const PREVIOUS = "544d11f47f1f4a960fcf49d13bba53c736d78fe4fe9d225c996c84311d442ad0";
+const CURRENT = "c6742e500c2a5d3767f1d886bb5937167eab42730f8271eec76b427a10c5f302";
+const BACKEND_TARGET = "45c8e505f2fd5ce553923ce64ed46a49914abe7d2d1fa80aa2f6f866e1d00d7d";
 const FUTURE = "2".repeat(64);
 const OUTSIDE = "3".repeat(64);
 const ENGINE_MAIN_SHA = "7bc61e39a5ae2fda52c777c8a222f138ee36c5af";
-const NOW = Date.parse("2026-08-01T00:00:00Z");
+const NOW = Date.parse("2026-08-09T00:00:00Z");
 const RETIRED_TRANSITION = {
-  transition_id: "custodial-native-security-build11-20260801",
+  transition_id: "custodial-native-vault-removal-build11-20260801",
   from_fingerprint: PREVIOUS,
   to_fingerprint: CURRENT,
   expires_at: "2026-08-14T23:59:59Z",
@@ -24,10 +24,10 @@ const FUTURE_TRANSITION = {
   expires_at: "2026-08-14T23:59:59Z",
 };
 const ACTIVE_TRANSITION = {
-  transition_id: "custodial-native-vault-removal-build11-20260801",
+  transition_id: "cleaning-inspection-freshness-24h-20260809",
   from_fingerprint: CURRENT,
   to_fingerprint: BACKEND_TARGET,
-  expires_at: "2026-08-14T23:59:59Z",
+  expires_at: "2026-08-22T23:59:59Z",
 };
 
 function clone(value) {
@@ -48,22 +48,22 @@ function fixtures({ backendFingerprint = CURRENT, frontendFingerprint = CURRENT,
 const sourceManifest = JSON.parse(readFileSync(new URL("../release/frontend-release-manifest.json", import.meta.url), "utf8"));
 assert.equal(sourceManifest.frontend_commit_sha, ENGINE_MAIN_SHA,
   "the backend copy must pin the exact verified Engine main commit");
-assert.equal(sourceManifest.schema_fingerprint, BACKEND_TARGET,
-  "the backend copy must pin the exact deployed frontend fingerprint during transition");
+assert.equal(sourceManifest.schema_fingerprint, CURRENT,
+  "the backend copy must retain the deployed frontend primary while staging the transition");
 assert.equal(Object.hasOwn(sourceManifest, "schema_transition"), true,
   "the backend copy must retain the active transition key");
 assert.deepEqual(sourceManifest.schema_transition, ACTIVE_TRANSITION,
-  "the backend copy must declare the coordinated removal transition exactly");
+  "the backend copy must declare the coordinated inspection-freshness transition exactly");
 
 const backendRelease = buildReleaseManifest({ appVersion: "test-release" });
 assert.equal(backendRelease.frontend.commit_sha, ENGINE_MAIN_SHA);
-assert.equal(backendRelease.schema.fingerprint, BACKEND_TARGET,
-  "the backend must publish the rebuilt production fingerprint");
-assert.equal(backendRelease.frontend.manifest.schema_fingerprint, BACKEND_TARGET);
+assert.equal(backendRelease.schema.fingerprint, CURRENT,
+  "the bridge-only backend release must retain the current production fingerprint");
+assert.equal(backendRelease.frontend.manifest.schema_fingerprint, CURRENT);
 assert.equal(Object.hasOwn(backendRelease, "schema_transition"), true,
   "the backend runtime manifest must publish the active transition key");
 assert.deepEqual(backendRelease.schema_transition, ACTIVE_TRANSITION,
-  "the backend runtime manifest must publish the coordinated removal transition exactly");
+  "the backend runtime manifest must publish the coordinated inspection-freshness transition exactly");
 assert.deepEqual(schemaTransitionFields({ schema_transition: FUTURE_TRANSITION }), { schema_transition: FUTURE_TRANSITION },
   "an active future transition must still be forwarded exactly");
 const inactiveTransitionFields = schemaTransitionFields({ schema_transition: null });
@@ -177,9 +177,9 @@ assert.throws(() => assertSchemaAlignment(fixtures({
   deploymentTransition: { ...FUTURE_TRANSITION, expires_at: "2026-07-31T23:59:59Z" },
 })), /expired/);
 assert.throws(() => assertSchemaAlignment(fixtures({
-  backendTransition: { ...FUTURE_TRANSITION, expires_at: "2026-08-16T00:00:01Z" },
-  frontendTransition: { ...FUTURE_TRANSITION, expires_at: "2026-08-16T00:00:01Z" },
-  deploymentTransition: { ...FUTURE_TRANSITION, expires_at: "2026-08-16T00:00:01Z" },
+  backendTransition: { ...FUTURE_TRANSITION, expires_at: "2026-08-23T00:00:01Z" },
+  frontendTransition: { ...FUTURE_TRANSITION, expires_at: "2026-08-23T00:00:01Z" },
+  deploymentTransition: { ...FUTURE_TRANSITION, expires_at: "2026-08-23T00:00:01Z" },
 })), /14-day transition window/);
 assert.throws(() => assertSchemaAlignment(fixtures({
   backendTransition: { ...FUTURE_TRANSITION, to_fingerprint: CURRENT },
