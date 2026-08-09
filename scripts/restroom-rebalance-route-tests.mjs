@@ -46,6 +46,9 @@ function buildApp({ readCalls, writeCalls, rpcCalls }) {
     runReadOnlySql: async (sql) => {
       const query = String(sql || "");
       readCalls.push(query);
+      if (query.includes("select public.sch_service_date(now()) as service_date")) {
+        return [{ service_date: SERVICE_DATE }];
+      }
       if (query.includes("as roster_count") && query.includes("as assignment_count")) {
         return [{ roster_count: roster.length, assignment_count: assignments.length }];
       }
@@ -119,6 +122,16 @@ await withServer(buildApp({ readCalls, writeCalls, rpcCalls }), async (baseUrl) 
     [EMPLOYEE_C]: 1,
   });
   assert.equal(payload.data.balance.skipped_moves.length, 0);
+
+  const statusResponse = await fetch(`${baseUrl}/schedule-api/restroom-rebalance/status`);
+  assert.equal(statusResponse.status, 200);
+  const statusPayload = await statusResponse.json();
+  assert.deepEqual(statusPayload.data.scheduler, {
+    enabled: false,
+    sweep_ms: 0,
+    owner: "disabled",
+    source: "disabled_by_default",
+  });
 });
 
 const rebalanceWrite = writeCalls.find((call) => call.namePrefix === "restroom_rebalance_0945");

@@ -45,6 +45,7 @@ The production `/mcp` URL is public. Enabling full tokenless access therefore au
 | Name | Required | Purpose |
 |---|---:|---|
 | `ADMIN_API_KEY` | **Yes in production** | Server-to-server/admin automation key accepted via `X-Admin-Key` / `X-API-Key`. |
+| `RESTROOM_REBALANCE_SWEEP_MS` | No | Automatic 09:45 restroom scheduler interval. Defaults to `60000` only on the production Render service. Local and pull-request runtimes are hard-disabled even if given a positive override. Set `0` as an explicit production kill switch. Invalid values disable the scheduler. |
 | `OPS_MANAGER_FULL_ACCESS_KEY` | **Yes in production for Ops UI writes** | Full-access Ops Manager public-link key accepted via `X-Ops-Access-Key`; mints signed bearer sessions for protected read/write routes. |
 | `OPS_MANAGER_READ_ONLY_ACCESS_KEY` | Recommended | Read-only Ops Manager public-link key accepted via `X-Ops-Access-Key`; mints signed bearer sessions for protected read routes only. |
 | `OPS_MANAGER_SESSION_SECRET` | Recommended | HMAC secret used to sign Ops Manager bearer sessions. If unset, the backend falls back to existing secret material; set this explicitly on Render before public use. |
