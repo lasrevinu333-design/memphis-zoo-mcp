@@ -9,7 +9,7 @@ const CURRENT = "c6742e500c2a5d3767f1d886bb5937167eab42730f8271eec76b427a10c5f30
 const BACKEND_TARGET = "333ddfc8008ea0b85916de7d491b98c9b8d6a7d45d3a2947d99b4b3bb836ea00";
 const FUTURE = "2".repeat(64);
 const OUTSIDE = "3".repeat(64);
-const ENGINE_MAIN_SHA = "09b1b5007b608c952c03b7ba28c9969ef7aa9bbf";
+const ENGINE_MAIN_SHA = "64d3552d7b5cb761fe1963edd2c81af4b4c07a18";
 const NOW = Date.parse("2026-08-09T00:00:00Z");
 const RETIRED_TRANSITION = {
   transition_id: "custodial-native-vault-removal-build11-20260801",
@@ -48,22 +48,18 @@ function fixtures({ backendFingerprint = CURRENT, frontendFingerprint = CURRENT,
 const sourceManifest = JSON.parse(readFileSync(new URL("../release/frontend-release-manifest.json", import.meta.url), "utf8"));
 assert.equal(sourceManifest.frontend_commit_sha, ENGINE_MAIN_SHA,
   "the backend copy must pin the exact verified Engine main commit");
-assert.equal(sourceManifest.schema_fingerprint, CURRENT,
-  "the backend copy must retain the deployed frontend primary during transition");
-assert.equal(Object.hasOwn(sourceManifest, "schema_transition"), true,
-  "the backend copy must retain the active transition key");
-assert.deepEqual(sourceManifest.schema_transition, ACTIVE_TRANSITION,
-  "the backend copy must declare the coordinated inspection-freshness transition exactly");
+assert.equal(sourceManifest.schema_fingerprint, BACKEND_TARGET,
+  "the backend copy must pin the deployed target frontend fingerprint");
+assert.equal(Object.hasOwn(sourceManifest, "schema_transition"), false,
+  "the backend copy must retire the completed inspection-freshness transition");
 
 const backendRelease = buildReleaseManifest({ appVersion: "test-release" });
 assert.equal(backendRelease.frontend.commit_sha, ENGINE_MAIN_SHA);
 assert.equal(backendRelease.schema.fingerprint, BACKEND_TARGET,
   "the backend must publish the rebuilt production fingerprint");
-assert.equal(backendRelease.frontend.manifest.schema_fingerprint, CURRENT);
-assert.equal(Object.hasOwn(backendRelease, "schema_transition"), true,
-  "the backend runtime manifest must publish the active transition key");
-assert.deepEqual(backendRelease.schema_transition, ACTIVE_TRANSITION,
-  "the backend runtime manifest must publish the coordinated inspection-freshness transition exactly");
+assert.equal(backendRelease.frontend.manifest.schema_fingerprint, BACKEND_TARGET);
+assert.equal(Object.hasOwn(backendRelease, "schema_transition"), false,
+  "the backend runtime manifest must not publish the retired transition");
 assert.deepEqual(schemaTransitionFields({ schema_transition: FUTURE_TRANSITION }), { schema_transition: FUTURE_TRANSITION },
   "an active future transition must still be forwarded exactly");
 const inactiveTransitionFields = schemaTransitionFields({ schema_transition: null });
