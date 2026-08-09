@@ -6,7 +6,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import sodium from "libsodium-wrappers";
 import pg from "pg";
-import { BOOTSTRAP } from "./production-schema-c674-bootstrap.mjs";
+import { INSPECTION_FRESHNESS_MIGRATION } from "./production-schema-inspection-freshness.mjs";
 import {
   assertProductionDatabaseIdentity,
   productionDatabaseConnectionFromPassword,
@@ -19,7 +19,10 @@ import {
 } from "./schema-fingerprint-catalog.mjs";
 
 const { Client } = pg;
-const SECRET_NAME = "SUPABASE_DB_PASSWORD";
+const SECRET_NAMES = Object.freeze({
+  password: "SUPABASE_DB_PASSWORD",
+  databaseUrl: "SUPABASE_DB_URL",
+});
 const GITHUB_ACTIONS_SECRETS_PUBLIC_KEY = Object.freeze({
   key_id: "3380204578043523366",
   key: "JdVX3R29kQt0kDfeAMtjNiFR4Wr78AnStHVPp0tnCmY=",
@@ -51,13 +54,18 @@ export function extractLegacyDatabasePassword(databaseUrlInput) {
     "legacy production database URL is not a managed Supabase session-pooler endpoint");
   assert.match(decodeSecretComponent(parsed.username, "username"), /^postgres\.[a-z0-9]{20}$/,
     "legacy production database username is not a Supabase project binding");
-  assert.equal([...parsed.searchParams.keys()].length, 0,
-    "legacy production database URL contains query parameters that cannot be carried forward");
+  const permittedParameters = new Set(["sslmode", "sslcert", "sslkey", "sslrootcert"]);
+  for (const key of parsed.searchParams.keys()) {
+    assert.ok(permittedParameters.has(key),
+      `legacy production database URL parameter is not reviewed: ${key}`);
+  }
   return validateProductionDatabasePassword(decodeSecretComponent(parsed.password, "password"));
 }
 
-export async function sealPasswordForGitHub(passwordInput) {
-  const password = validateProductionDatabasePassword(passwordInput);
+async function sealSecretForGitHub(secretInput) {
+  const secret = String(secretInput || "");
+  assert.ok(secret, "GitHub secret value is required");
+  assert.doesNotMatch(secret, /[\r\n\0]/, "GitHub secret value contains forbidden control characters");
   await sodium.ready;
   const publicKey = sodium.from_base64(
     GITHUB_ACTIONS_SECRETS_PUBLIC_KEY.key,
@@ -65,8 +73,8 @@ export async function sealPasswordForGitHub(passwordInput) {
   );
   assert.equal(publicKey.length, sodium.crypto_box_PUBLICKEYBYTES,
     "pinned GitHub Actions secrets public key is malformed");
-  const encrypted = sodium.crypto_box_seal(sodium.from_string(password), publicKey);
-  assert.equal(encrypted.length, sodium.from_string(password).length + sodium.crypto_box_SEALBYTES,
+  const encrypted = sodium.crypto_box_seal(sodium.from_string(secret), publicKey);
+  assert.equal(encrypted.length, sodium.from_string(secret).length + sodium.crypto_box_SEALBYTES,
     "sealed GitHub secret has an unexpected length");
   return Object.freeze({
     key_id: GITHUB_ACTIONS_SECRETS_PUBLIC_KEY.key_id,
@@ -74,11 +82,15 @@ export async function sealPasswordForGitHub(passwordInput) {
   });
 }
 
+export async function sealPasswordForGitHub(passwordInput) {
+  return sealSecretForGitHub(validateProductionDatabasePassword(passwordInput));
+}
+
 async function exactPreflight(client) {
   const databaseIdentity = await assertProductionDatabaseIdentity(client, { migrationAuthority: true });
   const physical = fingerprintSchemaCatalog(await captureSchemaCatalog(client));
-  assert.equal(physical.fingerprint, BOOTSTRAP.from_fingerprint,
-    "credential bridge reached a database outside the reviewed pre-bootstrap physical state");
+  assert.equal(physical.fingerprint, INSPECTION_FRESHNESS_MIGRATION.from_fingerprint,
+    "credential bridge reached a database outside the reviewed pre-migration physical state");
   const ledger = await client.query(`
     select count(*)::integer as migration_count,
            max(version) as max_version,
@@ -95,13 +107,13 @@ async function exactPreflight(client) {
              '[]'
            ), 'UTF8'), 'sha256'), 'hex') as ledger_sha256
       from supabase_migrations.schema_migrations
-  `, [BOOTSTRAP.migration_version, BOOTSTRAP.migration_name]);
+  `, [INSPECTION_FRESHNESS_MIGRATION.version, INSPECTION_FRESHNESS_MIGRATION.name]);
   assert.equal(ledger.rowCount, 1, "production migration ledger preflight is incomplete");
   assert.deepEqual(ledger.rows[0], {
-    migration_count: BOOTSTRAP.before_ledger_count,
-    max_version: BOOTSTRAP.before_ledger_max_version,
+    migration_count: INSPECTION_FRESHNESS_MIGRATION.before_ledger_count,
+    max_version: INSPECTION_FRESHNESS_MIGRATION.before_ledger_max_version,
     target_conflicts: 0,
-    ledger_sha256: BOOTSTRAP.base_ledger_sha256,
+    ledger_sha256: INSPECTION_FRESHNESS_MIGRATION.base_ledger_sha256,
   }, "credential bridge reached a database outside the exact reviewed migration-ledger state");
   return {
     database_identity: databaseIdentity,
@@ -146,16 +158,28 @@ export async function run() {
     await client.end().catch(() => {});
   }
 
-  const sealed = await sealPasswordForGitHub(password);
-  assert.match(sealed.encrypted_value, /^[A-Za-z0-9+/]+={0,2}$/,
-    "sealed GitHub secret value is malformed");
+  const sealedPassword = await sealPasswordForGitHub(password);
+  const sealedDatabaseUrl = await sealSecretForGitHub(database.connectionString);
+  for (const sealed of [sealedPassword, sealedDatabaseUrl]) {
+    assert.match(sealed.encrypted_value, /^[A-Za-z0-9+/]+={0,2}$/,
+      "sealed GitHub secret value is malformed");
+  }
 
   const artifact = {
-    format: "memphis-zoo-github-sealed-secret.v1",
+    format: "memphis-zoo-github-sealed-secrets.v2",
     repository,
-    secret_name: SECRET_NAME,
-    key_id: sealed.key_id,
-    encrypted_value: sealed.encrypted_value,
+    secrets: [
+      {
+        secret_name: SECRET_NAMES.password,
+        key_id: sealedPassword.key_id,
+        encrypted_value: sealedPassword.encrypted_value,
+      },
+      {
+        secret_name: SECRET_NAMES.databaseUrl,
+        key_id: sealedDatabaseUrl.key_id,
+        encrypted_value: sealedDatabaseUrl.encrypted_value,
+      },
+    ],
     source_sha: sourceSha,
     generated_at: new Date().toISOString(),
     verification: preflight,
@@ -165,7 +189,7 @@ export async function run() {
   console.log(JSON.stringify({
     ok: true,
     sealed_for_repository: repository,
-    secret_name: SECRET_NAME,
+    secret_names: Object.values(SECRET_NAMES),
     source_sha: sourceSha,
     verification: preflight,
     output_file_created: true,
