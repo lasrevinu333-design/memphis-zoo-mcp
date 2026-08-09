@@ -1,17 +1,20 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import express from "express";
 import { createMessagingRouter } from "../src/messaging-api.js";
 
-const SHARED_THREAD_ID = "00000000-0000-4000-8000-000000000801";
 const MANAGER_A_ID = "00000000-0000-4000-8000-000000000802";
 const MANAGER_B_ID = "00000000-0000-4000-8000-000000000803";
 const MANAGER_A_USER_ID = "00000000-0000-4000-8000-000000000804";
 const MANAGER_B_USER_ID = "00000000-0000-4000-8000-000000000805";
-const participants = new Set();
-const messages = [];
+const MANAGER_A_THREAD_ID = "00000000-0000-4000-8000-000000000806";
+const MANAGER_B_THREAD_ID = "00000000-0000-4000-8000-000000000807";
+const MANAGER_A_MEMPHIS_ID = "00000000-0000-4000-8000-000000000808";
+const MANAGER_B_MEMPHIS_ID = "00000000-0000-4000-8000-000000000809";
+const MANAGER_A_CLIENT_ID = "00000000-0000-4000-8000-000000000821";
+const MANAGER_B_CLIENT_ID = "00000000-0000-4000-8000-000000000822";
 const rpcCalls = [];
+const messages = [];
 
 const sessions = new Map([
   ["manager-a-desktop", { manager_id: MANAGER_A_ID, manager_display_name: "Manager A", device_id: "manager-a-desktop", credential_id: "00000000-0000-4000-8000-000000000811" }],
@@ -20,96 +23,112 @@ const sessions = new Map([
 ]);
 
 function userForManager(managerId) {
-  if (managerId === MANAGER_A_ID || managerId === MANAGER_B_ID) return { id: MANAGER_A_USER_ID, display_name: "Ops Manager" };
+  if (managerId === MANAGER_A_ID) return { id: MANAGER_A_USER_ID, display_name: "Manager A" };
+  if (managerId === MANAGER_B_ID) return { id: MANAGER_B_USER_ID, display_name: "Manager B" };
   return null;
+}
+
+function threadForManager(managerId) {
+  if (managerId === MANAGER_A_ID) return MANAGER_A_THREAD_ID;
+  if (managerId === MANAGER_B_ID) return MANAGER_B_THREAD_ID;
+  return "";
+}
+
+function memphisThreadForUser(userId) {
+  if (userId === MANAGER_A_USER_ID) return MANAGER_A_MEMPHIS_ID;
+  if (userId === MANAGER_B_USER_ID) return MANAGER_B_MEMPHIS_ID;
+  return "";
 }
 
 async function runRpc(fn, args) {
   rpcCalls.push({ fn, args });
+  if (fn === "msg_get_or_create_ops_manager_thread") {
+    throw new Error("retired shared-room bootstrap must never be called");
+  }
   if (fn === "msg_ensure_ops_manager_user") {
     const user = userForManager(args.p_manager_id);
     assert.ok(user, "only authenticated manager fixtures may receive a Messenger principal");
-    return { ...user, user_id: user.id, msg_user_id: user.id, role: "manager", is_active: true, messaging_identity_key: "ops_manager_shared_identity_v1" };
+    return {
+      ...user,
+      user_id: user.id,
+      msg_user_id: user.id,
+      role: "manager",
+      is_active: true,
+      ops_manager_id: args.p_manager_id,
+    };
   }
-  if (fn === "msg_get_or_create_ops_manager_thread") {
-    const user = userForManager(args.p_manager_id);
-    assert.ok(user);
-    participants.add(user.id);
-    return { id: SHARED_THREAD_ID, thread_type: "group", title: "Ops Manager Chat", system_key: "ops_manager_shared_chat_v1" };
+  if (fn === "msg_get_or_create_memphis_thread") {
+    const id = memphisThreadForUser(args.p_user_id);
+    assert.ok(id, "Memphis thread must be scoped to the authenticated named principal");
+    return { id, thread_type: "bot", title: "Memphis", is_active: true };
   }
-  if (fn === "msg_get_or_create_memphis_thread") return { id: randomUUID(), thread_type: "bot", title: "Memphis" };
   if (fn === "msg_send_message_as_ops_manager") {
-    assert.equal(args.p_thread_id, SHARED_THREAD_ID);
-    assert.ok(userForManager(args.p_manager_id));
-    const duplicate = messages.find((row) => row.sender_user_id === MANAGER_A_USER_ID && row.client_message_id === args.p_client_message_id);
+    const user = userForManager(args.p_manager_id);
+    assert.ok(user, "send actor must be an authenticated named manager");
+    assert.equal(args.p_thread_id, threadForManager(args.p_manager_id), "manager may send only through the fixture's authorized thread");
+    const duplicate = messages.find((row) => row.manager_id === args.p_manager_id && row.client_message_id === args.p_client_message_id);
     if (duplicate) return duplicate;
     const row = {
-      id: randomUUID(),
-      thread_id: SHARED_THREAD_ID,
-      sender_user_id: MANAGER_A_USER_ID,
-      sender_display_name: "Ops Manager",
-      authenticated_manager_id: args.p_manager_id,
+      id: args.p_manager_id === MANAGER_A_ID
+        ? "00000000-0000-4000-8000-000000000831"
+        : "00000000-0000-4000-8000-000000000832",
+      thread_id: args.p_thread_id,
+      manager_id: args.p_manager_id,
+      sender_user_id: user.id,
+      sender_display_name: user.display_name,
       body: args.p_body,
-      message_type: "text",
+      message_type: args.p_message_type,
       client_message_id: args.p_client_message_id,
-      sent_at: new Date().toISOString(),
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      sent_at: "2026-08-07T00:05:00.000Z",
+      created_at: "2026-08-07T00:05:00.000Z",
+      updated_at: "2026-08-07T00:05:00.000Z",
       is_deleted: false,
     };
     messages.push(row);
     return row;
   }
-  if (fn === "msg_delete_message") {
-    const row = messages.find((message) => message.id === args.p_message_id);
-    assert.ok(row, "message deletion targets a persisted message");
-    assert.ok(participants.has(args.p_request_user_id), "deletion actor is a server-authenticated participant");
-    if (!row.is_deleted) {
-      row.body = "[deleted]";
-      row.is_deleted = true;
-      row.deleted_at = new Date(Date.now() + 1000).toISOString();
-      row.purge_after = new Date(Date.parse(row.deleted_at) + 14 * 86400000).toISOString();
-      row.updated_at = row.deleted_at;
-    }
-    return row;
+  if (fn === "msg_mark_thread_read") {
+    return { marked: true, thread_id: args.p_thread_id, user_id: args.p_user_id };
   }
-  if (fn === "msg_mark_thread_read") return 1;
   throw new Error(`Unexpected RPC: ${fn}`);
 }
 
-function uuidFrom(sql, pattern) {
-  return sql.match(pattern)?.[1] || "";
+function includesPair(sql, threadId, userId) {
+  return sql.includes(threadId) && sql.includes(userId);
 }
 
 async function runReadOnlySql(sql) {
+  if (/from public\.msg_users u[\s\S]*join public\.ops_manager_managers m/i.test(sql)) {
+    if (sql.includes(MANAGER_A_USER_ID)) {
+      return [{ msg_user_id: MANAGER_A_USER_ID, manager_id: MANAGER_A_ID, manager_display_name: "Manager A", job_title: "Operations Manager A", department_key: "operations", manager_roles: ["OPS_MANAGER"] }];
+    }
+    if (sql.includes(MANAGER_B_USER_ID)) {
+      return [{ msg_user_id: MANAGER_B_USER_ID, manager_id: MANAGER_B_ID, manager_display_name: "Manager B", job_title: "Operations Manager B", department_key: "operations", manager_roles: ["OPS_MANAGER"] }];
+    }
+  }
   if (/^\s*select\s+1\s+from public\.msg_thread_participants/i.test(sql)) {
-    const userId = uuidFrom(sql, /user_id\s*=\s*'([0-9a-f-]{36})'/i);
-    return participants.has(userId) ? [{ "?column?": 1 }] : [];
+    if (includesPair(sql, MANAGER_A_THREAD_ID, MANAGER_A_USER_ID)) return [{ "?column?": 1 }];
+    if (includesPair(sql, MANAGER_B_THREAD_ID, MANAGER_B_USER_ID)) return [{ "?column?": 1 }];
+    return [];
   }
-  if (/as has_memphis_bot/i.test(sql)) {
-    return [{ id: SHARED_THREAD_ID, thread_type: "group", title: "Ops Manager Chat", system_key: "ops_manager_shared_chat_v1", is_active: true, has_memphis_bot: false }];
+  if (/from public\.msg_threads t/i.test(sql) && /as has_memphis_bot/i.test(sql)) {
+    if (sql.includes(MANAGER_A_THREAD_ID)) return [{ id: MANAGER_A_THREAD_ID, thread_type: "direct", title: "Manager A conversation", system_key: null, is_active: true, has_memphis_bot: false }];
+    if (sql.includes(MANAGER_B_THREAD_ID)) return [{ id: MANAGER_B_THREAD_ID, thread_type: "direct", title: "Manager B conversation", system_key: null, is_active: true, has_memphis_bot: false }];
+    if (sql.includes(MANAGER_A_MEMPHIS_ID)) return [{ id: MANAGER_A_MEMPHIS_ID, thread_type: "bot", title: "Memphis", system_key: null, is_active: true, has_memphis_bot: true }];
+    if (sql.includes(MANAGER_B_MEMPHIS_ID)) return [{ id: MANAGER_B_MEMPHIS_ID, thread_type: "bot", title: "Memphis", system_key: null, is_active: true, has_memphis_bot: true }];
   }
-  if (/select m\.id, m\.thread_id, m\.sender_user_id, m\.is_deleted/i.test(sql)) {
-    const messageId = uuidFrom(sql, /m\.id\s*=\s*'([0-9a-f-]{36})'/i);
-    const threadId = uuidFrom(sql, /m\.thread_id\s*=\s*'([0-9a-f-]{36})'/i);
-    const row = messages.find((message) => message.id === messageId && message.thread_id === threadId);
-    return row ? [{ id: row.id, thread_id: row.thread_id, sender_user_id: row.sender_user_id, is_deleted: row.is_deleted }] : [];
+  if (/thread_participants/i.test(sql) && /last_messages/i.test(sql)) {
+    if (sql.includes(MANAGER_A_USER_ID)) {
+      return [{ thread_id: MANAGER_A_THREAD_ID, thread_type: "direct", thread_title: "Manager A conversation", system_key: null, is_ops_manager_shared: false, viewer_can_send: true, participant_names: "Manager A, Employee A", unread_count: 0, updated_at: "2026-08-07T00:00:00.000Z" }];
+    }
+    if (sql.includes(MANAGER_B_USER_ID)) {
+      return [{ thread_id: MANAGER_B_THREAD_ID, thread_type: "direct", thread_title: "Manager B conversation", system_key: null, is_ops_manager_shared: false, viewer_can_send: true, participant_names: "Manager B, Employee B", unread_count: 0, updated_at: "2026-08-07T00:00:00.000Z" }];
+    }
   }
-  if (/thread_rows/i.test(sql)) {
-    const viewerUserId = uuidFrom(sql, /tp\.user_id\s*=\s*'([0-9a-f-]{36})'/i) || (sql.includes(MANAGER_A_USER_ID) ? MANAGER_A_USER_ID : MANAGER_B_USER_ID);
-    return [{
-      thread_id: SHARED_THREAD_ID,
-      thread_type: "group",
-      thread_title: "Ops Manager Chat",
-      system_key: "ops_manager_shared_chat_v1",
-      is_ops_manager_shared: true,
-      viewer_can_send: participants.has(viewerUserId),
-      participant_names: "Ops Manager",
-      unread_count: 0,
-      updated_at: new Date().toISOString(),
-    }];
+  if (/thread_messages/i.test(sql)) {
+    if (sql.includes(MANAGER_A_THREAD_ID)) return messages.filter((row) => row.thread_id === MANAGER_A_THREAD_ID);
+    if (sql.includes(MANAGER_B_THREAD_ID)) return messages.filter((row) => row.thread_id === MANAGER_B_THREAD_ID);
   }
-  if (/thread_messages/i.test(sql)) return messages.filter((message) => !message.is_deleted);
   return [];
 }
 
@@ -124,111 +143,139 @@ function managerBoundary(req, res, next) {
   next();
 }
 
-const app = express();
-app.use(express.json());
-app.use("/messaging-api", createMessagingRouter({
-  runReadOnlySql,
-  runRpc,
-  buildHealthPayload: () => ({ ok: true }),
-  requireDeviceAccess: managerBoundary,
-  requireOpsManagerAuth: managerBoundary,
-  appVersion: "test",
-  releaseId: "test",
-  contractVersion: "messaging.v4",
-}));
-
-const server = createServer(app);
-await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-const origin = `http://127.0.0.1:${server.address().port}/messaging-api`;
-
-async function request(token, path, options = {}) {
-  const response = await fetch(`${origin}${path}`, {
-    ...options,
-    headers: {
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers || {}),
+async function startServer() {
+  const app = express();
+  app.use(express.json());
+  app.use("/messaging-api", createMessagingRouter({
+    runReadOnlySql,
+    runRpc,
+    buildHealthPayload: () => ({ ok: true }),
+    requireDeviceAccess: managerBoundary,
+    requireOpsManagerAuth: managerBoundary,
+    appVersion: "test",
+    releaseId: "test",
+    contractVersion: "messaging.v4",
+  }));
+  const server = createServer(app);
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const origin = `http://127.0.0.1:${server.address().port}/messaging-api`;
+  return {
+    async request(token, path, { method = "GET", body = null } = {}) {
+      const response = await fetch(`${origin}${path}`, {
+        method,
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(body ? { "Content-Type": "application/json" } : {}),
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      return { status: response.status, payload: await response.json() };
     },
-  });
-  return { status: response.status, payload: await response.json() };
+    close: () => new Promise((resolve) => server.close(resolve)),
+  };
 }
 
+const first = await startServer();
 try {
-  const aDesktop = await request("manager-a-desktop", "/me/by-device");
-  const aPhone = await request("manager-a-phone", "/me/by-device");
-  const bDesktop = await request("manager-b-desktop", "/me/by-device");
+  const aDesktop = await first.request("manager-a-desktop", "/me/by-device");
+  const aPhone = await first.request("manager-a-phone", "/me/by-device");
+  const bDesktop = await first.request("manager-b-desktop", "/me/by-device");
   assert.equal(aDesktop.status, 200);
-  assert.equal(aPhone.payload.data.msg_user_id, aDesktop.payload.data.msg_user_id, "one manager keeps one sender identity across devices");
-  assert.equal(bDesktop.payload.data.msg_user_id, aDesktop.payload.data.msg_user_id, "all manager sessions share the one public Ops Manager messaging identity");
-  assert.equal(aDesktop.payload.data.ops_manager_thread_id, SHARED_THREAD_ID);
-  assert.equal(bDesktop.payload.data.ops_manager_thread_id, SHARED_THREAD_ID, "all manager sessions resolve the same room");
+  assert.equal(aPhone.status, 200);
+  assert.equal(bDesktop.status, 200);
+  assert.equal(aDesktop.payload.data.msg_user_id, MANAGER_A_USER_ID);
+  assert.equal(aPhone.payload.data.msg_user_id, MANAGER_A_USER_ID, "one named manager retains one principal across devices");
+  assert.equal(bDesktop.payload.data.msg_user_id, MANAGER_B_USER_ID, "different managers retain different principals");
+  assert.notEqual(aDesktop.payload.data.msg_user_id, bDesktop.payload.data.msg_user_id);
+  assert.equal(Object.prototype.hasOwnProperty.call(aDesktop.payload.data, "ops_manager_thread_id"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(bDesktop.payload.data, "ops_manager_thread_id"), false);
 
-  const aThreads = await request("manager-a-phone", `/threads?user_id=${MANAGER_A_USER_ID}`);
-  const bThreads = await request("manager-b-desktop", `/threads?user_id=${MANAGER_A_USER_ID}`);
-  assert.equal(aThreads.payload.data[0].is_ops_manager_shared, true);
-  assert.equal(bThreads.payload.data[0].thread_id, SHARED_THREAD_ID);
-  assert.equal(aThreads.payload.data[0].viewer_can_send, true);
-  assert.equal(bThreads.payload.data[0].viewer_can_send, true);
+  const aThreads = await first.request("manager-a-phone", `/threads?user_id=${MANAGER_A_USER_ID}`);
+  const bThreads = await first.request("manager-b-desktop", `/threads?user_id=${MANAGER_B_USER_ID}`);
+  assert.equal(aThreads.status, 200);
+  assert.equal(bThreads.status, 200);
+  assert.equal(aThreads.payload.data[0].thread_id, MANAGER_A_THREAD_ID);
+  assert.equal(bThreads.payload.data[0].thread_id, MANAGER_B_THREAD_ID);
+  assert.equal(aThreads.payload.data[0].is_ops_manager_shared, false);
+  assert.equal(bThreads.payload.data[0].is_ops_manager_shared, false);
 
-  const forged = await request("manager-a-desktop", `/thread/${SHARED_THREAD_ID}/message`, {
+  const sentA = await first.request("manager-a-phone", `/thread/${MANAGER_A_THREAD_ID}/message`, {
     method: "POST",
-    body: JSON.stringify({ sender_user_id: MANAGER_B_USER_ID, body: "forged", client_message_id: randomUUID() }),
+    body: { body: "Named manager A message", client_message_id: MANAGER_A_CLIENT_ID },
   });
-  assert.equal(forged.status, 403, "a browser cannot choose another manager sender");
-
-  const aClientId = randomUUID();
-  const sentA = await request("manager-a-phone", `/thread/${SHARED_THREAD_ID}/message`, {
+  const retryA = await first.request("manager-a-desktop", `/thread/${MANAGER_A_THREAD_ID}/message`, {
     method: "POST",
-    body: JSON.stringify({ body: "Shared room from manager A", client_message_id: aClientId }),
+    body: { body: "Named manager A message", client_message_id: MANAGER_A_CLIENT_ID },
   });
-  const retryA = await request("manager-a-desktop", `/thread/${SHARED_THREAD_ID}/message`, {
+  const sentB = await first.request("manager-b-desktop", `/thread/${MANAGER_B_THREAD_ID}/message`, {
     method: "POST",
-    body: JSON.stringify({ body: "Shared room from manager A", client_message_id: aClientId }),
-  });
-  const sentB = await request("manager-b-desktop", `/thread/${SHARED_THREAD_ID}/message`, {
-    method: "POST",
-    body: JSON.stringify({ body: "Shared room from manager B", client_message_id: randomUUID() }),
+    body: { body: "Named manager B message", client_message_id: MANAGER_B_CLIENT_ID },
   });
   assert.equal(sentA.status, 200, JSON.stringify(sentA.payload));
-  assert.equal(retryA.payload.data.id, sentA.payload.data.id, "cross-device retry keeps one logical message");
-  assert.equal(sentB.payload.data.sender_user_id, MANAGER_A_USER_ID);
-  assert.equal(sentB.payload.data.authenticated_manager_id, MANAGER_B_ID, "the server still retains the authenticated manager behind the shared public sender");
-  assert.equal(messages.length, 2);
+  assert.equal(retryA.status, 200, JSON.stringify(retryA.payload));
+  assert.equal(sentB.status, 200, JSON.stringify(sentB.payload));
+  assert.equal(retryA.payload.data.id, sentA.payload.data.id, "cross-device retry remains one logical message");
+  assert.equal(sentA.payload.data.sender_user_id, MANAGER_A_USER_ID);
+  assert.equal(sentB.payload.data.sender_user_id, MANAGER_B_USER_ID);
+  assert.notEqual(sentA.payload.data.sender_user_id, sentB.payload.data.sender_user_id);
 
-  const visibleToB = await request("manager-b-desktop", `/thread/${SHARED_THREAD_ID}/messages?user_id=${MANAGER_A_USER_ID}&limit=100`);
-  assert.deepEqual(visibleToB.payload.data.map((row) => row.body), ["Shared room from manager A", "Shared room from manager B"]);
+  const aMessages = await first.request("manager-a-desktop", `/thread/${MANAGER_A_THREAD_ID}/messages?user_id=${MANAGER_A_USER_ID}&limit=100`);
+  const bMessages = await first.request("manager-b-desktop", `/thread/${MANAGER_B_THREAD_ID}/messages?user_id=${MANAGER_B_USER_ID}&limit=100`);
+  assert.deepEqual(aMessages.payload.data.map((row) => row.body), ["Named manager A message"]);
+  assert.deepEqual(bMessages.payload.data.map((row) => row.body), ["Named manager B message"]);
 
-  const forgedDelete = await request("manager-a-desktop", `/thread/${SHARED_THREAD_ID}/message/${sentA.payload.data.id}/delete`, {
+  const readA = await first.request("manager-a-desktop", `/thread/${MANAGER_A_THREAD_ID}/read`, {
     method: "POST",
-    body: JSON.stringify({ user_id: MANAGER_B_USER_ID }),
+    body: { user_id: MANAGER_A_USER_ID },
   });
-  assert.equal(forgedDelete.status, 403, "a browser cannot choose the message-deletion actor");
+  assert.equal(readA.status, 200);
+  assert.equal(readA.payload.data.user_id, MANAGER_A_USER_ID);
 
-  const deletedByManagerB = await request("manager-b-desktop", `/thread/${SHARED_THREAD_ID}/message/${sentA.payload.data.id}/delete`, {
+  const memphisA = await first.request("manager-a-phone", "/memphis/thread", {
     method: "POST",
-    body: "{}",
+    body: { user_id: MANAGER_A_USER_ID },
   });
-  assert.equal(deletedByManagerB.status, 200, JSON.stringify(deletedByManagerB.payload));
-  assert.equal(deletedByManagerB.payload.data.is_deleted, true);
-  assert.equal(deletedByManagerB.payload.data.body, "[deleted]");
-  const deleteCall = rpcCalls.find((call) => call.fn === "msg_delete_message");
-  assert.equal(deleteCall.args.p_request_user_id, MANAGER_A_USER_ID, "server session supplies the shared public deletion actor");
+  assert.equal(memphisA.status, 200);
+  assert.equal(memphisA.payload.data.id, MANAGER_A_MEMPHIS_ID);
 
-  const deleteRetry = await request("manager-b-desktop", `/thread/${SHARED_THREAD_ID}/message/${sentA.payload.data.id}/delete`, {
+  const impersonation = await first.request("manager-a-desktop", `/threads?user_id=${MANAGER_B_USER_ID}`);
+  assert.equal(impersonation.status, 403, "a named manager session cannot impersonate another Messenger principal");
+  const forgedSend = await first.request("manager-a-desktop", `/thread/${MANAGER_A_THREAD_ID}/message`, {
     method: "POST",
-    body: "{}",
+    body: { sender_user_id: MANAGER_B_USER_ID, body: "forged", client_message_id: "00000000-0000-4000-8000-000000000823" },
   });
-  assert.equal(deleteRetry.status, 200, "message deletion is idempotent");
-  assert.equal(messages.length, 2, "soft deletion never duplicates or hard-deletes the row");
-  const afterDelete = await request("manager-a-phone", `/thread/${SHARED_THREAD_ID}/messages?limit=100`);
-  assert.equal(afterDelete.payload.data.some((row) => row.id === sentA.payload.data.id), false, "deleted messages disappear from every manager device");
-
-  const deleteShared = await request("manager-a-desktop", `/thread/${SHARED_THREAD_ID}/delete`, { method: "POST", body: JSON.stringify({ operation_id: randomUUID() }) });
-  assert.equal(deleteShared.status, 409, "the canonical manager room cannot be hidden or deleted");
-  const anonymous = await request("", "/me/by-device");
-  assert.equal(anonymous.status, 401);
-  assert.ok(rpcCalls.some((call) => call.fn === "msg_get_or_create_ops_manager_thread"));
-  console.log("OPS_MANAGER_SHARED_MESSENGER_INTEGRATION_PASS");
+  assert.equal(forgedSend.status, 403);
+  const forgedRead = await first.request("manager-a-desktop", `/thread/${MANAGER_A_THREAD_ID}/read`, {
+    method: "POST",
+    body: { user_id: MANAGER_B_USER_ID },
+  });
+  assert.equal(forgedRead.status, 403);
+  const forgedMemphis = await first.request("manager-a-desktop", "/memphis/thread", {
+    method: "POST",
+    body: { user_id: MANAGER_B_USER_ID },
+  });
+  assert.equal(forgedMemphis.status, 403);
+  const invalid = await first.request("revoked-or-expired-session", "/me/by-device");
+  assert.equal(invalid.status, 401);
 } finally {
-  await new Promise((resolve) => server.close(resolve));
+  await first.close();
 }
+
+const restarted = await startServer();
+try {
+  const afterRestart = await restarted.request("manager-a-desktop", "/me/by-device");
+  const threadsAfterRestart = await restarted.request("manager-a-desktop", `/threads?user_id=${MANAGER_A_USER_ID}`);
+  const messagesAfterRestart = await restarted.request("manager-a-desktop", `/thread/${MANAGER_A_THREAD_ID}/messages?user_id=${MANAGER_A_USER_ID}&limit=100`);
+  assert.equal(afterRestart.status, 200);
+  assert.equal(afterRestart.payload.data.msg_user_id, MANAGER_A_USER_ID, "backend restart preserves deterministic named identity");
+  assert.equal(threadsAfterRestart.payload.data[0].thread_id, MANAGER_A_THREAD_ID);
+  assert.deepEqual(messagesAfterRestart.payload.data.map((row) => row.body), ["Named manager A message"], "reconnect preserves the named manager conversation");
+} finally {
+  await restarted.close();
+}
+
+assert.equal(messages.length, 2, "idempotent retry must not duplicate messages");
+assert.equal(rpcCalls.some((call) => call.fn === "msg_get_or_create_ops_manager_thread"), false);
+assert.ok(rpcCalls.some((call) => call.fn === "msg_mark_thread_read" && call.args.p_user_id === MANAGER_A_USER_ID));
+assert.ok(rpcCalls.some((call) => call.fn === "msg_get_or_create_memphis_thread" && call.args.p_user_id === MANAGER_A_USER_ID));
+console.log("OPS_MANAGER_NAMED_MESSENGER_INTEGRATION_PASS");
