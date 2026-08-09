@@ -5,6 +5,8 @@ import { makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
 const CONTRACT_VERSION = "operational-analytics.v1";
 const INSPECTION_TYPES = new Set(["manager_spot_check", "formal", "follow_up", "complaint_response", "training_coaching"]);
 const OPERATIONAL_TIME_ZONE = "America/Chicago";
+export const INSPECTION_FRESHNESS_WINDOW_HOURS = 24;
+export const INSPECTION_FRESHNESS_WINDOW_MS = INSPECTION_FRESHNESS_WINDOW_HOURS * 60 * 60 * 1000;
 
 function envText(env, key) { return String(env?.[key] || "").trim(); }
 function clip(value, max = 2000) { return String(value ?? "").trim().slice(0, max); }
@@ -104,6 +106,22 @@ export function stableFingerprint(value) {
   return crypto.createHash("sha256").update(JSON.stringify(stableJson(value))).digest("hex");
 }
 
+export function inspectionEligibility(session = {}, { nowMs = Date.now() } = {}) {
+  const status = String(session.status || "").trim().toLowerCase();
+  const completedAt = Date.parse(String(session.ended_at || session.completion_submitted_at || ""));
+  const eligibleUntilMs = completedAt + INSPECTION_FRESHNESS_WINDOW_MS;
+  const eligible = ["pending_submit", "closed"].includes(status)
+    && Number.isFinite(completedAt)
+    && Number.isFinite(nowMs)
+    && nowMs >= completedAt
+    && nowMs <= eligibleUntilMs;
+  return {
+    inspection_eligible: eligible,
+    inspection_eligible_until: Number.isFinite(eligibleUntilMs) ? new Date(eligibleUntilMs).toISOString() : null,
+    inspection_freshness_window_hours: INSPECTION_FRESHNESS_WINDOW_HOURS,
+  };
+}
+
 export function normalizeInspectionPayload(values = {}, auth = {}, idempotencyKey = "") {
   const sessionId = String(values.session_id || values.sessionId || "").trim();
   const operationId = String(idempotencyKey || values.operation_id || values.operationId || "").trim();
@@ -119,8 +137,8 @@ export function normalizeInspectionPayload(values = {}, auth = {}, idempotencyKe
     throw Object.assign(new Error("inspection_type is invalid."), { status: 422 });
   }
   const providedInspectedAt = values.inspected_at ?? values.inspectedAt ?? null;
-  if (providedInspectedAt != null && !Number.isFinite(Date.parse(String(providedInspectedAt)))) {
-    throw Object.assign(new Error("inspected_at must be a valid timestamp."), { status: 422 });
+  if (providedInspectedAt != null) {
+    throw Object.assign(new Error("inspected_at is assigned by the server and must not be provided."), { status: 422 });
   }
 
   const overallScore = boundedInt(values.overall_score ?? values.overallScore, { required: true, name: "overall_score" });
@@ -145,8 +163,6 @@ export function normalizeInspectionPayload(values = {}, auth = {}, idempotencyKe
     findings_json: findings,
     notes: clip(values.notes, 8000) || null,
   };
-  if (providedInspectedAt != null) normalized.inspected_at = new Date(providedInspectedAt).toISOString();
-
   normalized.request_fingerprint = stableFingerprint({
     ...normalized,
     inspector_name_snapshot: undefined,
@@ -234,7 +250,20 @@ export function installOperationalAnalyticsRoutes(app, { env = process.env, supa
       query = query.order("started_at", { ascending: false }).limit(normalizeLimit(req.query?.limit, 250, 1000));
       const result = await query;
       if (result.error) throw result.error;
-      res.json({ ok: true, data: result.data || [], meta: { contract_version: CONTRACT_VERSION, generated_at: new Date().toISOString() } });
+      const generatedAt = new Date();
+      const rows = (result.data || []).map((row) => ({
+        ...row,
+        ...inspectionEligibility(row, { nowMs: generatedAt.getTime() }),
+      }));
+      res.json({
+        ok: true,
+        data: rows,
+        meta: {
+          contract_version: CONTRACT_VERSION,
+          generated_at: generatedAt.toISOString(),
+          inspection_freshness_window_hours: INSPECTION_FRESHNESS_WINDOW_HOURS,
+        },
+      });
     } catch (error) { fail(res, error, "Cleaning session facts could not be loaded."); }
   });
 

@@ -24,6 +24,7 @@ async function json(statement) {
 
 const ids = {
   location: "00000000-0000-4000-8000-00000000a101",
+  boundaryLocation: "00000000-0000-4000-8000-00000000a130",
   fastEmployee: "00000000-0000-4000-8000-00000000a102",
   slowEmployee: "00000000-0000-4000-8000-00000000a103",
   fastDevice: "00000000-0000-4000-8000-00000000a104",
@@ -34,6 +35,13 @@ const ids = {
   slowCompletion: "00000000-0000-4000-8000-00000000a109",
   fastInspection: "00000000-0000-4000-8000-00000000a110",
   slowInspection: "00000000-0000-4000-8000-00000000a111",
+  boundarySession: "00000000-0000-4000-8000-00000000a112",
+  boundaryInspection: "00000000-0000-4000-8000-00000000a118",
+  fallbackSession: "00000000-0000-4000-8000-00000000a119",
+  fallbackCompletion: "00000000-0000-4000-8000-00000000a120",
+  fallbackInspection: "00000000-0000-4000-8000-00000000a129",
+  missingCompletionSession: "00000000-0000-4000-8000-00000000a132",
+  staleSession: "00000000-0000-4000-8000-00000000a131",
   thread: "00000000-0000-4000-8000-00000000a113",
   oldMessage: "00000000-0000-4000-8000-00000000a114",
   recentMessage: "00000000-0000-4000-8000-00000000a115",
@@ -106,7 +114,9 @@ assert.equal(
 
 await sql(`
   insert into public.locations(id,location_code,location_name,location_type,form_type,active)
-  values ('${ids.location}','ANALYTICS_TETON','Analytics Teton','exhibit','exhibit',true);
+  values
+    ('${ids.location}','ANALYTICS_TETON','Analytics Teton','exhibit','exhibit',true),
+    ('${ids.boundaryLocation}','ANALYTICS_BOUNDARY','Analytics Boundary','exhibit','exhibit',true);
   insert into public.employees(id,employee_code,display_name,active,role,notes) values
     ('${ids.fastEmployee}','EMP990101','Analytics Tammy',true,'staff','analytics acceptance'),
     ('${ids.slowEmployee}','EMP990102','Analytics Sherita',true,'staff','analytics acceptance');
@@ -119,6 +129,18 @@ await sql(`
   ) values
     ('${ids.fastSession}','analytics-fast-session','analytics-fast-session','${ids.location}','${ids.fastEmployee}','${ids.fastDevice}','closed',now()-interval '45 minutes',now(),45,'45 min','kiosk_form'),
     ('${ids.slowSession}','analytics-slow-session','analytics-slow-session','${ids.location}','${ids.slowEmployee}','${ids.slowDevice}','closed',now()-interval '90 minutes',now(),90,'90 min','kiosk_form');
+  insert into public.sessions(
+    id,session_uuid,client_session_id,location_id,employee_id,device_id,status,
+    started_at,ended_at,duration_minutes,duration_display,completion_source
+  ) values
+    ('${ids.boundarySession}','analytics-boundary-session','analytics-boundary-session','${ids.boundaryLocation}','${ids.fastEmployee}','${ids.fastDevice}','closed',
+      now()-interval '1 hour',now(),60,'60 min','kiosk_form'),
+    ('${ids.fallbackSession}','analytics-fallback-session','analytics-fallback-session','${ids.boundaryLocation}','${ids.fastEmployee}','${ids.fastDevice}','pending_submit',
+      now()-interval '25 hours',null,60,'60 min','kiosk_form'),
+    ('${ids.missingCompletionSession}','analytics-missing-completion-session','analytics-missing-completion-session','${ids.boundaryLocation}','${ids.fastEmployee}','${ids.fastDevice}','closed',
+      now()-interval '1 hour',null,60,'60 min','kiosk_form'),
+    ('${ids.staleSession}','analytics-stale-session','analytics-stale-session','${ids.boundaryLocation}','${ids.fastEmployee}','${ids.fastDevice}','closed',
+      now()-interval '26 hours',now()-interval '25 hours',60,'60 min','kiosk_form');
   insert into public.completion_responses(
     id,session_id,location_id,submitted_by_employee_id,device_id,response_json,client_completion_id
   ) values
@@ -136,6 +158,42 @@ await sql(`
       'manager_spot_check','custodial-v1',96,98,96,94,96,98,85,false,false,'[]','Looks excellent.'),
     ('${ids.slowInspection}','10000000-0000-4000-8000-00000000a111','${"b".repeat(64)}','${ids.slowSession}','Database Inspector',
       'manager_spot_check','custodial-v1',72,75,70,78,65,74,85,false,true,'[{"category":"detail","note":"Edges and fixtures need work"}]','Needs improvement.');
+  with boundary as (
+    update public.sessions
+    set started_at=statement_timestamp()-interval '25 hours',
+        ended_at=statement_timestamp()-interval '24 hours'
+    where id='${ids.boundarySession}'
+    returning id
+  )
+  insert into public.cleaning_inspections(
+    id,operation_id,request_fingerprint,session_id,inspector_name_snapshot,
+    inspection_type,rubric_version,overall_score,pass_threshold,critical_failure,
+    follow_up_required,findings_json,inspected_at
+  )
+  select
+    '${ids.boundaryInspection}','10000000-0000-4000-8000-00000000a118','${"f".repeat(64)}',b.id,'Database Inspector',
+    'manager_spot_check','custodial-v1',90,85,false,false,'[]','2000-01-01T00:00:00Z'
+  from boundary b;
+  with fallback as (
+    insert into public.completion_responses(
+      id,session_id,location_id,submitted_by_employee_id,device_id,response_json,
+      client_completion_id,submitted_at,created_at
+    ) values (
+      '${ids.fallbackCompletion}','${ids.fallbackSession}','${ids.boundaryLocation}',
+      '${ids.fastEmployee}','${ids.fastDevice}','{}','analytics-fallback-completion',
+      statement_timestamp()-interval '24 hours',statement_timestamp()-interval '24 hours'
+    )
+    returning session_id,submitted_at
+  )
+  insert into public.cleaning_inspections(
+    id,operation_id,request_fingerprint,session_id,inspector_name_snapshot,
+    inspection_type,rubric_version,overall_score,pass_threshold,critical_failure,
+    follow_up_required,findings_json,inspected_at
+  )
+  select
+    '${ids.fallbackInspection}','10000000-0000-4000-8000-00000000a129','${"9".repeat(64)}',f.session_id,'Database Inspector',
+    'manager_spot_check','custodial-v1',90,85,false,false,'[]','2000-01-01T00:00:00Z'
+  from fallback f;
   insert into public.maintenance_tickets(
     completion_response_id,session_id,location_id,reported_by_employee_id,device_id,
     issue_source,status,issue_summary,issue_category,fixture_type,fixture_identifier,
@@ -174,23 +232,45 @@ await sql(`
     begin
       insert into public.cleaning_inspections(
         operation_id,request_fingerprint,session_id,inspector_name_snapshot,
-        overall_score,pass_threshold,critical_failure,follow_up_required,inspected_at
+        overall_score,pass_threshold,critical_failure,follow_up_required
       ) values (
-        '10000000-0000-4000-8000-00000000a121','${"d".repeat(64)}','${ids.fastSession}','Database Inspector',
-        95,85,false,false,now()-interval '2 hours'
+        '10000000-0000-4000-8000-00000000a124','${"1".repeat(64)}','${ids.missingCompletionSession}','Database Inspector',
+        95,85,false,false
       );
-      raise exception 'pre-session inspection time unexpectedly accepted';
+      raise exception 'finished session without completion evidence unexpectedly accepted';
+    exception when check_violation then null;
+    end;
+    begin
+      update public.sessions
+      set ended_at=statement_timestamp()+interval '1 hour'
+      where id='${ids.boundarySession}';
+      insert into public.cleaning_inspections(
+        operation_id,request_fingerprint,session_id,inspector_name_snapshot,
+        overall_score,pass_threshold,critical_failure,follow_up_required
+      ) values (
+        '10000000-0000-4000-8000-00000000a121','${"d".repeat(64)}','${ids.boundarySession}','Database Inspector',
+        95,85,false,false
+      );
+      raise exception 'inspection before a future session completion unexpectedly accepted';
+    exception when check_violation then null;
+    end;
+    begin
+      update public.cleaning_inspections
+      set inspected_at=inspected_at-interval '1 minute'
+      where id='${ids.fastInspection}';
+      raise exception 'authoritative inspection timestamp mutation unexpectedly accepted';
     exception when check_violation then null;
     end;
     begin
       insert into public.cleaning_inspections(
         operation_id,request_fingerprint,session_id,inspector_name_snapshot,
         overall_score,pass_threshold,critical_failure,follow_up_required,inspected_at
-      ) values (
-        '10000000-0000-4000-8000-00000000a122','${"e".repeat(64)}','${ids.fastSession}','Database Inspector',
-        95,85,false,false,now()+interval '10 minutes'
-      );
-      raise exception 'future inspection time unexpectedly accepted';
+      )
+      select
+        '10000000-0000-4000-8000-00000000a123','${"0".repeat(64)}',s.id,'Database Inspector',
+        95,85,false,false,s.ended_at+interval '1 minute'
+      from public.sessions s where s.id='${ids.staleSession}';
+      raise exception 'stale session with a backdated inspection timestamp unexpectedly accepted';
     exception when check_violation then null;
     end;
   end
@@ -304,6 +384,18 @@ assert.equal(await sql(`select count(*) from public.msg_messages where id='${ids
 assert.equal(await sql(`select count(*) from public.sessions where id in ('${ids.fastSession}','${ids.slowSession}');`), "2");
 assert.equal(await sql(`select count(*) from public.completion_responses where id in ('${ids.fastCompletion}','${ids.slowCompletion}');`), "2");
 assert.equal(await sql(`select count(*) from public.cleaning_inspections where id in ('${ids.fastInspection}','${ids.slowInspection}');`), "2");
+assert.equal(await sql(`select count(*) from public.cleaning_inspections where id='${ids.boundaryInspection}';`), "1");
+assert.equal(await sql(`select count(*) from public.cleaning_inspections where id='${ids.fallbackInspection}';`), "1");
+assert.equal(await sql(`
+  select (i.inspected_at=i.created_at and i.inspected_at=s.ended_at+interval '24 hours')::text
+  from public.cleaning_inspections i join public.sessions s on s.id=i.session_id
+  where i.id='${ids.boundaryInspection}';
+`), "true", "the exact boundary must use one authoritative server timestamp");
+assert.equal(await sql(`
+  select (i.inspected_at=i.created_at and i.inspected_at=c.submitted_at+interval '24 hours' and i.session_ended_at=c.submitted_at)::text
+  from public.cleaning_inspections i join public.completion_responses c on c.session_id=i.session_id
+  where i.id='${ids.fallbackInspection}';
+`), "true", "pending submissions must use the durable completion response timestamp");
 assert.equal(await sql(`select count(*) from public.maintenance_tickets where location_id='${ids.location}';`), "3");
 
 console.log("OPERATIONAL_ANALYTICS_DATABASE_PASS");

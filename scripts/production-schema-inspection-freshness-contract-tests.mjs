@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import {
   INSPECTION_FRESHNESS_MIGRATION,
+  INSPECTION_TRIGGER_DEFINITION_PATTERN,
   validateMigrationDirectory,
 } from "./production-schema-inspection-freshness.mjs";
 
@@ -67,6 +68,14 @@ assert.match(runner, /begin isolation level repeatable read read only/);
 assert.match(runner, /finished sessions without completion evidence must be repaired before migration/);
 assert.match(runner, /existing inspections violate the 24-hour completion contract/);
 assert.match(runner, /post-migration physical catalog is not the reviewed 333ddfc8 target state/);
+assert.match(
+  "CREATE TRIGGER x BEFORE INSERT OR UPDATE ON cleaning_inspections FOR EACH ROW EXECUTE FUNCTION cleaning_inspections_set_snapshot()",
+  INSPECTION_TRIGGER_DEFINITION_PATTERN,
+);
+assert.match(
+  "CREATE TRIGGER x BEFORE INSERT OR UPDATE ON public.cleaning_inspections FOR EACH ROW EXECUTE FUNCTION public.cleaning_inspections_set_snapshot()",
+  INSPECTION_TRIGGER_DEFINITION_PATTERN,
+);
 
 console.log(JSON.stringify({
   ok: true,

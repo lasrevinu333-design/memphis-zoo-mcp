@@ -1,13 +1,21 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { normalizeInspectionPayload, stableFingerprint } from "../src/operational-analytics-api.js";
+import {
+  INSPECTION_FRESHNESS_WINDOW_HOURS,
+  installOperationalAnalyticsRoutes,
+  inspectionEligibility,
+  normalizeInspectionPayload,
+  stableFingerprint,
+} from "../src/operational-analytics-api.js";
 
 const root = new URL("../", import.meta.url);
 const read = (path) => readFileSync(new URL(path, root), "utf8");
 const migration = read("supabase/migrations/20260722233500_operational_retention_and_analytics.sql");
 const historyGuard = read("supabase/migrations/20260722233600_event_retention_history_guard.sql");
 const securityHardening = read("supabase/migrations/20260723111020_v17_trigger_privilege_hardening.sql");
+const inspectionFreshness = read("supabase/migrations/20260809125735_cleaning_inspection_24_hour_freshness.sql");
+const reviewedInspectionFreshness = read("release/reviewed-migrations/20260809125735_cleaning_inspection_24_hour_freshness.sql");
 const api = read("src/operational-analytics-api.js");
 const indexSource = read("src/index.js");
 
@@ -49,6 +57,36 @@ assert.match(api, /\/analytics-api\/inspection-coverage/, "inspection coverage m
 assert.match(api, /CUSTODIAL_MANAGER/, "personnel analytics must require Custodial Manager authority");
 assert.match(api, /Idempotency-Key/, "inspection writes must be idempotent");
 assert.match(indexSource, /installOperationalAnalyticsRoutes\(app/, "analytics routes must be installed explicitly in the canonical application");
+assert.match(inspectionFreshness, /interval '24 hours'/i, "the database must enforce the inspection freshness window");
+assert.equal(inspectionFreshness, reviewedInspectionFreshness,
+  "the canonical and production-reviewed inspection migrations must remain byte-identical");
+assert.match(inspectionFreshness, /cannot be recorded more than 24 hours after cleaning session completion/i);
+
+assert.equal(INSPECTION_FRESHNESS_WINDOW_HOURS, 24);
+const completedAt = "2026-08-09T01:00:00.000Z";
+assert.deepEqual(inspectionEligibility({ status: "closed", ended_at: completedAt }, {
+  nowMs: Date.parse("2026-08-10T01:00:00.000Z"),
+}), {
+  inspection_eligible: true,
+  inspection_eligible_until: "2026-08-10T01:00:00.000Z",
+  inspection_freshness_window_hours: 24,
+});
+assert.equal(inspectionEligibility({ status: "closed", ended_at: completedAt }, {
+  nowMs: Date.parse("2026-08-10T01:00:00.001Z"),
+}).inspection_eligible, false);
+assert.equal(inspectionEligibility({ status: "active", ended_at: completedAt }, {
+  nowMs: Date.parse("2026-08-09T02:00:00.000Z"),
+}).inspection_eligible, false);
+assert.equal(inspectionEligibility({ status: "pending_submit", completion_submitted_at: completedAt }, {
+  nowMs: Date.parse("2026-08-09T02:00:00.000Z"),
+}).inspection_eligible, true, "pending submissions must use the durable completion response timestamp");
+assert.deepEqual(inspectionEligibility({ status: "closed", started_at: completedAt }, {
+  nowMs: Date.parse("2026-08-09T02:00:00.000Z"),
+}), {
+  inspection_eligible: false,
+  inspection_eligible_until: null,
+  inspection_freshness_window_hours: 24,
+}, "finished sessions without completion evidence must fail closed");
 
 const ordered = stableFingerprint({ alpha: 1, beta: { y: 2, x: 1 } });
 const reordered = stableFingerprint({ beta: { x: 1, y: 2 }, alpha: 1 });
@@ -91,7 +129,44 @@ assert.throws(() => normalizeInspectionPayload({ session_id: "bad", overall_scor
 assert.throws(() => normalizeInspectionPayload({ session_id: sessionId, overall_score: 90 }, {}, "bad"), /Idempotency-Key/i);
 assert.throws(() => normalizeInspectionPayload({ session_id: sessionId, overall_score: 90, findings_json: "bad" }, {}, operationId), /array or object/i);
 assert.throws(() => normalizeInspectionPayload({ session_id: sessionId, overall_score: 90, inspection_type: "whatever" }, {}, operationId), /inspection_type is invalid/i);
+assert.throws(
+  () => normalizeInspectionPayload({ session_id: sessionId, overall_score: 90, inspected_at: "2026-08-01T00:00:00Z" }, {}, operationId),
+  /assigned by the server/i,
+  "the API contract must prohibit client backdating",
+);
 assert.equal(normalizeInspectionPayload({ session_id: sessionId, overall_score: 70 }, {}, operationId).follow_up_required, true, "failed inspections require follow-up");
 assert.equal(normalizeInspectionPayload({ session_id: sessionId, overall_score: 95, critical_failure: true }, {}, operationId).follow_up_required, true, "critical failures require follow-up");
+
+const registeredPosts = new Map();
+const app = {
+  use() {},
+  get() {},
+  post(path, ...handlers) { registeredPosts.set(path, handlers); },
+};
+let databaseCalled = false;
+installOperationalAnalyticsRoutes(app, {
+  supabase: {
+    from() {
+      databaseCalled = true;
+      throw new Error("database must not be called for a client-supplied inspection timestamp");
+    },
+  },
+});
+const inspectionPost = registeredPosts.get("/analytics-api/inspections");
+assert.ok(Array.isArray(inspectionPost) && inspectionPost.length > 0, "the inspection POST route must be registered");
+let responseStatus = 0;
+let responseBody = null;
+const response = {
+  status(value) { responseStatus = value; return this; },
+  json(value) { responseBody = value; return this; },
+};
+await inspectionPost.at(-1)({
+  body: { session_id: sessionId, overall_score: 90, inspected_at: "2026-07-01T00:00:00Z" },
+  memphisAuth: auth,
+  get: () => operationId,
+}, response);
+assert.equal(responseStatus, 422);
+assert.match(responseBody.error, /assigned by the server/i);
+assert.equal(databaseCalled, false, "a backdated API request must fail before any database write");
 
 console.log("OPERATIONAL_ANALYTICS_SOURCE_CONTRACT_PASS");

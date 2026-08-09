@@ -40,6 +40,8 @@ export const INSPECTION_FRESHNESS_MIGRATION = Object.freeze({
 
 const FUNCTION_SIGNATURE = "public.cleaning_inspections_set_snapshot()";
 const ADVISORY_LOCK = "memphis-zoo:production-schema-inspection-freshness:20260809125735";
+export const INSPECTION_TRIGGER_DEFINITION_PATTERN =
+  /BEFORE INSERT OR UPDATE ON (?:public\.)?cleaning_inspections\b/;
 
 function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
@@ -212,7 +214,7 @@ async function inspectionContract(client) {
   assert.equal(fn.rowCount, 1, "inspection snapshot function is missing");
   assert.equal(trigger.rowCount, 1, "inspection snapshot trigger is missing");
   assert.equal(trigger.rows[0].enabled, "O", "inspection snapshot trigger is not enabled normally");
-  assert.match(trigger.rows[0].definition, /BEFORE INSERT OR UPDATE ON public\.cleaning_inspections/);
+  assert.match(trigger.rows[0].definition, INSPECTION_TRIGGER_DEFINITION_PATTERN);
   assert.deepEqual(functionAcl.rows, EXPECTED_FUNCTION_ACL,
     "inspection snapshot function ACL differs from the reviewed contract");
   assert.equal(compatibility.rows[0].finished_without_completion, 0,

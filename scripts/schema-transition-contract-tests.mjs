@@ -9,7 +9,7 @@ const CURRENT = "c6742e500c2a5d3767f1d886bb5937167eab42730f8271eec76b427a10c5f30
 const BACKEND_TARGET = "333ddfc8008ea0b85916de7d491b98c9b8d6a7d45d3a2947d99b4b3bb836ea00";
 const FUTURE = "2".repeat(64);
 const OUTSIDE = "3".repeat(64);
-const ENGINE_MAIN_SHA = "7bc61e39a5ae2fda52c777c8a222f138ee36c5af";
+const ENGINE_MAIN_SHA = "09b1b5007b608c952c03b7ba28c9969ef7aa9bbf";
 const NOW = Date.parse("2026-08-09T00:00:00Z");
 const RETIRED_TRANSITION = {
   transition_id: "custodial-native-vault-removal-build11-20260801",
@@ -49,7 +49,7 @@ const sourceManifest = JSON.parse(readFileSync(new URL("../release/frontend-rele
 assert.equal(sourceManifest.frontend_commit_sha, ENGINE_MAIN_SHA,
   "the backend copy must pin the exact verified Engine main commit");
 assert.equal(sourceManifest.schema_fingerprint, CURRENT,
-  "the backend copy must retain the deployed frontend primary while staging the transition");
+  "the backend copy must retain the deployed frontend primary during transition");
 assert.equal(Object.hasOwn(sourceManifest, "schema_transition"), true,
   "the backend copy must retain the active transition key");
 assert.deepEqual(sourceManifest.schema_transition, ACTIVE_TRANSITION,
@@ -57,8 +57,8 @@ assert.deepEqual(sourceManifest.schema_transition, ACTIVE_TRANSITION,
 
 const backendRelease = buildReleaseManifest({ appVersion: "test-release" });
 assert.equal(backendRelease.frontend.commit_sha, ENGINE_MAIN_SHA);
-assert.equal(backendRelease.schema.fingerprint, CURRENT,
-  "the bridge-only backend release must retain the current production fingerprint");
+assert.equal(backendRelease.schema.fingerprint, BACKEND_TARGET,
+  "the backend must publish the rebuilt production fingerprint");
 assert.equal(backendRelease.frontend.manifest.schema_fingerprint, CURRENT);
 assert.equal(Object.hasOwn(backendRelease, "schema_transition"), true,
   "the backend runtime manifest must publish the active transition key");

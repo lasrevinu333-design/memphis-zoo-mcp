@@ -41,6 +41,8 @@ limit 100
 
 export const HUMAN_CONFIRMATION_REQUIREMENT =
   "A manager must confirm that the accepted database record represents an inspection they physically performed on the linked post-repair cleaning session; automation cannot independently prove the physical act.";
+export const INSPECTION_FRESHNESS_WINDOW_HOURS = 24;
+const INSPECTION_FRESHNESS_WINDOW_MS = INSPECTION_FRESHNESS_WINDOW_HOURS * 60 * 60 * 1000;
 
 const GENERIC_OR_TEST_IDENTITY = /(?:^custodial manager$|\btest\b|\bfixture\b|\bdemo\b|\bsample\b|\bmock\b)/i;
 
@@ -92,6 +94,14 @@ export function evaluateManagerInspectionReadiness(rows, {
     if (!Number.isFinite(inspectedAtMs) || inspectedAtMs < notBeforeMs) gaps.push("inspection act predates the acceptance window");
     if (Number.isFinite(inspectedAtMs) && Number.isFinite(sessionEndedAtMs) && inspectedAtMs < sessionEndedAtMs) {
       gaps.push("inspection timestamp predates session completion");
+    }
+    if (Number.isFinite(inspectedAtMs) && Number.isFinite(sessionEndedAtMs)
+      && inspectedAtMs - sessionEndedAtMs > INSPECTION_FRESHNESS_WINDOW_MS) {
+      gaps.push("inspection occurred more than 24 hours after session completion");
+    }
+    if (Number.isFinite(createdAtMs) && Number.isFinite(sessionEndedAtMs)
+      && createdAtMs - sessionEndedAtMs > INSPECTION_FRESHNESS_WINDOW_MS) {
+      gaps.push("inspection record was created more than 24 hours after session completion");
     }
     if ((Number.isFinite(createdAtMs) && createdAtMs > futureLimitMs)
       || (Number.isFinite(inspectedAtMs) && inspectedAtMs > futureLimitMs)) {
