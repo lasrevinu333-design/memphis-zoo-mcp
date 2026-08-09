@@ -74,6 +74,7 @@ jobs:
           npm run --silent test:gemini-console
           npm run --silent test:schema-fingerprint
           npm run --silent test:schema-transition
+          npm run --silent test:production-schema-inspection-freshness
           npm run --silent test:ci-workflows
       - name: Empty database migration rebuild and database concurrency
         shell: bash

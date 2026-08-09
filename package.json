@@ -78,6 +78,7 @@
     "test:production-runtime": "node scripts/production-runtime-contract-tests.mjs",
     "test:ci-workflows": "node scripts/ci-workflow-contract-tests.mjs",
     "test:production-schema-c674-bootstrap": "node scripts/production-schema-c674-bootstrap-contract-tests.mjs",
+    "test:production-schema-inspection-freshness": "node scripts/production-schema-inspection-freshness-contract-tests.mjs",
     "test:production-database-identity": "node scripts/production-database-identity-contract-tests.mjs"
   },
   "dependencies": {
