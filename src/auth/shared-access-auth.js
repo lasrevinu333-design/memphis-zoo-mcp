@@ -1488,6 +1488,17 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
     return { ok: true, actor, activeStore };
   };
 
+  const retireSharedManagerEnrollment = (req, res) => {
+    auditTrustedDevice(store, authEvent(req, {
+      eventType: "shared_manager_enrollment_route_rejected",
+      success: false,
+      detail: { reason: "named_leadership_enrollment_required" },
+      env,
+    }));
+    res.status(410).json({ ok: false, error: "Shared manager enrollment is retired. Use the personal code created for your named leadership account." });
+  };
+  app.use("/auth-api/ops/shared-enrollment", retireSharedManagerEnrollment);
+
   app.get("/auth-api/ops/shared-enrollment", async (req, res) => {
     try {
       const auth = await requireCustodialManager(req, res);
@@ -1729,13 +1740,12 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
     auditTrustedDevice(store, authEvent(req, {
       eventType: "legacy_manager_enrollment_route_rejected",
       success: false,
-      detail: { reason: "shared_48_hour_passcode_required" },
+      detail: { reason: "named_leadership_enrollment_required" },
       env,
     }));
-    res.status(410).json({ ok: false, error: "This enrollment method is retired. Use the shared 48-hour passcode on the normal Ops Manager Hub URL." });
+    res.status(410).json({ ok: false, error: "This enrollment method is retired. Use the personal code created for your named leadership account." });
   };
   app.use("/auth-api/ops/managers", retireLegacyManagerEnrollment);
-  app.use("/auth-api/ops/manager-codes", retireLegacyManagerEnrollment);
   app.use("/auth-api/ops/pairing", retireLegacyManagerEnrollment);
   app.use("/auth-api/ops/pairing-links", retireLegacyManagerEnrollment);
   app.use("/auth-api/ops/invitations", retireLegacyManagerEnrollment);
@@ -2517,9 +2527,10 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
         passwordless_manager_access: config.passwordlessManagerAccess,
         operations_first: config.passwordlessManagerAccess,
         trusted_device_enrollment: !config.passwordlessManagerAccess && Boolean(store),
-        shared_48_hour_enrollment: !config.passwordlessManagerAccess && Boolean(store),
-        shared_enrollment_ttl_seconds: SHARED_ENROLLMENT_TTL_SECONDS,
-        trusted_device_codes: false,
+        named_manager_enrollment: !config.passwordlessManagerAccess && Boolean(store),
+        shared_48_hour_enrollment: false,
+        shared_enrollment_ttl_seconds: null,
+        trusted_device_codes: !config.passwordlessManagerAccess && Boolean(store),
         trusted_device_pairing: false,
         access_token_ttl_seconds: Math.floor(config.accessTtlMs / 1000),
         trusted_device_ttl_days: Math.floor(config.trustTtlMs / 86_400_000),
