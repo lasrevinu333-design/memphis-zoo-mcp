@@ -6,6 +6,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   HUMAN_CONFIRMATION_REQUIREMENT,
+  INSPECTION_FRESHNESS_WINDOW_HOURS,
   MANAGER_INSPECTION_QUERY,
   evaluateManagerInspectionReadiness,
 } from "./manager-inspection-readiness.mjs";
@@ -47,6 +48,7 @@ assert.equal(passing.ok, true);
 assert.equal(passing.eligible_inspection_count, 1);
 assert.equal(passing.accepted_inspection.inspection_id, ready.id);
 assert.match(passing.human_confirmation_required, /physically performed/i);
+assert.equal(INSPECTION_FRESHNESS_WINDOW_HOURS, 24);
 
 const empty = evaluateManagerInspectionReadiness([], { notBefore, nowMs });
 assert.equal(empty.ok, false);
@@ -86,5 +88,13 @@ assert.doesNotMatch(
 assert.match(workflow, /MANAGER_INSPECTION_ENFORCE:/);
 
 assert.throws(() => evaluateManagerInspectionReadiness([], { notBefore: "bad", nowMs }), /valid timestamp/i);
+
+const stale = evaluateManagerInspectionReadiness([{
+  ...ready,
+  inspected_at: "2026-07-31T00:15:00.000Z",
+  created_at: "2026-08-01T00:00:01.000Z",
+}], { notBefore, nowMs: Date.parse("2026-08-01T00:30:00.000Z") });
+assert.equal(stale.ok, false);
+assert.match(stale.candidates[0].gaps.join(" "), /record was created more than 24 hours after session completion/i);
 
 console.log("MANAGER_INSPECTION_READINESS_TESTS_PASS");
