@@ -59,6 +59,8 @@ SECURITY_WORDS = re.compile(
 
 COMPAT_WORDS = re.compile(r"\b(legacy|compat|fallback|deprecated|retire|rollback|repair|temporary|bridge)\b", re.I)
 
+GIT_BLOB_BY_PATH: dict[str, str] = {}
+
 
 def run_git(*args: str) -> str:
     proc = subprocess.run(["git", *args], check=True, text=True, capture_output=True)
@@ -132,6 +134,9 @@ def add_entry(
     route: str | None = None,
     extra: dict[str, Any] | None = None,
 ) -> None:
+    git_blob = GIT_BLOB_BY_PATH.get(path)
+    if git_blob is None:
+        raise RuntimeError(f"missing Git blob identity for {path}")
     line = line_number(text, offset)
     context_start = max(0, offset - 180)
     context_end = min(len(text), offset + 1200)
@@ -142,6 +147,7 @@ def add_entry(
         "source_commit": commit,
         "source_tree": tree,
         "path": path,
+        "git_blob_sha1": git_blob,
         "file_sha256": file_digest,
         "line": line,
         "category": category,
@@ -395,7 +401,13 @@ def main() -> None:
     if commit != args.commit:
         raise SystemExit(f"commit mismatch: expected {args.commit}, got {commit}")
     tree = run_git("rev-parse", f"{commit}^{{tree}}").strip()
-    paths = [p for p in run_git("ls-tree", "-r", "--name-only", commit).splitlines() if p]
+    GIT_BLOB_BY_PATH.clear()
+    for row in run_git("ls-tree", "-r", commit).splitlines():
+        metadata, path = row.split("\t", 1)
+        _mode, object_type, object_id = metadata.split()
+        if object_type == "blob":
+            GIT_BLOB_BY_PATH[path] = object_id
+    paths = sorted(GIT_BLOB_BY_PATH)
 
     entries: list[dict[str, Any]] = []
     file_manifest: list[dict[str, Any]] = []
@@ -418,7 +430,12 @@ def main() -> None:
             continue
         scanned += 1
         digest = sha256_text(text)
-        file_manifest.append({"path": path, "sha256": digest, "bytes_utf8": len(text.encode("utf-8"))})
+        file_manifest.append({
+            "path": path,
+            "git_blob_sha1": GIT_BLOB_BY_PATH[path],
+            "sha256": digest,
+            "bytes_utf8": len(text.encode("utf-8")),
+        })
         if suffix == ".sql":
             scan_sql(
                 entries,
