@@ -64,10 +64,17 @@ for (let attempt = 1; attempt <= 5; attempt += 1) {
 }
 const progress = await makeOutbox("batch-progress");
 const recoveryBatch = await claim("final-lease-worker-recovery");
-assert.ok(recoveryBatch.some((item) => item.outbox_id === progress.outboxId), "an exhausted row does not abort or wedge later claim-batch progress");
+const progressClaim = recoveryBatch.find((item) => item.outbox_id === progress.outboxId);
+assert.ok(progressClaim, "an exhausted row does not abort or wedge later claim-batch progress");
 assert.ok(!recoveryBatch.some((item) => item.outbox_id === exhausted.outboxId), "the exhausted row is terminalized rather than claimed a sixth time");
 assert.equal(await sql(`select state || '|' || attempts::text || '|' || (failed_at is not null)::text || '|' || left(last_error,60) from public.custodial_offline_reconciliation_outbox where outbox_id=${q(exhausted.outboxId)}::uuid;`), "failed|5|true|notification delivery lease expired after maximum attempts", "fifth expired lease records terminal failure evidence");
 assert.equal(await sql(`select count(*) from public.custodial_offline_reconciliation_delivery_events where outbox_id=${q(exhausted.outboxId)}::uuid and event_type='outbox_lease_reclaimed';`), "4", "attempts one through four have durable reclaim evidence");
+const progressFinished = await finish(progressClaim, "final-lease-worker-recovery", {
+  succeeded: true,
+  delivery: { channel: "test-cleanup", batch_progress_verified: true },
+});
+assert.equal(progressFinished.state, "delivered", "batch-progress fixture is terminalized after proving same-batch progress");
+assert.equal(await sql(`select count(*)::text from public.custodial_offline_reconciliation_outbox where outbox_id=${q(progress.outboxId)}::uuid and state='claimed';`), "0", "batch-progress fixture leaves no claimed row for a later suite");
 
 // A direct terminal failure is visible in both named-manager list and detail
 // with stable state, bounded error, timestamps, and disposition linkage field.

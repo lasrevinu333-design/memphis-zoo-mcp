@@ -139,6 +139,17 @@ function archiveInventory() {
   `).then(JSON.parse);
 }
 
+// The suite must not rely on another database suite to create the bot
+//principal required by the direct-Memphis concurrency assertions.
+await sql(`
+  insert into public.msg_users(id,display_name,role,is_active)
+  select '00000000-0000-4000-8000-00000000e197'::uuid,'Memphis','bot',true
+  where not exists (
+    select 1 from public.msg_users
+    where is_active is true and role='bot' and lower(btrim(display_name))='memphis'
+  );
+`);
+
 await sql(`
   insert into public.msg_users(id,display_name,role,is_active)
   values
@@ -546,18 +557,23 @@ await sql(`
     ('${SAME_NAME_MANAGER_B}'::uuid,'Simultaneous Same Name',array['OPS_MANAGER']::text[],true,false)
   on conflict(manager_id) do update set display_name=excluded.display_name,roles=excluded.roles,active=true,revoked_at=null,is_system_principal=false;
 `);
-const sameNamePrincipals = await concurrentSameNameProvision([SAME_NAME_MANAGER_A, SAME_NAME_MANAGER_B]);
-assert.equal(new Set(sameNamePrincipals).size, 2, "simultaneous same-name manager provisioning adopted one principal");
-const sameNameRows = JSON.parse(await sql(`select jsonb_agg(jsonb_build_object('manager_id',ops_manager_id,'id',id,'display_name',display_name) order by ops_manager_id)::text from public.msg_users where ops_manager_id in ('${SAME_NAME_MANAGER_A}'::uuid,'${SAME_NAME_MANAGER_B}'::uuid);`));
-assert.equal(sameNameRows.length, 2, "simultaneous same-name manager provisioning did not create two principals");
-assert.equal(new Set(sameNameRows.map((row) => row.display_name)).size, 2, "same-name manager labels collided");
-assert.ok(sameNameRows.some((row) => row.display_name === "Simultaneous Same Name"));
-assert.ok(sameNameRows.some((row) => / · Leadership 0000000000004000800000000000e51[12]$/.test(row.display_name)),
-  "same-name collision label did not use a full deterministic UUID identity");
-for (const row of sameNameRows) {
-  const replay = await sql(`set role service_role; select (public.msg_ensure_ops_manager_user('${row.manager_id}'::uuid)).id::text;`);
-  assert.equal(replay, row.id, "same-name provision replay changed the manager principal");
+try {
+  const sameNamePrincipals = await concurrentSameNameProvision([SAME_NAME_MANAGER_A, SAME_NAME_MANAGER_B]);
+  assert.equal(new Set(sameNamePrincipals).size, 2, "simultaneous same-name manager provisioning adopted one principal");
+  const sameNameRows = JSON.parse(await sql(`select jsonb_agg(jsonb_build_object('manager_id',ops_manager_id,'id',id,'display_name',display_name) order by ops_manager_id)::text from public.msg_users where ops_manager_id in ('${SAME_NAME_MANAGER_A}'::uuid,'${SAME_NAME_MANAGER_B}'::uuid);`));
+  assert.equal(sameNameRows.length, 2, "simultaneous same-name manager provisioning did not create two principals");
+  assert.equal(new Set(sameNameRows.map((row) => row.display_name)).size, 2, "same-name manager labels collided");
+  assert.ok(sameNameRows.some((row) => row.display_name === "Simultaneous Same Name"));
+  assert.ok(sameNameRows.some((row) => / · Leadership 0000000000004000800000000000e51[12]$/.test(row.display_name)),
+    "same-name collision label did not use a full deterministic UUID identity");
+  for (const row of sameNameRows) {
+    const replay = await sql(`set role service_role; select (public.msg_ensure_ops_manager_user('${row.manager_id}'::uuid)).id::text;`);
+    assert.equal(replay, row.id, "same-name provision replay changed the manager principal");
+  }
+} finally {
+  await sql(`drop table if exists public.named_manager_test_barrier;`);
 }
+assert.equal(await sql(`select (to_regclass('public.named_manager_test_barrier') is null)::text;`), "true", "same-name concurrency barrier must self-clean before later suites inspect the schema");
 
 const NAMED_RESTORE_THREAD = "00000000-0000-4000-8000-00000000e513";
 await sql(`

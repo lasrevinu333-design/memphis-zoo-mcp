@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -24,10 +23,15 @@ assert.equal(input.backend_contract.execution_boundary, "CUSTODIAL_BACKEND_PROOF
 assert.equal(input.backend_contract.bridge_backend_source, "src/index.js:runPreparedScanRpc");
 assert.ok(Array.isArray(input.cutover?.phase_order) && input.cutover.phase_order.length >= 6);
 assert.ok(Array.isArray(input.cutover?.rollback?.restoration_checks) && input.cutover.rollback.restoration_checks.length >= 4);
-assert.equal(input.cutover?.source_identity?.kind, "runtime_git_identity");
-assert.equal(input.cutover?.source_identity?.commit_ref, "HEAD");
-assert.equal(input.cutover?.source_identity?.tree_ref, "HEAD^{tree}");
-assert.ok(Array.isArray(input.cutover?.source_identity?.authority_content_paths) && input.cutover.source_identity.authority_content_paths.length >= 3);
+assert.equal(input.cutover?.source_identity?.kind, "external_immutable_acceptance_input");
+assert.equal(input.cutover?.source_identity?.generated_evidence_path, "release/integrated-backend-authority-evidence.json");
+assert.equal(input.cutover?.source_identity?.generated_evidence_excluded_from_content_identity, true);
+assert.ok(Array.isArray(input.cutover?.source_identity?.authority_content_paths) && input.cutover.source_identity.authority_content_paths.length >= 12);
+assert.equal(new Set(input.cutover.source_identity.authority_content_paths).size, input.cutover.source_identity.authority_content_paths.length);
+for (const path of input.cutover.source_identity.authority_content_paths) {
+  assert.match(path, /^(?!.*(?:^|\/)\.\.(?:\/|$))[A-Za-z0-9._/-]+$/);
+  assert.ok(!path.startsWith("/"));
+}
 const migrations = [
   "20260810120000_retire_named_manager_shared_room_authority.sql",
   "20260810130000_harden_named_manager_retired_archive_and_concurrency.sql",
@@ -37,14 +41,9 @@ const migrations = [
   "20260810160000_close_offline_authority_integrity_gaps.sql",
   "20260810170000_finish_offline_authority_operational_closure.sql",
   "20260810190000_final_integrated_backend_operational_correction.sql",
-].map((name) => ({ name, sha256: createHash("sha256").update(readFileSync(resolve(root, "supabase/migrations", name))).digest("hex") }));
-const authorityContent = input.cutover.source_identity.authority_content_paths.map((path) => ({
-  path,
-  sha256: createHash("sha256").update(readFileSync(resolve(root, path))).digest("hex"),
-}));
-const authorityContentSha256 = createHash("sha256").update(JSON.stringify(authorityContent)).digest("hex");
+].map((name) => ({ name }));
 const output = {
-  artifact: "integrated-backend-authority-release-evidence.v1",
+  artifact: "integrated-backend-authority-release-evidence.v2",
   schema_fingerprint: schemaFingerprint,
   schema_transition: frontendManifest.schema_transition,
   frontend_source_fingerprint: frontendManifest.schema_fingerprint,
@@ -61,10 +60,10 @@ const output = {
   rollback: input.rollback,
   cutover: input.cutover,
   authority_content_identity: {
-    algorithm: "sha256",
-    value: authorityContentSha256,
-    paths: authorityContent,
-    commit_and_tree: "resolved by the executable cutover gate from git HEAD and HEAD^{tree}",
+    source: "git_tree_blobs_from_external_immutable_acceptance_input",
+    authority_paths: input.cutover.source_identity.authority_content_paths,
+    generated_evidence_excluded_path: "release/integrated-backend-authority-evidence.json",
+    binding: "The executable cutover gate requires externally supplied exact expected_commit and expected_tree, verifies this evidence file as a blob in that tree, then hashes every listed authority path from that tree and compares each worktree byte sequence with its exact tree blob.",
   },
   manager_recovery: {
     list: "GET /admin-api/custodial/offline-reconciliations?limit=1..100&before=<ISO-8601>",

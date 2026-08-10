@@ -20,13 +20,27 @@
   },
   "cutover": {
     "source_identity": {
-      "kind": "runtime_git_identity",
-      "commit_ref": "HEAD",
-      "tree_ref": "HEAD^{tree}",
+      "kind": "external_immutable_acceptance_input",
+      "acceptance_input_contract": "The cutover invocation must supply a regular, mode-0444 JSON file outside this worktree with one exact expected_commit, expected_tree, and this exact authority_content_paths array. The executable gate derives all authority hashes from that expected Git tree; generated evidence is never its own identity authority.",
+      "generated_evidence_path": "release/integrated-backend-authority-evidence.json",
+      "generated_evidence_excluded_from_content_identity": true,
       "authority_content_paths": [
+        "scripts/integrated-backend-authority-cutover-check.mjs",
+        "scripts/refresh-integrated-backend-authority-release.mjs",
         "src/index.js",
+        "src/auth/device-credential-auth.js",
         "src/offline-authority-http.js",
-        "supabase/migrations/20260810190000_final_integrated_backend_operational_correction.sql"
+        "supabase/migrations/20260810143000_offline_actor_occurrence_reconciliation.sql",
+        "supabase/migrations/20260810150000_enforce_integrated_backend_authority.sql",
+        "supabase/migrations/20260810160000_close_offline_authority_integrity_gaps.sql",
+        "supabase/migrations/20260810170000_finish_offline_authority_operational_closure.sql",
+        "supabase/migrations/20260810190000_final_integrated_backend_operational_correction.sql",
+        "release/frontend-release-manifest.json",
+        "release/schema-alignment-input.json",
+        "release/integrated-backend-authority-input.json",
+        "supabase/canonical/schema-fingerprint-input.json",
+        "supabase/canonical/schema-fingerprint.txt",
+        "package.json"
       ]
     },
     "phase_order": [
