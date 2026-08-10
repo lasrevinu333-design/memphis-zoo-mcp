@@ -25,6 +25,7 @@ import { createGeminiControlledRepairWorker } from "./gemini-controlled-worker.j
 import { createMcpServer as createCanonicalMcpServer } from "./mcp/create-mcp-server.js";
 import { getToolManifest } from "./mcp/tool-manifest.js";
 import { validateRuntimeEnv } from "./config/env.js";
+import { authorityHttpFailure, rpcFailure, sqlStateHttpStatus } from "./offline-authority-http.js";
 import { installAnnieMoxieRoutes } from "./annie-moxie-bootstrap.js";
 import { installLeadershipHttpRoutes } from "./leadership-bootstrap.js";
 import { installCustodialEmployeeAdminRoutes } from "./custodial-employee-admin.js";
@@ -53,7 +54,14 @@ app.use((req, res, next) => {
   }
   next();
 });
-app.use(express.json({ limit: "10mb" }));
+// The authority route parses after credential authentication so malformed but
+// authenticated submissions can be durably quarantined instead of disappearing
+// inside Express's global JSON parser.
+const generalJsonParser = express.json({ limit: "10mb" });
+app.use((req, res, next) => {
+  if (req.path === "/scan-api/rpc") return next();
+  return generalJsonParser(req, res, next);
+});
 app.use(express.urlencoded({ extended: false, limit: "32kb" }));
 
 const MOXIE_MOUNT_PATH = (String(process.env.MOXIE_PREFIX || "/moxie").trim() || "/moxie").replace(/\/+$/, "") || "/moxie";
@@ -80,13 +88,9 @@ const SCAN_RPC_ALLOWLIST = new Set([
   "tool_get_system_settings",
   "tool_list_active_employees",
   "tool_get_location_scan_state",
-  "tool_start_session",
-  "tool_start_session_v2",
   "tool_start_offline_occurrence",
-  "tool_finish_session",
   "tool_complete_session",
   "tool_ping_device",
-  "tool_record_scan_event",
   "tool_commit_cleaning_workflow",
   "tool_report_device_sync_status",
   "tool_evaluate_location_proximity",
@@ -292,20 +296,20 @@ function consumeRateLimitBucket({ key, limit, now = Date.now() }) {
 }
 
 function canonicalizeScanArguments(fn, args, device) {
-  const canonicalArgs = { ...(args && typeof args === "object" ? args : {}) };
+  if (!args || typeof args !== "object" || Array.isArray(args)) {
+    throw Object.assign(new Error("Scan RPC args must be a JSON object."), { status: 422, code: "22023" });
+  }
+  const canonicalArgs = { ...args };
   const canonicalDeviceId = String(device?.canonical_device_id || device?.device_id || "").trim();
   if (canonicalDeviceId) {
     if ("p_device_id" in canonicalArgs || [
       "tool_get_location_scan_state",
-      "tool_start_session",
       "tool_start_offline_occurrence",
-      "tool_finish_session",
       "tool_complete_session",
       "tool_ping_device",
       "tool_commit_cleaning_workflow",
     ].includes(fn)) canonicalArgs.p_device_id = canonicalDeviceId;
     if ("p_device_identifier" in canonicalArgs || [
-      "tool_record_scan_event",
       "tool_report_device_sync_status",
       "tool_evaluate_location_proximity",
       "tool_evaluate_location_proximity_v2",
@@ -313,42 +317,13 @@ function canonicalizeScanArguments(fn, args, device) {
   }
 
   const assignedEmployeeName = String(device?.assigned_employee_name || "").trim();
-  if (assignedEmployeeName && fn === "tool_start_session") canonicalArgs.p_employee_name = assignedEmployeeName;
   if (assignedEmployeeName && fn === "tool_complete_session") canonicalArgs.p_submitted_by_employee_name = assignedEmployeeName;
   return canonicalArgs;
 }
 
 function prepareScanRpcCall(fn, args) {
   const normalizedFn = String(fn || "").trim();
-  const nextArgs = { ...(args && typeof args === "object" ? args : {}) };
-  if (normalizedFn === "tool_start_session") {
-    const clientSessionId = String(nextArgs.p_client_session_id || nextArgs.client_session_id || "").trim();
-    if (!clientSessionId) {
-      const error = new Error("p_client_session_id is required for scan start idempotency.");
-      error.status = 422;
-      throw error;
-    }
-    return {
-      fn: "tool_start_session_v2",
-      args: {
-        p_location_code: nextArgs.p_location_code,
-        p_device_id: nextArgs.p_device_id,
-        p_client_session_id: clientSessionId,
-        p_client_started_at: nextArgs.p_client_started_at || nextArgs.started_at || null,
-        p_correlation_id: nextArgs.p_correlation_id || `scan-start:${clientSessionId}`,
-      },
-    };
-  }
-  if (normalizedFn === "tool_start_session_v2") {
-    const clientSessionId = String(nextArgs.p_client_session_id || nextArgs.client_session_id || "").trim();
-    if (!clientSessionId) {
-      const error = new Error("p_client_session_id is required for scan start idempotency.");
-      error.status = 422;
-      throw error;
-    }
-    nextArgs.p_client_session_id = clientSessionId;
-    if (!nextArgs.p_correlation_id) nextArgs.p_correlation_id = `scan-start:${clientSessionId}`;
-  }
+  const nextArgs = { ...args };
   if (normalizedFn === "tool_start_offline_occurrence") {
     const clientSessionId = String(nextArgs.p_client_session_id || nextArgs.client_session_id || "").trim();
     const clientStartedAt = String(nextArgs.p_client_started_at || nextArgs.started_at || "").trim();
@@ -359,29 +334,6 @@ function prepareScanRpcCall(fn, args) {
     }
     nextArgs.p_client_session_id = clientSessionId;
     nextArgs.p_client_started_at = clientStartedAt;
-  }
-  if (normalizedFn === "tool_finish_session") {
-    const sessionIdentifier = String(nextArgs.p_session_uuid || nextArgs.p_client_session_id || "").trim();
-    const finishOperationId = String(nextArgs.p_finish_operation_id || nextArgs.p_operation_id || nextArgs.p_client_event_id || "").trim();
-    if (!sessionIdentifier) {
-      const error = new Error("Exact p_session_uuid or p_client_session_id is required for a finish transition.");
-      error.status = 422;
-      throw error;
-    }
-    if (!isUuid(finishOperationId)) {
-      const error = new Error("p_finish_operation_id must be a stable UUID for a finish transition.");
-      error.status = 422;
-      throw error;
-    }
-    return {
-      fn: "tool_finish_session_exact",
-      args: {
-        p_session_identifier: sessionIdentifier,
-        p_device_id: nextArgs.p_device_id,
-        p_finish_operation_id: finishOperationId,
-        p_client_ended_at: nextArgs.p_client_ended_at || nextArgs.ended_at || null,
-      },
-    };
   }
   if (normalizedFn === "tool_complete_session") {
     const sessionIdentifier = String(nextArgs.p_session_uuid || nextArgs.p_client_session_id || "").trim();
@@ -400,7 +352,7 @@ function prepareScanRpcCall(fn, args) {
       fn: normalizedFn,
       args: {
         p_session_uuid: sessionIdentifier,
-        p_response_json: nextArgs.p_response_json || {},
+        p_response_json: nextArgs.p_response_json,
         p_submitted_by_employee_name: nextArgs.p_submitted_by_employee_name || null,
         p_device_id: nextArgs.p_device_id || null,
         p_client_completion_id: completionId,
@@ -416,6 +368,12 @@ function prepareScanRpcCall(fn, args) {
       throw error;
     }
     if (!nextArgs.p_correlation_id) nextArgs.p_correlation_id = `scan-commit:${clientSessionId}:${clientCompletionId}`;
+    if (!nextArgs.p_response_json || typeof nextArgs.p_response_json !== "object" || Array.isArray(nextArgs.p_response_json)) {
+      throw Object.assign(new Error("p_response_json must be a JSON object."), { status: 422, code: "22023" });
+    }
+    if (!Array.isArray(nextArgs.p_scan_evidence)) {
+      throw Object.assign(new Error("p_scan_evidence must be a JSON array."), { status: 422, code: "22023" });
+    }
   }
   return { fn: normalizedFn, args: nextArgs };
 }
@@ -434,7 +392,10 @@ function offlineAuthoritySecret() {
 function bindOfflineActorProof(fn, args, credential) {
   const normalizedFn = String(fn || "").trim();
   if (!["tool_commit_cleaning_workflow", "tool_complete_session", "tool_start_offline_occurrence"].includes(normalizedFn)) return { fn: normalizedFn, args };
-  const nextArgs = { ...(args && typeof args === "object" ? args : {}) };
+  if (!args || typeof args !== "object" || Array.isArray(args)) {
+    throw Object.assign(new Error("Offline authority arguments must be a JSON object."), { status: 422, code: "22023" });
+  }
+  const nextArgs = { ...args };
   const secret = offlineAuthoritySecret();
   if (!credential?.credential_id) {
     const error = new Error("An authenticated device credential is required for offline authority.");
@@ -447,42 +408,137 @@ function bindOfflineActorProof(fn, args, credential) {
     return { fn: normalizedFn, args: nextArgs };
   }
   if (normalizedFn === "tool_complete_session") {
+    const authoritativeArgs = {
+      p_session_uuid: nextArgs.p_session_uuid,
+      p_response_json: nextArgs.p_response_json,
+      p_device_id: nextArgs.p_device_id || null,
+      p_client_completion_id: nextArgs.p_client_completion_id,
+      p_authenticated_credential_id: credential.credential_id,
+      p_backend_execution_secret: secret,
+    };
     return {
       fn: "tool_complete_session_authoritative",
-      args: {
-        p_session_uuid: nextArgs.p_session_uuid,
-        p_response_json: nextArgs.p_response_json || {},
-        p_device_id: nextArgs.p_device_id || null,
-        p_client_completion_id: nextArgs.p_client_completion_id,
-        p_authenticated_credential_id: credential.credential_id,
-        p_backend_execution_secret: secret,
+      args: authoritativeArgs,
+      // The bridge release is safe to deploy before Phase B: while the new
+      // command does not exist it calls the accepted legacy writer; the first
+      // Phase B transaction atomically makes the canonical command available.
+      fallback: {
+        fn: "tool_complete_session",
+        args: {
+          p_session_uuid: nextArgs.p_session_uuid,
+          p_response_json: nextArgs.p_response_json,
+          p_submitted_by_employee_name: nextArgs.p_submitted_by_employee_name || null,
+          p_device_id: nextArgs.p_device_id || null,
+          p_client_completion_id: nextArgs.p_client_completion_id,
+        },
       },
     };
   }
-  const response = nextArgs.p_response_json && typeof nextArgs.p_response_json === "object" && !Array.isArray(nextArgs.p_response_json)
-    ? { ...nextArgs.p_response_json }
-    : {};
+  if (!nextArgs.p_response_json || typeof nextArgs.p_response_json !== "object" || Array.isArray(nextArgs.p_response_json)) {
+    throw Object.assign(new Error("p_response_json must be a JSON object."), { status: 422, code: "22023" });
+  }
+  if (!Array.isArray(nextArgs.p_scan_evidence)) {
+    throw Object.assign(new Error("p_scan_evidence must be a JSON array."), { status: 422, code: "22023" });
+  }
+  const response = { ...nextArgs.p_response_json };
   const requested = response.__custodial_offline_reconciliation_v1;
-  const requestedControl = requested && typeof requested === "object" && !Array.isArray(requested) ? requested : {};
+  if (!requested || typeof requested !== "object" || Array.isArray(requested)) {
+    throw Object.assign(new Error("A canonical offline reconciliation control object is required."), { status: 422, code: "22023" });
+  }
+  const requestedControl = requested;
   delete response.__custodial_offline_reconciliation_v1;
+  const authoritativeArgs = {
+    p_client_session_id: nextArgs.p_client_session_id,
+    p_client_completion_id: nextArgs.p_client_completion_id,
+    p_device_id: nextArgs.p_device_id,
+    p_location_code: nextArgs.p_location_code,
+    p_client_started_at: String(nextArgs.p_client_started_at || ""),
+    p_client_ended_at: String(nextArgs.p_client_ended_at || ""),
+    p_response_json: response,
+    p_scan_evidence: nextArgs.p_scan_evidence,
+    p_correlation_id: nextArgs.p_correlation_id || null,
+    p_context_id: String(requestedControl.context_id || ""),
+    p_submission_proof: String(requestedControl.submission_proof || ""),
+    p_authenticated_credential_id: credential.credential_id,
+    p_backend_execution_secret: secret,
+  };
   return {
     fn: "tool_commit_cleaning_workflow_authoritative",
-    args: {
-      p_client_session_id: nextArgs.p_client_session_id,
-      p_client_completion_id: nextArgs.p_client_completion_id,
-      p_device_id: nextArgs.p_device_id,
-      p_location_code: nextArgs.p_location_code,
-      p_client_started_at: String(nextArgs.p_client_started_at || ""),
-      p_client_ended_at: String(nextArgs.p_client_ended_at || ""),
-      p_response_json: response,
-      p_scan_evidence: Array.isArray(nextArgs.p_scan_evidence) ? nextArgs.p_scan_evidence : [],
-      p_correlation_id: nextArgs.p_correlation_id || null,
-      p_context_id: String(requestedControl.context_id || ""),
-      p_submission_proof: String(requestedControl.submission_proof || ""),
-      p_authenticated_credential_id: credential.credential_id,
-      p_backend_execution_secret: secret,
+    args: authoritativeArgs,
+    fallback: {
+      fn: "tool_commit_cleaning_workflow",
+      args: {
+        p_client_session_id: nextArgs.p_client_session_id,
+        p_client_completion_id: nextArgs.p_client_completion_id,
+        p_device_id: nextArgs.p_device_id,
+        p_location_code: nextArgs.p_location_code,
+        p_client_started_at: nextArgs.p_client_started_at,
+        p_client_ended_at: nextArgs.p_client_ended_at,
+        p_response_json: response,
+        p_scan_evidence: nextArgs.p_scan_evidence,
+        p_correlation_id: nextArgs.p_correlation_id || null,
+      },
     },
   };
+}
+
+async function runPreparedScanRpc(prepared) {
+  try {
+    return await runRpc(prepared.fn, prepared.args);
+  } catch (error) {
+    if (["42883", "PGRST202"].includes(error?.code) && prepared?.fallback?.fn) {
+      return runRpc(prepared.fallback.fn, prepared.fallback.args);
+    }
+    throw error;
+  }
+}
+
+const MAX_SCAN_RPC_BYTES = 1024 * 1024;
+const scanAuthorityJsonParser = express.json({
+  limit: `${MAX_SCAN_RPC_BYTES}b`,
+  strict: true,
+  verify(req, _res, buffer) {
+    req.scanAuthorityRawBody = Buffer.from(buffer);
+  },
+});
+
+async function parseAuthenticatedScanAuthorityJson(req, res, next) {
+  scanAuthorityJsonParser(req, res, async (parseError) => {
+    if (!parseError) {
+      next();
+      return;
+    }
+    const credentialId = String(req.memphisDeviceCredential?.credential_id || "").trim();
+    const rawBody = req.scanAuthorityRawBody || parseError.body || Buffer.alloc(0);
+    const declaredLength = Number.parseInt(String(req.headers["content-length"] || rawBody.length || 0), 10);
+    const contentLength = Number.isFinite(declaredLength) && declaredLength >= 0
+      ? Math.min(declaredLength, 10 * 1024 * 1024)
+      : Math.min(rawBody.length, 10 * 1024 * 1024);
+    const digest = createHash("sha256")
+      .update(`${credentialId}:${parseError.type || "invalid_json"}:${contentLength}:`)
+      .update(rawBody)
+      .digest("hex");
+    try {
+      if (credentialId && offlineAuthoritySecret()) {
+        await runRpc("custodial_quarantine_malformed_scan_http", {
+          p_request_digest: digest,
+          p_authenticated_credential_id: credentialId,
+          p_content_length: contentLength,
+          p_backend_execution_secret: offlineAuthoritySecret(),
+        });
+      }
+    } catch (quarantineError) {
+      const failure = authorityHttpFailure(quarantineError, "Malformed scan payload quarantine is unavailable.");
+      res.status(failure.status).json(failure.body);
+      return;
+    }
+    res.status(422).json({
+      ok: false,
+      error: "Malformed or oversized scan JSON was quarantined.",
+      code: "22023",
+      retryable: false,
+    });
+  });
 }
 
 function scanRpcRateLimit(req, res, next) {
@@ -718,12 +774,12 @@ async function runRpc(functionName, args = {}) {
       p_service_date: args?.p_service_date,
       p_force: args?.p_force === true,
     });
-    if (error) throw new Error(error.message || "RPC failed: sch_generate_daily_schedule_privileged");
+    if (error) throw rpcFailure(error, "sch_generate_daily_schedule_privileged");
     return data;
   }
   const client = getSupabaseConfig();
   const { data, error } = await client.rpc(functionName, args);
-  if (error) throw new Error(error.message || `RPC failed: ${functionName}`);
+  if (error) throw rpcFailure(error, functionName);
   return data;
 }
 
@@ -762,6 +818,19 @@ function requestOperationId(req) {
   ).trim();
   if (!value) return randomUUID();
   if (!isUuid(value)) throw Object.assign(new Error("operation_id must be a UUID."), { status: 422 });
+  return value;
+}
+
+function requiredRequestOperationId(req) {
+  const value = String(
+    req?.body?.operation_id
+      || req?.body?.operationId
+      || req?.header?.("idempotency-key")
+      || "",
+  ).trim();
+  if (!isUuid(value)) {
+    throw Object.assign(new Error("operation_id must be a stable UUID."), { status: 422, code: "22023" });
+  }
   return value;
 }
 
@@ -2444,7 +2513,7 @@ app.get("/admin-api/custodial/offline-reconciliations", requireOpsManagerAuth, a
       p_backend_execution_secret: offlineAuthoritySecret(),
     });
     res.status(200).json({ ok: true, contract_version: "offline-authority.v2", data });
-  } catch (error) { res.status(error?.status || 503).json({ ok: false, error: error?.message || "Offline reconciliation recovery is unavailable." }); }
+  } catch (error) { const failure = authorityHttpFailure(error, "Offline reconciliation recovery is unavailable."); res.status(failure.status).json(failure.body); }
 });
 app.get("/admin-api/custodial/offline-reconciliations/:reconciliationId", requireOpsManagerAuth, async (req, res) => {
   try {
@@ -2455,7 +2524,7 @@ app.get("/admin-api/custodial/offline-reconciliations/:reconciliationId", requir
       p_backend_execution_secret: offlineAuthoritySecret(),
     });
     res.status(200).json({ ok: true, contract_version: "offline-authority.v2", data });
-  } catch (error) { res.status(error?.status || 503).json({ ok: false, error: error?.message || "Offline reconciliation recovery is unavailable." }); }
+  } catch (error) { const failure = authorityHttpFailure(error, "Offline reconciliation recovery is unavailable."); res.status(failure.status).json(failure.body); }
 });
 app.post("/admin-api/custodial/offline-reconciliations/:reconciliationId/dispositions", requireOpsManagerWrite, async (req, res) => {
   try {
@@ -2467,10 +2536,11 @@ app.post("/admin-api/custodial/offline-reconciliations/:reconciliationId/disposi
     }
     const data = await runRpc("custodial_manager_dispose_offline_reconciliation", {
       p_manager_id: offlineAuthorityManagerId(req), p_reconciliation_id: reconciliationId,
-      p_disposition: disposition, p_reason: reason, p_backend_execution_secret: offlineAuthoritySecret(),
+      p_disposition: disposition, p_reason: reason, p_request_id: requiredRequestOperationId(req),
+      p_backend_execution_secret: offlineAuthoritySecret(),
     });
-    res.status(201).json({ ok: true, contract_version: "offline-authority.v2", data });
-  } catch (error) { res.status(error?.status || 503).json({ ok: false, error: error?.message || "Offline reconciliation disposition is unavailable." }); }
+    res.status(data?.replayed === true ? 200 : 201).json({ ok: true, contract_version: "offline-authority.v2", data });
+  } catch (error) { const failure = authorityHttpFailure(error, "Offline reconciliation disposition is unavailable."); res.status(failure.status).json(failure.body); }
 });
 app.get("/scan-api/health", (_req, res) => {
   res.status(200).json(buildHealthPayload("scan", {
@@ -2482,7 +2552,16 @@ app.get("/scan-api/health", (_req, res) => {
     },
   }));
 });
-app.post("/scan-api/rpc", requireDeviceOrOpsAccess, requireScanRpcAuthorization, scanRpcRateLimit, async (req, res) => {
+app.get("/scan-api/authority-health", async (_req, res) => {
+  try {
+    const data = await runRpc("custodial_backend_authority_health", { p_backend_execution_secret: offlineAuthoritySecret() });
+    res.status(200).json({ ok: true, data });
+  } catch (error) {
+    const failure = authorityHttpFailure(error, "Offline authority health is unavailable.");
+    res.status(failure.status).json(failure.body);
+  }
+});
+app.post("/scan-api/rpc", requireDeviceOrOpsAccess, parseAuthenticatedScanAuthorityJson, requireScanRpcAuthorization, scanRpcRateLimit, async (req, res) => {
   try {
     const fn = String(req.body?.fn || "").trim();
     if (!SCAN_RPC_ALLOWLIST.has(fn)) {
@@ -2493,7 +2572,7 @@ app.post("/scan-api/rpc", requireDeviceOrOpsAccess, requireScanRpcAuthorization,
     const preparedBase = prepareScanRpcCall(fn, args);
     const proofBound = bindOfflineActorProof(preparedBase.fn, preparedBase.args, req.memphisDeviceCredential);
     const prepared = { ...preparedBase, ...proofBound };
-    const data = await runRpc(prepared.fn, prepared.args);
+    const data = await runPreparedScanRpc(prepared);
     res.status(200).json({
       ok: true,
       data,
@@ -2507,18 +2586,8 @@ app.post("/scan-api/rpc", requireDeviceOrOpsAccess, requireScanRpcAuthorization,
     });
   } catch (error) {
     console.error("scan rpc failed:", error);
-    const message = String(error?.message || "Scan RPC failed");
-    const status = error?.status
-      || (/not found/i.test(message)
-        ? 404
-        : /invalid|required|cannot|must|too (?:old|far|large)|exceeds/i.test(message)
-          ? 422
-      : /already has|already bound|manager recovery|required review|transition/i.test(message)
-        ? 409
-      : /unauthor|not assigned|another device/i.test(message)
-        ? 403
-        : 500);
-    res.status(status).json({ ok: false, error: message });
+    const failure = authorityHttpFailure(error, "Scan RPC failed.");
+    res.status(failure.status).json(failure.body);
   }
 });
 app.get("/", (_req, res) => { res.status(200).send("Memphis Zoo MCP server is running."); });

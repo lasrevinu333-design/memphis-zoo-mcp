@@ -1,17 +1,19 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v1",
-  "schema_fingerprint": "2693a43e070cece74a9ad9f6e9389acfc072ba0cf49cd128db2130cdd494df2d",
+  "schema_fingerprint": "62ac67ebfca2eb1c575699b05543ae5d18cad883b17cbbdd67832425ded27d5b",
   "schema_transition": {
     "transition_id": "named-manager-messenger-archive-retirement-20260810",
     "from_fingerprint": "333ddfc8008ea0b85916de7d491b98c9b8d6a7d45d3a2947d99b4b3bb836ea00",
-    "to_fingerprint": "2693a43e070cece74a9ad9f6e9389acfc072ba0cf49cd128db2130cdd494df2d",
+    "to_fingerprint": "62ac67ebfca2eb1c575699b05543ae5d18cad883b17cbbdd67832425ded27d5b",
     "expires_at": "2026-08-23T23:59:59Z"
   },
   "frontend_source_fingerprint": "333ddfc8008ea0b85916de7d491b98c9b8d6a7d45d3a2947d99b4b3bb836ea00",
   "backend_contract": {
     "scan": "scan.v3.offline-authority",
     "authority": "offline-authority.v2",
-    "execution_boundary": "CUSTODIAL_BACKEND_PROOF_SECRET"
+    "execution_boundary": "CUSTODIAL_BACKEND_PROOF_SECRET",
+    "bridge_backend_source": "src/index.js:runPreparedScanRpc",
+    "health_gate": "GET /scan-api/authority-health and custodial_backend_authority_health"
   },
   "compatibility_window": {
     "accepted_engine": {
@@ -26,12 +28,34 @@
       "completion": "tool_commit_cleaning_workflow with context_id and submission_proof"
     },
     "additive_phase": "20260810143000 supplies explicit activation and records no state-read proof",
-    "enforcement_phase": "20260810150000 routes both canonical and legacy completion through one server-authenticated transaction"
+    "enforcement_phase": "20260810150000 routes both canonical and legacy completion through one server-authenticated transaction",
+    "closure_phase": "20260810160000 removes direct DML and legacy-writer authority, fences terminal conflicts, and writes manager outbox evidence"
   },
   "rollback": {
     "before_enforcement": "legacy Engine and current backend completion remain available",
-    "after_enforcement": "keep the final backend; it translates legacy completion to the authoritative adapter and preserves all immutable evidence",
-    "database": "forward-only; do not down-migrate contexts, proofs, reservations, reconciliation, audit, scan evidence, or dispositions"
+    "after_enforcement": "roll traffic only to the retained bridge backend artifact; it is capability-aware and never re-enables direct SQL writers",
+    "database": "forward-only; do not down-migrate contexts, proofs, reservations, reconciliation, audit, scan evidence, dispositions, or outbox evidence"
+  },
+  "cutover": {
+    "source_identity": "agent/integrated-backend-10e5952-audit-correction-20260810",
+    "phase_order": [
+      "configure CUSTODIAL_BACKEND_PROOF_SECRET (minimum 32 characters) and matching database SHA-256 digest",
+      "apply 20260810143000_offline_actor_occurrence_reconciliation.sql",
+      "deploy the bridge backend; it falls back only on absent authoritative procedures",
+      "apply 20260810150000_enforce_integrated_backend_authority.sql",
+      "apply 20260810160000_close_offline_authority_integrity_gaps.sql",
+      "require a green authority health gate and direct-DML denial probes before routing traffic"
+    ],
+    "rollback": {
+      "precondition": "retain the exact bridge backend artifact and the execution secret until all authority health and restoration probes are green",
+      "action": "roll traffic back to the bridge backend artifact; it selects the authoritative procedure when present and only uses legacy fallback when the procedure is absent",
+      "restoration_checks": [
+        "custodial_backend_authority_health returns ok=true",
+        "exact completion replay returns one reconciliation and one completion",
+        "service_role direct insert/update/delete/truncate probes are denied",
+        "named-manager reconciliation read and exactly-once disposition replay remain available"
+      ]
+    }
   },
   "manager_recovery": {
     "list": "GET /admin-api/custodial/offline-reconciliations?limit=1..100&before=<ISO-8601>",
@@ -59,7 +83,11 @@
     {
       "name": "20260810150000_enforce_integrated_backend_authority.sql",
       "sha256": "ed21f67236622e924979be1bacc3578c932af3284cd1dd86fd2b6a091d89cf1f"
+    },
+    {
+      "name": "20260810160000_close_offline_authority_integrity_gaps.sql",
+      "sha256": "1c520032b8cba706bd25c638b788410bd52553bd8ffd1bf0faa97112bb435e1d"
     }
   ],
-  "release_boundary": "Configure the database execution-secret digest and CUSTODIAL_BACKEND_PROOF_SECRET before enabling Phase B; otherwise all new authority writers fail closed."
+  "release_boundary": "Configure a minimum-32-character CUSTODIAL_BACKEND_PROOF_SECRET and matching database digest before Phase A, retain the bridge backend artifact through Phase C, and require the executable health/restoration probes before traffic changes."
 }

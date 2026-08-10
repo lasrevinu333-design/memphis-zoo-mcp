@@ -21,6 +21,10 @@ const offlineAuthorityEnforcementMigration = readFileSync(
   "supabase/migrations/20260810150000_enforce_integrated_backend_authority.sql",
   "utf8",
 );
+const offlineAuthorityClosureMigration = readFileSync(
+  "supabase/migrations/20260810160000_close_offline_authority_integrity_gaps.sql",
+  "utf8",
+);
 const schemaReconciliationMigration = readFileSync(
   "supabase/migrations/20260801134430_reconcile_canonical_schema_security_metadata.sql",
   "utf8",
@@ -38,8 +42,8 @@ const foreignKeyIndexMigration = readFileSync(
   "utf8",
 );
 
-assert.match(indexSource, /tool_start_session_v2/);
-assert.match(indexSource, /p_client_session_id is required for scan start idempotency/);
+assert.doesNotMatch(indexSource, /"tool_start_session_v2"/);
+assert.doesNotMatch(indexSource, /"tool_record_scan_event"/);
 assert.match(indexSource, /p_client_completion_id are required for idempotent completion/);
 assert.match(indexSource, /prepareScanRpcCall/);
 assert.match(indexSource, /bindOfflineActorProof/);
@@ -47,7 +51,16 @@ assert.match(indexSource, /tool_start_offline_occurrence/);
 assert.match(indexSource, /tool_commit_cleaning_workflow_authoritative/);
 assert.match(indexSource, /CUSTODIAL_BACKEND_PROOF_SECRET/);
 assert.doesNotMatch(indexSource, /custodial_issue_offline_actor_context/);
-assert.match(indexSource, /error\?\.status/);
+assert.match(indexSource, /sqlStateHttpStatus/);
+assert.match(indexSource, /custodial_quarantine_malformed_scan_http/);
+assert.match(indexSource, /requiredRequestOperationId/);
+assert.match(indexSource, /authorityHttpFailure/);
+assert.match(offlineAuthorityClosureMigration, /custodial_offline_reconciliation_outbox/);
+assert.match(offlineAuthorityClosureMigration, /custodial_reject_offline_evidence_truncate/);
+assert.match(offlineAuthorityClosureMigration, /invalid_payload_shape_or_bounds/);
+assert.match(offlineAuthorityClosureMigration, /duplicate scan event identity in one payload/);
+assert.match(offlineAuthorityClosureMigration, /scan_event_identity_already_bound/);
+assert.match(offlineAuthorityClosureMigration, /revoke all on table public\.sessions,public\.completion_responses,public\.scan_events,public\.maintenance_tickets/);
 assert.doesNotMatch(indexSource, /create table if not exists public\.guest_cleanliness_reports/i);
 assert.doesNotMatch(indexSource, /create table if not exists public\.system_feedback_items/i);
 assert.match(indexSource, /storage_bucket/);

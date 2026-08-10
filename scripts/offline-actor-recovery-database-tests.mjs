@@ -37,11 +37,11 @@ async function sql(statement, { expectFailure = false } = {}) {
     return String(error.stderr || error.message);
   }
 }
-function jsonSql({ session, completion, context, proof, device, location, start = startedAt, end = endedAt, response = { issues: [{ label: "Authority test faucet", category: "plumbing" }], alpha: 1 }, scans = [], correlation = "correlation-a" }) {
+function jsonSql({ session, completion, context, proof, device, location, credential = credentialA, start = startedAt, end = endedAt, response = { issues: [{ label: "Authority test faucet", category: "plumbing" }], alpha: 1 }, scans = [], correlation = "correlation-a" }) {
   return `select public.tool_commit_cleaning_workflow_authoritative(
     ${q(session)},${q(completion)},${q(device)},${q(location)},${q(start)},${q(end)},
     ${q(JSON.stringify(response))}::jsonb,${q(JSON.stringify(scans))}::jsonb,${q(correlation)},
-    ${q(context)},${q(proof)},${q(credentialA)},${q(execSecret)}
+    ${q(context)},${q(proof)},${q(credential)},${q(execSecret)}
   )::text;`;
 }
 async function activate({ device, location, session, start = startedAt, credential = credentialA }) {
@@ -111,12 +111,109 @@ const malformedStart = malformed.started_at;
 const malformedResult = JSON.parse(await sql(`select public.tool_commit_cleaning_workflow_authoritative(${q(`oa-${stamp}-malformed`)},${q(`oa-${stamp}-malformed-complete`)},${q(`OA-${stamp}-C`)},${q(codeC)},${q(malformedStart)},${q(new Date().toISOString())},'{}'::jsonb,${q(JSON.stringify([{ event_type: "scan_finish", client_event_id: `oa-${stamp}-bad`, scanned_at: "not-a-time" }]))}::jsonb,'malformed',${q(malformed.context_id)},${q(malformed.submission_proof)},${q(credentialC)},${q(execSecret)})::text;`));
 assert.equal(malformedResult.reason, "malformed_scan_evidence");
 assert.equal(await sql(`select count(*) from public.completion_responses where client_completion_id=${q(`oa-${stamp}-malformed-complete`)};`), "0");
-assert.equal(await sql(`select to_regclass('public.custodial_offline_reconciliation_outbox') is null;`), "t", "quarantine has no operational outbox");
+assert.equal(await sql(`select count(*) from public.custodial_offline_reconciliation_outbox o join public.custodial_offline_reconciliation_records r on r.reconciliation_id=o.reconciliation_id where r.client_completion_id=${q(`oa-${stamp}-malformed-complete`)} and o.notification_kind='offline_reconciliation_quarantine';`), "1", "each new quarantine has one deduplicated manager outbox record");
 
 for (const table of ["custodial_offline_actor_contexts", "custodial_offline_submission_proofs", "custodial_offline_reconciliation_records", "custodial_offline_reconciliation_audits", "custodial_offline_scan_event_evidence"]) {
   const denial = await sql(`set role service_role; delete from public.${table};`, { expectFailure: true });
   assert.match(denial, /permission denied|append-only|immutable/i, `${table} rejects direct service-role deletion`);
 }
+for (const table of ["sessions", "completion_responses", "scan_events", "maintenance_tickets"]) {
+  for (const statement of [
+    `insert into public.${table} default values;`,
+    `update public.${table} set id=id where false;`,
+    `delete from public.${table} where false;`,
+    `truncate table public.${table};`,
+  ]) {
+    const denial = await sql(`set role service_role; ${statement}`, { expectFailure: true });
+    assert.match(denial, /permission denied/i, `${table} rejects direct service-role DML and TRUNCATE`);
+  }
+}
+assert.notEqual(await sql(`set role service_role; select count(*) from public.sessions;`), "", "service role retains operational reads");
+const truncateGuard = await sql(`truncate table public.custodial_offline_reconciliation_outbox;`, { expectFailure: true });
+assert.match(truncateGuard, /explicit maintenance procedure/i, "append-only evidence has a statement-level TRUNCATE guard");
+
+// Concurrent activation has one canonical context and every exact caller gets
+// a normal replay instead of a unique-constraint error.
+const activationSession = `oa-${stamp}-concurrent-activation`;
+const activationStartedAt = new Date(Date.now() - 90_000).toISOString();
+const activationResults = await Promise.all(Array.from({ length: 8 }, () => activate({
+  device: `OA-${stamp}-C`, location: codeC, session: activationSession, start: activationStartedAt, credential: credentialC,
+})));
+assert.equal(new Set(activationResults.map((result) => result.context_id)).size, 1, "concurrent exact activation converges on one context");
+assert.equal(await sql(`select count(*) from public.custodial_offline_actor_contexts where client_session_id=${q(activationSession)};`), "1");
+
+// A same completion key on a second occurrence must fence that occurrence and
+// its proof; a new key cannot subsequently close it.
+const fenceStart = new Date(Date.now() - 2 * 60_000).toISOString();
+const fenceEnd = new Date(Date.now() - 70_000).toISOString();
+const fenceA = await activate({ device: `OA-${stamp}-B`, location: codeB, session: `oa-${stamp}-fence-a`, start: fenceStart, credential: credentialB });
+const fenceKey = `oa-${stamp}-shared-fence-key`;
+assert.equal(JSON.parse(await sql(jsonSql({ session: `oa-${stamp}-fence-a`, completion: fenceKey, context: fenceA.context_id, proof: fenceA.submission_proof, device: `OA-${stamp}-B`, location: codeB, credential: credentialB, start: fenceStart, end: fenceEnd }))).status, "closed");
+const fenceB = await activate({ device: `OA-${stamp}-C`, location: codeC, session: `oa-${stamp}-fence-b`, start: fenceStart, credential: credentialC });
+const fenced = JSON.parse(await sql(jsonSql({ session: `oa-${stamp}-fence-b`, completion: fenceKey, context: fenceB.context_id, proof: fenceB.submission_proof, device: `OA-${stamp}-C`, location: codeC, credential: credentialC, start: fenceStart, end: fenceEnd })));
+assert.equal(fenced.status, "quarantined");
+assert.equal(await sql(`select status from public.custodial_offline_actor_contexts where context_id=${q(fenceB.context_id)}::uuid;`), "quarantined");
+assert.equal(await sql(`select state from public.custodial_offline_submission_proofs where context_id=${q(fenceB.context_id)}::uuid;`), "quarantined");
+const fencedRetry = JSON.parse(await sql(jsonSql({ session: `oa-${stamp}-fence-b`, completion: `oa-${stamp}-fence-b-new-key`, context: fenceB.context_id, proof: fenceB.submission_proof, device: `OA-${stamp}-C`, location: codeC, credential: credentialC, start: fenceStart, end: fenceEnd })));
+assert.equal(fencedRetry.status, "quarantined");
+assert.equal(await sql(`select count(*) from public.completion_responses where client_completion_id=${q(`oa-${stamp}-fence-b-new-key`)};`), "0", "fenced proof never mints a second completion");
+
+const duplicate = await activate({ device: `OA-${stamp}-C`, location: codeC, session: `oa-${stamp}-duplicate-events`, start: fenceStart, credential: credentialC });
+const duplicateResult = JSON.parse(await sql(jsonSql({
+  session: `oa-${stamp}-duplicate-events`, completion: `oa-${stamp}-duplicate-events-complete`, context: duplicate.context_id, proof: duplicate.submission_proof,
+  device: `OA-${stamp}-C`, location: codeC, credential: credentialC, start: fenceStart, end: fenceEnd,
+  scans: [
+    { event_type: "scan_finish", client_event_id: `oa-${stamp}-duplicate-id`, scanned_at: fenceEnd, result: "first" },
+    { event_type: "scan_finish", client_event_id: `oa-${stamp}-duplicate-id`, scanned_at: fenceEnd, result: "second" },
+  ],
+})));
+assert.equal(duplicateResult.reason, "malformed_scan_evidence", "duplicate identities inside one payload quarantine instead of splitting evidence");
+
+const infinity = await activate({ device: `OA-${stamp}-C`, location: codeC, session: `oa-${stamp}-infinity`, start: fenceStart, credential: credentialC });
+const infinityResult = JSON.parse(await sql(jsonSql({
+  session: `oa-${stamp}-infinity`, completion: `oa-${stamp}-infinity-complete`, context: infinity.context_id, proof: infinity.submission_proof,
+  device: `OA-${stamp}-C`, location: codeC, credential: credentialC, start: fenceStart, end: fenceEnd,
+  scans: [{ event_type: "scan_finish", client_event_id: `oa-${stamp}-infinity-id`, scanned_at: "infinity" }],
+})));
+assert.equal(infinityResult.reason, "malformed_scan_evidence", "PostgreSQL infinity is not canonical scan evidence");
+
+const oversized = await activate({ device: `OA-${stamp}-C`, location: codeC, session: `oa-${stamp}-oversized`, start: fenceStart, credential: credentialC });
+const oversizedResult = JSON.parse(await sql(jsonSql({
+  session: `oa-${stamp}-oversized`, completion: `oa-${stamp}-oversized-complete`, context: oversized.context_id, proof: oversized.submission_proof,
+  device: `OA-${stamp}-C`, location: codeC, credential: credentialC, start: fenceStart, end: fenceEnd,
+  scans: Array.from({ length: 101 }, (_, index) => ({ event_type: "scan_finish", client_event_id: `oa-${stamp}-oversized-${index}`, scanned_at: fenceEnd })),
+})));
+assert.equal(oversizedResult.reason, "invalid_payload_shape_or_bounds", "oversized payloads become durable quarantines");
+
+// A shared scan identity is serialised by a canonical event lock. The loser is
+// quarantined with its own manager outbox record rather than rolling back naked.
+await sql(`update public.devices set assigned_employee_id='${employeeB}'::uuid where id='${deviceB}'::uuid;
+  insert into public.custodial_employee_device_assignment_history(device_id,device_identifier,new_employee_id,new_employee_name,change_reason,source)
+  values('${deviceB}'::uuid,'OA-${stamp}-B','${employeeB}'::uuid,'Offline Authority Actor B','race fixture','test');`);
+const raceStart = new Date(Date.now() - 55_000).toISOString();
+const raceEnd = new Date(Date.now() - 25_000).toISOString();
+const raceA = await activate({ device: `OA-${stamp}-B`, location: codeB, session: `oa-${stamp}-race-a`, start: raceStart, credential: credentialB });
+const raceB = await activate({ device: `OA-${stamp}-C`, location: codeC, session: `oa-${stamp}-race-b`, start: raceStart, credential: credentialC });
+const sharedEvent = `oa-${stamp}-shared-event`;
+const [raceResultA, raceResultB] = await Promise.all([
+  sql(jsonSql({ session: `oa-${stamp}-race-a`, completion: `oa-${stamp}-race-a-complete`, context: raceA.context_id, proof: raceA.submission_proof, device: `OA-${stamp}-B`, location: codeB, credential: credentialB, start: raceStart, end: raceEnd, scans: [{ event_type: "scan_finish", client_event_id: sharedEvent, scanned_at: raceEnd, result: "A" }] })).then(JSON.parse),
+  sql(jsonSql({ session: `oa-${stamp}-race-b`, completion: `oa-${stamp}-race-b-complete`, context: raceB.context_id, proof: raceB.submission_proof, device: `OA-${stamp}-C`, location: codeC, credential: credentialC, start: raceStart, end: raceEnd, scans: [{ event_type: "scan_finish", client_event_id: sharedEvent, scanned_at: raceEnd, result: "B" }] })).then(JSON.parse),
+]);
+assert.equal([raceResultA, raceResultB].filter((result) => result.status === "closed").length, 1);
+const raceLoser = raceResultA.status === "quarantined" ? `oa-${stamp}-race-a-complete` : `oa-${stamp}-race-b-complete`;
+assert.equal(await sql(`select count(*) from public.custodial_offline_reconciliation_outbox o join public.custodial_offline_reconciliation_records r on r.reconciliation_id=o.reconciliation_id where r.client_completion_id=${q(raceLoser)};`), "1", "cross-submission event race leaves a durable manager follow-up record");
+
+const reconciliationId = await sql(`select reconciliation_id::text from public.custodial_offline_reconciliation_records where client_completion_id=${q(`oa-${stamp}-malformed-complete`)};`);
+const managerId = "00000000-0000-4000-8000-000000000001";
+const dispositionRequestId = randomUUID();
+const dispositionSql = `select public.custodial_manager_dispose_offline_reconciliation('${managerId}'::uuid,${q(reconciliationId)}::uuid,'reviewed','validated exactly-once recovery disposition','${dispositionRequestId}'::uuid,${q(execSecret)})::text;`;
+const dispositionResults = await Promise.all([sql(dispositionSql).then(JSON.parse), sql(dispositionSql).then(JSON.parse)]);
+assert.equal(new Set(dispositionResults.map((result) => result.disposition_id)).size, 1, "concurrent exact dispositions converge on one canonical outcome");
+assert.equal(dispositionResults.filter((result) => result.replayed).length, 1);
+const dispositionConflict = await sql(`select public.custodial_manager_dispose_offline_reconciliation('${managerId}'::uuid,${q(reconciliationId)}::uuid,'reviewed','different request payload','${dispositionRequestId}'::uuid,${q(execSecret)});`, { expectFailure: true });
+assert.match(dispositionConflict, /already bound to a different recovery outcome/i);
+await sql(`select public.custodial_truncate_offline_evidence_for_maintenance('public.custodial_offline_reconciliation_outbox'::regclass,'disposable rebuild restoration verification');`);
+assert.equal(await sql(`select count(*) from public.custodial_offline_reconciliation_outbox;`), "0", "the explicit maintenance procedure is the only tested TRUNCATE path");
 const legacyDenied = await sql(`select public.tool_complete_session('missing','{}'::jsonb,null,'OA-${stamp}-A','oa-${stamp}-legacy');`, { expectFailure: true });
 assert.match(legacyDenied, /Use tool_complete_session_authoritative/i);
 const messengerDenied = await sql(`select public.msg_delete_thread_permanently(gen_random_uuid());`, { expectFailure: true });
