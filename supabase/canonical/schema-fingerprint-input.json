@@ -26816,7 +26816,7 @@
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.msg_reject_retired_ops_manager_shared_thread_evidence_mutation()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_thread_id uuid;\nbegin\n  v_thread_id:=case when tg_op='DELETE' then old.thread_id else new.thread_id end;\n  if exists (\n    select 1 from public.msg_threads t\n    where t.id=v_thread_id and t.system_key='ops_manager_shared_chat_v1'\n  ) then\n    raise exception using errcode='23514',message='The retired Operations Leadership conversation evidence is immutable';\n  end if;\n  return case when tg_op='DELETE' then old else new end;\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_reject_retired_ops_manager_shared_thread_evidence_mutation()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_old_thread_id uuid;\n  v_new_thread_id uuid;\nbegin\n  if tg_op<>'INSERT' then v_old_thread_id:=old.thread_id; end if;\n  if tg_op<>'DELETE' then v_new_thread_id:=new.thread_id; end if;\n  if exists (\n    select 1 from public.msg_threads t\n    where t.id in (v_old_thread_id,v_new_thread_id)\n      and t.system_key='ops_manager_shared_chat_v1'\n  ) then\n    raise exception using errcode='23514',message='The retired Operations Leadership conversation evidence is immutable';\n  end if;\n  return case when tg_op='DELETE' then old else new end;\nend\n$function$\n",
       "function_name": "msg_reject_retired_ops_manager_shared_thread_evidence_mutation",
       "identity_arguments": "",
       "schema_name": "public"

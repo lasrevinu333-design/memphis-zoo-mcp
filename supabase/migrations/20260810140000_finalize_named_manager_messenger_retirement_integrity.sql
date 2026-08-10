@@ -699,12 +699,16 @@ returns trigger
 language plpgsql
 set search_path=pg_catalog,public
 as $function$
-declare v_thread_id uuid;
+declare
+  v_old_thread_id uuid;
+  v_new_thread_id uuid;
 begin
-  v_thread_id:=case when tg_op='DELETE' then old.thread_id else new.thread_id end;
+  if tg_op<>'INSERT' then v_old_thread_id:=old.thread_id; end if;
+  if tg_op<>'DELETE' then v_new_thread_id:=new.thread_id; end if;
   if exists (
     select 1 from public.msg_threads t
-    where t.id=v_thread_id and t.system_key='ops_manager_shared_chat_v1'
+    where t.id in (v_old_thread_id,v_new_thread_id)
+      and t.system_key='ops_manager_shared_chat_v1'
   ) then
     raise exception using errcode='23514',message='The retired Operations Leadership conversation evidence is immutable';
   end if;

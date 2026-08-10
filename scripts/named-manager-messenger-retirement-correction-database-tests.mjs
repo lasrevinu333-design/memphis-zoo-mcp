@@ -25,7 +25,9 @@ const MEMPHIS_USER = "00000000-0000-4000-8000-00000000e125";
 const INACTIVE_THREAD = "00000000-0000-4000-8000-00000000e110";
 const INACTIVE_MESSAGE = "00000000-0000-4000-8000-00000000e114";
 const ACTIVE_THREAD = "00000000-0000-4000-8000-00000000e120";
+const ACTIVE_THREAD_DESTINATION = "00000000-0000-4000-8000-00000000e122";
 const ACTIVE_MESSAGE = "00000000-0000-4000-8000-00000000e121";
+const ACTIVE_OPERATION = "00000000-0000-4000-8000-00000000e123";
 const TOMBSTONED_THREAD = "00000000-0000-4000-8000-00000000e119";
 const TOMBSTONED_MESSAGE = "00000000-0000-4000-8000-00000000e11a";
 const DEVICE_ID = "NMMS-RETIREMENT-DEVICE";
@@ -51,15 +53,17 @@ async function sql(statement) {
 
 function psqlResult(statement) {
   return spawnSync("docker", [
-    "exec", container, "psql", "-X", "-v", "ON_ERROR_STOP=1", "-A", "-t",
+    "exec", container, "psql", "-X", "-v", "ON_ERROR_STOP=1", "-v", "VERBOSITY=verbose", "-A", "-t",
     "-U", "supabase_admin", "-d", database, "-c", statement,
   ], { encoding: "utf8", maxBuffer: 32 * 1024 * 1024 });
 }
 
-function expectRejected(statement, expected) {
+function expectRejected(statement, expected, expectedSqlState = null) {
   const result = psqlResult(statement);
   assert.notEqual(result.status, 0, `expected rejection, received: ${result.stdout}`);
-  assert.match(`${result.stderr}\n${result.stdout}`, expected);
+  const output = `${result.stderr}\n${result.stdout}`;
+  assert.match(output, expected);
+  if (expectedSqlState) assert.match(output, new RegExp(`\\b${expectedSqlState}\\b`));
 }
 
 function applyFinalCorrection() {
@@ -246,6 +250,44 @@ await sql(`
 assert.deepEqual(await archiveInventory(), archiveBeforeReplay,
   "service_role TRUNCATE attack changed retired archive bytes");
 
+// A row already in the archive must not be movable to an active ordinary
+//thread.  Each direct service-role attack asserts both the trigger SQLSTATE
+//and its immutable-evidence message before the complete inventory comparison.
+await sql(`
+  insert into public.msg_threads(id,thread_type,title,created_by_user_id,is_active)
+  values
+    ('${ACTIVE_THREAD}'::uuid,'group','Active ordinary fixture','${USER_A}'::uuid,true),
+    ('${ACTIVE_THREAD_DESTINATION}'::uuid,'group','Active ordinary destination fixture','${USER_A}'::uuid,true)
+  on conflict (id) do nothing;
+`);
+const retiredArchiveMoveAttacks = [
+  {
+    table: "msg_thread_visibility",
+    statement: `update public.msg_thread_visibility set thread_id='${ACTIVE_THREAD}'::uuid where thread_id=(select id from public.msg_threads where system_key='ops_manager_shared_chat_v1');`,
+  },
+  {
+    table: "msg_hidden_threads_by_device",
+    statement: `update public.msg_hidden_threads_by_device set thread_id='${ACTIVE_THREAD}'::uuid where thread_id=(select id from public.msg_threads where system_key='ops_manager_shared_chat_v1');`,
+  },
+  {
+    table: "msg_memphis_thread_context",
+    statement: `update public.msg_memphis_thread_context set thread_id='${ACTIVE_THREAD}'::uuid where thread_id=(select id from public.msg_threads where system_key='ops_manager_shared_chat_v1');`,
+  },
+  {
+    table: "msg_thread_deletion_operations",
+    statement: `update public.msg_thread_deletion_operations set thread_id='${ACTIVE_THREAD}'::uuid where operation_id='${ARCHIVE_OPERATION}'::uuid;`,
+  },
+];
+for (const { table, statement } of retiredArchiveMoveAttacks) {
+  expectRejected(
+    `set role service_role; ${statement}`,
+    /retired Operations Leadership conversation evidence is immutable/i,
+    "23514",
+  );
+  assert.deepEqual(await archiveInventory(), archiveBeforeReplay,
+    `${table} archive-to-active move changed retired presentation or deletion evidence`);
+}
+
 for (const statement of [
   `update public.msg_thread_visibility set hidden_before=now() where thread_id=(select id from public.msg_threads where system_key='ops_manager_shared_chat_v1');`,
   `delete from public.msg_thread_visibility where thread_id=(select id from public.msg_threads where system_key='ops_manager_shared_chat_v1');`,
@@ -267,7 +309,8 @@ await sql(`
   insert into public.msg_threads(id,thread_type,title,created_by_user_id,is_active)
   values
     ('${INACTIVE_THREAD}'::uuid,'group','Inactive ordinary fixture','${USER_A}'::uuid,true),
-    ('${ACTIVE_THREAD}'::uuid,'group','Active ordinary fixture','${USER_A}'::uuid,true)
+    ('${ACTIVE_THREAD}'::uuid,'group','Active ordinary fixture','${USER_A}'::uuid,true),
+    ('${ACTIVE_THREAD_DESTINATION}'::uuid,'group','Active ordinary destination fixture','${USER_A}'::uuid,true)
   on conflict (id) do nothing;
   insert into public.msg_thread_participants(thread_id,user_id)
   values ('${INACTIVE_THREAD}'::uuid,'${USER_A}'::uuid),('${INACTIVE_THREAD}'::uuid,'${USER_B}'::uuid),
@@ -283,6 +326,47 @@ await sql(`
   on conflict (message_id,user_id) do nothing;
   update public.msg_threads set is_active=false where id='${INACTIVE_THREAD}'::uuid;
 `);
+
+// The archive guard is deliberately narrow: every guarded table continues to
+// permit an otherwise-valid direct move between two active ordinary threads.
+await sql(`
+  set role service_role;
+  insert into public.msg_thread_visibility(thread_id,user_id,device_identifier,hidden_before)
+  values ('${ACTIVE_THREAD}'::uuid,'${USER_A}'::uuid,'active-move-visibility',now());
+  insert into public.msg_hidden_threads_by_device(thread_id,device_identifier)
+  values ('${ACTIVE_THREAD}'::uuid,'active-move-hidden');
+  insert into public.msg_memphis_thread_context(thread_id,last_intent)
+  values ('${ACTIVE_THREAD}'::uuid,'active-move-context');
+  insert into public.msg_thread_deletion_operations(operation_id,thread_id,user_id,deletion_scope,deleted_through,deleted_at,thread_type)
+  values ('${ACTIVE_OPERATION}'::uuid,'${ACTIVE_THREAD}'::uuid,'${USER_A}'::uuid,'user',now(),now(),'group');
+  update public.msg_thread_visibility set thread_id='${ACTIVE_THREAD_DESTINATION}'::uuid
+  where thread_id='${ACTIVE_THREAD}'::uuid and device_identifier='active-move-visibility';
+  update public.msg_hidden_threads_by_device set thread_id='${ACTIVE_THREAD_DESTINATION}'::uuid
+  where thread_id='${ACTIVE_THREAD}'::uuid and device_identifier='active-move-hidden';
+  update public.msg_memphis_thread_context set thread_id='${ACTIVE_THREAD_DESTINATION}'::uuid
+  where thread_id='${ACTIVE_THREAD}'::uuid;
+  update public.msg_thread_deletion_operations set thread_id='${ACTIVE_THREAD_DESTINATION}'::uuid
+  where operation_id='${ACTIVE_OPERATION}'::uuid;
+  reset role;
+`);
+assert.equal(await sql(`
+  select count(*)::text
+  from public.msg_thread_visibility
+  where thread_id='${ACTIVE_THREAD_DESTINATION}'::uuid and device_identifier='active-move-visibility';
+`), "1", "active ordinary visibility row could not move between active threads");
+assert.equal(await sql(`
+  select count(*)::text
+  from public.msg_hidden_threads_by_device
+  where thread_id='${ACTIVE_THREAD_DESTINATION}'::uuid and device_identifier='active-move-hidden';
+`), "1", "active ordinary hidden-device row could not move between active threads");
+assert.equal(await sql(`
+  select count(*)::text from public.msg_memphis_thread_context
+  where thread_id='${ACTIVE_THREAD_DESTINATION}'::uuid and last_intent='active-move-context';
+`), "1", "active ordinary Memphis context row could not move between active threads");
+assert.equal(await sql(`
+  select count(*)::text from public.msg_thread_deletion_operations
+  where operation_id='${ACTIVE_OPERATION}'::uuid and thread_id='${ACTIVE_THREAD_DESTINATION}'::uuid;
+`), "1", "active ordinary deletion-operation row could not move between active threads");
 
 const inactiveBefore = await sql(`
   select jsonb_build_object(
