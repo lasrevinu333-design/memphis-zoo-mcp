@@ -31,6 +31,7 @@ const migrations = [
   "20260810143000_offline_actor_occurrence_reconciliation.sql",
   "20260810150000_enforce_integrated_backend_authority.sql",
   "20260810160000_close_offline_authority_integrity_gaps.sql",
+  "20260810170000_finish_offline_authority_operational_closure.sql",
 ].map((name) => ({ name, sha256: createHash("sha256").update(readFileSync(resolve(root, "supabase/migrations", name))).digest("hex") }));
 const output = {
   artifact: "integrated-backend-authority-release-evidence.v1",
@@ -44,6 +45,7 @@ const output = {
     additive_phase: "20260810143000 supplies explicit activation and records no state-read proof",
     enforcement_phase: "20260810150000 routes both canonical and legacy completion through one server-authenticated transaction",
     closure_phase: "20260810160000 removes direct DML and legacy-writer authority, fences terminal conflicts, and writes manager outbox evidence",
+    operational_closure_phase: "20260810170000 recovers durable exact-start proofs, retires every service-role generic writer, and runs leased reconciliation notification delivery",
   },
   rollback: input.rollback,
   cutover: input.cutover,

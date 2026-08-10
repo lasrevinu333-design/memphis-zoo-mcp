@@ -140,12 +140,6 @@ function normalizeUuidArray(value) {
   return ids;
 }
 
-function sqlUuidArrayLiteral(ids = []) {
-  const values = normalizeUuidArray(ids);
-  if (!values.length) return "'{}'::uuid[]";
-  return `array[${values.map((id) => `${sqlLiteral(id)}::uuid`).join(", ")}]::uuid[]`;
-}
-
 function normalizeDisplayLocation(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
 }
@@ -631,134 +625,16 @@ async function ensureUpcomingEventScheduleState({ runReadOnlySql, runRpc }) {
   return { ok: true, checked_dates: states.length, generated_dates: generatedDates };
 }
 
-function buildEventInsertSql(record) {
-  const operationConflict = record.operation_id
-    ? `on conflict (operation_id) where operation_id is not null do update set updated_at = public.events_app_events.updated_at`
-    : "";
-  return `insert into public.events_app_events (
-       event_name,
-       location_group_id,
-       event_scope,
-       primary_venue_id,
-       venue_ids,
-       display_location,
-       coverage_location_ids,
-       staffing_area_ids,
-       source_location_text,
-       parser_confidence,
-       needs_review,
-       parse_reason,
-       source_text,
-       source_format,
-       manually_overridden,
-       overridden_by,
-       overridden_at,
-       event_timezone,
-       operation_id,
-       event_date,
-       end_date,
-       start_time,
-       end_time,
-       attendee_count,
-       notes,
-       created_by,
-       updated_at
-     ) values (
-       ${sqlLiteral(record.event_name)},
-       ${sqlLiteral(record.location_group_id)}::uuid,
-       ${sqlLiteral(record.event_scope)},
-       ${record.primary_venue_id ? `${sqlLiteral(record.primary_venue_id)}::uuid` : "null"},
-       ${sqlUuidArrayLiteral(record.venue_ids)},
-       ${sqlLiteral(record.display_location)},
-       ${sqlUuidArrayLiteral(record.coverage_location_ids)},
-       ${sqlUuidArrayLiteral(record.staffing_area_ids)},
-       ${sqlLiteral(record.source_location_text)},
-       ${sqlLiteral(record.parser_confidence)},
-       ${record.needs_review ? "true" : "false"},
-       ${sqlLiteral(record.parse_reason)},
-       ${sqlLiteral(record.source_text)},
-       ${sqlLiteral(record.source_format)},
-       ${record.manually_overridden ? "true" : "false"},
-       ${sqlLiteral(record.overridden_by)},
-       ${record.overridden_at ? `${sqlLiteral(record.overridden_at)}::timestamptz` : "null"},
-       ${sqlLiteral(record.event_timezone)},
-       ${record.operation_id ? `${sqlLiteral(record.operation_id)}::uuid` : "null"},
-       ${sqlLiteral(record.event_date)}::date,
-       ${sqlLiteral(record.end_date)}::date,
-       ${sqlLiteral(record.start_time)}::time,
-       ${sqlLiteral(record.end_time)}::time,
-       ${record.attendee_count == null ? "null" : record.attendee_count},
-       ${sqlLiteral(record.notes)},
-       ${sqlLiteral(record.created_by)},
-       now()
-     )
-     ${operationConflict}
-     returning *;`;
-}
-
-function buildEventUpdateSql(eventId, record) {
-  return `with before_row as (
-       select to_jsonb(e.*) as previous_record
-       from public.events_app_events e
-       where e.id = ${sqlLiteral(eventId)}::uuid
-       for update
-     ), updated as (
-       update public.events_app_events e
-          set event_name = ${sqlLiteral(record.event_name)},
-              location_group_id = ${sqlLiteral(record.location_group_id)}::uuid,
-              event_scope = ${sqlLiteral(record.event_scope)},
-              primary_venue_id = ${record.primary_venue_id ? `${sqlLiteral(record.primary_venue_id)}::uuid` : "null"},
-              venue_ids = ${sqlUuidArrayLiteral(record.venue_ids)},
-              display_location = ${sqlLiteral(record.display_location)},
-              coverage_location_ids = ${sqlUuidArrayLiteral(record.coverage_location_ids)},
-              staffing_area_ids = ${sqlUuidArrayLiteral(record.staffing_area_ids)},
-              source_location_text = ${sqlLiteral(record.source_location_text)},
-              parser_confidence = ${sqlLiteral(record.parser_confidence)},
-              needs_review = ${record.needs_review ? "true" : "false"},
-              parse_reason = ${sqlLiteral(record.parse_reason)},
-              source_text = ${sqlLiteral(record.source_text)},
-              source_format = ${sqlLiteral(record.source_format)},
-              manually_overridden = true,
-              overridden_by = ${sqlLiteral(record.overridden_by || record.created_by || "Input Console")},
-              overridden_at = now(),
-              event_timezone = ${sqlLiteral(record.event_timezone)},
-              event_date = ${sqlLiteral(record.event_date)}::date,
-              end_date = ${sqlLiteral(record.end_date)}::date,
-              start_time = ${sqlLiteral(record.start_time)}::time,
-              end_time = ${sqlLiteral(record.end_time)}::time,
-              attendee_count = ${record.attendee_count == null ? "null" : record.attendee_count},
-              notes = ${sqlLiteral(record.notes)},
-              revision = coalesce(e.revision, 1) + 1,
-              updated_at = now()
-        from before_row
-        where e.id = ${sqlLiteral(eventId)}::uuid
-        returning e.*, before_row.previous_record
-     ), history as (
-       insert into public.events_app_event_history (
-         event_id, action, actor, reason, previous_record, new_record, created_at
-       )
-       select id, 'update', ${sqlLiteral(record.overridden_by || record.created_by || "Input Console")},
-              ${sqlLiteral(record.parse_reason || "Event updated from Event Input Console.")},
-              previous_record, to_jsonb(updated.*) - 'previous_record', now()
-       from updated
-       returning id
-     )
-     select * from updated;`;
-}
-
 function normalizeWriteResultRows(result) {
   if (Array.isArray(result)) return result.filter(Boolean);
   if (result && typeof result === "object") return [result];
   return [];
 }
 
-async function createEventRecord(runReadOnlySql, runWriteSql, payload) {
+async function createEventRecord(runReadOnlySql, runCommand, payload) {
   const referenceData = await getEventReferenceData(runReadOnlySql);
   const record = normalizeEventPayload(payload, referenceData);
-  const rows = normalizeWriteResultRows(await runWriteSql(
-    "events_app_create",
-    buildEventInsertSql(record)
-  ));
+  const rows = normalizeWriteResultRows(await runCommand("event_create", { record }));
   const writeRow = rows.find((row) => row?.id);
   if (writeRow) return { ...record, ...writeRow };
   const authoritativeRow = await readEventByOperationId(runReadOnlySql, record.operation_id);
@@ -766,12 +642,16 @@ async function createEventRecord(runReadOnlySql, runWriteSql, payload) {
   return record;
 }
 
-async function updateEventRecord(runReadOnlySql, runWriteSql, eventId, payload) {
+async function updateEventRecord(runReadOnlySql, runCommand, eventId, payload) {
   const normalizedId = String(eventId || "").trim();
   if (!isUuid(normalizedId)) throw new Error("A valid event id is required.");
   const referenceData = await getEventReferenceData(runReadOnlySql);
   const record = normalizeEventPayload({ ...payload, manually_overridden: true }, referenceData);
-  const rows = normalizeWriteResultRows(await runWriteSql("events_app_update", buildEventUpdateSql(normalizedId, record)));
+  const rows = normalizeWriteResultRows(await runCommand("event_update", {
+    event_id: normalizedId, record,
+    actor: record.overridden_by || record.created_by || "Input Console",
+    reason: record.parse_reason || "Event updated from Event Input Console.",
+  }));
   const writeRow = rows.find((row) => row?.id);
   if (writeRow) return { ...record, ...writeRow, previous_record: undefined };
   const authoritativeRow = await readEventById(runReadOnlySql, normalizedId);
@@ -779,37 +659,13 @@ async function updateEventRecord(runReadOnlySql, runWriteSql, eventId, payload) 
   throw new Error("Event not found.");
 }
 
-async function deleteEventRecord(runWriteSql, eventId, actor = "Input Console", reason = "Event cancelled from Event Input Console.") {
+async function deleteEventRecord(runCommand, eventId, actor = "Input Console", reason = "Event cancelled from Event Input Console.") {
   const normalizedId = String(eventId || "").trim();
   if (!isUuid(normalizedId)) throw new Error("A valid event id is required.");
-  const rows = normalizeWriteResultRows(await runWriteSql("events_app_cancel", `
-    with before_row as (
-      select e.*, to_jsonb(e.*) as previous_record
-      from public.events_app_events e
-      where e.id = ${sqlLiteral(normalizedId)}::uuid
-      for update
-    ), updated as (
-      update public.events_app_events e
-      set status = 'CANCELLED',
-          cancelled_at = coalesce(e.cancelled_at, now()),
-          cancelled_by = ${sqlLiteral(String(actor || "Input Console").slice(0, 200))},
-          cancellation_reason = ${sqlLiteral(String(reason || "Event cancelled.").slice(0, 1000))},
-          revision = coalesce(e.revision, 1) + 1,
-          updated_at = now()
-      from before_row
-      where e.id = before_row.id
-      returning e.*, before_row.previous_record
-    ), history as (
-      insert into public.events_app_event_history(event_id, action, actor, reason, previous_record, new_record, created_at)
-      select id, 'cancel', ${sqlLiteral(String(actor || "Input Console").slice(0, 200))},
-             ${sqlLiteral(String(reason || "Event cancelled.").slice(0, 1000))},
-             previous_record, to_jsonb(updated.*) - 'previous_record', now()
-      from updated
-      returning id
-    )
-    select id, status, cancelled_at, cancelled_by, cancellation_reason, revision
-    from updated;
-  `));
+  const rows = normalizeWriteResultRows(await runCommand("event_cancel", {
+    event_id: normalizedId, actor: String(actor || "Input Console").slice(0, 200),
+    reason: String(reason || "Event cancelled.").slice(0, 1000),
+  }));
   const row = rows.find((item) => item?.id);
   if (!row) throw Object.assign(new Error("Event not found."), { status: 404 });
   return { ...row, deleted: false, cancelled: true };
@@ -850,7 +706,7 @@ async function queueDueScanAlerts(runRpc) {
   }
 }
 
-export function createEventMaintenanceController({ runReadOnlySql, runWriteSql, runRpc }) {
+export function createEventMaintenanceController({ runReadOnlySql, runCommand, runRpc }) {
   let lastRunAt = 0;
   let running = false;
   let lastStartedAt = null;
@@ -928,7 +784,7 @@ export function createEventMaintenanceController({ runReadOnlySql, runWriteSql, 
 
 export function createEventsPublicRouter({
   runReadOnlySql,
-  runWriteSql,
+  runCommand,
   buildHealthPayload,
   appVersion,
   releaseId,
@@ -1029,7 +885,7 @@ export function createEventsPublicRouter({
 
 export function createEventsAdminRouter({
   runReadOnlySql,
-  runWriteSql,
+  runCommand,
   buildHealthPayload,
   appVersion,
   releaseId,
@@ -1154,7 +1010,7 @@ export function createEventsAdminRouter({
     try {
       const record = await createEventRecord(
         runReadOnlySql,
-        runWriteSql,
+        runCommand,
         req.body && typeof req.body === "object" ? req.body : {}
       );
       maintenanceController?.kick("events_admin_create_after");
@@ -1176,7 +1032,7 @@ export function createEventsAdminRouter({
     try {
       const record = await updateEventRecord(
         runReadOnlySql,
-        runWriteSql,
+        runCommand,
         req.params.eventId,
         req.body && typeof req.body === "object" ? req.body : {}
       );
@@ -1198,7 +1054,7 @@ export function createEventsAdminRouter({
   router.delete("/:eventId", typeof requireAdminApiWrite === "function" ? requireAdminApiWrite : (_req, _res, next) => next(), async (req, res) => {
     try {
       const result = await deleteEventRecord(
-        runWriteSql,
+        runCommand,
         req.params.eventId,
         req.body?.cancelled_by || req.body?.actor || "Input Console",
         req.body?.reason || "Event cancelled from Event Input Console.",

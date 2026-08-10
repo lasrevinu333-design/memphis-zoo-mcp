@@ -47,6 +47,12 @@ function jsonSql({ session, completion, context, proof, device, location, creden
 async function activate({ device, location, session, start = startedAt, credential = credentialA }) {
   return JSON.parse(await sql(`select public.tool_start_offline_occurrence(${q(device)},${q(location)},${q(session)},${q(start)},${q(credential)},${q(execSecret)})::text;`));
 }
+async function claimNotifications(workerId, limit = 50) {
+  return JSON.parse(await sql(`select coalesce(jsonb_agg(to_jsonb(n)),'[]'::jsonb)::text from public.custodial_claim_offline_reconciliation_notifications(${q(workerId)},${limit},15,${q(execSecret)}) n;`));
+}
+async function finishNotification(notification, { workerId, succeeded, terminal = false, error = null, retrySeconds = 15, delivery = {} }) {
+  return JSON.parse(await sql(`select public.custodial_finish_offline_reconciliation_notification(${q(notification.outbox_id)}::uuid,${q(workerId)},${q(notification.lease_token)}::uuid,${succeeded},${q(error)},${retrySeconds},${terminal},${q(JSON.stringify(delivery))}::jsonb,${q(execSecret)})::text;`));
+}
 
 const setup = `
 select public.custodial_configure_backend_execution_key(encode(extensions.digest(convert_to(${q(execSecret)},'UTF8'),'sha256'),'hex'),'offline-authority-db-test');
@@ -77,12 +83,30 @@ const sessionA = `oa-${stamp}-accepted`;
 const contextA = await activate({ device: `OA-${stamp}-A`, location: codeA, session: sessionA });
 assert.equal(contextA.committable, true);
 assert.match(contextA.occurrence_id, /^[0-9a-f-]{36}$/);
+assert.match(contextA.submission_proof, /^[0-9a-f]{64}$/);
+// Every sql() call opens a fresh psql process, so this is both an exact replay
+// after a lost response and a transport/service-restart recovery check.
 const startReplay = await activate({ device: `OA-${stamp}-A`, location: codeA, session: sessionA });
-assert.equal(startReplay.proof_replay_requires_durable_local_copy, true, "start replay may not mint a second proof");
+assert.equal(startReplay.committable, true, "exact start replay remains completion-capable");
+assert.equal(startReplay.replayed, true, "exact start replay is explicitly classified");
+assert.equal(startReplay.submission_proof, contextA.submission_proof, "lost start response recovers the stable durable proof");
 assert.equal(await sql(`select count(*) from public.custodial_offline_submission_proofs p join public.custodial_offline_actor_contexts c on c.context_id=p.context_id where c.client_session_id=${q(sessionA)};`), "1");
+const changedStartDenied = await sql(`select public.tool_start_offline_occurrence(${q(`OA-${stamp}-A`)},${q(codeA)},${q(sessionA)},${q(new Date(Date.parse(startedAt) + 1000).toISOString())},${q(credentialA)},${q(execSecret)});`, { expectFailure: true });
+assert.match(changedStartDenied, /does not match the original occurrence/i, "different start content remains fenced");
 
 const genericDenied = await sql(`set role service_role; select public.tool_start_offline_occurrence('OA-${stamp}-A','${codeA}','oa-${stamp}-forged',${q(startedAt)},'${credentialA}','not-the-backend-secret');`, { expectFailure: true });
 assert.match(genericDenied, /not authorized/i, "generic service_role cannot forge the backend execution proof");
+assert.equal(await sql(`select has_function_privilege('service_role','public.run_sql_write(text)'::regprocedure,'EXECUTE')::text;`), "false", "the legacy one-argument SQL writer is not application-callable");
+for (const [label, statement] of [
+  ["application SQL executor", `select public.run_application_write('forged','select 1');`],
+  ["legacy SQL write executor", `select public.run_sql_write('select 1'::text,'forged'::text);`],
+  ["migration SQL executor", `select public.run_sql_migration('forged','select 1');`],
+  ["force-close terminal writer", `select public.force_close_session(gen_random_uuid()::text,'forged','forged');`],
+  ["force-close tool writer", `select public.tool_force_close_session(gen_random_uuid()::text,'forged','forged');`],
+]) {
+  const denial = await sql(`set role service_role; ${statement}`, { expectFailure: true });
+  assert.match(denial, /permission denied/i, `${label} is not application-callable`);
+}
 
 // Reassignment after an activated occurrence retains A only for that exact proof.
 await sql(`update public.devices set assigned_employee_id='${employeeB}'::uuid where id='${deviceA}'::uuid;`);
@@ -212,6 +236,40 @@ assert.equal(new Set(dispositionResults.map((result) => result.disposition_id)).
 assert.equal(dispositionResults.filter((result) => result.replayed).length, 1);
 const dispositionConflict = await sql(`select public.custodial_manager_dispose_offline_reconciliation('${managerId}'::uuid,${q(reconciliationId)}::uuid,'reviewed','different request payload','${dispositionRequestId}'::uuid,${q(execSecret)});`, { expectFailure: true });
 assert.match(dispositionConflict, /already bound to a different recovery outcome/i);
+assert.equal(await sql(`select count(*) from public.custodial_offline_reconciliation_outbox where disposition_id=${q(dispositionResults[0].disposition_id)}::uuid and notification_kind='offline_reconciliation_disposition';`), "1", "an accepted disposition emits one deduplicated notification fact");
+
+// Claim state, retry timing, restart recovery, delivery evidence, and terminal
+// failure are all durable outbox transitions rather than in-memory worker work.
+const firstWorker = "offline-authority-db-worker-before-restart";
+const firstClaims = await claimNotifications(firstWorker);
+assert.ok(firstClaims.length >= 3, "quarantines and the accepted disposition are claimable");
+const dispositionNotification = firstClaims.find((notification) => notification.notification_kind === "offline_reconciliation_disposition");
+const terminalNotification = firstClaims.find((notification) => notification.notification_kind === "offline_reconciliation_quarantine");
+assert.ok(dispositionNotification && terminalNotification, "claim includes both reconciliation lifecycle notification kinds");
+const retried = await finishNotification(dispositionNotification, {
+  workerId: firstWorker, succeeded: false, error: "transient messenger outage", retrySeconds: 15,
+});
+assert.equal(retried.state, "pending");
+assert.equal(retried.attempts, 1);
+const terminalFailure = await finishNotification(terminalNotification, {
+  workerId: firstWorker, succeeded: false, terminal: true, error: "named manager recipient permanently unavailable",
+});
+assert.equal(terminalFailure.state, "failed");
+assert.equal(terminalFailure.terminal, true);
+for (const notification of firstClaims.filter((notification) => notification.outbox_id !== dispositionNotification.outbox_id && notification.outbox_id !== terminalNotification.outbox_id)) {
+  const delivered = await finishNotification(notification, { workerId: firstWorker, succeeded: true, delivery: { channel: "test", delivered: true } });
+  assert.equal(delivered.state, "delivered");
+}
+await new Promise((resolve) => setTimeout(resolve, 16_000));
+const restartClaims = await claimNotifications("offline-authority-db-worker-after-restart");
+assert.equal(restartClaims.length, 1, "a fresh worker process claims the due retry exactly once");
+assert.equal(restartClaims[0].outbox_id, dispositionNotification.outbox_id);
+assert.equal(restartClaims[0].attempts, 2);
+const retriedDelivered = await finishNotification(restartClaims[0], {
+  workerId: "offline-authority-db-worker-after-restart", succeeded: true, delivery: { channel: "test", delivered_after_restart: true },
+});
+assert.equal(retriedDelivered.state, "delivered");
+assert.equal(await sql(`select state from public.custodial_offline_reconciliation_outbox where outbox_id=${q(terminalNotification.outbox_id)}::uuid;`), "failed", "terminal delivery failure remains visible instead of pending");
 await sql(`select public.custodial_truncate_offline_evidence_for_maintenance('public.custodial_offline_reconciliation_outbox'::regclass,'disposable rebuild restoration verification');`);
 assert.equal(await sql(`select count(*) from public.custodial_offline_reconciliation_outbox;`), "0", "the explicit maintenance procedure is the only tested TRUNCATE path");
 const legacyDenied = await sql(`select public.tool_complete_session('missing','{}'::jsonb,null,'OA-${stamp}-A','oa-${stamp}-legacy');`, { expectFailure: true });

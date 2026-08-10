@@ -13,7 +13,7 @@
   },
   "backend_contract": {
     "scan": "scan.v3.offline-authority",
-    "authority": "offline-authority.v2",
+    "authority": "offline-authority.v3",
     "execution_boundary": "CUSTODIAL_BACKEND_PROOF_SECRET",
     "bridge_backend_source": "src/index.js:runPreparedScanRpc",
     "health_gate": "GET /scan-api/authority-health and custodial_backend_authority_health"
@@ -26,6 +26,7 @@
       "deploy the bridge backend; it falls back only on absent authoritative procedures",
       "apply 20260810150000_enforce_integrated_backend_authority.sql",
       "apply 20260810160000_close_offline_authority_integrity_gaps.sql",
+      "apply 20260810170000_finish_offline_authority_operational_closure.sql",
       "require a green authority health gate and direct-DML denial probes before routing traffic"
     ],
     "rollback": {
@@ -33,9 +34,9 @@
       "action": "roll traffic back to the bridge backend artifact; it selects the authoritative procedure when present and only uses legacy fallback when the procedure is absent",
       "restoration_checks": [
         "custodial_backend_authority_health returns ok=true",
-        "exact completion replay returns one reconciliation and one completion",
+        "exact start and completion replay return one durable proof, reconciliation, and completion",
         "service_role direct insert/update/delete/truncate probes are denied",
-        "named-manager reconciliation read and exactly-once disposition replay remain available"
+        "named-manager reconciliation read, exactly-once disposition replay, and notification retry state remain available"
       ]
     }
   },

@@ -51,7 +51,7 @@ function buildApp(readCalls = []) {
       return [];
     },
     runRpc: async () => null,
-    runWriteSql: async () => null,
+    runCommand: async () => null,
     buildHealthPayload: async () => ({ ok: true }),
     requireAdminApiAuth: (_req, _res, next) => next(),
     appVersion: "test",

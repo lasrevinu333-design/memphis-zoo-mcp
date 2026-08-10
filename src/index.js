@@ -25,7 +25,7 @@ import { createGeminiControlledRepairWorker } from "./gemini-controlled-worker.j
 import { createMcpServer as createCanonicalMcpServer } from "./mcp/create-mcp-server.js";
 import { getToolManifest } from "./mcp/tool-manifest.js";
 import { validateRuntimeEnv } from "./config/env.js";
-import { authorityHttpFailure, rpcFailure, sqlStateHttpStatus } from "./offline-authority-http.js";
+import { authorityHttpFailure, authorityHttpOutcome, malformedScanAuthorityOutcome, rpcFailure, sqlStateHttpStatus } from "./offline-authority-http.js";
 import { installAnnieMoxieRoutes } from "./annie-moxie-bootstrap.js";
 import { installLeadershipHttpRoutes } from "./leadership-bootstrap.js";
 import { installCustodialEmployeeAdminRoutes } from "./custodial-employee-admin.js";
@@ -218,23 +218,7 @@ function publicSubmissionRateLimit(scope) {
     try {
       const ip = String(req.ip || req.socket?.remoteAddress || "unknown").trim();
       const bucketKey = createHmac("sha256", getFeedbackLinkSecret()).update(`${scope}:${ip}`).digest("hex");
-      await runWriteSql(
-        `public_${scope}_rate_limit`,
-        `insert into public.public_submission_rate_limits(bucket_key,scope,window_started_at,request_count,updated_at)
-         values (${sqlLiteral(bucketKey)},${sqlLiteral(scope)},now(),1,now())
-         on conflict(bucket_key) do update
-         set scope=excluded.scope,
-             window_started_at=case
-               when public.public_submission_rate_limits.window_started_at <= now() - interval '60 seconds' then now()
-               else public.public_submission_rate_limits.window_started_at
-             end,
-             request_count=case
-               when public.public_submission_rate_limits.window_started_at <= now() - interval '60 seconds' then 1
-               else public.public_submission_rate_limits.request_count + 1
-             end,
-             updated_at=now()
-         ;`
-      );
+      await runOperationalCommand("public_rate_limit", { bucket_key: bucketKey, scope });
       const rows = await runReadOnlySql(
         `select request_count from public.public_submission_rate_limits where bucket_key=${sqlLiteral(bucketKey)} limit 1`
       );
@@ -532,12 +516,8 @@ async function parseAuthenticatedScanAuthorityJson(req, res, next) {
       res.status(failure.status).json(failure.body);
       return;
     }
-    res.status(422).json({
-      ok: false,
-      error: "Malformed or oversized scan JSON was quarantined.",
-      code: "22023",
-      retryable: false,
-    });
+    const outcome = malformedScanAuthorityOutcome({ deviceQuarantined: Boolean(credentialId && offlineAuthoritySecret()) });
+    res.status(outcome.status).json(outcome.body);
   });
 }
 
@@ -896,31 +876,10 @@ async function persistAttendanceState(payload = {}) {
     }
   }
 
-  await runWriteSql(
-    "attendance_state_upsert",
-    `insert into public.current_attendance_state (
-       id, attendance, last_year, planned, yesterday, yesterday_plan, source, fetched_at, updated_at
-     ) values (
-       1,
-       ${sqlLiteral(attendance)},
-       ${sqlLiteral(lastYear)},
-       ${sqlLiteral(planned)},
-       ${sqlLiteral(yesterday)},
-       ${sqlLiteral(yesterdayPlan)},
-       ${sqlLiteral(source)},
-       ${fetchedAt ? `${sqlLiteral(fetchedAt)}::timestamptz` : "null"},
-       now()
-     )
-     on conflict (id) do update set
-       attendance = excluded.attendance,
-       last_year = excluded.last_year,
-       planned = excluded.planned,
-       yesterday = excluded.yesterday,
-       yesterday_plan = excluded.yesterday_plan,
-       source = excluded.source,
-       fetched_at = excluded.fetched_at,
-       updated_at = now();`
-  );
+  await runOperationalCommand("attendance_state_upsert", {
+    attendance, last_year: lastYear, planned, yesterday, yesterday_plan: yesterdayPlan,
+    source, fetched_at: fetchedAt,
+  });
 
   return await loadStoredAttendance();
 }
@@ -1002,18 +961,39 @@ async function runReadOnlySql(sql) {
   return result.rows;
 }
 
-async function runWriteSql(namePrefix, sql) {
-  const client = getSupabaseConfig();
-  const operationName = String(namePrefix || "application_write").trim().slice(0, 120) || "application_write";
-  const { data, error } = await client.rpc("run_application_write", {
-    p_name: operationName,
-    p_sql: String(sql || "").trim(),
+async function runOperationalCommand(command, payload = {}) {
+  return runRpc("app_apply_operational_command", {
+    p_command: String(command || "").trim(),
+    p_payload: payload,
   });
-  if (error) throw new Error(error.message || "run_application_write failed");
-  return data;
 }
 
-const eventMaintenanceController = createEventMaintenanceController({ runReadOnlySql, runWriteSql, runRpc });
+async function runEventCommand(command, payload = {}) {
+  const normalized = String(command || "").trim();
+  const commands = {
+    event_create: "create",
+    event_update: "update",
+    event_cancel: "cancel",
+  };
+  const eventCommand = commands[normalized];
+  if (!eventCommand) throw new Error(`Unsupported bounded event command: ${normalized}`);
+  return runRpc("app_apply_event_command", {
+    p_command: eventCommand,
+    p_event_id: payload.event_id || null,
+    p_record: payload.record || {},
+    p_actor: payload.actor || null,
+    p_reason: payload.reason || null,
+  });
+}
+
+async function runScheduleCommand(command, payload = {}) {
+  return runRpc("app_apply_schedule_command", {
+    p_command: String(command || "").trim(),
+    p_payload: payload,
+  });
+}
+
+const eventMaintenanceController = createEventMaintenanceController({ runReadOnlySql, runCommand: runEventCommand, runRpc });
 
 async function runAdminBundleViaSqlRead(limits = {}) {
   const pLocationLimit = toSafeInt(limits.p_location_limit, 60);
@@ -1050,17 +1030,99 @@ async function resolveGuestReportLocation(locationCode) {
 
 async function resolveOpsManagerRecipients() {
   const rows = await runReadOnlySql(`
-    select distinct mu.id as user_id, mu.display_name, mu.role
+    select distinct mu.id as user_id, mu.display_name, mu.role, m.manager_id
     from public.msg_users mu
+    join public.ops_manager_managers m on m.manager_id = mu.ops_manager_id
     where coalesce(mu.is_active, true) = true
-      and (
-        lower(coalesce(mu.role, '')) like '%ops manager%'
-        or lower(coalesce(mu.role, '')) like '%operations manager%'
-        or lower(coalesce(mu.role, '')) = 'manager'
-      )
+      and m.active = true
+      and m.revoked_at is null
+      and m.is_system_principal = false
     order by mu.display_name
   `);
   return Array.isArray(rows) ? rows.filter((row) => isUuid(row.user_id)) : [];
+}
+
+async function deliverCustodialOfflineReconciliationNotification(notification) {
+  const recipients = await resolveOpsManagerRecipients();
+  if (!recipients.length) {
+    const error = new Error("No active named manager recipient is available for offline reconciliation recovery.");
+    error.terminal = true;
+    throw error;
+  }
+  const memphisRows = await runReadOnlySql("select public.msg_get_memphis_user_id() as memphis_user_id");
+  const memphisUserId = Array.isArray(memphisRows) && memphisRows.length ? memphisRows[0].memphis_user_id : null;
+  if (!isUuid(memphisUserId)) throw new Error("Memphis bot identity is unavailable.");
+  const payload = notification?.payload_json && typeof notification.payload_json === "object" ? notification.payload_json : {};
+  const isDisposition = notification?.notification_kind === "offline_reconciliation_disposition";
+  const subject = isDisposition ? "Offline reconciliation disposition recorded" : "Offline reconciliation quarantined";
+  const body = [
+    subject,
+    `Reconciliation: ${payload.reconciliation_id || notification?.reconciliation_id || "unknown"}`,
+    isDisposition ? `Disposition: ${payload.disposition || "recorded"}` : `Reason: ${payload.reason || "offline_authority_rejected"}`,
+    "Open the named-manager offline reconciliation queue to review immutable evidence.",
+  ].join("\n");
+  const results = await Promise.allSettled(recipients.map(async (recipient) => {
+    const thread = await runRpc("msg_get_or_create_direct_thread", { p_user_a: memphisUserId, p_user_b: recipient.user_id });
+    await runRpc("msg_send_message", {
+      p_thread_id: thread.id,
+      p_sender_user_id: memphisUserId,
+      p_body: body,
+      p_message_type: "bot_response",
+      p_metadata_json: {
+        channel: "offline_reconciliation_recovery",
+        reconciliation_id: payload.reconciliation_id || notification?.reconciliation_id || null,
+        disposition_id: payload.disposition_id || notification?.disposition_id || null,
+        recipient_manager_id: recipient.manager_id || null,
+      },
+    });
+  }));
+  const failures = results.filter((result) => result.status === "rejected");
+  if (failures.length) throw new Error(`Offline reconciliation notification delivery failed for ${failures.length} named manager recipient(s).`);
+  return { recipient_manager_ids: recipients.map((recipient) => recipient.manager_id).filter(isUuid), delivered_count: recipients.length };
+}
+
+async function runCustodialOfflineReconciliationNotificationWorker({ limit = 10 } = {}) {
+  let executionSecret;
+  try {
+    executionSecret = offlineAuthoritySecret();
+  } catch (error) {
+    return { claimed: 0, completed: 0, skipped: "offline_authority_not_configured", error: error.code || "offline_authority_not_configured", results: [] };
+  }
+  const claimed = await runRpc("custodial_claim_offline_reconciliation_notifications", {
+    p_worker_id: OPERATIONAL_NOTIFICATION_WORKER_ID,
+    p_limit: Math.max(1, Math.min(50, Number(limit) || 10)),
+    p_lease_seconds: 120,
+    p_backend_execution_secret: executionSecret,
+  });
+  const notifications = Array.isArray(claimed) ? claimed : (claimed ? [claimed] : []);
+  const results = [];
+  for (const notification of notifications) {
+    let succeeded = false;
+    let terminal = false;
+    let errorMessage = null;
+    let delivery = {};
+    try {
+      delivery = await deliverCustodialOfflineReconciliationNotification(notification);
+      succeeded = true;
+    } catch (error) {
+      terminal = error?.terminal === true;
+      errorMessage = String(error?.message || "Offline reconciliation notification delivery failed.").slice(0, 2000);
+    }
+    const retrySeconds = Math.min(3600, Math.max(15, 15 * (2 ** Math.min(8, Number(notification.attempts || 1) - 1))));
+    const finished = await runRpc("custodial_finish_offline_reconciliation_notification", {
+      p_outbox_id: notification.outbox_id,
+      p_worker_id: OPERATIONAL_NOTIFICATION_WORKER_ID,
+      p_lease_token: notification.lease_token,
+      p_succeeded: succeeded,
+      p_error: errorMessage,
+      p_retry_seconds: retrySeconds,
+      p_terminal: terminal,
+      p_delivery_json: delivery,
+      p_backend_execution_secret: executionSecret,
+    });
+    results.push({ outbox_id: notification.outbox_id, succeeded, terminal: finished?.terminal === true, state: finished?.state, error: errorMessage });
+  }
+  return { claimed: notifications.length, completed: results.filter((result) => result.succeeded).length, results };
 }
 
 async function createGuestCleanlinessReport({ operationId, requestFingerprint, location, issueType, severity, notes, reporter = {}, reporterContext = {} }) {
@@ -1093,28 +1155,11 @@ async function createGuestCleanlinessReport({ operationId, requestFingerprint, l
     return { ...existingRows[0], newly_inserted: false };
   }
   const reportId = randomUUID();
-  await runWriteSql(
-    "guest_cleanliness_report_insert",
-    `insert into public.guest_cleanliness_reports (
-         id, operation_id, request_fingerprint, location_code, location_name,
-         issue_type, severity, notes, status, marketing_review_status,
-         notification_status, metadata_json
-       ) values (
-         ${sqlLiteral(reportId)}::uuid,
-         ${sqlLiteral(operationId)}::uuid,
-         ${sqlLiteral(requestFingerprint)},
-         ${sqlLiteral(location.location_code)},
-         ${sqlLiteral(location.location_name || null)},
-         ${sqlLiteral(issue)},
-         ${sqlLiteral(level)},
-         ${sqlLiteral(noteText)},
-         'pending_marketing_review',
-         'pending',
-         'awaiting_marketing_review',
-         ${sqlLiteral(JSON.stringify(metadata))}::jsonb
-       )
-       on conflict (operation_id) do nothing`
-  );
+  await runOperationalCommand("guest_report_create", {
+    id: reportId, operation_id: operationId, request_fingerprint: requestFingerprint,
+    location_code: location.location_code, location_name: location.location_name || null,
+    issue_type: issue, severity: level, notes: noteText, metadata_json: metadata,
+  });
   const rows = await runReadOnlySql(`
     select id, operation_id, request_fingerprint, location_code, location_name,
            issue_type, severity, notes, status, source, submitted_at, resolved_at,
@@ -1188,16 +1233,11 @@ async function notifyGuestReportRecipients({ report, currentOwner, opsRecipients
     ? "failed"
     : (notified.errors.length === 0 ? "sent" : (totalSucceeded === 0 ? "failed" : "partial"));
 
-  await runWriteSql(
-    "guest_report_notification_status",
-    `update public.guest_cleanliness_reports
-       set notification_status = ${sqlLiteral(notificationStatus)},
-           notified_employee_user_id = ${sqlLiteral(notified.employee_user_id)}${notified.employee_user_id ? "::uuid" : ""},
-           notified_ops_count = ${Number(notified.ops_count || 0)},
-           dispatched_at = case when ${Number(totalSucceeded)} > 0 then now() else dispatched_at end,
-           metadata_json = coalesce(metadata_json, '{}'::jsonb) || ${sqlLiteral(JSON.stringify({ notification_errors: notified.errors }))}::jsonb
-     where id = ${sqlLiteral(report.id)}::uuid`
-  );
+  await runOperationalCommand("guest_report_notification", {
+    id: report.id, notification_status: notificationStatus, notified_employee_user_id: notified.employee_user_id,
+    notified_ops_count: Number(notified.ops_count || 0), delivered_count: totalSucceeded,
+    notification_errors: notified.errors,
+  });
 
   return notified;
 }
@@ -1285,11 +1325,13 @@ async function runOperationalNotificationWorker({ limit = 10 } = {}) {
       }
       results.push({ job_id: job.job_id, succeeded, terminal, error: errorMessage });
     }
+    const custodial = await runCustodialOfflineReconciliationNotificationWorker({ limit });
     return {
       ok: true,
       claimed: jobs.length,
       completed: results.filter((item) => item.succeeded).length,
       results,
+      custodial_offline_reconciliation: custodial,
     };
   } finally {
     operationalNotificationWorkerInFlight = false;
@@ -1329,43 +1371,9 @@ async function reviewGuestCleanlinessReport(reportId, { action, actor, notes = n
     throw Object.assign(new Error("Guest report is not awaiting Marketing review."), { status: 409 });
   }
   if (normalizedAction === "approve") {
-    await runWriteSql(
-      "guest_marketing_approve",
-      `update public.guest_cleanliness_reports
-         set marketing_review_status='approved',
-             marketing_reviewed_at=now(),
-             marketing_reviewed_by=${sqlLiteral(reviewedBy)},
-             marketing_review_notes=${sqlLiteral(reviewNotes)},
-             status='open',
-             notification_status='pending'
-         where id=${sqlLiteral(reportId)}::uuid
-           and status='pending_marketing_review'
-           and marketing_review_status='pending';
-       insert into public.operational_notification_jobs(job_key,job_type,source_id,payload_json)
-         select 'guest-report:' || id::text,'guest_cleanliness_report',id,
-                jsonb_build_object('operation_id',operation_id,'marketing_approved',true)
-         from public.guest_cleanliness_reports
-         where id=${sqlLiteral(reportId)}::uuid
-           and status='open'
-           and marketing_review_status='approved'
-         on conflict(job_key) do nothing;`
-    );
+    await runOperationalCommand("guest_report_review", { id: reportId, action: "approve", actor: reviewedBy, notes: reviewNotes });
   } else {
-    await runWriteSql(
-      "guest_marketing_reject",
-      `update public.guest_cleanliness_reports
-       set marketing_review_status='rejected',
-           marketing_reviewed_at=now(),
-           marketing_reviewed_by=${sqlLiteral(reviewedBy)},
-           marketing_review_notes=${sqlLiteral(reviewNotes)},
-           status='rejected',
-           resolved_at=now(),
-           resolved_by=${sqlLiteral(reviewedBy)},
-           notification_status='not_dispatched'
-       where id=${sqlLiteral(reportId)}::uuid
-         and status='pending_marketing_review'
-         and marketing_review_status='pending'`
-    );
+    await runOperationalCommand("guest_report_review", { id: reportId, action: "reject", actor: reviewedBy, notes: reviewNotes });
   }
   const reviewed = await getGuestCleanlinessReportById(reportId);
   if (reviewed.marketing_review_status !== (normalizedAction === "approve" ? "approved" : "rejected")) {
@@ -1382,15 +1390,7 @@ async function resolveGuestCleanlinessReport(reportId, { actor, notes = null } =
   if (before.status !== "open" || before.marketing_review_status !== "approved") {
     throw Object.assign(new Error("Only an approved open guest report can be resolved."), { status: 409 });
   }
-  await runWriteSql(
-    "guest_report_resolve",
-    `update public.guest_cleanliness_reports
-     set status='resolved',resolved_at=now(),resolved_by=${sqlLiteral(resolvedBy)},
-         metadata_json=coalesce(metadata_json,'{}'::jsonb) || ${sqlLiteral(JSON.stringify({ resolution_notes: closeNotes }))}::jsonb
-     where id=${sqlLiteral(reportId)}::uuid
-       and status='open'
-       and marketing_review_status='approved'`
-  );
+  await runOperationalCommand("guest_report_resolve", { id: reportId, actor: resolvedBy, notes: closeNotes });
   const resolved = await getGuestCleanlinessReportById(reportId);
   if (resolved.status !== "resolved") throw Object.assign(new Error("Guest report resolution did not complete."), { status: 409 });
   return resolved;
@@ -1574,19 +1574,10 @@ async function migrateLegacySystemFeedbackImageJob(job) {
   const persistedImage = persistedSystemFeedbackImageMetadata(storedImage);
   const updatedMetadata = { ...metadata, image_attachment: persistedImage };
   try {
-    await runWriteSql(
-      "system_feedback_legacy_image_migration",
-      `update public.system_feedback_items
-          set metadata_json = ${sqlLiteral(JSON.stringify(updatedMetadata))}::jsonb,
-              updated_at = now()
-        where id = ${sqlLiteral(feedbackId)}::uuid
-          and metadata_json->'image_attachment'->>'data_url' is not null;
-       update public.system_feedback_legacy_image_backups
-          set migrated_at = now(),
-              storage_bucket = ${sqlLiteral(persistedImage.storage_bucket)},
-              storage_path = ${sqlLiteral(persistedImage.storage_path)}
-        where feedback_id = ${sqlLiteral(feedbackId)}::uuid;`,
-    );
+    await runOperationalCommand("feedback_legacy_image_migration", {
+      id: feedbackId, metadata_json: updatedMetadata,
+      storage_bucket: persistedImage.storage_bucket, storage_path: persistedImage.storage_path,
+    });
   } catch (error) {
     await removeUnreferencedSystemFeedbackImage(storedImage);
     throw error;
@@ -1648,25 +1639,11 @@ async function createSystemFeedbackItem(payload = {}) {
   };
   const summary = summarizeSystemFeedback({ category, priority, message, hubContext, submittedBy });
   try {
-    await runWriteSql(
-      "system_feedback_insert",
-      `insert into public.system_feedback_items (
-       id, operation_id, request_fingerprint, category, priority, message, submitted_by, hub_context, device_id, page_url, summary, metadata_json
-     ) values (
-       ${sqlLiteral(feedbackId)}::uuid,
-       ${sqlLiteral(operationId)}::uuid,
-       ${sqlLiteral(requestFingerprint)},
-       ${sqlLiteral(category)},
-       ${sqlLiteral(priority)},
-       ${sqlLiteral(message)},
-       ${sqlLiteral(submittedBy)},
-       ${sqlLiteral(hubContext)},
-       ${sqlLiteral(deviceId)},
-       ${sqlLiteral(pageUrl)},
-       ${sqlLiteral(summary)},
-       ${sqlLiteral(JSON.stringify(metadata))}::jsonb
-       ) on conflict (operation_id) do nothing`,
-    );
+    await runOperationalCommand("feedback_create", {
+      id: feedbackId, operation_id: operationId, request_fingerprint: requestFingerprint,
+      category, priority, message, submitted_by: submittedBy, hub_context: hubContext,
+      device_id: deviceId, page_url: pageUrl, summary, metadata_json: metadata,
+    });
 
     const rows = await runReadOnlySql(`
       select id, operation_id, request_fingerprint, category, priority, message, submitted_by, hub_context, device_id, page_url,
@@ -1728,17 +1705,12 @@ async function notifySystemFeedbackRecipients({ item, opsRecipients, memphisUser
     }
   }
 
-  await runWriteSql(
-      "system_feedback_notification_status",
-    `update public.system_feedback_items
-       set notification_status = ${sqlLiteral(eligibleRecipients.length === 0 ? "failed" : (notified.errors.length === 0 ? "sent" : (notified.ops_count ? "partial" : "failed")))},
-           notified_ops_count = coalesce(notified_ops_count, 0) + ${Number(notified.ops_count || 0)},
-           last_feedback_reminder_at = now(),
-           feedback_reminder_count = coalesce(feedback_reminder_count, 0) + ${reminder ? 1 : 0},
-           updated_at = now(),
-           metadata_json = coalesce(metadata_json, '{}'::jsonb) || ${sqlLiteral(JSON.stringify({ notification_errors: notified.errors }))}::jsonb
-     where id = ${sqlLiteral(item.id)}::uuid`
-  );
+  await runOperationalCommand("feedback_notification", {
+    id: item.id,
+    notification_status: eligibleRecipients.length === 0 ? "failed" : (notified.errors.length === 0 ? "sent" : (notified.ops_count ? "partial" : "failed")),
+    notified_ops_count: Number(notified.ops_count || 0), reminder_increment: reminder ? 1 : 0,
+    notification_errors: notified.errors,
+  });
 
   return notified;
 }
@@ -1778,16 +1750,9 @@ async function getSystemFeedbackItemById(feedbackId) {
 async function acknowledgeSystemFeedbackItem(feedbackId, acknowledgedBy = "ops_manager") {
   if (!isUuid(feedbackId)) throw new Error("feedback id is invalid.");
   const actor = String(acknowledgedBy || "ops_manager").trim().slice(0, 120) || "ops_manager";
-  await runWriteSql(
-    "system_feedback_acknowledge",
-    `update public.system_feedback_items
-       set status = 'acknowledged',
-           acknowledged_at = now(),
-           acknowledged_by = ${sqlLiteral(actor)},
-           updated_at = now(),
-           metadata_json = coalesce(metadata_json, '{}'::jsonb) || ${sqlLiteral(JSON.stringify({ acknowledged_via: "feedback-api" }))}::jsonb
-     where id = ${sqlLiteral(feedbackId)}::uuid`
-  );
+  await runOperationalCommand("feedback_status", {
+    id: feedbackId, status: "acknowledged", actor, metadata_patch: { acknowledged_via: "feedback-api" },
+  });
   return getSystemFeedbackItemById(feedbackId);
 }
 
@@ -1800,17 +1765,10 @@ async function setSystemFeedbackStatus(feedbackId, status, actor = "ops_manager"
   if (["closed", "resolved"].includes(before.status)) {
     throw Object.assign(new Error("Feedback item is already resolved or unavailable."), { status: 409 });
   }
-  await runWriteSql(
-    "system_feedback_status",
-    `update public.system_feedback_items
-     set status=${sqlLiteral(normalizedStatus)},
-         acknowledged_at=case when ${sqlLiteral(normalizedStatus)}='acknowledged' then now() else acknowledged_at end,
-         acknowledged_by=case when ${sqlLiteral(normalizedStatus)}='acknowledged' then ${sqlLiteral(changedBy)} else acknowledged_by end,
-         updated_at=now(),
-         metadata_json=coalesce(metadata_json,'{}'::jsonb) || ${sqlLiteral(JSON.stringify({ status_changed_via: "manager_feedback_inbox", status_changed_by: changedBy }))}::jsonb
-     where id=${sqlLiteral(feedbackId)}::uuid
-       and status not in ('closed','resolved')`
-  );
+  await runOperationalCommand("feedback_status", {
+    id: feedbackId, status: normalizedStatus, actor: changedBy,
+    metadata_patch: { status_changed_via: "manager_feedback_inbox", status_changed_by: changedBy },
+  });
   const changed = await getSystemFeedbackItemById(feedbackId);
   if (changed.status !== normalizedStatus) throw Object.assign(new Error("Feedback status update did not complete."), { status: 409 });
   return changed;
@@ -1833,15 +1791,7 @@ async function listSystemFeedbackReminderDueItems({ limit = 25 } = {}) {
 
 async function markSystemFeedbackReminderExhausted(item, reason = "max_reminders_reached") {
   if (!item?.id) return null;
-  await runWriteSql(
-    "system_feedback_reminder_exhausted",
-    `update public.system_feedback_items
-       set status = 'reminder_exhausted',
-           updated_at = now(),
-           metadata_json = coalesce(metadata_json, '{}'::jsonb) || ${sqlLiteral(JSON.stringify({ reminder_exhausted_reason: reason }))}::jsonb
-     where id = ${sqlLiteral(item.id)}::uuid
-       and status not in ('acknowledged', 'resolved', 'closed')`
-  );
+  await runOperationalCommand("feedback_reminder_exhausted", { id: item.id, reason });
   return { ...item, status: "reminder_exhausted" };
 }
 
@@ -2046,7 +1996,7 @@ app.use("/admin-api", (req, res, next) => { setAdminApiCors(res, req); if (req.m
 app.use("/dashboard-api", (req, res, next) => { setPublicDashboardCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/scan-api", (req, res, next) => { setScanApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/messaging-api", (req, res, next) => { setMessagingApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); }, createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPayload, requireDeviceAccess: requireDeviceOrOpsAccess, requireOpsManagerAuth, registerOperationalJobHandler: registerOperationalNotificationJobHandler, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: MESSAGING_CONTRACT_VERSION }));
-app.use("/schedule-api", (req, res, next) => { setScheduleApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); }, createScheduleRouter({ runReadOnlySql, runRpc, runWriteSql, buildHealthPayload, requireAdminApiAuth: requireOpsManagerWrite, requireOpsManagerAuth, requireDeviceAccess: requireDeviceOrOpsAccess, publicTrafficRateLimit: publicSubmissionRateLimit, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: SCHEDULE_CONTRACT_VERSION }));
+app.use("/schedule-api", (req, res, next) => { setScheduleApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); }, createScheduleRouter({ runReadOnlySql, runRpc, runCommand: runScheduleCommand, buildHealthPayload, requireAdminApiAuth: requireOpsManagerWrite, requireOpsManagerAuth, requireDeviceAccess: requireDeviceOrOpsAccess, publicTrafficRateLimit: publicSubmissionRateLimit, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: SCHEDULE_CONTRACT_VERSION }));
 app.use("/guest-api", (req, res, next) => { setGuestApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/feedback-api", (req, res, next) => { setFeedbackApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use(
@@ -2064,8 +2014,8 @@ app.use(
     frontendCommit: buildReleaseManifest({ appVersion: APP_VERSION, releaseId: RELEASE_ID }).frontend.commit_sha,
   }),
 );
-app.use("/dashboard-api/events", createEventsPublicRouter({ runReadOnlySql, runWriteSql, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController }));
-app.use("/admin-api/events", createEventsAdminRouter({ runReadOnlySql, runWriteSql, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController, requireAdminApiAuth: requireOpsManagerAuth, requireAdminApiWrite: requireOpsManagerWrite }));
+app.use("/dashboard-api/events", createEventsPublicRouter({ runReadOnlySql, runCommand: runEventCommand, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController }));
+app.use("/admin-api/events", createEventsAdminRouter({ runReadOnlySql, runCommand: runEventCommand, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController, requireAdminApiAuth: requireOpsManagerAuth, requireAdminApiWrite: requireOpsManagerWrite }));
 app.use(["/version", "/release-manifest", "/health", "/health/dependencies"], (req, res, next) => {
   setPublicDashboardCors(res, req);
   if (req.method === "OPTIONS") {
@@ -2209,15 +2159,7 @@ app.post("/feedback-api/submit", publicSubmissionRateLimit("feedback"), async (r
       operation_id: operationId,
       user_agent: String(req.get("user-agent") || "").slice(0, 500),
     });
-    await runWriteSql(
-      "system_feedback_dashboard_only",
-      `update public.system_feedback_items
-         set notification_status = 'dashboard_only',
-             notified_ops_count = 0,
-             updated_at = now(),
-             metadata_json = coalesce(metadata_json, '{}'::jsonb) || ${sqlLiteral(JSON.stringify({ notification_delivery: "dashboard_only" }))}::jsonb
-       where id = ${sqlLiteral(item.id)}::uuid`
-    );
+    await runOperationalCommand("feedback_dashboard_only", { id: item.id });
     item.notification_status = "dashboard_only";
     item.notified_ops_count = 0;
     const notification = { ops_count: 0, errors: [], skipped: "dashboard_only" };
@@ -2425,12 +2367,8 @@ app.post("/admin-api/bundle", requireOpsManagerWrite, async (req, res) => {
   catch (error) { console.error("admin bundle failed:", error); res.status(500).json({ ok: false, error: error.message || "Admin bundle failed" }); }
 });
 app.post("/admin-api/close-ticket", requireOpsManagerWrite, async (req, res) => {
-  try { const ticketId = String(req.body?.ticket_id || "").trim(); const closedBy = String(req.body?.closed_by || "").trim(); const closeNotes = req.body?.close_notes == null ? null : String(req.body.close_notes); if (!ticketId || !closedBy) { res.status(400).json({ ok: false, error: "ticket_id and closed_by are required." }); return; } await runWriteSql("admin_close_ticket", `select public.close_maintenance_ticket(${sqlLiteral(ticketId)}::uuid, ${sqlLiteral(closedBy)}, ${sqlLiteral(closeNotes)});`); res.status(200).json({ ok: true, ticket_id: ticketId, status: "closed" }); }
+  try { const ticketId = String(req.body?.ticket_id || "").trim(); const closedBy = String(req.body?.closed_by || "").trim(); const closeNotes = req.body?.close_notes == null ? null : String(req.body.close_notes); if (!ticketId || !closedBy) { res.status(400).json({ ok: false, error: "ticket_id and closed_by are required." }); return; } await runRpc("close_maintenance_ticket", { p_ticket_id: ticketId, p_closed_by: closedBy, p_close_notes: closeNotes }); res.status(200).json({ ok: true, ticket_id: ticketId, status: "closed" }); }
   catch (error) { console.error("close ticket failed:", error); res.status(500).json({ ok: false, error: error.message || "Close ticket failed" }); }
-});
-app.post("/admin-api/force-close-session", requireOpsManagerWrite, async (req, res) => {
-  try { const sessionUuid = String(req.body?.session_uuid || "").trim(); const closedBy = String(req.body?.closed_by || "").trim(); const reason = req.body?.reason == null ? null : String(req.body.reason); if (!sessionUuid || !closedBy) { res.status(400).json({ ok: false, error: "session_uuid and closed_by are required." }); return; } await runWriteSql("admin_force_close_session", `select public.force_close_session(${sqlLiteral(sessionUuid)}, ${sqlLiteral(closedBy)}, ${sqlLiteral(reason)});`); res.status(200).json({ ok: true, session_uuid: sessionUuid, status: "closed" }); }
-  catch (error) { console.error("force close session failed:", error); res.status(500).json({ ok: false, error: error.message || "Force close session failed" }); }
 });
 app.get("/dashboard-api/summary", requireOpsManagerAuth, async (_req, res) => {
   try { const data = await runPublicDashboardSummary(); res.status(200).json({ ok: true, data }); }
@@ -2486,7 +2424,7 @@ app.post("/dashboard-api/close-ticket", requireOpsManagerWrite, async (req, res)
       res.status(400).json({ ok: false, error: "ticket_id is required." });
       return;
     }
-    await runWriteSql("dashboard_close_ticket", `select public.close_maintenance_ticket(${sqlLiteral(ticketId)}::uuid, ${sqlLiteral(closedBy)}, null);`);
+    await runRpc("close_maintenance_ticket", { p_ticket_id: ticketId, p_closed_by: closedBy, p_close_notes: null });
     res.status(200).json({ ok: true, ticket_id: ticketId, status: "closed" });
   }
   catch (error) { console.error("dashboard close ticket failed:", error); res.status(500).json({ ok: false, error: error.message || "Dashboard close ticket failed" }); }
@@ -2573,9 +2511,9 @@ app.post("/scan-api/rpc", requireDeviceOrOpsAccess, parseAuthenticatedScanAuthor
     const proofBound = bindOfflineActorProof(preparedBase.fn, preparedBase.args, req.memphisDeviceCredential);
     const prepared = { ...preparedBase, ...proofBound };
     const data = await runPreparedScanRpc(prepared);
-    res.status(200).json({
-      ok: true,
-      data,
+    const outcome = authorityHttpOutcome(data);
+    res.status(outcome.status).json({
+      ...outcome.body,
       meta: {
         version: APP_VERSION,
         release_id: RELEASE_ID,

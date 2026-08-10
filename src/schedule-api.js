@@ -163,18 +163,6 @@ function buildRestroomRebalanceCompletionSelectSql(serviceDate) {
   `;
 }
 
-function buildRestroomRebalanceCompletionUpsertSql(serviceDate, result = {}, status = "completed") {
-  const resultJson = JSON.stringify(result || {});
-  return `
-    insert into public.schedule_automation_runs (automation_key, service_date, status, result_json, updated_at)
-    values ('${sqlQuote(RESTROOM_REBALANCE_SOURCE)}', '${sqlQuote(serviceDate)}'::date, '${sqlQuote(status)}', '${sqlQuote(resultJson)}'::jsonb, now())
-    on conflict (automation_key, service_date)
-    do update set status = excluded.status,
-                  result_json = excluded.result_json,
-                  updated_at = now();
-  `;
-}
-
 function normalizeIdList(value) {
   if (Array.isArray(value)) {
     return Array.from(new Set(value.map((item) => String(item || "").trim()).filter(Boolean)));
@@ -584,7 +572,7 @@ function safeJsonParse(text) {
 export function createScheduleRouter({
   runReadOnlySql,
   runRpc,
-  runWriteSql,
+  runCommand,
   buildHealthPayload,
   requireAdminApiAuth,
   requireOpsManagerAuth,
@@ -833,144 +821,6 @@ export function createScheduleRouter({
       || /SCH2 publish confirm requires service_role backend execution/i.test(message);
   }
 
-  function buildSch2GuardedPublishSql(runId) {
-    const id = esc(runId);
-    return `select pg_advisory_xact_lock(hashtext('memphis_sch2_publish'));
-
-drop table if exists pg_temp.sch2_publish_candidate;
-create temporary table sch2_publish_candidate (run_id uuid primary key);
-insert into sch2_publish_candidate (run_id) values ('${id}'::uuid);
-
-drop table if exists pg_temp.sch2_publish_valid;
-create temporary table sch2_publish_valid as
-select q.*
-from (
-  select
-    r.id as run_id,
-    r.service_date,
-    r.status,
-    r.input_hash,
-    public.sch2_input_hash(r.service_date) as current_input_hash,
-    public.sch2_audit_solution(r.id) as audit,
-    public.sch2_compare_current_vs_preview(r.id) as diff,
-    (select count(*) from public.schedule_solution_assignments sa where sa.run_id = r.id) as preview_rows
-  from public.schedule_generation_runs r
-  join sch2_publish_candidate c on c.run_id = r.id
-) q
-where q.status = 'preview_ready'
-  and q.input_hash = q.current_input_hash
-  and coalesce((q.audit->>'hard_violation_count')::integer, 0) = 0
-  and coalesce((q.audit->>'open_required_count')::integer, 0) = 0
-  and coalesce((q.audit->>'work_item_count')::integer, 0) > 0
-  and coalesce((q.audit->>'solution_assignment_count')::integer, 0) = coalesce((q.audit->>'work_item_count')::integer, 0)
-  and q.preview_rows = coalesce((q.audit->>'work_item_count')::integer, 0);
-
-select 1 / case when (select count(*) from sch2_publish_valid) = 1 then 1 else 0 end as guard_candidate_valid;
-
-drop table if exists pg_temp.sch2_publish_audit_row;
-create temporary table sch2_publish_audit_row (id uuid primary key, run_id uuid not null, service_date date not null);
-with inserted as (
-  insert into public.schedule_publish_audit (
-    run_id,
-    service_date,
-    previous_rows,
-    published_rows,
-    diff_summary,
-    published_by,
-    status,
-    published_at
-  )
-  select
-    v.run_id,
-    v.service_date,
-    (
-      select coalesce(jsonb_agg(to_jsonb(dsa) order by dsa.coverage_start, dsa.location_group_id, dsa.segment_number), '[]'::jsonb)
-      from public.daily_schedule_assignments dsa
-      where dsa.service_date = v.service_date
-    ),
-    '[]'::jsonb,
-    v.diff,
-    'schedule_api_guarded_sql_publish',
-    'publishing',
-    now()
-  from sch2_publish_valid v
-  returning id, run_id, service_date
-)
-insert into sch2_publish_audit_row (id, run_id, service_date)
-select id, run_id, service_date from inserted;
-
-select 1 / case when (select count(*) from sch2_publish_audit_row) = 1 then 1 else 0 end as guard_audit_created;
-
-delete from public.daily_schedule_assignments dsa
-using sch2_publish_valid v
-where dsa.service_date = v.service_date;
-
-insert into public.daily_schedule_assignments (
-  service_date,
-  location_group_id,
-  segment_number,
-  assigned_employee_id,
-  owner_type,
-  coverage_start,
-  coverage_end,
-  status,
-  load_points,
-  notes,
-  source_type,
-  coverage_purpose
-)
-select
-  sa.service_date,
-  sa.location_group_id,
-  sa.segment_number,
-  sa.assigned_employee_id,
-  sa.owner_type,
-  sa.coverage_start,
-  sa.coverage_end,
-  sa.status,
-  sa.load_points,
-  concat_ws(' | ', nullif(sa.notes, ''), 'Published by SCH2 guarded SQL run ' || sa.run_id::text),
-  'sch2_published',
-  sa.coverage_purpose
-from public.schedule_solution_assignments sa
-join sch2_publish_valid v on v.run_id = sa.run_id
-order by sa.service_date, sa.coverage_start, sa.location_group_id, sa.segment_number;
-
-select 1 / case when not exists (
-  select 1
-  from sch2_publish_valid v
-  left join lateral (
-    select count(*)::integer as inserted_rows
-    from public.daily_schedule_assignments dsa
-    where dsa.service_date = v.service_date
-  ) c on true
-  where c.inserted_rows <> (v.audit->>'work_item_count')::integer
-) then 1 else 0 end as guard_inserted_rows_match;
-
-update public.schedule_publish_audit spa
-   set published_rows = (
-         select coalesce(jsonb_agg(to_jsonb(dsa) order by dsa.coverage_start, dsa.location_group_id, dsa.segment_number), '[]'::jsonb)
-         from public.daily_schedule_assignments dsa
-         where dsa.service_date = spa.service_date
-       ),
-       status = 'published',
-       published_at = now()
-from sch2_publish_audit_row a
-where spa.id = a.id;
-
-update public.schedule_generation_runs r
-   set status = 'published',
-       published_at = now(),
-       published_by = 'schedule_api_guarded_sql_publish',
-       updated_at = now()
-from sch2_publish_valid v
-where r.id = v.run_id;
-
-drop table if exists pg_temp.sch2_publish_audit_row;
-drop table if exists pg_temp.sch2_publish_valid;
-drop table if exists pg_temp.sch2_publish_candidate;`;
-  }
-
   async function runSch2PublishWithFallback(runId, confirm) {
     try {
       return await runRpc("sch2_publish_solution", { p_run_id: runId, p_confirm: confirm });
@@ -1000,8 +850,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
           diff: row.diff,
         };
       }
-      if (typeof runWriteSql !== "function") throw error;
-      await runWriteSql("sch2_guarded_publish", buildSch2GuardedPublishSql(runId));
+      await runCommand("sch2_guarded_publish", { run_id: runId });
       const rows = await runReadOnlySql(`
         select
           r.id as run_id,
@@ -1028,7 +877,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
       return {
         ok: true,
         dry_run: false,
-        fallback: "guarded_sql",
+        fallback: "bounded_command",
         publish_audit_id: row.publish_audit_id,
         run_id: row.run_id,
         service_date: row.service_date,
@@ -1280,22 +1129,11 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
     const linkId = randomUUID();
     const expiresAt = new Date(Date.now() + coverAllLinkTtlHours(ttlHours) * 60 * 60 * 1000).toISOString();
     const createdBy = String(actor || "authenticated_manager").trim().slice(0, 160) || "authenticated_manager";
-    const result = await runWriteSql("coverall_assignment_link_issue", `
-      with revoked as (
-        update public.coverall_assignment_links
-        set revoked_at = now(), revoked_by = '${esc(createdBy)}'
-        where service_date = '${esc(serviceDate)}'::date
-          and slot_code = '${esc(slot.employee_code)}'
-          and revoked_at is null
-        returning id
-      ), inserted as (
-        insert into public.coverall_assignment_links(id,token_hash,service_date,slot_code,created_by,expires_at)
-        values ('${esc(linkId)}'::uuid,'${esc(tokenHash)}','${esc(serviceDate)}'::date,'${esc(slot.employee_code)}','${esc(createdBy)}','${esc(expiresAt)}'::timestamptz)
-        returning id,service_date,slot_code,created_at,expires_at
-      )
-      select * from inserted
-    `);
-    const row = Array.isArray(result) ? result[0] : null;
+    const result = await runCommand("coverall_assignment_link_issue", {
+      id: linkId, token_hash: tokenHash, service_date: serviceDate, slot_code: slot.employee_code,
+      created_by: createdBy, expires_at: expiresAt,
+    });
+    const row = Array.isArray(result) ? result[0] : result;
     if (!row?.id) throw new Error("The secure CoverAll assignment link could not be created.");
     const publicOrigin = String(process.env.SCHEDULE_PUBLIC_BASE_URL || process.env.PUBLIC_BASE_URL || "https://memphis-zoo-mcp.onrender.com").replace(/\/+$/, "");
     const normalizedLang = String(lang || "en").toLowerCase() === "es" ? "es" : "en";
@@ -1311,14 +1149,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
   async function revokeCoverAllAssignmentLinks({ serviceDate, slotCode, actor }) {
     await getCoverAllSlotByCode(slotCode);
     const revokedBy = String(actor || "authenticated_manager").trim().slice(0, 160) || "authenticated_manager";
-    const result = await runWriteSql("coverall_assignment_link_revoke", `
-      update public.coverall_assignment_links
-      set revoked_at = now(), revoked_by = '${esc(revokedBy)}'
-      where service_date = '${esc(serviceDate)}'::date
-        and slot_code = '${esc(slotCode)}'
-        and revoked_at is null
-      returning id
-    `);
+    const result = await runCommand("coverall_assignment_link_revoke", { service_date: serviceDate, slot_code: slotCode, revoked_by: revokedBy });
     return Array.isArray(result) ? result.length : 0;
   }
 
@@ -1369,45 +1200,13 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
 
     if (!operations.length) throw new Error("At least one CoverAll slot operation is required.");
 
-    const activeOps = operations.filter((op) => op.active);
-    const inactiveOps = operations.filter((op) => !op.active);
-
-    let sql = "";
-    if (activeOps.length) {
-      const valuesSql = activeOps.map((op) => `(
-        '${esc(serviceDate)}'::date,
-        '${esc(op.slot.employee_id)}'::uuid,
-        '${esc(op.shiftStart)}'::time,
-        '${esc(op.shiftEnd)}'::time,
-        'coverall_manual',
-        '${esc(op.notes)}',
-        true
-      )`).join(",\n");
-      sql += `
-        insert into public.daily_work_roster (service_date, employee_id, shift_start, shift_end, source_type, notes, active)
-        values ${valuesSql}
-        on conflict (service_date, employee_id) do update set
-          shift_start = excluded.shift_start,
-          shift_end = excluded.shift_end,
-          source_type = excluded.source_type,
-          notes = excluded.notes,
-          active = true,
-          updated_at = now();
-      `;
-    }
-
-    if (inactiveOps.length) {
-      sql += `
-        update public.daily_work_roster
-           set active = false,
-               updated_at = now(),
-               notes = trim(concat_ws(' ', nullif(notes, ''), 'CoverAll slot removed from scheduler.'))
-         where service_date = '${esc(serviceDate)}'::date
-           and employee_id in (${inactiveOps.map((op) => `'${esc(op.slot.employee_id)}'::uuid`).join(",")});
-      `;
-    }
-
-    await runWriteSql("coverall_slots_publish", sql);
+    await runCommand("coverall_slots_publish", {
+      service_date: serviceDate,
+      operations: operations.map((op) => ({
+        employee_id: op.slot.employee_id, active: op.active, shift_start: op.shiftStart,
+        shift_end: op.shiftEnd, notes: op.notes,
+      })),
+    });
     let generateResult = null;
     let staticRestoreResult = null;
     let balanceResult = null;
@@ -1659,27 +1458,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
       return { service_date: serviceDate, ...plan };
     }
 
-    const valuesSql = plan.moves.map((move) => `(
-      '${esc(move.assignment_id)}'::uuid,
-      '${esc(move.to_employee_id)}'::uuid,
-      '${esc(move.to_employee_name)}',
-      '${esc(move.from_employee_name)}'
-    )`).join(",\n");
-
-    await runWriteSql("coverall_load_balance", `
-      with moved(assignment_id, to_employee_id, to_employee_name, from_employee_name) as (
-        values ${valuesSql}
-      )
-      update public.daily_schedule_assignments dsa
-         set assigned_employee_id = moved.to_employee_id,
-             owner_type = 'EMPLOYEE',
-             status = 'ASSIGNED',
-             source_type = 'coverall_manual_balance',
-             notes = trim(concat_ws(' ', nullif(dsa.notes, ''), 'Balanced to ' || moved.to_employee_name || ' from ' || moved.from_employee_name || ' for extra CoverAll help.')),
-             updated_at = now()
-      from moved
-      where dsa.id = moved.assignment_id;
-    `);
+    await runCommand("coverall_load_balance", { service_date: serviceDate, moves: plan.moves });
 
     return { service_date: serviceDate, ...plan };
   }
@@ -1892,7 +1671,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
   }
 
   async function rebalanceRestroomAssignments(serviceDate) {
-    if (typeof runWriteSql !== "function") return { applied: false, reason: "write_path_unavailable", moved_count: 0, moves: [] };
+    if (typeof runCommand !== "function") return { applied: false, reason: "write_path_unavailable", moved_count: 0, moves: [] };
 
     const activeRoster = await listActiveRosterForRestroomRebalance(serviceDate);
     const assignments = await listRestroomAssignmentsForRebalance(serviceDate);
@@ -1908,58 +1687,10 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
       };
     }
 
-    const valuesSql = plan.moves.map((move) => `(
-      '${esc(move.assignment_id)}'::uuid,
-      '${esc(move.from_employee_id)}'::uuid,
-      '${esc(move.to_employee_id)}'::uuid,
-      '${esc(move.to_employee_name)}',
-      '${esc(move.from_employee_name)}'
-    )`).join(",\n");
-
-    const writeResult = await runWriteSql("restroom_rebalance_0945", `
-      with operation_lock as (
-        select pg_advisory_xact_lock(hashtextextended('${esc(RESTROOM_REBALANCE_SOURCE)}:${esc(serviceDate)}', 0))
-      ), moved(assignment_id, from_employee_id, to_employee_id, to_employee_name, from_employee_name) as (
-        values ${valuesSql}
-      ), eligible as (
-        select moved.*
-        from moved
-        cross join operation_lock
-        join public.daily_schedule_assignments dsa on dsa.id = moved.assignment_id
-        join public.daily_work_roster r on r.service_date = dsa.service_date
-          and r.employee_id = moved.to_employee_id
-          and r.active = true
-        where dsa.service_date = '${esc(serviceDate)}'::date
-          and dsa.status = 'ASSIGNED'
-          and dsa.owner_type = 'EMPLOYEE'
-          and dsa.assigned_employee_id = moved.from_employee_id
-          and dsa.assigned_employee_id is not null
-          and coalesce(dsa.coverage_purpose, '') <> 'lunch_coverage'
-          and coalesce(dsa.source_type, '') not ilike '%manual%'
-          and coalesce(dsa.source_type, '') not ilike '%override%'
-          and coalesce(dsa.source_type, '') not ilike '%manager%'
-          and r.shift_start <= dsa.coverage_start
-          and r.shift_end >= dsa.coverage_end
-          and not public.sch_is_employee_location_group_restricted(
-            moved.to_employee_id,
-            dsa.location_group_id,
-            extract(dow from dsa.service_date)::integer
-          )
-      ),
-      updated as (
-        update public.daily_schedule_assignments dsa
-           set assigned_employee_id = eligible.to_employee_id,
-               owner_type = 'EMPLOYEE',
-               status = 'ASSIGNED',
-               source_type = '${esc(RESTROOM_REBALANCE_SOURCE)}',
-               notes = trim(concat_ws(' ', nullif(dsa.notes, ''), '${esc(RESTROOM_REBALANCE_NOTE)}' || ' From ' || eligible.from_employee_name || ' to ' || eligible.to_employee_name || '.')),
-               updated_at = now()
-        from eligible
-        where dsa.id = eligible.assignment_id
-        returning dsa.id::text as assignment_id, dsa.assigned_employee_id::text as assigned_employee_id, dsa.status, dsa.owner_type, dsa.source_type
-      )
-      select * from updated;
-    `);
+    const writeResult = await runCommand("restroom_rebalance_0945", {
+      service_date: serviceDate, source: RESTROOM_REBALANCE_SOURCE, note: RESTROOM_REBALANCE_NOTE,
+      moves: plan.moves,
+    });
 
     const postRows = Array.isArray(writeResult) ? writeResult : [];
     const postById = new Map((Array.isArray(postRows) ? postRows : []).map((row) => [String(row.assignment_id || ""), row]));
@@ -2020,8 +1751,8 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
   }
 
   async function markRestroomRebalanceCompletion(serviceDate, result, status = "completed") {
-    if (typeof runWriteSql !== "function") return null;
-    await runWriteSql("restroom_rebalance_completion", buildRestroomRebalanceCompletionUpsertSql(serviceDate, result, status));
+    if (typeof runCommand !== "function") return null;
+    await runCommand("restroom_rebalance_completion", { service_date: serviceDate, result, status, automation_key: RESTROOM_REBALANCE_SOURCE });
     return { automation_key: RESTROOM_REBALANCE_SOURCE, service_date: serviceDate, status, completed: status === "completed", result };
   }
 
@@ -2152,62 +1883,11 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
     if (!plan?.triggered || !Array.isArray(plan.assignments) || !plan.assignments.length) {
       return { ...(plan || {}), applied: false, assigned_count: 0, assigned_assignments: [] };
     }
-    if (typeof runWriteSql !== "function") throw new Error("CoverAll write path is not configured.");
+    if (typeof runCommand !== "function") throw new Error("CoverAll write path is not configured.");
     const coverAll = await getCoverAllEmployee();
-    const valuesSql = plan.assignments.map((row) => `(
-      '${esc(row.location_group_id)}'::uuid,
-      '${esc(row.coverage_start)}'::time,
-      '${esc(row.coverage_end)}'::time,
-      '${esc(row.group_name)}',
-      '${esc(row.source)}'
-    )`).join(",\n");
-
-    await runWriteSql("coverall_assignment_apply", `
-      with target(location_group_id, coverage_start, coverage_end, group_name, coverall_source) as (
-        values ${valuesSql}
-      ), bounds as (
-        select min(coverage_start) as shift_start, max(coverage_end) as shift_end from target
-      ), upsert_roster as (
-        insert into public.daily_work_roster (service_date, employee_id, shift_start, shift_end, source_type, notes, active, created_at, updated_at)
-        select '${esc(serviceDate)}'::date, '${esc(coverAll.employee_id)}'::uuid, b.shift_start, b.shift_end, 'coverall',
-               'Call CoverAll: 3+ custodial absences detected. CoverAll fills the 3rd and later absence workload.', true, now(), now()
-        from bounds b
-        where b.shift_start is not null and b.shift_end is not null
-          and not exists (
-            select 1 from public.daily_work_roster existing
-            where existing.service_date = '${esc(serviceDate)}'::date
-              and existing.employee_id = '${esc(coverAll.employee_id)}'::uuid
-          )
-        returning employee_id
-      )
-      update public.daily_work_roster dwr
-         set shift_start = least(dwr.shift_start, b.shift_start),
-             shift_end = greatest(dwr.shift_end, b.shift_end),
-             notes = 'Call CoverAll: 3+ custodial absences detected. CoverAll fills the 3rd and later absence workload.',
-             active = true,
-             updated_at = now()
-      from bounds b
-      where dwr.service_date = '${esc(serviceDate)}'::date
-        and dwr.employee_id = '${esc(coverAll.employee_id)}'::uuid
-        and b.shift_start is not null
-        and b.shift_end is not null;
-
-      with target(location_group_id, coverage_start, coverage_end, group_name, coverall_source) as (
-        values ${valuesSql}
-      )
-      update public.daily_schedule_assignments dsa
-         set assigned_employee_id = '${esc(coverAll.employee_id)}'::uuid,
-             owner_type = 'EMPLOYEE',
-             status = 'ASSIGNED',
-             source_type = 'coverall_escalation',
-             notes = trim(concat_ws(' ', nullif(dsa.notes, ''), 'Call CoverAll: assigned due to 3+ custodial absences.')),
-             updated_at = now()
-      from target t
-      where dsa.service_date = '${esc(serviceDate)}'::date
-        and dsa.location_group_id = t.location_group_id
-        and dsa.coverage_start = t.coverage_start
-        and dsa.coverage_end = t.coverage_end;
-    `);
+    await runCommand("coverall_assignment_apply", {
+      service_date: serviceDate, employee_id: coverAll.employee_id, assignments: plan.assignments,
+    });
 
     const assignedRows = await runReadOnlySql(`
       select dsa.location_group_id, lg.group_code, lg.group_name,
@@ -2326,33 +2006,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
       });
     }
 
-    const valuesSql = normalized.map((row) => `(
-      '${esc(row.employee_id)}'::uuid,
-      '${esc(row.start_date)}'::date,
-      '${esc(row.end_date)}'::date,
-      '${esc(row.pto_type)}',
-      '${esc(row.source)}',
-      ${row.notes == null ? "null" : `'${esc(row.notes)}'`},
-      true
-    )`).join(",\n");
-
-    await runWriteSql("pto_import", `
-      insert into public.employee_planned_time_off (
-        employee_id,
-        start_date,
-        end_date,
-        pto_type,
-        source,
-        notes,
-        active
-      )
-      values ${valuesSql}
-      on conflict (employee_id, start_date, end_date, pto_type, source)
-      do update set
-        notes = excluded.notes,
-        active = true,
-        updated_at = now();
-    `);
+    await runCommand("pto_import", { rows: normalized });
 
     return normalized;
   }
@@ -2616,65 +2270,8 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
   }
 
   async function restoreStaticOwnersForDate(serviceDate) {
-    if (typeof runWriteSql !== "function") return { applied: false, reason: "write_path_unavailable" };
-    await runWriteSql("restore_static_schedule_owners", `
-      update public.daily_schedule_assignments dsa
-         set assigned_employee_id = ct.assigned_employee_id,
-             owner_type = 'EMPLOYEE',
-             status = 'ASSIGNED',
-             source_type = case
-               when dsa.source_type is null or dsa.source_type = '' then 'coverage_template_static_owner'
-               when dsa.source_type like '%static_owner%' then dsa.source_type
-               else dsa.source_type || ':static_owner_restored'
-             end,
-             notes = trim(concat_ws(' | ', nullif(dsa.notes, ''), 'Static owner restored because owner is working and not absent.')),
-             updated_at = now()
-      from public.coverage_templates ct
-      join public.daily_work_roster dwr
-        on dwr.service_date = '${esc(serviceDate)}'::date
-       and dwr.employee_id = ct.assigned_employee_id
-       and dwr.active = true
-      where dsa.service_date = '${esc(serviceDate)}'::date
-        and dwr.shift_start <= dsa.coverage_start
-        and dwr.shift_end >= least(dsa.coverage_end, public.sch_get_schedule_close_time('${esc(serviceDate)}'::date))
-        and ct.active = true
-        and ct.day_of_week = extract(dow from '${esc(serviceDate)}'::date)::int
-        and ct.location_group_id = dsa.location_group_id
-        and ct.segment_number = dsa.segment_number
-        and ct.coverage_start = dsa.coverage_start
-        and least(ct.coverage_end, public.sch_get_schedule_close_time('${esc(serviceDate)}'::date)) = dsa.coverage_end
-        and coalesce(ct.coverage_purpose, 'area_owner') = coalesce(dsa.coverage_purpose, 'area_owner')
-        and coalesce(dsa.coverage_purpose, '') <> 'lunch_coverage'
-        and coalesce(dsa.source_type, '') not ilike '%lunch%'
-        and ct.assigned_employee_id is not null
-        and not public.sch_is_employee_location_group_restricted(
-          ct.assigned_employee_id,
-          ct.location_group_id,
-          extract(dow from '${esc(serviceDate)}'::date)::int
-        )
-        and not exists (
-          select 1 from public.daily_absence_overrides dao
-          where dao.absence_date = '${esc(serviceDate)}'::date
-            and dao.employee_id = ct.assigned_employee_id
-            and dao.active = true
-          union all
-          select 1 from public.employee_planned_time_off pto
-          where pto.start_date <= '${esc(serviceDate)}'::date
-            and pto.end_date >= '${esc(serviceDate)}'::date
-            and pto.employee_id = ct.assigned_employee_id
-            and pto.active = true
-          union all
-          select 1 from public.employee_pto ep
-          where ep.start_date <= '${esc(serviceDate)}'::date
-            and ep.end_date >= '${esc(serviceDate)}'::date
-            and ep.employee_id = ct.assigned_employee_id
-            and ep.active = true
-        )
-        and coalesce(dsa.source_type, '') not like 'coverall%'
-        and coalesce(dsa.source_type, '') not ilike '%manual%'
-        and coalesce(dsa.source_type, '') not ilike '%override%'
-        and coalesce(dsa.source_type, '') not ilike '%manager%';
-    `);
+    if (typeof runCommand !== "function") return { applied: false, reason: "write_path_unavailable" };
+    await runCommand("restore_static_schedule_owners", { service_date: serviceDate });
     return { applied: true };
   }
 
@@ -4539,33 +4136,9 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
       const serviceDate = requireDate(req.body?.service_date || req.body?.date || (await getServiceDate()));
       const explicit = normalizeUuidList(req.body?.absent_employee_ids || []);
       const requestedCoverAllSlots = Array.isArray(req.body?.coverall_slots) ? req.body.coverall_slots : [];
-      const idsSql = uuidArrayLiteral(explicit);
       let coverallPlan = await buildCoverAllPlan(serviceDate, explicit);
 
-      await runWriteSql("manual_absence_publish", `
-        update public.daily_absence_overrides dao
-           set active = (dao.employee_id = any(${idsSql}::uuid[])),
-               updated_at = now(),
-               notes = case
-                 when dao.employee_id = any(${idsSql}::uuid[]) then 'Published from simplified absence scheduler'
-                 else coalesce(dao.notes, 'Cleared by simplified absence scheduler')
-               end
-         where dao.absence_date = '${esc(serviceDate)}'::date
-           and dao.absence_type = 'manual_override';
-
-        insert into public.daily_absence_overrides (
-          id, absence_date, employee_id, absence_type, active, notes, created_at, updated_at
-        )
-        select gen_random_uuid(), '${esc(serviceDate)}'::date, x.employee_id, 'manual_override', true,
-               'Published from simplified absence scheduler', now(), now()
-        from (select distinct unnest(${idsSql}) as employee_id) x
-        where not exists (
-          select 1
-          from public.daily_absence_overrides y
-          where y.absence_date = '${esc(serviceDate)}'::date
-            and y.employee_id = x.employee_id
-        );
-      `);
+      await runCommand("manual_absence_publish", { service_date: serviceDate, employee_ids: explicit });
 
       const generateResult = await runRpc("sch_generate_daily_schedule", { p_service_date: serviceDate, p_force: true });
       const staticRestoreResult = await restoreStaticOwnersForDate(serviceDate);
@@ -4664,16 +4237,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
         employeeName = Array.isArray(employeeRows) && employeeRows.length ? String(employeeRows[0].employee_name || "") : "";
       }
 
-      await runWriteSql("manual_absence_return", `
-        update public.daily_absence_overrides
-           set active = false,
-               updated_at = now(),
-               notes = trim(concat_ws(' ', nullif(notes, ''), 'Cleared: employee returned to schedule.'))
-         where absence_date = '${esc(serviceDate)}'::date
-           and employee_id = '${esc(employeeId)}'::uuid
-           and absence_type = 'manual_override'
-           and active = true;
-      `);
+      await runCommand("manual_absence_return", { service_date: serviceDate, employee_id: employeeId });
 
       const generateResult = await runRpc("sch_generate_daily_schedule", { p_service_date: serviceDate, p_force: true });
       const staticRestoreResult = await restoreStaticOwnersForDate(serviceDate);
@@ -4837,7 +4401,7 @@ drop table if exists pg_temp.sch2_publish_candidate;`;
     }
   });
 
-  if (RESTROOM_REBALANCE_SWEEP_MS > 0 && typeof runWriteSql === "function") {
+  if (RESTROOM_REBALANCE_SWEEP_MS > 0 && typeof runCommand === "function") {
     setInterval(() => {
       maybeAutoRestroomRebalance({ reason: "scheduled_interval" })
         .catch((error) => console.error("9:45 restroom rebalance failed:", error));
