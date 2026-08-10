@@ -7,7 +7,7 @@
   "schema_transition": {
     "transition_id": "named-manager-messenger-archive-retirement-20260810",
     "from_fingerprint": "333ddfc8008ea0b85916de7d491b98c9b8d6a7d45d3a2947d99b4b3bb836ea00",
-    "to_fingerprint": "6c318e60c9a5491bad86421375889cff2bfbb31027d5caaad6aee8910803238c",
+    "to_fingerprint": "34520e1c0c1c6a6a2befeae93e6a0223a394970e1656abc7cb07d7d45cd4d44f",
     "expires_at": "2026-08-23T23:59:59Z"
   },
   "api_contract_versions": {

@@ -114,8 +114,18 @@ try {
     assert.equal(response.status, 409);
     assert.match(response.body.error, /retired or inactive/i);
   }
-  assert.equal(calls.filter((call) => call.fn === "msg_acknowledge_event_device_notification").length, 2,
+  const omittedMessage = await post("/device-notifications/ack", {
+    device_id: "NMMS-ROUTE-DEVICE",
+    notification_key: "route-native-only-event",
+    notification_type: "event",
+    action: "acknowledged",
+  });
+  assert.equal(omittedMessage.status, 409);
+  const eventCalls = calls.filter((call) => call.fn === "msg_acknowledge_event_device_notification");
+  assert.equal(eventCalls.length, 3,
     "linked event acknowledgements must use the single atomic RPC");
+  assert.equal(eventCalls.at(-1).args.p_message_id, null,
+    "an omitted event message assertion must still take the atomic authoritative path");
   assert.equal(calls.some((call) => call.fn === "ack_device_notification" || call.fn === "msg_acknowledge_message"), false,
     "route must not commit native acknowledgement before linked-message rejection");
 

@@ -798,7 +798,7 @@ begin
   end if;
 
   insert into public.ops_manager_managers(manager_id, display_name, roles, active)
-  values ('00000000-0000-4000-8000-00000000f107', 'Rebuild Messaging Manager', array['OPS_MANAGER','CUSTODIAL_MANAGER']::text[], true);
+  values ('00000000-0000-4000-8000-00000000f107', 'Rebuild Messaging Manager', array['OPS_MANAGER','CUSTODIAL_MANAGER','SECURITY_ADMIN']::text[], true);
   v_manager_user := public.msg_ensure_ops_manager_user('00000000-0000-4000-8000-00000000f107');
   if v_manager_user.messaging_identity_key <> 'ops_manager_named_0000000000004000800000000000f107'
      or v_manager_user.ops_manager_id <> '00000000-0000-4000-8000-00000000f107'::uuid
@@ -961,13 +961,9 @@ begin
     null;
   end;
 
-  insert into public.msg_users(id,display_name,role,is_active)
-  values ('00000000-0000-4000-8000-00000000f123','Empty DB Messenger Admin','admin',true)
-  on conflict(id) do update set role='admin',is_active=true;
-
   v_delete := public.msg_admin_tombstone_thread(
     v_group_thread_a.id,
-    '00000000-0000-4000-8000-00000000f123',
+    v_manager_user.id,
     '00000000-0000-4000-8000-00000000f124'
   );
   if (v_delete->>'deleted')::boolean is not true
@@ -1125,6 +1121,17 @@ if (dockerContainer) {
       dockerPsql(targetDatabase, sql);
       console.log(`applied ${file}`);
     }
+    execFileSync(process.execPath, [resolve(root, "scripts/refresh-schema-fingerprint.mjs"), "--check"], {
+      cwd: root,
+      env: {
+        ...process.env,
+        SCHEMA_FINGERPRINT_DOCKER_CONTAINER: dockerContainer,
+        SCHEMA_FINGERPRINT_DATABASE: targetDatabase,
+        SCHEMA_FINGERPRINT_MCP_URL: "",
+      },
+      stdio: "inherit",
+    });
+    console.log("verified clean-rebuild schema inventory equals the committed canonical fingerprint");
     dockerPsql(targetDatabase, exactFinishFunctionalSql);
     console.log("verified exact session finish transition and idempotent replay");
     await verifyNamedManagerRetirementMigrationModes(targetDatabase);

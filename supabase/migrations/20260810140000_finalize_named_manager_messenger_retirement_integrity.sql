@@ -56,9 +56,10 @@ begin
 end
 $function$;
 
--- Event acknowledgement owns both the native-notification receipt and the
---Messenger receipt in one transaction. All message, thread, membership, and
---receipt validation happens before either durable acknowledgement is written.
+-- Event acknowledgement owns both the native-notification receipt and any
+--authoritatively linked Messenger receipt in one transaction.  The native
+--event instance is resolved from the canonical active device and notification
+--key; a client-supplied message id is only an equality assertion.
 create or replace function public.msg_acknowledge_event_device_notification(
   p_device_identifier text,
   p_notification_key text,
@@ -73,46 +74,102 @@ security definer
 set search_path=pg_catalog,public,extensions
 as $function$
 declare
+  v_device public.devices%rowtype;
+  v_instance public.event_push_instances%rowtype;
+  v_log public.events_app_notification_log%rowtype;
+  v_linked_user public.msg_users%rowtype;
+  v_message public.msg_messages%rowtype;
   v_thread_id uuid;
   v_notification jsonb;
   v_receipt public.msg_receipts%rowtype;
 begin
-  if p_message_id is null or p_user_id is null then
-    raise exception using errcode='22023',message='Linked message and Messenger user are required for event acknowledgement';
+  select * into v_device
+  from public.devices d
+  where d.active is true
+    and upper(btrim(d.device_id))=upper(btrim(coalesce(p_device_identifier,'')))
+  for update;
+  if v_device.id is null then
+    raise exception using errcode='P0002',message='Active canonical device was not found for event acknowledgement';
   end if;
 
-  select m.thread_id into v_thread_id
-  from public.msg_messages m
-  where m.id=p_message_id
-  for key share;
-  if v_thread_id is null then
-    raise exception using errcode='P0002',message='Linked event message was not found';
+  select i.* into v_instance
+  from public.event_push_instances i
+  join public.device_auth_credentials c
+    on c.credential_id=i.credential_id
+   and c.device_id=v_device.id
+   and c.confirmed_at is not null
+   and c.revoked_at is null
+   and c.expires_at>now()
+  where i.notification_key=btrim(coalesce(p_notification_key,''))
+    and i.device_id=v_device.id
+    and i.employee_id=v_device.assigned_employee_id
+    and i.assignment_epoch=v_device.assignment_epoch
+    and i.state in ('sent','opened')
+  for update of i;
+  if v_instance.instance_id is null then
+    raise exception using errcode='P0002',message='Active event notification was not found for this device assignment';
   end if;
-  perform public.msg_assert_active_mutable_thread(v_thread_id);
 
-  if not exists (
-    select 1
-    from public.msg_thread_participants p
-    where p.thread_id=v_thread_id
-      and p.user_id=p_user_id
-      and p.left_at is null
-  ) then
-    raise exception using errcode='42501',message='Messenger user is not an active participant in the linked conversation';
-  end if;
-  if not exists (
-    select 1
-    from public.msg_receipts r
-    where r.message_id=p_message_id
-      and r.user_id=p_user_id
-  ) then
-    raise exception using errcode='P0002',message='Linked event message receipt was not found';
+  select * into v_log
+  from public.events_app_notification_log l
+  where l.event_id=v_instance.event_id
+    and l.employee_id=v_instance.employee_id
+    and l.notification_kind=v_instance.notification_kind
+  for update;
+
+  if v_log.id is not null and v_log.response_message_id is not null then
+    if v_log.status<>'sent' or v_log.msg_user_id is null or v_log.thread_id is null then
+      raise exception using errcode='23514',message='Authoritative Event-to-Messenger notification linkage is invalid';
+    end if;
+    select * into v_linked_user
+    from public.msg_users u
+    where u.id=v_log.msg_user_id
+      and u.employee_id=v_instance.employee_id
+      and u.is_active is true
+    for key share;
+    if v_linked_user.id is null or p_user_id is null or p_user_id<>v_linked_user.id then
+      raise exception using errcode='42501',message='Server-derived Messenger user does not match the authoritative event notification recipient';
+    end if;
+    select * into v_message
+    from public.msg_messages m
+    where m.id=v_log.response_message_id
+      and m.thread_id=v_log.thread_id
+    for key share;
+    if v_message.id is null then
+      raise exception using errcode='23514',message='Authoritative Event-to-Messenger response message linkage is invalid';
+    end if;
+    if p_message_id is not null and p_message_id<>v_message.id then
+      raise exception using errcode='23514',message='Provided message id does not match the authoritative event notification link';
+    end if;
+    v_thread_id:=v_message.thread_id;
+    perform public.msg_assert_active_mutable_thread(v_thread_id);
+    if not exists (
+      select 1 from public.msg_thread_participants p
+      where p.thread_id=v_thread_id and p.user_id=v_linked_user.id and p.left_at is null
+    ) then
+      raise exception using errcode='42501',message='Authoritative event recipient is not an active Messenger participant';
+    end if;
+    if not exists (
+      select 1 from public.msg_receipts r
+      where r.message_id=v_message.id and r.user_id=v_linked_user.id
+    ) then
+      raise exception using errcode='P0002',message='Authoritative event message receipt was not found';
+    end if;
+  elsif p_message_id is not null then
+    raise exception using errcode='23514',message='Provided message id has no authoritative Event-to-Messenger link';
   end if;
 
   v_notification:=public.ack_device_notification(
-    p_device_identifier,p_notification_key,p_notification_type,p_action,p_metadata_json
+    v_device.device_id,v_instance.notification_key,p_notification_type,p_action,p_metadata_json
   );
-  v_receipt:=public.msg_acknowledge_message(p_message_id,p_user_id,p_device_identifier);
-  return v_notification || jsonb_build_object('message_receipt_id',v_receipt.id);
+  if v_message.id is not null then
+    v_receipt:=public.msg_acknowledge_message(v_message.id,v_linked_user.id,v_device.device_id);
+  end if;
+  return v_notification || jsonb_build_object(
+    'event_push_instance_id',v_instance.instance_id,
+    'message_receipt_id',v_receipt.id,
+    'linked_message_id',v_message.id
+  );
 end
 $function$;
 
@@ -402,6 +459,113 @@ begin
 end
 $function$;
 
+-- Legacy presentation/recovery writers remain available only on an active
+--conversation, and runtime identity has one named-manager-aware authority.
+create or replace function public.msg_is_runtime_user(p_user_id uuid)
+returns boolean
+language sql
+stable security definer
+set search_path=pg_catalog,public,extensions
+as $function$
+  select exists (
+    select 1
+    from public.msg_users mu
+    left join public.employees e on e.id=mu.employee_id
+    left join public.ops_manager_managers om on om.manager_id=mu.ops_manager_id
+    where mu.id=p_user_id
+      and mu.is_active is true
+      and (
+        (mu.role='bot' and lower(btrim(mu.display_name))='memphis')
+        or (
+          mu.role in ('manager','ops','ops_manager','operations_manager')
+          and mu.employee_id is null
+          and (
+            mu.ops_manager_id is null
+            or (om.manager_id is not null and om.active is true and om.revoked_at is null and om.is_system_principal is false)
+          )
+        )
+        or (
+          mu.role='employee'
+          and e.id is not null
+          and e.active is true
+          and coalesce(e.employee_code,'') ~ '^EMP[0-9]+'
+          and exists (
+            select 1 from public.msg_device_assignments mda
+            where mda.msg_user_id=mu.id and mda.is_active is true
+          )
+        )
+      )
+  )
+$function$;
+
+create or replace function public.msg_is_runtime_identity(p_user_id uuid)
+returns boolean
+language sql
+stable security definer
+set search_path=pg_catalog,public,extensions
+as $function$
+  select public.msg_is_runtime_user(p_user_id)
+$function$;
+
+create or replace function public.msg_hide_thread_for_device(p_thread_id uuid,p_device_identifier text)
+returns public.msg_hidden_threads_by_device
+language plpgsql security definer
+set search_path=pg_catalog,public,extensions
+as $function$
+declare v_row public.msg_hidden_threads_by_device%rowtype; v_device text;
+begin
+  v_device:=btrim(coalesce(p_device_identifier,''));
+  if p_thread_id is null or v_device='' then raise exception 'thread_id and device_identifier are required.'; end if;
+  perform public.msg_assert_active_mutable_thread(p_thread_id);
+  insert into public.msg_hidden_threads_by_device(thread_id,device_identifier,hidden_at)
+  values(p_thread_id,v_device,now())
+  on conflict(thread_id,device_identifier) do update set hidden_at=excluded.hidden_at
+  returning * into v_row;
+  return v_row;
+end
+$function$;
+
+create or replace function public.msg_restore_thread_visibility(p_thread_id uuid,p_user_id uuid,p_device_identifier text default null)
+returns void
+language plpgsql security definer
+set search_path=pg_catalog,public,extensions
+as $function$
+declare v_requested text:=nullif(btrim(coalesce(p_device_identifier,'')), ''); v_device text;
+begin
+  if p_thread_id is null or p_user_id is null then raise exception 'thread_id and user_id are required.'; end if;
+  if not public.msg_is_runtime_user(p_user_id) then raise exception 'Runtime messaging user not found or inactive.'; end if;
+  perform public.msg_assert_active_mutable_thread(p_thread_id);
+  if v_requested is not null then
+    select d.device_id into v_device
+    from public.devices d
+    where d.active is true and upper(btrim(d.device_id))=upper(v_requested)
+    union all
+    select d.device_id
+    from public.device_aliases da
+    join public.devices d on d.id=da.canonical_device_id and d.active is true
+    where da.active is true and upper(btrim(da.alias_identifier))=upper(v_requested)
+    limit 1;
+  end if;
+  v_device:=coalesce(v_device,v_requested,'server');
+  delete from public.msg_thread_visibility
+  where thread_id=p_thread_id and user_id=p_user_id
+    and (device_identifier is null or upper(btrim(device_identifier))=upper(v_device)
+      or (v_requested is not null and upper(btrim(device_identifier))=upper(v_requested)));
+end
+$function$;
+
+create or replace function public.msg_mark_thread_deleted(p_thread_id uuid,p_user_id uuid,p_device_identifier text default null)
+returns jsonb
+language plpgsql security definer
+set search_path=pg_catalog,public,extensions
+as $function$
+begin
+  raise exception using
+    errcode='0A000',
+    message='Legacy thread deletion is retired. Delete the conversation instead.';
+end
+$function$;
+
 -- Individual-message deletion remains retired. Conversation-level removal is
 -- the only supported user deletion contract.
 create or replace function public.msg_delete_message(p_message_id uuid,p_request_user_id uuid)
@@ -415,6 +579,7 @@ begin
     message='Individual-message deletion is retired. Delete the conversation instead.';
 end
 $function$;
+comment on function public.msg_delete_message(uuid,uuid) is null;
 
 -- User deletion remains replay-safe because a verified replay makes no
 --mutation. A new operation always checks the locked target before touching
@@ -473,7 +638,6 @@ as $function$
 declare
   v_thread public.msg_threads%rowtype;
   v_existing public.msg_thread_deletion_operations%rowtype;
-  v_request_role text;
   v_now timestamptz:=clock_timestamp();
   v_deleted_messages integer:=0;
 begin
@@ -489,8 +653,20 @@ begin
     return jsonb_build_object('ok',true,'thread_id',v_existing.thread_id,'deleted',true,'deletion_scope','global','deleted_at',v_existing.deleted_at,'purge_after',v_existing.deleted_at+interval '14 days','operation_id',v_existing.operation_id,'replayed',true);
   end if;
   perform public.msg_assert_active_mutable_thread(p_thread_id);
-  select role into v_request_role from public.msg_users where id=p_request_user_id and is_active is true;
-  if v_request_role<>'admin' then raise exception using errcode='42501',message='An active Messenger admin is required for global tombstoning'; end if;
+  if not exists (
+    select 1
+    from public.msg_users u
+    join public.ops_manager_managers m on m.manager_id=u.ops_manager_id
+    where u.id=p_request_user_id
+      and u.role='manager'
+      and u.is_active is true
+      and m.active is true
+      and m.revoked_at is null
+      and m.is_system_principal is false
+      and 'SECURITY_ADMIN'=any(m.roles)
+  ) then
+    raise exception using errcode='42501',message='An active named SECURITY_ADMIN Messenger principal is required for global tombstoning';
+  end if;
   select * into v_thread from public.msg_threads where id=p_thread_id for update;
   update public.msg_messages set is_deleted=true,body='[deleted]',deleted_at=coalesce(deleted_at,v_now),deleted_by_user_id=coalesce(deleted_by_user_id,p_request_user_id),purge_after=coalesce(purge_after,coalesce(deleted_at,v_now)+interval '14 days'),metadata_json=(coalesce(metadata_json,'{}'::jsonb)-'deleted_by'-'deleted_at')||jsonb_build_object('deletion_retention_days',14,'conversation_globally_tombstoned',true),updated_at=v_now
   where thread_id=p_thread_id and is_deleted is false;
@@ -514,6 +690,54 @@ begin
   raise exception using errcode='23514',message='Messenger archive and evidence tables cannot be truncated';
 end
 $function$;
+
+-- The retired conversation's complete presentation and deletion evidence is
+--immutable at row level too.  The tables remain writable for active threads;
+--these guards only reject a row that belongs to the retired archive.
+create or replace function public.msg_reject_retired_ops_manager_shared_thread_evidence_mutation()
+returns trigger
+language plpgsql
+set search_path=pg_catalog,public
+as $function$
+declare v_thread_id uuid;
+begin
+  v_thread_id:=case when tg_op='DELETE' then old.thread_id else new.thread_id end;
+  if exists (
+    select 1 from public.msg_threads t
+    where t.id=v_thread_id and t.system_key='ops_manager_shared_chat_v1'
+  ) then
+    raise exception using errcode='23514',message='The retired Operations Leadership conversation evidence is immutable';
+  end if;
+  return case when tg_op='DELETE' then old else new end;
+end
+$function$;
+
+do $archive_evidence_row_guards$
+declare v_table text;
+begin
+  foreach v_table in array array[
+    'msg_thread_visibility','msg_hidden_threads_by_device','msg_memphis_thread_context','msg_thread_deletion_operations'
+  ] loop
+    if exists (
+      select 1 from pg_trigger t
+      where t.tgrelid=to_regclass(format('public.%I',v_table))
+        and t.tgname='trg_msg_reject_retired_ops_manager_shared_thread_evidence_mutat'
+        and not t.tgisinternal
+    ) then
+      execute format('drop trigger trg_msg_reject_retired_ops_manager_shared_thread_evidence_mutat on public.%I',v_table);
+    end if;
+    if exists (
+      select 1 from pg_trigger t
+      where t.tgrelid=to_regclass(format('public.%I',v_table))
+        and t.tgname='trg_msg_reject_retired_ops_shared_evidence'
+        and not t.tgisinternal
+    ) then
+      execute format('drop trigger trg_msg_reject_retired_ops_shared_evidence on public.%I',v_table);
+    end if;
+    execute format('create trigger trg_msg_reject_retired_ops_shared_evidence before insert or update or delete on public.%I for each row execute function public.msg_reject_retired_ops_manager_shared_thread_evidence_mutation()',v_table);
+  end loop;
+end
+$archive_evidence_row_guards$;
 
 do $archive_truncate_guards$
 declare v_table text;
@@ -574,8 +798,9 @@ begin
   end if;
 
   v_display_name:=btrim(v_manager.display_name);
+  perform pg_advisory_xact_lock(hashtextextended('named-manager-messenger-display-name:v1:'||lower(v_display_name),0));
   if exists(select 1 from public.msg_users u where lower(btrim(u.display_name))=lower(v_display_name) and (v_user.id is null or u.id<>v_user.id)) then
-    v_display_name:=left(v_display_name,64)||' · Leadership '||left(p_manager_id::text,8);
+    v_display_name:=left(v_display_name,112)||' · Leadership '||replace(p_manager_id::text,'-','');
   end if;
   if v_user.id is null then
     insert into public.msg_users(display_name,role,is_active,ops_manager_id,messaging_identity_key)
@@ -764,6 +989,7 @@ $function$;
 revoke all on function public.msg_assert_active_mutable_thread(uuid) from public,anon,authenticated,service_role;
 revoke all on function public.msg_assert_active_mutable_message(uuid) from public,anon,authenticated,service_role;
 revoke all on function public.msg_reject_archive_truncate() from public,anon,authenticated,service_role;
+revoke all on function public.msg_reject_retired_ops_manager_shared_thread_evidence_mutation() from public,anon,authenticated,service_role;
 revoke all on function public.msg_assert_no_ambiguous_active_pair_for_thread(uuid) from public,anon,authenticated,service_role;
 revoke all on function public.msg_enforce_canonical_active_pair_participants() from public,anon,authenticated,service_role;
 revoke all on function public.msg_enforce_canonical_active_pair_thread() from public,anon,authenticated,service_role;

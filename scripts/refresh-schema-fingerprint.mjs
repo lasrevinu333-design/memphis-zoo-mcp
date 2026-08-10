@@ -2,7 +2,7 @@
 
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
@@ -15,6 +15,7 @@ if(mcpUrl&&!/^https:\/\//i.test(mcpUrl)&&!/^http:\/\/(127\.0\.0\.1|localhost)(?:
 const root=resolve(new URL("..",import.meta.url).pathname);
 const inputPath=resolve(root,"supabase/canonical/schema-fingerprint-input.json");
 const hashPath=resolve(root,"supabase/canonical/schema-fingerprint.txt");
+const checkOnly=process.argv.slice(2).includes("--check");
 
 const queries={
   extensions:`select e.extname as extension_name,case when e.extname='pg_net' then 'provider_managed' else e.extversion end as version,n.nspname as schema_name from pg_extension e join pg_namespace n on n.oid=e.extnamespace order by e.extname`,
@@ -65,6 +66,13 @@ if(mcpClient)await mcpClient.close();
 const normalized=stable(inventory);
 const compact=JSON.stringify(normalized);
 const fingerprint=createHash("sha256").update(compact).digest("hex");
-writeFileSync(inputPath,`${JSON.stringify(normalized,null,2)}\n`);
-writeFileSync(hashPath,`${fingerprint}\n`);
-console.log(JSON.stringify({ok:true,schema_fingerprint:fingerprint,counts:Object.fromEntries(Object.entries(inventory).map(([name,rows])=>[name,rows.length]))},null,2));
+const inputText=`${JSON.stringify(normalized,null,2)}\n`;
+const hashText=`${fingerprint}\n`;
+if(checkOnly){
+  if(readFileSync(inputPath,"utf8")!==inputText)throw new Error("Committed canonical schema-fingerprint-input.json does not equal the clean rebuild inventory.");
+  if(readFileSync(hashPath,"utf8")!==hashText)throw new Error("Committed canonical schema-fingerprint.txt does not equal the clean rebuild inventory.");
+}else{
+  writeFileSync(inputPath,inputText);
+  writeFileSync(hashPath,hashText);
+}
+console.log(JSON.stringify({ok:true,checked:checkOnly,schema_fingerprint:fingerprint,counts:Object.fromEntries(Object.entries(inventory).map(([name,rows])=>[name,rows.length]))},null,2));

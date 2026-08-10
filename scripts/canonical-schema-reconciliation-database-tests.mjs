@@ -47,6 +47,10 @@ await sql(`
   alter table public.msg_message_audit disable trigger trg_msg_reject_retired_ops_manager_shared_audit_guard;
   alter table public.msg_receipts disable trigger trg_msg_reject_retired_ops_manager_shared_receipt_mutation;
   alter table public.msg_message_deletions disable trigger trg_msg_reject_retired_ops_manager_shared_message_delete;
+  alter table public.msg_thread_visibility disable trigger trg_msg_reject_retired_ops_shared_evidence;
+  alter table public.msg_hidden_threads_by_device disable trigger trg_msg_reject_retired_ops_shared_evidence;
+  alter table public.msg_memphis_thread_context disable trigger trg_msg_reject_retired_ops_shared_evidence;
+  alter table public.msg_thread_deletion_operations disable trigger trg_msg_reject_retired_ops_shared_evidence;
   insert into public.msg_messages(id,thread_id,sender_user_id,message_type,body,metadata_json,sent_at,created_at)
   select '${ARCHIVE_MESSAGE_ID}'::uuid,t.id,p.user_id,'text','historical archived evidence','{"fixture":"archive"}'::jsonb,
          timestamptz '2026-08-01T00:00:00Z',timestamptz '2026-08-01T00:00:00Z'
@@ -85,6 +89,30 @@ await sql(`
   ) p on true
   where m.id='${ARCHIVE_MESSAGE_ID}'::uuid
   on conflict (message_id,user_id) do nothing;
+  insert into public.msg_thread_visibility(thread_id,user_id,device_identifier,hidden_before,created_at,updated_at)
+  select t.id,p.user_id,'canonical-archive-visibility',t.created_at,t.created_at,t.created_at
+  from public.msg_threads t
+  join lateral (select user_id from public.msg_thread_participants where thread_id=t.id order by id limit 1) p on true
+  where t.system_key='ops_manager_shared_chat_v1'
+  on conflict(thread_id,user_id,device_identifier) do nothing;
+  insert into public.msg_hidden_threads_by_device(thread_id,device_identifier,hidden_at)
+  select t.id,'canonical-archive-hidden',t.created_at from public.msg_threads t
+  where t.system_key='ops_manager_shared_chat_v1'
+  on conflict(thread_id,device_identifier) do nothing;
+  insert into public.msg_memphis_thread_context(thread_id,last_intent,context_json,updated_at)
+  select t.id,'archive_fixture','{"fixture":"canonical"}'::jsonb,t.created_at from public.msg_threads t
+  where t.system_key='ops_manager_shared_chat_v1'
+  on conflict(thread_id) do nothing;
+  insert into public.msg_thread_deletion_operations(operation_id,thread_id,user_id,deletion_scope,deleted_through,deleted_at,thread_type,metadata_json)
+  select '00000000-0000-4000-8000-00000000d904'::uuid,t.id,p.user_id,'user',t.created_at,t.created_at,t.thread_type,'{"fixture":"canonical"}'::jsonb
+  from public.msg_threads t
+  join lateral (select user_id from public.msg_thread_participants where thread_id=t.id order by id limit 1) p on true
+  where t.system_key='ops_manager_shared_chat_v1'
+  on conflict(operation_id) do nothing;
+  alter table public.msg_thread_deletion_operations enable trigger trg_msg_reject_retired_ops_shared_evidence;
+  alter table public.msg_memphis_thread_context enable trigger trg_msg_reject_retired_ops_shared_evidence;
+  alter table public.msg_hidden_threads_by_device enable trigger trg_msg_reject_retired_ops_shared_evidence;
+  alter table public.msg_thread_visibility enable trigger trg_msg_reject_retired_ops_shared_evidence;
   alter table public.msg_message_deletions enable trigger trg_msg_reject_retired_ops_manager_shared_message_delete;
   alter table public.msg_receipts enable trigger trg_msg_reject_retired_ops_manager_shared_receipt_mutation;
   alter table public.msg_message_audit enable trigger trg_msg_reject_retired_ops_manager_shared_audit_guard;
@@ -122,12 +150,14 @@ with functions as (
       'msg_reject_retired_ops_manager_shared_message_mutation',
       'msg_reject_retired_ops_manager_shared_message_audit_mutation',
       'msg_reject_retired_ops_manager_shared_receipt_mutation',
-      'msg_reject_retired_ops_manager_shared_message_deletion_mutation'
+      'msg_reject_retired_ops_manager_shared_message_deletion_mutation',
+      'msg_reject_retired_ops_manager_shared_thread_evidence_mutation'
     )
 ), triggers as (
   select c.relname as table_name,t.tgname as trigger_name,pg_get_triggerdef(t.oid,true) as definition,t.tgenabled as enabled
   from pg_trigger t join pg_class c on c.oid=t.tgrelid
-  where t.tgname like 'trg_msg_reject_retired_ops_manager_shared_%'
+  where (t.tgname like 'trg_msg_reject_retired_ops_manager_shared_%'
+      or t.tgname='trg_msg_reject_retired_ops_shared_evidence')
     and not t.tgisinternal
 ), archive as (
   select jsonb_build_object(
@@ -136,7 +166,11 @@ with functions as (
     'messages',(select coalesce(jsonb_agg(to_jsonb(m) order by m.id),'[]'::jsonb) from public.msg_messages m join public.msg_threads t on t.id=m.thread_id where t.system_key='ops_manager_shared_chat_v1'),
     'audit',(select coalesce(jsonb_agg(to_jsonb(a) order by a.audit_id),'[]'::jsonb) from public.msg_message_audit a join public.msg_threads t on t.id=a.thread_id where t.system_key='ops_manager_shared_chat_v1'),
     'receipts',(select coalesce(jsonb_agg(to_jsonb(r) order by r.id),'[]'::jsonb) from public.msg_receipts r join public.msg_messages m on m.id=r.message_id join public.msg_threads t on t.id=m.thread_id where t.system_key='ops_manager_shared_chat_v1'),
-    'deletions',(select coalesce(jsonb_agg(to_jsonb(d) order by d.id),'[]'::jsonb) from public.msg_message_deletions d join public.msg_messages m on m.id=d.message_id join public.msg_threads t on t.id=m.thread_id where t.system_key='ops_manager_shared_chat_v1')
+    'deletions',(select coalesce(jsonb_agg(to_jsonb(d) order by d.id),'[]'::jsonb) from public.msg_message_deletions d join public.msg_messages m on m.id=d.message_id join public.msg_threads t on t.id=m.thread_id where t.system_key='ops_manager_shared_chat_v1'),
+    'visibility',(select coalesce(jsonb_agg(to_jsonb(v) order by v.id),'[]'::jsonb) from public.msg_thread_visibility v join public.msg_threads t on t.id=v.thread_id where t.system_key='ops_manager_shared_chat_v1'),
+    'hidden_devices',(select coalesce(jsonb_agg(to_jsonb(h) order by h.id),'[]'::jsonb) from public.msg_hidden_threads_by_device h join public.msg_threads t on t.id=h.thread_id where t.system_key='ops_manager_shared_chat_v1'),
+    'memphis_context',(select coalesce(jsonb_agg(to_jsonb(c) order by c.thread_id),'[]'::jsonb) from public.msg_memphis_thread_context c join public.msg_threads t on t.id=c.thread_id where t.system_key='ops_manager_shared_chat_v1'),
+    'operations',(select coalesce(jsonb_agg(to_jsonb(o) order by o.operation_id),'[]'::jsonb) from public.msg_thread_deletion_operations o join public.msg_threads t on t.id=o.thread_id where t.system_key='ops_manager_shared_chat_v1')
   ) as data
 )
 select jsonb_build_object(
@@ -166,6 +200,7 @@ for (const name of [
   "msg_reject_retired_ops_manager_shared_message_audit_mutation()",
   "msg_reject_retired_ops_manager_shared_receipt_mutation()",
   "msg_reject_retired_ops_manager_shared_message_deletion_mutation()",
+  "msg_reject_retired_ops_manager_shared_thread_evidence_mutation()",
 ]) {
   const fn = functions[name];
   assert.ok(fn, `${name} is missing`);
@@ -210,11 +245,15 @@ assert.equal(messageDelete.anon_execute, false, "retired deletion RPC exposed to
 assert.equal(messageDelete.authenticated_execute, false, "retired deletion RPC exposed to authenticated");
 assert.equal(messageDelete.service_execute, true, "retired deletion RPC must be executable only by service_role");
 assert.deepEqual(afterReplay.triggers.map((trigger) => [trigger.table_name, trigger.trigger_name]), [
+  ["msg_hidden_threads_by_device", "trg_msg_reject_retired_ops_shared_evidence"],
+  ["msg_memphis_thread_context", "trg_msg_reject_retired_ops_shared_evidence"],
   ["msg_message_audit", "trg_msg_reject_retired_ops_manager_shared_audit_guard"],
   ["msg_message_deletions", "trg_msg_reject_retired_ops_manager_shared_message_delete"],
   ["msg_messages", "trg_msg_reject_retired_ops_manager_shared_message_mutation"],
   ["msg_receipts", "trg_msg_reject_retired_ops_manager_shared_receipt_mutation"],
+  ["msg_thread_deletion_operations", "trg_msg_reject_retired_ops_shared_evidence"],
   ["msg_thread_participants", "trg_msg_reject_retired_ops_manager_shared_participation"],
+  ["msg_thread_visibility", "trg_msg_reject_retired_ops_shared_evidence"],
   ["msg_threads", "trg_msg_reject_retired_ops_manager_shared_thread_mutation"],
 ]);
 for (const trigger of afterReplay.triggers) {
@@ -233,6 +272,10 @@ assert.equal(afterReplay.archive.messages.some((row) => row.id === ARCHIVE_MESSA
 assert.equal(afterReplay.archive.audit.some((row) => row.message_id === ARCHIVE_MESSAGE_ID), true);
 assert.equal(afterReplay.archive.receipts.some((row) => row.message_id === ARCHIVE_MESSAGE_ID), true);
 assert.equal(afterReplay.archive.deletions.some((row) => row.message_id === ARCHIVE_MESSAGE_ID), true);
+assert.ok(afterReplay.archive.visibility.length >= 1);
+assert.ok(afterReplay.archive.hidden_devices.length >= 1);
+assert.ok(afterReplay.archive.memphis_context.length >= 1);
+assert.ok(afterReplay.archive.operations.length >= 1);
 
 await sql(`
   insert into public.msg_threads(id,thread_type,title,created_by_user_id,is_active)
@@ -283,6 +326,18 @@ await sql(`
     begin update public.msg_message_deletions set deleted_at=now() where id=v_deletion; raise exception 'archive deletion evidence update was accepted'; exception when check_violation then null; end;
     begin delete from public.msg_message_deletions where id=v_deletion; raise exception 'archive deletion evidence delete was accepted'; exception when check_violation then null; end;
     begin insert into public.msg_message_deletions(message_id,user_id) values('${ARCHIVE_MESSAGE_ID}'::uuid,v_sender); raise exception 'archive deletion evidence fabrication was accepted'; exception when check_violation then null; end;
+    begin update public.msg_thread_visibility set hidden_before=now() where thread_id=v_thread; raise exception 'archive visibility update was accepted'; exception when check_violation then null; end;
+    begin delete from public.msg_thread_visibility where thread_id=v_thread; raise exception 'archive visibility delete was accepted'; exception when check_violation then null; end;
+    begin insert into public.msg_thread_visibility(thread_id,user_id,device_identifier,hidden_before) values(v_thread,v_sender,'canonical-archive-attack',now()); raise exception 'archive visibility fabrication was accepted'; exception when check_violation then null; end;
+    begin update public.msg_hidden_threads_by_device set hidden_at=now() where thread_id=v_thread; raise exception 'archive hidden-device update was accepted'; exception when check_violation then null; end;
+    begin delete from public.msg_hidden_threads_by_device where thread_id=v_thread; raise exception 'archive hidden-device delete was accepted'; exception when check_violation then null; end;
+    begin insert into public.msg_hidden_threads_by_device(thread_id,device_identifier) values(v_thread,'canonical-archive-attack'); raise exception 'archive hidden-device fabrication was accepted'; exception when check_violation then null; end;
+    begin update public.msg_memphis_thread_context set updated_at=now() where thread_id=v_thread; raise exception 'archive Memphis context update was accepted'; exception when check_violation then null; end;
+    begin delete from public.msg_memphis_thread_context where thread_id=v_thread; raise exception 'archive Memphis context delete was accepted'; exception when check_violation then null; end;
+    begin insert into public.msg_memphis_thread_context(thread_id,last_intent) values(v_thread,'canonical-archive-attack'); raise exception 'archive Memphis context fabrication was accepted'; exception when check_violation then null; end;
+    begin update public.msg_thread_deletion_operations set deleted_at=now() where thread_id=v_thread; raise exception 'archive deletion operation update was accepted'; exception when check_violation then null; end;
+    begin delete from public.msg_thread_deletion_operations where thread_id=v_thread; raise exception 'archive deletion operation delete was accepted'; exception when check_violation then null; end;
+    begin insert into public.msg_thread_deletion_operations(operation_id,thread_id,user_id,deletion_scope,deleted_through,deleted_at,thread_type) values('00000000-0000-4000-8000-00000000d905'::uuid,v_thread,v_sender,'user',now(),now(),'group'); raise exception 'archive deletion operation fabrication was accepted'; exception when check_violation then null; end;
 
     begin perform public.msg_mark_thread_read(v_thread,v_sender); raise exception 'read RPC accepted retired archive'; exception when check_violation then null; end;
     begin perform public.msg_mark_messages_delivered(v_thread,v_sender); raise exception 'batch delivery RPC accepted retired archive'; exception when check_violation then null; end;

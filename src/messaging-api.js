@@ -1593,20 +1593,19 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         ? req.body.metadata
         : {};
       let data;
-      if (notificationType === 'event' && req.body?.message_id) {
+      if (notificationType === 'event') {
         const viewer = await getViewerIdentity(canonicalDeviceId);
-        if (!viewer?.msg_user_id) throw Object.assign(new Error("Device has no active Messenger identity for the linked event acknowledgement."), { status: 403 });
-        // The linked-message/thread/membership precondition and both writes
-        // occur in the single database RPC. Do not split this into native and
-        // Messenger calls: a rejected linked message must leave no receipt.
+        // The database derives any Messenger link from the authoritative Event
+        // notification record. A body message_id can only assert equality; an
+        // omitted id must never bypass a linked Messenger acknowledgement.
         data = await runRpc("msg_acknowledge_event_device_notification", {
           p_device_identifier: canonicalDeviceId,
           p_notification_key: notificationKey,
           p_notification_type: notificationType,
           p_action: action,
           p_metadata_json: metadata,
-          p_message_id: String(req.body.message_id),
-          p_user_id: viewer.msg_user_id,
+          p_message_id: req.body?.message_id ? String(req.body.message_id) : null,
+          p_user_id: viewer?.msg_user_id ? String(viewer.msg_user_id) : null,
         });
       } else {
         data = await runRpc("ack_device_notification", {

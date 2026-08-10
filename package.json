@@ -46,6 +46,7 @@
     "test:schema-reconciliation-db": "node scripts/canonical-schema-reconciliation-database-tests.mjs",
     "test:named-manager-messenger-retirement-correction-db": "node scripts/named-manager-messenger-retirement-correction-database-tests.mjs",
     "test:named-manager-messenger-retirement-correction-routes": "node scripts/named-manager-messenger-retirement-correction-route-tests.mjs",
+    "test:named-manager-messenger-admin-route-db": "node scripts/named-manager-messenger-admin-route-database-tests.mjs",
     "test:schema-fingerprint": "node scripts/schema-fingerprint-check.mjs",
     "test:schema-transition": "node scripts/refresh-release-schema-alignment.mjs --check && node scripts/schema-transition-contract-tests.mjs",
     "release:schema-alignment:refresh": "node scripts/refresh-release-schema-alignment.mjs",
