@@ -32,7 +32,7 @@
     "test:schedule-display": "node scripts/schedule-display-tests.mjs",
     "test:messaging-recovery": "node scripts/memphis-messaging-route-recovery-tests.mjs",
     "test:messaging-incremental": "node scripts/messaging-incremental-sync-tests.mjs",
-    "test:messaging-manager-authority": "node scripts/messaging-manager-authority-tests.mjs",
+    "test:messaging-manager-authority": "node scripts/messaging-manager-authority-tests.mjs && node scripts/named-manager-messenger-identity-tests.mjs",
     "test:gemini-console": "node scripts/gemini-console-foundation-tests.mjs",
     "test:gemini-console-db": "node scripts/gemini-console-database-tests.mjs",
     "test:device-security-app": "node scripts/device-security-app-tests.mjs",
