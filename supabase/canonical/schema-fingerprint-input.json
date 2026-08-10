@@ -2290,6 +2290,370 @@
     },
     {
       "collation_name": null,
+      "column_name": "delivery_event_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": "gen_random_uuid()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 1,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_events"
+    },
+    {
+      "collation_name": null,
+      "column_name": "outbox_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 2,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_events"
+    },
+    {
+      "collation_name": null,
+      "column_name": "delivery_recipient_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 3,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_events"
+    },
+    {
+      "collation_name": null,
+      "column_name": "event_type",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 4,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_events"
+    },
+    {
+      "collation_name": null,
+      "column_name": "attempt",
+      "comment": null,
+      "data_type": "integer",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 5,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_events"
+    },
+    {
+      "collation_name": null,
+      "column_name": "worker_id",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 6,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_events"
+    },
+    {
+      "collation_name": null,
+      "column_name": "error_text",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 7,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_events"
+    },
+    {
+      "collation_name": null,
+      "column_name": "evidence_json",
+      "comment": null,
+      "data_type": "jsonb",
+      "default_expression": "'{}'::jsonb",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 8,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_events"
+    },
+    {
+      "collation_name": null,
+      "column_name": "created_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "now()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 9,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_events"
+    },
+    {
+      "collation_name": null,
+      "column_name": "delivery_recipient_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": "gen_random_uuid()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 1,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients"
+    },
+    {
+      "collation_name": null,
+      "column_name": "outbox_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 2,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients"
+    },
+    {
+      "collation_name": null,
+      "column_name": "manager_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 3,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients"
+    },
+    {
+      "collation_name": null,
+      "column_name": "recipient_user_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 4,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients"
+    },
+    {
+      "collation_name": null,
+      "column_name": "client_message_id",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 5,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients"
+    },
+    {
+      "collation_name": null,
+      "column_name": "notification_instance_key",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 6,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients"
+    },
+    {
+      "collation_name": null,
+      "column_name": "state",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": "'pending'::text",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 7,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients"
+    },
+    {
+      "collation_name": null,
+      "column_name": "attempts",
+      "comment": null,
+      "data_type": "integer",
+      "default_expression": "0",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 8,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients"
+    },
+    {
+      "collation_name": null,
+      "column_name": "claimed_by",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 9,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients"
+    },
+    {
+      "collation_name": null,
+      "column_name": "lease_token",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 10,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients"
+    },
+    {
+      "collation_name": null,
+      "column_name": "claimed_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 11,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients"
+    },
+    {
+      "collation_name": null,
+      "column_name": "lease_expires_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 12,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients"
+    },
+    {
+      "collation_name": null,
+      "column_name": "next_attempt_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "now()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 13,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients"
+    },
+    {
+      "collation_name": null,
+      "column_name": "delivered_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 14,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients"
+    },
+    {
+      "collation_name": null,
+      "column_name": "failed_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 15,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients"
+    },
+    {
+      "collation_name": null,
+      "column_name": "last_error",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 16,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients"
+    },
+    {
+      "collation_name": null,
+      "column_name": "message_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 17,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients"
+    },
+    {
+      "collation_name": null,
+      "column_name": "delivery_evidence",
+      "comment": null,
+      "data_type": "jsonb",
+      "default_expression": "'{}'::jsonb",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 18,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients"
+    },
+    {
+      "collation_name": null,
+      "column_name": "created_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "now()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 19,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients"
+    },
+    {
+      "collation_name": null,
       "column_name": "disposition_id",
       "comment": null,
       "data_type": "uuid",
@@ -22091,6 +22455,142 @@
       "validated": true
     },
     {
+      "constraint_name": "custodial_offline_reconciliation_del_delivery_recipient_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (delivery_recipient_id) REFERENCES custodial_offline_reconciliation_delivery_recipients(delivery_recipient_id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_events",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_reconciliation_delivery_even_event_type_check",
+      "constraint_type": "c",
+      "definition": "CHECK (event_type = ANY (ARRAY['recipient_declared'::text, 'outbox_lease_reclaimed'::text, 'outbox_lease_exhausted'::text, 'recipient_claimed'::text, 'recipient_lease_reclaimed'::text, 'recipient_lease_exhausted'::text, 'recipient_retry_scheduled'::text, 'recipient_delivered'::text, 'recipient_failed'::text, 'outbox_retry_scheduled'::text, 'outbox_delivered'::text, 'outbox_failed'::text]))",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_events",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_reconciliation_delivery_events_outbox_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (outbox_id) REFERENCES custodial_offline_reconciliation_outbox(outbox_id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_events",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_reconciliation_delivery_events_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (delivery_event_id)",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_events",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_reconciliatio_notification_instance_key_check",
+      "constraint_type": "c",
+      "definition": "CHECK (length(notification_instance_key) >= 1 AND length(notification_instance_key) <= 500)",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_reconciliatio_outbox_id_recipient_user_id_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (outbox_id, recipient_user_id)",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_reconciliation__notification_instance_key_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (notification_instance_key)",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_reconciliation_deliv_outbox_id_manager_id_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (outbox_id, manager_id)",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_reconciliation_delive_client_message_id_check",
+      "constraint_type": "c",
+      "definition": "CHECK (length(client_message_id) >= 1 AND length(client_message_id) <= 200)",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_reconciliation_deliver_recipient_user_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (recipient_user_id) REFERENCES msg_users(id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_reconciliation_delivery_client_message_id_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (client_message_id)",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_reconciliation_delivery_recip_manager_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (manager_id) REFERENCES ops_manager_managers(manager_id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_reconciliation_delivery_recip_message_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (message_id) REFERENCES msg_messages(id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_reconciliation_delivery_recipi_attempts_check",
+      "constraint_type": "c",
+      "definition": "CHECK (attempts >= 0 AND attempts <= 5)",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_reconciliation_delivery_recipi_outbox_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (outbox_id) REFERENCES custodial_offline_reconciliation_outbox(outbox_id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_reconciliation_delivery_recipient_state_check",
+      "constraint_type": "c",
+      "definition": "CHECK (state = ANY (ARRAY['pending'::text, 'claimed'::text, 'retry'::text, 'delivered'::text, 'failed'::text]))",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_reconciliation_delivery_recipients_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (delivery_recipient_id)",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients",
+      "validated": true
+    },
+    {
       "constraint_name": "custodial_offline_reconcilia_original_evidence_fingerprin_check",
       "constraint_type": "c",
       "definition": "CHECK (original_evidence_fingerprint ~ '^[0-9a-f]{64}$'::text)",
@@ -22213,7 +22713,7 @@
     {
       "constraint_name": "custodial_offline_reconciliation_outbox_state_check",
       "constraint_type": "c",
-      "definition": "CHECK (state = ANY (ARRAY['pending'::text, 'claimed'::text, 'delivered'::text, 'failed'::text]))",
+      "definition": "CHECK (state = ANY (ARRAY['pending'::text, 'claimed'::text, 'retry'::text, 'delivered'::text, 'failed'::text]))",
       "schema_name": "public",
       "table_name": "custodial_offline_reconciliation_outbox",
       "validated": true
@@ -27842,7 +28342,7 @@
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.custodial_backend_authority_health(p_backend_execution_secret text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\nbegin\n  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  return jsonb_build_object('ok',true,'authority','offline-authority.v3','phase','D','configured',true,\n    'durable_start_proof_replay',true,'reconciliation_notification_lifecycle',true);\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_backend_authority_health(p_backend_execution_secret text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\nbegin\n  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  return jsonb_build_object('ok',true,'authority','offline-authority.v3','phase','E','configured',true,\n    'durable_start_proof_replay',true,'assignment_fenced_proof_recovery',true,'terminal_writer_inventory',true,\n    'reconciliation_notification_lifecycle',true,'recipient_idempotent_delivery',true);\nend\n$function$\n",
       "function_name": "custodial_backend_authority_health",
       "identity_arguments": "p_backend_execution_secret text",
       "schema_name": "public"
@@ -27856,9 +28356,23 @@
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.custodial_claim_offline_reconciliation_notifications(p_worker_id text, p_limit integer, p_lease_seconds integer, p_backend_execution_secret text)\n RETURNS TABLE(outbox_id uuid, reconciliation_id uuid, disposition_id uuid, notification_kind text, payload_json jsonb, attempts integer, lease_token uuid, lease_expires_at timestamp with time zone)\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_worker_id text := nullif(btrim(coalesce(p_worker_id, '')), '');\n  v_limit integer := greatest(1, least(coalesce(p_limit, 10), 50));\n  v_lease_seconds integer := greatest(15, least(coalesce(p_lease_seconds, 120), 900));\nbegin\n  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  if v_worker_id is null or length(v_worker_id) > 200 then\n    raise exception using errcode='22023', message='a bounded notification worker identity is required';\n  end if;\n  update public.custodial_offline_reconciliation_outbox o\n  set state = 'pending', claimed_by = null, lease_token = null, claimed_at = null,\n      lease_expires_at = null, next_attempt_at = now(),\n      last_error = coalesce(o.last_error, 'delivery lease expired')\n  where o.state = 'claimed' and o.lease_expires_at <= now();\n  return query\n  with candidates as (\n    select o.outbox_id\n    from public.custodial_offline_reconciliation_outbox o\n    where o.state = 'pending' and o.next_attempt_at <= now()\n    order by o.created_at, o.outbox_id\n    limit v_limit\n    for update skip locked\n  ), claimed as (\n    update public.custodial_offline_reconciliation_outbox o\n    set state = 'claimed', claimed_by = v_worker_id, lease_token = gen_random_uuid(),\n        claimed_at = now(), lease_expires_at = now() + make_interval(secs => v_lease_seconds),\n        attempts = o.attempts + 1\n    from candidates c\n    where o.outbox_id = c.outbox_id\n    returning o.*\n  )\n  select c.outbox_id, c.reconciliation_id, c.disposition_id, c.notification_kind,\n         c.payload_json, c.attempts, c.lease_token, c.lease_expires_at\n  from claimed c\n  order by c.created_at, c.outbox_id;\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_claim_offline_reconciliation_notification_recipients(p_outbox_id uuid, p_worker_id text, p_outbox_lease_token uuid, p_recipients jsonb, p_backend_execution_secret text)\n RETURNS TABLE(delivery_recipient_id uuid, manager_id uuid, recipient_user_id uuid, client_message_id text, notification_instance_key text, attempts integer, lease_token uuid, lease_expires_at timestamp with time zone)\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_outbox public.custodial_offline_reconciliation_outbox%rowtype;\n  v_worker_id text := nullif(btrim(coalesce(p_worker_id,'')), '');\n  v_expected integer;\n  v_inserted integer;\nbegin\n  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  if v_worker_id is null or length(v_worker_id)>200 or p_outbox_id is null then raise exception using errcode='22023',message='a bounded worker and notification identity are required'; end if;\n  select * into v_outbox from public.custodial_offline_reconciliation_outbox where outbox_id=p_outbox_id for update;\n  if v_outbox.outbox_id is null then raise exception using errcode='P0002',message='offline reconciliation notification was not found'; end if;\n  if v_outbox.state<>'claimed' or v_outbox.claimed_by<>v_worker_id or v_outbox.lease_token is distinct from p_outbox_lease_token or v_outbox.lease_expires_at<=now() then\n    raise exception using errcode='40901',message='notification claim is no longer owned by this worker';\n  end if;\n  if not exists(select 1 from public.custodial_offline_reconciliation_delivery_recipients where outbox_id=p_outbox_id) then\n    if jsonb_typeof(coalesce(p_recipients,'null'::jsonb))<>'array' or jsonb_array_length(p_recipients) not between 1 and 100 then\n      raise exception using errcode='22023',message='one to one hundred authoritative named-manager recipients are required';\n    end if;\n    select count(*) into v_expected from (\n      select distinct input.manager_id,input.user_id from jsonb_to_recordset(p_recipients) as input(manager_id uuid,user_id uuid)\n    ) candidates;\n    insert into public.custodial_offline_reconciliation_delivery_recipients(\n      outbox_id,manager_id,recipient_user_id,client_message_id,notification_instance_key\n    )\n    select p_outbox_id,c.manager_id,c.user_id,\n      'offline-reconciliation:'||p_outbox_id::text||':'||c.user_id::text,\n      'offline-reconciliation:'||p_outbox_id::text||':'||c.user_id::text\n    from (select distinct input.manager_id,input.user_id from jsonb_to_recordset(p_recipients) as input(manager_id uuid,user_id uuid)) c\n    join public.ops_manager_managers m on m.manager_id=c.manager_id and m.active=true and m.revoked_at is null and m.is_system_principal=false\n    join public.msg_users u on u.id=c.user_id and u.ops_manager_id=m.manager_id and coalesce(u.is_active,true)=true;\n    get diagnostics v_inserted=row_count;\n    if v_inserted<>v_expected then raise exception using errcode='42501',message='notification recipients must be active named-manager Messenger identities'; end if;\n    insert into public.custodial_offline_reconciliation_delivery_events(outbox_id,delivery_recipient_id,event_type,evidence_json)\n      select p_outbox_id,r.delivery_recipient_id,'recipient_declared',jsonb_build_object('manager_id',r.manager_id,'recipient_user_id',r.recipient_user_id,'client_message_id',r.client_message_id)\n      from public.custodial_offline_reconciliation_delivery_recipients r where r.outbox_id=p_outbox_id;\n  end if;\n  with exhausted as (\n    update public.custodial_offline_reconciliation_delivery_recipients r\n    set state='failed',failed_at=now(),claimed_by=null,lease_token=null,claimed_at=null,lease_expires_at=null,\n      last_error='recipient delivery lease expired after maximum attempts'\n    where r.outbox_id=p_outbox_id and r.state='claimed' and r.lease_expires_at<=now() and r.attempts>=5\n    returning r.delivery_recipient_id,r.attempts\n  ) insert into public.custodial_offline_reconciliation_delivery_events(outbox_id,delivery_recipient_id,event_type,attempt,error_text,evidence_json)\n    select p_outbox_id,e.delivery_recipient_id,'recipient_lease_exhausted',e.attempts,'recipient delivery lease expired after maximum attempts',jsonb_build_object('terminal',true) from exhausted e;\n  with reclaimed as (\n    update public.custodial_offline_reconciliation_delivery_recipients r\n    set state='retry',claimed_by=null,lease_token=null,claimed_at=null,lease_expires_at=null,next_attempt_at=now(),\n      last_error=coalesce(nullif(r.last_error,''),'recipient delivery lease expired')\n    where r.outbox_id=p_outbox_id and r.state='claimed' and r.lease_expires_at<=now() and r.attempts<5\n    returning r.delivery_recipient_id,r.attempts\n  ) insert into public.custodial_offline_reconciliation_delivery_events(outbox_id,delivery_recipient_id,event_type,attempt,error_text,evidence_json)\n    select p_outbox_id,r.delivery_recipient_id,'recipient_lease_reclaimed',r.attempts,'recipient delivery lease expired',jsonb_build_object('requeued',true) from reclaimed r;\n  return query\n  with candidates as (\n    select r.delivery_recipient_id from public.custodial_offline_reconciliation_delivery_recipients r\n    where r.outbox_id=p_outbox_id and r.state in ('pending','retry') and r.next_attempt_at<=now() and r.attempts<5\n    order by r.created_at,r.delivery_recipient_id for update skip locked\n  ), claimed as (\n    update public.custodial_offline_reconciliation_delivery_recipients r\n    set state='claimed',claimed_by=v_worker_id,lease_token=gen_random_uuid(),claimed_at=now(),lease_expires_at=least(v_outbox.lease_expires_at,now()+interval '120 seconds'),attempts=r.attempts+1\n    from candidates c where r.delivery_recipient_id=c.delivery_recipient_id returning r.*\n  ), evidence as (\n    insert into public.custodial_offline_reconciliation_delivery_events(outbox_id,delivery_recipient_id,event_type,attempt,worker_id,evidence_json)\n    select p_outbox_id,c.delivery_recipient_id,'recipient_claimed',c.attempts,v_worker_id,jsonb_build_object('lease_token',c.lease_token,'lease_expires_at',c.lease_expires_at) from claimed c\n  )\n  select c.delivery_recipient_id,c.manager_id,c.recipient_user_id,c.client_message_id,c.notification_instance_key,c.attempts,c.lease_token,c.lease_expires_at from claimed c;\nend\n$function$\n",
+      "function_name": "custodial_claim_offline_reconciliation_notification_recipients",
+      "identity_arguments": "p_outbox_id uuid, p_worker_id text, p_outbox_lease_token uuid, p_recipients jsonb, p_backend_execution_secret text",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_claim_offline_reconciliation_notifications(p_worker_id text, p_limit integer, p_lease_seconds integer, p_backend_execution_secret text)\n RETURNS TABLE(outbox_id uuid, reconciliation_id uuid, disposition_id uuid, notification_kind text, payload_json jsonb, attempts integer, lease_token uuid, lease_expires_at timestamp with time zone)\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_worker_id text := nullif(btrim(coalesce(p_worker_id, '')), '');\n  v_limit integer := greatest(1, least(coalesce(p_limit, 10), 50));\n  v_lease_seconds integer := greatest(15, least(coalesce(p_lease_seconds, 120), 900));\nbegin\n  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  if v_worker_id is null or length(v_worker_id) > 200 then raise exception using errcode='22023', message='a bounded notification worker identity is required'; end if;\n  with exhausted as (\n    update public.custodial_offline_reconciliation_outbox o\n    set state='failed', failed_at=now(), claimed_by=null, lease_token=null, claimed_at=null, lease_expires_at=null,\n      last_error='notification delivery lease expired after maximum attempts'\n    where o.state='claimed' and o.lease_expires_at<=now() and o.attempts>=5\n    returning o.outbox_id,o.attempts\n  ) insert into public.custodial_offline_reconciliation_delivery_events(outbox_id,event_type,attempt,error_text,evidence_json)\n    select e.outbox_id,'outbox_lease_exhausted',e.attempts,'notification delivery lease expired after maximum attempts',jsonb_build_object('terminal',true) from exhausted e;\n  with reclaimed as (\n    update public.custodial_offline_reconciliation_outbox o\n    set state='retry', claimed_by=null, lease_token=null, claimed_at=null, lease_expires_at=null,\n      next_attempt_at=now(), last_error=coalesce(nullif(o.last_error,''),'delivery lease expired')\n    where o.state='claimed' and o.lease_expires_at<=now() and o.attempts<5\n    returning o.outbox_id,o.attempts\n  ) insert into public.custodial_offline_reconciliation_delivery_events(outbox_id,event_type,attempt,error_text,evidence_json)\n    select r.outbox_id,'outbox_lease_reclaimed',r.attempts,'delivery lease expired',jsonb_build_object('requeued',true) from reclaimed r;\n  return query\n  with candidates as (\n    select o.outbox_id from public.custodial_offline_reconciliation_outbox o\n    where o.state in ('pending','retry') and o.next_attempt_at<=now() and o.attempts<5\n    order by o.created_at,o.outbox_id limit v_limit for update skip locked\n  ), claimed as (\n    update public.custodial_offline_reconciliation_outbox o\n    set state='claimed',claimed_by=v_worker_id,lease_token=gen_random_uuid(),claimed_at=now(),\n      lease_expires_at=now()+make_interval(secs=>v_lease_seconds),attempts=o.attempts+1\n    from candidates c where o.outbox_id=c.outbox_id returning o.*\n  )\n  select c.outbox_id,c.reconciliation_id,c.disposition_id,c.notification_kind,c.payload_json,c.attempts,c.lease_token,c.lease_expires_at\n  from claimed c order by c.created_at,c.outbox_id;\nend\n$function$\n",
       "function_name": "custodial_claim_offline_reconciliation_notifications",
       "identity_arguments": "p_worker_id text, p_limit integer, p_lease_seconds integer, p_backend_execution_secret text",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_close_maintenance_ticket_authoritative(p_ticket_id uuid, p_closed_by text, p_close_notes text, p_backend_execution_secret text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare v_closed_by text := nullif(left(btrim(coalesce(p_closed_by,'')),200),'');\nbegin\n  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  if p_ticket_id is null or v_closed_by is null then raise exception using errcode='22023',message='ticket identity and named closer are required'; end if;\n  return public.close_maintenance_ticket(p_ticket_id,v_closed_by,nullif(left(btrim(coalesce(p_close_notes,'')),1000),''));\nend\n$function$\n",
+      "function_name": "custodial_close_maintenance_ticket_authoritative",
+      "identity_arguments": "p_ticket_id uuid, p_closed_by text, p_close_notes text, p_backend_execution_secret text",
       "schema_name": "public"
     },
     {
@@ -27898,9 +28412,16 @@
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.custodial_finish_offline_reconciliation_notification(p_outbox_id uuid, p_worker_id text, p_lease_token uuid, p_succeeded boolean, p_error text, p_retry_seconds integer, p_terminal boolean, p_delivery_json jsonb, p_backend_execution_secret text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_outbox public.custodial_offline_reconciliation_outbox%rowtype;\n  v_worker_id text := nullif(btrim(coalesce(p_worker_id, '')), '');\n  v_error text := nullif(left(btrim(coalesce(p_error, '')), 2000), '');\n  v_retry_seconds integer := greatest(15, least(coalesce(p_retry_seconds, 60), 3600));\nbegin\n  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  select * into v_outbox\n  from public.custodial_offline_reconciliation_outbox\n  where outbox_id = p_outbox_id\n  for update;\n  if v_outbox.outbox_id is null then\n    raise exception using errcode='P0002', message='offline reconciliation notification was not found';\n  end if;\n  if v_worker_id is null or v_outbox.state <> 'claimed'\n     or v_outbox.claimed_by <> v_worker_id\n     or v_outbox.lease_token is distinct from p_lease_token\n     or v_outbox.lease_expires_at <= now() then\n    raise exception using errcode='40901', message='notification claim is no longer owned by this worker';\n  end if;\n  if p_succeeded is true then\n    update public.custodial_offline_reconciliation_outbox\n    set state = 'delivered', delivered_at = now(), failed_at = null,\n        claimed_by = null, lease_token = null, claimed_at = null, lease_expires_at = null,\n        last_error = null, delivery_json = coalesce(p_delivery_json, '{}'::jsonb)\n    where outbox_id = v_outbox.outbox_id;\n  elsif p_terminal is true or v_outbox.attempts >= 5 then\n    update public.custodial_offline_reconciliation_outbox\n    set state = 'failed', failed_at = now(), claimed_by = null, lease_token = null,\n        claimed_at = null, lease_expires_at = null,\n        last_error = coalesce(v_error, 'notification delivery reached terminal failure'),\n        delivery_json = coalesce(p_delivery_json, '{}'::jsonb)\n    where outbox_id = v_outbox.outbox_id;\n  else\n    update public.custodial_offline_reconciliation_outbox\n    set state = 'pending', claimed_by = null, lease_token = null, claimed_at = null,\n        lease_expires_at = null, next_attempt_at = now() + make_interval(secs => v_retry_seconds),\n        last_error = coalesce(v_error, 'notification delivery failed')\n    where outbox_id = v_outbox.outbox_id;\n  end if;\n  select * into v_outbox from public.custodial_offline_reconciliation_outbox where outbox_id = v_outbox.outbox_id;\n  return jsonb_build_object('outbox_id', v_outbox.outbox_id, 'state', v_outbox.state,\n    'attempts', v_outbox.attempts, 'terminal', v_outbox.state in ('delivered', 'failed'),\n    'next_attempt_at', v_outbox.next_attempt_at, 'failed_at', v_outbox.failed_at);\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_finish_offline_reconciliation_notification(p_outbox_id uuid, p_worker_id text, p_lease_token uuid, p_succeeded boolean, p_error text, p_retry_seconds integer, p_terminal boolean, p_delivery_json jsonb, p_backend_execution_secret text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_outbox public.custodial_offline_reconciliation_outbox%rowtype;\n  v_worker_id text := nullif(btrim(coalesce(p_worker_id,'')), '');\n  v_error text := nullif(left(btrim(coalesce(p_error,'')),500),'');\n  v_retry_seconds integer := greatest(15,least(coalesce(p_retry_seconds,60),3600));\n  v_recipients integer := 0;\n  v_delivered integer := 0;\n  v_failed integer := 0;\nbegin\n  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  select * into v_outbox from public.custodial_offline_reconciliation_outbox where outbox_id=p_outbox_id for update;\n  if v_outbox.outbox_id is null then raise exception using errcode='P0002',message='offline reconciliation notification was not found'; end if;\n  if v_worker_id is null or v_outbox.state<>'claimed' or v_outbox.claimed_by<>v_worker_id or v_outbox.lease_token is distinct from p_lease_token or v_outbox.lease_expires_at<=now() then raise exception using errcode='40901',message='notification claim is no longer owned by this worker'; end if;\n  select count(*),count(*) filter(where state='delivered'),count(*) filter(where state='failed') into v_recipients,v_delivered,v_failed\n    from public.custodial_offline_reconciliation_delivery_recipients where outbox_id=v_outbox.outbox_id;\n  if v_failed>0 or p_terminal is true then\n    update public.custodial_offline_reconciliation_outbox\n    set state='failed',failed_at=now(),claimed_by=null,lease_token=null,claimed_at=null,lease_expires_at=null,\n      last_error=coalesce(v_error,case when v_failed>0 then 'one or more named-manager recipients are unavailable' else 'notification delivery reached terminal failure' end),delivery_json=coalesce(p_delivery_json,'{}'::jsonb)\n    where outbox_id=v_outbox.outbox_id;\n    insert into public.custodial_offline_reconciliation_delivery_events(outbox_id,event_type,attempt,worker_id,error_text,evidence_json)\n    values(v_outbox.outbox_id,'outbox_failed',v_outbox.attempts,v_worker_id,coalesce(v_error,'notification delivery reached terminal failure'),coalesce(p_delivery_json,'{}'::jsonb));\n  elsif v_recipients>0 and v_delivered=v_recipients then\n    update public.custodial_offline_reconciliation_outbox\n    set state='delivered',delivered_at=now(),failed_at=null,claimed_by=null,lease_token=null,claimed_at=null,lease_expires_at=null,last_error=null,delivery_json=coalesce(p_delivery_json,'{}'::jsonb)\n    where outbox_id=v_outbox.outbox_id;\n    insert into public.custodial_offline_reconciliation_delivery_events(outbox_id,event_type,attempt,worker_id,evidence_json)\n    values(v_outbox.outbox_id,'outbox_delivered',v_outbox.attempts,v_worker_id,coalesce(p_delivery_json,'{}'::jsonb));\n  elsif v_recipients=0 and p_succeeded is true then\n    update public.custodial_offline_reconciliation_outbox\n    set state='delivered',delivered_at=now(),failed_at=null,claimed_by=null,lease_token=null,claimed_at=null,lease_expires_at=null,last_error=null,delivery_json=coalesce(p_delivery_json,'{}'::jsonb)\n    where outbox_id=v_outbox.outbox_id;\n    insert into public.custodial_offline_reconciliation_delivery_events(outbox_id,event_type,attempt,worker_id,evidence_json)\n    values(v_outbox.outbox_id,'outbox_delivered',v_outbox.attempts,v_worker_id,coalesce(p_delivery_json,'{}'::jsonb));\n  elsif v_outbox.attempts>=5 then\n    update public.custodial_offline_reconciliation_outbox\n    set state='failed',failed_at=now(),claimed_by=null,lease_token=null,claimed_at=null,lease_expires_at=null,last_error=coalesce(v_error,'notification delivery reached maximum attempts'),delivery_json=coalesce(p_delivery_json,'{}'::jsonb)\n    where outbox_id=v_outbox.outbox_id;\n    insert into public.custodial_offline_reconciliation_delivery_events(outbox_id,event_type,attempt,worker_id,error_text,evidence_json)\n    values(v_outbox.outbox_id,'outbox_failed',v_outbox.attempts,v_worker_id,coalesce(v_error,'notification delivery reached maximum attempts'),coalesce(p_delivery_json,'{}'::jsonb));\n  else\n    update public.custodial_offline_reconciliation_outbox\n    set state='retry',claimed_by=null,lease_token=null,claimed_at=null,lease_expires_at=null,next_attempt_at=now()+make_interval(secs=>v_retry_seconds),last_error=coalesce(v_error,'notification delivery incomplete'),delivery_json=coalesce(p_delivery_json,'{}'::jsonb)\n    where outbox_id=v_outbox.outbox_id;\n    insert into public.custodial_offline_reconciliation_delivery_events(outbox_id,event_type,attempt,worker_id,error_text,evidence_json)\n    values(v_outbox.outbox_id,'outbox_retry_scheduled',v_outbox.attempts,v_worker_id,coalesce(v_error,'notification delivery incomplete'),coalesce(p_delivery_json,'{}'::jsonb));\n  end if;\n  select * into v_outbox from public.custodial_offline_reconciliation_outbox where outbox_id=v_outbox.outbox_id;\n  return jsonb_build_object('outbox_id',v_outbox.outbox_id,'state',v_outbox.state,'attempts',v_outbox.attempts,'terminal',v_outbox.state in ('delivered','failed'),'next_attempt_at',v_outbox.next_attempt_at,'failed_at',v_outbox.failed_at);\nend\n$function$\n",
       "function_name": "custodial_finish_offline_reconciliation_notification",
       "identity_arguments": "p_outbox_id uuid, p_worker_id text, p_lease_token uuid, p_succeeded boolean, p_error text, p_retry_seconds integer, p_terminal boolean, p_delivery_json jsonb, p_backend_execution_secret text",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_finish_offline_reconciliation_notification_recipient(p_delivery_recipient_id uuid, p_worker_id text, p_lease_token uuid, p_succeeded boolean, p_message_id uuid, p_error text, p_retry_seconds integer, p_terminal boolean, p_delivery_evidence jsonb, p_backend_execution_secret text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_recipient public.custodial_offline_reconciliation_delivery_recipients%rowtype;\n  v_outbox public.custodial_offline_reconciliation_outbox%rowtype;\n  v_worker_id text := nullif(btrim(coalesce(p_worker_id,'')), '');\n  v_error text := nullif(left(btrim(coalesce(p_error,'')),500),'');\n  v_retry_seconds integer := greatest(15,least(coalesce(p_retry_seconds,60),3600));\nbegin\n  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  select * into v_recipient from public.custodial_offline_reconciliation_delivery_recipients where delivery_recipient_id=p_delivery_recipient_id for update;\n  if v_recipient.delivery_recipient_id is null then raise exception using errcode='P0002',message='offline reconciliation notification recipient was not found'; end if;\n  select * into v_outbox from public.custodial_offline_reconciliation_outbox where outbox_id=v_recipient.outbox_id for key share;\n  if v_worker_id is null or v_recipient.state<>'claimed' or v_recipient.claimed_by<>v_worker_id or v_recipient.lease_token is distinct from p_lease_token or v_recipient.lease_expires_at<=now()\n     or v_outbox.state<>'claimed' or v_outbox.claimed_by<>v_worker_id or v_outbox.lease_expires_at<=now() then\n    raise exception using errcode='40901',message='recipient delivery claim is no longer owned by this worker';\n  end if;\n  if p_succeeded is true then\n    if p_message_id is null or not exists(\n      select 1 from public.msg_messages m join public.msg_thread_participants tp on tp.thread_id=m.thread_id and tp.user_id=v_recipient.recipient_user_id and tp.left_at is null\n      where m.id=p_message_id and m.client_message_id=v_recipient.client_message_id and m.metadata_json->>'notification_instance_key'=v_recipient.notification_instance_key\n    ) then raise exception using errcode='23514',message='recipient delivery evidence must bind the stable Messenger notification identity'; end if;\n    update public.custodial_offline_reconciliation_delivery_recipients\n    set state='delivered',delivered_at=now(),failed_at=null,claimed_by=null,lease_token=null,claimed_at=null,lease_expires_at=null,last_error=null,message_id=p_message_id,\n      delivery_evidence=coalesce(p_delivery_evidence,'{}'::jsonb)||jsonb_build_object('message_id',p_message_id,'client_message_id',v_recipient.client_message_id,'notification_instance_key',v_recipient.notification_instance_key)\n    where delivery_recipient_id=v_recipient.delivery_recipient_id;\n    insert into public.custodial_offline_reconciliation_delivery_events(outbox_id,delivery_recipient_id,event_type,attempt,worker_id,evidence_json)\n    values(v_recipient.outbox_id,v_recipient.delivery_recipient_id,'recipient_delivered',v_recipient.attempts,v_worker_id,jsonb_build_object('message_id',p_message_id,'client_message_id',v_recipient.client_message_id));\n  elsif p_terminal is true or v_recipient.attempts>=5 then\n    update public.custodial_offline_reconciliation_delivery_recipients\n    set state='failed',failed_at=now(),claimed_by=null,lease_token=null,claimed_at=null,lease_expires_at=null,last_error=coalesce(v_error,'recipient delivery reached terminal failure'),\n      delivery_evidence=coalesce(p_delivery_evidence,'{}'::jsonb)\n    where delivery_recipient_id=v_recipient.delivery_recipient_id;\n    insert into public.custodial_offline_reconciliation_delivery_events(outbox_id,delivery_recipient_id,event_type,attempt,worker_id,error_text,evidence_json)\n    values(v_recipient.outbox_id,v_recipient.delivery_recipient_id,'recipient_failed',v_recipient.attempts,v_worker_id,coalesce(v_error,'recipient delivery reached terminal failure'),coalesce(p_delivery_evidence,'{}'::jsonb));\n  else\n    update public.custodial_offline_reconciliation_delivery_recipients\n    set state='retry',claimed_by=null,lease_token=null,claimed_at=null,lease_expires_at=null,next_attempt_at=now()+make_interval(secs=>v_retry_seconds),last_error=coalesce(v_error,'recipient delivery failed'),\n      delivery_evidence=coalesce(p_delivery_evidence,'{}'::jsonb)\n    where delivery_recipient_id=v_recipient.delivery_recipient_id;\n    insert into public.custodial_offline_reconciliation_delivery_events(outbox_id,delivery_recipient_id,event_type,attempt,worker_id,error_text,evidence_json)\n    values(v_recipient.outbox_id,v_recipient.delivery_recipient_id,'recipient_retry_scheduled',v_recipient.attempts,v_worker_id,coalesce(v_error,'recipient delivery failed'),coalesce(p_delivery_evidence,'{}'::jsonb));\n  end if;\n  select * into v_recipient from public.custodial_offline_reconciliation_delivery_recipients where delivery_recipient_id=v_recipient.delivery_recipient_id;\n  return jsonb_build_object('delivery_recipient_id',v_recipient.delivery_recipient_id,'state',v_recipient.state,'attempts',v_recipient.attempts,'terminal',v_recipient.state in ('delivered','failed'),'message_id',v_recipient.message_id);\nend\n$function$\n",
+      "function_name": "custodial_finish_offline_reconciliation_notification_recipient",
+      "identity_arguments": "p_delivery_recipient_id uuid, p_worker_id text, p_lease_token uuid, p_succeeded boolean, p_message_id uuid, p_error text, p_retry_seconds integer, p_terminal boolean, p_delivery_evidence jsonb, p_backend_execution_secret text",
       "schema_name": "public"
     },
     {
@@ -27926,14 +28447,14 @@
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.custodial_manager_get_offline_reconciliation(p_manager_id uuid, p_reconciliation_id uuid, p_backend_execution_secret text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare v_record public.custodial_offline_reconciliation_records%rowtype;\nbegin\n  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  if not exists(select 1 from public.ops_manager_managers m where m.manager_id=p_manager_id and m.active=true and m.revoked_at is null) then raise exception using errcode='42501',message='active named manager authority is required'; end if;\n  select * into v_record from public.custodial_offline_reconciliation_records where reconciliation_id=p_reconciliation_id;\n  if v_record.reconciliation_id is null then raise exception using errcode='P0002',message='offline reconciliation not found'; end if;\n  return jsonb_build_object('record',to_jsonb(v_record),'audits',(select coalesce(jsonb_agg(to_jsonb(a) order by a.created_at),'[]'::jsonb) from public.custodial_offline_reconciliation_audits a where a.reconciliation_id=v_record.reconciliation_id),'dispositions',(select coalesce(jsonb_agg(to_jsonb(d) order by d.created_at),'[]'::jsonb) from public.custodial_offline_reconciliation_dispositions d where d.reconciliation_id=v_record.reconciliation_id));\nend $function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_manager_get_offline_reconciliation(p_manager_id uuid, p_reconciliation_id uuid, p_backend_execution_secret text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare v_record public.custodial_offline_reconciliation_records%rowtype;\nbegin\n  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  if not exists(select 1 from public.ops_manager_managers m where m.manager_id=p_manager_id and m.active=true and m.revoked_at is null) then raise exception using errcode='42501',message='active named manager authority is required'; end if;\n  select * into v_record from public.custodial_offline_reconciliation_records where reconciliation_id=p_reconciliation_id;\n  if v_record.reconciliation_id is null then raise exception using errcode='P0002',message='offline reconciliation not found'; end if;\n  return jsonb_build_object('record',to_jsonb(v_record),'audits',(select coalesce(jsonb_agg(to_jsonb(a) order by a.created_at),'[]'::jsonb) from public.custodial_offline_reconciliation_audits a where a.reconciliation_id=v_record.reconciliation_id),'dispositions',(select coalesce(jsonb_agg(to_jsonb(d) order by d.created_at),'[]'::jsonb) from public.custodial_offline_reconciliation_dispositions d where d.reconciliation_id=v_record.reconciliation_id),'notifications',coalesce((select jsonb_agg(jsonb_build_object(\n    'outbox_id',o.outbox_id,'notification_key',o.notification_key,'notification_kind',o.notification_kind,'disposition_id',o.disposition_id,'state',o.state,\n    'status_label',case o.state when 'pending' then 'Pending delivery' when 'claimed' then 'Delivery in progress' when 'retry' then 'Retry scheduled' when 'delivered' then 'Delivered' else 'Delivery unavailable' end,\n    'attempts',o.attempts,'claimed_at',o.claimed_at,'lease_expires_at',o.lease_expires_at,'next_attempt_at',o.next_attempt_at,'delivered_at',o.delivered_at,'failed_at',o.failed_at,'last_error',nullif(left(coalesce(o.last_error,''),500),''),'delivery_evidence',o.delivery_json,\n    'recipients',coalesce((select jsonb_agg(jsonb_build_object('delivery_recipient_id',dr.delivery_recipient_id,'manager_id',dr.manager_id,'recipient_user_id',dr.recipient_user_id,'state',dr.state,'attempts',dr.attempts,'claimed_at',dr.claimed_at,'lease_expires_at',dr.lease_expires_at,'next_attempt_at',dr.next_attempt_at,'delivered_at',dr.delivered_at,'failed_at',dr.failed_at,'last_error',nullif(left(coalesce(dr.last_error,''),500),''),'message_id',dr.message_id,'client_message_id',dr.client_message_id,'notification_instance_key',dr.notification_instance_key,'delivery_evidence',dr.delivery_evidence,\n      'events',coalesce((select jsonb_agg(jsonb_build_object('event_type',de.event_type,'attempt',de.attempt,'worker_id',de.worker_id,'error',de.error_text,'evidence',de.evidence_json,'created_at',de.created_at) order by de.created_at,de.delivery_event_id) from public.custodial_offline_reconciliation_delivery_events de where de.delivery_recipient_id=dr.delivery_recipient_id),'[]'::jsonb)) order by dr.created_at,dr.delivery_recipient_id) from public.custodial_offline_reconciliation_delivery_recipients dr where dr.outbox_id=o.outbox_id),'[]'::jsonb),\n    'events',coalesce((select jsonb_agg(jsonb_build_object('event_type',de.event_type,'attempt',de.attempt,'worker_id',de.worker_id,'error',de.error_text,'evidence',de.evidence_json,'created_at',de.created_at) order by de.created_at,de.delivery_event_id) from public.custodial_offline_reconciliation_delivery_events de where de.outbox_id=o.outbox_id and de.delivery_recipient_id is null),'[]'::jsonb)\n  ) order by o.created_at,o.outbox_id) from public.custodial_offline_reconciliation_outbox o where o.reconciliation_id=v_record.reconciliation_id),'[]'::jsonb));\nend\n$function$\n",
       "function_name": "custodial_manager_get_offline_reconciliation",
       "identity_arguments": "p_manager_id uuid, p_reconciliation_id uuid, p_backend_execution_secret text",
       "schema_name": "public"
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.custodial_manager_list_offline_reconciliations(p_manager_id uuid, p_limit integer, p_before timestamp with time zone, p_backend_execution_secret text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\nbegin\n  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  if not exists(select 1 from public.ops_manager_managers m where m.manager_id=p_manager_id and m.active=true and m.revoked_at is null and m.roles && array['OPS_MANAGER','DIRECTOR','SECURITY_ADMIN']::text[]) then\n    raise exception using errcode='42501', message='active named manager authority is required';\n  end if;\n  return coalesce((select jsonb_agg(jsonb_build_object('reconciliation_id',r.reconciliation_id,'state',r.state,'reason',r.quarantine_reason,'original_employee_id',r.original_employee_id,'occurrence_id',r.occurrence_id,'created_at',r.created_at) order by r.created_at desc)\n    from (select * from public.custodial_offline_reconciliation_records where p_before is null or created_at<p_before order by created_at desc limit greatest(1,least(coalesce(p_limit,50),100))) r),'[]'::jsonb);\nend $function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_manager_list_offline_reconciliations(p_manager_id uuid, p_limit integer, p_before timestamp with time zone, p_backend_execution_secret text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\nbegin\n  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  if not exists(select 1 from public.ops_manager_managers m where m.manager_id=p_manager_id and m.active=true and m.revoked_at is null and m.roles && array['OPS_MANAGER','DIRECTOR','SECURITY_ADMIN']::text[]) then raise exception using errcode='42501',message='active named manager authority is required'; end if;\n  return coalesce((select jsonb_agg(jsonb_build_object(\n    'reconciliation_id',r.reconciliation_id,'state',r.state,'reason',r.quarantine_reason,'original_employee_id',r.original_employee_id,'occurrence_id',r.occurrence_id,'created_at',r.created_at,\n    'notifications',coalesce((select jsonb_agg(jsonb_build_object('outbox_id',o.outbox_id,'notification_kind',o.notification_kind,'disposition_id',o.disposition_id,'state',o.state,\n      'status_label',case o.state when 'pending' then 'Pending delivery' when 'claimed' then 'Delivery in progress' when 'retry' then 'Retry scheduled' when 'delivered' then 'Delivered' else 'Delivery unavailable' end,\n      'attempts',o.attempts,'claimed_at',o.claimed_at,'lease_expires_at',o.lease_expires_at,'next_attempt_at',o.next_attempt_at,'delivered_at',o.delivered_at,'failed_at',o.failed_at,'last_error',nullif(left(coalesce(o.last_error,''),500),''),\n      'recipient_count',(select count(*) from public.custodial_offline_reconciliation_delivery_recipients dr where dr.outbox_id=o.outbox_id)) order by o.created_at,o.outbox_id) from public.custodial_offline_reconciliation_outbox o where o.reconciliation_id=r.reconciliation_id),'[]'::jsonb)\n  ) order by r.created_at desc) from (select * from public.custodial_offline_reconciliation_records where p_before is null or created_at<p_before order by created_at desc limit greatest(1,least(coalesce(p_limit,50),100))) r),'[]'::jsonb);\nend\n$function$\n",
       "function_name": "custodial_manager_list_offline_reconciliations",
       "identity_arguments": "p_manager_id uuid, p_limit integer, p_before timestamp with time zone, p_backend_execution_secret text",
       "schema_name": "public"
@@ -27964,6 +28485,20 @@
       "definition": "CREATE OR REPLACE FUNCTION public.custodial_quarantine_offline_submission(p_client_session_id text, p_client_completion_id text, p_context_id uuid, p_payload_fingerprint text, p_payload_json jsonb, p_reason text, p_details jsonb, p_backend_execution_secret text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_existing public.custodial_offline_reconciliation_records%rowtype;\n  v_context public.custodial_offline_actor_contexts%rowtype;\n  v_reconciliation_id uuid;\n  v_reason text := left(nullif(btrim(coalesce(p_reason,'')), ''), 200);\n  v_fingerprint text;\n  v_session_id text;\n  v_completion_id text;\n  v_safe_payload jsonb := coalesce(p_payload_json,'{}'::jsonb);\n  v_result jsonb;\nbegin\n  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  v_reason := coalesce(v_reason, 'offline_authority_rejected');\n  v_fingerprint := case when coalesce(p_payload_fingerprint,'') ~ '^[0-9a-f]{64}$' then p_payload_fingerprint\n    else encode(extensions.digest(convert_to(coalesce(p_client_session_id,'') || ':' || coalesce(p_client_completion_id,'') || ':' || v_safe_payload::text,'UTF8'),'sha256'),'hex') end;\n  v_session_id := nullif(btrim(coalesce(p_client_session_id,'')), '');\n  v_completion_id := nullif(btrim(coalesce(p_client_completion_id,'')), '');\n  if v_session_id is null or length(v_session_id)>200 then v_session_id := 'invalid-session:' || substr(v_fingerprint,1,48); end if;\n  if v_completion_id is null or length(v_completion_id)>200 then v_completion_id := 'invalid-completion:' || substr(v_fingerprint,1,45); end if;\n  if pg_column_size(v_safe_payload)>1048576 then\n    v_safe_payload := jsonb_build_object('payload_omitted',true,'payload_bytes',pg_column_size(coalesce(p_payload_json,'{}'::jsonb)),'payload_fingerprint',v_fingerprint);\n  end if;\n  perform public.custodial_lock_offline_reconciliation_keys(v_session_id,v_completion_id);\n  if p_context_id is not null then\n    select * into v_context from public.custodial_offline_actor_contexts where context_id=p_context_id for update;\n  end if;\n  select * into v_existing from public.custodial_offline_reconciliation_records\n  where client_completion_id=v_completion_id or client_session_id=v_session_id\n  order by case when client_completion_id=v_completion_id then 0 else 1 end\n  limit 1 for update;\n  if v_existing.reconciliation_id is not null then\n    if v_context.context_id is not null then\n      update public.custodial_offline_actor_contexts set status='quarantined'\n       where context_id=v_context.context_id and status='activated';\n      update public.custodial_offline_submission_proofs set state='quarantined', consumed_at=now()\n       where context_id=v_context.context_id and state='issued';\n    end if;\n    insert into public.custodial_offline_reconciliation_audits(reconciliation_id,event_type,reason,evidence_json)\n    values (v_existing.reconciliation_id,'conflict_fenced',v_reason,\n      jsonb_build_object('attempt_payload_fingerprint',v_fingerprint,'attempt_context_id',p_context_id,\n        'attempt_occurrence_id',v_context.occurrence_id,'details',coalesce(p_details,'{}'::jsonb),'payload',v_safe_payload));\n    perform public.custodial_enqueue_offline_reconciliation_notification(v_existing.reconciliation_id);\n    return jsonb_build_object('status','quarantined','terminal',true,'automatic_replay_fenced',true,\n      'reconciliation_id',v_existing.reconciliation_id,'reason',v_reason,'replayed',true,\n      'attempt_context_fenced',v_context.context_id is not null);\n  end if;\n  v_result := jsonb_build_object('status','quarantined','terminal',true,'automatic_replay_fenced',true,\n    'discard_local_workflow',false,'reason',v_reason,'client_session_id',v_session_id,'client_completion_id',v_completion_id);\n  insert into public.custodial_offline_reconciliation_records(\n    context_id,occurrence_id,occurrence_fingerprint,original_employee_id,device_id,credential_id,location_id,\n    client_session_id,client_completion_id,payload_fingerprint,payload_json,state,quarantine_reason,result_json\n  ) values (\n    v_context.context_id,v_context.occurrence_id,v_context.occurrence_fingerprint,v_context.employee_id,v_context.device_id,v_context.credential_id,v_context.location_id,\n    v_session_id,v_completion_id,v_fingerprint,v_safe_payload,'quarantined',v_reason,v_result\n  ) returning reconciliation_id into v_reconciliation_id;\n  if v_context.context_id is not null then\n    update public.custodial_offline_actor_contexts set status='quarantined' where context_id=v_context.context_id and status='activated';\n    update public.custodial_offline_submission_proofs set state='quarantined', consumed_at=now() where context_id=v_context.context_id and state='issued';\n  end if;\n  insert into public.custodial_offline_reconciliation_audits(reconciliation_id,event_type,reason,evidence_json)\n  values (v_reconciliation_id,'quarantined',v_reason,coalesce(p_details,'{}'::jsonb));\n  perform public.custodial_enqueue_offline_reconciliation_notification(v_reconciliation_id);\n  return v_result || jsonb_build_object('reconciliation_id',v_reconciliation_id,'occurrence_id',v_context.occurrence_id);\nend\n$function$\n",
       "function_name": "custodial_quarantine_offline_submission",
       "identity_arguments": "p_client_session_id text, p_client_completion_id text, p_context_id uuid, p_payload_fingerprint text, p_payload_json jsonb, p_reason text, p_details jsonb, p_backend_execution_secret text",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_reject_offline_delivery_event_mutation()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\nbegin\n  raise exception using errcode='23514', message='Custodial offline delivery event evidence is append-only';\nend\n$function$\n",
+      "function_name": "custodial_reject_offline_delivery_event_mutation",
+      "identity_arguments": "",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_reject_offline_delivery_recipient_mutation()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\nbegin\n  if tg_op = 'DELETE' then\n    raise exception using errcode='23514', message='Custodial offline recipient delivery evidence is append-only';\n  end if;\n  if not public.custodial_backend_transition_allowed() then\n    raise exception using errcode='23514', message='Custodial offline recipient delivery state is mutable only by the canonical delivery worker';\n  end if;\n  if new.delivery_recipient_id is distinct from old.delivery_recipient_id\n     or new.outbox_id is distinct from old.outbox_id\n     or new.manager_id is distinct from old.manager_id\n     or new.recipient_user_id is distinct from old.recipient_user_id\n     or new.client_message_id is distinct from old.client_message_id\n     or new.notification_instance_key is distinct from old.notification_instance_key\n     or new.created_at is distinct from old.created_at then\n    raise exception using errcode='23514', message='Custodial offline recipient identity is immutable';\n  end if;\n  return new;\nend\n$function$\n",
+      "function_name": "custodial_reject_offline_delivery_recipient_mutation",
+      "identity_arguments": "",
       "schema_name": "public"
     },
     {
@@ -28003,14 +28538,14 @@
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.custodial_start_offline_occurrence(p_device_id text, p_location_code text, p_client_session_id text, p_client_started_at text, p_authenticated_credential_id text, p_backend_execution_secret text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_client_session_id text := nullif(btrim(coalesce(p_client_session_id,'')), '');\n  v_credential_id uuid;\n  v_started_at timestamptz;\n  v_device record;\n  v_location record;\n  v_context public.custodial_offline_actor_contexts%rowtype;\n  v_existing public.custodial_offline_actor_contexts%rowtype;\n  v_proof public.custodial_offline_submission_proofs%rowtype;\n  v_assignment_change_id uuid;\n  v_proof_value text := encode(extensions.gen_random_bytes(32), 'hex');\n  v_fingerprint text;\nbegin\n  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  if v_client_session_id is null or length(v_client_session_id)>200 then raise exception using errcode='22023',message='client_session_id is required for offline occurrence activation'; end if;\n  begin\n    v_credential_id := nullif(lower(btrim(coalesce(p_authenticated_credential_id,''))), '')::uuid;\n    v_started_at := nullif(btrim(coalesce(p_client_started_at,'')), '')::timestamptz;\n  exception when others then raise exception using errcode='22023',message='offline occurrence activation requires canonical credential and start timestamp'; end;\n  if not isfinite(v_started_at) or v_started_at > now()+interval '10 minutes' or v_started_at < now()-interval '7 days' then\n    raise exception using errcode='22023',message='offline occurrence start timestamp is outside the accepted window';\n  end if;\n  perform pg_advisory_xact_lock(hashtextextended('custodial-offline-activation:'||v_client_session_id,0));\n  select * into v_existing from public.custodial_offline_actor_contexts where client_session_id=v_client_session_id for update;\n  if v_existing.context_id is not null then\n    if upper(btrim(coalesce(p_device_id,'')))<>upper((select device_id from public.devices where id=v_existing.device_id))\n       or v_existing.credential_id<>v_credential_id or v_existing.canonical_location_code<>public.resolve_scan_location_code(p_location_code)\n       or v_existing.started_at<>v_started_at then raise exception using errcode='23505',message='offline occurrence activation replay does not match the original occurrence'; end if;\n    select * into v_proof from public.custodial_offline_submission_proofs where context_id=v_existing.context_id for update;\n    if v_proof.state = 'issued' and v_proof.issued_submission_proof is not null then\n      return jsonb_build_object('context_id',v_existing.context_id,'occurrence_id',v_existing.occurrence_id,'client_session_id',v_existing.client_session_id,\n        'canonical_location_code',v_existing.canonical_location_code,'location_aliases',v_existing.location_aliases,'started_at',v_existing.started_at,\n        'submission_proof',v_proof.issued_submission_proof,'expires_at',v_existing.expires_at,'schema_version','offline-authority.v3','committable',true,'replayed',true);\n    end if;\n    raise exception using errcode='40901', message='the legacy occurrence cannot recover a completion proof; create a manager-visible recovery disposition';\n  end if;\n  select d.id,d.device_id,d.assigned_employee_id,d.assignment_epoch,e.active as employee_active,c.credential_id,c.confirmed_at,c.revoked_at,c.expires_at into v_device\n  from public.devices d join public.employees e on e.id=d.assigned_employee_id\n  join public.device_auth_credentials c on c.credential_id=v_credential_id and c.device_id=d.id\n  where upper(btrim(d.device_id))=upper(btrim(p_device_id)) and d.active=true for update of d;\n  if v_device.id is null or v_device.assigned_employee_id is null or v_device.employee_active is not true or v_device.confirmed_at is null or v_device.revoked_at is not null or v_device.expires_at<=now() then\n    raise exception using errcode='42501',message='active authenticated actor assignment is required for offline occurrence activation';\n  end if;\n  select l.id,l.location_code,jsonb_build_array(l.location_code,upper(btrim(p_location_code))) as aliases into v_location\n  from public.locations l where l.location_code=public.resolve_scan_location_code(p_location_code) and l.active=true;\n  if v_location.id is null then raise exception using errcode='22023',message='active canonical location is required for offline occurrence activation'; end if;\n  select h.assignment_change_id into v_assignment_change_id from public.custodial_employee_device_assignment_history h\n  where h.device_id=v_device.id and h.new_employee_id=v_device.assigned_employee_id order by h.changed_at desc limit 1;\n  if v_assignment_change_id is null then raise exception using errcode='42501',message='an authoritative device assignment epoch is required for offline occurrence activation'; end if;\n  v_fingerprint := encode(extensions.digest(convert_to(jsonb_build_object('client_session_id',v_client_session_id,'device_id',v_device.id::text,\n    'employee_id',v_device.assigned_employee_id::text,'credential_id',v_credential_id::text,'assignment_epoch',v_device.assignment_epoch,\n    'assignment_change_id',v_assignment_change_id::text,'location_id',v_location.id::text,'location_code',v_location.location_code,\n    'location_aliases',v_location.aliases,'started_at',v_started_at)::text,'UTF8'),'sha256'),'hex');\n  insert into public.custodial_offline_actor_contexts(client_session_id,device_id,employee_id,credential_id,assignment_epoch,assignment_change_id,location_id,canonical_location_code,location_aliases,started_at,occurrence_fingerprint,expires_at)\n  values(v_client_session_id,v_device.id,v_device.assigned_employee_id,v_credential_id,v_device.assignment_epoch,v_assignment_change_id,v_location.id,v_location.location_code,v_location.aliases,v_started_at,v_fingerprint,now()+interval '7 days') returning * into v_context;\n  insert into public.custodial_offline_submission_proofs(context_id,proof_digest,issued_submission_proof)\n  values(v_context.context_id,encode(extensions.digest(convert_to(v_proof_value,'UTF8'),'sha256'),'hex'),v_proof_value);\n  return jsonb_build_object('context_id',v_context.context_id,'occurrence_id',v_context.occurrence_id,'client_session_id',v_context.client_session_id,\n    'canonical_location_code',v_context.canonical_location_code,'location_aliases',v_context.location_aliases,'started_at',v_context.started_at,\n    'submission_proof',v_proof_value,'expires_at',v_context.expires_at,'schema_version','offline-authority.v3','committable',true,'replayed',false);\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_start_offline_occurrence(p_device_id text, p_location_code text, p_client_session_id text, p_client_started_at text, p_authenticated_credential_id text, p_backend_execution_secret text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_client_session_id text := nullif(btrim(coalesce(p_client_session_id,'')), '');\n  v_credential_id uuid;\n  v_started_at timestamptz;\n  v_device record;\n  v_location record;\n  v_context public.custodial_offline_actor_contexts%rowtype;\n  v_existing public.custodial_offline_actor_contexts%rowtype;\n  v_proof public.custodial_offline_submission_proofs%rowtype;\n  v_assignment_change_id uuid;\n  v_proof_value text := encode(extensions.gen_random_bytes(32), 'hex');\n  v_fingerprint text;\nbegin\n  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  if v_client_session_id is null or length(v_client_session_id)>200 then raise exception using errcode='22023',message='client_session_id is required for offline occurrence activation'; end if;\n  begin\n    v_credential_id := nullif(lower(btrim(coalesce(p_authenticated_credential_id,''))), '')::uuid;\n    v_started_at := nullif(btrim(coalesce(p_client_started_at,'')), '')::timestamptz;\n  exception when others then raise exception using errcode='22023',message='offline occurrence activation requires canonical credential and start timestamp'; end;\n  if not isfinite(v_started_at) or v_started_at > now()+interval '10 minutes' or v_started_at < now()-interval '7 days' then\n    raise exception using errcode='22023',message='offline occurrence start timestamp is outside the accepted window';\n  end if;\n  perform pg_advisory_xact_lock(hashtextextended('custodial-offline-activation:'||v_client_session_id,0));\n  select * into v_existing from public.custodial_offline_actor_contexts where client_session_id=v_client_session_id for update;\n  if v_existing.context_id is not null then\n    if upper(btrim(coalesce(p_device_id,'')))<>upper((select device_id from public.devices where id=v_existing.device_id))\n       or v_existing.credential_id<>v_credential_id or v_existing.canonical_location_code<>public.resolve_scan_location_code(p_location_code)\n       or v_existing.started_at<>v_started_at then raise exception using errcode='23505',message='offline occurrence activation replay does not match the original occurrence'; end if;\n    select d.id,d.device_id,d.assigned_employee_id,d.assignment_epoch,e.active as employee_active,\n      c.credential_id,c.confirmed_at,c.revoked_at,c.expires_at\n      into v_device\n    from public.devices d\n    join public.employees e on e.id=d.assigned_employee_id\n    join public.device_auth_credentials c on c.credential_id=v_credential_id and c.device_id=d.id\n    where d.id=v_existing.device_id and d.active=true\n    for update of d;\n    select l.id,l.location_code,jsonb_build_array(l.location_code,upper(btrim(p_location_code))) as aliases\n      into v_location\n    from public.locations l where l.location_code=public.resolve_scan_location_code(p_location_code) and l.active=true;\n    select h.assignment_change_id into v_assignment_change_id\n      from public.custodial_employee_device_assignment_history h\n      where h.device_id=v_existing.device_id and h.new_employee_id=v_device.assigned_employee_id\n      order by h.changed_at desc, h.assignment_change_id desc limit 1;\n    if v_device.id is null or v_device.assigned_employee_id is distinct from v_existing.employee_id\n       or v_device.assignment_epoch is distinct from v_existing.assignment_epoch\n       or v_assignment_change_id is distinct from v_existing.assignment_change_id\n       or v_device.confirmed_at is null or v_device.revoked_at is not null or v_device.expires_at<=now()\n       or v_location.id is null then\n      raise exception using errcode='40901', message='offline occurrence replay is fenced because its authoritative assignment changed';\n    end if;\n    v_fingerprint := encode(extensions.digest(convert_to(jsonb_build_object('client_session_id',v_client_session_id,'device_id',v_device.id::text,\n      'employee_id',v_device.assigned_employee_id::text,'credential_id',v_credential_id::text,'assignment_epoch',v_device.assignment_epoch,\n      'assignment_change_id',v_assignment_change_id::text,'location_id',v_location.id::text,'location_code',v_location.location_code,\n      'location_aliases',v_location.aliases,'started_at',v_started_at)::text,'UTF8'),'sha256'),'hex');\n    if v_fingerprint is distinct from v_existing.occurrence_fingerprint then\n      raise exception using errcode='40901', message='offline occurrence replay is fenced because its normalized request fingerprint changed';\n    end if;\n    select * into v_proof from public.custodial_offline_submission_proofs where context_id=v_existing.context_id for update;\n    if v_proof.state = 'issued' and v_proof.issued_submission_proof is not null then\n      return jsonb_build_object('context_id',v_existing.context_id,'occurrence_id',v_existing.occurrence_id,'client_session_id',v_existing.client_session_id,\n        'canonical_location_code',v_existing.canonical_location_code,'location_aliases',v_existing.location_aliases,'started_at',v_existing.started_at,\n        'submission_proof',v_proof.issued_submission_proof,'expires_at',v_existing.expires_at,'schema_version','offline-authority.v3','committable',true,'replayed',true);\n    end if;\n    raise exception using errcode='40901', message='the legacy occurrence cannot recover a completion proof; create a manager-visible recovery disposition';\n  end if;\n  select d.id,d.device_id,d.assigned_employee_id,d.assignment_epoch,e.active as employee_active,c.credential_id,c.confirmed_at,c.revoked_at,c.expires_at into v_device\n  from public.devices d join public.employees e on e.id=d.assigned_employee_id\n  join public.device_auth_credentials c on c.credential_id=v_credential_id and c.device_id=d.id\n  where upper(btrim(d.device_id))=upper(btrim(p_device_id)) and d.active=true for update of d;\n  if v_device.id is null or v_device.assigned_employee_id is null or v_device.employee_active is not true or v_device.confirmed_at is null or v_device.revoked_at is not null or v_device.expires_at<=now() then\n    raise exception using errcode='42501',message='active authenticated actor assignment is required for offline occurrence activation';\n  end if;\n  select l.id,l.location_code,jsonb_build_array(l.location_code,upper(btrim(p_location_code))) as aliases into v_location\n  from public.locations l where l.location_code=public.resolve_scan_location_code(p_location_code) and l.active=true;\n  if v_location.id is null then raise exception using errcode='22023',message='active canonical location is required for offline occurrence activation'; end if;\n  select h.assignment_change_id into v_assignment_change_id from public.custodial_employee_device_assignment_history h\n  where h.device_id=v_device.id and h.new_employee_id=v_device.assigned_employee_id order by h.changed_at desc, h.assignment_change_id desc limit 1;\n  if v_assignment_change_id is null then raise exception using errcode='42501',message='an authoritative device assignment epoch is required for offline occurrence activation'; end if;\n  v_fingerprint := encode(extensions.digest(convert_to(jsonb_build_object('client_session_id',v_client_session_id,'device_id',v_device.id::text,\n    'employee_id',v_device.assigned_employee_id::text,'credential_id',v_credential_id::text,'assignment_epoch',v_device.assignment_epoch,\n    'assignment_change_id',v_assignment_change_id::text,'location_id',v_location.id::text,'location_code',v_location.location_code,\n    'location_aliases',v_location.aliases,'started_at',v_started_at)::text,'UTF8'),'sha256'),'hex');\n  insert into public.custodial_offline_actor_contexts(client_session_id,device_id,employee_id,credential_id,assignment_epoch,assignment_change_id,location_id,canonical_location_code,location_aliases,started_at,occurrence_fingerprint,expires_at)\n  values(v_client_session_id,v_device.id,v_device.assigned_employee_id,v_credential_id,v_device.assignment_epoch,v_assignment_change_id,v_location.id,v_location.location_code,v_location.aliases,v_started_at,v_fingerprint,now()+interval '7 days') returning * into v_context;\n  insert into public.custodial_offline_submission_proofs(context_id,proof_digest,issued_submission_proof)\n  values(v_context.context_id,encode(extensions.digest(convert_to(v_proof_value,'UTF8'),'sha256'),'hex'),v_proof_value);\n  return jsonb_build_object('context_id',v_context.context_id,'occurrence_id',v_context.occurrence_id,'client_session_id',v_context.client_session_id,\n    'canonical_location_code',v_context.canonical_location_code,'location_aliases',v_context.location_aliases,'started_at',v_context.started_at,\n    'submission_proof',v_proof_value,'expires_at',v_context.expires_at,'schema_version','offline-authority.v3','committable',true,'replayed',false);\nend\n$function$\n",
       "function_name": "custodial_start_offline_occurrence",
       "identity_arguments": "p_device_id text, p_location_code text, p_client_session_id text, p_client_started_at text, p_authenticated_credential_id text, p_backend_execution_secret text",
       "schema_name": "public"
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.custodial_truncate_offline_evidence_for_maintenance(p_table regclass, p_reason text)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\nbegin\n  if p_table::text not in (\n    'custodial_offline_actor_contexts','custodial_offline_submission_proofs',\n    'custodial_offline_reconciliation_records','custodial_offline_reconciliation_audits',\n    'custodial_offline_scan_event_evidence','custodial_offline_time_reservations',\n    'custodial_offline_reconciliation_dispositions','custodial_offline_reconciliation_outbox'\n  ) or nullif(btrim(coalesce(p_reason,'')), '') is null then\n    raise exception using errcode='22023', message='an approved offline evidence table and maintenance reason are required';\n  end if;\n  perform set_config('custodial.offline_evidence_maintenance', 'approved', true);\n  execute format('truncate table public.%I', p_table::text);\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_truncate_offline_evidence_for_maintenance(p_table regclass, p_reason text)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$ begin raise exception using errcode='0A000',message='Custodial offline evidence truncation is retired; evidence is append-only'; end $function$\n",
       "function_name": "custodial_truncate_offline_evidence_for_maintenance",
       "identity_arguments": "p_table regclass, p_reason text",
       "schema_name": "public"
@@ -29074,7 +29609,7 @@
     },
     {
       "comment": "Destructive scan-history purge. Automatic execution disabled 2026-07-15. PostgreSQL-owner execution only.",
-      "definition": "CREATE OR REPLACE FUNCTION public.purge_closed_scan_history_before(p_cutoff timestamp with time zone, p_requested_by text DEFAULT NULL::text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_session_events_deleted integer := 0;\n  v_scan_events_deleted integer := 0;\n  v_system_logs_deleted integer := 0;\n  v_completion_deleted integer := 0;\n  v_sessions_deleted integer := 0;\n  v_nullified_open_tickets integer := 0;\nbegin\n  if p_cutoff is null then\n    raise exception 'Cutoff timestamp is required';\n  end if;\n\n  with target_sessions as (\n    select s.id\n    from public.sessions s\n    where s.status = 'closed'\n      and coalesce(s.ended_at, s.started_at, s.created_at) < p_cutoff\n  ), nullified_tickets as (\n    update public.maintenance_tickets mt\n    set\n      session_id = null,\n      completion_response_id = null\n    where mt.status = 'open'\n      and (\n        mt.session_id in (select id from target_sessions)\n        or mt.completion_response_id in (\n          select cr.id\n          from public.completion_responses cr\n          where cr.session_id in (select id from target_sessions)\n        )\n      )\n    returning mt.id\n  )\n  select count(*) into v_nullified_open_tickets from nullified_tickets;\n\n  with target_sessions as (\n    select s.id\n    from public.sessions s\n    where s.status = 'closed'\n      and coalesce(s.ended_at, s.started_at, s.created_at) < p_cutoff\n  ), deleted_rows as (\n    delete from public.session_events se\n    where se.session_id in (select id from target_sessions)\n    returning se.id\n  )\n  select count(*) into v_session_events_deleted from deleted_rows;\n\n  with target_sessions as (\n    select s.id\n    from public.sessions s\n    where s.status = 'closed'\n      and coalesce(s.ended_at, s.started_at, s.created_at) < p_cutoff\n  ), deleted_rows as (\n    delete from public.scan_events se\n    where se.session_id in (select id from target_sessions)\n       or (se.session_id is null and coalesce(se.scanned_at, se.created_at) < p_cutoff)\n    returning se.id\n  )\n  select count(*) into v_scan_events_deleted from deleted_rows;\n\n  with target_sessions as (\n    select s.id\n    from public.sessions s\n    where s.status = 'closed'\n      and coalesce(s.ended_at, s.started_at, s.created_at) < p_cutoff\n  ), deleted_rows as (\n    delete from public.system_logs sl\n    where sl.session_id in (select id from target_sessions)\n       or (sl.session_id is null and sl.created_at < p_cutoff)\n    returning sl.id\n  )\n  select count(*) into v_system_logs_deleted from deleted_rows;\n\n  with target_sessions as (\n    select s.id\n    from public.sessions s\n    where s.status = 'closed'\n      and coalesce(s.ended_at, s.started_at, s.created_at) < p_cutoff\n  ), deleted_rows as (\n    delete from public.completion_responses cr\n    where cr.session_id in (select id from target_sessions)\n    returning cr.id\n  )\n  select count(*) into v_completion_deleted from deleted_rows;\n\n  with deleted_rows as (\n    delete from public.sessions s\n    where s.status = 'closed'\n      and coalesce(s.ended_at, s.started_at, s.created_at) < p_cutoff\n    returning s.id\n  )\n  select count(*) into v_sessions_deleted from deleted_rows;\n\n  return jsonb_build_object(\n    'requested_by', coalesce(p_requested_by, 'unknown'),\n    'cutoff', p_cutoff,\n    'nullified_open_tickets', v_nullified_open_tickets,\n    'deleted_session_events', v_session_events_deleted,\n    'deleted_scan_events', v_scan_events_deleted,\n    'deleted_system_logs', v_system_logs_deleted,\n    'deleted_completion_responses', v_completion_deleted,\n    'deleted_sessions', v_sessions_deleted\n  );\nend;\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.purge_closed_scan_history_before(p_cutoff timestamp with time zone, p_requested_by text DEFAULT NULL::text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$ begin raise exception using errcode='0A000',message='Custodial terminal history purge is retired; terminal evidence is append-only'; end $function$\n",
       "function_name": "purge_closed_scan_history_before",
       "identity_arguments": "p_cutoff timestamp with time zone, p_requested_by text",
       "schema_name": "public"
@@ -29977,7 +30512,7 @@
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.tool_purge_closed_scan_history_before(p_cutoff timestamp with time zone, p_requested_by text DEFAULT NULL::text)\n RETURNS jsonb\n LANGUAGE sql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\n  select public.purge_closed_scan_history_before(p_cutoff, p_requested_by);\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.tool_purge_closed_scan_history_before(p_cutoff timestamp with time zone, p_requested_by text DEFAULT NULL::text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$ begin raise exception using errcode='0A000',message='Custodial terminal history purge is retired; terminal evidence is append-only'; end $function$\n",
       "function_name": "tool_purge_closed_scan_history_before",
       "identity_arguments": "p_cutoff timestamp with time zone, p_requested_by text",
       "schema_name": "public"
@@ -30520,6 +31055,78 @@
       "is_unique": true,
       "schema_name": "public",
       "table_name": "custodial_offline_reconciliation_audits"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX custodial_offline_reconciliation_delivery_events_pkey ON public.custodial_offline_reconciliation_delivery_events USING btree (delivery_event_id)",
+      "index_name": "custodial_offline_reconciliation_delivery_events_pkey",
+      "is_primary": true,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_events"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_custodial_offline_delivery_events_outbox ON public.custodial_offline_reconciliation_delivery_events USING btree (outbox_id, created_at, delivery_event_id)",
+      "index_name": "idx_custodial_offline_delivery_events_outbox",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_events"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX custodial_offline_reconciliatio_outbox_id_recipient_user_id_key ON public.custodial_offline_reconciliation_delivery_recipients USING btree (outbox_id, recipient_user_id)",
+      "index_name": "custodial_offline_reconciliatio_outbox_id_recipient_user_id_key",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX custodial_offline_reconciliation__notification_instance_key_key ON public.custodial_offline_reconciliation_delivery_recipients USING btree (notification_instance_key)",
+      "index_name": "custodial_offline_reconciliation__notification_instance_key_key",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX custodial_offline_reconciliation_deliv_outbox_id_manager_id_key ON public.custodial_offline_reconciliation_delivery_recipients USING btree (outbox_id, manager_id)",
+      "index_name": "custodial_offline_reconciliation_deliv_outbox_id_manager_id_key",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX custodial_offline_reconciliation_delivery_client_message_id_key ON public.custodial_offline_reconciliation_delivery_recipients USING btree (client_message_id)",
+      "index_name": "custodial_offline_reconciliation_delivery_client_message_id_key",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX custodial_offline_reconciliation_delivery_recipients_pkey ON public.custodial_offline_reconciliation_delivery_recipients USING btree (delivery_recipient_id)",
+      "index_name": "custodial_offline_reconciliation_delivery_recipients_pkey",
+      "is_primary": true,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_custodial_offline_delivery_recipients_claimable ON public.custodial_offline_reconciliation_delivery_recipients USING btree (outbox_id, state, next_attempt_at, created_at)",
+      "index_name": "idx_custodial_offline_delivery_recipients_claimable",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients"
     },
     {
       "backs_constraint": true,
@@ -35560,22 +36167,6 @@
       "schema_name": "public"
     },
     {
-      "function_name": "close_maintenance_ticket",
-      "grantee": "service_role",
-      "identity_arguments": "p_ticket_id uuid, p_closed_by text, p_close_notes text",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "create_maintenance_tickets_from_response",
-      "grantee": "service_role",
-      "identity_arguments": "p_completion_response_id uuid, p_session_id uuid, p_location_id uuid, p_reported_by_employee_id uuid, p_device_id uuid, p_reported_at timestamp with time zone, p_response_json jsonb",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
       "function_name": "custodial_assert_manager",
       "grantee": "service_role",
       "identity_arguments": "p_manager_id uuid",
@@ -35608,6 +36199,22 @@
       "schema_name": "public"
     },
     {
+      "function_name": "custodial_claim_offline_reconciliation_notification_recipients",
+      "grantee": "PUBLIC",
+      "identity_arguments": "p_outbox_id uuid, p_worker_id text, p_outbox_lease_token uuid, p_recipients jsonb, p_backend_execution_secret text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "custodial_claim_offline_reconciliation_notification_recipients",
+      "grantee": "service_role",
+      "identity_arguments": "p_outbox_id uuid, p_worker_id text, p_outbox_lease_token uuid, p_recipients jsonb, p_backend_execution_secret text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
       "function_name": "custodial_claim_offline_reconciliation_notifications",
       "grantee": "service_role",
       "identity_arguments": "p_worker_id text, p_limit integer, p_lease_seconds integer, p_backend_execution_secret text",
@@ -35616,9 +36223,17 @@
       "schema_name": "public"
     },
     {
-      "function_name": "custodial_commit_offline_occurrence",
+      "function_name": "custodial_close_maintenance_ticket_authoritative",
+      "grantee": "PUBLIC",
+      "identity_arguments": "p_ticket_id uuid, p_closed_by text, p_close_notes text, p_backend_execution_secret text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "custodial_close_maintenance_ticket_authoritative",
       "grantee": "service_role",
-      "identity_arguments": "p_client_session_id text, p_client_completion_id text, p_device_id text, p_location_code text, p_client_started_at text, p_client_ended_at text, p_response_json jsonb, p_scan_evidence jsonb, p_correlation_id text, p_context_id text, p_submission_proof text, p_authenticated_credential_id text, p_backend_execution_secret text",
+      "identity_arguments": "p_ticket_id uuid, p_closed_by text, p_close_notes text, p_backend_execution_secret text",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -35643,6 +36258,22 @@
       "function_name": "custodial_finish_offline_reconciliation_notification",
       "grantee": "service_role",
       "identity_arguments": "p_outbox_id uuid, p_worker_id text, p_lease_token uuid, p_succeeded boolean, p_error text, p_retry_seconds integer, p_terminal boolean, p_delivery_json jsonb, p_backend_execution_secret text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "custodial_finish_offline_reconciliation_notification_recipient",
+      "grantee": "PUBLIC",
+      "identity_arguments": "p_delivery_recipient_id uuid, p_worker_id text, p_lease_token uuid, p_succeeded boolean, p_message_id uuid, p_error text, p_retry_seconds integer, p_terminal boolean, p_delivery_evidence jsonb, p_backend_execution_secret text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "custodial_finish_offline_reconciliation_notification_recipient",
+      "grantee": "service_role",
+      "identity_arguments": "p_delivery_recipient_id uuid, p_worker_id text, p_lease_token uuid, p_succeeded boolean, p_message_id uuid, p_error text, p_retry_seconds integer, p_terminal boolean, p_delivery_evidence jsonb, p_backend_execution_secret text",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -35720,6 +36351,38 @@
       "schema_name": "public"
     },
     {
+      "function_name": "custodial_reject_offline_delivery_event_mutation",
+      "grantee": "PUBLIC",
+      "identity_arguments": "",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "custodial_reject_offline_delivery_event_mutation",
+      "grantee": "service_role",
+      "identity_arguments": "",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "custodial_reject_offline_delivery_recipient_mutation",
+      "grantee": "PUBLIC",
+      "identity_arguments": "",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "custodial_reject_offline_delivery_recipient_mutation",
+      "grantee": "service_role",
+      "identity_arguments": "",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
       "function_name": "custodial_reject_offline_evidence_mutation",
       "grantee": "PUBLIC",
       "identity_arguments": "",
@@ -35787,134 +36450,6 @@
       "function_name": "custodial_start_offline_occurrence",
       "grantee": "service_role",
       "identity_arguments": "p_device_id text, p_location_code text, p_client_session_id text, p_client_started_at text, p_authenticated_credential_id text, p_backend_execution_secret text",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "demo_scan_mock_advance",
-      "grantee": "service_role",
-      "identity_arguments": "p_run_id uuid",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "demo_scan_mock_assigned_area_tick",
-      "grantee": "service_role",
-      "identity_arguments": "p_run_id uuid",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "demo_scan_mock_begin_cycle",
-      "grantee": "service_role",
-      "identity_arguments": "p_run_id uuid",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "demo_scan_mock_cleanup",
-      "grantee": "service_role",
-      "identity_arguments": "p_run_id uuid",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "demo_scan_mock_complete_open_dynamic",
-      "grantee": "service_role",
-      "identity_arguments": "p_run_id uuid, p_force boolean",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "demo_scan_mock_complete_open_sessions",
-      "grantee": "service_role",
-      "identity_arguments": "p_run_id uuid, p_force boolean, p_duration_minutes integer",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "demo_scan_mock_cron_advance",
-      "grantee": "service_role",
-      "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "demo_scan_mock_cron_shift_tick",
-      "grantee": "service_role",
-      "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "demo_scan_mock_demo_duration_minutes",
-      "grantee": "service_role",
-      "identity_arguments": "p_seed text",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "demo_scan_mock_preflight",
-      "grantee": "service_role",
-      "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "demo_scan_mock_refresh_snapshot",
-      "grantee": "service_role",
-      "identity_arguments": "p_run_id uuid",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "demo_scan_mock_shift_tick",
-      "grantee": "service_role",
-      "identity_arguments": "p_run_id uuid",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "demo_scan_mock_start",
-      "grantee": "service_role",
-      "identity_arguments": "p_employee_count integer, p_reset_existing boolean",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "demo_scan_mock_start_shift_schedule",
-      "grantee": "service_role",
-      "identity_arguments": "p_reset_existing boolean, p_employee_count integer",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "demo_scan_mock_status",
-      "grantee": "service_role",
-      "identity_arguments": "p_run_id uuid",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "demo_scan_mock_stop",
-      "grantee": "service_role",
-      "identity_arguments": "p_run_id uuid, p_cleanup boolean",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -36016,22 +36551,6 @@
       "schema_name": "public"
     },
     {
-      "function_name": "evaluate_location_proximity",
-      "grantee": "service_role",
-      "identity_arguments": "p_location_code text, p_device_identifier text, p_latitude numeric, p_longitude numeric, p_accuracy_m numeric, p_session_uuid text, p_client_event_id text, p_correlation_id text",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "evaluate_location_proximity_v2",
-      "grantee": "service_role",
-      "identity_arguments": "p_location_code text, p_device_identifier text, p_latitude numeric, p_longitude numeric, p_accuracy_m numeric, p_session_uuid text, p_client_event_id text, p_correlation_id text, p_observed_at timestamp with time zone",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
       "function_name": "events_app_delete_retention_guard",
       "grantee": "service_role",
       "identity_arguments": "",
@@ -36067,14 +36586,6 @@
       "function_name": "events_app_validate_scope_venue",
       "grantee": "service_role",
       "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "expire_stale_open_sessions",
-      "grantee": "service_role",
-      "identity_arguments": "p_now timestamp with time zone",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -36843,14 +37354,6 @@
       "function_name": "public_viewer_dashboard_snapshot",
       "grantee": "service_role",
       "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "purge_closed_scan_history_before",
-      "grantee": "service_role",
-      "identity_arguments": "p_cutoff timestamp with time zone, p_requested_by text",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -37680,14 +38183,6 @@
       "schema_name": "public"
     },
     {
-      "function_name": "tool_close_maintenance_ticket",
-      "grantee": "service_role",
-      "identity_arguments": "p_ticket_id text, p_closed_by text, p_close_notes text",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
       "function_name": "tool_commit_cleaning_workflow_authoritative",
       "grantee": "service_role",
       "identity_arguments": "p_client_session_id text, p_client_completion_id text, p_device_id text, p_location_code text, p_client_started_at text, p_client_ended_at text, p_response_json jsonb, p_scan_evidence jsonb, p_correlation_id text, p_context_id text, p_submission_proof text, p_authenticated_credential_id text, p_backend_execution_secret text",
@@ -37779,14 +38274,6 @@
       "function_name": "tool_ping_device",
       "grantee": "service_role",
       "identity_arguments": "p_device_id text, p_notes text",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "tool_purge_closed_scan_history_before",
-      "grantee": "service_role",
-      "identity_arguments": "p_cutoff timestamp with time zone, p_requested_by text",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -38516,6 +39003,55 @@
       "is_grantable": "NO",
       "privilege_type": "DELETE",
       "schema_name": "public",
+      "table_name": "custodial_terminal_writer_inventory"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "INSERT",
+      "schema_name": "public",
+      "table_name": "custodial_terminal_writer_inventory"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "REFERENCES",
+      "schema_name": "public",
+      "table_name": "custodial_terminal_writer_inventory"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "custodial_terminal_writer_inventory"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "TRIGGER",
+      "schema_name": "public",
+      "table_name": "custodial_terminal_writer_inventory"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "TRUNCATE",
+      "schema_name": "public",
+      "table_name": "custodial_terminal_writer_inventory"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "UPDATE",
+      "schema_name": "public",
+      "table_name": "custodial_terminal_writer_inventory"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "DELETE",
+      "schema_name": "public",
       "table_name": "daily_absence_overrides"
     },
     {
@@ -38706,55 +39242,6 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "daily_work_roster"
-    },
-    {
-      "grantee": "service_role",
-      "is_grantable": "NO",
-      "privilege_type": "DELETE",
-      "schema_name": "public",
-      "table_name": "demo_scan_mock_runs"
-    },
-    {
-      "grantee": "service_role",
-      "is_grantable": "NO",
-      "privilege_type": "INSERT",
-      "schema_name": "public",
-      "table_name": "demo_scan_mock_runs"
-    },
-    {
-      "grantee": "service_role",
-      "is_grantable": "NO",
-      "privilege_type": "REFERENCES",
-      "schema_name": "public",
-      "table_name": "demo_scan_mock_runs"
-    },
-    {
-      "grantee": "service_role",
-      "is_grantable": "NO",
-      "privilege_type": "SELECT",
-      "schema_name": "public",
-      "table_name": "demo_scan_mock_runs"
-    },
-    {
-      "grantee": "service_role",
-      "is_grantable": "NO",
-      "privilege_type": "TRIGGER",
-      "schema_name": "public",
-      "table_name": "demo_scan_mock_runs"
-    },
-    {
-      "grantee": "service_role",
-      "is_grantable": "NO",
-      "privilege_type": "TRUNCATE",
-      "schema_name": "public",
-      "table_name": "demo_scan_mock_runs"
-    },
-    {
-      "grantee": "service_role",
-      "is_grantable": "NO",
-      "privilege_type": "UPDATE",
-      "schema_name": "public",
-      "table_name": "demo_scan_mock_runs"
     },
     {
       "grantee": "service_role",
@@ -45836,6 +46323,24 @@
       "rls_enabled": false,
       "rls_forced": false,
       "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_events"
+    },
+    {
+      "comment": null,
+      "partition_key": null,
+      "relation_kind": "r",
+      "rls_enabled": false,
+      "rls_forced": false,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients"
+    },
+    {
+      "comment": null,
+      "partition_key": null,
+      "relation_kind": "r",
+      "rls_enabled": false,
+      "rls_forced": false,
+      "schema_name": "public",
       "table_name": "custodial_offline_reconciliation_dispositions"
     },
     {
@@ -47042,6 +47547,34 @@
       "trigger_name": "trg_custodial_offline_reconciliation_audits_truncate_guard"
     },
     {
+      "definition": "CREATE TRIGGER trg_custodial_offline_delivery_event_immutable BEFORE DELETE OR UPDATE ON custodial_offline_reconciliation_delivery_events FOR EACH ROW EXECUTE FUNCTION custodial_reject_offline_delivery_event_mutation()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_events",
+      "trigger_name": "trg_custodial_offline_delivery_event_immutable"
+    },
+    {
+      "definition": "CREATE TRIGGER trg_custodial_offline_delivery_events_truncate_guard BEFORE TRUNCATE ON custodial_offline_reconciliation_delivery_events FOR EACH STATEMENT EXECUTE FUNCTION custodial_reject_offline_evidence_truncate()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_events",
+      "trigger_name": "trg_custodial_offline_delivery_events_truncate_guard"
+    },
+    {
+      "definition": "CREATE TRIGGER trg_custodial_offline_delivery_recipient_immutable BEFORE DELETE OR UPDATE ON custodial_offline_reconciliation_delivery_recipients FOR EACH ROW EXECUTE FUNCTION custodial_reject_offline_delivery_recipient_mutation()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients",
+      "trigger_name": "trg_custodial_offline_delivery_recipient_immutable"
+    },
+    {
+      "definition": "CREATE TRIGGER trg_custodial_offline_delivery_recipients_truncate_guard BEFORE TRUNCATE ON custodial_offline_reconciliation_delivery_recipients FOR EACH STATEMENT EXECUTE FUNCTION custodial_reject_offline_evidence_truncate()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients",
+      "trigger_name": "trg_custodial_offline_delivery_recipients_truncate_guard"
+    },
+    {
       "definition": "CREATE TRIGGER trg_custodial_offline_disposition_immutable BEFORE DELETE OR UPDATE ON custodial_offline_reconciliation_dispositions FOR EACH ROW EXECUTE FUNCTION custodial_reject_offline_evidence_mutation()",
       "enabled": "O",
       "schema_name": "public",
@@ -47646,6 +48179,13 @@
   ],
   "types": [],
   "views": [
+    {
+      "comment": null,
+      "definition": " SELECT p.oid,\n    p.oid::regprocedure::text AS routine_identity,\n    p.proname,\n    p.prorettype <> 'trigger'::regtype::oid AND (has_function_privilege('anon'::name, p.oid, 'EXECUTE'::text) OR has_function_privilege('authenticated'::name, p.oid, 'EXECUTE'::text) OR has_function_privilege('service_role'::name, p.oid, 'EXECUTE'::text)) AS application_callable,\n    lower(pg_get_functiondef(p.oid)) AS definition,\n    lower(pg_get_functiondef(p.oid)) ~ '(insert[[:space:]]+into|update|delete[[:space:]]+from|truncate([[:space:]]+table)?)'::text AND lower(pg_get_functiondef(p.oid)) ~ 'public[.]?(sessions|completion_responses|scan_events|maintenance_tickets)'::text AS mutates_terminal_truth,\n    p.proname ~~ 'demo_scan_mock_%'::text OR lower(pg_get_functiondef(p.oid)) ~ 'public[.]demo_scan_mock_'::text OR lower(pg_get_functiondef(p.oid)) ~ 'public[.](purge_closed_scan_history_before|tool_purge_closed_scan_history_before|close_maintenance_ticket|tool_close_maintenance_ticket|force_close_session|tool_force_close_session|start_session|tool_start_session|finish_session|tool_finish_session|complete_session|tool_complete_session|record_scan_event|tool_record_scan_event)'::text AS delegates_alternate_terminal_authority\n   FROM pg_proc p\n     JOIN pg_namespace n ON n.oid = p.pronamespace\n  WHERE n.nspname = 'public'::name AND p.prokind = 'f'::\"char\";",
+      "relation_kind": "v",
+      "schema_name": "public",
+      "view_name": "custodial_terminal_writer_inventory"
+    },
     {
       "comment": null,
       "definition": " WITH cfg AS (\n         SELECT get_setting_int('stale_session_timeout_minutes'::text, 120) AS stale_timeout_minutes,\n            get_setting_int('scan_history_warning_mb'::text, 350) AS scan_history_warning_mb,\n            operational_day_start(now()) AS operational_day_start\n        ), storage AS (\n         SELECT scan_history_storage_summary() AS summary\n        ), counts AS (\n         SELECT ( SELECT count(*) AS count\n                   FROM sessions\n                  WHERE sessions.status = 'active'::text) AS active_sessions,\n            ( SELECT count(*) AS count\n                   FROM sessions\n                  WHERE sessions.status = 'pending_submit'::text) AS pending_submit_sessions,\n            ( SELECT count(*) AS count\n                   FROM sessions\n                  WHERE sessions.status = 'closed'::text AND COALESCE(sessions.ended_at, sessions.started_at, sessions.created_at) >= (( SELECT cfg.operational_day_start\n                           FROM cfg))) AS closed_sessions_today,\n            ( SELECT count(*) AS count\n                   FROM v_open_maintenance_tickets) AS open_ticket_count,\n            ( SELECT count(*) AS count\n                   FROM v_location_dashboard_status\n                  WHERE v_location_dashboard_status.status_code = 'overdue'::text) AS overdue_locations,\n            ( SELECT count(*) AS count\n                   FROM v_location_dashboard_status\n                  WHERE v_location_dashboard_status.status_code = 'due_soon'::text) AS due_soon_locations,\n            ( SELECT count(*) AS count\n                   FROM v_location_dashboard_status\n                  WHERE v_location_dashboard_status.status_code = 'in_progress'::text) AS in_progress_locations,\n            ( SELECT count(*) AS count\n                   FROM locations\n                  WHERE locations.active = true) AS active_locations,\n            ( SELECT count(*) AS count\n                   FROM devices\n                  WHERE devices.active = true) AS active_devices,\n            ( SELECT count(*) AS count\n                   FROM devices\n                  WHERE devices.active = true AND devices.last_seen_at >= (now() - '24:00:00'::interval)) AS devices_seen_last_24h,\n            ( SELECT count(*) AS count\n                   FROM devices\n                  WHERE devices.active = true AND (devices.last_seen_at IS NULL OR devices.last_seen_at < (now() - '24:00:00'::interval))) AS devices_missing_recent_heartbeat,\n            ( SELECT count(*) AS count\n                   FROM sessions s_1\n                  WHERE (s_1.status = ANY (ARRAY['active'::text, 'pending_submit'::text])) AND COALESCE(s_1.ended_at, s_1.started_at) <= (now() - make_interval(mins => ( SELECT cfg.stale_timeout_minutes\n                           FROM cfg)))) AS stale_open_sessions,\n            ( SELECT count(*) AS count\n                   FROM system_logs\n                  WHERE (system_logs.level = ANY (ARRAY['WARN'::text, 'ERROR'::text])) AND system_logs.created_at >= (now() - '24:00:00'::interval)) AS warn_error_logs_last_24h\n        )\n SELECT now() AS snapshot_at,\n    ( SELECT cfg.operational_day_start\n           FROM cfg) AS operational_day_start,\n    ( SELECT cfg.stale_timeout_minutes\n           FROM cfg) AS stale_timeout_minutes,\n    ( SELECT cfg.scan_history_warning_mb\n           FROM cfg) AS scan_history_warning_mb,\n    c.active_sessions,\n    c.pending_submit_sessions,\n    c.closed_sessions_today,\n    c.open_ticket_count,\n    c.overdue_locations,\n    c.due_soon_locations,\n    c.in_progress_locations,\n    c.active_locations,\n    c.active_devices,\n    c.devices_seen_last_24h,\n    c.devices_missing_recent_heartbeat,\n    c.stale_open_sessions,\n    c.warn_error_logs_last_24h,\n    s.summary AS storage_summary\n   FROM counts c\n     CROSS JOIN storage s;",

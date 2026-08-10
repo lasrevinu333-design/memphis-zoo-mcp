@@ -1061,24 +1061,78 @@ async function deliverCustodialOfflineReconciliationNotification(notification) {
     isDisposition ? `Disposition: ${payload.disposition || "recorded"}` : `Reason: ${payload.reason || "offline_authority_rejected"}`,
     "Open the named-manager offline reconciliation queue to review immutable evidence.",
   ].join("\n");
-  const results = await Promise.allSettled(recipients.map(async (recipient) => {
-    const thread = await runRpc("msg_get_or_create_direct_thread", { p_user_a: memphisUserId, p_user_b: recipient.user_id });
-    await runRpc("msg_send_message", {
-      p_thread_id: thread.id,
-      p_sender_user_id: memphisUserId,
-      p_body: body,
-      p_message_type: "bot_response",
-      p_metadata_json: {
-        channel: "offline_reconciliation_recovery",
+  const claimed = await runRpc("custodial_claim_offline_reconciliation_notification_recipients", {
+    p_outbox_id: notification.outbox_id,
+    p_worker_id: OPERATIONAL_NOTIFICATION_WORKER_ID,
+    p_outbox_lease_token: notification.lease_token,
+    p_recipients: recipients.map((recipient) => ({ manager_id: recipient.manager_id, user_id: recipient.user_id })),
+    p_backend_execution_secret: offlineAuthoritySecret(),
+  });
+  const claimedRecipients = Array.isArray(claimed) ? claimed : (claimed ? [claimed] : []);
+  const results = [];
+  for (const recipient of claimedRecipients) {
+    let succeeded = false;
+    let terminal = false;
+    let errorMessage = null;
+    let message = null;
+    try {
+      const thread = await runRpc("msg_get_or_create_direct_thread", { p_user_a: memphisUserId, p_user_b: recipient.recipient_user_id });
+      message = await runRpc("msg_send_message", {
+        p_thread_id: thread.id,
+        p_sender_user_id: memphisUserId,
+        p_body: body,
+        p_message_type: "bot_response",
+        p_metadata_json: {
+          channel: "offline_reconciliation_recovery",
+          reconciliation_id: payload.reconciliation_id || notification?.reconciliation_id || null,
+          disposition_id: payload.disposition_id || notification?.disposition_id || null,
+          recipient_manager_id: recipient.manager_id || null,
+          client_message_id: recipient.client_message_id,
+          notification_instance_key: recipient.notification_instance_key,
+        },
+      });
+      if (!isUuid(message?.id)) throw new Error("Messenger did not return the durable message identity.");
+      succeeded = true;
+    } catch (error) {
+      terminal = error?.terminal === true;
+      errorMessage = String(error?.message || "Offline reconciliation recipient delivery failed.").slice(0, 500);
+    }
+    const retrySeconds = Math.min(3600, Math.max(15, 15 * (2 ** Math.min(8, Number(recipient.attempts || 1) - 1))));
+    const finished = await runRpc("custodial_finish_offline_reconciliation_notification_recipient", {
+      p_delivery_recipient_id: recipient.delivery_recipient_id,
+      p_worker_id: OPERATIONAL_NOTIFICATION_WORKER_ID,
+      p_lease_token: recipient.lease_token,
+      p_succeeded: succeeded,
+      p_message_id: message?.id || null,
+      p_error: errorMessage,
+      p_retry_seconds: retrySeconds,
+      p_terminal: terminal,
+      p_delivery_evidence: {
+        channel: "messenger",
         reconciliation_id: payload.reconciliation_id || notification?.reconciliation_id || null,
         disposition_id: payload.disposition_id || notification?.disposition_id || null,
         recipient_manager_id: recipient.manager_id || null,
       },
+      p_backend_execution_secret: offlineAuthoritySecret(),
     });
-  }));
-  const failures = results.filter((result) => result.status === "rejected");
-  if (failures.length) throw new Error(`Offline reconciliation notification delivery failed for ${failures.length} named manager recipient(s).`);
-  return { recipient_manager_ids: recipients.map((recipient) => recipient.manager_id).filter(isUuid), delivered_count: recipients.length };
+    results.push({
+      manager_id: recipient.manager_id,
+      recipient_user_id: recipient.recipient_user_id,
+      state: finished?.state,
+      message_id: finished?.message_id || message?.id || null,
+      error: errorMessage,
+    });
+  }
+  const failed = results.filter((result) => result.state === "failed");
+  const incomplete = results.filter((result) => result.state !== "delivered");
+  return {
+    recipient_manager_ids: recipients.map((recipient) => recipient.manager_id).filter(isUuid),
+    delivered_count: results.filter((result) => result.state === "delivered").length,
+    recipient_results: results,
+    succeeded: incomplete.length === 0,
+    terminal: failed.length > 0,
+    error: failed.length ? "One or more named-manager recipients are unavailable." : (incomplete.length ? "One or more named-manager recipient deliveries are pending retry." : null),
+  };
 }
 
 async function runCustodialOfflineReconciliationNotificationWorker({ limit = 10 } = {}) {
@@ -1103,7 +1157,9 @@ async function runCustodialOfflineReconciliationNotificationWorker({ limit = 10 
     let delivery = {};
     try {
       delivery = await deliverCustodialOfflineReconciliationNotification(notification);
-      succeeded = true;
+      succeeded = delivery?.succeeded === true;
+      terminal = delivery?.terminal === true;
+      errorMessage = delivery?.error || null;
     } catch (error) {
       terminal = error?.terminal === true;
       errorMessage = String(error?.message || "Offline reconciliation notification delivery failed.").slice(0, 2000);
@@ -2367,7 +2423,7 @@ app.post("/admin-api/bundle", requireOpsManagerWrite, async (req, res) => {
   catch (error) { console.error("admin bundle failed:", error); res.status(500).json({ ok: false, error: error.message || "Admin bundle failed" }); }
 });
 app.post("/admin-api/close-ticket", requireOpsManagerWrite, async (req, res) => {
-  try { const ticketId = String(req.body?.ticket_id || "").trim(); const closedBy = String(req.body?.closed_by || "").trim(); const closeNotes = req.body?.close_notes == null ? null : String(req.body.close_notes); if (!ticketId || !closedBy) { res.status(400).json({ ok: false, error: "ticket_id and closed_by are required." }); return; } await runRpc("close_maintenance_ticket", { p_ticket_id: ticketId, p_closed_by: closedBy, p_close_notes: closeNotes }); res.status(200).json({ ok: true, ticket_id: ticketId, status: "closed" }); }
+  try { const ticketId = String(req.body?.ticket_id || "").trim(); const closedBy = String(req.body?.closed_by || "").trim(); const closeNotes = req.body?.close_notes == null ? null : String(req.body.close_notes); if (!ticketId || !closedBy) { res.status(400).json({ ok: false, error: "ticket_id and closed_by are required." }); return; } await runRpc("custodial_close_maintenance_ticket_authoritative", { p_ticket_id: ticketId, p_closed_by: closedBy, p_close_notes: closeNotes, p_backend_execution_secret: offlineAuthoritySecret() }); res.status(200).json({ ok: true, ticket_id: ticketId, status: "closed" }); }
   catch (error) { console.error("close ticket failed:", error); res.status(500).json({ ok: false, error: error.message || "Close ticket failed" }); }
 });
 app.get("/dashboard-api/summary", requireOpsManagerAuth, async (_req, res) => {
@@ -2424,7 +2480,7 @@ app.post("/dashboard-api/close-ticket", requireOpsManagerWrite, async (req, res)
       res.status(400).json({ ok: false, error: "ticket_id is required." });
       return;
     }
-    await runRpc("close_maintenance_ticket", { p_ticket_id: ticketId, p_closed_by: closedBy, p_close_notes: null });
+    await runRpc("custodial_close_maintenance_ticket_authoritative", { p_ticket_id: ticketId, p_closed_by: closedBy, p_close_notes: null, p_backend_execution_secret: offlineAuthoritySecret() });
     res.status(200).json({ ok: true, ticket_id: ticketId, status: "closed" });
   }
   catch (error) { console.error("dashboard close ticket failed:", error); res.status(500).json({ ok: false, error: error.message || "Dashboard close ticket failed" }); }

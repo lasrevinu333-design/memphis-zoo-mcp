@@ -1,10 +1,10 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v1",
-  "schema_fingerprint": "24704813851f82aad0c1a8306b0c95b909617c33a2bc5c079926d6f9e74de6d8",
+  "schema_fingerprint": "af1c1420a8a4b21bb152a7fa137835b72430e9bd57a24ff50974d0f95dd00cf5",
   "schema_transition": {
     "transition_id": "named-manager-messenger-archive-retirement-20260810",
     "from_fingerprint": "333ddfc8008ea0b85916de7d491b98c9b8d6a7d45d3a2947d99b4b3bb836ea00",
-    "to_fingerprint": "24704813851f82aad0c1a8306b0c95b909617c33a2bc5c079926d6f9e74de6d8",
+    "to_fingerprint": "af1c1420a8a4b21bb152a7fa137835b72430e9bd57a24ff50974d0f95dd00cf5",
     "expires_at": "2026-08-23T23:59:59Z"
   },
   "frontend_source_fingerprint": "333ddfc8008ea0b85916de7d491b98c9b8d6a7d45d3a2947d99b4b3bb836ea00",
@@ -30,7 +30,8 @@
     "additive_phase": "20260810143000 supplies explicit activation and records no state-read proof",
     "enforcement_phase": "20260810150000 routes both canonical and legacy completion through one server-authenticated transaction",
     "closure_phase": "20260810160000 removes direct DML and legacy-writer authority, fences terminal conflicts, and writes manager outbox evidence",
-    "operational_closure_phase": "20260810170000 recovers durable exact-start proofs, retires every service-role generic writer, and runs leased reconciliation notification delivery"
+    "operational_closure_phase": "20260810170000 recovers durable exact-start proofs, retires every service-role generic writer, and runs leased reconciliation notification delivery",
+    "final_operational_correction_phase": "20260810190000 fences reassigned proof replay, retires alternate terminal writers and purge, and records idempotent recipient delivery evidence"
   },
   "rollback": {
     "before_enforcement": "legacy Engine and current backend completion remain available",
@@ -38,7 +39,16 @@
     "database": "forward-only; do not down-migrate contexts, proofs, reservations, reconciliation, audit, scan evidence, dispositions, or outbox evidence"
   },
   "cutover": {
-    "source_identity": "agent/integrated-backend-10e5952-audit-correction-20260810",
+    "source_identity": {
+      "kind": "runtime_git_identity",
+      "commit_ref": "HEAD",
+      "tree_ref": "HEAD^{tree}",
+      "authority_content_paths": [
+        "src/index.js",
+        "src/offline-authority-http.js",
+        "supabase/migrations/20260810190000_final_integrated_backend_operational_correction.sql"
+      ]
+    },
     "phase_order": [
       "configure CUSTODIAL_BACKEND_PROOF_SECRET (minimum 32 characters) and matching database SHA-256 digest",
       "apply 20260810143000_offline_actor_occurrence_reconciliation.sql",
@@ -46,6 +56,7 @@
       "apply 20260810150000_enforce_integrated_backend_authority.sql",
       "apply 20260810160000_close_offline_authority_integrity_gaps.sql",
       "apply 20260810170000_finish_offline_authority_operational_closure.sql",
+      "apply 20260810190000_final_integrated_backend_operational_correction.sql",
       "require a green authority health gate and direct-DML denial probes before routing traffic"
     ],
     "rollback": {
@@ -58,6 +69,25 @@
         "named-manager reconciliation read, exactly-once disposition replay, and notification retry state remain available"
       ]
     }
+  },
+  "authority_content_identity": {
+    "algorithm": "sha256",
+    "value": "5094b11091e2d7ac009255a59cdf237b846c8a057fc4f0ba8b5b9ec49a72c2b1",
+    "paths": [
+      {
+        "path": "src/index.js",
+        "sha256": "88a96b0f5bba1bbd920ac40c8db942f239baa2c6b916a742b736f1de20bc7165"
+      },
+      {
+        "path": "src/offline-authority-http.js",
+        "sha256": "376ff052db4e2d9956449bd134e673bdf289971fa8a7dd15a63e2ff8a4a39287"
+      },
+      {
+        "path": "supabase/migrations/20260810190000_final_integrated_backend_operational_correction.sql",
+        "sha256": "b7db33e260ccb34b478a406cf31a86aec1fcc5f4cbe59a7666bfe93607bb214c"
+      }
+    ],
+    "commit_and_tree": "resolved by the executable cutover gate from git HEAD and HEAD^{tree}"
   },
   "manager_recovery": {
     "list": "GET /admin-api/custodial/offline-reconciliations?limit=1..100&before=<ISO-8601>",
@@ -93,6 +123,10 @@
     {
       "name": "20260810170000_finish_offline_authority_operational_closure.sql",
       "sha256": "a860643a26c27319635ccb258de1f79a28e9fec9575d41226baf9799a9ea0275"
+    },
+    {
+      "name": "20260810190000_final_integrated_backend_operational_correction.sql",
+      "sha256": "b7db33e260ccb34b478a406cf31a86aec1fcc5f4cbe59a7666bfe93607bb214c"
     }
   ],
   "release_boundary": "Configure a minimum-32-character CUSTODIAL_BACKEND_PROOF_SECRET and matching database digest before Phase A, retain the bridge backend artifact through Phase C, and require the executable health/restoration probes before traffic changes."

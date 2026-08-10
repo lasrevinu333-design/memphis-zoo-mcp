@@ -24,6 +24,10 @@ assert.equal(input.backend_contract.execution_boundary, "CUSTODIAL_BACKEND_PROOF
 assert.equal(input.backend_contract.bridge_backend_source, "src/index.js:runPreparedScanRpc");
 assert.ok(Array.isArray(input.cutover?.phase_order) && input.cutover.phase_order.length >= 6);
 assert.ok(Array.isArray(input.cutover?.rollback?.restoration_checks) && input.cutover.rollback.restoration_checks.length >= 4);
+assert.equal(input.cutover?.source_identity?.kind, "runtime_git_identity");
+assert.equal(input.cutover?.source_identity?.commit_ref, "HEAD");
+assert.equal(input.cutover?.source_identity?.tree_ref, "HEAD^{tree}");
+assert.ok(Array.isArray(input.cutover?.source_identity?.authority_content_paths) && input.cutover.source_identity.authority_content_paths.length >= 3);
 const migrations = [
   "20260810120000_retire_named_manager_shared_room_authority.sql",
   "20260810130000_harden_named_manager_retired_archive_and_concurrency.sql",
@@ -32,7 +36,13 @@ const migrations = [
   "20260810150000_enforce_integrated_backend_authority.sql",
   "20260810160000_close_offline_authority_integrity_gaps.sql",
   "20260810170000_finish_offline_authority_operational_closure.sql",
+  "20260810190000_final_integrated_backend_operational_correction.sql",
 ].map((name) => ({ name, sha256: createHash("sha256").update(readFileSync(resolve(root, "supabase/migrations", name))).digest("hex") }));
+const authorityContent = input.cutover.source_identity.authority_content_paths.map((path) => ({
+  path,
+  sha256: createHash("sha256").update(readFileSync(resolve(root, path))).digest("hex"),
+}));
+const authorityContentSha256 = createHash("sha256").update(JSON.stringify(authorityContent)).digest("hex");
 const output = {
   artifact: "integrated-backend-authority-release-evidence.v1",
   schema_fingerprint: schemaFingerprint,
@@ -46,9 +56,16 @@ const output = {
     enforcement_phase: "20260810150000 routes both canonical and legacy completion through one server-authenticated transaction",
     closure_phase: "20260810160000 removes direct DML and legacy-writer authority, fences terminal conflicts, and writes manager outbox evidence",
     operational_closure_phase: "20260810170000 recovers durable exact-start proofs, retires every service-role generic writer, and runs leased reconciliation notification delivery",
+    final_operational_correction_phase: "20260810190000 fences reassigned proof replay, retires alternate terminal writers and purge, and records idempotent recipient delivery evidence",
   },
   rollback: input.rollback,
   cutover: input.cutover,
+  authority_content_identity: {
+    algorithm: "sha256",
+    value: authorityContentSha256,
+    paths: authorityContent,
+    commit_and_tree: "resolved by the executable cutover gate from git HEAD and HEAD^{tree}",
+  },
   manager_recovery: {
     list: "GET /admin-api/custodial/offline-reconciliations?limit=1..100&before=<ISO-8601>",
     detail: "GET /admin-api/custodial/offline-reconciliations/:reconciliationId",

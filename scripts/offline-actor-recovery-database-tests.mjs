@@ -103,13 +103,28 @@ for (const [label, statement] of [
   ["migration SQL executor", `select public.run_sql_migration('forged','select 1');`],
   ["force-close terminal writer", `select public.force_close_session(gen_random_uuid()::text,'forged','forged');`],
   ["force-close tool writer", `select public.tool_force_close_session(gen_random_uuid()::text,'forged','forged');`],
+  ["demo mutation start writer", `select public.demo_scan_mock_start(1,false);`],
+  ["demo dynamic completion writer", `select public.demo_scan_mock_complete_open_dynamic(gen_random_uuid(),true);`],
+  ["demo cleanup writer", `select * from public.demo_scan_mock_cleanup(null);`],
+  ["purge terminal writer", `select public.purge_closed_scan_history_before(now(),'forged');`],
+  ["purge terminal wrapper", `select public.tool_purge_closed_scan_history_before(now(),'forged');`],
+  ["ticket close writer", `select public.close_maintenance_ticket(gen_random_uuid(),'forged',null);`],
+  ["ticket close wrapper", `select public.tool_close_maintenance_ticket(gen_random_uuid()::text,'forged',null);`],
 ]) {
   const denial = await sql(`set role service_role; ${statement}`, { expectFailure: true });
   assert.match(denial, /permission denied/i, `${label} is not application-callable`);
 }
+assert.equal(await sql(`select count(*) from public.custodial_terminal_writer_inventory where application_callable and (mutates_terminal_truth or delegates_alternate_terminal_authority) and proname not in ('tool_start_offline_occurrence','tool_commit_cleaning_workflow_authoritative','tool_complete_session_authoritative','custodial_close_maintenance_ticket_authoritative');`), "0", "capability/grant inventory leaves no application-callable alternate terminal writer");
 
-// Reassignment after an activated occurrence retains A only for that exact proof.
-await sql(`update public.devices set assigned_employee_id='${employeeB}'::uuid where id='${deviceA}'::uuid;`);
+// A lost response is recoverable only while the issuing assignment remains
+// authoritative. After reassignment the replay must not disclose the proof,
+// while the proof already held by actor A remains valid for completion.
+await sql(`update public.devices set assigned_employee_id='${employeeB}'::uuid where id='${deviceA}'::uuid;
+  insert into public.custodial_employee_device_assignment_history(device_id,device_identifier,new_employee_id,new_employee_name,change_reason,source)
+  values('${deviceA}'::uuid,'OA-${stamp}-A','${employeeB}'::uuid,'Offline Authority Actor B','proof replay reassignment fixture','test');`);
+const reassignedReplayDenied = await sql(`select public.tool_start_offline_occurrence(${q(`OA-${stamp}-A`)},${q(codeA)},${q(sessionA)},${q(startedAt)},${q(credentialA)},${q(execSecret)});`, { expectFailure: true });
+assert.match(reassignedReplayDenied, /authoritative assignment changed/i, "reassigned exact start replay is fenced without returning the old proof");
+assert.doesNotMatch(reassignedReplayDenied, new RegExp(contextA.submission_proof), "reassigned replay never discloses the held completion proof");
 const scanId = `oa-${stamp}-scan-1`;
 const acceptedSql = jsonSql({ session: sessionA, completion: `oa-${stamp}-complete-1`, context: contextA.context_id, proof: contextA.submission_proof, device: `OA-${stamp}-A`, location: codeA, scans: [{ event_type: "scan_finish", client_event_id: scanId, scanned_at: endedAt, result: "ok", payload_json: { z: 2, a: 1 } }] });
 const accepted = JSON.parse(await sql(acceptedSql));
@@ -153,7 +168,7 @@ for (const table of ["sessions", "completion_responses", "scan_events", "mainten
   }
 }
 assert.notEqual(await sql(`set role service_role; select count(*) from public.sessions;`), "", "service role retains operational reads");
-const truncateGuard = await sql(`truncate table public.custodial_offline_reconciliation_outbox;`, { expectFailure: true });
+const truncateGuard = await sql(`truncate table public.custodial_offline_reconciliation_outbox cascade;`, { expectFailure: true });
 assert.match(truncateGuard, /explicit maintenance procedure/i, "append-only evidence has a statement-level TRUNCATE guard");
 
 // Concurrent activation has one canonical context and every exact caller gets
@@ -249,7 +264,7 @@ assert.ok(dispositionNotification && terminalNotification, "claim includes both 
 const retried = await finishNotification(dispositionNotification, {
   workerId: firstWorker, succeeded: false, error: "transient messenger outage", retrySeconds: 15,
 });
-assert.equal(retried.state, "pending");
+assert.equal(retried.state, "retry");
 assert.equal(retried.attempts, 1);
 const terminalFailure = await finishNotification(terminalNotification, {
   workerId: firstWorker, succeeded: false, terminal: true, error: "named manager recipient permanently unavailable",
@@ -269,9 +284,9 @@ const retriedDelivered = await finishNotification(restartClaims[0], {
   workerId: "offline-authority-db-worker-after-restart", succeeded: true, delivery: { channel: "test", delivered_after_restart: true },
 });
 assert.equal(retriedDelivered.state, "delivered");
-assert.equal(await sql(`select state from public.custodial_offline_reconciliation_outbox where outbox_id=${q(terminalNotification.outbox_id)}::uuid;`), "failed", "terminal delivery failure remains visible instead of pending");
-await sql(`select public.custodial_truncate_offline_evidence_for_maintenance('public.custodial_offline_reconciliation_outbox'::regclass,'disposable rebuild restoration verification');`);
-assert.equal(await sql(`select count(*) from public.custodial_offline_reconciliation_outbox;`), "0", "the explicit maintenance procedure is the only tested TRUNCATE path");
+assert.equal(await sql(`select state from public.custodial_offline_reconciliation_outbox where outbox_id=${q(terminalNotification.outbox_id)}::uuid;`), "failed", "terminal delivery failure remains visible instead of retry");
+const retiredMaintenance = await sql(`select public.custodial_truncate_offline_evidence_for_maintenance('public.custodial_offline_reconciliation_outbox'::regclass,'disposable rebuild verification');`, { expectFailure: true });
+assert.match(retiredMaintenance, /truncation is retired/i, "there is no application-callable or owner-maintenance purge of append-only custodial evidence");
 const legacyDenied = await sql(`select public.tool_complete_session('missing','{}'::jsonb,null,'OA-${stamp}-A','oa-${stamp}-legacy');`, { expectFailure: true });
 assert.match(legacyDenied, /Use tool_complete_session_authoritative/i);
 const messengerDenied = await sql(`select public.msg_delete_thread_permanently(gen_random_uuid());`, { expectFailure: true });

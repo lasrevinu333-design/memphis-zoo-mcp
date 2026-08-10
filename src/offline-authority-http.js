@@ -3,7 +3,7 @@ export function sqlStateHttpStatus(sqlState) {
   if (["42501", "28000"].includes(state)) return 403;
   if (state === "P0002") return 404;
   if (["22023", "22003", "22007", "22008", "22P02"].includes(state)) return 422;
-  if (["23505", "23514", "23P01", "0A000"].includes(state)) return 409;
+  if (["23505", "23514", "23P01", "0A000", "40901"].includes(state)) return 409;
   if (["40001", "40P01", "55P03"].includes(state)) return 503;
   return 500;
 }

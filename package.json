@@ -46,6 +46,7 @@
     "test:offline-actor-recovery": "node scripts/offline-actor-recovery-route-tests.mjs && node scripts/custodial-repair-contract-tests.mjs",
     "test:offline-authority-routes": "node scripts/offline-authority-route-tests.mjs",
     "test:offline-actor-recovery-db": "node scripts/offline-actor-recovery-database-tests.mjs",
+    "test:final-operational-correction-db": "node scripts/final-operational-correction-database-tests.mjs",
     "test:integrated-backend-authority": "node scripts/integrated-backend-authority-contract-tests.mjs",
     "test:integrated-backend-authority-cutover": "node scripts/integrated-backend-authority-cutover-check.mjs",
     "test:schema-reconciliation-db": "node scripts/canonical-schema-reconciliation-database-tests.mjs",
