@@ -26359,13 +26359,6 @@
       "schema_name": "public"
     },
     {
-      "comment": "Compatibility-only bootstrap RPC. Returns the archived inactive Operations Leadership room and never reactivates it.",
-      "definition": "CREATE OR REPLACE FUNCTION public.msg_get_or_create_ops_manager_thread(p_manager_id uuid)\n RETURNS msg_threads\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_manager public.ops_manager_managers%rowtype;\n  v_user public.msg_users%rowtype;\n  v_thread public.msg_threads%rowtype;\nbegin\n  if p_manager_id is null then\n    raise exception using errcode='22023',message='Authenticated leadership manager id is required';\n  end if;\n\n  select * into v_manager\n  from public.ops_manager_managers\n  where manager_id=p_manager_id\n    and active=true\n    and revoked_at is null\n    and is_system_principal=false\n    and roles && array['OPS_MANAGER','CUSTODIAL_MANAGER','DIRECTOR','SECURITY_ADMIN']::text[];\n  if v_manager.manager_id is null then\n    raise exception using errcode='42501',message='Active authenticated Operations Leadership identity was not found';\n  end if;\n\n  v_user:=public.msg_ensure_ops_manager_user(p_manager_id);\n  perform pg_advisory_xact_lock(hashtextextended('operations-leadership-chat-v1-retired',0));\n  select * into v_thread\n  from public.msg_threads\n  where system_key='ops_manager_shared_chat_v1'\n  order by created_at,id\n  limit 1\n  for update;\n\n  if v_thread.id is null then\n    insert into public.msg_threads(thread_type,title,created_by_user_id,is_active,system_key)\n    values('group','Operations Leadership Chat (Retired)',v_user.id,false,'ops_manager_shared_chat_v1')\n    returning * into v_thread;\n  else\n    update public.msg_threads\n    set is_active=false,\n        thread_type='group',\n        title='Operations Leadership Chat (Retired)',\n        updated_at=now()\n    where id=v_thread.id\n    returning * into v_thread;\n  end if;\n\n  -- Preserve the historical participant/audit relationship without exposing an\n  -- active room in thread listings.  This also keeps old message ownership\n  -- intelligible if the archived record is inspected later.\n  insert into public.msg_thread_participants(thread_id,user_id,joined_at,left_at)\n  values(v_thread.id,v_user.id,now(),null)\n  on conflict(thread_id,user_id) do update\n    set left_at=null\n    where public.msg_thread_participants.left_at is not null;\n\n  return v_thread;\nend\n$function$\n",
-      "function_name": "msg_get_or_create_ops_manager_thread",
-      "identity_arguments": "p_manager_id uuid",
-      "schema_name": "public"
-    },
-    {
       "comment": "Resolves active messenger user assignment by device identifier.",
       "definition": "CREATE OR REPLACE FUNCTION public.msg_get_user_by_device(p_device_identifier text)\n RETURNS TABLE(msg_user_id uuid, display_name text, role text, device_identifier text, is_active boolean)\n LANGUAGE sql\n STABLE\nAS $function$\n  select mu.id as msg_user_id,\n         mu.display_name,\n         mu.role,\n         mda.device_identifier,\n         mda.is_active\n  from public.msg_device_assignments mda\n  join public.msg_users mu on mu.id = mda.msg_user_id\n  where mda.device_identifier = btrim(coalesce(p_device_identifier, ''))\n    and mda.is_active = true\n    and mu.is_active = true\n  limit 1;\n$function$\n",
       "function_name": "msg_get_user_by_device",
@@ -26488,6 +26481,20 @@
       "comment": "Destructive legacy message purge. Automatic execution disabled 2026-07-15. PostgreSQL-owner execution only.",
       "definition": "CREATE OR REPLACE FUNCTION public.msg_purge_messages_older_than_14_days()\n RETURNS jsonb\n LANGUAGE sql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\n  select public.msg_purge_deleted_content(now(),1000);\n$function$\n",
       "function_name": "msg_purge_messages_older_than_14_days",
+      "identity_arguments": "",
+      "schema_name": "public"
+    },
+    {
+      "comment": "Prevents active participation in the retired Operations Leadership room while preserving historical rows.",
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_reject_retired_ops_manager_shared_participation()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\nbegin\n  if new.left_at is null and exists (\n    select 1\n    from public.msg_threads t\n    where t.id = new.thread_id\n      and t.system_key = 'ops_manager_shared_chat_v1'\n  ) then\n    raise exception using\n      errcode = '23514',\n      message = 'The retired Operations Leadership conversation cannot have active participants';\n  end if;\n\n  return new;\nend\n$function$\n",
+      "function_name": "msg_reject_retired_ops_manager_shared_participation",
+      "identity_arguments": "",
+      "schema_name": "public"
+    },
+    {
+      "comment": "Prevents recreation, system-key removal, and reactivation of the retired Operations Leadership room.",
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_reject_retired_ops_manager_shared_thread_mutation()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\nbegin\n  if tg_op = 'INSERT' and new.system_key = 'ops_manager_shared_chat_v1' then\n    raise exception using\n      errcode = '23514',\n      message = 'The retired Operations Leadership conversation cannot be recreated';\n  end if;\n\n  if tg_op = 'UPDATE'\n     and (old.system_key = 'ops_manager_shared_chat_v1'\n       or new.system_key = 'ops_manager_shared_chat_v1') then\n    if new.system_key is distinct from old.system_key then\n      raise exception using\n        errcode = '23514',\n        message = 'The retired Operations Leadership system key is immutable';\n    end if;\n    if new.is_active is true then\n      raise exception using\n        errcode = '23514',\n        message = 'The retired Operations Leadership conversation must remain inactive';\n    end if;\n  end if;\n\n  return new;\nend\n$function$\n",
+      "function_name": "msg_reject_retired_ops_manager_shared_thread_mutation",
       "identity_arguments": "",
       "schema_name": "public"
     },
@@ -33625,14 +33632,6 @@
       "function_name": "msg_get_or_create_memphis_thread",
       "grantee": "service_role",
       "identity_arguments": "p_user_id uuid",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "msg_get_or_create_ops_manager_thread",
-      "grantee": "service_role",
-      "identity_arguments": "p_manager_id uuid",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -44748,6 +44747,20 @@
       "schema_name": "public",
       "table_name": "msg_messages",
       "trigger_name": "trg_ops_manager_enqueue_message_push"
+    },
+    {
+      "definition": "CREATE TRIGGER trg_msg_reject_retired_ops_manager_shared_participation BEFORE INSERT OR UPDATE OF thread_id, left_at ON msg_thread_participants FOR EACH ROW EXECUTE FUNCTION msg_reject_retired_ops_manager_shared_participation()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "msg_thread_participants",
+      "trigger_name": "trg_msg_reject_retired_ops_manager_shared_participation"
+    },
+    {
+      "definition": "CREATE TRIGGER trg_msg_reject_retired_ops_manager_shared_thread_mutation BEFORE INSERT OR UPDATE OF system_key, is_active ON msg_threads FOR EACH ROW EXECUTE FUNCTION msg_reject_retired_ops_manager_shared_thread_mutation()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "msg_threads",
+      "trigger_name": "trg_msg_reject_retired_ops_manager_shared_thread_mutation"
     },
     {
       "definition": "CREATE TRIGGER trg_msg_threads_set_updated_at BEFORE UPDATE ON msg_threads FOR EACH ROW EXECUTE FUNCTION msg_set_updated_at()",

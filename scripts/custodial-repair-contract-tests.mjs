@@ -17,6 +17,10 @@ const schemaReconciliationMigration = readFileSync(
   "supabase/migrations/20260801134430_reconcile_canonical_schema_security_metadata.sql",
   "utf8",
 );
+const namedManagerSharedRoomRetirementMigration = readFileSync(
+  "supabase/migrations/20260810120000_retire_named_manager_shared_room_authority.sql",
+  "utf8",
+);
 const foreignKeyIndexMigration = readFileSync(
   "supabase/migrations/20260730222357_index_remaining_foreign_keys.sql",
   "utf8",
@@ -93,28 +97,22 @@ assert.match(
   /grant execute on function public\.commit_cleaning_workflow[\s\S]*to postgres, service_role/i,
 );
 
-for (const functionName of [
-  "msg_ensure_ops_manager_user",
-  "msg_get_or_create_ops_manager_thread",
-]) {
-  assert.match(
-    schemaReconciliationMigration,
-    new RegExp(`create or replace function public\\.${functionName}`, "i"),
-  );
-  assert.match(
-    schemaReconciliationMigration,
-    new RegExp(`revoke all on function public\\.${functionName}[\\s\\S]*from public, anon, authenticated`, "i"),
-  );
-  assert.match(
-    schemaReconciliationMigration,
-    new RegExp(`grant execute on function public\\.${functionName}[\\s\\S]*to service_role`, "i"),
-  );
-}
+assert.match(schemaReconciliationMigration, /create or replace function public\.msg_ensure_ops_manager_user/i);
+assert.match(schemaReconciliationMigration, /grant execute on function public\.msg_ensure_ops_manager_user[\s\S]*to service_role/i);
 assert.match(schemaReconciliationMigration, /set search_path=pg_catalog,public/);
 assert.match(schemaReconciliationMigration, /set local lock_timeout = '5s'/i);
 assert.match(schemaReconciliationMigration, /set local statement_timeout = '60s'/i);
 assert.match(schemaReconciliationMigration, /Prefer the exact real name/);
-assert.match(schemaReconciliationMigration, /Preserve the historical participant\/audit relationship/);
+assert.match(namedManagerSharedRoomRetirementMigration, /drop function if exists public\.msg_get_or_create_ops_manager_thread\(uuid\)/i);
+assert.match(namedManagerSharedRoomRetirementMigration, /update public\.msg_threads[\s\S]*is_active = false[\s\S]*ops_manager_shared_chat_v1/i);
+assert.match(namedManagerSharedRoomRetirementMigration, /update public\.msg_thread_participants p[\s\S]*set left_at = coalesce\(p\.left_at, now\(\)\)[\s\S]*ops_manager_shared_chat_v1/i);
+assert.match(namedManagerSharedRoomRetirementMigration, /create trigger trg_msg_reject_retired_ops_manager_shared_thread_mutation/i);
+assert.match(namedManagerSharedRoomRetirementMigration, /before insert or update of system_key, is_active on public\.msg_threads/i);
+assert.match(namedManagerSharedRoomRetirementMigration, /create trigger trg_msg_reject_retired_ops_manager_shared_participation/i);
+assert.match(namedManagerSharedRoomRetirementMigration, /before insert or update of thread_id, left_at on public\.msg_thread_participants/i);
+assert.match(namedManagerSharedRoomRetirementMigration, /cannot be recreated/i);
+assert.match(namedManagerSharedRoomRetirementMigration, /must remain inactive/i);
+assert.match(namedManagerSharedRoomRetirementMigration, /cannot have active participants/i);
 for (const tableName of [
   "custodial_employee_device_assignment_history",
   "custodial_employee_status_history",
@@ -178,5 +176,10 @@ assert.match(messagingSource, /p_client_message_id: clientMessageId \|\| null/);
 assert.match(messagingSource, /Sender user ID must match the authenticated viewer/);
 assert.match(messagingSource, /Read acknowledgement user ID must match the authenticated viewer/);
 assert.match(messagingSource, /p_user_id: viewer\.effectiveUserId/);
+assert.doesNotMatch(
+  messagingSource,
+  /runRpc\(\s*["']msg_get_or_create_ops_manager_thread["']/,
+  "current Messenger routes must not bootstrap the retired shared room",
+);
 
 console.log("CUSTODIAL_REPAIR_CONTRACT_TESTS_PASS");

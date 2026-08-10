@@ -17,7 +17,7 @@ if (
 }
 
 const migration = readFileSync(
-  new URL("../supabase/migrations/20260801134430_reconcile_canonical_schema_security_metadata.sql", import.meta.url),
+  new URL("../supabase/migrations/20260810120000_retire_named_manager_shared_room_authority.sql", import.meta.url),
   "utf8",
 );
 
@@ -153,19 +153,11 @@ assert.equal(ensureManager.authenticated_execute, false);
 assert.equal(ensureManager.service_execute, true);
 assert.match(ensureManager.definition, /Prefer the exact real name/);
 
-const retiredRoom = functions["msg_get_or_create_ops_manager_thread(uuid)"];
-assert.equal(retiredRoom.definition_md5, "e36865f31bbc15efa26a45efd156f33f");
-assert.equal(retiredRoom.security_definer, true);
-assert.deepEqual(retiredRoom.configuration, ["search_path=pg_catalog, public"]);
 assert.equal(
-  retiredRoom.comment,
-  "Compatibility-only bootstrap RPC. Returns the archived inactive Operations Leadership room and never reactivates it.",
+  Object.hasOwn(functions, "msg_get_or_create_ops_manager_thread(uuid)"),
+  false,
+  "the retired shared-room RPC must not remain callable by any role",
 );
-assert.equal(retiredRoom.public_execute, false);
-assert.equal(retiredRoom.anon_execute, false);
-assert.equal(retiredRoom.authenticated_execute, false);
-assert.equal(retiredRoom.service_execute, true);
-assert.match(retiredRoom.definition, /Preserve the historical participant\/audit relationship/);
 
 const tables = Object.fromEntries(after.tables.map((entry) => [entry.table_name, entry]));
 for (const name of [
@@ -222,8 +214,10 @@ begin;
 do $acceptance$
 declare
   v_manager_id uuid;
+  v_other_manager_id uuid;
   v_user public.msg_users%rowtype;
-  v_thread public.msg_threads%rowtype;
+  v_other_user public.msg_users%rowtype;
+  v_archived_thread public.msg_threads%rowtype;
 begin
   select manager_id into strict v_manager_id
   from public.ops_manager_managers
@@ -239,12 +233,68 @@ begin
     raise exception 'named manager identity reconciliation failed';
   end if;
 
-  v_thread := public.msg_get_or_create_ops_manager_thread(v_manager_id);
-  if v_thread.system_key <> 'ops_manager_shared_chat_v1'
-     or v_thread.is_active is not false
-     or v_thread.title <> 'Operations Leadership Chat (Retired)' then
-    raise exception 'compatibility RPC reactivated or replaced the retired room';
+  select manager_id into strict v_other_manager_id
+  from public.ops_manager_managers
+  where active is true
+    and revoked_at is null
+    and is_system_principal is false
+    and manager_id <> v_manager_id
+  order by manager_id
+  limit 1;
+  v_other_user := public.msg_ensure_ops_manager_user(v_other_manager_id);
+  if v_other_user.id = v_user.id or v_other_user.ops_manager_id <> v_other_manager_id then
+    raise exception 'different named managers did not retain distinct Messenger identities';
   end if;
+
+  if to_regprocedure('public.msg_get_or_create_ops_manager_thread(uuid)') is not null then
+    raise exception 'retired shared-room RPC remains available';
+  end if;
+
+  select * into strict v_archived_thread
+  from public.msg_threads
+  where system_key = 'ops_manager_shared_chat_v1';
+  if v_archived_thread.is_active is true
+     or v_archived_thread.title <> 'Operations Leadership Chat (Retired)'
+     or exists (
+       select 1 from public.msg_thread_participants
+       where thread_id = v_archived_thread.id and left_at is null
+     ) then
+    raise exception 'retired shared-room archival state is not durable';
+  end if;
+
+  begin
+    update public.msg_threads set is_active = true where id = v_archived_thread.id;
+    raise exception 'retired shared room was reactivated';
+  exception when check_violation then
+    if sqlerrm not like '%must remain inactive%' then raise; end if;
+  end;
+  begin
+    insert into public.msg_threads(thread_type,title,created_by_user_id,is_active,system_key)
+    values ('group','Illegal Operations Leadership recreation',v_user.id,true,'ops_manager_shared_chat_v1');
+    raise exception 'retired shared room was recreated';
+  exception when check_violation then
+    if sqlerrm not like '%cannot be recreated%' then raise; end if;
+  end;
+  begin
+    insert into public.msg_thread_participants(thread_id,user_id,left_at)
+    values (v_archived_thread.id,v_user.id,null);
+    raise exception 'active retired shared-room participant was inserted';
+  exception when check_violation then
+    if sqlerrm not like '%cannot have active participants%' then raise; end if;
+  end;
+  begin
+    update public.msg_thread_participants
+    set left_at = null
+    where id = (
+      select id from public.msg_thread_participants
+      where thread_id = v_archived_thread.id
+      order by id
+      limit 1
+    );
+    raise exception 'retired shared-room participant was restored';
+  exception when check_violation then
+    if sqlerrm not like '%cannot have active participants%' then raise; end if;
+  end;
 end
 $acceptance$;
 rollback;
