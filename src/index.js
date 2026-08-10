@@ -82,6 +82,7 @@ const SCAN_RPC_ALLOWLIST = new Set([
   "tool_get_location_scan_state",
   "tool_start_session",
   "tool_start_session_v2",
+  "tool_start_offline_occurrence",
   "tool_finish_session",
   "tool_complete_session",
   "tool_ping_device",
@@ -92,7 +93,7 @@ const SCAN_RPC_ALLOWLIST = new Set([
   "tool_evaluate_location_proximity_v2"
 ]);
 
-const SCAN_CONTRACT_VERSION = "scan.v2";
+const SCAN_CONTRACT_VERSION = "scan.v3.offline-authority";
 const DASHBOARD_CONTRACT_VERSION = "dashboard.v1";
 const MESSAGING_CONTRACT_VERSION = "messaging.v5";
 const SCHEDULE_CONTRACT_VERSION = "schedule.v2";
@@ -193,6 +194,10 @@ function requireDeviceOrOpsAccess(req, res, next) {
 
 function requireScanRpcAuthorization(req, res, next) {
   const fn = String(req.body?.fn || "").trim();
+  if (req.memphisDeviceAuth?.offline_recovery_only === true && fn !== "tool_commit_cleaning_workflow") {
+    res.status(403).json({ ok: false, error: "A revoked or stale device credential may submit only its frozen offline recovery record." });
+    return;
+  }
   if (req.memphisAuth?.read_only && !SCAN_READ_FUNCTIONS.has(fn)) {
     res.status(403).json({ ok: false, error: "Read-only Ops Manager access cannot run scan mutations." });
     return;
@@ -293,6 +298,7 @@ function canonicalizeScanArguments(fn, args, device) {
     if ("p_device_id" in canonicalArgs || [
       "tool_get_location_scan_state",
       "tool_start_session",
+      "tool_start_offline_occurrence",
       "tool_finish_session",
       "tool_complete_session",
       "tool_ping_device",
@@ -342,6 +348,17 @@ function prepareScanRpcCall(fn, args) {
     }
     nextArgs.p_client_session_id = clientSessionId;
     if (!nextArgs.p_correlation_id) nextArgs.p_correlation_id = `scan-start:${clientSessionId}`;
+  }
+  if (normalizedFn === "tool_start_offline_occurrence") {
+    const clientSessionId = String(nextArgs.p_client_session_id || nextArgs.client_session_id || "").trim();
+    const clientStartedAt = String(nextArgs.p_client_started_at || nextArgs.started_at || "").trim();
+    if (!clientSessionId || !clientStartedAt) {
+      const error = new Error("p_client_session_id and p_client_started_at are required to activate an offline occurrence.");
+      error.status = 422;
+      throw error;
+    }
+    nextArgs.p_client_session_id = clientSessionId;
+    nextArgs.p_client_started_at = clientStartedAt;
   }
   if (normalizedFn === "tool_finish_session") {
     const sessionIdentifier = String(nextArgs.p_session_uuid || nextArgs.p_client_session_id || "").trim();
@@ -401,6 +418,71 @@ function prepareScanRpcCall(fn, args) {
     if (!nextArgs.p_correlation_id) nextArgs.p_correlation_id = `scan-commit:${clientSessionId}:${clientCompletionId}`;
   }
   return { fn: normalizedFn, args: nextArgs };
+}
+
+function offlineAuthoritySecret() {
+  const secret = String(process.env.CUSTODIAL_BACKEND_PROOF_SECRET || "").trim();
+  if (secret.length < 32) {
+    const error = new Error("Offline authority is unavailable until CUSTODIAL_BACKEND_PROOF_SECRET is configured.");
+    error.status = 503;
+    error.code = "offline_authority_not_configured";
+    throw error;
+  }
+  return secret;
+}
+
+function bindOfflineActorProof(fn, args, credential) {
+  const normalizedFn = String(fn || "").trim();
+  if (!["tool_commit_cleaning_workflow", "tool_complete_session", "tool_start_offline_occurrence"].includes(normalizedFn)) return { fn: normalizedFn, args };
+  const nextArgs = { ...(args && typeof args === "object" ? args : {}) };
+  const secret = offlineAuthoritySecret();
+  if (!credential?.credential_id) {
+    const error = new Error("An authenticated device credential is required for offline authority.");
+    error.status = 401;
+    throw error;
+  }
+  if (normalizedFn === "tool_start_offline_occurrence") {
+    nextArgs.p_authenticated_credential_id = credential.credential_id;
+    nextArgs.p_backend_execution_secret = secret;
+    return { fn: normalizedFn, args: nextArgs };
+  }
+  if (normalizedFn === "tool_complete_session") {
+    return {
+      fn: "tool_complete_session_authoritative",
+      args: {
+        p_session_uuid: nextArgs.p_session_uuid,
+        p_response_json: nextArgs.p_response_json || {},
+        p_device_id: nextArgs.p_device_id || null,
+        p_client_completion_id: nextArgs.p_client_completion_id,
+        p_authenticated_credential_id: credential.credential_id,
+        p_backend_execution_secret: secret,
+      },
+    };
+  }
+  const response = nextArgs.p_response_json && typeof nextArgs.p_response_json === "object" && !Array.isArray(nextArgs.p_response_json)
+    ? { ...nextArgs.p_response_json }
+    : {};
+  const requested = response.__custodial_offline_reconciliation_v1;
+  const requestedControl = requested && typeof requested === "object" && !Array.isArray(requested) ? requested : {};
+  delete response.__custodial_offline_reconciliation_v1;
+  return {
+    fn: "tool_commit_cleaning_workflow_authoritative",
+    args: {
+      p_client_session_id: nextArgs.p_client_session_id,
+      p_client_completion_id: nextArgs.p_client_completion_id,
+      p_device_id: nextArgs.p_device_id,
+      p_location_code: nextArgs.p_location_code,
+      p_client_started_at: String(nextArgs.p_client_started_at || ""),
+      p_client_ended_at: String(nextArgs.p_client_ended_at || ""),
+      p_response_json: response,
+      p_scan_evidence: Array.isArray(nextArgs.p_scan_evidence) ? nextArgs.p_scan_evidence : [],
+      p_correlation_id: nextArgs.p_correlation_id || null,
+      p_context_id: String(requestedControl.context_id || ""),
+      p_submission_proof: String(requestedControl.submission_proof || ""),
+      p_authenticated_credential_id: credential.credential_id,
+      p_backend_execution_secret: secret,
+    },
+  };
 }
 
 function scanRpcRateLimit(req, res, next) {
@@ -2340,6 +2422,56 @@ app.post("/dashboard-api/close-ticket", requireOpsManagerWrite, async (req, res)
   }
   catch (error) { console.error("dashboard close ticket failed:", error); res.status(500).json({ ok: false, error: error.message || "Dashboard close ticket failed" }); }
 });
+function offlineAuthorityManagerId(req) {
+  const managerId = String(req?.memphisAuth?.manager_id || "").trim();
+  if (!isUuid(managerId)) {
+    const error = new Error("An authenticated named manager identity is required.");
+    error.status = 403;
+    throw error;
+  }
+  return managerId;
+}
+
+// Original occurrence evidence is append-only. These bounded, named-manager
+// endpoints can inspect it and append a disposition, never rewrite it.
+app.get("/admin-api/custodial/offline-reconciliations", requireOpsManagerAuth, async (req, res) => {
+  try {
+    const limit = Math.max(1, Math.min(100, Number.parseInt(String(req.query?.limit || "50"), 10) || 50));
+    const before = String(req.query?.before || "").trim() || null;
+    if (before && Number.isNaN(Date.parse(before))) throw Object.assign(new Error("before must be an ISO timestamp."), { status: 400 });
+    const data = await runRpc("custodial_manager_list_offline_reconciliations", {
+      p_manager_id: offlineAuthorityManagerId(req), p_limit: limit, p_before: before,
+      p_backend_execution_secret: offlineAuthoritySecret(),
+    });
+    res.status(200).json({ ok: true, contract_version: "offline-authority.v2", data });
+  } catch (error) { res.status(error?.status || 503).json({ ok: false, error: error?.message || "Offline reconciliation recovery is unavailable." }); }
+});
+app.get("/admin-api/custodial/offline-reconciliations/:reconciliationId", requireOpsManagerAuth, async (req, res) => {
+  try {
+    const reconciliationId = String(req.params?.reconciliationId || "").trim();
+    if (!isUuid(reconciliationId)) throw Object.assign(new Error("reconciliationId must be a UUID."), { status: 400 });
+    const data = await runRpc("custodial_manager_get_offline_reconciliation", {
+      p_manager_id: offlineAuthorityManagerId(req), p_reconciliation_id: reconciliationId,
+      p_backend_execution_secret: offlineAuthoritySecret(),
+    });
+    res.status(200).json({ ok: true, contract_version: "offline-authority.v2", data });
+  } catch (error) { res.status(error?.status || 503).json({ ok: false, error: error?.message || "Offline reconciliation recovery is unavailable." }); }
+});
+app.post("/admin-api/custodial/offline-reconciliations/:reconciliationId/dispositions", requireOpsManagerWrite, async (req, res) => {
+  try {
+    const reconciliationId = String(req.params?.reconciliationId || "").trim();
+    const disposition = String(req.body?.disposition || "").trim();
+    const reason = String(req.body?.reason || "").trim();
+    if (!isUuid(reconciliationId) || !["reviewed", "retained_for_recovery", "superseded_by_new_occurrence"].includes(disposition) || !reason) {
+      throw Object.assign(new Error("A reconciliation UUID, supported disposition, and reason are required."), { status: 400 });
+    }
+    const data = await runRpc("custodial_manager_dispose_offline_reconciliation", {
+      p_manager_id: offlineAuthorityManagerId(req), p_reconciliation_id: reconciliationId,
+      p_disposition: disposition, p_reason: reason, p_backend_execution_secret: offlineAuthoritySecret(),
+    });
+    res.status(201).json({ ok: true, contract_version: "offline-authority.v2", data });
+  } catch (error) { res.status(error?.status || 503).json({ ok: false, error: error?.message || "Offline reconciliation disposition is unavailable." }); }
+});
 app.get("/scan-api/health", (_req, res) => {
   res.status(200).json(buildHealthPayload("scan", {
     available_functions: Array.from(SCAN_RPC_ALLOWLIST),
@@ -2358,7 +2490,9 @@ app.post("/scan-api/rpc", requireDeviceOrOpsAccess, requireScanRpcAuthorization,
       return;
     }
     const args = canonicalizeScanArguments(fn, req.body?.args, req.memphisDevice);
-    const prepared = prepareScanRpcCall(fn, args);
+    const preparedBase = prepareScanRpcCall(fn, args);
+    const proofBound = bindOfflineActorProof(preparedBase.fn, preparedBase.args, req.memphisDeviceCredential);
+    const prepared = { ...preparedBase, ...proofBound };
     const data = await runRpc(prepared.fn, prepared.args);
     res.status(200).json({
       ok: true,

@@ -1627,6 +1627,71 @@
     },
     {
       "collation_name": null,
+      "column_name": "config_key",
+      "comment": null,
+      "data_type": "boolean",
+      "default_expression": "true",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 1,
+      "schema_name": "public",
+      "table_name": "custodial_backend_execution_config"
+    },
+    {
+      "collation_name": null,
+      "column_name": "execution_secret_digest",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 2,
+      "schema_name": "public",
+      "table_name": "custodial_backend_execution_config"
+    },
+    {
+      "collation_name": null,
+      "column_name": "enabled",
+      "comment": null,
+      "data_type": "boolean",
+      "default_expression": "false",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 3,
+      "schema_name": "public",
+      "table_name": "custodial_backend_execution_config"
+    },
+    {
+      "collation_name": null,
+      "column_name": "configured_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 4,
+      "schema_name": "public",
+      "table_name": "custodial_backend_execution_config"
+    },
+    {
+      "collation_name": null,
+      "column_name": "configured_by",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 5,
+      "schema_name": "public",
+      "table_name": "custodial_backend_execution_config"
+    },
+    {
+      "collation_name": null,
       "column_name": "assignment_change_id",
       "comment": null,
       "data_type": "uuid",
@@ -1910,6 +1975,890 @@
       "ordinal_position": 10,
       "schema_name": "public",
       "table_name": "custodial_employee_status_history"
+    },
+    {
+      "collation_name": null,
+      "column_name": "context_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": "gen_random_uuid()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 1,
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts"
+    },
+    {
+      "collation_name": null,
+      "column_name": "occurrence_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": "gen_random_uuid()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 2,
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts"
+    },
+    {
+      "collation_name": null,
+      "column_name": "client_session_id",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 3,
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts"
+    },
+    {
+      "collation_name": null,
+      "column_name": "device_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 4,
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts"
+    },
+    {
+      "collation_name": null,
+      "column_name": "employee_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 5,
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts"
+    },
+    {
+      "collation_name": null,
+      "column_name": "credential_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 6,
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts"
+    },
+    {
+      "collation_name": null,
+      "column_name": "assignment_epoch",
+      "comment": null,
+      "data_type": "bigint",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 7,
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts"
+    },
+    {
+      "collation_name": null,
+      "column_name": "assignment_change_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 8,
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts"
+    },
+    {
+      "collation_name": null,
+      "column_name": "location_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 9,
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts"
+    },
+    {
+      "collation_name": null,
+      "column_name": "canonical_location_code",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 10,
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts"
+    },
+    {
+      "collation_name": null,
+      "column_name": "location_aliases",
+      "comment": null,
+      "data_type": "jsonb",
+      "default_expression": "'[]'::jsonb",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 11,
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts"
+    },
+    {
+      "collation_name": null,
+      "column_name": "started_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 12,
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts"
+    },
+    {
+      "collation_name": null,
+      "column_name": "occurrence_fingerprint",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 13,
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts"
+    },
+    {
+      "collation_name": null,
+      "column_name": "status",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": "'activated'::text",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 14,
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts"
+    },
+    {
+      "collation_name": null,
+      "column_name": "expires_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 15,
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts"
+    },
+    {
+      "collation_name": null,
+      "column_name": "created_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "now()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 16,
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts"
+    },
+    {
+      "collation_name": null,
+      "column_name": "audit_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": "gen_random_uuid()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 1,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_audits"
+    },
+    {
+      "collation_name": null,
+      "column_name": "reconciliation_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 2,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_audits"
+    },
+    {
+      "collation_name": null,
+      "column_name": "event_type",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 3,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_audits"
+    },
+    {
+      "collation_name": null,
+      "column_name": "actor_manager_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 4,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_audits"
+    },
+    {
+      "collation_name": null,
+      "column_name": "reason",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 5,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_audits"
+    },
+    {
+      "collation_name": null,
+      "column_name": "evidence_json",
+      "comment": null,
+      "data_type": "jsonb",
+      "default_expression": "'{}'::jsonb",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 6,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_audits"
+    },
+    {
+      "collation_name": null,
+      "column_name": "created_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "now()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 7,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_audits"
+    },
+    {
+      "collation_name": null,
+      "column_name": "disposition_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": "gen_random_uuid()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 1,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_dispositions"
+    },
+    {
+      "collation_name": null,
+      "column_name": "reconciliation_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 2,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_dispositions"
+    },
+    {
+      "collation_name": null,
+      "column_name": "manager_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 3,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_dispositions"
+    },
+    {
+      "collation_name": null,
+      "column_name": "disposition",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 4,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_dispositions"
+    },
+    {
+      "collation_name": null,
+      "column_name": "reason",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 5,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_dispositions"
+    },
+    {
+      "collation_name": null,
+      "column_name": "original_evidence_fingerprint",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 6,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_dispositions"
+    },
+    {
+      "collation_name": null,
+      "column_name": "created_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "now()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 7,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_dispositions"
+    },
+    {
+      "collation_name": null,
+      "column_name": "reconciliation_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": "gen_random_uuid()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 1,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_records"
+    },
+    {
+      "collation_name": null,
+      "column_name": "context_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 2,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_records"
+    },
+    {
+      "collation_name": null,
+      "column_name": "occurrence_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 3,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_records"
+    },
+    {
+      "collation_name": null,
+      "column_name": "occurrence_fingerprint",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 4,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_records"
+    },
+    {
+      "collation_name": null,
+      "column_name": "original_employee_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 5,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_records"
+    },
+    {
+      "collation_name": null,
+      "column_name": "device_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 6,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_records"
+    },
+    {
+      "collation_name": null,
+      "column_name": "credential_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 7,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_records"
+    },
+    {
+      "collation_name": null,
+      "column_name": "location_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 8,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_records"
+    },
+    {
+      "collation_name": null,
+      "column_name": "client_session_id",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 9,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_records"
+    },
+    {
+      "collation_name": null,
+      "column_name": "client_completion_id",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 10,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_records"
+    },
+    {
+      "collation_name": null,
+      "column_name": "payload_fingerprint",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 11,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_records"
+    },
+    {
+      "collation_name": null,
+      "column_name": "payload_json",
+      "comment": null,
+      "data_type": "jsonb",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 12,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_records"
+    },
+    {
+      "collation_name": null,
+      "column_name": "state",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 13,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_records"
+    },
+    {
+      "collation_name": null,
+      "column_name": "quarantine_reason",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 14,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_records"
+    },
+    {
+      "collation_name": null,
+      "column_name": "result_json",
+      "comment": null,
+      "data_type": "jsonb",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 15,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_records"
+    },
+    {
+      "collation_name": null,
+      "column_name": "session_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 16,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_records"
+    },
+    {
+      "collation_name": null,
+      "column_name": "completion_response_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 17,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_records"
+    },
+    {
+      "collation_name": null,
+      "column_name": "created_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "now()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 18,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_records"
+    },
+    {
+      "collation_name": null,
+      "column_name": "client_event_id",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 1,
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_event_evidence"
+    },
+    {
+      "collation_name": null,
+      "column_name": "context_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 2,
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_event_evidence"
+    },
+    {
+      "collation_name": null,
+      "column_name": "reconciliation_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 3,
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_event_evidence"
+    },
+    {
+      "collation_name": null,
+      "column_name": "session_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 4,
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_event_evidence"
+    },
+    {
+      "collation_name": null,
+      "column_name": "event_fingerprint",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 5,
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_event_evidence"
+    },
+    {
+      "collation_name": null,
+      "column_name": "event_payload",
+      "comment": null,
+      "data_type": "jsonb",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 6,
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_event_evidence"
+    },
+    {
+      "collation_name": null,
+      "column_name": "created_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "now()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 7,
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_event_evidence"
+    },
+    {
+      "collation_name": null,
+      "column_name": "submission_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": "gen_random_uuid()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 1,
+      "schema_name": "public",
+      "table_name": "custodial_offline_submission_proofs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "context_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 2,
+      "schema_name": "public",
+      "table_name": "custodial_offline_submission_proofs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "proof_digest",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 3,
+      "schema_name": "public",
+      "table_name": "custodial_offline_submission_proofs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "state",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": "'issued'::text",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 4,
+      "schema_name": "public",
+      "table_name": "custodial_offline_submission_proofs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "created_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "now()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 5,
+      "schema_name": "public",
+      "table_name": "custodial_offline_submission_proofs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "consumed_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 6,
+      "schema_name": "public",
+      "table_name": "custodial_offline_submission_proofs"
+    },
+    {
+      "collation_name": null,
+      "column_name": "occurrence_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 1,
+      "schema_name": "public",
+      "table_name": "custodial_offline_time_reservations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "employee_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 2,
+      "schema_name": "public",
+      "table_name": "custodial_offline_time_reservations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "device_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 3,
+      "schema_name": "public",
+      "table_name": "custodial_offline_time_reservations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "started_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 4,
+      "schema_name": "public",
+      "table_name": "custodial_offline_time_reservations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "ended_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 5,
+      "schema_name": "public",
+      "table_name": "custodial_offline_time_reservations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "occurred_range",
+      "comment": null,
+      "data_type": "tstzrange",
+      "default_expression": "tstzrange(started_at, ended_at, '[)'::text)",
+      "generated_kind": "s",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 6,
+      "schema_name": "public",
+      "table_name": "custodial_offline_time_reservations"
+    },
+    {
+      "collation_name": null,
+      "column_name": "created_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "now()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 7,
+      "schema_name": "public",
+      "table_name": "custodial_offline_time_reservations"
     },
     {
       "collation_name": null,
@@ -20616,6 +21565,30 @@
       "validated": true
     },
     {
+      "constraint_name": "custodial_backend_execution_confi_execution_secret_digest_check",
+      "constraint_type": "c",
+      "definition": "CHECK (execution_secret_digest IS NULL OR execution_secret_digest ~ '^[0-9a-f]{64}$'::text)",
+      "schema_name": "public",
+      "table_name": "custodial_backend_execution_config",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_backend_execution_config_config_key_check",
+      "constraint_type": "c",
+      "definition": "CHECK (config_key)",
+      "schema_name": "public",
+      "table_name": "custodial_backend_execution_config",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_backend_execution_config_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (config_key)",
+      "schema_name": "public",
+      "table_name": "custodial_backend_execution_config",
+      "validated": true
+    },
+    {
       "constraint_name": "custodial_employee_device_assignment__previous_employee_id_fkey",
       "constraint_type": "f",
       "definition": "FOREIGN KEY (previous_employee_id) REFERENCES employees(id) ON DELETE SET NULL",
@@ -20677,6 +21650,470 @@
       "definition": "PRIMARY KEY (status_change_id)",
       "schema_name": "public",
       "table_name": "custodial_employee_status_history",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_actor_contexts_assignment_change_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (assignment_change_id) REFERENCES custodial_employee_device_assignment_history(assignment_change_id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_actor_contexts_assignment_epoch_check",
+      "constraint_type": "c",
+      "definition": "CHECK (assignment_epoch >= 1)",
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_actor_contexts_check",
+      "constraint_type": "c",
+      "definition": "CHECK (expires_at > started_at)",
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_actor_contexts_client_session_id_check",
+      "constraint_type": "c",
+      "definition": "CHECK (length(btrim(client_session_id)) >= 1 AND length(btrim(client_session_id)) <= 200)",
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_actor_contexts_client_session_id_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (client_session_id)",
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_actor_contexts_credential_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (credential_id) REFERENCES device_auth_credentials(credential_id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_actor_contexts_device_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_actor_contexts_employee_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_actor_contexts_location_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_actor_contexts_occurrence_fingerprint_check",
+      "constraint_type": "c",
+      "definition": "CHECK (occurrence_fingerprint ~ '^[0-9a-f]{64}$'::text)",
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_actor_contexts_occurrence_fingerprint_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (occurrence_fingerprint)",
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_actor_contexts_occurrence_id_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (occurrence_id)",
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_actor_contexts_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (context_id)",
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_actor_contexts_status_check",
+      "constraint_type": "c",
+      "definition": "CHECK (status = ANY (ARRAY['activated'::text, 'committed'::text, 'quarantined'::text, 'cancelled'::text]))",
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_reconciliation_audits_actor_manager_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (actor_manager_id) REFERENCES ops_manager_managers(manager_id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_audits",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_reconciliation_audits_event_type_check",
+      "constraint_type": "c",
+      "definition": "CHECK (event_type = ANY (ARRAY['accepted'::text, 'quarantined'::text, 'replayed'::text, 'payload_fingerprint_conflict'::text, 'disposition_recorded'::text]))",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_audits",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_reconciliation_audits_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (audit_id)",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_audits",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_reconciliation_audits_reconciliation_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (reconciliation_id) REFERENCES custodial_offline_reconciliation_records(reconciliation_id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_audits",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_reconcilia_original_evidence_fingerprin_check",
+      "constraint_type": "c",
+      "definition": "CHECK (original_evidence_fingerprint ~ '^[0-9a-f]{64}$'::text)",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_dispositions",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_reconciliation_disposi_reconciliation_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (reconciliation_id) REFERENCES custodial_offline_reconciliation_records(reconciliation_id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_dispositions",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_reconciliation_dispositions_disposition_check",
+      "constraint_type": "c",
+      "definition": "CHECK (disposition = ANY (ARRAY['reviewed'::text, 'retained_for_recovery'::text, 'superseded_by_new_occurrence'::text]))",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_dispositions",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_reconciliation_dispositions_manager_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (manager_id) REFERENCES ops_manager_managers(manager_id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_dispositions",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_reconciliation_dispositions_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (disposition_id)",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_dispositions",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_reconciliation_dispositions_reason_check",
+      "constraint_type": "c",
+      "definition": "CHECK (length(btrim(reason)) >= 1 AND length(btrim(reason)) <= 1000)",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_dispositions",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_reconciliation_re_completion_response_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (completion_response_id) REFERENCES completion_responses(id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_records",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_reconciliation_rec_client_completion_id_check",
+      "constraint_type": "c",
+      "definition": "CHECK (length(btrim(client_completion_id)) >= 1 AND length(btrim(client_completion_id)) <= 200)",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_records",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_reconciliation_reco_original_employee_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (original_employee_id) REFERENCES employees(id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_records",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_reconciliation_reco_payload_fingerprint_check",
+      "constraint_type": "c",
+      "definition": "CHECK (payload_fingerprint ~ '^[0-9a-f]{64}$'::text)",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_records",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_reconciliation_record_client_session_id_check",
+      "constraint_type": "c",
+      "definition": "CHECK (length(btrim(client_session_id)) >= 1 AND length(btrim(client_session_id)) <= 200)",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_records",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_reconciliation_records_check",
+      "constraint_type": "c",
+      "definition": "CHECK ((state = 'quarantined'::text) = (quarantine_reason IS NOT NULL))",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_records",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_reconciliation_records_context_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (context_id) REFERENCES custodial_offline_actor_contexts(context_id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_records",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_reconciliation_records_credential_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (credential_id) REFERENCES device_auth_credentials(credential_id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_records",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_reconciliation_records_device_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_records",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_reconciliation_records_location_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_records",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_reconciliation_records_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (reconciliation_id)",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_records",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_reconciliation_records_session_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_records",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_reconciliation_records_state_check",
+      "constraint_type": "c",
+      "definition": "CHECK (state = ANY (ARRAY['committed'::text, 'quarantined'::text]))",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_records",
+      "validated": true
+    },
+    {
+      "constraint_name": "uq_custodial_offline_reconciliation_completion",
+      "constraint_type": "u",
+      "definition": "UNIQUE (client_completion_id)",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_records",
+      "validated": true
+    },
+    {
+      "constraint_name": "uq_custodial_offline_reconciliation_session",
+      "constraint_type": "u",
+      "definition": "UNIQUE (client_session_id)",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_records",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_scan_event_evidence_client_event_id_check",
+      "constraint_type": "c",
+      "definition": "CHECK (length(btrim(client_event_id)) >= 1 AND length(btrim(client_event_id)) <= 200)",
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_event_evidence",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_scan_event_evidence_context_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (context_id) REFERENCES custodial_offline_actor_contexts(context_id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_event_evidence",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_scan_event_evidence_event_fingerprint_check",
+      "constraint_type": "c",
+      "definition": "CHECK (event_fingerprint ~ '^[0-9a-f]{64}$'::text)",
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_event_evidence",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_scan_event_evidence_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (client_event_id)",
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_event_evidence",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_scan_event_evidence_reconciliation_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (reconciliation_id) REFERENCES custodial_offline_reconciliation_records(reconciliation_id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_event_evidence",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_scan_event_evidence_session_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_event_evidence",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_submission_proofs_context_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (context_id) REFERENCES custodial_offline_actor_contexts(context_id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_submission_proofs",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_submission_proofs_context_id_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (context_id)",
+      "schema_name": "public",
+      "table_name": "custodial_offline_submission_proofs",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_submission_proofs_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (submission_id)",
+      "schema_name": "public",
+      "table_name": "custodial_offline_submission_proofs",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_submission_proofs_proof_digest_check",
+      "constraint_type": "c",
+      "definition": "CHECK (proof_digest ~ '^[0-9a-f]{64}$'::text)",
+      "schema_name": "public",
+      "table_name": "custodial_offline_submission_proofs",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_submission_proofs_proof_digest_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (proof_digest)",
+      "schema_name": "public",
+      "table_name": "custodial_offline_submission_proofs",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_submission_proofs_state_check",
+      "constraint_type": "c",
+      "definition": "CHECK (state = ANY (ARRAY['issued'::text, 'consumed'::text, 'quarantined'::text]))",
+      "schema_name": "public",
+      "table_name": "custodial_offline_submission_proofs",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_device_time_no_overlap",
+      "constraint_type": "x",
+      "definition": "EXCLUDE USING gist (device_id WITH =, occurred_range WITH &&)",
+      "schema_name": "public",
+      "table_name": "custodial_offline_time_reservations",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_employee_time_no_overlap",
+      "constraint_type": "x",
+      "definition": "EXCLUDE USING gist (employee_id WITH =, occurred_range WITH &&)",
+      "schema_name": "public",
+      "table_name": "custodial_offline_time_reservations",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_time_reservations_check",
+      "constraint_type": "c",
+      "definition": "CHECK (ended_at > started_at)",
+      "schema_name": "public",
+      "table_name": "custodial_offline_time_reservations",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_time_reservations_device_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_time_reservations",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_time_reservations_employee_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_time_reservations",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_time_reservations_occurrence_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (occurrence_id) REFERENCES custodial_offline_actor_contexts(occurrence_id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_time_reservations",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_time_reservations_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (occurrence_id)",
+      "schema_name": "public",
+      "table_name": "custodial_offline_time_reservations",
       "validated": true
     },
     {
@@ -25868,6 +27305,11 @@
   ],
   "extensions": [
     {
+      "extension_name": "btree_gist",
+      "schema_name": "extensions",
+      "version": "1.7"
+    },
+    {
       "extension_name": "pg_cron",
       "schema_name": "pg_catalog",
       "version": "1.6.4"
@@ -25962,7 +27404,7 @@
     },
     {
       "comment": "Atomically commits an online or queued cleaning workflow while preserving resolved identity across an absent-session lookup and replaying idempotently.",
-      "definition": "CREATE OR REPLACE FUNCTION public.commit_cleaning_workflow(p_client_session_id text, p_client_completion_id text, p_device_id text, p_location_code text, p_client_started_at timestamp with time zone, p_client_ended_at timestamp with time zone, p_response_json jsonb DEFAULT '{}'::jsonb, p_scan_evidence jsonb DEFAULT '[]'::jsonb, p_correlation_id text DEFAULT NULL::text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_client_session_id text := nullif(btrim(coalesce(p_client_session_id, '')), '');\n  v_client_completion_id text := nullif(btrim(coalesce(p_client_completion_id, '')), '');\n  v_correlation_id text := nullif(btrim(coalesce(p_correlation_id, '')), '');\n  v_location_id uuid;\n  v_location_code text;\n  v_location_name text;\n  v_location_type text;\n  v_form_type text;\n  v_device_pk uuid;\n  v_device_id text;\n  v_device_name text;\n  v_employee_id uuid;\n  v_employee_name text;\n  v_session_id uuid;\n  v_session_uuid text;\n  v_session_status text;\n  v_started_at timestamptz;\n  v_ended_at timestamptz;\n  v_duration_minutes integer;\n  v_duration_display text;\n  v_session_location_id uuid;\n  v_session_device_pk uuid;\n  v_session_employee_id uuid;\n  v_completion_response_id uuid;\n  v_existing_completion_id uuid;\n  v_existing_client_completion_id text;\n  v_existing_submitted_at timestamptz;\n  v_ticket_count integer := 0;\n  v_session_created boolean := false;\n  v_item jsonb;\n  v_event_type text;\n  v_event_id text;\nbegin\n  if v_client_session_id is null or length(v_client_session_id) > 200 then\n    raise exception 'client_session_id is required and must be at most 200 characters';\n  end if;\n  if v_client_completion_id is null or length(v_client_completion_id) > 200 then\n    raise exception 'client_completion_id is required and must be at most 200 characters';\n  end if;\n  if nullif(btrim(coalesce(p_device_id, '')), '') is null then raise exception 'device_id is required'; end if;\n  if nullif(btrim(coalesce(p_location_code, '')), '') is null then raise exception 'location_code is required'; end if;\n  if jsonb_typeof(coalesce(p_response_json, '{}'::jsonb)) <> 'object' then raise exception 'response_json must be an object'; end if;\n  if pg_column_size(coalesce(p_response_json, '{}'::jsonb)) > 1048576 then raise exception 'response_json exceeds 1 MB'; end if;\n  if jsonb_typeof(coalesce(p_scan_evidence, '[]'::jsonb)) <> 'array' then raise exception 'scan_evidence must be an array'; end if;\n\n  perform pg_advisory_xact_lock(hashtextextended('scan-session:' || v_client_session_id, 0));\n  perform pg_advisory_xact_lock(hashtextextended('scan-completion:' || v_client_completion_id, 0));\n\n  select cr.id, cr.submitted_at, s.id, s.session_uuid, s.status, s.started_at, s.ended_at,\n         s.duration_minutes, s.duration_display,\n         l.id, l.location_code, l.location_name, l.location_type, l.form_type,\n         d.id, d.device_id, d.device_name,\n         e.id, e.display_name\n    into v_existing_completion_id, v_existing_submitted_at,\n         v_session_id, v_session_uuid, v_session_status, v_started_at, v_ended_at,\n         v_duration_minutes, v_duration_display,\n         v_location_id, v_location_code, v_location_name, v_location_type, v_form_type,\n         v_device_pk, v_device_id, v_device_name,\n         v_employee_id, v_employee_name\n  from public.completion_responses cr\n  join public.sessions s on s.id = cr.session_id\n  join public.locations l on l.id = s.location_id\n  join public.devices d on d.id = s.device_id\n  join public.employees e on e.id = s.employee_id\n  where cr.client_completion_id = v_client_completion_id\n  limit 1;\n\n  if v_existing_completion_id is not null then\n    if upper(btrim(v_device_id)) <> upper(btrim(p_device_id)) then\n      raise exception 'client_completion_id is already bound to another device';\n    end if;\n    if v_client_session_id <> (select s.client_session_id from public.sessions s where s.id = v_session_id) then\n      raise exception 'client_completion_id is already bound to another client_session_id';\n    end if;\n    return jsonb_build_object(\n      'session_uuid', v_session_uuid,\n      'client_session_id', v_client_session_id,\n      'client_completion_id', v_client_completion_id,\n      'location_code', v_location_code,\n      'location_name', v_location_name,\n      'location_type', v_location_type,\n      'form_type', v_form_type,\n      'employee_name', v_employee_name,\n      'device_id', v_device_id,\n      'device_name', v_device_name,\n      'status', v_session_status,\n      'started_at', v_started_at,\n      'ended_at', v_ended_at,\n      'duration_minutes', v_duration_minutes,\n      'duration_display', v_duration_display,\n      'submitted_at', v_existing_submitted_at,\n      'completion_response_id', v_existing_completion_id,\n      'replayed', true,\n      'correlation_id', v_correlation_id\n    );\n  end if;\n\n  select l.id, l.location_code, l.location_name, l.location_type, l.form_type\n    into v_location_id, v_location_code, v_location_name, v_location_type, v_form_type\n  from public.locations l\n  where l.location_code = public.resolve_scan_location_code(p_location_code)\n    and l.active = true\n  limit 1;\n  if v_location_id is null then raise exception 'Active location not found for code: %', p_location_code; end if;\n\n  select d.id, d.device_id, d.device_name, e.id, e.display_name\n    into v_device_pk, v_device_id, v_device_name, v_employee_id, v_employee_name\n  from public.devices d\n  left join public.employees e on e.id = d.assigned_employee_id and e.active = true\n  where upper(btrim(d.device_id)) = upper(btrim(p_device_id))\n    and d.active = true\n  limit 1;\n  if v_device_pk is null then raise exception 'Active device not found: %', p_device_id; end if;\n  if v_employee_id is null then raise exception 'Device % is not assigned to an active employee', v_device_id; end if;\n\n  -- Keep the requested, freshly resolved identity in v_location_id/v_device_pk/v_employee_id.\n  -- A SELECT INTO with no matching session clears every target, so optional session state\n  -- must use distinct variables or a first offline completion loses its required identities.\n  select s.id, s.session_uuid, s.status, s.started_at, s.ended_at, s.duration_minutes, s.duration_display,\n         s.location_id, s.device_id, s.employee_id\n    into v_session_id, v_session_uuid, v_session_status, v_started_at, v_ended_at,\n         v_duration_minutes, v_duration_display,\n         v_session_location_id, v_session_device_pk, v_session_employee_id\n  from public.sessions s\n  where s.client_session_id = v_client_session_id\n  for update;\n\n  if v_session_id is not null then\n    if v_session_device_pk <> v_device_pk then\n      raise exception 'client_session_id is bound to another device';\n    end if;\n    if v_session_location_id <> v_location_id then\n      raise exception 'client_session_id is bound to another location';\n    end if;\n    if v_session_employee_id <> v_employee_id then\n      raise exception 'device assignment changed during this session; manager review required';\n    end if;\n    if v_session_status = 'cancelled' then\n      raise exception 'Session was cancelled before completion reached the server; manager recovery is required';\n    end if;\n    if exists (select 1 from public.completion_responses cr where cr.session_id = v_session_id) then\n      select cr.id, cr.submitted_at, cr.client_completion_id\n        into v_existing_completion_id, v_existing_submitted_at, v_existing_client_completion_id\n      from public.completion_responses cr where cr.session_id = v_session_id limit 1;\n      if v_existing_client_completion_id is distinct from v_client_completion_id then\n        raise exception 'client_session_id is already completed with another client_completion_id';\n      end if;\n      return jsonb_build_object(\n        'session_uuid', v_session_uuid,\n        'client_session_id', v_client_session_id,\n        'client_completion_id', v_existing_client_completion_id,\n        'location_code', v_location_code,\n        'location_name', v_location_name,\n        'location_type', v_location_type,\n        'form_type', v_form_type,\n        'employee_name', v_employee_name,\n        'device_id', v_device_id,\n        'device_name', v_device_name,\n        'status', v_session_status,\n        'started_at', v_started_at,\n        'ended_at', v_ended_at,\n        'duration_minutes', v_duration_minutes,\n        'duration_display', v_duration_display,\n        'submitted_at', v_existing_submitted_at,\n        'completion_response_id', v_existing_completion_id,\n        'replayed', true,\n        'correlation_id', v_correlation_id\n      );\n    end if;\n  else\n    perform public.expire_stale_open_sessions(now());\n\n    if exists (select 1 from public.sessions s where s.device_id = v_device_pk and s.status in ('active','pending_submit')) then\n      raise exception 'Device already has another open session: %', v_device_id;\n    end if;\n    if exists (select 1 from public.sessions s where s.employee_id = v_employee_id and s.status in ('active','pending_submit')) then\n      raise exception 'Assigned employee already has another open session: %', v_employee_name;\n    end if;\n    if exists (select 1 from public.sessions s where s.location_id = v_location_id and s.status in ('active','pending_submit')) then\n      raise exception 'Location already has another open session: %', v_location_code;\n    end if;\n\n    v_started_at := coalesce(p_client_started_at, p_client_ended_at, now());\n    v_session_uuid := gen_random_uuid()::text;\n    insert into public.sessions(\n      session_uuid, client_session_id, location_id, employee_id, device_id,\n      status, started_at, completion_source\n    ) values (\n      v_session_uuid, v_client_session_id, v_location_id, v_employee_id, v_device_pk,\n      'active', v_started_at, null\n    ) returning id into v_session_id;\n    v_session_status := 'active';\n    v_session_created := true;\n\n    insert into public.session_events(session_id, event_type, actor_type, actor_ref, details_json)\n    values (\n      v_session_id,\n      'session_started',\n      'device',\n      v_device_id,\n      jsonb_build_object(\n        'location_code', v_location_code,\n        'device_id', v_device_id,\n        'employee_name', v_employee_name,\n        'client_session_id', v_client_session_id,\n        'correlation_id', v_correlation_id,\n        'identity_source', 'devices.assigned_employee_id',\n        'created_during_atomic_commit', true\n      )\n    );\n  end if;\n\n  v_started_at := coalesce(v_started_at, p_client_started_at, now());\n  v_ended_at := coalesce(p_client_ended_at, now());\n  if v_ended_at > now() + interval '10 minutes' then raise exception 'client_ended_at is too far in the future'; end if;\n  if v_started_at > v_ended_at then raise exception 'client_started_at cannot be after client_ended_at'; end if;\n  if v_started_at < now() - interval '7 days' then raise exception 'client_started_at is too old'; end if;\n  if v_ended_at - v_started_at > interval '24 hours' then raise exception 'cleaning duration exceeds 24 hours'; end if;\n\n  v_duration_minutes := greatest(0, round(extract(epoch from (v_ended_at - v_started_at)) / 60.0)::integer);\n  v_duration_display := v_duration_minutes::text || ' min';\n\n  if v_session_status = 'active' then\n    update public.sessions\n    set status = 'pending_submit',\n        ended_at = v_ended_at,\n        duration_minutes = v_duration_minutes,\n        duration_display = v_duration_display,\n        updated_at = now()\n    where id = v_session_id and status = 'active';\n\n    insert into public.session_events(session_id, event_type, actor_type, actor_ref, details_json)\n    values (\n      v_session_id,\n      'session_finished',\n      'device',\n      v_device_id,\n      jsonb_build_object(\n        'location_code', v_location_code,\n        'device_id', v_device_id,\n        'duration_minutes', v_duration_minutes,\n        'client_session_id', v_client_session_id,\n        'correlation_id', v_correlation_id,\n        'atomic_commit', true\n      )\n    );\n    v_session_status := 'pending_submit';\n  elsif v_session_status <> 'pending_submit' then\n    raise exception 'Session status % cannot be completed', v_session_status;\n  end if;\n\n  insert into public.completion_responses(\n    session_id,\n    location_id,\n    submitted_by_employee_id,\n    device_id,\n    response_json,\n    submitted_at,\n    client_completion_id\n  ) values (\n    v_session_id,\n    v_location_id,\n    v_employee_id,\n    v_device_pk,\n    coalesce(p_response_json, '{}'::jsonb),\n    now(),\n    v_client_completion_id\n  ) returning id, submitted_at into v_completion_response_id, v_existing_submitted_at;\n\n  v_ticket_count := public.create_maintenance_tickets_from_response(\n    v_completion_response_id,\n    v_session_id,\n    v_location_id,\n    v_employee_id,\n    v_device_pk,\n    v_existing_submitted_at,\n    coalesce(p_response_json, '{}'::jsonb)\n  );\n\n  if jsonb_array_length(coalesce(p_scan_evidence, '[]'::jsonb)) > 200 then\n    raise exception 'scan_evidence cannot contain more than 200 events';\n  end if;\n\n  for v_item in select value from jsonb_array_elements(coalesce(p_scan_evidence, '[]'::jsonb))\n  loop\n    if jsonb_typeof(v_item) <> 'object' then continue; end if;\n    v_event_type := nullif(btrim(coalesce(v_item->>'event_type', '')), '');\n    v_event_id := nullif(btrim(coalesce(v_item->>'client_event_id', '')), '');\n    if v_event_type not in (\n      'scan_received', 'scan_blocked', 'scan_start', 'scan_finish',\n      'scan_resume_pending', 'scan_invalid_location', 'scan_unauthorized_device', 'scan_error'\n    ) then\n      continue;\n    end if;\n\n    insert into public.scan_events(\n      scanned_at,\n      location_id,\n      location_code,\n      device_id,\n      device_identifier,\n      session_id,\n      event_type,\n      result,\n      notes,\n      payload_json,\n      client_event_id\n    ) values (\n      coalesce(nullif(v_item->>'scanned_at', '')::timestamptz, now()),\n      v_location_id,\n      v_location_code,\n      v_device_pk,\n      v_device_id,\n      v_session_id,\n      v_event_type,\n      nullif(v_item->>'result', ''),\n      nullif(v_item->>'notes', ''),\n      coalesce(v_item->'payload_json', '{}'::jsonb) || jsonb_build_object('correlation_id', v_correlation_id),\n      v_event_id\n    )\n    on conflict (client_event_id) where client_event_id is not null\n    do update set\n      session_id = coalesce(public.scan_events.session_id, excluded.session_id),\n      location_id = coalesce(public.scan_events.location_id, excluded.location_id),\n      device_id = coalesce(public.scan_events.device_id, excluded.device_id),\n      payload_json = coalesce(public.scan_events.payload_json, '{}'::jsonb) || excluded.payload_json;\n  end loop;\n\n  update public.sessions\n  set status = 'closed',\n      ended_at = v_ended_at,\n      duration_minutes = v_duration_minutes,\n      duration_display = v_duration_display,\n      completion_source = 'kiosk_form',\n      updated_at = now()\n  where id = v_session_id and status = 'pending_submit';\n\n  if not found then raise exception 'Session could not transition from pending_submit to closed'; end if;\n\n  insert into public.session_events(session_id, event_type, actor_type, actor_ref, details_json)\n  values (\n    v_session_id,\n    'session_completed',\n    'form',\n    v_employee_name,\n    jsonb_build_object(\n      'client_session_id', v_client_session_id,\n      'client_completion_id', v_client_completion_id,\n      'correlation_id', v_correlation_id,\n      'ticket_count', v_ticket_count,\n      'identity_source', 'devices.assigned_employee_id',\n      'atomic_commit', true\n    )\n  );\n\n  insert into public.system_logs(level, source, message, session_id, location_id, device_id)\n  values ('INFO', 'commit_cleaning_workflow', 'Atomic cleaning workflow committed', v_session_id, v_location_id, v_device_pk);\n\n  return jsonb_build_object(\n    'session_uuid', v_session_uuid,\n    'client_session_id', v_client_session_id,\n    'client_completion_id', v_client_completion_id,\n    'location_code', v_location_code,\n    'location_name', v_location_name,\n    'location_type', v_location_type,\n    'form_type', v_form_type,\n    'employee_name', v_employee_name,\n    'device_id', v_device_id,\n    'device_name', v_device_name,\n    'status', 'closed',\n    'started_at', v_started_at,\n    'ended_at', v_ended_at,\n    'duration_minutes', v_duration_minutes,\n    'duration_display', v_duration_display,\n    'submitted_at', v_existing_submitted_at,\n    'completion_response_id', v_completion_response_id,\n    'maintenance_ticket_count', v_ticket_count,\n    'session_created_during_commit', v_session_created,\n    'replayed', false,\n    'correlation_id', v_correlation_id\n  );\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.commit_cleaning_workflow(p_client_session_id text, p_client_completion_id text, p_device_id text, p_location_code text, p_client_started_at timestamp with time zone, p_client_ended_at timestamp with time zone, p_response_json jsonb DEFAULT '{}'::jsonb, p_scan_evidence jsonb DEFAULT '[]'::jsonb, p_correlation_id text DEFAULT NULL::text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$ begin raise exception using errcode='0A000', message='Use tool_commit_cleaning_workflow_authoritative through the authenticated scan backend'; end $function$\n",
       "function_name": "commit_cleaning_workflow",
       "identity_arguments": "p_client_session_id text, p_client_completion_id text, p_device_id text, p_location_code text, p_client_started_at timestamp with time zone, p_client_ended_at timestamp with time zone, p_response_json jsonb, p_scan_evidence jsonb, p_correlation_id text",
       "schema_name": "public"
@@ -25997,9 +27439,51 @@
     },
     {
       "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_backend_transition_allowed()\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_expected text;\nbegin\n  select execution_secret_digest into v_expected from public.custodial_backend_execution_config where config_key=true and enabled=true;\n  return coalesce(v_expected is not null\n    and encode(extensions.digest(convert_to(current_setting('custodial.backend_execution_secret', true), 'UTF8'), 'sha256'), 'hex') = v_expected, false);\nend\n$function$\n",
+      "function_name": "custodial_backend_transition_allowed",
+      "identity_arguments": "",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_commit_offline_occurrence(p_client_session_id text, p_client_completion_id text, p_device_id text, p_location_code text, p_client_started_at text, p_client_ended_at text, p_response_json jsonb, p_scan_evidence jsonb, p_correlation_id text, p_context_id text, p_submission_proof text, p_authenticated_credential_id text, p_backend_execution_secret text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_client_session_id text := nullif(btrim(coalesce(p_client_session_id,'')), '');\n  v_client_completion_id text := nullif(btrim(coalesce(p_client_completion_id,'')), '');\n  v_context_id uuid;\n  v_credential_id uuid;\n  v_started_at timestamptz;\n  v_ended_at timestamptz;\n  v_context public.custodial_offline_actor_contexts%rowtype;\n  v_proof public.custodial_offline_submission_proofs%rowtype;\n  v_existing public.custodial_offline_reconciliation_records%rowtype;\n  v_device public.devices%rowtype;\n  v_employee public.employees%rowtype;\n  v_credential public.device_auth_credentials%rowtype;\n  v_location record;\n  v_session public.sessions%rowtype;\n  v_completion_response_id uuid;\n  v_submitted_at timestamptz;\n  v_ticket_count integer := 0;\n  v_payload_fingerprint text;\n  v_result jsonb;\n  v_item jsonb;\n  v_event_type text;\n  v_event_id text;\n  v_event_time timestamptz;\n  v_event_fingerprint text;\n  v_known_event public.custodial_offline_scan_event_evidence%rowtype;\n  v_duration_minutes integer;\n  v_duration_display text;\n  v_failure_reason text;\n  v_failure_detail text;\nbegin\n  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  if v_client_session_id is null or length(v_client_session_id)>200 or v_client_completion_id is null or length(v_client_completion_id)>200 then\n    raise exception using errcode='22023', message='stable client_session_id and client_completion_id are required';\n  end if;\n  if jsonb_typeof(coalesce(p_response_json,'{}'::jsonb)) <> 'object' or pg_column_size(coalesce(p_response_json,'{}'::jsonb)) > 1048576\n     or jsonb_typeof(coalesce(p_scan_evidence,'[]'::jsonb)) <> 'array' or jsonb_array_length(coalesce(p_scan_evidence,'[]'::jsonb)) > 200 then\n    raise exception using errcode='22023', message='completion payload shape is invalid';\n  end if;\n  begin\n    v_context_id := nullif(lower(btrim(coalesce(p_context_id,''))), '')::uuid;\n    v_credential_id := nullif(lower(btrim(coalesce(p_authenticated_credential_id,''))), '')::uuid;\n    v_started_at := nullif(btrim(coalesce(p_client_started_at,'')), '')::timestamptz;\n    v_ended_at := nullif(btrim(coalesce(p_client_ended_at,'')), '')::timestamptz;\n  exception when others then\n    return public.custodial_quarantine_offline_submission(v_client_session_id,v_client_completion_id,null,\n      encode(extensions.digest(convert_to(coalesce(p_client_session_id,'')||':'||coalesce(p_client_completion_id,''),'UTF8'),'sha256'),'hex'),\n      jsonb_build_object('response_json',coalesce(p_response_json,'{}'::jsonb),'scan_evidence',coalesce(p_scan_evidence,'[]'::jsonb)),\n      'malformed_authority_or_timestamp',jsonb_build_object('context_id',p_context_id,'credential_id',p_authenticated_credential_id),p_backend_execution_secret);\n  end;\n  if v_started_at is null or v_ended_at is null or v_ended_at <= v_started_at or v_ended_at > now()+interval '10 minutes'\n     or v_started_at < now()-interval '7 days' or v_ended_at-v_started_at > interval '24 hours' then\n    return public.custodial_quarantine_offline_submission(v_client_session_id,v_client_completion_id,v_context_id,\n      encode(extensions.digest(convert_to(coalesce(p_client_session_id,'')||':'||coalesce(p_client_completion_id,'')||':invalid-time','UTF8'),'sha256'),'hex'),\n      jsonb_build_object('response_json',coalesce(p_response_json,'{}'::jsonb),'scan_evidence',coalesce(p_scan_evidence,'[]'::jsonb)),\n      'invalid_occurrence_timestamps','{}'::jsonb,p_backend_execution_secret);\n  end if;\n  perform pg_advisory_xact_lock(hashtextextended('custodial-offline-session:'||v_client_session_id,0));\n  perform pg_advisory_xact_lock(hashtextextended('custodial-offline-completion:'||v_client_completion_id,0));\n  select * into v_existing from public.custodial_offline_reconciliation_records\n   where client_completion_id=v_client_completion_id or client_session_id=v_client_session_id\n   order by case when client_completion_id=v_client_completion_id then 0 else 1 end limit 1 for update;\n  select * into v_context from public.custodial_offline_actor_contexts where context_id=v_context_id for update;\n  if v_context.context_id is null then\n    return public.custodial_quarantine_offline_submission(v_client_session_id,v_client_completion_id,null,\n      encode(extensions.digest(convert_to(v_client_session_id||':'||v_client_completion_id||':missing-context','UTF8'),'sha256'),'hex'),\n      jsonb_build_object('response_json',p_response_json,'scan_evidence',p_scan_evidence),'offline_actor_context_not_found','{}'::jsonb,p_backend_execution_secret);\n  end if;\n  v_payload_fingerprint := public.custodial_offline_payload_fingerprint(v_context,v_client_completion_id,v_started_at,v_ended_at,p_response_json,p_scan_evidence,p_correlation_id);\n  if v_existing.reconciliation_id is not null then\n    if v_existing.client_session_id=v_client_session_id and v_existing.client_completion_id=v_client_completion_id and v_existing.payload_fingerprint=v_payload_fingerprint then\n      insert into public.custodial_offline_reconciliation_audits(reconciliation_id,event_type,evidence_json)\n      values(v_existing.reconciliation_id,'replayed',jsonb_build_object('exact_payload_replay',true));\n      return v_existing.result_json || jsonb_build_object('reconciliation_id',v_existing.reconciliation_id,'replayed',true);\n    end if;\n    insert into public.custodial_offline_reconciliation_audits(reconciliation_id,event_type,reason,evidence_json)\n    values(v_existing.reconciliation_id,'payload_fingerprint_conflict','payload_fingerprint_conflict',jsonb_build_object('attempt_payload_fingerprint',v_payload_fingerprint));\n    return jsonb_build_object('status','quarantined','terminal',true,'automatic_replay_fenced',true,\n      'reconciliation_id',v_existing.reconciliation_id,'reason','payload_fingerprint_conflict');\n  end if;\n  if v_context.client_session_id <> v_client_session_id or v_context.status <> 'activated' or v_context.expires_at <= now()\n     or upper(btrim(coalesce(p_device_id,''))) <> upper((select device_id from public.devices where id=v_context.device_id))\n     or public.resolve_scan_location_code(p_location_code) <> v_context.canonical_location_code\n     or v_context.credential_id <> v_credential_id\n     or v_context.started_at <> v_started_at then\n    return public.custodial_quarantine_offline_submission(v_client_session_id,v_client_completion_id,v_context.context_id,v_payload_fingerprint,\n      jsonb_build_object('response_json',p_response_json,'scan_evidence',p_scan_evidence),'context_binding_mismatch','{}'::jsonb,p_backend_execution_secret);\n  end if;\n  select * into v_proof from public.custodial_offline_submission_proofs where context_id=v_context.context_id for update;\n  if v_proof.state <> 'issued' or coalesce(p_submission_proof,'') !~ '^[0-9a-f]{64}$'\n     or encode(extensions.digest(convert_to(lower(p_submission_proof),'UTF8'),'sha256'),'hex') <> v_proof.proof_digest then\n    return public.custodial_quarantine_offline_submission(v_client_session_id,v_client_completion_id,v_context.context_id,v_payload_fingerprint,\n      jsonb_build_object('response_json',p_response_json,'scan_evidence',p_scan_evidence),'submission_proof_invalid','{}'::jsonb,p_backend_execution_secret);\n  end if;\n  select * into v_device from public.devices where id=v_context.device_id for update;\n  select * into v_employee from public.employees where id=v_context.employee_id;\n  select * into v_credential from public.device_auth_credentials where credential_id=v_context.credential_id;\n  select l.id,l.location_code,l.location_name,l.location_type,l.form_type into v_location from public.locations l where l.id=v_context.location_id and l.active=true;\n  if v_device.id is null or v_device.active is not true or v_employee.id is null or v_employee.active is not true\n     or v_credential.credential_id is null or v_credential.device_id<>v_context.device_id or v_credential.confirmed_at is null\n     or v_credential.revoked_at is not null or v_credential.expires_at<=now() or v_location.id is null\n     or not exists (select 1 from public.custodial_employee_device_assignment_history h where h.assignment_change_id=v_context.assignment_change_id and h.device_id=v_context.device_id and h.new_employee_id=v_context.employee_id) then\n    return public.custodial_quarantine_offline_submission(v_client_session_id,v_client_completion_id,v_context.context_id,v_payload_fingerprint,\n      jsonb_build_object('response_json',p_response_json,'scan_evidence',p_scan_evidence),'permanent_actor_or_credential_proof_loss','{}'::jsonb,p_backend_execution_secret);\n  end if;\n  -- Parse every event before the operational subtransaction.  A malformed\n  -- timestamp never gets as far as completion/ticket creation.\n  begin\n    for v_item in select value from jsonb_array_elements(p_scan_evidence) loop\n      if jsonb_typeof(v_item) <> 'object' then raise exception using errcode='22023', message='scan event must be an object'; end if;\n      v_event_type := nullif(btrim(coalesce(v_item->>'event_type','')), '');\n      v_event_id := nullif(btrim(coalesce(v_item->>'client_event_id','')), '');\n      if v_event_type not in ('scan_received','scan_blocked','scan_start','scan_finish','scan_resume_pending','scan_invalid_location','scan_unauthorized_device','scan_error')\n         or v_event_id is null or length(v_event_id)>200 then\n        raise exception using errcode='22023', message='scan event identity is invalid';\n      end if;\n      v_event_time := nullif(btrim(coalesce(v_item->>'scanned_at','')), '')::timestamptz;\n    end loop;\n  exception when others then\n    return public.custodial_quarantine_offline_submission(v_client_session_id,v_client_completion_id,v_context.context_id,v_payload_fingerprint,\n      jsonb_build_object('response_json',p_response_json,'scan_evidence',p_scan_evidence),'malformed_scan_evidence',jsonb_build_object('detail',sqlerrm),p_backend_execution_secret);\n  end;\n  begin\n    insert into public.custodial_offline_time_reservations(occurrence_id,employee_id,device_id,started_at,ended_at)\n    values(v_context.occurrence_id,v_context.employee_id,v_context.device_id,v_started_at,v_ended_at);\n    select * into v_session from public.sessions where client_session_id=v_client_session_id for update;\n    if v_session.id is null then\n      insert into public.sessions(session_uuid,client_session_id,location_id,employee_id,device_id,status,started_at,ended_at,duration_minutes,duration_display,completion_source)\n      values(gen_random_uuid()::text,v_client_session_id,v_context.location_id,v_context.employee_id,v_context.device_id,'pending_submit',v_started_at,v_ended_at,\n        greatest(0,round(extract(epoch from(v_ended_at-v_started_at))/60.0)::integer),greatest(0,round(extract(epoch from(v_ended_at-v_started_at))/60.0)::integer)::text||' min','kiosk_form')\n      returning * into v_session;\n    elsif v_session.device_id<>v_context.device_id or v_session.employee_id<>v_context.employee_id or v_session.location_id<>v_context.location_id or v_session.status not in ('active','pending_submit') then\n      raise exception using errcode='23514', message='server session is not bound to the activated occurrence';\n    else\n      update public.sessions set status='pending_submit',ended_at=v_ended_at,duration_minutes=greatest(0,round(extract(epoch from(v_ended_at-v_started_at))/60.0)::integer),duration_display=greatest(0,round(extract(epoch from(v_ended_at-v_started_at))/60.0)::integer)::text||' min'\n        where id=v_session.id and status='active';\n      select * into v_session from public.sessions where id=v_session.id;\n    end if;\n    insert into public.completion_responses(session_id,location_id,submitted_by_employee_id,device_id,response_json,submitted_at,client_completion_id)\n    values(v_session.id,v_context.location_id,v_context.employee_id,v_context.device_id,p_response_json,now(),v_client_completion_id)\n    returning id,submitted_at into v_completion_response_id,v_submitted_at;\n    v_ticket_count := public.create_maintenance_tickets_from_response(v_completion_response_id,v_session.id,v_context.location_id,v_context.employee_id,v_context.device_id,v_submitted_at,p_response_json);\n    update public.sessions set status='closed',completion_source='kiosk_form',updated_at=now() where id=v_session.id and status='pending_submit';\n    if not found then raise exception using errcode='40001', message='session did not reach the canonical pending_submit state'; end if;\n    for v_item in select value from jsonb_array_elements(p_scan_evidence) loop\n      v_event_type := v_item->>'event_type'; v_event_id := btrim(v_item->>'client_event_id'); v_event_time := (v_item->>'scanned_at')::timestamptz;\n      v_event_fingerprint := encode(extensions.digest(convert_to(jsonb_build_object(\n        'client_event_id',v_event_id,'context_id',v_context.context_id::text,'device_id',v_context.device_id::text,\n        'event_type',v_event_type,'location_id',v_context.location_id::text,'payload_json',coalesce(v_item->'payload_json','{}'::jsonb),\n        'result',nullif(v_item->>'result',''),'scanned_at',v_event_time,'session_id',v_session.id::text,'notes',nullif(v_item->>'notes','')\n      )::text,'UTF8'),'sha256'),'hex');\n      select * into v_known_event from public.custodial_offline_scan_event_evidence where client_event_id=v_event_id for update;\n      if v_known_event.client_event_id is not null and v_known_event.event_fingerprint<>v_event_fingerprint then\n        raise exception using errcode='23514', message='scan event identity is already bound to different immutable evidence';\n      end if;\n    end loop;\n  exception when exclusion_violation then\n    return public.custodial_quarantine_offline_submission(v_client_session_id,v_client_completion_id,v_context.context_id,v_payload_fingerprint,\n      jsonb_build_object('response_json',p_response_json,'scan_evidence',p_scan_evidence),'overlapping_employee_or_device_occurrence','{}'::jsonb,p_backend_execution_secret);\n  when others then\n    v_failure_detail := sqlerrm;\n    return public.custodial_quarantine_offline_submission(v_client_session_id,v_client_completion_id,v_context.context_id,v_payload_fingerprint,\n      jsonb_build_object('response_json',p_response_json,'scan_evidence',p_scan_evidence),'operational_commit_exception',jsonb_build_object('detail',v_failure_detail),p_backend_execution_secret);\n  end;\n  v_result := jsonb_build_object('status','closed','terminal',true,'client_session_id',v_client_session_id,'client_completion_id',v_client_completion_id,\n    'session_uuid',v_session.session_uuid,'completion_response_id',v_completion_response_id,'occurrence_id',v_context.occurrence_id,\n    'original_employee_id',v_context.employee_id,'started_at',v_started_at,'ended_at',v_ended_at,'correlation_id',nullif(btrim(coalesce(p_correlation_id,'')),''),\n    'maintenance_ticket_count',v_ticket_count,'replayed',false);\n  insert into public.custodial_offline_reconciliation_records(\n    context_id,occurrence_id,occurrence_fingerprint,original_employee_id,device_id,credential_id,location_id,\n    client_session_id,client_completion_id,payload_fingerprint,payload_json,state,result_json,session_id,completion_response_id\n  ) values (\n    v_context.context_id,v_context.occurrence_id,v_context.occurrence_fingerprint,v_context.employee_id,v_context.device_id,v_context.credential_id,v_context.location_id,\n    v_client_session_id,v_client_completion_id,v_payload_fingerprint,jsonb_build_object('response_json',p_response_json,'scan_evidence',p_scan_evidence),'committed',v_result,v_session.id,v_completion_response_id\n  ) returning reconciliation_id into v_existing.reconciliation_id;\n  for v_item in select value from jsonb_array_elements(p_scan_evidence) loop\n    v_event_type := v_item->>'event_type'; v_event_id := btrim(v_item->>'client_event_id'); v_event_time := (v_item->>'scanned_at')::timestamptz;\n    v_event_fingerprint := encode(extensions.digest(convert_to(jsonb_build_object(\n      'client_event_id',v_event_id,'context_id',v_context.context_id::text,'device_id',v_context.device_id::text,\n      'event_type',v_event_type,'location_id',v_context.location_id::text,'payload_json',coalesce(v_item->'payload_json','{}'::jsonb),\n      'result',nullif(v_item->>'result',''),'scanned_at',v_event_time,'session_id',v_session.id::text,'notes',nullif(v_item->>'notes','')\n    )::text,'UTF8'),'sha256'),'hex');\n    if not exists(select 1 from public.custodial_offline_scan_event_evidence where client_event_id=v_event_id) then\n      insert into public.custodial_offline_scan_event_evidence(client_event_id,context_id,reconciliation_id,session_id,event_fingerprint,event_payload)\n      values(v_event_id,v_context.context_id,v_existing.reconciliation_id,v_session.id,v_event_fingerprint,v_item);\n      insert into public.scan_events(scanned_at,location_id,location_code,device_id,device_identifier,session_id,event_type,result,notes,payload_json,client_event_id)\n      values(v_event_time,v_context.location_id,v_context.canonical_location_code,v_context.device_id,v_device.device_id,v_session.id,v_event_type,\n        nullif(v_item->>'result',''),nullif(v_item->>'notes',''),coalesce(v_item->'payload_json','{}'::jsonb)||jsonb_build_object('offline_occurrence_id',v_context.occurrence_id),v_event_id)\n      on conflict (client_event_id) where client_event_id is not null do nothing;\n    end if;\n  end loop;\n  update public.custodial_offline_actor_contexts set status='committed' where context_id=v_context.context_id and status='activated';\n  update public.custodial_offline_submission_proofs set state='consumed', consumed_at=now() where context_id=v_context.context_id and state='issued';\n  insert into public.custodial_offline_reconciliation_audits(reconciliation_id,event_type,evidence_json)\n  values(v_existing.reconciliation_id,'accepted',jsonb_build_object('occurrence_fingerprint',v_context.occurrence_fingerprint,'payload_fingerprint',v_payload_fingerprint));\n  return v_result || jsonb_build_object('reconciliation_id',v_existing.reconciliation_id);\nend\n$function$\n",
+      "function_name": "custodial_commit_offline_occurrence",
+      "identity_arguments": "p_client_session_id text, p_client_completion_id text, p_device_id text, p_location_code text, p_client_started_at text, p_client_ended_at text, p_response_json jsonb, p_scan_evidence jsonb, p_correlation_id text, p_context_id text, p_submission_proof text, p_authenticated_credential_id text, p_backend_execution_secret text",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_configure_backend_execution_key(p_execution_secret_digest text, p_configured_by text DEFAULT 'release-owner'::text)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\nbegin\n  if coalesce(p_execution_secret_digest, '') !~ '^[0-9a-f]{64}$' then\n    raise exception using errcode='22023', message='execution secret digest must be a lowercase SHA-256 hex digest';\n  end if;\n  insert into public.custodial_backend_execution_config(config_key, execution_secret_digest, enabled, configured_at, configured_by)\n  values (true, p_execution_secret_digest, true, now(), left(coalesce(p_configured_by, 'release-owner'), 200))\n  on conflict (config_key) do update set\n    execution_secret_digest=excluded.execution_secret_digest,\n    enabled=true,\n    configured_at=excluded.configured_at,\n    configured_by=excluded.configured_by;\nend\n$function$\n",
+      "function_name": "custodial_configure_backend_execution_key",
+      "identity_arguments": "p_execution_secret_digest text, p_configured_by text",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
       "definition": "CREATE OR REPLACE FUNCTION public.custodial_create_employee(p_display_name text, p_employee_code text DEFAULT NULL::text, p_notes text DEFAULT NULL::text, p_changed_by_manager_id uuid DEFAULT NULL::uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_manager public.ops_manager_managers%rowtype;\n  v_name text := regexp_replace(btrim(coalesce(p_display_name, '')), '\\s+', ' ', 'g');\n  v_code text := upper(btrim(coalesce(p_employee_code, '')));\n  v_employee public.employees%rowtype;\n  v_user public.msg_users%rowtype;\nbegin\n  v_manager := public.custodial_assert_manager(p_changed_by_manager_id);\n  if length(v_name) < 2 or length(v_name) > 160 then\n    raise exception using errcode = '22023', message = 'Employee name must be between 2 and 160 characters.';\n  end if;\n  if exists (select 1 from public.employees where lower(btrim(display_name)) = lower(v_name)) then\n    raise exception using errcode = '23505', message = 'An employee record with that name already exists. Reactivate the existing record instead.';\n  end if;\n  if v_code = '' then v_code := public.custodial_next_employee_code(); end if;\n  if v_code is null or v_code !~ '^EMP[0-9]{3,6}$' then\n    raise exception using errcode = '22023', message = 'Employee code must use the EMP number format, such as EMP010.';\n  end if;\n  if exists (select 1 from public.employees where upper(coalesce(employee_code, '')) = v_code) then\n    raise exception using errcode = '23505', message = 'That employee code is already in use.';\n  end if;\n\n  insert into public.employees(employee_code, display_name, active, role, notes)\n  values (v_code, v_name, true, 'staff', nullif(btrim(coalesce(p_notes, '')), ''))\n  returning * into v_employee;\n\n  insert into public.msg_users(employee_id, display_name, role, is_active)\n  values (v_employee.id, v_employee.display_name, 'employee', true)\n  returning * into v_user;\n\n  insert into public.custodial_employee_status_history(\n    employee_id, employee_name, previous_active, new_active,\n    changed_by_manager_id, change_reason, source, metadata_json\n  ) values (\n    v_employee.id, v_employee.display_name, null, true,\n    v_manager.manager_id, 'employee_created', 'operations_app',\n    jsonb_build_object('employee_code', v_employee.employee_code, 'msg_user_id', v_user.id)\n  );\n\n  return jsonb_build_object(\n    'created', true,\n    'employee', to_jsonb(v_employee),\n    'messenger_user_id', v_user.id\n  );\nend;\n$function$\n",
       "function_name": "custodial_create_employee",
       "identity_arguments": "p_display_name text, p_employee_code text, p_notes text, p_changed_by_manager_id uuid",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_manager_dispose_offline_reconciliation(p_manager_id uuid, p_reconciliation_id uuid, p_disposition text, p_reason text, p_backend_execution_secret text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare v_fingerprint text; v_disposition_id uuid;\nbegin\n  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  if not exists(select 1 from public.ops_manager_managers m where m.manager_id=p_manager_id and m.active=true and m.revoked_at is null and m.roles && array['DIRECTOR','SECURITY_ADMIN']::text[]) then raise exception using errcode='42501',message='named recovery manager authority is required'; end if;\n  select encode(extensions.digest(convert_to(to_jsonb(r)::text,'UTF8'),'sha256'),'hex') into v_fingerprint from public.custodial_offline_reconciliation_records r where r.reconciliation_id=p_reconciliation_id;\n  if v_fingerprint is null then raise exception using errcode='P0002',message='offline reconciliation not found'; end if;\n  insert into public.custodial_offline_reconciliation_dispositions(reconciliation_id,manager_id,disposition,reason,original_evidence_fingerprint) values(p_reconciliation_id,p_manager_id,p_disposition,btrim(p_reason),v_fingerprint) returning disposition_id into v_disposition_id;\n  insert into public.custodial_offline_reconciliation_audits(reconciliation_id,event_type,actor_manager_id,reason,evidence_json) values(p_reconciliation_id,'disposition_recorded',p_manager_id,btrim(p_reason),jsonb_build_object('disposition_id',v_disposition_id,'disposition',p_disposition));\n  return jsonb_build_object('disposition_id',v_disposition_id,'reconciliation_id',p_reconciliation_id,'immutable_original_evidence_fingerprint',v_fingerprint);\nend $function$\n",
+      "function_name": "custodial_manager_dispose_offline_reconciliation",
+      "identity_arguments": "p_manager_id uuid, p_reconciliation_id uuid, p_disposition text, p_reason text, p_backend_execution_secret text",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_manager_get_offline_reconciliation(p_manager_id uuid, p_reconciliation_id uuid, p_backend_execution_secret text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare v_record public.custodial_offline_reconciliation_records%rowtype;\nbegin\n  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  if not exists(select 1 from public.ops_manager_managers m where m.manager_id=p_manager_id and m.active=true and m.revoked_at is null) then raise exception using errcode='42501',message='active named manager authority is required'; end if;\n  select * into v_record from public.custodial_offline_reconciliation_records where reconciliation_id=p_reconciliation_id;\n  if v_record.reconciliation_id is null then raise exception using errcode='P0002',message='offline reconciliation not found'; end if;\n  return jsonb_build_object('record',to_jsonb(v_record),'audits',(select coalesce(jsonb_agg(to_jsonb(a) order by a.created_at),'[]'::jsonb) from public.custodial_offline_reconciliation_audits a where a.reconciliation_id=v_record.reconciliation_id),'dispositions',(select coalesce(jsonb_agg(to_jsonb(d) order by d.created_at),'[]'::jsonb) from public.custodial_offline_reconciliation_dispositions d where d.reconciliation_id=v_record.reconciliation_id));\nend $function$\n",
+      "function_name": "custodial_manager_get_offline_reconciliation",
+      "identity_arguments": "p_manager_id uuid, p_reconciliation_id uuid, p_backend_execution_secret text",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_manager_list_offline_reconciliations(p_manager_id uuid, p_limit integer, p_before timestamp with time zone, p_backend_execution_secret text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\nbegin\n  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  if not exists(select 1 from public.ops_manager_managers m where m.manager_id=p_manager_id and m.active=true and m.revoked_at is null and m.roles && array['OPS_MANAGER','DIRECTOR','SECURITY_ADMIN']::text[]) then\n    raise exception using errcode='42501', message='active named manager authority is required';\n  end if;\n  return coalesce((select jsonb_agg(jsonb_build_object('reconciliation_id',r.reconciliation_id,'state',r.state,'reason',r.quarantine_reason,'original_employee_id',r.original_employee_id,'occurrence_id',r.occurrence_id,'created_at',r.created_at) order by r.created_at desc)\n    from (select * from public.custodial_offline_reconciliation_records where p_before is null or created_at<p_before order by created_at desc limit greatest(1,least(coalesce(p_limit,50),100))) r),'[]'::jsonb);\nend $function$\n",
+      "function_name": "custodial_manager_list_offline_reconciliations",
+      "identity_arguments": "p_manager_id uuid, p_limit integer, p_before timestamp with time zone, p_backend_execution_secret text",
       "schema_name": "public"
     },
     {
@@ -26011,9 +27495,44 @@
     },
     {
       "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_offline_payload_fingerprint(p_context custodial_offline_actor_contexts, p_client_completion_id text, p_started_at timestamp with time zone, p_ended_at timestamp with time zone, p_response_json jsonb, p_scan_evidence jsonb, p_correlation_id text)\n RETURNS text\n LANGUAGE sql\n IMMUTABLE\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\n  select encode(extensions.digest(convert_to(jsonb_build_object(\n    'actor_employee_id', p_context.employee_id::text,\n    'assignment_change_id', p_context.assignment_change_id::text,\n    'assignment_epoch', p_context.assignment_epoch,\n    'canonical_location_code', p_context.canonical_location_code,\n    'client_completion_id', btrim(p_client_completion_id),\n    'client_session_id', p_context.client_session_id,\n    'correlation_id', nullif(btrim(coalesce(p_correlation_id,'')),''),\n    'credential_id', p_context.credential_id::text,\n    'device_id', p_context.device_id::text,\n    'ended_at', p_ended_at,\n    'location_aliases', p_context.location_aliases,\n    'location_id', p_context.location_id::text,\n    'occurrence_fingerprint', p_context.occurrence_fingerprint,\n    'occurrence_id', p_context.occurrence_id::text,\n    'response_json', coalesce(p_response_json,'{}'::jsonb),\n    'scan_evidence', coalesce(p_scan_evidence,'[]'::jsonb),\n    'started_at', p_started_at\n  )::text, 'UTF8'), 'sha256'), 'hex');\n$function$\n",
+      "function_name": "custodial_offline_payload_fingerprint",
+      "identity_arguments": "p_context custodial_offline_actor_contexts, p_client_completion_id text, p_started_at timestamp with time zone, p_ended_at timestamp with time zone, p_response_json jsonb, p_scan_evidence jsonb, p_correlation_id text",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_quarantine_offline_submission(p_client_session_id text, p_client_completion_id text, p_context_id uuid, p_payload_fingerprint text, p_payload_json jsonb, p_reason text, p_details jsonb, p_backend_execution_secret text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_existing public.custodial_offline_reconciliation_records%rowtype;\n  v_context public.custodial_offline_actor_contexts%rowtype;\n  v_reconciliation_id uuid;\n  v_result jsonb;\n  v_reason text := left(nullif(btrim(coalesce(p_reason,'')), ''), 200);\nbegin\n  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  v_reason := coalesce(v_reason, 'offline_authority_rejected');\n  select * into v_existing from public.custodial_offline_reconciliation_records\n   where client_completion_id=btrim(p_client_completion_id) or client_session_id=btrim(p_client_session_id)\n   order by case when client_completion_id=btrim(p_client_completion_id) then 0 else 1 end\n   limit 1 for update;\n  if v_existing.reconciliation_id is not null then\n    insert into public.custodial_offline_reconciliation_audits(reconciliation_id,event_type,reason,evidence_json)\n    values (v_existing.reconciliation_id, 'payload_fingerprint_conflict', v_reason,\n      jsonb_build_object('attempt_payload_fingerprint',p_payload_fingerprint,'existing_payload_fingerprint',v_existing.payload_fingerprint,'details',coalesce(p_details,'{}'::jsonb)));\n    return jsonb_build_object('status','quarantined','terminal',true,'automatic_replay_fenced',true,\n      'reconciliation_id',v_existing.reconciliation_id,'reason',v_reason,'replayed',true);\n  end if;\n  if p_context_id is not null then\n    select * into v_context from public.custodial_offline_actor_contexts where context_id=p_context_id for update;\n  end if;\n  v_result := jsonb_build_object('status','quarantined','terminal',true,'automatic_replay_fenced',true,\n    'discard_local_workflow',false,'reason',v_reason,'client_session_id',btrim(p_client_session_id),\n    'client_completion_id',btrim(p_client_completion_id));\n  insert into public.custodial_offline_reconciliation_records(\n    context_id,occurrence_id,occurrence_fingerprint,original_employee_id,device_id,credential_id,location_id,\n    client_session_id,client_completion_id,payload_fingerprint,payload_json,state,quarantine_reason,result_json\n  ) values (\n    v_context.context_id,v_context.occurrence_id,v_context.occurrence_fingerprint,v_context.employee_id,v_context.device_id,v_context.credential_id,v_context.location_id,\n    btrim(p_client_session_id),btrim(p_client_completion_id),p_payload_fingerprint,coalesce(p_payload_json,'{}'::jsonb),'quarantined',v_reason,v_result\n  ) returning reconciliation_id into v_reconciliation_id;\n  if v_context.context_id is not null then\n    update public.custodial_offline_actor_contexts set status='quarantined' where context_id=v_context.context_id and status='activated';\n    update public.custodial_offline_submission_proofs set state='quarantined', consumed_at=now()\n      where context_id=v_context.context_id and state='issued';\n  end if;\n  insert into public.custodial_offline_reconciliation_audits(reconciliation_id,event_type,reason,evidence_json)\n  values (v_reconciliation_id,'quarantined',v_reason,coalesce(p_details,'{}'::jsonb));\n  return v_result || jsonb_build_object('reconciliation_id',v_reconciliation_id,'occurrence_id',v_context.occurrence_id);\nend\n$function$\n",
+      "function_name": "custodial_quarantine_offline_submission",
+      "identity_arguments": "p_client_session_id text, p_client_completion_id text, p_context_id uuid, p_payload_fingerprint text, p_payload_json jsonb, p_reason text, p_details jsonb, p_backend_execution_secret text",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_reject_offline_evidence_mutation()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\nbegin\n  if tg_op = 'DELETE' then\n    raise exception using errcode='23514', message='Custodial offline authority evidence is append-only';\n  end if;\n  if not public.custodial_backend_transition_allowed() then\n    raise exception using errcode='23514', message='Custodial offline authority evidence is immutable outside the canonical writer';\n  end if;\n  return new;\nend\n$function$\n",
+      "function_name": "custodial_reject_offline_evidence_mutation",
+      "identity_arguments": "",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_require_backend_execution_secret(p_execution_secret text)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_expected text;\n  v_enabled boolean;\nbegin\n  select execution_secret_digest, enabled into v_expected, v_enabled\n    from public.custodial_backend_execution_config\n   where config_key=true;\n  if v_enabled is not true or v_expected is null\n     or coalesce(p_execution_secret, '') = ''\n     or encode(extensions.digest(convert_to(p_execution_secret, 'UTF8'), 'sha256'), 'hex') <> v_expected then\n    raise exception using errcode='42501', message='custodial backend execution boundary is not authorized';\n  end if;\n  perform set_config('custodial.backend_execution_secret', p_execution_secret, true);\nend\n$function$\n",
+      "function_name": "custodial_require_backend_execution_secret",
+      "identity_arguments": "p_execution_secret text",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
       "definition": "CREATE OR REPLACE FUNCTION public.custodial_set_employee_active(p_employee_id uuid, p_active boolean, p_changed_by_manager_id uuid DEFAULT NULL::uuid, p_reason text DEFAULT NULL::text, p_release_devices boolean DEFAULT true)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_manager public.ops_manager_managers%rowtype;\n  v_employee public.employees%rowtype;\n  v_device public.devices%rowtype;\n  v_previous boolean;\n  v_reason text := left(nullif(btrim(coalesce(p_reason, '')), ''), 500);\n  v_released text[] := '{}'::text[];\nbegin\n  v_manager := public.custodial_assert_manager(p_changed_by_manager_id);\n  select * into v_employee from public.employees where id = p_employee_id for update;\n  if v_employee.id is null then\n    raise exception using errcode = 'P0002', message = 'Employee not found.';\n  end if;\n  if v_employee.employee_code !~ '^EMP[0-9]+$' then\n    raise exception using errcode = '22023', message = 'CoverAll and system staffing slots cannot be changed from Employee Phones.';\n  end if;\n  v_previous := v_employee.active;\n  if v_previous = p_active then\n    return jsonb_build_object('changed', false, 'employee', to_jsonb(v_employee), 'released_devices', v_released);\n  end if;\n\n  if p_active is false and not p_release_devices and exists (\n    select 1 from public.devices where assigned_employee_id = v_employee.id and active is true\n  ) then\n    raise exception using errcode = '23503', message = 'Release the employee phone before marking this employee inactive.';\n  end if;\n\n  if p_active is false and p_release_devices then\n    for v_device in\n      select * from public.devices\n      where assigned_employee_id = v_employee.id and active is true\n      order by device_id\n      for update\n    loop\n      update public.devices\n      set assigned_employee_id = null,\n          device_name = 'Unassigned ' || v_device.device_id,\n          updated_at = now()\n      where id = v_device.id;\n\n      update public.msg_device_assignments\n      set is_active = false,\n          notes = 'Employee inactive; phone released by Operations app',\n          updated_at = now()\n      where upper(device_identifier) = upper(v_device.device_id)\n         or upper(device_identifier) in (\n           select upper(alias_identifier) from public.device_aliases\n           where canonical_device_id = v_device.id and active is true\n         );\n\n      insert into public.custodial_employee_device_assignment_history(\n        device_id, device_identifier, previous_employee_id, previous_employee_name,\n        new_employee_id, new_employee_name, changed_by_manager_id,\n        change_reason, source, metadata_json\n      ) values (\n        v_device.id, v_device.device_id, v_employee.id, v_employee.display_name,\n        null, null, v_manager.manager_id,\n        coalesce(v_reason, 'employee_inactivated'), 'operations_app',\n        jsonb_build_object('employee_status_changed', true)\n      );\n      v_released := array_append(v_released, v_device.device_id);\n    end loop;\n  end if;\n\n  update public.employees\n  set active = p_active,\n      updated_at = now(),\n      notes = case\n        when p_active then notes\n        when v_reason is null then notes\n        when notes is null or btrim(notes) = '' then 'Inactive: ' || v_reason\n        else notes || E'\\nInactive: ' || v_reason\n      end\n  where id = v_employee.id\n  returning * into v_employee;\n\n  update public.msg_users\n  set is_active = p_active,\n      display_name = v_employee.display_name,\n      updated_at = now()\n  where employee_id = v_employee.id;\n\n  insert into public.custodial_employee_status_history(\n    employee_id, employee_name, previous_active, new_active,\n    changed_by_manager_id, change_reason, source, metadata_json\n  ) values (\n    v_employee.id, v_employee.display_name, v_previous, p_active,\n    v_manager.manager_id,\n    coalesce(v_reason, case when p_active then 'employee_reactivated' else 'employee_inactivated' end),\n    'operations_app',\n    jsonb_build_object('released_devices', to_jsonb(v_released))\n  );\n\n  return jsonb_build_object(\n    'changed', true,\n    'employee', to_jsonb(v_employee),\n    'released_devices', to_jsonb(v_released)\n  );\nend;\n$function$\n",
       "function_name": "custodial_set_employee_active",
       "identity_arguments": "p_employee_id uuid, p_active boolean, p_changed_by_manager_id uuid, p_reason text, p_release_devices boolean",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_start_offline_occurrence(p_device_id text, p_location_code text, p_client_session_id text, p_client_started_at text, p_authenticated_credential_id text, p_backend_execution_secret text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_client_session_id text := nullif(btrim(coalesce(p_client_session_id, '')), '');\n  v_credential_id uuid;\n  v_started_at timestamptz;\n  v_device record;\n  v_location record;\n  v_context public.custodial_offline_actor_contexts%rowtype;\n  v_existing public.custodial_offline_actor_contexts%rowtype;\n  v_assignment_change_id uuid;\n  v_proof text := encode(extensions.gen_random_bytes(32), 'hex');\n  v_fingerprint text;\nbegin\n  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  if v_client_session_id is null or length(v_client_session_id) > 200 then\n    raise exception using errcode='22023', message='client_session_id is required for offline occurrence activation';\n  end if;\n  begin\n    v_credential_id := nullif(lower(btrim(coalesce(p_authenticated_credential_id, ''))), '')::uuid;\n    v_started_at := nullif(btrim(coalesce(p_client_started_at, '')), '')::timestamptz;\n  exception when others then\n    raise exception using errcode='22023', message='offline occurrence activation requires canonical credential and start timestamp';\n  end;\n  if v_started_at > now() + interval '10 minutes' or v_started_at < now() - interval '7 days' then\n    raise exception using errcode='22023', message='offline occurrence start timestamp is outside the accepted window';\n  end if;\n\n  select * into v_existing from public.custodial_offline_actor_contexts where client_session_id=v_client_session_id for update;\n  if v_existing.context_id is not null then\n    if upper(btrim(coalesce(p_device_id, ''))) <> upper((select device_id from public.devices where id=v_existing.device_id))\n       or v_existing.credential_id <> v_credential_id\n       or v_existing.canonical_location_code <> public.resolve_scan_location_code(p_location_code)\n       or v_existing.started_at <> v_started_at then\n      raise exception using errcode='23505', message='offline occurrence activation replay does not match the original occurrence';\n    end if;\n    select encode(extensions.digest(convert_to(v_proof, 'UTF8'), 'sha256'), 'hex') into v_fingerprint;\n    -- A raw proof is intentionally returned only on first activation.  A replay\n    -- is safe but cannot mint a second committable proof.\n    return jsonb_build_object('context_id', v_existing.context_id, 'occurrence_id', v_existing.occurrence_id,\n      'client_session_id', v_existing.client_session_id, 'started_at', v_existing.started_at,\n      'proof_replay_requires_durable_local_copy', true, 'schema_version', 'offline-authority.v2');\n  end if;\n\n  select d.id, d.device_id, d.assigned_employee_id, d.assignment_epoch, e.active as employee_active,\n         c.credential_id, c.confirmed_at, c.revoked_at, c.expires_at\n    into v_device\n    from public.devices d\n    join public.employees e on e.id=d.assigned_employee_id\n    join public.device_auth_credentials c on c.credential_id=v_credential_id and c.device_id=d.id\n   where upper(btrim(d.device_id))=upper(btrim(p_device_id)) and d.active=true\n   for update of d;\n  if v_device.id is null or v_device.assigned_employee_id is null or v_device.employee_active is not true\n     or v_device.confirmed_at is null or v_device.revoked_at is not null or v_device.expires_at <= now() then\n    raise exception using errcode='42501', message='active authenticated actor assignment is required for offline occurrence activation';\n  end if;\n  -- Location aliases are resolved by resolve_scan_location_code.  Preserve both\n  -- the canonical code and the exact normalized presented alias in the proof.\n  select l.id, l.location_code,\n         jsonb_build_array(l.location_code, upper(btrim(p_location_code))) as aliases\n    into v_location\n    from public.locations l\n   where l.location_code=public.resolve_scan_location_code(p_location_code) and l.active=true;\n  if v_location.id is null then\n    raise exception using errcode='22023', message='active canonical location is required for offline occurrence activation';\n  end if;\n  select h.assignment_change_id into v_assignment_change_id\n    from public.custodial_employee_device_assignment_history h\n   where h.device_id=v_device.id and h.new_employee_id=v_device.assigned_employee_id\n   order by h.changed_at desc limit 1;\n  if v_assignment_change_id is null then\n    raise exception using errcode='42501', message='an authoritative device assignment epoch is required for offline occurrence activation';\n  end if;\n  v_fingerprint := encode(extensions.digest(convert_to(jsonb_build_object(\n    'client_session_id',v_client_session_id,'device_id',v_device.id::text,'employee_id',v_device.assigned_employee_id::text,\n    'credential_id',v_credential_id::text,'assignment_epoch',v_device.assignment_epoch,'assignment_change_id',v_assignment_change_id::text,\n    'location_id',v_location.id::text,'location_code',v_location.location_code,'location_aliases',v_location.aliases,'started_at',v_started_at\n  )::text, 'UTF8'), 'sha256'), 'hex');\n  insert into public.custodial_offline_actor_contexts(\n    client_session_id, device_id, employee_id, credential_id, assignment_epoch, assignment_change_id, location_id,\n    canonical_location_code, location_aliases, started_at, occurrence_fingerprint, expires_at\n  ) values (\n    v_client_session_id, v_device.id, v_device.assigned_employee_id, v_credential_id, v_device.assignment_epoch, v_assignment_change_id,\n    v_location.id, v_location.location_code, v_location.aliases, v_started_at, v_fingerprint, now() + interval '7 days'\n  ) returning * into v_context;\n  insert into public.custodial_offline_submission_proofs(context_id, proof_digest)\n  values (v_context.context_id, encode(extensions.digest(convert_to(v_proof, 'UTF8'), 'sha256'), 'hex'));\n  return jsonb_build_object(\n    'context_id',v_context.context_id,'occurrence_id',v_context.occurrence_id,'client_session_id',v_context.client_session_id,\n    'canonical_location_code',v_context.canonical_location_code,'location_aliases',v_context.location_aliases,\n    'started_at',v_context.started_at,'submission_proof',v_proof,'expires_at',v_context.expires_at,\n    'schema_version','offline-authority.v2','committable',true\n  );\nend\n$function$\n",
+      "function_name": "custodial_start_offline_occurrence",
+      "identity_arguments": "p_device_id text, p_location_code text, p_client_session_id text, p_client_started_at text, p_authenticated_credential_id text, p_backend_execution_secret text",
       "schema_name": "public"
     },
     {
@@ -26557,7 +28076,7 @@
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.msg_delete_thread_permanently(p_thread_id uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_deleted_threads integer := 0;\n  v_deleted_messages integer := 0;\n  v_deleted_receipts integer := 0;\n  v_deleted_message_deletions integer := 0;\n  v_deleted_hidden_rows integer := 0;\n  v_deleted_participants integer := 0;\nbegin\n  if p_thread_id is null then\n    raise exception 'p_thread_id is required';\n  end if;\n\n  with target_messages as (\n    select id\n    from public.msg_messages\n    where thread_id = p_thread_id\n  ),\n  del_receipts as (\n    delete from public.msg_receipts r\n    where r.message_id in (select id from target_messages)\n    returning 1\n  ),\n  del_message_deletions as (\n    delete from public.msg_message_deletions d\n    where d.message_id in (select id from target_messages)\n    returning 1\n  ),\n  del_messages as (\n    delete from public.msg_messages m\n    where m.thread_id = p_thread_id\n    returning 1\n  ),\n  del_hidden as (\n    delete from public.msg_hidden_threads_by_device h\n    where h.thread_id = p_thread_id\n    returning 1\n  ),\n  del_participants as (\n    delete from public.msg_thread_participants p\n    where p.thread_id = p_thread_id\n    returning 1\n  ),\n  del_thread as (\n    delete from public.msg_threads t\n    where t.id = p_thread_id\n    returning 1\n  )\n  select\n    (select count(*) from del_thread),\n    (select count(*) from del_messages),\n    (select count(*) from del_receipts),\n    (select count(*) from del_message_deletions),\n    (select count(*) from del_hidden),\n    (select count(*) from del_participants)\n  into\n    v_deleted_threads,\n    v_deleted_messages,\n    v_deleted_receipts,\n    v_deleted_message_deletions,\n    v_deleted_hidden_rows,\n    v_deleted_participants;\n\n  return jsonb_build_object(\n    'thread_id', p_thread_id,\n    'deleted_threads', v_deleted_threads,\n    'deleted_messages', v_deleted_messages,\n    'deleted_receipts', v_deleted_receipts,\n    'deleted_message_deletions', v_deleted_message_deletions,\n    'deleted_hidden_rows', v_deleted_hidden_rows,\n    'deleted_participants', v_deleted_participants\n  );\nend;\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_delete_thread_permanently(p_thread_id uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$ begin raise exception using errcode='0A000', message='Permanent Messenger thread deletion is retired; use the audited tombstone workflow'; end $function$\n",
       "function_name": "msg_delete_thread_permanently",
       "identity_arguments": "p_thread_id uuid",
       "schema_name": "public"
@@ -27859,16 +29378,30 @@
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.tool_commit_cleaning_workflow(p_client_session_id text, p_client_completion_id text, p_device_id text, p_location_code text, p_client_started_at timestamp with time zone, p_client_ended_at timestamp with time zone, p_response_json jsonb DEFAULT '{}'::jsonb, p_scan_evidence jsonb DEFAULT '[]'::jsonb, p_correlation_id text DEFAULT NULL::text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_session record;\n  v_presented_device_pk uuid;\nbegin\n  select s.id, s.session_uuid, s.client_session_id, s.status,\n         s.started_at, s.ended_at, s.duration_minutes, s.duration_display,\n         s.completion_source, s.device_id as session_device_pk,\n         l.location_code, l.location_name, l.location_type, l.form_type,\n         e.display_name as employee_name, d.device_id\n    into v_session\n  from public.sessions s\n  join public.locations l on l.id = s.location_id\n  join public.employees e on e.id = s.employee_id\n  join public.devices d on d.id = s.device_id\n  where s.client_session_id = btrim(p_client_session_id)\n  limit 1;\n\n  if v_session.session_uuid is not null and v_session.status = 'cancelled' then\n    select d.id into v_presented_device_pk\n    from public.device_aliases da\n    join public.devices d on d.id = da.canonical_device_id and d.active = true\n    where da.active = true and upper(btrim(da.alias_identifier)) = upper(btrim(p_device_id))\n    union all\n    select d.id from public.devices d\n    where d.active = true and upper(btrim(d.device_id)) = upper(btrim(p_device_id))\n    limit 1;\n\n    if v_presented_device_pk is null or v_presented_device_pk <> v_session.session_device_pk then\n      raise exception 'Session does not belong to device %', p_device_id;\n    end if;\n\n    return jsonb_build_object(\n      'session_uuid', v_session.session_uuid,\n      'client_session_id', v_session.client_session_id,\n      'client_completion_id', p_client_completion_id,\n      'location_code', v_session.location_code,\n      'location_name', v_session.location_name,\n      'location_type', v_session.location_type,\n      'form_type', v_session.form_type,\n      'employee_name', v_session.employee_name,\n      'device_id', v_session.device_id,\n      'status', 'cancelled',\n      'started_at', v_session.started_at,\n      'ended_at', v_session.ended_at,\n      'duration_minutes', v_session.duration_minutes,\n      'duration_display', v_session.duration_display,\n      'completion_source', v_session.completion_source,\n      'replayed', true,\n      'terminal', true,\n      'discard_local_workflow', true,\n      'reason', 'session_cancelled_without_authoritative_completion',\n      'correlation_id', p_correlation_id\n    );\n  end if;\n\n  return public.commit_cleaning_workflow(\n    p_client_session_id,\n    p_client_completion_id,\n    p_device_id,\n    p_location_code,\n    p_client_started_at,\n    p_client_ended_at,\n    p_response_json,\n    p_scan_evidence,\n    p_correlation_id\n  );\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.tool_commit_cleaning_workflow(p_client_session_id text, p_client_completion_id text, p_device_id text, p_location_code text, p_client_started_at timestamp with time zone, p_client_ended_at timestamp with time zone, p_response_json jsonb DEFAULT '{}'::jsonb, p_scan_evidence jsonb DEFAULT '[]'::jsonb, p_correlation_id text DEFAULT NULL::text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$ begin raise exception using errcode='0A000', message='Use tool_commit_cleaning_workflow_authoritative through the authenticated scan backend'; end $function$\n",
       "function_name": "tool_commit_cleaning_workflow",
       "identity_arguments": "p_client_session_id text, p_client_completion_id text, p_device_id text, p_location_code text, p_client_started_at timestamp with time zone, p_client_ended_at timestamp with time zone, p_response_json jsonb, p_scan_evidence jsonb, p_correlation_id text",
       "schema_name": "public"
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.tool_complete_session(p_session_uuid text, p_response_json jsonb DEFAULT '{}'::jsonb, p_submitted_by_employee_name text DEFAULT NULL::text, p_device_id text DEFAULT NULL::text, p_client_completion_id text DEFAULT NULL::text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_session record;\n  v_presented_device_pk uuid;\n  v_row record;\nbegin\n  select s.id, s.session_uuid, s.client_session_id, s.status,\n         s.started_at, s.ended_at, s.duration_minutes, s.duration_display,\n         s.completion_source, s.device_id as session_device_pk,\n         l.location_name, l.location_code, l.location_type, l.form_type,\n         e.display_name as employee_name, d.device_id\n    into v_session\n  from public.sessions s\n  join public.locations l on l.id = s.location_id\n  join public.employees e on e.id = s.employee_id\n  join public.devices d on d.id = s.device_id\n  where s.session_uuid = p_session_uuid or s.client_session_id = p_session_uuid\n  order by case when s.session_uuid = p_session_uuid then 0 else 1 end\n  limit 1;\n\n  if v_session.session_uuid is null then\n    raise exception 'Session not found for server or client identifier: %', p_session_uuid;\n  end if;\n\n  if nullif(btrim(coalesce(p_device_id,'')), '') is not null then\n    select d.id into v_presented_device_pk\n    from public.device_aliases da\n    join public.devices d on d.id = da.canonical_device_id and d.active = true\n    where da.active = true and upper(btrim(da.alias_identifier)) = upper(btrim(p_device_id))\n    union all\n    select d.id from public.devices d\n    where d.active = true and upper(btrim(d.device_id)) = upper(btrim(p_device_id))\n    limit 1;\n    if v_presented_device_pk is null or v_presented_device_pk <> v_session.session_device_pk then\n      raise exception 'Session does not belong to device %', p_device_id;\n    end if;\n  end if;\n\n  if v_session.status = 'cancelled' then\n    return jsonb_build_object(\n      'session_uuid', v_session.session_uuid,\n      'client_session_id', v_session.client_session_id,\n      'location_code', v_session.location_code,\n      'location_name', v_session.location_name,\n      'location_type', v_session.location_type,\n      'form_type', v_session.form_type,\n      'employee_name', v_session.employee_name,\n      'device_id', v_session.device_id,\n      'status', 'cancelled',\n      'started_at', v_session.started_at,\n      'ended_at', v_session.ended_at,\n      'duration_minutes', v_session.duration_minutes,\n      'duration_display', v_session.duration_display,\n      'completion_source', v_session.completion_source,\n      'replayed', true,\n      'terminal', true,\n      'discard_local_workflow', true,\n      'reason', 'session_cancelled_without_authoritative_completion'\n    );\n  end if;\n\n  if v_session.status = 'closed' and exists(\n    select 1 from public.completion_responses cr where cr.session_id = v_session.id\n  ) then\n    return (\n      select jsonb_build_object(\n        'session_uuid', v_session.session_uuid,\n        'client_session_id', v_session.client_session_id,\n        'location_code', v_session.location_code,\n        'location_name', v_session.location_name,\n        'location_type', v_session.location_type,\n        'form_type', v_session.form_type,\n        'employee_name', v_session.employee_name,\n        'device_id', v_session.device_id,\n        'status', 'closed',\n        'submitted_at', cr.submitted_at,\n        'replayed', true\n      )\n      from public.completion_responses cr\n      where cr.session_id = v_session.id\n      limit 1\n    );\n  end if;\n\n  select * into v_row\n  from public.complete_session(\n    v_session.session_uuid,\n    p_response_json,\n    p_submitted_by_employee_name,\n    v_session.device_id,\n    p_client_completion_id\n  )\n  limit 1;\n\n  return jsonb_build_object(\n    'session_uuid', v_row.session_uuid,\n    'client_session_id', v_session.client_session_id,\n    'location_code', v_session.location_code,\n    'location_name', v_row.location_name,\n    'location_type', v_session.location_type,\n    'form_type', v_session.form_type,\n    'employee_name', v_row.employee_name,\n    'device_id', v_session.device_id,\n    'status', v_row.status,\n    'submitted_at', v_row.submitted_at,\n    'replayed', false\n  );\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.tool_commit_cleaning_workflow_authoritative(p_client_session_id text, p_client_completion_id text, p_device_id text, p_location_code text, p_client_started_at text, p_client_ended_at text, p_response_json jsonb, p_scan_evidence jsonb, p_correlation_id text, p_context_id text, p_submission_proof text, p_authenticated_credential_id text, p_backend_execution_secret text)\n RETURNS jsonb\n LANGUAGE sql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\n  select public.custodial_commit_offline_occurrence(p_client_session_id,p_client_completion_id,p_device_id,p_location_code,p_client_started_at,p_client_ended_at,p_response_json,p_scan_evidence,p_correlation_id,p_context_id,p_submission_proof,p_authenticated_credential_id,p_backend_execution_secret);\n$function$\n",
+      "function_name": "tool_commit_cleaning_workflow_authoritative",
+      "identity_arguments": "p_client_session_id text, p_client_completion_id text, p_device_id text, p_location_code text, p_client_started_at text, p_client_ended_at text, p_response_json jsonb, p_scan_evidence jsonb, p_correlation_id text, p_context_id text, p_submission_proof text, p_authenticated_credential_id text, p_backend_execution_secret text",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.tool_complete_session(p_session_uuid text, p_response_json jsonb DEFAULT '{}'::jsonb, p_submitted_by_employee_name text DEFAULT NULL::text, p_device_id text DEFAULT NULL::text, p_client_completion_id text DEFAULT NULL::text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$ begin raise exception using errcode='0A000', message='Use tool_complete_session_authoritative through the authenticated scan backend'; end $function$\n",
       "function_name": "tool_complete_session",
       "identity_arguments": "p_session_uuid text, p_response_json jsonb, p_submitted_by_employee_name text, p_device_id text, p_client_completion_id text",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.tool_complete_session_authoritative(p_session_uuid text, p_response_json jsonb, p_device_id text, p_client_completion_id text, p_authenticated_credential_id text, p_backend_execution_secret text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_session record;\n  v_context public.custodial_offline_actor_contexts%rowtype;\n  v_existing public.custodial_offline_reconciliation_records%rowtype;\n  v_proof text := encode(extensions.gen_random_bytes(32), 'hex');\n  v_occurrence_fingerprint text;\n  v_assignment_change_id uuid;\nbegin\n  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  select s.*, d.device_id as canonical_device_id, l.location_code, c.credential_id\n    into v_session from public.sessions s join public.devices d on d.id=s.device_id join public.locations l on l.id=s.location_id\n    join public.device_auth_credentials c on c.credential_id=nullif(lower(btrim(p_authenticated_credential_id)),'')::uuid and c.device_id=s.device_id\n   where s.session_uuid=p_session_uuid or s.client_session_id=p_session_uuid\n   order by case when s.session_uuid=p_session_uuid then 0 else 1 end limit 1 for update of s;\n  if v_session.id is null or upper(btrim(coalesce(p_device_id,'')))<>upper(v_session.canonical_device_id) then\n    raise exception using errcode='42501', message='legacy completion is not bound to an authenticated server session';\n  end if;\n  -- A legacy caller never receives the one-time proof.  Its exact retry is\n  -- therefore resolved from the immutable reconciliation record, while any\n  -- altered completion id or response is fenced as an identity conflict.\n  select * into v_existing from public.custodial_offline_reconciliation_records\n    where client_session_id=v_session.client_session_id or client_completion_id=btrim(p_client_completion_id)\n    order by case when client_completion_id=btrim(p_client_completion_id) then 0 else 1 end\n    limit 1 for update;\n  if v_existing.reconciliation_id is not null then\n    if v_existing.client_session_id=v_session.client_session_id\n       and v_existing.client_completion_id=btrim(p_client_completion_id)\n       and v_existing.payload_json=jsonb_build_object('response_json',coalesce(p_response_json,'{}'::jsonb),'scan_evidence','[]'::jsonb) then\n      insert into public.custodial_offline_reconciliation_audits(reconciliation_id,event_type,evidence_json)\n      values(v_existing.reconciliation_id,'replayed',jsonb_build_object('exact_legacy_adapter_replay',true));\n      return v_existing.result_json || jsonb_build_object('reconciliation_id',v_existing.reconciliation_id,'replayed',true);\n    end if;\n    return public.custodial_quarantine_offline_submission(\n      v_session.client_session_id,p_client_completion_id,v_existing.context_id,\n      encode(extensions.digest(convert_to(v_session.client_session_id||':'||coalesce(p_client_completion_id,'')||':legacy-conflict','UTF8'),'sha256'),'hex'),\n      jsonb_build_object('response_json',coalesce(p_response_json,'{}'::jsonb),'scan_evidence','[]'::jsonb),\n      'legacy_adapter_payload_fingerprint_conflict','{}'::jsonb,p_backend_execution_secret);\n  end if;\n  select * into v_context from public.custodial_offline_actor_contexts where client_session_id=v_session.client_session_id for update;\n  if v_context.context_id is null then\n    select assignment_change_id into v_assignment_change_id from public.custodial_employee_device_assignment_history\n      where device_id=v_session.device_id and new_employee_id=v_session.employee_id order by changed_at desc limit 1;\n    if v_assignment_change_id is null then raise exception using errcode='42501', message='legacy completion has no authoritative assignment epoch'; end if;\n    v_occurrence_fingerprint := encode(extensions.digest(convert_to(jsonb_build_object('legacy_server_session_id',v_session.id::text,'employee_id',v_session.employee_id::text,'device_id',v_session.device_id::text,'location_id',v_session.location_id::text,'started_at',v_session.started_at,'client_session_id',v_session.client_session_id)::text,'UTF8'),'sha256'),'hex');\n    insert into public.custodial_offline_actor_contexts(client_session_id,device_id,employee_id,credential_id,assignment_epoch,assignment_change_id,location_id,canonical_location_code,location_aliases,started_at,occurrence_fingerprint,expires_at)\n    select v_session.client_session_id,v_session.device_id,v_session.employee_id,v_session.credential_id,d.assignment_epoch,v_assignment_change_id,v_session.location_id,v_session.location_code,jsonb_build_array(v_session.location_code),v_session.started_at,v_occurrence_fingerprint,now()+interval '7 days'\n      from public.devices d where d.id=v_session.device_id\n    returning * into v_context;\n    insert into public.custodial_offline_submission_proofs(context_id,proof_digest) values(v_context.context_id,encode(extensions.digest(convert_to(v_proof,'UTF8'),'sha256'),'hex'));\n  else\n    raise exception using errcode='0A000', message='legacy completion must use the existing canonical occurrence adapter';\n  end if;\n  return public.custodial_commit_offline_occurrence(v_context.client_session_id,p_client_completion_id,v_session.canonical_device_id,v_session.location_code,\n    v_context.started_at::text,coalesce(v_session.ended_at,now())::text,coalesce(p_response_json,'{}'::jsonb),'[]'::jsonb,\n    'legacy-completion:'||p_client_completion_id,v_context.context_id::text,v_proof,v_context.credential_id::text,p_backend_execution_secret);\nend\n$function$\n",
+      "function_name": "tool_complete_session_authoritative",
+      "identity_arguments": "p_session_uuid text, p_response_json jsonb, p_device_id text, p_client_completion_id text, p_authenticated_credential_id text, p_backend_execution_secret text",
       "schema_name": "public"
     },
     {
@@ -27988,6 +29521,13 @@
       "definition": "CREATE OR REPLACE FUNCTION public.tool_runtime_readiness()\n RETURNS jsonb\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\n  select jsonb_build_object(\n    'employees_count', (select count(*) from public.employees where active = true),\n    'devices_count', (select count(*) from public.devices where active = true),\n    'locations_count', (select count(*) from public.locations where active = true),\n    'system_enabled', public.get_setting_bool('system_enabled', false),\n    'use_approved_devices', public.get_setting_bool('use_approved_devices', false),\n    'has_background_image', public.get_setting_text('background_image_url', null) is not null,\n    'ready', (\n      (select count(*) from public.employees where active = true) > 0\n      and (select count(*) from public.devices where active = true) > 0\n      and (select count(*) from public.locations where active = true) > 0\n      and public.get_setting_bool('system_enabled', false) = true\n    )\n  );\n$function$\n",
       "function_name": "tool_runtime_readiness",
       "identity_arguments": "",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.tool_start_offline_occurrence(p_device_id text, p_location_code text, p_client_session_id text, p_client_started_at text, p_authenticated_credential_id text, p_backend_execution_secret text)\n RETURNS jsonb\n LANGUAGE sql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\n  select public.custodial_start_offline_occurrence(\n    p_device_id,p_location_code,p_client_session_id,p_client_started_at,p_authenticated_credential_id,p_backend_execution_secret\n  );\n$function$\n",
+      "function_name": "tool_start_offline_occurrence",
+      "identity_arguments": "p_device_id text, p_location_code text, p_client_session_id text, p_client_started_at text, p_authenticated_credential_id text, p_backend_execution_secret text",
       "schema_name": "public"
     },
     {
@@ -28368,6 +29908,15 @@
     },
     {
       "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX custodial_backend_execution_config_pkey ON public.custodial_backend_execution_config USING btree (config_key)",
+      "index_name": "custodial_backend_execution_config_pkey",
+      "is_primary": true,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "custodial_backend_execution_config"
+    },
+    {
+      "backs_constraint": true,
       "definition": "CREATE UNIQUE INDEX custodial_employee_device_assignment_history_pkey ON public.custodial_employee_device_assignment_history USING btree (assignment_change_id)",
       "index_name": "custodial_employee_device_assignment_history_pkey",
       "is_primary": true,
@@ -28437,6 +29986,168 @@
       "is_unique": false,
       "schema_name": "public",
       "table_name": "custodial_employee_status_history"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX custodial_offline_actor_contexts_client_session_id_key ON public.custodial_offline_actor_contexts USING btree (client_session_id)",
+      "index_name": "custodial_offline_actor_contexts_client_session_id_key",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX custodial_offline_actor_contexts_occurrence_fingerprint_key ON public.custodial_offline_actor_contexts USING btree (occurrence_fingerprint)",
+      "index_name": "custodial_offline_actor_contexts_occurrence_fingerprint_key",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX custodial_offline_actor_contexts_occurrence_id_key ON public.custodial_offline_actor_contexts USING btree (occurrence_id)",
+      "index_name": "custodial_offline_actor_contexts_occurrence_id_key",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX custodial_offline_actor_contexts_pkey ON public.custodial_offline_actor_contexts USING btree (context_id)",
+      "index_name": "custodial_offline_actor_contexts_pkey",
+      "is_primary": true,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_custodial_offline_actor_contexts_actor_time ON public.custodial_offline_actor_contexts USING btree (employee_id, device_id, started_at DESC)",
+      "index_name": "idx_custodial_offline_actor_contexts_actor_time",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX custodial_offline_reconciliation_audits_pkey ON public.custodial_offline_reconciliation_audits USING btree (audit_id)",
+      "index_name": "custodial_offline_reconciliation_audits_pkey",
+      "is_primary": true,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_audits"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX custodial_offline_reconciliation_dispositions_pkey ON public.custodial_offline_reconciliation_dispositions USING btree (disposition_id)",
+      "index_name": "custodial_offline_reconciliation_dispositions_pkey",
+      "is_primary": true,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_dispositions"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX custodial_offline_reconciliation_records_pkey ON public.custodial_offline_reconciliation_records USING btree (reconciliation_id)",
+      "index_name": "custodial_offline_reconciliation_records_pkey",
+      "is_primary": true,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_records"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_custodial_offline_reconciliation_manager_list ON public.custodial_offline_reconciliation_records USING btree (state, created_at DESC, reconciliation_id)",
+      "index_name": "idx_custodial_offline_reconciliation_manager_list",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_records"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX uq_custodial_offline_reconciliation_completion ON public.custodial_offline_reconciliation_records USING btree (client_completion_id)",
+      "index_name": "uq_custodial_offline_reconciliation_completion",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_records"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX uq_custodial_offline_reconciliation_session ON public.custodial_offline_reconciliation_records USING btree (client_session_id)",
+      "index_name": "uq_custodial_offline_reconciliation_session",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_records"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX custodial_offline_scan_event_evidence_pkey ON public.custodial_offline_scan_event_evidence USING btree (client_event_id)",
+      "index_name": "custodial_offline_scan_event_evidence_pkey",
+      "is_primary": true,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_event_evidence"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX custodial_offline_submission_proofs_context_id_key ON public.custodial_offline_submission_proofs USING btree (context_id)",
+      "index_name": "custodial_offline_submission_proofs_context_id_key",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "custodial_offline_submission_proofs"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX custodial_offline_submission_proofs_pkey ON public.custodial_offline_submission_proofs USING btree (submission_id)",
+      "index_name": "custodial_offline_submission_proofs_pkey",
+      "is_primary": true,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "custodial_offline_submission_proofs"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX custodial_offline_submission_proofs_proof_digest_key ON public.custodial_offline_submission_proofs USING btree (proof_digest)",
+      "index_name": "custodial_offline_submission_proofs_proof_digest_key",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "custodial_offline_submission_proofs"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE INDEX custodial_offline_device_time_no_overlap ON public.custodial_offline_time_reservations USING gist (device_id, occurred_range)",
+      "index_name": "custodial_offline_device_time_no_overlap",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "custodial_offline_time_reservations"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE INDEX custodial_offline_employee_time_no_overlap ON public.custodial_offline_time_reservations USING gist (employee_id, occurred_range)",
+      "index_name": "custodial_offline_employee_time_no_overlap",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "custodial_offline_time_reservations"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX custodial_offline_time_reservations_pkey ON public.custodial_offline_time_reservations USING btree (occurrence_id)",
+      "index_name": "custodial_offline_time_reservations_pkey",
+      "is_primary": true,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "custodial_offline_time_reservations"
     },
     {
       "backs_constraint": true,
@@ -33299,14 +35010,6 @@
       "schema_name": "public"
     },
     {
-      "function_name": "commit_cleaning_workflow",
-      "grantee": "service_role",
-      "identity_arguments": "p_client_session_id text, p_client_completion_id text, p_device_id text, p_location_code text, p_client_started_at timestamp with time zone, p_client_ended_at timestamp with time zone, p_response_json jsonb, p_scan_evidence jsonb, p_correlation_id text",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
       "function_name": "complete_session",
       "grantee": "service_role",
       "identity_arguments": "p_session_uuid text, p_response_json jsonb, p_submitted_by_employee_name text, p_device_id text, p_client_completion_id text",
@@ -33339,9 +35042,49 @@
       "schema_name": "public"
     },
     {
+      "function_name": "custodial_backend_transition_allowed",
+      "grantee": "service_role",
+      "identity_arguments": "",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "custodial_commit_offline_occurrence",
+      "grantee": "service_role",
+      "identity_arguments": "p_client_session_id text, p_client_completion_id text, p_device_id text, p_location_code text, p_client_started_at text, p_client_ended_at text, p_response_json jsonb, p_scan_evidence jsonb, p_correlation_id text, p_context_id text, p_submission_proof text, p_authenticated_credential_id text, p_backend_execution_secret text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
       "function_name": "custodial_create_employee",
       "grantee": "service_role",
       "identity_arguments": "p_display_name text, p_employee_code text, p_notes text, p_changed_by_manager_id uuid",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "custodial_manager_dispose_offline_reconciliation",
+      "grantee": "service_role",
+      "identity_arguments": "p_manager_id uuid, p_reconciliation_id uuid, p_disposition text, p_reason text, p_backend_execution_secret text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "custodial_manager_get_offline_reconciliation",
+      "grantee": "service_role",
+      "identity_arguments": "p_manager_id uuid, p_reconciliation_id uuid, p_backend_execution_secret text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "custodial_manager_list_offline_reconciliations",
+      "grantee": "service_role",
+      "identity_arguments": "p_manager_id uuid, p_limit integer, p_before timestamp with time zone, p_backend_execution_secret text",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -33355,9 +35098,65 @@
       "schema_name": "public"
     },
     {
+      "function_name": "custodial_offline_payload_fingerprint",
+      "grantee": "PUBLIC",
+      "identity_arguments": "p_context custodial_offline_actor_contexts, p_client_completion_id text, p_started_at timestamp with time zone, p_ended_at timestamp with time zone, p_response_json jsonb, p_scan_evidence jsonb, p_correlation_id text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "custodial_offline_payload_fingerprint",
+      "grantee": "service_role",
+      "identity_arguments": "p_context custodial_offline_actor_contexts, p_client_completion_id text, p_started_at timestamp with time zone, p_ended_at timestamp with time zone, p_response_json jsonb, p_scan_evidence jsonb, p_correlation_id text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "custodial_quarantine_offline_submission",
+      "grantee": "service_role",
+      "identity_arguments": "p_client_session_id text, p_client_completion_id text, p_context_id uuid, p_payload_fingerprint text, p_payload_json jsonb, p_reason text, p_details jsonb, p_backend_execution_secret text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "custodial_reject_offline_evidence_mutation",
+      "grantee": "PUBLIC",
+      "identity_arguments": "",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "custodial_reject_offline_evidence_mutation",
+      "grantee": "service_role",
+      "identity_arguments": "",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "custodial_require_backend_execution_secret",
+      "grantee": "service_role",
+      "identity_arguments": "p_execution_secret text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
       "function_name": "custodial_set_employee_active",
       "grantee": "service_role",
       "identity_arguments": "p_employee_id uuid, p_active boolean, p_changed_by_manager_id uuid, p_reason text, p_release_devices boolean",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "custodial_start_offline_occurrence",
+      "grantee": "service_role",
+      "identity_arguments": "p_device_id text, p_location_code text, p_client_session_id text, p_client_started_at text, p_authenticated_credential_id text, p_backend_execution_secret text",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -35331,9 +37130,9 @@
       "schema_name": "public"
     },
     {
-      "function_name": "tool_commit_cleaning_workflow",
+      "function_name": "tool_commit_cleaning_workflow_authoritative",
       "grantee": "service_role",
-      "identity_arguments": "p_client_session_id text, p_client_completion_id text, p_device_id text, p_location_code text, p_client_started_at timestamp with time zone, p_client_ended_at timestamp with time zone, p_response_json jsonb, p_scan_evidence jsonb, p_correlation_id text",
+      "identity_arguments": "p_client_session_id text, p_client_completion_id text, p_device_id text, p_location_code text, p_client_started_at text, p_client_ended_at text, p_response_json jsonb, p_scan_evidence jsonb, p_correlation_id text, p_context_id text, p_submission_proof text, p_authenticated_credential_id text, p_backend_execution_secret text",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -35342,6 +37141,14 @@
       "function_name": "tool_complete_session",
       "grantee": "service_role",
       "identity_arguments": "p_session_uuid text, p_response_json jsonb, p_submitted_by_employee_name text, p_device_id text, p_client_completion_id text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "tool_complete_session_authoritative",
+      "grantee": "service_role",
+      "identity_arguments": "p_session_uuid text, p_response_json jsonb, p_device_id text, p_client_completion_id text, p_authenticated_credential_id text, p_backend_execution_secret text",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -35478,6 +37285,14 @@
       "function_name": "tool_runtime_readiness",
       "grantee": "service_role",
       "identity_arguments": "",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "tool_start_offline_occurrence",
+      "grantee": "service_role",
+      "identity_arguments": "p_device_id text, p_location_code text, p_client_session_id text, p_client_started_at text, p_authenticated_credential_id text, p_backend_execution_secret text",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -43639,6 +45454,15 @@
       "comment": null,
       "partition_key": null,
       "relation_kind": "r",
+      "rls_enabled": false,
+      "rls_forced": false,
+      "schema_name": "public",
+      "table_name": "custodial_backend_execution_config"
+    },
+    {
+      "comment": null,
+      "partition_key": null,
+      "relation_kind": "r",
       "rls_enabled": true,
       "rls_forced": true,
       "schema_name": "public",
@@ -43652,6 +45476,69 @@
       "rls_forced": true,
       "schema_name": "public",
       "table_name": "custodial_employee_status_history"
+    },
+    {
+      "comment": null,
+      "partition_key": null,
+      "relation_kind": "r",
+      "rls_enabled": false,
+      "rls_forced": false,
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts"
+    },
+    {
+      "comment": null,
+      "partition_key": null,
+      "relation_kind": "r",
+      "rls_enabled": false,
+      "rls_forced": false,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_audits"
+    },
+    {
+      "comment": null,
+      "partition_key": null,
+      "relation_kind": "r",
+      "rls_enabled": false,
+      "rls_forced": false,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_dispositions"
+    },
+    {
+      "comment": null,
+      "partition_key": null,
+      "relation_kind": "r",
+      "rls_enabled": false,
+      "rls_forced": false,
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_records"
+    },
+    {
+      "comment": null,
+      "partition_key": null,
+      "relation_kind": "r",
+      "rls_enabled": false,
+      "rls_forced": false,
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_event_evidence"
+    },
+    {
+      "comment": null,
+      "partition_key": null,
+      "relation_kind": "r",
+      "rls_enabled": false,
+      "rls_forced": false,
+      "schema_name": "public",
+      "table_name": "custodial_offline_submission_proofs"
+    },
+    {
+      "comment": null,
+      "partition_key": null,
+      "relation_kind": "r",
+      "rls_enabled": false,
+      "rls_forced": false,
+      "schema_name": "public",
+      "table_name": "custodial_offline_time_reservations"
     },
     {
       "comment": null,
@@ -44782,6 +46669,55 @@
       "schema_name": "public",
       "table_name": "coverage_templates",
       "trigger_name": "trg_sch_guard_restricted_coverage_template"
+    },
+    {
+      "definition": "CREATE TRIGGER trg_custodial_offline_context_immutable BEFORE DELETE OR UPDATE ON custodial_offline_actor_contexts FOR EACH ROW EXECUTE FUNCTION custodial_reject_offline_evidence_mutation()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts",
+      "trigger_name": "trg_custodial_offline_context_immutable"
+    },
+    {
+      "definition": "CREATE TRIGGER trg_custodial_offline_audit_immutable BEFORE DELETE OR UPDATE ON custodial_offline_reconciliation_audits FOR EACH ROW EXECUTE FUNCTION custodial_reject_offline_evidence_mutation()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_audits",
+      "trigger_name": "trg_custodial_offline_audit_immutable"
+    },
+    {
+      "definition": "CREATE TRIGGER trg_custodial_offline_disposition_immutable BEFORE DELETE OR UPDATE ON custodial_offline_reconciliation_dispositions FOR EACH ROW EXECUTE FUNCTION custodial_reject_offline_evidence_mutation()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_dispositions",
+      "trigger_name": "trg_custodial_offline_disposition_immutable"
+    },
+    {
+      "definition": "CREATE TRIGGER trg_custodial_offline_reconciliation_immutable BEFORE DELETE OR UPDATE ON custodial_offline_reconciliation_records FOR EACH ROW EXECUTE FUNCTION custodial_reject_offline_evidence_mutation()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_records",
+      "trigger_name": "trg_custodial_offline_reconciliation_immutable"
+    },
+    {
+      "definition": "CREATE TRIGGER trg_custodial_offline_scan_evidence_immutable BEFORE DELETE OR UPDATE ON custodial_offline_scan_event_evidence FOR EACH ROW EXECUTE FUNCTION custodial_reject_offline_evidence_mutation()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_event_evidence",
+      "trigger_name": "trg_custodial_offline_scan_evidence_immutable"
+    },
+    {
+      "definition": "CREATE TRIGGER trg_custodial_offline_proof_immutable BEFORE DELETE OR UPDATE ON custodial_offline_submission_proofs FOR EACH ROW EXECUTE FUNCTION custodial_reject_offline_evidence_mutation()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "custodial_offline_submission_proofs",
+      "trigger_name": "trg_custodial_offline_proof_immutable"
+    },
+    {
+      "definition": "CREATE TRIGGER trg_custodial_offline_reservation_immutable BEFORE DELETE OR UPDATE ON custodial_offline_time_reservations FOR EACH ROW EXECUTE FUNCTION custodial_reject_offline_evidence_mutation()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "custodial_offline_time_reservations",
+      "trigger_name": "trg_custodial_offline_reservation_immutable"
     },
     {
       "definition": "CREATE TRIGGER daily_absence_overrides_regenerate_schedule AFTER INSERT OR DELETE OR UPDATE ON daily_absence_overrides FOR EACH ROW EXECUTE FUNCTION sch_daily_absence_override_regenerate_trigger()",

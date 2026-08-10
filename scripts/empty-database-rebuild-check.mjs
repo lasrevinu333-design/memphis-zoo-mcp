@@ -697,6 +697,19 @@ insert into public.locations(id, location_code, location_name, location_type, fo
 values ('00000000-0000-4000-8000-00000000f102', 'REBUILD_FINISH', 'Rebuild Finish Location', 'restroom', 'restroom', true);
 insert into public.devices(id, device_id, device_name, active, assigned_employee_id)
 values ('00000000-0000-4000-8000-00000000f103', 'REBUILD-FINISH-DEVICE', 'Rebuild Finish Device', true, '00000000-0000-4000-8000-00000000f101');
+insert into public.device_auth_credentials(credential_id,device_id,token_hash,confirmed_at,expires_at)
+values ('00000000-0000-4000-8000-00000000f110','00000000-0000-4000-8000-00000000f103',repeat('f',64),now(),now()+interval '1 day');
+insert into public.custodial_employee_device_assignment_history(device_id,device_identifier,new_employee_id,new_employee_name,change_reason,source)
+values ('00000000-0000-4000-8000-00000000f103','REBUILD-FINISH-DEVICE','00000000-0000-4000-8000-00000000f101','Rebuild Finish Test','empty rebuild authority fixture','test');
+insert into public.employees(id, employee_code, display_name, active, role)
+values ('00000000-0000-4000-8000-00000000f127', 'REBUILD-FINISH-SECOND', 'Rebuild Finish Second Test', true, 'staff');
+insert into public.devices(id, device_id, device_name, active, assigned_employee_id)
+values ('00000000-0000-4000-8000-00000000f123', 'REBUILD-FINISH-DEVICE-SECOND', 'Rebuild Finish Second Device', true, '00000000-0000-4000-8000-00000000f127');
+insert into public.device_auth_credentials(credential_id,device_id,token_hash,confirmed_at,expires_at)
+values ('00000000-0000-4000-8000-00000000f126','00000000-0000-4000-8000-00000000f123',repeat('e',64),now(),now()+interval '1 day');
+insert into public.custodial_employee_device_assignment_history(device_id,device_identifier,new_employee_id,new_employee_name,change_reason,source)
+values ('00000000-0000-4000-8000-00000000f123','REBUILD-FINISH-DEVICE-SECOND','00000000-0000-4000-8000-00000000f127','Rebuild Finish Second Test','empty rebuild authority fixture','test');
+select public.custodial_configure_backend_execution_key(encode(extensions.digest(convert_to('empty-rebuild-offline-authority-secret-0123456789','UTF8'),'sha256'),'hex'),'empty-rebuild');
 do $functional_test$
 declare
   v_start jsonb;
@@ -704,6 +717,7 @@ declare
   v_replay jsonb;
   v_session_uuid text;
   v_issue_start jsonb;
+  v_issue_completion jsonb;
   v_issue_session_uuid text;
   v_manager_user public.msg_users%rowtype;
   v_manager_user_again public.msg_users%rowtype;
@@ -721,7 +735,7 @@ begin
     'REBUILD_FINISH',
     'REBUILD-FINISH-DEVICE',
     '00000000-0000-4000-8000-00000000f104',
-    now() - interval '5 minutes',
+    now() - interval '120 minutes',
     'rebuild-functional-start'
   );
   v_session_uuid := v_start ->> 'session_uuid';
@@ -732,7 +746,7 @@ begin
     v_session_uuid,
     'REBUILD-FINISH-DEVICE',
     '00000000-0000-4000-8000-00000000f105',
-    now() - interval '1 minute'
+    now() - interval '90 minutes'
   );
   if v_finish ->> 'status' <> 'pending_submit' or (v_finish ->> 'replayed')::boolean is not false then
     raise exception 'First exact finish did not produce one authoritative transition: %', v_finish;
@@ -741,7 +755,7 @@ begin
     v_session_uuid,
     'REBUILD-FINISH-DEVICE',
     '00000000-0000-4000-8000-00000000f105',
-    now() - interval '1 minute'
+    now() - interval '90 minutes'
   );
   if v_replay ->> 'status' <> 'pending_submit' or (v_replay ->> 'replayed')::boolean is not true then
     raise exception 'Exact finish replay was not recognized idempotently: %', v_replay;
@@ -751,7 +765,7 @@ begin
       v_session_uuid,
       'REBUILD-FINISH-DEVICE',
       '00000000-0000-4000-8000-00000000f106',
-      now()
+    now() - interval '89 minutes'
     );
     raise exception 'A second finish operation id was incorrectly accepted';
   exception when unique_violation then
@@ -761,40 +775,59 @@ begin
     raise exception 'Exact finish functional check produced a duplicate session';
   end if;
 
-  perform public.tool_complete_session(
+  v_issue_completion := public.tool_complete_session_authoritative(
     v_session_uuid,
     '{"services_performed":["trash_removed"],"notes":"Routine cleaning completed without a maintenance issue."}'::jsonb,
-    'Rebuild Finish Test',
     'REBUILD-FINISH-DEVICE',
-    'rebuild-routine-notes-completion'
+    'rebuild-routine-notes-completion',
+    '00000000-0000-4000-8000-00000000f110',
+    'empty-rebuild-offline-authority-secret-0123456789'
   );
+  if v_issue_completion->>'status' <> 'closed' then
+    raise exception 'Explicit maintenance issue completion was not accepted: %', v_issue_completion;
+  end if;
+  v_issue_completion := public.tool_complete_session_authoritative(
+    v_session_uuid,
+    '{"services_performed":["trash_removed"],"notes":"Routine cleaning completed without a maintenance issue."}'::jsonb,
+    'REBUILD-FINISH-DEVICE',
+    'rebuild-routine-notes-completion',
+    '00000000-0000-4000-8000-00000000f110',
+    'empty-rebuild-offline-authority-secret-0123456789'
+  );
+  if v_issue_completion->>'status' <> 'closed' or coalesce((v_issue_completion->>'replayed')::boolean,false) is not true then
+    raise exception 'Legacy adapter exact replay was not accepted idempotently: %', v_issue_completion;
+  end if;
   if exists (select 1 from public.maintenance_tickets where session_id = (select id from public.sessions where session_uuid = v_session_uuid)) then
     raise exception 'Routine cleaning notes incorrectly created a maintenance ticket';
   end if;
 
   v_issue_start := public.tool_start_session_v2(
     'REBUILD_FINISH',
-    'REBUILD-FINISH-DEVICE',
+    'REBUILD-FINISH-DEVICE-SECOND',
     '00000000-0000-4000-8000-00000000f111',
-    now() - interval '5 minutes',
+    now() - interval '60 minutes',
     'rebuild-explicit-issue-start'
   );
   v_issue_session_uuid := v_issue_start ->> 'session_uuid';
   perform public.tool_finish_session_exact(
     v_issue_session_uuid,
-    'REBUILD-FINISH-DEVICE',
+    'REBUILD-FINISH-DEVICE-SECOND',
     '00000000-0000-4000-8000-00000000f112',
-    now() - interval '1 minute'
+    now() - interval '30 minutes'
   );
-  perform public.tool_complete_session(
+  v_issue_completion := public.tool_complete_session_authoritative(
     v_issue_session_uuid,
     '{"services_performed":["trash_removed"],"notes":"Routine context.","maintenance_issues":[{"label":"Leaking toilet","fixture_identifier":"stall 2"}]}'::jsonb,
-    'Rebuild Finish Test',
-    'REBUILD-FINISH-DEVICE',
-    'rebuild-explicit-issue-completion'
+    'REBUILD-FINISH-DEVICE-SECOND',
+    'rebuild-explicit-issue-completion',
+    '00000000-0000-4000-8000-00000000f126',
+    'empty-rebuild-offline-authority-secret-0123456789'
   );
+  if v_issue_completion->>'status' <> 'closed' then
+    raise exception 'Explicit maintenance issue completion was not accepted: %', v_issue_completion;
+  end if;
   if (select count(*) from public.maintenance_tickets where session_id = (select id from public.sessions where session_uuid = v_issue_session_uuid)) <> 1 then
-    raise exception 'Explicit maintenance issue did not create exactly one ticket';
+    raise exception 'Explicit maintenance issue did not create exactly one ticket: %', (select count(*) from public.maintenance_tickets where session_id = (select id from public.sessions where session_uuid = v_issue_session_uuid));
   end if;
 
   insert into public.ops_manager_managers(manager_id, display_name, roles, active)

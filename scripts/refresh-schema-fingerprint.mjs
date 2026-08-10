@@ -34,16 +34,23 @@ const queries={
   cron_jobs:`select jobname,schedule,command,database,case when username in ('postgres','supabase_admin') then 'migration_owner' else username end as username,active from cron.job order by jobname`,
 };
 
-function queryDocker(sql){
+function queryDocker(sql,name){
   const wrapped=`select coalesce(json_agg(row_to_json(q)),'[]'::json)::text from (${sql}) q;`;
   const output=execFileSync("docker",["exec",container,"psql","-v","ON_ERROR_STOP=1","-At","-U","supabase_admin","-d",database,"-c",wrapped],{encoding:"utf8",maxBuffer:64*1024*1024}).trim();
-  return JSON.parse(output.split("\n").at(-1)||"[]");
+  const rows=JSON.parse(output.split("\n").at(-1)||"[]");
+  // pg_cron records the connected disposable database name.  That name is a
+  // harness allocation detail, not schema drift.  Normalize only owned
+  // external rebuild databases; production/MCP inventory remains literal.
+  if(name==="cron_jobs" && /^mz_schema_rebuild_[a-zA-Z0-9_]+$/.test(container) && /^mz_schema_rebuild_[a-zA-Z0-9_]+$/.test(database)){
+    return rows.map((row)=>row.database===database?{...row,database:"postgres"}:row);
+  }
+  return rows;
 }
 function stable(value){if(Array.isArray(value))return value.map(stable);if(value&&typeof value==="object")return Object.fromEntries(Object.keys(value).sort().map(key=>[key,stable(value[key])]));return value;}
 
 let mcpClient=null;
 async function query(sql,name="schema inventory"){
-  if(!mcpUrl)return queryDocker(sql);
+  if(!mcpUrl)return queryDocker(sql,name);
   if(!mcpClient){
     mcpClient=new Client({name:"schema-fingerprint-refresh",version:"1.0.0"});
     await mcpClient.connect(new StreamableHTTPClientTransport(new URL(mcpUrl)));

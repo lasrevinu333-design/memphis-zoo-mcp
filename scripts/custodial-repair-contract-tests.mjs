@@ -13,6 +13,14 @@ const atomicCommitMigration = readFileSync(
   "supabase/migrations/20260801131340_custodial_atomic_offline_completion_identity.sql",
   "utf8",
 );
+const offlineActorRecoveryMigration = readFileSync(
+  "supabase/migrations/20260810143000_offline_actor_occurrence_reconciliation.sql",
+  "utf8",
+);
+const offlineAuthorityEnforcementMigration = readFileSync(
+  "supabase/migrations/20260810150000_enforce_integrated_backend_authority.sql",
+  "utf8",
+);
 const schemaReconciliationMigration = readFileSync(
   "supabase/migrations/20260801134430_reconcile_canonical_schema_security_metadata.sql",
   "utf8",
@@ -34,6 +42,11 @@ assert.match(indexSource, /tool_start_session_v2/);
 assert.match(indexSource, /p_client_session_id is required for scan start idempotency/);
 assert.match(indexSource, /p_client_completion_id are required for idempotent completion/);
 assert.match(indexSource, /prepareScanRpcCall/);
+assert.match(indexSource, /bindOfflineActorProof/);
+assert.match(indexSource, /tool_start_offline_occurrence/);
+assert.match(indexSource, /tool_commit_cleaning_workflow_authoritative/);
+assert.match(indexSource, /CUSTODIAL_BACKEND_PROOF_SECRET/);
+assert.doesNotMatch(indexSource, /custodial_issue_offline_actor_context/);
 assert.match(indexSource, /error\?\.status/);
 assert.doesNotMatch(indexSource, /create table if not exists public\.guest_cleanliness_reports/i);
 assert.doesNotMatch(indexSource, /create table if not exists public\.system_feedback_items/i);
@@ -77,6 +90,36 @@ assert.match(
   /v_session_location_id, v_session_device_pk, v_session_employee_id\s+from public\.sessions/i,
   "optional session lookup must write only to session identity variables",
 );
+
+for (const contract of [
+  "custodial_offline_actor_contexts",
+  "custodial_offline_submission_proofs",
+  "occurrence_id",
+  "assignment_epoch",
+  "assignment_change_id",
+  "occurrence_fingerprint",
+  "custodial_start_offline_occurrence",
+  "custodial_backend_execution_config",
+]) assert.match(offlineActorRecoveryMigration, new RegExp(contract.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"));
+for (const contract of [
+  "custodial_offline_reconciliation_records",
+  "custodial_offline_reconciliation_audits",
+  "custodial_offline_scan_event_evidence",
+  "custodial_offline_time_reservations",
+  "payload_fingerprint",
+  "payload_fingerprint_conflict",
+  "custodial_quarantine_offline_submission",
+  "tool_complete_session_authoritative",
+  "custodial_offline_employee_time_no_overlap",
+  "custodial_offline_device_time_no_overlap",
+]) assert.match(offlineAuthorityEnforcementMigration, new RegExp(contract.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"));
+assert.doesNotMatch(
+  offlineActorRecoveryMigration,
+  /identity_source','devices\.assigned_employee_id'/,
+  "forward commit authority must not rebind an offline occurrence to the device's current employee",
+);
+assert.match(deviceAuthSource, /offline_recovery_only/);
+assert.match(deviceAuthSource, /isOfflineRecoveryCommitRequest/);
 assert.doesNotMatch(
   atomicCommitMigration,
   /v_location_id, v_device_pk, v_employee_id\s+from public\.sessions/i,

@@ -1,6 +1,6 @@
 import { createHmac, randomBytes, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import argon2 from "argon2";
-import { isCanonicalEmployeeKiosk, normalizeDeviceIdentifier, resolveActiveAssignedDevice } from "../device-identity.js";
+import { isCanonicalEmployeeKiosk, normalizeDeviceIdentifier, resolveActiveAssignedDevice, resolveCanonicalDevice } from "../device-identity.js";
 
 const DEVICE_COOKIE_NAME = "memphis_device_credential";
 const DEVICE_SECURITY_COOKIE_NAME = "memphis_device_security_session";
@@ -565,10 +565,16 @@ function authEvent(req, device, { credentialId = null, eventType, success, reaso
   };
 }
 
-async function resolveDevice(req, runReadOnlySql) {
+function isOfflineRecoveryCommitRequest(req) {
+  return String(req?.body?.fn || "").trim() === "tool_commit_cleaning_workflow";
+}
+
+async function resolveDevice(req, runReadOnlySql, { allowTerminalOfflineRecovery = false } = {}) {
   const identifier = requestDeviceIdentifier(req);
   if (!identifier) return { identifier: "", device: null };
-  const device = await resolveActiveAssignedDevice({ runReadOnlySql, deviceIdentifier: identifier });
+  const device = allowTerminalOfflineRecovery
+    ? await resolveCanonicalDevice({ runReadOnlySql, deviceIdentifier: identifier })
+    : await resolveActiveAssignedDevice({ runReadOnlySql, deviceIdentifier: identifier });
   return { identifier, device };
 }
 
@@ -594,10 +600,11 @@ export async function authenticateDeviceCredentialRequest(req, {
   const store = suppliedStore || createSupabaseDeviceCredentialStore(supabase);
   if (!store) return { ok: false, status: 503, code: "device_auth_unavailable", error: "Device authentication store is unavailable." };
 
-  const { identifier, device } = await resolveDevice(req, runReadOnlySql);
+  const terminalOfflineRecovery = isOfflineRecoveryCommitRequest(req);
+  const { identifier, device } = await resolveDevice(req, runReadOnlySql, { allowTerminalOfflineRecovery: terminalOfflineRecovery });
   if (!identifier) return { ok: false, status: 401, code: "device_id_required", error: "device_id is required." };
-  if (!device || !device.device_active) return { ok: false, status: 401, code: "device_not_registered", error: "Registered device is required." };
-  if (!isEligibleEmployeeDevice(device)) {
+  if (!device || (!device.device_active && !terminalOfflineRecovery)) return { ok: false, status: 401, code: "device_not_registered", error: "Registered device is required." };
+  if (!isEligibleEmployeeDevice(device) && !terminalOfflineRecovery) {
     return { ok: false, status: 403, code: "device_not_eligible", error: "An active canonical employee kiosk assignment is required." };
   }
 
@@ -607,16 +614,15 @@ export async function authenticateDeviceCredentialRequest(req, {
   if (parts) {
     const row = await store.findCredential(parts.credentialId);
     const expiresAt = Date.parse(String(row?.expires_at || ""));
-    const valid = Boolean(
+    const tokenMatchesDevice = Boolean(
       row
-      && !row.revoked_at
-      && Number.isFinite(expiresAt)
-      && expiresAt > now.getTime()
       && String(row.device_id || "") === String(device.canonical_device_pk || "")
       && row.token_hash
       && safeEqual(row.token_hash, tokenHash(parts.secret, env))
     );
-    if (valid) {
+    const valid = Boolean(tokenMatchesDevice && !row.revoked_at && Number.isFinite(expiresAt) && expiresAt > now.getTime());
+    const normalCommitEligible = Boolean(device?.device_active && isEligibleEmployeeDevice(device));
+    if (valid && normalCommitEligible) {
       const metadata = row?.metadata_json;
       const operationBound = Boolean(
         metadata
@@ -674,6 +680,29 @@ export async function authenticateDeviceCredentialRequest(req, {
         device,
         credentialed: true,
         credential,
+        policy_mode: policy.mode,
+        enrollment_required: false,
+      };
+    }
+    // A token that still cryptographically proves this canonical device may
+    // submit only its already-frozen offline occurrence for server quarantine.
+    // It never restores general access after revocation, expiry, deactivation,
+    // or assignment loss; the RPC injects the credential id and the database
+    // decides whether the frozen proof remains compatible.
+    if (terminalOfflineRecovery && tokenMatchesDevice) {
+      await audit(store, authEvent(req, device, {
+        credentialId: row.credential_id,
+        eventType: "device_offline_recovery_submission",
+        success: true,
+        reason: row?.revoked_at ? "revoked_credential_recovery_only" : "expired_or_ineligible_credential_recovery_only",
+        env,
+      }));
+      return {
+        ok: true,
+        device,
+        credentialed: true,
+        credential: row,
+        offline_recovery_only: true,
         policy_mode: policy.mode,
         enrollment_required: false,
       };

@@ -21,7 +21,6 @@ const USER_A = "00000000-0000-4000-8000-00000000e111";
 const USER_B = "00000000-0000-4000-8000-00000000e112";
 const ADMIN_USER = "00000000-0000-4000-8000-00000000e113";
 const NONPARTICIPANT_USER = "00000000-0000-4000-8000-00000000e118";
-const MEMPHIS_USER = "00000000-0000-4000-8000-00000000e125";
 const INACTIVE_THREAD = "00000000-0000-4000-8000-00000000e110";
 const INACTIVE_MESSAGE = "00000000-0000-4000-8000-00000000e114";
 const ACTIVE_THREAD = "00000000-0000-4000-8000-00000000e120";
@@ -146,8 +145,7 @@ await sql(`
     ('${USER_A}'::uuid,'Retirement Fixture Sender','manager',true),
     ('${USER_B}'::uuid,'Retirement Fixture Recipient','manager',true),
     ('${ADMIN_USER}'::uuid,'Retirement Fixture Admin','admin',true),
-    ('${NONPARTICIPANT_USER}'::uuid,'Retirement Fixture Nonparticipant','manager',true),
-    ('${MEMPHIS_USER}'::uuid,'Memphis','bot',true)
+    ('${NONPARTICIPANT_USER}'::uuid,'Retirement Fixture Nonparticipant','manager',true)
   on conflict (id) do update set is_active=true;
   insert into public.devices(id,device_id,device_name,active)
   values ('00000000-0000-4000-8000-00000000e115'::uuid,'${DEVICE_ID}','Named manager retirement disposable device',true)

@@ -1,0 +1,24 @@
+{
+  "release_contract_version": "offline-authority.v2",
+  "accepted_engine_contract": {
+    "scan": "scan.v2",
+    "queue": "indexeddb-v4",
+    "completion": "tool_complete_session via authenticated compatibility adapter"
+  },
+  "required_engine_contract": {
+    "scan": "scan.v3.offline-authority",
+    "queue": "indexeddb-v6-offline-authority",
+    "activation": "tool_start_offline_occurrence",
+    "completion": "tool_commit_cleaning_workflow with context_id and submission_proof"
+  },
+  "backend_contract": {
+    "scan": "scan.v3.offline-authority",
+    "authority": "offline-authority.v2",
+    "execution_boundary": "CUSTODIAL_BACKEND_PROOF_SECRET"
+  },
+  "rollback": {
+    "before_enforcement": "legacy Engine and current backend completion remain available",
+    "after_enforcement": "keep the final backend; it translates legacy completion to the authoritative adapter and preserves all immutable evidence",
+    "database": "forward-only; do not down-migrate contexts, proofs, reservations, reconciliation, audit, scan evidence, or dispositions"
+  }
+}
