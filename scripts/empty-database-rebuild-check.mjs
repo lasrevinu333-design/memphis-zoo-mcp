@@ -24,6 +24,11 @@ if (adminUrl && !/(localhost|127\.0\.0\.1|memphis-rebuild|schema-rebuild|test|ci
 const root = resolve(new URL("..", import.meta.url).pathname);
 const migrationsDir = resolve(root, "supabase/migrations");
 const migrationFiles = readdirSync(migrationsDir).filter((name) => name.endsWith(".sql")).sort();
+const retirementCorrectionPath = resolve(migrationsDir, "20260810130000_harden_named_manager_retired_archive_and_concurrency.sql");
+const retirementCorrection = readFileSync(retirementCorrectionPath, "utf8");
+const retirementCorrectionBody = retirementCorrection
+  .replace(/^\s*begin;\s*/i, "")
+  .replace(/\s*commit;\s*$/i, "");
 const requestedDatabaseName = String(process.env.SCHEMA_REBUILD_DATABASE_NAME || "").trim();
 if (requestedDatabaseName && !/^mz_schema_rebuild_[a-zA-Z0-9_]+$/.test(requestedDatabaseName)) {
   throw new Error("SCHEMA_REBUILD_DATABASE_NAME must use the disposable mz_schema_rebuild_* namespace.");
@@ -65,6 +70,99 @@ function dockerPsqlConcurrent(database, sql) {
 
 function outputLines(result) {
   return String(result.stdout || "").split("\n").map((line) => line.trim()).filter(Boolean);
+}
+
+async function verifyNamedManagerRetirementMigrationModes(database) {
+  const archiveState = () => dockerPsql(database, `
+    select count(*)::text || '|' || bool_and(is_active is false)::text || '|' ||
+      bool_and(title='Operations Leadership Chat (Retired)')::text || '|' ||
+      (select count(*)::text from public.msg_thread_participants p join public.msg_threads t on t.id=p.thread_id where t.system_key='ops_manager_shared_chat_v1' and p.left_at is null)
+    from public.msg_threads where system_key='ops_manager_shared_chat_v1';
+  `).trim();
+  const canonicalState = archiveState();
+  if (canonicalState !== "1|true|true|0") throw new Error(`One-archive precondition failed: ${canonicalState}`);
+
+  const absentOutput = dockerPsql(database, `
+    begin;
+    alter table public.msg_threads disable trigger trg_msg_reject_retired_ops_manager_shared_thread_mutation;
+    alter table public.msg_thread_participants disable trigger trg_msg_reject_retired_ops_manager_shared_participation;
+    alter table public.msg_messages disable trigger trg_msg_reject_retired_ops_manager_shared_message_mutation;
+    alter table public.msg_message_audit disable trigger trg_msg_reject_retired_ops_manager_shared_audit_guard;
+    alter table public.msg_receipts disable trigger trg_msg_reject_retired_ops_manager_shared_receipt_mutation;
+    alter table public.msg_message_deletions disable trigger trg_msg_reject_retired_ops_manager_shared_message_delete;
+    delete from public.msg_threads where system_key='ops_manager_shared_chat_v1';
+    ${retirementCorrectionBody}
+    do $absent_archive$
+    declare v_user uuid;
+    begin
+      select id into v_user from public.msg_users where is_active is true order by id limit 1;
+      begin
+        insert into public.msg_threads(thread_type,title,created_by_user_id,is_active,system_key)
+        values('group','fabricated retired room',v_user,true,'ops_manager_shared_chat_v1');
+        raise exception 'absent archive could be recreated';
+      exception when check_violation then null;
+      end;
+    end
+    $absent_archive$;
+    select 'ABSENT:' || count(*)::text || ':' ||
+      (to_regprocedure('public.msg_get_or_create_ops_manager_thread(uuid)') is null)::text || ':' ||
+      (to_regclass('public.msg_canonical_thread_pairs') is not null)::text
+    from public.msg_threads where system_key='ops_manager_shared_chat_v1';
+    rollback;
+  `);
+  const absentState = absentOutput.split("\n").find((line) => line.startsWith("ABSENT:"));
+  if (absentState !== "ABSENT:0:true:true") throw new Error(`Absent-archive correction failed: ${absentOutput}`);
+  if (archiveState() !== canonicalState) throw new Error("Absent-archive test did not roll back to the exact preserved archive state.");
+
+  const duplicatePairInjection = await dockerPsqlConcurrent(database, `
+    begin;
+    do $duplicate_pair$
+    declare
+      v_user_a uuid;
+      v_user_b uuid;
+      v_thread uuid;
+    begin
+      select p.user_id into v_user_a
+      from public.msg_thread_participants p join public.msg_threads t on t.id=p.thread_id
+      where t.system_key='ops_manager_shared_chat_v1' order by p.id limit 1;
+      select p.user_id into v_user_b
+      from public.msg_thread_participants p join public.msg_threads t on t.id=p.thread_id
+      where t.system_key='ops_manager_shared_chat_v1' order by p.id offset 1 limit 1;
+      for ordinal in 1..2 loop
+        insert into public.msg_threads(thread_type,created_by_user_id,is_active)
+        values('direct',v_user_a,true) returning id into v_thread;
+        insert into public.msg_thread_participants(thread_id,user_id)
+        values(v_thread,v_user_a),(v_thread,v_user_b);
+      end loop;
+    end
+    $duplicate_pair$;
+    ${retirementCorrectionBody}
+    commit;
+  `);
+  if (duplicatePairInjection.status === 0 || !/duplicate active direct or bot conversations/i.test(duplicatePairInjection.stderr)) {
+    throw new Error(`Pre-existing duplicate direct/Memphis pair did not fail closed: ${JSON.stringify(duplicatePairInjection)}`);
+  }
+  if (archiveState() !== canonicalState) throw new Error("Duplicate-pair rejection leaked a partial archive mutation.");
+
+  const rollbackInjection = await dockerPsqlConcurrent(database, `
+    begin;
+    alter table public.msg_threads disable trigger trg_msg_reject_retired_ops_manager_shared_thread_mutation;
+    alter table public.msg_thread_participants disable trigger trg_msg_reject_retired_ops_manager_shared_participation;
+    update public.msg_threads
+    set is_active=true,title='Operations Leadership Chat'
+    where system_key='ops_manager_shared_chat_v1';
+    update public.msg_thread_participants p
+    set left_at=null
+    from public.msg_threads t
+    where t.id=p.thread_id and t.system_key='ops_manager_shared_chat_v1';
+    ${retirementCorrectionBody}
+    select 1/0;
+    commit;
+  `);
+  if (rollbackInjection.status === 0 || !/division by zero/i.test(rollbackInjection.stderr)) {
+    throw new Error(`Retirement rollback injection did not fail inside the migration transaction: ${JSON.stringify(rollbackInjection)}`);
+  }
+  if (archiveState() !== canonicalState) throw new Error("Rollback injection leaked partial retirement normalization or guard DDL.");
 }
 
 async function verifyDockerConcurrency(database) {
@@ -368,7 +466,7 @@ async function verifyDockerConcurrency(database) {
   const reactivateArchivedRoom = await dockerPsqlConcurrent(database, `
     update public.msg_threads set is_active=true where id='${archivedThreadId}'::uuid;
   `);
-  if (reactivateArchivedRoom.status === 0 || !/must remain inactive/i.test(reactivateArchivedRoom.stderr)) {
+  if (reactivateArchivedRoom.status === 0 || !/immutable/i.test(reactivateArchivedRoom.stderr)) {
     throw new Error(`Archived Ops Manager room reactivation did not fail closed: ${reactivateArchivedRoom.stderr}`);
   }
   const recreateArchivedRoom = await dockerPsqlConcurrent(database, `
@@ -382,14 +480,14 @@ async function verifyDockerConcurrency(database) {
     insert into public.msg_thread_participants(thread_id,user_id,left_at)
     values ('${archivedThreadId}'::uuid,'${namedIdentityIds[0]}'::uuid,null);
   `);
-  if (addArchivedParticipant.status === 0 || !/cannot have active participants/i.test(addArchivedParticipant.stderr)) {
+  if (addArchivedParticipant.status === 0 || !/participant history is immutable/i.test(addArchivedParticipant.stderr)) {
     throw new Error(`Archived Ops Manager participant insertion did not fail closed: ${addArchivedParticipant.stderr}`);
   }
   const restoreArchivedParticipant = await dockerPsqlConcurrent(database, `
     update public.msg_thread_participants set left_at=null
     where id=(select id from public.msg_thread_participants where thread_id='${archivedThreadId}'::uuid order by id limit 1);
   `);
-  if (restoreArchivedParticipant.status === 0 || !/cannot have active participants/i.test(restoreArchivedParticipant.stderr)) {
+  if (restoreArchivedParticipant.status === 0 || !/participant history is immutable/i.test(restoreArchivedParticipant.stderr)) {
     throw new Error(`Archived Ops Manager participant restoration did not fail closed: ${restoreArchivedParticipant.stderr}`);
   }
   const teamRoomCall = await dockerPsqlConcurrent(database, `select id from public.msg_get_or_create_custodial_team_thread((select id from public.msg_users where ops_manager_id='00000000-0000-4000-8000-000000009001'::uuid));`);
@@ -413,6 +511,54 @@ async function verifyDockerConcurrency(database) {
       ('REBUILD-GROUP-DEVICE-2','00000000-0000-4000-8000-000000009112',true),
       ('REBUILD-GROUP-DEVICE-3','00000000-0000-4000-8000-000000009113',true);
   `);
+
+  // Every caller waits on one database-clock barrier, then resolves the same
+  // principal pair together. This makes the ten-way race reproducible instead
+  // of relying on scheduler luck; the replay must return the original id too.
+  const barrierSql = (expression, barrierAt) => `
+    select pg_sleep(greatest(0, extract(epoch from ('${barrierAt}'::timestamptz - clock_timestamp()))));
+    select (${expression}).id;
+  `;
+  const assertTenWayStable = async (label, expression) => {
+    const run = async () => {
+      const barrierAt = new Date(Date.now() + 1500).toISOString();
+      const calls = await Promise.all(Array.from(
+        { length: 10 },
+        () => dockerPsqlConcurrent(database, barrierSql(expression, barrierAt)),
+      ));
+      if (calls.some((result) => result.status !== 0)) {
+        throw new Error(`${label} ten-way barrier calls failed:\n${calls.map((item) => item.stderr).filter(Boolean).join("\n")}`);
+      }
+      const ids = calls.flatMap(outputLines);
+      if (ids.length !== 10 || new Set(ids).size !== 1) {
+        throw new Error(`${label} ten-way barrier calls did not converge: ${JSON.stringify(ids)}`);
+      }
+      return ids[0];
+    };
+    const first = await run();
+    const replay = await run();
+    if (first !== replay) throw new Error(`${label} replay changed the canonical thread id: ${JSON.stringify({ first, replay })}`);
+    return first;
+  };
+  const directThreadId = await assertTenWayStable(
+    "direct get-or-create",
+    "public.msg_get_or_create_direct_thread('00000000-0000-4000-8000-000000009111'::uuid,'00000000-0000-4000-8000-000000009112'::uuid)",
+  );
+  if (dockerPsql(database, `select count(*) from public.msg_canonical_thread_pairs where thread_id='${directThreadId}'::uuid;`).trim() !== "1") {
+    throw new Error("Direct get-or-create did not record exactly one canonical pair authority row.");
+  }
+  dockerPsql(database, `
+    insert into public.msg_users(id,display_name,role,is_active)
+    values ('00000000-0000-4000-8000-000000009119','Memphis','bot',true)
+    on conflict (id) do update set display_name='Memphis',role='bot',is_active=true;
+  `);
+  const memphisThreadId = await assertTenWayStable(
+    "Memphis get-or-create",
+    "public.msg_get_or_create_memphis_thread('00000000-0000-4000-8000-000000009113'::uuid)",
+  );
+  if (dockerPsql(database, `select count(*) from public.msg_canonical_thread_pairs where thread_id='${memphisThreadId}'::uuid and conversation_type='bot';`).trim() !== "1") {
+    throw new Error("Memphis get-or-create did not record exactly one canonical pair authority row.");
+  }
   const groupOperationCalls = await Promise.all([
     dockerPsqlConcurrent(database, `select id from public.msg_create_group_thread_v2(
       '00000000-0000-4000-8000-000000009111'::uuid,
@@ -481,7 +627,7 @@ async function verifyDockerConcurrency(database) {
   if (retiredMessageDelete.status === 0 || !/Individual-message deletion is retired/i.test(retiredMessageDelete.stderr)) {
     throw new Error(`Individual-message deletion did not fail closed: ${retiredMessageDelete.stderr}`);
   }
-  console.log("verified 10-way exact finish, GPS freshness/boundary/motion/replay/duplicate handling, two-worker outbox claims, restart lease recovery, two-browser Moxie CAS, atomic Moxie password rotation, stable/distinct named-manager identities, archived shared-room authority closure, idempotent ordinary group creation, concurrent user-scoped conversation removal, and retired individual-message deletion");
+  console.log("verified 10-way exact finish, direct/Memphis canonical-pair barrier races with replay, GPS freshness/boundary/motion/replay/duplicate handling, two-worker outbox claims, restart lease recovery, two-browser Moxie CAS, atomic Moxie password rotation, stable/distinct named-manager identities, archived shared-room authority closure, idempotent ordinary group creation, concurrent user-scoped conversation removal, and retired individual-message deletion");
 }
 
 function runDocker(args, options = {}) {
@@ -972,6 +1118,8 @@ if (dockerContainer) {
     }
     dockerPsql(targetDatabase, exactFinishFunctionalSql);
     console.log("verified exact session finish transition and idempotent replay");
+    await verifyNamedManagerRetirementMigrationModes(targetDatabase);
+    console.log("verified absent/one/replay retirement migration behavior, duplicate-pair fail-closed handling, and rollback injection");
     await verifyDockerConcurrency(targetDatabase);
     const counts = dockerPsql(
       targetDatabase,

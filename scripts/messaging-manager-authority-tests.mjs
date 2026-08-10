@@ -7,6 +7,7 @@ const MANAGER_ID = "00000000-0000-4000-8000-000000000701";
 const MANAGER_USER_ID = "00000000-0000-4000-8000-000000000702";
 const FORGED_EMPLOYEE_ID = "00000000-0000-4000-8000-000000000703";
 const THREAD_ID = "00000000-0000-4000-8000-000000000704";
+const ARCHIVED_THREAD_ID = "00000000-0000-4000-8000-000000000709";
 const calls = [];
 
 async function runRpc(fn, args) {
@@ -44,6 +45,16 @@ async function runReadOnlySql(sql) {
     return [{ id: "00000000-0000-4000-8000-000000000708", thread_id: THREAD_ID, sender_user_id: MANAGER_USER_ID, is_deleted: false }];
   }
   if (/from public\.msg_threads t/i.test(sql)) {
+    if (sql.includes(ARCHIVED_THREAD_ID)) {
+      return [{
+        id: ARCHIVED_THREAD_ID,
+        thread_type: "group",
+        title: "Operations Leadership Chat (Retired)",
+        system_key: "ops_manager_shared_chat_v1",
+        is_active: false,
+        has_memphis_bot: false,
+      }];
+    }
     return [{ id: THREAD_ID, thread_type: "group", title: "Authority test", is_active: true, has_memphis_bot: false }];
   }
   if (/from public\.msg_thread_participants/i.test(sql)) return [];
@@ -118,6 +129,21 @@ try {
 
   const forgedRead = await post(`/messaging-api/thread/${THREAD_ID}/read`, { user_id: FORGED_EMPLOYEE_ID });
   assert.equal(forgedRead.status, 403);
+
+  const archivedRead = await post(`/messaging-api/thread/${ARCHIVED_THREAD_ID}/read`, {});
+  assert.equal(archivedRead.status, 409);
+  assert.match(archivedRead.body.error, /retired or inactive/i);
+  const archivedMessage = await post(`/messaging-api/thread/${ARCHIVED_THREAD_ID}/message`, {
+    sender_user_id: MANAGER_USER_ID,
+    body: "attempt archived write",
+    client_message_id: "archived-route-write-attempt",
+  });
+  assert.equal(archivedMessage.status, 409);
+  assert.match(archivedMessage.body.error, /retired or inactive/i);
+  assert.equal(calls.some((call) => call.fn === "msg_mark_thread_read" && call.args.p_thread_id === ARCHIVED_THREAD_ID), false,
+    "the HTTP read route must reject the archive before reaching its writer RPC");
+  assert.equal(calls.some((call) => call.fn === "msg_send_message" && call.args.p_thread_id === ARCHIVED_THREAD_ID), false,
+    "the HTTP send route must reject the archive before reaching its writer RPC");
 
   const retiredMessageDelete = await post(`/messaging-api/thread/${THREAD_ID}/message/00000000-0000-4000-8000-000000000708/delete`, {
     user_id: FORGED_EMPLOYEE_ID,

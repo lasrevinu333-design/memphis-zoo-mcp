@@ -8,6 +8,7 @@ const MANAGER_B_ID = "00000000-0000-4000-8000-000000000802";
 const MANAGER_A_USER_ID = "00000000-0000-4000-8000-000000000803";
 const MANAGER_B_USER_ID = "00000000-0000-4000-8000-000000000804";
 const calls = [];
+const unavailableProfileUserIds = new Set();
 
 const managers = new Map([
   [MANAGER_A_ID, { userId: MANAGER_A_USER_ID, displayName: "Manager A", jobTitle: "Operations Manager" }],
@@ -42,6 +43,9 @@ async function runReadOnlySql(sql) {
   if (!/join public\.ops_manager_managers m/i.test(sql)) return [];
   for (const [managerId, manager] of managers) {
     if (!sql.includes(manager.userId)) continue;
+    if (unavailableProfileUserIds.has(manager.userId)) {
+      throw new Error("optional leadership profile read is temporarily unavailable");
+    }
     return [{
       msg_user_id: manager.userId,
       manager_id: managerId,
@@ -112,6 +116,15 @@ try {
     calls.filter((call) => call.fn === "msg_ensure_ops_manager_user").map((call) => call.args.p_manager_id),
     [MANAGER_A_ID, MANAGER_A_ID, MANAGER_B_ID],
   );
+
+  unavailableProfileUserIds.add(MANAGER_B_USER_ID);
+  const managerBWithUnavailableEnrichment = await identity("manager-b-desktop");
+  assert.equal(managerBWithUnavailableEnrichment.status, 200,
+    "a resolved named-manager principal must remain available when optional enrichment fails");
+  assert.equal(managerBWithUnavailableEnrichment.body.data.msg_user_id, MANAGER_B_USER_ID);
+  assert.equal(managerBWithUnavailableEnrichment.body.data.display_name, "Manager B");
+  assert.equal(managerBWithUnavailableEnrichment.body.data.role, "manager");
+  unavailableProfileUserIds.delete(MANAGER_B_USER_ID);
 
   const anonymous = await identity("");
   assert.equal(anonymous.status, 401);

@@ -21,6 +21,10 @@ const namedManagerSharedRoomRetirementMigration = readFileSync(
   "supabase/migrations/20260810120000_retire_named_manager_shared_room_authority.sql",
   "utf8",
 );
+const namedManagerSharedRoomRetirementCorrectionMigration = readFileSync(
+  "supabase/migrations/20260810130000_harden_named_manager_retired_archive_and_concurrency.sql",
+  "utf8",
+);
 const foreignKeyIndexMigration = readFileSync(
   "supabase/migrations/20260730222357_index_remaining_foreign_keys.sql",
   "utf8",
@@ -110,6 +114,17 @@ assert.match(namedManagerSharedRoomRetirementMigration, /create trigger trg_msg_
 assert.match(namedManagerSharedRoomRetirementMigration, /before insert or update of system_key, is_active on public\.msg_threads/i);
 assert.match(namedManagerSharedRoomRetirementMigration, /create trigger trg_msg_reject_retired_ops_manager_shared_participation/i);
 assert.match(namedManagerSharedRoomRetirementMigration, /before insert or update of thread_id, left_at on public\.msg_thread_participants/i);
+assert.match(namedManagerSharedRoomRetirementCorrectionMigration, /where system_key = 'ops_manager_shared_chat_v1'[\s\S]*is_active is distinct from false/i);
+assert.match(namedManagerSharedRoomRetirementCorrectionMigration, /and p\.left_at is null/i,
+  "the forward correction must only canonicalize active legacy participation");
+assert.match(namedManagerSharedRoomRetirementCorrectionMigration, /before insert or update or delete on public\.msg_threads/i);
+assert.match(namedManagerSharedRoomRetirementCorrectionMigration, /before insert or update or delete on public\.msg_thread_participants/i);
+assert.match(namedManagerSharedRoomRetirementCorrectionMigration, /before insert or update or delete on public\.msg_messages/i);
+assert.match(namedManagerSharedRoomRetirementCorrectionMigration, /before insert or update or delete on public\.msg_message_audit/i);
+assert.match(namedManagerSharedRoomRetirementCorrectionMigration, /before insert or update or delete on public\.msg_receipts/i);
+assert.match(namedManagerSharedRoomRetirementCorrectionMigration, /msg_canonical_thread_pairs/i);
+assert.match(namedManagerSharedRoomRetirementCorrectionMigration, /pg_advisory_xact_lock/i);
+assert.match(namedManagerSharedRoomRetirementCorrectionMigration, /msg_mark_thread_read/i);
 assert.match(namedManagerSharedRoomRetirementMigration, /cannot be recreated/i);
 assert.match(namedManagerSharedRoomRetirementMigration, /must remain inactive/i);
 assert.match(namedManagerSharedRoomRetirementMigration, /cannot have active participants/i);

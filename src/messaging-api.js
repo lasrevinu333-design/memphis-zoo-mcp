@@ -191,7 +191,15 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     const row = Array.isArray(data) ? data[0] : data;
     const userId = String(row?.msg_user_id || row?.user_id || row?.id || "").trim();
     if (!isUuid(userId)) throw Object.assign(new Error("Authenticated manager has no server messaging principal."), { status: 403 });
-    const leadershipProfile = await getLeadershipProfileForMessagingUser(userId);
+    // Principal resolution above is authoritative. Leadership-profile data is
+    // presentational enrichment only, so a transient read failure must not
+    // turn a valid named-manager Messenger session into a false 401.
+    let leadershipProfile = null;
+    try {
+      leadershipProfile = await getLeadershipProfileForMessagingUser(userId);
+    } catch {
+      leadershipProfile = null;
+    }
     return {
       ...row,
       msg_user_id: userId,
@@ -292,6 +300,37 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       limit 1
     `);
     return Array.isArray(rows) && rows.length ? rows[0] : null;
+  }
+
+  async function getMessageThreadIdentity(messageId) {
+    const normalizedMessageId = String(messageId || "").trim();
+    if (!isUuid(normalizedMessageId)) return null;
+    const rows = await runReadOnlySql(`
+      select
+        m.id as message_id,
+        t.id,
+        t.system_key,
+        t.is_active
+      from public.msg_messages m
+      join public.msg_threads t on t.id = m.thread_id
+      where m.id = '${esc(normalizedMessageId)}'::uuid
+      limit 1
+    `);
+    return Array.isArray(rows) && rows.length ? rows[0] : null;
+  }
+
+  function isRetiredOpsManagerSharedThread(thread = {}) {
+    return String(thread?.system_key || "").trim() === "ops_manager_shared_chat_v1";
+  }
+
+  function assertActiveMutableThread(thread) {
+    if (!thread || thread.is_active === false || isRetiredOpsManagerSharedThread(thread)) {
+      throw Object.assign(
+        new Error("The retired or inactive conversation cannot be modified."),
+        { status: 409 },
+      );
+    }
+    return thread;
   }
 
   function isMemphisThread(thread = {}) {
@@ -1560,6 +1599,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       if (notificationType === 'event' && req.body?.message_id && device.assigned_employee_id) {
         const viewer = await getViewerIdentity(canonicalDeviceId);
         if (viewer?.msg_user_id) {
+          assertActiveMutableThread(await getMessageThreadIdentity(req.body.message_id));
           await runRpc("msg_acknowledge_message", {
             p_message_id: String(req.body.message_id),
             p_user_id: viewer.msg_user_id,
@@ -1723,7 +1763,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         return;
       }
       const thread = await getThreadIdentity(threadId);
-      if (!thread || thread.is_active === false) throw new Error("Active thread not found.");
+      assertActiveMutableThread(thread);
       if (isMemphisThread(thread)) {
         const canonicalDeviceId = String(viewer.identity?.canonical_device_id || deviceId).trim();
         const data = await sendMemphisConversationMessage({
@@ -1888,6 +1928,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         res.status(403).json({ ok: false, error: "Read acknowledgement user ID must match the authenticated viewer." });
         return;
       }
+      assertActiveMutableThread(await getThreadIdentity(threadId));
       const data = await runRpc("msg_mark_thread_read", { p_thread_id: threadId, p_user_id: viewer.effectiveUserId });
       res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {

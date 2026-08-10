@@ -3,11 +3,9 @@
   "frontend_commit_sha": "64d3552d7b5cb761fe1963edd2c81af4b4c07a18",
   "frontend_commit_state": "github_pages_production_verified",
   "backend_minimum_version": "release-2026.07.19.custodial-v3.12",
-  "schema_fingerprint": "333ddfc8008ea0b85916de7d491b98c9b8d6a7d45d3a2947d99b4b3bb836ea00",
+  "schema_from_fingerprint": "333ddfc8008ea0b85916de7d491b98c9b8d6a7d45d3a2947d99b4b3bb836ea00",
   "schema_transition": {
     "transition_id": "named-manager-messenger-archive-retirement-20260810",
-    "from_fingerprint": "333ddfc8008ea0b85916de7d491b98c9b8d6a7d45d3a2947d99b4b3bb836ea00",
-    "to_fingerprint": "14b7e9c222aa8bba792d10c038d646798815d011c42235ba118e148e96964d3b",
     "expires_at": "2026-08-23T23:59:59Z"
   },
   "api_contract_versions": {
@@ -24,18 +22,8 @@
     "feedback": "feedback.v2.json-triage"
   },
   "queue_compatibility_versions": {
-    "scan": [
-      "legacy-local-storage",
-      "indexeddb-v1",
-      "indexeddb-v2",
-      "indexeddb-v3",
-      "indexeddb-v4"
-    ],
-    "messaging": [
-      "local-storage-outbox-v1"
-    ],
-    "gemini_console": [
-      "indexeddb-outbox-v1"
-    ]
+    "scan": ["legacy-local-storage", "indexeddb-v1", "indexeddb-v2", "indexeddb-v3", "indexeddb-v4"],
+    "messaging": ["local-storage-outbox-v1"],
+    "gemini_console": ["indexeddb-outbox-v1"]
   }
 }
