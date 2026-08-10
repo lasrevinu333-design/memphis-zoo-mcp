@@ -26,7 +26,6 @@ async function rejectsSql(statement, pattern) {
 const userA = '00000000-0000-4000-8000-00000000b201';
 const userB = '00000000-0000-4000-8000-00000000b202';
 const admin = '00000000-0000-4000-8000-00000000b203';
-const memphisBot = '00000000-0000-4000-8000-00000000b204';
 const directThread = '00000000-0000-4000-8000-00000000b210';
 const globalThread = '00000000-0000-4000-8000-00000000b211';
 const opUser = '00000000-0000-4000-8000-00000000b220';
@@ -38,8 +37,7 @@ await sql(`
   values
     ('${userA}'::uuid,'Batch 2 Manager A','manager',true),
     ('${userB}'::uuid,'Batch 2 Manager B','manager',true),
-    ('${admin}'::uuid,'Batch 2 Database Admin','admin',true),
-    ('${memphisBot}'::uuid,'Memphis','bot',true);
+    ('${admin}'::uuid,'Batch 2 Database Admin','admin',true);
 
   insert into public.msg_threads(id,thread_type,title,created_by_user_id,is_active)
   values

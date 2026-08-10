@@ -13,7 +13,7 @@ if (!/^mz_schema_rebuild_[a-zA-Z0-9_]+$/.test(container) || !/^(postgres|mz_sche
 }
 
 const migration = readFileSync(
-  new URL("../supabase/migrations/20260810130000_harden_named_manager_retired_archive_and_concurrency.sql", import.meta.url),
+  new URL("../supabase/migrations/20260810140000_finalize_named_manager_messenger_retirement_integrity.sql", import.meta.url),
   "utf8",
 );
 const ARCHIVE_MESSAGE_ID = "00000000-0000-4000-8000-00000000d901";
@@ -46,6 +46,7 @@ await sql(`
   alter table public.msg_messages disable trigger trg_msg_message_immutable_audit;
   alter table public.msg_message_audit disable trigger trg_msg_reject_retired_ops_manager_shared_audit_guard;
   alter table public.msg_receipts disable trigger trg_msg_reject_retired_ops_manager_shared_receipt_mutation;
+  alter table public.msg_message_deletions disable trigger trg_msg_reject_retired_ops_manager_shared_message_delete;
   insert into public.msg_messages(id,thread_id,sender_user_id,message_type,body,metadata_json,sent_at,created_at)
   select '${ARCHIVE_MESSAGE_ID}'::uuid,t.id,p.user_id,'text','historical archived evidence','{"fixture":"archive"}'::jsonb,
          timestamptz '2026-08-01T00:00:00Z',timestamptz '2026-08-01T00:00:00Z'
@@ -75,6 +76,16 @@ await sql(`
   ) p on true
   where m.id='${ARCHIVE_MESSAGE_ID}'::uuid
   on conflict (message_id,user_id) do nothing;
+  insert into public.msg_message_deletions(message_id,user_id,deleted_at)
+  select m.id,p.user_id,timestamptz '2026-08-01T00:06:00Z'
+  from public.msg_messages m
+  join lateral (
+    select p.user_id from public.msg_thread_participants p
+    where p.thread_id=m.thread_id order by p.id limit 1
+  ) p on true
+  where m.id='${ARCHIVE_MESSAGE_ID}'::uuid
+  on conflict (message_id,user_id) do nothing;
+  alter table public.msg_message_deletions enable trigger trg_msg_reject_retired_ops_manager_shared_message_delete;
   alter table public.msg_receipts enable trigger trg_msg_reject_retired_ops_manager_shared_receipt_mutation;
   alter table public.msg_message_audit enable trigger trg_msg_reject_retired_ops_manager_shared_audit_guard;
   alter table public.msg_messages enable trigger trg_msg_message_immutable_audit;
@@ -105,6 +116,7 @@ with functions as (
       'msg_mark_message_delivered',
       'msg_mark_message_displayed',
       'msg_acknowledge_message',
+      'msg_delete_message',
       'msg_reject_retired_ops_manager_shared_thread_mutation',
       'msg_reject_retired_ops_manager_shared_participation',
       'msg_reject_retired_ops_manager_shared_message_mutation',
@@ -123,7 +135,8 @@ with functions as (
     'participants',(select coalesce(jsonb_agg(to_jsonb(p) order by p.id),'[]'::jsonb) from public.msg_thread_participants p join public.msg_threads t on t.id=p.thread_id where t.system_key='ops_manager_shared_chat_v1'),
     'messages',(select coalesce(jsonb_agg(to_jsonb(m) order by m.id),'[]'::jsonb) from public.msg_messages m join public.msg_threads t on t.id=m.thread_id where t.system_key='ops_manager_shared_chat_v1'),
     'audit',(select coalesce(jsonb_agg(to_jsonb(a) order by a.audit_id),'[]'::jsonb) from public.msg_message_audit a join public.msg_threads t on t.id=a.thread_id where t.system_key='ops_manager_shared_chat_v1'),
-    'receipts',(select coalesce(jsonb_agg(to_jsonb(r) order by r.id),'[]'::jsonb) from public.msg_receipts r join public.msg_messages m on m.id=r.message_id join public.msg_threads t on t.id=m.thread_id where t.system_key='ops_manager_shared_chat_v1')
+    'receipts',(select coalesce(jsonb_agg(to_jsonb(r) order by r.id),'[]'::jsonb) from public.msg_receipts r join public.msg_messages m on m.id=r.message_id join public.msg_threads t on t.id=m.thread_id where t.system_key='ops_manager_shared_chat_v1'),
+    'deletions',(select coalesce(jsonb_agg(to_jsonb(d) order by d.id),'[]'::jsonb) from public.msg_message_deletions d join public.msg_messages m on m.id=d.message_id join public.msg_threads t on t.id=m.thread_id where t.system_key='ops_manager_shared_chat_v1')
   ) as data
 )
 select jsonb_build_object(
@@ -180,9 +193,22 @@ for (const name of [
   "msg_mark_message_displayed(uuid,uuid,text)",
   "msg_acknowledge_message(uuid,uuid,text)",
 ]) {
-  assert.match(functions[name].definition, /msg_assert_not_retired_ops_manager_shared/,
-    `${name} must reject the retired room before mutating receipt state`);
+  assert.match(functions[name].definition, /msg_assert_active_mutable/,
+    `${name} must reject retired and inactive targets before mutating receipt state`);
 }
+const messageDelete = functions["msg_delete_message(uuid,uuid)"];
+assert.ok(messageDelete, "retired individual-message deletion RPC is missing");
+assert.equal(messageDelete.security_definer, true, "retired deletion RPC must retain its server-side authority boundary");
+assert.match(messageDelete.definition, /Individual-message deletion is retired/,
+  "individual-message deletion must fail with the accepted retirement contract");
+assert.match(messageDelete.definition, /0A000/,
+  "individual-message deletion must fail as feature_not_supported");
+assert.doesNotMatch(messageDelete.definition, /msg_message_deletions/,
+  "retired individual-message deletion must not write deletion evidence");
+assert.equal(messageDelete.public_execute, false, "retired deletion RPC exposed to PUBLIC");
+assert.equal(messageDelete.anon_execute, false, "retired deletion RPC exposed to anon");
+assert.equal(messageDelete.authenticated_execute, false, "retired deletion RPC exposed to authenticated");
+assert.equal(messageDelete.service_execute, true, "retired deletion RPC must be executable only by service_role");
 assert.deepEqual(afterReplay.triggers.map((trigger) => [trigger.table_name, trigger.trigger_name]), [
   ["msg_message_audit", "trg_msg_reject_retired_ops_manager_shared_audit_guard"],
   ["msg_message_deletions", "trg_msg_reject_retired_ops_manager_shared_message_delete"],
@@ -206,6 +232,7 @@ assert.equal(afterReplay.archive.participants.some((row) => row.left_at === null
 assert.equal(afterReplay.archive.messages.some((row) => row.id === ARCHIVE_MESSAGE_ID), true);
 assert.equal(afterReplay.archive.audit.some((row) => row.message_id === ARCHIVE_MESSAGE_ID), true);
 assert.equal(afterReplay.archive.receipts.some((row) => row.message_id === ARCHIVE_MESSAGE_ID), true);
+assert.equal(afterReplay.archive.deletions.some((row) => row.message_id === ARCHIVE_MESSAGE_ID), true);
 
 await sql(`
   insert into public.msg_threads(id,thread_type,title,created_by_user_id,is_active)
@@ -224,11 +251,13 @@ await sql(`
     v_recipient uuid;
     v_participant uuid;
     v_receipt uuid;
+    v_deletion uuid;
   begin
     select id,created_by_user_id into v_thread,v_sender from public.msg_threads where system_key='ops_manager_shared_chat_v1';
     select user_id into v_recipient from public.msg_thread_participants where thread_id=v_thread order by id offset 1 limit 1;
     select id into v_participant from public.msg_thread_participants where thread_id=v_thread order by id limit 1;
     select id into v_receipt from public.msg_receipts where message_id='${ARCHIVE_MESSAGE_ID}'::uuid limit 1;
+    select id into v_deletion from public.msg_message_deletions where message_id='${ARCHIVE_MESSAGE_ID}'::uuid limit 1;
 
     begin update public.msg_threads set title='rewritten archive' where id=v_thread; raise exception 'archive title mutation was accepted'; exception when check_violation then null; end;
     begin update public.msg_threads set thread_type='direct' where id=v_thread; raise exception 'archive type mutation was accepted'; exception when check_violation then null; end;
@@ -251,6 +280,9 @@ await sql(`
     begin update public.msg_receipts set read_at=now() where id=v_receipt; raise exception 'archive receipt update was accepted'; exception when check_violation then null; end;
     begin delete from public.msg_receipts where id=v_receipt; raise exception 'archive receipt delete was accepted'; exception when check_violation then null; end;
     begin insert into public.msg_receipts(message_id,user_id) values('${ARCHIVE_MESSAGE_ID}'::uuid,v_sender); raise exception 'archive receipt fabrication was accepted'; exception when check_violation then null; end;
+    begin update public.msg_message_deletions set deleted_at=now() where id=v_deletion; raise exception 'archive deletion evidence update was accepted'; exception when check_violation then null; end;
+    begin delete from public.msg_message_deletions where id=v_deletion; raise exception 'archive deletion evidence delete was accepted'; exception when check_violation then null; end;
+    begin insert into public.msg_message_deletions(message_id,user_id) values('${ARCHIVE_MESSAGE_ID}'::uuid,v_sender); raise exception 'archive deletion evidence fabrication was accepted'; exception when check_violation then null; end;
 
     begin perform public.msg_mark_thread_read(v_thread,v_sender); raise exception 'read RPC accepted retired archive'; exception when check_violation then null; end;
     begin perform public.msg_mark_messages_delivered(v_thread,v_sender); raise exception 'batch delivery RPC accepted retired archive'; exception when check_violation then null; end;
@@ -258,6 +290,7 @@ await sql(`
     begin perform public.msg_mark_message_delivered('${ARCHIVE_MESSAGE_ID}'::uuid,v_sender,'fixture-device'); raise exception 'single delivery RPC accepted retired archive'; exception when check_violation then null; end;
     begin perform public.msg_mark_message_displayed('${ARCHIVE_MESSAGE_ID}'::uuid,v_sender,'fixture-device'); raise exception 'single display RPC accepted retired archive'; exception when check_violation then null; end;
     begin perform public.msg_acknowledge_message('${ARCHIVE_MESSAGE_ID}'::uuid,v_sender,'fixture-device'); raise exception 'acknowledgement RPC accepted retired archive'; exception when check_violation then null; end;
+    begin perform public.msg_delete_message('${ARCHIVE_MESSAGE_ID}'::uuid,v_sender); raise exception 'individual-message deletion RPC accepted a request'; exception when feature_not_supported then null; end;
   end
   $attacks$;
   reset role;

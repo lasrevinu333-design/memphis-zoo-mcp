@@ -12755,6 +12755,71 @@
     },
     {
       "collation_name": null,
+      "column_name": "manager_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 1,
+      "schema_name": "public",
+      "table_name": "msg_ops_manager_legacy_identity_links"
+    },
+    {
+      "collation_name": null,
+      "column_name": "msg_user_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 2,
+      "schema_name": "public",
+      "table_name": "msg_ops_manager_legacy_identity_links"
+    },
+    {
+      "collation_name": null,
+      "column_name": "verified_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "now()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 3,
+      "schema_name": "public",
+      "table_name": "msg_ops_manager_legacy_identity_links"
+    },
+    {
+      "collation_name": null,
+      "column_name": "verified_by",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": "'reviewed_migration'::text",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 4,
+      "schema_name": "public",
+      "table_name": "msg_ops_manager_legacy_identity_links"
+    },
+    {
+      "collation_name": null,
+      "column_name": "created_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "now()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 5,
+      "schema_name": "public",
+      "table_name": "msg_ops_manager_legacy_identity_links"
+    },
+    {
+      "collation_name": null,
       "column_name": "id",
       "comment": null,
       "data_type": "uuid",
@@ -23591,6 +23656,38 @@
       "validated": true
     },
     {
+      "constraint_name": "msg_ops_manager_legacy_identity_links_manager_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (manager_id) REFERENCES ops_manager_managers(manager_id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "msg_ops_manager_legacy_identity_links",
+      "validated": true
+    },
+    {
+      "constraint_name": "msg_ops_manager_legacy_identity_links_msg_user_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (msg_user_id) REFERENCES msg_users(id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "msg_ops_manager_legacy_identity_links",
+      "validated": true
+    },
+    {
+      "constraint_name": "msg_ops_manager_legacy_identity_links_msg_user_id_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (msg_user_id)",
+      "schema_name": "public",
+      "table_name": "msg_ops_manager_legacy_identity_links",
+      "validated": true
+    },
+    {
+      "constraint_name": "msg_ops_manager_legacy_identity_links_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (manager_id)",
+      "schema_name": "public",
+      "table_name": "msg_ops_manager_legacy_identity_links",
+      "validated": true
+    },
+    {
       "constraint_name": "msg_receipts_message_id_fkey",
       "constraint_type": "f",
       "definition": "FOREIGN KEY (message_id) REFERENCES msg_messages(id) ON DELETE CASCADE",
@@ -26362,16 +26459,44 @@
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.msg_acknowledge_message(p_message_id uuid, p_user_id uuid, p_device_identifier text)\n RETURNS msg_receipts\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare v_receipt public.msg_receipts%rowtype;\nbegin\n  perform public.msg_assert_not_retired_ops_manager_shared_message(p_message_id);\n  update public.msg_receipts\n  set delivered_at=coalesce(delivered_at,now()),\n      displayed_at=coalesce(displayed_at,now()),\n      read_at=coalesce(read_at,now()),\n      acknowledged_at=coalesce(acknowledged_at,now()),\n      delivery_device_identifier=nullif(btrim(coalesce(p_device_identifier,'')), '')\n  where message_id=p_message_id and user_id=p_user_id\n  returning * into v_receipt;\n  if not found then raise exception 'Message receipt not found.'; end if;\n  return v_receipt;\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_acknowledge_event_device_notification(p_device_identifier text, p_notification_key text, p_notification_type text, p_action text, p_metadata_json jsonb, p_message_id uuid, p_user_id uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_thread_id uuid;\n  v_notification jsonb;\n  v_receipt public.msg_receipts%rowtype;\nbegin\n  if p_message_id is null or p_user_id is null then\n    raise exception using errcode='22023',message='Linked message and Messenger user are required for event acknowledgement';\n  end if;\n\n  select m.thread_id into v_thread_id\n  from public.msg_messages m\n  where m.id=p_message_id\n  for key share;\n  if v_thread_id is null then\n    raise exception using errcode='P0002',message='Linked event message was not found';\n  end if;\n  perform public.msg_assert_active_mutable_thread(v_thread_id);\n\n  if not exists (\n    select 1\n    from public.msg_thread_participants p\n    where p.thread_id=v_thread_id\n      and p.user_id=p_user_id\n      and p.left_at is null\n  ) then\n    raise exception using errcode='42501',message='Messenger user is not an active participant in the linked conversation';\n  end if;\n  if not exists (\n    select 1\n    from public.msg_receipts r\n    where r.message_id=p_message_id\n      and r.user_id=p_user_id\n  ) then\n    raise exception using errcode='P0002',message='Linked event message receipt was not found';\n  end if;\n\n  v_notification:=public.ack_device_notification(\n    p_device_identifier,p_notification_key,p_notification_type,p_action,p_metadata_json\n  );\n  v_receipt:=public.msg_acknowledge_message(p_message_id,p_user_id,p_device_identifier);\n  return v_notification || jsonb_build_object('message_receipt_id',v_receipt.id);\nend\n$function$\n",
+      "function_name": "msg_acknowledge_event_device_notification",
+      "identity_arguments": "p_device_identifier text, p_notification_key text, p_notification_type text, p_action text, p_metadata_json jsonb, p_message_id uuid, p_user_id uuid",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_acknowledge_message(p_message_id uuid, p_user_id uuid, p_device_identifier text)\n RETURNS msg_receipts\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare v_receipt public.msg_receipts%rowtype;\nbegin\n  perform public.msg_assert_active_mutable_message(p_message_id);\n  update public.msg_receipts set delivered_at=coalesce(delivered_at,now()),displayed_at=coalesce(displayed_at,now()),read_at=coalesce(read_at,now()),acknowledged_at=coalesce(acknowledged_at,now()),delivery_device_identifier=nullif(btrim(coalesce(p_device_identifier,'')), '')\n  where message_id=p_message_id and user_id=p_user_id returning * into v_receipt;\n  if not found then raise exception 'Message receipt not found.'; end if;\n  return v_receipt;\nend\n$function$\n",
       "function_name": "msg_acknowledge_message",
       "identity_arguments": "p_message_id uuid, p_user_id uuid, p_device_identifier text",
       "schema_name": "public"
     },
     {
       "comment": "Admin-only global conversation tombstone with immediate hiding and 14-day hard-purge retention.",
-      "definition": "CREATE OR REPLACE FUNCTION public.msg_admin_tombstone_thread(p_thread_id uuid, p_request_user_id uuid, p_operation_id uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_thread public.msg_threads%rowtype;\n  v_existing public.msg_thread_deletion_operations%rowtype;\n  v_request_role text;\n  v_now timestamptz := clock_timestamp();\n  v_deleted_messages integer := 0;\nbegin\n  if p_thread_id is null or p_request_user_id is null or p_operation_id is null then\n    raise exception using errcode='22023',\n      message='Thread, authenticated admin, and deletion operation are required';\n  end if;\n\n  perform pg_advisory_xact_lock(hashtextextended(p_operation_id::text,0));\n\n  select * into v_existing\n  from public.msg_thread_deletion_operations\n  where operation_id=p_operation_id;\n\n  if v_existing.operation_id is not null then\n    if v_existing.thread_id<>p_thread_id\n       or v_existing.user_id<>p_request_user_id\n       or v_existing.deletion_scope<>'global' then\n      raise exception using errcode='23505',\n        message='Deletion operation id was already used for another target';\n    end if;\n    return jsonb_build_object(\n      'ok',true,\n      'thread_id',v_existing.thread_id,\n      'deleted',true,\n      'deletion_scope','global',\n      'deleted_at',v_existing.deleted_at,\n      'purge_after',v_existing.deleted_at+interval '14 days',\n      'operation_id',v_existing.operation_id,\n      'replayed',true\n    );\n  end if;\n\n  select role into v_request_role\n  from public.msg_users\n  where id=p_request_user_id and is_active is true;\n\n  if v_request_role<>'admin' then\n    raise exception using errcode='42501',\n      message='An active Messenger admin is required for global tombstoning';\n  end if;\n\n  select * into v_thread\n  from public.msg_threads\n  where id=p_thread_id\n  for update;\n\n  if v_thread.id is null then\n    raise exception using errcode='P0002', message='Conversation not found';\n  end if;\n\n  if v_thread.system_key='ops_manager_shared_chat_v1' then\n    raise exception using errcode='23514',\n      message='The shared Ops Manager conversation cannot be globally tombstoned';\n  end if;\n\n  update public.msg_messages\n  set is_deleted=true,\n      body='[deleted]',\n      deleted_at=coalesce(deleted_at,v_now),\n      deleted_by_user_id=coalesce(deleted_by_user_id,p_request_user_id),\n      purge_after=coalesce(purge_after,coalesce(deleted_at,v_now)+interval '14 days'),\n      metadata_json=(coalesce(metadata_json,'{}'::jsonb)-'deleted_by'-'deleted_at')\n        || jsonb_build_object(\n          'deletion_retention_days',14,\n          'conversation_globally_tombstoned',true\n        ),\n      updated_at=v_now\n  where thread_id=p_thread_id\n    and is_deleted is false;\n  get diagnostics v_deleted_messages=row_count;\n\n  update public.msg_threads\n  set is_active=false,\n      deleted_at=v_now,\n      deleted_by_user_id=p_request_user_id,\n      deletion_operation_id=p_operation_id,\n      purge_after=v_now+interval '14 days',\n      last_message_at=null,\n      updated_at=v_now\n  where id=p_thread_id\n  returning * into v_thread;\n\n  insert into public.msg_thread_deletion_operations(\n    operation_id,thread_id,user_id,deletion_scope,deleted_through,deleted_at,\n    thread_type,metadata_json\n  ) values (\n    p_operation_id,p_thread_id,p_request_user_id,'global',v_now,v_now,\n    v_thread.thread_type,\n    jsonb_build_object('deleted_message_count',v_deleted_messages)\n  );\n\n  return jsonb_build_object(\n    'ok',true,\n    'thread_id',p_thread_id,\n    'deleted',true,\n    'deletion_scope','global',\n    'deleted_at',v_now,\n    'purge_after',v_now+interval '14 days',\n    'operation_id',p_operation_id,\n    'deleted_message_count',v_deleted_messages,\n    'replayed',false\n  );\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_admin_tombstone_thread(p_thread_id uuid, p_request_user_id uuid, p_operation_id uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_thread public.msg_threads%rowtype;\n  v_existing public.msg_thread_deletion_operations%rowtype;\n  v_request_role text;\n  v_now timestamptz:=clock_timestamp();\n  v_deleted_messages integer:=0;\nbegin\n  if p_thread_id is null or p_request_user_id is null or p_operation_id is null then\n    raise exception using errcode='22023',message='Thread, authenticated admin, and deletion operation are required';\n  end if;\n  perform pg_advisory_xact_lock(hashtextextended(p_operation_id::text,0));\n  select * into v_existing from public.msg_thread_deletion_operations where operation_id=p_operation_id;\n  if v_existing.operation_id is not null then\n    if v_existing.thread_id<>p_thread_id or v_existing.user_id<>p_request_user_id or v_existing.deletion_scope<>'global' then\n      raise exception using errcode='23505',message='Deletion operation id was already used for another target';\n    end if;\n    return jsonb_build_object('ok',true,'thread_id',v_existing.thread_id,'deleted',true,'deletion_scope','global','deleted_at',v_existing.deleted_at,'purge_after',v_existing.deleted_at+interval '14 days','operation_id',v_existing.operation_id,'replayed',true);\n  end if;\n  perform public.msg_assert_active_mutable_thread(p_thread_id);\n  select role into v_request_role from public.msg_users where id=p_request_user_id and is_active is true;\n  if v_request_role<>'admin' then raise exception using errcode='42501',message='An active Messenger admin is required for global tombstoning'; end if;\n  select * into v_thread from public.msg_threads where id=p_thread_id for update;\n  update public.msg_messages set is_deleted=true,body='[deleted]',deleted_at=coalesce(deleted_at,v_now),deleted_by_user_id=coalesce(deleted_by_user_id,p_request_user_id),purge_after=coalesce(purge_after,coalesce(deleted_at,v_now)+interval '14 days'),metadata_json=(coalesce(metadata_json,'{}'::jsonb)-'deleted_by'-'deleted_at')||jsonb_build_object('deletion_retention_days',14,'conversation_globally_tombstoned',true),updated_at=v_now\n  where thread_id=p_thread_id and is_deleted is false;\n  get diagnostics v_deleted_messages=row_count;\n  update public.msg_threads set is_active=false,deleted_at=v_now,deleted_by_user_id=p_request_user_id,deletion_operation_id=p_operation_id,purge_after=v_now+interval '14 days',last_message_at=null,updated_at=v_now where id=p_thread_id returning * into v_thread;\n  insert into public.msg_thread_deletion_operations(operation_id,thread_id,user_id,deletion_scope,deleted_through,deleted_at,thread_type,metadata_json)\n  values(p_operation_id,p_thread_id,p_request_user_id,'global',v_now,v_now,v_thread.thread_type,jsonb_build_object('deleted_message_count',v_deleted_messages));\n  return jsonb_build_object('ok',true,'thread_id',p_thread_id,'deleted',true,'deletion_scope','global','deleted_at',v_now,'purge_after',v_now+interval '14 days','operation_id',p_operation_id,'deleted_message_count',v_deleted_messages,'replayed',false);\nend\n$function$\n",
       "function_name": "msg_admin_tombstone_thread",
       "identity_arguments": "p_thread_id uuid, p_request_user_id uuid, p_operation_id uuid",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_assert_active_mutable_message(p_message_id uuid)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_thread_id uuid;\nbegin\n  if p_message_id is null then\n    raise exception using errcode='22023',message='message_id is required.';\n  end if;\n  select m.thread_id into v_thread_id\n  from public.msg_messages m\n  where m.id=p_message_id\n  for key share;\n  if v_thread_id is null then\n    raise exception using errcode='P0002',message='Message not found';\n  end if;\n  perform public.msg_assert_active_mutable_thread(v_thread_id);\nend\n$function$\n",
+      "function_name": "msg_assert_active_mutable_message",
+      "identity_arguments": "p_message_id uuid",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_assert_active_mutable_thread(p_thread_id uuid)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_thread public.msg_threads%rowtype;\nbegin\n  if p_thread_id is null then\n    raise exception using errcode='22023',message='thread_id is required.';\n  end if;\n  select * into v_thread\n  from public.msg_threads\n  where id=p_thread_id\n  for update;\n  if v_thread.id is null then\n    raise exception using errcode='P0002',message='Conversation not found';\n  end if;\n  if v_thread.system_key='ops_manager_shared_chat_v1' then\n    raise exception using errcode='23514',message='The retired Operations Leadership conversation is immutable';\n  end if;\n  if v_thread.is_active is not true then\n    raise exception using errcode='23514',message='Conversation is retired or inactive';\n  end if;\nend\n$function$\n",
+      "function_name": "msg_assert_active_mutable_thread",
+      "identity_arguments": "p_thread_id uuid",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_assert_no_ambiguous_active_pair_for_thread(p_thread_id uuid)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_thread public.msg_threads%rowtype;\n  v_low uuid;\n  v_high uuid;\n  v_candidate_count integer;\nbegin\n  select * into v_thread from public.msg_threads where id=p_thread_id;\n  if v_thread.id is null or v_thread.is_active is not true or v_thread.thread_type not in ('direct','bot') then return; end if;\n  select (array_agg(p.user_id order by p.user_id))[1],(array_agg(p.user_id order by p.user_id))[2] into v_low,v_high\n  from public.msg_thread_participants p where p.thread_id=p_thread_id and p.left_at is null;\n  if v_low is null or v_low=v_high or 2<>(select count(*) from public.msg_thread_participants p where p.thread_id=p_thread_id and p.left_at is null) then return; end if;\n  perform pg_advisory_xact_lock(hashtextextended('msg-canonical-conversation-pair:v1:'||v_low::text||':'||v_high::text,0));\n  select count(*) into v_candidate_count\n  from public.msg_threads t\n  join public.msg_thread_participants p1 on p1.thread_id=t.id and p1.user_id=v_low and p1.left_at is null\n  join public.msg_thread_participants p2 on p2.thread_id=t.id and p2.user_id=v_high and p2.left_at is null\n  where t.is_active is true and t.thread_type in ('direct','bot')\n    and 2=(select count(*) from public.msg_thread_participants px where px.thread_id=t.id and px.left_at is null);\n  if v_candidate_count>1 then\n    raise exception using errcode='23505',message='Ambiguous active Messenger canonical pair has more than one candidate';\n  end if;\nend\n$function$\n",
+      "function_name": "msg_assert_no_ambiguous_active_pair_for_thread",
+      "identity_arguments": "p_thread_id uuid",
       "schema_name": "public"
     },
     {
@@ -26417,7 +26542,7 @@
       "schema_name": "public"
     },
     {
-      "comment": "Retired fail-closed compatibility entry point. Messenger deletes whole conversations, not individual messages.",
+      "comment": null,
       "definition": "CREATE OR REPLACE FUNCTION public.msg_delete_message(p_message_id uuid, p_request_user_id uuid)\n RETURNS msg_messages\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\nbegin\n  raise exception using\n    errcode='0A000',\n    message='Individual-message deletion is retired. Delete the conversation instead.';\nend\n$function$\n",
       "function_name": "msg_delete_message",
       "identity_arguments": "p_message_id uuid, p_request_user_id uuid",
@@ -26425,7 +26550,7 @@
     },
     {
       "comment": "Removes a conversation only for the authenticated user through a visibility cutoff. Memphis deletion ends that user thread generation.",
-      "definition": "CREATE OR REPLACE FUNCTION public.msg_delete_thread(p_thread_id uuid, p_request_user_id uuid, p_operation_id uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_thread public.msg_threads%rowtype;\n  v_existing public.msg_thread_deletion_operations%rowtype;\n  v_request_role text;\n  v_now timestamptz := clock_timestamp();\n  v_deleted_through timestamptz;\n  v_is_memphis boolean := false;\nbegin\n  if p_thread_id is null or p_request_user_id is null or p_operation_id is null then\n    raise exception using errcode='22023',\n      message='Thread, authenticated user, and deletion operation are required';\n  end if;\n\n  perform pg_advisory_xact_lock(hashtextextended(p_operation_id::text,0));\n\n  select * into v_existing\n  from public.msg_thread_deletion_operations\n  where operation_id=p_operation_id;\n\n  if v_existing.operation_id is not null then\n    if v_existing.thread_id<>p_thread_id\n       or v_existing.user_id<>p_request_user_id\n       or v_existing.deletion_scope<>'user' then\n      raise exception using errcode='23505',\n        message='Deletion operation id was already used for another target';\n    end if;\n    return jsonb_build_object(\n      'ok',true,\n      'thread_id',v_existing.thread_id,\n      'deleted',true,\n      'deletion_scope','user',\n      'deleted_at',v_existing.deleted_at,\n      'deleted_through',v_existing.deleted_through,\n      'operation_id',v_existing.operation_id,\n      'replayed',true\n    );\n  end if;\n\n  select role into v_request_role\n  from public.msg_users\n  where id=p_request_user_id and is_active is true;\n\n  if v_request_role is null or not public.msg_is_runtime_user(p_request_user_id) then\n    raise exception using errcode='42501',\n      message='Authenticated messaging user was not found';\n  end if;\n\n  select * into v_thread\n  from public.msg_threads\n  where id=p_thread_id\n  for update;\n\n  if v_thread.id is null then\n    raise exception using errcode='P0002', message='Conversation not found';\n  end if;\n\n  if v_thread.system_key='ops_manager_shared_chat_v1' then\n    raise exception using errcode='23514',\n      message='The shared Ops Manager conversation cannot be deleted';\n  end if;\n\n  if v_request_role not in ('manager','admin')\n     and not exists (\n       select 1 from public.msg_thread_participants p\n       where p.thread_id=p_thread_id\n         and p.user_id=p_request_user_id\n         and p.left_at is null\n     ) then\n    raise exception using errcode='42501',\n      message='Only a participant or Ops Manager can remove this conversation';\n  end if;\n\n  v_deleted_through := greatest(\n    v_now,\n    coalesce((\n      select max(coalesce(m.sent_at,m.created_at))\n      from public.msg_messages m\n      where m.thread_id=p_thread_id\n    ),v_now)\n  );\n\n  delete from public.msg_thread_visibility\n  where thread_id=p_thread_id\n    and user_id=p_request_user_id\n    and device_identifier is null;\n\n  insert into public.msg_thread_visibility(\n    thread_id,user_id,device_identifier,hidden_before,created_at,updated_at\n  ) values (\n    p_thread_id,p_request_user_id,null,v_deleted_through,v_now,v_now\n  );\n\n  select exists(\n    select 1\n    from public.msg_thread_participants p\n    join public.msg_users u on u.id=p.user_id\n    where p.thread_id=p_thread_id\n      and p.left_at is null\n      and u.role='bot'\n      and lower(btrim(u.display_name))='memphis'\n  ) into v_is_memphis;\n\n  if v_is_memphis then\n    update public.msg_thread_participants\n    set left_at=coalesce(left_at,v_now)\n    where thread_id=p_thread_id\n      and user_id=p_request_user_id\n      and left_at is null;\n  end if;\n\n  insert into public.msg_thread_deletion_operations(\n    operation_id,thread_id,user_id,deletion_scope,deleted_through,deleted_at,\n    thread_type,metadata_json\n  ) values (\n    p_operation_id,p_thread_id,p_request_user_id,'user',v_deleted_through,v_now,\n    v_thread.thread_type,\n    jsonb_build_object('memphis_generation_ended',v_is_memphis)\n  );\n\n  update public.msg_threads\n  set updated_at=v_now\n  where id=p_thread_id;\n\n  return jsonb_build_object(\n    'ok',true,\n    'thread_id',p_thread_id,\n    'deleted',true,\n    'deletion_scope','user',\n    'deleted_at',v_now,\n    'deleted_through',v_deleted_through,\n    'operation_id',p_operation_id,\n    'memphis_generation_ended',v_is_memphis,\n    'replayed',false\n  );\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_delete_thread(p_thread_id uuid, p_request_user_id uuid, p_operation_id uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_thread public.msg_threads%rowtype;\n  v_existing public.msg_thread_deletion_operations%rowtype;\n  v_request_role text;\n  v_now timestamptz:=clock_timestamp();\n  v_deleted_through timestamptz;\n  v_is_memphis boolean:=false;\nbegin\n  if p_thread_id is null or p_request_user_id is null or p_operation_id is null then\n    raise exception using errcode='22023',message='Thread, authenticated user, and deletion operation are required';\n  end if;\n  perform pg_advisory_xact_lock(hashtextextended(p_operation_id::text,0));\n  select * into v_existing from public.msg_thread_deletion_operations where operation_id=p_operation_id;\n  if v_existing.operation_id is not null then\n    if v_existing.thread_id<>p_thread_id or v_existing.user_id<>p_request_user_id or v_existing.deletion_scope<>'user' then\n      raise exception using errcode='23505',message='Deletion operation id was already used for another target';\n    end if;\n    return jsonb_build_object('ok',true,'thread_id',v_existing.thread_id,'deleted',true,'deletion_scope','user','deleted_at',v_existing.deleted_at,'deleted_through',v_existing.deleted_through,'operation_id',v_existing.operation_id,'replayed',true);\n  end if;\n  perform public.msg_assert_active_mutable_thread(p_thread_id);\n  select role into v_request_role from public.msg_users where id=p_request_user_id and is_active is true;\n  if v_request_role is null or not public.msg_is_runtime_user(p_request_user_id) then\n    raise exception using errcode='42501',message='Authenticated messaging user was not found';\n  end if;\n  select * into v_thread from public.msg_threads where id=p_thread_id for update;\n  if v_request_role not in ('manager','admin') and not exists (\n    select 1 from public.msg_thread_participants p where p.thread_id=p_thread_id and p.user_id=p_request_user_id and p.left_at is null\n  ) then raise exception using errcode='42501',message='Only a participant or Ops Manager can remove this conversation'; end if;\n  v_deleted_through:=greatest(v_now,coalesce((select max(coalesce(m.sent_at,m.created_at)) from public.msg_messages m where m.thread_id=p_thread_id),v_now));\n  delete from public.msg_thread_visibility where thread_id=p_thread_id and user_id=p_request_user_id and device_identifier is null;\n  insert into public.msg_thread_visibility(thread_id,user_id,device_identifier,hidden_before,created_at,updated_at)\n  values(p_thread_id,p_request_user_id,null,v_deleted_through,v_now,v_now);\n  select exists(select 1 from public.msg_thread_participants p join public.msg_users u on u.id=p.user_id where p.thread_id=p_thread_id and p.left_at is null and u.role='bot' and lower(btrim(u.display_name))='memphis') into v_is_memphis;\n  if v_is_memphis then update public.msg_thread_participants set left_at=coalesce(left_at,v_now) where thread_id=p_thread_id and user_id=p_request_user_id and left_at is null; end if;\n  insert into public.msg_thread_deletion_operations(operation_id,thread_id,user_id,deletion_scope,deleted_through,deleted_at,thread_type,metadata_json)\n  values(p_operation_id,p_thread_id,p_request_user_id,'user',v_deleted_through,v_now,v_thread.thread_type,jsonb_build_object('memphis_generation_ended',v_is_memphis));\n  update public.msg_threads set updated_at=v_now where id=p_thread_id;\n  return jsonb_build_object('ok',true,'thread_id',p_thread_id,'deleted',true,'deletion_scope','user','deleted_at',v_now,'deleted_through',v_deleted_through,'operation_id',p_operation_id,'memphis_generation_ended',v_is_memphis,'replayed',false);\nend\n$function$\n",
       "function_name": "msg_delete_thread",
       "identity_arguments": "p_thread_id uuid, p_request_user_id uuid, p_operation_id uuid",
       "schema_name": "public"
@@ -26435,6 +26560,20 @@
       "definition": "CREATE OR REPLACE FUNCTION public.msg_delete_thread_permanently(p_thread_id uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_deleted_threads integer := 0;\n  v_deleted_messages integer := 0;\n  v_deleted_receipts integer := 0;\n  v_deleted_message_deletions integer := 0;\n  v_deleted_hidden_rows integer := 0;\n  v_deleted_participants integer := 0;\nbegin\n  if p_thread_id is null then\n    raise exception 'p_thread_id is required';\n  end if;\n\n  with target_messages as (\n    select id\n    from public.msg_messages\n    where thread_id = p_thread_id\n  ),\n  del_receipts as (\n    delete from public.msg_receipts r\n    where r.message_id in (select id from target_messages)\n    returning 1\n  ),\n  del_message_deletions as (\n    delete from public.msg_message_deletions d\n    where d.message_id in (select id from target_messages)\n    returning 1\n  ),\n  del_messages as (\n    delete from public.msg_messages m\n    where m.thread_id = p_thread_id\n    returning 1\n  ),\n  del_hidden as (\n    delete from public.msg_hidden_threads_by_device h\n    where h.thread_id = p_thread_id\n    returning 1\n  ),\n  del_participants as (\n    delete from public.msg_thread_participants p\n    where p.thread_id = p_thread_id\n    returning 1\n  ),\n  del_thread as (\n    delete from public.msg_threads t\n    where t.id = p_thread_id\n    returning 1\n  )\n  select\n    (select count(*) from del_thread),\n    (select count(*) from del_messages),\n    (select count(*) from del_receipts),\n    (select count(*) from del_message_deletions),\n    (select count(*) from del_hidden),\n    (select count(*) from del_participants)\n  into\n    v_deleted_threads,\n    v_deleted_messages,\n    v_deleted_receipts,\n    v_deleted_message_deletions,\n    v_deleted_hidden_rows,\n    v_deleted_participants;\n\n  return jsonb_build_object(\n    'thread_id', p_thread_id,\n    'deleted_threads', v_deleted_threads,\n    'deleted_messages', v_deleted_messages,\n    'deleted_receipts', v_deleted_receipts,\n    'deleted_message_deletions', v_deleted_message_deletions,\n    'deleted_hidden_rows', v_deleted_hidden_rows,\n    'deleted_participants', v_deleted_participants\n  );\nend;\n$function$\n",
       "function_name": "msg_delete_thread_permanently",
       "identity_arguments": "p_thread_id uuid",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_enforce_canonical_active_pair_participants()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\nbegin\n  perform public.msg_assert_no_ambiguous_active_pair_for_thread(case when tg_op='DELETE' then old.thread_id else new.thread_id end);\n  if tg_op='UPDATE' and old.thread_id is distinct from new.thread_id then\n    perform public.msg_assert_no_ambiguous_active_pair_for_thread(old.thread_id);\n  end if;\n  return null;\nend\n$function$\n",
+      "function_name": "msg_enforce_canonical_active_pair_participants",
+      "identity_arguments": "",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_enforce_canonical_active_pair_thread()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\nbegin\n  perform public.msg_assert_no_ambiguous_active_pair_for_thread(new.id);\n  return null;\nend\n$function$\n",
+      "function_name": "msg_enforce_canonical_active_pair_thread",
+      "identity_arguments": "",
       "schema_name": "public"
     },
     {
@@ -26453,7 +26592,7 @@
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.msg_ensure_ops_manager_user(p_manager_id uuid)\n RETURNS msg_users\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_manager public.ops_manager_managers%rowtype;\n  v_user public.msg_users%rowtype;\n  v_display_name text;\nbegin\n  if p_manager_id is null then\n    raise exception using errcode='22023',message='Authenticated leadership manager id is required';\n  end if;\n  perform pg_advisory_xact_lock(hashtextextended('named-manager-messenger:'||p_manager_id::text,0));\n  select * into v_manager\n  from public.ops_manager_managers\n  where manager_id=p_manager_id\n    and active=true\n    and revoked_at is null\n    and is_system_principal=false\n  for update;\n  if v_manager.manager_id is null then\n    raise exception using errcode='42501',message='Active named leadership identity was not found';\n  end if;\n\n  select * into v_user\n  from public.msg_users\n  where ops_manager_id=p_manager_id\n  order by created_at,id\n  limit 1\n  for update;\n\n  if v_user.id is null then\n    select * into v_user\n    from public.msg_users\n    where ops_manager_id is null\n      and lower(btrim(display_name))=lower(btrim(v_manager.display_name))\n      and coalesce(messaging_identity_key,'')<>'ops_manager_shared_identity_v1'\n    order by is_active desc,created_at,id\n    limit 1\n    for update;\n    if v_user.id is not null then\n      update public.msg_users\n      set ops_manager_id=p_manager_id,\n          display_name=btrim(v_manager.display_name),\n          role='manager',\n          is_active=true,\n          messaging_identity_key=null,\n          updated_at=now()\n      where id=v_user.id\n      returning * into v_user;\n    end if;\n  end if;\n\n  if v_user.id is null then\n    v_display_name:=btrim(v_manager.display_name);\n    if exists(select 1 from public.msg_users where lower(btrim(display_name))=lower(v_display_name)) then\n      v_display_name:=left(v_display_name,80)||' · Leadership';\n    end if;\n    insert into public.msg_users(display_name,role,is_active,ops_manager_id,messaging_identity_key)\n    values(v_display_name,'manager',true,p_manager_id,null)\n    returning * into v_user;\n  elsif v_user.is_active is false or v_user.role<>'manager' or v_user.display_name is distinct from btrim(v_manager.display_name) then\n    -- Prefer the exact real name. The fallback preserves startup if an old\n    -- unrelated row still owns that globally unique display name.\n    begin\n      update public.msg_users\n      set display_name=btrim(v_manager.display_name),role='manager',is_active=true,\n          messaging_identity_key=null,updated_at=now()\n      where id=v_user.id\n      returning * into v_user;\n    exception when unique_violation then\n      update public.msg_users\n      set role='manager',is_active=true,messaging_identity_key=null,updated_at=now()\n      where id=v_user.id\n      returning * into v_user;\n    end;\n  end if;\n  return v_user;\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_ensure_ops_manager_user(p_manager_id uuid)\n RETURNS msg_users\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_manager public.ops_manager_managers%rowtype;\n  v_user public.msg_users%rowtype;\n  v_link public.msg_ops_manager_legacy_identity_links%rowtype;\n  v_display_name text;\n  v_identity_key text;\nbegin\n  if p_manager_id is null then raise exception using errcode='22023',message='Authenticated leadership manager id is required'; end if;\n  perform pg_advisory_xact_lock(hashtextextended('named-manager-messenger:'||p_manager_id::text,0));\n  select * into v_manager from public.ops_manager_managers\n  where manager_id=p_manager_id and active=true and revoked_at is null and is_system_principal=false for update;\n  if v_manager.manager_id is null then raise exception using errcode='42501',message='Active named leadership identity was not found'; end if;\n  v_identity_key:='ops_manager_named_'||replace(p_manager_id::text,'-','');\n\n  select * into v_user from public.msg_users where ops_manager_id=p_manager_id order by created_at,id limit 1 for update;\n  if v_user.id is null then\n    select * into v_link from public.msg_ops_manager_legacy_identity_links where manager_id=p_manager_id for update;\n    if v_link.manager_id is not null then\n      select * into v_user from public.msg_users where id=v_link.msg_user_id for update;\n      if v_user.id is null or (v_user.ops_manager_id is not null and v_user.ops_manager_id<>p_manager_id) then\n        raise exception using errcode='23514',message='Verified legacy Messenger identity link is invalid';\n      end if;\n    end if;\n  end if;\n\n  v_display_name:=btrim(v_manager.display_name);\n  if exists(select 1 from public.msg_users u where lower(btrim(u.display_name))=lower(v_display_name) and (v_user.id is null or u.id<>v_user.id)) then\n    v_display_name:=left(v_display_name,64)||' · Leadership '||left(p_manager_id::text,8);\n  end if;\n  if v_user.id is null then\n    insert into public.msg_users(display_name,role,is_active,ops_manager_id,messaging_identity_key)\n    values(v_display_name,'manager',true,p_manager_id,v_identity_key)\n    returning * into v_user;\n  else\n    update public.msg_users\n    set ops_manager_id=p_manager_id,display_name=v_display_name,role='manager',is_active=true,messaging_identity_key=v_identity_key,updated_at=now()\n    where id=v_user.id\n    returning * into v_user;\n  end if;\n  return v_user;\nend\n$function$\n",
       "function_name": "msg_ensure_ops_manager_user",
       "identity_arguments": "p_manager_id uuid",
       "schema_name": "public"
@@ -26481,14 +26620,14 @@
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.msg_get_or_create_direct_thread(p_user_a uuid, p_user_b uuid)\n RETURNS msg_threads\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_thread public.msg_threads%rowtype;\n  v_pair public.msg_canonical_thread_pairs%rowtype;\n  v_low uuid;\n  v_high uuid;\nbegin\n  if p_user_a is null or p_user_b is null then raise exception 'Both users are required.'; end if;\n  if p_user_a = p_user_b then raise exception 'Direct thread requires two different users.'; end if;\n  if not exists (select 1 from public.msg_users where id = p_user_a and is_active is true) then raise exception 'User A not found or inactive.'; end if;\n  if not exists (select 1 from public.msg_users where id = p_user_b and is_active is true) then raise exception 'User B not found or inactive.'; end if;\n\n  v_low := least(p_user_a, p_user_b);\n  v_high := greatest(p_user_a, p_user_b);\n  perform pg_advisory_xact_lock(hashtextextended(\n    'msg-canonical-conversation-pair:v1:' || v_low::text || ':' || v_high::text,\n    0\n  ));\n\n  select * into v_pair\n  from public.msg_canonical_thread_pairs\n  where principal_low_id = v_low and principal_high_id = v_high\n  for update;\n\n  if v_pair.thread_id is not null then\n    select t.* into v_thread\n    from public.msg_threads t\n    join public.msg_thread_participants p1 on p1.thread_id=t.id and p1.user_id=p_user_a and p1.left_at is null\n    join public.msg_thread_participants p2 on p2.thread_id=t.id and p2.user_id=p_user_b and p2.left_at is null\n    where t.id=v_pair.thread_id\n      and t.is_active is true\n      and t.thread_type in ('direct','bot')\n      and 2=(select count(*) from public.msg_thread_participants px where px.thread_id=t.id and px.left_at is null);\n    if v_thread.id is not null then return v_thread; end if;\n    delete from public.msg_canonical_thread_pairs\n    where principal_low_id=v_low and principal_high_id=v_high;\n  end if;\n\n  select t.* into v_thread\n  from public.msg_threads t\n  join public.msg_thread_participants p1 on p1.thread_id=t.id and p1.user_id=p_user_a and p1.left_at is null\n  join public.msg_thread_participants p2 on p2.thread_id=t.id and p2.user_id=p_user_b and p2.left_at is null\n  where t.thread_type='direct'\n    and t.is_active is true\n    and 2=(select count(*) from public.msg_thread_participants px where px.thread_id=t.id and px.left_at is null)\n  order by t.created_at asc, t.id asc\n  limit 1;\n\n  if v_thread.id is null then\n    insert into public.msg_threads(thread_type,title,created_by_user_id,is_active)\n    values ('direct',null,p_user_a,true)\n    returning * into v_thread;\n    insert into public.msg_thread_participants(thread_id,user_id)\n    values (v_thread.id,p_user_a),(v_thread.id,p_user_b);\n  end if;\n\n  insert into public.msg_canonical_thread_pairs(principal_low_id,principal_high_id,thread_id,conversation_type)\n  values(v_low,v_high,v_thread.id,v_thread.thread_type)\n  on conflict (principal_low_id,principal_high_id) do nothing;\n  return v_thread;\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_get_or_create_direct_thread(p_user_a uuid, p_user_b uuid)\n RETURNS msg_threads\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_thread public.msg_threads%rowtype;\n  v_pair public.msg_canonical_thread_pairs%rowtype;\n  v_candidate_ids uuid[];\n  v_candidate_count integer:=0;\n  v_low uuid;\n  v_high uuid;\nbegin\n  if p_user_a is null or p_user_b is null then raise exception 'Both users are required.'; end if;\n  if p_user_a=p_user_b then raise exception 'Direct thread requires two different users.'; end if;\n  if not exists(select 1 from public.msg_users where id=p_user_a and is_active is true) then raise exception 'User A not found or inactive.'; end if;\n  if not exists(select 1 from public.msg_users where id=p_user_b and is_active is true) then raise exception 'User B not found or inactive.'; end if;\n  v_low:=least(p_user_a,p_user_b); v_high:=greatest(p_user_a,p_user_b);\n  perform pg_advisory_xact_lock(hashtextextended('msg-canonical-conversation-pair:v1:'||v_low::text||':'||v_high::text,0));\n  select * into v_pair from public.msg_canonical_thread_pairs where principal_low_id=v_low and principal_high_id=v_high for update;\n  with candidates as materialized (\n    select t.id from public.msg_threads t\n    join public.msg_thread_participants p1 on p1.thread_id=t.id and p1.user_id=p_user_a and p1.left_at is null\n    join public.msg_thread_participants p2 on p2.thread_id=t.id and p2.user_id=p_user_b and p2.left_at is null\n    where t.thread_type='direct' and t.is_active is true\n      and 2=(select count(*) from public.msg_thread_participants px where px.thread_id=t.id and px.left_at is null)\n    order by t.created_at,t.id for update of t\n  ) select coalesce(array_agg(id order by id),'{}'::uuid[]),count(*) into v_candidate_ids,v_candidate_count from candidates;\n  if v_candidate_count>1 then raise exception using errcode='23505',message='Ambiguous active Messenger canonical pair has more than one direct candidate'; end if;\n  if v_candidate_count=1 then\n    select * into v_thread from public.msg_threads where id=v_candidate_ids[1] for update;\n  elsif v_pair.thread_id is not null then\n    delete from public.msg_canonical_thread_pairs where principal_low_id=v_low and principal_high_id=v_high;\n  end if;\n  if v_thread.id is null then\n    insert into public.msg_threads(thread_type,title,created_by_user_id,is_active) values('direct',null,p_user_a,true) returning * into v_thread;\n    insert into public.msg_thread_participants(thread_id,user_id) values(v_thread.id,p_user_a),(v_thread.id,p_user_b);\n  end if;\n  insert into public.msg_canonical_thread_pairs(principal_low_id,principal_high_id,thread_id,conversation_type)\n  values(v_low,v_high,v_thread.id,'direct')\n  on conflict(principal_low_id,principal_high_id) do update set thread_id=excluded.thread_id,conversation_type=excluded.conversation_type\n  where public.msg_canonical_thread_pairs.thread_id is distinct from excluded.thread_id or public.msg_canonical_thread_pairs.conversation_type is distinct from excluded.conversation_type;\n  return v_thread;\nend\n$function$\n",
       "function_name": "msg_get_or_create_direct_thread",
       "identity_arguments": "p_user_a uuid, p_user_b uuid",
       "schema_name": "public"
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.msg_get_or_create_memphis_thread(p_user_id uuid)\n RETURNS msg_threads\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_memphis_user_id uuid;\n  v_thread public.msg_threads%rowtype;\n  v_pair public.msg_canonical_thread_pairs%rowtype;\n  v_low uuid;\n  v_high uuid;\nbegin\n  if p_user_id is null then raise exception 'user_id is required.'; end if;\n  if not public.msg_is_runtime_user(p_user_id) then raise exception 'User is not an active custodial Messenger identity.'; end if;\n\n  select mu.id into v_memphis_user_id\n  from public.msg_users mu\n  where mu.is_active is true\n    and mu.role='bot'\n    and lower(btrim(mu.display_name))='memphis'\n  order by mu.created_at asc, mu.id asc\n  limit 1;\n  if v_memphis_user_id is null then raise exception 'Memphis bot user not found.'; end if;\n  if p_user_id=v_memphis_user_id then raise exception 'Memphis cannot create a conversation with itself.'; end if;\n\n  v_low := least(p_user_id,v_memphis_user_id);\n  v_high := greatest(p_user_id,v_memphis_user_id);\n  perform pg_advisory_xact_lock(hashtextextended(\n    'msg-canonical-conversation-pair:v1:' || v_low::text || ':' || v_high::text,\n    0\n  ));\n\n  select * into v_pair\n  from public.msg_canonical_thread_pairs\n  where principal_low_id=v_low and principal_high_id=v_high\n  for update;\n\n  if v_pair.thread_id is not null then\n    select t.* into v_thread\n    from public.msg_threads t\n    join public.msg_thread_participants p1 on p1.thread_id=t.id and p1.user_id=p_user_id and p1.left_at is null\n    join public.msg_thread_participants p2 on p2.thread_id=t.id and p2.user_id=v_memphis_user_id and p2.left_at is null\n    where t.id=v_pair.thread_id\n      and t.is_active is true\n      and t.thread_type in ('direct','bot')\n      and 2=(select count(*) from public.msg_thread_participants px where px.thread_id=t.id and px.left_at is null);\n    if v_thread.id is null then\n      delete from public.msg_canonical_thread_pairs where principal_low_id=v_low and principal_high_id=v_high;\n    end if;\n  end if;\n\n  if v_thread.id is null then\n    select t.* into v_thread\n    from public.msg_threads t\n    join public.msg_thread_participants p1 on p1.thread_id=t.id and p1.user_id=p_user_id and p1.left_at is null\n    join public.msg_thread_participants p2 on p2.thread_id=t.id and p2.user_id=v_memphis_user_id and p2.left_at is null\n    where t.is_active is true\n      and t.thread_type in ('bot','direct')\n      and 2=(select count(*) from public.msg_thread_participants px where px.thread_id=t.id and px.left_at is null)\n    order by case when t.thread_type='bot' then 0 else 1 end, t.created_at asc, t.id asc\n    limit 1;\n  end if;\n\n  if v_thread.id is null then\n    insert into public.msg_threads(thread_type,title,created_by_user_id,is_active)\n    values('bot','Memphis',p_user_id,true)\n    returning * into v_thread;\n    insert into public.msg_thread_participants(thread_id,user_id)\n    values(v_thread.id,p_user_id),(v_thread.id,v_memphis_user_id);\n  elsif v_thread.thread_type is distinct from 'bot' or v_thread.title is distinct from 'Memphis' then\n    update public.msg_threads\n    set thread_type='bot',title='Memphis',updated_at=now()\n    where id=v_thread.id\n    returning * into v_thread;\n  end if;\n\n  insert into public.msg_canonical_thread_pairs(principal_low_id,principal_high_id,thread_id,conversation_type)\n  values(v_low,v_high,v_thread.id,'bot')\n  on conflict (principal_low_id,principal_high_id)\n  do update set thread_id=excluded.thread_id,conversation_type=excluded.conversation_type\n  where public.msg_canonical_thread_pairs.thread_id is distinct from excluded.thread_id\n     or public.msg_canonical_thread_pairs.conversation_type is distinct from excluded.conversation_type;\n  return v_thread;\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_get_or_create_memphis_thread(p_user_id uuid)\n RETURNS msg_threads\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_memphis_user_id uuid;\n  v_thread public.msg_threads%rowtype;\n  v_pair public.msg_canonical_thread_pairs%rowtype;\n  v_candidate_ids uuid[];\n  v_candidate_count integer:=0;\n  v_low uuid;\n  v_high uuid;\nbegin\n  if p_user_id is null then raise exception 'user_id is required.'; end if;\n  if not public.msg_is_runtime_user(p_user_id) then raise exception 'User is not an active custodial Messenger identity.'; end if;\n  select mu.id into v_memphis_user_id from public.msg_users mu\n  where mu.is_active is true and mu.role='bot' and lower(btrim(mu.display_name))='memphis'\n  order by mu.created_at,mu.id limit 1;\n  if v_memphis_user_id is null then raise exception 'Memphis bot user not found.'; end if;\n  if p_user_id=v_memphis_user_id then raise exception 'Memphis cannot create a conversation with itself.'; end if;\n  v_low:=least(p_user_id,v_memphis_user_id); v_high:=greatest(p_user_id,v_memphis_user_id);\n  perform pg_advisory_xact_lock(hashtextextended('msg-canonical-conversation-pair:v1:'||v_low::text||':'||v_high::text,0));\n  select * into v_pair from public.msg_canonical_thread_pairs where principal_low_id=v_low and principal_high_id=v_high for update;\n  with candidates as materialized (\n    select t.id from public.msg_threads t\n    join public.msg_thread_participants p1 on p1.thread_id=t.id and p1.user_id=p_user_id and p1.left_at is null\n    join public.msg_thread_participants p2 on p2.thread_id=t.id and p2.user_id=v_memphis_user_id and p2.left_at is null\n    where t.thread_type in ('direct','bot') and t.is_active is true\n      and 2=(select count(*) from public.msg_thread_participants px where px.thread_id=t.id and px.left_at is null)\n    order by case when t.thread_type='bot' then 0 else 1 end,t.created_at,t.id for update of t\n  ) select coalesce(array_agg(id order by id),'{}'::uuid[]),count(*) into v_candidate_ids,v_candidate_count from candidates;\n  if v_candidate_count>1 then raise exception using errcode='23505',message='Ambiguous active Messenger canonical pair has more than one Memphis candidate'; end if;\n  if v_candidate_count=1 then\n    select * into v_thread from public.msg_threads where id=v_candidate_ids[1] for update;\n  elsif v_pair.thread_id is not null then\n    delete from public.msg_canonical_thread_pairs where principal_low_id=v_low and principal_high_id=v_high;\n  end if;\n  if v_thread.id is null then\n    insert into public.msg_threads(thread_type,title,created_by_user_id,is_active) values('bot','Memphis',p_user_id,true) returning * into v_thread;\n    insert into public.msg_thread_participants(thread_id,user_id) values(v_thread.id,p_user_id),(v_thread.id,v_memphis_user_id);\n  elsif v_thread.thread_type is distinct from 'bot' or v_thread.title is distinct from 'Memphis' then\n    update public.msg_threads set thread_type='bot',title='Memphis',updated_at=now() where id=v_thread.id returning * into v_thread;\n  end if;\n  insert into public.msg_canonical_thread_pairs(principal_low_id,principal_high_id,thread_id,conversation_type)\n  values(v_low,v_high,v_thread.id,'bot')\n  on conflict(principal_low_id,principal_high_id) do update set thread_id=excluded.thread_id,conversation_type=excluded.conversation_type\n  where public.msg_canonical_thread_pairs.thread_id is distinct from excluded.thread_id or public.msg_canonical_thread_pairs.conversation_type is distinct from excluded.conversation_type;\n  return v_thread;\nend\n$function$\n",
       "function_name": "msg_get_or_create_memphis_thread",
       "identity_arguments": "p_user_id uuid",
       "schema_name": "public"
@@ -26565,28 +26704,28 @@
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.msg_mark_message_delivered(p_message_id uuid, p_user_id uuid, p_device_identifier text)\n RETURNS msg_receipts\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare v_receipt public.msg_receipts%rowtype;\nbegin\n  perform public.msg_assert_not_retired_ops_manager_shared_message(p_message_id);\n  update public.msg_receipts\n  set delivered_at=coalesce(delivered_at,now()),\n      delivery_device_identifier=nullif(btrim(coalesce(p_device_identifier,'')), ''),\n      last_delivery_attempt_at=now(),\n      delivery_attempts=delivery_attempts+1\n  where message_id=p_message_id and user_id=p_user_id\n  returning * into v_receipt;\n  if not found then raise exception 'Message receipt not found.'; end if;\n  return v_receipt;\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_mark_message_delivered(p_message_id uuid, p_user_id uuid, p_device_identifier text)\n RETURNS msg_receipts\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare v_receipt public.msg_receipts%rowtype;\nbegin\n  perform public.msg_assert_active_mutable_message(p_message_id);\n  update public.msg_receipts set delivered_at=coalesce(delivered_at,now()),delivery_device_identifier=nullif(btrim(coalesce(p_device_identifier,'')), ''),last_delivery_attempt_at=now(),delivery_attempts=delivery_attempts+1\n  where message_id=p_message_id and user_id=p_user_id returning * into v_receipt;\n  if not found then raise exception 'Message receipt not found.'; end if;\n  return v_receipt;\nend\n$function$\n",
       "function_name": "msg_mark_message_delivered",
       "identity_arguments": "p_message_id uuid, p_user_id uuid, p_device_identifier text",
       "schema_name": "public"
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.msg_mark_message_displayed(p_message_id uuid, p_user_id uuid, p_device_identifier text)\n RETURNS msg_receipts\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare v_receipt public.msg_receipts%rowtype;\nbegin\n  perform public.msg_assert_not_retired_ops_manager_shared_message(p_message_id);\n  update public.msg_receipts\n  set delivered_at=coalesce(delivered_at,now()),\n      displayed_at=coalesce(displayed_at,now()),\n      delivery_device_identifier=nullif(btrim(coalesce(p_device_identifier,'')), ''),\n      last_delivery_attempt_at=now(),\n      delivery_attempts=delivery_attempts+1\n  where message_id=p_message_id and user_id=p_user_id\n  returning * into v_receipt;\n  if not found then raise exception 'Message receipt not found.'; end if;\n  return v_receipt;\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_mark_message_displayed(p_message_id uuid, p_user_id uuid, p_device_identifier text)\n RETURNS msg_receipts\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare v_receipt public.msg_receipts%rowtype;\nbegin\n  perform public.msg_assert_active_mutable_message(p_message_id);\n  update public.msg_receipts set delivered_at=coalesce(delivered_at,now()),displayed_at=coalesce(displayed_at,now()),delivery_device_identifier=nullif(btrim(coalesce(p_device_identifier,'')), ''),last_delivery_attempt_at=now(),delivery_attempts=delivery_attempts+1\n  where message_id=p_message_id and user_id=p_user_id returning * into v_receipt;\n  if not found then raise exception 'Message receipt not found.'; end if;\n  return v_receipt;\nend\n$function$\n",
       "function_name": "msg_mark_message_displayed",
       "identity_arguments": "p_message_id uuid, p_user_id uuid, p_device_identifier text",
       "schema_name": "public"
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.msg_mark_messages_delivered(p_thread_id uuid, p_user_id uuid, p_message_ids uuid[] DEFAULT '{}'::uuid[])\n RETURNS integer\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare v_count integer := 0;\nbegin\n  if p_thread_id is null or p_user_id is null then raise exception 'thread_id and user_id are required.'; end if;\n  perform public.msg_assert_not_retired_ops_manager_shared_thread(p_thread_id);\n  update public.msg_receipts r\n  set delivered_at = coalesce(r.delivered_at, now())\n  from public.msg_messages m\n  where r.message_id = m.id\n    and r.user_id = p_user_id\n    and m.thread_id = p_thread_id\n    and (coalesce(array_length(p_message_ids, 1), 0) = 0 or m.id = any(p_message_ids));\n  get diagnostics v_count = row_count;\n  return v_count;\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_mark_messages_delivered(p_thread_id uuid, p_user_id uuid, p_message_ids uuid[] DEFAULT '{}'::uuid[])\n RETURNS integer\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare v_count integer:=0;\nbegin\n  if p_thread_id is null or p_user_id is null then raise exception 'thread_id and user_id are required.'; end if;\n  perform public.msg_assert_active_mutable_thread(p_thread_id);\n  update public.msg_receipts r set delivered_at=coalesce(r.delivered_at,now())\n  from public.msg_messages m where r.message_id=m.id and r.user_id=p_user_id and m.thread_id=p_thread_id\n    and (coalesce(array_length(p_message_ids,1),0)=0 or m.id=any(p_message_ids));\n  get diagnostics v_count=row_count;\n  return v_count;\nend\n$function$\n",
       "function_name": "msg_mark_messages_delivered",
       "identity_arguments": "p_thread_id uuid, p_user_id uuid, p_message_ids uuid[]",
       "schema_name": "public"
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.msg_mark_messages_displayed(p_thread_id uuid, p_user_id uuid, p_message_ids uuid[] DEFAULT '{}'::uuid[])\n RETURNS integer\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare v_count integer := 0;\nbegin\n  if p_thread_id is null or p_user_id is null then raise exception 'thread_id and user_id are required.'; end if;\n  perform public.msg_assert_not_retired_ops_manager_shared_thread(p_thread_id);\n  update public.msg_receipts r\n  set delivered_at = coalesce(r.delivered_at, now()),\n      displayed_at = coalesce(r.displayed_at, now())\n  from public.msg_messages m\n  where r.message_id = m.id\n    and r.user_id = p_user_id\n    and m.thread_id = p_thread_id\n    and (coalesce(array_length(p_message_ids, 1), 0) = 0 or m.id = any(p_message_ids));\n  get diagnostics v_count = row_count;\n  return v_count;\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_mark_messages_displayed(p_thread_id uuid, p_user_id uuid, p_message_ids uuid[] DEFAULT '{}'::uuid[])\n RETURNS integer\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare v_count integer:=0;\nbegin\n  if p_thread_id is null or p_user_id is null then raise exception 'thread_id and user_id are required.'; end if;\n  perform public.msg_assert_active_mutable_thread(p_thread_id);\n  update public.msg_receipts r set delivered_at=coalesce(r.delivered_at,now()),displayed_at=coalesce(r.displayed_at,now())\n  from public.msg_messages m where r.message_id=m.id and r.user_id=p_user_id and m.thread_id=p_thread_id\n    and (coalesce(array_length(p_message_ids,1),0)=0 or m.id=any(p_message_ids));\n  get diagnostics v_count=row_count;\n  return v_count;\nend\n$function$\n",
       "function_name": "msg_mark_messages_displayed",
       "identity_arguments": "p_thread_id uuid, p_user_id uuid, p_message_ids uuid[]",
       "schema_name": "public"
@@ -26600,7 +26739,7 @@
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.msg_mark_thread_read(p_thread_id uuid, p_user_id uuid)\n RETURNS integer\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare v_count integer := 0;\nbegin\n  if p_thread_id is null or p_user_id is null then raise exception 'thread_id and user_id are required.'; end if;\n  perform public.msg_assert_not_retired_ops_manager_shared_thread(p_thread_id);\n  update public.msg_receipts r\n  set delivered_at = coalesce(r.delivered_at, now()),\n      displayed_at = coalesce(r.displayed_at, now()),\n      read_at = coalesce(r.read_at, now())\n  from public.msg_messages m\n  where r.message_id = m.id\n    and r.user_id = p_user_id\n    and m.thread_id = p_thread_id;\n  get diagnostics v_count = row_count;\n  return v_count;\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_mark_thread_read(p_thread_id uuid, p_user_id uuid)\n RETURNS integer\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare v_count integer:=0;\nbegin\n  if p_thread_id is null or p_user_id is null then raise exception 'thread_id and user_id are required.'; end if;\n  perform public.msg_assert_active_mutable_thread(p_thread_id);\n  update public.msg_receipts r set delivered_at=coalesce(r.delivered_at,now()),displayed_at=coalesce(r.displayed_at,now()),read_at=coalesce(r.read_at,now())\n  from public.msg_messages m where r.message_id=m.id and r.user_id=p_user_id and m.thread_id=p_thread_id;\n  get diagnostics v_count=row_count;\n  return v_count;\nend\n$function$\n",
       "function_name": "msg_mark_thread_read",
       "identity_arguments": "p_thread_id uuid, p_user_id uuid",
       "schema_name": "public"
@@ -26630,6 +26769,13 @@
       "comment": "Destructive legacy message purge. Automatic execution disabled 2026-07-15. PostgreSQL-owner execution only.",
       "definition": "CREATE OR REPLACE FUNCTION public.msg_purge_messages_older_than_14_days()\n RETURNS jsonb\n LANGUAGE sql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\n  select public.msg_purge_deleted_content(now(),1000);\n$function$\n",
       "function_name": "msg_purge_messages_older_than_14_days",
+      "identity_arguments": "",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_reject_archive_truncate()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\nbegin\n  raise exception using errcode='23514',message='Messenger archive and evidence tables cannot be truncated';\nend\n$function$\n",
+      "function_name": "msg_reject_archive_truncate",
       "identity_arguments": "",
       "schema_name": "public"
     },
@@ -26691,14 +26837,14 @@
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.msg_send_message(p_thread_id uuid, p_sender_user_id uuid, p_body text, p_message_type text DEFAULT 'text'::text, p_metadata_json jsonb DEFAULT '{}'::jsonb)\n RETURNS msg_messages\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_message public.msg_messages%rowtype;\n  v_metadata jsonb := coalesce(p_metadata_json, '{}'::jsonb);\n  v_client_message_id text := nullif(btrim(coalesce(p_metadata_json->>'client_message_id', '')), '');\n  v_source text := lower(btrim(coalesce(p_metadata_json->>'source', '')));\n  v_event_id text := nullif(btrim(coalesce(p_metadata_json->>'event_id', '')), '');\n  v_dedupe_key text := nullif(btrim(coalesce(\n    p_metadata_json->>'notification_instance_key',\n    p_metadata_json->>'instance_key',\n    p_metadata_json->>'notification_key',\n    p_metadata_json->>'alert_key',\n    p_metadata_json->>'reminder_key',\n    ''\n  )), '');\nbegin\n  if p_thread_id is null then raise exception 'thread_id is required.'; end if;\n  if p_sender_user_id is null then raise exception 'sender_user_id is required.'; end if;\n  if p_body is null or btrim(p_body) = '' then raise exception 'Message body is required.'; end if;\n  if length(p_body) > 2000 then raise exception 'Message body cannot exceed 2000 characters.'; end if;\n  if v_client_message_id is not null and length(v_client_message_id) > 200 then\n    raise exception 'client_message_id cannot exceed 200 characters.';\n  end if;\n  if not exists (\n    select 1 from public.msg_thread_participants tp\n    where tp.thread_id = p_thread_id\n      and tp.user_id = p_sender_user_id\n      and tp.left_at is null\n  ) then\n    raise exception 'Sender is not an active participant in this thread.';\n  end if;\n\n  if v_dedupe_key is null and v_source = 'events_app' and v_event_id is not null then\n    v_dedupe_key := 'event:' || v_event_id;\n  end if;\n\n  if v_dedupe_key is not null then\n    if length(v_dedupe_key) > 500 then raise exception 'notification instance key cannot exceed 500 characters'; end if;\n    perform pg_advisory_xact_lock(hashtextextended(\n      'message-notification:' || p_thread_id::text || ':' || p_sender_user_id::text || ':' || v_dedupe_key,\n      0\n    ));\n    select * into v_message\n    from public.msg_messages m\n    where m.thread_id = p_thread_id\n      and m.sender_user_id = p_sender_user_id\n      and m.is_deleted = false\n      and (\n        m.metadata_json->>'notification_instance_key' = v_dedupe_key\n        or (v_source = 'events_app' and v_event_id is not null\n            and coalesce(m.metadata_json->>'source','') = 'events_app'\n            and m.metadata_json->>'event_id' = v_event_id)\n      )\n    order by m.sent_at\n    limit 1;\n    if found then return v_message; end if;\n    v_metadata := v_metadata || jsonb_build_object('notification_instance_key', v_dedupe_key);\n  end if;\n\n  if v_client_message_id is not null then\n    select * into v_message\n    from public.msg_messages m\n    where m.sender_user_id = p_sender_user_id\n      and m.client_message_id = v_client_message_id\n    limit 1;\n    if found then return v_message; end if;\n  end if;\n\n  insert into public.msg_messages(\n    thread_id, sender_user_id, message_type, body, metadata_json, client_message_id\n  ) values (\n    p_thread_id,\n    p_sender_user_id,\n    coalesce(nullif(btrim(p_message_type), ''), 'text'),\n    btrim(p_body),\n    v_metadata,\n    v_client_message_id\n  ) returning * into v_message;\n\n  insert into public.msg_receipts(message_id, user_id, delivered_at, displayed_at, read_at, acknowledged_at)\n  select v_message.id, tp.user_id, null, null, null, null\n  from public.msg_thread_participants tp\n  where tp.thread_id = p_thread_id\n    and tp.left_at is null\n    and tp.user_id <> p_sender_user_id\n  on conflict (message_id, user_id) do nothing;\n\n  update public.msg_threads\n  set last_message_at = v_message.sent_at, updated_at = now()\n  where id = p_thread_id;\n\n  return v_message;\nexception\n  when unique_violation then\n    if v_client_message_id is not null then\n      select * into v_message\n      from public.msg_messages m\n      where m.sender_user_id = p_sender_user_id\n        and m.client_message_id = v_client_message_id\n      limit 1;\n      if found then return v_message; end if;\n    end if;\n    if v_dedupe_key is not null then\n      select * into v_message\n      from public.msg_messages m\n      where m.thread_id = p_thread_id\n        and m.sender_user_id = p_sender_user_id\n        and m.metadata_json->>'notification_instance_key' = v_dedupe_key\n      limit 1;\n      if found then return v_message; end if;\n    end if;\n    raise;\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_send_message(p_thread_id uuid, p_sender_user_id uuid, p_body text, p_message_type text DEFAULT 'text'::text, p_metadata_json jsonb DEFAULT '{}'::jsonb)\n RETURNS msg_messages\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_message public.msg_messages%rowtype;\n  v_metadata jsonb := coalesce(p_metadata_json, '{}'::jsonb);\n  v_client_message_id text := nullif(btrim(coalesce(p_metadata_json->>'client_message_id', '')), '');\n  v_source text := lower(btrim(coalesce(p_metadata_json->>'source', '')));\n  v_event_id text := nullif(btrim(coalesce(p_metadata_json->>'event_id', '')), '');\n  v_dedupe_key text := nullif(btrim(coalesce(\n    p_metadata_json->>'notification_instance_key',\n    p_metadata_json->>'instance_key',\n    p_metadata_json->>'notification_key',\n    p_metadata_json->>'alert_key',\n    p_metadata_json->>'reminder_key',\n    ''\n  )), '');\nbegin\n  if p_thread_id is null then raise exception 'thread_id is required.'; end if;\n  if p_sender_user_id is null then raise exception 'sender_user_id is required.'; end if;\n  if p_body is null or btrim(p_body) = '' then raise exception 'Message body is required.'; end if;\n  if length(p_body) > 2000 then raise exception 'Message body cannot exceed 2000 characters.'; end if;\n  if v_client_message_id is not null and length(v_client_message_id) > 200 then\n    raise exception 'client_message_id cannot exceed 200 characters.';\n  end if;\n  perform public.msg_assert_active_mutable_thread(p_thread_id);\n  if not exists (\n    select 1 from public.msg_thread_participants tp\n    where tp.thread_id=p_thread_id and tp.user_id=p_sender_user_id and tp.left_at is null\n  ) then raise exception 'Sender is not an active participant in this thread.'; end if;\n\n  if v_dedupe_key is null and v_source='events_app' and v_event_id is not null then\n    v_dedupe_key:='event:'||v_event_id;\n  end if;\n  if v_dedupe_key is not null then\n    if length(v_dedupe_key)>500 then raise exception 'notification instance key cannot exceed 500 characters'; end if;\n    perform pg_advisory_xact_lock(hashtextextended(\n      'message-notification:'||p_thread_id::text||':'||p_sender_user_id::text||':'||v_dedupe_key,0\n    ));\n    select * into v_message from public.msg_messages m\n    where m.thread_id=p_thread_id and m.sender_user_id=p_sender_user_id and m.is_deleted is false\n      and (m.metadata_json->>'notification_instance_key'=v_dedupe_key\n        or (v_source='events_app' and v_event_id is not null\n          and coalesce(m.metadata_json->>'source','')='events_app'\n          and m.metadata_json->>'event_id'=v_event_id))\n    order by m.sent_at limit 1;\n    if found then return v_message; end if;\n    v_metadata:=v_metadata||jsonb_build_object('notification_instance_key',v_dedupe_key);\n  end if;\n  if v_client_message_id is not null then\n    select * into v_message from public.msg_messages m\n    where m.sender_user_id=p_sender_user_id and m.client_message_id=v_client_message_id limit 1;\n    if found then return v_message; end if;\n  end if;\n  insert into public.msg_messages(thread_id,sender_user_id,message_type,body,metadata_json,client_message_id)\n  values(p_thread_id,p_sender_user_id,coalesce(nullif(btrim(p_message_type),''),'text'),btrim(p_body),v_metadata,v_client_message_id)\n  returning * into v_message;\n  insert into public.msg_receipts(message_id,user_id,delivered_at,displayed_at,read_at,acknowledged_at)\n  select v_message.id,tp.user_id,null,null,null,null from public.msg_thread_participants tp\n  where tp.thread_id=p_thread_id and tp.left_at is null and tp.user_id<>p_sender_user_id\n  on conflict(message_id,user_id) do nothing;\n  update public.msg_threads set last_message_at=v_message.sent_at,updated_at=now() where id=p_thread_id;\n  return v_message;\nexception when unique_violation then\n  if v_client_message_id is not null then\n    select * into v_message from public.msg_messages m\n    where m.sender_user_id=p_sender_user_id and m.client_message_id=v_client_message_id limit 1;\n    if found then return v_message; end if;\n  end if;\n  if v_dedupe_key is not null then\n    select * into v_message from public.msg_messages m\n    where m.thread_id=p_thread_id and m.sender_user_id=p_sender_user_id\n      and m.metadata_json->>'notification_instance_key'=v_dedupe_key limit 1;\n    if found then return v_message; end if;\n  end if;\n  raise;\nend\n$function$\n",
       "function_name": "msg_send_message",
       "identity_arguments": "p_thread_id uuid, p_sender_user_id uuid, p_body text, p_message_type text, p_metadata_json jsonb",
       "schema_name": "public"
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.msg_send_message(p_thread_id uuid, p_sender_user_id uuid, p_body text, p_message_type text, p_metadata_json jsonb, p_client_message_id text)\n RETURNS msg_messages\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare v_message public.msg_messages%rowtype;\nbegin\n  if p_thread_id is null then raise exception 'thread_id is required.'; end if;\n  if p_sender_user_id is null then raise exception 'sender_user_id is required.'; end if;\n  if p_body is null or btrim(p_body)='' then raise exception 'Message body is required.'; end if;\n  if length(p_body)>4000 then raise exception 'Message body cannot exceed 4000 characters.'; end if;\n  if not exists(select 1 from public.msg_thread_participants tp where tp.thread_id=p_thread_id and tp.user_id=p_sender_user_id and tp.left_at is null) then raise exception 'Sender is not an active participant in this thread.'; end if;\n  if nullif(btrim(coalesce(p_client_message_id,'')),'') is not null then\n    select * into v_message from public.msg_messages where client_message_id=btrim(p_client_message_id) limit 1;\n    if found then\n      if v_message.thread_id<>p_thread_id or v_message.sender_user_id<>p_sender_user_id then raise exception 'client_message_id belongs to another message.'; end if;\n      return v_message;\n    end if;\n  end if;\n  insert into public.msg_messages(thread_id,sender_user_id,message_type,body,metadata_json,client_message_id)\n  values(p_thread_id,p_sender_user_id,coalesce(nullif(btrim(p_message_type),''),'text'),btrim(p_body),coalesce(p_metadata_json,'{}'::jsonb),nullif(btrim(coalesce(p_client_message_id,'')),'')) returning * into v_message;\n  insert into public.msg_receipts(message_id,user_id,queued_at,delivered_at,displayed_at,read_at)\n  select v_message.id,tp.user_id,now(),null,null,null from public.msg_thread_participants tp\n  where tp.thread_id=p_thread_id and tp.left_at is null and tp.user_id<>p_sender_user_id\n  on conflict(message_id,user_id) do nothing;\n  update public.msg_threads set last_message_at=v_message.sent_at,updated_at=now() where id=p_thread_id;\n  return v_message;\nend;\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_send_message(p_thread_id uuid, p_sender_user_id uuid, p_body text, p_message_type text, p_metadata_json jsonb, p_client_message_id text)\n RETURNS msg_messages\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare v_message public.msg_messages%rowtype;\nbegin\n  if p_thread_id is null then raise exception 'thread_id is required.'; end if;\n  if p_sender_user_id is null then raise exception 'sender_user_id is required.'; end if;\n  if p_body is null or btrim(p_body)='' then raise exception 'Message body is required.'; end if;\n  if length(p_body)>4000 then raise exception 'Message body cannot exceed 4000 characters.'; end if;\n  perform public.msg_assert_active_mutable_thread(p_thread_id);\n  if not exists(select 1 from public.msg_thread_participants tp where tp.thread_id=p_thread_id and tp.user_id=p_sender_user_id and tp.left_at is null) then\n    raise exception 'Sender is not an active participant in this thread.';\n  end if;\n  if nullif(btrim(coalesce(p_client_message_id,'')),'') is not null then\n    select * into v_message from public.msg_messages where client_message_id=btrim(p_client_message_id) limit 1;\n    if found then\n      if v_message.thread_id<>p_thread_id or v_message.sender_user_id<>p_sender_user_id then raise exception 'client_message_id belongs to another message.'; end if;\n      return v_message;\n    end if;\n  end if;\n  insert into public.msg_messages(thread_id,sender_user_id,message_type,body,metadata_json,client_message_id)\n  values(p_thread_id,p_sender_user_id,coalesce(nullif(btrim(p_message_type),''),'text'),btrim(p_body),coalesce(p_metadata_json,'{}'::jsonb),nullif(btrim(coalesce(p_client_message_id,'')),''))\n  returning * into v_message;\n  insert into public.msg_receipts(message_id,user_id,queued_at,delivered_at,displayed_at,read_at)\n  select v_message.id,tp.user_id,now(),null,null,null from public.msg_thread_participants tp\n  where tp.thread_id=p_thread_id and tp.left_at is null and tp.user_id<>p_sender_user_id\n  on conflict(message_id,user_id) do nothing;\n  update public.msg_threads set last_message_at=v_message.sent_at,updated_at=now() where id=p_thread_id;\n  return v_message;\nend\n$function$\n",
       "function_name": "msg_send_message",
       "identity_arguments": "p_thread_id uuid, p_sender_user_id uuid, p_body text, p_message_type text, p_metadata_json jsonb, p_client_message_id text",
       "schema_name": "public"
@@ -26712,7 +26858,7 @@
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.msg_set_memphis_thread_context(p_thread_id uuid, p_last_intent text DEFAULT NULL::text, p_last_employee_name text DEFAULT NULL::text, p_last_group_name text DEFAULT NULL::text, p_last_location_code text DEFAULT NULL::text, p_last_service_date date DEFAULT NULL::date, p_last_subject_type text DEFAULT NULL::text, p_context_json jsonb DEFAULT '{}'::jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_row public.msg_memphis_thread_context%rowtype;\nbegin\n  if p_thread_id is null then\n    raise exception 'p_thread_id is required';\n  end if;\n\n  insert into public.msg_memphis_thread_context (\n    thread_id, last_intent, last_employee_name, last_group_name, last_location_code,\n    last_service_date, last_subject_type, context_json, updated_at\n  )\n  values (\n    p_thread_id, p_last_intent, p_last_employee_name, p_last_group_name, p_last_location_code,\n    p_last_service_date, p_last_subject_type, coalesce(p_context_json, '{}'::jsonb), now()\n  )\n  on conflict (thread_id)\n  do update set\n    last_intent = coalesce(excluded.last_intent, public.msg_memphis_thread_context.last_intent),\n    last_employee_name = coalesce(excluded.last_employee_name, public.msg_memphis_thread_context.last_employee_name),\n    last_group_name = coalesce(excluded.last_group_name, public.msg_memphis_thread_context.last_group_name),\n    last_location_code = coalesce(excluded.last_location_code, public.msg_memphis_thread_context.last_location_code),\n    last_service_date = coalesce(excluded.last_service_date, public.msg_memphis_thread_context.last_service_date),\n    last_subject_type = coalesce(excluded.last_subject_type, public.msg_memphis_thread_context.last_subject_type),\n    context_json = coalesce(excluded.context_json, public.msg_memphis_thread_context.context_json),\n    updated_at = now()\n  returning * into v_row;\n\n  return jsonb_build_object(\n    'thread_id', v_row.thread_id,\n    'last_intent', v_row.last_intent,\n    'last_employee_name', v_row.last_employee_name,\n    'last_group_name', v_row.last_group_name,\n    'last_location_code', v_row.last_location_code,\n    'last_service_date', v_row.last_service_date,\n    'last_subject_type', v_row.last_subject_type,\n    'context_json', v_row.context_json,\n    'updated_at', v_row.updated_at\n  );\nend;\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_set_memphis_thread_context(p_thread_id uuid, p_last_intent text DEFAULT NULL::text, p_last_employee_name text DEFAULT NULL::text, p_last_group_name text DEFAULT NULL::text, p_last_location_code text DEFAULT NULL::text, p_last_service_date date DEFAULT NULL::date, p_last_subject_type text DEFAULT NULL::text, p_context_json jsonb DEFAULT '{}'::jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare v_row public.msg_memphis_thread_context%rowtype;\nbegin\n  if p_thread_id is null then raise exception 'p_thread_id is required'; end if;\n  perform public.msg_assert_active_mutable_thread(p_thread_id);\n  insert into public.msg_memphis_thread_context(\n    thread_id,last_intent,last_employee_name,last_group_name,last_location_code,\n    last_service_date,last_subject_type,context_json,updated_at\n  ) values (\n    p_thread_id,p_last_intent,p_last_employee_name,p_last_group_name,p_last_location_code,\n    p_last_service_date,p_last_subject_type,coalesce(p_context_json,'{}'::jsonb),now()\n  ) on conflict(thread_id) do update set\n    last_intent=coalesce(excluded.last_intent,public.msg_memphis_thread_context.last_intent),\n    last_employee_name=coalesce(excluded.last_employee_name,public.msg_memphis_thread_context.last_employee_name),\n    last_group_name=coalesce(excluded.last_group_name,public.msg_memphis_thread_context.last_group_name),\n    last_location_code=coalesce(excluded.last_location_code,public.msg_memphis_thread_context.last_location_code),\n    last_service_date=coalesce(excluded.last_service_date,public.msg_memphis_thread_context.last_service_date),\n    last_subject_type=coalesce(excluded.last_subject_type,public.msg_memphis_thread_context.last_subject_type),\n    context_json=coalesce(excluded.context_json,public.msg_memphis_thread_context.context_json),\n    updated_at=now()\n  returning * into v_row;\n  return jsonb_build_object(\n    'thread_id',v_row.thread_id,'last_intent',v_row.last_intent,\n    'last_employee_name',v_row.last_employee_name,'last_group_name',v_row.last_group_name,\n    'last_location_code',v_row.last_location_code,'last_service_date',v_row.last_service_date,\n    'last_subject_type',v_row.last_subject_type,'context_json',v_row.context_json,'updated_at',v_row.updated_at\n  );\nend\n$function$\n",
       "function_name": "msg_set_memphis_thread_context",
       "identity_arguments": "p_thread_id uuid, p_last_intent text, p_last_employee_name text, p_last_group_name text, p_last_location_code text, p_last_service_date date, p_last_subject_type text, p_context_json jsonb",
       "schema_name": "public"
@@ -26726,7 +26872,7 @@
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.msg_unhide_thread_for_device(p_thread_id uuid, p_device_identifier text)\n RETURNS integer\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_count integer := 0;\n  v_device text;\nbegin\n  v_device := btrim(coalesce(p_device_identifier, ''));\n  if p_thread_id is null or v_device = '' then\n    return 0;\n  end if;\n\n  delete from public.msg_hidden_threads_by_device\n  where thread_id = p_thread_id\n    and device_identifier = v_device;\n\n  get diagnostics v_count = row_count;\n  return v_count;\nend;\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.msg_unhide_thread_for_device(p_thread_id uuid, p_device_identifier text)\n RETURNS integer\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare v_count integer:=0; v_device text;\nbegin\n  v_device:=btrim(coalesce(p_device_identifier,''));\n  if p_thread_id is null or v_device='' then return 0; end if;\n  perform public.msg_assert_active_mutable_thread(p_thread_id);\n  delete from public.msg_hidden_threads_by_device where thread_id=p_thread_id and device_identifier=v_device;\n  get diagnostics v_count=row_count;\n  return v_count;\nend\n$function$\n",
       "function_name": "msg_unhide_thread_for_device",
       "identity_arguments": "p_thread_id uuid, p_device_identifier text",
       "schema_name": "public"
@@ -30869,6 +31015,24 @@
       "table_name": "msg_messages"
     },
     {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX msg_ops_manager_legacy_identity_links_msg_user_id_key ON public.msg_ops_manager_legacy_identity_links USING btree (msg_user_id)",
+      "index_name": "msg_ops_manager_legacy_identity_links_msg_user_id_key",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "msg_ops_manager_legacy_identity_links"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX msg_ops_manager_legacy_identity_links_pkey ON public.msg_ops_manager_legacy_identity_links USING btree (manager_id)",
+      "index_name": "msg_ops_manager_legacy_identity_links_pkey",
+      "is_primary": true,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "msg_ops_manager_legacy_identity_links"
+    },
+    {
       "backs_constraint": false,
       "definition": "CREATE INDEX idx_msg_receipts_delivery_lifecycle ON public.msg_receipts USING btree (user_id, delivered_at, displayed_at, read_at, acknowledged_at)",
       "index_name": "idx_msg_receipts_delivery_lifecycle",
@@ -33691,6 +33855,14 @@
       "function_name": "moxie_save_chat_state",
       "grantee": "service_role",
       "identity_arguments": "p_expected_revision bigint, p_history jsonb, p_saved_chats jsonb",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "msg_acknowledge_event_device_notification",
+      "grantee": "service_role",
+      "identity_arguments": "p_device_identifier text, p_notification_key text, p_notification_type text, p_action text, p_metadata_json jsonb, p_message_id uuid, p_user_id uuid",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -39427,13 +39599,6 @@
     {
       "grantee": "service_role",
       "is_grantable": "NO",
-      "privilege_type": "TRUNCATE",
-      "schema_name": "public",
-      "table_name": "msg_hidden_threads_by_device"
-    },
-    {
-      "grantee": "service_role",
-      "is_grantable": "NO",
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "msg_hidden_threads_by_device"
@@ -39476,13 +39641,6 @@
     {
       "grantee": "service_role",
       "is_grantable": "NO",
-      "privilege_type": "TRUNCATE",
-      "schema_name": "public",
-      "table_name": "msg_memphis_thread_context"
-    },
-    {
-      "grantee": "service_role",
-      "is_grantable": "NO",
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "msg_memphis_thread_context"
@@ -39525,13 +39683,6 @@
     {
       "grantee": "service_role",
       "is_grantable": "NO",
-      "privilege_type": "TRUNCATE",
-      "schema_name": "public",
-      "table_name": "msg_message_audit"
-    },
-    {
-      "grantee": "service_role",
-      "is_grantable": "NO",
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "msg_message_audit"
@@ -39574,13 +39725,6 @@
     {
       "grantee": "service_role",
       "is_grantable": "NO",
-      "privilege_type": "TRUNCATE",
-      "schema_name": "public",
-      "table_name": "msg_message_deletions"
-    },
-    {
-      "grantee": "service_role",
-      "is_grantable": "NO",
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "msg_message_deletions"
@@ -39623,13 +39767,6 @@
     {
       "grantee": "service_role",
       "is_grantable": "NO",
-      "privilege_type": "TRUNCATE",
-      "schema_name": "public",
-      "table_name": "msg_messages"
-    },
-    {
-      "grantee": "service_role",
-      "is_grantable": "NO",
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "msg_messages"
@@ -39672,13 +39809,6 @@
     {
       "grantee": "service_role",
       "is_grantable": "NO",
-      "privilege_type": "TRUNCATE",
-      "schema_name": "public",
-      "table_name": "msg_receipts"
-    },
-    {
-      "grantee": "service_role",
-      "is_grantable": "NO",
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "msg_receipts"
@@ -39721,13 +39851,6 @@
     {
       "grantee": "service_role",
       "is_grantable": "NO",
-      "privilege_type": "TRUNCATE",
-      "schema_name": "public",
-      "table_name": "msg_thread_deletion_operations"
-    },
-    {
-      "grantee": "service_role",
-      "is_grantable": "NO",
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "msg_thread_deletion_operations"
@@ -39770,13 +39893,6 @@
     {
       "grantee": "service_role",
       "is_grantable": "NO",
-      "privilege_type": "TRUNCATE",
-      "schema_name": "public",
-      "table_name": "msg_thread_participants"
-    },
-    {
-      "grantee": "service_role",
-      "is_grantable": "NO",
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "msg_thread_participants"
@@ -39819,13 +39935,6 @@
     {
       "grantee": "service_role",
       "is_grantable": "NO",
-      "privilege_type": "TRUNCATE",
-      "schema_name": "public",
-      "table_name": "msg_thread_visibility"
-    },
-    {
-      "grantee": "service_role",
-      "is_grantable": "NO",
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "msg_thread_visibility"
@@ -39862,13 +39971,6 @@
       "grantee": "service_role",
       "is_grantable": "NO",
       "privilege_type": "TRIGGER",
-      "schema_name": "public",
-      "table_name": "msg_threads"
-    },
-    {
-      "grantee": "service_role",
-      "is_grantable": "NO",
-      "privilege_type": "TRUNCATE",
       "schema_name": "public",
       "table_name": "msg_threads"
     },
@@ -44211,6 +44313,15 @@
       "table_name": "msg_messages"
     },
     {
+      "comment": null,
+      "partition_key": null,
+      "relation_kind": "r",
+      "rls_enabled": true,
+      "rls_forced": true,
+      "schema_name": "public",
+      "table_name": "msg_ops_manager_legacy_identity_links"
+    },
+    {
       "comment": "Per-user delivery/read tracking for messenger messages.",
       "partition_key": null,
       "relation_kind": "r",
@@ -44911,11 +45022,39 @@
       "trigger_name": "trg_sync_migration_log_summary"
     },
     {
+      "definition": "CREATE TRIGGER trg_msg_reject_archive_truncate BEFORE TRUNCATE ON msg_hidden_threads_by_device FOR EACH STATEMENT EXECUTE FUNCTION msg_reject_archive_truncate()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "msg_hidden_threads_by_device",
+      "trigger_name": "trg_msg_reject_archive_truncate"
+    },
+    {
+      "definition": "CREATE TRIGGER trg_msg_reject_archive_truncate BEFORE TRUNCATE ON msg_memphis_thread_context FOR EACH STATEMENT EXECUTE FUNCTION msg_reject_archive_truncate()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "msg_memphis_thread_context",
+      "trigger_name": "trg_msg_reject_archive_truncate"
+    },
+    {
+      "definition": "CREATE TRIGGER trg_msg_reject_archive_truncate BEFORE TRUNCATE ON msg_message_audit FOR EACH STATEMENT EXECUTE FUNCTION msg_reject_archive_truncate()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "msg_message_audit",
+      "trigger_name": "trg_msg_reject_archive_truncate"
+    },
+    {
       "definition": "CREATE TRIGGER trg_msg_reject_retired_ops_manager_shared_audit_guard BEFORE INSERT OR DELETE OR UPDATE ON msg_message_audit FOR EACH ROW EXECUTE FUNCTION msg_reject_retired_ops_manager_shared_message_audit_mutation()",
       "enabled": "O",
       "schema_name": "public",
       "table_name": "msg_message_audit",
       "trigger_name": "trg_msg_reject_retired_ops_manager_shared_audit_guard"
+    },
+    {
+      "definition": "CREATE TRIGGER trg_msg_reject_archive_truncate BEFORE TRUNCATE ON msg_message_deletions FOR EACH STATEMENT EXECUTE FUNCTION msg_reject_archive_truncate()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "msg_message_deletions",
+      "trigger_name": "trg_msg_reject_archive_truncate"
     },
     {
       "definition": "CREATE TRIGGER trg_msg_reject_retired_ops_manager_shared_message_delete BEFORE INSERT OR DELETE OR UPDATE ON msg_message_deletions FOR EACH ROW EXECUTE FUNCTION msg_reject_retired_ops_manager_shared_message_deletion_mutation()",
@@ -44946,6 +45085,13 @@
       "trigger_name": "trg_msg_message_immutable_audit"
     },
     {
+      "definition": "CREATE TRIGGER trg_msg_reject_archive_truncate BEFORE TRUNCATE ON msg_messages FOR EACH STATEMENT EXECUTE FUNCTION msg_reject_archive_truncate()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "msg_messages",
+      "trigger_name": "trg_msg_reject_archive_truncate"
+    },
+    {
       "definition": "CREATE TRIGGER trg_msg_reject_retired_ops_manager_shared_message_mutation BEFORE INSERT OR DELETE OR UPDATE ON msg_messages FOR EACH ROW EXECUTE FUNCTION msg_reject_retired_ops_manager_shared_message_mutation()",
       "enabled": "O",
       "schema_name": "public",
@@ -44974,6 +45120,13 @@
       "trigger_name": "trg_ops_manager_enqueue_message_push"
     },
     {
+      "definition": "CREATE TRIGGER trg_msg_reject_archive_truncate BEFORE TRUNCATE ON msg_receipts FOR EACH STATEMENT EXECUTE FUNCTION msg_reject_archive_truncate()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "msg_receipts",
+      "trigger_name": "trg_msg_reject_archive_truncate"
+    },
+    {
       "definition": "CREATE TRIGGER trg_msg_reject_retired_ops_manager_shared_receipt_mutation BEFORE INSERT OR DELETE OR UPDATE ON msg_receipts FOR EACH ROW EXECUTE FUNCTION msg_reject_retired_ops_manager_shared_receipt_mutation()",
       "enabled": "O",
       "schema_name": "public",
@@ -44981,11 +45134,53 @@
       "trigger_name": "trg_msg_reject_retired_ops_manager_shared_receipt_mutation"
     },
     {
+      "definition": "CREATE TRIGGER trg_msg_reject_archive_truncate BEFORE TRUNCATE ON msg_thread_deletion_operations FOR EACH STATEMENT EXECUTE FUNCTION msg_reject_archive_truncate()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "msg_thread_deletion_operations",
+      "trigger_name": "trg_msg_reject_archive_truncate"
+    },
+    {
+      "definition": "CREATE TRIGGER trg_msg_enforce_canonical_active_pair_participants AFTER INSERT OR DELETE OR UPDATE OF thread_id, user_id, left_at ON msg_thread_participants FOR EACH ROW EXECUTE FUNCTION msg_enforce_canonical_active_pair_participants()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "msg_thread_participants",
+      "trigger_name": "trg_msg_enforce_canonical_active_pair_participants"
+    },
+    {
+      "definition": "CREATE TRIGGER trg_msg_reject_archive_truncate BEFORE TRUNCATE ON msg_thread_participants FOR EACH STATEMENT EXECUTE FUNCTION msg_reject_archive_truncate()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "msg_thread_participants",
+      "trigger_name": "trg_msg_reject_archive_truncate"
+    },
+    {
       "definition": "CREATE TRIGGER trg_msg_reject_retired_ops_manager_shared_participation BEFORE INSERT OR DELETE OR UPDATE ON msg_thread_participants FOR EACH ROW EXECUTE FUNCTION msg_reject_retired_ops_manager_shared_participation()",
       "enabled": "O",
       "schema_name": "public",
       "table_name": "msg_thread_participants",
       "trigger_name": "trg_msg_reject_retired_ops_manager_shared_participation"
+    },
+    {
+      "definition": "CREATE TRIGGER trg_msg_reject_archive_truncate BEFORE TRUNCATE ON msg_thread_visibility FOR EACH STATEMENT EXECUTE FUNCTION msg_reject_archive_truncate()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "msg_thread_visibility",
+      "trigger_name": "trg_msg_reject_archive_truncate"
+    },
+    {
+      "definition": "CREATE TRIGGER trg_msg_enforce_canonical_active_pair_thread AFTER INSERT OR UPDATE OF is_active, thread_type ON msg_threads FOR EACH ROW EXECUTE FUNCTION msg_enforce_canonical_active_pair_thread()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "msg_threads",
+      "trigger_name": "trg_msg_enforce_canonical_active_pair_thread"
+    },
+    {
+      "definition": "CREATE TRIGGER trg_msg_reject_archive_truncate BEFORE TRUNCATE ON msg_threads FOR EACH STATEMENT EXECUTE FUNCTION msg_reject_archive_truncate()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "msg_threads",
+      "trigger_name": "trg_msg_reject_archive_truncate"
     },
     {
       "definition": "CREATE TRIGGER trg_msg_reject_retired_ops_manager_shared_thread_mutation BEFORE INSERT OR DELETE OR UPDATE ON msg_threads FOR EACH ROW EXECUTE FUNCTION msg_reject_retired_ops_manager_shared_thread_mutation()",

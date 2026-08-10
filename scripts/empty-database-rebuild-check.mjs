@@ -29,6 +29,11 @@ const retirementCorrection = readFileSync(retirementCorrectionPath, "utf8");
 const retirementCorrectionBody = retirementCorrection
   .replace(/^\s*begin;\s*/i, "")
   .replace(/\s*commit;\s*$/i, "");
+const finalCorrectionPath = resolve(migrationsDir, "20260810140000_finalize_named_manager_messenger_retirement_integrity.sql");
+const finalCorrection = readFileSync(finalCorrectionPath, "utf8");
+const finalCorrectionBody = finalCorrection
+  .replace(/^\s*begin;\s*/i, "")
+  .replace(/\s*commit;\s*$/i, "");
 const requestedDatabaseName = String(process.env.SCHEMA_REBUILD_DATABASE_NAME || "").trim();
 if (requestedDatabaseName && !/^mz_schema_rebuild_[a-zA-Z0-9_]+$/.test(requestedDatabaseName)) {
   throw new Error("SCHEMA_REBUILD_DATABASE_NAME must use the disposable mz_schema_rebuild_* namespace.");
@@ -92,6 +97,7 @@ async function verifyNamedManagerRetirementMigrationModes(database) {
     alter table public.msg_message_deletions disable trigger trg_msg_reject_retired_ops_manager_shared_message_delete;
     delete from public.msg_threads where system_key='ops_manager_shared_chat_v1';
     ${retirementCorrectionBody}
+    ${finalCorrectionBody}
     do $absent_archive$
     declare v_user uuid;
     begin
@@ -116,6 +122,8 @@ async function verifyNamedManagerRetirementMigrationModes(database) {
 
   const duplicatePairInjection = await dockerPsqlConcurrent(database, `
     begin;
+    alter table public.msg_threads disable trigger trg_msg_enforce_canonical_active_pair_thread;
+    alter table public.msg_thread_participants disable trigger trg_msg_enforce_canonical_active_pair_participants;
     do $duplicate_pair$
     declare
       v_user_a uuid;
@@ -156,6 +164,7 @@ async function verifyNamedManagerRetirementMigrationModes(database) {
     from public.msg_threads t
     where t.id=p.thread_id and t.system_key='ops_manager_shared_chat_v1';
     ${retirementCorrectionBody}
+    ${finalCorrectionBody}
     select 1/0;
     commit;
   `);
@@ -791,7 +800,7 @@ begin
   insert into public.ops_manager_managers(manager_id, display_name, roles, active)
   values ('00000000-0000-4000-8000-00000000f107', 'Rebuild Messaging Manager', array['OPS_MANAGER','CUSTODIAL_MANAGER']::text[], true);
   v_manager_user := public.msg_ensure_ops_manager_user('00000000-0000-4000-8000-00000000f107');
-  if v_manager_user.messaging_identity_key is not null
+  if v_manager_user.messaging_identity_key <> 'ops_manager_named_0000000000004000800000000000f107'
      or v_manager_user.ops_manager_id <> '00000000-0000-4000-8000-00000000f107'::uuid
      or v_manager_user.display_name <> 'Rebuild Messaging Manager'
      or v_manager_user.role <> 'manager' then

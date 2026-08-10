@@ -1269,8 +1269,11 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       select m.id, m.thread_id, m.sender_user_id, m.body, m.metadata_json,
              coalesce(m.metadata_json->>'device_id','') as device_id
       from public.msg_messages m
+      join public.msg_threads t on t.id = m.thread_id
       where m.id = '${esc(sourceMessageId)}'::uuid
         and m.is_deleted is false
+        and t.is_active is true
+        and t.system_key is distinct from 'ops_manager_shared_chat_v1'
       limit 1
     `);
     const source = Array.isArray(sourceRows) && sourceRows.length ? sourceRows[0] : null;
@@ -1589,23 +1592,30 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const metadata = req.body?.metadata && typeof req.body.metadata === 'object' && !Array.isArray(req.body.metadata)
         ? req.body.metadata
         : {};
-      const data = await runRpc("ack_device_notification", {
-        p_device_identifier: canonicalDeviceId,
-        p_notification_key: notificationKey,
-        p_notification_type: notificationType,
-        p_action: action,
-        p_metadata_json: metadata,
-      });
-      if (notificationType === 'event' && req.body?.message_id && device.assigned_employee_id) {
+      let data;
+      if (notificationType === 'event' && req.body?.message_id) {
         const viewer = await getViewerIdentity(canonicalDeviceId);
-        if (viewer?.msg_user_id) {
-          assertActiveMutableThread(await getMessageThreadIdentity(req.body.message_id));
-          await runRpc("msg_acknowledge_message", {
-            p_message_id: String(req.body.message_id),
-            p_user_id: viewer.msg_user_id,
-            p_device_identifier: canonicalDeviceId,
-          });
-        }
+        if (!viewer?.msg_user_id) throw Object.assign(new Error("Device has no active Messenger identity for the linked event acknowledgement."), { status: 403 });
+        // The linked-message/thread/membership precondition and both writes
+        // occur in the single database RPC. Do not split this into native and
+        // Messenger calls: a rejected linked message must leave no receipt.
+        data = await runRpc("msg_acknowledge_event_device_notification", {
+          p_device_identifier: canonicalDeviceId,
+          p_notification_key: notificationKey,
+          p_notification_type: notificationType,
+          p_action: action,
+          p_metadata_json: metadata,
+          p_message_id: String(req.body.message_id),
+          p_user_id: viewer.msg_user_id,
+        });
+      } else {
+        data = await runRpc("ack_device_notification", {
+          p_device_identifier: canonicalDeviceId,
+          p_notification_key: notificationKey,
+          p_notification_type: notificationType,
+          p_action: action,
+          p_metadata_json: metadata,
+        });
       }
       res.status(200).json({ ok: true, data, meta: messagingMeta() });
     } catch (error) {
@@ -1831,6 +1841,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         res.status(409).json({ ok: false, error: "The retired Operations Leadership conversation is preserved for audit and cannot be deleted." });
         return;
       }
+      assertActiveMutableThread(thread);
       if (!viewer.isManagerOverview) {
         const isParticipant = await isThreadParticipant(threadId, viewer.effectiveUserId);
         if (!isParticipant) {
@@ -1885,6 +1896,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         return;
       }
       const viewer = await resolveViewerContext({ managerSession: req.memphisAuth });
+      assertActiveMutableThread(await getThreadIdentity(threadId));
       const data = await runRpc("msg_admin_tombstone_thread", {
         p_thread_id: threadId,
         p_request_user_id: viewer.effectiveUserId,
