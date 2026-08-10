@@ -10,6 +10,7 @@ const phaseD = readFileSync("supabase/migrations/20260810170000_finish_offline_a
 const phaseE = readFileSync("supabase/migrations/20260810190000_final_integrated_backend_operational_correction.sql", "utf8");
 const index = readFileSync("src/index.js", "utf8");
 const auth = readFileSync("src/auth/device-credential-auth.js", "utf8");
+const releaseInput = JSON.parse(readFileSync("release/integrated-backend-authority-input.json", "utf8"));
 const releaseEvidence = JSON.parse(readFileSync("release/integrated-backend-authority-evidence.json", "utf8"));
 
 assert.match(phaseA, /Phase A is deliberately additive/i);
@@ -74,9 +75,17 @@ assert.equal(releaseEvidence.migrations.at(-1).name, "20260810190000_final_integ
 assert.equal(releaseEvidence.artifact, "integrated-backend-authority-release-evidence.v2");
 assert.equal(releaseEvidence.cutover.source_identity.kind, "external_immutable_acceptance_input");
 assert.equal(releaseEvidence.cutover.source_identity.generated_evidence_excluded_from_content_identity, true);
-assert.equal(releaseEvidence.authority_content_identity.source, "git_tree_blobs_from_external_immutable_acceptance_input");
+assert.equal(Object.hasOwn(releaseInput.cutover.source_identity, "authority_content_paths"), false, "manual authority inventory is forbidden");
+assert.equal(releaseInput.cutover.source_identity.authority_inventory.source, "all-tracked-paths-in-external-expected-tree");
+assert.deepEqual(releaseInput.cutover.source_identity.authority_inventory.exclude, ["release/integrated-backend-authority-evidence.json"]);
+assert.equal(releaseEvidence.authority_content_identity.source, "complete_tracked_git_tree_from_external_immutable_acceptance_input");
 assert.equal(releaseEvidence.authority_content_identity.generated_evidence_excluded_path, "release/integrated-backend-authority-evidence.json");
-assert.ok(Array.isArray(releaseEvidence.authority_content_identity.authority_paths));
-assert.ok(releaseEvidence.authority_content_identity.authority_paths.includes("src/index.js"));
+assert.ok(Array.isArray(releaseEvidence.authority_content_identity.expected_tree_inventory));
+assert.ok(releaseEvidence.authority_content_identity.expected_tree_inventory.some(({ path }) => path === "src/index.js"));
+assert.ok(releaseEvidence.authority_content_identity.expected_tree_inventory.some(({ path }) => path === "scripts/integrated-backend-authority-suite-order-tests.mjs"));
+assert.equal(releaseEvidence.authority_content_identity.expected_tree_inventory.some(({ path }) => path === "release/integrated-backend-authority-evidence.json"), false);
+assert.equal(releaseEvidence.authority_content_identity.authority_path_count, releaseEvidence.authority_content_identity.expected_tree_inventory.length);
+assert.equal(releaseEvidence.authority_content_identity.migration_path_count, 62);
+assert.equal(releaseEvidence.migrations.length, 62);
 assert.equal(Object.hasOwn(releaseEvidence.authority_content_identity, "value"), false, "generated evidence must not self-assert a worktree-derived content hash");
 console.log("INTEGRATED_BACKEND_AUTHORITY_CONTRACT_PASS");

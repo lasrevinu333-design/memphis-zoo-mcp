@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -11,6 +12,33 @@ const fingerprintPath = resolve(root, "supabase/canonical/schema-fingerprint.txt
 const releaseManifestPath = resolve(root, "release/frontend-release-manifest.json");
 const checkOnly = process.argv.slice(2).join(" ") === "--check";
 assert.ok(checkOnly || process.argv.length === 2, "usage: refresh-integrated-backend-authority-release.mjs [--check]");
+
+function gitText(args) {
+  return execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
+}
+
+function gitBytes(args) {
+  return execFileSync("git", args, { cwd: root, maxBuffer: 64 * 1024 * 1024 });
+}
+
+function assertRepositoryPath(path) {
+  assert.match(path, /^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[A-Za-z0-9._/-]+$/, `invalid tracked path: ${path}`);
+  return path;
+}
+
+function inventoryFromExactTree(tree) {
+  const entries = gitBytes(["ls-tree", "-r", "-z", tree]).toString("utf8").split("\0").filter(Boolean).map((record) => {
+    const match = record.match(/^([0-7]{6})\s+(blob)\s+([a-f0-9]{40})\t(.+)$/);
+    assert.ok(match, `expected tree contains a non-regular tracked entry: ${record}`);
+    const [, mode, type, objectId, rawPath] = match;
+    const path = assertRepositoryPath(rawPath);
+    assert.equal(type, "blob");
+    assert.ok(["100644", "100755"].includes(mode), `tracked authority path must be a regular non-symlink file: ${path}`);
+    return { path, mode, object_id: objectId };
+  });
+  assert.ok(entries.length > 0, "expected release tree must contain tracked paths");
+  return entries;
+}
 
 const input = JSON.parse(readFileSync(inputPath, "utf8"));
 const schemaFingerprint = readFileSync(fingerprintPath, "utf8").trim();
@@ -26,22 +54,20 @@ assert.ok(Array.isArray(input.cutover?.rollback?.restoration_checks) && input.cu
 assert.equal(input.cutover?.source_identity?.kind, "external_immutable_acceptance_input");
 assert.equal(input.cutover?.source_identity?.generated_evidence_path, "release/integrated-backend-authority-evidence.json");
 assert.equal(input.cutover?.source_identity?.generated_evidence_excluded_from_content_identity, true);
-assert.ok(Array.isArray(input.cutover?.source_identity?.authority_content_paths) && input.cutover.source_identity.authority_content_paths.length >= 12);
-assert.equal(new Set(input.cutover.source_identity.authority_content_paths).size, input.cutover.source_identity.authority_content_paths.length);
-for (const path of input.cutover.source_identity.authority_content_paths) {
-  assert.match(path, /^(?!.*(?:^|\/)\.\.(?:\/|$))[A-Za-z0-9._/-]+$/);
-  assert.ok(!path.startsWith("/"));
-}
-const migrations = [
-  "20260810120000_retire_named_manager_shared_room_authority.sql",
-  "20260810130000_harden_named_manager_retired_archive_and_concurrency.sql",
-  "20260810140000_finalize_named_manager_messenger_retirement_integrity.sql",
-  "20260810143000_offline_actor_occurrence_reconciliation.sql",
-  "20260810150000_enforce_integrated_backend_authority.sql",
-  "20260810160000_close_offline_authority_integrity_gaps.sql",
-  "20260810170000_finish_offline_authority_operational_closure.sql",
-  "20260810190000_final_integrated_backend_operational_correction.sql",
-].map((name) => ({ name }));
+assert.equal(Object.hasOwn(input.cutover.source_identity, "authority_content_paths"), false, "manual authority inventory is forbidden");
+assert.deepEqual(input.cutover?.source_identity?.authority_inventory?.exclude, [outputPath.slice(root.length + 1)]);
+assert.equal(input.cutover?.source_identity?.authority_inventory?.source, "all-tracked-paths-in-external-expected-tree");
+const generatedEvidencePath = outputPath.slice(root.length + 1);
+// The staged tree is the exact pre-commit source tree. The only subsequent
+// staged change is this generated evidence path, which is deliberately excluded
+// from its own inventory and verified separately by the executable checker.
+const sourceTree = gitText(["write-tree"]);
+const trackedInventory = inventoryFromExactTree(sourceTree);
+const authorityInventory = trackedInventory.filter(({ path }) => path !== generatedEvidencePath);
+const migrations = authorityInventory
+  .filter(({ path }) => /^supabase\/migrations\/[^/]+\.sql$/.test(path))
+  .map(({ path }) => ({ name: path.slice("supabase/migrations/".length) }));
+assert.equal(migrations.length, 62, "release authority inventory must bind every migration at this head");
 const output = {
   artifact: "integrated-backend-authority-release-evidence.v2",
   schema_fingerprint: schemaFingerprint,
@@ -60,10 +86,12 @@ const output = {
   rollback: input.rollback,
   cutover: input.cutover,
   authority_content_identity: {
-    source: "git_tree_blobs_from_external_immutable_acceptance_input",
-    authority_paths: input.cutover.source_identity.authority_content_paths,
-    generated_evidence_excluded_path: "release/integrated-backend-authority-evidence.json",
-    binding: "The executable cutover gate requires externally supplied exact expected_commit and expected_tree, verifies this evidence file as a blob in that tree, then hashes every listed authority path from that tree and compares each worktree byte sequence with its exact tree blob.",
+    source: "complete_tracked_git_tree_from_external_immutable_acceptance_input",
+    expected_tree_inventory: authorityInventory.map(({ path, mode, object_id }) => ({ path, mode, object_id })),
+    authority_path_count: authorityInventory.length,
+    migration_path_count: migrations.length,
+    generated_evidence_excluded_path: generatedEvidencePath,
+    binding: "The executable cutover gate requires externally supplied exact expected_commit and expected_tree, deterministically enumerates every tracked expected-tree entry, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file as its exact tree blob.",
   },
   manager_recovery: {
     list: "GET /admin-api/custodial/offline-reconciliations?limit=1..100&before=<ISO-8601>",
@@ -77,4 +105,4 @@ const output = {
 const rendered = `${JSON.stringify(output, null, 2)}\n`;
 if (checkOnly) assert.equal(readFileSync(outputPath, "utf8"), rendered, "Integrated backend authority release evidence is stale.");
 else writeFileSync(outputPath, rendered);
-console.log(JSON.stringify({ ok: true, mode: checkOnly ? "check" : "refresh", schema_fingerprint: schemaFingerprint, migrations: migrations.length }, null, 2));
+console.log(JSON.stringify({ ok: true, mode: checkOnly ? "check" : "refresh", source_tree: sourceTree, authority_paths: authorityInventory.length, migrations: migrations.length, schema_fingerprint: schemaFingerprint }, null, 2));

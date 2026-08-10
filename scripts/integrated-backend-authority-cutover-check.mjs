@@ -85,6 +85,17 @@ function assertExternalReadonlyInput(acceptancePath) {
   return { path: inputRealpath, bytes: readFileSync(inputRealpath) };
 }
 
+function assertNoForbiddenIndexFlags() {
+  const records = gitBytes(["ls-files", "-v", "-z"]).toString("utf8").split("\0").filter(Boolean);
+  for (const record of records) {
+    const marker = record.slice(0, 1);
+    const path = record.slice(2);
+    assert.equal(record.slice(1, 2), " ", `invalid index flag record: ${record}`);
+    assert.equal(marker === "S", false, `skip-worktree index flag is forbidden: ${path}`);
+    assert.equal(/[a-z]/.test(marker), false, `assume-unchanged index flag is forbidden: ${path}`);
+  }
+}
+
 function assertRepositoryIdentity(expectedCommit, expectedTree) {
   for (const name of forbiddenGitEnvironment) {
     assert.equal(Object.hasOwn(process.env, name), false, `${name} is forbidden: use the repository's actual worktree, Git directory, and index`);
@@ -110,10 +121,13 @@ function assertRepositoryIdentity(expectedCommit, expectedTree) {
   const indexLstat = lstatSync(indexPath);
   assert.equal(indexLstat.isSymbolicLink(), false, "repository index must not be a symlink/substitution");
   assert.equal(indexLstat.isFile(), true, "repository index must be a regular file");
+  assertNoForbiddenIndexFlags();
 
   assert.match(expectedCommit, /^[a-f0-9]{40}$/, "expected_commit must be one exact lowercase SHA-1 commit id");
   assert.match(expectedTree, /^[a-f0-9]{40}$/, "expected_tree must be one exact lowercase SHA-1 tree id");
-  assert.equal(gitText(["rev-parse", "--verify", `${expectedCommit}^{commit}`]), expectedCommit, "expected commit is unavailable or not exact");
+  const expectedCommitCheck = spawnSync("git", ["rev-parse", "--verify", `${expectedCommit}^{commit}`], { cwd: root, env: cleanGitEnvironment(), encoding: "utf8" });
+  assert.equal(expectedCommitCheck.status, 0, "expected commit is unavailable or not exact");
+  assert.equal(expectedCommitCheck.stdout.trim(), expectedCommit, "expected commit is unavailable or not exact");
   assert.equal(gitText(["rev-parse", `${expectedCommit}^{tree}`]), expectedTree, "expected commit does not resolve to expected tree");
   assert.equal(gitText(["rev-parse", "HEAD"]), expectedCommit, "HEAD does not equal immutable expected commit");
   assert.equal(gitText(["rev-parse", "HEAD^{tree}"]), expectedTree, "HEAD tree does not equal immutable expected tree");
@@ -124,16 +138,20 @@ function assertRepositoryIdentity(expectedCommit, expectedTree) {
   }
 }
 
-function blobFromExpectedTree(expectedCommit, expectedTree, path) {
-  mustBeRepositoryPath(path);
-  const treeEntry = gitText(["ls-tree", expectedTree, "--", path]);
-  const match = treeEntry.match(/^([0-7]{6})\s+blob\s+([a-f0-9]{40})\t(.+)$/);
-  assert.ok(match && match[3] === path, `expected tree lacks a regular blob for ${path}`);
-  assert.notEqual(match[1], "120000", `expected tree authority path must not be a symlink: ${path}`);
-  const objectId = gitText(["rev-parse", `${expectedCommit}:${path}`]);
-  assert.equal(objectId, match[2], `commit/tree blob mismatch for ${path}`);
-  assert.equal(gitText(["cat-file", "-t", objectId]), "blob", `expected authority object is not a blob: ${path}`);
-  return { path, mode: match[1], object_id: objectId, bytes: gitBytes(["cat-file", "blob", objectId]) };
+function trackedEntriesFromExpectedTree(expectedCommit, expectedTree) {
+  const entries = gitBytes(["ls-tree", "-r", "-z", expectedTree]).toString("utf8").split("\0").filter(Boolean).map((record) => {
+    const match = record.match(/^([0-7]{6})\s+(blob)\s+([a-f0-9]{40})\t(.+)$/);
+    assert.ok(match, `expected tree contains a non-regular tracked entry: ${record}`);
+    const [, mode, type, objectId, rawPath] = match;
+    const path = mustBeRepositoryPath(rawPath);
+    assert.equal(type, "blob", `expected tracked entry is not a blob: ${path}`);
+    assert.ok(["100644", "100755"].includes(mode), `expected tracked entry must be a regular non-symlink file: ${path}`);
+    assert.equal(gitText(["rev-parse", `${expectedCommit}:${path}`]), objectId, `commit/tree blob mismatch for ${path}`);
+    assert.equal(gitText(["cat-file", "-t", objectId]), "blob", `expected tracked object is not a blob: ${path}`);
+    return { path, mode, object_id: objectId, bytes: gitBytes(["cat-file", "blob", objectId]) };
+  });
+  assert.ok(entries.length > 0, "expected tree must contain tracked paths");
+  return entries;
 }
 
 function assertWorktreeMatchesExpectedBlob(blob) {
@@ -142,6 +160,8 @@ function assertWorktreeMatchesExpectedBlob(blob) {
   assert.equal(entry.isSymbolicLink(), false, `authority worktree path must not be a symlink/substitution: ${blob.path}`);
   assert.equal(entry.isFile(), true, `authority worktree path must be a regular file: ${blob.path}`);
   assert.equal(realpathSync(worktreePath), worktreePath, `authority worktree path resolves outside its exact location: ${blob.path}`);
+  const worktreeGitMode = (entry.mode & 0o111) === 0 ? "100644" : "100755";
+  assert.equal(worktreeGitMode, blob.mode, `worktree mode differs from expected Git tree mode: ${blob.path}`);
   assert.deepEqual(readFileSync(worktreePath), blob.bytes, `worktree bytes differ from expected Git tree blob: ${blob.path}`);
 }
 
@@ -153,17 +173,10 @@ function parseJsonBlob(blob, description) {
   }
 }
 
-function expectedReleaseEvidence(input, schemaFingerprint, frontendManifest) {
-  const migrations = [
-    "20260810120000_retire_named_manager_shared_room_authority.sql",
-    "20260810130000_harden_named_manager_retired_archive_and_concurrency.sql",
-    "20260810140000_finalize_named_manager_messenger_retirement_integrity.sql",
-    phaseA,
-    phaseB,
-    phaseC,
-    phaseD,
-    phaseE,
-  ].map((name) => ({ name }));
+function expectedReleaseEvidence(input, schemaFingerprint, frontendManifest, authorityInventory) {
+  const migrations = authorityInventory
+    .filter(({ path }) => /^supabase\/migrations\/[^/]+\.sql$/.test(path))
+    .map(({ path }) => ({ name: path.slice("supabase/migrations/".length) }));
   return {
     artifact: "integrated-backend-authority-release-evidence.v2",
     schema_fingerprint: schemaFingerprint,
@@ -182,10 +195,12 @@ function expectedReleaseEvidence(input, schemaFingerprint, frontendManifest) {
     rollback: input.rollback,
     cutover: input.cutover,
     authority_content_identity: {
-      source: "git_tree_blobs_from_external_immutable_acceptance_input",
-      authority_paths: input.cutover.source_identity.authority_content_paths,
+      source: "complete_tracked_git_tree_from_external_immutable_acceptance_input",
+      expected_tree_inventory: authorityInventory.map(({ path, mode, object_id }) => ({ path, mode, object_id })),
+      authority_path_count: authorityInventory.length,
+      migration_path_count: migrations.length,
       generated_evidence_excluded_path: releaseEvidencePath,
-      binding: "The executable cutover gate requires externally supplied exact expected_commit and expected_tree, verifies this evidence file as a blob in that tree, then hashes every listed authority path from that tree and compares each worktree byte sequence with its exact tree blob.",
+      binding: "The executable cutover gate requires externally supplied exact expected_commit and expected_tree, deterministically enumerates every tracked expected-tree entry, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file as its exact tree blob.",
     },
     manager_recovery: {
       list: "GET /admin-api/custodial/offline-reconciliations?limit=1..100&before=<ISO-8601>",
@@ -201,23 +216,22 @@ function expectedReleaseEvidence(input, schemaFingerprint, frontendManifest) {
 const { databaseMode, acceptanceInput } = parseArgs(process.argv.slice(2));
 const acceptanceFile = assertExternalReadonlyInput(acceptanceInput);
 const acceptance = JSON.parse(acceptanceFile.bytes.toString("utf8"));
-assert.deepEqual(Object.keys(acceptance).sort(), ["artifact", "authority_paths", "expected_commit", "expected_tree"]);
+assert.deepEqual(Object.keys(acceptance).sort(), ["artifact", "expected_commit", "expected_tree"]);
 assert.equal(acceptance.artifact, "integrated-backend-authority-release-acceptance.v1");
-assert.ok(Array.isArray(acceptance.authority_paths) && acceptance.authority_paths.length >= 12, "acceptance input must enumerate every authority-bearing path");
-assert.equal(new Set(acceptance.authority_paths).size, acceptance.authority_paths.length, "acceptance authority paths must be unique");
-for (const path of acceptance.authority_paths) mustBeRepositoryPath(path);
 
 // All repository/environment and immutable identity checks complete before any
 // database handle is read or any release acceptance result is created.
 assertRepositoryIdentity(acceptance.expected_commit, acceptance.expected_tree);
-const expectedBlobs = acceptance.authority_paths.map((path) => blobFromExpectedTree(acceptance.expected_commit, acceptance.expected_tree, path));
-for (const blob of expectedBlobs) assertWorktreeMatchesExpectedBlob(blob);
-const evidenceBlob = blobFromExpectedTree(acceptance.expected_commit, acceptance.expected_tree, releaseEvidencePath);
-assertWorktreeMatchesExpectedBlob(evidenceBlob);
-assert.equal(acceptance.authority_paths.includes(releaseEvidencePath), false, "generated evidence is explicitly excluded from its own content identity");
+const expectedEntries = trackedEntriesFromExpectedTree(acceptance.expected_commit, acceptance.expected_tree);
+const evidenceBlob = expectedEntries.find(({ path }) => path === releaseEvidencePath);
+assert.ok(evidenceBlob, "expected tree omits generated release evidence");
+const expectedBlobs = expectedEntries.filter(({ path }) => path !== releaseEvidencePath);
+assert.ok(expectedBlobs.length > 0, "release authority inventory is empty");
+assert.equal(expectedBlobs.filter(({ path }) => /^supabase\/migrations\/[^/]+\.sql$/.test(path)).length, 62, "release authority inventory must bind all 62 migrations");
+for (const blob of [...expectedBlobs, evidenceBlob]) assertWorktreeMatchesExpectedBlob(blob);
 
 const blobByPath = new Map(expectedBlobs.map((blob) => [blob.path, blob]));
-for (const required of [releaseInputPath, "src/index.js", "src/offline-authority-http.js", `supabase/migrations/${phaseC}`, `supabase/migrations/${phaseD}`, `supabase/migrations/${phaseE}`]) {
+for (const required of [releaseInputPath, "scripts/refresh-integrated-backend-authority-release.mjs", "scripts/integrated-backend-authority-cutover-check.mjs", "scripts/integrated-backend-authority-release-provenance-tests.mjs", "scripts/integrated-backend-authority-suite-order-tests.mjs", "scripts/final-operational-correction-database-tests.mjs", "scripts/named-manager-messenger-retirement-correction-database-tests.mjs", "scripts/empty-database-rebuild-check.mjs", "scripts/refresh-schema-fingerprint.mjs", "src/index.js", "src/offline-authority-http.js", `supabase/migrations/${phaseC}`, `supabase/migrations/${phaseD}`, `supabase/migrations/${phaseE}`]) {
   assert.ok(blobByPath.has(required), `immutable acceptance input omitted authority path ${required}`);
 }
 const input = parseJsonBlob(blobByPath.get(releaseInputPath), "release authority input");
@@ -241,7 +255,9 @@ assert.deepEqual(input.cutover.phase_order.slice(1, 7), [
 assert.equal(input.cutover.source_identity.kind, "external_immutable_acceptance_input");
 assert.equal(input.cutover.source_identity.generated_evidence_path, releaseEvidencePath);
 assert.equal(input.cutover.source_identity.generated_evidence_excluded_from_content_identity, true);
-assert.deepEqual(input.cutover.source_identity.authority_content_paths, acceptance.authority_paths, "mutable release input must agree with the external immutable authority-path enumeration");
+assert.equal(Object.hasOwn(input.cutover.source_identity, "authority_content_paths"), false, "manual authority inventory is forbidden");
+assert.equal(input.cutover.source_identity.authority_inventory?.source, "all-tracked-paths-in-external-expected-tree");
+assert.deepEqual(input.cutover.source_identity.authority_inventory?.exclude, [releaseEvidencePath]);
 assert.match(index, /runPreparedScanRpc/);
 assert.match(index, /\["42883", "PGRST202"\]/);
 assert.match(index, /tool_complete_session_authoritative/);
@@ -255,7 +271,7 @@ assert.match(phaseEText, /custodial_terminal_writer_inventory/);
 assert.match(phaseEText, /custodial_claim_offline_reconciliation_notification_recipients/);
 assert.match(phaseEText, /assignment_fenced_proof_recovery/);
 assert.match(schemaFingerprint, /^[a-f0-9]{64}$/);
-assert.deepEqual(releaseEvidence, expectedReleaseEvidence(input, schemaFingerprint, frontendManifest), "generated release evidence is stale or self-referential");
+assert.deepEqual(releaseEvidence, expectedReleaseEvidence(input, schemaFingerprint, frontendManifest, expectedBlobs), "generated release evidence is stale, incomplete, or self-referential");
 
 const authorityContent = expectedBlobs.map(({ path, mode, object_id, bytes }) => ({ path, mode, object_id, sha256: hash(bytes) }));
 const authorityContentSha256 = hash(Buffer.from(JSON.stringify(authorityContent)));
@@ -265,6 +281,9 @@ const sourceIdentity = {
   acceptance_input_sha256: hash(acceptanceFile.bytes),
   authority_content_sha256: authorityContentSha256,
   authority_path_count: authorityContent.length,
+  tracked_path_count: expectedEntries.length,
+  migration_path_count: expectedBlobs.filter(({ path }) => /^supabase\/migrations\/[^/]+\.sql$/.test(path)).length,
+  inventory_source: "all tracked paths from caller-supplied expected tree in git ls-tree -r -z order",
   generated_evidence_excluded_from_content_identity: releaseEvidencePath,
 };
 
