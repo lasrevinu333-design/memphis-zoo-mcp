@@ -10,7 +10,7 @@ import {
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const manager = { managerId: "10000000-0000-4000-8000-000000000001", managerName: "Named Manager", idempotencyKey: "adapter-unit-draft" };
 
-function sevenDayInput({ review = false } = {}) {
+function sevenDayInput({ review = false, eventOverlay = false } = {}) {
   const slotA = "20000000-0000-4000-8000-000000000001";
   const slotB = "20000000-0000-4000-8000-000000000002";
   const placeA = "40000000-0000-4000-8000-000000000011";
@@ -36,8 +36,33 @@ function sevenDayInput({ review = false } = {}) {
     dayOfWeek, dayOfWeek % 2 ? placeB : placeA, dayOfWeek % 2 ? slotB : slotA,
   ));
   assignments.push(work("optional-open", 4, placeB, slotB, { required: false, coveragePolicy: "permitted_open", requiredQualifications: ["unavailable-optional"] }));
+  if (eventOverlay) assignments.push(work("event-patch-target", 1, placeA, slotA, {
+    locationCodeSnapshot: "PATCH_BASE", locationNameSnapshot: "Patch Base", window: { start: "10:00", end: "11:00" }, serviceEffortMinutes: 20,
+  }));
+  const exceptions = eventOverlay ? [{
+    id: "adapter-event-impact-accepted", type: "event_impact", status: "accepted", serviceDate: "2026-10-05",
+    baseVersionId: "adapter-real-seven-day", publicationId: "adapter-real-publication", actorId: "adapter-test-event-manager",
+    reason: "accepted event work overlay", idempotencyKey: "adapter-event-impact-accepted", expectedRevision: 0, acceptedAt: "2026-10-04T12:00:00Z", sequence: 1,
+    payload: {
+      removeWorkIds: ["work-1"],
+      patchWork: [{
+        workId: "event-patch-target", locationId: placeB, locationCodeSnapshot: "EVENT_PATCH", locationNameSnapshot: "Event Patch Exhibit",
+        window: { start: "10:00", end: "11:30" }, serviceEffortMinutes: 45, serviceEffortProvenance: "adapter-test-event-patch-effort-v1",
+        priority: 2, priorityProvenance: "adapter-test-event-patch-priority-v1", requiredQualifications: ["general"],
+        qualificationProvenance: "adapter-test-event-patch-qualification-v1", restrictions: ["event-patch-restriction"],
+        restrictionProvenance: "adapter-test-event-patch-restriction-v1",
+      }],
+      addWork: [{
+        workId: "event-added-work", dayOfWeek: 1, originSlotId: slotA, locationId: placeA, locationCodeSnapshot: "EVENT_ADD",
+        locationNameSnapshot: "Event Added Exhibit", window: { start: "12:00", end: "13:00" }, serviceEffortMinutes: 30,
+        serviceEffortProvenance: "adapter-test-event-add-effort-v1", priority: 1, priorityProvenance: "adapter-test-event-add-priority-v1",
+        requiredQualifications: ["general"], qualificationProvenance: "adapter-test-event-add-qualification-v1", restrictions: ["event-add-restriction"],
+        restrictionProvenance: "adapter-test-event-add-restriction-v1",
+      }],
+    },
+  }] : [];
   return {
-    serviceDate: "2026-10-05", timezone: "America/Chicago", exceptions: [],
+    serviceDate: "2026-10-05", timezone: "America/Chicago", exceptions,
     proximity: [
       { from: "START_A", to: placeA, minutes: 1, verified: true, provenance: "adapter-test-route-v1" },
       { from: "START_A", to: placeB, minutes: 4, verified: true, provenance: "adapter-test-route-v1" },
@@ -87,6 +112,57 @@ assert.throws(() => adaptCompiledStaticWeeklySchedule(alteredOwner), /database_a
 const missingCertificate = clone(real); delete missingCertificate.certificate;
 assert.throws(() => adaptCompiledStaticWeeklySchedule(missingCertificate), /database_adapter_compiler_verifier_receipt_missing/);
 assert.throws(() => adaptCompiledStaticWeeklySchedule({ status: "FEASIBLE", canonicalAuthority: {} }), /database_adapter_authority_schema_invalid/);
+
+const eventOverlay = await compileStaticWeeklySchedule(sevenDayInput({ eventOverlay: true }));
+assert.equal(eventOverlay.status, "FEASIBLE", "the accepted event overlay compiles through the real frozen compiler");
+assert.equal(eventOverlay.verifier.ok, true, "the accepted event overlay compiles through the real frozen verifier");
+assert.deepEqual(eventOverlay.canonicalAuthority.appliedExceptions.map((item) => item.id), ["adapter-event-impact-accepted"]);
+assert.equal(eventOverlay.weeklyAssignments.some((row) => row.planWorkId === "1:work-1"), false, "event removeWorkIds removes baseline work from the active optimizer result");
+assert.equal(eventOverlay.weeklyAssignments.some((row) => row.planWorkId === "1:event-added-work"), true, "event addWork reaches the active optimizer result");
+
+const eventDraft = createStaticWeeklyDraftRpcInput({ result: eventOverlay, expectedRevision: 6, actor: { ...manager, idempotencyKey: "adapter-event-draft" } });
+const eventProjection = createStaticWeeklyProjectionRpcInput({ result: eventOverlay, publicationId: "50000000-0000-4000-8000-000000000002", expectedRevision: 7, actor: { ...manager, idempotencyKey: "adapter-event-projection" } });
+const expectedEventWork = {
+  "event-patch-target": {
+    locationId: "40000000-0000-4000-8000-000000000012", locationCodeSnapshot: "EVENT_PATCH", locationNameSnapshot: "Event Patch Exhibit",
+    window: { start: "10:00", end: "11:30" }, serviceEffortMinutes: 45, serviceEffortProvenance: "adapter-test-event-patch-effort-v1",
+    requiredQualifications: ["general"], restrictions: ["event-patch-restriction"],
+  },
+  "event-added-work": {
+    locationId: "40000000-0000-4000-8000-000000000011", locationCodeSnapshot: "EVENT_ADD", locationNameSnapshot: "Event Added Exhibit",
+    window: { start: "12:00", end: "13:00" }, serviceEffortMinutes: 30, serviceEffortProvenance: "adapter-test-event-add-effort-v1",
+    requiredQualifications: ["general"], restrictions: ["event-add-restriction"],
+  },
+};
+for (const [workId, expected] of Object.entries(expectedEventWork)) {
+  const draftRow = eventDraft.document.assignments.find((row) => row.work_id === workId && row.day_of_week === 1);
+  assert.deepEqual({
+    locationId: draftRow?.location_id, locationCodeSnapshot: draftRow?.location_code_snapshot, locationNameSnapshot: draftRow?.location_name_snapshot,
+    window: { start: draftRow?.coverage_start, end: draftRow?.coverage_end }, serviceEffortMinutes: draftRow?.workload_points,
+    serviceEffortProvenance: draftRow?.workload_provenance?.source, requiredQualifications: draftRow?.required_qualifications_snapshot, restrictions: draftRow?.restriction_snapshot,
+  }, expected, `draft uses exact post-overlay ${workId} facts`);
+  const projectionRow = eventProjection.envelope.assignments.find((row) => row.work_id === workId && row.day_of_week === 1);
+  assert.deepEqual({
+    workId: projectionRow?.work_snapshot?.workId, dayOfWeek: projectionRow?.work_snapshot?.dayOfWeek, locationId: projectionRow?.work_snapshot?.locationId,
+    locationCodeSnapshot: projectionRow?.work_snapshot?.locationCodeSnapshot, locationNameSnapshot: projectionRow?.work_snapshot?.locationNameSnapshot,
+    window: { start: projectionRow?.work_snapshot?.window?.start, end: projectionRow?.work_snapshot?.window?.end },
+    serviceEffortMinutes: projectionRow?.work_snapshot?.serviceEffortMinutes,
+    requiredQualifications: projectionRow?.work_snapshot?.requiredQualifications, restrictions: projectionRow?.work_snapshot?.restrictions,
+  }, {
+    workId, dayOfWeek: 1, locationId: expected.locationId, locationCodeSnapshot: expected.locationCodeSnapshot,
+    locationNameSnapshot: expected.locationNameSnapshot, window: expected.window, serviceEffortMinutes: expected.serviceEffortMinutes,
+    requiredQualifications: expected.requiredQualifications, restrictions: expected.restrictions,
+  }, `projection uses exact post-overlay ${workId} facts`);
+}
+assert.equal(eventDraft.document.assignments.some((row) => row.work_id === "work-1" && row.day_of_week === 1), false, "draft excludes event-removed baseline work");
+assert.equal(eventProjection.envelope.assignments.some((row) => row.plan_work_id === "1:work-1"), false, "projection excludes event-removed baseline work");
+
+const mutatedWorkSnapshot = clone(eventOverlay);
+mutatedWorkSnapshot.weeklyAssignments.find((row) => row.planWorkId === "1:event-patch-target").workSnapshot.window.end = "12:00";
+assert.throws(() => adaptCompiledStaticWeeklySchedule(mutatedWorkSnapshot), /database_adapter_work_snapshot_binding_mismatch/, "a returned post-overlay work snapshot cannot be mutated after verification");
+const mutatedOptimizerBinding = clone(eventOverlay);
+mutatedOptimizerBinding.canonicalAuthority.optimizerResult.assignments.find((row) => row.planWorkId === "1:event-added-work").status = "OPEN";
+assert.throws(() => adaptCompiledStaticWeeklySchedule(mutatedOptimizerBinding), /database_adapter_compiler_identity_mismatch/, "a canonical optimizer binding cannot be mutated after verification");
 
 const review = await compileStaticWeeklySchedule(sevenDayInput({ review: true }));
 assert.equal(review.status, "REVIEW");

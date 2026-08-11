@@ -36,18 +36,83 @@ function requireRevision(value, field) {
   return value;
 }
 
-function sourceWorkByPlanId(authority) {
-  const source = array(authority?.compilerInput?.version?.assignments);
-  const map = new Map();
-  for (const work of source) {
-    const day = Number(work?.dayOfWeek);
-    const workId = text(work?.workId || work?.id);
-    if (!Number.isInteger(day) || day < 0 || day > 6 || !workId) fail("database_adapter_compiler_work_identity_invalid");
-    const key = `${day}:${workId}`;
-    if (map.has(key)) fail("database_adapter_duplicate_compiler_work_identity", { planWorkId: key });
-    map.set(key, work);
+function optimizerBinding(assignment) {
+  return {
+    planWorkId: assignment?.planWorkId,
+    workId: assignment?.workId,
+    dayOfWeek: assignment?.dayOfWeek,
+    serviceDate: assignment?.serviceDate,
+    status: assignment?.status,
+    slotId: assignment?.slotId,
+    personId: assignment?.personId,
+    displayName: assignment?.displayName,
+    ownerDigest: assignment?.ownerDigest,
+    exactOwnerIdentity: assignment?.exactOwnerIdentity,
+    baselineSlotId: assignment?.baselineSlotId,
+    baselineOwnerPersonId: assignment?.baselineOwnerPersonId,
+    baselineOwnerName: assignment?.baselineOwnerName,
+    originalActorPersonId: assignment?.originalActorPersonId,
+    originalActorName: assignment?.originalActorName,
+    optimizedOwnerSlotId: assignment?.optimizedOwnerSlotId,
+    optimizedOwnerPersonId: assignment?.optimizedOwnerPersonId,
+    actualActorPersonId: assignment?.actualActorPersonId,
+    window: { start: assignment?.window?.start ?? null, end: assignment?.window?.end ?? null },
+    serviceEffortMinutes: assignment?.serviceEffortMinutes,
+  };
+}
+
+function activeWorkByPlanId(result, authority) {
+  // The compiler's canonical optimizer rows establish the immutable binding,
+  // while its independently verified public weekly assignments are the only
+  // source of post-overlay work snapshots.  In particular, do not reconstruct
+  // event overlays from compilerInput here: that would create a second overlay
+  // implementation at the database trust boundary.
+  const optimizer = stable(array(authority?.optimizerResult?.assignments), (left, right) => text(left.planWorkId).localeCompare(text(right.planWorkId)));
+  const canonical = new Map();
+  for (const assignment of optimizer) {
+    const binding = optimizerBinding(assignment);
+    const planWorkId = text(binding.planWorkId);
+    const workId = text(binding.workId);
+    const dayOfWeek = Number(binding.dayOfWeek);
+    const status = text(binding.status);
+    if (!planWorkId || !workId || !Number.isInteger(dayOfWeek) || dayOfWeek < 0 || dayOfWeek > 6
+      || planWorkId !== `${dayOfWeek}:${workId}` || !text(binding.serviceDate)
+      || !["ASSIGNED", "OPEN", "REVIEW"].includes(status)
+      || !binding.window?.start || !binding.window?.end || !Number.isFinite(Number(binding.serviceEffortMinutes))) {
+      fail("database_adapter_canonical_optimizer_assignment_invalid", { planWorkId });
+    }
+    if (status === "ASSIGNED" && (!text(binding.slotId) || !text(binding.personId) || !text(binding.displayName))) fail("database_adapter_optimizer_owner_invalid", { planWorkId });
+    if (status !== "ASSIGNED" && (binding.slotId != null || binding.personId != null || binding.displayName != null)) fail("database_adapter_open_review_owner_invalid", { planWorkId });
+    if (canonical.has(planWorkId)) fail("database_adapter_duplicate_optimizer_assignment", { planWorkId });
+    canonical.set(planWorkId, binding);
   }
-  return map;
+
+  const source = array(result?.weeklyAssignments);
+  if (source.length !== canonical.size) fail("database_adapter_optimizer_work_cardinality_invalid", { optimizerCount: canonical.size, sourceCount: source.length });
+  const workByPlanId = new Map();
+  for (const assignment of source) {
+    const planWorkId = text(assignment?.planWorkId);
+    const binding = canonical.get(planWorkId);
+    if (!planWorkId || workByPlanId.has(planWorkId)) fail("database_adapter_duplicate_compiled_work_snapshot", { planWorkId });
+    if (!binding) fail("database_adapter_extra_compiled_work_snapshot", { planWorkId });
+    if (postgresJsonbContentDigest(optimizerBinding(assignment)) !== postgresJsonbContentDigest(binding)) {
+      fail("database_adapter_compiler_optimizer_binding_mismatch", { planWorkId });
+    }
+    const work = assignment?.workSnapshot;
+    if (!work || typeof work !== "object" || Array.isArray(work)
+      || work.workId !== binding.workId || Number(work.dayOfWeek) !== Number(binding.dayOfWeek)
+      || (work.locationId ?? null) !== (assignment.locationId ?? null)
+      || work.window?.start !== binding.window.start || work.window?.end !== binding.window.end
+      || Number(work.serviceEffortMinutes) !== Number(binding.serviceEffortMinutes)
+      || !text(work.locationCodeSnapshot) || !text(work.locationNameSnapshot)
+      || !text(work.serviceEffortProvenance) || !Array.isArray(work.requiredQualifications)
+      || !Array.isArray(work.restrictions)) {
+      fail("database_adapter_work_snapshot_binding_mismatch", { planWorkId });
+    }
+    workByPlanId.set(planWorkId, clone(work));
+  }
+  for (const planWorkId of canonical.keys()) if (!workByPlanId.has(planWorkId)) fail("database_adapter_compiled_work_snapshot_missing", { planWorkId });
+  return { optimizer, workByPlanId };
 }
 
 function slotById(authority) {
@@ -154,10 +219,9 @@ function slotAvailabilityRows(authority) {
   return rows;
 }
 
-function draftAssignmentRows(authority) {
-  const workByPlanId = sourceWorkByPlanId(authority);
+function draftAssignmentRows(authority, activeWork) {
+  const { workByPlanId, optimizer } = activeWork;
   const slotMap = slotById(authority);
-  const optimizer = stable(array(authority.optimizerResult?.assignments), (left, right) => text(left.planWorkId).localeCompare(text(right.planWorkId)));
   if (optimizer.length !== workByPlanId.size) fail("database_adapter_optimizer_work_cardinality_invalid");
   const seen = new Set();
   return optimizer.map((assignment) => {
@@ -207,9 +271,8 @@ function draftAssignmentRows(authority) {
   });
 }
 
-function projectionAssignmentRows(authority) {
-  const workByPlanId = sourceWorkByPlanId(authority);
-  const optimizer = stable(array(authority.optimizerResult?.assignments), (left, right) => text(left.planWorkId).localeCompare(text(right.planWorkId)));
+function projectionAssignmentRows(activeWork) {
+  const { workByPlanId, optimizer } = activeWork;
   return optimizer.map((assignment) => {
     const work = workByPlanId.get(text(assignment.planWorkId));
     if (!work) fail("database_adapter_projection_work_missing", { planWorkId: assignment.planWorkId });
@@ -244,14 +307,15 @@ function projectionAssignmentRows(authority) {
   });
 }
 
-export function adaptCompiledStaticWeeklySchedule(result, { requirePublishable = false } = {}) {
+function buildAdaptedStaticWeeklySchedule(result, { requirePublishable = false } = {}) {
   const { authority, independentlyVerified } = validateCompiledResult(result, { allowReview: !requirePublishable });
+  const activeWork = activeWorkByPlanId(result, authority);
   const document = {
     adapter: { schema: STATIC_WEEKLY_DATABASE_ADAPTER_SCHEMA, version: STATIC_WEEKLY_DATABASE_ADAPTER_VERSION },
     authority: clone(authority),
     receipt: canonicalReceipt(result, authority, independentlyVerified),
     slot_availability: slotAvailabilityRows(authority),
-    assignments: draftAssignmentRows(authority),
+    assignments: draftAssignmentRows(authority, activeWork),
     objective_inputs: [{
       input_key: "static_weekly_compiler_receipt",
       input_value: { compiler_version: result.compilerVersion, authority_digest: result.authorityDigest, replay_digest: result.replayDigest },
@@ -270,12 +334,16 @@ export function adaptCompiledStaticWeeklySchedule(result, { requirePublishable =
   };
   const identity = { adapter: document.adapter, authority: document.authority, receipt: document.receipt, slot_availability: document.slot_availability, assignments: document.assignments, objective_inputs: document.objective_inputs };
   document.validation.database_document_identity = postgresJsonbContentDigest(identity);
-  return document;
+  return { document, activeWork };
+}
+
+export function adaptCompiledStaticWeeklySchedule(result, options = {}) {
+  return buildAdaptedStaticWeeklySchedule(result, options).document;
 }
 
 export function createStaticWeeklyDraftRpcInput({ result, expectedRevision, actor }) {
   const identity = requireActor(actor);
-  const document = adaptCompiledStaticWeeklySchedule(result, { requirePublishable: true });
+  const { document } = buildAdaptedStaticWeeklySchedule(result, { requirePublishable: true });
   return {
     effectiveStart: result.serviceDate,
     objectiveVersion: result.compilerVersion,
@@ -299,9 +367,9 @@ export function createStaticWeeklyDraftRpcInput({ result, expectedRevision, acto
 export function createStaticWeeklyProjectionRpcInput({ result, publicationId, expectedRevision, actor }) {
   const identity = requireActor(actor);
   if (!text(publicationId)) fail("database_adapter_publication_identity_required");
-  const document = adaptCompiledStaticWeeklySchedule(result, { requirePublishable: false });
+  const { document, activeWork } = buildAdaptedStaticWeeklySchedule(result, { requirePublishable: false });
   const authority = document.authority;
-  const assignments = projectionAssignmentRows(authority);
+  const assignments = projectionAssignmentRows(activeWork);
   const envelope = {
     adapter: document.adapter,
     service_date: result.serviceDate,
