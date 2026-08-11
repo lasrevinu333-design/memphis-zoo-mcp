@@ -1,177 +1,127 @@
 #!/usr/bin/env node
-// Real multi-session PostgreSQL probes for the static weekly authority seam.
+// Independent-session race and rollback probes for the full I2 backend chain.
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
-import { resolve } from "node:path";
+import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
-import pg from "pg";
-import { postgresJsonbContentDigest } from "../src/static-weekly-schedule-compiler.js";
+import fs from "node:fs";
+import path from "node:path";
+import { compileStaticWeeklySchedule } from "../src/static-weekly-schedule-compiler.js";
+import { createStaticWeeklyDraftRpcInput, createStaticWeeklyProjectionRpcInput } from "../src/static-weekly-schedule-database-adapter.js";
 
-const { Client } = pg;
 const execFileAsync = promisify(execFile);
-const container = `mz_static_weekly_concurrency_${process.pid}`;
-const initialMigration = resolve(process.cwd(), "supabase/migrations/20260810200000_static_weekly_scheduler_authority_integrated.sql");
-const managerOne = "10000000-0000-4000-8000-000000000001";
-const managerTwo = "10000000-0000-4000-8000-000000000002";
-const slot = "20000000-0000-4000-8000-000000000001";
-const person = "30000000-0000-4000-8000-000000000001";
-
-const docker = (args, options = {}) => execFileAsync("docker", args, { maxBuffer: 16 * 1024 * 1024, ...options });
-const digest = (character) => character.repeat(64);
+const container = `mz_static_weekly_i2_race_${process.pid}`;
+const migrationsDir = path.resolve(process.cwd(), "supabase/migrations");
+const backendMigrations = fs.readdirSync(migrationsDir).filter((name) => name.endsWith(".sql") && name <= "20260810190000_final_integrated_backend_operational_correction.sql").sort().map((name) => path.resolve(migrationsDir, name));
+const i2 = path.resolve(migrationsDir, "20260810200000_static_weekly_scheduler_authority_integrated.sql");
+const one = { id: "10000000-0000-4000-8000-000000000001", name: "Manager One" };
+const two = { id: "10000000-0000-4000-8000-000000000002", name: "Manager Two" };
 const quote = (value) => `'${String(value).replaceAll("'", "''")}'`;
-let port = null;
-const activeClients = new Set();
+const json = (value) => `$$${JSON.stringify(value)}$$::jsonb`;
+const clone = (value) => JSON.parse(JSON.stringify(value));
+const docker = (args, options = {}) => execFileAsync("docker", args, { maxBuffer: 32 * 1024 * 1024, ...options });
 
-async function execSql(sql) {
-  const result = await docker(["exec", container, "psql", "-v", "ON_ERROR_STOP=1", "-U", "postgres", "-d", "postgres", "-c", sql]);
-  return result.stdout;
-}
-async function client() {
-  const connection = new Client({ host: "127.0.0.1", port, database: "postgres", user: "postgres", password: "static-weekly-test" });
-  // Preserve the originating assertion/query error if cleanup later stops the
-  // disposable server while another client is still unwinding.
-  connection.on("error", () => {});
-  await connection.connect();
-  activeClients.add(connection);
-  return connection;
-}
-async function closeClient(connection) {
-  activeClients.delete(connection);
-  await connection.end();
-}
-async function rpc(connection, name, args) {
-  const { rows } = await connection.query(`select public.${name}(${args.map((_, index) => `$${index + 1}`).join(",")}) as result`, args);
-  return rows[0].result;
-}
-async function waitForPostgres() {
-  for (let attempt = 0; attempt < 60; attempt += 1) {
-    try { await execSql("select 1"); await new Promise((resolve) => setTimeout(resolve, 250)); return; } catch { await new Promise((resolve) => setTimeout(resolve, 200)); }
-  }
-  throw new Error("disposable PostgreSQL did not start");
-}
-function validDocument() {
-  const effectiveDate = "2026-09-07";
-  const workId = "work-concurrent";
-  const planWorkId = `1:${workId}`;
-  const locationId = "40000000-0000-4000-8000-000000000001";
-  const compilerInput = {
-    serviceDate: effectiveDate,
-    exceptions: [],
-    proximity: [],
-    version: {
-      id: "concurrency-v1",
-      assignments: [{ workId, dayOfWeek: 1, locationId, window: { start: "08:00", end: "09:00" }, ownerSlotId: slot, serviceEffortMinutes: 10, requiredQualifications: ["general"], restrictions: [] }],
-      slotAvailability: [{ slotId: slot, dayOfWeek: 1, status: "working", shift: { start: "07:00", end: "16:00" }, productiveCapacityMinutes: 1, qualifications: ["general"], qualificationProvenance: "concurrency", restrictions: [], restrictionProvenance: "concurrency" }],
-    },
-    slots: [{ id: slot, label: "Stable slot", incumbencies: [{ personId: person, displayName: "Concurrent Person", effectiveStart: "2020-01-01", effectiveEnd: null }] }],
+function input({ exceptions = [] } = {}) {
+  const slot = "20000000-0000-4000-8000-000000000041";
+  const person = "30000000-0000-4000-8000-000000000041";
+  const location = "40000000-0000-4000-8000-000000000041";
+  return {
+    serviceDate: "2026-11-02", timezone: "America/Chicago", exceptions,
+    proximity: [{ from: "START", to: location, minutes: 1, verified: true, provenance: "race-route-v1" }],
+    slots: [{ id: slot, label: "Race stable slot", incumbencies: [{ personId: person, displayName: "Race Worker", effectiveStart: "2020-01-01", effectiveEnd: null }] }],
+    versions: [{ id: "60000000-0000-4000-8000-000000000041", publicationId: "70000000-0000-4000-8000-000000000041", status: "published", effectiveStart: "2026-11-02", effectiveEnd: null, objective: { requireVerifiedProximity: true },
+      slotAvailability: Array.from({ length: 7 }, (_, dayOfWeek) => ({ slotId: slot, dayOfWeek, status: "working", shift: { start: "07:00", end: "16:00" }, productiveCapacityProvenance: "race-shift-v1", maxServiceEffortMinutes: 300, maxServiceEffortProvenance: "race-maximum-v1", qualifications: ["general"], qualificationProvenance: "race-qualification-v1", restrictions: [], restrictionProvenance: "race-restriction-v1", acceptedRouteAnchorLocationId: "START", acceptedRouteProvenance: "race-route-v1" })),
+      assignments: Array.from({ length: 7 }, (_, dayOfWeek) => ({ workId: `race-work-${dayOfWeek}`, dayOfWeek, locationId: location, locationCodeSnapshot: `RACE_${dayOfWeek}`, locationNameSnapshot: `Race ${dayOfWeek}`, window: { start: "08:00", end: "09:00" }, ownerSlotId: slot, serviceEffortMinutes: 20, serviceEffortProvenance: "race-service-v1", priority: 1, priorityProvenance: "race-priority-v1", requiredQualifications: ["general"], qualificationProvenance: "race-work-qualification-v1", restrictions: [], restrictionProvenance: "race-work-restriction-v1" })),
+    }],
   };
-  const ownerDigest = postgresJsonbContentDigest({ planWorkId, slotId: slot, personId: person, serviceDate: effectiveDate });
-  const exactOwnerIdentity = postgresJsonbContentDigest({ plan_work_id: planWorkId, service_date: effectiveDate, optimized_owner_slot_id: slot, optimized_owner_person_id: person, baseline_owner_slot_id: slot, baseline_owner_person_id: person });
-  const optimizerResult = { assignments: [{ planWorkId, workId, dayOfWeek: 1, serviceDate: effectiveDate, status: "ASSIGNED", slotId: slot, personId: person, displayName: "Concurrent Person", ownerDigest, exactOwnerIdentity, baselineSlotId: slot, baselineOwnerPersonId: person, baselineOwnerName: "Concurrent Person", originalActorPersonId: person, originalActorName: "Concurrent Person", optimizedOwnerSlotId: slot, optimizedOwnerPersonId: person, window: { start: "08:00", end: "09:00" }, serviceEffortMinutes: 10 }] };
-  const authority = {
-    authority_digest: digest("8"),
-    input_digest: postgresJsonbContentDigest(compilerInput),
-    baseline_input_digest: postgresJsonbContentDigest(compilerInput),
-    replay_digest: digest("6"),
-    solution_digest: postgresJsonbContentDigest(optimizerResult),
-    effective_date: effectiveDate,
-    compiler_input: compilerInput,
-    overlay_compiler_input: compilerInput,
-    applied_exceptions: [],
-    optimizer_result: optimizerResult,
-  };
-  authority.database_content_identity = postgresJsonbContentDigest(authority);
-  const assignment = {
-    work_id: workId,
-    day_of_week: 1,
-    location_id: locationId,
-    location_code_snapshot: "TETON",
-    location_name_snapshot: "Teton",
-    coverage_start: "08:00",
-    coverage_end: "09:00",
-    owner_slot_id: slot,
-    owner_slot_label_snapshot: "Stable slot",
-    owner_person_id_snapshot: person,
-    owner_name_snapshot: "Concurrent Person",
-    required_qualifications_snapshot: ["general"],
-    restriction_snapshot: [],
-    workload_points: 10,
-    workload_provenance: { source: "concurrency" },
-    manual_lock: true,
-    payload_json: { owner_digest: ownerDigest, exact_owner_identity: exactOwnerIdentity },
-  };
-  const document = {
-    slot_availability: [{ slot_id: slot, day_of_week: 1, availability_state: "working", shift_start: "07:00", shift_end: "16:00", capacity_units: 1, max_load_points: 100, qualification_snapshot: ["general"], qualification_provenance: { source: "concurrency" }, restriction_snapshot: [], restriction_provenance: { source: "concurrency" }, slot_label_snapshot: "Stable slot", incumbent_person_id_snapshot: person, incumbent_name_snapshot: "Concurrent Person" }],
-    assignments: [assignment],
-    objective_inputs: [{ input_key: "proximity", input_value: { source: "concurrency" }, provenance: { verified: true } }],
-    authority,
-    validation: { status: "FEASIBLE", replay_digest: authority.replay_digest, input_digest: authority.input_digest, authority_digest: authority.authority_digest, solution_digest: authority.solution_digest, server_computed: true },
-  };
-  document.validation.database_document_identity = postgresJsonbContentDigest({ effective_date: effectiveDate, authority, slot_availability: document.slot_availability, assignments: document.assignments, objective_inputs: document.objective_inputs });
-  return document;
 }
+
+async function sql(statement) {
+  if (Buffer.byteLength(statement) > 96 * 1024) return new Promise((resolve, reject) => {
+    const child = spawn("docker", ["exec", "-i", container, "psql", "-v", "ON_ERROR_STOP=1", "-At", "-U", "supabase_admin", "-d", "postgres"]);
+    let stdout = ""; let stderr = ""; child.stdout.on("data", (chunk) => { stdout += chunk; }); child.stderr.on("data", (chunk) => { stderr += chunk; }); child.once("error", reject);
+    child.once("close", (code) => code === 0 ? resolve(stdout.trim()) : reject(Object.assign(new Error(`psql exited ${code}`), { stdout, stderr }))); child.stdin.end(statement);
+  });
+  const { stdout } = await docker(["exec", container, "psql", "-v", "ON_ERROR_STOP=1", "-At", "-U", "supabase_admin", "-d", "postgres", "-c", statement]);
+  return stdout.trim();
+}
+const scalar = async (statement) => (await sql(statement)).split("\n").at(-1);
+async function service(statement) { return JSON.parse(await scalar(`set role service_role; select ${statement}::text`)); }
+async function migrate(pathname) { await sql(fs.readFileSync(pathname, "utf8")); }
+async function expectReject(promise, expression) { await assert.rejects(promise, (error) => expression.test(`${error.stdout || ""}\n${error.stderr || ""}\n${error.message || ""}`)); }
 
 let removed = false;
 try {
-  await docker(["image", "inspect", "postgres:17-alpine"]);
-  await docker(["run", "--rm", "-d", "--name", container, "-p", "127.0.0.1::5432", "-e", "POSTGRES_PASSWORD=static-weekly-test", "postgres:17-alpine"]);
-  const inspection = JSON.parse((await docker(["inspect", container, "--format", "{{json .NetworkSettings.Ports}}"])).stdout);
-  port = Number(inspection["5432/tcp"][0].HostPort);
-  await waitForPostgres();
-  await docker(["cp", initialMigration, `${container}:/tmp/initial.sql`]);
-  await execSql("do $$ begin create role anon; exception when duplicate_object then null; end $$; do $$ begin create role authenticated; exception when duplicate_object then null; end $$; do $$ begin create role service_role; exception when duplicate_object then null; end $$;");
-  await execSql("\\i /tmp/initial.sql");
-  await execSql(`insert into public.weekly_roster_slots(slot_id,slot_code,slot_label,created_by_manager_id,created_by_manager_name_snapshot,content_digest) values (${quote(slot)},'CONCURRENT','Stable slot',${quote(managerOne)},'Manager One',${quote(digest("c"))}); insert into public.weekly_roster_slot_incumbencies(slot_id,person_id,person_name_snapshot,effective_start,created_by_manager_id,created_by_manager_name_snapshot,content_digest) values (${quote(slot)},${quote(person)},'Concurrent Person','2020-01-01',${quote(managerOne)},'Manager One',${quote(digest("d"))});`);
+  await docker(["image", "inspect", "supabase/postgres:17.6.1.143"]);
+  await docker(["run", "--rm", "-d", "--name", container, "--tmpfs", "/var/lib/postgresql/data:rw,size=1g", "-e", "POSTGRES_PASSWORD=postgres", "supabase/postgres:17.6.1.143", "-c", "shared_preload_libraries=pg_cron,pg_net,pg_stat_statements"]);
+  let ready = false;
+  for (let attempt = 0; attempt < 300; attempt += 1) {
+    try { await sql("select 1"); await new Promise((resolve) => setTimeout(resolve, 1_000)); await sql("select 1"); const health = (await docker(["inspect", container, "--format", "{{if .State.Health}}{{.State.Health.Status}}{{end}}"]))?.stdout?.trim(); if (!health || health === "healthy") { await new Promise((resolve) => setTimeout(resolve, 10_000)); await sql("select 1"); ready = true; break; } } catch {}
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  if (!ready) throw new Error("owned race database did not start");
+  await sql("do $$ begin create role anon; exception when duplicate_object then null; end $$; do $$ begin create role authenticated; exception when duplicate_object then null; end $$; do $$ begin create role service_role; exception when duplicate_object then null; end $$;");
+  for (const migration of backendMigrations) await migrate(migration);
+  await migrate(i2);
 
-  const seed = await client();
-  const draft = await rpc(seed, "static_weekly_v2_create_draft", ["2026-09-07", "concurrency-v1", {}, {}, validDocument(), 0, managerOne, "Manager One", "seed-draft"]);
-  await rpc(seed, "static_weekly_v2_update_draft", [draft.data.version_id, validDocument(), { requireVerifiedProximity: true }, {}, 1, 1, managerOne, "Manager One", "seed-update"]);
-  const publication = await rpc(seed, "static_weekly_v2_publish_draft", [draft.data.version_id, 2, 2, managerOne, "Manager One", "seed-publish", "publish", null]);
-  assert.equal(publication.revision, 3);
+  const base = input(); const compiled = await compileStaticWeeklySchedule(base); assert.equal(compiled.status, "FEASIBLE");
+  const slot = base.slots[0]; const incumbent = slot.incumbencies[0];
+  await sql(`insert into public.weekly_roster_slots(slot_id,slot_code,slot_label,created_by_manager_id,created_by_manager_name_snapshot,content_digest) values(${quote(slot.id)},'RACE_SLOT',${quote(slot.label)},${quote(one.id)},${quote(one.name)},repeat('a',64)); insert into public.weekly_roster_slot_incumbencies(slot_id,person_id,person_name_snapshot,effective_start,created_by_manager_id,created_by_manager_name_snapshot,content_digest) values(${quote(slot.id)},${quote(incumbent.personId)},${quote(incumbent.displayName)},'2020-01-01',${quote(one.id)},${quote(one.name)},repeat('b',64));`);
+  const draftInput = createStaticWeeklyDraftRpcInput({ result: compiled, expectedRevision: 0, actor: { managerId: one.id, managerName: one.name, idempotencyKey: "race-create" } });
+  const draft = await service(`public.static_weekly_v2_create_draft(${quote(draftInput.effectiveStart)},${quote(draftInput.objectiveVersion)},${json(draftInput.objective)},${json(draftInput.inputProvenance)},${json(draftInput.document)},0,${quote(one.id)},${quote(one.name)},'race-create')`);
 
-  // Same actor/key/request: ten independent sockets begin together.  Every
-  // call rechecks the receipt after the authority lock and returns one result.
-  const duplicateClients = await Promise.all(Array.from({ length: 10 }, () => client()));
-  const duplicateCalls = duplicateClients.map((connection) => rpc(connection, "static_weekly_v2_apply_exception", ["pto", "2026-09-08", null, null, publication.data.version_id, publication.data.publication_id, "same key", { slotId: slot }, 3, managerOne, "Manager One", "same-key", null]));
-  const duplicateResults = await Promise.all(duplicateCalls);
-  await Promise.all(duplicateClients.map((connection) => closeClient(connection)));
-  assert.equal(new Set(duplicateResults.map((result) => JSON.stringify(result))).size, 1, "same-key concurrent calls must converge in one bounded attempt");
-  assert.equal(Number((await seed.query("select count(*)::int as count from public.weekly_schedule_exception_commands where idempotency_key='same-key' and actor_manager_id=$1", [managerOne])).rows[0].count), 1);
-  await assert.rejects(() => rpc(seed, "static_weekly_v2_apply_exception", ["pto", "2026-09-08", null, null, publication.data.version_id, publication.data.publication_id, "different body", { slotId: "different" }, 3, managerOne, "Manager One", "same-key", null]), /idempotency key/i);
+  // Separate psql processes begin at the same time. They are independent DB
+  // sessions, not promises sharing a client or transaction.
+  const publishSql = `public.static_weekly_v2_publish_draft(${quote(draft.data.version_id)},1,1,${quote(one.id)},${quote(one.name)},'race-publish','publish',null)`;
+  const publishResults = await Promise.all(Array.from({ length: 8 }, () => service(publishSql)));
+  assert.equal(new Set(publishResults.map((row) => JSON.stringify(row))).size, 1, "same-key publication race converges on one immutable receipt");
+  const publication = publishResults[0]; assert.equal(publication.revision, 2);
 
-  // Different manager commands with the same authority revision are safe: one
-  // advances the fence and the other sees a deterministic serialization error.
-  const revisionAfterDuplicate = 4;
-  const one = await client();
-  const two = await client();
-  const managers = await Promise.allSettled([
-    rpc(one, "static_weekly_v2_apply_exception", ["lunch", "2026-09-08", "12:00", "12:30", publication.data.version_id, publication.data.publication_id, "manager one", { slotId: slot }, revisionAfterDuplicate, managerOne, "Manager One", "manager-one-race", null]),
-    rpc(two, "static_weekly_v2_apply_exception", ["lunch", "2026-09-08", "12:00", "12:30", publication.data.version_id, publication.data.publication_id, "manager two", { slotId: slot }, revisionAfterDuplicate, managerTwo, "Manager Two", "manager-two-race", null]),
-  ]);
-  await closeClient(one); await closeClient(two);
-  assert.equal(managers.filter((entry) => entry.status === "fulfilled").length, 1, "two managers cannot both commit at one stale authority revision");
-  assert.equal(managers.filter((entry) => entry.status === "rejected").length, 1);
+  const ptoSql = `public.static_weekly_v2_apply_exception('pto','2026-11-03',null,null,${quote(publication.data.version_id)},${quote(publication.data.publication_id)},'race PTO',${json({ slotId: slot.id })},2,${quote(one.id)},${quote(one.name)},'race-pto',null)`;
+  const ptoResults = await Promise.all(Array.from({ length: 10 }, () => service(ptoSql)));
+  assert.equal(new Set(ptoResults.map((row) => JSON.stringify(row))).size, 1, "same-key exception race returns the original receipt to every independent session");
+  const pto = ptoResults[0]; assert.equal(pto.revision, 3);
+  await expectReject(service(`public.static_weekly_v2_apply_exception('pto','2026-11-03','10:00','11:00',${quote(publication.data.version_id)},${quote(publication.data.publication_id)},'changed',${json({ slotId: slot.id })},2,${quote(one.id)},${quote(one.name)},'race-pto',null)`), /idempotency key/i);
 
-  // A function result is still atomic with its caller transaction.  The later
-  // fault erases its revision, receipt, and history; restart/retry then applies
-  // exactly once and a later replay is receipt-stable.
-  const current = Number((await seed.query("select current_revision from public.static_weekly_schedule_control where singleton")).rows[0].current_revision);
-  const fault = await client();
-  await fault.query("begin");
-  await rpc(fault, "static_weekly_v2_apply_exception", ["manager_correction", "2026-09-08", null, null, publication.data.version_id, publication.data.publication_id, "fault", { locks: [] }, current, managerOne, "Manager One", "fault-retry", null]);
-  await assert.rejects(() => fault.query("select 1/0"));
-  await fault.query("rollback");
-  await closeClient(fault);
-  assert.equal(Number((await seed.query("select count(*)::int as count from public.weekly_schedule_command_receipts where idempotency_key='fault-retry'")).rows[0].count), 0, "post-write fault must roll back the receipt");
-  const retryConnection = await client();
-  const retried = await rpc(retryConnection, "static_weekly_v2_apply_exception", ["manager_correction", "2026-09-08", null, null, publication.data.version_id, publication.data.publication_id, "fault", { locks: [] }, current, managerOne, "Manager One", "fault-retry", null]);
-  await closeClient(retryConnection);
-  const restartReplay = await rpc(seed, "static_weekly_v2_apply_exception", ["manager_correction", "2026-09-08", null, null, publication.data.version_id, publication.data.publication_id, "fault", { locks: [] }, current, managerOne, "Manager One", "fault-retry", null]);
-  assert.deepEqual(restartReplay, retried, "restart/retry must preserve exactly-once response identity");
-  await closeClient(seed);
-  console.log("static weekly schedule real PostgreSQL concurrency tests: PASS");
+  const lunchOne = service(`public.static_weekly_v2_apply_exception('lunch','2026-11-04','12:00','12:30',${quote(publication.data.version_id)},${quote(publication.data.publication_id)},'one',${json({ slotId: slot.id })},3,${quote(one.id)},${quote(one.name)},'race-lunch-one',null)`);
+  const lunchTwo = service(`public.static_weekly_v2_apply_exception('lunch','2026-11-04','12:00','12:30',${quote(publication.data.version_id)},${quote(publication.data.publication_id)},'two',${json({ slotId: slot.id })},3,${quote(two.id)},${quote(two.name)},'race-lunch-two',null)`);
+  const stale = await Promise.allSettled([lunchOne, lunchTwo]);
+  assert.equal(stale.filter((result) => result.status === "fulfilled").length, 1, "different independent sessions cannot both pass a stale revision fence");
+  assert.equal(stale.filter((result) => result.status === "rejected").length, 1);
+  const current = Number(await scalar("select current_revision::text from public.static_weekly_schedule_control where singleton"));
+
+  // Caller transaction failure removes all command effects. A new independent
+  // session can then apply once, and restart-style replay remains receipt-stable.
+  const faultSql = `begin; set role service_role; select public.static_weekly_v2_apply_exception('manager_correction','2026-11-05',null,null,${quote(publication.data.version_id)},${quote(publication.data.publication_id)},'fault',${json({ locks: [] })},${current},${quote(one.id)},${quote(one.name)},'fault-retry',null); select 1/0;`;
+  await expectReject(sql(faultSql), /division by zero/i);
+  assert.equal(await scalar("select count(*) from public.weekly_schedule_command_receipts where idempotency_key='fault-retry'"), "0", "failure injection rolls back authority revision, command, and receipt together");
+  const retrySql = `public.static_weekly_v2_apply_exception('manager_correction','2026-11-05',null,null,${quote(publication.data.version_id)},${quote(publication.data.publication_id)},'fault',${json({ locks: [] })},${current},${quote(one.id)},${quote(one.name)},'fault-retry',null)`;
+  const retried = await service(retrySql); assert.deepEqual(await service(retrySql), retried, "restart replay preserves the successful response byte-for-byte");
+  const revisionAfterRetry = retried.revision;
+
+  const accepted = JSON.parse(await scalar(`select public.static_weekly_accepted_exception_set(${quote(publication.data.publication_id)},'2026-11-02')::text`));
+  const compilerExceptions = JSON.parse(await scalar(`select public.static_weekly_compiler_exception_set(${quote(publication.data.publication_id)},'2026-11-02')::text`));
+  const overlay = input({ exceptions: compilerExceptions }); const overlayResult = await compileStaticWeeklySchedule(overlay); assert.equal(overlayResult?.verifier?.ok, true, JSON.stringify(overlayResult.fatal || overlayResult));
+  assert.deepEqual(overlayResult.canonicalAuthority.appliedExceptions, accepted, "compiler applied-exception projection and SQL accepted-set identity are exact");
+  const projectionInput = createStaticWeeklyProjectionRpcInput({ result: overlayResult, publicationId: publication.data.publication_id, expectedRevision: revisionAfterRetry, actor: { managerId: one.id, managerName: one.name, idempotencyKey: "race-projection" } });
+  assert.equal(await scalar(`select public.static_weekly_digest_jsonb(public.static_weekly_accepted_exception_set(${quote(publication.data.publication_id)},'2026-11-02'))`), projectionInput.exceptionSetDigest, "adapter and SQL derive one exact complete weekly exception identity");
+  const projectionSql = `public.static_weekly_v2_materialize_projection(${quote(projectionInput.publicationId)},${quote(projectionInput.serviceDate)},${quote(projectionInput.exceptionSetDigest)},${quote(projectionInput.compilerVersion)},${json(projectionInput.objective)},${json(projectionInput.metrics)},${quote(projectionInput.replayDigest)},${json(projectionInput.envelope)},${revisionAfterRetry},${quote(one.id)},${quote(one.name)},'race-projection')`;
+  const projectionRace = await Promise.all(Array.from({ length: 6 }, () => service(projectionSql)));
+  assert.equal(new Set(projectionRace.map((row) => JSON.stringify(row))).size, 1, "full seven-day projection race is idempotent across independent sessions");
+  const projection = projectionRace[0];
+
+  const reversalSql = `public.static_weekly_v2_apply_exception('reverse','2026-11-03',null,null,${quote(publication.data.version_id)},${quote(publication.data.publication_id)},'PTO reversed',${json({ reversesExceptionId: pto.data.exception_id })},${projection.revision},${quote(one.id)},${quote(one.name)},'race-reverse',${quote(pto.data.exception_id)})`;
+  const reversals = await Promise.all(Array.from({ length: 6 }, () => service(reversalSql)));
+  assert.equal(new Set(reversals.map((row) => JSON.stringify(row))).size, 1, "successful reversal replay is checked after the shared lock and before mutable reversal validation");
+  const reversal = reversals[0];
+  await expectReject(service(`public.static_weekly_v2_apply_exception('reverse','2026-11-03',null,null,${quote(publication.data.version_id)},${quote(publication.data.publication_id)},'changed reversal',${json({ reversesExceptionId: pto.data.exception_id })},${projection.revision},${quote(one.id)},${quote(one.name)},'race-reverse',${quote(pto.data.exception_id)})`), /idempotency key/i);
+
+  const replaceOne = service(`public.static_weekly_v2_replace_incumbency(${quote(slot.id)},'30000000-0000-4000-8000-000000000042','Race Replacement','2026-11-16',${reversal.revision},${quote(one.id)},${quote(one.name)},'race-replace-one')`);
+  const replaceTwo = service(`public.static_weekly_v2_replace_incumbency(${quote(slot.id)},'30000000-0000-4000-8000-000000000043','Race Replacement Two','2026-11-16',${reversal.revision},${quote(two.id)},${quote(two.name)},'race-replace-two')`);
+  const replacementRace = await Promise.allSettled([replaceOne, replaceTwo]);
+  assert.equal(replacementRace.filter((result) => result.status === "fulfilled").length, 1, "incumbency replacement race permits exactly one closure fact");
+  assert.equal(replacementRace.filter((result) => result.status === "rejected").length, 1);
+  console.log("static weekly schedule real independent-session concurrency tests: PASS");
 } finally {
-  await Promise.allSettled([...activeClients].map((connection) => closeClient(connection)));
   await docker(["rm", "-f", container]).catch(() => {});
   removed = true;
 }
