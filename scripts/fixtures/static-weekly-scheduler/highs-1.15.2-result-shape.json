@@ -1,0 +1,34 @@
+{
+  "schema": "memphis-zoo.static-weekly.highs-terminal-report-result-shape.v2",
+  "package": {
+    "name": "highs",
+    "version": "1.15.2",
+    "packageJsonSha256": "21e76a89d13d636f56d5cdda7dde590acd48d6fb683c97a327c10d43e74d9c56",
+    "wrapperJavaScriptSha256": "6d5be3ed3cbd1ce1924cc66cc9302b50753dabdb8c6e0e815845dce7f1890033",
+    "wasmSha256": "7e6432b2b26f4fab9f6d9bac55da43307c7a4b1b071cb204cb4d23e1901bc4d0",
+    "embeddedRuntimeBanner": "HiGHS 1.15.1 (git hash: 04024d7)"
+  },
+  "runtime": "v22.23.2",
+  "options": { "threads": 1, "random_seed": 0, "presolve": "on", "parallel": "off", "mip_rel_gap": 0, "mip_abs_gap": 0, "mip_feasibility_tolerance": 1e-9, "output_flag": true },
+  "terminalReportContract": { "source": "terminal_solver_report", "parserVersion": "highs-terminal-report-v1", "start": "Solving report", "end": "Writing the solution to solution.txt" },
+  "cases": {
+    "optimal": {
+      "status": "Optimal", "objectiveValue": 1, "ownProperties": ["Columns", "ObjectiveValue", "Rows", "Status"], "columnOwnProperties": ["Index", "Lower", "Name", "Primal", "Type", "Upper"],
+      "terminalReportLines": ["Solving report", "  Model             m", "  Status            Optimal", "  Primal bound      1", "  Dual bound        1", "  Gap               0%", "  P-D integral      0", "  Solution status   feasible", "                    1 (objective)", "                    0 (bound viol.)", "                    0 (int. viol.)", "                    0 (row viol.)", "  Timing            0.01", "                    0.01 (Presolve)", "                    0.00 (Solve)", "                    0.00 (Postsolve)", "  Max sub-MIP depth 0", "  Nodes             0", "  Repair LPs        0", "  LP iterations     0", "Writing the solution to solution.txt"]
+    },
+    "infeasible": {
+      "status": "Infeasible", "objectiveValue": null, "ownProperties": ["Columns", "ObjectiveValue", "Rows", "Status"], "columnOwnProperties": ["Index", "Lower", "Name", "Type", "Upper"],
+      "terminalReportLines": ["Solving report", "  Model             m", "  Status            Infeasible", "  Primal bound      inf", "  Dual bound        -inf", "  Gap               inf", "  P-D integral      0", "  Solution status   -", "  Timing            0.00", "                    0.00 (Presolve)", "                    0.00 (Solve)", "                    0.00 (Postsolve)", "  Max sub-MIP depth 0", "  Nodes             0", "  Repair LPs        0", "  LP iterations     0", "Writing the solution to solution.txt"]
+    },
+    "immediateTimeoutNoSolution": {
+      "probe": "1500-binary two-constraint MIP with time_limit: 0", "status": "Time limit reached", "objectiveValue": null, "ownProperties": ["Columns", "ObjectiveValue", "Rows", "Status"],
+      "terminalReportLines": ["Solving report", "  Model             m", "  Status            Time limit reached", "  Primal bound      -inf", "  Dual bound        inf", "  Gap               0%", "  P-D integral      0", "  Solution status   -", "  Timing            0.01", "                    0.01 (Presolve)", "                    0.00 (Solve)", "                    0.00 (Postsolve)", "  Max sub-MIP depth 0", "  Nodes             0", "  Repair LPs        0", "  LP iterations     0", "Writing the solution to solution.txt"]
+    },
+    "timeLimitedFeasibleNonzeroGap": {
+      "probe": "1500-binary two-constraint MIP with time_limit: 0.02", "status": "Time limit reached", "objectiveValue": 216, "ownProperties": ["Columns", "ObjectiveValue", "Rows", "Status"], "timingMayVary": true,
+      "terminalReportLines": ["Solving report", "  Model             m", "  Status            Time limit reached", "  Primal bound      216", "  Dual bound        1500", "  Gap               594.44%", "  P-D integral      0.0588804566783", "  Solution status   feasible", "                    216 (objective)", "                    0 (bound viol.)", "                    0 (int. viol.)", "                    0 (row viol.)", "  Timing            0.04", "                    0.01 (Presolve)", "                    0.02 (Solve)", "                    0.00 (Postsolve)", "  Max sub-MIP depth 0", "  Nodes             0", "  Repair LPs        0", "  LP iterations     0", "Writing the solution to solution.txt"]
+    }
+  },
+  "capabilities": { "bestBound": true, "mipGap": true, "distinctTermination": true, "source": "terminal_solver_report" },
+  "publicationBehavior": "Optimal terminal-report evidence only; all nonoptimal, nonfinite, malformed, or inconsistent reports are REVIEW_FAIL_CLOSED."
+}

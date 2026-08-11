@@ -1,0 +1,32 @@
+{
+  "schema": "memphis-zoo.static-weekly.monotonic-leximax-exhaustive-oracle.v1",
+  "vectorOrder": ["requiredCoverage", "dailyRank1", "dailyRank2", "weeklyRank1", "weeklyRank2", "travel"],
+  "fixtures": [
+    {
+      "id": "optional-burden-range-counterexample",
+      "facts": { "capacities": { "A": 100, "B": 200 }, "baselineEffort": { "A": 80, "B": 0 }, "optionalEffort": 160, "scale": 1000 },
+      "rangeScores": { "leave-open": 800, "assign-optional": 0 },
+      "candidates": [
+        { "id": "leave-open", "vector": [0, 800, 0, 800, 0, 0] },
+        { "id": "assign-optional", "vector": [0, 800, 800, 800, 800, 0] }
+      ],
+      "expectedBest": "leave-open"
+    },
+    {
+      "id": "daily-cross-day-tradeoff",
+      "candidates": [
+        { "id": "protect-worst-day", "vector": [0, 900, 500, 500, 500, 9] },
+        { "id": "improve-summed-spread-only", "vector": [0, 950, 0, 475, 475, 1] }
+      ],
+      "expectedBest": "protect-worst-day"
+    },
+    {
+      "id": "stable-id-equal-utilization",
+      "candidates": [
+        { "id": "stable-a-before-b", "vector": [0, 500, 500, 500, 500, 2] },
+        { "id": "stable-b-before-a", "vector": [0, 500, 500, 500, 500, 3] }
+      ],
+      "expectedBest": "stable-a-before-b"
+    }
+  ]
+}

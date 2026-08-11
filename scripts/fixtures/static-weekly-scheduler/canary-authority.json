@@ -1,0 +1,60 @@
+{
+  "serviceDate": "2026-08-10",
+  "timezone": "America/Chicago",
+  "versions": [
+    {
+      "id": "weekly-a",
+      "publicationId": "publication-weekly-a",
+      "status": "published",
+      "effectiveStart": "2026-08-03",
+      "effectiveEnd": "2026-08-17",
+      "contentDigest": "weekly-a-fixture",
+      "objective": { "requireVerifiedProximity": true, "objectiveVersion": "fixture-v1" },
+      "slotAvailability": [
+        { "slotId": "slot-tammy", "dayOfWeek": 1, "status": "working", "shift": { "start": "07:00", "end": "16:00" }, "capacityUnits": 1, "maxLoadPoints": 100, "qualifications": ["general", "restroom"], "qualificationProvenance": "credential-fixture-v1", "restrictions": [], "restrictionProvenance": "restriction-fixture-v1", "establishedRouteLocationIds": ["teton-exhibit"] },
+        { "slotId": "slot-jordan", "dayOfWeek": 1, "status": "working", "shift": { "start": "07:00", "end": "16:00" }, "capacityUnits": 1, "maxLoadPoints": 100, "qualifications": ["general", "restroom"], "qualificationProvenance": "credential-fixture-v1", "restrictions": [], "restrictionProvenance": "restriction-fixture-v1", "establishedRouteLocationIds": ["east-exhibit"] },
+        { "slotId": "slot-departed-one", "dayOfWeek": 1, "status": "departed_named_absent", "shift": { "start": "07:00", "end": "16:00" }, "capacityUnits": 1, "qualifications": ["general"], "qualificationProvenance": "credential-fixture-v1", "restrictions": [], "restrictionProvenance": "restriction-fixture-v1" },
+        { "slotId": "slot-departed-two", "dayOfWeek": 1, "status": "departed_named_absent", "shift": { "start": "07:00", "end": "16:00" }, "capacityUnits": 1, "qualifications": ["general"], "qualificationProvenance": "credential-fixture-v1", "restrictions": [], "restrictionProvenance": "restriction-fixture-v1" }
+      ],
+      "assignments": [
+        { "id": "work-teton-restroom", "workId": "work-teton-restroom", "dayOfWeek": 1, "locationId": "teton-restroom", "window": { "start": "08:00", "end": "09:00" }, "ownerSlotId": "slot-tammy", "loadPoints": 40, "loadProvenance": "duration*difficulty*priority*frequency*isolation/v1", "requiredQualifications": ["restroom"], "qualificationProvenance": "work-requirement-fixture-v1", "restrictions": [], "restrictionProvenance": "work-restriction-fixture-v1" },
+        { "id": "work-teton-exhibit", "workId": "work-teton-exhibit", "dayOfWeek": 1, "locationId": "teton-exhibit", "window": { "start": "09:15", "end": "10:15" }, "ownerSlotId": "slot-tammy", "loadPoints": 20, "loadProvenance": "duration*difficulty*priority*frequency*isolation/v1", "requiredQualifications": ["general"], "qualificationProvenance": "work-requirement-fixture-v1", "restrictions": [], "restrictionProvenance": "work-restriction-fixture-v1" },
+        { "id": "work-east-restroom", "workId": "work-east-restroom", "dayOfWeek": 1, "locationId": "east-restroom", "window": { "start": "08:00", "end": "09:00" }, "ownerSlotId": "slot-jordan", "loadPoints": 40, "loadProvenance": "duration*difficulty*priority*frequency*isolation/v1", "requiredQualifications": ["restroom"], "qualificationProvenance": "work-requirement-fixture-v1", "restrictions": [], "restrictionProvenance": "work-restriction-fixture-v1" }
+      ]
+    },
+    {
+      "id": "weekly-b",
+      "publicationId": "publication-weekly-b",
+      "status": "published",
+      "effectiveStart": "2026-08-17",
+      "effectiveEnd": null,
+      "contentDigest": "weekly-b-fixture",
+      "objective": { "requireVerifiedProximity": true, "objectiveVersion": "fixture-v1" },
+      "slotAvailability": [
+        { "slotId": "slot-tammy", "dayOfWeek": 1, "status": "working", "shift": { "start": "07:00", "end": "16:00" }, "capacityUnits": 1, "maxLoadPoints": 100, "qualifications": ["general", "restroom"], "qualificationProvenance": "credential-fixture-v1", "restrictions": [], "restrictionProvenance": "restriction-fixture-v1", "establishedRouteLocationIds": ["teton-exhibit"] },
+        { "slotId": "slot-jordan", "dayOfWeek": 1, "status": "working", "shift": { "start": "07:00", "end": "16:00" }, "capacityUnits": 1, "maxLoadPoints": 100, "qualifications": ["general", "restroom"], "qualificationProvenance": "credential-fixture-v1", "restrictions": [], "restrictionProvenance": "restriction-fixture-v1", "establishedRouteLocationIds": ["east-exhibit"] },
+        { "slotId": "slot-departed-one", "dayOfWeek": 1, "status": "working", "shift": { "start": "07:00", "end": "16:00" }, "capacityUnits": 1, "qualifications": ["general"], "qualificationProvenance": "credential-fixture-v1", "restrictions": [], "restrictionProvenance": "restriction-fixture-v1" },
+        { "slotId": "slot-departed-two", "dayOfWeek": 1, "status": "working", "shift": { "start": "07:00", "end": "16:00" }, "capacityUnits": 1, "qualifications": ["general"], "qualificationProvenance": "credential-fixture-v1", "restrictions": [], "restrictionProvenance": "restriction-fixture-v1" }
+      ],
+      "assignments": [
+        { "id": "work-teton-restroom", "workId": "work-teton-restroom", "dayOfWeek": 1, "locationId": "teton-restroom", "window": { "start": "08:00", "end": "09:00" }, "ownerSlotId": "slot-tammy", "loadPoints": 40, "loadProvenance": "duration*difficulty*priority*frequency*isolation/v1", "requiredQualifications": ["restroom"], "qualificationProvenance": "work-requirement-fixture-v1", "restrictions": [], "restrictionProvenance": "work-restriction-fixture-v1" },
+        { "id": "work-teton-exhibit", "workId": "work-teton-exhibit", "dayOfWeek": 1, "locationId": "teton-exhibit", "window": { "start": "09:15", "end": "10:15" }, "ownerSlotId": "slot-departed-one", "loadPoints": 20, "loadProvenance": "duration*difficulty*priority*frequency*isolation/v1", "requiredQualifications": ["general"], "qualificationProvenance": "work-requirement-fixture-v1", "restrictions": [], "restrictionProvenance": "work-restriction-fixture-v1" },
+        { "id": "work-east-restroom", "workId": "work-east-restroom", "dayOfWeek": 1, "locationId": "east-restroom", "window": { "start": "08:00", "end": "09:00" }, "ownerSlotId": "slot-jordan", "loadPoints": 40, "loadProvenance": "duration*difficulty*priority*frequency*isolation/v1", "requiredQualifications": ["restroom"], "qualificationProvenance": "work-requirement-fixture-v1", "restrictions": [], "restrictionProvenance": "work-restriction-fixture-v1" }
+      ]
+    }
+  ],
+  "slots": [
+    { "id": "slot-tammy", "label": "Tammy stable roster slot", "incumbencies": [{ "personId": "person-tammy", "displayName": "Tammy", "effectiveStart": "2020-01-01", "effectiveEnd": null }] },
+    { "id": "slot-jordan", "label": "Jordan stable roster slot", "incumbencies": [{ "personId": "person-jordan", "displayName": "Jordan", "effectiveStart": "2020-01-01", "effectiveEnd": null }] },
+    { "id": "slot-departed-one", "label": "Departed One stable roster slot", "incumbencies": [{ "personId": "person-departed-one", "displayName": "Avery Departed", "effectiveStart": "2020-01-01", "effectiveEnd": "2026-08-17" }, { "personId": "person-replacement-one", "displayName": "Morgan Replacement", "effectiveStart": "2026-08-17", "effectiveEnd": null }] },
+    { "id": "slot-departed-two", "label": "Departed Two stable roster slot", "incumbencies": [{ "personId": "person-departed-two", "displayName": "Riley Departed", "effectiveStart": "2020-01-01", "effectiveEnd": "2026-08-17" }, { "personId": "person-replacement-two", "displayName": "Casey Replacement", "effectiveStart": "2026-08-17", "effectiveEnd": null }] }
+  ],
+  "proximity": [
+    { "id": "edge-teton-pair", "fromLocationId": "teton-restroom", "toLocationId": "teton-exhibit", "minutes": 2, "verified": true, "bidirectional": true, "provenance": "walk-study-2026-08-01" },
+    { "id": "edge-east-pair", "fromLocationId": "east-restroom", "toLocationId": "east-exhibit", "minutes": 2, "verified": true, "bidirectional": true, "provenance": "walk-study-2026-08-01" },
+    { "id": "edge-teton-rest-east", "fromLocationId": "teton-restroom", "toLocationId": "east-exhibit", "minutes": 22, "verified": true, "bidirectional": true, "provenance": "walk-study-2026-08-01" },
+    { "id": "edge-teton-exhibit-east", "fromLocationId": "teton-exhibit", "toLocationId": "east-exhibit", "minutes": 24, "verified": true, "bidirectional": true, "provenance": "walk-study-2026-08-01" },
+    { "id": "edge-east-rest-teton", "fromLocationId": "east-restroom", "toLocationId": "teton-exhibit", "minutes": 24, "verified": true, "bidirectional": true, "provenance": "walk-study-2026-08-01" },
+    { "id": "edge-east-rest-teton-rest", "fromLocationId": "east-restroom", "toLocationId": "teton-restroom", "minutes": 24, "verified": true, "bidirectional": true, "provenance": "walk-study-2026-08-01" }
+  ]
+}
