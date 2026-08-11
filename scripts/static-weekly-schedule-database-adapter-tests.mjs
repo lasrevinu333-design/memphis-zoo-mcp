@@ -7,8 +7,6 @@ import {
   createStaticWeeklyProjectionRpcInput,
 } from "../src/static-weekly-schedule-database-adapter.js";
 
-process.env.STATIC_WEEKLY_AUTHORITY_ATTESTATION_SECRET = "static-weekly-adapter-test-attestation-secret-0123456789";
-
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const manager = { managerId: "10000000-0000-4000-8000-000000000001", managerName: "Named Manager", idempotencyKey: "adapter-unit-draft" };
 
@@ -99,7 +97,7 @@ assert.equal(document.slot_availability.find((row) => row.slot_id === "20000000-
 assert.equal(document.assignments.some((row) => row.status === "open" && row.owner_slot_id === null && row.owner_person_id_snapshot === null && row.owner_name_snapshot === null), true, "OPEN rows retain no owner facts");
 assert.equal(document.receipt.compiler.certificate.schema, "memphis-zoo.static-weekly-solver-certificate.v4");
 assert.equal(document.receipt.compiler.independentVerification.ok, true);
-assert.equal(document.attestation.scope, "recurring_document", "a recurring document carries a keyed provenance attestation");
+assert.equal("attestation" in document, false, "the pure adapter never receives or emits a scheduler signing key; PostgreSQL v3 attests inside the control plane");
 
 const draft = createStaticWeeklyDraftRpcInput({ result: real, expectedRevision: 4, actor: manager });
 assert.deepEqual(draft.document, document, "the adapter result is deterministic for the exact real compiler result");
@@ -108,7 +106,7 @@ assert.equal(draft.inputProvenance.authority_digest, real.authorityDigest);
 const projection = createStaticWeeklyProjectionRpcInput({ result: real, publicationId: "50000000-0000-4000-8000-000000000001", expectedRevision: 5, actor: { ...manager, idempotencyKey: "adapter-unit-projection" } });
 assert.equal(projection.envelope.assignments.length, real.weeklyAssignments.length, "projection is the complete seven-day optimizer projection, never a same-day subset");
 assert.equal(projection.envelope.assignments.filter((row) => row.status === "open").every((row) => row.owner_slot_id === null && row.owner_person_id === null), true);
-assert.equal(projection.envelope.attestation.scope, "dated_projection", "a dated envelope carries a distinct keyed provenance attestation");
+assert.equal("attestation" in projection.envelope, false, "the pure adapter never emits a dated signing primitive");
 
 const alteredOwner = clone(real);
 alteredOwner.canonicalAuthority.optimizerResult.assignments[0].personId = "30000000-0000-4000-8000-000000000003";

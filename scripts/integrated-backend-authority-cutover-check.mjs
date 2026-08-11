@@ -227,7 +227,7 @@ const evidenceBlob = expectedEntries.find(({ path }) => path === releaseEvidence
 assert.ok(evidenceBlob, "expected tree omits generated release evidence");
 const expectedBlobs = expectedEntries.filter(({ path }) => path !== releaseEvidencePath);
 assert.ok(expectedBlobs.length > 0, "release authority inventory is empty");
-assert.equal(expectedBlobs.filter(({ path }) => /^supabase\/migrations\/[^/]+\.sql$/.test(path)).length, 64, "release authority inventory must bind all 64 migrations");
+assert.equal(expectedBlobs.filter(({ path }) => /^supabase\/migrations\/[^/]+\.sql$/.test(path)).length, 65, "release authority inventory must bind all 65 migrations");
 for (const blob of [...expectedBlobs, evidenceBlob]) assertWorktreeMatchesExpectedBlob(blob);
 
 const blobByPath = new Map(expectedBlobs.map((blob) => [blob.path, blob]));

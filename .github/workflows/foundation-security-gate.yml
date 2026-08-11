@@ -2,12 +2,7 @@ name: Foundation Security Gate
 
 on:
   pull_request:
-    branches: [main]
   push:
-    branches:
-      - main
-      - foundation/security-control-plane-clean-20260715
-      - codex/custodial-foundation-repair-20260717
 
 permissions:
   contents: read
@@ -55,4 +50,7 @@ jobs:
           npm run --silent test:foundation-repair
           npm run --silent test:scheduler-overhaul
           npm run --silent test:static-weekly-scheduler:fast
+          # This starts only disposable worker-owned PostgreSQL containers and
+          # includes the real independent-session concurrency/restart suite.
+          npm run --silent test:static-weekly-scheduler:database
           npm run --silent test:ci-workflows

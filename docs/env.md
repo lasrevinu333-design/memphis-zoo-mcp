@@ -40,6 +40,33 @@ The production `/mcp` URL is public. Enabling full tokenless access therefore au
 | `SUPABASE_URL` | Yes | Supabase project URL. |
 | `SUPABASE_SERVICE_ROLE_KEY` | Yes | Service role key for trusted server-side RPC calls. |
 
+## Static weekly scheduler control plane
+
+The scheduler authority is a separate process, not part of the ordinary API
+service. Its database login must be the only provisioned identity able to
+`SET ROLE static_weekly_control_plane`; the ordinary Supabase service role must
+not receive that membership, a scheduler signing key, or execute rights on any
+scheduler mutator.
+
+| Name | Required | Purpose |
+|---|---:|---|
+| `STATIC_WEEKLY_CONTROL_PLANE_DATABASE_URL` | Yes, control-plane service only | Dedicated PostgreSQL login URL. It is not set on the ordinary API deployment. |
+| `STATIC_WEEKLY_CONTROL_PLANE_PORT` | No | Listener port for `npm run start:static-weekly-control-plane`; defaults to `PORT` then `3100`. |
+
+Before a first draft can be created, the release operator registers the
+compiler-normalized, exception-free recurring source of record with
+`static_weekly_v3_register_authority_source`. A manager requests only the
+registered `source_id` and an effective date through the separate control
+plane; it never posts roster, work, proximity, or compiler truth. Later
+replacement drafts derive that source from the currently effective immutable
+publication. The release operator provisions the first key through
+`static_weekly_v3_configure_initial_authority_key`, then uses the v3 rotation,
+revocation, and recovery procedures. Key values must be supplied only through
+the release operator's protected session: they are never placed in app
+environment variables, release evidence, command output, or database result
+payloads. Rotation permits at most 24 hours of verification overlap; health
+must report exactly one active key and no expired overlap before release.
+
 ## Admin / Ops API
 
 | Name | Required | Purpose |

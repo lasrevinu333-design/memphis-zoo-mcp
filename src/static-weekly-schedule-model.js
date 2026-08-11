@@ -222,18 +222,65 @@ function exactPayloadObject(value, required, label) {
   assert(keys.length === required.length && keys.every((key, index) => key === required.slice().sort(stableCompare)[index]), `${label} contains unknown, missing, or noncanonical fields.`, "invalid_exception_payload");
 }
 
-function nonblankPayloadText(value, label) {
-  assert(String(value || "").trim(), `${label} is required.`, "invalid_exception_payload");
+// Exception commands cross a portable/SQL boundary.  Do not coerce here:
+// accepting `false`, 12, or an object as a text identity makes the portable
+// compiler disagree with PostgreSQL and can turn an invalid command into a
+// persisted authority revision.  The limits below intentionally match the
+// database v3 validator introduced with this contract.
+const EXCEPTION_TEXT_MAX = 200;
+const EXCEPTION_WORK_ID_MAX = 160;
+
+function nonblankPayloadText(value, label, maximum = EXCEPTION_TEXT_MAX) {
+  assert(typeof value === "string" && value.trim() && value.length <= maximum, `${label} must be a bounded nonblank string.`, "invalid_exception_payload");
+  return value;
+}
+
+function payloadIdentity(value, label, maximum = EXCEPTION_TEXT_MAX) {
+  nonblankPayloadText(value, label, maximum);
+  // The portable compiler also supports stable external identities used by
+  // replay fixtures. Relational UUID columns are checked independently by SQL.
+  assert(!/[\u0000-\u001f\u007f]/.test(value), `${label} contains a control character.`, "invalid_exception_payload");
+  return value;
 }
 
 function payloadWindow(value, label) {
   exactPayloadObject(value, ["start", "end"], label);
+  assert(typeof value.start === "string" && typeof value.end === "string", `${label} must use string HH:MM endpoints.`, "invalid_exception_payload");
   return normalizeWindow(value, label);
 }
 
-function exactStringArray(value, label) {
-  assert(Array.isArray(value) && value.every((item) => String(item || "").trim()), `${label} must contain nonblank string identities.`, "invalid_exception_payload");
-  assert(new Set(value).size === value.length, `${label} may not contain duplicate identities.`, "invalid_exception_payload");
+function exactStringArray(value, label, { allowEmpty = true, maximum = EXCEPTION_TEXT_MAX } = {}) {
+  assert(Array.isArray(value) && (allowEmpty || value.length > 0), `${label} must be an array${allowEmpty ? "" : " with at least one identity"}.`, "invalid_exception_payload");
+  const identities = value.map((item) => nonblankPayloadText(item, label, maximum));
+  assert(new Set(identities).size === identities.length, `${label} may not contain duplicate identities.`, "invalid_exception_payload");
+  return identities;
+}
+
+function payloadFiniteInteger(value, label, minimum, maximum) {
+  assert(typeof value === "number" && Number.isFinite(value) && Number.isInteger(value) && value >= minimum && value <= maximum, `${label} must be an integer from ${minimum} through ${maximum}.`, "invalid_exception_payload");
+  return value;
+}
+
+function assertExceptionWorkShape(value, { added = false } = {}) {
+  const workKeys = ["locationCodeSnapshot", "locationId", "locationNameSnapshot", "priority", "priorityProvenance", "qualificationProvenance", "requiredQualifications", "restrictionProvenance", "restrictions", "serviceEffortMinutes", "serviceEffortProvenance", "window", "workId"];
+  exactPayloadObject(value, added ? [...workKeys, "dayOfWeek", "originSlotId"] : workKeys, added ? "event added work" : "event patch work");
+  nonblankPayloadText(value.workId, "event workId", EXCEPTION_WORK_ID_MAX);
+  payloadIdentity(value.locationId, "event locationId");
+  nonblankPayloadText(value.locationCodeSnapshot, "event location code");
+  nonblankPayloadText(value.locationNameSnapshot, "event location name");
+  payloadWindow(value.window, "event work window");
+  payloadFiniteInteger(value.serviceEffortMinutes, "event service effort", 1, 1_440);
+  payloadFiniteInteger(value.priority, "event priority", 0, 100);
+  nonblankPayloadText(value.serviceEffortProvenance, "event service provenance");
+  nonblankPayloadText(value.priorityProvenance, "event priority provenance");
+  nonblankPayloadText(value.qualificationProvenance, "event qualification provenance");
+  nonblankPayloadText(value.restrictionProvenance, "event restriction provenance");
+  exactStringArray(value.requiredQualifications, "event qualifications");
+  exactStringArray(value.restrictions, "event restrictions");
+  if (added) {
+    payloadFiniteInteger(value.dayOfWeek, "event weekday", 0, 6);
+    payloadIdentity(value.originSlotId, "event origin slotId");
+  }
 }
 
 // This is the portable half of the exception boundary.  It deliberately
@@ -246,31 +293,31 @@ export function assertStaticWeeklyExceptionPayload(exception) {
   const type = exception?.type;
   const window = exception?.window ?? null;
   if (["pto", "daily_absence"].includes(type)) {
-    exactPayloadObject(payload, ["slotId"], `${type} payload`); nonblankPayloadText(payload.slotId, `${type} slotId`); assert(window == null, `${type} may not carry a partial window.`, "invalid_exception_payload");
+    exactPayloadObject(payload, ["slotId"], `${type} payload`); payloadIdentity(payload.slotId, `${type} slotId`); assert(window == null, `${type} may not carry a partial window.`, "invalid_exception_payload");
   } else if (type === "partial_absence" || type === "lunch") {
-    exactPayloadObject(payload, ["slotId"], `${type} payload`); nonblankPayloadText(payload.slotId, `${type} slotId`); normalizeWindow(window, `${type} window`);
+    exactPayloadObject(payload, ["slotId"], `${type} payload`); payloadIdentity(payload.slotId, `${type} slotId`); payloadWindow(window, `${type} window`);
   } else if (type === "shift_override") {
-    exactPayloadObject(payload, ["shift", "slotId", "status"], "shift override payload"); nonblankPayloadText(payload.slotId, "shift override slotId"); assert(AVAILABILITY_STATES.has(payload.status) && payload.status !== "departed_named_absent", "shift override status is invalid.", "invalid_exception_payload"); payloadWindow(payload.shift, "shift override shift"); assert(window == null, "shift override may not carry a second window.", "invalid_exception_payload");
+    exactPayloadObject(payload, ["shift", "slotId", "status"], "shift override payload"); payloadIdentity(payload.slotId, "shift override slotId"); assert(typeof payload.status === "string" && AVAILABILITY_STATES.has(payload.status) && payload.status !== "departed_named_absent", "shift override status is invalid.", "invalid_exception_payload"); payloadWindow(payload.shift, "shift override shift"); assert(window == null, "shift override may not carry a second window.", "invalid_exception_payload");
   } else if (type === "cover_all") {
     exactPayloadObject(payload, ["availability"], "coverall payload");
     exactPayloadObject(payload.availability, ["acceptedRouteAnchorLocationId", "acceptedRouteProvenance", "maxServiceEffortMinutes", "maxServiceEffortProvenance", "productiveCapacityProvenance", "qualificationProvenance", "qualifications", "restrictionProvenance", "restrictions", "shift", "slotId"], "coverall availability");
-    nonblankPayloadText(payload.availability.slotId, "coverall slotId"); payloadWindow(payload.availability.shift, "coverall shift"); exactStringArray(payload.availability.qualifications, "coverall qualifications"); exactStringArray(payload.availability.restrictions, "coverall restrictions"); assert(window == null, "coverall may not carry a second window.", "invalid_exception_payload");
+    payloadIdentity(payload.availability.slotId, "coverall slotId"); payloadWindow(payload.availability.shift, "coverall shift"); payloadFiniteInteger(payload.availability.maxServiceEffortMinutes, "coverall maximum effort", 1, 1_440); payloadIdentity(payload.availability.acceptedRouteAnchorLocationId, "coverall route anchor");
+    for (const field of ["productiveCapacityProvenance", "maxServiceEffortProvenance", "qualificationProvenance", "restrictionProvenance", "acceptedRouteProvenance"]) nonblankPayloadText(payload.availability[field], `coverall ${field}`);
+    exactStringArray(payload.availability.qualifications, "coverall qualifications"); exactStringArray(payload.availability.restrictions, "coverall restrictions"); assert(window == null, "coverall may not carry a second window.", "invalid_exception_payload");
   } else if (["nine_forty_five_rebalance", "manager_correction"].includes(type)) {
     exactPayloadObject(payload, ["locks"], `${type} payload`); assert(Array.isArray(payload.locks) && payload.locks.length > 0, `${type} requires locks.`, "invalid_exception_payload");
     const workIds = new Set();
-    for (const lock of payload.locks) { exactPayloadObject(lock, ["slotId", "workId"], "manager correction lock"); nonblankPayloadText(lock.workId, "manager correction workId"); nonblankPayloadText(lock.slotId, "manager correction slotId"); assert(!workIds.has(lock.workId), "manager correction lock target is duplicated.", "invalid_exception_payload"); workIds.add(lock.workId); }
+    for (const lock of payload.locks) { exactPayloadObject(lock, ["slotId", "workId"], "manager correction lock"); nonblankPayloadText(lock.workId, "manager correction workId", EXCEPTION_WORK_ID_MAX); payloadIdentity(lock.slotId, "manager correction slotId"); assert(!workIds.has(lock.workId), "manager correction lock target is duplicated.", "invalid_exception_payload"); workIds.add(lock.workId); }
     assert(window == null, `${type} may not carry a window.`, "invalid_exception_payload");
   } else if (type === "event_impact") {
     exactPayloadObject(payload, ["addWork", "patchWork", "removeWorkIds"], "event impact payload");
-    exactStringArray(payload.removeWorkIds, "event removal targets"); assert(Array.isArray(payload.patchWork) && Array.isArray(payload.addWork) && payload.removeWorkIds.length + payload.patchWork.length + payload.addWork.length > 0, "event impact must have a target.", "invalid_exception_payload");
+    exactStringArray(payload.removeWorkIds, "event removal targets", { maximum: EXCEPTION_WORK_ID_MAX }); assert(Array.isArray(payload.patchWork) && Array.isArray(payload.addWork) && payload.removeWorkIds.length + payload.patchWork.length + payload.addWork.length > 0, "event impact must have a target.", "invalid_exception_payload");
     const patchIds = new Set(); const addIds = new Set();
-    const workKeys = ["locationCodeSnapshot", "locationId", "locationNameSnapshot", "priority", "priorityProvenance", "qualificationProvenance", "requiredQualifications", "restrictionProvenance", "restrictions", "serviceEffortMinutes", "serviceEffortProvenance", "window", "workId"];
-    for (const patch of payload.patchWork) { exactPayloadObject(patch, workKeys, "event patch work"); nonblankPayloadText(patch.workId, "event patch workId"); assert(!patchIds.has(patch.workId) && !payload.removeWorkIds.includes(patch.workId), "event patch target is duplicated or removed.", "invalid_exception_payload"); patchIds.add(patch.workId); payloadWindow(patch.window, "event patch window"); exactStringArray(patch.requiredQualifications, "event patch qualifications"); exactStringArray(patch.restrictions, "event patch restrictions"); }
-    const addKeys = [...workKeys, "dayOfWeek", "originSlotId"];
-    for (const add of payload.addWork) { exactPayloadObject(add, addKeys, "event added work"); nonblankPayloadText(add.workId, "event added workId"); nonblankPayloadText(add.originSlotId, "event add originSlotId"); assert(Number.isInteger(add.dayOfWeek) && add.dayOfWeek >= 0 && add.dayOfWeek <= 6, "event add weekday is invalid.", "invalid_exception_payload"); assert(!addIds.has(add.workId) && !patchIds.has(add.workId) && !payload.removeWorkIds.includes(add.workId), "event add target is duplicated or overlaps another event command.", "invalid_exception_payload"); addIds.add(add.workId); payloadWindow(add.window, "event add window"); exactStringArray(add.requiredQualifications, "event add qualifications"); exactStringArray(add.restrictions, "event add restrictions"); }
+    for (const patch of payload.patchWork) { assertExceptionWorkShape(patch); assert(!patchIds.has(patch.workId) && !payload.removeWorkIds.includes(patch.workId), "event patch target is duplicated or removed.", "invalid_exception_payload"); patchIds.add(patch.workId); }
+    for (const add of payload.addWork) { assertExceptionWorkShape(add, { added: true }); assert(!addIds.has(add.workId) && !patchIds.has(add.workId) && !payload.removeWorkIds.includes(add.workId), "event add target is duplicated or overlaps another event command.", "invalid_exception_payload"); addIds.add(add.workId); }
     assert(window == null, "event impact may not carry a window.", "invalid_exception_payload");
   } else if (type === "reverse") {
-    exactPayloadObject(payload, ["reversesExceptionId"], "reverse payload"); nonblankPayloadText(payload.reversesExceptionId, "reverse target"); assert(String(exception.reversesExceptionId || payload.reversesExceptionId) === payload.reversesExceptionId, "reverse target is incoherent.", "invalid_exception_payload"); assert(window == null, "reverse may not carry a window.", "invalid_exception_payload");
+    exactPayloadObject(payload, ["reversesExceptionId"], "reverse payload"); payloadIdentity(payload.reversesExceptionId, "reverse target"); assert(exception.reversesExceptionId == null || (typeof exception.reversesExceptionId === "string" && exception.reversesExceptionId === payload.reversesExceptionId), "reverse target is incoherent.", "invalid_exception_payload"); assert(window == null, "reverse may not carry a window.", "invalid_exception_payload");
   }
   return exception;
 }
@@ -279,10 +326,13 @@ export function assertExceptionCommand(exception) {
   assert(exception && typeof exception === "object", "Exception command is required.", "invalid_exception");
   assert(EXCEPTION_TYPES.has(exception.type), `Unsupported exception type ${exception.type || ""}.`, "invalid_exception_type");
   assertServiceDate(exception.serviceDate, "exception service date");
-  assert(String(exception.id || "").trim(), "Exception ID is required.", "invalid_exception");
-  assert(String(exception.actorId || "").trim(), "Exception actor identity is required.", "invalid_exception");
-  assert(String(exception.reason || "").trim(), "Exception reason is required.", "invalid_exception");
-  assert(String(exception.idempotencyKey || "").trim(), "Exception idempotency key is required.", "invalid_exception");
+  // Compiler fixtures may carry an external immutable command identity rather
+  // than a database UUID.  It is still total and bounded; SQL validates UUIDs
+  // for relational slot/location/reversal identities at its own boundary.
+  nonblankPayloadText(exception.id, "Exception ID", EXCEPTION_TEXT_MAX);
+  nonblankPayloadText(exception.actorId, "Exception actor identity", EXCEPTION_TEXT_MAX);
+  nonblankPayloadText(exception.reason, "Exception reason", 500);
+  nonblankPayloadText(exception.idempotencyKey, "Exception idempotency key", 200);
   assert(Number.isInteger(exception.expectedRevision) && exception.expectedRevision >= 0, "Exception expected revision is required.", "invalid_exception");
   assertStaticWeeklyExceptionPayload(exception);
   return exception;
