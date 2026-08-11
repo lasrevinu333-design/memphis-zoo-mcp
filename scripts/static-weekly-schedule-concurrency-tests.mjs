@@ -13,8 +13,11 @@ const container = `mz_static_weekly_i2_race_${process.pid}`;
 const migrationsDir = path.resolve(process.cwd(), "supabase/migrations");
 const backendMigrations = fs.readdirSync(migrationsDir).filter((name) => name.endsWith(".sql") && name <= "20260810190000_final_integrated_backend_operational_correction.sql").sort().map((name) => path.resolve(migrationsDir, name));
 const i2 = path.resolve(migrationsDir, "20260810200000_static_weekly_scheduler_authority_integrated.sql");
+const correction = path.resolve(migrationsDir, "20260810210000_static_weekly_scheduler_three_high_foundation_correction.sql");
 const one = { id: "10000000-0000-4000-8000-000000000001", name: "Manager One" };
 const two = { id: "10000000-0000-4000-8000-000000000002", name: "Manager Two" };
+const attestationSecret = "static-weekly-concurrency-test-attestation-secret-0123456789";
+process.env.STATIC_WEEKLY_AUTHORITY_ATTESTATION_SECRET = attestationSecret;
 const quote = (value) => `'${String(value).replaceAll("'", "''")}'`;
 const json = (value) => `$$${JSON.stringify(value)}$$::jsonb`;
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -62,6 +65,8 @@ try {
   await sql("do $$ begin create role anon; exception when duplicate_object then null; end $$; do $$ begin create role authenticated; exception when duplicate_object then null; end $$; do $$ begin create role service_role; exception when duplicate_object then null; end $$;");
   for (const migration of backendMigrations) await migrate(migration);
   await migrate(i2);
+  await migrate(correction);
+  await sql(`select public.static_weekly_configure_authority_attestation_key(${quote(attestationSecret)},'static-weekly-concurrency-test');`);
 
   const base = input(); const compiled = await compileStaticWeeklySchedule(base); assert.equal(compiled.status, "FEASIBLE");
   const slot = base.slots[0]; const incumbent = slot.incumbencies[0];
@@ -91,10 +96,11 @@ try {
 
   // Caller transaction failure removes all command effects. A new independent
   // session can then apply once, and restart-style replay remains receipt-stable.
-  const faultSql = `begin; set role service_role; select public.static_weekly_v2_apply_exception('manager_correction','2026-11-05',null,null,${quote(publication.data.version_id)},${quote(publication.data.publication_id)},'fault',${json({ locks: [] })},${current},${quote(one.id)},${quote(one.name)},'fault-retry',null); select 1/0;`;
+  const faultPayload = { locks: [{ workId: "race-work-4", slotId: slot.id }] };
+  const faultSql = `begin; set role service_role; select public.static_weekly_v2_apply_exception('manager_correction','2026-11-05',null,null,${quote(publication.data.version_id)},${quote(publication.data.publication_id)},'fault',${json(faultPayload)},${current},${quote(one.id)},${quote(one.name)},'fault-retry',null); select 1/0;`;
   await expectReject(sql(faultSql), /division by zero/i);
   assert.equal(await scalar("select count(*) from public.weekly_schedule_command_receipts where idempotency_key='fault-retry'"), "0", "failure injection rolls back authority revision, command, and receipt together");
-  const retrySql = `public.static_weekly_v2_apply_exception('manager_correction','2026-11-05',null,null,${quote(publication.data.version_id)},${quote(publication.data.publication_id)},'fault',${json({ locks: [] })},${current},${quote(one.id)},${quote(one.name)},'fault-retry',null)`;
+  const retrySql = `public.static_weekly_v2_apply_exception('manager_correction','2026-11-05',null,null,${quote(publication.data.version_id)},${quote(publication.data.publication_id)},'fault',${json(faultPayload)},${current},${quote(one.id)},${quote(one.name)},'fault-retry',null)`;
   const retried = await service(retrySql); assert.deepEqual(await service(retrySql), retried, "restart replay preserves the successful response byte-for-byte");
   const revisionAfterRetry = retried.revision;
 

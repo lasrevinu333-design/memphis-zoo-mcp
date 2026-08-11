@@ -269,7 +269,7 @@ const semanticAuthorityDifference = [...Array(Math.max(semanticAuthorityText.len
 assert.equal(semanticPermutationResult.authorityDigest, semanticCanonicalResult.authorityDigest, `semantic set permutations have one authority identity (first authority text difference: ${semanticAuthorityDifference}; ${semanticAuthorityText.slice(Math.max(0, (semanticAuthorityDifference || 0) - 100), (semanticAuthorityDifference || 0) + 100)} <> ${semanticPermutationAuthorityText.slice(Math.max(0, (semanticAuthorityDifference || 0) - 100), (semanticAuthorityDifference || 0) + 100)})`);
 assert.equal(semanticPermutationResult.replayDigest, semanticCanonicalResult.replayDigest, "cross-day repeated work and semantic sets replay byte-identically");
 
-const exception = (id, acceptedAt, payload = { workId: "one", slotId: "a" }, extra = {}) => ({
+const exception = (id, acceptedAt, payload = { locks: [{ workId: "one", slotId: "a" }] }, extra = {}) => ({
   id, type: "manager_correction", serviceDate: "2026-08-10", acceptedAt, sequence: 1,
   baseVersionId: "test-week", publicationId: "test-publication", actorId: "manager", reason: "approved", idempotencyKey: `${id}-key`, expectedRevision: 1, payload, ...extra,
 });
@@ -281,7 +281,7 @@ assert.equal(exceptionCode([{ ...exception("reverse-missing", "2026-08-10T08:01:
 const reversalTarget = exception("reverse-target", "2026-08-10T08:00:00Z");
 assert.equal(exceptionCode([reversalTarget, { ...exception("reverse-one", "2026-08-10T08:01:00Z", {}), type: "reverse", payload: { reversesExceptionId: "reverse-target" } }, { ...exception("reverse-two", "2026-08-10T08:02:00Z", {}), type: "reverse", payload: { reversesExceptionId: "reverse-target" } }]), "duplicate_exception_reversal");
 assert.equal(exceptionCode([reversalTarget, { ...exception("reverse-cross-authority", "2026-08-10T08:01:00Z", {}), type: "reverse", publicationId: "other-publication", payload: { reversesExceptionId: "reverse-target" } }]), "exception_reversal_authority_mismatch");
-assert.equal(exceptionCode([exception("lock-a", "2026-08-10T08:00:00Z", { workId: "one", slotId: "a" }), exception("lock-b", "2026-08-10T08:01:00Z", { workId: "one", slotId: "b" })]), "conflicting_manager_correction_lock");
+assert.equal(exceptionCode([exception("lock-a", "2026-08-10T08:00:00Z", { locks: [{ workId: "one", slotId: "a" }] }), exception("lock-b", "2026-08-10T08:01:00Z", { locks: [{ workId: "one", slotId: "b" }] })]), "conflicting_manager_correction_lock");
 const shuffled = clone(authorityInput); shuffled.slots.reverse(); shuffled.versions[0].assignments.reverse(); shuffled.versions[0].slotAvailability.reverse();
 const replay = await compile(shuffled);
 const replayByteDifference = [...authoritative.canonicalReplay].findIndex((character, index) => character !== replay.canonicalReplay[index]);
@@ -446,9 +446,9 @@ for (const mutate of [
   assert.equal(verifyStaticWeeklyScheduleResult(changed, authoritative).ok, false, "canonical proof rejects mutated authority content");
 }
 const exceptionAuthority = clone(authorityInput);
-exceptionAuthority.exceptions = [{ id: "proof-exception", type: "manager_correction", serviceDate: "2026-08-10", baseVersionId: "test-week", publicationId: "test-publication", actorId: "manager", reason: "approved", idempotencyKey: "proof-exception", expectedRevision: 1, payload: { workId: "one", slotId: "b" } }];
+exceptionAuthority.exceptions = [{ id: "proof-exception", type: "manager_correction", serviceDate: "2026-08-10", baseVersionId: "test-week", publicationId: "test-publication", actorId: "manager", reason: "approved", idempotencyKey: "proof-exception", expectedRevision: 1, payload: { locks: [{ workId: "one", slotId: "b" }] } }];
 const exceptionProof = await compile(exceptionAuthority);
-const changedException = clone(exceptionAuthority); changedException.exceptions[0].payload.slotId = "slot-b";
+const changedException = clone(exceptionAuthority); changedException.exceptions[0].payload.locks[0].slotId = "slot-b";
 assert.equal(verifyStaticWeeklyScheduleResult(changedException, exceptionProof).ok, false, "canonical proof rejects exception mutation");
 
 // A negative mutation has to be caught by the verifier even though HiGHS did
@@ -756,13 +756,23 @@ const overlay = (id, type, payload, window = null) => ({ id, type, serviceDate: 
 for (const input of [
   smallInput({ exceptions: [overlay("pto-owner", "pto", { slotId: "a" })] }),
   smallInput({ exceptions: [overlay("partial-owner", "partial_absence", { slotId: "a" }, { start: "08:00", end: "09:00" })] }),
-  smallInput({ exceptions: [overlay("manager-owner", "manager_correction", { workId: "one", slotId: "b" })] }),
+  smallInput({ exceptions: [overlay("manager-owner", "manager_correction", { locks: [{ workId: "one", slotId: "b" }] })] }),
 ]) {
   const result = await compile(input); const changed = result.weeklyAssignments.find((item) => item.workId === "one");
   assert.equal(changed.slotId, "b"); assert.equal(changed.originSlotId, "a");
 }
 const coverAll = smallInput({ slots: ["a", "b"], availabilities: [availability("a", "A", { status: "departed_named_absent" })], assignments: [work("one", "A", "08:00", "09:00", "a")] });
-coverAll.exceptions = [overlay("coverall-owner", "cover_all", { availability: availability("b", "B") })];
+const coverallAvailability = availability("b", "B");
+coverAll.exceptions = [overlay("coverall-owner", "cover_all", { availability: {
+  slotId: coverallAvailability.slotId, shift: coverallAvailability.shift,
+  productiveCapacityProvenance: coverallAvailability.productiveCapacityProvenance,
+  maxServiceEffortMinutes: coverallAvailability.maxServiceEffortMinutes,
+  maxServiceEffortProvenance: coverallAvailability.maxServiceEffortProvenance,
+  qualifications: coverallAvailability.qualifications, qualificationProvenance: coverallAvailability.qualificationProvenance,
+  restrictions: coverallAvailability.restrictions, restrictionProvenance: coverallAvailability.restrictionProvenance,
+  acceptedRouteAnchorLocationId: coverallAvailability.acceptedRouteAnchorLocationId,
+  acceptedRouteProvenance: coverallAvailability.acceptedRouteProvenance,
+} })];
 const coverAllResult = await compile(coverAll); assert.equal(coverAllResult.weeklyAssignments.find((item) => item.workId === "one").slotId, "b");
 
 // The dated roster identity is resolved for each occurrence, never once at
@@ -786,7 +796,7 @@ for (let day = 0; day < 7; day += 1) {
   if (day === 1) unequalCapacity.versions[0].slotAvailability.push({ ...availability("a", "A", { maxServiceEffortMinutes: 540 }), dayOfWeek: day });
   unequalCapacity.versions[0].assignments.push({ ...work(`unequal-${day}`, "A", "08:00", "09:00", day === 1 ? "a" : "b", { serviceEffortMinutes: 60 }), dayOfWeek: day });
 }
-unequalCapacity.exceptions = [overlay("lock-a", "manager_correction", { workId: "unequal-1", slotId: "a" })];
+unequalCapacity.exceptions = [overlay("lock-a", "manager_correction", { locks: [{ workId: "unequal-1", slotId: "a" }] })];
 const unequalResult = await compile(unequalCapacity);
 assert.equal(unequalResult.metrics.weekly.normalizedInequity, 0.015873015873015872);
 assert.deepEqual(unequalResult.metrics.weekly.normalizedLoads, { a: 0.1111111111111111, b: 0.09523809523809523 });

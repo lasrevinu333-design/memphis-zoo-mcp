@@ -64,7 +64,7 @@ assert.deepEqual(snapshotIncumbency(stableSlot, "2026-08-10"), { slotId: "slot-d
 assert.deepEqual(snapshotIncumbency(stableSlot, "2026-08-17"), { slotId: "slot-departed", slotLabel: "Stable named slot", personId: "new-person", displayName: "Morgan Replacement" });
 
 assert.doesNotThrow(() => assertExceptionCommand({
-  id: "pto-1", type: "pto", serviceDate: "2026-08-10", actorId: "manager-1", reason: "Approved PTO", idempotencyKey: "pto-1-key", expectedRevision: 3,
+  id: "pto-1", type: "pto", serviceDate: "2026-08-10", actorId: "manager-1", reason: "Approved PTO", idempotencyKey: "pto-1-key", expectedRevision: 3, payload: { slotId: "stable-slot" },
 }));
 assert.throws(() => assertExceptionCommand({ id: "bad", type: "pto", serviceDate: "2026-08-10" }), /actor identity/i);
 

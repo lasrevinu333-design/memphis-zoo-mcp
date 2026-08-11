@@ -54,4 +54,5 @@ jobs:
           npm run --silent test:foundation
           npm run --silent test:foundation-repair
           npm run --silent test:scheduler-overhaul
+          npm run --silent test:static-weekly-scheduler:fast
           npm run --silent test:ci-workflows

@@ -1,6 +1,6 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
-  "schema_fingerprint": "af1c1420a8a4b21bb152a7fa137835b72430e9bd57a24ff50974d0f95dd00cf5",
+  "schema_fingerprint": "d65d1b918ec2b054f440cf31761f1a3aa917a103d11c8fa287ae94d0f5c957e5",
   "schema_transition": {
     "transition_id": "named-manager-messenger-archive-retirement-20260810",
     "from_fingerprint": "333ddfc8008ea0b85916de7d491b98c9b8d6a7d45d3a2947d99b4b3bb836ea00",
@@ -101,7 +101,7 @@
       {
         "path": ".github/workflows/foundation-security-gate.yml",
         "mode": "100644",
-        "object_id": "7d4a887b01750b766218ce6a8f513f99ec52a0bd"
+        "object_id": "2b50782b00a9bda60173ac2e20bef4a62c44a7cc"
       },
       {
         "path": ".github/workflows/manager-inspection-readiness-monitor.yml",
@@ -296,12 +296,12 @@
       {
         "path": "package-lock.json",
         "mode": "100644",
-        "object_id": "b31df031db4803a5b74754a0ed6bd8729a7b6572"
+        "object_id": "891f963038bff00ad9fb1b9b867b9fe12e552322"
       },
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "4caa7f0caac2adc520d31538dbeaa72c05bbaf0f"
+        "object_id": "4ae815b49c203969c08482b190c31d1cec12566d"
       },
       {
         "path": "public/moxie-assets/contacts-creekside-animal.png",
@@ -554,6 +554,26 @@
         "object_id": "464dbe0d21ad395b1776f379a4802e4eaccec959"
       },
       {
+        "path": "scripts/fixtures/static-weekly-scheduler/canary-authority.json",
+        "mode": "100644",
+        "object_id": "4d22eeec506909e49fce9b3e6edb3a3207bacba1"
+      },
+      {
+        "path": "scripts/fixtures/static-weekly-scheduler/candidate-workbook-authority.json",
+        "mode": "100644",
+        "object_id": "cb1413c7683a5da0cce3c4c70556a4ae2d014869"
+      },
+      {
+        "path": "scripts/fixtures/static-weekly-scheduler/highs-1.15.2-result-shape.json",
+        "mode": "100644",
+        "object_id": "abe15f923d631e645775e62fb02163eb091b53cd"
+      },
+      {
+        "path": "scripts/fixtures/static-weekly-scheduler/monotonic-leximax-exhaustive-oracle.json",
+        "mode": "100644",
+        "object_id": "77d93fdc3cb84f7403ebf87e00d7b624c4697ce3"
+      },
+      {
         "path": "scripts/foundation-repair-tests.mjs",
         "mode": "100644",
         "object_id": "12ab77c2f57cbfde14c6b77088fc2c1eb157636b"
@@ -586,17 +606,17 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "94c8a7e49b6fcba676d5084d8c547c12029d3e10"
+        "object_id": "b36d5b79acedcc7742bb435902660fcaee5062b0"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "76415945133ae3bfcce94012ece5bb5475579647"
+        "object_id": "a421579f3537805bfe60d1c9c64044eecef7b602"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
         "mode": "100644",
-        "object_id": "39de20882914a0fdf1a254164d3844dc352bd536"
+        "object_id": "afe2b6c56a067246fc9f0a67604902621ed170ae"
       },
       {
         "path": "scripts/integrated-backend-authority-suite-order-tests.mjs",
@@ -806,7 +826,7 @@
       {
         "path": "scripts/refresh-integrated-backend-authority-release.mjs",
         "mode": "100644",
-        "object_id": "fdf0d987444a02e6d6e75d6cc506be1d02ee6132"
+        "object_id": "f2fa4429843249ab24a8cd6c69096ebd445a94b9"
       },
       {
         "path": "scripts/refresh-release-schema-alignment.mjs",
@@ -962,6 +982,41 @@
         "path": "scripts/sql/missing-assignments-report.sql",
         "mode": "100644",
         "object_id": "d1fc2839a3061df922e8ef891089dbde26d3a8c2"
+      },
+      {
+        "path": "scripts/static-weekly-schedule-candidate-importer.mjs",
+        "mode": "100644",
+        "object_id": "24591c0ab176590a3ce46747a77616a8e925b7e0"
+      },
+      {
+        "path": "scripts/static-weekly-schedule-compiler-tests.mjs",
+        "mode": "100644",
+        "object_id": "06d26671476010e8e963789c2d7fe21fcdbda341"
+      },
+      {
+        "path": "scripts/static-weekly-schedule-concurrency-tests.mjs",
+        "mode": "100644",
+        "object_id": "292981cc84bba71bbea2913f08c4a0fbad2ba54e"
+      },
+      {
+        "path": "scripts/static-weekly-schedule-database-adapter-tests.mjs",
+        "mode": "100644",
+        "object_id": "8996e2a288c2b7288ccef5f02ebf08f095306e6e"
+      },
+      {
+        "path": "scripts/static-weekly-schedule-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "48d5b16dbba3c6699bb6b85c23ba15dcd4cde974"
+      },
+      {
+        "path": "scripts/static-weekly-schedule-model-tests.mjs",
+        "mode": "100644",
+        "object_id": "434fc569e834d846b7e9e9d961fa8a5cea675899"
+      },
+      {
+        "path": "scripts/static-weekly-schedule-solver-lifecycle-tests.mjs",
+        "mode": "100644",
+        "object_id": "f2e0b6186cdfec956c539d5bff451c4ffff12f62"
       },
       {
         "path": "scripts/thursday-notification-presentation-tests.mjs",
@@ -1429,6 +1484,41 @@
         "object_id": "eac65dfc558d5ed30d97087b86e5074a0ca490dc"
       },
       {
+        "path": "src/static-weekly-schedule-compiler.js",
+        "mode": "100644",
+        "object_id": "7b08dff175d89901867d72cec3f8fd90fc55c12a"
+      },
+      {
+        "path": "src/static-weekly-schedule-database-adapter.js",
+        "mode": "100644",
+        "object_id": "f33cd4c02d7ddd63db3fe2fafddfe1ca52d4521a"
+      },
+      {
+        "path": "src/static-weekly-schedule-model.js",
+        "mode": "100644",
+        "object_id": "acb7b737d37df121e41d7935197bf589e118ec81"
+      },
+      {
+        "path": "src/static-weekly-schedule-program.js",
+        "mode": "100644",
+        "object_id": "5142d5037ffb56cdcefb27366d6cb4df78910a7e"
+      },
+      {
+        "path": "src/static-weekly-schedule-solver-worker.js",
+        "mode": "100644",
+        "object_id": "2f8049f62ce088a77940a134449cc95271602fc9"
+      },
+      {
+        "path": "src/static-weekly-schedule-solver.js",
+        "mode": "100644",
+        "object_id": "ca041a70d5245ccaf0fba1909293123cec7879f3"
+      },
+      {
+        "path": "src/static-weekly-schedule-verifier.js",
+        "mode": "100644",
+        "object_id": "bc264b8571ffbb1c76e14d2679a27b6fecee62c3"
+      },
+      {
         "path": "src/supabase/client.js",
         "mode": "100644",
         "object_id": "b8ddd3f765f56985b5820e0426158d76ef16bc5e"
@@ -1476,12 +1566,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "7de10dc9137d4d5b73d0734e6f001f36f08cca9f"
+        "object_id": "2dd8d46989ddf4ae04b4e09db17c613f05a18d8e"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "21a9315fa5e5d1adb848119d9561da55343b07e2"
+        "object_id": "114e6b863d259c35969335d22ae5aa0141f17eb1"
       },
       {
         "path": "supabase/config.toml",
@@ -2379,13 +2469,23 @@
         "object_id": "14dd4bccb0a9551fc76d7952600bc67953f71611"
       },
       {
+        "path": "supabase/migrations/20260810200000_static_weekly_scheduler_authority_integrated.sql",
+        "mode": "100644",
+        "object_id": "8ee6511a9580792b0a4b490dfdc813b050eef9d9"
+      },
+      {
+        "path": "supabase/migrations/20260810210000_static_weekly_scheduler_three_high_foundation_correction.sql",
+        "mode": "100644",
+        "object_id": "a8c5a9c72c261ee834fafc37028cf686fa0ff231"
+      },
+      {
         "path": "tmp/write_probe.txt",
         "mode": "100644",
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 461,
-    "migration_path_count": 62,
+    "authority_path_count": 481,
+    "migration_path_count": 64,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate requires externally supplied exact expected_commit and expected_tree, deterministically enumerates every tracked expected-tree entry, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file as its exact tree blob."
   },
@@ -2581,6 +2681,12 @@
     },
     {
       "name": "20260810190000_final_integrated_backend_operational_correction.sql"
+    },
+    {
+      "name": "20260810200000_static_weekly_scheduler_authority_integrated.sql"
+    },
+    {
+      "name": "20260810210000_static_weekly_scheduler_three_high_foundation_correction.sql"
     }
   ],
   "release_boundary": "Configure a minimum-32-character CUSTODIAL_BACKEND_PROOF_SECRET and matching database digest before Phase A, retain the bridge backend artifact through Phase C, and require the executable health/restoration probes before traffic changes."

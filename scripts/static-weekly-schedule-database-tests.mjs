@@ -6,17 +6,21 @@ import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import fs from "node:fs";
 import path from "node:path";
+import { createHmac } from "node:crypto";
 import { compileStaticWeeklySchedule } from "../src/static-weekly-schedule-compiler.js";
 import { adaptCompiledStaticWeeklySchedule, createStaticWeeklyDraftRpcInput, createStaticWeeklyProjectionRpcInput } from "../src/static-weekly-schedule-database-adapter.js";
-import { postgresJsonbContentDigest } from "../src/static-weekly-schedule-compiler.js";
+import { postgresJsonbCanonicalText, postgresJsonbContentDigest } from "../src/static-weekly-schedule-compiler.js";
 
 const execFileAsync = promisify(execFile);
 const container = `mz_static_weekly_i2_${process.pid}`;
 const migrationsDir = path.resolve(process.cwd(), "supabase/migrations");
 const backendFinal = "20260810190000_final_integrated_backend_operational_correction.sql";
 const migrationPath = path.resolve(migrationsDir, "20260810200000_static_weekly_scheduler_authority_integrated.sql");
+const correctionPath = path.resolve(migrationsDir, "20260810210000_static_weekly_scheduler_three_high_foundation_correction.sql");
 const backendMigrations = fs.readdirSync(migrationsDir).filter((name) => name.endsWith(".sql") && name <= backendFinal).sort().map((name) => path.resolve(migrationsDir, name));
 const manager = { managerId: "10000000-0000-4000-8000-000000000001", managerName: "Named Manager" };
+const attestationSecret = "static-weekly-database-test-attestation-secret-0123456789";
+process.env.STATIC_WEEKLY_AUTHORITY_ATTESTATION_SECRET = attestationSecret;
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const quote = (value) => `'${String(value).replaceAll("'", "''")}'`;
 const json = (value) => `$$${JSON.stringify(value)}$$::jsonb`;
@@ -121,17 +125,39 @@ function refreshDocumentValidation(document) {
   document.validation.receipt_digest = postgresJsonbContentDigest(document.receipt);
   document.validation.database_document_identity = postgresJsonbContentDigest({
     adapter: document.adapter, authority: document.authority, receipt: document.receipt,
-    slot_availability: document.slot_availability, assignments: document.assignments, objective_inputs: document.objective_inputs,
+    slot_availability: document.slot_availability, assignments: document.assignments, objective_inputs: document.objective_inputs, semantic_snapshot: document.semantic_snapshot,
   });
   return document;
 }
-function refreshProjectionIdentity(envelope) {
-  const identity = clone(envelope); delete identity.database_projection_identity;
+function signAttestation(scope, payload) {
+  return {
+    schema: "memphis-zoo.static-weekly-authority-attestation.v1", key_id: "static-weekly-authority-hmac-v1", scope,
+    payload_digest: postgresJsonbContentDigest(payload),
+    signature: createHmac("sha256", attestationSecret).update(`${scope}\n${postgresJsonbCanonicalText(payload)}`, "utf8").digest("hex"),
+  };
+}
+function refreshDocumentAttestation(document) {
+  refreshDocumentValidation(document);
+  document.attestation = signAttestation("recurring_document", {
+    adapter: document.adapter, authority: document.authority, receipt: document.receipt,
+    slot_availability: document.slot_availability, assignments: document.assignments,
+    objective_inputs: document.objective_inputs, semantic_snapshot: document.semantic_snapshot,
+  });
+  return document;
+}
+function refreshProjectionIdentity(envelope, { attest = true } = {}) {
+  // A trusted fixture that deliberately exercises lower projection validation
+  // must keep the signed semantic snapshot coherent.  The untrusted caller
+  // probes below pass attest:false and therefore cannot forge this boundary.
+  if (attest && envelope.semantic_snapshot) envelope.semantic_snapshot.active_assignments = clone(envelope.assignments);
+  const identity = clone(envelope); delete identity.database_projection_identity; delete identity.attestation;
   envelope.database_projection_identity = postgresJsonbContentDigest(identity);
+  if (attest) envelope.attestation = signAttestation("dated_projection", (() => { const payload = clone(envelope); delete payload.attestation; return payload; })());
   return envelope;
 }
 async function applyAll() { for (const migration of backendMigrations) await sql(fs.readFileSync(migration, "utf8")); }
 async function applyI2() { await sql(fs.readFileSync(migrationPath, "utf8")); }
+async function applyCorrection() { await sql(fs.readFileSync(correctionPath, "utf8")); }
 async function serviceRpc(name, argsSql) { return JSON.parse(await scalar(`set role service_role; select public.${name}(${argsSql})::text`)); }
 
 let removed = false;
@@ -154,10 +180,12 @@ try {
   await sql("do $$ begin create role anon; exception when duplicate_object then null; end $$; do $$ begin create role authenticated; exception when duplicate_object then null; end $$; do $$ begin create role service_role; exception when duplicate_object then null; end $$;");
   await applyAll();
   await applyI2();
+  await applyCorrection();
+  await sql(`select public.static_weekly_configure_authority_attestation_key(${quote(attestationSecret)},'static-weekly-database-test');`);
 
   const source = compilerInput();
   const compiled = await compileStaticWeeklySchedule(source);
-  assert.equal(compiled.status, "FEASIBLE"); assert.equal(compiled.verifier.ok, true);
+  assert.equal(compiled.status, "FEASIBLE", JSON.stringify(compiled.fatal || compiled.verifier)); assert.equal(compiled.verifier.ok, true);
   for (const [index, slot] of source.slots.entries()) {
     await sql(`insert into public.weekly_roster_slots(slot_id,slot_code,slot_label,created_by_manager_id,created_by_manager_name_snapshot,content_digest) values(${quote(slot.id)},${quote(`SLOT_${index}`)},${quote(slot.label)},${quote(manager.managerId)},${quote(manager.managerName)},repeat('${String.fromCharCode(97 + index)}',64));`);
     for (const incumbent of slot.incumbencies) await sql(`insert into public.weekly_roster_slot_incumbencies(slot_id,person_id,person_name_snapshot,effective_start,effective_end,created_by_manager_id,created_by_manager_name_snapshot,content_digest) values(${quote(slot.id)},${quote(incumbent.personId)},${quote(incumbent.displayName)},${quote(incumbent.effectiveStart)},${incumbent.effectiveEnd ? quote(incumbent.effectiveEnd) : "null"},${quote(manager.managerId)},${quote(manager.managerName)},repeat('f',64));`);
@@ -184,9 +212,14 @@ try {
   const nullValidation = clone(draftInput.document); nullValidation.validation.authority_digest = null;
   await expectNoMutation(`set role service_role; select public.static_weekly_v2_create_draft(${quote(draftInput.effectiveStart)},${quote(draftInput.objectiveVersion)},${json(draftInput.objective)},${json(draftInput.inputProvenance)},${json(nullValidation)},0,${quote(manager.managerId)},${quote(manager.managerName)},'null-validation-authority')`, /validation|document|exact/i, "JSON-null required validation field");
   const missingReceipt = refreshDocumentValidation(clone(draftInput.document)); delete missingReceipt.receipt.compiler.canonicalAuthority; refreshDocumentValidation(missingReceipt);
-  await expectNoMutation(`set role service_role; select public.static_weekly_v2_create_draft(${quote(draftInput.effectiveStart)},${quote(draftInput.objectiveVersion)},${json(draftInput.objective)},${json(draftInput.inputProvenance)},${json(missingReceipt)},0,${quote(manager.managerId)},${quote(manager.managerName)},'missing-receipt-authority')`, /receipt|compiler|exact/i, "missing required receipt field");
+  await expectNoMutation(`set role service_role; select public.static_weekly_v2_create_draft(${quote(draftInput.effectiveStart)},${quote(draftInput.objectiveVersion)},${json(draftInput.objective)},${json(draftInput.inputProvenance)},${json(missingReceipt)},0,${quote(manager.managerId)},${quote(manager.managerName)},'missing-receipt-authority')`, /attestation|receipt|compiler|exact/i, "missing required receipt field");
   const nullReceipt = refreshDocumentValidation(clone(draftInput.document)); nullReceipt.receipt.compiler.canonicalAuthority = null; refreshDocumentValidation(nullReceipt);
-  await expectNoMutation(`set role service_role; select public.static_weekly_v2_create_draft(${quote(draftInput.effectiveStart)},${quote(draftInput.objectiveVersion)},${json(draftInput.objective)},${json(draftInput.inputProvenance)},${json(nullReceipt)},0,${quote(manager.managerId)},${quote(manager.managerName)},'null-receipt-authority')`, /receipt|compiler|exact/i, "JSON-null required receipt field");
+  await expectNoMutation(`set role service_role; select public.static_weekly_v2_create_draft(${quote(draftInput.effectiveStart)},${quote(draftInput.objectiveVersion)},${json(draftInput.objective)},${json(draftInput.inputProvenance)},${json(nullReceipt)},0,${quote(manager.managerId)},${quote(manager.managerName)},'null-receipt-authority')`, /attestation|receipt|compiler|exact/i, "JSON-null required receipt field");
+  const forgedDraftQualification = clone(draftInput.document);
+  forgedDraftQualification.assignments[0].required_qualifications_snapshot = ["FORGED_DRAFT_QUALIFICATION"];
+  forgedDraftQualification.semantic_snapshot.relational_assignments[0].required_qualifications_snapshot = ["FORGED_DRAFT_QUALIFICATION"];
+  refreshDocumentValidation(forgedDraftQualification);
+  await expectNoMutation(`set role service_role; select public.static_weekly_v2_create_draft(${quote(draftInput.effectiveStart)},${quote(draftInput.objectiveVersion)},${json(draftInput.objective)},${json(draftInput.inputProvenance)},${json(forgedDraftQualification)},0,${quote(manager.managerId)},${quote(manager.managerName)},'forged-draft-qualification')`, /attestation/i, "FORGED_DRAFT_QUALIFICATION with recomputed public identities is rejected before relational materialization");
   await expectNoMutation(`set role service_role; select public.static_weekly_v2_create_draft(${quote(draftInput.effectiveStart)},${quote(draftInput.objectiveVersion)},${json(draftInput.objective)},${json(draftInput.inputProvenance)},${json(draftInput.document)},0,null,${quote(manager.managerName)},'missing-create-actor')`, /actor identity|idempotency/i, "missing create actor identity");
   const draft = await serviceRpc("static_weekly_v2_create_draft", createArgs);
   assert.equal(draft.revision, 1);
@@ -194,7 +227,7 @@ try {
   await expectFailure(`set role service_role; select public.static_weekly_v2_create_draft(${quote(draftInput.effectiveStart)},${quote(draftInput.objectiveVersion)},'{"changed":true}'::jsonb,${json(draftInput.inputProvenance)},${json(draftInput.document)},0,${quote(manager.managerId)},${quote(manager.managerName)},'base-create')`, /idempotency key/i);
   await expectFailure(`set role service_role; select public.static_weekly_v2_create_draft('2026-12-01','fake','{}','{}','{}',1,${quote(manager.managerId)},${quote(manager.managerName)},'fake-authority')`, /trusted|compiler|adapter|authority/i);
   const altered = clone(draftInput.document); altered.authority.optimizerResult.assignments[0].personId = "30000000-0000-4000-8000-000000000099";
-  await expectFailure(`set role service_role; select public.static_weekly_v2_create_draft('2026-12-08',${quote(draftInput.objectiveVersion)},${json(draftInput.objective)},${json(draftInput.inputProvenance)},${json(altered)},1,${quote(manager.managerId)},${quote(manager.managerName)},'altered-authority')`, /identity|authority|optimizer/i);
+  await expectFailure(`set role service_role; select public.static_weekly_v2_create_draft('2026-12-08',${quote(draftInput.objectiveVersion)},${json(draftInput.objective)},${json(draftInput.inputProvenance)},${json(altered)},1,${quote(manager.managerId)},${quote(manager.managerName)},'altered-authority')`, /attestation|identity|authority|optimizer/i);
 
   // Two independently valid drafts must never be cross-bound by an update.
   const siblingSource = compilerInput({ versionId: "60000000-0000-4000-8000-000000000004", publicationId: "70000000-0000-4000-8000-000000000004" });
@@ -206,6 +239,7 @@ try {
   await expectNoMutation(`set role service_role; select public.static_weekly_v2_update_draft(${quote(draft.data.version_id)},${json(draftInput.document)},${json(draftInput.objective)},${json(draftInput.inputProvenance)},1,2,${quote(manager.managerId)},'   ','blank-update-actor-name')`, /actor identity|actor name|idempotency/i, "blank update actor name");
   await expectNoMutation(`set role service_role; select public.static_weekly_v2_publish_draft(${quote(draft.data.version_id)},1,2,${quote(manager.managerId)},${quote(manager.managerName)},'',null,null)`, /actor identity|idempotency/i, "blank publish idempotency key");
   await expectNoMutation(`set role service_role; select public.static_weekly_v2_publish_draft(${quote(draft.data.version_id)},1,2,${quote(manager.managerId)},${quote(manager.managerName)},'null-publication-kind',null,null)`, /invalid publication kind/i, "null publication kind");
+  await expectNoMutation(`set role service_role; select public.static_weekly_v2_publish_draft(${quote(draft.data.version_id)},1,2,${quote(manager.managerId)},${quote(manager.managerName)},'mislabeled-first-supersede','supersede',null)`, /first weekly authority publication.*publish/i, "the first publication cannot be mislabeled supersede");
   const publication = await serviceRpc("static_weekly_v2_publish_draft", `${quote(draft.data.version_id)},1,2,${quote(manager.managerId)},${quote(manager.managerName)},'base-publish','publish',null`);
   assert.equal(publication.revision, 3, "revision-1 draft publishes directly through service_role after sibling draft cross-binding proof");
   assert.equal(publication.data.version_id, source.versions[0].id, "compiler weekly version identity is the immutable database version identity");
@@ -227,10 +261,10 @@ try {
     id: "80000000-0000-4000-8000-000000000003", type: "event_impact", status: "accepted", serviceDate: "2026-10-13",
     baseVersionId: draftOverlaySource.versions[0].id, publicationId: draftOverlaySource.versions[0].publicationId, actorId: manager.managerId,
     reason: "draft boundary event", idempotencyKey: "draft-boundary-event", expectedRevision: 0, acceptedAt: "2026-10-12T12:00:00Z", sequence: 1,
-    payload: { patchWork: [{ workId: "event-patch-target", locationId: "40000000-0000-4000-8000-000000000012", locationCodeSnapshot: "DRAFT_EVENT", locationNameSnapshot: "Draft Event Must Not Persist", window: { start: "10:00", end: "11:30" }, serviceEffortMinutes: 45, serviceEffortProvenance: "draft-boundary-event-effort-v1", priority: 2, priorityProvenance: "draft-boundary-event-priority-v1", requiredQualifications: ["general"], qualificationProvenance: "draft-boundary-event-qualification-v1", restrictions: ["draft-boundary-event-restriction"], restrictionProvenance: "draft-boundary-event-restriction-v1" }] },
+    payload: { addWork: [], patchWork: [{ workId: "event-patch-target", locationId: "40000000-0000-4000-8000-000000000012", locationCodeSnapshot: "DRAFT_EVENT", locationNameSnapshot: "Draft Event Must Not Persist", window: { start: "10:00", end: "11:30" }, serviceEffortMinutes: 45, serviceEffortProvenance: "draft-boundary-event-effort-v1", priority: 2, priorityProvenance: "draft-boundary-event-priority-v1", requiredQualifications: ["general"], qualificationProvenance: "draft-boundary-event-qualification-v1", restrictions: ["draft-boundary-event-restriction"], restrictionProvenance: "draft-boundary-event-restriction-v1" }], removeWorkIds: [] },
   }];
   const draftOverlayCompiled = await compileStaticWeeklySchedule(draftOverlaySource);
-  assert.equal(draftOverlayCompiled.status, "FEASIBLE"); assert.equal(draftOverlayCompiled.verifier.ok, true);
+  assert.equal(draftOverlayCompiled.status, "FEASIBLE", JSON.stringify(draftOverlayCompiled.fatal || draftOverlayCompiled.verifier)); assert.equal(draftOverlayCompiled.verifier.ok, true);
   const draftOverlayDocument = adaptCompiledStaticWeeklySchedule(draftOverlayCompiled, { requirePublishable: true });
   const draftOverlayProvenance = {
     adapter_schema: "memphis-zoo.static-weekly-database-adapter.v1", compiler_version: draftOverlayCompiled.compilerVersion,
@@ -244,6 +278,19 @@ try {
   await expectNoMutation(`set role service_role; select public.static_weekly_v2_apply_exception(null,'2026-10-06',null,null,${quote(publication.data.version_id)},${quote(publication.data.publication_id)},'null exception type',${json({ slotId: source.slots[0].id })},5,${quote(manager.managerId)},${quote(manager.managerName)},'null-exception-type',null)`, /complete exception|exception semantic/i, "null exception type");
   await expectNoMutation(`set role service_role; select public.static_weekly_v2_apply_exception('pto','2026-10-06',null,null,${quote(publication.data.version_id)},${quote(publication.data.publication_id)},'contradictory reverse target',${json({ slotId: source.slots[0].id })},5,${quote(manager.managerId)},${quote(manager.managerName)},'contradictory-reverse-target','80000000-0000-4000-8000-000000000099')`, /reversal target coherence/i, "contradictory non-reverse target");
   await expectNoMutation(`set role service_role; select public.static_weekly_v2_apply_exception('pto','2026-10-06',null,null,${quote(publication.data.version_id)},${quote(publication.data.publication_id)},'missing exception actor',${json({ slotId: source.slots[0].id })},5,null,${quote(manager.managerName)},'missing-exception-actor',null)`, /actor identity|idempotency/i, "missing exception actor identity");
+  for (const malformed of [
+    { type: "pto", starts: "null", ends: "null", payload: {}, label: "targetless PTO" },
+    { type: "daily_absence", starts: "null", ends: "null", payload: {}, label: "targetless daily absence" },
+    { type: "partial_absence", starts: "'10:00'", ends: "'11:00'", payload: {}, label: "targetless partial absence" },
+    { type: "shift_override", starts: "null", ends: "null", payload: {}, label: "targetless shift override" },
+    { type: "cover_all", starts: "null", ends: "null", payload: {}, label: "targetless coverall" },
+    { type: "lunch", starts: "'12:00'", ends: "'12:30'", payload: {}, label: "targetless lunch" },
+    { type: "nine_forty_five_rebalance", starts: "null", ends: "null", payload: { locks: [] }, label: "empty rebalance" },
+    { type: "manager_correction", starts: "null", ends: "null", payload: { locks: [] }, label: "empty manager correction" },
+    { type: "event_impact", starts: "null", ends: "null", payload: {}, label: "targetless event impact" },
+  ]) {
+    await expectNoMutation(`set role service_role; select public.static_weekly_v2_apply_exception(${quote(malformed.type)},'2026-10-06',${malformed.starts},${malformed.ends},${quote(publication.data.version_id)},${quote(publication.data.publication_id)},${quote(malformed.label)},${json(malformed.payload)},5,${quote(manager.managerId)},${quote(manager.managerName)},${quote(`malformed-${malformed.type}`)},null)`, /requires|payload|exact|working|nonempty/i, `${malformed.label}: rejected atomically before authority advancement`);
+  }
   const pto = await serviceRpc("static_weekly_v2_apply_exception", `'pto','2026-10-06',null,null,${quote(publication.data.version_id)},${quote(publication.data.publication_id)},'approved seven-day PTO',${json({ slotId: source.slots[0].id })},5,${quote(manager.managerId)},${quote(manager.managerName)},'pto-a',null`);
   const absence = await serviceRpc("static_weekly_v2_apply_exception", `'daily_absence','2026-10-06',null,null,${quote(publication.data.version_id)},${quote(publication.data.publication_id)},'approved adjacent daily absence',${json({ slotId: source.slots[1].id })},6,${quote(manager.managerId)},${quote(manager.managerName)},'absence-b',null`);
   assert.equal(absence.revision, 7);
@@ -329,8 +376,12 @@ try {
   assert.equal(await scalar(`select owner_person_id_snapshot::text from public.weekly_schedule_occurrences where projection_id=${quote(projection.data.projection_id)} and work_id='departed-round-3' and day_of_week=3`), "30000000-0000-4000-8000-000000000001", "unrelated weekly occurrence retains canonical owner truth");
   const malformedProjection = clone(projectionInput);
   malformedProjection.envelope.assignments.find((row) => row.plan_work_id === "1:event-patch-target").work_snapshot.serviceEffortMinutes = 999;
-  refreshProjectionIdentity(malformedProjection.envelope);
-  await expectNoMutation(`set role service_role; select public.static_weekly_v2_materialize_projection(${quote(malformedProjection.publicationId)},${quote(malformedProjection.serviceDate)},${quote(malformedProjection.exceptionSetDigest)},${quote(malformedProjection.compilerVersion)},${json(malformedProjection.objective)},${json(malformedProjection.metrics)},${quote(malformedProjection.replayDigest)},${json(malformedProjection.envelope)},9,${quote(manager.managerId)},${quote(manager.managerName)},'malformed-work-snapshot')`, /work snapshots|semantic authority|canonical optimizer/i, "forged numeric SQL work snapshot fact");
+  refreshProjectionIdentity(malformedProjection.envelope, { attest: false });
+  await expectNoMutation(`set role service_role; select public.static_weekly_v2_materialize_projection(${quote(malformedProjection.publicationId)},${quote(malformedProjection.serviceDate)},${quote(malformedProjection.exceptionSetDigest)},${quote(malformedProjection.compilerVersion)},${json(malformedProjection.objective)},${json(malformedProjection.metrics)},${quote(malformedProjection.replayDigest)},${json(malformedProjection.envelope)},9,${quote(manager.managerId)},${quote(manager.managerName)},'malformed-work-snapshot')`, /attestation/i, "forged numeric SQL work snapshot fact cannot be persisted after public identity recomputation");
+  const forgedCallerWorkFact = clone(projectionInput);
+  forgedCallerWorkFact.envelope.assignments.find((row) => row.plan_work_id === "1:event-patch-target").work_snapshot.coveragePolicyProvenance = "FORGED_CALLER_WORK_FACT";
+  refreshProjectionIdentity(forgedCallerWorkFact.envelope, { attest: false });
+  await expectNoMutation(`set role service_role; select public.static_weekly_v2_materialize_projection(${quote(forgedCallerWorkFact.publicationId)},${quote(forgedCallerWorkFact.serviceDate)},${quote(forgedCallerWorkFact.exceptionSetDigest)},${quote(forgedCallerWorkFact.compilerVersion)},${json(forgedCallerWorkFact.objective)},${json(forgedCallerWorkFact.metrics)},${quote(forgedCallerWorkFact.replayDigest)},${json(forgedCallerWorkFact.envelope)},9,${quote(manager.managerId)},${quote(manager.managerName)},'forged-caller-work-fact')`, /attestation/i, "FORGED_CALLER_WORK_FACT with a recomputed public projection identity is rejected before occurrence mutation");
   await expectNoMutation(`set role service_role; select public.static_weekly_v2_materialize_projection(${quote(projectionInput.publicationId)},${quote(projectionInput.serviceDate)},${quote(projectionInput.exceptionSetDigest)},'forged-compiler',${json(projectionInput.objective)},${json(projectionInput.metrics)},${quote(projectionInput.replayDigest)},${json(projectionInput.envelope)},9,${quote(manager.managerId)},${quote(manager.managerName)},'forged-projection')`, /compiler|identity|projection/i, "forged compiler command identity");
 
   const reversal = await serviceRpc("static_weekly_v2_apply_exception", `'reverse','2026-10-06',null,null,${quote(publication.data.version_id)},${quote(publication.data.publication_id)},'PTO cancelled',${json({ reversesExceptionId: pto.data.exception_id })},9,${quote(manager.managerId)},${quote(manager.managerName)},'reverse-pto',${quote(pto.data.exception_id)}`);
@@ -345,12 +396,41 @@ try {
   assert.equal(await scalar(`select operation from public.weekly_schedule_authority_revisions where authority_revision=11`), "replace_incumbency");
   assert.equal(await scalar(`select command_type from public.weekly_schedule_command_receipts where idempotency_key='replace-incumbency'`), "replace_incumbency");
 
+  await expectNoMutation(`set role service_role; select public.static_weekly_v2_publish_draft(${quote(futureDraft.data.version_id)},2,11,${quote(manager.managerId)},${quote(manager.managerName)},'mislabeled-later-publish','publish',null)`, /supersede/i, "a later ordinary replacement cannot be mislabeled publish");
+  const supersede = await serviceRpc("static_weekly_v2_publish_draft", `${quote(futureDraft.data.version_id)},2,11,${quote(manager.managerId)},${quote(manager.managerName)},'future-supersede','supersede',null`);
+  assert.equal(supersede.operation, "supersede", "a later ordinary replacement is truthfully labeled supersede");
+  assert.equal(await scalar(`select closed_at_effective_date::text from public.weekly_schedule_effective_range_closures where closed_version_id=${quote(publication.data.version_id)}`), "2026-10-12", "supersede closes the preceding effective range at the new authority start");
+  assert.equal(await scalar(`select publication_kind from public.weekly_schedule_versions where version_id=${quote(futureDraft.data.version_id)}`), "supersede");
+
+  const rollbackSource = compilerInput({ serviceDate: "2026-10-19", versionId: "60000000-0000-4000-8000-000000000005", publicationId: "70000000-0000-4000-8000-000000000005" });
+  rollbackSource.slots[1].incumbencies = [
+    { personId: "30000000-0000-4000-8000-000000000002", displayName: "Jordan Old", effectiveStart: "2020-01-01", effectiveEnd: "2026-10-07" },
+    { personId: "30000000-0000-4000-8000-000000000003", displayName: "Jordan New", effectiveStart: "2026-10-07", effectiveEnd: "2026-10-19" },
+    { personId: "30000000-0000-4000-8000-000000000006", displayName: "Jordan Later", effectiveStart: "2026-10-19", effectiveEnd: null },
+  ];
+  const rollbackCompiled = await compileStaticWeeklySchedule(rollbackSource);
+  assert.equal(rollbackCompiled.status, "FEASIBLE", JSON.stringify(rollbackCompiled.fatal || rollbackCompiled.verifier));
+  const rollbackDraftInput = createStaticWeeklyDraftRpcInput({ result: rollbackCompiled, expectedRevision: 12, actor: { ...manager, idempotencyKey: "rollback-create" } });
+  const rollbackDraft = await serviceRpc("static_weekly_v2_create_draft", `${quote(rollbackDraftInput.effectiveStart)},${quote(rollbackDraftInput.objectiveVersion)},${json(rollbackDraftInput.objective)},${json(rollbackDraftInput.inputProvenance)},${json(rollbackDraftInput.document)},12,${quote(manager.managerId)},${quote(manager.managerName)},'rollback-create'`);
+  assert.equal(rollbackDraft.data.version_id, rollbackSource.versions[0].id, "rollback compensation uses a new compiler/database version identity");
+  const rollback = await serviceRpc("static_weekly_v2_publish_draft", `${quote(rollbackDraft.data.version_id)},1,13,${quote(manager.managerId)},${quote(manager.managerName)},'rollback-compensation','rollback_compensation',${quote(publication.data.version_id)}`);
+  assert.equal(rollback.operation, "rollback", "rollback compensation is reachable through public v2 draft and publish operations");
+  assert.equal(rollback.data.rollback_of_version_id, publication.data.version_id, "rollback response preserves the immutable earlier target link");
+  assert.equal(await scalar(`select rollback_of_version_id::text from public.weekly_schedule_versions where version_id=${quote(rollbackDraft.data.version_id)}`), publication.data.version_id, "rollback publication links the prior authority without erasing history");
+  assert.equal(await scalar(`select closed_at_effective_date::text from public.weekly_schedule_effective_range_closures where closed_version_id=${quote(futureDraft.data.version_id)}`), "2026-10-19", "rollback compensation closes the superseded range with a later effective date");
+  assert.deepEqual(await serviceRpc("static_weekly_v2_publish_draft", `${quote(rollbackDraft.data.version_id)},1,13,${quote(manager.managerId)},${quote(manager.managerName)},'rollback-compensation','rollback_compensation',${quote(publication.data.version_id)}`), rollback, "rollback publication retry remains receipt-stable");
+  const rollbackProjectionInput = createStaticWeeklyProjectionRpcInput({ result: rollbackCompiled, publicationId: rollback.data.publication_id, expectedRevision: 14, actor: { ...manager, idempotencyKey: "rollback-projection" } });
+  const rollbackProjection = await serviceRpc("static_weekly_v2_materialize_projection", `${quote(rollbackProjectionInput.publicationId)},${quote(rollbackProjectionInput.serviceDate)},${quote(rollbackProjectionInput.exceptionSetDigest)},${quote(rollbackProjectionInput.compilerVersion)},${json(rollbackProjectionInput.objective)},${json(rollbackProjectionInput.metrics)},${quote(rollbackProjectionInput.replayDigest)},${json(rollbackProjectionInput.envelope)},14,${quote(manager.managerId)},${quote(manager.managerName)},'rollback-projection'`);
+  assert.equal(rollbackProjection.operation, "materialize_projection", "a compensated authority has a truthful new dated projection");
+  assert.equal(await scalar(`select owner_person_id_snapshot::text from public.weekly_schedule_occurrences where projection_id=${quote(rollbackProjection.data.projection_id)} and owner_slot_id=${quote(source.slots[1].id)} limit 1`), "30000000-0000-4000-8000-000000000006", "rollback restores the stable recurring schedule while retaining the separately accepted current actual actor");
+
   await expectFailure("set role service_role; insert into public.weekly_schedule_versions(lifecycle_state,effective_start,objective_version,objective_json,input_provenance_json,draft_document,content_digest,created_by_manager_id,created_by_manager_name_snapshot) values('draft','2027-01-01','bypass','{}','{}','{}',repeat('0',64)," + quote(manager.managerId) + "," + quote(manager.managerName) + ")", /permission denied|row-level security/i);
   assert.equal(await scalar("select count(*) from pg_constraint c join pg_class r on r.oid=c.conrelid where r.relname like 'weekly_%' and c.convalidated=false"), "0", "fresh migration has zero scheduler NOT VALID constraints");
   assert.equal(await scalar("select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname like 'static_weekly%' and has_function_privilege('service_role',p.oid,'execute') and p.proname not like 'static_weekly_v2_%'"), "0", "no legacy writer or internal helper remains service-callable");
 
   const beforeReplay = await scalar("select current_revision::text from public.static_weekly_schedule_control where singleton");
   await applyI2();
+  await applyCorrection();
   assert.equal(await scalar("select current_revision::text from public.static_weekly_schedule_control where singleton"), beforeReplay, "migration replay preserves populated immutable authority");
   assert.equal(await scalar("select to_regclass('public.static_weekly_scheduler_cutover_manifest') is null"), "t", "no later-consumer cutover/readiness metadata exists");
   console.log("static weekly schedule database tests: PASS");

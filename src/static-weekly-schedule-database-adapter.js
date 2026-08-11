@@ -7,12 +7,15 @@
  * every such value below is derived from a successful compiler result and is
  * reverified before it can become an RPC argument.
  */
-import { postgresJsonbContentDigest } from "./static-weekly-schedule-compiler.js";
+import { createHmac } from "node:crypto";
+import { postgresJsonbCanonicalText, postgresJsonbContentDigest } from "./static-weekly-schedule-compiler.js";
 import { verifyStaticWeeklyScheduleResult } from "./static-weekly-schedule-verifier.js";
 import { generateStaticWeeklySchedulingProgram, programReason } from "./static-weekly-schedule-program.js";
 
 export const STATIC_WEEKLY_DATABASE_ADAPTER_SCHEMA = "memphis-zoo.static-weekly-database-adapter.v1";
 export const STATIC_WEEKLY_DATABASE_ADAPTER_VERSION = "static-weekly-database-adapter-v1";
+export const STATIC_WEEKLY_AUTHORITY_ATTESTATION_SCHEMA = "memphis-zoo.static-weekly-authority-attestation.v1";
+export const STATIC_WEEKLY_AUTHORITY_ATTESTATION_KEY_ID = "static-weekly-authority-hmac-v1";
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const array = (value) => Array.isArray(value) ? value : [];
@@ -35,6 +38,23 @@ function requireActor(actor = {}) {
 function requireRevision(value, field) {
   if (!Number.isSafeInteger(value) || value < 0) fail("database_adapter_expected_revision_required", { field });
   return value;
+}
+
+function requireAuthorityAttestationSecret(value) {
+  const secret = text(value || process.env.STATIC_WEEKLY_AUTHORITY_ATTESTATION_SECRET).trim();
+  if (secret.length < 32) fail("database_adapter_authority_attestation_secret_required");
+  return secret;
+}
+
+function authorityAttestation(scope, payload, secret) {
+  const canonical = postgresJsonbCanonicalText(payload);
+  return {
+    schema: STATIC_WEEKLY_AUTHORITY_ATTESTATION_SCHEMA,
+    key_id: STATIC_WEEKLY_AUTHORITY_ATTESTATION_KEY_ID,
+    scope,
+    payload_digest: postgresJsonbContentDigest(payload),
+    signature: createHmac("sha256", secret).update(`${scope}\n${canonical}`, "utf8").digest("hex"),
+  };
 }
 
 function optimizerBinding(assignment) {
@@ -422,21 +442,34 @@ function projectionAssignmentRows(activeWork) {
   });
 }
 
-function buildAdaptedStaticWeeklySchedule(result, { requirePublishable = false, baselineOnly = false } = {}) {
+function buildAdaptedStaticWeeklySchedule(result, { requirePublishable = false, baselineOnly = false, authorityAttestationSecret } = {}) {
   const { authority, independentlyVerified, program } = validateCompiledResult(result, { allowReview: !requirePublishable });
   if (baselineOnly) assertBaselineDraftAuthority(authority);
   const activeWork = activeWorkByPlanId(result, authority, program);
+  const availability = slotAvailabilityRows(authority);
+  const assignments = draftAssignmentRows(authority, activeWork);
   const document = {
     adapter: { schema: STATIC_WEEKLY_DATABASE_ADAPTER_SCHEMA, version: STATIC_WEEKLY_DATABASE_ADAPTER_VERSION },
     authority: clone(authority),
     receipt: canonicalReceipt(result, authority, independentlyVerified),
-    slot_availability: slotAvailabilityRows(authority),
-    assignments: draftAssignmentRows(authority, activeWork),
+    slot_availability: availability,
+    assignments,
     objective_inputs: [{
       input_key: "static_weekly_compiler_receipt",
       input_value: { compiler_version: result.compilerVersion, authority_digest: result.authorityDigest, replay_digest: result.replayDigest },
       provenance: { adapter_schema: STATIC_WEEKLY_DATABASE_ADAPTER_SCHEMA, independently_verified: true },
     }],
+  };
+  // This shared snapshot is the explicit semantic boundary used by both the
+  // recurring document and a dated projection.  It duplicates the exact
+  // relational materialization intentionally: SQL checks parity while the
+  // server-side HMAC binds every source, work, location, policy, qualification,
+  // restriction, lock, owner, and overlay fact before it can be persisted.
+  document.semantic_snapshot = {
+    schema: "memphis-zoo.static-weekly-recurring-semantic-snapshot.v1",
+    recurring_source: clone(authority.compilerInput),
+    relational_slot_availability: clone(availability),
+    relational_assignments: clone(assignments),
   };
   document.validation = {
     status: result.status,
@@ -448,8 +481,9 @@ function buildAdaptedStaticWeeklySchedule(result, { requirePublishable = false, 
     replay_digest: result.replayDigest,
     receipt_digest: postgresJsonbContentDigest(document.receipt),
   };
-  const identity = { adapter: document.adapter, authority: document.authority, receipt: document.receipt, slot_availability: document.slot_availability, assignments: document.assignments, objective_inputs: document.objective_inputs };
+  const identity = { adapter: document.adapter, authority: document.authority, receipt: document.receipt, slot_availability: document.slot_availability, assignments: document.assignments, objective_inputs: document.objective_inputs, semantic_snapshot: document.semantic_snapshot };
   document.validation.database_document_identity = postgresJsonbContentDigest(identity);
+  document.attestation = authorityAttestation("recurring_document", identity, requireAuthorityAttestationSecret(authorityAttestationSecret));
   return { document, activeWork };
 }
 
@@ -457,9 +491,9 @@ export function adaptCompiledStaticWeeklySchedule(result, options = {}) {
   return buildAdaptedStaticWeeklySchedule(result, options).document;
 }
 
-export function createStaticWeeklyDraftRpcInput({ result, expectedRevision, actor }) {
+export function createStaticWeeklyDraftRpcInput({ result, expectedRevision, actor, authorityAttestationSecret }) {
   const identity = requireActor(actor);
-  const { document } = buildAdaptedStaticWeeklySchedule(result, { requirePublishable: true, baselineOnly: true });
+  const { document } = buildAdaptedStaticWeeklySchedule(result, { requirePublishable: true, baselineOnly: true, authorityAttestationSecret });
   return {
     effectiveStart: result.serviceDate,
     objectiveVersion: result.compilerVersion,
@@ -480,10 +514,11 @@ export function createStaticWeeklyDraftRpcInput({ result, expectedRevision, acto
   };
 }
 
-export function createStaticWeeklyProjectionRpcInput({ result, publicationId, expectedRevision, actor }) {
+export function createStaticWeeklyProjectionRpcInput({ result, publicationId, expectedRevision, actor, authorityAttestationSecret }) {
   const identity = requireActor(actor);
   if (!text(publicationId)) fail("database_adapter_publication_identity_required");
-  const { document, activeWork } = buildAdaptedStaticWeeklySchedule(result, { requirePublishable: false });
+  const secret = requireAuthorityAttestationSecret(authorityAttestationSecret);
+  const { document, activeWork } = buildAdaptedStaticWeeklySchedule(result, { requirePublishable: false, authorityAttestationSecret: secret });
   const authority = document.authority;
   const assignments = projectionAssignmentRows(activeWork);
   const envelope = {
@@ -506,7 +541,15 @@ export function createStaticWeeklyProjectionRpcInput({ result, publicationId, ex
   // caller-selected projection scope.
   const start = new Date(`${authority.effectiveDate}T00:00:00Z`);
   envelope.week_end = new Date(start.getTime() + (6 * 86_400_000)).toISOString().slice(0, 10);
+  envelope.semantic_snapshot = {
+    schema: "memphis-zoo.static-weekly-projection-semantic-snapshot.v1",
+    recurring_source: clone(authority.compilerInput),
+    overlay_source: clone(authority.overlayCompilerInput),
+    applied_exceptions: clone(authority.appliedExceptions),
+    active_assignments: clone(assignments),
+  };
   envelope.database_projection_identity = postgresJsonbContentDigest({ ...envelope });
+  envelope.attestation = authorityAttestation("dated_projection", { ...envelope }, secret);
   return {
     publicationId,
     serviceDate: result.serviceDate,

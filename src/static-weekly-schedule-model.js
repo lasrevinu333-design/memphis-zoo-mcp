@@ -216,6 +216,65 @@ export function snapshotIncumbency(slot, serviceDate) {
   return { slotId: String(slot.id), slotLabel: String(slot.label || slot.id), personId: String(incumbent.personId), displayName: String(incumbent.displayName) };
 }
 
+function exactPayloadObject(value, required, label) {
+  assert(value && typeof value === "object" && !Array.isArray(value), `${label} must be an exact object.`, "invalid_exception_payload");
+  const keys = Object.keys(value).sort(stableCompare);
+  assert(keys.length === required.length && keys.every((key, index) => key === required.slice().sort(stableCompare)[index]), `${label} contains unknown, missing, or noncanonical fields.`, "invalid_exception_payload");
+}
+
+function nonblankPayloadText(value, label) {
+  assert(String(value || "").trim(), `${label} is required.`, "invalid_exception_payload");
+}
+
+function payloadWindow(value, label) {
+  exactPayloadObject(value, ["start", "end"], label);
+  return normalizeWindow(value, label);
+}
+
+function exactStringArray(value, label) {
+  assert(Array.isArray(value) && value.every((item) => String(item || "").trim()), `${label} must contain nonblank string identities.`, "invalid_exception_payload");
+  assert(new Set(value).size === value.length, `${label} may not contain duplicate identities.`, "invalid_exception_payload");
+}
+
+// This is the portable half of the exception boundary.  It deliberately
+// validates the same normalized JSON shapes accepted by I2 SQL; model callers
+// cannot create a compiler authority that SQL would reject.  SQL adds the
+// publication/version/dated-work target checks that only relational authority
+// can establish.
+export function assertStaticWeeklyExceptionPayload(exception) {
+  const payload = exception?.payload;
+  const type = exception?.type;
+  const window = exception?.window ?? null;
+  if (["pto", "daily_absence"].includes(type)) {
+    exactPayloadObject(payload, ["slotId"], `${type} payload`); nonblankPayloadText(payload.slotId, `${type} slotId`); assert(window == null, `${type} may not carry a partial window.`, "invalid_exception_payload");
+  } else if (type === "partial_absence" || type === "lunch") {
+    exactPayloadObject(payload, ["slotId"], `${type} payload`); nonblankPayloadText(payload.slotId, `${type} slotId`); normalizeWindow(window, `${type} window`);
+  } else if (type === "shift_override") {
+    exactPayloadObject(payload, ["shift", "slotId", "status"], "shift override payload"); nonblankPayloadText(payload.slotId, "shift override slotId"); assert(AVAILABILITY_STATES.has(payload.status) && payload.status !== "departed_named_absent", "shift override status is invalid.", "invalid_exception_payload"); payloadWindow(payload.shift, "shift override shift"); assert(window == null, "shift override may not carry a second window.", "invalid_exception_payload");
+  } else if (type === "cover_all") {
+    exactPayloadObject(payload, ["availability"], "coverall payload");
+    exactPayloadObject(payload.availability, ["acceptedRouteAnchorLocationId", "acceptedRouteProvenance", "maxServiceEffortMinutes", "maxServiceEffortProvenance", "productiveCapacityProvenance", "qualificationProvenance", "qualifications", "restrictionProvenance", "restrictions", "shift", "slotId"], "coverall availability");
+    nonblankPayloadText(payload.availability.slotId, "coverall slotId"); payloadWindow(payload.availability.shift, "coverall shift"); exactStringArray(payload.availability.qualifications, "coverall qualifications"); exactStringArray(payload.availability.restrictions, "coverall restrictions"); assert(window == null, "coverall may not carry a second window.", "invalid_exception_payload");
+  } else if (["nine_forty_five_rebalance", "manager_correction"].includes(type)) {
+    exactPayloadObject(payload, ["locks"], `${type} payload`); assert(Array.isArray(payload.locks) && payload.locks.length > 0, `${type} requires locks.`, "invalid_exception_payload");
+    const workIds = new Set();
+    for (const lock of payload.locks) { exactPayloadObject(lock, ["slotId", "workId"], "manager correction lock"); nonblankPayloadText(lock.workId, "manager correction workId"); nonblankPayloadText(lock.slotId, "manager correction slotId"); assert(!workIds.has(lock.workId), "manager correction lock target is duplicated.", "invalid_exception_payload"); workIds.add(lock.workId); }
+    assert(window == null, `${type} may not carry a window.`, "invalid_exception_payload");
+  } else if (type === "event_impact") {
+    exactPayloadObject(payload, ["addWork", "patchWork", "removeWorkIds"], "event impact payload");
+    exactStringArray(payload.removeWorkIds, "event removal targets"); assert(Array.isArray(payload.patchWork) && Array.isArray(payload.addWork) && payload.removeWorkIds.length + payload.patchWork.length + payload.addWork.length > 0, "event impact must have a target.", "invalid_exception_payload");
+    const patchIds = new Set(); const addIds = new Set();
+    const workKeys = ["locationCodeSnapshot", "locationId", "locationNameSnapshot", "priority", "priorityProvenance", "qualificationProvenance", "requiredQualifications", "restrictionProvenance", "restrictions", "serviceEffortMinutes", "serviceEffortProvenance", "window", "workId"];
+    for (const patch of payload.patchWork) { exactPayloadObject(patch, workKeys, "event patch work"); nonblankPayloadText(patch.workId, "event patch workId"); assert(!patchIds.has(patch.workId) && !payload.removeWorkIds.includes(patch.workId), "event patch target is duplicated or removed.", "invalid_exception_payload"); patchIds.add(patch.workId); payloadWindow(patch.window, "event patch window"); exactStringArray(patch.requiredQualifications, "event patch qualifications"); exactStringArray(patch.restrictions, "event patch restrictions"); }
+    const addKeys = [...workKeys, "dayOfWeek", "originSlotId"];
+    for (const add of payload.addWork) { exactPayloadObject(add, addKeys, "event added work"); nonblankPayloadText(add.workId, "event added workId"); nonblankPayloadText(add.originSlotId, "event add originSlotId"); assert(Number.isInteger(add.dayOfWeek) && add.dayOfWeek >= 0 && add.dayOfWeek <= 6, "event add weekday is invalid.", "invalid_exception_payload"); assert(!addIds.has(add.workId) && !patchIds.has(add.workId) && !payload.removeWorkIds.includes(add.workId), "event add target is duplicated or overlaps another event command.", "invalid_exception_payload"); addIds.add(add.workId); payloadWindow(add.window, "event add window"); exactStringArray(add.requiredQualifications, "event add qualifications"); exactStringArray(add.restrictions, "event add restrictions"); }
+    assert(window == null, "event impact may not carry a window.", "invalid_exception_payload");
+  } else if (type === "reverse") {
+    exactPayloadObject(payload, ["reversesExceptionId"], "reverse payload"); nonblankPayloadText(payload.reversesExceptionId, "reverse target"); assert(String(exception.reversesExceptionId || payload.reversesExceptionId) === payload.reversesExceptionId, "reverse target is incoherent.", "invalid_exception_payload"); assert(window == null, "reverse may not carry a window.", "invalid_exception_payload");
+  }
+  return exception;
+}
+
 export function assertExceptionCommand(exception) {
   assert(exception && typeof exception === "object", "Exception command is required.", "invalid_exception");
   assert(EXCEPTION_TYPES.has(exception.type), `Unsupported exception type ${exception.type || ""}.`, "invalid_exception_type");
@@ -225,6 +284,6 @@ export function assertExceptionCommand(exception) {
   assert(String(exception.reason || "").trim(), "Exception reason is required.", "invalid_exception");
   assert(String(exception.idempotencyKey || "").trim(), "Exception idempotency key is required.", "invalid_exception");
   assert(Number.isInteger(exception.expectedRevision) && exception.expectedRevision >= 0, "Exception expected revision is required.", "invalid_exception");
-  if (exception.window) normalizeWindow(exception.window, "exception window");
+  assertStaticWeeklyExceptionPayload(exception);
   return exception;
 }
