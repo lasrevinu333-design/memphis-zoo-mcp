@@ -22,10 +22,30 @@ const array = (value) => Array.isArray(value) ? value : [];
 const text = (value) => typeof value === "string" ? value : "";
 const recurringSemanticIdentity = (value) => {
   const identity = clone(value);
-  // `serviceDate` selects a projection horizon.  It is deliberately not part
-  // of the stable recurring publication identity: a later aligned horizon
-  // must retain the same source publication without a weekly republish.
+  // `serviceDate`, publication/version lifecycle values, and incumbent ranges
+  // are dated projection facts. Stable source identity retains slot IDs and
+  // every recurring work/proximity fact, while SQL rehydrates the incumbent
+  // history from its closure-aware ledger for the requested horizon.
   delete identity.serviceDate;
+  const version = identity.version || (Array.isArray(identity.versions) ? identity.versions[0] : null);
+  delete identity.version;
+  delete identity.versions;
+  if (version && typeof version === "object" && !Array.isArray(version)) {
+    const stableVersion = clone(version);
+    delete stableVersion.id;
+    delete stableVersion.publicationId;
+    delete stableVersion.status;
+    delete stableVersion.effectiveStart;
+    delete stableVersion.effectiveEnd;
+    identity.version = stableVersion;
+  }
+  if (Array.isArray(identity.slots)) {
+    identity.slots = identity.slots.map((slot) => {
+      const stableSlot = clone(slot);
+      delete stableSlot.incumbencies;
+      return stableSlot;
+    });
+  }
   return identity;
 };
 const fail = (code, detail = {}) => {

@@ -54,6 +54,17 @@ If an automated publishing pipeline is needed in the future, it should:
 3. Alert operations staff if generation fails or audit finds issues
 4. Store the generated schedules for the AI to read without on-demand generation
 
+## Static-weekly authority control plane
+
+The separate static-weekly scheduler authority is not part of the legacy
+on-demand generation path above. It reads one release-registered recurring
+source and materializes an aligned seven-day horizon through the dedicated
+control plane. Stable roster slots remain part of that source, while the
+effective incumbent for each service date is read from the append-only
+closure-aware roster ledger. A trusted, write-enabled named manager session is
+required for every scheduler mutation; startup and writes fail closed if the
+trusted-device revocation or manager-association store is unavailable.
+
 ## AI integration
 
 The AI system (`memphis-ai.js`) interacts with the static schedule pipeline through:

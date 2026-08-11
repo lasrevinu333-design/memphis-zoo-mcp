@@ -34796,7 +34796,7 @@
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_assert_projection_envelope_attested(p_envelope jsonb, p_publication_id uuid, p_week_start date, p_exception_set jsonb)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_legacy jsonb; v_snapshot jsonb; v_document jsonb;\nbegin\n  perform public.static_weekly_assert_exact_object(p_envelope,array['adapter','service_date','week_start','week_end','authority','receipt','authority_digest','replay_digest','compiler_version','objective','metrics','applied_exceptions','assignments','database_projection_identity','semantic_snapshot','attestation'],array['adapter','service_date','week_start','week_end','authority','receipt','authority_digest','replay_digest','compiler_version','objective','metrics','applied_exceptions','assignments','database_projection_identity','semantic_snapshot','attestation'],'attested projection envelope');\n  perform public.static_weekly_assert_authority_attestation(p_envelope->'attestation','dated_projection',public.static_weekly_projection_attestation_payload(p_envelope));\n  if p_envelope->>'database_projection_identity' is distinct from public.static_weekly_digest_jsonb((p_envelope-'attestation')-'database_projection_identity') then raise exception using errcode='23514',message='projection semantic identity must bind the complete attested envelope'; end if;\n  v_snapshot:=p_envelope->'semantic_snapshot'; perform public.static_weekly_assert_exact_object(v_snapshot,array['schema','recurring_source','overlay_source','applied_exceptions','active_assignments'],array['schema','recurring_source','overlay_source','applied_exceptions','active_assignments'],'projection semantic snapshot');\n  select draft_document into v_document from public.weekly_schedule_versions v join public.weekly_schedule_publications p on p.version_id=v.version_id where p.publication_id=p_publication_id;\n  if v_snapshot->>'schema' is distinct from 'memphis-zoo.static-weekly-projection-semantic-snapshot.v1' or v_snapshot->'recurring_source' is distinct from public.static_weekly_v3_recurring_identity(p_envelope#>'{authority,compilerInput}') or v_snapshot->'recurring_source' is distinct from public.static_weekly_v3_recurring_identity(v_document#>'{semantic_snapshot,recurring_source}') or v_snapshot->'overlay_source' is distinct from public.static_weekly_v3_recurring_identity(p_envelope#>'{authority,overlayCompilerInput}') or v_snapshot->'applied_exceptions' is distinct from p_envelope->'applied_exceptions' or v_snapshot->'active_assignments' is distinct from p_envelope->'assignments' then raise exception using errcode='23514',message='projection must bind stable recurring source, dated overlay, accepted exceptions, and active assignments'; end if;\n  v_legacy:=p_envelope-'semantic_snapshot'-'attestation'; v_legacy:=jsonb_set(v_legacy,'{database_projection_identity}',to_jsonb(public.static_weekly_digest_jsonb(v_legacy-'database_projection_identity')),true); perform public.static_weekly_assert_projection_envelope(v_legacy,p_publication_id,p_week_start,p_exception_set);\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_assert_projection_envelope_attested(p_envelope jsonb, p_publication_id uuid, p_week_start date, p_exception_set jsonb)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_legacy jsonb; v_snapshot jsonb; v_document jsonb;\nbegin\n  perform public.static_weekly_assert_exact_object(p_envelope,array['adapter','service_date','week_start','week_end','authority','receipt','authority_digest','replay_digest','compiler_version','objective','metrics','applied_exceptions','assignments','database_projection_identity','semantic_snapshot','attestation'],array['adapter','service_date','week_start','week_end','authority','receipt','authority_digest','replay_digest','compiler_version','objective','metrics','applied_exceptions','assignments','database_projection_identity','semantic_snapshot','attestation'],'attested projection envelope');\n  perform public.static_weekly_assert_authority_attestation(p_envelope->'attestation','dated_projection',public.static_weekly_projection_attestation_payload(p_envelope));\n  if p_envelope->>'database_projection_identity' is distinct from public.static_weekly_digest_jsonb((p_envelope-'attestation')-'database_projection_identity') then\n    raise exception using errcode='23514',message='projection semantic identity must bind the complete attested envelope';\n  end if;\n  v_snapshot:=p_envelope->'semantic_snapshot';\n  perform public.static_weekly_assert_exact_object(v_snapshot,array['schema','recurring_source','overlay_source','applied_exceptions','active_assignments'],array['schema','recurring_source','overlay_source','applied_exceptions','active_assignments'],'projection semantic snapshot');\n  select draft_document into v_document from public.weekly_schedule_versions v join public.weekly_schedule_publications p on p.version_id=v.version_id where p.publication_id=p_publication_id;\n  if v_snapshot->>'schema' is distinct from 'memphis-zoo.static-weekly-projection-semantic-snapshot.v1'\n    or v_snapshot->'recurring_source' is distinct from public.static_weekly_v4_projection_source_identity(p_envelope#>'{authority,compilerInput}')\n    or v_snapshot->'recurring_source' is distinct from public.static_weekly_v4_projection_source_identity(v_document#>'{semantic_snapshot,recurring_source}')\n    or v_snapshot->'overlay_source' is distinct from public.static_weekly_v4_projection_source_identity(p_envelope#>'{authority,overlayCompilerInput}')\n    or v_snapshot->'applied_exceptions' is distinct from p_envelope->'applied_exceptions'\n    or v_snapshot->'active_assignments' is distinct from p_envelope->'assignments' then\n    raise exception using errcode='23514',message='projection must bind stable recurring source, dated overlay, accepted exceptions, and active assignments';\n  end if;\n  v_legacy:=p_envelope-'semantic_snapshot'-'attestation';\n  v_legacy:=jsonb_set(v_legacy,'{database_projection_identity}',to_jsonb(public.static_weekly_digest_jsonb(v_legacy-'database_projection_identity')),true);\n  perform public.static_weekly_v4_assert_projection_envelope(v_legacy,p_publication_id,p_week_start,p_exception_set);\nend\n$function$\n",
       "function_name": "static_weekly_assert_projection_envelope_attested",
       "identity_arguments": "p_envelope jsonb, p_publication_id uuid, p_week_start date, p_exception_set jsonb",
       "schema_name": "public"
@@ -34957,7 +34957,7 @@
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_v3_apply_exception(p_exception_type text, p_service_date date, p_starts_at time without time zone, p_ends_at time without time zone, p_base_version_id uuid, p_publication_id uuid, p_reason text, p_payload jsonb, p_expected_revision bigint, p_manager_id uuid, p_idempotency_key text, p_reverses_exception_id uuid DEFAULT NULL::uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_actor jsonb;\nbegin perform public.static_weekly_v3_assert_control_plane(); v_actor:=public.static_weekly_v3_manager_actor(p_manager_id); return public.static_weekly_v2_apply_exception(p_exception_type,p_service_date,p_starts_at,p_ends_at,p_base_version_id,p_publication_id,p_reason,p_payload,p_expected_revision,p_manager_id,v_actor->>'manager_name',p_idempotency_key,p_reverses_exception_id); end\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_v3_apply_exception(p_exception_type text, p_service_date date, p_starts_at time without time zone, p_ends_at time without time zone, p_base_version_id uuid, p_publication_id uuid, p_reason text, p_payload jsonb, p_expected_revision bigint, p_manager_id uuid, p_idempotency_key text, p_reverses_exception_id uuid DEFAULT NULL::uuid)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_actor jsonb;\nbegin\n  perform public.static_weekly_v3_assert_control_plane();\n  if nullif(btrim(coalesce(p_reason,'')),'') is null or char_length(p_reason)>500 or p_reason ~ '[\\x00-\\x1f\\x7f]' then\n    raise exception using errcode='23514',message='exception reason must be a nonblank control-free string of at most 500 characters';\n  end if;\n  v_actor:=public.static_weekly_v3_manager_actor(p_manager_id);\n  return public.static_weekly_v2_apply_exception(p_exception_type,p_service_date,p_starts_at,p_ends_at,p_base_version_id,p_publication_id,p_reason,p_payload,p_expected_revision,p_manager_id,v_actor->>'manager_name',p_idempotency_key,p_reverses_exception_id);\nend\n$function$\n",
       "function_name": "static_weekly_v3_apply_exception",
       "identity_arguments": "p_exception_type text, p_service_date date, p_starts_at time without time zone, p_ends_at time without time zone, p_base_version_id uuid, p_publication_id uuid, p_reason text, p_payload jsonb, p_expected_revision bigint, p_manager_id uuid, p_idempotency_key text, p_reverses_exception_id uuid",
       "schema_name": "public"
@@ -34971,7 +34971,7 @@
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_v3_assert_draft_incumbency(p_version_id uuid)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_start date; v_row record; v_person uuid; v_name text; v_date date;\nbegin\n  select effective_start into v_start from public.weekly_schedule_versions where version_id=p_version_id for share; if v_start is null then raise exception using errcode='23514',message='draft version does not exist'; end if;\n  for v_row in select * from public.weekly_schedule_slot_availability where version_id=p_version_id order by day_of_week,slot_id loop\n    v_date:=v_start+mod(v_row.day_of_week-extract(dow from v_start)::integer+7,7); select person_id,person_name_snapshot into v_person,v_name from public.weekly_roster_slot_incumbencies where slot_id=v_row.slot_id and effective_start<=v_date and (effective_end is null or v_date<effective_end) for share;\n    if v_person is null or v_row.incumbent_person_id_snapshot is distinct from v_person or v_row.incumbent_name_snapshot is distinct from v_name then raise exception using errcode='23514',message='draft roster incumbency snapshot is stale or incomplete at publication effective date'; end if;\n  end loop;\n  for v_row in select * from public.weekly_schedule_slot_assignments where version_id=p_version_id and owner_slot_id is not null order by day_of_week,assignment_id loop\n    v_date:=v_start+mod(v_row.day_of_week-extract(dow from v_start)::integer+7,7); select person_id,person_name_snapshot into v_person,v_name from public.weekly_roster_slot_incumbencies where slot_id=v_row.owner_slot_id and effective_start<=v_date and (effective_end is null or v_date<effective_end) for share;\n    if v_person is null or v_row.owner_person_id_snapshot is distinct from v_person or v_row.owner_name_snapshot is distinct from v_name then raise exception using errcode='23514',message='draft recurring owner snapshot is stale or incomplete at publication effective date'; end if;\n  end loop;\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_v3_assert_draft_incumbency(p_version_id uuid)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_start date; v_row record; v_person uuid; v_name text; v_date date; v_matches integer;\nbegin\n  select effective_start into v_start from public.weekly_schedule_versions where version_id=p_version_id for share;\n  if v_start is null then raise exception using errcode='23514',message='draft version does not exist'; end if;\n  for v_row in select * from public.weekly_schedule_slot_availability where version_id=p_version_id order by day_of_week,slot_id loop\n    v_date:=v_start+mod(v_row.day_of_week-extract(dow from v_start)::integer+7,7);\n    select count(*) into v_matches from public.v_weekly_roster_slot_incumbency_ranges where slot_id=v_row.slot_id and effective_start<=v_date and (effective_end is null or v_date<effective_end);\n    if v_matches<>1 then raise exception using errcode='23514',message='draft roster slot must resolve exactly one closure-aware incumbent at each service date'; end if;\n    select person_id,person_name_snapshot into v_person,v_name from public.v_weekly_roster_slot_incumbency_ranges where slot_id=v_row.slot_id and effective_start<=v_date and (effective_end is null or v_date<effective_end);\n    if v_row.incumbent_person_id_snapshot is distinct from v_person or v_row.incumbent_name_snapshot is distinct from v_name then raise exception using errcode='23514',message='draft roster incumbency snapshot is stale or incomplete at publication service date'; end if;\n  end loop;\n  for v_row in select * from public.weekly_schedule_slot_assignments where version_id=p_version_id and owner_slot_id is not null order by day_of_week,assignment_id loop\n    v_date:=v_start+mod(v_row.day_of_week-extract(dow from v_start)::integer+7,7);\n    select count(*) into v_matches from public.v_weekly_roster_slot_incumbency_ranges where slot_id=v_row.owner_slot_id and effective_start<=v_date and (effective_end is null or v_date<effective_end);\n    if v_matches<>1 then raise exception using errcode='23514',message='draft assignment owner must resolve exactly one closure-aware incumbent at each service date'; end if;\n    select person_id,person_name_snapshot into v_person,v_name from public.v_weekly_roster_slot_incumbency_ranges where slot_id=v_row.owner_slot_id and effective_start<=v_date and (effective_end is null or v_date<effective_end);\n    if v_row.owner_person_id_snapshot is distinct from v_person or v_row.owner_name_snapshot is distinct from v_name then raise exception using errcode='23514',message='draft recurring owner snapshot is stale or incomplete at publication service date'; end if;\n  end loop;\nend\n$function$\n",
       "function_name": "static_weekly_v3_assert_draft_incumbency",
       "identity_arguments": "p_version_id uuid",
       "schema_name": "public"
@@ -35041,7 +35041,7 @@
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_v3_authority_health()\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_active integer; v_overlap_bad integer; v_cp boolean; v_v3 integer;\nbegin\n  select count(*) into v_active from public.static_weekly_authority_attestation_keys where key_state='active' and activates_at<=statement_timestamp() and (verify_not_after is null or verify_not_after>statement_timestamp());\n  select count(*) into v_overlap_bad from public.static_weekly_authority_attestation_keys where key_state='overlap' and (verify_not_after is null or verify_not_after<=statement_timestamp());\n  select exists(select 1 from pg_roles where rolname='static_weekly_control_plane') into v_cp;\n  select count(*) into v_v3 from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname like 'static_weekly_v3_%';\n  return jsonb_build_object('ready',v_active=1 and v_overlap_bad=0 and v_cp and v_v3>=8,'active_key_count',v_active,'expired_overlap_count',v_overlap_bad,'control_plane_role_present',v_cp,'v3_function_count',v_v3,'key_ids',(select coalesce(jsonb_agg(jsonb_build_object('key_id',key_id,'state',key_state,'activates_at',activates_at,'verify_not_after',verify_not_after) order by key_id),'[]'::jsonb) from public.static_weekly_authority_attestation_keys));\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_v3_authority_health()\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_active integer; v_overlap_bad integer; v_cp boolean; v_v3 integer; v_key public.static_weekly_authority_attestation_keys%rowtype; v_probe jsonb; v_signature text; v_canary boolean:=false;\nbegin\n  select count(*) into v_active from public.static_weekly_authority_attestation_keys where key_state='active' and activates_at<=statement_timestamp() and (verify_not_after is null or verify_not_after>statement_timestamp());\n  select count(*) into v_overlap_bad from public.static_weekly_authority_attestation_keys where key_state='overlap' and (verify_not_after is null or verify_not_after<=statement_timestamp());\n  select exists(select 1 from pg_roles where rolname='static_weekly_control_plane') into v_cp;\n  select count(*) into v_v3 from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname like 'static_weekly_v3_%';\n  if v_active=1 then\n    select * into v_key from public.static_weekly_authority_attestation_keys where key_state='active' and activates_at<=statement_timestamp() and (verify_not_after is null or verify_not_after>statement_timestamp()) for share;\n    v_probe:=jsonb_build_object('schema','memphis-zoo.static-weekly-authority-health-canary.v1','key_id',v_key.key_id,'purpose','operational_sign_verify');\n    v_signature:=public.static_weekly_v3_hmac(v_key.secret_material,'authority_health_canary',v_probe);\n    v_canary:=v_signature ~ '^[0-9a-f]{64}$' and public.static_weekly_v3_constant_time_equal(decode(v_signature,'hex'),decode(public.static_weekly_v3_hmac(v_key.secret_material,'authority_health_canary',v_probe),'hex'));\n  end if;\n  return jsonb_build_object('ready',v_active=1 and v_overlap_bad=0 and v_cp and v_v3>=8 and v_canary,'active_key_count',v_active,'expired_overlap_count',v_overlap_bad,'control_plane_role_present',v_cp,'v3_function_count',v_v3,'operational_sign_verify_canary',v_canary,'key_ids',(select coalesce(jsonb_agg(jsonb_build_object('key_id',key_id,'state',key_state,'activates_at',activates_at,'verify_not_after',verify_not_after,'recovery_of_key_id',recovery_of_key_id) order by key_id),'[]'::jsonb) from public.static_weekly_authority_attestation_keys));\nend\n$function$\n",
       "function_name": "static_weekly_v3_authority_health",
       "identity_arguments": "",
       "schema_name": "public"
@@ -35118,14 +35118,14 @@
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_v3_read_publication_source(p_publication_id uuid, p_service_date date)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_document jsonb; v_version uuid; v_source uuid;\nbegin\n  perform public.static_weekly_v3_assert_control_plane();\n  select v.draft_document,p.version_id,v.authority_source_id into v_document,v_version,v_source from public.weekly_schedule_publications p join public.weekly_schedule_versions v on v.version_id=p.version_id where p.publication_id=p_publication_id;\n  if not found or v_source is null or public.static_weekly_effective_version(p_service_date) is distinct from v_version then raise exception using errcode='23514',message='control plane source must name the effective immutable publication and registered source'; end if;\n  return jsonb_build_object('source_id',v_source::text,'compiler_input',v_document#>'{semantic_snapshot,recurring_source}','exceptions',public.static_weekly_compiler_exception_set(p_publication_id,p_service_date),'publication_id',p_publication_id::text,'version_id',v_version::text,'authority_revision',(select current_revision from public.static_weekly_schedule_control where singleton));\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_v3_read_publication_source(p_publication_id uuid, p_service_date date)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_document jsonb; v_version uuid; v_source uuid;\nbegin\n  perform public.static_weekly_v3_assert_control_plane();\n  select v.draft_document,p.version_id,v.authority_source_id into v_document,v_version,v_source\n  from public.weekly_schedule_publications p\n  join public.weekly_schedule_versions v on v.version_id=p.version_id\n  where p.publication_id=p_publication_id;\n  if not found or v_source is null or public.static_weekly_effective_version(p_service_date) is distinct from v_version then\n    raise exception using errcode='23514',message='control plane source must name the effective immutable publication and registered source';\n  end if;\n  return jsonb_build_object(\n    'source_id',v_source::text,\n    'compiler_input',public.static_weekly_v4_hydrate_compiler_source(v_document#>'{semantic_snapshot,recurring_source}',p_service_date),\n    'exceptions',public.static_weekly_compiler_exception_set(p_publication_id,p_service_date),\n    'publication_id',p_publication_id::text,\n    'version_id',v_version::text,\n    'authority_revision',(select current_revision from public.static_weekly_schedule_control where singleton)\n  );\nend\n$function$\n",
       "function_name": "static_weekly_v3_read_publication_source",
       "identity_arguments": "p_publication_id uuid, p_service_date date",
       "schema_name": "public"
     },
     {
-      "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_v3_recover_authority_key(p_key_id text, p_secret text, p_recovery_of text, p_configured_by text DEFAULT 'release-owner'::text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\nbegin\n  perform public.static_weekly_v3_assert_release_operator();\n  if p_key_id !~ '^static-weekly-authority-hmac-v[0-9]+$' or length(coalesce(p_secret,''))<32 or not exists(select 1 from public.static_weekly_authority_attestation_keys where key_id=p_recovery_of and key_state='revoked') then raise exception using errcode='22023',message='recovery requires a new key, secret, and revoked predecessor'; end if;\n  update public.static_weekly_authority_attestation_keys set key_state='revoked',revoked_at=statement_timestamp(),revoked_by='failed-rotation-recovery',verify_not_after=statement_timestamp() where key_state in ('active','overlap');\n  insert into public.static_weekly_authority_attestation_keys(key_id,secret_material,key_state,activates_at,verify_not_after,configured_by,recovery_of_key_id) values(p_key_id,p_secret,'active',statement_timestamp(),null,left(coalesce(nullif(btrim(p_configured_by),''),'release-owner'),200),p_recovery_of);\n  return public.static_weekly_v3_authority_health();\nend\n$function$\n",
+      "comment": "Atomic failed-active recovery: one new key replaces and revokes exactly the current active predecessor, with one immutable recovery lineage and no pre-revocation step.",
+      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_v3_recover_authority_key(p_key_id text, p_secret text, p_recovery_of text, p_configured_by text DEFAULT 'release-owner'::text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_now timestamptz:=statement_timestamp(); v_active text; v_active_count integer;\nbegin\n  perform public.static_weekly_v3_assert_release_operator();\n  if p_key_id !~ '^static-weekly-authority-hmac-v[0-9]+$' or p_key_id is distinct from nullif(btrim(p_key_id),'') or length(coalesce(p_secret,''))<32 or nullif(btrim(p_configured_by),'') is null or nullif(btrim(p_recovery_of),'') is null then\n    raise exception using errcode='22023',message='recovery requires a distinct new versioned key, valid secret, exact failed active predecessor, and release operator identity';\n  end if;\n  perform 1 from public.static_weekly_authority_attestation_keys where key_state='active' and activates_at<=v_now and (verify_not_after is null or verify_not_after>v_now) for update;\n  select count(*),min(key_id) into v_active_count,v_active from public.static_weekly_authority_attestation_keys where key_state='active' and activates_at<=v_now and (verify_not_after is null or verify_not_after>v_now);\n  if v_active_count<>1 or p_recovery_of is distinct from v_active or p_key_id=p_recovery_of then\n    raise exception using errcode='23514',message='recovery predecessor must be the one current active failed key';\n  end if;\n  if exists(select 1 from public.static_weekly_authority_attestation_keys where key_id=p_key_id) then\n    raise exception using errcode='23505',message='recovery key identity must be new and may not be reused';\n  end if;\n  if exists(select 1 from public.static_weekly_authority_attestation_keys where recovery_of_key_id=p_recovery_of) then\n    raise exception using errcode='23505',message='failed active key already has one immutable recovery successor';\n  end if;\n  update public.static_weekly_authority_attestation_keys\n  set key_state='revoked',revoked_at=v_now,revoked_by='failed-active-recovery',verify_not_after=v_now\n  where key_id=v_active and key_state='active';\n  if not found then raise exception using errcode='40001',message='failed active key changed before atomic recovery could complete'; end if;\n  insert into public.static_weekly_authority_attestation_keys(key_id,secret_material,key_state,activates_at,verify_not_after,configured_by,recovery_of_key_id)\n  values(p_key_id,p_secret,'active',v_now,null,left(p_configured_by,200),p_recovery_of);\n  return public.static_weekly_v3_authority_health();\nend\n$function$\n",
       "function_name": "static_weekly_v3_recover_authority_key",
       "identity_arguments": "p_key_id text, p_secret text, p_recovery_of text, p_configured_by text",
       "schema_name": "public"
@@ -35167,7 +35167,7 @@
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_v3_source_identity(p_source jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n IMMUTABLE\nAS $function$\ndeclare v_identity jsonb; v_version jsonb;\nbegin\n  if jsonb_typeof(p_source) is distinct from 'object' or coalesce(p_source->'exceptions','[]'::jsonb)<>'[]'::jsonb then\n    raise exception using errcode='23514',message='registered scheduler source must be one exception-free recurring compiler input';\n  end if;\n  if jsonb_typeof(p_source->'version')='object' then\n    v_version:=p_source->'version';\n  elsif jsonb_typeof(p_source->'versions')='array' and jsonb_array_length(p_source->'versions')=1 then\n    v_version:=(p_source->'versions')->0;\n  else\n    raise exception using errcode='23514',message='registered scheduler source must carry exactly one recurring version';\n  end if;\n  v_version:=v_version-'id'-'publicationId'-'status'-'effectiveStart'-'effectiveEnd';\n  v_identity:=(p_source-'serviceDate'-'exceptions'-'version'-'versions');\n  return jsonb_set(v_identity,'{version}',v_version,true);\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_v3_source_identity(p_source jsonb)\n RETURNS jsonb\n LANGUAGE sql\n IMMUTABLE\nAS $function$\n  select public.static_weekly_v4_recurring_source_identity(p_source)\n$function$\n",
       "function_name": "static_weekly_v3_source_identity",
       "identity_arguments": "p_source jsonb",
       "schema_name": "public"
@@ -35177,6 +35177,34 @@
       "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_v3_update_draft(p_version_id uuid, p_document jsonb, p_objective jsonb, p_input_provenance jsonb, p_expected_draft_revision bigint, p_expected_revision bigint, p_manager_id uuid, p_idempotency_key text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_actor jsonb; v_document jsonb; v_source uuid;\nbegin\n  perform public.static_weekly_v3_assert_control_plane(); v_actor:=public.static_weekly_v3_manager_actor(p_manager_id); select authority_source_id into v_source from public.weekly_schedule_versions where version_id=p_version_id and lifecycle_state='draft' for share; perform public.static_weekly_v3_assert_registered_source(v_source,p_document#>'{semantic_snapshot,recurring_source}');\n  v_document:=jsonb_set(p_document,'{attestation}',public.static_weekly_v3_issue_attestation('recurring_document',public.static_weekly_document_attestation_payload(p_document)),true);\n  return public.static_weekly_v2_update_draft(p_version_id,v_document,p_objective,p_input_provenance,p_expected_draft_revision,p_expected_revision,p_manager_id,v_actor->>'manager_name',p_idempotency_key);\nend\n$function$\n",
       "function_name": "static_weekly_v3_update_draft",
       "identity_arguments": "p_version_id uuid, p_document jsonb, p_objective jsonb, p_input_provenance jsonb, p_expected_draft_revision bigint, p_expected_revision bigint, p_manager_id uuid, p_idempotency_key text",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_v4_assert_projection_envelope(p_envelope jsonb, p_publication_id uuid, p_week_start date, p_exception_set jsonb)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_authority jsonb:=p_envelope->'authority'; v_base jsonb; v_compiler_exceptions jsonb; v_publication public.weekly_schedule_publications%rowtype;\nbegin\n  perform public.static_weekly_assert_exact_object(p_envelope,array['adapter','service_date','week_start','week_end','authority','receipt','authority_digest','replay_digest','compiler_version','objective','metrics','applied_exceptions','assignments','database_projection_identity'],array['adapter','service_date','week_start','week_end','authority','receipt','authority_digest','replay_digest','compiler_version','objective','metrics','applied_exceptions','assignments','database_projection_identity'],'projection envelope');\n  perform public.static_weekly_assert_exact_object(p_envelope->'adapter',array['schema','version'],array['schema','version'],'projection envelope adapter');\n  if jsonb_typeof(p_exception_set) is distinct from 'array' or jsonb_typeof(p_envelope->'service_date') is distinct from 'string'\n    or jsonb_typeof(p_envelope->'week_start') is distinct from 'string' or jsonb_typeof(p_envelope->'week_end') is distinct from 'string'\n    or jsonb_typeof(p_envelope->'authority_digest') is distinct from 'string' or jsonb_typeof(p_envelope->'replay_digest') is distinct from 'string'\n    or jsonb_typeof(p_envelope->'compiler_version') is distinct from 'string' or jsonb_typeof(p_envelope->'objective') is distinct from 'object'\n    or jsonb_typeof(p_envelope->'metrics') is distinct from 'object' or jsonb_typeof(p_envelope->'applied_exceptions') is distinct from 'array'\n    or jsonb_typeof(p_envelope->'assignments') is distinct from 'array' or jsonb_typeof(p_envelope->'database_projection_identity') is distinct from 'string' then\n    raise exception using errcode='23514',message='projection envelope requires complete typed authority, receipt, identity, and assignment fields';\n  end if;\n  if jsonb_array_length(p_envelope->'assignments')=0 then raise exception using errcode='23514',message='projection assignments may not be empty'; end if;\n  if exists(select 1 from jsonb_array_elements(p_envelope->'assignments') as a(x) where jsonb_typeof(a.x) is distinct from 'object' or not (a.x ?& array['plan_work_id','work_id','day_of_week','service_date','status','work_snapshot','explanation'])) then\n    raise exception using errcode='23514',message='projection assignments require every identity, status, snapshot, and explanation key';\n  end if;\n  if exists(select 1 from jsonb_array_elements(p_envelope->'assignments') as a(x)\n      where jsonb_typeof(a.x->'plan_work_id') is distinct from 'string' or nullif(btrim(a.x->>'plan_work_id'),'') is null\n        or jsonb_typeof(a.x->'work_id') is distinct from 'string' or nullif(btrim(a.x->>'work_id'),'') is null\n        or jsonb_typeof(a.x->'day_of_week') is distinct from 'number' or (a.x->>'day_of_week') !~ '^[0-6]$'\n        or jsonb_typeof(a.x->'service_date') is distinct from 'string' or nullif(btrim(a.x->>'service_date'),'') is null\n        or (a.x->>'service_date') !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' or not pg_input_is_valid(a.x->>'service_date','date')\n        or case when jsonb_typeof(a.x->'service_date')='string' and (a.x->>'service_date') ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' and pg_input_is_valid(a.x->>'service_date','date') then (a.x->>'service_date')::date::text is distinct from a.x->>'service_date' or (a.x->>'service_date')::date<p_week_start or (a.x->>'service_date')::date>p_week_start+6 else false end\n        or jsonb_typeof(a.x->'explanation') is distinct from 'object'\n        or jsonb_typeof(a.x->'status') is distinct from 'string' or upper(a.x->>'status') not in ('ASSIGNED','OPEN','REVIEW')) then\n    raise exception using errcode='23514',message='projection assignments require complete canonical seven-day identity, status, and explanation facts';\n  end if;\n  if (select count(*) from jsonb_array_elements(p_envelope->'assignments'))<>(select count(distinct x->>'plan_work_id') from jsonb_array_elements(p_envelope->'assignments') as a(x)) then\n    raise exception using errcode='23514',message='projection assignments may not contain duplicate work identities';\n  end if;\n  select * into v_publication from public.weekly_schedule_publications where publication_id=p_publication_id;\n  if not found then raise exception using errcode='23514',message='projection publication is unknown'; end if;\n  select draft_document#>'{semantic_snapshot,recurring_source}' into v_base from public.weekly_schedule_versions where version_id=v_publication.version_id;\n  v_compiler_exceptions:=public.static_weekly_compiler_exception_set(p_publication_id,p_week_start);\n  perform public.static_weekly_assert_compiler_authority(v_authority,p_envelope->'receipt',p_week_start,false);\n  if p_envelope #>> '{adapter,schema}' is distinct from 'memphis-zoo.static-weekly-database-adapter.v1' or p_envelope #>> '{adapter,version}' is distinct from 'static-weekly-database-adapter-v1' or p_envelope->>'service_date' is distinct from p_week_start::text or p_envelope->>'week_start' is distinct from p_week_start::text or p_envelope->>'week_end' is distinct from (p_week_start+6)::text\n    or p_envelope->>'authority_digest' is distinct from public.static_weekly_digest_jsonb(v_authority) or p_envelope->>'replay_digest' is distinct from p_envelope #>>'{receipt,compiler,replayDigest}'\n    or p_envelope->>'compiler_version' is distinct from v_authority #>>'{optimizerResult,compilerVersion}' or p_envelope->'objective' is distinct from v_authority #> '{optimizerResult,objective}' or p_envelope->'metrics' is distinct from v_authority #> '{optimizerResult,metrics}'\n    or p_envelope->>'database_projection_identity' is distinct from public.static_weekly_digest_jsonb(p_envelope-'database_projection_identity')\n    or public.static_weekly_v4_recurring_source_identity(v_authority->'compilerInput') is distinct from public.static_weekly_v4_recurring_source_identity(v_base) then\n    raise exception using errcode='23514',message='projection must bind the stable registered source, complete dated receipt, objective, metrics, replay, and full weekly envelope';\n  end if;\n  if v_authority->'appliedExceptions' is distinct from p_exception_set or p_envelope->'applied_exceptions' is distinct from p_exception_set then\n    raise exception using errcode='23514',message='overlay compiler input and applied exceptions must bind the complete accepted seven-day exception set';\n  end if;\n  if v_authority #> '{overlayCompilerInput,exceptions}' is distinct from v_compiler_exceptions then\n    raise exception using errcode='23514',message='overlay compiler input must carry every semantic accepted exception fact for the same seven-day horizon';\n  end if;\n  if exists(with optimizer as(select value x from jsonb_array_elements(v_authority #> '{optimizerResult,assignments}')), projected as(select value x from jsonb_array_elements(p_envelope->'assignments'))\n    select 1 from optimizer o full join projected p on p.x->>'plan_work_id'=o.x->>'planWorkId'\n    where o.x is null or p.x is null or p.x->>'service_date' is distinct from o.x->>'serviceDate' or p.x->>'work_id' is distinct from o.x->>'workId' or p.x->>'day_of_week' is distinct from o.x->>'dayOfWeek' or upper(p.x->>'status') is distinct from upper(o.x->>'status')\n      or (o.x->>'status'='ASSIGNED' and (p.x->>'owner_slot_id' is distinct from o.x->>'slotId' or p.x->>'owner_person_id' is distinct from o.x->>'personId'))\n      or (o.x->>'status' in ('OPEN','REVIEW') and (p.x->>'owner_slot_id' is not null or p.x->>'owner_person_id' is not null))) then\n    raise exception using errcode='23514',message='complete weekly projection assignments must exactly bind the canonical optimizer';\n  end if;\n  if exists(with optimizer as(select value x from jsonb_array_elements(v_authority #> '{optimizerResult,assignments}')), projected as(select value x from jsonb_array_elements(p_envelope->'assignments'))\n    select 1 from optimizer o join projected p on p.x->>'plan_work_id'=o.x->>'planWorkId'\n    where jsonb_typeof(p.x->'work_snapshot') is distinct from 'object'\n      or not (p.x->'work_snapshot' ?& array['workId','dayOfWeek','originSlotId','locationId','locationCodeSnapshot','locationNameSnapshot','window','serviceEffortMinutes','serviceEffortProvenance','priority','priorityProvenance','required','coveragePolicy','bestEffortCoverage','coveragePolicyOrder','coveragePolicyProvenance','requiredQualifications','qualificationProvenance','restrictions','restrictionProvenance','restrictedSlotIds','manualLock','manualLockSlotId','overlayWork'])\n      or exists(select 1 from jsonb_object_keys(p.x->'work_snapshot') as k(key) where not (k.key=any(array['workId','dayOfWeek','originSlotId','locationId','locationCodeSnapshot','locationNameSnapshot','window','serviceEffortMinutes','serviceEffortProvenance','priority','priorityProvenance','required','coveragePolicy','bestEffortCoverage','coveragePolicyOrder','coveragePolicyProvenance','requiredQualifications','qualificationProvenance','restrictions','restrictionProvenance','restrictedSlotIds','manualLock','manualLockSlotId','overlayWork'])))\n      or jsonb_typeof(p.x#>'{work_snapshot,workId}') is distinct from 'string' or jsonb_typeof(p.x#>'{work_snapshot,dayOfWeek}') is distinct from 'number' or jsonb_typeof(p.x#>'{work_snapshot,originSlotId}') not in ('string','null')\n      or p.x#>>'{work_snapshot,workId}' is distinct from o.x->>'workId' or p.x#>>'{work_snapshot,dayOfWeek}' is distinct from o.x->>'dayOfWeek' or p.x#>>'{work_snapshot,window,start}' is distinct from o.x#>>'{window,start}' or p.x#>>'{work_snapshot,window,end}' is distinct from o.x#>>'{window,end}' or p.x#>>'{work_snapshot,serviceEffortMinutes}' is distinct from o.x->>'serviceEffortMinutes'\n      or jsonb_typeof(p.x#>'{work_snapshot,locationId}') is distinct from 'string' or p.x#>>'{work_snapshot,locationId}' !~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'\n      or jsonb_typeof(p.x#>'{work_snapshot,locationCodeSnapshot}') is distinct from 'string' or nullif(btrim(p.x#>>'{work_snapshot,locationCodeSnapshot}'),'') is null or jsonb_typeof(p.x#>'{work_snapshot,locationNameSnapshot}') is distinct from 'string' or nullif(btrim(p.x#>>'{work_snapshot,locationNameSnapshot}'),'') is null\n      or jsonb_typeof(p.x#>'{work_snapshot,window}') is distinct from 'object' or jsonb_typeof(p.x#>'{work_snapshot,window,start}') is distinct from 'string' or nullif(btrim(p.x#>>'{work_snapshot,window,start}'),'') is null or jsonb_typeof(p.x#>'{work_snapshot,window,end}') is distinct from 'string' or nullif(btrim(p.x#>>'{work_snapshot,window,end}'),'') is null\n      or jsonb_typeof(p.x#>'{work_snapshot,serviceEffortMinutes}') is distinct from 'number' or jsonb_typeof(p.x#>'{work_snapshot,serviceEffortProvenance}') is distinct from 'string' or nullif(btrim(p.x#>>'{work_snapshot,serviceEffortProvenance}'),'') is null or jsonb_typeof(p.x#>'{work_snapshot,priority}') is distinct from 'number'\n      or jsonb_typeof(p.x#>'{work_snapshot,priorityProvenance}') not in ('string','null') or (jsonb_typeof(p.x#>'{work_snapshot,priorityProvenance}')='string' and nullif(btrim(p.x#>>'{work_snapshot,priorityProvenance}'),'') is null)\n      or jsonb_typeof(p.x#>'{work_snapshot,required}') is distinct from 'boolean' or jsonb_typeof(p.x#>'{work_snapshot,coveragePolicy}') not in ('string','null') or jsonb_typeof(p.x#>'{work_snapshot,bestEffortCoverage}') is distinct from 'boolean' or jsonb_typeof(p.x#>'{work_snapshot,coveragePolicyOrder}') not in ('number','null') or jsonb_typeof(p.x#>'{work_snapshot,coveragePolicyProvenance}') not in ('string','null')\n      or jsonb_typeof(p.x#>'{work_snapshot,requiredQualifications}') is distinct from 'array' or jsonb_typeof(p.x#>'{work_snapshot,qualificationProvenance}') is distinct from 'string' or nullif(btrim(p.x#>>'{work_snapshot,qualificationProvenance}'),'') is null or jsonb_typeof(p.x#>'{work_snapshot,restrictions}') is distinct from 'array' or jsonb_typeof(p.x#>'{work_snapshot,restrictionProvenance}') is distinct from 'string' or nullif(btrim(p.x#>>'{work_snapshot,restrictionProvenance}'),'') is null or jsonb_typeof(p.x#>'{work_snapshot,restrictedSlotIds}') is distinct from 'array' or jsonb_typeof(p.x#>'{work_snapshot,manualLock}') is distinct from 'boolean' or jsonb_typeof(p.x#>'{work_snapshot,manualLockSlotId}') not in ('string','null') or jsonb_typeof(p.x#>'{work_snapshot,overlayWork}') is distinct from 'boolean'\n      or exists(select 1 from jsonb_array_elements(p.x#>'{work_snapshot,requiredQualifications}') as q(value) where jsonb_typeof(q.value) is distinct from 'string' or nullif(btrim(q.value#>>'{}'),'') is null)\n      or exists(select 1 from jsonb_array_elements(p.x#>'{work_snapshot,restrictions}') as r(value) where jsonb_typeof(r.value) is distinct from 'string' or nullif(btrim(r.value#>>'{}'),'') is null)\n      or exists(select 1 from jsonb_array_elements(p.x#>'{work_snapshot,restrictedSlotIds}') as r(value) where jsonb_typeof(r.value) is distinct from 'string' or nullif(btrim(r.value#>>'{}'),'') is null)\n      or (select count(*) from jsonb_array_elements(p.x#>'{work_snapshot,requiredQualifications}'))<>(select count(distinct value#>>'{}') from jsonb_array_elements(p.x#>'{work_snapshot,requiredQualifications}'))\n      or (select count(*) from jsonb_array_elements(p.x#>'{work_snapshot,restrictions}'))<>(select count(distinct value#>>'{}') from jsonb_array_elements(p.x#>'{work_snapshot,restrictions}'))\n      or (select count(*) from jsonb_array_elements(p.x#>'{work_snapshot,restrictedSlotIds}'))<>(select count(distinct value#>>'{}') from jsonb_array_elements(p.x#>'{work_snapshot,restrictedSlotIds}'))\n  ) then raise exception using errcode='23514',message='projection work snapshots must be complete semantic authority facts bound to the canonical optimizer'; end if;\nend\n$function$\n",
+      "function_name": "static_weekly_v4_assert_projection_envelope",
+      "identity_arguments": "p_envelope jsonb, p_publication_id uuid, p_week_start date, p_exception_set jsonb",
+      "schema_name": "public"
+    },
+    {
+      "comment": "Derives only dated incumbent ranges from the append-only closure-aware roster ledger while preserving immutable recurring source and stable slot identity.",
+      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_v4_hydrate_compiler_source(p_source jsonb, p_service_date date)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_slots jsonb; v_slot jsonb; v_ranges jsonb; v_hydrated jsonb;\nbegin\n  if p_service_date is null or jsonb_typeof(p_source) is distinct from 'object' or jsonb_typeof(p_source->'slots') is distinct from 'array' then\n    raise exception using errcode='23514',message='dated scheduler source requires one canonical service date and stable slot array';\n  end if;\n  for v_slot in select value from jsonb_array_elements(p_source->'slots') loop\n    if jsonb_typeof(v_slot->'id') is distinct from 'string' or v_slot->>'id' !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' then\n      raise exception using errcode='23514',message='registered scheduler source contains a non-UUID stable roster slot identity';\n    end if;\n    select coalesce(jsonb_agg(jsonb_build_object(\n      'personId',r.person_id::text,\n      'displayName',r.person_name_snapshot,\n      'effectiveStart',r.effective_start::text,\n      'effectiveEnd',case when r.effective_end is null then null else r.effective_end::text end\n    ) order by r.effective_start,r.incumbency_id),'[]'::jsonb) into v_ranges\n    from public.v_weekly_roster_slot_incumbency_ranges r\n    where r.slot_id=(v_slot->>'id')::uuid\n      and r.effective_start<=p_service_date+6\n      and (r.effective_end is null or r.effective_end>p_service_date);\n    if jsonb_array_length(v_ranges)=0 then\n      raise exception using errcode='23514',message='every projected stable roster slot requires closure-aware incumbent history for the requested horizon';\n    end if;\n    v_slot:=jsonb_set(v_slot,'{incumbencies}',v_ranges,true);\n    v_slots:=coalesce(v_slots,'[]'::jsonb)||jsonb_build_array(v_slot);\n  end loop;\n  v_hydrated:=jsonb_set(p_source,'{slots}',coalesce(v_slots,'[]'::jsonb),true);\n  return jsonb_set(v_hydrated,'{serviceDate}',to_jsonb(p_service_date::text),true);\nend\n$function$\n",
+      "function_name": "static_weekly_v4_hydrate_compiler_source",
+      "identity_arguments": "p_source jsonb, p_service_date date",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_v4_projection_source_identity(p_source jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n IMMUTABLE\nAS $function$\ndeclare v_identity jsonb; v_version jsonb; v_slots jsonb;\nbegin\n  if jsonb_typeof(p_source) is distinct from 'object' then\n    raise exception using errcode='23514',message='projection source must be one compiler input object';\n  end if;\n  if jsonb_typeof(p_source->'version')='object' then\n    v_version:=p_source->'version';\n  elsif jsonb_typeof(p_source->'versions')='array' and jsonb_array_length(p_source->'versions')=1 then\n    v_version:=(p_source->'versions')->0;\n  else\n    raise exception using errcode='23514',message='projection source must carry exactly one recurring version';\n  end if;\n  v_version:=v_version-'id'-'publicationId'-'status'-'effectiveStart'-'effectiveEnd';\n  v_identity:=p_source-'serviceDate'-'version'-'versions';\n  if jsonb_typeof(v_identity->'slots') is distinct from 'array' then\n    raise exception using errcode='23514',message='projection source must carry stable roster slots';\n  end if;\n  select coalesce(jsonb_agg(slot-'incumbencies' order by ordinal),'[]'::jsonb) into v_slots\n  from jsonb_array_elements(v_identity->'slots') with ordinality as s(slot,ordinal);\n  v_identity:=jsonb_set(v_identity,'{slots}',v_slots,true);\n  return jsonb_set(v_identity,'{version}',v_version,true);\nend\n$function$\n",
+      "function_name": "static_weekly_v4_projection_source_identity",
+      "identity_arguments": "p_source jsonb",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_v4_recurring_source_identity(p_source jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n IMMUTABLE\nAS $function$\ndeclare v_identity jsonb; v_version jsonb; v_slots jsonb;\nbegin\n  if jsonb_typeof(p_source) is distinct from 'object' or coalesce(p_source->'exceptions','[]'::jsonb)<>'[]'::jsonb then\n    raise exception using errcode='23514',message='registered scheduler source must be one exception-free recurring compiler input';\n  end if;\n  if jsonb_typeof(p_source->'version')='object' then\n    v_version:=p_source->'version';\n  elsif jsonb_typeof(p_source->'versions')='array' and jsonb_array_length(p_source->'versions')=1 then\n    v_version:=(p_source->'versions')->0;\n  else\n    raise exception using errcode='23514',message='registered scheduler source must carry exactly one recurring version';\n  end if;\n  v_version:=v_version-'id'-'publicationId'-'status'-'effectiveStart'-'effectiveEnd';\n  v_identity:=p_source-'serviceDate'-'exceptions'-'version'-'versions';\n  if jsonb_typeof(v_identity->'slots') is distinct from 'array' then\n    raise exception using errcode='23514',message='registered scheduler source must carry stable roster slots';\n  end if;\n  select coalesce(jsonb_agg(slot-'incumbencies' order by ordinal),'[]'::jsonb) into v_slots\n  from jsonb_array_elements(v_identity->'slots') with ordinality as s(slot,ordinal);\n  v_identity:=jsonb_set(v_identity,'{slots}',v_slots,true);\n  return jsonb_set(v_identity,'{version}',v_version,true);\nend\n$function$\n",
+      "function_name": "static_weekly_v4_recurring_source_identity",
+      "identity_arguments": "p_source jsonb",
       "schema_name": "public"
     },
     {
@@ -40450,6 +40478,15 @@
       "table_name": "static_weekly_authority_attestation_keys"
     },
     {
+      "backs_constraint": false,
+      "definition": "CREATE UNIQUE INDEX static_weekly_authority_recovery_lineage_unique ON public.static_weekly_authority_attestation_keys USING btree (recovery_of_key_id) WHERE (recovery_of_key_id IS NOT NULL)",
+      "index_name": "static_weekly_authority_recovery_lineage_unique",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "static_weekly_authority_attestation_keys"
+    },
+    {
       "backs_constraint": true,
       "definition": "CREATE UNIQUE INDEX static_weekly_authority_source_documents_pkey ON public.static_weekly_authority_source_documents USING btree (source_id)",
       "index_name": "static_weekly_authority_source_documents_pkey",
@@ -41015,6 +41052,42 @@
       "is_unique": true,
       "schema_name": "public",
       "table_name": "zones"
+    }
+  ],
+  "owned_scheduler_role_memberships": [
+    {
+      "admin_option": false,
+      "granted_role": "static_weekly_control_plane",
+      "member_role": "supabase_admin"
+    },
+    {
+      "admin_option": false,
+      "granted_role": "static_weekly_release_operator",
+      "member_role": "supabase_admin"
+    }
+  ],
+  "owned_scheduler_roles": [
+    {
+      "bypasses_rls": false,
+      "can_create_database": false,
+      "can_create_role": false,
+      "can_login": false,
+      "can_replicate": false,
+      "connection_limit": -1,
+      "inherits_role": false,
+      "is_superuser": false,
+      "role_name": "static_weekly_control_plane"
+    },
+    {
+      "bypasses_rls": false,
+      "can_create_database": false,
+      "can_create_role": false,
+      "can_login": false,
+      "can_replicate": false,
+      "connection_limit": -1,
+      "inherits_role": false,
+      "is_superuser": false,
+      "role_name": "static_weekly_release_operator"
     }
   ],
   "policies": [
@@ -43395,6 +43468,126 @@
       "schema_name": "public"
     },
     {
+      "function_name": "static_weekly_v3_apply_exception",
+      "grantee": "static_weekly_control_plane",
+      "identity_arguments": "p_exception_type text, p_service_date date, p_starts_at time without time zone, p_ends_at time without time zone, p_base_version_id uuid, p_publication_id uuid, p_reason text, p_payload jsonb, p_expected_revision bigint, p_manager_id uuid, p_idempotency_key text, p_reverses_exception_id uuid",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "static_weekly_v3_authority_health",
+      "grantee": "static_weekly_control_plane",
+      "identity_arguments": "",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "static_weekly_v3_authority_health",
+      "grantee": "static_weekly_release_operator",
+      "identity_arguments": "",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "static_weekly_v3_configure_initial_authority_key",
+      "grantee": "static_weekly_release_operator",
+      "identity_arguments": "p_key_id text, p_secret text, p_configured_by text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "static_weekly_v3_create_draft",
+      "grantee": "static_weekly_control_plane",
+      "identity_arguments": "p_effective_start date, p_objective_version text, p_objective jsonb, p_input_provenance jsonb, p_document jsonb, p_expected_revision bigint, p_manager_id uuid, p_idempotency_key text, p_source_id uuid",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "static_weekly_v3_materialize_projection",
+      "grantee": "static_weekly_control_plane",
+      "identity_arguments": "p_publication_id uuid, p_service_date date, p_exception_set_digest text, p_compiler_version text, p_objective jsonb, p_metrics jsonb, p_replay_digest text, p_envelope jsonb, p_expected_revision bigint, p_manager_id uuid, p_idempotency_key text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "static_weekly_v3_publish_draft",
+      "grantee": "static_weekly_control_plane",
+      "identity_arguments": "p_draft_version_id uuid, p_expected_draft_revision bigint, p_expected_revision bigint, p_manager_id uuid, p_idempotency_key text, p_publication_kind text, p_rollback_of_version_id uuid",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "static_weekly_v3_read_authority_source",
+      "grantee": "static_weekly_control_plane",
+      "identity_arguments": "p_source_id uuid",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "static_weekly_v3_read_publication_source",
+      "grantee": "static_weekly_control_plane",
+      "identity_arguments": "p_publication_id uuid, p_service_date date",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "static_weekly_v3_recover_authority_key",
+      "grantee": "static_weekly_release_operator",
+      "identity_arguments": "p_key_id text, p_secret text, p_recovery_of text, p_configured_by text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "static_weekly_v3_register_authority_source",
+      "grantee": "static_weekly_release_operator",
+      "identity_arguments": "p_source_id uuid, p_canonical_source jsonb, p_configured_by text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "static_weekly_v3_replace_incumbency",
+      "grantee": "static_weekly_control_plane",
+      "identity_arguments": "p_slot_id uuid, p_person_id uuid, p_person_name_snapshot text, p_effective_start date, p_expected_revision bigint, p_manager_id uuid, p_idempotency_key text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "static_weekly_v3_revoke_authority_key",
+      "grantee": "static_weekly_release_operator",
+      "identity_arguments": "p_key_id text, p_reason text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "static_weekly_v3_rotate_authority_key",
+      "grantee": "static_weekly_release_operator",
+      "identity_arguments": "p_key_id text, p_secret text, p_overlap_until timestamp with time zone, p_configured_by text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "static_weekly_v3_update_draft",
+      "grantee": "static_weekly_control_plane",
+      "identity_arguments": "p_version_id uuid, p_document jsonb, p_objective jsonb, p_input_provenance jsonb, p_expected_draft_revision bigint, p_expected_revision bigint, p_manager_id uuid, p_idempotency_key text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
       "function_name": "sync_migration_log_summary",
       "grantee": "service_role",
       "identity_arguments": "",
@@ -43544,6 +43737,32 @@
       "identity_arguments": "p_device_id text, p_location_code text, p_client_session_id text, p_client_started_at text, p_authenticated_credential_id text, p_backend_execution_secret text",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    }
+  ],
+  "schema_grants": [
+    {
+      "grantee": "PUBLIC",
+      "is_grantable": false,
+      "privilege_type": "USAGE",
+      "schema_name": "public"
+    },
+    {
+      "grantee": "anon",
+      "is_grantable": false,
+      "privilege_type": "USAGE",
+      "schema_name": "public"
+    },
+    {
+      "grantee": "authenticated",
+      "is_grantable": false,
+      "privilege_type": "USAGE",
+      "schema_name": "public"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": false,
+      "privilege_type": "USAGE",
       "schema_name": "public"
     }
   ],

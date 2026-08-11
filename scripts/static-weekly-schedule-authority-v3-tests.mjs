@@ -149,8 +149,8 @@ try {
   await scalar(release("static_weekly_v3_revoke_authority_key", `${quote("static-weekly-authority-hmac-v2")},'overlap revoked'`));
   await expectReject(verifyAttestation(issuedAttestation), /unknown, expired, or revoked/i);
   assert.equal((JSON.parse(await scalar(release("static_weekly_v3_authority_health", "")))).ready, true, "revoked overlap cannot downgrade the active key");
-  const recovered = JSON.parse(await scalar(release("static_weekly_v3_recover_authority_key", `${quote("static-weekly-authority-hmac-v4")},${quote("static-weekly-v3-recovery-secret-01234567890123456789")},${quote("static-weekly-authority-hmac-v2")},'v3-test-recovery'`)));
-  assert.equal(recovered.ready, true, "recovery replaces a failed active key only through a new version tied to a revoked predecessor");
+  const recovered = JSON.parse(await scalar(release("static_weekly_v3_recover_authority_key", `${quote("static-weekly-authority-hmac-v4")},${quote("static-weekly-v3-recovery-secret-01234567890123456789")},${quote("static-weekly-authority-hmac-v3")},'v3-test-recovery'`)));
+  assert.equal(recovered.ready, true, "recovery atomically replaces the exact failed active key through one new versioned lineage");
   console.log("static weekly scheduler complete v3 authority tests: PASS");
 } finally { await docker(["rm", "-f", container]).catch(() => {}); removed = true; }
 assert.equal(removed, true, "worker-owned PostgreSQL container must be removed");

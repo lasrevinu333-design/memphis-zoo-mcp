@@ -3,7 +3,7 @@
 // runs each enum through the same no-mutation fence; this file mutates every
 // normalized field family before a compiler result can even be constructed.
 import assert from "node:assert/strict";
-import { assertExceptionCommand, EXCEPTION_TYPES } from "../src/static-weekly-schedule-model.js";
+import { assertExceptionCommand, EXCEPTION_TYPES, STATIC_WEEKLY_EXCEPTION_REASON_MAX } from "../src/static-weekly-schedule-model.js";
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const base = (type, payload, window = null) => ({ id: `exception-${type}`, type, serviceDate: "2026-10-06", actorId: "named-manager", reason: "approved operational adjustment", idempotencyKey: `key-${type}`, expectedRevision: 4, payload, ...(window ? { window } : {}) });
@@ -62,4 +62,21 @@ attack("event_impact", (command) => { command.payload.addWork = [work(true)]; co
 attack("event_impact", (command) => { command.payload.addWork = [work(true)]; command.payload.removeWorkIds = []; command.payload.addWork[0].serviceEffortMinutes = -1; });
 attack("reverse", (command) => { command.reversesExceptionId = "different-target"; });
 attack("reverse", (command) => { command.payload.reversesExceptionId = 42; });
+
+// PostgreSQL char_length and the portable authority both count Unicode code
+// points. Keep the reason boundary table-driven so astral characters cannot
+// silently turn into a different 500-character contract at the SQL seam.
+for (const { label, reason, accepted } of [
+  { label: "ascii 500", reason: "a".repeat(STATIC_WEEKLY_EXCEPTION_REASON_MAX), accepted: true },
+  { label: "astral 500", reason: "😀".repeat(STATIC_WEEKLY_EXCEPTION_REASON_MAX), accepted: true },
+  { label: "ascii 501", reason: "a".repeat(STATIC_WEEKLY_EXCEPTION_REASON_MAX + 1), accepted: false },
+  { label: "astral 501", reason: "😀".repeat(STATIC_WEEKLY_EXCEPTION_REASON_MAX + 1), accepted: false },
+  { label: "blank", reason: "   ", accepted: false },
+  { label: "control", reason: "approved\nchange", accepted: false },
+]) {
+  const command = base("pto", { slotId: "slot-a" });
+  command.reason = reason;
+  if (accepted) assert.doesNotThrow(() => assertExceptionCommand(command), `${label} reason must be portable-valid`);
+  else assert.throws(() => assertExceptionCommand(command), /reason|bounded/i, `${label} reason must be portable-invalid`);
+}
 console.log("static weekly exhaustive portable exception contract tests: PASS");

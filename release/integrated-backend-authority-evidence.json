@@ -1,6 +1,6 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
-  "schema_fingerprint": "2c9f5da79251d795668979f72b3a907402fccca78be1d185d09f2bc5b2358257",
+  "schema_fingerprint": "40ac95a0989979c5b446210c6bb2e0d03288c339ac13729b0a16faa0a7c5199d",
   "schema_transition": {
     "transition_id": "named-manager-messenger-archive-retirement-20260810",
     "from_fingerprint": "333ddfc8008ea0b85916de7d491b98c9b8d6a7d45d3a2947d99b4b3bb836ea00",
@@ -201,7 +201,7 @@
       {
         "path": "docs/env.md",
         "mode": "100644",
-        "object_id": "227027861d3f5293e0e16dc388eac7a0549d4930"
+        "object_id": "d0a7f1d49ddf380dc3938eca4872b50f10a223cc"
       },
       {
         "path": "docs/github-json-commands.md",
@@ -276,7 +276,7 @@
       {
         "path": "docs/static-schedule-publishing-pipeline.md",
         "mode": "100644",
-        "object_id": "2c996c65b6bcbd7888ce9a8f3dd71bab74bbff56"
+        "object_id": "19b0000d69eb9b80ec2be28a862ac98af23d7571"
       },
       {
         "path": "home/eric/greek_roman_herbal_medicine.md",
@@ -301,7 +301,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "a46d13bfd453cde16a4a2c1464050ea446ad5e49"
+        "object_id": "e1626155a7fffc850ef9b3d40264bb350dc6e0c9"
       },
       {
         "path": "public/moxie-assets/contacts-creekside-animal.png",
@@ -606,17 +606,17 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "0a682c6ee3e92d55b01f2c39c928f5fe271cef13"
+        "object_id": "36e1b3ff8fef155fd3469e0dacab8af53fe06f83"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "ad5e9c507d21af56bef044750d04ef8f6968e0e2"
+        "object_id": "fce7768cfd602719e03904ff6355affdf0d0c66d"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
         "mode": "100644",
-        "object_id": "42dd5f5f3a91f4bbdb33d8770ca97d9986a09eb3"
+        "object_id": "238de2499d7b47b42cff9f728bdac84d0f6f118c"
       },
       {
         "path": "scripts/integrated-backend-authority-suite-order-tests.mjs",
@@ -826,7 +826,7 @@
       {
         "path": "scripts/refresh-integrated-backend-authority-release.mjs",
         "mode": "100644",
-        "object_id": "c83e86836a8fd2dea1929a6624ef1caf06d70fa7"
+        "object_id": "294e5b087a29c94dbdb6e65753526e9db3421c1d"
       },
       {
         "path": "scripts/refresh-release-schema-alignment.mjs",
@@ -836,7 +836,7 @@
       {
         "path": "scripts/refresh-schema-fingerprint.mjs",
         "mode": "100644",
-        "object_id": "914883734304eca5a875e0a3d311aa277e210388"
+        "object_id": "5cbfbb3ea63cef321548108c6a8db54212c6a5e2"
       },
       {
         "path": "scripts/restroom-rebalance-route-tests.mjs",
@@ -876,7 +876,7 @@
       {
         "path": "scripts/schema-fingerprint-catalog.mjs",
         "mode": "100644",
-        "object_id": "11453449e3c5a5f50f44418510ed1badb928fccd"
+        "object_id": "e67a88195329bed730c776b1bf7ad4517cec0c2c"
       },
       {
         "path": "scripts/schema-fingerprint-check.mjs",
@@ -984,14 +984,24 @@
         "object_id": "d1fc2839a3061df922e8ef891089dbde26d3a8c2"
       },
       {
+        "path": "scripts/static-weekly-control-plane-runtime-tests.mjs",
+        "mode": "100644",
+        "object_id": "25e319c047500d276eef1371cdeb3f391c884627"
+      },
+      {
         "path": "scripts/static-weekly-control-plane-tests.mjs",
         "mode": "100644",
         "object_id": "b8dc9302e5094685eef8d5a79a7614843f25d9b3"
       },
       {
+        "path": "scripts/static-weekly-schedule-authority-closure-tests.mjs",
+        "mode": "100644",
+        "object_id": "5fe5e0ec18a5228c9cc74ef872a69260e82b271f"
+      },
+      {
         "path": "scripts/static-weekly-schedule-authority-v3-tests.mjs",
         "mode": "100644",
-        "object_id": "56370bd097a41c7b8b4f29ece531bd5a01da221c"
+        "object_id": "b65d675e31d001d54ec0bb228a550f6ea1ba891a"
       },
       {
         "path": "scripts/static-weekly-schedule-candidate-importer.mjs",
@@ -1021,7 +1031,7 @@
       {
         "path": "scripts/static-weekly-schedule-exception-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "b16242b185bbc62242cae9cff1054401459f3930"
+        "object_id": "518f647724729832762edb42918b5be9653c7b4f"
       },
       {
         "path": "scripts/static-weekly-schedule-model-tests.mjs",
@@ -1306,7 +1316,7 @@
       {
         "path": "src/auth/shared-access-auth.js",
         "mode": "100644",
-        "object_id": "956bf68a69ccd97feea806a73414ebf211f76454"
+        "object_id": "8ca0e12ae19833d8893e8cb629d26eeb77c9f729"
       },
       {
         "path": "src/config/env.js",
@@ -1501,7 +1511,7 @@
       {
         "path": "src/static-weekly-control-plane-runtime.js",
         "mode": "100644",
-        "object_id": "0a8297ce980d903bd7063b89f34fbea12d58d4e4"
+        "object_id": "13dacfa37b43eda07d6282e76f63ee53232020a1"
       },
       {
         "path": "src/static-weekly-control-plane.js",
@@ -1516,12 +1526,12 @@
       {
         "path": "src/static-weekly-schedule-database-adapter.js",
         "mode": "100644",
-        "object_id": "798766d08342a22b6f2304dcef1213184fd72f24"
+        "object_id": "351f509874f45596eae36da07e05e0672e3b5f32"
       },
       {
         "path": "src/static-weekly-schedule-model.js",
         "mode": "100644",
-        "object_id": "89b6c180ff4cfb3b0728e199565629eaec7fcd43"
+        "object_id": "afcef45dede961fab08ec9217e3678122175a7c9"
       },
       {
         "path": "src/static-weekly-schedule-program.js",
@@ -1591,12 +1601,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "aed8d4de6693c04d2c0a586322ebd4f8877f754c"
+        "object_id": "f30a87b5e6cb9deca30652e31e191ec7bc35a5d9"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "ba69a4c52e438313d8427c02007fd39327fbac02"
+        "object_id": "2dae7c9fd6a3719cdfb29ecb1ebe7419a8e1813d"
       },
       {
         "path": "supabase/config.toml",
@@ -2509,13 +2519,18 @@
         "object_id": "433543ea210ec505d9ca1ef92dd1900bede785d2"
       },
       {
+        "path": "supabase/migrations/20260810230000_static_weekly_scheduler_authority_closure_correction.sql",
+        "mode": "100644",
+        "object_id": "46654c2fbb3d07828f1c6516c66645509c680696"
+      },
+      {
         "path": "tmp/write_probe.txt",
         "mode": "100644",
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 487,
-    "migration_path_count": 65,
+    "authority_path_count": 490,
+    "migration_path_count": 66,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate requires externally supplied exact expected_commit and expected_tree, deterministically enumerates every tracked expected-tree entry, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file as its exact tree blob."
   },
@@ -2720,6 +2735,9 @@
     },
     {
       "name": "20260810220000_static_weekly_scheduler_complete_authority_correction.sql"
+    },
+    {
+      "name": "20260810230000_static_weekly_scheduler_authority_closure_correction.sql"
     }
   ],
   "release_boundary": "Configure a minimum-32-character CUSTODIAL_BACKEND_PROOF_SECRET and matching database digest before Phase A, retain the bridge backend artifact through Phase C, and require the executable health/restoration probes before traffic changes."

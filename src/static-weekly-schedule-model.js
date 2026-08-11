@@ -229,9 +229,15 @@ function exactPayloadObject(value, required, label) {
 // database v3 validator introduced with this contract.
 const EXCEPTION_TEXT_MAX = 200;
 const EXCEPTION_WORK_ID_MAX = 160;
+export const STATIC_WEEKLY_EXCEPTION_REASON_MAX = 500;
+
+// PostgreSQL char_length(text) counts Unicode code points. Keep the portable
+// contract on that same character unit rather than JavaScript UTF-16 units.
+const exceptionCharacterLength = (value) => Array.from(value).length;
+const hasExceptionControlCharacter = (value) => /[\x00-\x1f\x7f]/.test(value);
 
 function nonblankPayloadText(value, label, maximum = EXCEPTION_TEXT_MAX) {
-  assert(typeof value === "string" && value.trim() && value.length <= maximum, `${label} must be a bounded nonblank string.`, "invalid_exception_payload");
+  assert(typeof value === "string" && value.replace(/^ +| +$/g, "") && exceptionCharacterLength(value) <= maximum && !hasExceptionControlCharacter(value), `${label} must be a bounded nonblank string.`, "invalid_exception_payload");
   return value;
 }
 
@@ -331,7 +337,7 @@ export function assertExceptionCommand(exception) {
   // for relational slot/location/reversal identities at its own boundary.
   nonblankPayloadText(exception.id, "Exception ID", EXCEPTION_TEXT_MAX);
   nonblankPayloadText(exception.actorId, "Exception actor identity", EXCEPTION_TEXT_MAX);
-  nonblankPayloadText(exception.reason, "Exception reason", 500);
+  nonblankPayloadText(exception.reason, "Exception reason", STATIC_WEEKLY_EXCEPTION_REASON_MAX);
   nonblankPayloadText(exception.idempotencyKey, "Exception idempotency key", 200);
   assert(Number.isInteger(exception.expectedRevision) && exception.expectedRevision >= 0, "Exception expected revision is required.", "invalid_exception");
   assertStaticWeeklyExceptionPayload(exception);

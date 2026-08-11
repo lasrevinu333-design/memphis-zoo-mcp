@@ -52,6 +52,8 @@ scheduler mutator.
 |---|---:|---|
 | `STATIC_WEEKLY_CONTROL_PLANE_DATABASE_URL` | Yes, control-plane service only | Dedicated PostgreSQL login URL. It is not set on the ordinary API deployment. |
 | `STATIC_WEEKLY_CONTROL_PLANE_PORT` | No | Listener port for `npm run start:static-weekly-control-plane`; defaults to `PORT` then `3100`. |
+| `SUPABASE_URL` | Yes, control-plane service only | Required to construct the trusted-device revocation and manager-association store. The scheduler process refuses startup if it is absent. |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes, control-plane service only | Required with `SUPABASE_URL` for trusted-device revocation and manager-association checks. The scheduler process refuses startup if it is absent. |
 
 Before a first draft can be created, the release operator registers the
 compiler-normalized, exception-free recurring source of record with
@@ -65,7 +67,10 @@ revocation, and recovery procedures. Key values must be supplied only through
 the release operator's protected session: they are never placed in app
 environment variables, release evidence, command output, or database result
 payloads. Rotation permits at most 24 hours of verification overlap; health
-must report exactly one active key and no expired overlap before release.
+must report exactly one active key, no expired overlap, and a successful
+internal sign/verify canary before release. Failed-active recovery names that
+exact current active predecessor and atomically revokes it while installing one
+distinct successor; it does not require an unsafe pre-revocation step.
 
 ## Admin / Ops API
 
