@@ -12,7 +12,7 @@ export function getMcpConnectorToken(env = process.env) {
 }
 
 export function isMcpFullNoAuthEnabled(env = process.env) {
-  const value = String(env?.MCP_ALLOW_FULL_NOAUTH ?? "true").trim().toLowerCase();
+  const value = String(env?.MCP_ALLOW_FULL_NOAUTH ?? "false").trim().toLowerCase();
   return !["0", "false", "no", "off"].includes(value);
 }
 
@@ -63,11 +63,9 @@ export function authenticateMcpConnectorRequest(
   const configuredConnectorToken = getMcpConnectorToken(env);
   const providedConnectorToken = requestMcpConnectorToken(req);
 
-  // ChatGPT custom apps do not consistently send customer-defined API-key
-  // headers. Streamable HTTP therefore defaults to the full connector tool set.
-  // Operators can disable full tokenless access with MCP_ALLOW_FULL_NOAUTH=false,
-  // which falls back to the existing read-only mode. A presented but incorrect
-  // token is never downgraded to tokenless access.
+  // Tokenless Streamable HTTP is read-only by default. Full access requires
+  // either a valid connector token or an explicit unsafe operator override.
+  // A presented but incorrect token is never downgraded to tokenless access.
   if (!providedConnectorToken && allowFullNoAuth) {
     return {
       ok: true,

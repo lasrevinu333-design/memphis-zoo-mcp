@@ -6,6 +6,7 @@ import {
   isMcpReadOnlyNoAuthEnabled,
   makeMcpConnectorMiddleware,
 } from "../src/auth/mcp-connector-auth.js";
+import { validateRuntimeEnv } from "../src/config/env.js";
 
 const NOW = new Date("2026-07-23T17:30:00.000Z");
 const TOKEN = "unit-test-connector-token";
@@ -29,14 +30,15 @@ function authenticate(headers, options = {}) {
   });
 }
 
-assert.equal(isMcpFullNoAuthEnabled({}), true);
+assert.equal(isMcpFullNoAuthEnabled({}), false);
+assert.equal(isMcpFullNoAuthEnabled({ MCP_ALLOW_FULL_NOAUTH: "true" }), true);
 assert.equal(isMcpFullNoAuthEnabled({ MCP_ALLOW_FULL_NOAUTH: "false" }), false);
 assert.equal(isMcpFullNoAuthEnabled({ MCP_ALLOW_FULL_NOAUTH: "0" }), false);
 assert.equal(isMcpReadOnlyNoAuthEnabled({}), true);
 assert.equal(isMcpReadOnlyNoAuthEnabled({ MCP_ALLOW_READONLY_NOAUTH: "false" }), false);
 assert.equal(isMcpReadOnlyNoAuthEnabled({ MCP_ALLOW_READONLY_NOAUTH: "0" }), false);
 
-const anonymousFull = authenticate({});
+const anonymousFull = authenticate({}, { allowFullNoAuth: true });
 assert.equal(anonymousFull.ok, true);
 assert.equal(anonymousFull.auth_source, "noauth_full");
 assert.equal(anonymousFull.session.role, "connector_service");
@@ -73,8 +75,8 @@ const unconfiguredAnonymous = authenticateMcpConnectorRequest(request(), {
   now: NOW,
 });
 assert.equal(unconfiguredAnonymous.ok, true);
-assert.equal(unconfiguredAnonymous.auth_source, "noauth_full");
-assert.equal(unconfiguredAnonymous.session.read_only, false);
+assert.equal(unconfiguredAnonymous.auth_source, "noauth_readonly");
+assert.equal(unconfiguredAnonymous.session.read_only, true);
 
 const unconfiguredReadOnly = authenticateMcpConnectorRequest(request(), {
   env: {},
@@ -103,10 +105,10 @@ middleware(
   middlewareRequest,
   {
     status() {
-      throw new Error("Default full-access middleware should not reject the request.");
+      throw new Error("Default read-only middleware should not reject the request.");
     },
     json() {
-      throw new Error("Default full-access middleware should not write an error response.");
+      throw new Error("Default read-only middleware should not write an error response.");
     },
   },
   () => {
@@ -114,9 +116,29 @@ middleware(
   }
 );
 assert.equal(nextCalled, true);
-assert.equal(middlewareRequest.memphisMcpAuth.read_only, false);
-assert.equal(middlewareRequest.memphisAuth.read_only, false);
-assert.equal(middlewareRequest.memphisMcpAuth.source, "noauth_full");
+assert.equal(middlewareRequest.memphisMcpAuth.read_only, true);
+assert.equal(middlewareRequest.memphisAuth.read_only, true);
+assert.equal(middlewareRequest.memphisMcpAuth.source, "noauth_readonly");
+
+const savedEnv = Object.fromEntries(
+  ["NODE_ENV", "RENDER", "MCP_ALLOW_FULL_NOAUTH"].map((name) => [name, process.env[name]])
+);
+try {
+  process.env.NODE_ENV = "production";
+  process.env.RENDER = "true";
+  process.env.MCP_ALLOW_FULL_NOAUTH = "true";
+  const unsafeProduction = validateRuntimeEnv({ strict: true });
+  assert.equal(unsafeProduction.env.mcp.allow_full_noauth, true);
+  assert.ok(
+    unsafeProduction.errors.some((message) => message.includes("MCP_ALLOW_FULL_NOAUTH")),
+    "Strict production health must reject tokenless mutation access."
+  );
+} finally {
+  for (const [name, value] of Object.entries(savedEnv)) {
+    if (value == null) delete process.env[name];
+    else process.env[name] = value;
+  }
+}
 
 const readOnlyMiddlewareRequest = request();
 let readOnlyNextCalled = false;
