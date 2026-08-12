@@ -10,6 +10,9 @@ function buildApp(readCalls = []) {
       const query = String(sql || "");
       readCalls.push(query);
       if (query.includes("sch_service_date(now())")) return [{ service_date: "2026-06-10" }];
+      if (query.includes("static_weekly_v5_read_employee_day")) {
+        return [{ data: { governed: false, source: "legacy_daily_schedule" } }];
+      }
       if (/from\s+public\.employees/i.test(query) && /Clayton Jones/i.test(query)) {
         return [{ employee_id: "85170562-5f48-4e3d-9df6-760d0e3ff5f0" }];
       }
