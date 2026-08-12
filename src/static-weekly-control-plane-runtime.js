@@ -43,6 +43,7 @@ export function createStaticWeeklyControlPlaneRuntime({
     trustedDeviceStore: trustedStore,
     supabase: trustedSupabase,
     requireTrustedDeviceStore: true,
+    requireCurrentManagerAssociation: true,
   });
 
   function namedManager(req, res, next) {

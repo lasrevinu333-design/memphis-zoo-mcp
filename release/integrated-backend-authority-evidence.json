@@ -101,7 +101,7 @@
       {
         "path": ".github/workflows/foundation-security-gate.yml",
         "mode": "100644",
-        "object_id": "3280ff2d9a70c955d260b9c64dd432abbd8b24ff"
+        "object_id": "f60551a6423efc80917505b8f32adc0c50c97c9c"
       },
       {
         "path": ".github/workflows/manager-inspection-readiness-monitor.yml",
@@ -301,7 +301,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "e1626155a7fffc850ef9b3d40264bb350dc6e0c9"
+        "object_id": "8414390579d16df3e4c2a06d1a466ceaa323aa14"
       },
       {
         "path": "public/moxie-assets/contacts-creekside-animal.png",
@@ -431,7 +431,7 @@
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "9386617f99b70316426d2ff9a4966815d350ed22"
+        "object_id": "9f893220fe6b241e4fc46df74ec355ee09d8bcca"
       },
       {
         "path": "scripts/custodial-atomic-commit-database-tests.mjs",
@@ -617,6 +617,11 @@
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
         "mode": "100644",
         "object_id": "238de2499d7b47b42cff9f728bdac84d0f6f118c"
+      },
+      {
+        "path": "scripts/integrated-backend-authority-suite-order-isolated-tests.mjs",
+        "mode": "100644",
+        "object_id": "df7f74e046cb79ef457e7c38ad8537b3ed00541e"
       },
       {
         "path": "scripts/integrated-backend-authority-suite-order-tests.mjs",
@@ -986,7 +991,7 @@
       {
         "path": "scripts/static-weekly-control-plane-runtime-tests.mjs",
         "mode": "100644",
-        "object_id": "25e319c047500d276eef1371cdeb3f391c884627"
+        "object_id": "dd9c56c1e65279afc577ad7e6a5096471566c148"
       },
       {
         "path": "scripts/static-weekly-control-plane-tests.mjs",
@@ -1316,7 +1321,7 @@
       {
         "path": "src/auth/shared-access-auth.js",
         "mode": "100644",
-        "object_id": "8ca0e12ae19833d8893e8cb629d26eeb77c9f729"
+        "object_id": "e6fa6b64e97fcafda82ec5d080bd1c914c315846"
       },
       {
         "path": "src/config/env.js",
@@ -1511,7 +1516,7 @@
       {
         "path": "src/static-weekly-control-plane-runtime.js",
         "mode": "100644",
-        "object_id": "13dacfa37b43eda07d6282e76f63ee53232020a1"
+        "object_id": "ec00fbebbc877956fd521e9339c388ca07dd634a"
       },
       {
         "path": "src/static-weekly-control-plane.js",
@@ -2529,7 +2534,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 490,
+    "authority_path_count": 491,
     "migration_path_count": 66,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate requires externally supplied exact expected_commit and expected_tree, deterministically enumerates every tracked expected-tree entry, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file as its exact tree blob."

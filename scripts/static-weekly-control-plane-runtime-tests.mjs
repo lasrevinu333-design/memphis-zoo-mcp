@@ -26,6 +26,7 @@ assert.throws(() => createStaticWeeklyControlPlaneRuntime({
 
 let lookup = async () => ({
   credential_id: credentialId, device_id: deviceId, max_access_level: "full_access", expires_at: future(),
+  manager_id: manager.manager_id,
   manager: { ...manager },
 });
 const store = { async find(id) { return lookup(id); } };
@@ -53,26 +54,42 @@ try {
   assert.equal(response.status, 200, "a valid trusted named-manager credential may reach the scheduler mutation boundary");
   assert.equal(mutations, 1);
 
-  lookup = async () => ({ credential_id: credentialId, device_id: deviceId, max_access_level: "full_access", expires_at: future(), revoked_at: new Date().toISOString(), manager: { ...manager } });
+  lookup = async () => ({ credential_id: credentialId, device_id: deviceId, max_access_level: "full_access", expires_at: future(), revoked_at: new Date().toISOString(), manager_id: manager.manager_id, manager: { ...manager } });
   response = await mutation();
   assert.equal(response.status, 401, "a revoked trusted-device credential must be rejected before scheduler mutation");
   assert.equal(mutations, 1);
 
-  lookup = async () => ({ credential_id: credentialId, device_id: deviceId, max_access_level: "full_access", expires_at: future(), manager: { ...manager, active: false, revoked_at: new Date().toISOString() } });
+  lookup = async () => ({ credential_id: credentialId, device_id: deviceId, max_access_level: "full_access", expires_at: future(), manager_id: manager.manager_id, manager: { ...manager, active: false, revoked_at: new Date().toISOString() } });
   response = await mutation();
   assert.equal(response.status, 403, "a revoked manager/device association must be rejected before scheduler mutation");
   assert.equal(mutations, 1);
 
+  lookup = async () => ({ credential_id: credentialId, device_id: deviceId, max_access_level: "full_access", expires_at: future(), manager_id: null, manager: null });
+  response = await mutation();
+  assert.equal(response.status, 403, "a removed manager/device association must be rejected before scheduler mutation");
+  assert.equal(mutations, 1);
+
+  const otherManager = { ...manager, manager_id: "10000000-0000-4000-8000-000000000092", display_name: "Other Runtime Manager" };
+  lookup = async () => ({ credential_id: credentialId, device_id: deviceId, max_access_level: "full_access", expires_at: future(), manager_id: otherManager.manager_id, manager: otherManager });
+  response = await mutation();
+  assert.equal(response.status, 403, "a changed manager/device association must be rejected before scheduler mutation");
+  assert.equal(mutations, 1);
+
+  lookup = async () => ({ credential_id: credentialId, device_id: deviceId, max_access_level: "full_access", expires_at: future(), manager_id: manager.manager_id, manager: { ...manager } });
+  response = await mutation();
+  assert.equal(response.status, 200, "the current matching manager/device association may reach the scheduler mutation boundary");
+  assert.equal(mutations, 2);
+
   lookup = async () => { throw new Error("trusted store unavailable"); };
   response = await mutation();
   assert.equal(response.status, 500, "a trusted-device lookup failure must fail closed before scheduler mutation");
-  assert.equal(mutations, 1);
+  assert.equal(mutations, 2);
 
   const savedFind = store.find;
   delete store.find;
   response = await mutation();
   assert.equal(response.status, 503, "an unavailable trusted-device lookup method must fail closed before scheduler mutation");
-  assert.equal(mutations, 1);
+  assert.equal(mutations, 2);
   store.find = savedFind;
 } finally {
   await new Promise((resolve) => server.close(resolve));

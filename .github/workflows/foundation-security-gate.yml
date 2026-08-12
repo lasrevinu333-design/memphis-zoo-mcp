@@ -53,4 +53,5 @@ jobs:
           # This starts only disposable worker-owned PostgreSQL containers and
           # includes the real independent-session concurrency/restart suite.
           npm run --silent test:static-weekly-scheduler:database
+          npm run --silent test:integrated-backend-authority-suite-order
           npm run --silent test:ci-workflows
