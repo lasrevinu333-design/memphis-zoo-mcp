@@ -1,10 +1,10 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
-  "schema_fingerprint": "6198339d765feecf1507a943364efd67ae4fb6a83dfdedcaa240d0c26fc539a3",
+  "schema_fingerprint": "cc51ccb39ab7705b07fa870d996aa9920fe742e58cbab84039ba8d745731716d",
   "schema_transition": {
     "transition_id": "named-manager-messenger-archive-retirement-20260810",
     "from_fingerprint": "333ddfc8008ea0b85916de7d491b98c9b8d6a7d45d3a2947d99b4b3bb836ea00",
-    "to_fingerprint": "6198339d765feecf1507a943364efd67ae4fb6a83dfdedcaa240d0c26fc539a3",
+    "to_fingerprint": "cc51ccb39ab7705b07fa870d996aa9920fe742e58cbab84039ba8d745731716d",
     "expires_at": "2026-08-23T23:59:59Z"
   },
   "frontend_source_fingerprint": "333ddfc8008ea0b85916de7d491b98c9b8d6a7d45d3a2947d99b4b3bb836ea00",
@@ -356,7 +356,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "077ca82b678eef327e513695a4ed7e822a4412ee"
+        "object_id": "265d528597214c0b48d551a027575708469bd5b3"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -1001,12 +1001,12 @@
       {
         "path": "scripts/static-weekly-control-plane-runtime-tests.mjs",
         "mode": "100644",
-        "object_id": "32fd96d8004710792578c49f39fd803a60fd1c02"
+        "object_id": "f0ac1908c0f2aa470727cb1962f0441f2c6dac6b"
       },
       {
         "path": "scripts/static-weekly-control-plane-tests.mjs",
         "mode": "100644",
-        "object_id": "ff3d61ef2c7fa18075290d7ac51973459eedc6a0"
+        "object_id": "909c6fa83a07dbcef25ffd2d343cddd95959cf5a"
       },
       {
         "path": "scripts/static-weekly-employee-day-route-tests.mjs",
@@ -1016,12 +1016,12 @@
       {
         "path": "scripts/static-weekly-schedule-authority-closure-tests.mjs",
         "mode": "100644",
-        "object_id": "5fe5e0ec18a5228c9cc74ef872a69260e82b271f"
+        "object_id": "e6fb47c307b4332945c373f1678bcf042f8adab2"
       },
       {
         "path": "scripts/static-weekly-schedule-authority-v3-tests.mjs",
         "mode": "100644",
-        "object_id": "ba7f0b45e68f2bd69a4b245459746089a7a7256b"
+        "object_id": "a448e7fced810b559ec8cef841051709af967555"
       },
       {
         "path": "scripts/static-weekly-schedule-candidate-importer.mjs",
@@ -1036,7 +1036,7 @@
       {
         "path": "scripts/static-weekly-schedule-concurrency-tests.mjs",
         "mode": "100644",
-        "object_id": "29e18c9d5e2d012f9e91d18a0b25ca79953b1997"
+        "object_id": "9fbbb7c6aedde557da37ebe2546153bff236ebc5"
       },
       {
         "path": "scripts/static-weekly-schedule-database-adapter-tests.mjs",
@@ -1531,12 +1531,12 @@
       {
         "path": "src/static-weekly-control-plane-runtime.js",
         "mode": "100644",
-        "object_id": "08243129c0b6557933ed22f2aba09a7500dc0469"
+        "object_id": "19e896a7c97a07d8d1265f7155ff1be12f506556"
       },
       {
         "path": "src/static-weekly-control-plane.js",
         "mode": "100644",
-        "object_id": "1407c68f01be21026ba004b26d707d802962b5db"
+        "object_id": "05f79348d8ba19fb6037e24a64274aa717c6d330"
       },
       {
         "path": "src/static-weekly-schedule-compiler.js",
@@ -1621,12 +1621,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "f1accc8e69989e0af8af0148a171bd6b9ab21d43"
+        "object_id": "ebf3bac5e99deb242a73ab6a65811e16e5a434a9"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "921ae836d3d513d4b894252f1a5f7c1c96a842c2"
+        "object_id": "e54f4005115a23b519f68fd54b5be2d7360705a9"
       },
       {
         "path": "supabase/config.toml",
@@ -2551,7 +2551,7 @@
       {
         "path": "supabase/migrations/20260812130000_static_weekly_employee_turnover.sql",
         "mode": "100644",
-        "object_id": "536f8639c8976863199712ee014c0f82631ce7d3"
+        "object_id": "e4bee98c773b1362241c4c8198061dc7d212ab98"
       },
       {
         "path": "tmp/write_probe.txt",
