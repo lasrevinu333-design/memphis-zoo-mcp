@@ -9,6 +9,7 @@ const serviceDate = "2027-02-15";
 function employeeDay(projectionStatus = "current") {
   const item = {
     id: "90000000-0000-4000-8000-000000000001",
+    occurrence_id: "90000000-0000-4000-8000-000000000001",
     service_date: serviceDate,
     group_code: "TETON_RESTROOM",
     group_name: "Teton Restroom",
@@ -18,6 +19,13 @@ function employeeDay(projectionStatus = "current") {
     coverage_end: "10:00",
     coverage_purpose: "area_owner",
     status: "ASSIGNED",
+  };
+  const laterItem = {
+    ...item,
+    id: "90000000-0000-4000-8000-000000000002",
+    occurrence_id: "90000000-0000-4000-8000-000000000002",
+    coverage_start: "14:00",
+    coverage_end: "15:00",
   };
   return {
     ok: true,
@@ -34,7 +42,7 @@ function employeeDay(projectionStatus = "current") {
     phase: "assigned_areas",
     notice: "Your assigned areas are shown below. Choose the practical cleaning order.",
     current_items: [item],
-    all_items: [item],
+    all_items: [item, laterItem],
     items: [item],
   };
 }
@@ -74,8 +82,12 @@ await withServer(buildApp(async (sql) => {
   const summaryPayload = await summary.json();
   assert.equal(summaryPayload.data.source, "static_weekly_projection");
   assert.equal(summaryPayload.data.employee_name, "Taylor New");
-  assert.equal(summaryPayload.data.items.length, 1);
+  assert.equal(summaryPayload.data.items.length, 2, "canonical occurrences at the same location and purpose must remain separate");
   assert.equal(summaryPayload.data.items[0].name, "Teton Restroom");
+  assert.deepEqual(summaryPayload.data.items.map((item) => item.occurrence_id), [
+    "90000000-0000-4000-8000-000000000001",
+    "90000000-0000-4000-8000-000000000002",
+  ]);
 
   const html = await fetch(`${origin}/schedule-api/my-schedule?employee_id=${employeeId}&service_date=${serviceDate}`);
   assert.equal(html.status, 200);

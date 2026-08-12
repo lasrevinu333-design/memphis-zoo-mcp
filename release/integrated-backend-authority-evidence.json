@@ -1011,7 +1011,7 @@
       {
         "path": "scripts/static-weekly-employee-day-route-tests.mjs",
         "mode": "100644",
-        "object_id": "ffae325135b0946fd643e5d65fac4ac24c040ea4"
+        "object_id": "0cfb63bc5e5598a50e478594d515f2572696447c"
       },
       {
         "path": "scripts/static-weekly-schedule-authority-closure-tests.mjs",
@@ -1516,7 +1516,7 @@
       {
         "path": "src/schedule-display.js",
         "mode": "100644",
-        "object_id": "8df55a0993869a11c9176333ac4ab4e7604dfdcd"
+        "object_id": "6d7e0a810d8efa16f47597d1c5f6cdf605f5dbd4"
       },
       {
         "path": "src/schema-transition.js",
