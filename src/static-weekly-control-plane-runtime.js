@@ -15,6 +15,23 @@ function requireTrustedDeviceConfiguration(env) {
   return { url, key };
 }
 
+function allowedOrigins(env) {
+  return new Set([
+    "https://lasrevinu333-design.github.io",
+    "https://localhost",
+    "capacitor://localhost",
+    ...text(env?.STATIC_WEEKLY_CONTROL_PLANE_ALLOWED_ORIGINS || env?.ALLOWED_CORS_ORIGINS).split(",").map((value) => value.trim()).filter(Boolean),
+  ]);
+}
+
+function setCors(req, res, env) {
+  const origin = text(req.headers?.origin);
+  if (origin && allowedOrigins(env).has(origin)) res.setHeader("Access-Control-Allow-Origin", origin);
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Device-Id");
+  res.setHeader("Vary", "Origin");
+}
+
 export function createStaticWeeklyControlPlaneRuntime({
   env = process.env,
   database = null,
@@ -35,6 +52,11 @@ export function createStaticWeeklyControlPlaneRuntime({
   const authorityControlPlane = controlPlane || createControlPlane({ database: authorityDatabase });
   const app = express();
   app.disable("x-powered-by");
+  app.use((req, res, next) => {
+    setCors(req, res, env);
+    if (req.method === "OPTIONS") { res.sendStatus(204); return; }
+    next();
+  });
   app.use(express.json({ limit: "128kb" }));
 
   const requireManagerWrite = makeOpsAccessMiddleware({
@@ -64,10 +86,12 @@ export function createStaticWeeklyControlPlaneRuntime({
   }
 
   app.get("/health", respond(async () => authorityControlPlane.health()));
+  app.get("/static-weekly/manager-snapshot", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.getManagerSnapshot({ manager: manager(req), weekStart: req.query?.week_start })));
   app.post("/static-weekly/drafts/initial", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.createInitialDraft({ manager: manager(req), sourceId: req.body?.source_id, effectiveStart: req.body?.effective_start, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key })));
   app.post("/static-weekly/drafts/replacement", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.createReplacementDraft({ manager: manager(req), sourcePublicationId: req.body?.source_publication_id, effectiveStart: req.body?.effective_start, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key })));
   app.post("/static-weekly/drafts/:versionId/publish", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.publishDraft({ manager: manager(req), draftVersionId: req.params.versionId, expectedDraftRevision: req.body?.expected_draft_revision, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key, publicationKind: req.body?.publication_kind || "publish", rollbackOfVersionId: req.body?.rollback_of_version_id || null })));
   app.post("/static-weekly/exceptions", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.applyException({ manager: manager(req), exceptionType: req.body?.exception_type, serviceDate: req.body?.service_date, startsAt: req.body?.starts_at || null, endsAt: req.body?.ends_at || null, baseVersionId: req.body?.base_version_id, publicationId: req.body?.publication_id, reason: req.body?.reason, payload: req.body?.payload, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key, reversesExceptionId: req.body?.reverses_exception_id || null })));
+  app.post("/static-weekly/contractor-capacity", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.applyContractorCapacity({ manager: manager(req), serviceDate: req.body?.service_date, baseVersionId: req.body?.base_version_id, publicationId: req.body?.publication_id, slotId: req.body?.slot_id, shift: req.body?.shift, reason: req.body?.reason, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key })));
   app.post("/static-weekly/incumbencies", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.replaceIncumbency({ manager: manager(req), slotId: req.body?.slot_id, personId: req.body?.person_id, personName: req.body?.person_name, effectiveStart: req.body?.effective_start, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key })));
   app.post("/static-weekly/projections", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.materializeProjection({ manager: manager(req), publicationId: req.body?.publication_id, serviceDate: req.body?.service_date, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key })));
 

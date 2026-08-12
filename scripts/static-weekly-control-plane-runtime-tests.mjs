@@ -31,8 +31,11 @@ let lookup = async () => ({
 });
 const store = { async find(id) { return lookup(id); } };
 let mutations = 0;
+let snapshots = 0;
 const controlPlane = {
   async health() { return { ready: true }; },
+  async getManagerSnapshot({ weekStart }) { snapshots += 1; return { schema: "memphis-zoo.static-weekly-manager-snapshot.v1", week_start: weekStart, authority_revision: 0 }; },
+  async applyContractorCapacity() { mutations += 1; return { revision: mutations, data: { exception_id: `contractor-${mutations}` } }; },
   async applyException() { mutations += 1; return { revision: mutations, data: { exception_id: `runtime-${mutations}` } }; },
 };
 const runtime = createStaticWeeklyControlPlaneRuntime({ env, trustedDeviceStore: store, database: {}, controlPlane });
@@ -49,7 +52,34 @@ async function mutation() {
   return { status: response.status, body: await response.json() };
 }
 
+async function managerSnapshot() {
+  const response = await fetch(`${origin}/static-weekly/manager-snapshot?week_start=2026-10-05`, {
+    headers: { Authorization: `Bearer ${session.token}` },
+  });
+  return { status: response.status, body: await response.json() };
+}
+
 try {
+  const preflight = await fetch(`${origin}/static-weekly/manager-snapshot`, {
+    method: "OPTIONS",
+    headers: { Origin: "https://lasrevinu333-design.github.io", "Access-Control-Request-Method": "GET", "Access-Control-Request-Headers": "authorization,x-device-id" },
+  });
+  assert.equal(preflight.status, 204);
+  assert.equal(preflight.headers.get("access-control-allow-origin"), "https://lasrevinu333-design.github.io");
+  assert.match(preflight.headers.get("access-control-allow-headers") || "", /Authorization/);
+
+  let snapshot = await managerSnapshot();
+  assert.equal(snapshot.status, 200, "a currently associated named manager may read the coherent weekly snapshot");
+  assert.equal(snapshot.body.data.schema, "memphis-zoo.static-weekly-manager-snapshot.v1");
+  assert.equal(snapshots, 1);
+
+  const rejectedOrigin = await fetch(`${origin}/static-weekly/manager-snapshot`, {
+    method: "OPTIONS",
+    headers: { Origin: "https://untrusted.example", "Access-Control-Request-Method": "GET" },
+  });
+  assert.equal(rejectedOrigin.status, 204);
+  assert.equal(rejectedOrigin.headers.get("access-control-allow-origin"), null, "unknown browser origins must not receive scheduler CORS access");
+
   let response = await mutation();
   assert.equal(response.status, 200, "a valid trusted named-manager credential may reach the scheduler mutation boundary");
   assert.equal(mutations, 1);
@@ -65,6 +95,9 @@ try {
   assert.equal(mutations, 1);
 
   lookup = async () => ({ credential_id: credentialId, device_id: deviceId, max_access_level: "full_access", expires_at: future(), manager_id: null, manager: null });
+  snapshot = await managerSnapshot();
+  assert.equal(snapshot.status, 403, "a removed manager/device association must be rejected before scheduler reads");
+  assert.equal(snapshots, 1);
   response = await mutation();
   assert.equal(response.status, 403, "a removed manager/device association must be rejected before scheduler mutation");
   assert.equal(mutations, 1);

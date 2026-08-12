@@ -56,6 +56,45 @@ function requireSourceId(value) {
   return sourceId;
 }
 
+function requireWindow(value, label) {
+  const start = text(value?.start);
+  const end = text(value?.end);
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(start) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(end) || start >= end) {
+    throw fail("static_weekly_control_plane_invalid_window", `${label} must be one ordered HH:MM window.`);
+  }
+  return { start, end };
+}
+
+function contractorAvailabilityFromSource(source, slotId, serviceDate, requestedShift) {
+  const raw = source?.compiler_input;
+  const id = text(slotId);
+  const slot = Array.isArray(raw?.slots) ? raw.slots.find((entry) => text(entry?.id) === id && entry?.contractorCapacity === true) : null;
+  const weekday = new Date(`${requireDate(serviceDate, "service date")}T00:00:00Z`).getUTCDay();
+  const template = Array.isArray(slot?.contractorAvailability) ? slot.contractorAvailability.find((entry) => entry?.dayOfWeek === weekday) : null;
+  if (!slot || !template) throw fail("static_weekly_control_plane_contractor_slot_required", "The selected slot is not registered contractor capacity for this service day.");
+  const requiredText = (field) => {
+    const value = text(template[field]);
+    if (!value) throw fail("static_weekly_control_plane_contractor_template_invalid", `Contractor capacity is missing ${field}.`);
+    return value;
+  };
+  const effort = template.maxServiceEffortMinutes;
+  if (!Number.isSafeInteger(effort) || effort < 1 || effort > 1440) throw fail("static_weekly_control_plane_contractor_template_invalid", "Contractor capacity has an invalid maximum service effort.");
+  if (!Array.isArray(template.qualifications) || !Array.isArray(template.restrictions)) throw fail("static_weekly_control_plane_contractor_template_invalid", "Contractor capacity is missing qualifications or restrictions.");
+  return {
+    slotId: id,
+    shift: requireWindow(requestedShift || template.shift, "contractor shift"),
+    productiveCapacityProvenance: requiredText("productiveCapacityProvenance"),
+    maxServiceEffortMinutes: effort,
+    maxServiceEffortProvenance: requiredText("maxServiceEffortProvenance"),
+    qualifications: clone(template.qualifications),
+    qualificationProvenance: requiredText("qualificationProvenance"),
+    restrictions: clone(template.restrictions),
+    restrictionProvenance: requiredText("restrictionProvenance"),
+    acceptedRouteAnchorLocationId: requiredText("acceptedRouteAnchorLocationId"),
+    acceptedRouteProvenance: requiredText("acceptedRouteProvenance"),
+  };
+}
+
 function compilerInputFromPublishedSource(source, serviceDate) {
   const raw = source?.compiler_input;
   if (!raw || typeof raw !== "object" || Array.isArray(raw) || !raw.version || !Array.isArray(raw.slots) || !Array.isArray(raw.proximity)) throw fail("static_weekly_control_plane_source_invalid");
@@ -138,6 +177,10 @@ export function createStaticWeeklyControlPlane({ database, compiler = compileSta
     async health() {
       return transaction((client) => call(client, "static_weekly_v3_authority_health", []));
     },
+    async getManagerSnapshot({ manager, weekStart }) {
+      requireManager(manager);
+      return transaction((client) => call(client, "static_weekly_v3_read_manager_snapshot", [requireDate(weekStart, "week start")]));
+    },
     async createReplacementDraft({ manager, sourcePublicationId, effectiveStart, expectedRevision, idempotencyKey }) {
       const actor = requireManager(manager); const date = requireDate(effectiveStart, "effective start");
       return transaction(async (client) => {
@@ -163,6 +206,14 @@ export function createStaticWeeklyControlPlane({ database, compiler = compileSta
     async applyException({ manager, exceptionType, serviceDate, startsAt = null, endsAt = null, baseVersionId, publicationId, reason, payload, expectedRevision, idempotencyKey, reversesExceptionId = null }) {
       const actor = requireManager(manager);
       return transaction((client) => call(client, "static_weekly_v3_apply_exception", [text(exceptionType), requireDate(serviceDate, "service date"), startsAt || null, endsAt || null, text(baseVersionId), text(publicationId), text(reason), payload, requireRevision(expectedRevision), actor.managerId, requireIdempotencyKey(idempotencyKey), reversesExceptionId || null]));
+    },
+    async applyContractorCapacity({ manager, serviceDate, baseVersionId, publicationId, slotId, shift, reason, expectedRevision, idempotencyKey }) {
+      const actor = requireManager(manager); const date = requireDate(serviceDate, "service date");
+      return transaction(async (client) => {
+        const source = await sourceFor(client, text(publicationId), date);
+        const availability = contractorAvailabilityFromSource(source, slotId, date, shift);
+        return call(client, "static_weekly_v3_apply_exception", ["cover_all", date, null, null, text(baseVersionId), text(publicationId), text(reason), { availability }, requireRevision(expectedRevision), actor.managerId, requireIdempotencyKey(idempotencyKey), null]);
+      });
     },
     async replaceIncumbency({ manager, slotId, personId, personName, effectiveStart, expectedRevision, idempotencyKey }) {
       const actor = requireManager(manager);

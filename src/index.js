@@ -579,6 +579,15 @@ function buildHealthPayload(area, extra = {}) {
   };
 }
 
+function staticWeeklyControlPlanePublicUrl(env = process.env) {
+  const value = String(env.STATIC_WEEKLY_CONTROL_PLANE_PUBLIC_URL || "").trim().replace(/\/+$/, "");
+  if (!value) return null;
+  if (!/^https:\/\/[a-z0-9.-]+(?::\d+)?$/i.test(value) && !/^http:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?$/i.test(value)) {
+    throw new Error("STATIC_WEEKLY_CONTROL_PLANE_PUBLIC_URL must be one HTTPS origin or a local HTTP origin.");
+  }
+  return value;
+}
+
 function getSupabaseConfig() {
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY || !supabaseAdmin) {
     throw new Error("Supabase is not configured. Check SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env.");
@@ -2072,7 +2081,7 @@ app.use(
 );
 app.use("/dashboard-api/events", createEventsPublicRouter({ runReadOnlySql, runCommand: runEventCommand, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController }));
 app.use("/admin-api/events", createEventsAdminRouter({ runReadOnlySql, runCommand: runEventCommand, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController, requireAdminApiAuth: requireOpsManagerAuth, requireAdminApiWrite: requireOpsManagerWrite }));
-app.use(["/version", "/release-manifest", "/health", "/health/dependencies"], (req, res, next) => {
+app.use(["/version", "/release-manifest", "/scheduler-runtime-config", "/health", "/health/dependencies"], (req, res, next) => {
   setPublicDashboardCors(res, req);
   if (req.method === "OPTIONS") {
     res.sendStatus(200);
@@ -2082,6 +2091,20 @@ app.use(["/version", "/release-manifest", "/health", "/health/dependencies"], (r
 });
 app.get("/version", (_req, res) => { setPublicDashboardCors(res, _req); res.status(200).json(buildHealthPayload("version")); });
 app.get("/release-manifest", (_req, res) => { setPublicDashboardCors(res, _req); res.status(200).json(buildReleaseManifest({ appVersion: APP_VERSION, releaseId: RELEASE_ID, contracts: buildHealthPayload("contracts").contracts })); });
+app.get("/scheduler-runtime-config", (req, res) => {
+  setPublicDashboardCors(res, req);
+  try {
+    const publicUrl = staticWeeklyControlPlanePublicUrl();
+    res.status(publicUrl ? 200 : 503).json({
+      ok: Boolean(publicUrl),
+      data: { configured: Boolean(publicUrl), public_url: publicUrl },
+      meta: { version: APP_VERSION, release_id: RELEASE_ID },
+      ...(publicUrl ? {} : { error: "The weekly scheduler service is not configured." }),
+    });
+  } catch (error) {
+    res.status(503).json({ ok: false, data: { configured: false, public_url: null }, error: error.message });
+  }
+});
 app.get(["/health", "/health/dependencies"], async (req, res) => {
   setPublicDashboardCors(res, req);
   try {

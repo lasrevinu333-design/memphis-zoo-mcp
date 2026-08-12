@@ -22,6 +22,7 @@ const docker = (args, options = {}) => execFileAsync("docker", args, { maxBuffer
 function sourceInput({ serviceDate = "2026-10-05", versionId = "60000000-0000-4000-8000-000000000001", publicationId = "70000000-0000-4000-8000-000000000001", exceptions = [] } = {}) {
   const a = "20000000-0000-4000-8000-000000000001"; const b = "20000000-0000-4000-8000-000000000002";
   const departedA = "20000000-0000-4000-8000-000000000003"; const departedB = "20000000-0000-4000-8000-000000000004";
+  const contractor = "20000000-0000-4000-8000-000000000005";
   const locationA = "40000000-0000-4000-8000-000000000011"; const locationB = "40000000-0000-4000-8000-000000000012";
   const availability = (slotId, dayOfWeek, anchor) => ({ slotId, dayOfWeek, status: "working", shift: { start: "07:00", end: "16:00" }, productiveCapacityProvenance: "v3-test-shift", maxServiceEffortMinutes: 300, maxServiceEffortProvenance: "v3-test-capacity", qualifications: ["general"], qualificationProvenance: "v3-test-qualifications", restrictions: [], restrictionProvenance: "v3-test-restrictions", acceptedRouteAnchorLocationId: anchor, acceptedRouteProvenance: "v3-test-route" });
   const work = (workId, dayOfWeek, locationId, ownerSlotId) => ({ workId, dayOfWeek, locationId, locationCodeSnapshot: `DAY_${dayOfWeek}`, locationNameSnapshot: `Area ${dayOfWeek}`, window: { start: "08:00", end: "09:00" }, ownerSlotId, serviceEffortMinutes: 20, serviceEffortProvenance: "v3-test-effort", priority: 1, priorityProvenance: "v3-test-priority", requiredQualifications: ["general"], qualificationProvenance: "v3-test-work-qualifications", restrictions: [], restrictionProvenance: "v3-test-work-restrictions" });
@@ -33,6 +34,7 @@ function sourceInput({ serviceDate = "2026-10-05", versionId = "60000000-0000-40
       { id: b, label: "Working B", incumbencies: [{ personId: "30000000-0000-4000-8000-000000000002", displayName: "Jordan Old", effectiveStart: "2020-01-01", effectiveEnd: "2026-10-07" }, { personId: "30000000-0000-4000-8000-000000000003", displayName: "Jordan New", effectiveStart: "2026-10-07", effectiveEnd: null }] },
       { id: departedA, label: "Avery Departed", incumbencies: [{ personId: "30000000-0000-4000-8000-000000000004", displayName: "Avery Departed", effectiveStart: "2020-01-01", effectiveEnd: null }] },
       { id: departedB, label: "Riley Departed", incumbencies: [{ personId: "30000000-0000-4000-8000-000000000005", displayName: "Riley Departed", effectiveStart: "2020-01-01", effectiveEnd: null }] },
+      { id: contractor, label: "CoverAll capacity 1", contractorCapacity: true, incumbencies: [{ personId: "30000000-0000-4000-8000-000000000006", displayName: "CoverAll capacity 1", effectiveStart: "2020-01-01", effectiveEnd: null }], contractorAvailability: Array.from({ length: 7 }, (_, dayOfWeek) => { const { slotId: _slotId, ...template } = availability(contractor, dayOfWeek, "START_A"); return template; }) },
     ],
     versions: [{ id: versionId, publicationId, status: "published", effectiveStart: serviceDate, effectiveEnd: null, objective: { requireVerifiedProximity: true }, namedAbsentSlotIds: [departedA, departedB], slotAvailability: Array.from({ length: 7 }, (_, day) => [availability(a, day, "START_A"), availability(b, day, "START_B")]).flat(), assignments: Array.from({ length: 7 }, (_, day) => work(`work-${day}`, day, day % 2 ? locationB : locationA, day % 2 ? departedB : departedA)) }],
   };
@@ -92,8 +94,25 @@ try {
   const published = JSON.parse(await scalar(cp("static_weekly_v3_publish_draft", `${quote(versionId)},1,1,${quote(manager.managerId)},'v3-publish','publish',null`)));
   const publicationId = published.data.publication_id;
   assert.equal(await scalar(`select count(*) from public.weekly_schedule_slot_availability where availability_state='departed_named_absent'`), "14", "both departed employees remain named absent placeholders for all seven weekdays");
+  const publishedSnapshot = JSON.parse(await scalar(cp("static_weekly_v3_read_manager_snapshot", `${quote("2026-10-05")}`)));
+  assert.equal(publishedSnapshot.schema, "memphis-zoo.static-weekly-manager-snapshot.v1");
+  assert.equal(publishedSnapshot.authority_revision, 2);
+  assert.equal(publishedSnapshot.current_publication.publication_id, publicationId);
+  assert.equal(publishedSnapshot.display_version.lifecycle_state, "published");
+  assert.equal(publishedSnapshot.roster.length, 5);
+  assert.equal(publishedSnapshot.roster.find((row) => row.slot_id === source.slots[4].id).contractor_capacity, true, "registered dedicated CoverAll capacity is exposed without inventing an employee identity");
+  assert.equal(publishedSnapshot.availability.length, 28, "inactive contractor capacity is not part of the baseline workforce");
+  assert.equal(publishedSnapshot.assignments.length, 7);
+  assert.equal(publishedSnapshot.availability.filter((row) => row.availability_state === "departed_named_absent").length, 14);
+  assert.equal(publishedSnapshot.sources.some((entry) => entry.source_id === sourceId), true);
+  await expectReject(cp("static_weekly_v3_read_manager_snapshot", `${quote("2026-10-06")}`), /Monday/i);
+  await expectReject(`set role service_role; select public.static_weekly_v3_read_manager_snapshot('2026-10-05')`, /permission denied/i);
   const firstProjection = createStaticWeeklyProjectionRpcInput({ result: compiled, publicationId, expectedRevision: 2, actor: { ...manager, idempotencyKey: "v3-projection-first" } });
   await scalar(cp("static_weekly_v3_materialize_projection", `${quote(publicationId)},${quote(firstProjection.serviceDate)},${quote(firstProjection.exceptionSetDigest)},${quote(firstProjection.compilerVersion)},${json(firstProjection.objective)},${json(firstProjection.metrics)},${quote(firstProjection.replayDigest)},${json(firstProjection.envelope)},2,${quote(manager.managerId)},'v3-projection-first'`));
+  const projectedSnapshot = JSON.parse(await scalar(cp("static_weekly_v3_read_manager_snapshot", `${quote("2026-10-05")}`)));
+  assert.equal(projectedSnapshot.authority_revision, 3);
+  assert.equal(projectedSnapshot.latest_projection.publication_id, publicationId);
+  assert.equal(projectedSnapshot.latest_projection.assignments.length, 7);
   const secondInput = sourceInput({ serviceDate: "2026-10-12", versionId, publicationId }); const secondCompiled = await compileStaticWeeklySchedule(secondInput); assert.equal(secondCompiled.status, "FEASIBLE", "same recurring publication compiles a second aligned week without republish");
   const secondProjection = createStaticWeeklyProjectionRpcInput({ result: secondCompiled, publicationId, expectedRevision: 3, actor: { ...manager, idempotencyKey: "v3-projection-second" } });
   await scalar(cp("static_weekly_v3_materialize_projection", `${quote(publicationId)},${quote(secondProjection.serviceDate)},${quote(secondProjection.exceptionSetDigest)},${quote(secondProjection.compilerVersion)},${json(secondProjection.objective)},${json(secondProjection.metrics)},${quote(secondProjection.replayDigest)},${json(secondProjection.envelope)},3,${quote(manager.managerId)},'v3-projection-second'`));
@@ -116,6 +135,10 @@ try {
   }
   const ptoArgs = `'pto','2026-10-06',null,null,${quote(versionId)},${quote(publicationId)},'approved PTO',${json({ slotId: source.slots[0].id })},5,${quote(manager.managerId)},'valid-pto',null`;
   const pto = JSON.parse(await scalar(cp("static_weekly_v3_apply_exception", ptoArgs))); assert.equal(pto.revision, 6);
+  const changedSnapshot = JSON.parse(await scalar(cp("static_weekly_v3_read_manager_snapshot", `${quote("2026-10-05")}`)));
+  assert.equal(changedSnapshot.exceptions.length, 1);
+  assert.equal(changedSnapshot.exceptions[0].payload.slotId, source.slots[0].id, "the manager snapshot includes accepted dated payload facts, not only a digest");
+  assert.equal(changedSnapshot.latest_projection, null, "a projection from an older exception set must not be shown as current");
   await expectNoMutation(cp("static_weekly_v3_apply_exception", `'pto','2026-10-06',null,null,${quote(versionId)},${quote(publicationId)},'duplicate PTO',${json({ slotId: source.slots[0].id })},6,${quote(manager.managerId)},'duplicate-pto',null`), /duplicate|conflict|absence/i, "duplicate PTO");
 
   // A later ordinary publication establishes the only current authority. A

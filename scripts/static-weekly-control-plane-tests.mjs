@@ -19,8 +19,11 @@ assert.doesNotMatch(controlPlaneSource, /static_weekly_v2_/, "the control plane 
 assert.match(controlPlaneSource, /static_weekly_v3_read_authority_source/, "first-publication drafts must load a release-registered source of record server-side");
 assert.match(controlPlaneSource, /source\.source_id/, "draft creation must bind the immutable server-side source identity to PostgreSQL");
 assert.match(runtimeSource, /requireManagerWrite, namedManager/, "every scheduler mutation route must require a trusted named manager writer");
+assert.match(runtimeSource, /\/static-weekly\/manager-snapshot[^\n]+requireManagerWrite, namedManager/, "the scheduler snapshot must use the same current named-manager association gate as mutations");
 assert.match(runtimeSource, /\/static-weekly\/drafts\/initial/, "the separately deployed control plane must expose a deployable first-draft path without accepting source facts");
 assert.doesNotMatch(ordinaryApiSource, /static_weekly_v3_|static-weekly-control-plane/, "the ordinary API must not expose scheduler authority mutations");
+assert.match(ordinaryApiSource, /\/scheduler-runtime-config/, "the ordinary API must expose the separately configured scheduler service origin to the static frontend");
+assert.match(ordinaryApiSource, /STATIC_WEEKLY_CONTROL_PLANE_PUBLIC_URL/, "the scheduler service origin must come from deployment configuration");
 
 const queries = [];
 const client = {
@@ -61,4 +64,31 @@ assert.equal(queries.length, 0, "admin/API-key and operations-first identities m
 const health = await controlPlane.health();
 assert.equal(health.ready, true);
 assert.equal(JSON.stringify(health).includes("secret"), false, "health responses must expose key state, never key material");
+
+queries.length = 0;
+const snapshotResult = { schema: "memphis-zoo.static-weekly-manager-snapshot.v1", week_start: "2026-10-05", authority_revision: 7 };
+client.query = async (statement, values = []) => {
+  queries.push({ statement, values });
+  if (statement.includes("static_weekly_v3_read_manager_snapshot")) return { rows: [{ result: snapshotResult }] };
+  return { rows: [] };
+};
+const snapshot = await controlPlane.getManagerSnapshot({ manager, weekStart: "2026-10-05" });
+assert.deepEqual(snapshot, snapshotResult);
+assert.deepEqual(queries.map((entry) => entry.statement), ["begin", "set local role static_weekly_control_plane", "select public.static_weekly_v3_read_manager_snapshot($1) as result", "commit"]);
+assert.deepEqual(queries[2].values, ["2026-10-05"], "the read contract passes only the canonical week start; actor identity stays in the trusted runtime boundary");
+
+queries.length = 0;
+const contractorSlot = "20000000-0000-4000-8000-000000000099";
+client.query = async (statement, values = []) => {
+  queries.push({ statement, values });
+  if (statement.includes("static_weekly_v3_read_publication_source")) return { rows: [{ result: { compiler_input: { slots: [{ id: contractorSlot, contractorCapacity: true, contractorAvailability: [{ dayOfWeek: 2, shift: { start: "07:00", end: "16:00" }, productiveCapacityProvenance: "approved contractor shift", maxServiceEffortMinutes: 300, maxServiceEffortProvenance: "approved contractor limit", qualifications: ["general"], qualificationProvenance: "approved contractor role", restrictions: [], restrictionProvenance: "approved contractor restrictions", acceptedRouteAnchorLocationId: "40000000-0000-4000-8000-000000000099", acceptedRouteProvenance: "approved contractor staging" }] }], version: { slotAvailability: [] } } } }] };
+  if (statement.includes("static_weekly_v3_apply_exception")) return { rows: [{ result: { revision: 8, data: { exception_id: "contractor-exception" } } }] };
+  return { rows: [] };
+};
+const contractor = await controlPlane.applyContractorCapacity({ manager, serviceDate: "2026-10-06", baseVersionId: "60000000-0000-4000-8000-000000000001", publicationId: "70000000-0000-4000-8000-000000000001", slotId: contractorSlot, shift: { start: "08:00", end: "17:00" }, reason: "Approved CoverAll help", expectedRevision: 7, idempotencyKey: "contractor-capacity-test" });
+assert.equal(contractor.revision, 8);
+assert.equal(queries[3].values[0], "cover_all");
+assert.deepEqual(queries[3].values[7].availability.shift, { start: "08:00", end: "17:00" });
+assert.equal(queries[3].values[7].availability.maxServiceEffortMinutes, 300, "the server must derive contractor capacity facts from the registered source");
+await assert.rejects(() => controlPlane.applyContractorCapacity({ manager, serviceDate: "2026-10-06", baseVersionId: "v", publicationId: "p", slotId: "20000000-0000-4000-8000-000000000098", reason: "bad", expectedRevision: 8, idempotencyKey: "bad-contractor" }), /not registered contractor capacity/i);
 console.log("static weekly control-plane separation tests: PASS");

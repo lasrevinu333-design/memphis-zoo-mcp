@@ -52,6 +52,8 @@ scheduler mutator.
 |---|---:|---|
 | `STATIC_WEEKLY_CONTROL_PLANE_DATABASE_URL` | Yes, control-plane service only | Dedicated PostgreSQL login URL. It is not set on the ordinary API deployment. |
 | `STATIC_WEEKLY_CONTROL_PLANE_PORT` | No | Listener port for `npm run start:static-weekly-control-plane`; defaults to `PORT` then `3100`. |
+| `STATIC_WEEKLY_CONTROL_PLANE_ALLOWED_ORIGINS` | No | Comma-separated additional browser origins allowed to call the separated scheduler service. The Engine GitHub Pages origin and supported native origins are built in. |
+| `STATIC_WEEKLY_CONTROL_PLANE_PUBLIC_URL` | Yes, ordinary API deployment after the scheduler service exists | Public HTTPS origin returned by `GET /scheduler-runtime-config`; this is an address only and grants no scheduler authority. |
 | `SUPABASE_URL` | Yes, control-plane service only | Required to construct the trusted-device revocation and manager-association store. The scheduler process refuses startup if it is absent. |
 | `SUPABASE_SERVICE_ROLE_KEY` | Yes, control-plane service only | Required with `SUPABASE_URL` for trusted-device revocation and manager-association checks. The scheduler process refuses startup if it is absent. |
 
