@@ -34,6 +34,8 @@ jobs:
           node --check src/manager-notifications.js
           node --check src/annie-moxie-bootstrap.js
           npm audit --omit=dev --audit-level=high
+      - name: Pull exact disposable PostgreSQL test image
+        run: docker pull supabase/postgres:17.6.1.143
       - name: Authentication and integration contracts
         run: |
           set -euo pipefail

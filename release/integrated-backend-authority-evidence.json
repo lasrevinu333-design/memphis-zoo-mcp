@@ -101,7 +101,7 @@
       {
         "path": ".github/workflows/foundation-security-gate.yml",
         "mode": "100644",
-        "object_id": "f60551a6423efc80917505b8f32adc0c50c97c9c"
+        "object_id": "5d126f15272703d060f5f65f80c8ed7690af62e9"
       },
       {
         "path": ".github/workflows/manager-inspection-readiness-monitor.yml",
@@ -431,7 +431,7 @@
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "9f893220fe6b241e4fc46df74ec355ee09d8bcca"
+        "object_id": "ad8cd09ff5dfb8c24e4507819c249e48592667c2"
       },
       {
         "path": "scripts/custodial-atomic-commit-database-tests.mjs",
