@@ -4,7 +4,7 @@
   "schema_transition": {
     "transition_id": "named-manager-messenger-archive-retirement-20260810",
     "from_fingerprint": "333ddfc8008ea0b85916de7d491b98c9b8d6a7d45d3a2947d99b4b3bb836ea00",
-    "to_fingerprint": "af1c1420a8a4b21bb152a7fa137835b72430e9bd57a24ff50974d0f95dd00cf5",
+    "to_fingerprint": "e5adbbcc13e937bd424ca51b3bfd6130ce308db794382afcc300741acadace18",
     "expires_at": "2026-08-23T23:59:59Z"
   },
   "frontend_source_fingerprint": "333ddfc8008ea0b85916de7d491b98c9b8d6a7d45d3a2947d99b4b3bb836ea00",
@@ -351,7 +351,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "ff8d9577070ffed406ea4815d1c862ff13e1a42d"
+        "object_id": "c22b465723caf15cacad8f749e17c9ee8d5ab931"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -481,7 +481,7 @@
       {
         "path": "scripts/custodial-repair-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "2929467cf4aaa1ca479cd6663b833070af7bac75"
+        "object_id": "c99eeeff1f72f8866a0474d16fc8a54a359d4aca"
       },
       {
         "path": "scripts/dashboard-recent-activity-contract-tests.mjs",
