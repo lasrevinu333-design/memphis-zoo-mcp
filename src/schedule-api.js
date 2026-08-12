@@ -638,6 +638,46 @@ export function createScheduleRouter({
     error.readiness = { service_date: requested, roster_count: rosterCount, assignment_count: assignmentCount };
     throw error;
   }
+  async function loadStaticWeeklyEmployeeDay(serviceDate, employeeId, atSql) {
+    let rows;
+    try {
+      rows = await runReadOnlySql(`
+        select public.static_weekly_v5_read_employee_day(
+          '${esc(serviceDate)}'::date,
+          '${esc(employeeId)}'::uuid,
+          ${atSql}
+        ) as data
+      `);
+    } catch (error) {
+      if (/function\s+public\.static_weekly_v5_read_employee_day[^\n]*does not exist/i.test(String(error?.message || ''))) return null;
+      throw error;
+    }
+    const data = Array.isArray(rows) && rows.length ? rows[0].data : null;
+    if (data?.governed === false) return null;
+    if (!data || typeof data !== 'object' || data.governed !== true) {
+      const error = new Error('The weekly schedule authority returned an invalid employee schedule response.');
+      error.status = 503;
+      error.code = 'weekly_schedule_read_invalid';
+      error.readiness = { service_date: serviceDate, source: data?.source || null };
+      throw error;
+    }
+    if (data.projection_status !== 'current') {
+      const error = new Error(data.projection_status === 'stale_staffing_change'
+        ? 'The weekly schedule changed and must be rebuilt before employee phones can display it.'
+        : 'The published weekly schedule must be generated before employee phones can display it.');
+      error.status = 503;
+      error.code = 'weekly_schedule_rebuild_required';
+      error.readiness = {
+        service_date: serviceDate,
+        source: data.source,
+        projection_status: data.projection_status,
+        publication_id: data.publication_id || null,
+        projection_id: data.projection_id || null,
+      };
+      throw error;
+    }
+    return combineFullDaySchedule(data, data.all_items);
+  }
   async function loadFullDayScheduleItems(serviceDate, employeeId) {
     const rows = await runReadOnlySql(`
       select
@@ -3313,7 +3353,6 @@ export function createScheduleRouter({
       }
 
       const serviceDate = requireDate(req.query.service_date || req.query.date || (await getServiceDate()));
-      await assertScheduleReadyForRead(serviceDate);
       const atSql = optionalTimestampLiteral(req.query.as_of || req.query.at);
       let resolvedEmployeeId = employeeId;
       let assignment = null;
@@ -3345,18 +3384,22 @@ export function createScheduleRouter({
         resolvedEmployeeId = employeeRows[0].employee_id;
       }
 
-      const [pageRows, fullDayItems] = await Promise.all([
-        runReadOnlySql(`
-          select public.sch_employee_my_schedule_page(
-            '${esc(serviceDate)}'::date,
-            '${esc(resolvedEmployeeId)}'::uuid,
-            ${atSql}
-          ) as data
-        `),
-        loadFullDayScheduleItems(serviceDate, resolvedEmployeeId),
-      ]);
-      const pageData = Array.isArray(pageRows) && pageRows.length ? pageRows[0].data : null;
-      const data = combineFullDaySchedule(pageData, fullDayItems);
+      let data = await loadStaticWeeklyEmployeeDay(serviceDate, resolvedEmployeeId, atSql);
+      if (!data) {
+        await assertScheduleReadyForRead(serviceDate);
+        const [pageRows, fullDayItems] = await Promise.all([
+          runReadOnlySql(`
+            select public.sch_employee_my_schedule_page(
+              '${esc(serviceDate)}'::date,
+              '${esc(resolvedEmployeeId)}'::uuid,
+              ${atSql}
+            ) as data
+          `),
+          loadFullDayScheduleItems(serviceDate, resolvedEmployeeId),
+        ]);
+        const pageData = Array.isArray(pageRows) && pageRows.length ? pageRows[0].data : null;
+        data = combineFullDaySchedule(pageData, fullDayItems);
+      }
       res.status(200).json({
         ok: true,
         data: {
@@ -3377,21 +3420,24 @@ export function createScheduleRouter({
   router.get("/my-schedule", requirePersonalScheduleAccess, async (req, res) => {
     try {
       const serviceDate = requireDate(req.query.service_date || req.query.date || (await getServiceDate()));
-      await assertScheduleReadyForRead(serviceDate);
       const atSql = optionalTimestampLiteral(req.query.as_of || req.query.at);
       const { employeeId } = await resolveEmployeeIdFromRequest(req);
-      const [pageRows, fullDayItems] = await Promise.all([
-        runReadOnlySql(`
-          select public.sch_employee_my_schedule_page(
-            '${esc(serviceDate)}'::date,
-            '${esc(employeeId)}'::uuid,
-            ${atSql}
-          ) as data
-        `),
-        loadFullDayScheduleItems(serviceDate, employeeId),
-      ]);
-      const pageData = Array.isArray(pageRows) && pageRows.length ? pageRows[0].data : null;
-      const data = combineFullDaySchedule(pageData, fullDayItems);
+      let data = await loadStaticWeeklyEmployeeDay(serviceDate, employeeId, atSql);
+      if (!data) {
+        await assertScheduleReadyForRead(serviceDate);
+        const [pageRows, fullDayItems] = await Promise.all([
+          runReadOnlySql(`
+            select public.sch_employee_my_schedule_page(
+              '${esc(serviceDate)}'::date,
+              '${esc(employeeId)}'::uuid,
+              ${atSql}
+            ) as data
+          `),
+          loadFullDayScheduleItems(serviceDate, employeeId),
+        ]);
+        const pageData = Array.isArray(pageRows) && pageRows.length ? pageRows[0].data : null;
+        data = combineFullDaySchedule(pageData, fullDayItems);
+      }
       if (!data?.ok) {
         res.status(404).send(renderMyScheduleHtml(data || { employee: { display_name: "My Schedule" }, items: [], notice: "Schedule not found." }));
         return;

@@ -1,10 +1,10 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
-  "schema_fingerprint": "097132b83c20530341ba360cb9413a5db9cd7d2309f9995c1a32ce4531623877",
+  "schema_fingerprint": "6198339d765feecf1507a943364efd67ae4fb6a83dfdedcaa240d0c26fc539a3",
   "schema_transition": {
     "transition_id": "named-manager-messenger-archive-retirement-20260810",
     "from_fingerprint": "333ddfc8008ea0b85916de7d491b98c9b8d6a7d45d3a2947d99b4b3bb836ea00",
-    "to_fingerprint": "097132b83c20530341ba360cb9413a5db9cd7d2309f9995c1a32ce4531623877",
+    "to_fingerprint": "6198339d765feecf1507a943364efd67ae4fb6a83dfdedcaa240d0c26fc539a3",
     "expires_at": "2026-08-23T23:59:59Z"
   },
   "frontend_source_fingerprint": "333ddfc8008ea0b85916de7d491b98c9b8d6a7d45d3a2947d99b4b3bb836ea00",
@@ -306,7 +306,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "68c5239f2372edf39ecd5b6bacc6ef8a1891341b"
+        "object_id": "167e0ac6e9ca7e16fa23d8656e66d3b1a18e5623"
       },
       {
         "path": "public/moxie-assets/contacts-creekside-animal.png",
@@ -356,7 +356,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "44936d62973cb61c89545f8a87ea08629db7a044"
+        "object_id": "077ca82b678eef327e513695a4ed7e822a4412ee"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -1009,6 +1009,11 @@
         "object_id": "ff3d61ef2c7fa18075290d7ac51973459eedc6a0"
       },
       {
+        "path": "scripts/static-weekly-employee-day-route-tests.mjs",
+        "mode": "100644",
+        "object_id": "ffae325135b0946fd643e5d65fac4ac24c040ea4"
+      },
+      {
         "path": "scripts/static-weekly-schedule-authority-closure-tests.mjs",
         "mode": "100644",
         "object_id": "5fe5e0ec18a5228c9cc74ef872a69260e82b271f"
@@ -1016,7 +1021,7 @@
       {
         "path": "scripts/static-weekly-schedule-authority-v3-tests.mjs",
         "mode": "100644",
-        "object_id": "658232b4e461aa32c81a140da0bc51c910f1e1ab"
+        "object_id": "ba7f0b45e68f2bd69a4b245459746089a7a7256b"
       },
       {
         "path": "scripts/static-weekly-schedule-candidate-importer.mjs",
@@ -1506,7 +1511,7 @@
       {
         "path": "src/schedule-api.js",
         "mode": "100644",
-        "object_id": "81ce3e2dfd668316f1c10628e8fd0297c943836e"
+        "object_id": "6082a593205c9866a3c5d05281fcfae0b3f9b2ac"
       },
       {
         "path": "src/schedule-display.js",
@@ -1616,12 +1621,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "4e601cfa16eb300685a290862e50b164f9e004be"
+        "object_id": "f1accc8e69989e0af8af0148a171bd6b9ab21d43"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "66d2abaae884d265054a4ce4e995add0fdf9273f"
+        "object_id": "921ae836d3d513d4b894252f1a5f7c1c96a842c2"
       },
       {
         "path": "supabase/config.toml",
@@ -2546,7 +2551,7 @@
       {
         "path": "supabase/migrations/20260812130000_static_weekly_employee_turnover.sql",
         "mode": "100644",
-        "object_id": "1ee120850d5869335779926282dbb2f273554a06"
+        "object_id": "536f8639c8976863199712ee014c0f82631ce7d3"
       },
       {
         "path": "tmp/write_probe.txt",
@@ -2554,7 +2559,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 495,
+    "authority_path_count": 496,
     "migration_path_count": 68,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate requires externally supplied exact expected_commit and expected_tree, deterministically enumerates every tracked expected-tree entry, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file as its exact tree blob."

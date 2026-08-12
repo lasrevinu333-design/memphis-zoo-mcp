@@ -212,6 +212,13 @@ try {
   assert.equal(beforeTurnoverCompiled.status, "FEASIBLE");
   const beforeTurnoverProjection = createStaticWeeklyProjectionRpcInput({ result: beforeTurnoverCompiled, publicationId: turnoverPublicationId, expectedRevision: 12, actor: { ...manager, idempotencyKey: "v4-before-turnover-projection" } });
   await scalar(cp("static_weekly_v3_materialize_projection", `${quote(turnoverPublicationId)},${quote(turnoverWeek)},${quote(beforeTurnoverProjection.exceptionSetDigest)},${quote(beforeTurnoverProjection.compilerVersion)},${json(beforeTurnoverProjection.objective)},${json(beforeTurnoverProjection.metrics)},${quote(beforeTurnoverProjection.replayDigest)},${json(beforeTurnoverProjection.envelope)},12,${quote(manager.managerId)},'v4-before-turnover-projection'`));
+  const employeeDay = (employeeId, at = "2027-02-15 08:30:00-06") => `set role service_role; select public.static_weekly_v5_read_employee_day(${quote(turnoverWeek)},${quote(employeeId)},${quote(at)}::timestamptz)::text`;
+  const beforeEmployeeDay = JSON.parse(await scalar(employeeDay("30000000-0000-4000-8000-000000000001")));
+  assert.equal(beforeEmployeeDay.projection_status, "current", "the employee phone reads the exact current weekly projection before turnover");
+  assert.equal(beforeEmployeeDay.source, "static_weekly_projection");
+  assert.equal(beforeEmployeeDay.all_items.length > 0, true);
+  assert.equal(beforeEmployeeDay.all_items.every((item) => item.source_type === "static_weekly_projection"), true);
+  await expectReject("set role authenticated; select public.static_weekly_v5_read_employee_day('2027-02-15','30000000-0000-4000-8000-000000000001',statement_timestamp())", /permission denied/i);
   await sql(`insert into public.sessions(session_uuid,location_id,employee_id,device_id,status) values('turnover-active','92000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001','91000000-0000-4000-8000-000000000001','active')`);
   await expectNoMutation(cp("static_weekly_v4_mark_employee_departed", `${quote(source.slots[0].id)},${quote(turnoverWeek)},'employee departed',13,${quote(manager.managerId)},'v4-depart-active-block'`), /active|submission/i, "turnover with active cleaning work");
   assert.equal(await scalar("select active::text from public.employees where id='30000000-0000-4000-8000-000000000001'"), "true", "a blocked turnover cannot deactivate the employee");
@@ -228,6 +235,9 @@ try {
   assert.equal(departedMonday.availability_state, "departed_named_absent", "manager read shows the effective named absence rather than stale publication status");
   assert.equal(departedMonday.employee_active, false);
   assert.deepEqual(departedMonday.device_ids, []);
+  const departedEmployeeDay = JSON.parse(await scalar(employeeDay("30000000-0000-4000-8000-000000000001")));
+  assert.equal(departedEmployeeDay.projection_status, "stale_staffing_change", "employee phones suppress the pre-departure projection immediately");
+  assert.deepEqual(departedEmployeeDay.all_items, []);
   const departedCompiled = await compilePublicationSource();
   assert.equal(departedCompiled.status, "FEASIBLE", "one departed slot must rebalance onto the remaining verified workforce");
   const departedProjection = createStaticWeeklyProjectionRpcInput({ result: departedCompiled, publicationId: turnoverPublicationId, expectedRevision: 14, actor: { ...manager, idempotencyKey: "v4-departed-projection" } });
@@ -250,6 +260,9 @@ try {
   assert.equal(replacementMonday.person_name, "Taylor New");
   assert.equal(replacementMonday.employee_active, true);
   assert.deepEqual(replacementMonday.device_ids, ["KIOSK_02"], "manager read shows the phone that followed the replacement");
+  const staleReplacementDay = JSON.parse(await scalar(employeeDay(replacement.data.new_employee_id)));
+  assert.equal(staleReplacementDay.projection_status, "stale_staffing_change", "replacement phones cannot display the departed-staff projection");
+  assert.deepEqual(staleReplacementDay.items, []);
   const replacementCompiled = await compilePublicationSource();
   assert.equal(replacementCompiled.status, "FEASIBLE");
   assert.equal(replacementCompiled.weeklyAssignments.filter((row) => row.personId === replacement.data.new_employee_id).length > 0, true, "the replacement is immediately eligible for the stable weekly workload");
@@ -260,6 +273,11 @@ try {
   assert.equal(currentReplacementSnapshot.projection_status, "current");
   assert.equal(currentReplacementSnapshot.projection_authority_revision, 17);
   assert.equal(currentReplacementSnapshot.staffing_authority_revision, 16);
+  const currentReplacementDay = JSON.parse(await scalar(employeeDay(replacement.data.new_employee_id)));
+  assert.equal(currentReplacementDay.projection_status, "current");
+  assert.equal(currentReplacementDay.employee_name, "Taylor New");
+  assert.equal(currentReplacementDay.all_items.length > 0, true, "the new phone identity receives its current projected areas after rebuild");
+  assert.equal(currentReplacementDay.all_items.every((item) => item.source_type === "static_weekly_projection"), true);
   const rotation = JSON.parse(await scalar(release("static_weekly_v3_rotate_authority_key", `${quote("static-weekly-authority-hmac-v3")},${quote("static-weekly-v3-rotation-secret-01234567890123456789")},statement_timestamp()+interval '1 hour','v3-test-rotation'`))); assert.equal(rotation.ready, true, "key rotation keeps exactly one active key with bounded overlap");
   assert.equal(await scalar(verifyAttestation(issuedAttestation)), "verified", "the bounded overlap continues to verify outstanding v2 work during rotation");
   await expectReject(release("static_weekly_v3_revoke_authority_key", `${quote("static-weekly-authority-hmac-v3")},'wrong active revoke'`), /non-active/i);

@@ -336,6 +336,61 @@ begin
 end
 $function$;
 
+-- Employee phones consume the same effective publication and latest immutable
+-- projection as the manager workspace. A governed date never falls back to the
+-- legacy daily scheduler when its projection is missing or stale.
+create or replace function public.static_weekly_v5_read_employee_day(
+  p_service_date date,p_employee_id uuid,p_now timestamptz default now()
+) returns jsonb language plpgsql stable security definer set search_path=pg_catalog,public as $function$
+declare v_version uuid; v_publication uuid; v_week_start date; v_projection uuid; v_projection_revision bigint; v_staffing_revision bigint; v_status text:='missing_projection'; v_employee public.employees%rowtype; v_slot uuid; v_slot_count integer; v_shift_start time; v_shift_end time; v_staffing_state text; v_items jsonb:='[]'::jsonb; v_current jsonb:='[]'::jsonb; v_local_date date; v_local_time time; v_phase text; v_notice text;
+begin
+  if p_service_date is null or p_employee_id is null or p_now is null then raise exception using errcode='22023',message='employee day requires service_date, employee_id, and current time'; end if;
+  v_version:=public.static_weekly_effective_version(p_service_date);
+  if v_version is null then return jsonb_build_object('governed',false,'service_date',p_service_date::text,'source','legacy_daily_schedule'); end if;
+  select p.publication_id into v_publication from public.weekly_schedule_publications p where p.version_id=v_version;
+  v_week_start:=p_service_date-(extract(isodow from p_service_date)::integer-1);
+  select p.projection_id,(r.response_json->>'revision')::bigint into v_projection,v_projection_revision from public.weekly_schedule_compiled_projections p
+  join public.weekly_schedule_command_receipts r on r.command_type='materialize_projection' and r.response_json#>>'{data,projection_id}'=p.projection_id::text
+  where p.publication_id=v_publication and p.week_start=v_week_start
+    and p.exception_set_digest=public.static_weekly_digest_jsonb(public.static_weekly_accepted_exception_set(v_publication,v_week_start))
+  order by (r.response_json->>'revision')::bigint desc,r.command_id desc limit 1;
+  select max(s.authority_revision) into v_staffing_revision from public.weekly_roster_slot_staffing_states s where s.effective_start<=v_week_start+6;
+  if v_projection_revision is not null and (v_staffing_revision is null or v_projection_revision>v_staffing_revision) then v_status:='current';
+  elsif v_projection is not null then v_status:='stale_staffing_change'; end if;
+  select * into v_employee from public.employees e where e.id=p_employee_id;
+  if not found then raise exception using errcode='P0002',message='employee not found'; end if;
+  if v_status<>'current' then return jsonb_build_object('governed',true,'source','static_weekly_projection','service_date',p_service_date::text,'week_start',v_week_start::text,'publication_id',v_publication::text,'projection_id',case when v_projection is null then null else v_projection::text end,'projection_status',v_status,'projection_authority_revision',v_projection_revision,'staffing_authority_revision',v_staffing_revision,'employee_id',v_employee.id::text,'employee_name',v_employee.display_name,'items','[]'::jsonb,'all_items','[]'::jsonb,'current_items','[]'::jsonb); end if;
+  select count(*),(array_agg(r.slot_id order by r.slot_id))[1] into v_slot_count,v_slot from public.v_weekly_roster_slot_incumbency_ranges r
+  where r.person_id=p_employee_id and r.effective_start<=p_service_date and (r.effective_end is null or p_service_date<r.effective_end);
+  if v_slot_count>1 then raise exception using errcode='23514',message='employee resolves to more than one effective weekly roster slot'; end if;
+  if v_slot is not null then
+    select a.shift_start,a.shift_end into v_shift_start,v_shift_end from public.weekly_schedule_slot_availability a
+    where a.version_id=v_version and a.slot_id=v_slot and a.day_of_week=extract(dow from p_service_date)::integer;
+    select s.staffing_state into v_staffing_state from public.weekly_roster_slot_staffing_states s where s.slot_id=v_slot and s.effective_start<=p_service_date order by s.effective_start desc,s.authority_revision desc limit 1;
+  end if;
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id',o.occurrence_id::text,'occurrence_id',o.occurrence_id::text,'projection_id',o.projection_id::text,'service_date',o.service_date::text,
+    'segment_number',row_number_value,'location_id',case when o.location_id is null then null else o.location_id::text end,
+    'group_code',o.location_code_snapshot,'group_name',o.location_name_snapshot,'location_group_code',o.location_code_snapshot,'location_group_name',o.location_name_snapshot,
+    'location_name',o.location_name_snapshot,'included_locations',jsonb_build_array(o.location_name_snapshot),
+    'coverage_start',to_char(o.coverage_start,'HH24:MI'),'coverage_end',to_char(o.coverage_end,'HH24:MI'),'start_time',to_char(o.coverage_start,'HH24:MI'),'end_time',to_char(o.coverage_end,'HH24:MI'),
+    'coverage_purpose',coalesce(nullif(o.authority_facts_json#>>'{work_snapshot,coveragePurpose}',''),nullif(o.authority_facts_json#>>'{work_snapshot,purpose}',''),'area_owner'),'purpose',coalesce(nullif(o.authority_facts_json#>>'{work_snapshot,coveragePurpose}',''),nullif(o.authority_facts_json#>>'{work_snapshot,purpose}',''),'area_owner'),
+    'source_type','static_weekly_projection','owner_type','EMPLOYEE','status','ASSIGNED','load_points',coalesce((o.authority_facts_json#>>'{work_snapshot,serviceEffortMinutes}')::numeric,1),'notes',null,
+    'is_public_restroom',(lower(o.location_name_snapshot) like '%restroom%' or lower(o.location_name_snapshot) like '%bathroom%')
+  ) order by o.coverage_start,o.coverage_end,o.location_name_snapshot,o.work_id),'[]'::jsonb) into v_items
+  from (select occurrence.*,row_number() over(order by coverage_start,coverage_end,location_name_snapshot,work_id) as row_number_value from public.weekly_schedule_occurrences occurrence where occurrence.projection_id=v_projection and occurrence.service_date=p_service_date and occurrence.owner_person_id_snapshot=p_employee_id and occurrence.state='created') o;
+  v_local_date:=(p_now at time zone 'America/Chicago')::date; v_local_time:=(p_now at time zone 'America/Chicago')::time;
+  if v_local_date=p_service_date then select coalesce(jsonb_agg(item order by ordinal),'[]'::jsonb) into v_current from jsonb_array_elements(v_items) with ordinality current_item(item,ordinal) where (item->>'coverage_start')::time<=v_local_time and v_local_time<(item->>'coverage_end')::time; end if;
+  if v_employee.active is not true or coalesce(v_staffing_state,'working')<>'working' or v_shift_start is null or v_shift_end is null then v_phase:='off_day'; v_notice:='You are not scheduled to work today.';
+  elsif jsonb_array_length(v_items)=0 then v_phase:='schedule_missing'; v_notice:='Your shift is active, but no assignments were published. Contact a Custodial Manager.';
+  elsif v_local_date<p_service_date or (v_local_date=p_service_date and v_local_time<v_shift_start) then v_phase:='before_shift'; v_notice:=format('Your assigned areas are below. Your shift begins at %s.',to_char(v_shift_start,'FMHH12:MI AM'));
+  elsif v_local_date>p_service_date or (v_local_date=p_service_date and v_local_time>=v_shift_end) then v_phase:='after_shift'; v_notice:='Your shift is complete. Today''s assigned areas remain below.';
+  elsif jsonb_array_length(v_current)=0 then v_phase:='between_assignments'; v_notice:='No coverage window is active at this moment. Your assigned areas remain below.';
+  else v_phase:='assigned_areas'; v_notice:='Your assigned areas are shown below. Choose the practical cleaning order.'; end if;
+  return jsonb_build_object('ok',true,'governed',true,'source','static_weekly_projection','contract_version','static-weekly-employee-day.v1','service_date',p_service_date::text,'week_start',v_week_start::text,'publication_id',v_publication::text,'projection_id',v_projection::text,'projection_status',v_status,'projection_authority_revision',v_projection_revision,'staffing_authority_revision',v_staffing_revision,'employee_id',v_employee.id::text,'employee_name',v_employee.display_name,'employee_code',v_employee.employee_code,'employee',jsonb_build_object('id',v_employee.id::text,'display_name',v_employee.display_name,'employee_code',v_employee.employee_code),'shift',case when v_shift_start is null or v_shift_end is null then null else jsonb_build_object('start',to_char(v_shift_start,'HH12:MI AM'),'end',to_char(v_shift_end,'HH12:MI AM'),'shift_start',to_char(v_shift_start,'HH24:MI'),'shift_end',to_char(v_shift_end,'HH24:MI'),'active',v_employee.active and coalesce(v_staffing_state,'working')='working') end,'phase',v_phase,'notice',v_notice,'items',v_current,'all_items',v_items,'current_items',v_current,'assignment_count',jsonb_array_length(v_items),'schedule_status',case when v_phase='off_day' then 'off' when v_phase='schedule_missing' then 'missing_assignments' when v_phase='after_shift' then 'completed' when v_phase='between_assignments' then 'between_assignments' else 'scheduled' end);
+end
+$function$;
+
 revoke all on function public.static_weekly_v3_read_manager_snapshot(date)
 from public,anon,authenticated,service_role,static_weekly_release_operator;
 grant execute on function public.static_weekly_v3_read_manager_snapshot(date)
@@ -398,11 +453,14 @@ revoke all on function public.static_weekly_v5_source_availability_template(uuid
 revoke all on function public.static_weekly_v4_assert_employee_turnover_ready(uuid) from public,anon,authenticated,service_role,static_weekly_control_plane,static_weekly_release_operator;
 revoke all on function public.static_weekly_v4_mark_employee_departed(uuid,date,text,bigint,uuid,text) from public,anon,authenticated,service_role,static_weekly_control_plane,static_weekly_release_operator;
 revoke all on function public.static_weekly_v4_replace_employee(uuid,text,date,text,bigint,uuid,text) from public,anon,authenticated,service_role,static_weekly_control_plane,static_weekly_release_operator;
+revoke all on function public.static_weekly_v5_read_employee_day(date,uuid,timestamptz) from public,anon,authenticated,service_role,static_weekly_control_plane,static_weekly_release_operator;
 grant execute on function public.static_weekly_v4_mark_employee_departed(uuid,date,text,bigint,uuid,text) to static_weekly_control_plane;
 grant execute on function public.static_weekly_v4_replace_employee(uuid,text,date,text,bigint,uuid,text) to static_weekly_control_plane;
+grant execute on function public.static_weekly_v5_read_employee_day(date,uuid,timestamptz) to service_role;
 
 comment on table public.weekly_roster_slot_staffing_states is 'Append-only effective-dated working/departed state for a stable recurring roster slot.';
 comment on function public.static_weekly_v4_replace_employee(uuid,text,date,text,bigint,uuid,text) is 'Atomic fresh-start replacement: new employee identity and statistics, stable schedule slot, optional unambiguous phone transfer, former-employee retirement, and immutable turnover receipt.';
 comment on function public.static_weekly_v3_read_manager_snapshot(date) is 'One coherent manager week read enriched with effective-dated staffing, incumbent identity, employee active state, and assigned phone truth.';
+comment on function public.static_weekly_v5_read_employee_day(date,uuid,timestamptz) is 'Read-only employee phone projection from the current static weekly schedule; governed dates fail visibly when projection authority is stale or missing.';
 
 commit;
