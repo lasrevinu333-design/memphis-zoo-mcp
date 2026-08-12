@@ -139,20 +139,6 @@ const managerReads = [
 ];
 const managerMutations = [
   {
-    family: "employee creation",
-    method: "POST",
-    path: "/custodial-admin-api/employees",
-    body: { display_name: "Replacement Employee" },
-    rpc: "custodial_create_employee",
-  },
-  {
-    family: "employee status",
-    method: "PATCH",
-    path: `/custodial-admin-api/employees/${employeeId}/status`,
-    body: { active: false, reason: "Authorization contract" },
-    rpc: "custodial_set_employee_active",
-  },
-  {
     family: "device assignment",
     method: "PUT",
     path: "/custodial-admin-api/devices/KIOSK_02/assignment",
@@ -167,11 +153,11 @@ const managerMutations = [
     rpc: "device_auth_issue_enrollment_code",
   },
   {
-    family: "legacy employee creation",
+    family: "legacy device assignment",
     method: "POST",
-    path: "/leadership-api/phone-assignments/unassigned",
-    body: { new_employee_name: "Legacy Replacement Employee" },
-    rpc: "custodial_create_employee",
+    path: "/leadership-api/phone-assignments/KIOSK_02",
+    body: { employee_id: employeeId, expected_current_employee_id: employeeId },
+    rpc: "custodial_assign_employee_device",
   },
   {
     family: "legacy enrollment-code issuance",
@@ -180,6 +166,13 @@ const managerMutations = [
     body: {},
     rpc: "device_auth_issue_enrollment_code",
   },
+];
+const rosterOnlyMutations = [
+  { family: "employee creation", method: "POST", path: "/custodial-admin-api/employees", body: { display_name: "Replacement Employee" } },
+  { family: "employee status", method: "PATCH", path: `/custodial-admin-api/employees/${employeeId}/status`, body: { active: false, reason: "Authorization contract" } },
+  { family: "legacy employee creation", method: "POST", path: "/leadership-api/phone-assignments/unassigned", body: { new_employee_name: "Legacy Replacement Employee" } },
+  { family: "embedded employee creation", method: "POST", path: "/leadership-api/phone-assignments/KIOSK_02", body: { new_employee_name: "Legacy Replacement Employee" } },
+  { family: "departure during phone assignment", method: "PUT", path: "/custodial-admin-api/devices/KIOSK_02/assignment", body: { employee_id: null, deactivate_previous: true } },
 ];
 
 try {
@@ -190,7 +183,7 @@ try {
     assert.equal(result.body.ok, true);
   }
 
-  for (const route of managerMutations) {
+  for (const route of [...managerMutations, ...rosterOnlyMutations]) {
     const callsBefore = databaseCalls.length;
     const result = await request(route.path, {
       method: route.method,
@@ -216,6 +209,14 @@ try {
       databaseCalls.slice(callsBefore).some((call) => call.kind === "rpc" && call.name === route.rpc),
       `${route.family} did not reach its expected authorized RPC`,
     );
+  }
+
+  for (const route of rosterOnlyMutations) {
+    const callsBefore = databaseCalls.length;
+    const result = await request(route.path, { method: route.method, token: fullAccessToken, body: route.body });
+    assert.equal(result.status, 409, `full-access Custodial Manager bypassed the roster authority through ${route.family}`);
+    assert.match(result.body.error, /weekly schedule/i);
+    assert.equal(databaseCalls.length, callsBefore, `${route.family} touched the database outside the roster transaction`);
   }
 
   const ordinaryManagerToken = managerToken("full_access", ["OPS_MANAGER"]);
