@@ -188,25 +188,12 @@ try {
     } else await expectNoMutation(action, /reason|500|control/i, `${label} SQL reason`);
   }
 
-  // FP-H2: the replacement RPC closes the old range and a later actual
-  // control-plane projection consumes the new dated owner history.
-  const replacement = await controlPlane.replaceIncumbency({ manager, slotId, personId: newPersonId, personName: "Closure New", effectiveStart: "2027-02-03", expectedRevision: 6, idempotencyKey: "closure-replace" });
-  assert.equal(replacement.revision, 7);
-  const replacedProjection = await controlPlane.materializeProjection({ manager, publicationId, serviceDate: "2027-02-01", expectedRevision: 7, idempotencyKey: "closure-replacement-projection" });
-  assert.equal(replacedProjection.revision, 8);
-  const ownerCounts = outputJson((await dockerSql(`select coalesce(jsonb_agg(jsonb_build_object('service_date',service_date::text,'count',count) order by service_date),'[]'::jsonb)::text from (select service_date,count(*)::int as count from public.weekly_schedule_occurrences where projection_id=${quote(replacedProjection.data.projection_id)} and owner_person_id_snapshot=${quote(newPersonId)} group by service_date) x`)).stdout);
-  assert.deepEqual(ownerCounts.map((row) => [row.service_date, row.count]), [["2027-02-03", 1], ["2027-02-04", 1], ["2027-02-05", 1], ["2027-02-06", 1], ["2027-02-07", 1]], "closure-aware source hydration changes only the actual post-replacement service dates while preserving stable slots");
+  // FP-H2: arbitrary person/date replacement was retired in favor of the
+  // atomic employee turnover contract proven in the complete v3 suite.
+  assert.equal((await dockerSql("select (to_regprocedure('public.static_weekly_v3_replace_incumbency(uuid,uuid,text,date,bigint,uuid,text)') is null)::text")).stdout.trim(), "true");
+  assert.equal((await dockerSql("select (to_regprocedure('public.static_weekly_v2_replace_incumbency(uuid,uuid,text,date,bigint,uuid,text,text)') is null)::text")).stdout.trim(), "true");
 
-  // FP-H3: a stale predecessor draft may be formed only for this adversarial
-  // test; its publication is rejected by the same closure-aware view before
-  // any publication or revision mutation occurs.
-  const staleCompiled = await compileStaticWeeklySchedule(sourceInput({ serviceDate: "2027-02-09", versionId: "60000000-0000-4000-8000-000000000072", publicationId: "70000000-0000-4000-8000-000000000072" }));
-  assert.equal(staleCompiled.status, "FEASIBLE");
-  const staleDraftInput = createStaticWeeklyDraftRpcInput({ result: staleCompiled, expectedRevision: 8, actor: { managerId: manager.manager_id, managerName: manager.manager_display_name, idempotencyKey: "closure-stale-create" } });
-  const staleDraft = await roleCall("static_weekly_control_plane", "static_weekly_v3_create_draft", [staleDraftInput.effectiveStart, staleDraftInput.objectiveVersion, staleDraftInput.objective, staleDraftInput.inputProvenance, staleDraftInput.document, 8, manager.manager_id, "closure-stale-create", sourceId]);
-  await expectNoMutation(() => roleCall("static_weekly_control_plane", "static_weekly_v3_publish_draft", [staleDraft.data.version_id, 1, 9, manager.manager_id, "closure-stale-publish", "supersede", null]), /stale|closure-aware|incumbency/i, "stale predecessor publication");
-
-  // FP-H4: a failed sole active key recovers atomically without pre-revoking
+  // FP-H3: a failed sole active key recovers atomically without pre-revoking
   // it, and the readiness result includes an internal sign/verify canary.
   const healthy = await roleCall("static_weekly_release_operator", "static_weekly_v3_authority_health");
   assert.equal(healthy.ready, true); assert.equal(healthy.operational_sign_verify_canary, true);

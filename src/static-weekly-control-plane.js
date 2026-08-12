@@ -215,17 +215,13 @@ export function createStaticWeeklyControlPlane({ database, compiler = compileSta
         return call(client, "static_weekly_v3_apply_exception", ["cover_all", date, null, null, text(baseVersionId), text(publicationId), text(reason), { availability }, requireRevision(expectedRevision), actor.managerId, requireIdempotencyKey(idempotencyKey), null]);
       });
     },
-    async replaceIncumbency({ manager, slotId, personId, personName, effectiveStart, expectedRevision, idempotencyKey }) {
+    async markEmployeeDeparted({ manager, slotId, reason, expectedRevision, idempotencyKey }) {
       const actor = requireManager(manager);
-      return transaction((client) => call(client, "static_weekly_v3_replace_incumbency", [text(slotId), text(personId), text(personName), requireDate(effectiveStart, "incumbency effective start"), requireRevision(expectedRevision), actor.managerId, requireIdempotencyKey(idempotencyKey)]));
+      return transaction((client) => call(client, "static_weekly_v4_mark_employee_departed", [text(slotId), text(reason), requireRevision(expectedRevision), actor.managerId, requireIdempotencyKey(idempotencyKey)]));
     },
-    async markEmployeeDeparted({ manager, slotId, effectiveStart, reason, expectedRevision, idempotencyKey }) {
+    async replaceEmployee({ manager, slotId, newEmployeeName, reason, expectedRevision, idempotencyKey }) {
       const actor = requireManager(manager);
-      return transaction((client) => call(client, "static_weekly_v4_mark_employee_departed", [text(slotId), requireDate(effectiveStart, "departure effective start"), text(reason), requireRevision(expectedRevision), actor.managerId, requireIdempotencyKey(idempotencyKey)]));
-    },
-    async replaceEmployee({ manager, slotId, newEmployeeName, effectiveStart, reason, expectedRevision, idempotencyKey }) {
-      const actor = requireManager(manager);
-      return transaction((client) => call(client, "static_weekly_v4_replace_employee", [text(slotId), text(newEmployeeName), requireDate(effectiveStart, "replacement effective start"), text(reason), requireRevision(expectedRevision), actor.managerId, requireIdempotencyKey(idempotencyKey)]));
+      return transaction((client) => call(client, "static_weekly_v4_replace_employee", [text(slotId), text(newEmployeeName), text(reason), requireRevision(expectedRevision), actor.managerId, requireIdempotencyKey(idempotencyKey)]));
     },
     async materializeProjection({ manager, publicationId, serviceDate, expectedRevision, idempotencyKey }) {
       const actor = requireManager(manager); const date = requireDate(serviceDate, "projection start");

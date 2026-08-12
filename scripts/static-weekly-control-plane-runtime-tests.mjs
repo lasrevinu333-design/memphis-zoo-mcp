@@ -93,6 +93,14 @@ try {
   assert.equal(response.status, 200, "a valid trusted named-manager credential may reach the scheduler mutation boundary");
   assert.equal(mutations, 1);
 
+  const retiredIncumbency = await fetch(`${origin}/static-weekly/incumbencies`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
+    body: JSON.stringify({ slot_id: "20000000-0000-4000-8000-000000000091", person_id: "30000000-0000-4000-8000-000000000091", effective_start: "2099-01-01" }),
+  });
+  assert.equal(retiredIncumbency.status, 404, "the arbitrary person/date incumbency endpoint is retired");
+  assert.equal(mutations, 1, "the retired endpoint cannot reach any scheduler mutation");
+
   lookup = async () => ({ credential_id: credentialId, device_id: deviceId, max_access_level: "full_access", expires_at: future(), revoked_at: new Date().toISOString(), manager_id: manager.manager_id, manager: { ...manager } });
   response = await mutation();
   assert.equal(response.status, 401, "a revoked trusted-device credential must be rejected before scheduler mutation");

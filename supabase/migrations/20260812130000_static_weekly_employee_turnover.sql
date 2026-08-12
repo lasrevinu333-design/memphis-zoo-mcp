@@ -5,6 +5,13 @@
 -- completed work remains attached to the former immutable employee ID.
 begin;
 
+-- Departed Messenger principals remain immutable historical actors, but only
+-- active principals reserve an operational display name. This permits a fresh
+-- employee identity to reuse a former employee's name without moving history.
+alter table public.msg_users drop constraint if exists msg_users_display_name_unique;
+create unique index if not exists msg_users_active_display_name_unique
+  on public.msg_users(display_name) where is_active is true;
+
 alter table public.weekly_schedule_authority_revisions
   drop constraint if exists weekly_schedule_authority_revisions_operation_check;
 alter table public.weekly_schedule_authority_revisions
@@ -192,33 +199,54 @@ begin
 end
 $function$;
 
+create or replace function public.static_weekly_v5_create_replacement_employee(p_display_name text,p_manager_id uuid)
+returns jsonb language plpgsql security definer set search_path=pg_catalog,public as $function$
+declare v_manager public.ops_manager_managers%rowtype; v_name text:=regexp_replace(btrim(coalesce(p_display_name,'')),'\s+',' ','g'); v_code text; v_employee public.employees%rowtype; v_user public.msg_users%rowtype;
+begin
+  v_manager:=public.custodial_assert_manager(p_manager_id);
+  if length(v_name) not between 2 and 160 then raise exception using errcode='22023',message='Employee name must be between 2 and 160 characters.'; end if;
+  if exists(select 1 from public.employees where active is true and lower(btrim(display_name))=lower(v_name)) then
+    raise exception using errcode='23505',message='An active employee record with that name already exists.';
+  end if;
+  v_code:=public.custodial_next_employee_code();
+  if v_code is null then raise exception using errcode='23514',message='No employee code is available for the replacement.'; end if;
+  insert into public.employees(employee_code,display_name,active,role,notes)
+  values(v_code,v_name,true,'staff','Fresh employee created by atomic stable-slot replacement') returning * into v_employee;
+  insert into public.msg_users(employee_id,display_name,role,is_active)
+  values(v_employee.id,v_employee.display_name,'employee',true) returning * into v_user;
+  insert into public.custodial_employee_status_history(employee_id,employee_name,previous_active,new_active,changed_by_manager_id,change_reason,source,metadata_json)
+  values(v_employee.id,v_employee.display_name,null,true,v_manager.manager_id,'employee_created','static_weekly_turnover',jsonb_build_object('employee_code',v_employee.employee_code,'msg_user_id',v_user.id));
+  return jsonb_build_object('created',true,'employee',to_jsonb(v_employee),'messenger_user_id',v_user.id);
+end
+$function$;
+
 create or replace function public.static_weekly_v4_mark_employee_departed(
-  p_slot_id uuid,p_effective_start date,p_reason text,p_expected_revision bigint,p_manager_id uuid,p_idempotency_key text
+  p_slot_id uuid,p_reason text,p_expected_revision bigint,p_manager_id uuid,p_idempotency_key text
 ) returns jsonb language plpgsql security definer set search_path=pg_catalog,public as $function$
-declare v_actor jsonb; v_manager public.ops_manager_managers%rowtype; v_prior public.weekly_schedule_command_receipts%rowtype; v_incumbent public.v_weekly_roster_slot_incumbency_ranges%rowtype; v_employee public.employees%rowtype; v_request jsonb; v_request_digest text; v_content_digest text; v_command uuid:=gen_random_uuid(); v_revision bigint; v_response jsonb; v_status jsonb;
+declare v_actor jsonb; v_manager public.ops_manager_managers%rowtype; v_prior public.weekly_schedule_command_receipts%rowtype; v_incumbent public.v_weekly_roster_slot_incumbency_ranges%rowtype; v_employee public.employees%rowtype; v_request jsonb; v_request_digest text; v_content_digest text; v_command uuid:=gen_random_uuid(); v_revision bigint; v_response jsonb; v_status jsonb; v_effective_start date:=(statement_timestamp() at time zone 'America/Chicago')::date;
 begin
   perform public.static_weekly_v3_assert_control_plane(); v_manager:=public.custodial_assert_manager(p_manager_id); v_actor:=public.static_weekly_v3_manager_actor(p_manager_id);
   perform public.static_weekly_assert_command_identity(p_expected_revision,p_manager_id,v_actor->>'manager_name',p_idempotency_key,'mark_employee_departed');
-  if p_slot_id is null or p_effective_start is null or nullif(btrim(coalesce(p_reason,'')),'') is null or char_length(p_reason)>500 or p_reason~'[\x00-\x1f\x7f]' then
-    raise exception using errcode='23514',message='departure requires a stable slot, effective date, and control-free reason of at most 500 characters';
+  if p_slot_id is null or nullif(btrim(coalesce(p_reason,'')),'') is null or char_length(p_reason)>500 or p_reason~'[\x00-\x1f\x7f]' then
+    raise exception using errcode='23514',message='departure requires a stable slot and control-free reason of at most 500 characters';
   end if;
-  v_request:=jsonb_build_object('operation','mark_employee_departed','slot_id',p_slot_id,'effective_start',p_effective_start,'reason',p_reason,'expected_revision',p_expected_revision,'actor_manager_id',p_manager_id);
+  v_request:=jsonb_build_object('operation','mark_employee_departed','slot_id',p_slot_id,'effective_start',v_effective_start,'reason',p_reason,'expected_revision',p_expected_revision,'actor_manager_id',p_manager_id);
   v_request_digest:=public.static_weekly_digest_jsonb(v_request); perform pg_advisory_xact_lock(hashtextextended('memphis-static-weekly-authority',0));
   select * into v_prior from public.weekly_schedule_command_receipts where actor_manager_id=p_manager_id and idempotency_key=p_idempotency_key;
   if found then if v_prior.request_digest<>v_request_digest then raise exception using errcode='23505',message='idempotency key was already used for different semantic inputs'; end if; return v_prior.response_json; end if;
   perform public.static_weekly_v5_source_availability_template(p_slot_id);
-  select * into v_incumbent from public.v_weekly_roster_slot_incumbency_ranges where slot_id=p_slot_id and effective_start<=p_effective_start and (effective_end is null or p_effective_start<effective_end) order by effective_start desc limit 1;
+  select * into v_incumbent from public.v_weekly_roster_slot_incumbency_ranges where slot_id=p_slot_id and effective_start<=v_effective_start and (effective_end is null or v_effective_start<effective_end) order by effective_start desc limit 1;
   if not found then raise exception using errcode='23514',message='departure requires one effective stable-slot incumbent'; end if;
   select * into v_employee from public.employees where id=v_incumbent.person_id for update;
   if not found or v_employee.active is not true then raise exception using errcode='23514',message='departure requires one active custodial employee matching the stable-slot incumbent'; end if;
   perform public.static_weekly_v4_assert_employee_turnover_ready(v_employee.id);
-  if exists(select 1 from public.weekly_roster_slot_staffing_states where slot_id=p_slot_id and effective_start=p_effective_start and staffing_state='departed_named_absent') then raise exception using errcode='23505',message='stable slot is already marked departed on this effective date'; end if;
+  if exists(select 1 from public.weekly_roster_slot_staffing_states where slot_id=p_slot_id and effective_start=v_effective_start and staffing_state='departed_named_absent') then raise exception using errcode='23505',message='stable slot is already marked departed today'; end if;
   v_content_digest:=public.static_weekly_digest_jsonb(v_request-'expected_revision'-'actor_manager_id'-'operation');
   v_revision:=public.static_weekly_advance_authority(p_expected_revision,'mark_employee_departed',p_manager_id,v_actor->>'manager_name',v_command,v_content_digest);
   insert into public.weekly_roster_slot_staffing_states(slot_id,employee_id,staffing_state,effective_start,authority_revision,actor_manager_id,actor_manager_name_snapshot,reason,content_digest)
-  values(p_slot_id,v_employee.id,'departed_named_absent',p_effective_start,v_revision,p_manager_id,v_actor->>'manager_name',p_reason,v_content_digest);
+  values(p_slot_id,v_employee.id,'departed_named_absent',v_effective_start,v_revision,p_manager_id,v_actor->>'manager_name',p_reason,v_content_digest);
   v_status:=public.custodial_set_employee_active(v_employee.id,false,p_manager_id,p_reason,true);
-  v_response:=public.static_weekly_response_json('mark_employee_departed',v_revision,v_content_digest,v_request_digest,jsonb_build_object('slot_id',p_slot_id,'former_employee_id',v_employee.id,'former_employee_name',v_employee.display_name,'effective_start',p_effective_start,'employee_status',v_status));
+  v_response:=public.static_weekly_response_json('mark_employee_departed',v_revision,v_content_digest,v_request_digest,jsonb_build_object('slot_id',p_slot_id,'former_employee_id',v_employee.id,'former_employee_name',v_employee.display_name,'effective_start',v_effective_start,'employee_status',v_status));
   insert into public.weekly_schedule_command_receipts(command_id,actor_manager_id,actor_manager_name_snapshot,command_type,idempotency_key,expected_revision,request_digest,request_canonical_json,response_json,response_digest,content_digest)
   values(v_command,p_manager_id,v_actor->>'manager_name','mark_employee_departed',p_idempotency_key,p_expected_revision,v_request_digest,v_request,v_response,v_response->>'output_digest',v_content_digest);
   return v_response;
@@ -226,26 +254,26 @@ end
 $function$;
 
 create or replace function public.static_weekly_v4_replace_employee(
-  p_slot_id uuid,p_new_employee_name text,p_effective_start date,p_reason text,p_expected_revision bigint,p_manager_id uuid,p_idempotency_key text
+  p_slot_id uuid,p_new_employee_name text,p_reason text,p_expected_revision bigint,p_manager_id uuid,p_idempotency_key text
 ) returns jsonb language plpgsql security definer set search_path=pg_catalog,public as $function$
-declare v_actor jsonb; v_manager public.ops_manager_managers%rowtype; v_prior public.weekly_schedule_command_receipts%rowtype; v_incumbent public.v_weekly_roster_slot_incumbency_ranges%rowtype; v_old public.employees%rowtype; v_request jsonb; v_request_digest text; v_content_digest text; v_command uuid:=gen_random_uuid(); v_new_incumbency uuid:=gen_random_uuid(); v_revision bigint; v_response jsonb; v_created jsonb; v_status jsonb; v_assignment jsonb; v_new_employee_id uuid; v_new_name text:=regexp_replace(btrim(coalesce(p_new_employee_name,'')),'\s+',' ','g'); v_device text; v_device_count integer;
+declare v_actor jsonb; v_manager public.ops_manager_managers%rowtype; v_prior public.weekly_schedule_command_receipts%rowtype; v_incumbent public.v_weekly_roster_slot_incumbency_ranges%rowtype; v_old public.employees%rowtype; v_request jsonb; v_request_digest text; v_content_digest text; v_command uuid:=gen_random_uuid(); v_new_incumbency uuid:=gen_random_uuid(); v_revision bigint; v_response jsonb; v_created jsonb; v_status jsonb; v_assignment jsonb; v_new_employee_id uuid; v_new_name text:=regexp_replace(btrim(coalesce(p_new_employee_name,'')),'\s+',' ','g'); v_device text; v_device_count integer; v_effective_start date:=(statement_timestamp() at time zone 'America/Chicago')::date;
 begin
   perform public.static_weekly_v3_assert_control_plane(); v_manager:=public.custodial_assert_manager(p_manager_id); v_actor:=public.static_weekly_v3_manager_actor(p_manager_id);
   perform public.static_weekly_assert_command_identity(p_expected_revision,p_manager_id,v_actor->>'manager_name',p_idempotency_key,'replace_employee');
-  if p_slot_id is null or p_effective_start is null or length(v_new_name) not between 2 and 160 or nullif(btrim(coalesce(p_reason,'')),'') is null or char_length(p_reason)>500 or p_reason~'[\x00-\x1f\x7f]' then
-    raise exception using errcode='23514',message='replacement requires a stable slot, new employee name, effective date, and control-free reason of at most 500 characters';
+  if p_slot_id is null or length(v_new_name) not between 2 and 160 or nullif(btrim(coalesce(p_reason,'')),'') is null or char_length(p_reason)>500 or p_reason~'[\x00-\x1f\x7f]' then
+    raise exception using errcode='23514',message='replacement requires a stable slot, new employee name, and control-free reason of at most 500 characters';
   end if;
-  v_request:=jsonb_build_object('operation','replace_employee','slot_id',p_slot_id,'new_employee_name',v_new_name,'effective_start',p_effective_start,'reason',p_reason,'expected_revision',p_expected_revision,'actor_manager_id',p_manager_id);
+  v_request:=jsonb_build_object('operation','replace_employee','slot_id',p_slot_id,'new_employee_name',v_new_name,'effective_start',v_effective_start,'reason',p_reason,'expected_revision',p_expected_revision,'actor_manager_id',p_manager_id);
   v_request_digest:=public.static_weekly_digest_jsonb(v_request); perform pg_advisory_xact_lock(hashtextextended('memphis-static-weekly-authority',0));
   select * into v_prior from public.weekly_schedule_command_receipts where actor_manager_id=p_manager_id and idempotency_key=p_idempotency_key;
   if found then if v_prior.request_digest<>v_request_digest then raise exception using errcode='23505',message='idempotency key was already used for different semantic inputs'; end if; return v_prior.response_json; end if;
   perform public.static_weekly_v5_source_availability_template(p_slot_id);
-  select * into v_incumbent from public.v_weekly_roster_slot_incumbency_ranges where slot_id=p_slot_id and effective_start<p_effective_start and (effective_end is null or p_effective_start<effective_end) order by effective_start desc limit 1;
+  select * into v_incumbent from public.v_weekly_roster_slot_incumbency_ranges where slot_id=p_slot_id and effective_start<v_effective_start and (effective_end is null or v_effective_start<effective_end) order by effective_start desc limit 1;
   if not found then raise exception using errcode='23514',message='replacement requires one predecessor stable-slot incumbent'; end if;
   select * into v_old from public.employees where id=v_incumbent.person_id for update;
   if not found then raise exception using errcode='23514',message='replacement predecessor must resolve to a custodial employee'; end if;
   perform public.static_weekly_v4_assert_employee_turnover_ready(v_old.id);
-  if exists(select 1 from public.weekly_roster_slot_staffing_states where slot_id=p_slot_id and effective_start=p_effective_start and staffing_state='working') then raise exception using errcode='23505',message='stable slot already has a replacement on this effective date'; end if;
+  if exists(select 1 from public.weekly_roster_slot_staffing_states where slot_id=p_slot_id and effective_start=v_effective_start and staffing_state='working') then raise exception using errcode='23505',message='stable slot already has a replacement today'; end if;
   select count(*),min(device_id) into v_device_count,v_device from public.devices where active=true and assigned_employee_id=v_old.id;
   if v_device_count=0 then
     select count(*),min(d.device_id) into v_device_count,v_device
@@ -255,20 +283,20 @@ begin
     );
   end if;
   if v_device_count>1 then raise exception using errcode='23514',message='replacement phone is ambiguous; assign one phone to the stable slot before retrying'; end if;
-  v_created:=public.custodial_create_employee(v_new_name,null,'Fresh employee created by atomic stable-slot replacement',p_manager_id);
+  if v_old.active then v_status:=public.custodial_set_employee_active(v_old.id,false,p_manager_id,p_reason,true);
+  else update public.msg_users set is_active=false,updated_at=statement_timestamp() where employee_id=v_old.id and is_active is true; v_status:=jsonb_build_object('changed',false,'employee',to_jsonb(v_old),'released_devices','[]'::jsonb); end if;
+  v_created:=public.static_weekly_v5_create_replacement_employee(v_new_name,p_manager_id);
   v_new_employee_id:=(v_created#>>'{employee,id}')::uuid;
   if v_device is not null then v_assignment:=public.custodial_assign_employee_device(v_device,v_new_employee_id,p_manager_id,p_reason,false); end if;
-  if v_old.active then v_status:=public.custodial_set_employee_active(v_old.id,false,p_manager_id,p_reason,true);
-  else v_status:=jsonb_build_object('changed',false,'employee',to_jsonb(v_old),'released_devices','[]'::jsonb); end if;
   v_content_digest:=public.static_weekly_digest_jsonb(v_request-'expected_revision'-'actor_manager_id'-'operation');
   v_revision:=public.static_weekly_advance_authority(p_expected_revision,'replace_employee',p_manager_id,v_actor->>'manager_name',v_command,v_content_digest);
   insert into public.weekly_roster_slot_incumbencies(incumbency_id,slot_id,person_id,person_name_snapshot,effective_start,created_by_manager_id,created_by_manager_name_snapshot,content_digest)
-  values(v_new_incumbency,p_slot_id,v_new_employee_id,v_new_name,p_effective_start,p_manager_id,v_actor->>'manager_name',v_content_digest);
+  values(v_new_incumbency,p_slot_id,v_new_employee_id,v_new_name,v_effective_start,p_manager_id,v_actor->>'manager_name',v_content_digest);
   insert into public.weekly_roster_slot_incumbency_closures(closed_incumbency_id,replacement_incumbency_id,closed_at_effective_date,authority_revision,actor_manager_id,actor_manager_name_snapshot,content_digest)
-  values(v_incumbent.incumbency_id,v_new_incumbency,p_effective_start,v_revision,p_manager_id,v_actor->>'manager_name',v_content_digest);
+  values(v_incumbent.incumbency_id,v_new_incumbency,v_effective_start,v_revision,p_manager_id,v_actor->>'manager_name',v_content_digest);
   insert into public.weekly_roster_slot_staffing_states(slot_id,employee_id,staffing_state,effective_start,authority_revision,actor_manager_id,actor_manager_name_snapshot,reason,content_digest)
-  values(p_slot_id,v_new_employee_id,'working',p_effective_start,v_revision,p_manager_id,v_actor->>'manager_name',p_reason,v_content_digest);
-  v_response:=public.static_weekly_response_json('replace_employee',v_revision,v_content_digest,v_request_digest,jsonb_build_object('slot_id',p_slot_id,'former_employee_id',v_old.id,'former_employee_name',v_old.display_name,'new_employee_id',v_new_employee_id,'new_employee_name',v_new_name,'new_employee_code',v_created#>>'{employee,employee_code}','effective_start',p_effective_start,'device_id',v_device,'phone_assignment',v_assignment,'former_employee_status',v_status));
+  values(p_slot_id,v_new_employee_id,'working',v_effective_start,v_revision,p_manager_id,v_actor->>'manager_name',p_reason,v_content_digest);
+  v_response:=public.static_weekly_response_json('replace_employee',v_revision,v_content_digest,v_request_digest,jsonb_build_object('slot_id',p_slot_id,'former_employee_id',v_old.id,'former_employee_name',v_old.display_name,'new_employee_id',v_new_employee_id,'new_employee_name',v_new_name,'new_employee_code',v_created#>>'{employee,employee_code}','effective_start',v_effective_start,'device_id',v_device,'phone_assignment',v_assignment,'former_employee_status',v_status));
   insert into public.weekly_schedule_command_receipts(command_id,actor_manager_id,actor_manager_name_snapshot,command_type,idempotency_key,expected_revision,request_digest,request_canonical_json,response_json,response_digest,content_digest)
   values(v_command,p_manager_id,v_actor->>'manager_name','replace_employee',p_idempotency_key,p_expected_revision,v_request_digest,v_request,v_response,v_response->>'output_digest',v_content_digest);
   return v_response;
@@ -375,6 +403,7 @@ begin
     'location_name',o.location_name_snapshot,'included_locations',jsonb_build_array(o.location_name_snapshot),
     'coverage_start',to_char(o.coverage_start,'HH24:MI'),'coverage_end',to_char(o.coverage_end,'HH24:MI'),'start_time',to_char(o.coverage_start,'HH24:MI'),'end_time',to_char(o.coverage_end,'HH24:MI'),
     'coverage_purpose',coalesce(nullif(o.authority_facts_json#>>'{work_snapshot,coveragePurpose}',''),nullif(o.authority_facts_json#>>'{work_snapshot,purpose}',''),'area_owner'),'purpose',coalesce(nullif(o.authority_facts_json#>>'{work_snapshot,coveragePurpose}',''),nullif(o.authority_facts_json#>>'{work_snapshot,purpose}',''),'area_owner'),
+    'section_title',case coalesce(nullif(o.authority_facts_json#>>'{work_snapshot,coveragePurpose}',''),nullif(o.authority_facts_json#>>'{work_snapshot,purpose}',''),'area_owner') when 'area_owner' then 'Primary area coverage' when 'restroom_upkeep' then 'Restroom upkeep' when 'deep_clean' then 'Deep cleaning' when 'late_coverage' then 'Late coverage' when 'lunch_coverage' then 'Lunch coverage' else initcap(replace(coalesce(nullif(o.authority_facts_json#>>'{work_snapshot,coveragePurpose}',''),nullif(o.authority_facts_json#>>'{work_snapshot,purpose}',''),'assigned coverage'),'_',' ')) end,
     'source_type','static_weekly_projection','owner_type','EMPLOYEE','status','ASSIGNED','load_points',coalesce((o.authority_facts_json#>>'{work_snapshot,serviceEffortMinutes}')::numeric,1),'notes',null,
     'is_public_restroom',(lower(o.location_name_snapshot) like '%restroom%' or lower(o.location_name_snapshot) like '%bathroom%')
   ) order by o.coverage_start,o.coverage_end,o.location_name_snapshot,o.work_id),'[]'::jsonb) into v_items
@@ -451,15 +480,22 @@ revoke all on function public.static_weekly_v5_projection_source_identity(jsonb)
 revoke all on function public.static_weekly_v5_registered_source_identity(jsonb) from public,anon,authenticated,service_role,static_weekly_control_plane,static_weekly_release_operator;
 revoke all on function public.static_weekly_v5_source_availability_template(uuid) from public,anon,authenticated,service_role,static_weekly_control_plane,static_weekly_release_operator;
 revoke all on function public.static_weekly_v4_assert_employee_turnover_ready(uuid) from public,anon,authenticated,service_role,static_weekly_control_plane,static_weekly_release_operator;
-revoke all on function public.static_weekly_v4_mark_employee_departed(uuid,date,text,bigint,uuid,text) from public,anon,authenticated,service_role,static_weekly_control_plane,static_weekly_release_operator;
-revoke all on function public.static_weekly_v4_replace_employee(uuid,text,date,text,bigint,uuid,text) from public,anon,authenticated,service_role,static_weekly_control_plane,static_weekly_release_operator;
+revoke all on function public.static_weekly_v5_create_replacement_employee(text,uuid) from public,anon,authenticated,service_role,static_weekly_control_plane,static_weekly_release_operator;
+revoke all on function public.static_weekly_v4_mark_employee_departed(uuid,text,bigint,uuid,text) from public,anon,authenticated,service_role,static_weekly_control_plane,static_weekly_release_operator;
+revoke all on function public.static_weekly_v4_replace_employee(uuid,text,text,bigint,uuid,text) from public,anon,authenticated,service_role,static_weekly_control_plane,static_weekly_release_operator;
 revoke all on function public.static_weekly_v5_read_employee_day(date,uuid,timestamptz) from public,anon,authenticated,service_role,static_weekly_control_plane,static_weekly_release_operator;
-grant execute on function public.static_weekly_v4_mark_employee_departed(uuid,date,text,bigint,uuid,text) to static_weekly_control_plane;
-grant execute on function public.static_weekly_v4_replace_employee(uuid,text,date,text,bigint,uuid,text) to static_weekly_control_plane;
+grant execute on function public.static_weekly_v4_mark_employee_departed(uuid,text,bigint,uuid,text) to static_weekly_control_plane;
+grant execute on function public.static_weekly_v4_replace_employee(uuid,text,text,bigint,uuid,text) to static_weekly_control_plane;
 grant execute on function public.static_weekly_v5_read_employee_day(date,uuid,timestamptz) to service_role;
 
+-- The pre-turnover writer accepted arbitrary people and dates without employee,
+-- phone, staffing, or projection integration. Historical receipts remain valid,
+-- but no executable legacy authority surface survives this migration.
+drop function if exists public.static_weekly_v3_replace_incumbency(uuid,uuid,text,date,bigint,uuid,text);
+drop function if exists public.static_weekly_v2_replace_incumbency(uuid,uuid,text,date,bigint,uuid,text,text);
+
 comment on table public.weekly_roster_slot_staffing_states is 'Append-only effective-dated working/departed state for a stable recurring roster slot.';
-comment on function public.static_weekly_v4_replace_employee(uuid,text,date,text,bigint,uuid,text) is 'Atomic fresh-start replacement: new employee identity and statistics, stable schedule slot, optional unambiguous phone transfer, former-employee retirement, and immutable turnover receipt.';
+comment on function public.static_weekly_v4_replace_employee(uuid,text,text,bigint,uuid,text) is 'Atomic current-day fresh-start replacement: new employee identity and statistics, stable schedule slot, optional unambiguous phone transfer, former-employee retirement, and immutable turnover receipt.';
 comment on function public.static_weekly_v3_read_manager_snapshot(date) is 'One coherent manager week read enriched with effective-dated staffing, incumbent identity, employee active state, and assigned phone truth.';
 comment on function public.static_weekly_v5_read_employee_day(date,uuid,timestamptz) is 'Read-only employee phone projection from the current static weekly schedule; governed dates fail visibly when projection authority is stale or missing.';
 

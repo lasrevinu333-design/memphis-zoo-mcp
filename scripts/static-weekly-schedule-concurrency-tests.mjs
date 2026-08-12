@@ -121,11 +121,7 @@ try {
   const reversal = reversals[0];
   await expectReject(control(`public.static_weekly_v3_apply_exception('reverse','2026-11-03',null,null,${quote(publication.data.version_id)},${quote(publication.data.publication_id)},'changed reversal',${json({ reversesExceptionId: pto.data.exception_id })},${projection.revision},${quote(one.id)},'race-reverse',${quote(pto.data.exception_id)})`), /idempotency key/i);
 
-  const replaceOne = control(`public.static_weekly_v3_replace_incumbency(${quote(slot.id)},'30000000-0000-4000-8000-000000000042','Race Replacement','2026-11-16',${reversal.revision},${quote(one.id)},'race-replace-one')`);
-  const replaceTwo = control(`public.static_weekly_v3_replace_incumbency(${quote(slot.id)},'30000000-0000-4000-8000-000000000043','Race Replacement Two','2026-11-16',${reversal.revision},${quote(two.id)},'race-replace-two')`);
-  const replacementRace = await Promise.allSettled([replaceOne, replaceTwo]);
-  assert.equal(replacementRace.filter((result) => result.status === "fulfilled").length, 1, "incumbency replacement race permits exactly one closure fact");
-  assert.equal(replacementRace.filter((result) => result.status === "rejected").length, 1);
+  assert.equal(await scalar("select (to_regprocedure('public.static_weekly_v3_replace_incumbency(uuid,uuid,text,date,bigint,uuid,text)') is null)::text"), "true", "the arbitrary legacy replacement writer is absent during concurrent authority operation");
   console.log("static weekly schedule real independent-session concurrency tests: PASS");
 } finally {
   await docker(["rm", "-f", container]).catch(() => {});
