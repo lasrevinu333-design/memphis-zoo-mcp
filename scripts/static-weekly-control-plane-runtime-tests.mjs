@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
 import { createServer } from "node:http";
 import { createOpsManagerSession } from "../src/auth/shared-access-auth.js";
-import { createStaticWeeklyControlPlaneRuntime } from "../src/static-weekly-control-plane-runtime.js";
+import { createStaticWeeklyControlPlaneRuntime, startStaticWeeklyControlPlaneRuntime } from "../src/static-weekly-control-plane-runtime.js";
 
 const env = {
   NODE_ENV: "test",
@@ -60,6 +61,14 @@ async function managerSnapshot() {
 }
 
 try {
+  let health = await fetch(`${origin}/health`);
+  assert.equal(health.status, 200, "health must pass only when the database authority reports ready");
+  assert.equal(health.headers.get("cache-control"), "no-store");
+  assert.equal((await health.json()).data.ready, true);
+
+  health = await fetch(`${origin}/ready`);
+  assert.equal(health.status, 200, "the deployment readiness path must share the authority health gate");
+
   const preflight = await fetch(`${origin}/static-weekly/manager-snapshot`, {
     method: "OPTIONS",
     headers: { Origin: "https://lasrevinu333-design.github.io", "Access-Control-Request-Method": "GET", "Access-Control-Request-Headers": "authorization,x-device-id" },
@@ -127,5 +136,63 @@ try {
 } finally {
   await new Promise((resolve) => server.close(resolve));
 }
+
+async function fetchHealth(controlPlaneHealth) {
+  const healthRuntime = createStaticWeeklyControlPlaneRuntime({
+    env,
+    trustedDeviceStore: store,
+    database: {},
+    controlPlane: { async health() { return controlPlaneHealth(); } },
+  });
+  const healthServer = createServer(healthRuntime.app);
+  await new Promise((resolve) => healthServer.listen(0, "127.0.0.1", resolve));
+  try {
+    const response = await fetch(`http://127.0.0.1:${healthServer.address().port}/ready`);
+    return { status: response.status, body: await response.json() };
+  } finally {
+    await new Promise((resolve) => healthServer.close(resolve));
+  }
+}
+
+let unavailableHealth = await fetchHealth(() => ({ ready: false, active_key_count: 0 }));
+assert.equal(unavailableHealth.status, 503, "a not-ready authority must prevent deployment readiness");
+assert.equal(unavailableHealth.body.ok, false);
+assert.equal(unavailableHealth.body.data.active_key_count, 0);
+
+unavailableHealth = await fetchHealth(() => { throw new Error("database unavailable"); });
+assert.equal(unavailableHealth.status, 503, "an authority health failure must fail closed without exposing database errors");
+assert.equal(unavailableHealth.body.code, "static_weekly_control_plane_unavailable");
+assert.doesNotMatch(JSON.stringify(unavailableHealth.body), /database unavailable/);
+
+const processTarget = new EventEmitter();
+let closeCount = 0;
+const started = startStaticWeeklyControlPlaneRuntime({
+  env: { ...env, PORT: "0" },
+  processTarget,
+  logger: { log() {}, error() {} },
+  trustedDeviceStore: store,
+  database: {},
+  controlPlane: {
+    async health() { return { ready: true }; },
+    async close() { closeCount += 1; },
+  },
+});
+await new Promise((resolve, reject) => {
+  if (started.server.listening) resolve();
+  else {
+    started.server.once("listening", resolve);
+    started.server.once("error", reject);
+  }
+});
+assert.equal(processTarget.listenerCount("SIGTERM"), 1, "the process, not the HTTP server, must own SIGTERM");
+processTarget.emit("SIGTERM");
+await started.shutdown();
+assert.equal(started.server.listening, false, "SIGTERM must drain the HTTP listener");
+assert.equal(closeCount, 1, "SIGTERM and repeated shutdown calls must close the authority pool exactly once");
+assert.equal(processTarget.listenerCount("SIGTERM"), 0, "shutdown must remove process signal handlers");
+
+assert.throws(() => startStaticWeeklyControlPlaneRuntime({
+  env: { ...env, PORT: "not-a-port" }, trustedDeviceStore: store, database: {}, controlPlane,
+}), /port must be an integer/i, "invalid deployment ports must fail before listening");
 
 console.log("static weekly control-plane runtime trusted-device fail-closed tests: PASS");

@@ -74,6 +74,16 @@ internal sign/verify canary before release. Failed-active recovery names that
 exact current active predecessor and atomically revokes it while installing one
 distinct successor; it does not require an unsafe pre-revocation step.
 
+The no-cost first canary service definition is
+`deploy/static-weekly-control-plane.render.yaml`. It is intentionally set to
+Render's free plan with automatic deployment disabled. Creating or syncing the
+service is a separate production/account action; merging the file does not
+create a resource. Before that action, production must have all repository
+scheduler migrations through `20260812032055`, a dedicated login granted only
+`static_weekly_control_plane`, one active authority key, and one hash-bound
+verified schedule packet. The April candidate workbook is not that packet and
+is never registration authority.
+
 ## Admin / Ops API
 
 | Name | Required | Purpose |

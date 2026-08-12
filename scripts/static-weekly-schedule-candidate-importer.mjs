@@ -6,10 +6,21 @@
  */
 import fs from "node:fs";
 import { createHash } from "node:crypto";
+import { compileStaticWeeklySchedule, postgresJsonbContentDigest } from "../src/static-weekly-schedule-compiler.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const WORKBOOK_SHA256 = "f9eba54e274cd1b792545770de6fb17e9e25fee989aca18f65250d433f599e40";
 const hash = (value) => createHash("sha256").update(value).digest("hex");
+const KNOWN_CANDIDATE_UUID_PREFIXES = ["4b99b100-", "5b99b100-"];
+const isCandidatePlaceholder = (value) => KNOWN_CANDIDATE_UUID_PREFIXES.some((prefix) => String(value || "").toLowerCase().startsWith(prefix));
+const text = (value) => typeof value === "string" ? value.trim() : "";
+
+function activeIncumbent(slot, effectiveDate) {
+  const matches = Array.isArray(slot?.incumbencies) ? slot.incumbencies.filter((item) => (
+    text(item?.effectiveStart) <= effectiveDate && (!text(item?.effectiveEnd) || text(item.effectiveEnd) > effectiveDate)
+  )) : [];
+  return matches.length === 1 ? matches[0] : null;
+}
 
 export function validateStaticWeeklyPacket(packet) {
   const errors = [];
@@ -20,21 +31,92 @@ export function validateStaticWeeklyPacket(packet) {
     if (packet.source?.sha256 !== WORKBOOK_SHA256) errors.push("candidate_workbook_hash_mismatch");
     if (!Array.isArray(packet.candidateRoster) || !packet.candidateRoster.length || packet.candidateRoster.some((row) => !UUID.test(row.slotId || "") || !UUID.test(row.personId || "") || !String(row.displayName || "").trim())) errors.push("candidate_roster_requires_uuid_source_facts");
     if (!Array.isArray(packet.unresolved?.absentUntilReplacedStableSlots) || packet.unresolved.absentUntilReplacedStableSlots.length !== 2) errors.push("two_departed_slot_identities_must_remain_unresolved");
-    return { ok: errors.length === 0, classification: "CANDIDATE_ONLY", errors, contentDigest: hash(JSON.stringify(packet)) };
+    return { ok: errors.length === 0, classification: "CANDIDATE_ONLY", admissibleForRegistration: false, errors, contentDigest: hash(JSON.stringify(packet)) };
   }
   if (packet.packetSchema !== "memphis-zoo.static-weekly.verified-schedule-packet.v1") errors.push("unknown_packet_schema");
   if (packet.publicationAuthority !== "VERIFIED_SERVER_PACKET") errors.push("verified_packet_authority_required");
-  for (const field of ["effectiveDate", "baseline", "rosterSlots", "directedProximity", "acceptedRoutes", "serviceEffort", "capacity", "sourceDigest"]) if (packet[field] == null) errors.push(`verified_packet_missing_${field}`);
+  for (const field of ["effectiveDate", "compilerInput", "rosterSlots", "directedProximity", "acceptedRoutes", "serviceEffort", "capacity", "sourceDigest", "verifiedAt", "verifiedBy", "evidence"]) if (packet[field] == null) errors.push(`verified_packet_missing_${field}`);
   if (packet.sourceDigest && !/^[0-9a-f]{64}$/i.test(packet.sourceDigest)) errors.push("verified_packet_source_digest_required");
-  if (Array.isArray(packet.rosterSlots) && packet.rosterSlots.some((row) => !UUID.test(row.slotId || "") || !UUID.test(row.personId || ""))) errors.push("verified_packet_uuid_identity_required");
-  return { ok: errors.length === 0, classification: "VERIFIED_PACKET", errors, contentDigest: hash(JSON.stringify(packet)) };
+  if (!UUID.test(packet.sourceId || "") || isCandidatePlaceholder(packet.sourceId)) errors.push("verified_packet_source_id_required");
+  if (Array.isArray(packet.rosterSlots) && packet.rosterSlots.some((row) => !UUID.test(row.slotId || "") || !UUID.test(row.personId || "") || isCandidatePlaceholder(row.slotId) || isCandidatePlaceholder(row.personId))) errors.push("verified_packet_production_uuid_identity_required");
+  if (!Array.isArray(packet.evidence) || !packet.evidence.length || packet.evidence.some((item) => !String(item?.kind || "").trim() || !/^[0-9a-f]{64}$/i.test(item?.sha256 || ""))) errors.push("verified_packet_hash_bound_evidence_required");
+  if (!packet.compilerInput || typeof packet.compilerInput !== "object" || Array.isArray(packet.compilerInput)) errors.push("verified_packet_compiler_input_required");
+  else {
+    if (!Array.isArray(packet.compilerInput.exceptions) || packet.compilerInput.exceptions.length !== 0) errors.push("verified_packet_recurring_source_must_be_exception_free");
+    const singularVersion = packet.compilerInput.version && typeof packet.compilerInput.version === "object" && !Array.isArray(packet.compilerInput.version)
+      ? packet.compilerInput.version : null;
+    const pluralVersion = Array.isArray(packet.compilerInput.versions) && packet.compilerInput.versions.length === 1
+      ? packet.compilerInput.versions[0] : null;
+    const version = singularVersion || pluralVersion;
+    if (!version || Boolean(singularVersion) === Boolean(pluralVersion)) errors.push("verified_packet_exactly_one_recurring_version_required");
+    if (packet.sourceDigest && postgresJsonbContentDigest(packet.compilerInput) !== packet.sourceDigest) errors.push("verified_packet_source_digest_mismatch");
+    if (JSON.stringify(packet.compilerInput).match(/"[45]b99b100-/i)) errors.push("verified_packet_candidate_placeholder_forbidden");
+    const absentSlotIds = Array.isArray(version?.namedAbsentSlotIds) ? [...new Set(version.namedAbsentSlotIds)] : [];
+    if (absentSlotIds.length !== 2 || absentSlotIds.some((id) => !UUID.test(id || "") || isCandidatePlaceholder(id))) errors.push("verified_packet_exactly_two_real_named_absent_slots_required");
+    const slots = Array.isArray(packet.compilerInput.slots) ? packet.compilerInput.slots : [];
+    const roster = Array.isArray(packet.rosterSlots) ? packet.rosterSlots : [];
+    for (const slotId of absentSlotIds) {
+      const slot = slots.find((item) => item?.id === slotId);
+      const incumbent = activeIncumbent(slot, text(packet.effectiveDate));
+      const rosterRow = roster.find((item) => item?.slotId === slotId);
+      if (!slot || !incumbent || !UUID.test(incumbent.personId || "") || !text(incumbent.displayName)
+        || rosterRow?.personId !== incumbent.personId || text(rosterRow?.displayName) !== text(incumbent.displayName)
+        || rosterRow?.availabilityState !== "departed_named_absent") {
+        errors.push("verified_packet_named_absent_roster_identity_mismatch");
+        break;
+      }
+    }
+  }
+  return { ok: errors.length === 0, classification: "VERIFIED_PACKET", admissibleForRegistration: errors.length === 0, errors, contentDigest: hash(JSON.stringify(packet)) };
+}
+
+function executableCompilerInput(packet) {
+  const input = JSON.parse(JSON.stringify(packet.compilerInput));
+  if (input.version && !input.versions) {
+    input.versions = [input.version];
+    delete input.version;
+  }
+  input.serviceDate = packet.effectiveDate;
+  input.exceptions = [];
+  return input;
+}
+
+export async function prepareStaticWeeklyRegistrationArtifact(packet) {
+  const result = validateStaticWeeklyPacket(packet);
+  if (!result.admissibleForRegistration) return result;
+  const compiled = await compileStaticWeeklySchedule(executableCompilerInput(packet));
+  const canonicalSource = compiled.canonicalAuthority?.compilerInput;
+  if (compiled.status !== "FEASIBLE" || compiled.publicationAuthority !== "ACCEPTABLE" || compiled.verifier?.ok !== true
+    || !canonicalSource || postgresJsonbContentDigest(canonicalSource) !== packet.sourceDigest) {
+    result.ok = false;
+    result.admissibleForRegistration = false;
+    result.errors.push("verified_packet_compiler_rejected");
+    return result;
+  }
+  result.registration = {
+    schema: "memphis-zoo.static-weekly-source-registration.v1",
+    sourceId: packet.sourceId,
+    sourceDigest: postgresJsonbContentDigest(canonicalSource),
+    packetContentDigest: result.contentDigest,
+    compilerVersion: compiled.compilerVersion,
+    replayDigest: compiled.replayDigest,
+    verifierOk: true,
+    canonicalSource,
+  };
+  return result;
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const candidatePath = process.argv[2];
-  if (!candidatePath) throw new Error("Usage: static-weekly-schedule-candidate-importer.mjs <candidate-or-verified-packet.json>");
+  const outputPath = process.argv[3] || null;
+  if (!candidatePath) throw new Error("Usage: static-weekly-schedule-candidate-importer.mjs <candidate-or-verified-packet.json> [registration-artifact.json]");
+  if (fs.statSync(candidatePath).size > 8 * 1024 * 1024) throw new Error("Static weekly source packet exceeds the 8 MiB release boundary.");
   const packet = JSON.parse(fs.readFileSync(candidatePath, "utf8"));
-  const result = validateStaticWeeklyPacket(packet);
-  process.stdout.write(`${JSON.stringify(result)}\n`);
-  process.exitCode = result.ok ? 0 : 1;
+  const result = await prepareStaticWeeklyRegistrationArtifact(packet);
+  const rendered = `${JSON.stringify(result, null, outputPath ? 2 : 0)}\n`;
+  if (outputPath) {
+    if (!result.registration) throw new Error(`Registration artifact refused: ${result.errors.join(", ")}`);
+    fs.writeFileSync(outputPath, rendered, { mode: 0o600, flag: "wx" });
+  } else process.stdout.write(rendered);
+  process.exitCode = result.ok && (!outputPath || Boolean(result.registration)) ? 0 : 1;
 }

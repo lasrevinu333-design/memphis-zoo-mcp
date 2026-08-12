@@ -7,8 +7,9 @@ import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import fs from "node:fs";
 import path from "node:path";
-import { compileStaticWeeklySchedule } from "../src/static-weekly-schedule-compiler.js";
+import { compileStaticWeeklySchedule, postgresJsonbContentDigest } from "../src/static-weekly-schedule-compiler.js";
 import { createStaticWeeklyDraftRpcInput, createStaticWeeklyProjectionRpcInput } from "../src/static-weekly-schedule-database-adapter.js";
+import { prepareStaticWeeklyRegistrationArtifact, validateStaticWeeklyPacket } from "./static-weekly-schedule-candidate-importer.mjs";
 
 const execFileAsync = promisify(execFile);
 const container = `mz_static_weekly_i2_v3_${process.pid}`;
@@ -83,6 +84,24 @@ try {
   const sourceId = "80000000-0000-4000-8000-000000000001";
   const source = sourceInput();
   const compiled = await compileStaticWeeklySchedule(source); assert.equal(compiled.status, "FEASIBLE"); assert.equal(compiled.verifier.ok, true);
+  const verifiedPacket = {
+    packetSchema: "memphis-zoo.static-weekly.verified-schedule-packet.v1", publicationAuthority: "VERIFIED_SERVER_PACKET",
+    sourceId, effectiveDate: source.serviceDate, compilerInput: compiled.canonicalAuthority.compilerInput,
+    rosterSlots: source.slots.filter((slot) => !slot.contractorCapacity).map((slot) => ({
+      slotId: slot.id, personId: slot.incumbencies[0].personId, displayName: slot.incumbencies[0].displayName,
+      availabilityState: source.versions[0].namedAbsentSlotIds.includes(slot.id) ? "departed_named_absent" : "working",
+    })),
+    directedProximity: source.proximity, acceptedRoutes: "bound in compilerInput", serviceEffort: "bound in compilerInput",
+    capacity: "bound in compilerInput", sourceDigest: postgresJsonbContentDigest(compiled.canonicalAuthority.compilerInput),
+    verifiedAt: "2026-08-12T00:00:00Z", verifiedBy: "scheduler-v3-disposable-authority-suite",
+    evidence: [{ kind: "disposable-authority-fixture", sha256: "a".repeat(64) }],
+  };
+  const verifiedPacketResult = validateStaticWeeklyPacket(verifiedPacket);
+  assert.equal(verifiedPacketResult.ok, true, `a hash-bound compiler-consistent packet is admissible: ${verifiedPacketResult.errors.join(",")}`);
+  assert.equal(verifiedPacketResult.admissibleForRegistration, true);
+  const registrationArtifact = await prepareStaticWeeklyRegistrationArtifact(verifiedPacket);
+  assert.equal(registrationArtifact.registration.sourceDigest, verifiedPacket.sourceDigest, "release hydration must recompile to the exact registered canonical source digest");
+  assert.equal(registrationArtifact.registration.verifierOk, true);
   await scalar(release("static_weekly_v3_register_authority_source", `${quote(sourceId)},${json(compiled.canonicalAuthority.compilerInput)},'v3-test-source-registration'`));
   for (const [index, slot] of source.slots.entries()) { await sql(`insert into public.weekly_roster_slots(slot_id,slot_code,slot_label,created_by_manager_id,created_by_manager_name_snapshot,content_digest) values(${quote(slot.id)},${quote(`SLOT_${index}`)},${quote(slot.label)},${quote(manager.managerId)},${quote(manager.managerName)},repeat('${String.fromCharCode(97 + index)}',64))`); for (const incumbent of slot.incumbencies) await sql(`insert into public.weekly_roster_slot_incumbencies(slot_id,person_id,person_name_snapshot,effective_start,effective_end,created_by_manager_id,created_by_manager_name_snapshot,content_digest) values(${quote(slot.id)},${quote(incumbent.personId)},${quote(incumbent.displayName)},${quote(incumbent.effectiveStart)},${incumbent.effectiveEnd ? quote(incumbent.effectiveEnd) : "null"},${quote(manager.managerId)},${quote(manager.managerName)},repeat('f',64))`); }
   const draft = createStaticWeeklyDraftRpcInput({ result: compiled, expectedRevision: 0, actor: { ...manager, idempotencyKey: "v3-create" } });

@@ -54,6 +54,7 @@ export function createStaticWeeklyControlPlaneRuntime({
   app.disable("x-powered-by");
   app.use((req, res, next) => {
     setCors(req, res, env);
+    res.setHeader("Cache-Control", "no-store");
     if (req.method === "OPTIONS") { res.sendStatus(204); return; }
     next();
   });
@@ -85,7 +86,26 @@ export function createStaticWeeklyControlPlaneRuntime({
     };
   }
 
-  app.get("/health", respond(async () => authorityControlPlane.health()));
+  async function readiness(_req, res) {
+    try {
+      const data = await authorityControlPlane.health();
+      const ready = data?.ready === true;
+      res.status(ready ? 200 : 503).json({
+        ok: ready,
+        data,
+        ...(ready ? {} : { error: "The static weekly scheduler authority is not ready.", code: "static_weekly_control_plane_not_ready" }),
+      });
+    } catch (_error) {
+      res.status(503).json({
+        ok: false,
+        data: { ready: false },
+        error: "The static weekly scheduler authority is unavailable.",
+        code: "static_weekly_control_plane_unavailable",
+      });
+    }
+  }
+
+  app.get(["/health", "/ready"], readiness);
   app.get("/static-weekly/manager-snapshot", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.getManagerSnapshot({ manager: manager(req), weekStart: req.query?.week_start })));
   app.post("/static-weekly/drafts/initial", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.createInitialDraft({ manager: manager(req), sourceId: req.body?.source_id, effectiveStart: req.body?.effective_start, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key })));
   app.post("/static-weekly/drafts/replacement", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.createReplacementDraft({ manager: manager(req), sourcePublicationId: req.body?.source_publication_id, effectiveStart: req.body?.effective_start, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key })));
@@ -100,11 +120,46 @@ export function createStaticWeeklyControlPlaneRuntime({
 
 export function startStaticWeeklyControlPlaneRuntime(options = {}) {
   const env = options.env || process.env;
-  const runtime = createStaticWeeklyControlPlaneRuntime({ ...options, env });
   const port = Number(env.STATIC_WEEKLY_CONTROL_PLANE_PORT || env.PORT || 3100);
-  const server = runtime.app.listen(port, () => console.log(`Static weekly control plane listening on ${port}`));
-  for (const signal of ["SIGINT", "SIGTERM"]) server.once(signal, () => server.close(() => runtime.controlPlane.close().finally(() => process.exit(0))));
-  return { ...runtime, server };
+  if (!Number.isInteger(port) || port < 0 || port > 65_535) throw fail("static_weekly_control_plane_port_invalid", "The scheduler control-plane port must be an integer from 0 through 65535.");
+  const runtime = createStaticWeeklyControlPlaneRuntime({ ...options, env });
+
+  const processTarget = options.processTarget || process;
+  const logger = options.logger || console;
+  const server = runtime.app.listen(port, () => logger.log(`Static weekly control plane listening on ${server.address()?.port || port}`));
+  let shutdownPromise = null;
+
+  const removeSignalHandlers = () => {
+    processTarget.removeListener("SIGINT", onSignal);
+    processTarget.removeListener("SIGTERM", onSignal);
+  };
+  const shutdown = () => {
+    if (shutdownPromise) return shutdownPromise;
+    shutdownPromise = new Promise((resolve, reject) => {
+      const finish = async (serverError = null) => {
+        try {
+          await runtime.controlPlane.close();
+          if (serverError) reject(serverError);
+          else resolve();
+        } catch (error) {
+          reject(error);
+        }
+      };
+      if (!server.listening) void finish();
+      else server.close((error) => void finish(error || null));
+    }).finally(removeSignalHandlers);
+    return shutdownPromise;
+  };
+  const onSignal = () => {
+    shutdown().catch((error) => {
+      processTarget.exitCode = 1;
+      logger.error("Static weekly control-plane shutdown failed.", error);
+    });
+  };
+
+  processTarget.once("SIGINT", onSignal);
+  processTarget.once("SIGTERM", onSignal);
+  return { ...runtime, server, shutdown };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) startStaticWeeklyControlPlaneRuntime();

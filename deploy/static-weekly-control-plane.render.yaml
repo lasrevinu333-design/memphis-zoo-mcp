@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: memphis-zoo-static-weekly-control-plane
+    runtime: node
+    plan: free
+    region: ohio
+    repo: https://github.com/lasrevinu333-design/memphis-zoo-mcp
+    branch: main
+    buildCommand: npm ci --ignore-scripts
+    startCommand: npm run start:static-weekly-control-plane
+    healthCheckPath: /ready
+    autoDeployTrigger: off
+    maxShutdownDelaySeconds: 30
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: STATIC_WEEKLY_CONTROL_PLANE_DATABASE_URL
+        sync: false
+      - key: STATIC_WEEKLY_CONTROL_PLANE_ALLOWED_ORIGINS
+        value: https://lasrevinu333-design.github.io

@@ -103,8 +103,25 @@ if (process.env.STATIC_WEEKLY_PHYSICAL_SCALE === "1") { await runPhysicalScaleFi
 // fixture.  Its UUID source facts are useful without inventing the two absent
 // incumbents, and it cannot enter a publication path until a verified packet.
 assert.equal(validateStaticWeeklyPacket(candidateWorkbook).ok, true);
+assert.equal(validateStaticWeeklyPacket(candidateWorkbook).admissibleForRegistration, false, "candidate evidence can never become a release source merely by passing evidence validation");
 assert.equal(validateStaticWeeklyPacket({ ...candidateWorkbook, admission: { ...candidateWorkbook.admission, canaryReady: true } }).ok, false);
 assert.equal(candidateWorkbook.unresolved.absentUntilReplacedStableSlots.length, 2);
+
+const forgedVerifiedPacket = {
+  packetSchema: "memphis-zoo.static-weekly.verified-schedule-packet.v1",
+  publicationAuthority: "VERIFIED_SERVER_PACKET",
+  effectiveDate: "2026-08-17",
+  compilerInput: { exceptions: [], versions: [{}] },
+  rosterSlots: candidateWorkbook.candidateRoster,
+  directedProximity: [], acceptedRoutes: [], serviceEffort: [], capacity: [],
+  sourceDigest: postgresJsonbContentDigest({ exceptions: [], versions: [{}] }),
+  verifiedAt: "2026-08-12T00:00:00Z", verifiedBy: "test",
+  evidence: [{ kind: "candidate-workbook", sha256: candidateWorkbook.source.sha256 }],
+};
+const forgedVerifiedResult = validateStaticWeeklyPacket(forgedVerifiedPacket);
+assert.equal(forgedVerifiedResult.ok, false, "candidate placeholder UUIDs cannot be relabeled as verified production identities");
+assert.equal(forgedVerifiedResult.admissibleForRegistration, false);
+assert.ok(forgedVerifiedResult.errors.includes("verified_packet_production_uuid_identity_required"));
 
 const solverIdentity = await initializeStaticWeeklySolver();
 // Monotonic budget evidence: a wall-clock jump is irrelevant to the request
