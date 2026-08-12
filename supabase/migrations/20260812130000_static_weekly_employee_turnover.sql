@@ -286,7 +286,7 @@ from public,anon,authenticated,service_role,static_weekly_control_plane,static_w
 
 create or replace function public.static_weekly_v3_read_manager_snapshot(p_week_start date)
 returns jsonb language plpgsql security definer set search_path=pg_catalog,public as $function$
-declare v_snapshot jsonb; v_availability jsonb:='[]'::jsonb; v_roster jsonb:='[]'::jsonb; v_item jsonb; v_date date; v_state text; v_person uuid; v_name text; v_active boolean; v_devices jsonb; v_week_staffing jsonb;
+declare v_snapshot jsonb; v_availability jsonb:='[]'::jsonb; v_roster jsonb:='[]'::jsonb; v_item jsonb; v_date date; v_state text; v_person uuid; v_name text; v_active boolean; v_devices jsonb; v_week_staffing jsonb; v_projection_revision bigint; v_staffing_revision bigint; v_projection_status text:='missing';
 begin
   perform public.static_weekly_v3_assert_control_plane();
   v_snapshot:=public.static_weekly_v3_read_manager_snapshot_base(p_week_start);
@@ -315,7 +315,24 @@ begin
     from jsonb_array_elements(v_availability) a where a->>'slot_id'=v_item->>'slot_id';
     v_roster:=v_roster||jsonb_build_array(v_item||jsonb_build_object('week_staffing',v_week_staffing));
   end loop;
-  return jsonb_set(jsonb_set(v_snapshot,'{availability}',v_availability,true),'{roster}',v_roster,true);
+  if jsonb_typeof(v_snapshot->'latest_projection')='object' then
+    select (r.response_json->>'revision')::bigint into v_projection_revision
+    from public.weekly_schedule_command_receipts r
+    where r.command_type='materialize_projection'
+      and r.response_json#>>'{data,projection_id}'=v_snapshot#>>'{latest_projection,projection_id}'
+    order by r.accepted_at desc,r.command_id desc limit 1;
+  end if;
+  select max(s.authority_revision) into v_staffing_revision
+  from public.weekly_roster_slot_staffing_states s
+  where s.effective_start<=p_week_start+6;
+  if v_projection_revision is not null and (v_staffing_revision is null or v_projection_revision>v_staffing_revision) then
+    v_projection_status:='current';
+  elsif v_projection_revision is not null or v_staffing_revision is not null then
+    v_projection_status:='stale_staffing_change';
+    v_snapshot:=jsonb_set(v_snapshot,'{latest_projection}','null'::jsonb,true);
+  end if;
+  return jsonb_set(jsonb_set(v_snapshot,'{availability}',v_availability,true),'{roster}',v_roster,true)
+    ||jsonb_build_object('projection_status',v_projection_status,'projection_authority_revision',v_projection_revision,'staffing_authority_revision',v_staffing_revision);
 end
 $function$;
 

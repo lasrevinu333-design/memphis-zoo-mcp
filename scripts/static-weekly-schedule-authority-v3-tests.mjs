@@ -223,6 +223,8 @@ try {
   assert.equal(await scalar("select assigned_employee_id is null from public.devices where device_id='KIOSK_02'"), "t");
   const departedSnapshot = JSON.parse(await scalar(cp("static_weekly_v3_read_manager_snapshot", `${quote(turnoverWeek)}`)));
   const departedMonday = departedSnapshot.availability.find((row) => row.slot_id === source.slots[0].id && row.service_date === turnoverWeek);
+  assert.equal(departedSnapshot.projection_status, "stale_staffing_change", "a pre-turnover projection must never be presented as current");
+  assert.equal(departedSnapshot.latest_projection, null);
   assert.equal(departedMonday.availability_state, "departed_named_absent", "manager read shows the effective named absence rather than stale publication status");
   assert.equal(departedMonday.employee_active, false);
   assert.deepEqual(departedMonday.device_ids, []);
@@ -241,6 +243,8 @@ try {
   assert.equal(await scalar(`select staffing_state from public.weekly_roster_slot_staffing_states where slot_id=${quote(source.slots[0].id)} and effective_start=${quote(turnoverWeek)} order by authority_revision desc limit 1`), "working", "a same-day replacement deterministically supersedes the named absence");
   const replacementSnapshot = JSON.parse(await scalar(cp("static_weekly_v3_read_manager_snapshot", `${quote(turnoverWeek)}`)));
   const replacementMonday = replacementSnapshot.availability.find((row) => row.slot_id === source.slots[0].id && row.service_date === turnoverWeek);
+  assert.equal(replacementSnapshot.projection_status, "stale_staffing_change", "the departed projection becomes stale as soon as a replacement starts");
+  assert.equal(replacementSnapshot.latest_projection, null);
   assert.equal(replacementMonday.availability_state, "working");
   assert.equal(replacementMonday.person_id, replacement.data.new_employee_id);
   assert.equal(replacementMonday.person_name, "Taylor New");
@@ -252,6 +256,10 @@ try {
   const replacementProjection = createStaticWeeklyProjectionRpcInput({ result: replacementCompiled, publicationId: turnoverPublicationId, expectedRevision: 16, actor: { ...manager, idempotencyKey: "v4-replacement-projection" } });
   await scalar(cp("static_weekly_v3_materialize_projection", `${quote(turnoverPublicationId)},${quote(turnoverWeek)},${quote(replacementProjection.exceptionSetDigest)},${quote(replacementProjection.compilerVersion)},${json(replacementProjection.objective)},${json(replacementProjection.metrics)},${quote(replacementProjection.replayDigest)},${json(replacementProjection.envelope)},16,${quote(manager.managerId)},'v4-replacement-projection'`));
   assert.equal(await scalar(`select count(*) from public.weekly_schedule_compiled_projections where publication_id=${quote(turnoverPublicationId)} and week_start=${quote(turnoverWeek)}`), "3", "each changed weekly authority appends an immutable same-week projection");
+  const currentReplacementSnapshot = JSON.parse(await scalar(cp("static_weekly_v3_read_manager_snapshot", `${quote(turnoverWeek)}`)));
+  assert.equal(currentReplacementSnapshot.projection_status, "current");
+  assert.equal(currentReplacementSnapshot.projection_authority_revision, 17);
+  assert.equal(currentReplacementSnapshot.staffing_authority_revision, 16);
   const rotation = JSON.parse(await scalar(release("static_weekly_v3_rotate_authority_key", `${quote("static-weekly-authority-hmac-v3")},${quote("static-weekly-v3-rotation-secret-01234567890123456789")},statement_timestamp()+interval '1 hour','v3-test-rotation'`))); assert.equal(rotation.ready, true, "key rotation keeps exactly one active key with bounded overlap");
   assert.equal(await scalar(verifyAttestation(issuedAttestation)), "verified", "the bounded overlap continues to verify outstanding v2 work during rotation");
   await expectReject(release("static_weekly_v3_revoke_authority_key", `${quote("static-weekly-authority-hmac-v3")},'wrong active revoke'`), /non-active/i);

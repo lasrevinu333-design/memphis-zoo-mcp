@@ -1,10 +1,10 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
-  "schema_fingerprint": "04f4cf468f6257fe07efdcd2f6d63e2875911dd8f236a359bf5dc0168dfec748",
+  "schema_fingerprint": "097132b83c20530341ba360cb9413a5db9cd7d2309f9995c1a32ce4531623877",
   "schema_transition": {
     "transition_id": "named-manager-messenger-archive-retirement-20260810",
     "from_fingerprint": "333ddfc8008ea0b85916de7d491b98c9b8d6a7d45d3a2947d99b4b3bb836ea00",
-    "to_fingerprint": "04f4cf468f6257fe07efdcd2f6d63e2875911dd8f236a359bf5dc0168dfec748",
+    "to_fingerprint": "097132b83c20530341ba360cb9413a5db9cd7d2309f9995c1a32ce4531623877",
     "expires_at": "2026-08-23T23:59:59Z"
   },
   "frontend_source_fingerprint": "333ddfc8008ea0b85916de7d491b98c9b8d6a7d45d3a2947d99b4b3bb836ea00",
@@ -356,7 +356,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "201f07c291315cb78f7676475b18d8a93d6688d5"
+        "object_id": "44936d62973cb61c89545f8a87ea08629db7a044"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -1016,7 +1016,7 @@
       {
         "path": "scripts/static-weekly-schedule-authority-v3-tests.mjs",
         "mode": "100644",
-        "object_id": "5d697c7976138349646680bd6990c2ec5e6a22b7"
+        "object_id": "658232b4e461aa32c81a140da0bc51c910f1e1ab"
       },
       {
         "path": "scripts/static-weekly-schedule-candidate-importer.mjs",
@@ -1616,12 +1616,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "78cf717ab08bec0edc4229540b37170662996659"
+        "object_id": "4e601cfa16eb300685a290862e50b164f9e004be"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "58b869fa301136e1b66419b66c183e180f887a54"
+        "object_id": "66d2abaae884d265054a4ce4e995add0fdf9273f"
       },
       {
         "path": "supabase/config.toml",
@@ -2546,7 +2546,7 @@
       {
         "path": "supabase/migrations/20260812130000_static_weekly_employee_turnover.sql",
         "mode": "100644",
-        "object_id": "7139dab4ddbaf5d644415d13d5888c91b8995a23"
+        "object_id": "1ee120850d5869335779926282dbb2f273554a06"
       },
       {
         "path": "tmp/write_probe.txt",
