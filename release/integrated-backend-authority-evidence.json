@@ -496,7 +496,7 @@
       {
         "path": "scripts/device-credential-foundation-tests.mjs",
         "mode": "100644",
-        "object_id": "f90fa48f2578bc375728585512288924905e888e"
+        "object_id": "cd7871c8e07ee975d558ce1faf36e585c09c95bc"
       },
       {
         "path": "scripts/device-popup-fully-kiosk-test.mjs",
@@ -546,7 +546,7 @@
       {
         "path": "scripts/feedback-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "78dc7b5bce5cf998545d5d469195aae1cfe8f893"
+        "object_id": "bf042c996f5997eed3ac9f1ff0447c7c5e4b0eb8"
       },
       {
         "path": "scripts/final-operational-correction-database-tests.mjs",
