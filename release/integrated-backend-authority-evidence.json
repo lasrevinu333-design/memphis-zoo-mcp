@@ -1,10 +1,10 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
-  "schema_fingerprint": "e5adbbcc13e937bd424ca51b3bfd6130ce308db794382afcc300741acadace18",
+  "schema_fingerprint": "04f4cf468f6257fe07efdcd2f6d63e2875911dd8f236a359bf5dc0168dfec748",
   "schema_transition": {
     "transition_id": "named-manager-messenger-archive-retirement-20260810",
     "from_fingerprint": "333ddfc8008ea0b85916de7d491b98c9b8d6a7d45d3a2947d99b4b3bb836ea00",
-    "to_fingerprint": "e5adbbcc13e937bd424ca51b3bfd6130ce308db794382afcc300741acadace18",
+    "to_fingerprint": "04f4cf468f6257fe07efdcd2f6d63e2875911dd8f236a359bf5dc0168dfec748",
     "expires_at": "2026-08-23T23:59:59Z"
   },
   "frontend_source_fingerprint": "333ddfc8008ea0b85916de7d491b98c9b8d6a7d45d3a2947d99b4b3bb836ea00",
@@ -194,6 +194,11 @@
         "object_id": "f362dce1dc63784024bddcce134e287f27714a2a"
       },
       {
+        "path": "deploy/static-weekly-control-plane.render.yaml",
+        "mode": "100644",
+        "object_id": "59770fb43af2b9caa58ff2700faf899736cf1828"
+      },
+      {
         "path": "docs/AI_INTEGRATION_ARCHITECTURE.md",
         "mode": "100644",
         "object_id": "936586f668d82a5e63a386cf4726e7db10bb9f03"
@@ -201,7 +206,7 @@
       {
         "path": "docs/env.md",
         "mode": "100644",
-        "object_id": "25b46dd6b3295d0c44f9bc80fb6c1a7f7661fe8b"
+        "object_id": "ca423487704771fe86d2dd76d2df047cc949a470"
       },
       {
         "path": "docs/github-json-commands.md",
@@ -301,7 +306,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "8414390579d16df3e4c2a06d1a466ceaa323aa14"
+        "object_id": "68c5239f2372edf39ecd5b6bacc6ef8a1891341b"
       },
       {
         "path": "public/moxie-assets/contacts-creekside-animal.png",
@@ -351,7 +356,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "c22b465723caf15cacad8f749e17c9ee8d5ab931"
+        "object_id": "201f07c291315cb78f7676475b18d8a93d6688d5"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -606,17 +611,17 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "3910c9ec90eec449900b01f857ba424173d7f48f"
+        "object_id": "20e02954ad742e7a3697bf764945e19ca1d0bc24"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "4bb13c2223606ed87975d0bb58e4ce82b589c5c5"
+        "object_id": "679d505346df4e36cca25cb720328a3584ff9e1a"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
         "mode": "100644",
-        "object_id": "65005c5d3c370334edc707e3a5fea202e44c3600"
+        "object_id": "469825602e1be1dd83a3f5c2ead27ceca7c040a8"
       },
       {
         "path": "scripts/integrated-backend-authority-suite-order-isolated-tests.mjs",
@@ -831,7 +836,7 @@
       {
         "path": "scripts/refresh-integrated-backend-authority-release.mjs",
         "mode": "100644",
-        "object_id": "81b9ba366a6061366de59e038e1516b34214f92a"
+        "object_id": "1c7e113870d9e7ac6c8229ac344a7017f76688de"
       },
       {
         "path": "scripts/refresh-release-schema-alignment.mjs",
@@ -989,14 +994,19 @@
         "object_id": "d1fc2839a3061df922e8ef891089dbde26d3a8c2"
       },
       {
+        "path": "scripts/static-weekly-control-plane-deployment-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "8789e3ca46bbf335945f70af64458b6c5075b9df"
+      },
+      {
         "path": "scripts/static-weekly-control-plane-runtime-tests.mjs",
         "mode": "100644",
-        "object_id": "c2db583485d57d132044f0822219fb2ae365a6fb"
+        "object_id": "32fd96d8004710792578c49f39fd803a60fd1c02"
       },
       {
         "path": "scripts/static-weekly-control-plane-tests.mjs",
         "mode": "100644",
-        "object_id": "f4de9a58d3d8807293ca436a96886216a8d32870"
+        "object_id": "ff3d61ef2c7fa18075290d7ac51973459eedc6a0"
       },
       {
         "path": "scripts/static-weekly-schedule-authority-closure-tests.mjs",
@@ -1006,17 +1016,17 @@
       {
         "path": "scripts/static-weekly-schedule-authority-v3-tests.mjs",
         "mode": "100644",
-        "object_id": "530a67ed68e6610c98506b6c4067e78d0986cba6"
+        "object_id": "5d697c7976138349646680bd6990c2ec5e6a22b7"
       },
       {
         "path": "scripts/static-weekly-schedule-candidate-importer.mjs",
         "mode": "100644",
-        "object_id": "24591c0ab176590a3ce46747a77616a8e925b7e0"
+        "object_id": "74276a06f8ca22c03a7bfb46ae015b23adc24ada"
       },
       {
         "path": "scripts/static-weekly-schedule-compiler-tests.mjs",
         "mode": "100644",
-        "object_id": "06d26671476010e8e963789c2d7fe21fcdbda341"
+        "object_id": "cdc29a9766de7ba9809807393ffc4ee5743f39e0"
       },
       {
         "path": "scripts/static-weekly-schedule-concurrency-tests.mjs",
@@ -1516,12 +1526,12 @@
       {
         "path": "src/static-weekly-control-plane-runtime.js",
         "mode": "100644",
-        "object_id": "f5767fb0be14b81a63bed63b7dc950d1631204be"
+        "object_id": "08243129c0b6557933ed22f2aba09a7500dc0469"
       },
       {
         "path": "src/static-weekly-control-plane.js",
         "mode": "100644",
-        "object_id": "c81a51cf4eef2d7421d42c66da402d1760c2b0c6"
+        "object_id": "1407c68f01be21026ba004b26d707d802962b5db"
       },
       {
         "path": "src/static-weekly-schedule-compiler.js",
@@ -1531,7 +1541,7 @@
       {
         "path": "src/static-weekly-schedule-database-adapter.js",
         "mode": "100644",
-        "object_id": "351f509874f45596eae36da07e05e0672e3b5f32"
+        "object_id": "46c85e5cce4f03608a23a300b47b43796f1cae4f"
       },
       {
         "path": "src/static-weekly-schedule-model.js",
@@ -1606,12 +1616,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "a6f21a8f55afd9c70d7145b43fd408b7e1afe4be"
+        "object_id": "78cf717ab08bec0edc4229540b37170662996659"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "f852f39d83124fa06ec7545415a358b2c54c24af"
+        "object_id": "58b869fa301136e1b66419b66c183e180f887a54"
       },
       {
         "path": "supabase/config.toml",
@@ -2534,13 +2544,18 @@
         "object_id": "95eb13a9681fdcb7b936439a8818451e8bafdba3"
       },
       {
+        "path": "supabase/migrations/20260812130000_static_weekly_employee_turnover.sql",
+        "mode": "100644",
+        "object_id": "7139dab4ddbaf5d644415d13d5888c91b8995a23"
+      },
+      {
         "path": "tmp/write_probe.txt",
         "mode": "100644",
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 492,
-    "migration_path_count": 67,
+    "authority_path_count": 495,
+    "migration_path_count": 68,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate requires externally supplied exact expected_commit and expected_tree, deterministically enumerates every tracked expected-tree entry, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file as its exact tree blob."
   },
@@ -2751,6 +2766,9 @@
     },
     {
       "name": "20260812032055_static_weekly_manager_snapshot.sql"
+    },
+    {
+      "name": "20260812130000_static_weekly_employee_turnover.sql"
     }
   ],
   "release_boundary": "Configure a minimum-32-character CUSTODIAL_BACKEND_PROOF_SECRET and matching database digest before Phase A, retain the bridge backend artifact through Phase C, and require the executable health/restoration probes before traffic changes."

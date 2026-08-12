@@ -55,13 +55,25 @@ export function validateStaticWeeklyPacket(packet) {
     if (absentSlotIds.length !== 2 || absentSlotIds.some((id) => !UUID.test(id || "") || isCandidatePlaceholder(id))) errors.push("verified_packet_exactly_two_real_named_absent_slots_required");
     const slots = Array.isArray(packet.compilerInput.slots) ? packet.compilerInput.slots : [];
     const roster = Array.isArray(packet.rosterSlots) ? packet.rosterSlots : [];
+    const availability = Array.isArray(version?.slotAvailability) ? version.slotAvailability : [];
     for (const slotId of absentSlotIds) {
       const slot = slots.find((item) => item?.id === slotId);
       const incumbent = activeIncumbent(slot, text(packet.effectiveDate));
       const rosterRow = roster.find((item) => item?.slotId === slotId);
+      const templates = availability.filter((item) => item?.slotId === slotId);
       if (!slot || !incumbent || !UUID.test(incumbent.personId || "") || !text(incumbent.displayName)
         || rosterRow?.personId !== incumbent.personId || text(rosterRow?.displayName) !== text(incumbent.displayName)
-        || rosterRow?.availabilityState !== "departed_named_absent") {
+        || rosterRow?.availabilityState !== "departed_named_absent"
+        || templates.length === 0
+        || templates.some((item) => item?.status !== "departed_named_absent"
+          || !Number.isInteger(item?.dayOfWeek) || item.dayOfWeek < 0 || item.dayOfWeek > 6
+          || !text(item?.shift?.start) || !text(item?.shift?.end)
+          || !text(item?.productiveCapacityProvenance)
+          || !Number.isSafeInteger(item?.maxServiceEffortMinutes) || item.maxServiceEffortMinutes < 1
+          || !text(item?.maxServiceEffortProvenance)
+          || !Array.isArray(item?.qualifications) || !text(item?.qualificationProvenance)
+          || !Array.isArray(item?.restrictions) || !text(item?.restrictionProvenance)
+          || !text(item?.acceptedRouteAnchorLocationId) || !text(item?.acceptedRouteProvenance))) {
         errors.push("verified_packet_named_absent_roster_identity_mismatch");
         break;
       }

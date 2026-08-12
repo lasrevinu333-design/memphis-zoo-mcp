@@ -21,6 +21,8 @@ assert.match(controlPlaneSource, /source\.source_id/, "draft creation must bind 
 assert.match(runtimeSource, /requireManagerWrite, namedManager/, "every scheduler mutation route must require a trusted named manager writer");
 assert.match(runtimeSource, /\/static-weekly\/manager-snapshot[^\n]+requireManagerWrite, namedManager/, "the scheduler snapshot must use the same current named-manager association gate as mutations");
 assert.match(runtimeSource, /\/static-weekly\/drafts\/initial/, "the separately deployed control plane must expose a deployable first-draft path without accepting source facts");
+assert.match(runtimeSource, /\/static-weekly\/employees\/departed/, "the control plane must expose one bounded departure transaction");
+assert.match(runtimeSource, /\/static-weekly\/employees\/replacements/, "the control plane must expose one bounded fresh-start replacement transaction");
 assert.doesNotMatch(ordinaryApiSource, /static_weekly_v3_|static-weekly-control-plane/, "the ordinary API must not expose scheduler authority mutations");
 assert.match(ordinaryApiSource, /\/scheduler-runtime-config/, "the ordinary API must expose the separately configured scheduler service origin to the static frontend");
 assert.match(ordinaryApiSource, /STATIC_WEEKLY_CONTROL_PLANE_PUBLIC_URL/, "the scheduler service origin must come from deployment configuration");
@@ -64,6 +66,17 @@ assert.equal(queries.length, 0, "admin/API-key and operations-first identities m
 const health = await controlPlane.health();
 assert.equal(health.ready, true);
 assert.equal(JSON.stringify(health).includes("secret"), false, "health responses must expose key state, never key material");
+
+queries.length = 0;
+client.query = async (statement, values = []) => {
+  queries.push({ statement, values });
+  if (statement.includes("static_weekly_v4_replace_employee")) return { rows: [{ result: { revision: 9, data: { new_employee_name: "Fresh Employee" } } }] };
+  return { rows: [] };
+};
+const replacedEmployee = await controlPlane.replaceEmployee({ manager, slotId: "20000000-0000-4000-8000-000000000001", newEmployeeName: "Fresh Employee", effectiveStart: "2026-10-07", reason: "Employment turnover", expectedRevision: 8, idempotencyKey: "replace-employee" });
+assert.equal(replacedEmployee.revision, 9);
+assert.deepEqual(queries.map((entry) => entry.statement), ["begin", "set local role static_weekly_control_plane", "select public.static_weekly_v4_replace_employee($1,$2,$3,$4,$5,$6,$7) as result", "commit"]);
+assert.equal(queries[2].values.includes(manager.manager_display_name), false, "turnover persists only the database-resolved manager name");
 
 queries.length = 0;
 const snapshotResult = { schema: "memphis-zoo.static-weekly-manager-snapshot.v1", week_start: "2026-10-05", authority_revision: 7 };

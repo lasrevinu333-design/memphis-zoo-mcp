@@ -37,6 +37,14 @@ const recurringSemanticIdentity = (value) => {
     delete stableVersion.status;
     delete stableVersion.effectiveStart;
     delete stableVersion.effectiveEnd;
+    delete stableVersion.namedAbsentSlotIds;
+    if (Array.isArray(stableVersion.slotAvailability)) {
+      stableVersion.slotAvailability = stableVersion.slotAvailability.map((availability) => {
+        const recurringTemplate = clone(availability);
+        delete recurringTemplate.status;
+        return recurringTemplate;
+      });
+    }
     identity.version = stableVersion;
   }
   if (Array.isArray(identity.slots)) {
@@ -346,18 +354,19 @@ function slotAvailabilityRows(authority) {
     if (!slot || !Number.isInteger(availability.dayOfWeek) || availability.dayOfWeek < 0 || availability.dayOfWeek > 6) fail("database_adapter_projection_availability_invalid");
     const state = text(availability.status);
     const working = state === "working";
+    const recurringTemplate = working || state === "departed_named_absent";
     const shift = availability.shift || {};
     const lunch = availability.lunch || {};
     return {
       slot_id: availability.slotId,
       day_of_week: availability.dayOfWeek,
       availability_state: state,
-      shift_start: working ? shift.start ?? null : null,
-      shift_end: working ? shift.end ?? null : null,
+      shift_start: recurringTemplate ? shift.start ?? null : null,
+      shift_end: recurringTemplate ? shift.end ?? null : null,
       lunch_start: lunch.start ?? null,
       lunch_end: lunch.end ?? null,
-      capacity_units: working ? availability.productiveCapacityMinutes ?? null : null,
-      max_load_points: working ? availability.maxServiceEffortMinutes ?? null : null,
+      capacity_units: recurringTemplate ? availability.productiveCapacityMinutes ?? null : null,
+      max_load_points: recurringTemplate ? availability.maxServiceEffortMinutes ?? null : null,
       qualification_snapshot: clone(availability.qualifications || []),
       qualification_provenance: { source: availability.qualificationProvenance || null },
       restriction_snapshot: clone(availability.restrictions || []),

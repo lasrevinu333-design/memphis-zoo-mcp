@@ -37,7 +37,11 @@ function sourceInput({ serviceDate = "2026-10-05", versionId = "60000000-0000-40
       { id: departedB, label: "Riley Departed", incumbencies: [{ personId: "30000000-0000-4000-8000-000000000005", displayName: "Riley Departed", effectiveStart: "2020-01-01", effectiveEnd: null }] },
       { id: contractor, label: "CoverAll capacity 1", contractorCapacity: true, incumbencies: [{ personId: "30000000-0000-4000-8000-000000000006", displayName: "CoverAll capacity 1", effectiveStart: "2020-01-01", effectiveEnd: null }], contractorAvailability: Array.from({ length: 7 }, (_, dayOfWeek) => { const { slotId: _slotId, ...template } = availability(contractor, dayOfWeek, "START_A"); return template; }) },
     ],
-    versions: [{ id: versionId, publicationId, status: "published", effectiveStart: serviceDate, effectiveEnd: null, objective: { requireVerifiedProximity: true }, namedAbsentSlotIds: [departedA, departedB], slotAvailability: Array.from({ length: 7 }, (_, day) => [availability(a, day, "START_A"), availability(b, day, "START_B")]).flat(), assignments: Array.from({ length: 7 }, (_, day) => work(`work-${day}`, day, day % 2 ? locationB : locationA, day % 2 ? departedB : departedA)) }],
+    versions: [{ id: versionId, publicationId, status: "published", effectiveStart: serviceDate, effectiveEnd: null, objective: { requireVerifiedProximity: true }, namedAbsentSlotIds: [departedA, departedB], slotAvailability: Array.from({ length: 7 }, (_, day) => [
+      availability(a, day, "START_A"), availability(b, day, "START_B"),
+      { ...availability(departedA, day, "START_A"), status: "departed_named_absent" },
+      { ...availability(departedB, day, "START_B"), status: "departed_named_absent" },
+    ]).flat(), assignments: Array.from({ length: 7 }, (_, day) => work(`work-${day}`, day, day % 2 ? locationB : locationA, day % 2 ? departedB : departedA)) }],
   };
 }
 
@@ -66,7 +70,14 @@ try {
   assert.equal(ready, true, "owned PostgreSQL must start before migrations run");
   await sql("do $$ begin create role anon; exception when duplicate_object then null; end $$; do $$ begin create role authenticated; exception when duplicate_object then null; end $$; do $$ begin create role service_role; exception when duplicate_object then null; end $$;");
   for (const file of fs.readdirSync(migrationsDir).filter((name) => name.endsWith(".sql")).sort()) await sql(fs.readFileSync(path.join(migrationsDir, file), "utf8"));
-  await sql(`insert into public.ops_manager_managers(manager_id,display_name,roles,active,metadata_json,is_system_principal) values(${quote(manager.managerId)},${quote(manager.managerName)},array['OPS_MANAGER']::text[],true,'{}'::jsonb,false)`);
+  await sql(`insert into public.ops_manager_managers(manager_id,display_name,roles,active,metadata_json,is_system_principal) values(${quote(manager.managerId)},${quote(manager.managerName)},array['OPS_MANAGER','CUSTODIAL_MANAGER']::text[],true,'{}'::jsonb,false)`);
+  await sql(`
+    insert into public.employees(id,employee_code,display_name,active,role) values('30000000-0000-4000-8000-000000000001','EMP900','Morgan',true,'staff');
+    insert into public.msg_users(employee_id,display_name,role,is_active) values('30000000-0000-4000-8000-000000000001','Morgan','employee',true);
+    insert into public.devices(id,device_id,device_name,active,assigned_employee_id) values('91000000-0000-4000-8000-000000000001','KIOSK_02','Morgan',true,'30000000-0000-4000-8000-000000000001');
+    insert into public.locations(id,location_code,location_name,location_type,active) values('92000000-0000-4000-8000-000000000001','TURNOVER_TEST','Turnover test location','exhibit',true);
+    insert into public.sessions(session_uuid,location_id,employee_id,device_id,status,started_at,ended_at,duration_minutes) values('turnover-history','92000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001','91000000-0000-4000-8000-000000000001','closed',statement_timestamp()-interval '2 hours',statement_timestamp()-interval '1 hour',60);
+  `);
   const healthBefore = JSON.parse(await scalar(release("static_weekly_v3_authority_health", ""))); assert.equal(healthBefore.ready, false, "release readiness fails closed before key provisioning");
   const keySecret = "static-weekly-v3-disposable-key-012345678901234567890";
   const initialized = JSON.parse(await scalar(release("static_weekly_v3_configure_initial_authority_key", `${quote("static-weekly-authority-hmac-v2")},${quote(keySecret)},'v3-test-release'`))); assert.equal(initialized.ready, true, "release readiness accepts exactly one active control-plane key");
@@ -185,6 +196,62 @@ try {
   await expectNoMutation(cp("static_weekly_v3_publish_draft", `${quote(invalidRollbackDraft.data.version_id)},1,11,${quote(manager.managerId)},'v3-rollback-of-rollback','rollback_compensation',${quote(rollbackDraft.data.version_id)}`), /non-rollback|rollback/i, "rollback of a rollback target");
   const postRollbackSupersede = JSON.parse(await scalar(cp("static_weekly_v3_publish_draft", `${quote(invalidRollbackDraft.data.version_id)},1,11,${quote(manager.managerId)},'v3-post-rollback-supersede','supersede',null`))); assert.equal(postRollbackSupersede.revision, 12, "a later ordinary supersession remains valid after one rollback compensation");
   assert.equal(await scalar(`select closed_at_effective_date::text from public.weekly_schedule_effective_range_closures where closed_version_id=${quote(rollbackDraft.data.version_id)} order by created_at desc limit 1`), "2027-02-15", "the later ordinary supersession closes the rollback range at its exact effective boundary");
+
+  // One stable-slot transaction handles the real manager workflow: an
+  // outgoing employee remains a named absence until a replacement starts,
+  // the phone follows only when unambiguous, and the new immutable employee ID
+  // starts with no inherited session/statistics history.
+  const turnoverPublicationId = postRollbackSupersede.data.publication_id;
+  const turnoverWeek = "2027-02-15";
+  const compilePublicationSource = async () => {
+    const payload = JSON.parse(await scalar(cp("static_weekly_v3_read_publication_source", `${quote(turnoverPublicationId)},${quote(turnoverWeek)}`)));
+    const { version, ...compilerInput } = payload.compiler_input;
+    return compileStaticWeeklySchedule({ ...compilerInput, serviceDate: turnoverWeek, exceptions: payload.exceptions, versions: [version] });
+  };
+  const beforeTurnoverCompiled = await compilePublicationSource();
+  assert.equal(beforeTurnoverCompiled.status, "FEASIBLE");
+  const beforeTurnoverProjection = createStaticWeeklyProjectionRpcInput({ result: beforeTurnoverCompiled, publicationId: turnoverPublicationId, expectedRevision: 12, actor: { ...manager, idempotencyKey: "v4-before-turnover-projection" } });
+  await scalar(cp("static_weekly_v3_materialize_projection", `${quote(turnoverPublicationId)},${quote(turnoverWeek)},${quote(beforeTurnoverProjection.exceptionSetDigest)},${quote(beforeTurnoverProjection.compilerVersion)},${json(beforeTurnoverProjection.objective)},${json(beforeTurnoverProjection.metrics)},${quote(beforeTurnoverProjection.replayDigest)},${json(beforeTurnoverProjection.envelope)},12,${quote(manager.managerId)},'v4-before-turnover-projection'`));
+  await sql(`insert into public.sessions(session_uuid,location_id,employee_id,device_id,status) values('turnover-active','92000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001','91000000-0000-4000-8000-000000000001','active')`);
+  await expectNoMutation(cp("static_weekly_v4_mark_employee_departed", `${quote(source.slots[0].id)},${quote(turnoverWeek)},'employee departed',13,${quote(manager.managerId)},'v4-depart-active-block'`), /active|submission/i, "turnover with active cleaning work");
+  assert.equal(await scalar("select active::text from public.employees where id='30000000-0000-4000-8000-000000000001'"), "true", "a blocked turnover cannot deactivate the employee");
+  assert.equal(await scalar("select assigned_employee_id::text from public.devices where device_id='KIOSK_02'"), "30000000-0000-4000-8000-000000000001", "a blocked turnover cannot release the phone");
+  await sql("update public.sessions set status='cancelled',ended_at=statement_timestamp() where session_uuid='turnover-active'");
+  const departed = JSON.parse(await scalar(cp("static_weekly_v4_mark_employee_departed", `${quote(source.slots[0].id)},${quote(turnoverWeek)},'employee departed',13,${quote(manager.managerId)},'v4-depart'`)));
+  assert.equal(departed.revision, 14);
+  assert.equal(await scalar("select active::text from public.employees where id='30000000-0000-4000-8000-000000000001'"), "false");
+  assert.equal(await scalar("select assigned_employee_id is null from public.devices where device_id='KIOSK_02'"), "t");
+  const departedSnapshot = JSON.parse(await scalar(cp("static_weekly_v3_read_manager_snapshot", `${quote(turnoverWeek)}`)));
+  const departedMonday = departedSnapshot.availability.find((row) => row.slot_id === source.slots[0].id && row.service_date === turnoverWeek);
+  assert.equal(departedMonday.availability_state, "departed_named_absent", "manager read shows the effective named absence rather than stale publication status");
+  assert.equal(departedMonday.employee_active, false);
+  assert.deepEqual(departedMonday.device_ids, []);
+  const departedCompiled = await compilePublicationSource();
+  assert.equal(departedCompiled.status, "FEASIBLE", "one departed slot must rebalance onto the remaining verified workforce");
+  const departedProjection = createStaticWeeklyProjectionRpcInput({ result: departedCompiled, publicationId: turnoverPublicationId, expectedRevision: 14, actor: { ...manager, idempotencyKey: "v4-departed-projection" } });
+  await scalar(cp("static_weekly_v3_materialize_projection", `${quote(turnoverPublicationId)},${quote(turnoverWeek)},${quote(departedProjection.exceptionSetDigest)},${quote(departedProjection.compilerVersion)},${json(departedProjection.objective)},${json(departedProjection.metrics)},${quote(departedProjection.replayDigest)},${json(departedProjection.envelope)},14,${quote(manager.managerId)},'v4-departed-projection'`));
+  const replacement = JSON.parse(await scalar(cp("static_weekly_v4_replace_employee", `${quote(source.slots[0].id)},'Taylor New',${quote(turnoverWeek)},'new employee hired',15,${quote(manager.managerId)},'v4-replacement'`)));
+  assert.equal(replacement.revision, 16);
+  assert.notEqual(replacement.data.new_employee_id, "30000000-0000-4000-8000-000000000001", "replacement must use a fresh employee identity");
+  assert.equal(await scalar(`select assigned_employee_id::text from public.devices where device_id='KIOSK_02'`), replacement.data.new_employee_id, "the unambiguous stable-slot phone follows the replacement");
+  assert.equal(await scalar(`select count(*) from public.sessions where employee_id=${quote(replacement.data.new_employee_id)}`), "0", "the replacement starts with no inherited cleaning history or statistics");
+  assert.equal(await scalar("select count(*) from public.sessions where employee_id='30000000-0000-4000-8000-000000000001'"), "2", "former work remains isolated under the former immutable employee ID");
+  assert.equal(await scalar(`select is_active::text from public.msg_users where employee_id=${quote(replacement.data.new_employee_id)}`), "true", "the replacement receives a fresh active Messenger identity");
+  assert.equal(await scalar("select is_active::text from public.msg_users where employee_id='30000000-0000-4000-8000-000000000001'"), "false", "the departed Messenger identity is retired");
+  assert.equal(await scalar(`select staffing_state from public.weekly_roster_slot_staffing_states where slot_id=${quote(source.slots[0].id)} and effective_start=${quote(turnoverWeek)} order by authority_revision desc limit 1`), "working", "a same-day replacement deterministically supersedes the named absence");
+  const replacementSnapshot = JSON.parse(await scalar(cp("static_weekly_v3_read_manager_snapshot", `${quote(turnoverWeek)}`)));
+  const replacementMonday = replacementSnapshot.availability.find((row) => row.slot_id === source.slots[0].id && row.service_date === turnoverWeek);
+  assert.equal(replacementMonday.availability_state, "working");
+  assert.equal(replacementMonday.person_id, replacement.data.new_employee_id);
+  assert.equal(replacementMonday.person_name, "Taylor New");
+  assert.equal(replacementMonday.employee_active, true);
+  assert.deepEqual(replacementMonday.device_ids, ["KIOSK_02"], "manager read shows the phone that followed the replacement");
+  const replacementCompiled = await compilePublicationSource();
+  assert.equal(replacementCompiled.status, "FEASIBLE");
+  assert.equal(replacementCompiled.weeklyAssignments.filter((row) => row.personId === replacement.data.new_employee_id).length > 0, true, "the replacement is immediately eligible for the stable weekly workload");
+  const replacementProjection = createStaticWeeklyProjectionRpcInput({ result: replacementCompiled, publicationId: turnoverPublicationId, expectedRevision: 16, actor: { ...manager, idempotencyKey: "v4-replacement-projection" } });
+  await scalar(cp("static_weekly_v3_materialize_projection", `${quote(turnoverPublicationId)},${quote(turnoverWeek)},${quote(replacementProjection.exceptionSetDigest)},${quote(replacementProjection.compilerVersion)},${json(replacementProjection.objective)},${json(replacementProjection.metrics)},${quote(replacementProjection.replayDigest)},${json(replacementProjection.envelope)},16,${quote(manager.managerId)},'v4-replacement-projection'`));
+  assert.equal(await scalar(`select count(*) from public.weekly_schedule_compiled_projections where publication_id=${quote(turnoverPublicationId)} and week_start=${quote(turnoverWeek)}`), "3", "each changed weekly authority appends an immutable same-week projection");
   const rotation = JSON.parse(await scalar(release("static_weekly_v3_rotate_authority_key", `${quote("static-weekly-authority-hmac-v3")},${quote("static-weekly-v3-rotation-secret-01234567890123456789")},statement_timestamp()+interval '1 hour','v3-test-rotation'`))); assert.equal(rotation.ready, true, "key rotation keeps exactly one active key with bounded overlap");
   assert.equal(await scalar(verifyAttestation(issuedAttestation)), "verified", "the bounded overlap continues to verify outstanding v2 work during rotation");
   await expectReject(release("static_weekly_v3_revoke_authority_key", `${quote("static-weekly-authority-hmac-v3")},'wrong active revoke'`), /non-active/i);

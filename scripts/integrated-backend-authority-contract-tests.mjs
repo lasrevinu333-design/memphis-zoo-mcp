@@ -85,7 +85,7 @@ assert.match(auth, /offline_recovery_only/);
 assert.equal(releaseEvidence.backend_contract.authority, "offline-authority.v3");
 assert.equal(releaseEvidence.compatibility_window.accepted_engine.scan, "scan.v2");
 assert.equal(releaseEvidence.compatibility_window.required_engine.scan, "scan.v3.offline-authority");
-assert.equal(releaseEvidence.migrations.at(-1).name, "20260812032055_static_weekly_manager_snapshot.sql");
+assert.equal(releaseEvidence.migrations.at(-1).name, "20260812130000_static_weekly_employee_turnover.sql");
 assert.equal(releaseEvidence.artifact, "integrated-backend-authority-release-evidence.v2");
 assert.equal(releaseEvidence.cutover.source_identity.kind, "external_immutable_acceptance_input");
 assert.equal(releaseEvidence.cutover.source_identity.generated_evidence_excluded_from_content_identity, true);
@@ -99,7 +99,7 @@ assert.ok(releaseEvidence.authority_content_identity.expected_tree_inventory.som
 assert.ok(releaseEvidence.authority_content_identity.expected_tree_inventory.some(({ path }) => path === "scripts/integrated-backend-authority-suite-order-tests.mjs"));
 assert.equal(releaseEvidence.authority_content_identity.expected_tree_inventory.some(({ path }) => path === "release/integrated-backend-authority-evidence.json"), false);
 assert.equal(releaseEvidence.authority_content_identity.authority_path_count, releaseEvidence.authority_content_identity.expected_tree_inventory.length);
-assert.equal(releaseEvidence.authority_content_identity.migration_path_count, 67);
-assert.equal(releaseEvidence.migrations.length, 67);
+assert.equal(releaseEvidence.authority_content_identity.migration_path_count, 68);
+assert.equal(releaseEvidence.migrations.length, 68);
 assert.equal(Object.hasOwn(releaseEvidence.authority_content_identity, "value"), false, "generated evidence must not self-assert a worktree-derived content hash");
 console.log("INTEGRATED_BACKEND_AUTHORITY_CONTRACT_PASS");
