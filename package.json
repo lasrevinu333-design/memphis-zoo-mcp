@@ -89,6 +89,8 @@
     "test:batch2": "node scripts/batch-2-event-messenger-cutover-tests.mjs",
     "test:batch2-db": "node scripts/batch-2-event-messenger-cutover-database-tests.mjs",
     "release:live:check": "node scripts/live-release-alignment-check.mjs",
+    "test:release-closure": "node scripts/release-closure-contract-tests.mjs",
+    "test:release-canary-recovery-db": "node scripts/release-canary-recovery-database-tests.mjs",
     "backup:production": "node scripts/production-backup.mjs",
     "restore:verify": "node scripts/production-restore.mjs",
     "restore:production": "RESTORE_APPLY=true node scripts/production-restore.mjs",

@@ -14,6 +14,7 @@ const phaseC = "20260810160000_close_offline_authority_integrity_gaps.sql";
 const phaseD = "20260810170000_finish_offline_authority_operational_closure.sql";
 const phaseE = "20260810190000_final_integrated_backend_operational_correction.sql";
 const phaseF = "20260813035530_offline_scan_authority_snapshot.sql";
+const phaseG = "20260813050000_release_canary_rollback_audit.sql";
 const releaseInputPath = "release/integrated-backend-authority-input.json";
 const releaseEvidencePath = "release/integrated-backend-authority-evidence.json";
 const forbiddenGitEnvironment = [
@@ -193,7 +194,7 @@ function expectedReleaseEvidence(input, schemaFingerprint, frontendManifest, aut
       operational_closure_phase: "20260810170000 recovers durable exact-start proofs, retires every service-role generic writer, and runs leased reconciliation notification delivery",
       final_operational_correction_phase: "20260810190000 fences reassigned proof replay, retires alternate terminal writers and purge, and records idempotent recipient delivery evidence",
       scan_snapshot_phase: "20260813035530 exposes bounded offline scan authority and enforces exact provenance evidence shape",
-      snapshot_rebind_closure_phase: "20260813050000 binds activation to an issued snapshot and derives never-cleaned operational truth",
+      canary_rollback_audit_phase: "20260813050000 adds an audited, reversible post-enforcement canary traffic pause/resume with no alternate writer",
     },
     rollback: input.rollback,
     cutover: input.cutover,
@@ -234,7 +235,7 @@ assert.equal(expectedBlobs.filter(({ path }) => /^supabase\/migrations\/[^/]+\.s
 for (const blob of [...expectedBlobs, evidenceBlob]) assertWorktreeMatchesExpectedBlob(blob);
 
 const blobByPath = new Map(expectedBlobs.map((blob) => [blob.path, blob]));
-for (const required of [releaseInputPath, "scripts/refresh-integrated-backend-authority-release.mjs", "scripts/integrated-backend-authority-cutover-check.mjs", "scripts/integrated-backend-authority-release-provenance-tests.mjs", "scripts/integrated-backend-authority-suite-order-tests.mjs", "scripts/final-operational-correction-database-tests.mjs", "scripts/named-manager-messenger-retirement-correction-database-tests.mjs", "scripts/empty-database-rebuild-check.mjs", "scripts/refresh-schema-fingerprint.mjs", "src/index.js", "src/offline-authority-http.js", "src/scan-evidence.js", `supabase/migrations/${phaseC}`, `supabase/migrations/${phaseD}`, `supabase/migrations/${phaseE}`, `supabase/migrations/${phaseF}`]) {
+for (const required of [releaseInputPath, "scripts/refresh-integrated-backend-authority-release.mjs", "scripts/integrated-backend-authority-cutover-check.mjs", "scripts/integrated-backend-authority-release-provenance-tests.mjs", "scripts/integrated-backend-authority-suite-order-tests.mjs", "scripts/final-operational-correction-database-tests.mjs", "scripts/named-manager-messenger-retirement-correction-database-tests.mjs", "scripts/empty-database-rebuild-check.mjs", "scripts/refresh-schema-fingerprint.mjs", "src/index.js", "src/offline-authority-http.js", "src/scan-evidence.js", `supabase/migrations/${phaseC}`, `supabase/migrations/${phaseD}`, `supabase/migrations/${phaseE}`, `supabase/migrations/${phaseF}`, `supabase/migrations/${phaseG}`]) {
   assert.ok(blobByPath.has(required), `immutable acceptance input omitted authority path ${required}`);
 }
 const input = parseJsonBlob(blobByPath.get(releaseInputPath), "release authority input");
@@ -244,11 +245,12 @@ const phaseCText = blobByPath.get(`supabase/migrations/${phaseC}`).bytes.toStrin
 const phaseDText = blobByPath.get(`supabase/migrations/${phaseD}`).bytes.toString("utf8");
 const phaseEText = blobByPath.get(`supabase/migrations/${phaseE}`).bytes.toString("utf8");
 const phaseFText = blobByPath.get(`supabase/migrations/${phaseF}`).bytes.toString("utf8");
+const phaseGText = blobByPath.get(`supabase/migrations/${phaseG}`).bytes.toString("utf8");
 const schemaFingerprint = blobByPath.get("supabase/canonical/schema-fingerprint.txt")?.bytes.toString("utf8").trim();
 const frontendManifest = parseJsonBlob(blobByPath.get("release/frontend-release-manifest.json"), "frontend release manifest");
 
-assert.equal(input.release_contract_version, "offline-authority.v4");
-assert.deepEqual(input.cutover.phase_order.slice(1, 8), [
+assert.equal(input.release_contract_version, "offline-authority.v3");
+assert.deepEqual(input.cutover.phase_order.slice(1, 9), [
   `apply ${phaseA}`,
   "deploy the bridge backend; it falls back only on absent authoritative procedures",
   `apply ${phaseB}`,
@@ -256,6 +258,7 @@ assert.deepEqual(input.cutover.phase_order.slice(1, 8), [
   `apply ${phaseD}`,
   `apply ${phaseE}`,
   `apply ${phaseF}`,
+  `apply ${phaseG}`,
 ]);
 assert.equal(input.cutover.source_identity.kind, "external_immutable_acceptance_input");
 assert.equal(input.cutover.source_identity.generated_evidence_path, releaseEvidencePath);
@@ -277,6 +280,7 @@ assert.match(phaseEText, /custodial_claim_offline_reconciliation_notification_re
 assert.match(phaseEText, /assignment_fenced_proof_recovery/);
 assert.match(phaseFText, /tool_get_offline_scan_authority_snapshot/);
 assert.match(phaseFText, /custodial_scan_evidence_is_canonical/);
+assert.match(phaseGText, /custodial_audit_release_canary_rollback/);
 assert.match(schemaFingerprint, /^[a-f0-9]{64}$/);
 assert.deepEqual(releaseEvidence, expectedReleaseEvidence(input, schemaFingerprint, frontendManifest, expectedBlobs), "generated release evidence is stale, incomplete, or self-referential");
 
@@ -298,7 +302,7 @@ const result = {
   ok: true,
   source_identity: sourceIdentity,
   authority_content: authorityContent,
-  phase_order: [phaseA, phaseB, phaseC, phaseD, phaseE, phaseF],
+  phase_order: [phaseA, phaseB, phaseC, phaseD, phaseE, phaseF, phaseG],
   bridge_fallback: "only absent authoritative procedure SQLSTATE 42883/PGRST202",
   database_gate: "not-requested",
 };
@@ -313,7 +317,7 @@ if (databaseMode) {
   const q = (value) => `'${String(value).replaceAll("'", "''")}'`;
   const run = (statement) => execFileSync("docker", ["exec", container, "psql", "-v", "ON_ERROR_STOP=1", "-At", "-U", "supabase_admin", "-d", database, "-c", statement], { encoding: "utf8" }).trim();
   assert.equal(run(`select public.custodial_backend_authority_health(${q(secret)})->>'ok';`).split("\n").at(-1), "true", "configured secret must pass the canonical health gate");
-  assert.equal(run(`select public.custodial_backend_authority_health(${q(secret)})->>'authority';`).split("\n").at(-1), "offline-authority.v4", "snapshot closure health must expose issued-snapshot authority");
+  assert.equal(run(`select public.custodial_backend_authority_health(${q(secret)})->>'authority';`).split("\n").at(-1), "offline-authority.v3", "Phase D health must expose durable proof and delivery authority");
   assert.equal(run(`select count(*) from information_schema.role_table_grants where table_schema='public' and grantee='service_role' and table_name in ('sessions','completion_responses','scan_events','maintenance_tickets') and privilege_type in ('INSERT','UPDATE','DELETE','TRUNCATE');`).split("\n").at(-1), "0", "service role must not retain operational DML grants");
   assert.equal(run(`select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('tool_get_offline_scan_authority_snapshot','tool_start_offline_occurrence','tool_commit_cleaning_workflow_authoritative','tool_complete_session_authoritative','custodial_backend_authority_health','custodial_close_maintenance_ticket_authoritative');`).split("\n").at(-1), "6", "bounded canonical command and snapshot surface must be present");
   assert.equal(run(`select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('run_application_write','run_sql_write','run_sql_migration','force_close_session','tool_force_close_session') and has_function_privilege('service_role',p.oid,'EXECUTE');`).split("\n").at(-1), "0", "service role must not retain a generic or force-close writer");

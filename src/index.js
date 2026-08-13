@@ -16,6 +16,7 @@ import {
 } from "./routes/index.js";
 import { APP_VERSION, RELEASE_ID } from "./app-version.js";
 import { buildReleaseManifest } from "./release-manifest.js";
+import { observeProductionSchemaIdentity } from "./production-schema-identity.js";
 import { authenticateOpsAccessRequest, createSupabaseTrustedDeviceStore, installSharedAuthRoutes, makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
 import { makeMcpConnectorMiddleware } from "./auth/mcp-connector-auth.js";
 import { installDeviceCredentialRoutes, makeDeviceCredentialMiddleware } from "./auth/device-credential-auth.js";
@@ -111,7 +112,7 @@ const OPS_MANAGER_AUTH_CONTRACT_VERSION = "ops-manager-auth.v5.named-leadership"
 const GEMINI_CONSOLE_CONTRACT_VERSION = "gemini-console.v2";
 const CANARY_RESTROOM_CODE = "TETM";
 const CANARY_EXHIBIT_CODE = "TETX";
-const CANARY_DEVICE_ID = "canary-check";
+const HEALTH_PROBE_DEVICE_ID = "canary-check";
 const ATTENDANCE_SOURCE_URL = String(process.env.ND_MEMZOO_ATTENDANCE_URL || "https://nd.memzoo.org").trim();
 const ATTENDANCE_TIMEOUT_MS = toSafeInt(process.env.ND_MEMZOO_ATTENDANCE_TIMEOUT_MS, 8000);
 const ATTENDANCE_CACHE_MS = toSafeInt(process.env.ND_MEMZOO_ATTENDANCE_CACHE_MS, 60000);
@@ -720,6 +721,30 @@ function safeStringEqual(left, right) {
   return timingSafeEqual(a, b);
 }
 
+function configuredReleaseCanaryDeviceId() {
+  const deviceId = String(process.env.CUSTODIAL_RELEASE_CANARY_DEVICE_ID || "").trim().toUpperCase();
+  if (!deviceId) return null;
+  if (!/^KIOSK_(0[2-9]|10)$/.test(deviceId)) {
+    throw new Error("CUSTODIAL_RELEASE_CANARY_DEVICE_ID must identify KIOSK_02 through KIOSK_10.");
+  }
+  return deviceId;
+}
+
+function requireReleaseSchemaIdentityToken(req, res, next) {
+  const configured = String(process.env.MEMPHIS_RELEASE_SCHEMA_IDENTITY_TOKEN || "").trim();
+  if (configured.length < 32) {
+    res.status(503).json({ ok: false, error: "Release schema observation is not configured." });
+    return;
+  }
+  const match = String(req.get("authorization") || "").match(/^Bearer\s+(.+)$/i);
+  const supplied = String(match?.[1] || "").trim();
+  if (!supplied || !safeStringEqual(supplied, configured)) {
+    res.status(401).json({ ok: false, error: "Unauthorized" });
+    return;
+  }
+  next();
+}
+
 let _feedbackLinkSecretGenerated = null;
 function getFeedbackLinkSecret() {
   const secret = String(process.env.FEEDBACK_LINK_SECRET || "").trim();
@@ -990,6 +1015,15 @@ async function runReadOnlySql(sql) {
   const client = getSupabaseConfig();
   const result = await runSupabaseReadOnlySql({ client, sql });
   return result.rows;
+}
+
+async function runSchemaCatalogSql(sql) {
+  return runSupabaseReadOnlySql({
+    client: getSupabaseConfig(),
+    sql,
+    maxRows: 250_000,
+    maxResponseBytes: 100_000_000,
+  });
 }
 
 async function runOperationalCommand(command, payload = {}) {
@@ -1965,7 +1999,7 @@ async function runCanaryChecks() {
   await safeCheck("restroom_scan_state", async () => {
     const state = await runRpc("tool_get_location_scan_state", {
       p_location_code: CANARY_RESTROOM_CODE,
-      p_device_id: CANARY_DEVICE_ID,
+      p_device_id: HEALTH_PROBE_DEVICE_ID,
     });
     if (!state || state.location_code !== CANARY_RESTROOM_CODE) throw new Error("restroom scan state missing expected location code");
     if (String(state.form_type || state.location_type || "").toLowerCase() !== "restroom") throw new Error(`expected restroom form_type, got ${state.form_type || state.location_type || "unknown"}`);
@@ -1975,7 +2009,7 @@ async function runCanaryChecks() {
   await safeCheck("exhibit_scan_state", async () => {
     const state = await runRpc("tool_get_location_scan_state", {
       p_location_code: CANARY_EXHIBIT_CODE,
-      p_device_id: CANARY_DEVICE_ID,
+      p_device_id: HEALTH_PROBE_DEVICE_ID,
     });
     if (!state || state.location_code !== CANARY_EXHIBIT_CODE) throw new Error("exhibit scan state missing expected location code");
     if (String(state.form_type || state.location_type || "").toLowerCase() !== "exhibit") throw new Error(`expected exhibit form_type, got ${state.form_type || state.location_type || "unknown"}`);
@@ -2179,6 +2213,51 @@ app.get(["/health", "/health/dependencies"], async (req, res) => {
   }
 });
 app.get("/admin-api/health", requireOpsManagerAuth, (_req, res) => { res.status(200).json(buildHealthPayload("admin", { authenticated: true })); });
+app.post("/admin-api/release-canary-rollback", requireOpsManagerWrite, async (req, res) => {
+  try {
+    const action = String(req.body?.action || "").trim();
+    const reason = String(req.body?.reason || "").trim();
+    const canaryDeviceId = configuredReleaseCanaryDeviceId();
+    if (!canaryDeviceId) {
+      throw Object.assign(new Error("No physical release canary is configured."), { status: 503, code: "release_canary_not_configured" });
+    }
+    if (!["pause_canary", "resume_canary", "restore_authority"].includes(action) || !reason) {
+      throw Object.assign(new Error("action, reason, and the configured physical canary are required."), { status: 422 });
+    }
+    let authoritativeHealth;
+    try {
+      authoritativeHealth = await runRpc("custodial_backend_authority_health", { p_backend_execution_secret: offlineAuthoritySecret() });
+    } catch (error) {
+      // A missing or failing authoritative RPC is the reason this post-
+      // enforcement safety control exists. Preserve its bounded evidence;
+      // never route to a legacy/direct-SQL writer.
+      authoritativeHealth = { ok: false, code: error?.code || "authority_probe_failed", message: String(error?.message || "authority probe failed") };
+    }
+    const control = await runRpc("custodial_control_release_canary", {
+      p_manager_id: offlineAuthorityManagerId(req), p_request_id: requiredRequestOperationId(req),
+      p_device_identifier: canaryDeviceId, p_action: action, p_reason: reason, p_authoritative_health: authoritativeHealth,
+      p_backend_execution_secret: offlineAuthoritySecret(),
+    });
+    if (action === "restore_authority") {
+      authoritativeHealth = await runRpc("custodial_backend_authority_health", { p_backend_execution_secret: offlineAuthoritySecret() });
+    }
+    res.status(200).json({ ok: true, ...control, authoritative_health: authoritativeHealth });
+  } catch (error) {
+    const failure = authorityHttpFailure(error, "Canary rollback control is unavailable.");
+    res.status(failure.status).json(failure.body);
+  }
+});
+app.get("/admin-api/release-schema-identity", requireReleaseSchemaIdentityToken, async (_req, res) => {
+  try {
+    // This endpoint is intentionally authenticated and uses only the shared
+    // SELECT-only executor. It reports a fingerprint calculated from the
+    // connected catalog, never the source target fingerprint.
+    const observed = await observeProductionSchemaIdentity({ runReadOnlySql: runSchemaCatalogSql });
+    res.status(200).json({ ok: true, ...observed });
+  } catch (error) {
+    res.status(503).json({ ok: false, error: "Production schema identity observation failed." });
+  }
+});
 app.get("/dashboard-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("dashboard")); });
 app.get("/schedule-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("schedule", { contract_version: SCHEDULE_CONTRACT_VERSION })); });
 app.get("/guest-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("guest_reports", { contract_version: GUEST_REPORTS_CONTRACT_VERSION })); });
@@ -2602,6 +2681,18 @@ app.get("/scan-api/authority-health", async (_req, res) => {
 });
 app.post("/scan-api/rpc", requireDeviceOrOpsAccess, parseAuthenticatedScanAuthorityJson, requireScanRpcAuthorization, scanRpcRateLimit, async (req, res) => {
   try {
+    const canaryDeviceId = configuredReleaseCanaryDeviceId();
+    const requestDeviceId = String(req.memphisDevice?.canonical_device_id || req.memphisDevice?.device_id || "").trim().toUpperCase();
+    if (canaryDeviceId && requestDeviceId === canaryDeviceId) {
+      const paused = await runRpc("custodial_release_canary_is_paused", {
+        p_device_identifier: canaryDeviceId,
+        p_backend_execution_secret: offlineAuthoritySecret(),
+      });
+      if (paused === true) {
+        res.status(503).json({ ok: false, code: "release_canary_paused", retryable: false, error: "The physical release canary is operator-paused." });
+        return;
+      }
+    }
     const fn = String(req.body?.fn || "").trim();
     if (!SCAN_RPC_ALLOWLIST.has(fn)) {
       res.status(400).json({ ok: false, error: `Function not allowed: ${fn}` });

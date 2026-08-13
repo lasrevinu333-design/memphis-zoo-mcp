@@ -16,7 +16,10 @@ const fingerprint = readFileSync(fingerprintPath, "utf8").trim();
 assert.match(fingerprint, /^[a-f0-9]{64}$/, "canonical schema fingerprint is invalid");
 assert.match(String(input.schema_from_fingerprint || ""), /^[a-f0-9]{64}$/, "release source fingerprint is invalid");
 assert.notEqual(input.schema_from_fingerprint, fingerprint, "a release transition requires distinct fingerprints");
-assert.match(String(input.frontend_commit_sha || ""), /^[a-f0-9]{40}$/, "frontend commit identity is invalid");
+assert.ok(input.frontend_commit_sha === null || /^[a-f0-9]{40}$/.test(String(input.frontend_commit_sha || "")),
+  "frontend commit identity must be null until final rebind or an exact commit");
+assert.ok(["final_rebind_required", "final_pair_bound"].includes(input.frontend_commit_state), "frontend commit state is invalid");
+assert.deepEqual(Object.keys(input.minimum_supported || {}).sort(), ["backend_version", "frontend_version"]);
 assert.match(String(input.schema_transition?.transition_id || ""), /^[a-z0-9][a-z0-9.-]{1,126}[a-z0-9]$/, "release transition identity is invalid");
 assert.match(String(input.schema_transition?.expires_at || ""), /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/, "release transition expiry is invalid");
 
@@ -34,6 +37,7 @@ const manifest = {
   },
   api_contract_versions: input.api_contract_versions,
   queue_compatibility_versions: input.queue_compatibility_versions,
+  minimum_supported: input.minimum_supported,
 };
 const generated = `${JSON.stringify(manifest, null, 2)}\n`;
 

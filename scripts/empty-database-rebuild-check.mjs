@@ -9,6 +9,7 @@ const adminUrl = process.env.SCHEMA_REBUILD_ADMIN_URL || process.env.DATABASE_UR
 let dockerContainer = process.env.SCHEMA_REBUILD_DOCKER_CONTAINER;
 const dockerImage = process.env.SCHEMA_REBUILD_DOCKER_IMAGE;
 const keepDatabase = /^(1|true|yes)$/i.test(String(process.env.SCHEMA_REBUILD_KEEP_DATABASE || ""));
+const useEmptyContainerPostgres = /^(1|true|yes)$/i.test(String(process.env.SCHEMA_REBUILD_USE_EMPTY_CONTAINER_POSTGRES || ""));
 let ownsDockerContainer = false;
 
 if (!adminUrl && !dockerContainer && !dockerImage) {
@@ -1147,8 +1148,13 @@ if (dockerImage) {
 if (dockerContainer) {
   try {
     execFileSync("docker", ["inspect", dockerContainer], { stdio: "ignore" });
-    const targetDatabase = ownsDockerContainer ? "postgres" : databaseName;
-    if (!ownsDockerContainer) dockerPsql("postgres", `create database ${quoteIdentifier(databaseName)};`);
+    const targetDatabase = ownsDockerContainer || useEmptyContainerPostgres ? "postgres" : databaseName;
+    if (useEmptyContainerPostgres) {
+      const publicObjects = dockerPsql("postgres", `select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public';`).trim();
+      if (publicObjects !== "0") throw new Error("SCHEMA_REBUILD_USE_EMPTY_CONTAINER_POSTGRES requires an empty disposable public schema.");
+    } else if (!ownsDockerContainer) {
+      dockerPsql("postgres", `create database ${quoteIdentifier(databaseName)};`);
+    }
     for (const file of migrationFiles) {
       const sql = readFileSync(resolve(migrationsDir, file), "utf8");
       dockerPsql(targetDatabase, sql);
@@ -1243,7 +1249,7 @@ if (dockerContainer) {
     console.log(JSON.stringify({ ok: true, database: targetDatabase, migrations: migrationFiles.length, counts: rebuildResult }, null, 2));
   } finally {
     try {
-      if (!ownsDockerContainer && !keepDatabase) {
+      if (!ownsDockerContainer && !useEmptyContainerPostgres && !keepDatabase) {
         dockerPsql(
           "postgres",
           `
@@ -1254,7 +1260,7 @@ if (dockerContainer) {
         );
         dockerPsql("postgres", `drop database if exists ${quoteIdentifier(databaseName)};`);
       }
-      if (!ownsDockerContainer && keepDatabase) console.log(JSON.stringify({ retained_test_database: databaseName }));
+      if (!ownsDockerContainer && keepDatabase) console.log(JSON.stringify({ retained_test_database: targetDatabase }));
     } catch {
       // Best-effort cleanup for local/CI disposable databases.
     } finally {
