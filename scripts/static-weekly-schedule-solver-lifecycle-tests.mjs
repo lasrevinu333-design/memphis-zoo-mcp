@@ -6,6 +6,13 @@ import { getStaticWeeklySolverReadiness, initializeStaticWeeklySolver, setStatic
 
 const execFileAsync = promisify(execFile);
 const lp = "Minimize\n objective: + 1 x\nSubject To\n c: + 1 x >= 1\nBounds\n 0 <= x <= 1\nBinary\n x\nEnd\n";
+async function waitForSolverRecovery(timeoutMilliseconds = 5_000) {
+  const deadline = performance.now() + timeoutMilliseconds;
+  while (!getStaticWeeklySolverReadiness().available && performance.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  assert.equal(getStaticWeeklySolverReadiness().available, true, "replacement worker must complete its measured readiness preflight");
+}
 await initializeStaticWeeklySolver();
 const ready = getStaticWeeklySolverReadiness();
 assert.equal(ready.available, true);
@@ -14,6 +21,9 @@ assert.match(ready.identity.packageJsonSha256, /^[0-9a-f]{64}$/);
 assert.match(ready.identity.wrapperJavaScriptSha256, /^[0-9a-f]{64}$/);
 assert.match(ready.identity.wasmSha256, /^[0-9a-f]{64}$/);
 assert.equal(ready.identity.embeddedRuntimeBanner, "HiGHS 1.15.1 (git hash: 04024d7)");
+assert.equal(ready.identity.initializationRecord.channel, "print", "readiness requires a completed measured solver preflight");
+assert.match(ready.identity.initializationRecord.text, /^Running HiGHS 1\.15\.1 \(git hash: 04024d7\): Copyright/);
+assert.equal(ready.identity.initializationRecord.utf8Sha256, ready.identity.initializationBannerUtf8Sha256);
 assert.deepEqual(ready.identity.resultEvidenceCapabilities, { bestBound: true, mipGap: true, distinctTermination: true, source: "terminal_solver_report" });
 
 const optimal = await solveStaticWeeklyMip(lp, { timeLimitSeconds: 1 });
@@ -140,12 +150,10 @@ const responsive = new Promise((resolve) => setTimeout(() => { pulse = true; res
 await assert.rejects(() => solveStaticWeeklyMip(lp, { timeLimitSeconds: 0.05 }), (error) => error.code === "solver_timeout");
 await responsive;
 assert.equal(pulse, true, "the parent event loop remains responsive while a worker blocks");
-await new Promise((resolve) => setTimeout(resolve, 150));
-assert.equal(getStaticWeeklySolverReadiness().available, true);
+await waitForSolverRecovery();
 setStaticWeeklySolverTestOverride("crash");
 await assert.rejects(() => solveStaticWeeklyMip(lp, { timeLimitSeconds: 1 }), (error) => error.code === "solver_unavailable");
-await new Promise((resolve) => setTimeout(resolve, 150));
-assert.equal(getStaticWeeklySolverReadiness().available, true);
+await waitForSolverRecovery();
 setStaticWeeklySolverTestOverride(null);
 
 const initializeOnly = await execFileAsync(process.execPath, ["--input-type=module", "-e", "import { initializeStaticWeeklySolver } from './src/static-weekly-schedule-solver.js'; await initializeStaticWeeklySolver(); console.log('INITIALIZE_ONLY_PASS');"], { cwd: process.cwd(), timeout: 5_000 });

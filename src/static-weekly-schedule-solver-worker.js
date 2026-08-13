@@ -14,6 +14,7 @@ const TERMINAL_REPORT_REPRESENTATION = "highs-terminal-report-records-json-utf8-
 const RAW_SOLVER_RECEIPT_SCHEMA = "memphis-zoo.static-weekly-raw-solver-receipt.v1";
 const REPORT_START = "Solving report";
 const REPORT_END = "Writing the solution to solution.txt";
+const READINESS_PREFLIGHT_LP = "Minimize\n objective: + 1 x\nSubject To\n c: + 1 x >= 1\nBounds\n 0 <= x <= 1\nBinary\n x\nEnd\n";
 const MAX_COLLECTED_OUTPUT_BYTES = 256 * 1024;
 const PINNED_IDENTITY = Object.freeze({
   packageJsonSha256: "21e76a89d13d636f56d5cdda7dde590acd48d6fb683c97a327c10d43e74d9c56",
@@ -156,7 +157,7 @@ function normalizeResultEvidence(result, collector) {
   const parsed = report.error ? { ok: false, errors: [report.error], raw: {}, normalized: {} } : parseTerminalReport(report);
   const initializationRecords = collector.records.filter((record) => /^Running HiGHS .+: Copyright/.test(record.text));
   const banners = initializationRecords.map((record) => record.text.match(/^Running (HiGHS .+): Copyright/)?.[1]).filter(Boolean);
-  const embeddedRuntimeBanner = banners.length === 0 ? runtime?.identity?.embeddedRuntimeBanner || null : banners.length === 1 && banners[0] === runtime?.identity?.embeddedRuntimeBanner ? banners[0] : null;
+  const embeddedRuntimeBanner = banners.length === 0 ? runtime?.identity?.embeddedRuntimeBanner || null : banners.length === 1 && banners[0] === PINNED_IDENTITY.embeddedRuntimeBanner ? banners[0] : null;
   return {
     evidenceSource: "terminal_solver_report",
     parserVersion: TERMINAL_REPORT_PARSER_VERSION,
@@ -178,6 +179,40 @@ function normalizeResultEvidence(result, collector) {
     reportGap: parsed.raw.gap ?? null,
     reportSolutionStatus: parsed.raw.solutionStatus ?? null,
   };
+}
+function bindInitializationIdentity(identity, evidence) {
+  if (evidence.initializationRecords.length !== 1) throw new Error(`Expected exactly one observed HiGHS initialization callback record; observed ${evidence.initializationRecords.length}.`);
+  const initializationRecord = evidence.initializationRecords[0];
+  const initializationUtf8 = Buffer.from(JSON.stringify({ channel: initializationRecord.channel, text: initializationRecord.text }), "utf8");
+  const observedBanner = /^Running (HiGHS .+): Copyright/.exec(initializationRecord.text)?.[1] || null;
+  if (observedBanner !== PINNED_IDENTITY.embeddedRuntimeBanner) throw new Error("Observed HiGHS initialization banner did not match the pinned runtime.");
+  return {
+    ...identity,
+    initializationRecord: {
+      channel: initializationRecord.channel,
+      text: initializationRecord.text,
+      utf8Base64: initializationUtf8.toString("base64"),
+      utf8Sha256: sha256(initializationUtf8),
+    },
+    initializationBannerUtf8Sha256: sha256(initializationUtf8),
+  };
+}
+
+function assertReadinessPreflight(result, evidence) {
+  const normalized = evidence.normalized || {};
+  const valid = result?.Status === "Optimal"
+    && evidence.objectStatus === "Optimal"
+    && evidence.reportStatus === "Optimal"
+    && evidence.reportSolutionStatus === "feasible"
+    && evidence.parserOk === true
+    && normalizedEqualsSafeInteger(normalized.primalBound, 1)
+    && normalizedEqualsSafeInteger(normalized.dualBound, 1)
+    && normalizedIsZero(normalized.gap)
+    && normalizedIsZero(normalized.boundViolation)
+    && normalizedIsZero(normalized.integerViolation)
+    && normalizedIsZero(normalized.rowViolation)
+    && evidence.outputTruncated === false;
+  if (!valid) throw new Error("HiGHS readiness preflight did not produce one exact optimal terminal solver report.");
 }
 const send = (message) => {
   if (typeof process.send !== "function") throw new Error("Static weekly solver requires a private IPC parent.");
@@ -203,11 +238,19 @@ async function initialize() {
   // become a later tier's evidence.
   const solver = await loader({ locateFile: () => wasmPath, print: (value) => captureOutput("print", value), printErr: (value) => captureOutput("printErr", value) });
   if (!solver || typeof solver.solve !== "function") throw new Error("HiGHS WebAssembly module did not expose solve().");
-  // This interface emits the initialization record when the runtime executes
-  // its first model, not while it constructs the module.  The first accepted
-  // solve below captures the raw callback record and fails closed if it is not
-  // exposed exactly once; no expected banner is ever substituted for it.
-  return { solver, identity: { package: "highs@1.15.2", packageVersion: packageJson.version, wasmSha256: observedIdentity.wasmSha256, packageJsonSha256: observedIdentity.packageJsonSha256, wrapperJavaScriptSha256: observedIdentity.wrapperJavaScriptSha256, runtime: "local WebAssembly", embeddedRuntimeBanner: PINNED_IDENTITY.embeddedRuntimeBanner, initializationRecord: null, initializationBannerUtf8Sha256: null, wasmMemoryLimitPages: MAX_WASM_MEMORY_PAGES, wasmMemoryLimitBytes: MAX_WASM_MEMORY_PAGES * 65_536, v8SemiSpaceLimitMb: MAX_SEMI_SPACE_MB, resultEvidenceCapabilities: { bestBound: true, mipGap: true, distinctTermination: true, source: "terminal_solver_report" } } };
+  let identity = { package: "highs@1.15.2", packageVersion: packageJson.version, wasmSha256: observedIdentity.wasmSha256, packageJsonSha256: observedIdentity.packageJsonSha256, wrapperJavaScriptSha256: observedIdentity.wrapperJavaScriptSha256, runtime: "local WebAssembly", embeddedRuntimeBanner: PINNED_IDENTITY.embeddedRuntimeBanner, initializationRecord: null, initializationBannerUtf8Sha256: null, wasmMemoryLimitPages: MAX_WASM_MEMORY_PAGES, wasmMemoryLimitBytes: MAX_WASM_MEMORY_PAGES * 65_536, v8SemiSpaceLimitMb: MAX_SEMI_SPACE_MB, resultEvidenceCapabilities: { bestBound: true, mipGap: true, distinctTermination: true, source: "terminal_solver_report" } };
+  // Module construction alone is not readiness. Execute one exact bounded MIP
+  // and verify its measured terminal report before the parent can admit work.
+  const collector = beginCollector();
+  try {
+    const result = solver.solve(READINESS_PREFLIGHT_LP, { ...OPTIONS, time_limit: 1 });
+    const evidence = normalizeResultEvidence(result, collector);
+    identity = bindInitializationIdentity(identity, evidence);
+    assertReadinessPreflight(result, evidence);
+  } finally {
+    finalizeCollector(collector);
+  }
+  return { solver, identity };
 }
 
 try {
@@ -235,13 +278,7 @@ process.on("message", (message) => {
     // Test-only adversary: safely above the pinned 1e-9 integer tolerance.
     if (message.behavior === "tolerance_edge") { const first = Object.keys(result.Columns || {})[0]; if (first) result.Columns[first].Primal = 0.999999998; }
     const evidence = normalizeResultEvidence(result, collector);
-    if (!runtime.identity.initializationRecord) {
-      if (evidence.initializationRecords.length !== 1) throw new Error(`Expected exactly one observed HiGHS initialization callback record; observed ${evidence.initializationRecords.length}.`);
-      const initializationRecord = evidence.initializationRecords[0]; const initializationUtf8 = Buffer.from(JSON.stringify({ channel: initializationRecord.channel, text: initializationRecord.text }), "utf8");
-      const observedBanner = /^Running (HiGHS .+): Copyright/.exec(initializationRecord.text)?.[1] || null;
-      if (observedBanner !== PINNED_IDENTITY.embeddedRuntimeBanner) throw new Error("Observed HiGHS initialization banner did not match the pinned runtime.");
-      runtime.identity = { ...runtime.identity, initializationRecord: { channel: initializationRecord.channel, text: initializationRecord.text, utf8Base64: initializationUtf8.toString("base64"), utf8Sha256: sha256(initializationUtf8) }, initializationBannerUtf8Sha256: sha256(initializationUtf8) };
-    }
+    if (!runtime.identity.initializationRecord) runtime.identity = bindInitializationIdentity(runtime.identity, evidence);
     // Evidence has copied the report representation before the private
     // collector is cleared in finally.  Nothing from one solve remains live.
     if (evidence.outputTruncated) throw new Error("HiGHS terminal output exceeded the pinned collector bound.");

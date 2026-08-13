@@ -7,12 +7,13 @@ import {
 } from '../src/employee-notifications.js';
 
 const root = new URL('../', import.meta.url);
-const [source, manager, indexSource, migration, nativeKindsMigration] = await Promise.all([
+const [source, manager, indexSource, migration, nativeKindsMigration, boundaryMigration] = await Promise.all([
   readFile(new URL('src/employee-notifications.js', root), 'utf8'),
   readFile(new URL('src/manager-notifications.js', root), 'utf8'),
   readFile(new URL('src/index.js', root), 'utf8'),
   readFile(new URL('supabase/migrations/20260724010000_native_employee_event_delivery.sql', root), 'utf8'),
   readFile(new URL('supabase/migrations/20260731211500_native_employee_message_location_push.sql', root), 'utf8'),
+  readFile(new URL('supabase/migrations/20260813141806_custodial_operational_boundary_closure.sql', root), 'utf8'),
 ]);
 
 assert.match(source, /const API_PREFIX = ['"]\/employee-notifications-api['"]/);
@@ -112,6 +113,8 @@ for (const contract of [
 assert.match(nativeKindsMigration, /status\.status_code in \('due_soon','overdue'\)/);
 assert.match(nativeKindsMigration, /job_type in \('employee_event_push','employee_native_push'\)/);
 assert.doesNotMatch(nativeKindsMigration, /messenger_fallback|presentation_demo/);
+assert.match(boundaryMigration, /mz_enqueue_employee_location_pushes\(timestamp with time zone\)/);
+assert.match(boundaryMigration, /v_service_date date:=public\.sch_service_date\(p_now\)/);
 
 const registeredWorkerTypes = [];
 installEmployeeNotificationRoutes(express(), {

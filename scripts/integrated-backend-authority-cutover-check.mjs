@@ -18,6 +18,7 @@ const phaseF = "20260813035530_offline_scan_authority_snapshot.sql";
 const phaseG = "20260813050000_offline_snapshot_operational_truth_closure.sql";
 const phaseH = "20260813060000_release_canary_operational_recovery.sql";
 const phaseI = "20260813070000_operational_service_date_foundation.sql";
+const phaseJ = "20260813141806_custodial_operational_boundary_closure.sql";
 const releaseInputPath = "release/integrated-backend-authority-input.json";
 const releaseEvidencePath = "release/integrated-backend-authority-evidence.json";
 const forbiddenGitEnvironment = [
@@ -208,6 +209,7 @@ function expectedReleaseEvidence(input, schemaFingerprint, frontendManifest, aut
       snapshot_rebind_closure_phase: "20260813050000 binds activation to an issued snapshot and derives current operational-day truth",
       canary_operational_recovery_phase: "20260813060000 adds durable exact-device pause and known-good forward restoration of canonical authority functions",
       operational_service_date_phase: "20260813070000 unifies schedules, turnover, occurrences, dashboard truth, and recovery probes at the 04:00 Central service date",
+      operational_boundary_closure_phase: "20260813141806 aligns notification service dates, exact activation replay identity, and the captured rollback definition",
     },
     rollback: input.rollback,
     cutover: input.cutover,
@@ -244,13 +246,13 @@ const evidenceBlob = expectedEntries.find(({ path }) => path === releaseEvidence
 assert.ok(evidenceBlob, "expected tree omits generated release evidence");
 const expectedBlobs = expectedEntries.filter(({ path }) => path !== releaseEvidencePath);
 assert.ok(expectedBlobs.length > 0, "release authority inventory is empty");
-assert.equal(expectedBlobs.filter(({ path }) => /^supabase\/migrations\/[^/]+\.sql$/.test(path)).length, 72, "release authority inventory must bind all 72 migrations");
+assert.equal(expectedBlobs.filter(({ path }) => /^supabase\/migrations\/[^/]+\.sql$/.test(path)).length, 73, "release authority inventory must bind all 73 migrations");
 for (const blob of [...expectedBlobs, evidenceBlob]) assertWorktreeMatchesExpectedBlob(blob);
 assert.equal(evidenceBlob.object_id, acceptance.backend_evidence_blob_sha, "signed release attestation names the wrong evidence blob");
 assert.equal(hash(evidenceBlob.bytes), acceptance.backend_evidence_sha256, "signed release attestation names the wrong evidence digest");
 
 const blobByPath = new Map(expectedBlobs.map((blob) => [blob.path, blob]));
-for (const required of [releaseInputPath, "scripts/refresh-integrated-backend-authority-release.mjs", "scripts/integrated-backend-authority-cutover-check.mjs", "scripts/integrated-backend-authority-release-provenance-tests.mjs", "scripts/integrated-backend-authority-suite-order-tests.mjs", "scripts/final-operational-correction-database-tests.mjs", "scripts/named-manager-messenger-retirement-correction-database-tests.mjs", "scripts/empty-database-rebuild-check.mjs", "scripts/refresh-schema-fingerprint.mjs", "src/index.js", "src/offline-authority-http.js", "src/scan-evidence.js", `supabase/migrations/${phaseC}`, `supabase/migrations/${phaseD}`, `supabase/migrations/${phaseE}`, `supabase/migrations/${phaseF}`, `supabase/migrations/${phaseG}`, `supabase/migrations/${phaseH}`, `supabase/migrations/${phaseI}`]) {
+for (const required of [releaseInputPath, "scripts/refresh-integrated-backend-authority-release.mjs", "scripts/integrated-backend-authority-cutover-check.mjs", "scripts/integrated-backend-authority-release-provenance-tests.mjs", "scripts/integrated-backend-authority-suite-order-tests.mjs", "scripts/final-operational-correction-database-tests.mjs", "scripts/named-manager-messenger-retirement-correction-database-tests.mjs", "scripts/empty-database-rebuild-check.mjs", "scripts/refresh-schema-fingerprint.mjs", "src/index.js", "src/offline-authority-http.js", "src/scan-evidence.js", `supabase/migrations/${phaseC}`, `supabase/migrations/${phaseD}`, `supabase/migrations/${phaseE}`, `supabase/migrations/${phaseF}`, `supabase/migrations/${phaseG}`, `supabase/migrations/${phaseH}`, `supabase/migrations/${phaseI}`, `supabase/migrations/${phaseJ}`]) {
   assert.ok(blobByPath.has(required), `immutable acceptance input omitted authority path ${required}`);
 }
 const input = parseJsonBlob(blobByPath.get(releaseInputPath), "release authority input");
@@ -263,11 +265,12 @@ const phaseFText = blobByPath.get(`supabase/migrations/${phaseF}`).bytes.toStrin
 const phaseGText = blobByPath.get(`supabase/migrations/${phaseG}`).bytes.toString("utf8");
 const phaseHText = blobByPath.get(`supabase/migrations/${phaseH}`).bytes.toString("utf8");
 const phaseIText = blobByPath.get(`supabase/migrations/${phaseI}`).bytes.toString("utf8");
+const phaseJText = blobByPath.get(`supabase/migrations/${phaseJ}`).bytes.toString("utf8");
 const schemaFingerprint = blobByPath.get("supabase/canonical/schema-fingerprint.txt")?.bytes.toString("utf8").trim();
 const frontendManifest = parseJsonBlob(blobByPath.get("release/frontend-release-manifest.json"), "frontend release manifest");
 
 assert.equal(input.release_contract_version, "offline-authority.v4");
-assert.deepEqual(input.cutover.phase_order.slice(1, 11), [
+assert.deepEqual(input.cutover.phase_order.slice(1, 12), [
   `apply ${phaseA}`,
   "deploy the bridge backend; it falls back only on absent authoritative procedures",
   `apply ${phaseB}`,
@@ -278,6 +281,7 @@ assert.deepEqual(input.cutover.phase_order.slice(1, 11), [
   `apply ${phaseG}`,
   `apply ${phaseH}`,
   `apply ${phaseI}`,
+  `apply ${phaseJ}`,
 ]);
 assert.equal(input.cutover.source_identity.kind, "external_signed_release_attestation");
 assert.equal(input.cutover.source_identity.generated_evidence_path, releaseEvidencePath);
@@ -304,6 +308,10 @@ assert.match(phaseHText, /custodial_control_release_canary/);
 assert.match(phaseHText, /custodial_release_authority_restore_definitions/);
 assert.match(phaseIText, /custodial_run_release_canary_recovery_probe/);
 assert.match(phaseIText, /operational_service_date_boundary/);
+assert.match(phaseJText, /v_service_date date:=public\.sch_service_date\(p_now\)/);
+assert.match(phaseJText, /v_local_date date:=public\.sch_service_date\(p_now\)/);
+assert.match(phaseJText, /v_new text:='''employee_id'',v_existing\.employee_id,''assignment_epoch'',v_existing\.assignment_epoch/);
+assert.match(phaseJText, /custodial_release_authority_restore_definitions/);
 assert.match(schemaFingerprint, /^[a-f0-9]{64}$/);
 assert.equal(frontendManifest.frontend_commit_sha, acceptance.frontend_commit_sha, "signed release attestation names the wrong frontend commit");
 assert.equal(frontendManifest.release_id, acceptance.release_id, "signed release attestation names the wrong semantic release");
@@ -329,7 +337,7 @@ const result = {
   ok: true,
   source_identity: sourceIdentity,
   authority_content: authorityContent,
-  phase_order: [phaseA, phaseB, phaseC, phaseD, phaseE, phaseF, phaseG, phaseH, phaseI],
+  phase_order: [phaseA, phaseB, phaseC, phaseD, phaseE, phaseF, phaseG, phaseH, phaseI, phaseJ],
   bridge_fallback: "only absent authoritative procedure SQLSTATE 42883/PGRST202",
   database_gate: "not-requested",
 };

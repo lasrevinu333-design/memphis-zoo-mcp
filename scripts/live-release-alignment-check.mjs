@@ -92,8 +92,10 @@ assert.equal(authorityHealth.data?.ok, true, "canonical custodial authority inve
 assert.equal(authorityHealth.data?.canonical_functions_verified, 7, "canonical custodial authority inventory is incomplete");
 assert.equal(health.release_canary?.configured, true, "one-phone release canary is not configured");
 assert.equal(health.release_canary?.control_initialized, true, "one-phone release canary control is not initialized");
+assert.equal(health.release_canary?.paused, false, "one-phone release canary remains operator-paused");
 assert.equal(authorityHealth.data?.release_canary?.configured, true, "authority health does not expose the configured canary");
 assert.equal(authorityHealth.data?.release_canary?.control_initialized, true, "authority health does not prove initialized canary control");
+assert.equal(authorityHealth.data?.release_canary?.paused, false, "authority health reports an operator-paused canary");
 assert.equal(schedulerReady.ok, true, "static weekly scheduler readiness is not green");
 assert.equal(schedulerReady.data?.ready, true, "static weekly scheduler authority is not ready");
 assert.equal(schedulerReady.data?.solver?.available, true, "static weekly HiGHS solver is unavailable");

@@ -44,6 +44,14 @@ function fail(res, error, fallback = "Custodial employee administration failed."
   const status = Number(error?.status || error?.statusCode) || (/permission|access/i.test(String(error?.message || "")) ? 403 : 500);
   res.status(Math.max(400, Math.min(599, status))).json({ ok: false, error: clip(error?.message || fallback, 1000) });
 }
+function missingRelation(error, relation) {
+  const code = String(error?.code || "").toUpperCase();
+  const message = [error?.message, error?.details, error?.hint, error]
+    .map((value) => String(value || ""))
+    .join(" ");
+  return ["42P01", "PGRST205"].includes(code)
+    && (!relation || message.toLowerCase().includes(String(relation).toLowerCase()));
+}
 function normalizeDeviceId(value) {
   const raw = String(value || "").trim().toUpperCase().replace(/^KIOSK[-_ ]?/, "KIOSK_");
   if (/^KIOSK_[2-9]$/.test(raw)) return `KIOSK_0${raw.slice(7)}`;
@@ -175,9 +183,9 @@ function consumeNativeAttempt(req, deviceId) {
 
 async function loadPhoneAdminSnapshot(db) {
   const expected = Array.from({ length: 9 }, (_value, index) => `KIOSK_${String(index + 2).padStart(2, "0")}`);
-  const [devicesResult, employeesResult, credentialsResult, historyResult] = await Promise.all([
+  const [devicesResult, employeesResult, credentialsResult, historyResult, syncResult] = await Promise.all([
     db.from("devices")
-      .select("id,device_id,device_name,active,assigned_employee_id,last_seen_at,updated_at,employees!devices_assigned_employee_id_fkey(id,employee_code,display_name,active,role)")
+      .select("id,device_id,device_name,active,assigned_employee_id,assignment_epoch,last_seen_at,updated_at,employees!devices_assigned_employee_id_fkey(id,employee_code,display_name,active,role)")
       .in("device_id", expected).order("device_id"),
     db.from("employees").select("id,employee_code,display_name,active,role,notes,updated_at")
       .eq("role", "staff").like("employee_code", "EMP%").order("active", { ascending: false }).order("display_name"),
@@ -186,26 +194,63 @@ async function loadPhoneAdminSnapshot(db) {
     db.from("custodial_employee_device_assignment_history")
       .select("assignment_change_id,device_identifier,previous_employee_name,new_employee_name,change_reason,changed_at")
       .order("changed_at", { ascending: false }).limit(30),
+    db.from("device_sync_status")
+      .select("device_id,queue_count,oldest_item_at,retry_count,last_error,updated_at"),
   ]);
-  for (const result of [devicesResult, employeesResult, credentialsResult, historyResult]) if (result.error) throw result.error;
+  for (const result of [devicesResult, employeesResult, credentialsResult, historyResult, syncResult]) if (result.error) throw result.error;
+  const snapshotEntries = await Promise.all((devicesResult.data || []).map(async (deviceRow) => {
+    const result = await db.from("custodial_offline_scan_authority_snapshots")
+      .select("device_id,employee_id,assignment_epoch,generated_at,expires_at")
+      .eq("device_id", deviceRow.id)
+      .gt("expires_at", new Date().toISOString())
+      .order("generated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (result.error) {
+      if (missingRelation(result.error, "custodial_offline_scan_authority_snapshots")) return [String(deviceRow.id), null];
+      throw result.error;
+    }
+    return [String(deviceRow.id), result.data || null];
+  }));
   const credentialByDevicePk = new Map((credentialsResult.data || []).map((row) => [String(row.device_id), row]));
+  const syncByDevicePk = new Map((syncResult.data || []).map((row) => [String(row.device_id), row]));
+  const snapshotByDevicePk = new Map(snapshotEntries);
+  const employeeById = new Map((employeesResult.data || []).map((row) => [String(row.id), row]));
   const deviceById = new Map((devicesResult.data || []).map((row) => [String(row.device_id).toUpperCase(), row]));
   const phones = expected.map((deviceId) => {
     const row = deviceById.get(deviceId) || null;
     const employee = Array.isArray(row?.employees) ? row.employees[0] : row?.employees;
     const credential = row ? credentialByDevicePk.get(String(row.id)) || null : null;
+    const sync = row ? syncByDevicePk.get(String(row.id)) || null : null;
+    const snapshot = row ? snapshotByDevicePk.get(String(row.id)) || null : null;
+    const syncReportedAt = Date.parse(String(sync?.updated_at || ""));
+    const pendingWorkStatus = !sync
+      ? "unavailable"
+      : (!Number.isFinite(syncReportedAt) || Date.now() - syncReportedAt > 5 * 60 * 1000 ? "stale" : "current");
     return {
       device_pk: row?.id || null,
       device_id: deviceId,
       device_name: row?.device_name || `Unregistered ${deviceId}`,
       active: row?.active === true,
       assigned_employee_id: row?.assigned_employee_id || null,
+      assignment_epoch: row?.assignment_epoch == null ? null : Number(row.assignment_epoch),
       assigned_employee: employee || null,
       last_seen_at: row?.last_seen_at || null,
       updated_at: row?.updated_at || null,
       enrolled: Boolean(credential),
       credential_confirmed: Boolean(credential?.confirmed_at),
       credential_last_used_at: credential?.last_used_at || null,
+      pending_work_count: Math.max(0, Number(sync?.queue_count || 0)),
+      pending_work_status: pendingWorkStatus,
+      pending_work_oldest_at: sync?.oldest_item_at || null,
+      pending_work_retry_count: Math.max(0, Number(sync?.retry_count || 0)),
+      pending_work_last_error: sync?.last_error || null,
+      pending_work_reported_at: sync?.updated_at || null,
+      offline_authority_expires_at: snapshot?.expires_at || null,
+      offline_authority_generated_at: snapshot?.generated_at || null,
+      offline_authority_employee_id: snapshot?.employee_id || null,
+      offline_authority_employee_name: employeeById.get(String(snapshot?.employee_id || ""))?.display_name || null,
+      offline_authority_assignment_epoch: snapshot?.assignment_epoch == null ? null : Number(snapshot.assignment_epoch),
     };
   });
   return {

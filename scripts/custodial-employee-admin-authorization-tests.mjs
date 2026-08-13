@@ -30,6 +30,7 @@ const device = {
   device_name: "Authorization Contract Phone",
   active: true,
   assigned_employee_id: employeeId,
+  assignment_epoch: 4,
   last_seen_at: null,
   updated_at: new Date().toISOString(),
   employees: employee,
@@ -66,6 +67,14 @@ class Query {
       }], error: null };
     }
     if (this.table === "custodial_employee_device_assignment_history") return { data: [], error: null };
+    if (this.table === "device_sync_status") return { data: [{
+      device_id: devicePk, queue_count: 2, oldest_item_at: "2026-08-13T12:00:00.000Z",
+      retry_count: 1, last_error: "offline", updated_at: new Date().toISOString(),
+    }], error: null };
+    if (this.table === "custodial_offline_scan_authority_snapshots") return { data: [{
+      device_id: devicePk, employee_id: employeeId, assignment_epoch: 4,
+      generated_at: "2026-08-13T12:00:00.000Z", expires_at: "2026-08-14T12:00:00.000Z",
+    }], error: null };
     throw new Error(`Unexpected table in authorization contract: ${this.table}`);
   }
 
@@ -73,6 +82,10 @@ class Query {
     databaseCalls.push({ kind: "query", table: this.table, terminal: "maybeSingle", filters: structuredClone(this.filters) });
     if (this.table === "devices") return { data: structuredClone(device), error: null };
     if (this.table === "employees") return { data: structuredClone(employee), error: null };
+    if (this.table === "custodial_offline_scan_authority_snapshots") return { data: {
+      device_id: devicePk, employee_id: employeeId, assignment_epoch: 4,
+      generated_at: "2026-08-13T12:00:00.000Z", expires_at: "2026-08-14T12:00:00.000Z",
+    }, error: null };
     throw new Error(`Unexpected maybeSingle table in authorization contract: ${this.table}`);
   }
 
@@ -181,6 +194,14 @@ try {
     const result = await request(route.path, { method: route.method, token: readOnlyToken });
     assert.equal(result.status, 200, `read-only Custodial Manager should retain ${route.method} ${route.path}`);
     assert.equal(result.body.ok, true);
+    if (route.path === "/leadership-api/phone-assignments") {
+      assert.equal(result.body.data.devices[0].assignment_epoch, 4);
+      assert.equal(result.body.data.devices[0].pending_work_count, 2);
+      assert.equal(result.body.data.devices[0].pending_work_status, "current");
+      assert.equal(result.body.data.devices[0].offline_authority_assignment_epoch, 4);
+      assert.equal(result.body.data.devices[0].offline_authority_employee_id, employeeId);
+      assert.equal(result.body.data.devices[0].offline_authority_employee_name, employee.display_name);
+    }
   }
 
   for (const route of [...managerMutations, ...rosterOnlyMutations]) {
@@ -278,6 +299,10 @@ for (const route of [
   );
 }
 assert.match(routeSource, /makeOpsAccessMiddleware\(\{ env, supabase: db, requireWrite: true \}\)/);
+assert.match(routeSource, /missingRelation\(result\.error, "custodial_offline_scan_authority_snapshots"\)/,
+  "the transition-compatible manager read may omit only an absent snapshot ledger, not arbitrary query errors");
+assert.match(routeSource, /\.eq\("device_id", deviceRow\.id\)[\s\S]*?\.limit\(1\)[\s\S]*?\.maybeSingle\(\)/,
+  "manager reads must fetch the newest valid offline authority independently for each phone");
 
 // Native lifecycle routes act as the employee phone, not as an Ops Manager.
 // Their enrollment-code or device-credential proofs remain purpose-specific;

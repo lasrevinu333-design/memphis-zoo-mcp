@@ -5,10 +5,11 @@ import express from "express";
 import { createPushRuntime, installManagerNotificationRoutes } from "../src/manager-notifications.js";
 
 const root = new URL("../", import.meta.url);
-const [moduleSource, migration, closureMigration, indexSource] = await Promise.all([
+const [moduleSource, migration, closureMigration, boundaryMigration, indexSource] = await Promise.all([
   readFile(new URL("src/manager-notifications.js", root), "utf8"),
   readFile(new URL("supabase/migrations/20260721203000_manager_mobile_notifications.sql", root), "utf8"),
   readFile(new URL("supabase/migrations/20260813050000_offline_snapshot_operational_truth_closure.sql", root), "utf8"),
+  readFile(new URL("supabase/migrations/20260813141806_custodial_operational_boundary_closure.sql", root), "utf8"),
   readFile(new URL("src/index.js", root), "utf8"),
 ]);
 
@@ -42,6 +43,9 @@ assert.match(migration, /ops_manager_enqueue_scheduled_notifications/);
 assert.match(migration, /ops_manager_claim_notification_jobs/);
 assert.match(migration, /employee kiosk devices are not eligible/);
 assert.match(closureMigration, /ops_manager_notification_job_is_current/);
+assert.match(boundaryMigration, /ops_manager_enqueue_scheduled_notifications\(timestamp with time zone\)/);
+assert.match(boundaryMigration, /v_local_date date:=public\.sch_service_date\(p_now\)/);
+assert.match(boundaryMigration, /extract\(dow from v_local_date\)/);
 assert.match(moduleSource, /beforeSend:\s*async[\s\S]*ops_manager_notification_job_is_current/);
 
 const app = express();

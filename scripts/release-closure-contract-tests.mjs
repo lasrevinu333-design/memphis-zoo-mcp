@@ -8,8 +8,9 @@ const input = JSON.parse(readFileSync(new URL("../release/schema-alignment-input
 const index = readFileSync(new URL("../src/index.js", import.meta.url), "utf8");
 const liveGate = readFileSync(new URL("./live-release-alignment-check.mjs", import.meta.url), "utf8");
 const rollbackMigration = readFileSync(new URL("../supabase/migrations/20260813060000_release_canary_operational_recovery.sql", import.meta.url), "utf8");
+const boundaryMigration = readFileSync(new URL("../supabase/migrations/20260813141806_custodial_operational_boundary_closure.sql", import.meta.url), "utf8");
 
-assert.equal(input.frontend_commit_sha, "57032deeed5b2e396fd79cf10453e33210b54b9b", "backend must pin the exact audited frontend candidate");
+assert.equal(input.frontend_commit_sha, "95e055fec0113f16378101408e6bcb485a6f57eb", "backend must pin the exact audited frontend candidate");
 assert.equal(input.frontend_commit_state, "final_pair_bound");
 assert.deepEqual(input.queue_compatibility_versions.scan.at(-1), "indexeddb-v6-offline-authority");
 assert.deepEqual(Object.keys(input.minimum_supported).sort(), ["backend_version", "frontend_version"]);
@@ -19,10 +20,16 @@ assert.match(index, /observeProductionSchemaIdentity/, "schema observation must 
 assert.match(index, /\/admin-api\/release-canary-rollback/, "operator canary rollback endpoint is required");
 assert.doesNotMatch(index, /let releaseCanaryPaused/, "canary pause must not live in process memory");
 assert.match(index, /custodial_release_canary_is_paused/, "scan traffic must read the durable exact-device control");
+assert.match(index, /canaryControlInitialized\s*&&\s*canaryPaused === false/g,
+  "health and authority health must reject a configured but operator-paused canary");
 assert.match(index, /custodial_control_release_canary/, "release recovery must use its durable database control");
 assert.match(rollbackMigration, /pause_canary','resume_canary','restore_authority/);
 assert.match(rollbackMigration, /custodial_release_authority_restore_definitions/);
 assert.match(rollbackMigration, /pg_get_functiondef/);
+assert.match(boundaryMigration, /v_new text:='''employee_id'',v_existing\.employee_id,''assignment_epoch'',v_existing\.assignment_epoch/,
+  "exact activation replay must return its frozen actor identity");
+assert.match(boundaryMigration, /custodial_release_authority_restore_definitions/,
+  "the corrected activation definition must replace its rollback capture");
 assert.doesNotMatch(rollbackMigration, /grant execute on function public\.tool_(?:complete_session|commit_cleaning_workflow)\(/i,
   "release recovery must not revive legacy writer wrappers");
 assert.match(liveGate, /LIVE_RELEASE_ATTESTATION_INPUT/);
@@ -30,6 +37,8 @@ assert.match(liveGate, /MEMPHIS_RELEASE_ATTESTATION_PUBLIC_KEY/);
 assert.match(liveGate, /LIVE_RELEASE_SCHEMA_IDENTITY_TOKEN/);
 assert.match(liveGate, /assertObservedSchemaIdentity/);
 assert.match(liveGate, /assertManifestContract/);
+assert.match(liveGate, /release_canary\?\.paused, false/g,
+  "the live release gate must reject a paused canary in both health views");
 
 const { privateKey, publicKey } = generateKeyPairSync("ed25519");
 const unsignedAttestation = { artifact: "memphis-zoo-integrated-release-attestation.v2", release_id: input.release_id,

@@ -2210,7 +2210,8 @@ app.get(["/health", "/health/dependencies"], async (req, res) => {
       "manager_messaging_rpc",
       "worker_claim_rpc",
     ].every((key) => dependencies[key] === true);
-    const canaryReady = !releaseCanaryConfigurationRequired() || (Boolean(canaryDeviceId) && canaryControlInitialized);
+    const canaryReady = !releaseCanaryConfigurationRequired()
+      || (Boolean(canaryDeviceId) && canaryControlInitialized && canaryPaused === false);
     const ok = dependencies.database_reachable === true && requiredSchemaPresent && canaryReady;
     res.status(ok ? 200 : 503).json(buildHealthPayload("dependencies", {
       ok,
@@ -2712,7 +2713,8 @@ app.get("/scan-api/authority-health", async (_req, res) => {
       canaryControlInitialized = typeof canaryPaused === "boolean";
     }
     const data = await runRpc("custodial_backend_authority_health", { p_backend_execution_secret: offlineAuthoritySecret() });
-    const canaryReady = !releaseCanaryConfigurationRequired() || (Boolean(canaryDeviceId) && canaryControlInitialized);
+    const canaryReady = !releaseCanaryConfigurationRequired()
+      || (Boolean(canaryDeviceId) && canaryControlInitialized && canaryPaused === false);
     const ok = data?.ok === true && canaryReady;
     res.status(ok ? 200 : 503).json({
       ok,
