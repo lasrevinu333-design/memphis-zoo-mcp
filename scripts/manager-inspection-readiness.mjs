@@ -151,7 +151,6 @@ async function main() {
   const databaseUrl = String(process.env.SUPABASE_DB_URL || process.env.DATABASE_URL || "").trim();
   const databaseCaCertPath = String(process.env.SUPABASE_DB_CA_CERT_PATH || "").trim();
   const notBefore = String(process.env.MANAGER_INSPECTION_NOT_BEFORE || "").trim();
-  const enforce = String(process.env.MANAGER_INSPECTION_ENFORCE || "false").toLowerCase() === "true";
   if (!databaseUrl) throw new Error("SUPABASE_DB_URL or DATABASE_URL is required");
   if (!Number.isFinite(timestamp(notBefore))) throw new Error("MANAGER_INSPECTION_NOT_BEFORE must be a valid timestamp");
 
@@ -170,7 +169,7 @@ async function main() {
     await client.query("commit");
     const report = evaluateManagerInspectionReadiness(result.rows, { notBefore });
     console.log(JSON.stringify(report, null, 2));
-    if (enforce && !report.ok) process.exitCode = 1;
+    if (!report.ok) process.exitCode = 1;
   } catch (error) {
     await client.query("rollback").catch(() => {});
     throw error;

@@ -141,17 +141,34 @@ for (const [label, statement] of [
 }
 assert.equal(await sql(`select count(*) from public.custodial_terminal_writer_inventory where application_callable and (mutates_terminal_truth or delegates_alternate_terminal_authority) and proname not in ('tool_start_offline_occurrence','tool_commit_cleaning_workflow_authoritative','tool_complete_session_authoritative','custodial_close_maintenance_ticket_authoritative');`), "0", "capability/grant inventory leaves no application-callable alternate terminal writer");
 
-// An issued occurrence is frozen evidence. Reassignment blocks a new start
-// from A's snapshot, but its exact replay safely recovers the original proof
-// and completion remains attributed to A.
+// A start genuinely begun offline under A may first reach the server after the
+// phone is assigned to B. The unexpired issued snapshot preserves A as actor.
 await sql(`update public.devices set assigned_employee_id='${employeeB}'::uuid where id='${deviceA}'::uuid;
   insert into public.custodial_employee_device_assignment_history(device_id,device_identifier,new_employee_id,new_employee_name,change_reason,source)
   values('${deviceA}'::uuid,'OA-${stamp}-A','${employeeB}'::uuid,'Offline Authority Actor B','proof replay reassignment fixture','test');`);
 const reassignedReplay = await activate({ device: `OA-${stamp}-A`, location: codeA, session: sessionA });
 assert.equal(reassignedReplay.replayed, true, "reassignment preserves exact frozen start replay");
 assert.equal(reassignedReplay.submission_proof, contextA.submission_proof, "exact frozen replay returns the original proof");
-const newActivationAfterReassignment = await sql(`select public.tool_start_offline_occurrence(${q(`OA-${stamp}-A`)},${q(codeA)},${q(`oa-${stamp}-reassigned-new`)},${q(startedAt)},${q(snapshot.snapshot_id)},${q(snapshot.employee_id)},${snapshot.assignment_epoch},${q(credentialA)},${q(credentialA)},${q(execSecret)});`, { expectFailure: true });
-assert.match(newActivationAfterReassignment, /drifted from the issued offline snapshot/i, "reassignment rejects new activation from A's stale snapshot");
+const delayedSession = `oa-${stamp}-reassigned-first-sync`;
+const delayedStart = new Date(Date.now() - 20 * 60_000).toISOString();
+const delayedEnd = new Date(Date.now() - 15 * 60_000).toISOString();
+const delayedActivation = await activate({ device: `OA-${stamp}-A`, location: codeA, session: delayedSession, start: delayedStart });
+assert.equal(delayedActivation.employee_id, employeeA, "first sync after reassignment freezes snapshot employee A");
+assert.notEqual(delayedActivation.employee_id, employeeB, "replacement employee B is never credited for A's offline start");
+const delayedCompletion = JSON.parse(await sql(jsonSql({
+  session: delayedSession,
+  completion: `${delayedSession}-complete`,
+  context: delayedActivation.context_id,
+  proof: delayedActivation.submission_proof,
+  device: `OA-${stamp}-A`,
+  location: codeA,
+  start: delayedStart,
+  end: delayedEnd,
+  correlation: `${delayedSession}-correlation`,
+})));
+assert.equal(delayedCompletion.status, "closed", "delayed first-sync work remains committable");
+assert.equal(await sql(`select employee_id::text from public.sessions where client_session_id=${q(delayedSession)};`), employeeA,
+  "durable session preserves A after the phone is reassigned to B");
 const scanId = `oa-${stamp}-scan-1`;
 const acceptedSql = jsonSql({ session: sessionA, completion: `oa-${stamp}-complete-1`, context: contextA.context_id, proof: contextA.submission_proof, device: `OA-${stamp}-A`, location: codeA, scans: [{ event_type: "scan_finish", client_event_id: scanId, scanned_at: endedAt, result: "ok", payload_json: entryEvidence }] });
 const accepted = JSON.parse(await sql(acceptedSql));

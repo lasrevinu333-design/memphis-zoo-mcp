@@ -87,7 +87,8 @@ assert.doesNotMatch(
   /continue-on-error/,
   "monitor infrastructure and query failures must fail the workflow",
 );
-assert.match(workflow, /MANAGER_INSPECTION_ENFORCE:/);
+assert.doesNotMatch(workflow, /MANAGER_INSPECTION_ENFORCE:/);
+assert.match(readFileSync(resolve(root, "scripts/manager-inspection-readiness.mjs"), "utf8"), /if \(!report\.ok\) process\.exitCode = 1;/);
 
 assert.throws(() => evaluateManagerInspectionReadiness([], { notBefore: "bad", nowMs }), /valid timestamp/i);
 

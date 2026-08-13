@@ -122,28 +122,31 @@ begin
   select * into v_snapshot from public.custodial_offline_scan_authority_snapshots where snapshot_id=lower(btrim(p_snapshot_id)) for share;
   if v_snapshot.snapshot_id is null or v_snapshot.employee_id<>v_snapshot_employee_id or v_snapshot.assignment_epoch<>p_snapshot_assignment_epoch
      or v_snapshot.credential_id<>v_snapshot_credential_id or v_snapshot.expires_at<=now() then raise exception using errcode='42501',message='issued offline authority snapshot is absent, expired, or does not match its exact identity'; end if;
-  select d.id,d.device_id,d.assigned_employee_id,d.assignment_epoch,e.active employee_active,c.confirmed_at,c.revoked_at,c.expires_at
-    into v_device from public.devices d join public.employees e on e.id=d.assigned_employee_id
+  select d.id,d.device_id,c.confirmed_at,c.revoked_at,c.expires_at
+    into v_device from public.devices d
     join public.device_auth_credentials c on c.credential_id=v_credential_id and c.device_id=d.id
    where upper(btrim(d.device_id))=upper(btrim(coalesce(p_device_id,''))) and d.active=true for update of d;
-  if v_device.id is null or v_device.id<>v_snapshot.device_id or v_device.assigned_employee_id<>v_snapshot.employee_id
-     or v_device.assignment_epoch<>v_snapshot.assignment_epoch or v_device.employee_active is not true
-     or v_device.confirmed_at is null or v_device.revoked_at is not null or v_device.expires_at<=now() then raise exception using errcode='42501',message='current authenticated assignment drifted from the issued offline snapshot'; end if;
+  if v_device.id is null or v_device.id<>v_snapshot.device_id
+     or v_device.confirmed_at is null or v_device.revoked_at is not null or v_device.expires_at<=now() then
+    raise exception using errcode='42501',message='the authenticated device credential cannot exercise the issued offline snapshot';
+  end if;
   select l.id,l.location_code,jsonb_build_array(l.location_code,upper(btrim(p_location_code))) aliases into v_location
     from public.locations l where l.location_code=public.resolve_scan_location_code(p_location_code) and l.active=true;
   if v_location.id is null or not exists(select 1 from jsonb_array_elements(v_snapshot.locations_json) x where x->>'location_code'=v_location.location_code) then raise exception using errcode='22023',message='active location is not authorized by the issued offline snapshot'; end if;
   select h.assignment_change_id into v_assignment_change_id from public.custodial_employee_device_assignment_history h
-   where h.device_id=v_device.id and h.new_employee_id=v_device.assigned_employee_id order by h.changed_at desc limit 1;
+   where h.device_id=v_snapshot.device_id and h.new_employee_id=v_snapshot.employee_id
+     and h.changed_at<=v_snapshot.generated_at
+   order by h.changed_at desc limit 1;
   if v_assignment_change_id is null then raise exception using errcode='42501',message='an authoritative device assignment epoch is required for offline occurrence activation'; end if;
-  v_fingerprint:=encode(extensions.digest(convert_to(jsonb_build_object('client_session_id',v_client_session_id,'device_id',v_device.id::text,
-    'employee_id',v_device.assigned_employee_id::text,'credential_id',v_credential_id::text,'assignment_epoch',v_device.assignment_epoch,
+  v_fingerprint:=encode(extensions.digest(convert_to(jsonb_build_object('client_session_id',v_client_session_id,'device_id',v_snapshot.device_id::text,
+    'employee_id',v_snapshot.employee_id::text,'credential_id',v_credential_id::text,'assignment_epoch',v_snapshot.assignment_epoch,
     'snapshot_id',v_snapshot.snapshot_id,'snapshot_employee_id',v_snapshot.employee_id::text,'snapshot_assignment_epoch',v_snapshot.assignment_epoch,
     'snapshot_credential_id',v_snapshot.credential_id::text,'assignment_change_id',v_assignment_change_id::text,'location_id',v_location.id::text,
     'location_code',v_location.location_code,'location_aliases',v_location.aliases,'started_at',v_started_at)::text,'UTF8'),'sha256'),'hex');
   insert into public.custodial_offline_actor_contexts(client_session_id,device_id,employee_id,credential_id,assignment_epoch,assignment_change_id,location_id,canonical_location_code,location_aliases,started_at,occurrence_fingerprint,expires_at,snapshot_id,snapshot_employee_id,snapshot_assignment_epoch,snapshot_credential_id)
-  values(v_client_session_id,v_device.id,v_device.assigned_employee_id,v_credential_id,v_device.assignment_epoch,v_assignment_change_id,v_location.id,v_location.location_code,v_location.aliases,v_started_at,v_fingerprint,now()+interval '7 days',v_snapshot.snapshot_id,v_snapshot.employee_id,v_snapshot.assignment_epoch,v_snapshot.credential_id) returning * into v_context;
+  values(v_client_session_id,v_snapshot.device_id,v_snapshot.employee_id,v_credential_id,v_snapshot.assignment_epoch,v_assignment_change_id,v_location.id,v_location.location_code,v_location.aliases,v_started_at,v_fingerprint,now()+interval '7 days',v_snapshot.snapshot_id,v_snapshot.employee_id,v_snapshot.assignment_epoch,v_snapshot.credential_id) returning * into v_context;
   insert into public.custodial_offline_submission_proofs(context_id,proof_digest,issued_submission_proof) values(v_context.context_id,encode(extensions.digest(convert_to(v_proof_value,'UTF8'),'sha256'),'hex'),v_proof_value);
-  return jsonb_build_object('context_id',v_context.context_id,'occurrence_id',v_context.occurrence_id,'client_session_id',v_context.client_session_id,'canonical_location_code',v_context.canonical_location_code,'location_aliases',v_context.location_aliases,'started_at',v_context.started_at,'submission_proof',v_proof_value,'expires_at',v_context.expires_at,'snapshot_id',v_snapshot.snapshot_id,'schema_version','offline-authority.v4','committable',true,'replayed',false);
+  return jsonb_build_object('context_id',v_context.context_id,'occurrence_id',v_context.occurrence_id,'client_session_id',v_context.client_session_id,'canonical_location_code',v_context.canonical_location_code,'location_aliases',v_context.location_aliases,'started_at',v_context.started_at,'employee_id',v_context.employee_id,'assignment_epoch',v_context.assignment_epoch,'submission_proof',v_proof_value,'expires_at',v_context.expires_at,'snapshot_id',v_snapshot.snapshot_id,'schema_version','offline-authority.v4','committable',true,'replayed',false,'frozen_actor',true);
 end $function$;
 create function public.tool_start_offline_occurrence(p_device_id text,p_location_code text,p_client_session_id text,p_client_started_at text,p_snapshot_id text,p_snapshot_employee_id text,p_snapshot_assignment_epoch integer,p_snapshot_credential_id text,p_authenticated_credential_id text,p_backend_execution_secret text)
 returns jsonb language sql security definer set search_path to 'pg_catalog','public','extensions' as $function$
