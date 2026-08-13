@@ -1,10 +1,10 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
-  "schema_fingerprint": "7983615aa14a9e1ea7417f7d6efc5ad8c06d95a9271508ed2e40c7faeb67d9a3",
+  "schema_fingerprint": "8738b47fb19d90335bfcc22ba8a3265aa5cd1f30228e4a6b9afa9b8a7af15219",
   "schema_transition": {
     "transition_id": "custodial-canary-offline-scan-authority-20260813",
     "from_fingerprint": "333ddfc8008ea0b85916de7d491b98c9b8d6a7d45d3a2947d99b4b3bb836ea00",
-    "to_fingerprint": "7983615aa14a9e1ea7417f7d6efc5ad8c06d95a9271508ed2e40c7faeb67d9a3",
+    "to_fingerprint": "8738b47fb19d90335bfcc22ba8a3265aa5cd1f30228e4a6b9afa9b8a7af15219",
     "expires_at": "2026-08-23T23:59:59Z"
   },
   "frontend_source_fingerprint": "333ddfc8008ea0b85916de7d491b98c9b8d6a7d45d3a2947d99b4b3bb836ea00",
@@ -95,7 +95,7 @@
       {
         "path": ".github/workflows/custodial-production-repair.yml",
         "mode": "100644",
-        "object_id": "f47b9b3ff4b11bda0cd0d09dc638fd58f10fcfc0"
+        "object_id": "ec60d4e1309c5be6cddcd371284469756074a228"
       },
       {
         "path": ".github/workflows/device-credential-foundation.yml",
@@ -110,7 +110,7 @@
       {
         "path": ".github/workflows/foundation-security-gate.yml",
         "mode": "100644",
-        "object_id": "5d126f15272703d060f5f65f80c8ed7690af62e9"
+        "object_id": "57bbe0b7abe224c588ba20612f16dc81024039b9"
       },
       {
         "path": ".github/workflows/manager-inspection-readiness-monitor.yml",
@@ -140,7 +140,7 @@
       {
         "path": ".github/workflows/production-availability-monitor.yml",
         "mode": "100644",
-        "object_id": "6653d56a2d1418d08fa66cd7723947f001dd6cb4"
+        "object_id": "5c03447453a37721b0ba3aba6122206a695a60b7"
       },
       {
         "path": ".github/workflows/production-database-credential-bridge.yml",
@@ -315,7 +315,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "fcdb2c7d6930803fa43386daf9ddcd40939e7039"
+        "object_id": "375618ebc0a5b60ecf72339fa3d859c5129914b0"
       },
       {
         "path": "public/moxie-assets/contacts-creekside-animal.png",
@@ -365,7 +365,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "3917c6faa76f44060ba91b2ea452b89dc27fc7b3"
+        "object_id": "ecfb32f15ffc1552feb9c9ef0f918db978b2054e"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -380,7 +380,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "02ab1d40a52ad6249cdb7268418396bf620e5448"
+        "object_id": "54014bbe584b0af144226c8dd6eb1299b68a233e"
       },
       {
         "path": "research/european_herbalism_through_paracelsus.md",
@@ -445,7 +445,7 @@
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "ad8cd09ff5dfb8c24e4507819c249e48592667c2"
+        "object_id": "ce4b38a13a74f12f9bbff2ca909872745ad32d5f"
       },
       {
         "path": "scripts/custodial-atomic-commit-database-tests.mjs",
@@ -495,7 +495,7 @@
       {
         "path": "scripts/custodial-repair-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "b35af6b96596664ce739f8785dde70781289e443"
+        "object_id": "902414ff0da69cf19dcd664cf0db8a9369857b5a"
       },
       {
         "path": "scripts/dashboard-recent-activity-contract-tests.mjs",
@@ -563,6 +563,11 @@
         "object_id": "bf042c996f5997eed3ac9f1ff0447c7c5e4b0eb8"
       },
       {
+        "path": "scripts/final-closure-database-isolated-tests.mjs",
+        "mode": "100644",
+        "object_id": "4e218d7cbad3bb6b931a8d89a5110c1cfa68ab2a"
+      },
+      {
         "path": "scripts/final-operational-correction-database-tests.mjs",
         "mode": "100644",
         "object_id": "464dbe0d21ad395b1776f379a4802e4eaccec959"
@@ -570,7 +575,7 @@
       {
         "path": "scripts/final-uncertainty-closure-database-tests.mjs",
         "mode": "100644",
-        "object_id": "031a7e5d2be7ca5fb7aebd7fdff354a66c6a9800"
+        "object_id": "d6b5649818fca80da8472d4139135f88db5526fc"
       },
       {
         "path": "scripts/fixtures/static-weekly-scheduler/canary-authority.json",
@@ -650,7 +655,7 @@
       {
         "path": "scripts/live-release-alignment-check.mjs",
         "mode": "100644",
-        "object_id": "c40f3bb99f851680b4cfd24a80108c0efd0ec92f"
+        "object_id": "cf423a170bf303a9b356b7c702713a6fa3df4cb1"
       },
       {
         "path": "scripts/location-group-audit-reminder-aware.mjs",
@@ -675,7 +680,7 @@
       {
         "path": "scripts/manager-notification-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "fd2266d9a1f05a25ca9431f67cc7a3ec5be2bf49"
+        "object_id": "fb01e740126c3f954574ba10f9a1ac36fec9232f"
       },
       {
         "path": "scripts/mcp-connector-auth-tests.mjs",
@@ -770,7 +775,7 @@
       {
         "path": "scripts/operations-leadership-mobile-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "f90f80b721d8d01c5cf2b21b6ad6df01e8e69be4"
+        "object_id": "df95f71a4dcd7f73789bab8e8e2dc4746a5fbd0f"
       },
       {
         "path": "scripts/operations-leadership-mobile-database-tests.mjs",
@@ -870,7 +875,7 @@
       {
         "path": "scripts/release-closure-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "b383487abf4bad218e0e4157749068d8f91f5c8f"
+        "object_id": "1b279c9bef7f3a5f7ec69f06846b279e7a37ffc1"
       },
       {
         "path": "scripts/restroom-rebalance-route-tests.mjs",
@@ -1450,7 +1455,7 @@
       {
         "path": "src/manager-notifications.js",
         "mode": "100644",
-        "object_id": "281b56ad93f66fe080212ac90d9eb2acae303d2a"
+        "object_id": "91c1e4276f43344f66071100489d7b2000203baf"
       },
       {
         "path": "src/mcp/create-mcp-server.js",
@@ -1525,7 +1530,7 @@
       {
         "path": "src/release-contract.js",
         "mode": "100644",
-        "object_id": "79e7286406709cbc7c1f8a0e58d554f20bc2545e"
+        "object_id": "cd852ecaf26ccfcda7e12024d5137006eb833898"
       },
       {
         "path": "src/release-manifest.js",
@@ -1665,12 +1670,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "deef5c36ca845ceccc25d301d9b9bc4af8c73892"
+        "object_id": "3e60d110f9b1769837c713141935dd753c1dc439"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "9446101f98168b0c130c3b6088fe0be4cb3ee54e"
+        "object_id": "62b2760cd3591502fcd88ca7eef86296e24e66a9"
       },
       {
         "path": "supabase/config.toml",
@@ -2605,7 +2610,7 @@
       {
         "path": "supabase/migrations/20260813050000_offline_snapshot_operational_truth_closure.sql",
         "mode": "100644",
-        "object_id": "8abc4d1957382b05c238b8f47c5ce798e14a118a"
+        "object_id": "366be93fff87f6ce28dbf8c17f814ad6c5b45269"
       },
       {
         "path": "supabase/migrations/20260813060000_release_canary_operational_recovery.sql",
@@ -2618,7 +2623,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 506,
+    "authority_path_count": 507,
     "migration_path_count": 71,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate requires externally supplied exact expected_commit and expected_tree, deterministically enumerates every tracked expected-tree entry, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file as its exact tree blob."
