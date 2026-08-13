@@ -23,6 +23,12 @@ assert.match(index, /custodial_release_canary_is_paused/, "scan traffic must rea
 assert.match(index, /canaryControlInitialized\s*&&\s*canaryPaused === false/g,
   "health and authority health must reject a configured but operator-paused canary");
 assert.match(index, /custodial_control_release_canary/, "release recovery must use its durable database control");
+assert.match(index, /custodial_record_release_canary_transport_probe/,
+  "release recovery must record the designated phone's authenticated native RPC traversal");
+assert.match(index, /custodial_get_release_canary_transport_probe_health/,
+  "release recovery must verify a persisted phone transport receipt");
+assert.doesNotMatch(index, /collectBackendAuthorityHealth\([\s\S]{0,1400}executeScanRpcTransport\(/,
+  "a server-internal RPC call cannot prove the employee phone path");
 assert.match(index, /action === "resume_canary" && authoritativeHealth\?\.ok !== true/,
   "release resume must fail closed unless the database and employee scan transport are both healthy");
 assert.match(rollbackMigration, /pause_canary','resume_canary','restore_authority/);

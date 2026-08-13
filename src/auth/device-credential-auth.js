@@ -565,8 +565,13 @@ function authEvent(req, device, { credentialId = null, eventType, success, reaso
   };
 }
 
-function isOfflineRecoveryCommitRequest(req) {
-  return String(req?.body?.fn || "").trim() === "tool_commit_cleaning_workflow";
+const OFFLINE_RECOVERY_FUNCTIONS = new Set([
+  "tool_start_offline_occurrence",
+  "tool_commit_cleaning_workflow",
+]);
+
+function isOfflineRecoveryRequest(req) {
+  return OFFLINE_RECOVERY_FUNCTIONS.has(String(req?.body?.fn || "").trim());
 }
 
 async function resolveDevice(req, runReadOnlySql, { allowTerminalOfflineRecovery = false } = {}) {
@@ -600,7 +605,7 @@ export async function authenticateDeviceCredentialRequest(req, {
   const store = suppliedStore || createSupabaseDeviceCredentialStore(supabase);
   if (!store) return { ok: false, status: 503, code: "device_auth_unavailable", error: "Device authentication store is unavailable." };
 
-  const terminalOfflineRecovery = isOfflineRecoveryCommitRequest(req);
+  const terminalOfflineRecovery = isOfflineRecoveryRequest(req);
   const { identifier, device } = await resolveDevice(req, runReadOnlySql, { allowTerminalOfflineRecovery: terminalOfflineRecovery });
   if (!identifier) return { ok: false, status: 401, code: "device_id_required", error: "device_id is required." };
   if (!device || (!device.device_active && !terminalOfflineRecovery)) return { ok: false, status: 401, code: "device_not_registered", error: "Registered device is required." };
@@ -685,10 +690,10 @@ export async function authenticateDeviceCredentialRequest(req, {
       };
     }
     // A token that still cryptographically proves this canonical device may
-    // submit only its already-frozen offline occurrence for server quarantine.
+    // activate or submit only work bound to its previously issued snapshot.
     // It never restores general access after revocation, expiry, deactivation,
-    // or assignment loss; the RPC injects the credential id and the database
-    // decides whether the frozen proof remains compatible.
+    // or assignment loss; the database verifies that the work began while the
+    // snapshot and credential were valid.
     if (terminalOfflineRecovery && tokenMatchesDevice) {
       await audit(store, authEvent(req, device, {
         credentialId: row.credential_id,

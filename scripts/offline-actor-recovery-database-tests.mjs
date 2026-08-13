@@ -150,8 +150,8 @@ const reassignedReplay = await activate({ device: `OA-${stamp}-A`, location: cod
 assert.equal(reassignedReplay.replayed, true, "reassignment preserves exact frozen start replay");
 assert.equal(reassignedReplay.submission_proof, contextA.submission_proof, "exact frozen replay returns the original proof");
 const delayedSession = `oa-${stamp}-reassigned-first-sync`;
-const delayedStart = new Date(Date.now() - 20 * 60_000).toISOString();
-const delayedEnd = new Date(Date.now() - 15 * 60_000).toISOString();
+const delayedStart = new Date(Date.parse(snapshot.generated_at) - 10 * 60_000 + 100).toISOString();
+const delayedEnd = new Date(Date.parse(snapshot.generated_at) - 9 * 60_000).toISOString();
 const delayedActivation = await activate({ device: `OA-${stamp}-A`, location: codeA, session: delayedSession, start: delayedStart });
 assert.equal(delayedActivation.employee_id, employeeA, "first sync after reassignment freezes snapshot employee A");
 assert.notEqual(delayedActivation.employee_id, employeeB, "replacement employee B is never credited for A's offline start");
@@ -169,6 +169,59 @@ const delayedCompletion = JSON.parse(await sql(jsonSql({
 assert.equal(delayedCompletion.status, "closed", "delayed first-sync work remains committable");
 assert.equal(await sql(`select employee_id::text from public.sessions where client_session_id=${q(delayedSession)};`), employeeA,
   "durable session preserves A after the phone is reassigned to B");
+
+// The phone may remain fully offline through both start and completion. A
+// subsequently revoked credential still proves work that began first, but it
+// cannot authorize work beginning at or after revocation or reassignment.
+const recoveryDevice = randomUUID();
+const recoveryCredential = randomUUID();
+const recoveryCode = `OA${stamp}R`.toUpperCase();
+const recoveryLocation = randomUUID();
+await sql(`insert into public.locations(id,location_code,location_name,location_type,active,form_type,notes)
+  values('${recoveryLocation}'::uuid,${q(recoveryCode)},'Offline Recovery Location','restroom',true,'restroom','disposable recovery test');
+  insert into public.devices(id,device_id,device_name,active,assigned_employee_id,notes)
+  values('${recoveryDevice}'::uuid,'OA-${stamp}-R','Offline Recovery Device',true,'${employeeA}'::uuid,'disposable recovery test');
+  insert into public.device_auth_credentials(credential_id,device_id,token_hash,device_label,confirmed_at,expires_at,metadata_json)
+  values('${recoveryCredential}'::uuid,'${recoveryDevice}'::uuid,${q(createHash("sha256").update(`offline-recovery:${stamp}`).digest("hex"))},'recovery',now(),now()+interval '30 days','{}'::jsonb);
+  insert into public.custodial_employee_device_assignment_history(device_id,device_identifier,new_employee_id,new_employee_name,change_reason,source)
+  values('${recoveryDevice}'::uuid,'OA-${stamp}-R','${employeeA}'::uuid,'Offline Authority Actor A','recovery fixture','test');`);
+const recoverySnapshot = JSON.parse(await sql(`select public.tool_get_offline_scan_authority_snapshot('OA-${stamp}-R','${recoveryCredential}'::text,${q(execSecret)})::text;`));
+const recoveryStartedAt = new Date(Date.parse(recoverySnapshot.generated_at) + 1).toISOString();
+const recoveryRevokedAt = new Date(Date.parse(recoverySnapshot.generated_at) + 2).toISOString();
+await sql(`update public.device_auth_credentials set revoked_at=${q(recoveryRevokedAt)},revoked_reason='offline activation recovery test' where credential_id='${recoveryCredential}'::uuid;
+  update public.custodial_offline_scan_authority_snapshots set expires_at=generated_at+interval '2 milliseconds' where snapshot_id=${q(recoverySnapshot.snapshot_id)};`);
+const recoveredActivation = await activate({
+  device: `OA-${stamp}-R`, location: recoveryCode, session: `oa-${stamp}-revoked-recovery`,
+  start: recoveryStartedAt, credential: recoveryCredential, authoritySnapshot: recoverySnapshot,
+});
+assert.equal(recoveredActivation.employee_id, employeeA,
+  "work started before credential revocation and snapshot expiry retains the issued snapshot actor");
+const afterRevocationDenied = await sql(`select public.tool_start_offline_occurrence(
+  'OA-${stamp}-R',${q(recoveryCode)},'oa-${stamp}-after-revoke',${q(new Date(Date.parse(recoveryRevokedAt) + 1000).toISOString())},
+  ${q(recoverySnapshot.snapshot_id)},${q(recoverySnapshot.employee_id)},${recoverySnapshot.assignment_epoch},
+  '${recoveryCredential}','${recoveryCredential}',${q(execSecret)});`, { expectFailure: true });
+assert.match(afterRevocationDenied, /snapshot was not valid|credential was not valid/i,
+  "revoked or expired authority cannot start new work");
+await sql(`update public.device_auth_credentials set confirmed_at=${q(new Date(Date.parse(recoverySnapshot.generated_at) + 1000).toISOString())},revoked_at=null,revoked_reason=null where credential_id='${recoveryCredential}'::uuid;
+  update public.custodial_offline_scan_authority_snapshots set expires_at=generated_at+interval '1 hour' where snapshot_id=${q(recoverySnapshot.snapshot_id)};`);
+const postdatedEnrollmentDenied = await sql(`select public.tool_start_offline_occurrence(
+  'OA-${stamp}-R',${q(recoveryCode)},'oa-${stamp}-postdated-enrollment',${q(recoveryStartedAt)},
+  ${q(recoverySnapshot.snapshot_id)},${q(recoverySnapshot.employee_id)},${recoverySnapshot.assignment_epoch},
+  '${recoveryCredential}','${recoveryCredential}',${q(execSecret)});`, { expectFailure: true });
+assert.match(postdatedEnrollmentDenied, /credential was not valid/i,
+  "a credential confirmation postdated after snapshot issuance cannot backdate new work");
+await sql(`update public.device_auth_credentials set revoked_at=null,revoked_reason=null where credential_id='${recoveryCredential}'::uuid;
+  update public.device_auth_credentials set confirmed_at=${q(recoverySnapshot.generated_at)} where credential_id='${recoveryCredential}'::uuid;
+  update public.custodial_offline_scan_authority_snapshots set expires_at=generated_at+interval '1 hour' where snapshot_id=${q(recoverySnapshot.snapshot_id)};
+  update public.devices set assigned_employee_id='${employeeB}'::uuid where id='${recoveryDevice}'::uuid;
+  insert into public.custodial_employee_device_assignment_history(device_id,device_identifier,new_employee_id,new_employee_name,changed_at,change_reason,source)
+  values('${recoveryDevice}'::uuid,'OA-${stamp}-R','${employeeB}'::uuid,'Offline Authority Actor B',${q(new Date(Date.parse(recoverySnapshot.generated_at) + 3).toISOString())},'replacement fixture','test');`);
+const afterReassignmentDenied = await sql(`select public.tool_start_offline_occurrence(
+  'OA-${stamp}-R',${q(recoveryCode)},'oa-${stamp}-after-reassign',${q(new Date(Date.parse(recoverySnapshot.generated_at) + 4).toISOString())},
+  ${q(recoverySnapshot.snapshot_id)},${q(recoverySnapshot.employee_id)},${recoverySnapshot.assignment_epoch},
+  '${recoveryCredential}','${recoveryCredential}',${q(execSecret)});`, { expectFailure: true });
+assert.match(afterReassignmentDenied, /snapshot no longer owned the phone/i,
+  "an old employee snapshot cannot authorize replacement-employee work");
 const scanId = `oa-${stamp}-scan-1`;
 const acceptedSql = jsonSql({ session: sessionA, completion: `oa-${stamp}-complete-1`, context: contextA.context_id, proof: contextA.submission_proof, device: `OA-${stamp}-A`, location: codeA, scans: [{ event_type: "scan_finish", client_event_id: scanId, scanned_at: endedAt, result: "ok", payload_json: entryEvidence }] });
 const accepted = JSON.parse(await sql(acceptedSql));

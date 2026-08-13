@@ -6,7 +6,7 @@ import {
   normalizeAttendanceRecord,
   toNullableNonNegativeInteger,
 } from "../src/attendance-state.js";
-import { chicagoDateStartIso, normalizeInspectionPayload } from "../src/operational-analytics-api.js";
+import { chicagoServiceDateStartIso, normalizeInspectionPayload } from "../src/operational-analytics-api.js";
 
 const root = new URL("../", import.meta.url);
 const read = (path) => readFileSync(new URL(path, root), "utf8");
@@ -33,11 +33,11 @@ assert.equal(attendanceSourceTimestamp({ updated_at: "invalid" }), null);
 assert.match(indexSource, /stored && !stored\.stale/, "fresh stored attendance should remain the preferred source");
 assert.match(indexSource, /stale_stored_fallback/, "stale stored attendance must be labeled when source refresh fails");
 
-assert.equal(chicagoDateStartIso("2026-01-15"), "2026-01-15T06:00:00.000Z", "winter boundary must use CST");
-assert.equal(chicagoDateStartIso("2026-07-15"), "2026-07-15T05:00:00.000Z", "summer boundary must use CDT");
-assert.throws(() => chicagoDateStartIso("2026-02-30"), /real calendar date/i);
+assert.equal(chicagoServiceDateStartIso("2026-01-15"), "2026-01-15T10:00:00.000Z", "winter service day must begin at 04:00 CST");
+assert.equal(chicagoServiceDateStartIso("2026-07-15"), "2026-07-15T09:00:00.000Z", "summer service day must begin at 04:00 CDT");
+assert.throws(() => chicagoServiceDateStartIso("2026-02-30"), /real calendar date/i);
 assert.doesNotMatch(analyticsSource, /T00:00:00-06:00|T23:59:59\.999-06:00/, "analytics must not hard-code CST offsets");
-assert.match(analyticsSource, /\.lt\("started_at", chicagoDateStartIso/, "date_to must use an exclusive next-day boundary");
+assert.match(analyticsSource, /\.lt\("started_at", chicagoServiceDateStartIso/, "date_to must use an exclusive next-service-day boundary");
 
 const operationId = "10000000-0000-4000-8000-000000000001";
 const sessionId = "20000000-0000-4000-8000-000000000001";

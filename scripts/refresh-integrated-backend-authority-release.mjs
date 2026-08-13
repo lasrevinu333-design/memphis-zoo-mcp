@@ -67,7 +67,7 @@ const authorityInventory = trackedInventory.filter(({ path }) => path !== genera
 const migrations = authorityInventory
   .filter(({ path }) => /^supabase\/migrations\/[^/]+\.sql$/.test(path))
   .map(({ path }) => ({ name: path.slice("supabase/migrations/".length) }));
-assert.equal(migrations.length, 74, "release authority inventory must bind every migration at this head");
+assert.equal(migrations.length, 75, "release authority inventory must bind every migration at this head");
 const output = {
   artifact: "integrated-backend-authority-release-evidence.v2",
   release_id: frontendManifest.release_id,
@@ -90,6 +90,7 @@ const output = {
     operational_service_date_phase: "20260813070000 unifies schedules, turnover, occurrences, dashboard truth, and recovery probes at the 04:00 Central service date",
     operational_boundary_closure_phase: "20260813141806 aligns notification service dates, exact activation replay identity, and the captured rollback definition",
     device_sync_actor_groups_phase: "20260813173000 stores verified pending work groups by issued snapshot, employee, and assignment epoch while retaining the Build 22 aggregate reporter",
+    release_phone_transport_and_offline_activation_phase: "20260813190000 requires a fresh immutable receipt from the designated phone's native-vault /scan-api/rpc path before resume and permits delayed activation only for work begun while snapshot, credential, and assignment authority were valid",
   },
   rollback: input.rollback,
   cutover: input.cutover,

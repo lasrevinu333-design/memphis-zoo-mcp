@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   INSPECTION_FRESHNESS_WINDOW_HOURS,
+  chicagoServiceDateStartIso,
   installOperationalAnalyticsRoutes,
   inspectionEligibility,
   normalizeInspectionPayload,
@@ -61,6 +62,15 @@ assert.match(inspectionFreshness, /interval '24 hours'/i, "the database must enf
 assert.equal(inspectionFreshness, reviewedInspectionFreshness,
   "the canonical and production-reviewed inspection migrations must remain byte-identical");
 assert.match(inspectionFreshness, /cannot be recorded more than 24 hours after cleaning session completion/i);
+
+assert.equal(chicagoServiceDateStartIso("2026-08-13"), "2026-08-13T09:00:00.000Z",
+  "summer service dates begin at 04:00 Central");
+assert.equal(chicagoServiceDateStartIso("2026-01-13"), "2026-01-13T10:00:00.000Z",
+  "winter service dates begin at 04:00 Central");
+assert.equal(chicagoServiceDateStartIso("2026-03-08"), "2026-03-08T09:00:00.000Z",
+  "the spring DST service date still begins at local 04:00");
+assert.equal(chicagoServiceDateStartIso("2026-11-01"), "2026-11-01T10:00:00.000Z",
+  "the fall DST service date still begins at local 04:00");
 
 assert.equal(INSPECTION_FRESHNESS_WINDOW_HOURS, 24);
 const completedAt = "2026-08-09T01:00:00.000Z";

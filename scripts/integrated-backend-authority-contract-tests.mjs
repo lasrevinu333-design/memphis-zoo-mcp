@@ -75,6 +75,12 @@ assert.match(index, /scanRpcHttpOutcome/);
 assert.match(index, /executeScanRpcTransport/);
 assert.match(index, /collectBackendAuthorityHealth/);
 assert.match(index, /scan_rpc_transport/);
+assert.match(index, /custodial_get_release_canary_transport_probe_health/,
+  "release health must read the durable exact-phone receipt instead of invoking the RPC implementation internally");
+assert.match(index, /custodial_record_release_canary_transport_probe/,
+  "the authenticated native canary route must persist its transport receipt");
+assert.doesNotMatch(index, /collectBackendAuthorityHealth\([\s\S]{0,1400}executeScanRpcTransport\(/,
+  "release health must not bypass the real phone HTTP and native-vault path");
 assert.match(index, /action === "resume_canary" && authoritativeHealth\?\.ok !== true/,
   "physical canary resume must require the combined database and real scan-transport health probe");
 assert.match(index, /runCustodialOfflineReconciliationNotificationWorker/);
@@ -90,7 +96,8 @@ assert.match(auth, /offline_recovery_only/);
 assert.equal(releaseEvidence.backend_contract.authority, "offline-authority.v4");
 assert.equal(releaseEvidence.compatibility_window.accepted_engine.scan, "scan.v2");
 assert.equal(releaseEvidence.compatibility_window.required_engine.scan, "scan.v4.snapshot-bound-authority");
-assert.equal(releaseEvidence.migrations.at(-1).name, "20260813173000_device_sync_actor_groups.sql");
+assert.equal(releaseEvidence.migrations.at(-1).name, "20260813190000_release_phone_transport_and_offline_activation_closure.sql");
+assert.match(releaseEvidence.compatibility_window.release_phone_transport_and_offline_activation_phase, /native-vault \/scan-api\/rpc/);
 assert.equal(releaseEvidence.artifact, "integrated-backend-authority-release-evidence.v2");
 assert.equal(releaseEvidence.release_id, "release-2026.07.19.custodial-v3.12");
 assert.equal(releaseEvidence.frontend_commit_sha, "054cf40534b568768cea321085ce1f09b2414bdc");
@@ -106,7 +113,7 @@ assert.ok(releaseEvidence.authority_content_identity.expected_tree_inventory.som
 assert.ok(releaseEvidence.authority_content_identity.expected_tree_inventory.some(({ path }) => path === "scripts/integrated-backend-authority-suite-order-tests.mjs"));
 assert.equal(releaseEvidence.authority_content_identity.expected_tree_inventory.some(({ path }) => path === "release/integrated-backend-authority-evidence.json"), false);
 assert.equal(releaseEvidence.authority_content_identity.authority_path_count, releaseEvidence.authority_content_identity.expected_tree_inventory.length);
-assert.equal(releaseEvidence.authority_content_identity.migration_path_count, 74);
-assert.equal(releaseEvidence.migrations.length, 74);
+assert.equal(releaseEvidence.authority_content_identity.migration_path_count, 75);
+assert.equal(releaseEvidence.migrations.length, 75);
 assert.equal(Object.hasOwn(releaseEvidence.authority_content_identity, "value"), false, "generated evidence must not self-assert a worktree-derived content hash");
 console.log("INTEGRATED_BACKEND_AUTHORITY_CONTRACT_PASS");

@@ -100,6 +100,16 @@ const SCAN_RPC_ALLOWLIST = new Set([
   "tool_evaluate_location_proximity",
   "tool_evaluate_location_proximity_v2"
 ]);
+const OFFLINE_RECOVERY_FUNCTIONS = new Set([
+  "tool_start_offline_occurrence",
+  "tool_commit_cleaning_workflow",
+]);
+const NATIVE_CUSTODIAL_ORIGINS = new Set([
+  "https://localhost",
+  "http://localhost",
+  "capacitor://localhost",
+  "ionic://localhost",
+]);
 
 const SCAN_CONTRACT_VERSION = "scan.v4.snapshot-bound-authority";
 const DASHBOARD_CONTRACT_VERSION = "dashboard.v1";
@@ -202,8 +212,8 @@ function requireDeviceOrOpsAccess(req, res, next) {
 
 function requireScanRpcAuthorization(req, res, next) {
   const fn = String(req.body?.fn || "").trim();
-  if (req.memphisDeviceAuth?.offline_recovery_only === true && fn !== "tool_commit_cleaning_workflow") {
-    res.status(403).json({ ok: false, error: "A revoked or stale device credential may submit only its frozen offline recovery record." });
+  if (req.memphisDeviceAuth?.offline_recovery_only === true && !OFFLINE_RECOVERY_FUNCTIONS.has(fn)) {
+    res.status(403).json({ ok: false, error: "A revoked or stale device credential may activate or submit only work bound to its frozen offline snapshot." });
     return;
   }
   if (req.memphisAuth?.read_only && !SCAN_READ_FUNCTIONS.has(fn)) {
@@ -519,25 +529,53 @@ async function collectBackendAuthorityHealth() {
   const authorityHealth = await runRpc("custodial_backend_authority_health", {
     p_backend_execution_secret: offlineAuthoritySecret(),
   });
-  const scanTransportProbe = await executeScanRpcTransport(
-    "tool_get_system_settings",
-    {},
-    null,
-    null,
-  );
-  const scanTransportReady = scanTransportProbe.status === 200
-    && scanTransportProbe.body?.ok === true
-    && typeof scanTransportProbe.body?.data?.system_enabled === "boolean";
+  const canaryDeviceId = configuredReleaseCanaryDeviceId();
+  const scanTransportProbe = canaryDeviceId
+    ? await runRpc("custodial_get_release_canary_transport_probe_health", {
+        p_device_identifier: canaryDeviceId,
+        p_backend_commit_sha: BACKEND_COMMIT_SHA,
+        p_release_id: RELEASE_ID,
+        p_backend_execution_secret: offlineAuthoritySecret(),
+      })
+    : { ready: true, configured: false, reason: "release_canary_not_required" };
+  const scanTransportReady = scanTransportProbe?.ready === true;
   return {
     ...authorityHealth,
     ok: authorityHealth?.ok === true && scanTransportReady,
     scan_rpc_transport: {
+      ...scanTransportProbe,
       ready: scanTransportReady,
       probe_function: "tool_get_system_settings",
-      status: scanTransportProbe.status,
-      code: scanTransportProbe.body?.code || null,
+      path: "/scan-api/rpc",
     },
   };
+}
+
+function isNativeCustodialScanRequest(req) {
+  const origin = String(req.headers?.origin || "").trim();
+  const edition = String(req.headers?.["x-memphis-app-edition"] || "").trim().toLowerCase();
+  return NATIVE_CUSTODIAL_ORIGINS.has(origin) && edition === "custodial";
+}
+
+async function recordReleaseCanaryTransportProbe(req, deviceIdentifier) {
+  const credentialId = String(req.memphisDeviceCredential?.credential_id || "").trim();
+  if (!credentialId || req.memphisDeviceAuth?.credentialed !== true || req.memphisDeviceAuth?.offline_recovery_only === true) {
+    throw Object.assign(new Error("A current native canary credential is required for the release transport probe."), {
+      status: 403,
+      code: "release_canary_probe_credential_required",
+    });
+  }
+  const requestSha256 = createHash("sha256").update(req.scanAuthorityRawBody || Buffer.alloc(0)).digest("hex");
+  return runRpc("custodial_record_release_canary_transport_probe", {
+    p_device_identifier: deviceIdentifier,
+    p_credential_id: credentialId,
+    p_request_sha256: requestSha256,
+    p_backend_commit_sha: BACKEND_COMMIT_SHA,
+    p_release_id: RELEASE_ID,
+    p_native_origin: String(req.headers?.origin || "").trim(),
+    p_app_edition: String(req.headers?.["x-memphis-app-edition"] || "").trim(),
+    p_backend_execution_secret: offlineAuthoritySecret(),
+  });
 }
 
 const MAX_SCAN_RPC_BYTES = 1024 * 1024;
@@ -686,6 +724,7 @@ const TRUSTED_DEVICE_CORS_HEADERS = [
   "X-Device-Label",
   "X-Device-Credential",
   "X-Memphis-Device-Credential",
+  "X-Memphis-App-Edition",
   "X-Device-Security-CSRF",
   "X-Admin-Key",
   "X-Ops-Access-Key",
@@ -2786,18 +2825,24 @@ app.post("/scan-api/rpc", parseScanAuthorityJsonBeforeAuthentication, requireDev
   try {
     const canaryDeviceId = configuredReleaseCanaryDeviceId();
     const requestDeviceId = String(req.memphisDevice?.canonical_device_id || req.memphisDevice?.device_id || "").trim().toUpperCase();
+    const fn = String(req.body?.fn || "").trim();
+    let canaryPaused = false;
     if (canaryDeviceId && requestDeviceId === canaryDeviceId) {
-      const paused = await runRpc("custodial_release_canary_is_paused", {
+      canaryPaused = await runRpc("custodial_release_canary_is_paused", {
         p_device_identifier: canaryDeviceId,
         p_backend_execution_secret: offlineAuthoritySecret(),
       });
-      if (paused === true) {
+      const nativeProbe = fn === "tool_get_system_settings" && isNativeCustodialScanRequest(req);
+      if (canaryPaused === true && !nativeProbe) {
         res.status(503).json({ ok: false, code: "release_canary_paused", retryable: false, error: "The physical release canary is operator-paused." });
         return;
       }
     }
-    const fn = String(req.body?.fn || "").trim();
     const outcome = await executeScanRpcTransport(fn, req.body?.args, req.memphisDevice, req.memphisDeviceCredential);
+    let canaryTransportProbe = null;
+    if (canaryPaused === true && outcome.status === 200 && outcome.body?.ok === true) {
+      canaryTransportProbe = await recordReleaseCanaryTransportProbe(req, canaryDeviceId);
+    }
     res.status(outcome.status).json({
       ...outcome.body,
       meta: {
@@ -2806,6 +2851,7 @@ app.post("/scan-api/rpc", parseScanAuthorityJsonBeforeAuthentication, requireDev
         contract_version: SCAN_CONTRACT_VERSION,
         requested_device_id: req.memphisDevice?.requested_device_id || null,
         canonical_device_id: req.memphisDevice?.canonical_device_id || req.memphisDevice?.device_id || null,
+        release_canary_transport_probe: canaryTransportProbe,
       },
     });
   } catch (error) {

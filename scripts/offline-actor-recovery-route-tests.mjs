@@ -54,6 +54,13 @@ assert.equal(recovery.ok, true);
 assert.equal(recovery.offline_recovery_only, true);
 assert.equal(recovery.credential.credential_id, credentialId);
 
+const startRecovery = await authenticateDeviceCredentialRequest(request("tool_start_offline_occurrence"), {
+  env, store: store(revokedCredential), runReadOnlySql: resolver, now: new Date("2026-08-10T02:00:00.000Z"),
+});
+assert.equal(startRecovery.ok, true);
+assert.equal(startRecovery.offline_recovery_only, true,
+  "a cryptographically valid stale token may reach only the database-verified snapshot activation path");
+
 const generalAccess = await authenticateDeviceCredentialRequest(request("tool_get_location_scan_state"), {
   env, store: store(revokedCredential), runReadOnlySql: resolver, now: new Date("2026-08-10T02:00:00.000Z"),
 });
@@ -93,7 +100,8 @@ app.post("/scan-api/rpc",
       res.status(422).json({ ok: false, code: "invalid_json" });
       return;
     }
-    if (req.memphisDeviceAuth?.offline_recovery_only !== true || req.body?.fn !== "tool_commit_cleaning_workflow") {
+    if (req.memphisDeviceAuth?.offline_recovery_only !== true
+        || !["tool_start_offline_occurrence", "tool_commit_cleaning_workflow"].includes(req.body?.fn)) {
       res.status(403).json({ ok: false, code: "recovery_scope_violation" });
       return;
     }
@@ -118,6 +126,18 @@ try {
   });
   assert.equal(routeRecovery.status, 200, "real route order exposes the terminal function before stale-credential authentication");
   assert.deepEqual(await routeRecovery.json(), { ok: true, recovery_only: true });
+
+  const routeStartRecovery = await fetch(`${origin}/scan-api/rpc`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Device ${credentialId}.${secret}`,
+      "X-Device-Id": "KIOSK_08",
+    },
+    body: JSON.stringify({ fn: "tool_start_offline_occurrence", args: { p_device_id: "KIOSK_08" } }),
+  });
+  assert.equal(routeStartRecovery.status, 200,
+    "queued snapshot activation reaches database verification before a stale token is rejected");
 
   const routeRead = await fetch(`${origin}/scan-api/rpc`, {
     method: "POST",

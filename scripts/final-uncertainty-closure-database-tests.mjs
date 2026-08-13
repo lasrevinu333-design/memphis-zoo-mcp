@@ -67,10 +67,10 @@ assert.equal(unhealthy.ok, false);
 assert.ok(unhealthy.mismatched_functions.includes("public.tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text)"));
 const spoofedResume = sql(`select public.custodial_control_release_canary(
   '${managerId}'::uuid,'${randomUUID()}'::uuid,'KIOSK_09','resume_canary','spoofed green health','{"ok":true}'::jsonb,${q(secret)});`, { expectFailure: true });
-assert.match(spoofedResume, /cannot resume until a fresh persisted recovery probe is green/i);
+assert.match(spoofedResume, /cannot resume until a fresh persisted database recovery probe is green/i);
 const restored = JSON.parse(sql(`select public.custodial_control_release_canary(
   '${managerId}'::uuid,'${randomUUID()}'::uuid,'KIOSK_09','restore_authority','restore exact authority set',${q(JSON.stringify(unhealthy))}::jsonb,${q(secret)})::text;`));
-assert.equal(restored.restored_functions, 7);
+assert.equal(restored.restored_functions, 9);
 assert.equal(JSON.parse(sql(`select public.custodial_backend_authority_health(${q(secret)})::text;`)).ok, true);
 
 const credentialId = randomUUID();

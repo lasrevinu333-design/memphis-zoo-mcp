@@ -132,7 +132,9 @@ assert.doesNotMatch(
   "forward commit authority must not rebind an offline occurrence to the device's current employee",
 );
 assert.match(deviceAuthSource, /offline_recovery_only/);
-assert.match(deviceAuthSource, /isOfflineRecoveryCommitRequest/);
+assert.match(deviceAuthSource, /isOfflineRecoveryRequest/);
+assert.match(deviceAuthSource, /tool_start_offline_occurrence[\s\S]*tool_commit_cleaning_workflow/,
+  "stale credential recovery is limited to snapshot activation and terminal submission");
 assert.doesNotMatch(
   atomicCommitMigration,
   /v_location_id, v_device_pk, v_employee_id\s+from public\.sessions/i,

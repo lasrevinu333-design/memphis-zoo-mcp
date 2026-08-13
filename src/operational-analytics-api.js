@@ -79,9 +79,9 @@ function addCalendarDays(value, days) {
   return `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, "0")}-${String(next.getUTCDate()).padStart(2, "0")}`;
 }
 
-export function chicagoDateStartIso(value) {
+export function chicagoServiceDateStartIso(value) {
   const desiredParts = calendarDateParts(value);
-  const desired = Date.UTC(desiredParts.year, desiredParts.month - 1, desiredParts.day);
+  const desired = Date.UTC(desiredParts.year, desiredParts.month - 1, desiredParts.day, 4);
   const formatter = new Intl.DateTimeFormat("en-US", {
     timeZone: OPERATIONAL_TIME_ZONE,
     year: "numeric", month: "2-digit", day: "2-digit",
@@ -243,11 +243,11 @@ export function installOperationalAnalyticsRoutes(app, { env = process.env, supa
       if (req.query?.location_code) query = query.eq("location_code", clip(req.query.location_code, 80).toUpperCase());
       if (req.query?.date_from) {
         if (!validIsoDate(req.query.date_from)) throw Object.assign(new Error("date_from must be YYYY-MM-DD."), { status: 422 });
-        query = query.gte("started_at", chicagoDateStartIso(req.query.date_from));
+        query = query.gte("started_at", chicagoServiceDateStartIso(req.query.date_from));
       }
       if (req.query?.date_to) {
         if (!validIsoDate(req.query.date_to)) throw Object.assign(new Error("date_to must be YYYY-MM-DD."), { status: 422 });
-        query = query.lt("started_at", chicagoDateStartIso(addCalendarDays(req.query.date_to, 1)));
+        query = query.lt("started_at", chicagoServiceDateStartIso(addCalendarDays(req.query.date_to, 1)));
       }
       query = query.order("started_at", { ascending: false }).limit(normalizeLimit(req.query?.limit, 250, 1000));
       const result = await query;
