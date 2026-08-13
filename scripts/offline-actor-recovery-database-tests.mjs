@@ -24,6 +24,7 @@ const tokenHashB = createHash("sha256").update(`offline-authority-b:${stamp}`).d
 const tokenHashC = createHash("sha256").update(`offline-authority-c:${stamp}`).digest("hex");
 const startedAt = new Date(Date.now() - 8 * 60_000).toISOString();
 const endedAt = new Date(Date.now() - 3 * 60_000).toISOString();
+const entryEvidence = { entry_source: "native-nfc" };
 
 function q(value) { return `'${String(value ?? "").replaceAll("'", "''")}'`; }
 async function sql(statement, { expectFailure = false } = {}) {
@@ -38,9 +39,17 @@ async function sql(statement, { expectFailure = false } = {}) {
   }
 }
 function jsonSql({ session, completion, context, proof, device, location, credential = credentialA, start = startedAt, end = endedAt, response = { issues: [{ label: "Authority test faucet", category: "plumbing" }], alpha: 1 }, scans = [], correlation = "correlation-a" }) {
+  const canonicalScans = scans.map((event) => ({
+    client_event_id: event.client_event_id,
+    event_type: event.event_type,
+    result: event.result ?? null,
+    notes: event.notes ?? null,
+    scanned_at: event.scanned_at,
+    payload_json: event.payload_json ?? entryEvidence,
+  }));
   return `select public.tool_commit_cleaning_workflow_authoritative(
     ${q(session)},${q(completion)},${q(device)},${q(location)},${q(start)},${q(end)},
-    ${q(JSON.stringify(response))}::jsonb,${q(JSON.stringify(scans))}::jsonb,${q(correlation)},
+    ${q(JSON.stringify(response))}::jsonb,${q(JSON.stringify(canonicalScans))}::jsonb,${q(correlation)},
     ${q(context)},${q(proof)},${q(credential)},${q(execSecret)}
   )::text;`;
 }
@@ -78,6 +87,17 @@ insert into public.custodial_employee_device_assignment_history(device_id,device
 
 await sql(setup);
 assert.equal(await sql(`select count(*) from public.custodial_offline_actor_contexts where client_session_id like 'oa-${stamp}%';`), "0", "state reads must create no proof/context");
+const snapshot = JSON.parse(await sql(`select public.tool_get_offline_scan_authority_snapshot(${q(`OA-${stamp}-A`)},${q(credentialA)},${q(execSecret)})::text;`));
+assert.equal(snapshot.schema_version, "offline-scan-snapshot.v1");
+assert.equal(snapshot.contract_version, "scan.v3.offline-authority");
+assert.equal(snapshot.canonical_device_id, `OA-${stamp}-A`);
+assert.equal(snapshot.employee_id, employeeA);
+assert.equal(snapshot.employee_name, "Offline Authority Actor A");
+assert.equal(snapshot.assignment_epoch, 1);
+assert.equal(snapshot.locations.some((row) => row.location_code === codeA), true);
+assert.equal(Date.parse(snapshot.expires_at) - Date.parse(snapshot.generated_at) <= 24 * 60 * 60 * 1000, true);
+const foreignSnapshotDenied = await sql(`select public.tool_get_offline_scan_authority_snapshot(${q(`OA-${stamp}-A`)},${q(credentialB)},${q(execSecret)});`, { expectFailure: true });
+assert.match(foreignSnapshotDenied, /active authenticated employee-device assignment is required/i);
 
 const sessionA = `oa-${stamp}-accepted`;
 const contextA = await activate({ device: `OA-${stamp}-A`, location: codeA, session: sessionA });
@@ -126,13 +146,13 @@ const reassignedReplayDenied = await sql(`select public.tool_start_offline_occur
 assert.match(reassignedReplayDenied, /authoritative assignment changed/i, "reassigned exact start replay is fenced without returning the old proof");
 assert.doesNotMatch(reassignedReplayDenied, new RegExp(contextA.submission_proof), "reassigned replay never discloses the held completion proof");
 const scanId = `oa-${stamp}-scan-1`;
-const acceptedSql = jsonSql({ session: sessionA, completion: `oa-${stamp}-complete-1`, context: contextA.context_id, proof: contextA.submission_proof, device: `OA-${stamp}-A`, location: codeA, scans: [{ event_type: "scan_finish", client_event_id: scanId, scanned_at: endedAt, result: "ok", payload_json: { z: 2, a: 1 } }] });
+const acceptedSql = jsonSql({ session: sessionA, completion: `oa-${stamp}-complete-1`, context: contextA.context_id, proof: contextA.submission_proof, device: `OA-${stamp}-A`, location: codeA, scans: [{ event_type: "scan_finish", client_event_id: scanId, scanned_at: endedAt, result: "ok", payload_json: entryEvidence }] });
 const accepted = JSON.parse(await sql(acceptedSql));
 assert.equal(accepted.status, "closed");
 assert.equal(await sql(`select employee_id::text from public.sessions where client_session_id=${q(sessionA)};`), employeeA);
 const replays = await Promise.all(Array.from({ length: 8 }, () => sql(acceptedSql).then(JSON.parse)));
 assert.equal(replays.filter((result) => result.replayed === true).length, 8, "concurrent exact retries converge");
-const reorderedReplay = JSON.parse(await sql(jsonSql({ session: sessionA, completion: `oa-${stamp}-complete-1`, context: contextA.context_id, proof: contextA.submission_proof, device: `OA-${stamp}-A`, location: codeA, response: { alpha: 1, issues: [{ category: "plumbing", label: "Authority test faucet" }] }, scans: [{ payload_json: { a: 1, z: 2 }, result: "ok", scanned_at: endedAt, client_event_id: scanId, event_type: "scan_finish" }] })));
+const reorderedReplay = JSON.parse(await sql(jsonSql({ session: sessionA, completion: `oa-${stamp}-complete-1`, context: contextA.context_id, proof: contextA.submission_proof, device: `OA-${stamp}-A`, location: codeA, response: { alpha: 1, issues: [{ category: "plumbing", label: "Authority test faucet" }] }, scans: [{ payload_json: entryEvidence, result: "ok", scanned_at: endedAt, client_event_id: scanId, event_type: "scan_finish" }] })));
 assert.equal(reorderedReplay.replayed, true, "JSON object order is canonical replay");
 const correlationMismatch = JSON.parse(await sql(jsonSql({ session: sessionA, completion: `oa-${stamp}-complete-1`, context: contextA.context_id, proof: contextA.submission_proof, device: `OA-${stamp}-A`, location: codeA, correlation: "correlation-b" })));
 assert.equal(correlationMismatch.reason, "payload_fingerprint_conflict");
@@ -151,6 +171,19 @@ const malformedResult = JSON.parse(await sql(`select public.tool_commit_cleaning
 assert.equal(malformedResult.reason, "malformed_scan_evidence");
 assert.equal(await sql(`select count(*) from public.completion_responses where client_completion_id=${q(`oa-${stamp}-malformed-complete`)};`), "0");
 assert.equal(await sql(`select count(*) from public.custodial_offline_reconciliation_outbox o join public.custodial_offline_reconciliation_records r on r.reconciliation_id=o.reconciliation_id where r.client_completion_id=${q(`oa-${stamp}-malformed-complete`)} and o.notification_kind='offline_reconciliation_quarantine';`), "1", "each new quarantine has one deduplicated manager outbox record");
+
+const provenanceSession = `oa-${stamp}-provenance`;
+const provenanceStart = new Date(Date.now() - 2 * 60_000).toISOString();
+const provenanceEnd = new Date(Date.now() - 60_000).toISOString();
+const provenance = await activate({ device: `OA-${stamp}-C`, location: codeC, session: provenanceSession, start: provenanceStart, credential: credentialC });
+const unknownProvenance = JSON.parse(await sql(`select public.tool_commit_cleaning_workflow_authoritative(${q(provenanceSession)},${q(`${provenanceSession}-complete`)},${q(`OA-${stamp}-C`)},${q(codeC)},${q(provenanceStart)},${q(provenanceEnd)},'{}'::jsonb,${q(JSON.stringify([{ client_event_id: `${provenanceSession}-event`, event_type: "scan_finish", result: "ok", notes: null, scanned_at: provenanceEnd, payload_json: { entry_source: "legacy-or-unknown" } }]))}::jsonb,'provenance',${q(provenance.context_id)},${q(provenance.submission_proof)},${q(credentialC)},${q(execSecret)})::text;`));
+assert.equal(unknownProvenance.reason, "malformed_scan_evidence");
+const extraSession = `oa-${stamp}-extra-evidence`;
+const extraStart = new Date(Date.now() - 4 * 60_000).toISOString();
+const extraEnd = new Date(Date.now() - 3 * 60_000).toISOString();
+const extraContext = await activate({ device: `OA-${stamp}-C`, location: codeC, session: extraSession, start: extraStart, credential: credentialC });
+const extraEvidence = JSON.parse(await sql(`select public.tool_commit_cleaning_workflow_authoritative(${q(extraSession)},${q(`${extraSession}-complete`)},${q(`OA-${stamp}-C`)},${q(codeC)},${q(extraStart)},${q(extraEnd)},'{}'::jsonb,${q(JSON.stringify([{ client_event_id: `${extraSession}-event`, event_type: "scan_finish", result: "ok", notes: null, scanned_at: extraEnd, payload_json: { ...entryEvidence, injected: true }, injected: true }]))}::jsonb,'provenance-extra',${q(extraContext.context_id)},${q(extraContext.submission_proof)},${q(credentialC)},${q(execSecret)})::text;`));
+assert.equal(extraEvidence.reason, "malformed_scan_evidence");
 
 for (const table of ["custodial_offline_actor_contexts", "custodial_offline_submission_proofs", "custodial_offline_reconciliation_records", "custodial_offline_reconciliation_audits", "custodial_offline_scan_event_evidence"]) {
   const denial = await sql(`set role service_role; delete from public.${table};`, { expectFailure: true });

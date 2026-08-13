@@ -33,6 +33,7 @@ import { installManagerNotificationRoutes } from "./manager-notifications.js";
 import { installEmployeeNotificationRoutes } from "./employee-notifications.js";
 import { installOperationalAnalyticsRoutes } from "./operational-analytics-api.js";
 import { normalizeAttendanceRecord, toNullableNonNegativeInteger } from "./attendance-state.js";
+import { normalizeCanonicalScanEvidence } from "./scan-evidence.js";
 import {
   guestFeatureState,
   normalizeFeedbackInput,
@@ -88,6 +89,7 @@ const SCAN_RPC_ALLOWLIST = new Set([
   "tool_get_system_settings",
   "tool_list_active_employees",
   "tool_get_location_scan_state",
+  "tool_get_offline_scan_authority_snapshot",
   "tool_start_offline_occurrence",
   "tool_complete_session",
   "tool_ping_device",
@@ -255,6 +257,7 @@ const SCAN_READ_FUNCTIONS = new Set([
   "tool_get_system_settings",
   "tool_list_active_employees",
   "tool_get_location_scan_state",
+  "tool_get_offline_scan_authority_snapshot",
 ]);
 
 function clientIp(req) {
@@ -288,6 +291,7 @@ function canonicalizeScanArguments(fn, args, device) {
   if (canonicalDeviceId) {
     if ("p_device_id" in canonicalArgs || [
       "tool_get_location_scan_state",
+      "tool_get_offline_scan_authority_snapshot",
       "tool_start_offline_occurrence",
       "tool_complete_session",
       "tool_ping_device",
@@ -355,9 +359,7 @@ function prepareScanRpcCall(fn, args) {
     if (!nextArgs.p_response_json || typeof nextArgs.p_response_json !== "object" || Array.isArray(nextArgs.p_response_json)) {
       throw Object.assign(new Error("p_response_json must be a JSON object."), { status: 422, code: "22023" });
     }
-    if (!Array.isArray(nextArgs.p_scan_evidence)) {
-      throw Object.assign(new Error("p_scan_evidence must be a JSON array."), { status: 422, code: "22023" });
-    }
+    nextArgs.p_scan_evidence = normalizeCanonicalScanEvidence(nextArgs.p_scan_evidence);
   }
   return { fn: normalizedFn, args: nextArgs };
 }
@@ -375,7 +377,7 @@ function offlineAuthoritySecret() {
 
 function bindOfflineActorProof(fn, args, credential) {
   const normalizedFn = String(fn || "").trim();
-  if (!["tool_commit_cleaning_workflow", "tool_complete_session", "tool_start_offline_occurrence"].includes(normalizedFn)) return { fn: normalizedFn, args };
+  if (!["tool_commit_cleaning_workflow", "tool_complete_session", "tool_start_offline_occurrence", "tool_get_offline_scan_authority_snapshot"].includes(normalizedFn)) return { fn: normalizedFn, args };
   if (!args || typeof args !== "object" || Array.isArray(args)) {
     throw Object.assign(new Error("Offline authority arguments must be a JSON object."), { status: 422, code: "22023" });
   }
@@ -385,6 +387,16 @@ function bindOfflineActorProof(fn, args, credential) {
     const error = new Error("An authenticated device credential is required for offline authority.");
     error.status = 401;
     throw error;
+  }
+  if (normalizedFn === "tool_get_offline_scan_authority_snapshot") {
+    return {
+      fn: normalizedFn,
+      args: {
+        p_device_id: nextArgs.p_device_id,
+        p_authenticated_credential_id: credential.credential_id,
+        p_backend_execution_secret: secret,
+      },
+    };
   }
   if (normalizedFn === "tool_start_offline_occurrence") {
     nextArgs.p_authenticated_credential_id = credential.credential_id;
@@ -421,9 +433,7 @@ function bindOfflineActorProof(fn, args, credential) {
   if (!nextArgs.p_response_json || typeof nextArgs.p_response_json !== "object" || Array.isArray(nextArgs.p_response_json)) {
     throw Object.assign(new Error("p_response_json must be a JSON object."), { status: 422, code: "22023" });
   }
-  if (!Array.isArray(nextArgs.p_scan_evidence)) {
-    throw Object.assign(new Error("p_scan_evidence must be a JSON array."), { status: 422, code: "22023" });
-  }
+  nextArgs.p_scan_evidence = normalizeCanonicalScanEvidence(nextArgs.p_scan_evidence);
   const response = { ...nextArgs.p_response_json };
   const requested = response.__custodial_offline_reconciliation_v1;
   if (!requested || typeof requested !== "object" || Array.isArray(requested)) {

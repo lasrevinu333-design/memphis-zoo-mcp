@@ -415,7 +415,15 @@ begin
   end if;
   begin
     for v_item in select value from jsonb_array_elements(p_scan_evidence) loop
-      if jsonb_typeof(v_item)<>'object' or pg_column_size(v_item)>65536 or jsonb_typeof(v_item->'event_type')<>'string' or jsonb_typeof(v_item->'client_event_id')<>'string' or jsonb_typeof(v_item->'scanned_at')<>'string' then raise exception using errcode='22023',message='scan event shape is invalid'; end if;
+      if jsonb_typeof(v_item)<>'object' or pg_column_size(v_item)>65536
+         or not (v_item ?& array['client_event_id','event_type','result','notes','scanned_at','payload_json'])
+         or exists(select 1 from jsonb_object_keys(v_item) k where k not in ('client_event_id','event_type','result','notes','scanned_at','payload_json'))
+         or jsonb_typeof(v_item->'event_type')<>'string' or jsonb_typeof(v_item->'client_event_id')<>'string' or jsonb_typeof(v_item->'scanned_at')<>'string'
+         or coalesce(jsonb_typeof(v_item->'result'),'null') not in ('string','null') or coalesce(jsonb_typeof(v_item->'notes'),'null') not in ('string','null')
+         or jsonb_typeof(v_item->'payload_json')<>'object' or not ((v_item->'payload_json') ? 'entry_source')
+         or exists(select 1 from jsonb_object_keys(v_item->'payload_json') k where k<>'entry_source')
+         or (v_item->'payload_json'->>'entry_source') not in ('native-nfc','manual-qr-fallback')
+      then raise exception using errcode='22023',message='scan event shape or provenance is invalid'; end if;
       v_event_type := nullif(btrim(v_item->>'event_type'),''); v_event_id := nullif(btrim(v_item->>'client_event_id'),'');
       if v_event_type not in ('scan_received','scan_blocked','scan_start','scan_finish','scan_resume_pending','scan_invalid_location','scan_unauthorized_device','scan_error') or v_event_id is null or length(v_event_id)>200 or length(coalesce(v_item->>'result',''))>200 or length(coalesce(v_item->>'notes',''))>4000 or jsonb_typeof(coalesce(v_item->'payload_json','{}'::jsonb))<>'object' or pg_column_size(coalesce(v_item->'payload_json','{}'::jsonb))>32768 then raise exception using errcode='22023',message='scan event fields are invalid'; end if;
       v_event_time := (v_item->>'scanned_at')::timestamptz;
