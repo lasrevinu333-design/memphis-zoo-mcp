@@ -315,7 +315,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "3acb822cf35291ac7dae12824d29ecbaa33440cf"
+        "object_id": "fcdb2c7d6930803fa43386daf9ddcd40939e7039"
       },
       {
         "path": "public/moxie-assets/contacts-creekside-animal.png",
@@ -365,7 +365,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "6c5e4b6a88599e7f6e376b8e3931af885b5f531b"
+        "object_id": "3917c6faa76f44060ba91b2ea452b89dc27fc7b3"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -380,7 +380,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "15a11fed75b06665746701595fbe29d57c40f62e"
+        "object_id": "02ab1d40a52ad6249cdb7268418396bf620e5448"
       },
       {
         "path": "research/european_herbalism_through_paracelsus.md",
@@ -495,7 +495,7 @@
       {
         "path": "scripts/custodial-repair-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "36d99c85938572f2af4d4342fa1ccd1da1e70171"
+        "object_id": "b35af6b96596664ce739f8785dde70781289e443"
       },
       {
         "path": "scripts/dashboard-recent-activity-contract-tests.mjs",
@@ -568,6 +568,11 @@
         "object_id": "464dbe0d21ad395b1776f379a4802e4eaccec959"
       },
       {
+        "path": "scripts/final-uncertainty-closure-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "031a7e5d2be7ca5fb7aebd7fdff354a66c6a9800"
+      },
+      {
         "path": "scripts/fixtures/static-weekly-scheduler/canary-authority.json",
         "mode": "100644",
         "object_id": "4d22eeec506909e49fce9b3e6edb3a3207bacba1"
@@ -620,7 +625,7 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "74426a379afbf24b1a6c455ce6bfce7142fa809c"
+        "object_id": "fa630cdf9ce93dc3878f08e109dedbe5a75dabcf"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
@@ -645,7 +650,7 @@
       {
         "path": "scripts/live-release-alignment-check.mjs",
         "mode": "100644",
-        "object_id": "5d18ca2763e176a3c223de76c00b26c48eba35c4"
+        "object_id": "c40f3bb99f851680b4cfd24a80108c0efd0ec92f"
       },
       {
         "path": "scripts/location-group-audit-reminder-aware.mjs",
@@ -670,7 +675,7 @@
       {
         "path": "scripts/manager-notification-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "d6643703ce6127059364966ed027923b6e7c97bc"
+        "object_id": "fd2266d9a1f05a25ca9431f67cc7a3ec5be2bf49"
       },
       {
         "path": "scripts/mcp-connector-auth-tests.mjs",
@@ -765,7 +770,7 @@
       {
         "path": "scripts/operations-leadership-mobile-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "468e32dd56cd48bc947381ef2bc010426691d41e"
+        "object_id": "f90f80b721d8d01c5cf2b21b6ad6df01e8e69be4"
       },
       {
         "path": "scripts/operations-leadership-mobile-database-tests.mjs",
@@ -865,7 +870,7 @@
       {
         "path": "scripts/release-closure-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "38bf59fda417a8e50dccdd4e1543cd1bb3027958"
+        "object_id": "b383487abf4bad218e0e4157749068d8f91f5c8f"
       },
       {
         "path": "scripts/restroom-rebalance-route-tests.mjs",
@@ -1445,7 +1450,7 @@
       {
         "path": "src/manager-notifications.js",
         "mode": "100644",
-        "object_id": "7e062834c8abe591096eb03f6d61323ffdd79143"
+        "object_id": "281b56ad93f66fe080212ac90d9eb2acae303d2a"
       },
       {
         "path": "src/mcp/create-mcp-server.js",
@@ -1660,12 +1665,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "63a14e4d86814bb5fff100b42c76af3b5e8dc654"
+        "object_id": "deef5c36ca845ceccc25d301d9b9bc4af8c73892"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "9e1b1aa9adcb81e5dbbefe8088b09854fed5110d"
+        "object_id": "9446101f98168b0c130c3b6088fe0be4cb3ee54e"
       },
       {
         "path": "supabase/config.toml",
@@ -2600,12 +2605,12 @@
       {
         "path": "supabase/migrations/20260813050000_offline_snapshot_operational_truth_closure.sql",
         "mode": "100644",
-        "object_id": "8dc40756741e0183e90a99c9cf526aa877d61aa7"
+        "object_id": "8abc4d1957382b05c238b8f47c5ce798e14a118a"
       },
       {
         "path": "supabase/migrations/20260813060000_release_canary_operational_recovery.sql",
         "mode": "100644",
-        "object_id": "7e0fe23e7f89d96aee02a5c765501f0a5b2d6547"
+        "object_id": "38bb3a1aa6c4cd100984845fa0dfed51efc20469"
       },
       {
         "path": "tmp/write_probe.txt",
@@ -2613,7 +2618,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 505,
+    "authority_path_count": 506,
     "migration_path_count": 71,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate requires externally supplied exact expected_commit and expected_tree, deterministically enumerates every tracked expected-tree entry, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file as its exact tree blob."
