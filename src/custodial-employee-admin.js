@@ -195,7 +195,7 @@ async function loadPhoneAdminSnapshot(db) {
       .select("assignment_change_id,device_identifier,previous_employee_name,new_employee_name,change_reason,changed_at")
       .order("changed_at", { ascending: false }).limit(30),
     db.from("device_sync_status")
-      .select("device_id,queue_count,oldest_item_at,retry_count,last_error,updated_at"),
+      .select("device_id,queue_count,oldest_item_at,retry_count,last_error,queue_authority_groups,updated_at"),
   ]);
   for (const result of [devicesResult, employeesResult, credentialsResult, historyResult, syncResult]) if (result.error) throw result.error;
   const snapshotEntries = await Promise.all((devicesResult.data || []).map(async (deviceRow) => {
@@ -227,6 +227,14 @@ async function loadPhoneAdminSnapshot(db) {
     const pendingWorkStatus = !sync
       ? "unavailable"
       : (!Number.isFinite(syncReportedAt) || Date.now() - syncReportedAt > 5 * 60 * 1000 ? "stale" : "current");
+    const pendingWorkGroups = (Array.isArray(sync?.queue_authority_groups) ? sync.queue_authority_groups : []).map((group) => ({
+      employee_id: group.employee_id || null,
+      employee_name: employeeById.get(String(group.employee_id || ""))?.display_name || null,
+      assignment_epoch: Number(group.assignment_epoch),
+      snapshot_id: group.snapshot_id || null,
+      queue_count: Math.max(0, Number(group.queue_count || 0)),
+      oldest_item_at: group.oldest_item_at || null,
+    })).filter((group) => group.employee_id && Number.isSafeInteger(group.assignment_epoch) && group.assignment_epoch >= 1 && group.queue_count > 0);
     return {
       device_pk: row?.id || null,
       device_id: deviceId,
@@ -246,6 +254,8 @@ async function loadPhoneAdminSnapshot(db) {
       pending_work_retry_count: Math.max(0, Number(sync?.retry_count || 0)),
       pending_work_last_error: sync?.last_error || null,
       pending_work_reported_at: sync?.updated_at || null,
+      pending_work_groups: pendingWorkGroups,
+      pending_work_unbound_count: Math.max(0, Number(sync?.queue_count || 0) - pendingWorkGroups.reduce((total, group) => total + group.queue_count, 0)),
       offline_authority_expires_at: snapshot?.expires_at || null,
       offline_authority_generated_at: snapshot?.generated_at || null,
       offline_authority_employee_id: snapshot?.employee_id || null,

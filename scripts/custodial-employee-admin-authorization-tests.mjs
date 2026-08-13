@@ -14,12 +14,22 @@ const env = {
 };
 const managerId = "51000000-0000-4000-8000-000000000001";
 const employeeId = "51000000-0000-4000-8000-000000000002";
+const priorEmployeeId = "51000000-0000-4000-8000-000000000006";
 const devicePk = "51000000-0000-4000-8000-000000000003";
 const employee = {
   id: employeeId,
   employee_code: "EMP002",
   display_name: "Authorization Contract Employee",
   active: true,
+  role: "staff",
+  notes: null,
+  updated_at: new Date().toISOString(),
+};
+const priorEmployee = {
+  id: priorEmployeeId,
+  employee_code: "EMP001",
+  display_name: "Departed Authorization Employee",
+  active: false,
   role: "staff",
   notes: null,
   updated_at: new Date().toISOString(),
@@ -54,7 +64,7 @@ class Query {
 
   result() {
     if (this.table === "devices") return { data: [structuredClone(device)], error: null };
-    if (this.table === "employees") return { data: [structuredClone(employee)], error: null };
+    if (this.table === "employees") return { data: [structuredClone(employee), structuredClone(priorEmployee)], error: null };
     if (this.table === "device_auth_credentials") {
       return { data: [{
         credential_id: "51000000-0000-4000-8000-000000000004",
@@ -70,6 +80,10 @@ class Query {
     if (this.table === "device_sync_status") return { data: [{
       device_id: devicePk, queue_count: 2, oldest_item_at: "2026-08-13T12:00:00.000Z",
       retry_count: 1, last_error: "offline", updated_at: new Date().toISOString(),
+      queue_authority_groups: [{
+        employee_id: priorEmployeeId, assignment_epoch: 3, snapshot_id: "a".repeat(64),
+        queue_count: 1, oldest_item_at: "2026-08-13T12:00:00.000Z",
+      }],
     }], error: null };
     if (this.table === "custodial_offline_scan_authority_snapshots") return { data: [{
       device_id: devicePk, employee_id: employeeId, assignment_epoch: 4,
@@ -198,6 +212,15 @@ try {
       assert.equal(result.body.data.devices[0].assignment_epoch, 4);
       assert.equal(result.body.data.devices[0].pending_work_count, 2);
       assert.equal(result.body.data.devices[0].pending_work_status, "current");
+      assert.equal(result.body.data.devices[0].pending_work_unbound_count, 1);
+      assert.deepEqual(result.body.data.devices[0].pending_work_groups, [{
+        employee_id: priorEmployeeId,
+        employee_name: priorEmployee.display_name,
+        assignment_epoch: 3,
+        snapshot_id: "a".repeat(64),
+        queue_count: 1,
+        oldest_item_at: "2026-08-13T12:00:00.000Z",
+      }]);
       assert.equal(result.body.data.devices[0].offline_authority_assignment_epoch, 4);
       assert.equal(result.body.data.devices[0].offline_authority_employee_id, employeeId);
       assert.equal(result.body.data.devices[0].offline_authority_employee_name, employee.display_name);

@@ -67,7 +67,7 @@ const authorityInventory = trackedInventory.filter(({ path }) => path !== genera
 const migrations = authorityInventory
   .filter(({ path }) => /^supabase\/migrations\/[^/]+\.sql$/.test(path))
   .map(({ path }) => ({ name: path.slice("supabase/migrations/".length) }));
-assert.equal(migrations.length, 73, "release authority inventory must bind every migration at this head");
+assert.equal(migrations.length, 74, "release authority inventory must bind every migration at this head");
 const output = {
   artifact: "integrated-backend-authority-release-evidence.v2",
   release_id: frontendManifest.release_id,
@@ -89,6 +89,7 @@ const output = {
     canary_operational_recovery_phase: "20260813060000 adds durable exact-device pause and known-good forward restoration of canonical authority functions",
     operational_service_date_phase: "20260813070000 unifies schedules, turnover, occurrences, dashboard truth, and recovery probes at the 04:00 Central service date",
     operational_boundary_closure_phase: "20260813141806 aligns notification service dates, exact activation replay identity, and the captured rollback definition",
+    device_sync_actor_groups_phase: "20260813173000 stores verified pending work groups by issued snapshot, employee, and assignment epoch while retaining the Build 22 aggregate reporter",
   },
   rollback: input.rollback,
   cutover: input.cutover,

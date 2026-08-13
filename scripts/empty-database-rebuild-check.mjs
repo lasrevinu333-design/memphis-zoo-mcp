@@ -700,6 +700,12 @@ insert into public.devices(id, device_id, device_name, active, assigned_employee
 values ('00000000-0000-4000-8000-00000000f103', 'REBUILD-FINISH-DEVICE', 'Rebuild Finish Device', true, '00000000-0000-4000-8000-00000000f101');
 insert into public.device_auth_credentials(credential_id,device_id,token_hash,confirmed_at,expires_at)
 values ('00000000-0000-4000-8000-00000000f110','00000000-0000-4000-8000-00000000f103',repeat('f',64),now(),now()+interval '1 day');
+insert into public.custodial_offline_scan_authority_snapshots(
+  snapshot_id,device_id,employee_id,assignment_epoch,credential_id,generated_at,expires_at,locations_json
+) values (
+  repeat('1',64),'00000000-0000-4000-8000-00000000f103','00000000-0000-4000-8000-00000000f101',1,
+  '00000000-0000-4000-8000-00000000f110',now(),now()+interval '12 hours','[]'::jsonb
+);
 insert into public.custodial_employee_device_assignment_history(device_id,device_identifier,new_employee_id,new_employee_name,change_reason,source)
 values ('00000000-0000-4000-8000-00000000f103','REBUILD-FINISH-DEVICE','00000000-0000-4000-8000-00000000f101','Rebuild Finish Test','empty rebuild authority fixture','test');
 insert into public.employees(id, employee_code, display_name, active, role)
@@ -732,6 +738,51 @@ declare
   v_message public.msg_messages%rowtype;
   v_old_message public.msg_messages%rowtype;
 begin
+  perform public.tool_report_device_sync_status_v2(
+    'REBUILD-FINISH-DEVICE',3,now()-interval '3 hours',2,null,'rebuild-v2',null,'rebuild-sync-v2',
+    jsonb_build_array(jsonb_build_object(
+      'employee_id','00000000-0000-4000-8000-00000000f101','assignment_epoch',1,
+      'snapshot_id',repeat('1',64),'queue_count',2,'oldest_item_at',now()-interval '2 hours'))
+  );
+  if not exists(
+    select 1 from public.device_sync_status s
+    where s.device_id='00000000-0000-4000-8000-00000000f103'
+      and s.queue_count=3 and jsonb_array_length(s.queue_authority_groups)=1
+      and s.queue_authority_groups->0->>'employee_id'='00000000-0000-4000-8000-00000000f101'
+      and (s.queue_authority_groups->0->>'assignment_epoch')::integer=1
+      and (s.queue_authority_groups->0->>'queue_count')::integer=2
+  ) then raise exception 'Actor-bound device sync status was not persisted exactly'; end if;
+  begin
+    perform public.tool_report_device_sync_status_v2(
+      'REBUILD-FINISH-DEVICE',1,now(),0,null,'rebuild-v2',null,'wrong-epoch',
+      jsonb_build_array(jsonb_build_object(
+        'employee_id','00000000-0000-4000-8000-00000000f101','assignment_epoch',2,
+        'snapshot_id',repeat('1',64),'queue_count',1,'oldest_item_at',now()))
+    );
+    raise exception 'Wrong assignment epoch was accepted for actor-bound pending work';
+  exception when insufficient_privilege then null; end;
+  begin
+    perform public.tool_report_device_sync_status_v2(
+      'REBUILD-FINISH-DEVICE',1,now(),0,null,'rebuild-v2',null,'missing-epoch',
+      jsonb_build_array(jsonb_build_object(
+        'employee_id','00000000-0000-4000-8000-00000000f101',
+        'snapshot_id',repeat('1',64),'queue_count',1,'oldest_item_at',now()))
+    );
+    raise exception 'Missing assignment epoch was accepted for actor-bound pending work';
+  exception when invalid_parameter_value then null; end;
+  perform public.tool_report_device_sync_status(
+    'REBUILD-FINISH-DEVICE',1,now(),0,null,'build-22',null,'rebuild-sync-legacy'
+  );
+  if not exists(
+    select 1 from public.device_sync_status s
+    where s.device_id='00000000-0000-4000-8000-00000000f103'
+      and s.queue_count=1 and s.queue_authority_groups='[]'::jsonb
+  ) then raise exception 'Build 22 aggregate sync reporter compatibility was not retained'; end if;
+  if has_function_privilege(
+    'service_role',
+    'public.custodial_report_device_sync_status_internal(text,integer,timestamp with time zone,integer,timestamp with time zone,text,text,text,jsonb)',
+    'EXECUTE'
+  ) then raise exception 'Service role can execute the internal device sync reporter directly'; end if;
   v_start := public.tool_start_session_v2(
     'REBUILD_FINISH',
     'REBUILD-FINISH-DEVICE',

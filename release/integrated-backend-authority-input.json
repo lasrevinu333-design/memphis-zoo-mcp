@@ -47,6 +47,7 @@
       "apply 20260813060000_release_canary_operational_recovery.sql",
       "apply 20260813070000_operational_service_date_foundation.sql",
       "apply 20260813141806_custodial_operational_boundary_closure.sql",
+      "apply 20260813173000_device_sync_actor_groups.sql",
       "require a green authority health gate and direct-DML denial probes before routing traffic"
     ],
     "rollback": {
@@ -62,6 +63,7 @@
         ,"present-but-broken and missing canonical authority functions restore to their captured known-good definitions while the canary remains paused"
         ,"schedule, turnover, occurrence, and dashboard service dates all change at the same 04:00 America/Chicago boundary"
         ,"employee and manager notifications use the same service date; activation replay returns frozen actor identity and its rollback definition remains exact"
+        ,"pending phone work reports every issued snapshot employee and assignment epoch separately; legacy aggregate-only reports remain explicitly unbound"
       ]
     }
   },
