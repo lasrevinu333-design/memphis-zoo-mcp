@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { lstatSync, readFileSync, realpathSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { assertManifestContract, assertExactReleasePair, assertObservedSchemaIdentity } from "../src/release-contract.js";
+import { assertBackendFrontendIdentity, assertFrontendReleaseIdentity, assertManifestContract, assertExactReleasePair, assertObservedSchemaIdentity } from "../src/release-contract.js";
 import { assertSchemaAlignment } from "../src/schema-transition.js";
 
 const root = realpathSync(resolve(fileURLToPath(new URL("..", import.meta.url))));
@@ -70,6 +70,9 @@ assert.equal(frontend.frontend_commit_sha, pair.frontend_commit_sha, "frontend r
 assert.equal(deployment.frontend_commit_sha, pair.frontend_commit_sha, "frontend deployment commit is not the supplied exact pair");
 assertManifestContract(backend, canonicalInput);
 assertManifestContract(frontend, canonicalInput);
+assertBackendFrontendIdentity(backend, canonicalInput);
+assertFrontendReleaseIdentity(frontend, canonicalInput);
+assertFrontendReleaseIdentity(deployment, canonicalInput);
 assertObservedSchemaIdentity(observed, backend.schema?.fingerprint);
 const schemaAlignment = assertSchemaAlignment({ backendManifest: backend, frontendManifest: frontend, deploymentManifest: deployment });
 assert.equal(health.ok, true, "backend dependency health is not green");

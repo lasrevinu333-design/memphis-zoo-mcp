@@ -23,11 +23,25 @@ export function assertObservedSchemaIdentity(identity, expectedFingerprint) {
 }
 
 export function assertManifestContract(manifest, expected) {
+  assert.equal(manifest?.release_id, expected.release_id,
+    "release_id must equal the source-controlled release identity");
   assert.deepEqual(manifest?.api_contract_versions, expected.api_contract_versions,
     "api_contract_versions must equal the release's canonical contract");
   assert.deepEqual(manifest?.queue_compatibility_versions, expected.queue_compatibility_versions,
     "queue_compatibility_versions must equal the release's canonical contract");
   assert.deepEqual(manifest?.minimum_supported, expected.minimum_supported,
     "minimum_supported must equal the release's canonical minimum versions");
+  return true;
+}
+
+export function assertFrontendReleaseIdentity(manifest, expected) {
+  assert.equal(manifest?.frontend_commit_sha, expected.frontend_commit_sha,
+    "frontend_commit_sha must equal the source-controlled frontend identity");
+  return true;
+}
+
+export function assertBackendFrontendIdentity(manifest, expected) {
+  assert.equal(manifest?.frontend?.commit_sha, expected.frontend_commit_sha,
+    "backend embedded frontend commit must equal the source-controlled frontend identity");
   return true;
 }

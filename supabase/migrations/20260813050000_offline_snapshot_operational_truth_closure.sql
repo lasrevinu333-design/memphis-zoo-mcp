@@ -167,7 +167,7 @@ end $function$;
 -- Never-cleaned locations can only be due when they have a current operational
 -- day assignment. Cancelled, inactive, and unassigned rows remain not_cleaned.
 create or replace view public.v_location_dashboard_status as
-with op_day as (select public.operational_day_start(now()) day_start, public.sch_service_date(now()) service_date),
+with op_day as (select public.operational_day_start(now()) day_start, public.sch_service_date(public.operational_day_start(now())) service_date),
 scheduled_baseline as (
   select membership.location_id, min((od.service_date + schedule.coverage_start::time) at time zone 'America/Chicago') baseline_at
   from op_day od join lateral public.sch_get_daily_schedule_with_purpose(od.service_date) schedule on schedule.status='ASSIGNED' and schedule.assigned_employee_id is not null and coalesce(schedule.coverage_purpose,'area_owner')<>'reminder'
@@ -207,13 +207,25 @@ begin
   update public.ops_manager_notification_queue q set status='cancelled',completed_at=now(),leased_until=null,lease_token=null,
     last_error='event occurrence is no longer upcoming',updated_at=now()
   where q.notification_type='event_digest' and (q.status='pending' or (q.status='leased' and q.leased_until<now()))
-    and not case when coalesce(q.data_json->>'next_event_starts_at','') ~ '^\d{4}-\d{2}-\d{2}T'
-      then (q.data_json->>'next_event_starts_at')::timestamptz>now() else false end;
+    and not exists (
+      select 1 from public.events_app_events e
+      where e.id=case when coalesce(q.data_json->>'next_event_id','') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+        then (q.data_json->>'next_event_id')::uuid else null end
+        and e.status='SCHEDULED'
+        and ((e.event_date+e.start_time) at time zone 'America/Chicago')>now()
+        and to_jsonb((e.event_date+e.start_time) at time zone 'America/Chicago')=q.data_json->'next_event_starts_at'
+    );
   return query with candidates as (
     select q.queue_id from public.ops_manager_notification_queue q
     where ((q.status='pending' and q.available_at<=now()) or (q.status='leased' and q.leased_until<now())) and q.attempts<q.max_attempts
-      and (q.notification_type<>'event_digest' or case when coalesce(q.data_json->>'next_event_starts_at','') ~ '^\d{4}-\d{2}-\d{2}T'
-        then (q.data_json->>'next_event_starts_at')::timestamptz>now() else false end)
+      and (q.notification_type<>'event_digest' or exists (
+        select 1 from public.events_app_events e
+        where e.id=case when coalesce(q.data_json->>'next_event_id','') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+          then (q.data_json->>'next_event_id')::uuid else null end
+          and e.status='SCHEDULED'
+          and ((e.event_date+e.start_time) at time zone 'America/Chicago')>now()
+          and to_jsonb((e.event_date+e.start_time) at time zone 'America/Chicago')=q.data_json->'next_event_starts_at'
+      ))
     order by q.available_at,q.created_at,q.queue_id for update skip locked limit greatest(1,least(coalesce(p_limit,20),100))
   ) update public.ops_manager_notification_queue q set status='leased',attempts=q.attempts+1,leased_at=now(),
     leased_until=now()+make_interval(secs=>greatest(15,least(coalesce(p_lease_seconds,120),900))),lease_token=gen_random_uuid(),
@@ -228,8 +240,14 @@ begin
   select * into v_row from public.ops_manager_notification_queue where queue_id=p_queue_id and status='leased' and lease_token=p_lease_token for update;
   if v_row.queue_id is null then raise exception using errcode='P0002',message='Notification job lease was not found'; end if;
   if v_row.notification_type='event_digest' then
-    v_event_current:=case when coalesce(v_row.data_json->>'next_event_starts_at','') ~ '^\d{4}-\d{2}-\d{2}T'
-      then (v_row.data_json->>'next_event_starts_at')::timestamptz>now() else false end;
+    select exists (
+      select 1 from public.events_app_events e
+      where e.id=case when coalesce(v_row.data_json->>'next_event_id','') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+        then (v_row.data_json->>'next_event_id')::uuid else null end
+        and e.status='SCHEDULED'
+        and ((e.event_date+e.start_time) at time zone 'America/Chicago')>now()
+        and to_jsonb((e.event_date+e.start_time) at time zone 'America/Chicago')=v_row.data_json->'next_event_starts_at'
+    ) into v_event_current;
   end if;
   if not v_event_current then
     update public.ops_manager_notification_queue set status='cancelled',completed_at=now(),leased_until=null,lease_token=null,

@@ -41,6 +41,8 @@ sql(`
 `);
 const staleStatus = sql(`select status_code||'|'||coalesce(open_session_status,'none') from public.v_location_dashboard_status where location_id='${locationId}'::uuid;`);
 assert.equal(staleStatus, "not_cleaned|none", "a prior-operational-day abandoned session cannot mask current readiness as in progress");
+assert.equal(sql(`select public.sch_service_date(public.operational_day_start('2026-08-13 02:00:00-05'::timestamptz));`), "2026-08-12",
+  "the schedule service date must stay on the same operational day before the 04:00 Central cutoff");
 
 sql(`select public.custodial_configure_backend_execution_key(
   encode(extensions.digest(convert_to(${q(secret)},'UTF8'),'sha256'),'hex'),'final uncertainty test');`);
@@ -76,14 +78,34 @@ assert.equal(sql(`select count(*) from public.ops_manager_claim_notification_job
 assert.equal(sql(`select status from public.ops_manager_notification_queue where job_key=${q(expiredKey)};`), "cancelled");
 
 const crossingKey = `event-crossing-${stamp}`;
-sql(`insert into public.ops_manager_notification_queue(job_key,credential_id,manager_id,notification_type,title,body,data_json)
+const eventId = randomUUID();
+sql(`insert into public.events_app_events(id,event_name,location_group_id,event_date,start_time,end_date,status,event_scope,display_location,needs_review)
+  select '${eventId}'::uuid,'Uncertainty canonical event',id,(now() at time zone 'America/Chicago')::date,
+    ((now() at time zone 'America/Chicago')+interval '1 hour')::time,(now() at time zone 'America/Chicago')::date,
+    'SCHEDULED','ZOO_WIDE','Zoo Footprint',false from public.location_groups order by id limit 1;
+  insert into public.ops_manager_notification_queue(job_key,credential_id,manager_id,notification_type,title,body,data_json)
   values (${q(crossingKey)},'${credentialId}'::uuid,'${managerId}'::uuid,'event_digest','Crossing event','Must expire before finish',
-    jsonb_build_object('kind','event_digest','next_event_starts_at',to_char(now()+interval '1 hour','YYYY-MM-DD"T"HH24:MI:SSOF')));`);
+    jsonb_build_object('kind','event_digest','next_event_id','${eventId}'::uuid,'next_event_starts_at',
+      (select (event_date+start_time) at time zone 'America/Chicago' from public.events_app_events where id='${eventId}'::uuid)));`);
 const lease = JSON.parse(sql(`select row_to_json(q)::text from public.ops_manager_claim_notification_jobs('uncertainty-worker',10,120) q where q.job_key=${q(crossingKey)};`));
-sql(`update public.ops_manager_notification_queue set data_json=jsonb_set(data_json,'{next_event_starts_at}',to_jsonb(to_char(now()-interval '1 second','YYYY-MM-DD"T"HH24:MI:SSOF'))) where queue_id='${lease.queue_id}'::uuid;`);
+sql(`update public.events_app_events set status='CANCELLED',cancelled_at=now(),cancelled_by='final uncertainty test' where id='${eventId}'::uuid;`);
 const finished = JSON.parse(sql(`select row_to_json(public.ops_manager_finish_notification_job('${lease.queue_id}'::uuid,'${lease.lease_token}'::uuid,true,'must-not-be-recorded',null,30))::text;`));
-assert.equal(finished.status, "cancelled", "an event crossing its start while leased cannot be recorded as sent");
+assert.equal(finished.status, "cancelled", "an event cancelled while leased cannot be recorded as sent");
 assert.equal(finished.provider_message_id, null);
 
+const rescheduledId = randomUUID();
+const rescheduledKey = `event-rescheduled-${stamp}`;
+sql(`insert into public.events_app_events(id,event_name,location_group_id,event_date,start_time,end_date,status,event_scope,display_location,needs_review)
+  select '${rescheduledId}'::uuid,'Uncertainty rescheduled event',id,(now() at time zone 'America/Chicago')::date,
+    ((now() at time zone 'America/Chicago')+interval '2 hours')::time,(now() at time zone 'America/Chicago')::date,
+    'SCHEDULED','ZOO_WIDE','Zoo Footprint',false from public.location_groups order by id limit 1;
+  insert into public.ops_manager_notification_queue(job_key,credential_id,manager_id,notification_type,title,body,data_json)
+  values (${q(rescheduledKey)},'${credentialId}'::uuid,'${managerId}'::uuid,'event_digest','Rescheduled event','Old occurrence must not send',
+    jsonb_build_object('kind','event_digest','next_event_id','${rescheduledId}'::uuid,'next_event_starts_at',
+      (select (event_date+start_time) at time zone 'America/Chicago' from public.events_app_events where id='${rescheduledId}'::uuid)));
+  update public.events_app_events set start_time=((now() at time zone 'America/Chicago')+interval '3 hours')::time where id='${rescheduledId}'::uuid;`);
+assert.equal(sql(`select count(*) from public.ops_manager_claim_notification_jobs('uncertainty-worker',10,120) where job_key=${q(rescheduledKey)};`), "0");
+assert.equal(sql(`select status from public.ops_manager_notification_queue where job_key=${q(rescheduledKey)};`), "cancelled");
+
 console.log(JSON.stringify({ ok: true, stale_session_masked: false, spoofed_authority_health_accepted: false,
-  expired_event_claimed: false, crossing_event_recorded_sent: false }, null, 2));
+  expired_event_claimed: false, cancelled_event_recorded_sent: false, rescheduled_event_claimed: false }, null, 2));

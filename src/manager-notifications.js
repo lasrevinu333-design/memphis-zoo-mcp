@@ -212,6 +212,11 @@ export function createPushRuntime({ db, env }) {
       throw error;
     }
     const token = await accessToken(PUSH_SCOPE);
+    if (!eventReminderIsCurrent(job)) {
+      const error = new Error("The event occurrence is no longer upcoming.");
+      error.expired = true;
+      throw error;
+    }
     const collapseKey = `memphis-${clip(channelId, 48).toLowerCase().replace(/[^a-z0-9_-]+/g, "-") || "operations"}`;
     const response = await fetch(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(account.project_id)}/messages:send`, {
       method: "POST",

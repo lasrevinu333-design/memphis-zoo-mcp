@@ -78,11 +78,13 @@ const custodialAndroidConfig = {
 const iosConfig = `<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>GOOGLE_APP_ID</key><string>1:123456789:ios:test</string><key>BUNDLE_ID</key><string>org.memphiszoo.ops</string><key>PROJECT_ID</key><string>memphis-zoo-custodial-program</string></dict></plist>`;
 const originalFetch = globalThis.fetch;
 const calls = [];
+let oauthDelayMs = 0;
 globalThis.fetch = async (input, init = {}) => {
   const url = String(input);
   if (/^https?:\/\/127\.0\.0\.1/.test(url)) return originalFetch(input, init);
   calls.push({ url, method: String(init.method || "GET"), authorization: String(init.headers?.Authorization || init.headers?.authorization || ""), body: String(init.body || "") });
   if (url === "https://oauth2.googleapis.com/token") {
+    if (oauthDelayMs) await new Promise((resolve) => setTimeout(resolve, oauthDelayMs));
     return new Response(JSON.stringify({ access_token: "test-firebase-oauth-token", expires_in: 3600 }), { status: 200, headers: { "Content-Type": "application/json" } });
   }
   if (url.endsWith("/projects/memphis-zoo-custodial-program/androidApps?pageSize=100")) {
@@ -176,6 +178,25 @@ try {
     notification_type: "event_digest", title: "Expired event", body: "Must not send",
     data_json: { next_event_starts_at: new Date(Date.now() - 1000).toISOString() },
   }, { fcm_token: "test-fcm-token" }), /no longer upcoming/i);
+  const beforeCrossingSend = calls.filter((call) => call.url.endsWith("/messages:send")).length;
+  oauthDelayMs = 80;
+  const crossingRuntime = createPushRuntime({
+    db: {},
+    env: {
+      FIREBASE_SERVICE_ACCOUNT_JSON: JSON.stringify({
+        type: "service_account",
+        project_id: "memphis-zoo-custodial-program",
+        client_email: "firebase-adminsdk-crossing@memphis-zoo-custodial-program.iam.gserviceaccount.com",
+        private_key: privateKey,
+      }),
+    },
+  });
+  await assert.rejects(() => crossingRuntime.send({
+    notification_type: "event_digest", title: "Crossing event", body: "Must not send",
+    data_json: { next_event_starts_at: new Date(Date.now() + 30).toISOString() },
+  }, { fcm_token: "test-fcm-token" }), /no longer upcoming/i);
+  oauthDelayMs = 0;
+  assert.equal(calls.filter((call) => call.url.endsWith("/messages:send")).length, beforeCrossingSend);
   const sentPushes = calls.filter((call) => call.url.endsWith("/messages:send")).map((call) => JSON.parse(call.body));
   assert.equal(sentPushes.at(-2).message.android.collapse_key, "memphis-employee-events");
   assert.equal(sentPushes.at(-1).message.android.collapse_key, "memphis-employee-messages");

@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { assertExactReleasePair, assertManifestContract, assertObservedSchemaIdentity } from "../src/release-contract.js";
+import { assertBackendFrontendIdentity, assertExactReleasePair, assertFrontendReleaseIdentity, assertManifestContract, assertObservedSchemaIdentity } from "../src/release-contract.js";
 
 const input = JSON.parse(readFileSync(new URL("../release/schema-alignment-input.json", import.meta.url), "utf8"));
 const index = readFileSync(new URL("../src/index.js", import.meta.url), "utf8");
 const liveGate = readFileSync(new URL("./live-release-alignment-check.mjs", import.meta.url), "utf8");
 const rollbackMigration = readFileSync(new URL("../supabase/migrations/20260813060000_release_canary_operational_recovery.sql", import.meta.url), "utf8");
 
-assert.equal(input.frontend_commit_sha, "6299f7a8ca67cf17598676d1f821bbd1549367f0", "backend must pin the exact audited frontend candidate");
+assert.equal(input.frontend_commit_sha, "6c8480d3c4d161c6747fec3748e7ac0c377b2a72", "backend must pin the exact audited frontend candidate");
 assert.equal(input.frontend_commit_state, "final_pair_bound");
 assert.deepEqual(input.queue_compatibility_versions.scan.at(-1), "indexeddb-v6-offline-authority");
 assert.deepEqual(Object.keys(input.minimum_supported).sort(), ["backend_version", "frontend_version"]);
@@ -34,11 +34,16 @@ const pair = assertExactReleasePair({ artifact: "memphis-zoo-integrated-release-
 assert.equal(pair.frontend_commit_sha, "b".repeat(40));
 assert.throws(() => assertExactReleasePair({ ...pair, unexpected: true }), /unexpected shape/);
 assert.throws(() => assertExactReleasePair({ ...pair, frontend_commit_sha: "b".repeat(39) }), /frontend commit/);
-const contract = { api_contract_versions: input.api_contract_versions, queue_compatibility_versions: input.queue_compatibility_versions, minimum_supported: input.minimum_supported };
+const contract = { release_id: input.release_id, api_contract_versions: input.api_contract_versions, queue_compatibility_versions: input.queue_compatibility_versions, minimum_supported: input.minimum_supported };
 assert.equal(assertManifestContract(contract, input), true);
+assert.throws(() => assertManifestContract({ ...contract, release_id: "release-spoofed" }, input), /release_id/);
 assert.throws(() => assertManifestContract({ ...contract, api_contract_versions: { ...contract.api_contract_versions, events: "events.v0" } }, input), /api_contract_versions/);
 assert.throws(() => assertManifestContract({ ...contract, queue_compatibility_versions: { ...contract.queue_compatibility_versions, scan: [] } }, input), /queue_compatibility_versions/);
 assert.throws(() => assertManifestContract({ ...contract, minimum_supported: { ...contract.minimum_supported, backend_version: "old" } }, input), /minimum_supported/);
+assert.equal(assertFrontendReleaseIdentity({ frontend_commit_sha: input.frontend_commit_sha }, input), true);
+assert.throws(() => assertFrontendReleaseIdentity({ frontend_commit_sha: "b".repeat(40) }, input), /frontend_commit_sha/);
+assert.equal(assertBackendFrontendIdentity({ frontend: { commit_sha: input.frontend_commit_sha } }, input), true);
+assert.throws(() => assertBackendFrontendIdentity({ frontend: { commit_sha: "b".repeat(40) } }, input), /embedded frontend commit/);
 assert.equal(assertObservedSchemaIdentity({ observation: "connected_database_catalog.v1", fingerprint: "c".repeat(64) }, "c".repeat(64)), "c".repeat(64));
 assert.throws(() => assertObservedSchemaIdentity({ observation: "source_file", fingerprint: "c".repeat(64) }, "c".repeat(64)), /not observed/);
 assert.throws(() => assertObservedSchemaIdentity({ observation: "connected_database_catalog.v1", fingerprint: "d".repeat(64) }, "c".repeat(64)), /does not equal/);

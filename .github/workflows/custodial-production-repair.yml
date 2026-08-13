@@ -117,3 +117,10 @@ jobs:
           OPERATIONAL_ANALYTICS_TEST_DOCKER_CONTAINER="$container" \
             OPERATIONAL_ANALYTICS_TEST_DATABASE=postgres \
             npm run --silent test:operational-analytics-db
+          RELEASE_CANARY_TEST_DOCKER_CONTAINER="$container" \
+            RELEASE_CANARY_TEST_DATABASE=postgres \
+            npm run --silent test:release-canary-recovery-db
+          FINAL_UNCERTAINTY_TEST_DOCKER_CONTAINER="$container" \
+            FINAL_UNCERTAINTY_TEST_DATABASE=postgres \
+            npm run --silent test:final-uncertainty-closure-db
+          npm run --silent test:release-closure
