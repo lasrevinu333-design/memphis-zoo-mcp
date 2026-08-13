@@ -3512,6 +3512,97 @@
     },
     {
       "collation_name": null,
+      "column_name": "audit_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": "gen_random_uuid()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 1,
+      "schema_name": "public",
+      "table_name": "custodial_release_canary_rollback_audits"
+    },
+    {
+      "collation_name": null,
+      "column_name": "requested_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "statement_timestamp()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 2,
+      "schema_name": "public",
+      "table_name": "custodial_release_canary_rollback_audits"
+    },
+    {
+      "collation_name": null,
+      "column_name": "requested_by_manager_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 3,
+      "schema_name": "public",
+      "table_name": "custodial_release_canary_rollback_audits"
+    },
+    {
+      "collation_name": null,
+      "column_name": "request_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 4,
+      "schema_name": "public",
+      "table_name": "custodial_release_canary_rollback_audits"
+    },
+    {
+      "collation_name": null,
+      "column_name": "action",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 5,
+      "schema_name": "public",
+      "table_name": "custodial_release_canary_rollback_audits"
+    },
+    {
+      "collation_name": null,
+      "column_name": "reason",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 6,
+      "schema_name": "public",
+      "table_name": "custodial_release_canary_rollback_audits"
+    },
+    {
+      "collation_name": null,
+      "column_name": "authoritative_health",
+      "comment": null,
+      "data_type": "jsonb",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 7,
+      "schema_name": "public",
+      "table_name": "custodial_release_canary_rollback_audits"
+    },
+    {
+      "collation_name": null,
       "column_name": "id",
       "comment": null,
       "data_type": "uuid",
@@ -26262,6 +26353,46 @@
       "validated": true
     },
     {
+      "constraint_name": "custodial_release_canary_roll_requested_by_manager_id_reque_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (requested_by_manager_id, request_id)",
+      "schema_name": "public",
+      "table_name": "custodial_release_canary_rollback_audits",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_release_canary_rollback__requested_by_manager_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (requested_by_manager_id) REFERENCES ops_manager_managers(manager_id)",
+      "schema_name": "public",
+      "table_name": "custodial_release_canary_rollback_audits",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_release_canary_rollback_audits_action_check",
+      "constraint_type": "c",
+      "definition": "CHECK (action = ANY (ARRAY['pause_canary'::text, 'resume_canary'::text]))",
+      "schema_name": "public",
+      "table_name": "custodial_release_canary_rollback_audits",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_release_canary_rollback_audits_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (audit_id)",
+      "schema_name": "public",
+      "table_name": "custodial_release_canary_rollback_audits",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_release_canary_rollback_audits_reason_check",
+      "constraint_type": "c",
+      "definition": "CHECK (length(btrim(reason)) >= 1 AND length(btrim(reason)) <= 1000)",
+      "schema_name": "public",
+      "table_name": "custodial_release_canary_rollback_audits",
+      "validated": true
+    },
+    {
       "constraint_name": "daily_absence_overrides_employee_id_fkey",
       "constraint_type": "f",
       "definition": "FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE",
@@ -32925,6 +33056,13 @@
     },
     {
       "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_audit_release_canary_rollback(p_manager_id uuid, p_request_id uuid, p_action text, p_reason text, p_authoritative_health jsonb, p_backend_execution_secret text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_existing public.custodial_release_canary_rollback_audits%rowtype; v_audit_id uuid;\nbegin\n  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  if not exists (select 1 from public.ops_manager_managers m where m.manager_id=p_manager_id and m.active=true and m.revoked_at is null and m.roles && array['DIRECTOR','SECURITY_ADMIN']::text[]) then\n    raise exception using errcode='42501', message='director or security administrator authority is required';\n  end if;\n  if p_request_id is null or p_action not in ('pause_canary','resume_canary') or length(btrim(coalesce(p_reason,''))) not between 1 and 1000 or jsonb_typeof(p_authoritative_health) <> 'object' then\n    raise exception using errcode='22023', message='stable request identity, supported action, reason, and authoritative health are required';\n  end if;\n  select * into v_existing from public.custodial_release_canary_rollback_audits where requested_by_manager_id=p_manager_id and request_id=p_request_id for update;\n  if found then\n    if v_existing.action<>p_action or v_existing.reason<>btrim(p_reason) or v_existing.authoritative_health<>p_authoritative_health then raise exception using errcode='23505',message='rollback request identity is already bound to different inputs'; end if;\n    return jsonb_build_object('audit_id',v_existing.audit_id,'replayed',true);\n  end if;\n  insert into public.custodial_release_canary_rollback_audits(requested_by_manager_id,request_id,action,reason,authoritative_health)\n  values(p_manager_id,p_request_id,p_action,btrim(p_reason),p_authoritative_health) returning audit_id into v_audit_id;\n  return jsonb_build_object('audit_id',v_audit_id,'replayed',false);\nend\n$function$\n",
+      "function_name": "custodial_audit_release_canary_rollback",
+      "identity_arguments": "p_manager_id uuid, p_request_id uuid, p_action text, p_reason text, p_authoritative_health jsonb, p_backend_execution_secret text",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
       "definition": "CREATE OR REPLACE FUNCTION public.custodial_backend_authority_health(p_backend_execution_secret text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\nbegin\n  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  return jsonb_build_object('ok',true,'authority','offline-authority.v3','phase','E','configured',true,\n    'durable_start_proof_replay',true,'assignment_fenced_proof_recovery',true,'terminal_writer_inventory',true,\n    'reconciliation_notification_lifecycle',true,'recipient_idempotent_delivery',true);\nend\n$function$\n",
       "function_name": "custodial_backend_authority_health",
       "identity_arguments": "p_backend_execution_secret text",
@@ -36439,6 +36577,24 @@
       "is_unique": true,
       "schema_name": "public",
       "table_name": "custodial_offline_time_reservations"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX custodial_release_canary_roll_requested_by_manager_id_reque_key ON public.custodial_release_canary_rollback_audits USING btree (requested_by_manager_id, request_id)",
+      "index_name": "custodial_release_canary_roll_requested_by_manager_id_reque_key",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "custodial_release_canary_rollback_audits"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX custodial_release_canary_rollback_audits_pkey ON public.custodial_release_canary_rollback_audits USING btree (audit_id)",
+      "index_name": "custodial_release_canary_rollback_audits_pkey",
+      "is_primary": true,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "custodial_release_canary_rollback_audits"
     },
     {
       "backs_constraint": true,
@@ -41823,6 +41979,14 @@
       "function_name": "custodial_assign_employee_device",
       "grantee": "service_role",
       "identity_arguments": "p_device_identifier text, p_employee_id uuid, p_changed_by_manager_id uuid, p_reason text, p_move_existing boolean",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "custodial_audit_release_canary_rollback",
+      "grantee": "service_role",
+      "identity_arguments": "p_manager_id uuid, p_request_id uuid, p_action text, p_reason text, p_authoritative_health jsonb, p_backend_execution_secret text",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -52308,6 +52472,15 @@
       "rls_forced": false,
       "schema_name": "public",
       "table_name": "custodial_offline_time_reservations"
+    },
+    {
+      "comment": "Immutable operator audit for reversible post-enforcement canary traffic pause/resume; it cannot restore a legacy writer or down-migrate schema.",
+      "partition_key": null,
+      "relation_kind": "r",
+      "rls_enabled": true,
+      "rls_forced": true,
+      "schema_name": "public",
+      "table_name": "custodial_release_canary_rollback_audits"
     },
     {
       "comment": null,

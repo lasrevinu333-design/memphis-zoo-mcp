@@ -16,6 +16,7 @@ import {
 } from "./routes/index.js";
 import { APP_VERSION, RELEASE_ID } from "./app-version.js";
 import { buildReleaseManifest } from "./release-manifest.js";
+import { observeProductionSchemaIdentity } from "./production-schema-identity.js";
 import { authenticateOpsAccessRequest, createSupabaseTrustedDeviceStore, installSharedAuthRoutes, makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
 import { makeMcpConnectorMiddleware } from "./auth/mcp-connector-auth.js";
 import { installDeviceCredentialRoutes, makeDeviceCredentialMiddleware } from "./auth/device-credential-auth.js";
@@ -131,6 +132,7 @@ let feedbackSchemaEnsured = false;
 let feedbackSchemaEnsurePromise = null;
 let operationalNotificationWorkerInFlight = false;
 const operationalNotificationJobHandlers = new Map();
+let releaseCanaryPaused = false;
 
 function registerOperationalNotificationJobHandler(jobType, handler) {
   const normalizedType = String(jobType || "").trim();
@@ -2167,6 +2169,48 @@ app.get(["/health", "/health/dependencies"], async (req, res) => {
   }
 });
 app.get("/admin-api/health", requireOpsManagerAuth, (_req, res) => { res.status(200).json(buildHealthPayload("admin", { authenticated: true })); });
+app.post("/admin-api/release-canary-rollback", requireOpsManagerWrite, async (req, res) => {
+  try {
+    const action = String(req.body?.action || "").trim();
+    const reason = String(req.body?.reason || "").trim();
+    if (!["pause_canary", "resume_canary"].includes(action) || !reason) {
+      throw Object.assign(new Error("action (pause_canary or resume_canary) and reason are required."), { status: 422 });
+    }
+    let authoritativeHealth;
+    try {
+      authoritativeHealth = await runRpc("custodial_backend_authority_health", { p_backend_execution_secret: offlineAuthoritySecret() });
+    } catch (error) {
+      // A missing or failing authoritative RPC is the reason this post-
+      // enforcement safety control exists. Preserve its bounded evidence;
+      // never route to a legacy/direct-SQL writer.
+      authoritativeHealth = { ok: false, code: error?.code || "authority_probe_failed", message: String(error?.message || "authority probe failed") };
+    }
+    const audit = await runRpc("custodial_audit_release_canary_rollback", {
+      p_manager_id: offlineAuthorityManagerId(req), p_request_id: requiredRequestOperationId(req),
+      p_action: action, p_reason: reason, p_authoritative_health: authoritativeHealth,
+      p_backend_execution_secret: offlineAuthoritySecret(),
+    });
+    if (action === "resume_canary" && authoritativeHealth?.ok !== true) {
+      throw Object.assign(new Error("Canary remains paused because authoritative health is not green."), { status: 503, code: "authority_health_not_green" });
+    }
+    releaseCanaryPaused = action === "pause_canary";
+    res.status(200).json({ ok: true, canary_paused: releaseCanaryPaused, audit, authoritative_health: authoritativeHealth });
+  } catch (error) {
+    const failure = authorityHttpFailure(error, "Canary rollback control is unavailable.");
+    res.status(failure.status).json(failure.body);
+  }
+});
+app.get("/admin-api/release-schema-identity", requireOpsManagerAuth, async (_req, res) => {
+  try {
+    // This endpoint is intentionally authenticated and uses only the shared
+    // SELECT-only executor. It reports a fingerprint calculated from the
+    // connected catalog, never the source target fingerprint.
+    const observed = await observeProductionSchemaIdentity({ runReadOnlySql });
+    res.status(200).json({ ok: true, ...observed });
+  } catch (error) {
+    res.status(503).json({ ok: false, error: "Production schema identity observation failed." });
+  }
+});
 app.get("/dashboard-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("dashboard")); });
 app.get("/schedule-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("schedule", { contract_version: SCHEDULE_CONTRACT_VERSION })); });
 app.get("/guest-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("guest_reports", { contract_version: GUEST_REPORTS_CONTRACT_VERSION })); });
@@ -2590,6 +2634,10 @@ app.get("/scan-api/authority-health", async (_req, res) => {
 });
 app.post("/scan-api/rpc", requireDeviceOrOpsAccess, parseAuthenticatedScanAuthorityJson, requireScanRpcAuthorization, scanRpcRateLimit, async (req, res) => {
   try {
+    if (releaseCanaryPaused && req.memphisDevice?.requested_device_id === CANARY_DEVICE_ID) {
+      res.status(503).json({ ok: false, code: "release_canary_paused", retryable: false, error: "The post-enforcement release canary is operator-paused." });
+      return;
+    }
     const fn = String(req.body?.fn || "").trim();
     if (!SCAN_RPC_ALLOWLIST.has(fn)) {
       res.status(400).json({ ok: false, error: `Function not allowed: ${fn}` });

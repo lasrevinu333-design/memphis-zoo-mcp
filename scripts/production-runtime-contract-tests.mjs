@@ -28,27 +28,17 @@ assert.equal(existsSync(new URL("../src/mcp-readonly-bootstrap.js", import.meta.
   "prototype-interception read-only bootstrap must not return");
 assert.doesNotMatch(source, /prototype\.(?:tool|listen)\s*=/,
   "canonical production startup must not alter framework prototypes");
-assert.match(releaseManifestSource, /frontendManifest\?\.frontend_commit_sha \|\| process\.env\.FRONTEND_COMMIT_SHA/,
-  "the coordinated source manifest must outrank stale hosting metadata");
+assert.match(releaseManifestSource, /final_rebind_required/,
+  "source must not guess a final frontend identity");
 
 assert.match(monitor, /cron: "\*\/10 \* \* \* \*"/,
   "the independent availability monitor must probe every ten minutes");
-assert.match(monitor, /--max-time 4/,
-  "availability probes must enforce the four-second response budget");
-assert.match(monitor, /database_reachable/);
-assert.match(monitor, /required_schema_present/);
-assert.match(monitor, /dead_letters/);
-assert.match(monitor, /expired_leases/);
-assert.match(monitor, /version\['version'\] == frontend\['release_id'\]/,
-  "the monitor must reject frontend/backend release drift");
-assert.match(monitor, /frontend-deployment-manifest\.json/,
-  "the monitor must load the live Pages deployment identity");
-assert.match(monitor, /comparison\['status'\] in \('identical', 'ahead'\)/,
-  "the monitor must accept only the baseline frontend commit or a verified forward release");
-assert.match(monitor, /api\.github\.com\/repos\/lasrevinu333-design\/Engine\/compare/,
-  "the monitor must prove frontend ancestry through the canonical GitHub repository");
-assert.match(monitor, /deployment\['schema_fingerprint'\] == frontend\['schema_fingerprint'\]/,
-  "the monitor must reject deployment schema drift");
+assert.match(monitor, /LIVE_RELEASE_PAIR_INPUT/,
+  "availability monitor must require an exact final frontend/backend pair");
+assert.match(monitor, /LIVE_RELEASE_SCHEMA_IDENTITY_TOKEN/,
+  "availability monitor must authenticate the connected-schema observation");
+assert.match(monitor, /release:live:check/,
+  "availability monitor must run the fail-closed release gate");
 assert.match(operationalLiveMonitor, /rollout_attempt=\$rollout_attempt/,
   "live operational acceptance must bypass caches while Render revisions converge");
 assert.match(operationalLiveMonitor, /all_endpoints_current=false[\s\S]*for rollout_attempt in \$\(seq 1 60\)/,

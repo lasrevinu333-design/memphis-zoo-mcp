@@ -1,13 +1,13 @@
 {
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "dfbd6b292577206fdd4a32df6b6148cebcb4e552",
-  "frontend_commit_state": "isolated_canary_candidate_verified",
+  "frontend_commit_sha": null,
+  "frontend_commit_state": "final_rebind_required",
   "backend_minimum_version": "release-2026.07.19.custodial-v3.12",
   "schema_fingerprint": "333ddfc8008ea0b85916de7d491b98c9b8d6a7d45d3a2947d99b4b3bb836ea00",
   "schema_transition": {
     "transition_id": "custodial-canary-offline-scan-authority-20260813",
     "from_fingerprint": "333ddfc8008ea0b85916de7d491b98c9b8d6a7d45d3a2947d99b4b3bb836ea00",
-    "to_fingerprint": "d4aa736e7c86a9bf816c4fbe7c74584bf243c31ae931393f2f5bebb239a5cf72",
+    "to_fingerprint": "b7c2167b35c4a6f0c3cf0c5c23e1e59185296554d8f12c80456178893f48b5a2",
     "expires_at": "2026-08-23T23:59:59Z"
   },
   "api_contract_versions": {
@@ -29,7 +29,8 @@
       "indexeddb-v1",
       "indexeddb-v2",
       "indexeddb-v3",
-      "indexeddb-v4"
+      "indexeddb-v4",
+      "indexeddb-v6-offline-authority"
     ],
     "messaging": [
       "local-storage-outbox-v1"
@@ -37,5 +38,9 @@
     "gemini_console": [
       "indexeddb-outbox-v1"
     ]
+  },
+  "minimum_supported": {
+    "frontend_version": "release-2026.07.19.custodial-v3.12",
+    "backend_version": "release-2026.07.19.custodial-v3.12"
   }
 }

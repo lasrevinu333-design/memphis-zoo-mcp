@@ -43,13 +43,16 @@
       "apply 20260810170000_finish_offline_authority_operational_closure.sql",
       "apply 20260810190000_final_integrated_backend_operational_correction.sql",
       "apply 20260813035530_offline_scan_authority_snapshot.sql",
+      "apply 20260813050000_release_canary_rollback_audit.sql",
       "require a green authority health gate and direct-DML denial probes before routing traffic"
     ],
     "rollback": {
       "precondition": "retain the exact bridge backend artifact and the execution secret until all authority health and restoration probes are green",
-      "action": "roll traffic back to the bridge backend artifact; it selects the authoritative procedure when present and only uses legacy fallback when the procedure is absent",
+      "action": "an authenticated DIRECTOR or SECURITY_ADMIN may pause the named release canary with POST /admin-api/release-canary-rollback; the action is durably audited and is reversible only by an audited resume after a green authoritative health probe. It never invokes a legacy writer, direct SQL, or down-migration.",
       "restoration_checks": [
         "custodial_backend_authority_health returns ok=true",
+        "authoritative procedure absent probe records a failed health observation and leaves the canary paused",
+        "authoritative procedure present-but-failing probe records a failed health observation and leaves the canary paused",
         "exact start and completion replay return one durable proof, reconciliation, and completion",
         "offline scan authority snapshot returns only current credential/device/employee/location authority",
         "scan evidence remains exact-shape and provenance-labeled after replay",
@@ -60,7 +63,7 @@
   },
   "rollback": {
     "before_enforcement": "legacy Engine and current backend completion remain available",
-    "after_enforcement": "roll traffic only to the retained bridge backend artifact; it is capability-aware and never re-enables direct SQL writers",
+    "after_enforcement": "pause or resume only the named release canary through the authenticated audited rollback control; it is capability-aware and never re-enables direct SQL writers",
     "database": "forward-only; do not down-migrate contexts, proofs, reservations, reconciliation, audit, scan evidence, dispositions, or outbox evidence"
   }
 }

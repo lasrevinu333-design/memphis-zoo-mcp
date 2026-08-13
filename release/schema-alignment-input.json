@@ -1,7 +1,7 @@
 {
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "dfbd6b292577206fdd4a32df6b6148cebcb4e552",
-  "frontend_commit_state": "isolated_canary_candidate_verified",
+  "frontend_commit_sha": null,
+  "frontend_commit_state": "final_rebind_required",
   "backend_minimum_version": "release-2026.07.19.custodial-v3.12",
   "schema_from_fingerprint": "333ddfc8008ea0b85916de7d491b98c9b8d6a7d45d3a2947d99b4b3bb836ea00",
   "schema_transition": {
@@ -22,8 +22,12 @@
     "feedback": "feedback.v2.json-triage"
   },
   "queue_compatibility_versions": {
-    "scan": ["legacy-local-storage", "indexeddb-v1", "indexeddb-v2", "indexeddb-v3", "indexeddb-v4"],
+    "scan": ["legacy-local-storage", "indexeddb-v1", "indexeddb-v2", "indexeddb-v3", "indexeddb-v4", "indexeddb-v6-offline-authority"],
     "messaging": ["local-storage-outbox-v1"],
     "gemini_console": ["indexeddb-outbox-v1"]
+  },
+  "minimum_supported": {
+    "frontend_version": "release-2026.07.19.custodial-v3.12",
+    "backend_version": "release-2026.07.19.custodial-v3.12"
   }
 }
