@@ -9,8 +9,8 @@ const frontend = JSON.parse(readFileSync(new URL("../release/frontend-release-ma
 const target = readFileSync(new URL("../supabase/canonical/schema-fingerprint.txt", import.meta.url), "utf8").trim();
 const now = Date.parse("2026-08-13T00:00:00Z");
 
-assert.equal(frontend.frontend_commit_sha, null, "the backend source manifest cannot claim a final frontend");
-assert.equal(frontend.frontend_commit_state, "final_rebind_required");
+assert.equal(frontend.frontend_commit_sha, input.frontend_commit_sha, "the backend manifest must pin the exact audited frontend");
+assert.equal(frontend.frontend_commit_state, "final_pair_bound");
 assert.deepEqual(frontend.minimum_supported, input.minimum_supported);
 const backend = buildReleaseManifest({ appVersion: "test-release" });
 assert.deepEqual(backend.api_contract_versions, input.api_contract_versions);

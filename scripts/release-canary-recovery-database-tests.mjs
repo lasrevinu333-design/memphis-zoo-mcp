@@ -49,6 +49,7 @@ assert.match(sql(`select public.custodial_release_canary_is_paused('canary-check
 
 const expectedHealthDigest = sql("select definition_sha256 from public.custodial_release_authority_restore_definitions where function_identity='public.custodial_backend_authority_health(text)';");
 sql(`create or replace function public.custodial_backend_authority_health(p_backend_execution_secret text) returns jsonb language sql as $$select '{"ok":false,"broken":true}'::jsonb$$;`);
+sql("drop function public.tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text);");
 assert.equal(JSON.parse(sql(`select public.custodial_backend_authority_health(${q(secret)})::text;`)).broken, true,
   "the test must first prove a present-but-broken authority function");
 
@@ -59,10 +60,16 @@ assert.equal(restore.canary_paused, true);
 assert.equal(restore.restored_functions, 7);
 const health = JSON.parse(sql(`select public.custodial_backend_authority_health(${q(secret)})::text;`));
 assert.equal(health.ok, true, "forward restoration must recover the canonical authority health RPC");
+assert.equal(sql("select to_regprocedure('public.tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text)') is not null;"), "t",
+  "forward restoration must recover an absent canonical authority RPC");
 assert.equal(sql("select encode(extensions.digest(convert_to(pg_get_functiondef('public.custodial_backend_authority_health(text)'::regprocedure),'UTF8'),'sha256'),'hex');"), expectedHealthDigest,
   "restored function must equal the captured known-good definition");
 assert.equal(sql("select has_function_privilege('service_role','public.tool_commit_cleaning_workflow(text,text,text,text,timestamptz,timestamptz,jsonb,jsonb,text)'::regprocedure,'EXECUTE')::text;"), "false",
   "recovery must not revive the legacy completion writer");
+assert.equal(sql(`select count(*) from public.custodial_terminal_writer_inventory where application_callable
+  and (mutates_terminal_truth or delegates_alternate_terminal_authority)
+  and proname not in ('tool_start_offline_occurrence','tool_commit_cleaning_workflow_authoritative','tool_complete_session_authoritative','custodial_close_maintenance_ticket_authoritative');`), "0",
+  "the recovery control must not become an alternate terminal writer");
 
 const unhealthyResume = sql(`select public.custodial_control_release_canary(
   '${managerId}'::uuid,'${randomUUID()}'::uuid,${q(deviceId)},'resume_canary','unhealthy resume must fail',

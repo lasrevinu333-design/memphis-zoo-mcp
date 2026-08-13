@@ -152,6 +152,20 @@ begin
 end
 $function$;
 
+-- The preceding inventory's legacy-wrapper matcher predates names ending in
+-- _authoritative. Require an actual legacy function call so a recovery control
+-- that mentions the canonical function identities is not misclassified as an
+-- alternate terminal writer.
+create or replace view public.custodial_terminal_writer_inventory as
+select p.oid,p.oid::regprocedure::text as routine_identity,p.proname,
+  p.prorettype <> 'pg_catalog.trigger'::regtype and (has_function_privilege('anon',p.oid,'EXECUTE') or has_function_privilege('authenticated',p.oid,'EXECUTE') or has_function_privilege('service_role',p.oid,'EXECUTE')) as application_callable,
+  lower(pg_get_functiondef(p.oid)) as definition,
+  (lower(pg_get_functiondef(p.oid)) ~ '(insert[[:space:]]+into|update|delete[[:space:]]+from|truncate([[:space:]]+table)?)' and lower(pg_get_functiondef(p.oid)) ~ 'public[.]?(sessions|completion_responses|scan_events|maintenance_tickets)') as mutates_terminal_truth,
+  (p.proname like 'demo_scan_mock_%'
+    or lower(pg_get_functiondef(p.oid)) ~ 'public[.]demo_scan_mock_[a-z0-9_]*[[:space:]]*[(]'
+    or lower(pg_get_functiondef(p.oid)) ~ 'public[.](purge_closed_scan_history_before|tool_purge_closed_scan_history_before|close_maintenance_ticket|tool_close_maintenance_ticket|force_close_session|tool_force_close_session|start_session|tool_start_session|finish_session|tool_finish_session|complete_session|tool_complete_session|record_scan_event|tool_record_scan_event)[[:space:]]*[(]') as delegates_alternate_terminal_authority
+from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.prokind='f';
+
 alter table public.custodial_release_canary_controls enable row level security;
 alter table public.custodial_release_canary_controls force row level security;
 alter table public.custodial_release_canary_rollback_audits enable row level security;
