@@ -2199,6 +2199,58 @@
     },
     {
       "collation_name": null,
+      "column_name": "snapshot_id",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 18,
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts"
+    },
+    {
+      "collation_name": null,
+      "column_name": "snapshot_employee_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 19,
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts"
+    },
+    {
+      "collation_name": null,
+      "column_name": "snapshot_assignment_epoch",
+      "comment": null,
+      "data_type": "integer",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 20,
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts"
+    },
+    {
+      "collation_name": null,
+      "column_name": "snapshot_credential_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 21,
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts"
+    },
+    {
+      "collation_name": null,
       "column_name": "audit_id",
       "comment": null,
       "data_type": "uuid",
@@ -3236,6 +3288,110 @@
       "ordinal_position": 18,
       "schema_name": "public",
       "table_name": "custodial_offline_reconciliation_records"
+    },
+    {
+      "collation_name": null,
+      "column_name": "snapshot_id",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 1,
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_authority_snapshots"
+    },
+    {
+      "collation_name": null,
+      "column_name": "device_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 2,
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_authority_snapshots"
+    },
+    {
+      "collation_name": null,
+      "column_name": "employee_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 3,
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_authority_snapshots"
+    },
+    {
+      "collation_name": null,
+      "column_name": "assignment_epoch",
+      "comment": null,
+      "data_type": "integer",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 4,
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_authority_snapshots"
+    },
+    {
+      "collation_name": null,
+      "column_name": "credential_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 5,
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_authority_snapshots"
+    },
+    {
+      "collation_name": null,
+      "column_name": "generated_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 6,
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_authority_snapshots"
+    },
+    {
+      "collation_name": null,
+      "column_name": "expires_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 7,
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_authority_snapshots"
+    },
+    {
+      "collation_name": null,
+      "column_name": "locations_json",
+      "comment": null,
+      "data_type": "jsonb",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 8,
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_authority_snapshots"
     },
     {
       "collation_name": null,
@@ -25678,6 +25834,14 @@
       "validated": true
     },
     {
+      "constraint_name": "custodial_offline_actor_contexts_snapshot_identity_check",
+      "constraint_type": "c",
+      "definition": "CHECK (snapshot_id IS NULL AND snapshot_employee_id IS NULL AND snapshot_assignment_epoch IS NULL AND snapshot_credential_id IS NULL OR snapshot_id ~ '^[0-9a-f]{64}$'::text AND snapshot_employee_id IS NOT NULL AND snapshot_assignment_epoch IS NOT NULL AND snapshot_credential_id IS NOT NULL) NOT VALID",
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts",
+      "validated": false
+    },
+    {
       "constraint_name": "custodial_offline_actor_contexts_status_check",
       "constraint_type": "c",
       "definition": "CHECK (status = ANY (ARRAY['activated'::text, 'committed'::text, 'quarantined'::text, 'cancelled'::text]))",
@@ -26099,6 +26263,62 @@
       "definition": "UNIQUE (client_session_id)",
       "schema_name": "public",
       "table_name": "custodial_offline_reconciliation_records",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_scan_authority_snapsho_assignment_epoch_check",
+      "constraint_type": "c",
+      "definition": "CHECK (assignment_epoch >= 0)",
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_authority_snapshots",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_scan_authority_snapshots_check",
+      "constraint_type": "c",
+      "definition": "CHECK (expires_at > generated_at AND expires_at <= (generated_at + '24:00:00'::interval))",
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_authority_snapshots",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_scan_authority_snapshots_credential_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (credential_id) REFERENCES device_auth_credentials(credential_id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_authority_snapshots",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_scan_authority_snapshots_device_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_authority_snapshots",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_scan_authority_snapshots_employee_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_authority_snapshots",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_scan_authority_snapshots_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (snapshot_id)",
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_authority_snapshots",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_offline_scan_authority_snapshots_snapshot_id_check",
+      "constraint_type": "c",
+      "definition": "CHECK (snapshot_id ~ '^[0-9a-f]{64}$'::text)",
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_authority_snapshots",
       "validated": true
     },
     {
@@ -32925,7 +33145,7 @@
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.custodial_backend_authority_health(p_backend_execution_secret text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\nbegin\n  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  return jsonb_build_object('ok',true,'authority','offline-authority.v3','phase','E','configured',true,\n    'durable_start_proof_replay',true,'assignment_fenced_proof_recovery',true,'terminal_writer_inventory',true,\n    'reconciliation_notification_lifecycle',true,'recipient_idempotent_delivery',true);\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_backend_authority_health(p_backend_execution_secret text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\nbegin\n  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  return jsonb_build_object('ok',true,'authority','offline-authority.v4','phase','snapshot-rebind-closure',\n    'configured',true,'issued_snapshot_ledger',true,'frozen_exact_replay',true,'operational_day_location_truth',true);\nend $function$\n",
       "function_name": "custodial_backend_authority_health",
       "identity_arguments": "p_backend_execution_secret text",
       "schema_name": "public"
@@ -33135,9 +33355,9 @@
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.custodial_start_offline_occurrence(p_device_id text, p_location_code text, p_client_session_id text, p_client_started_at text, p_authenticated_credential_id text, p_backend_execution_secret text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_client_session_id text := nullif(btrim(coalesce(p_client_session_id,'')), '');\n  v_credential_id uuid;\n  v_started_at timestamptz;\n  v_device record;\n  v_location record;\n  v_context public.custodial_offline_actor_contexts%rowtype;\n  v_existing public.custodial_offline_actor_contexts%rowtype;\n  v_proof public.custodial_offline_submission_proofs%rowtype;\n  v_assignment_change_id uuid;\n  v_proof_value text := encode(extensions.gen_random_bytes(32), 'hex');\n  v_fingerprint text;\nbegin\n  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  if v_client_session_id is null or length(v_client_session_id)>200 then raise exception using errcode='22023',message='client_session_id is required for offline occurrence activation'; end if;\n  begin\n    v_credential_id := nullif(lower(btrim(coalesce(p_authenticated_credential_id,''))), '')::uuid;\n    v_started_at := nullif(btrim(coalesce(p_client_started_at,'')), '')::timestamptz;\n  exception when others then raise exception using errcode='22023',message='offline occurrence activation requires canonical credential and start timestamp'; end;\n  if not isfinite(v_started_at) or v_started_at > now()+interval '10 minutes' or v_started_at < now()-interval '7 days' then\n    raise exception using errcode='22023',message='offline occurrence start timestamp is outside the accepted window';\n  end if;\n  perform pg_advisory_xact_lock(hashtextextended('custodial-offline-activation:'||v_client_session_id,0));\n  select * into v_existing from public.custodial_offline_actor_contexts where client_session_id=v_client_session_id for update;\n  if v_existing.context_id is not null then\n    if upper(btrim(coalesce(p_device_id,'')))<>upper((select device_id from public.devices where id=v_existing.device_id))\n       or v_existing.credential_id<>v_credential_id or v_existing.canonical_location_code<>public.resolve_scan_location_code(p_location_code)\n       or v_existing.started_at<>v_started_at then raise exception using errcode='23505',message='offline occurrence activation replay does not match the original occurrence'; end if;\n    select d.id,d.device_id,d.assigned_employee_id,d.assignment_epoch,e.active as employee_active,\n      c.credential_id,c.confirmed_at,c.revoked_at,c.expires_at\n      into v_device\n    from public.devices d\n    join public.employees e on e.id=d.assigned_employee_id\n    join public.device_auth_credentials c on c.credential_id=v_credential_id and c.device_id=d.id\n    where d.id=v_existing.device_id and d.active=true\n    for update of d;\n    select l.id,l.location_code,jsonb_build_array(l.location_code,upper(btrim(p_location_code))) as aliases\n      into v_location\n    from public.locations l where l.location_code=public.resolve_scan_location_code(p_location_code) and l.active=true;\n    select h.assignment_change_id into v_assignment_change_id\n      from public.custodial_employee_device_assignment_history h\n      where h.device_id=v_existing.device_id and h.new_employee_id=v_device.assigned_employee_id\n      order by h.changed_at desc, h.assignment_change_id desc limit 1;\n    if v_device.id is null or v_device.assigned_employee_id is distinct from v_existing.employee_id\n       or v_device.assignment_epoch is distinct from v_existing.assignment_epoch\n       or v_assignment_change_id is distinct from v_existing.assignment_change_id\n       or v_device.confirmed_at is null or v_device.revoked_at is not null or v_device.expires_at<=now()\n       or v_location.id is null then\n      raise exception using errcode='40901', message='offline occurrence replay is fenced because its authoritative assignment changed';\n    end if;\n    v_fingerprint := encode(extensions.digest(convert_to(jsonb_build_object('client_session_id',v_client_session_id,'device_id',v_device.id::text,\n      'employee_id',v_device.assigned_employee_id::text,'credential_id',v_credential_id::text,'assignment_epoch',v_device.assignment_epoch,\n      'assignment_change_id',v_assignment_change_id::text,'location_id',v_location.id::text,'location_code',v_location.location_code,\n      'location_aliases',v_location.aliases,'started_at',v_started_at)::text,'UTF8'),'sha256'),'hex');\n    if v_fingerprint is distinct from v_existing.occurrence_fingerprint then\n      raise exception using errcode='40901', message='offline occurrence replay is fenced because its normalized request fingerprint changed';\n    end if;\n    select * into v_proof from public.custodial_offline_submission_proofs where context_id=v_existing.context_id for update;\n    if v_proof.state = 'issued' and v_proof.issued_submission_proof is not null then\n      return jsonb_build_object('context_id',v_existing.context_id,'occurrence_id',v_existing.occurrence_id,'client_session_id',v_existing.client_session_id,\n        'canonical_location_code',v_existing.canonical_location_code,'location_aliases',v_existing.location_aliases,'started_at',v_existing.started_at,\n        'submission_proof',v_proof.issued_submission_proof,'expires_at',v_existing.expires_at,'schema_version','offline-authority.v3','committable',true,'replayed',true);\n    end if;\n    raise exception using errcode='40901', message='the legacy occurrence cannot recover a completion proof; create a manager-visible recovery disposition';\n  end if;\n  select d.id,d.device_id,d.assigned_employee_id,d.assignment_epoch,e.active as employee_active,c.credential_id,c.confirmed_at,c.revoked_at,c.expires_at into v_device\n  from public.devices d join public.employees e on e.id=d.assigned_employee_id\n  join public.device_auth_credentials c on c.credential_id=v_credential_id and c.device_id=d.id\n  where upper(btrim(d.device_id))=upper(btrim(p_device_id)) and d.active=true for update of d;\n  if v_device.id is null or v_device.assigned_employee_id is null or v_device.employee_active is not true or v_device.confirmed_at is null or v_device.revoked_at is not null or v_device.expires_at<=now() then\n    raise exception using errcode='42501',message='active authenticated actor assignment is required for offline occurrence activation';\n  end if;\n  select l.id,l.location_code,jsonb_build_array(l.location_code,upper(btrim(p_location_code))) as aliases into v_location\n  from public.locations l where l.location_code=public.resolve_scan_location_code(p_location_code) and l.active=true;\n  if v_location.id is null then raise exception using errcode='22023',message='active canonical location is required for offline occurrence activation'; end if;\n  select h.assignment_change_id into v_assignment_change_id from public.custodial_employee_device_assignment_history h\n  where h.device_id=v_device.id and h.new_employee_id=v_device.assigned_employee_id order by h.changed_at desc, h.assignment_change_id desc limit 1;\n  if v_assignment_change_id is null then raise exception using errcode='42501',message='an authoritative device assignment epoch is required for offline occurrence activation'; end if;\n  v_fingerprint := encode(extensions.digest(convert_to(jsonb_build_object('client_session_id',v_client_session_id,'device_id',v_device.id::text,\n    'employee_id',v_device.assigned_employee_id::text,'credential_id',v_credential_id::text,'assignment_epoch',v_device.assignment_epoch,\n    'assignment_change_id',v_assignment_change_id::text,'location_id',v_location.id::text,'location_code',v_location.location_code,\n    'location_aliases',v_location.aliases,'started_at',v_started_at)::text,'UTF8'),'sha256'),'hex');\n  insert into public.custodial_offline_actor_contexts(client_session_id,device_id,employee_id,credential_id,assignment_epoch,assignment_change_id,location_id,canonical_location_code,location_aliases,started_at,occurrence_fingerprint,expires_at)\n  values(v_client_session_id,v_device.id,v_device.assigned_employee_id,v_credential_id,v_device.assignment_epoch,v_assignment_change_id,v_location.id,v_location.location_code,v_location.aliases,v_started_at,v_fingerprint,now()+interval '7 days') returning * into v_context;\n  insert into public.custodial_offline_submission_proofs(context_id,proof_digest,issued_submission_proof)\n  values(v_context.context_id,encode(extensions.digest(convert_to(v_proof_value,'UTF8'),'sha256'),'hex'),v_proof_value);\n  return jsonb_build_object('context_id',v_context.context_id,'occurrence_id',v_context.occurrence_id,'client_session_id',v_context.client_session_id,\n    'canonical_location_code',v_context.canonical_location_code,'location_aliases',v_context.location_aliases,'started_at',v_context.started_at,\n    'submission_proof',v_proof_value,'expires_at',v_context.expires_at,'schema_version','offline-authority.v3','committable',true,'replayed',false);\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_start_offline_occurrence(p_device_id text, p_location_code text, p_client_session_id text, p_client_started_at text, p_snapshot_id text, p_snapshot_employee_id text, p_snapshot_assignment_epoch integer, p_snapshot_credential_id text, p_authenticated_credential_id text, p_backend_execution_secret text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_client_session_id text:=nullif(btrim(coalesce(p_client_session_id,'')), ''); v_started_at timestamptz;\n  v_credential_id uuid; v_snapshot_employee_id uuid; v_snapshot_credential_id uuid;\n  v_snapshot public.custodial_offline_scan_authority_snapshots%rowtype;\n  v_existing public.custodial_offline_actor_contexts%rowtype; v_proof public.custodial_offline_submission_proofs%rowtype;\n  v_device record; v_location record; v_assignment_change_id uuid; v_context public.custodial_offline_actor_contexts%rowtype;\n  v_proof_value text:=encode(extensions.gen_random_bytes(32),'hex'); v_fingerprint text;\nbegin\n  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  if v_client_session_id is null or length(v_client_session_id)>200 then raise exception using errcode='22023',message='client_session_id is required for offline occurrence activation'; end if;\n  begin\n    v_started_at:=nullif(btrim(coalesce(p_client_started_at,'')),'')::timestamptz;\n    v_credential_id:=nullif(lower(btrim(coalesce(p_authenticated_credential_id,''))),'')::uuid;\n    v_snapshot_employee_id:=nullif(lower(btrim(coalesce(p_snapshot_employee_id,''))),'')::uuid;\n    v_snapshot_credential_id:=nullif(lower(btrim(coalesce(p_snapshot_credential_id,''))),'')::uuid;\n  exception when others then raise exception using errcode='22023',message='offline activation requires canonical snapshot identity and credential'; end;\n  if nullif(lower(btrim(coalesce(p_snapshot_id,''))),'') !~ '^[0-9a-f]{64}$' or p_snapshot_assignment_epoch is null\n     or v_snapshot_credential_id<>v_credential_id then raise exception using errcode='22023',message='exact authenticated snapshot identity is required for offline occurrence activation'; end if;\n  if not isfinite(v_started_at) or v_started_at>now()+interval '10 minutes' or v_started_at<now()-interval '7 days' then raise exception using errcode='22023',message='offline occurrence start timestamp is outside the accepted window'; end if;\n  perform pg_advisory_xact_lock(hashtextextended('custodial-offline-activation:'||v_client_session_id,0));\n  select * into v_existing from public.custodial_offline_actor_contexts where client_session_id=v_client_session_id for update;\n  if v_existing.context_id is not null then\n    if upper(btrim(coalesce(p_device_id,'')))<>upper((select device_id from public.devices where id=v_existing.device_id))\n       or v_existing.credential_id<>v_credential_id or v_existing.canonical_location_code<>public.resolve_scan_location_code(p_location_code)\n       or v_existing.started_at<>v_started_at or v_existing.snapshot_id<>lower(btrim(p_snapshot_id))\n       or v_existing.snapshot_employee_id<>v_snapshot_employee_id or v_existing.snapshot_assignment_epoch<>p_snapshot_assignment_epoch\n       or v_existing.snapshot_credential_id<>v_snapshot_credential_id then raise exception using errcode='23505',message='offline occurrence activation replay does not match the original frozen snapshot'; end if;\n    select * into v_proof from public.custodial_offline_submission_proofs where context_id=v_existing.context_id for update;\n    if v_proof.state='issued' and v_proof.issued_submission_proof is not null then\n      return jsonb_build_object('context_id',v_existing.context_id,'occurrence_id',v_existing.occurrence_id,'client_session_id',v_existing.client_session_id,\n        'canonical_location_code',v_existing.canonical_location_code,'location_aliases',v_existing.location_aliases,'started_at',v_existing.started_at,\n        'submission_proof',v_proof.issued_submission_proof,'expires_at',v_existing.expires_at,'snapshot_id',v_existing.snapshot_id,\n        'schema_version','offline-authority.v4','committable',true,'replayed',true,'frozen_actor',true);\n    end if;\n    raise exception using errcode='40901',message='the frozen occurrence cannot recover a completion proof; create a manager-visible recovery disposition';\n  end if;\n  select * into v_snapshot from public.custodial_offline_scan_authority_snapshots where snapshot_id=lower(btrim(p_snapshot_id)) for share;\n  if v_snapshot.snapshot_id is null or v_snapshot.employee_id<>v_snapshot_employee_id or v_snapshot.assignment_epoch<>p_snapshot_assignment_epoch\n     or v_snapshot.credential_id<>v_snapshot_credential_id or v_snapshot.expires_at<=now() then raise exception using errcode='42501',message='issued offline authority snapshot is absent, expired, or does not match its exact identity'; end if;\n  select d.id,d.device_id,d.assigned_employee_id,d.assignment_epoch,e.active employee_active,c.confirmed_at,c.revoked_at,c.expires_at\n    into v_device from public.devices d join public.employees e on e.id=d.assigned_employee_id\n    join public.device_auth_credentials c on c.credential_id=v_credential_id and c.device_id=d.id\n   where upper(btrim(d.device_id))=upper(btrim(coalesce(p_device_id,''))) and d.active=true for update of d;\n  if v_device.id is null or v_device.id<>v_snapshot.device_id or v_device.assigned_employee_id<>v_snapshot.employee_id\n     or v_device.assignment_epoch<>v_snapshot.assignment_epoch or v_device.employee_active is not true\n     or v_device.confirmed_at is null or v_device.revoked_at is not null or v_device.expires_at<=now() then raise exception using errcode='42501',message='current authenticated assignment drifted from the issued offline snapshot'; end if;\n  select l.id,l.location_code,jsonb_build_array(l.location_code,upper(btrim(p_location_code))) aliases into v_location\n    from public.locations l where l.location_code=public.resolve_scan_location_code(p_location_code) and l.active=true;\n  if v_location.id is null or not exists(select 1 from jsonb_array_elements(v_snapshot.locations_json) x where x->>'location_code'=v_location.location_code) then raise exception using errcode='22023',message='active location is not authorized by the issued offline snapshot'; end if;\n  select h.assignment_change_id into v_assignment_change_id from public.custodial_employee_device_assignment_history h\n   where h.device_id=v_device.id and h.new_employee_id=v_device.assigned_employee_id order by h.changed_at desc limit 1;\n  if v_assignment_change_id is null then raise exception using errcode='42501',message='an authoritative device assignment epoch is required for offline occurrence activation'; end if;\n  v_fingerprint:=encode(extensions.digest(convert_to(jsonb_build_object('client_session_id',v_client_session_id,'device_id',v_device.id::text,\n    'employee_id',v_device.assigned_employee_id::text,'credential_id',v_credential_id::text,'assignment_epoch',v_device.assignment_epoch,\n    'snapshot_id',v_snapshot.snapshot_id,'snapshot_employee_id',v_snapshot.employee_id::text,'snapshot_assignment_epoch',v_snapshot.assignment_epoch,\n    'snapshot_credential_id',v_snapshot.credential_id::text,'assignment_change_id',v_assignment_change_id::text,'location_id',v_location.id::text,\n    'location_code',v_location.location_code,'location_aliases',v_location.aliases,'started_at',v_started_at)::text,'UTF8'),'sha256'),'hex');\n  insert into public.custodial_offline_actor_contexts(client_session_id,device_id,employee_id,credential_id,assignment_epoch,assignment_change_id,location_id,canonical_location_code,location_aliases,started_at,occurrence_fingerprint,expires_at,snapshot_id,snapshot_employee_id,snapshot_assignment_epoch,snapshot_credential_id)\n  values(v_client_session_id,v_device.id,v_device.assigned_employee_id,v_credential_id,v_device.assignment_epoch,v_assignment_change_id,v_location.id,v_location.location_code,v_location.aliases,v_started_at,v_fingerprint,now()+interval '7 days',v_snapshot.snapshot_id,v_snapshot.employee_id,v_snapshot.assignment_epoch,v_snapshot.credential_id) returning * into v_context;\n  insert into public.custodial_offline_submission_proofs(context_id,proof_digest,issued_submission_proof) values(v_context.context_id,encode(extensions.digest(convert_to(v_proof_value,'UTF8'),'sha256'),'hex'),v_proof_value);\n  return jsonb_build_object('context_id',v_context.context_id,'occurrence_id',v_context.occurrence_id,'client_session_id',v_context.client_session_id,'canonical_location_code',v_context.canonical_location_code,'location_aliases',v_context.location_aliases,'started_at',v_context.started_at,'submission_proof',v_proof_value,'expires_at',v_context.expires_at,'snapshot_id',v_snapshot.snapshot_id,'schema_version','offline-authority.v4','committable',true,'replayed',false);\nend $function$\n",
       "function_name": "custodial_start_offline_occurrence",
-      "identity_arguments": "p_device_id text, p_location_code text, p_client_session_id text, p_client_started_at text, p_authenticated_credential_id text, p_backend_execution_secret text",
+      "identity_arguments": "p_device_id text, p_location_code text, p_client_session_id text, p_client_started_at text, p_snapshot_id text, p_snapshot_employee_id text, p_snapshot_assignment_epoch integer, p_snapshot_credential_id text, p_authenticated_credential_id text, p_backend_execution_secret text",
       "schema_name": "public"
     },
     {
@@ -34171,7 +34391,7 @@
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.ops_manager_enqueue_scheduled_notifications(p_now timestamp with time zone DEFAULT now())\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_local_now timestamp without time zone:=p_now at time zone 'America/Chicago';\n  v_local_date date:=(p_now at time zone 'America/Chicago')::date;\n  v_local_time time:=(p_now at time zone 'America/Chicago')::time;\n  v_dow smallint:=extract(dow from p_now at time zone 'America/Chicago')::smallint;\n  v_target record;\n  v_event_count integer;\n  v_next_event record;\n  v_location_count integer;\n  v_due_count integer;\n  v_overdue_count integer;\n  v_location_fingerprint text;\n  v_location_rows jsonb;\n  v_state public.ops_manager_notification_state%rowtype;\n  v_bucket bigint;\n  v_inserted integer:=0;\nbegin\n  for v_target in\n    select pd.credential_id,pd.manager_id,\n           coalesce(pref.messages_enabled,true) messages_enabled,\n           coalesce(pref.event_reminders_enabled,false) event_reminders_enabled,\n           coalesce(pref.event_reminder_weekdays,array[0,1,2,3,4,5,6]::smallint[]) event_reminder_weekdays,\n           coalesce(pref.event_reminder_time,'08:00'::time) event_reminder_time,\n           coalesce(pref.event_lookahead_days,7) event_lookahead_days,\n           coalesce(pref.due_soon_enabled,false) due_soon_enabled,\n           coalesce(pref.overdue_enabled,false) overdue_enabled,\n           coalesce(pref.location_repeat_minutes,240) location_repeat_minutes\n    from public.ops_manager_push_devices pd\n    join public.ops_manager_trusted_devices td on td.credential_id=pd.credential_id and td.manager_id=pd.manager_id\n    join public.ops_manager_managers m on m.manager_id=pd.manager_id\n    left join public.ops_manager_notification_preferences pref on pref.credential_id=pd.credential_id\n    where pd.enabled=true and pd.revoked_at is null\n      and td.revoked_at is null and td.expires_at>p_now\n      and m.active=true and m.revoked_at is null and m.is_system_principal=false\n  loop\n    if v_target.event_reminders_enabled\n       and v_dow=any(v_target.event_reminder_weekdays)\n       and v_local_time>=v_target.event_reminder_time then\n      select count(*)::integer into v_event_count\n      from public.events_app_events e\n      where e.status='SCHEDULED'\n        and coalesce(e.end_date,e.event_date)>=v_local_date\n        and e.event_date<=v_local_date+v_target.event_lookahead_days;\n\n      if v_event_count>0 then\n        select e.event_name,e.event_date,e.start_time,e.display_location\n        into v_next_event\n        from public.events_app_events e\n        where e.status='SCHEDULED'\n          and coalesce(e.end_date,e.event_date)>=v_local_date\n          and e.event_date<=v_local_date+v_target.event_lookahead_days\n        order by e.event_date,e.start_time,e.event_name\n        limit 1;\n\n        insert into public.ops_manager_notification_queue(\n          job_key,credential_id,manager_id,notification_type,title,body,data_json\n        ) values (\n          'manager-event-digest:'||v_target.credential_id::text||':'||to_char(v_local_date,'YYYYMMDD'),\n          v_target.credential_id,\n          v_target.manager_id,\n          'event_digest',\n          'Upcoming Memphis Zoo Events',\n          left(format('%s event%s in the next %s day%s. Next: %s on %s%s.',\n            v_event_count,case when v_event_count=1 then '' else 's' end,\n            v_target.event_lookahead_days,case when v_target.event_lookahead_days=1 then '' else 's' end,\n            coalesce(v_next_event.event_name,'Event'),to_char(v_next_event.event_date,'Mon FMDD'),\n            case when v_next_event.display_location is null then '' else ' at '||v_next_event.display_location end\n          ),1000),\n          jsonb_build_object('kind','event_digest','route','events.html','service_date',v_local_date::text,'lookahead_days',v_target.event_lookahead_days)\n        ) on conflict(job_key) do nothing;\n        get diagnostics v_event_count=row_count;\n        v_inserted:=v_inserted+v_event_count;\n      end if;\n    end if;\n\n    if v_target.due_soon_enabled or v_target.overdue_enabled then\n      select\n        count(*)::integer,\n        count(*) filter(where s.status_code='due_soon')::integer,\n        count(*) filter(where s.status_code='overdue')::integer,\n        md5(coalesce(string_agg(s.location_code||':'||s.status_code,',' order by s.status_code,s.location_code),'')),\n        coalesce(jsonb_agg(jsonb_build_object('location_code',s.location_code,'location_name',s.location_name,'status',s.status_code) order by s.status_code,s.location_name),'[]'::jsonb)\n      into v_location_count,v_due_count,v_overdue_count,v_location_fingerprint,v_location_rows\n      from public.v_location_dashboard_status s\n      where (v_target.due_soon_enabled and s.status_code='due_soon')\n         or (v_target.overdue_enabled and s.status_code='overdue');\n\n      select * into v_state\n      from public.ops_manager_notification_state\n      where credential_id=v_target.credential_id and state_key='location_digest'\n      for update;\n\n      if v_location_count=0 then\n        insert into public.ops_manager_notification_state(credential_id,state_key,fingerprint,metadata_json,updated_at)\n        values(v_target.credential_id,'location_digest','',jsonb_build_object('due_soon',0,'overdue',0),p_now)\n        on conflict(credential_id,state_key) do update\n        set fingerprint='',metadata_json=excluded.metadata_json,updated_at=p_now;\n      elsif v_state.credential_id is null\n         or v_state.fingerprint is distinct from v_location_fingerprint\n         or v_state.last_enqueued_at is null\n         or v_state.last_enqueued_at<=p_now-make_interval(mins=>v_target.location_repeat_minutes) then\n        v_bucket:=floor(extract(epoch from p_now)/(v_target.location_repeat_minutes*60))::bigint;\n        insert into public.ops_manager_notification_queue(\n          job_key,credential_id,manager_id,notification_type,title,body,data_json\n        ) values (\n          'manager-location-digest:'||v_target.credential_id::text||':'||v_location_fingerprint||':'||v_bucket::text,\n          v_target.credential_id,\n          v_target.manager_id,\n          'location_digest',\n          'Custodial Location Attention',\n          left(format('%s overdue and %s due soon across all active areas. Tap to review the dashboard.',v_overdue_count,v_due_count),1000),\n          jsonb_build_object('kind','location_digest','route','dashboard.html','overdue_count',v_overdue_count,'due_soon_count',v_due_count,'locations',v_location_rows)\n        ) on conflict(job_key) do nothing;\n        get diagnostics v_location_count=row_count;\n        v_inserted:=v_inserted+v_location_count;\n\n        insert into public.ops_manager_notification_state(credential_id,state_key,fingerprint,last_enqueued_at,metadata_json,updated_at)\n        values(v_target.credential_id,'location_digest',v_location_fingerprint,p_now,jsonb_build_object('due_soon',v_due_count,'overdue',v_overdue_count),p_now)\n        on conflict(credential_id,state_key) do update\n        set fingerprint=excluded.fingerprint,last_enqueued_at=p_now,metadata_json=excluded.metadata_json,updated_at=p_now;\n      end if;\n    end if;\n  end loop;\n\n  return jsonb_build_object('ok',true,'enqueued',v_inserted,'checked_at',p_now,'local_date',v_local_date);\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.ops_manager_enqueue_scheduled_notifications(p_now timestamp with time zone DEFAULT now())\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_local_now timestamp without time zone:=p_now at time zone 'America/Chicago'; v_local_date date:=v_local_now::date; v_local_time time:=v_local_now::time; v_dow smallint:=extract(dow from v_local_now)::smallint; v_target record; v_event_count integer; v_next_event record; v_location_count integer; v_due_count integer; v_overdue_count integer; v_location_fingerprint text; v_location_rows jsonb; v_state public.ops_manager_notification_state%rowtype; v_bucket bigint; v_inserted integer:=0;\nbegin\nfor v_target in select pd.credential_id,pd.manager_id,coalesce(pref.event_reminders_enabled,false) event_reminders_enabled,coalesce(pref.event_reminder_weekdays,array[0,1,2,3,4,5,6]::smallint[]) event_reminder_weekdays,coalesce(pref.event_reminder_time,'08:00'::time) event_reminder_time,coalesce(pref.event_lookahead_days,7) event_lookahead_days,coalesce(pref.due_soon_enabled,false) due_soon_enabled,coalesce(pref.overdue_enabled,false) overdue_enabled,coalesce(pref.location_repeat_minutes,240) location_repeat_minutes from public.ops_manager_push_devices pd join public.ops_manager_trusted_devices td on td.credential_id=pd.credential_id and td.manager_id=pd.manager_id join public.ops_manager_managers m on m.manager_id=pd.manager_id left join public.ops_manager_notification_preferences pref on pref.credential_id=pd.credential_id where pd.enabled=true and pd.revoked_at is null and td.revoked_at is null and td.expires_at>p_now and m.active=true and m.revoked_at is null and m.is_system_principal=false loop\nif v_target.event_reminders_enabled and v_dow=any(v_target.event_reminder_weekdays) and v_local_time>=v_target.event_reminder_time then\nselect count(*)::integer into v_event_count from public.events_app_events e where e.status='SCHEDULED' and e.event_date<=v_local_date+v_target.event_lookahead_days and ((e.event_date+coalesce(e.start_time,time '00:00')) at time zone 'America/Chicago')>p_now;\nif v_event_count>0 then select e.event_name,e.event_date,e.start_time,e.display_location into v_next_event from public.events_app_events e where e.status='SCHEDULED' and e.event_date<=v_local_date+v_target.event_lookahead_days and ((e.event_date+coalesce(e.start_time,time '00:00')) at time zone 'America/Chicago')>p_now order by e.event_date,e.start_time,e.event_name limit 1;\ninsert into public.ops_manager_notification_queue(job_key,credential_id,manager_id,notification_type,title,body,data_json) values('manager-event-digest:'||v_target.credential_id::text||':'||to_char(v_local_date,'YYYYMMDD'),v_target.credential_id,v_target.manager_id,'event_digest','Upcoming Memphis Zoo Events',left(format('%s event%s in the next %s day%s. Next: %s on %s%s.',v_event_count,case when v_event_count=1 then '' else 's' end,v_target.event_lookahead_days,case when v_target.event_lookahead_days=1 then '' else 's' end,coalesce(v_next_event.event_name,'Event'),to_char(v_next_event.event_date,'Mon FMDD'),case when v_next_event.display_location is null then '' else ' at '||v_next_event.display_location end),1000),jsonb_build_object('kind','event_digest','route','events.html','service_date',v_local_date::text,'lookahead_days',v_target.event_lookahead_days)) on conflict(job_key) do nothing; get diagnostics v_event_count=row_count; v_inserted:=v_inserted+v_event_count; end if; end if;\nif v_target.due_soon_enabled or v_target.overdue_enabled then select count(*)::integer,count(*) filter(where s.status_code='due_soon')::integer,count(*) filter(where s.status_code='overdue')::integer,md5(coalesce(string_agg(s.location_code||':'||s.status_code,',' order by s.status_code,s.location_code),'')),coalesce(jsonb_agg(jsonb_build_object('location_code',s.location_code,'location_name',s.location_name,'status',s.status_code) order by s.status_code,s.location_name),'[]'::jsonb) into v_location_count,v_due_count,v_overdue_count,v_location_fingerprint,v_location_rows from public.v_location_dashboard_status s where (v_target.due_soon_enabled and s.status_code='due_soon') or (v_target.overdue_enabled and s.status_code='overdue'); select * into v_state from public.ops_manager_notification_state where credential_id=v_target.credential_id and state_key='location_digest' for update; if v_location_count=0 then insert into public.ops_manager_notification_state(credential_id,state_key,fingerprint,metadata_json,updated_at) values(v_target.credential_id,'location_digest','',jsonb_build_object('due_soon',0,'overdue',0),p_now) on conflict(credential_id,state_key) do update set fingerprint='',metadata_json=excluded.metadata_json,updated_at=p_now; elsif v_state.credential_id is null or v_state.fingerprint is distinct from v_location_fingerprint or v_state.last_enqueued_at is null or v_state.last_enqueued_at<=p_now-make_interval(mins=>v_target.location_repeat_minutes) then v_bucket:=floor(extract(epoch from p_now)/(v_target.location_repeat_minutes*60))::bigint; insert into public.ops_manager_notification_queue(job_key,credential_id,manager_id,notification_type,title,body,data_json) values('manager-location-digest:'||v_target.credential_id::text||':'||v_location_fingerprint||':'||v_bucket::text,v_target.credential_id,v_target.manager_id,'location_digest','Custodial Location Attention',left(format('%s overdue and %s due soon across all active areas. Tap to review the dashboard.',v_overdue_count,v_due_count),1000),jsonb_build_object('kind','location_digest','route','dashboard.html','overdue_count',v_overdue_count,'due_soon_count',v_due_count,'locations',v_location_rows)) on conflict(job_key) do nothing; get diagnostics v_location_count=row_count; v_inserted:=v_inserted+v_location_count; insert into public.ops_manager_notification_state(credential_id,state_key,fingerprint,last_enqueued_at,metadata_json,updated_at) values(v_target.credential_id,'location_digest',v_location_fingerprint,p_now,jsonb_build_object('due_soon',v_due_count,'overdue',v_overdue_count),p_now) on conflict(credential_id,state_key) do update set fingerprint=excluded.fingerprint,last_enqueued_at=excluded.last_enqueued_at,metadata_json=excluded.metadata_json,updated_at=now(); end if; end if;\nend loop; return jsonb_build_object('ok',true,'enqueued',v_inserted,'checked_at',p_now,'local_date',v_local_date); end $function$\n",
       "function_name": "ops_manager_enqueue_scheduled_notifications",
       "identity_arguments": "p_now timestamp with time zone",
       "schema_name": "public"
@@ -35620,7 +35840,7 @@
     },
     {
       "comment": "Issues a bounded 24-hour employee-device/location snapshot for fail-closed offline NFC activation. Queued starts remain subject to current authority when synchronized.",
-      "definition": "CREATE OR REPLACE FUNCTION public.tool_get_offline_scan_authority_snapshot(p_device_id text, p_authenticated_credential_id text, p_backend_execution_secret text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_device record;\n  v_credential public.device_auth_credentials%rowtype;\n  v_generated_at timestamptz := clock_timestamp();\n  v_expires_at timestamptz;\n  v_locations jsonb;\n  v_snapshot_id text;\nbegin\n  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  select d.id,d.device_id,d.assigned_employee_id,d.assignment_epoch,e.display_name as employee_name,e.active as employee_active\n  into v_device\n  from public.devices d\n  join public.employees e on e.id=d.assigned_employee_id\n  where upper(btrim(d.device_id))=upper(btrim(coalesce(p_device_id,''))) and d.active=true;\n  begin\n    select * into v_credential\n    from public.device_auth_credentials\n    where credential_id=nullif(lower(btrim(coalesce(p_authenticated_credential_id,''))),'')::uuid\n    for share;\n  exception when others then\n    raise exception using errcode='42501',message='an active authenticated employee-device credential is required';\n  end;\n  if v_device.id is null or v_device.assigned_employee_id is null or v_device.employee_active is not true\n     or v_credential.credential_id is null or v_credential.device_id<>v_device.id\n     or v_credential.confirmed_at is null or v_credential.revoked_at is not null or v_credential.expires_at<=v_generated_at then\n    raise exception using errcode='42501',message='an active authenticated employee-device assignment is required';\n  end if;\n  select coalesce(jsonb_agg(jsonb_build_object(\n    'location_code',l.location_code,\n    'location_name',l.location_name,\n    'location_type',l.location_type,\n    'form_type',coalesce(l.form_type,l.location_type)\n  ) order by l.location_code),'[]'::jsonb)\n  into v_locations\n  from public.locations l\n  where l.active=true;\n  v_expires_at := least(v_generated_at+interval '24 hours',v_credential.expires_at);\n  v_snapshot_id := encode(extensions.digest(convert_to(jsonb_build_object(\n    'contract_version','scan.v3.offline-authority',\n    'device_id',v_device.device_id,\n    'employee_id',v_device.assigned_employee_id::text,\n    'assignment_epoch',v_device.assignment_epoch,\n    'credential_id',v_credential.credential_id::text,\n    'generated_at',v_generated_at,\n    'expires_at',v_expires_at,\n    'locations',v_locations\n  )::text,'UTF8'),'sha256'),'hex');\n  return jsonb_build_object(\n    'schema_version','offline-scan-snapshot.v1',\n    'contract_version','scan.v3.offline-authority',\n    'snapshot_id',v_snapshot_id,\n    'canonical_device_id',v_device.device_id,\n    'employee_id',v_device.assigned_employee_id,\n    'employee_name',v_device.employee_name,\n    'assignment_epoch',v_device.assignment_epoch,\n    'credential_id',v_credential.credential_id,\n    'generated_at',v_generated_at,\n    'expires_at',v_expires_at,\n    'locations',v_locations\n  );\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.tool_get_offline_scan_authority_snapshot(p_device_id text, p_authenticated_credential_id text, p_backend_execution_secret text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_device record; v_credential public.device_auth_credentials%rowtype;\n  v_generated_at timestamptz := clock_timestamp(); v_expires_at timestamptz;\n  v_locations jsonb; v_snapshot_id text;\nbegin\n  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  select d.id,d.device_id,d.assigned_employee_id,d.assignment_epoch,e.display_name employee_name,e.active employee_active\n    into v_device from public.devices d join public.employees e on e.id=d.assigned_employee_id\n   where upper(btrim(d.device_id))=upper(btrim(coalesce(p_device_id,''))) and d.active=true;\n  begin\n    select * into v_credential from public.device_auth_credentials\n     where credential_id=nullif(lower(btrim(coalesce(p_authenticated_credential_id,''))),'')::uuid for share;\n  exception when others then\n    raise exception using errcode='42501',message='an active authenticated employee-device credential is required';\n  end;\n  if v_device.id is null or v_device.assigned_employee_id is null or v_device.employee_active is not true\n     or v_credential.credential_id is null or v_credential.device_id<>v_device.id or v_credential.confirmed_at is null\n     or v_credential.revoked_at is not null or v_credential.expires_at<=v_generated_at then\n    raise exception using errcode='42501',message='an active authenticated employee-device assignment is required';\n  end if;\n  select coalesce(jsonb_agg(jsonb_build_object('location_code',l.location_code,'location_name',l.location_name,\n    'location_type',l.location_type,'form_type',coalesce(l.form_type,l.location_type)) order by l.location_code),'[]'::jsonb)\n    into v_locations from public.locations l where l.active=true;\n  v_expires_at:=least(v_generated_at+interval '24 hours',v_credential.expires_at);\n  v_snapshot_id:=encode(extensions.digest(convert_to(jsonb_build_object('contract_version','scan.v4.snapshot-bound-authority',\n    'device_id',v_device.device_id,'employee_id',v_device.assigned_employee_id::text,'assignment_epoch',v_device.assignment_epoch,\n    'credential_id',v_credential.credential_id::text,'generated_at',v_generated_at,'expires_at',v_expires_at,'locations',v_locations)::text,'UTF8'),'sha256'),'hex');\n  insert into public.custodial_offline_scan_authority_snapshots(snapshot_id,device_id,employee_id,assignment_epoch,credential_id,generated_at,expires_at,locations_json)\n  values(v_snapshot_id,v_device.id,v_device.assigned_employee_id,v_device.assignment_epoch,v_credential.credential_id,v_generated_at,v_expires_at,v_locations)\n  on conflict(snapshot_id) do nothing;\n  return jsonb_build_object('schema_version','offline-scan-snapshot.v2','contract_version','scan.v4.snapshot-bound-authority',\n    'snapshot_id',v_snapshot_id,'canonical_device_id',v_device.device_id,'employee_id',v_device.assigned_employee_id,\n    'employee_name',v_device.employee_name,'assignment_epoch',v_device.assignment_epoch,'credential_id',v_credential.credential_id,\n    'generated_at',v_generated_at,'expires_at',v_expires_at,'locations',v_locations);\nend $function$\n",
       "function_name": "tool_get_offline_scan_authority_snapshot",
       "identity_arguments": "p_device_id text, p_authenticated_credential_id text, p_backend_execution_secret text",
       "schema_name": "public"
@@ -35690,9 +35910,9 @@
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.tool_start_offline_occurrence(p_device_id text, p_location_code text, p_client_session_id text, p_client_started_at text, p_authenticated_credential_id text, p_backend_execution_secret text)\n RETURNS jsonb\n LANGUAGE sql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\n  select public.custodial_start_offline_occurrence(\n    p_device_id,p_location_code,p_client_session_id,p_client_started_at,p_authenticated_credential_id,p_backend_execution_secret\n  );\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.tool_start_offline_occurrence(p_device_id text, p_location_code text, p_client_session_id text, p_client_started_at text, p_snapshot_id text, p_snapshot_employee_id text, p_snapshot_assignment_epoch integer, p_snapshot_credential_id text, p_authenticated_credential_id text, p_backend_execution_secret text)\n RETURNS jsonb\n LANGUAGE sql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\n  select public.custodial_start_offline_occurrence(p_device_id,p_location_code,p_client_session_id,p_client_started_at,p_snapshot_id,p_snapshot_employee_id,p_snapshot_assignment_epoch,p_snapshot_credential_id,p_authenticated_credential_id,p_backend_execution_secret)\n$function$\n",
       "function_name": "tool_start_offline_occurrence",
-      "identity_arguments": "p_device_id text, p_location_code text, p_client_session_id text, p_client_started_at text, p_authenticated_credential_id text, p_backend_execution_secret text",
+      "identity_arguments": "p_device_id text, p_location_code text, p_client_session_id text, p_client_started_at text, p_snapshot_id text, p_snapshot_employee_id text, p_snapshot_assignment_epoch integer, p_snapshot_credential_id text, p_authenticated_credential_id text, p_backend_execution_secret text",
       "schema_name": "public"
     },
     {
@@ -36376,6 +36596,24 @@
       "is_unique": true,
       "schema_name": "public",
       "table_name": "custodial_offline_reconciliation_records"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX custodial_offline_scan_authority_snapshots_pkey ON public.custodial_offline_scan_authority_snapshots USING btree (snapshot_id)",
+      "index_name": "custodial_offline_scan_authority_snapshots_pkey",
+      "is_primary": true,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_authority_snapshots"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_custodial_offline_snapshot_identity ON public.custodial_offline_scan_authority_snapshots USING btree (device_id, employee_id, assignment_epoch, credential_id, expires_at)",
+      "index_name": "idx_custodial_offline_snapshot_identity",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_authority_snapshots"
     },
     {
       "backs_constraint": true,
@@ -42094,7 +42332,7 @@
     {
       "function_name": "custodial_start_offline_occurrence",
       "grantee": "service_role",
-      "identity_arguments": "p_device_id text, p_location_code text, p_client_session_id text, p_client_started_at text, p_authenticated_credential_id text, p_backend_execution_secret text",
+      "identity_arguments": "p_device_id text, p_location_code text, p_client_session_id text, p_client_started_at text, p_snapshot_id text, p_snapshot_employee_id text, p_snapshot_assignment_epoch integer, p_snapshot_credential_id text, p_authenticated_credential_id text, p_backend_execution_secret text",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -44094,7 +44332,7 @@
     {
       "function_name": "tool_start_offline_occurrence",
       "grantee": "service_role",
-      "identity_arguments": "p_device_id text, p_location_code text, p_client_session_id text, p_client_started_at text, p_authenticated_credential_id text, p_backend_execution_secret text",
+      "identity_arguments": "p_device_id text, p_location_code text, p_client_session_id text, p_client_started_at text, p_snapshot_id text, p_snapshot_employee_id text, p_snapshot_assignment_epoch integer, p_snapshot_credential_id text, p_authenticated_credential_id text, p_backend_execution_secret text",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -44820,6 +45058,55 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "custodial_employee_status_history"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "DELETE",
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_authority_snapshots"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "INSERT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_authority_snapshots"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "REFERENCES",
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_authority_snapshots"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_authority_snapshots"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "TRIGGER",
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_authority_snapshots"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "TRUNCATE",
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_authority_snapshots"
+    },
+    {
+      "grantee": "service_role",
+      "is_grantable": "NO",
+      "privilege_type": "UPDATE",
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_authority_snapshots"
     },
     {
       "grantee": "service_role",
@@ -52289,6 +52576,15 @@
       "rls_enabled": false,
       "rls_forced": false,
       "schema_name": "public",
+      "table_name": "custodial_offline_scan_authority_snapshots"
+    },
+    {
+      "comment": null,
+      "partition_key": null,
+      "relation_kind": "r",
+      "rls_enabled": false,
+      "rls_forced": false,
+      "schema_name": "public",
       "table_name": "custodial_offline_scan_event_evidence"
     },
     {
@@ -54471,7 +54767,7 @@
     },
     {
       "comment": null,
-      "definition": " WITH op_day AS (\n         SELECT operational_day_start(now()) AS day_start\n        ), latest_scan AS (\n         SELECT se.location_id,\n            max(COALESCE(se.scanned_at, se.created_at)) AS last_scan_at\n           FROM scan_events se\n          GROUP BY se.location_id\n        ), open_session AS (\n         SELECT DISTINCT ON (s.location_id) s.location_id,\n            s.id AS session_id,\n            s.session_uuid,\n            s.status AS session_status,\n            s.started_at,\n            s.ended_at,\n            s.duration_minutes,\n            s.duration_display,\n            e.display_name AS employee_name,\n            d.device_id AS device_identifier\n           FROM sessions s\n             LEFT JOIN employees e ON e.id = s.employee_id\n             LEFT JOIN devices d ON d.id = s.device_id\n          WHERE s.status = ANY (ARRAY['active'::text, 'pending_submit'::text])\n          ORDER BY s.location_id, s.started_at DESC, s.created_at DESC\n        ), latest_completed AS (\n         SELECT DISTINCT ON (s.location_id) s.location_id,\n            s.id AS session_id,\n            s.session_uuid,\n            s.started_at,\n            s.ended_at,\n            s.duration_minutes,\n            s.duration_display,\n            e.display_name AS employee_name,\n            cr.submitted_at,\n            cr.response_json,\n            COALESCE(cr.submitted_at, s.ended_at, s.started_at) AS effective_completed_at\n           FROM sessions s\n             JOIN employees e ON e.id = s.employee_id\n             LEFT JOIN completion_responses cr ON cr.session_id = s.id\n             CROSS JOIN op_day od_1\n          WHERE s.status = 'closed'::text AND COALESCE(cr.submitted_at, s.ended_at, s.started_at) >= od_1.day_start\n          ORDER BY s.location_id, (COALESCE(cr.submitted_at, s.ended_at, s.started_at)) DESC, s.started_at DESC\n        ), open_tickets AS (\n         SELECT mt.location_id,\n            count(*) AS open_ticket_count\n           FROM maintenance_tickets mt\n          WHERE mt.status = 'open'::text\n          GROUP BY mt.location_id\n        )\n SELECT l.id AS location_id,\n    l.location_code,\n    l.location_name,\n    l.location_type,\n    l.form_type,\n    od.day_start AS operational_day_start,\n    ls.last_scan_at,\n    os.session_id AS open_session_id,\n    os.session_uuid AS open_session_uuid,\n    os.session_status AS open_session_status,\n    os.started_at AS open_session_started_at,\n    os.ended_at AS open_session_ended_at,\n    lc.session_id AS latest_completed_session_id,\n    lc.session_uuid AS latest_completed_session_uuid,\n    lc.started_at AS latest_started_at,\n    lc.ended_at AS latest_ended_at,\n    lc.submitted_at AS latest_submitted_at,\n    lc.effective_completed_at AS latest_completed_at,\n    lc.employee_name AS latest_employee_name,\n    lc.duration_minutes,\n    lc.duration_display,\n    COALESCE(lc.response_json -> 'services_performed'::text, lc.response_json -> 'servicesPerformed'::text, lc.response_json -> 'services'::text, lc.response_json -> 'completed_services'::text, lc.response_json -> 'completedServices'::text, '[]'::jsonb) AS services_performed,\n    COALESCE(lc.response_json ->> 'notes'::text, lc.response_json ->> 'cleaning_notes'::text, lc.response_json ->> 'cleaningNotes'::text, lc.response_json ->> 'maintenance_notes'::text, lc.response_json ->> 'maintenanceNotes'::text, lc.response_json ->> 'other_service_performed'::text, lc.response_json ->> 'otherServicePerformed'::text, lc.response_json ->> 'note'::text) AS notes,\n    COALESCE(ot.open_ticket_count, 0::bigint) AS open_ticket_count,\n        CASE\n            WHEN os.session_status = ANY (ARRAY['active'::text, 'pending_submit'::text]) THEN 'in_progress'::text\n            WHEN lc.effective_completed_at IS NULL THEN 'not_cleaned'::text\n            WHEN l.form_type = 'restroom'::text AND now() >= (lc.effective_completed_at + make_interval(mins => get_setting_int('restroom_overdue_minutes'::text, 120))) THEN 'overdue'::text\n            WHEN l.form_type = 'restroom'::text AND now() >= (lc.effective_completed_at + make_interval(mins => get_setting_int('restroom_due_soon_minutes'::text, 90))) THEN 'due_soon'::text\n            WHEN l.form_type = 'exhibit'::text AND now() >= (lc.effective_completed_at + make_interval(mins => get_setting_int('exhibit_overdue_minutes'::text, 240))) THEN 'overdue'::text\n            WHEN l.form_type = 'exhibit'::text AND now() >= (lc.effective_completed_at + make_interval(mins => get_setting_int('exhibit_due_soon_minutes'::text, 195))) THEN 'due_soon'::text\n            ELSE 'okay'::text\n        END AS status_code,\n        CASE\n            WHEN os.session_status = ANY (ARRAY['active'::text, 'pending_submit'::text]) THEN 'blue'::text\n            WHEN lc.effective_completed_at IS NULL THEN 'black'::text\n            WHEN l.form_type = 'restroom'::text AND now() >= (lc.effective_completed_at + make_interval(mins => get_setting_int('restroom_overdue_minutes'::text, 120))) THEN 'red'::text\n            WHEN l.form_type = 'restroom'::text AND now() >= (lc.effective_completed_at + make_interval(mins => get_setting_int('restroom_due_soon_minutes'::text, 90))) THEN 'yellow'::text\n            WHEN l.form_type = 'exhibit'::text AND now() >= (lc.effective_completed_at + make_interval(mins => get_setting_int('exhibit_overdue_minutes'::text, 240))) THEN 'red'::text\n            WHEN l.form_type = 'exhibit'::text AND now() >= (lc.effective_completed_at + make_interval(mins => get_setting_int('exhibit_due_soon_minutes'::text, 195))) THEN 'yellow'::text\n            ELSE 'green'::text\n        END AS status_color,\n    to_char(timezone('America/Chicago'::text, od.day_start), 'MM/DD/YYYY HH12:MI AM'::text) || ' Central'::text AS operational_day_start_display,\n    to_char(timezone('America/Chicago'::text, ls.last_scan_at), 'MM/DD/YYYY HH12:MI AM'::text) || ' Central'::text AS last_scan_at_display,\n    to_char(timezone('America/Chicago'::text, os.started_at), 'MM/DD/YYYY HH12:MI AM'::text) || ' Central'::text AS open_session_started_at_display,\n    to_char(timezone('America/Chicago'::text, os.ended_at), 'MM/DD/YYYY HH12:MI AM'::text) || ' Central'::text AS open_session_ended_at_display,\n    to_char(timezone('America/Chicago'::text, lc.started_at), 'MM/DD/YYYY HH12:MI AM'::text) || ' Central'::text AS latest_started_at_display,\n    to_char(timezone('America/Chicago'::text, lc.ended_at), 'MM/DD/YYYY HH12:MI AM'::text) || ' Central'::text AS latest_ended_at_display,\n    to_char(timezone('America/Chicago'::text, lc.submitted_at), 'MM/DD/YYYY HH12:MI AM'::text) || ' Central'::text AS latest_submitted_at_display,\n    to_char(timezone('America/Chicago'::text, lc.effective_completed_at), 'MM/DD/YYYY HH12:MI AM'::text) || ' Central'::text AS latest_completed_at_display,\n    os.employee_name AS open_session_employee_name,\n    os.device_identifier AS open_session_device_identifier\n   FROM locations l\n     CROSS JOIN op_day od\n     LEFT JOIN latest_scan ls ON ls.location_id = l.id\n     LEFT JOIN open_session os ON os.location_id = l.id\n     LEFT JOIN latest_completed lc ON lc.location_id = l.id\n     LEFT JOIN open_tickets ot ON ot.location_id = l.id\n  WHERE l.active = true;",
+      "definition": " WITH op_day AS (\n         SELECT operational_day_start(now()) AS day_start,\n            sch_service_date(now()) AS service_date\n        ), scheduled_baseline AS (\n         SELECT membership.location_id,\n            min(((od.service_date + schedule.coverage_start::time without time zone) AT TIME ZONE 'America/Chicago'::text)) AS baseline_at\n           FROM op_day od\n             JOIN LATERAL sch_get_daily_schedule_with_purpose(od.service_date) schedule(location_group_id, group_code, group_name, included_locations, segment_id, segment_number, owner_type, assigned_employee_id, assigned_employee_name, coverage_start, coverage_end, status, load_points, coverage_purpose, notes, source_type) ON schedule.status = 'ASSIGNED'::text AND schedule.assigned_employee_id IS NOT NULL AND COALESCE(schedule.coverage_purpose, 'area_owner'::text) <> 'reminder'::text\n             JOIN location_group_memberships membership ON membership.location_group_id = schedule.location_group_id AND membership.active = true\n             JOIN locations location ON location.id = membership.location_id AND location.active = true\n          GROUP BY membership.location_id\n        ), latest_scan AS (\n         SELECT scan_events.location_id,\n            max(COALESCE(scan_events.scanned_at, scan_events.created_at)) AS last_scan_at\n           FROM scan_events\n          GROUP BY scan_events.location_id\n        ), open_session AS (\n         SELECT DISTINCT ON (s.location_id) s.location_id,\n            s.id AS session_id,\n            s.session_uuid,\n            s.status AS session_status,\n            s.started_at,\n            s.ended_at,\n            s.duration_minutes,\n            s.duration_display,\n            e.display_name AS employee_name,\n            d.device_id AS device_identifier\n           FROM sessions s\n             LEFT JOIN employees e ON e.id = s.employee_id\n             LEFT JOIN devices d ON d.id = s.device_id\n          WHERE s.status = ANY (ARRAY['active'::text, 'pending_submit'::text])\n          ORDER BY s.location_id, s.started_at DESC, s.created_at DESC\n        ), latest_completed AS (\n         SELECT DISTINCT ON (s.location_id) s.location_id,\n            s.id AS session_id,\n            s.session_uuid,\n            s.started_at,\n            s.ended_at,\n            s.duration_minutes,\n            s.duration_display,\n            e.display_name AS employee_name,\n            cr.submitted_at,\n            cr.response_json,\n            COALESCE(cr.submitted_at, s.ended_at, s.started_at) AS effective_completed_at\n           FROM sessions s\n             JOIN employees e ON e.id = s.employee_id\n             LEFT JOIN completion_responses cr ON cr.session_id = s.id\n             CROSS JOIN op_day od\n          WHERE s.status = 'closed'::text AND COALESCE(cr.submitted_at, s.ended_at, s.started_at) >= od.day_start\n          ORDER BY s.location_id, (COALESCE(cr.submitted_at, s.ended_at, s.started_at)) DESC, s.started_at DESC\n        ), open_tickets AS (\n         SELECT maintenance_tickets.location_id,\n            count(*) AS open_ticket_count\n           FROM maintenance_tickets\n          WHERE maintenance_tickets.status = 'open'::text\n          GROUP BY maintenance_tickets.location_id\n        ), truth AS (\n         SELECT l.id AS location_id,\n            l.location_code,\n            l.location_name,\n            l.location_type,\n            l.form_type,\n            od.day_start,\n            ls.last_scan_at,\n            os.session_id AS open_session_id,\n            os.session_uuid AS open_session_uuid,\n            os.session_status AS open_session_status,\n            os.started_at AS open_session_started_at,\n            os.ended_at AS open_session_ended_at,\n            os.employee_name AS open_session_employee_name,\n            os.device_identifier AS open_session_device_identifier,\n            lc.session_id AS latest_completed_session_id,\n            lc.session_uuid AS latest_completed_session_uuid,\n            lc.started_at AS latest_started_at,\n            lc.ended_at AS latest_ended_at,\n            lc.submitted_at AS latest_submitted_at,\n            lc.effective_completed_at AS latest_completed_at,\n            lc.employee_name AS latest_employee_name,\n            lc.duration_minutes,\n            lc.duration_display,\n            lc.response_json,\n            COALESCE(ot.open_ticket_count, 0::bigint) AS open_ticket_count,\n            sb.baseline_at,\n            COALESCE(lc.effective_completed_at, sb.baseline_at) AS due_baseline_at\n           FROM locations l\n             CROSS JOIN op_day od\n             LEFT JOIN scheduled_baseline sb ON sb.location_id = l.id\n             LEFT JOIN latest_scan ls ON ls.location_id = l.id\n             LEFT JOIN open_session os ON os.location_id = l.id\n             LEFT JOIN latest_completed lc ON lc.location_id = l.id\n             LEFT JOIN open_tickets ot ON ot.location_id = l.id\n          WHERE l.active = true\n        )\n SELECT location_id,\n    location_code,\n    location_name,\n    location_type,\n    form_type,\n    day_start AS operational_day_start,\n    last_scan_at,\n    open_session_id,\n    open_session_uuid,\n    open_session_status,\n    open_session_started_at,\n    open_session_ended_at,\n    latest_completed_session_id,\n    latest_completed_session_uuid,\n    latest_started_at,\n    latest_ended_at,\n    latest_submitted_at,\n    latest_completed_at,\n    latest_employee_name,\n    duration_minutes,\n    duration_display,\n    COALESCE(response_json -> 'services_performed'::text, response_json -> 'servicesPerformed'::text, response_json -> 'services'::text, response_json -> 'completed_services'::text, response_json -> 'completedServices'::text, '[]'::jsonb) AS services_performed,\n    COALESCE(response_json ->> 'notes'::text, response_json ->> 'cleaning_notes'::text, response_json ->> 'cleaningNotes'::text, response_json ->> 'maintenance_notes'::text, response_json ->> 'maintenanceNotes'::text, response_json ->> 'other_service_performed'::text, response_json ->> 'otherServicePerformed'::text, response_json ->> 'note'::text) AS notes,\n    open_ticket_count,\n        CASE\n            WHEN open_session_status = ANY (ARRAY['active'::text, 'pending_submit'::text]) THEN 'in_progress'::text\n            WHEN due_baseline_at IS NULL THEN 'not_cleaned'::text\n            WHEN form_type = 'restroom'::text AND now() >= (due_baseline_at + make_interval(mins => get_setting_int('restroom_overdue_minutes'::text, 120))) THEN 'overdue'::text\n            WHEN form_type = 'restroom'::text AND now() >= (due_baseline_at + make_interval(mins => get_setting_int('restroom_due_soon_minutes'::text, 90))) THEN 'due_soon'::text\n            WHEN form_type = 'exhibit'::text AND now() >= (due_baseline_at + make_interval(mins => get_setting_int('exhibit_overdue_minutes'::text, 240))) THEN 'overdue'::text\n            WHEN form_type = 'exhibit'::text AND now() >= (due_baseline_at + make_interval(mins => get_setting_int('exhibit_due_soon_minutes'::text, 195))) THEN 'due_soon'::text\n            ELSE 'okay'::text\n        END AS status_code,\n        CASE\n            WHEN open_session_status = ANY (ARRAY['active'::text, 'pending_submit'::text]) THEN 'blue'::text\n            WHEN due_baseline_at IS NULL THEN 'black'::text\n            WHEN form_type = 'restroom'::text AND now() >= (due_baseline_at + make_interval(mins => get_setting_int('restroom_overdue_minutes'::text, 120))) OR form_type = 'exhibit'::text AND now() >= (due_baseline_at + make_interval(mins => get_setting_int('exhibit_overdue_minutes'::text, 240))) THEN 'red'::text\n            WHEN form_type = 'restroom'::text AND now() >= (due_baseline_at + make_interval(mins => get_setting_int('restroom_due_soon_minutes'::text, 90))) OR form_type = 'exhibit'::text AND now() >= (due_baseline_at + make_interval(mins => get_setting_int('exhibit_due_soon_minutes'::text, 195))) THEN 'yellow'::text\n            ELSE 'green'::text\n        END AS status_color,\n    to_char(timezone('America/Chicago'::text, day_start), 'MM/DD/YYYY HH12:MI AM'::text) || ' Central'::text AS operational_day_start_display,\n    to_char(timezone('America/Chicago'::text, last_scan_at), 'MM/DD/YYYY HH12:MI AM'::text) || ' Central'::text AS last_scan_at_display,\n    to_char(timezone('America/Chicago'::text, open_session_started_at), 'MM/DD/YYYY HH12:MI AM'::text) || ' Central'::text AS open_session_started_at_display,\n    to_char(timezone('America/Chicago'::text, open_session_ended_at), 'MM/DD/YYYY HH12:MI AM'::text) || ' Central'::text AS open_session_ended_at_display,\n    to_char(timezone('America/Chicago'::text, latest_started_at), 'MM/DD/YYYY HH12:MI AM'::text) || ' Central'::text AS latest_started_at_display,\n    to_char(timezone('America/Chicago'::text, latest_ended_at), 'MM/DD/YYYY HH12:MI AM'::text) || ' Central'::text AS latest_ended_at_display,\n    to_char(timezone('America/Chicago'::text, latest_submitted_at), 'MM/DD/YYYY HH12:MI AM'::text) || ' Central'::text AS latest_submitted_at_display,\n    to_char(timezone('America/Chicago'::text, latest_completed_at), 'MM/DD/YYYY HH12:MI AM'::text) || ' Central'::text AS latest_completed_at_display,\n    open_session_employee_name,\n    open_session_device_identifier\n   FROM truth;",
       "relation_kind": "v",
       "schema_name": "public",
       "view_name": "v_location_dashboard_status"

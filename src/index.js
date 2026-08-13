@@ -99,7 +99,7 @@ const SCAN_RPC_ALLOWLIST = new Set([
   "tool_evaluate_location_proximity_v2"
 ]);
 
-const SCAN_CONTRACT_VERSION = "scan.v3.offline-authority";
+const SCAN_CONTRACT_VERSION = "scan.v4.snapshot-bound-authority";
 const DASHBOARD_CONTRACT_VERSION = "dashboard.v1";
 const MESSAGING_CONTRACT_VERSION = "messaging.v5";
 const SCHEDULE_CONTRACT_VERSION = "schedule.v2";
@@ -322,6 +322,15 @@ function prepareScanRpcCall(fn, args) {
     }
     nextArgs.p_client_session_id = clientSessionId;
     nextArgs.p_client_started_at = clientStartedAt;
+    const snapshotId = String(nextArgs.p_snapshot_id || nextArgs.snapshot_id || "").trim().toLowerCase();
+    const snapshotEmployeeId = String(nextArgs.p_snapshot_employee_id || nextArgs.snapshot_employee_id || nextArgs.employee_id || "").trim().toLowerCase();
+    const snapshotEpoch = Number(nextArgs.p_snapshot_assignment_epoch ?? nextArgs.snapshot_assignment_epoch ?? nextArgs.assignment_epoch);
+    if (!/^[0-9a-f]{64}$/.test(snapshotId) || !/^[0-9a-f-]{36}$/.test(snapshotEmployeeId) || !Number.isInteger(snapshotEpoch) || snapshotEpoch < 0) {
+      throw Object.assign(new Error("p_snapshot_id, p_snapshot_employee_id, and p_snapshot_assignment_epoch from the issued offline snapshot are required."), { status: 422, code: "22023" });
+    }
+    nextArgs.p_snapshot_id = snapshotId;
+    nextArgs.p_snapshot_employee_id = snapshotEmployeeId;
+    nextArgs.p_snapshot_assignment_epoch = snapshotEpoch;
   }
   if (normalizedFn === "tool_complete_session") {
     const sessionIdentifier = String(nextArgs.p_session_uuid || nextArgs.p_client_session_id || "").trim();
@@ -400,6 +409,9 @@ function bindOfflineActorProof(fn, args, credential) {
   }
   if (normalizedFn === "tool_start_offline_occurrence") {
     nextArgs.p_authenticated_credential_id = credential.credential_id;
+    // Credential identity is authenticated server-side; never accept a
+    // client-provided snapshot credential as authority.
+    nextArgs.p_snapshot_credential_id = credential.credential_id;
     nextArgs.p_backend_execution_secret = secret;
     return { fn: normalizedFn, args: nextArgs };
   }

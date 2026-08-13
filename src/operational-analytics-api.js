@@ -159,7 +159,9 @@ export function normalizeInspectionPayload(values = {}, auth = {}, idempotencyKe
     safety_score: boundedInt(values.safety_score ?? values.safetyScore, { name: "safety_score" }),
     pass_threshold: passThreshold,
     critical_failure: criticalFailure,
-    follow_up_required: values.follow_up_required === true || values.followUpRequired === true || criticalFailure || overallScore < passThreshold,
+    // A failed inspection is never readiness evidence.  The server derives
+    // follow-up rather than allowing a client to suppress it.
+    follow_up_required: criticalFailure || overallScore < passThreshold,
     findings_json: findings,
     notes: clip(values.notes, 8000) || null,
   };

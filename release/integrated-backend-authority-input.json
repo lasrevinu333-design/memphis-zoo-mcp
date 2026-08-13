@@ -1,19 +1,19 @@
 {
-  "release_contract_version": "offline-authority.v3",
+  "release_contract_version": "offline-authority.v4",
   "accepted_engine_contract": {
     "scan": "scan.v2",
     "queue": "indexeddb-v4",
     "completion": "tool_complete_session via authenticated compatibility adapter"
   },
   "required_engine_contract": {
-    "scan": "scan.v3.offline-authority",
+    "scan": "scan.v4.snapshot-bound-authority",
     "queue": "indexeddb-v6-offline-authority",
     "activation": "tool_start_offline_occurrence",
     "completion": "tool_commit_cleaning_workflow with context_id and submission_proof"
   },
   "backend_contract": {
-    "scan": "scan.v3.offline-authority",
-    "authority": "offline-authority.v3",
+    "scan": "scan.v4.snapshot-bound-authority",
+    "authority": "offline-authority.v4",
     "execution_boundary": "CUSTODIAL_BACKEND_PROOF_SECRET",
     "bridge_backend_source": "src/index.js:runPreparedScanRpc",
     "health_gate": "GET /scan-api/authority-health and custodial_backend_authority_health"
@@ -43,6 +43,7 @@
       "apply 20260810170000_finish_offline_authority_operational_closure.sql",
       "apply 20260810190000_final_integrated_backend_operational_correction.sql",
       "apply 20260813035530_offline_scan_authority_snapshot.sql",
+      "apply 20260813050000_offline_snapshot_operational_truth_closure.sql",
       "require a green authority health gate and direct-DML denial probes before routing traffic"
     ],
     "rollback": {
@@ -51,7 +52,7 @@
       "restoration_checks": [
         "custodial_backend_authority_health returns ok=true",
         "exact start and completion replay return one durable proof, reconciliation, and completion",
-        "offline scan authority snapshot returns only current credential/device/employee/location authority",
+        "offline snapshot activation requires exact issued identity; frozen exact replay remains attributable to the original actor after reassignment",
         "scan evidence remains exact-shape and provenance-labeled after replay",
         "service_role direct insert/update/delete/truncate probes are denied",
         "named-manager reconciliation read, exactly-once disposition replay, and notification retry state remain available"

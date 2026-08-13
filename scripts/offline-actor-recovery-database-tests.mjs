@@ -53,8 +53,10 @@ function jsonSql({ session, completion, context, proof, device, location, creden
     ${q(context)},${q(proof)},${q(credential)},${q(execSecret)}
   )::text;`;
 }
-async function activate({ device, location, session, start = startedAt, credential = credentialA }) {
-  return JSON.parse(await sql(`select public.tool_start_offline_occurrence(${q(device)},${q(location)},${q(session)},${q(start)},${q(credential)},${q(execSecret)})::text;`));
+let snapshot;
+const snapshotsByDevice = new Map();
+async function activate({ device, location, session, start = startedAt, credential = credentialA, authoritySnapshot = snapshotsByDevice.get(device) || snapshot }) {
+  return JSON.parse(await sql(`select public.tool_start_offline_occurrence(${q(device)},${q(location)},${q(session)},${q(start)},${q(authoritySnapshot.snapshot_id)},${q(authoritySnapshot.employee_id)},${authoritySnapshot.assignment_epoch},${q(credential)},${q(credential)},${q(execSecret)})::text;`));
 }
 async function claimNotifications(workerId, limit = 50) {
   return JSON.parse(await sql(`select coalesce(jsonb_agg(to_jsonb(n)),'[]'::jsonb)::text from public.custodial_claim_offline_reconciliation_notifications(${q(workerId)},${limit},15,${q(execSecret)}) n;`));
@@ -87,9 +89,12 @@ insert into public.custodial_employee_device_assignment_history(device_id,device
 
 await sql(setup);
 assert.equal(await sql(`select count(*) from public.custodial_offline_actor_contexts where client_session_id like 'oa-${stamp}%';`), "0", "state reads must create no proof/context");
-const snapshot = JSON.parse(await sql(`select public.tool_get_offline_scan_authority_snapshot(${q(`OA-${stamp}-A`)},${q(credentialA)},${q(execSecret)})::text;`));
-assert.equal(snapshot.schema_version, "offline-scan-snapshot.v1");
-assert.equal(snapshot.contract_version, "scan.v3.offline-authority");
+snapshot = JSON.parse(await sql(`select public.tool_get_offline_scan_authority_snapshot(${q(`OA-${stamp}-A`)},${q(credentialA)},${q(execSecret)})::text;`));
+snapshotsByDevice.set(`OA-${stamp}-A`, snapshot);
+snapshotsByDevice.set(`OA-${stamp}-B`, JSON.parse(await sql(`select public.tool_get_offline_scan_authority_snapshot(${q(`OA-${stamp}-B`)},${q(credentialB)},${q(execSecret)})::text;`)));
+snapshotsByDevice.set(`OA-${stamp}-C`, JSON.parse(await sql(`select public.tool_get_offline_scan_authority_snapshot(${q(`OA-${stamp}-C`)},${q(credentialC)},${q(execSecret)})::text;`)));
+assert.equal(snapshot.schema_version, "offline-scan-snapshot.v2");
+assert.equal(snapshot.contract_version, "scan.v4.snapshot-bound-authority");
 assert.equal(snapshot.canonical_device_id, `OA-${stamp}-A`);
 assert.equal(snapshot.employee_id, employeeA);
 assert.equal(snapshot.employee_name, "Offline Authority Actor A");
@@ -111,10 +116,10 @@ assert.equal(startReplay.committable, true, "exact start replay remains completi
 assert.equal(startReplay.replayed, true, "exact start replay is explicitly classified");
 assert.equal(startReplay.submission_proof, contextA.submission_proof, "lost start response recovers the stable durable proof");
 assert.equal(await sql(`select count(*) from public.custodial_offline_submission_proofs p join public.custodial_offline_actor_contexts c on c.context_id=p.context_id where c.client_session_id=${q(sessionA)};`), "1");
-const changedStartDenied = await sql(`select public.tool_start_offline_occurrence(${q(`OA-${stamp}-A`)},${q(codeA)},${q(sessionA)},${q(new Date(Date.parse(startedAt) + 1000).toISOString())},${q(credentialA)},${q(execSecret)});`, { expectFailure: true });
-assert.match(changedStartDenied, /does not match the original occurrence/i, "different start content remains fenced");
+const changedStartDenied = await sql(`select public.tool_start_offline_occurrence(${q(`OA-${stamp}-A`)},${q(codeA)},${q(sessionA)},${q(new Date(Date.parse(startedAt) + 1000).toISOString())},${q(snapshot.snapshot_id)},${q(snapshot.employee_id)},${snapshot.assignment_epoch},${q(credentialA)},${q(credentialA)},${q(execSecret)});`, { expectFailure: true });
+assert.match(changedStartDenied, /does not match the original frozen snapshot/i, "different start content remains fenced");
 
-const genericDenied = await sql(`set role service_role; select public.tool_start_offline_occurrence('OA-${stamp}-A','${codeA}','oa-${stamp}-forged',${q(startedAt)},'${credentialA}','not-the-backend-secret');`, { expectFailure: true });
+const genericDenied = await sql(`set role service_role; select public.tool_start_offline_occurrence('OA-${stamp}-A','${codeA}','oa-${stamp}-forged',${q(startedAt)},${q(snapshot.snapshot_id)},${q(snapshot.employee_id)},${snapshot.assignment_epoch},'${credentialA}','${credentialA}','not-the-backend-secret');`, { expectFailure: true });
 assert.match(genericDenied, /not authorized/i, "generic service_role cannot forge the backend execution proof");
 assert.equal(await sql(`select has_function_privilege('service_role','public.run_sql_write(text)'::regprocedure,'EXECUTE')::text;`), "false", "the legacy one-argument SQL writer is not application-callable");
 for (const [label, statement] of [
@@ -136,15 +141,17 @@ for (const [label, statement] of [
 }
 assert.equal(await sql(`select count(*) from public.custodial_terminal_writer_inventory where application_callable and (mutates_terminal_truth or delegates_alternate_terminal_authority) and proname not in ('tool_start_offline_occurrence','tool_commit_cleaning_workflow_authoritative','tool_complete_session_authoritative','custodial_close_maintenance_ticket_authoritative');`), "0", "capability/grant inventory leaves no application-callable alternate terminal writer");
 
-// A lost response is recoverable only while the issuing assignment remains
-// authoritative. After reassignment the replay must not disclose the proof,
-// while the proof already held by actor A remains valid for completion.
+// An issued occurrence is frozen evidence. Reassignment blocks a new start
+// from A's snapshot, but its exact replay safely recovers the original proof
+// and completion remains attributed to A.
 await sql(`update public.devices set assigned_employee_id='${employeeB}'::uuid where id='${deviceA}'::uuid;
   insert into public.custodial_employee_device_assignment_history(device_id,device_identifier,new_employee_id,new_employee_name,change_reason,source)
   values('${deviceA}'::uuid,'OA-${stamp}-A','${employeeB}'::uuid,'Offline Authority Actor B','proof replay reassignment fixture','test');`);
-const reassignedReplayDenied = await sql(`select public.tool_start_offline_occurrence(${q(`OA-${stamp}-A`)},${q(codeA)},${q(sessionA)},${q(startedAt)},${q(credentialA)},${q(execSecret)});`, { expectFailure: true });
-assert.match(reassignedReplayDenied, /authoritative assignment changed/i, "reassigned exact start replay is fenced without returning the old proof");
-assert.doesNotMatch(reassignedReplayDenied, new RegExp(contextA.submission_proof), "reassigned replay never discloses the held completion proof");
+const reassignedReplay = await activate({ device: `OA-${stamp}-A`, location: codeA, session: sessionA });
+assert.equal(reassignedReplay.replayed, true, "reassignment preserves exact frozen start replay");
+assert.equal(reassignedReplay.submission_proof, contextA.submission_proof, "exact frozen replay returns the original proof");
+const newActivationAfterReassignment = await sql(`select public.tool_start_offline_occurrence(${q(`OA-${stamp}-A`)},${q(codeA)},${q(`oa-${stamp}-reassigned-new`)},${q(startedAt)},${q(snapshot.snapshot_id)},${q(snapshot.employee_id)},${snapshot.assignment_epoch},${q(credentialA)},${q(credentialA)},${q(execSecret)});`, { expectFailure: true });
+assert.match(newActivationAfterReassignment, /drifted from the issued offline snapshot/i, "reassignment rejects new activation from A's stale snapshot");
 const scanId = `oa-${stamp}-scan-1`;
 const acceptedSql = jsonSql({ session: sessionA, completion: `oa-${stamp}-complete-1`, context: contextA.context_id, proof: contextA.submission_proof, device: `OA-${stamp}-A`, location: codeA, scans: [{ event_type: "scan_finish", client_event_id: scanId, scanned_at: endedAt, result: "ok", payload_json: entryEvidence }] });
 const accepted = JSON.parse(await sql(acceptedSql));
@@ -262,6 +269,7 @@ assert.equal(oversizedResult.reason, "invalid_payload_shape_or_bounds", "oversiz
 await sql(`update public.devices set assigned_employee_id='${employeeB}'::uuid where id='${deviceB}'::uuid;
   insert into public.custodial_employee_device_assignment_history(device_id,device_identifier,new_employee_id,new_employee_name,change_reason,source)
   values('${deviceB}'::uuid,'OA-${stamp}-B','${employeeB}'::uuid,'Offline Authority Actor B','race fixture','test');`);
+snapshotsByDevice.set(`OA-${stamp}-B`, JSON.parse(await sql(`select public.tool_get_offline_scan_authority_snapshot(${q(`OA-${stamp}-B`)},${q(credentialB)},${q(execSecret)})::text;`)));
 const raceStart = new Date(Date.now() - 55_000).toISOString();
 const raceEnd = new Date(Date.now() - 25_000).toISOString();
 const raceA = await activate({ device: `OA-${stamp}-B`, location: codeB, session: `oa-${stamp}-race-a`, start: raceStart, credential: credentialB });

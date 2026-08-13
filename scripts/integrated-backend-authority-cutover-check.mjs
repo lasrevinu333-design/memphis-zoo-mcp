@@ -193,6 +193,7 @@ function expectedReleaseEvidence(input, schemaFingerprint, frontendManifest, aut
       operational_closure_phase: "20260810170000 recovers durable exact-start proofs, retires every service-role generic writer, and runs leased reconciliation notification delivery",
       final_operational_correction_phase: "20260810190000 fences reassigned proof replay, retires alternate terminal writers and purge, and records idempotent recipient delivery evidence",
       scan_snapshot_phase: "20260813035530 exposes bounded offline scan authority and enforces exact provenance evidence shape",
+      snapshot_rebind_closure_phase: "20260813050000 binds activation to an issued snapshot and derives never-cleaned operational truth",
     },
     rollback: input.rollback,
     cutover: input.cutover,
@@ -229,7 +230,7 @@ const evidenceBlob = expectedEntries.find(({ path }) => path === releaseEvidence
 assert.ok(evidenceBlob, "expected tree omits generated release evidence");
 const expectedBlobs = expectedEntries.filter(({ path }) => path !== releaseEvidencePath);
 assert.ok(expectedBlobs.length > 0, "release authority inventory is empty");
-assert.equal(expectedBlobs.filter(({ path }) => /^supabase\/migrations\/[^/]+\.sql$/.test(path)).length, 69, "release authority inventory must bind all 69 migrations");
+assert.equal(expectedBlobs.filter(({ path }) => /^supabase\/migrations\/[^/]+\.sql$/.test(path)).length, 70, "release authority inventory must bind all 70 migrations");
 for (const blob of [...expectedBlobs, evidenceBlob]) assertWorktreeMatchesExpectedBlob(blob);
 
 const blobByPath = new Map(expectedBlobs.map((blob) => [blob.path, blob]));
@@ -246,7 +247,7 @@ const phaseFText = blobByPath.get(`supabase/migrations/${phaseF}`).bytes.toStrin
 const schemaFingerprint = blobByPath.get("supabase/canonical/schema-fingerprint.txt")?.bytes.toString("utf8").trim();
 const frontendManifest = parseJsonBlob(blobByPath.get("release/frontend-release-manifest.json"), "frontend release manifest");
 
-assert.equal(input.release_contract_version, "offline-authority.v3");
+assert.equal(input.release_contract_version, "offline-authority.v4");
 assert.deepEqual(input.cutover.phase_order.slice(1, 8), [
   `apply ${phaseA}`,
   "deploy the bridge backend; it falls back only on absent authoritative procedures",
@@ -312,7 +313,7 @@ if (databaseMode) {
   const q = (value) => `'${String(value).replaceAll("'", "''")}'`;
   const run = (statement) => execFileSync("docker", ["exec", container, "psql", "-v", "ON_ERROR_STOP=1", "-At", "-U", "supabase_admin", "-d", database, "-c", statement], { encoding: "utf8" }).trim();
   assert.equal(run(`select public.custodial_backend_authority_health(${q(secret)})->>'ok';`).split("\n").at(-1), "true", "configured secret must pass the canonical health gate");
-  assert.equal(run(`select public.custodial_backend_authority_health(${q(secret)})->>'authority';`).split("\n").at(-1), "offline-authority.v3", "Phase D health must expose durable proof and delivery authority");
+  assert.equal(run(`select public.custodial_backend_authority_health(${q(secret)})->>'authority';`).split("\n").at(-1), "offline-authority.v4", "snapshot closure health must expose issued-snapshot authority");
   assert.equal(run(`select count(*) from information_schema.role_table_grants where table_schema='public' and grantee='service_role' and table_name in ('sessions','completion_responses','scan_events','maintenance_tickets') and privilege_type in ('INSERT','UPDATE','DELETE','TRUNCATE');`).split("\n").at(-1), "0", "service role must not retain operational DML grants");
   assert.equal(run(`select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('tool_get_offline_scan_authority_snapshot','tool_start_offline_occurrence','tool_commit_cleaning_workflow_authoritative','tool_complete_session_authoritative','custodial_backend_authority_health','custodial_close_maintenance_ticket_authoritative');`).split("\n").at(-1), "6", "bounded canonical command and snapshot surface must be present");
   assert.equal(run(`select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('run_application_write','run_sql_write','run_sql_migration','force_close_session','tool_force_close_session') and has_function_privilege('service_role',p.oid,'EXECUTE');`).split("\n").at(-1), "0", "service role must not retain a generic or force-close writer");

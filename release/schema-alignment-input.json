@@ -9,7 +9,7 @@
     "expires_at": "2026-08-23T23:59:59Z"
   },
   "api_contract_versions": {
-    "scan": "scan.v3.offline-authority",
+    "scan": "scan.v4.snapshot-bound-authority",
     "dashboard": "dashboard.v1",
     "messaging": "messaging.v5",
     "schedule": "schedule.v2",

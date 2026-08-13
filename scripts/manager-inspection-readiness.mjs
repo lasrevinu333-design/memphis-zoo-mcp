@@ -81,6 +81,8 @@ export function evaluateManagerInspectionReadiness(rows, {
     if (row.manager_active !== true) gaps.push("manager is not currently active");
     if (row.manager_revoked_at) gaps.push("manager authority is revoked");
     if (row.is_system_principal === true) gaps.push("system principals cannot perform the acceptance inspection");
+    if (row.passed !== true) gaps.push("inspection did not pass");
+    if (row.follow_up_required !== false) gaps.push("inspection requires follow-up");
     if (!row.session_id || !["pending_submit", "closed"].includes(row.session_status)) {
       gaps.push("linked cleaning session is not completed");
     }
