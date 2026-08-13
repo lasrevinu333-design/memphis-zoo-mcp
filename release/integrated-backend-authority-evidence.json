@@ -620,7 +620,7 @@
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "2c85204981a3a1ad0d50b63a4ee1d1c996e26648"
+        "object_id": "a8d2866d5c538a087831c5ed8e5e12131770ca30"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
