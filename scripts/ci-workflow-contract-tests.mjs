@@ -39,6 +39,7 @@ for (const name of workflowNames) {
 
 const schedulerGate = readFileSync(resolve(workflowDirectory, "foundation-security-gate.yml"), "utf8");
 const packageManifest = readFileSync(resolve(root, "package.json"), "utf8");
+const parsedPackageManifest = JSON.parse(packageManifest);
 assert.match(schedulerGate, /^on:\n\s+pull_request:\s*\n\s+push:\s*$/m, "the scheduler authority gate must run for every pull request and every pushed branch");
 assert.doesNotMatch(schedulerGate, /(?:paths|paths-ignore):/i, "the scheduler authority gate may not skip scheduler source changes by path filtering");
 assert.match(schedulerGate, /npm run --silent test:static-weekly-scheduler:fast/, "the scheduler gate must retain portable/compiler/control-plane contracts");
@@ -50,5 +51,10 @@ assert.match(schedulerGate, /npm run --silent test:final-closure-database-isolat
 assert.match(packageManifest, /"test:static-weekly-scheduler:database":\s*"[^"]*static-weekly-schedule-authority-v3-tests\.mjs[^"]*static-weekly-schedule-concurrency-tests\.mjs/, "the database scheduler command must include v3 authority and independent-session concurrency coverage");
 assert.match(packageManifest, /"test:integrated-backend-authority-suite-order":\s*"node scripts\/integrated-backend-authority-suite-order-isolated-tests\.mjs"/, "the integrated suite-order command must own isolated database setup for both orders");
 assert.match(packageManifest, /"test:final-closure-database-isolated":\s*"node scripts\/final-closure-database-isolated-tests\.mjs"/, "the final closure database command must own its clean disposable database");
+const releaseGate = readFileSync(resolve(workflowDirectory, "integrated-release-attestation.yml"), "utf8");
+assert.match(releaseGate, /test:integrated-backend-authority-cutover:database/,
+  "the manual signed release gate must invoke the database-enabled cutover checker");
+assert.match(parsedPackageManifest.scripts["test:integrated-backend-authority-cutover:database"], / --database$/,
+  "the signed release database command must not silently degrade to source-only acceptance");
 
 console.log(JSON.stringify({ ok: true, workflows_checked: workflowNames.length }, null, 2));

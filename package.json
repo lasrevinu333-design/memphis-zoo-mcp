@@ -59,6 +59,7 @@
     "test:integrated-backend-authority-suite-order:final-first": "node scripts/integrated-backend-authority-suite-order-isolated-tests.mjs --order final-first",
     "test:integrated-backend-authority-suite-order:named-first": "node scripts/integrated-backend-authority-suite-order-isolated-tests.mjs --order named-first",
     "test:integrated-backend-authority-cutover": "node scripts/integrated-backend-authority-cutover-check.mjs --acceptance-input \"$INTEGRATED_RELEASE_ATTESTATION_INPUT\"",
+    "test:integrated-backend-authority-cutover:database": "node scripts/integrated-backend-authority-cutover-check.mjs --acceptance-input \"$INTEGRATED_RELEASE_ATTESTATION_INPUT\" --database",
     "release:signing-key:create": "node scripts/create-release-signing-key.mjs",
     "release:attestation:create": "node scripts/create-release-attestation.mjs",
     "test:schema-reconciliation-db": "node scripts/canonical-schema-reconciliation-database-tests.mjs",

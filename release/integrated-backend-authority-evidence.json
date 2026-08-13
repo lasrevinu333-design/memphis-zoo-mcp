@@ -120,7 +120,7 @@
       {
         "path": ".github/workflows/integrated-release-attestation.yml",
         "mode": "100644",
-        "object_id": "53e3b7d7797dd20c8426e96696be2a57f23d9e4a"
+        "object_id": "53d8f757815493bacc6f31651a32a66f56ba9d32"
       },
       {
         "path": ".github/workflows/manager-inspection-readiness-monitor.yml",
@@ -325,7 +325,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "c9a1b2d4a0d7849858fd590ea33b691044b052ae"
+        "object_id": "ef982f61de894a60d9ecf2f7c7a12811735aa6ba"
       },
       {
         "path": "public/moxie-assets/contacts-creekside-animal.png",
@@ -455,7 +455,7 @@
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "10ffeaaa2704d814943f2173520f679683c3c7ea"
+        "object_id": "710356ccc26b0b6c55d45c8bac0c31f7e07fdffc"
       },
       {
         "path": "scripts/create-release-attestation.mjs",
