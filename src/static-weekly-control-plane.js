@@ -12,6 +12,7 @@ import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { compileStaticWeeklySchedule } from "./static-weekly-schedule-compiler.js";
 import { createStaticWeeklyDraftRpcInput, createStaticWeeklyProjectionRpcInput } from "./static-weekly-schedule-database-adapter.js";
+import { getStaticWeeklySolverReadiness, initializeStaticWeeklySolver } from "./static-weekly-schedule-solver.js";
 
 export const STATIC_WEEKLY_CONTROL_PLANE_SCHEMA = "memphis-zoo.static-weekly-control-plane.v1";
 
@@ -128,7 +129,12 @@ export function createStaticWeeklyControlPlaneDatabase({ connectionString = proc
   return new Pool({ connectionString, max: 4, idleTimeoutMillis: 10_000, connectionTimeoutMillis: 10_000, application_name: "memphis-static-weekly-control-plane" });
 }
 
-export function createStaticWeeklyControlPlane({ database, compiler = compileStaticWeeklySchedule } = {}) {
+export function createStaticWeeklyControlPlane({
+  database,
+  compiler = compileStaticWeeklySchedule,
+  initializeSolver = initializeStaticWeeklySolver,
+  getSolverReadiness = getStaticWeeklySolverReadiness,
+} = {}) {
   if (!database?.connect) throw fail("static_weekly_control_plane_database_required");
 
   async function transaction(work) {
@@ -175,7 +181,24 @@ export function createStaticWeeklyControlPlane({ database, compiler = compileSta
   return {
     schema: STATIC_WEEKLY_CONTROL_PLANE_SCHEMA,
     async health() {
-      return transaction((client) => call(client, "static_weekly_v3_authority_health", []));
+      const authority = await transaction((client) => call(client, "static_weekly_v3_authority_health", []));
+      try {
+        await initializeSolver();
+      } catch (error) {
+        return {
+          ...authority,
+          ready: false,
+          authority_ready: authority?.ready === true,
+          solver: { ...getSolverReadiness(), error: error?.message || "Static weekly solver initialization failed." },
+        };
+      }
+      const solver = getSolverReadiness();
+      return {
+        ...authority,
+        authority_ready: authority?.ready === true,
+        solver,
+        ready: authority?.ready === true && solver?.available === true,
+      };
     },
     async getManagerSnapshot({ manager, weekStart }) {
       requireManager(manager);

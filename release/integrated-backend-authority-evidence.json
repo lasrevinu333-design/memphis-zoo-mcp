@@ -1,10 +1,12 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
-  "schema_fingerprint": "8738b47fb19d90335bfcc22ba8a3265aa5cd1f30228e4a6b9afa9b8a7af15219",
+  "release_id": "release-2026.07.19.custodial-v3.12",
+  "frontend_commit_sha": "2959ec8f0e81742ba314e71fdfb7831e64782948",
+  "schema_fingerprint": "5b123634dd48e0d9bbf88cd572d2d52bafb8b1aaf96c9f9c2811d6f749f30ac6",
   "schema_transition": {
     "transition_id": "custodial-canary-offline-scan-authority-20260813",
     "from_fingerprint": "333ddfc8008ea0b85916de7d491b98c9b8d6a7d45d3a2947d99b4b3bb836ea00",
-    "to_fingerprint": "8738b47fb19d90335bfcc22ba8a3265aa5cd1f30228e4a6b9afa9b8a7af15219",
+    "to_fingerprint": "5b123634dd48e0d9bbf88cd572d2d52bafb8b1aaf96c9f9c2811d6f749f30ac6",
     "expires_at": "2026-08-23T23:59:59Z"
   },
   "frontend_source_fingerprint": "333ddfc8008ea0b85916de7d491b98c9b8d6a7d45d3a2947d99b4b3bb836ea00",
@@ -34,7 +36,8 @@
     "final_operational_correction_phase": "20260810190000 fences reassigned proof replay, retires alternate terminal writers and purge, and records idempotent recipient delivery evidence",
     "scan_snapshot_phase": "20260813035530 exposes bounded offline scan authority and enforces exact provenance evidence shape",
     "snapshot_rebind_closure_phase": "20260813050000 binds activation to an issued snapshot and derives current operational-day truth",
-    "canary_operational_recovery_phase": "20260813060000 adds durable exact-device pause and known-good forward restoration of canonical authority functions"
+    "canary_operational_recovery_phase": "20260813060000 adds durable exact-device pause and known-good forward restoration of canonical authority functions",
+    "operational_service_date_phase": "20260813070000 unifies schedules, turnover, occurrences, dashboard truth, and recovery probes at the 04:00 Central service date"
   },
   "rollback": {
     "before_enforcement": "legacy Engine and current backend completion remain available",
@@ -43,8 +46,8 @@
   },
   "cutover": {
     "source_identity": {
-      "kind": "external_immutable_acceptance_input",
-      "acceptance_input_contract": "The cutover invocation must supply a regular, mode-0444 JSON file outside this worktree with one exact expected_commit and expected_tree. The executable gate deterministically enumerates every tracked path and Git mode from that exact tree, compares every worktree path directly with its exact tree blob and mode, and rejects hidden index flags or Git-environment substitution before any database access. Generated evidence is never its own identity authority.",
+      "kind": "external_signed_release_attestation",
+      "acceptance_input_contract": "The cutover invocation must supply a regular, mode-0444, Ed25519-signed release attestation outside this worktree. It binds the semantic release, backend commit/tree/evidence digest/evidence blob, frontend commit, and schema fingerprint. The executable gate deterministically enumerates every tracked path and Git mode from that exact tree, compares every worktree path directly with its exact tree blob and mode, and rejects hidden index flags or Git-environment substitution before any database access. Generated evidence is never its own identity authority.",
       "generated_evidence_path": "release/integrated-backend-authority-evidence.json",
       "generated_evidence_excluded_from_content_identity": true,
       "authority_inventory": {
@@ -68,6 +71,7 @@
       "apply 20260813035530_offline_scan_authority_snapshot.sql",
       "apply 20260813050000_offline_snapshot_operational_truth_closure.sql",
       "apply 20260813060000_release_canary_operational_recovery.sql",
+      "apply 20260813070000_operational_service_date_foundation.sql",
       "require a green authority health gate and direct-DML denial probes before routing traffic"
     ],
     "rollback": {
@@ -80,12 +84,13 @@
         "scan evidence remains exact-shape and provenance-labeled after replay",
         "service_role direct insert/update/delete/truncate probes are denied",
         "named-manager reconciliation read, exactly-once disposition replay, and notification retry state remain available",
-        "present-but-broken and missing canonical authority functions restore to their captured known-good definitions while the canary remains paused"
+        "present-but-broken and missing canonical authority functions restore to their captured known-good definitions while the canary remains paused",
+        "schedule, turnover, occurrence, and dashboard service dates all change at the same 04:00 America/Chicago boundary"
       ]
     }
   },
   "authority_content_identity": {
-    "source": "complete_tracked_git_tree_from_external_immutable_acceptance_input",
+    "source": "complete_tracked_git_tree_from_external_signed_release_attestation",
     "expected_tree_inventory": [
       {
         "path": ".github/certs/prod-ca-2021.crt",
@@ -95,7 +100,7 @@
       {
         "path": ".github/workflows/custodial-production-repair.yml",
         "mode": "100644",
-        "object_id": "ec60d4e1309c5be6cddcd371284469756074a228"
+        "object_id": "2712962db3230742820506fc2b2d912d477f89f4"
       },
       {
         "path": ".github/workflows/device-credential-foundation.yml",
@@ -105,12 +110,17 @@
       {
         "path": ".github/workflows/event-integrity-diagnostics.yml",
         "mode": "100644",
-        "object_id": "a84c759aa3694f2c6b61a8382dad1d1fcec4f3b2"
+        "object_id": "233dab87521a740ec54ef3d90e9c86112b53f157"
       },
       {
         "path": ".github/workflows/foundation-security-gate.yml",
         "mode": "100644",
-        "object_id": "57bbe0b7abe224c588ba20612f16dc81024039b9"
+        "object_id": "5db335705bc458c4ad206725e767ea2589268fc3"
+      },
+      {
+        "path": ".github/workflows/integrated-release-attestation.yml",
+        "mode": "100644",
+        "object_id": "53e3b7d7797dd20c8426e96696be2a57f23d9e4a"
       },
       {
         "path": ".github/workflows/manager-inspection-readiness-monitor.yml",
@@ -120,7 +130,7 @@
       {
         "path": ".github/workflows/operational-analytics-diagnostics.yml",
         "mode": "100644",
-        "object_id": "ce41024403676c8995d86cb3fbcdee01460b2a66"
+        "object_id": "38b44520f0370285a3a488fc7b718608de133076"
       },
       {
         "path": ".github/workflows/operational-recovery-live.yml",
@@ -130,7 +140,7 @@
       {
         "path": ".github/workflows/operations-leadership-mobile-foundation.yml",
         "mode": "100644",
-        "object_id": "9dd044b3892b5fa895a28eb1a6ac00e8ed8f200b"
+        "object_id": "48cbb191a1cd7786aa84af0ac29b02827e9e1d22"
       },
       {
         "path": ".github/workflows/phone-production-handoff-monitor.yml",
@@ -140,7 +150,7 @@
       {
         "path": ".github/workflows/production-availability-monitor.yml",
         "mode": "100644",
-        "object_id": "5c03447453a37721b0ba3aba6122206a695a60b7"
+        "object_id": "ad465e47fd7a22795b497791e19bc0b7a5f722ef"
       },
       {
         "path": ".github/workflows/production-database-credential-bridge.yml",
@@ -205,7 +215,7 @@
       {
         "path": "deploy/static-weekly-control-plane.render.yaml",
         "mode": "100644",
-        "object_id": "59770fb43af2b9caa58ff2700faf899736cf1828"
+        "object_id": "dec875c55edd6387c3d97e924986732ad6b75cc8"
       },
       {
         "path": "docs/AI_INTEGRATION_ARCHITECTURE.md",
@@ -315,7 +325,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "375618ebc0a5b60ecf72339fa3d859c5129914b0"
+        "object_id": "c9a1b2d4a0d7849858fd590ea33b691044b052ae"
       },
       {
         "path": "public/moxie-assets/contacts-creekside-animal.png",
@@ -365,12 +375,12 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "ecfb32f15ffc1552feb9c9ef0f918db978b2054e"
+        "object_id": "3e0369aa048450029cd190b681f0f657659689b1"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
         "mode": "100644",
-        "object_id": "eb21baecc54991cec69be2f79e670ce8519a3454"
+        "object_id": "6f41a52218174fc96b3dc05f9b5671418db10b0e"
       },
       {
         "path": "release/reviewed-migrations/20260809125735_cleaning_inspection_24_hour_freshness.sql",
@@ -380,7 +390,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "54014bbe584b0af144226c8dd6eb1299b68a233e"
+        "object_id": "ff258ece52e852e011239ba1caeef41feb282001"
       },
       {
         "path": "research/european_herbalism_through_paracelsus.md",
@@ -445,7 +455,17 @@
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "ce4b38a13a74f12f9bbff2ca909872745ad32d5f"
+        "object_id": "10ffeaaa2704d814943f2173520f679683c3c7ea"
+      },
+      {
+        "path": "scripts/create-release-attestation.mjs",
+        "mode": "100644",
+        "object_id": "f8286e751a6f1451437b9e5f505c0baecee2da11"
+      },
+      {
+        "path": "scripts/create-release-signing-key.mjs",
+        "mode": "100644",
+        "object_id": "834e7c87d2ce34562e0e4dff45e5acb999d582f1"
       },
       {
         "path": "scripts/custodial-atomic-commit-database-tests.mjs",
@@ -495,7 +515,7 @@
       {
         "path": "scripts/custodial-repair-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "902414ff0da69cf19dcd664cf0db8a9369857b5a"
+        "object_id": "15afd71a32a6831f0e1bdae36e5eb6406aa817ad"
       },
       {
         "path": "scripts/dashboard-recent-activity-contract-tests.mjs",
@@ -565,7 +585,7 @@
       {
         "path": "scripts/final-closure-database-isolated-tests.mjs",
         "mode": "100644",
-        "object_id": "4e218d7cbad3bb6b931a8d89a5110c1cfa68ab2a"
+        "object_id": "4e4bce22915c1c467c5029eeeaa6996170413715"
       },
       {
         "path": "scripts/final-operational-correction-database-tests.mjs",
@@ -575,7 +595,7 @@
       {
         "path": "scripts/final-uncertainty-closure-database-tests.mjs",
         "mode": "100644",
-        "object_id": "d6b5649818fca80da8472d4139135f88db5526fc"
+        "object_id": "9c2816ea25864f57440e96ed8e5987e59484d433"
       },
       {
         "path": "scripts/fixtures/static-weekly-scheduler/canary-authority.json",
@@ -630,22 +650,22 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "fa630cdf9ce93dc3878f08e109dedbe5a75dabcf"
+        "object_id": "2694dd95f4f34a8868e197a28b1b1d4af9b9550a"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "d8121cc3332405e6f7716a29cc95cd317c44f839"
+        "object_id": "6ab325889b96898e9ba96210d33e16a99534e01f"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
         "mode": "100644",
-        "object_id": "eedd2de6d9e698be7f8b9f95a6b84a2cedc0789b"
+        "object_id": "3bae7219af2ba5a6c27e47e4ed74e86c16665168"
       },
       {
         "path": "scripts/integrated-backend-authority-suite-order-isolated-tests.mjs",
         "mode": "100644",
-        "object_id": "df7f74e046cb79ef457e7c38ad8537b3ed00541e"
+        "object_id": "7f1dc416c9929a4958c1d67caa142859499374bb"
       },
       {
         "path": "scripts/integrated-backend-authority-suite-order-tests.mjs",
@@ -655,7 +675,7 @@
       {
         "path": "scripts/live-release-alignment-check.mjs",
         "mode": "100644",
-        "object_id": "cf423a170bf303a9b356b7c702713a6fa3df4cb1"
+        "object_id": "448b6c1e30e621192eb9034e9ff8597ce68ed92c"
       },
       {
         "path": "scripts/location-group-audit-reminder-aware.mjs",
@@ -775,7 +795,7 @@
       {
         "path": "scripts/operations-leadership-mobile-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "df95f71a4dcd7f73789bab8e8e2dc4746a5fbd0f"
+        "object_id": "6946b103eb8931de20e0ad9df7d358573fdcda14"
       },
       {
         "path": "scripts/operations-leadership-mobile-database-tests.mjs",
@@ -825,7 +845,7 @@
       {
         "path": "scripts/production-runtime-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "9e007c4342c841d148b785bc441f70e046d89255"
+        "object_id": "c1e6320fca3dc0ceabfc2000aaf37294f51ac80d"
       },
       {
         "path": "scripts/production-schema-c674-bootstrap-contract-tests.mjs",
@@ -855,7 +875,7 @@
       {
         "path": "scripts/refresh-integrated-backend-authority-release.mjs",
         "mode": "100644",
-        "object_id": "712012820887486316b2f10e69f8159c2c4b1115"
+        "object_id": "a74756ed33a087dc44ba1e2c63516837e7882ca3"
       },
       {
         "path": "scripts/refresh-release-schema-alignment.mjs",
@@ -870,12 +890,12 @@
       {
         "path": "scripts/release-canary-recovery-database-tests.mjs",
         "mode": "100644",
-        "object_id": "2f9d04b0e5bd7548e849c5fe6fac1a210578ab44"
+        "object_id": "62732a3c55912fc9d2830a0726791c7308f8d3c1"
       },
       {
         "path": "scripts/release-closure-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "1b279c9bef7f3a5f7ec69f06846b279e7a37ffc1"
+        "object_id": "6a4262440a2781fc73e68ca769f58f4294247e5e"
       },
       {
         "path": "scripts/restroom-rebalance-route-tests.mjs",
@@ -1030,7 +1050,7 @@
       {
         "path": "scripts/static-weekly-control-plane-deployment-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "8789e3ca46bbf335945f70af64458b6c5075b9df"
+        "object_id": "11c333d3619c946a0f3f0abb5da88b72cae12a64"
       },
       {
         "path": "scripts/static-weekly-control-plane-runtime-tests.mjs",
@@ -1040,7 +1060,7 @@
       {
         "path": "scripts/static-weekly-control-plane-tests.mjs",
         "mode": "100644",
-        "object_id": "909c6fa83a07dbcef25ffd2d343cddd95959cf5a"
+        "object_id": "72cbd49e0dfce68105aa67695450fb997367a963"
       },
       {
         "path": "scripts/static-weekly-employee-day-route-tests.mjs",
@@ -1050,12 +1070,12 @@
       {
         "path": "scripts/static-weekly-schedule-authority-closure-tests.mjs",
         "mode": "100644",
-        "object_id": "e6fb47c307b4332945c373f1678bcf042f8adab2"
+        "object_id": "3587f8117667af2cc0bc09c8d9b02a2c7681113b"
       },
       {
         "path": "scripts/static-weekly-schedule-authority-v3-tests.mjs",
         "mode": "100644",
-        "object_id": "a448e7fced810b559ec8cef841051709af967555"
+        "object_id": "8fba406b2e5be79062bf24c97ff644ad17143bca"
       },
       {
         "path": "scripts/static-weekly-schedule-candidate-importer.mjs",
@@ -1070,7 +1090,7 @@
       {
         "path": "scripts/static-weekly-schedule-concurrency-tests.mjs",
         "mode": "100644",
-        "object_id": "9fbbb7c6aedde557da37ebe2546153bff236ebc5"
+        "object_id": "94f77338252421ad51416f41e92295d74cae1f69"
       },
       {
         "path": "scripts/static-weekly-schedule-database-adapter-tests.mjs",
@@ -1080,7 +1100,7 @@
       {
         "path": "scripts/static-weekly-schedule-database-tests.mjs",
         "mode": "100644",
-        "object_id": "48d5b16dbba3c6699bb6b85c23ba15dcd4cde974"
+        "object_id": "edd49d06ddf9c785372f79f661e68b97e9765c28"
       },
       {
         "path": "scripts/static-weekly-schedule-exception-contract-tests.mjs",
@@ -1350,7 +1370,7 @@
       {
         "path": "src/app-version.js",
         "mode": "100644",
-        "object_id": "4362309ec4b9d1e1dc76f0da6bff6abd361275b2"
+        "object_id": "448e6dc79edfda5b4e51d8ac77eda3945f06a544"
       },
       {
         "path": "src/attendance-state.js",
@@ -1445,7 +1465,7 @@
       {
         "path": "src/index.js",
         "mode": "100644",
-        "object_id": "e96bea890b006d543d3ec57bfc3a34f4a253aea4"
+        "object_id": "5b36e2eceb99d7e788d74720f76acae7b3dc0066"
       },
       {
         "path": "src/leadership-bootstrap.js",
@@ -1530,12 +1550,12 @@
       {
         "path": "src/release-contract.js",
         "mode": "100644",
-        "object_id": "cd852ecaf26ccfcda7e12024d5137006eb833898"
+        "object_id": "ba4f24f47c74bd5566bcf63cb609a6108267e199"
       },
       {
         "path": "src/release-manifest.js",
         "mode": "100644",
-        "object_id": "168ad890354a0e79dc73e23c34ad2c7023ae4783"
+        "object_id": "7978ce065ac1bcd1c55ad49e455c40fb677d1384"
       },
       {
         "path": "src/routes/index.js",
@@ -1580,12 +1600,12 @@
       {
         "path": "src/static-weekly-control-plane-runtime.js",
         "mode": "100644",
-        "object_id": "19e896a7c97a07d8d1265f7155ff1be12f506556"
+        "object_id": "49f7b793d8c0124e1c303c8eb5383b9454e70e0c"
       },
       {
         "path": "src/static-weekly-control-plane.js",
         "mode": "100644",
-        "object_id": "05f79348d8ba19fb6037e24a64274aa717c6d330"
+        "object_id": "1875f2cb10da8480534d666c763d98ce5ab56d8a"
       },
       {
         "path": "src/static-weekly-schedule-compiler.js",
@@ -1670,12 +1690,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "3e60d110f9b1769837c713141935dd753c1dc439"
+        "object_id": "eb080af9f569673a472fb53f472f0651ded879b7"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "62b2760cd3591502fcd88ca7eef86296e24e66a9"
+        "object_id": "6c70cbd17cb987386669a10dc5560b0bbc78e621"
       },
       {
         "path": "supabase/config.toml",
@@ -2265,7 +2285,7 @@
       {
         "path": "supabase/migrations/00000000000000_production_baseline.sql",
         "mode": "100644",
-        "object_id": "e2aad9af90e397b7fec8d6da8d2d994173f4414e"
+        "object_id": "0aba197bf7de67b8487aa9da37d4a21ee344a40a"
       },
       {
         "path": "supabase/migrations/20260717161000_custodial_foundation_repair_delta.sql",
@@ -2600,7 +2620,7 @@
       {
         "path": "supabase/migrations/20260812130000_static_weekly_employee_turnover.sql",
         "mode": "100644",
-        "object_id": "e4bee98c773b1362241c4c8198061dc7d212ab98"
+        "object_id": "6c2c7d77fdf3dcf1c58c814e92f2895c87292598"
       },
       {
         "path": "supabase/migrations/20260813035530_offline_scan_authority_snapshot.sql",
@@ -2610,7 +2630,7 @@
       {
         "path": "supabase/migrations/20260813050000_offline_snapshot_operational_truth_closure.sql",
         "mode": "100644",
-        "object_id": "366be93fff87f6ce28dbf8c17f814ad6c5b45269"
+        "object_id": "98fded2456cad25d059384ae00383df95b04ef2d"
       },
       {
         "path": "supabase/migrations/20260813060000_release_canary_operational_recovery.sql",
@@ -2618,15 +2638,20 @@
         "object_id": "38bb3a1aa6c4cd100984845fa0dfed51efc20469"
       },
       {
+        "path": "supabase/migrations/20260813070000_operational_service_date_foundation.sql",
+        "mode": "100644",
+        "object_id": "94bc63fbeb9e07a0d4890b58f984752500edf42e"
+      },
+      {
         "path": "tmp/write_probe.txt",
         "mode": "100644",
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 507,
-    "migration_path_count": 71,
+    "authority_path_count": 511,
+    "migration_path_count": 72,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
-    "binding": "The executable cutover gate requires externally supplied exact expected_commit and expected_tree, deterministically enumerates every tracked expected-tree entry, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file as its exact tree blob."
+    "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
   },
   "manager_recovery": {
     "list": "GET /admin-api/custodial/offline-reconciliations?limit=1..100&before=<ISO-8601>",
@@ -2847,6 +2872,9 @@
     },
     {
       "name": "20260813060000_release_canary_operational_recovery.sql"
+    },
+    {
+      "name": "20260813070000_operational_service_date_foundation.sql"
     }
   ],
   "release_boundary": "Configure a minimum-32-character CUSTODIAL_BACKEND_PROOF_SECRET and matching database digest before Phase A, retain the bridge backend artifact through the scan-snapshot phase, and require the executable health/restoration probes before traffic changes."

@@ -167,7 +167,7 @@ end $function$;
 -- Never-cleaned locations can only be due when they have a current operational
 -- day assignment. Cancelled, inactive, and unassigned rows remain not_cleaned.
 create or replace view public.v_location_dashboard_status as
-with op_day as (select public.operational_day_start(now()) day_start, public.sch_service_date(public.operational_day_start(now())) service_date),
+with op_day as (select public.operational_day_start(now()) day_start, public.sch_service_date(now()) service_date),
 scheduled_baseline as (
   select membership.location_id, min((od.service_date + schedule.coverage_start::time) at time zone 'America/Chicago') baseline_at
   from op_day od join lateral public.sch_get_daily_schedule_with_purpose(od.service_date) schedule on schedule.status='ASSIGNED' and schedule.assigned_employee_id is not null and coalesce(schedule.coverage_purpose,'area_owner')<>'reminder'

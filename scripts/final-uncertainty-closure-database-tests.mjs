@@ -41,8 +41,16 @@ sql(`
 `);
 const staleStatus = sql(`select status_code||'|'||coalesce(open_session_status,'none') from public.v_location_dashboard_status where location_id='${locationId}'::uuid;`);
 assert.equal(staleStatus, "not_cleaned|none", "a prior-operational-day abandoned session cannot mask current readiness as in progress");
-assert.equal(sql(`select public.sch_service_date(public.operational_day_start('2026-08-13 02:00:00-05'::timestamptz));`), "2026-08-12",
+assert.equal(sql(`select public.sch_service_date('2026-08-13 02:00:00-05'::timestamptz);`), "2026-08-12",
   "the schedule service date must stay on the same operational day before the 04:00 Central cutoff");
+assert.equal(sql(`select public.sch_service_date('2026-08-13 03:59:59-05'::timestamptz);`), "2026-08-12");
+assert.equal(sql(`select public.sch_service_date('2026-08-13 04:00:00-05'::timestamptz);`), "2026-08-13");
+assert.equal(sql(`select public.sch_service_date('2026-03-08 03:59:59-05'::timestamptz);`), "2026-03-07",
+  "spring DST transition must preserve the configured Central operational boundary");
+assert.equal(sql(`select public.sch_service_date('2026-03-08 04:00:00-05'::timestamptz);`), "2026-03-08");
+assert.equal(sql(`select public.sch_service_date('2026-11-01 03:59:59-06'::timestamptz);`), "2026-10-31",
+  "fall DST transition must preserve the configured Central operational boundary");
+assert.equal(sql(`select public.sch_service_date('2026-11-01 04:00:00-06'::timestamptz);`), "2026-11-01");
 
 sql(`select public.custodial_configure_backend_execution_key(
   encode(extensions.digest(convert_to(${q(secret)},'UTF8'),'sha256'),'hex'),'final uncertainty test');`);
@@ -59,7 +67,7 @@ assert.equal(unhealthy.ok, false);
 assert.ok(unhealthy.mismatched_functions.includes("public.tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text)"));
 const spoofedResume = sql(`select public.custodial_control_release_canary(
   '${managerId}'::uuid,'${randomUUID()}'::uuid,'KIOSK_09','resume_canary','spoofed green health','{"ok":true}'::jsonb,${q(secret)});`, { expectFailure: true });
-assert.match(spoofedResume, /cannot resume until authoritative health is green/i);
+assert.match(spoofedResume, /cannot resume until a fresh persisted recovery probe is green/i);
 const restored = JSON.parse(sql(`select public.custodial_control_release_canary(
   '${managerId}'::uuid,'${randomUUID()}'::uuid,'KIOSK_09','restore_authority','restore exact authority set',${q(JSON.stringify(unhealthy))}::jsonb,${q(secret)})::text;`));
 assert.equal(restored.restored_functions, 7);

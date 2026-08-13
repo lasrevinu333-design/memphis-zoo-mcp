@@ -51,7 +51,7 @@ assert.equal(input.backend_contract.execution_boundary, "CUSTODIAL_BACKEND_PROOF
 assert.equal(input.backend_contract.bridge_backend_source, "src/index.js:runPreparedScanRpc");
 assert.ok(Array.isArray(input.cutover?.phase_order) && input.cutover.phase_order.length >= 6);
 assert.ok(Array.isArray(input.cutover?.rollback?.restoration_checks) && input.cutover.rollback.restoration_checks.length >= 4);
-assert.equal(input.cutover?.source_identity?.kind, "external_immutable_acceptance_input");
+assert.equal(input.cutover?.source_identity?.kind, "external_signed_release_attestation");
 assert.equal(input.cutover?.source_identity?.generated_evidence_path, "release/integrated-backend-authority-evidence.json");
 assert.equal(input.cutover?.source_identity?.generated_evidence_excluded_from_content_identity, true);
 assert.equal(Object.hasOwn(input.cutover.source_identity, "authority_content_paths"), false, "manual authority inventory is forbidden");
@@ -67,9 +67,11 @@ const authorityInventory = trackedInventory.filter(({ path }) => path !== genera
 const migrations = authorityInventory
   .filter(({ path }) => /^supabase\/migrations\/[^/]+\.sql$/.test(path))
   .map(({ path }) => ({ name: path.slice("supabase/migrations/".length) }));
-assert.equal(migrations.length, 71, "release authority inventory must bind every migration at this head");
+assert.equal(migrations.length, 72, "release authority inventory must bind every migration at this head");
 const output = {
   artifact: "integrated-backend-authority-release-evidence.v2",
+  release_id: frontendManifest.release_id,
+  frontend_commit_sha: frontendManifest.frontend_commit_sha,
   schema_fingerprint: schemaFingerprint,
   schema_transition: frontendManifest.schema_transition,
   frontend_source_fingerprint: frontendManifest.schema_fingerprint,
@@ -85,16 +87,17 @@ const output = {
     scan_snapshot_phase: "20260813035530 exposes bounded offline scan authority and enforces exact provenance evidence shape",
     snapshot_rebind_closure_phase: "20260813050000 binds activation to an issued snapshot and derives current operational-day truth",
     canary_operational_recovery_phase: "20260813060000 adds durable exact-device pause and known-good forward restoration of canonical authority functions",
+    operational_service_date_phase: "20260813070000 unifies schedules, turnover, occurrences, dashboard truth, and recovery probes at the 04:00 Central service date",
   },
   rollback: input.rollback,
   cutover: input.cutover,
   authority_content_identity: {
-    source: "complete_tracked_git_tree_from_external_immutable_acceptance_input",
+    source: "complete_tracked_git_tree_from_external_signed_release_attestation",
     expected_tree_inventory: authorityInventory.map(({ path, mode, object_id }) => ({ path, mode, object_id })),
     authority_path_count: authorityInventory.length,
     migration_path_count: migrations.length,
     generated_evidence_excluded_path: generatedEvidencePath,
-    binding: "The executable cutover gate requires externally supplied exact expected_commit and expected_tree, deterministically enumerates every tracked expected-tree entry, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file as its exact tree blob.",
+    binding: "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob.",
   },
   manager_recovery: {
     list: "GET /admin-api/custodial/offline-reconciliations?limit=1..100&before=<ISO-8601>",

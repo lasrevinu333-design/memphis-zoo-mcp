@@ -33,8 +33,12 @@ assert.match(releaseManifestSource, /final_rebind_required/,
 
 assert.match(monitor, /cron: "\*\/10 \* \* \* \*"/,
   "the independent availability monitor must probe every ten minutes");
-assert.match(monitor, /LIVE_RELEASE_PAIR_INPUT/,
-  "availability monitor must require an exact final frontend/backend pair");
+assert.match(monitor, /LIVE_RELEASE_ATTESTATION_INPUT/,
+  "availability monitor must require the signed exact integrated release attestation");
+assert.match(monitor, /MEMPHIS_RELEASE_ATTESTATION_PUBLIC_KEY/,
+  "availability monitor must verify the release attestation signature");
+assert.match(monitor, /STATIC_WEEKLY_CONTROL_PLANE_READY_URL/,
+  "availability monitor must bind scheduler authority and solver readiness to the same release");
 assert.match(monitor, /LIVE_RELEASE_SCHEMA_IDENTITY_TOKEN/,
   "availability monitor must authenticate the connected-schema observation");
 assert.match(monitor, /release:live:check/,

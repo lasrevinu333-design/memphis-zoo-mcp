@@ -2,10 +2,12 @@
 
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
+import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import { chmodSync, copyFileSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { releaseAttestationPayload } from "../src/release-contract.js";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const checker = "scripts/integrated-backend-authority-cutover-check.mjs";
@@ -59,19 +61,40 @@ function createFixture({ beforeCommit = null } = {}) {
     git(fixture, ["-c", "user.name=Release Provenance Test", "-c", "user.email=release-provenance@example.invalid", "commit", "-qm", "fixture"]);
     const commit = git(fixture, ["rev-parse", "HEAD"]);
     const tree = git(fixture, ["rev-parse", "HEAD^{tree}"]);
+    const evidenceBytes = readFileSync(join(fixture, evidencePath));
+    const evidenceBlob = git(fixture, ["rev-parse", `${commit}:${evidencePath}`]);
+    const schemaInput = JSON.parse(readFileSync(join(fixture, "release/schema-alignment-input.json"), "utf8"));
+    const schemaFingerprint = readFileSync(join(fixture, "supabase/canonical/schema-fingerprint.txt"), "utf8").trim();
+    const { privateKey, publicKey } = generateKeyPairSync("ed25519");
+    const publicKeyPem = publicKey.export({ type: "spki", format: "pem" });
     const acceptancePath = join(acceptanceDirectory, "acceptance.json");
     const writeAcceptance = ({ expectedCommit = commit, expectedTree = tree, document = null } = {}) => {
       chmodSync(acceptanceDirectory, 0o755);
       try { chmodSync(acceptancePath, 0o644); } catch { /* first write */ }
-      writeFileSync(acceptancePath, `${JSON.stringify(document || {
-        artifact: "integrated-backend-authority-release-acceptance.v1",
-        expected_commit: expectedCommit,
-        expected_tree: expectedTree,
-      }, null, 2)}\n`);
+      let rendered = document;
+      if (!rendered) {
+        rendered = {
+          artifact: "memphis-zoo-integrated-release-attestation.v2",
+          release_id: schemaInput.release_id,
+          backend_commit_sha: expectedCommit,
+          backend_tree_sha: expectedTree,
+          backend_evidence_blob_sha: evidenceBlob,
+          backend_evidence_sha256: createHash("sha256").update(evidenceBytes).digest("hex"),
+          frontend_commit_sha: schemaInput.frontend_commit_sha,
+          schema_fingerprint: schemaFingerprint,
+          signature: { algorithm: "ed25519", key_id: "test-release-key", value_base64: "" },
+        };
+        rendered.signature.value_base64 = sign(
+          null,
+          Buffer.from(`${JSON.stringify(releaseAttestationPayload(rendered))}\n`, "utf8"),
+          privateKey,
+        ).toString("base64");
+      }
+      writeFileSync(acceptancePath, `${JSON.stringify(rendered, null, 2)}\n`);
       chmodSync(acceptancePath, 0o444);
       return acceptancePath;
     };
-    return { fixture, acceptanceDirectory, acceptancePath, trackedPaths, commit, tree, writeAcceptance };
+    return { fixture, acceptanceDirectory, acceptancePath, trackedPaths, commit, tree, publicKeyPem, writeAcceptance };
   } catch (error) {
     rmSync(fixture, { recursive: true, force: true });
     rmSync(acceptanceDirectory, { recursive: true, force: true });
@@ -89,7 +112,7 @@ function runGate(fixture, { cwd = fixture.fixture, env = {}, database = false, a
   if (database) args.push("--database");
   return spawnSync(process.execPath, args, {
     cwd,
-    env: cleanEnvironment(env),
+    env: cleanEnvironment({ MEMPHIS_RELEASE_ATTESTATION_PUBLIC_KEY: fixture.publicKeyPem, ...env }),
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
   });
@@ -137,7 +160,7 @@ try {
   assert.equal(payload.source_identity.tree, positive.tree);
   assert.equal(payload.source_identity.tracked_path_count, positive.trackedPaths.length);
   assert.equal(payload.source_identity.authority_path_count, positive.trackedPaths.length - 1);
-  assert.equal(payload.source_identity.migration_path_count, 71);
+  assert.equal(payload.source_identity.migration_path_count, 72);
   assert.equal(payload.source_identity.generated_evidence_excluded_from_content_identity, evidencePath);
 } finally {
   disposeFixture(positive);
@@ -230,19 +253,19 @@ expectRejected("mutable external acceptance input", (fixture) => {
 
 expectRejected("structurally inexact external acceptance input", (fixture) => {
   fixture.writeAcceptance({ document: {
-    artifact: "integrated-backend-authority-release-acceptance.v1",
-    expected_commit: fixture.commit,
-    expected_tree: fixture.tree,
+    artifact: "memphis-zoo-integrated-release-attestation.v2",
+    backend_commit_sha: fixture.commit,
+    backend_tree_sha: fixture.tree,
     authority_paths: [],
   } });
-}, /Expected values to be strictly deep-equal/i);
+}, /release attestation input has an unexpected shape/i);
 
 expectRejected("acceptance input inside worktree", (fixture) => {
   const path = resolve(fixture.fixture, "sealed-acceptance.json");
   writeFileSync(path, `${JSON.stringify({
-    artifact: "integrated-backend-authority-release-acceptance.v1",
-    expected_commit: fixture.commit,
-    expected_tree: fixture.tree,
+    artifact: "memphis-zoo-integrated-release-attestation.v2",
+    backend_commit_sha: fixture.commit,
+    backend_tree_sha: fixture.tree,
   }, null, 2)}\n`);
   chmodSync(path, 0o444);
   return { acceptancePath: path };

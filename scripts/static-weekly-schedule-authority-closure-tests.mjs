@@ -141,8 +141,9 @@ async function expectNoMutation(action, pattern, label) {
 }
 
 try {
-  await docker(["image", "inspect", "supabase/postgres:17.6.1.143"]);
-  await docker(["run", "--rm", "-d", "--name", container, "--tmpfs", "/var/lib/postgresql/data:rw,size=1g", "-e", "POSTGRES_PASSWORD=postgres", "supabase/postgres:17.6.1.143", "-c", "shared_preload_libraries=pg_cron,pg_net,pg_stat_statements"]);
+  const postgresImage = process.env.SCHEMA_REBUILD_DOCKER_IMAGE || "supabase/postgres@sha256:80d7b27c3e8d77cfa7226eee9508671796da214781ff15a35b3670d7ad5ee453";
+  await docker(["image", "inspect", postgresImage]);
+  await docker(["run", "--rm", "-d", "--name", container, "--tmpfs", "/var/lib/postgresql/data:rw,size=1g", "-e", "POSTGRES_PASSWORD=postgres", postgresImage, "-c", "shared_preload_libraries=pg_cron,pg_net,pg_stat_statements"]);
   await eventually(() => dockerSql("select 1"));
   await new Promise((resolve) => setTimeout(resolve, 10_000));
   pool = createDockerPool();

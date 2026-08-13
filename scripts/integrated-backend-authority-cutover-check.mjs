@@ -6,6 +6,7 @@ import { createHash } from "node:crypto";
 import { lstatSync, readFileSync, realpathSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { assertExactReleaseAttestation } from "../src/release-contract.js";
 
 const root = realpathSync(resolve(fileURLToPath(new URL("..", import.meta.url))));
 const phaseA = "20260810143000_offline_actor_occurrence_reconciliation.sql";
@@ -16,6 +17,7 @@ const phaseE = "20260810190000_final_integrated_backend_operational_correction.s
 const phaseF = "20260813035530_offline_scan_authority_snapshot.sql";
 const phaseG = "20260813050000_offline_snapshot_operational_truth_closure.sql";
 const phaseH = "20260813060000_release_canary_operational_recovery.sql";
+const phaseI = "20260813070000_operational_service_date_foundation.sql";
 const releaseInputPath = "release/integrated-backend-authority-input.json";
 const releaseEvidencePath = "release/integrated-backend-authority-evidence.json";
 const forbiddenGitEnvironment = [
@@ -86,6 +88,12 @@ function assertExternalReadonlyInput(acceptancePath) {
   const inputRealpath = realpathSync(acceptancePath);
   assert.equal(isOutside(inputRealpath, root), true, "acceptance input must remain outside the checked worktree");
   return { path: inputRealpath, bytes: readFileSync(inputRealpath) };
+}
+
+function releaseAttestationPublicKey() {
+  const value = String(process.env.MEMPHIS_RELEASE_ATTESTATION_PUBLIC_KEY || "").replaceAll("\\n", "\n").trim();
+  assert.ok(value, "MEMPHIS_RELEASE_ATTESTATION_PUBLIC_KEY is required");
+  return `${value}\n`;
 }
 
 function assertNoForbiddenIndexFlags() {
@@ -182,6 +190,8 @@ function expectedReleaseEvidence(input, schemaFingerprint, frontendManifest, aut
     .map(({ path }) => ({ name: path.slice("supabase/migrations/".length) }));
   return {
     artifact: "integrated-backend-authority-release-evidence.v2",
+    release_id: frontendManifest.release_id,
+    frontend_commit_sha: frontendManifest.frontend_commit_sha,
     schema_fingerprint: schemaFingerprint,
     schema_transition: frontendManifest.schema_transition,
     frontend_source_fingerprint: frontendManifest.schema_fingerprint,
@@ -197,16 +207,17 @@ function expectedReleaseEvidence(input, schemaFingerprint, frontendManifest, aut
       scan_snapshot_phase: "20260813035530 exposes bounded offline scan authority and enforces exact provenance evidence shape",
       snapshot_rebind_closure_phase: "20260813050000 binds activation to an issued snapshot and derives current operational-day truth",
       canary_operational_recovery_phase: "20260813060000 adds durable exact-device pause and known-good forward restoration of canonical authority functions",
+      operational_service_date_phase: "20260813070000 unifies schedules, turnover, occurrences, dashboard truth, and recovery probes at the 04:00 Central service date",
     },
     rollback: input.rollback,
     cutover: input.cutover,
     authority_content_identity: {
-      source: "complete_tracked_git_tree_from_external_immutable_acceptance_input",
+      source: "complete_tracked_git_tree_from_external_signed_release_attestation",
       expected_tree_inventory: authorityInventory.map(({ path, mode, object_id }) => ({ path, mode, object_id })),
       authority_path_count: authorityInventory.length,
       migration_path_count: migrations.length,
       generated_evidence_excluded_path: releaseEvidencePath,
-      binding: "The executable cutover gate requires externally supplied exact expected_commit and expected_tree, deterministically enumerates every tracked expected-tree entry, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file as its exact tree blob.",
+      binding: "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob.",
     },
     manager_recovery: {
       list: "GET /admin-api/custodial/offline-reconciliations?limit=1..100&before=<ISO-8601>",
@@ -221,23 +232,25 @@ function expectedReleaseEvidence(input, schemaFingerprint, frontendManifest, aut
 
 const { databaseMode, acceptanceInput } = parseArgs(process.argv.slice(2));
 const acceptanceFile = assertExternalReadonlyInput(acceptanceInput);
-const acceptance = JSON.parse(acceptanceFile.bytes.toString("utf8"));
-assert.deepEqual(Object.keys(acceptance).sort(), ["artifact", "expected_commit", "expected_tree"]);
-assert.equal(acceptance.artifact, "integrated-backend-authority-release-acceptance.v1");
+const acceptance = assertExactReleaseAttestation(JSON.parse(acceptanceFile.bytes.toString("utf8")), {
+  publicKeyPem: releaseAttestationPublicKey(),
+});
 
 // All repository/environment and immutable identity checks complete before any
 // database handle is read or any release acceptance result is created.
-assertRepositoryIdentity(acceptance.expected_commit, acceptance.expected_tree);
-const expectedEntries = trackedEntriesFromExpectedTree(acceptance.expected_commit, acceptance.expected_tree);
+assertRepositoryIdentity(acceptance.backend_commit_sha, acceptance.backend_tree_sha);
+const expectedEntries = trackedEntriesFromExpectedTree(acceptance.backend_commit_sha, acceptance.backend_tree_sha);
 const evidenceBlob = expectedEntries.find(({ path }) => path === releaseEvidencePath);
 assert.ok(evidenceBlob, "expected tree omits generated release evidence");
 const expectedBlobs = expectedEntries.filter(({ path }) => path !== releaseEvidencePath);
 assert.ok(expectedBlobs.length > 0, "release authority inventory is empty");
-assert.equal(expectedBlobs.filter(({ path }) => /^supabase\/migrations\/[^/]+\.sql$/.test(path)).length, 71, "release authority inventory must bind all 71 migrations");
+assert.equal(expectedBlobs.filter(({ path }) => /^supabase\/migrations\/[^/]+\.sql$/.test(path)).length, 72, "release authority inventory must bind all 72 migrations");
 for (const blob of [...expectedBlobs, evidenceBlob]) assertWorktreeMatchesExpectedBlob(blob);
+assert.equal(evidenceBlob.object_id, acceptance.backend_evidence_blob_sha, "signed release attestation names the wrong evidence blob");
+assert.equal(hash(evidenceBlob.bytes), acceptance.backend_evidence_sha256, "signed release attestation names the wrong evidence digest");
 
 const blobByPath = new Map(expectedBlobs.map((blob) => [blob.path, blob]));
-for (const required of [releaseInputPath, "scripts/refresh-integrated-backend-authority-release.mjs", "scripts/integrated-backend-authority-cutover-check.mjs", "scripts/integrated-backend-authority-release-provenance-tests.mjs", "scripts/integrated-backend-authority-suite-order-tests.mjs", "scripts/final-operational-correction-database-tests.mjs", "scripts/named-manager-messenger-retirement-correction-database-tests.mjs", "scripts/empty-database-rebuild-check.mjs", "scripts/refresh-schema-fingerprint.mjs", "src/index.js", "src/offline-authority-http.js", "src/scan-evidence.js", `supabase/migrations/${phaseC}`, `supabase/migrations/${phaseD}`, `supabase/migrations/${phaseE}`, `supabase/migrations/${phaseF}`, `supabase/migrations/${phaseG}`, `supabase/migrations/${phaseH}`]) {
+for (const required of [releaseInputPath, "scripts/refresh-integrated-backend-authority-release.mjs", "scripts/integrated-backend-authority-cutover-check.mjs", "scripts/integrated-backend-authority-release-provenance-tests.mjs", "scripts/integrated-backend-authority-suite-order-tests.mjs", "scripts/final-operational-correction-database-tests.mjs", "scripts/named-manager-messenger-retirement-correction-database-tests.mjs", "scripts/empty-database-rebuild-check.mjs", "scripts/refresh-schema-fingerprint.mjs", "src/index.js", "src/offline-authority-http.js", "src/scan-evidence.js", `supabase/migrations/${phaseC}`, `supabase/migrations/${phaseD}`, `supabase/migrations/${phaseE}`, `supabase/migrations/${phaseF}`, `supabase/migrations/${phaseG}`, `supabase/migrations/${phaseH}`, `supabase/migrations/${phaseI}`]) {
   assert.ok(blobByPath.has(required), `immutable acceptance input omitted authority path ${required}`);
 }
 const input = parseJsonBlob(blobByPath.get(releaseInputPath), "release authority input");
@@ -249,11 +262,12 @@ const phaseEText = blobByPath.get(`supabase/migrations/${phaseE}`).bytes.toStrin
 const phaseFText = blobByPath.get(`supabase/migrations/${phaseF}`).bytes.toString("utf8");
 const phaseGText = blobByPath.get(`supabase/migrations/${phaseG}`).bytes.toString("utf8");
 const phaseHText = blobByPath.get(`supabase/migrations/${phaseH}`).bytes.toString("utf8");
+const phaseIText = blobByPath.get(`supabase/migrations/${phaseI}`).bytes.toString("utf8");
 const schemaFingerprint = blobByPath.get("supabase/canonical/schema-fingerprint.txt")?.bytes.toString("utf8").trim();
 const frontendManifest = parseJsonBlob(blobByPath.get("release/frontend-release-manifest.json"), "frontend release manifest");
 
 assert.equal(input.release_contract_version, "offline-authority.v4");
-assert.deepEqual(input.cutover.phase_order.slice(1, 10), [
+assert.deepEqual(input.cutover.phase_order.slice(1, 11), [
   `apply ${phaseA}`,
   "deploy the bridge backend; it falls back only on absent authoritative procedures",
   `apply ${phaseB}`,
@@ -263,8 +277,9 @@ assert.deepEqual(input.cutover.phase_order.slice(1, 10), [
   `apply ${phaseF}`,
   `apply ${phaseG}`,
   `apply ${phaseH}`,
+  `apply ${phaseI}`,
 ]);
-assert.equal(input.cutover.source_identity.kind, "external_immutable_acceptance_input");
+assert.equal(input.cutover.source_identity.kind, "external_signed_release_attestation");
 assert.equal(input.cutover.source_identity.generated_evidence_path, releaseEvidencePath);
 assert.equal(input.cutover.source_identity.generated_evidence_excluded_from_content_identity, true);
 assert.equal(Object.hasOwn(input.cutover.source_identity, "authority_content_paths"), false, "manual authority inventory is forbidden");
@@ -287,15 +302,21 @@ assert.match(phaseFText, /custodial_scan_evidence_is_canonical/);
 assert.match(phaseGText, /custodial_offline_scan_authority_snapshots/);
 assert.match(phaseHText, /custodial_control_release_canary/);
 assert.match(phaseHText, /custodial_release_authority_restore_definitions/);
+assert.match(phaseIText, /custodial_run_release_canary_recovery_probe/);
+assert.match(phaseIText, /operational_service_date_boundary/);
 assert.match(schemaFingerprint, /^[a-f0-9]{64}$/);
+assert.equal(frontendManifest.frontend_commit_sha, acceptance.frontend_commit_sha, "signed release attestation names the wrong frontend commit");
+assert.equal(frontendManifest.release_id, acceptance.release_id, "signed release attestation names the wrong semantic release");
+assert.equal(schemaFingerprint, acceptance.schema_fingerprint, "signed release attestation names the wrong schema fingerprint");
 assert.deepEqual(releaseEvidence, expectedReleaseEvidence(input, schemaFingerprint, frontendManifest, expectedBlobs), "generated release evidence is stale, incomplete, or self-referential");
 
 const authorityContent = expectedBlobs.map(({ path, mode, object_id, bytes }) => ({ path, mode, object_id, sha256: hash(bytes) }));
 const authorityContentSha256 = hash(Buffer.from(JSON.stringify(authorityContent)));
 const sourceIdentity = {
-  commit: acceptance.expected_commit,
-  tree: acceptance.expected_tree,
+  commit: acceptance.backend_commit_sha,
+  tree: acceptance.backend_tree_sha,
   acceptance_input_sha256: hash(acceptanceFile.bytes),
+  release_attestation_key_id: acceptance.signature.key_id,
   authority_content_sha256: authorityContentSha256,
   authority_path_count: authorityContent.length,
   tracked_path_count: expectedEntries.length,
@@ -308,7 +329,7 @@ const result = {
   ok: true,
   source_identity: sourceIdentity,
   authority_content: authorityContent,
-  phase_order: [phaseA, phaseB, phaseC, phaseD, phaseE, phaseF, phaseG, phaseH],
+  phase_order: [phaseA, phaseB, phaseC, phaseD, phaseE, phaseF, phaseG, phaseH, phaseI],
   bridge_fallback: "only absent authoritative procedure SQLSTATE 42883/PGRST202",
   database_gate: "not-requested",
 };

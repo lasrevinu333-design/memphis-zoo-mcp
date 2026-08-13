@@ -39,7 +39,12 @@ const client = {
   },
   release() {},
 };
-const controlPlane = createStaticWeeklyControlPlane({ database: { async connect() { return client; } } });
+const solverIdentity = { package: "highs@1.15.2" };
+const controlPlane = createStaticWeeklyControlPlane({
+  database: { async connect() { return client; } },
+  initializeSolver: async () => solverIdentity,
+  getSolverReadiness: () => ({ state: "ready", available: true, identity: solverIdentity }),
+});
 const manager = { manager_id: "10000000-0000-4000-8000-000000000001", manager_display_name: "Named Manager", auth_mode: "trusted_device", trusted_device: true, read_only: false };
 
 const applied = await controlPlane.applyException({
@@ -67,6 +72,8 @@ assert.equal(queries.length, 0, "admin/API-key and operations-first identities m
 
 const health = await controlPlane.health();
 assert.equal(health.ready, true);
+assert.equal(health.authority_ready, true);
+assert.equal(health.solver.available, true);
 assert.equal(JSON.stringify(health).includes("secret"), false, "health responses must expose key state, never key material");
 
 queries.length = 0;

@@ -20,8 +20,8 @@
   },
   "cutover": {
     "source_identity": {
-      "kind": "external_immutable_acceptance_input",
-      "acceptance_input_contract": "The cutover invocation must supply a regular, mode-0444 JSON file outside this worktree with one exact expected_commit and expected_tree. The executable gate deterministically enumerates every tracked path and Git mode from that exact tree, compares every worktree path directly with its exact tree blob and mode, and rejects hidden index flags or Git-environment substitution before any database access. Generated evidence is never its own identity authority.",
+      "kind": "external_signed_release_attestation",
+      "acceptance_input_contract": "The cutover invocation must supply a regular, mode-0444, Ed25519-signed release attestation outside this worktree. It binds the semantic release, backend commit/tree/evidence digest/evidence blob, frontend commit, and schema fingerprint. The executable gate deterministically enumerates every tracked path and Git mode from that exact tree, compares every worktree path directly with its exact tree blob and mode, and rejects hidden index flags or Git-environment substitution before any database access. Generated evidence is never its own identity authority.",
       "generated_evidence_path": "release/integrated-backend-authority-evidence.json",
       "generated_evidence_excluded_from_content_identity": true,
       "authority_inventory": {
@@ -45,6 +45,7 @@
       "apply 20260813035530_offline_scan_authority_snapshot.sql",
       "apply 20260813050000_offline_snapshot_operational_truth_closure.sql",
       "apply 20260813060000_release_canary_operational_recovery.sql",
+      "apply 20260813070000_operational_service_date_foundation.sql",
       "require a green authority health gate and direct-DML denial probes before routing traffic"
     ],
     "rollback": {
@@ -58,6 +59,7 @@
         "service_role direct insert/update/delete/truncate probes are denied",
         "named-manager reconciliation read, exactly-once disposition replay, and notification retry state remain available"
         ,"present-but-broken and missing canonical authority functions restore to their captured known-good definitions while the canary remains paused"
+        ,"schedule, turnover, occurrence, and dashboard service dates all change at the same 04:00 America/Chicago boundary"
       ]
     }
   },

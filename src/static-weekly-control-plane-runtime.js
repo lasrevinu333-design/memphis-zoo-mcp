@@ -4,6 +4,7 @@ import express from "express";
 import { createClient } from "@supabase/supabase-js";
 import { createSupabaseTrustedDeviceStore, makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
 import { createStaticWeeklyControlPlane, createStaticWeeklyControlPlaneDatabase } from "./static-weekly-control-plane.js";
+import { assertConfiguredReleaseIdentity } from "./release-manifest.js";
 
 const text = (value) => typeof value === "string" ? value.trim() : "";
 const fail = (code, message = code) => Object.assign(new Error(message), { code });
@@ -42,6 +43,7 @@ export function createStaticWeeklyControlPlaneRuntime({
   createControlPlane = createStaticWeeklyControlPlane,
   createSupabaseClient = createClient,
 } = {}) {
+  const releaseIdentity = assertConfiguredReleaseIdentity();
   const { url, key } = requireTrustedDeviceConfiguration(env);
   const trustedSupabase = supabase || createSupabaseClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
   const trustedStore = trustedDeviceStore || createSupabaseTrustedDeviceStore(trustedSupabase);
@@ -93,6 +95,13 @@ export function createStaticWeeklyControlPlaneRuntime({
       res.status(ready ? 200 : 503).json({
         ok: ready,
         data,
+        release_identity: releaseIdentity ? {
+          release_id: releaseIdentity.release_id,
+          backend_commit_sha: releaseIdentity.backend_commit_sha,
+          backend_tree_sha: releaseIdentity.backend_tree_sha,
+          frontend_commit_sha: releaseIdentity.frontend_commit_sha,
+          schema_fingerprint: releaseIdentity.schema_fingerprint,
+        } : null,
         ...(ready ? {} : { error: "The static weekly scheduler authority is not ready.", code: "static_weekly_control_plane_not_ready" }),
       });
     } catch (_error) {
@@ -116,7 +125,7 @@ export function createStaticWeeklyControlPlaneRuntime({
   app.post("/static-weekly/employees/replacements", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.replaceEmployee({ manager: manager(req), slotId: req.body?.slot_id, newEmployeeName: req.body?.new_employee_name, reason: req.body?.reason, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key })));
   app.post("/static-weekly/projections", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.materializeProjection({ manager: manager(req), publicationId: req.body?.publication_id, serviceDate: req.body?.service_date, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key })));
 
-  return { app, controlPlane: authorityControlPlane, database: authorityDatabase, trustedDeviceStore: trustedStore };
+  return { app, controlPlane: authorityControlPlane, database: authorityDatabase, trustedDeviceStore: trustedStore, releaseIdentity };
 }
 
 export function startStaticWeeklyControlPlaneRuntime(options = {}) {

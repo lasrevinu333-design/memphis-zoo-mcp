@@ -6,7 +6,7 @@ import { execFileSync } from "node:child_process";
 const output = execFileSync(process.execPath, ["scripts/empty-database-rebuild-check.mjs"], {
   env: {
     ...process.env,
-    SCHEMA_REBUILD_DOCKER_IMAGE: process.env.SCHEMA_REBUILD_DOCKER_IMAGE || "supabase/postgres:17.6.1.143",
+    SCHEMA_REBUILD_DOCKER_IMAGE: process.env.SCHEMA_REBUILD_DOCKER_IMAGE || "supabase/postgres@sha256:80d7b27c3e8d77cfa7226eee9508671796da214781ff15a35b3670d7ad5ee453",
     SCHEMA_REBUILD_KEEP_DATABASE: "1",
   },
   encoding: "utf8",

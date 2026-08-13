@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { assertBackendFrontendIdentity, assertExactReleasePair, assertFrontendReleaseIdentity, assertManifestContract, assertObservedSchemaIdentity } from "../src/release-contract.js";
+import { generateKeyPairSync, sign } from "node:crypto";
+import { assertBackendFrontendIdentity, assertExactReleaseAttestation, assertFrontendReleaseDeclaration, assertFrontendReleaseIdentity, assertManifestContract, assertObservedSchemaIdentity, releaseAttestationPayload } from "../src/release-contract.js";
 
 const input = JSON.parse(readFileSync(new URL("../release/schema-alignment-input.json", import.meta.url), "utf8"));
 const index = readFileSync(new URL("../src/index.js", import.meta.url), "utf8");
 const liveGate = readFileSync(new URL("./live-release-alignment-check.mjs", import.meta.url), "utf8");
 const rollbackMigration = readFileSync(new URL("../supabase/migrations/20260813060000_release_canary_operational_recovery.sql", import.meta.url), "utf8");
 
-assert.equal(input.frontend_commit_sha, "3fc10db3965dc582380b8872258dc4248aa0c46f", "backend must pin the exact audited frontend candidate");
+assert.equal(input.frontend_commit_sha, "2959ec8f0e81742ba314e71fdfb7831e64782948", "backend must pin the exact audited frontend candidate");
 assert.equal(input.frontend_commit_state, "final_pair_bound");
 assert.deepEqual(input.queue_compatibility_versions.scan.at(-1), "indexeddb-v6-offline-authority");
 assert.deepEqual(Object.keys(input.minimum_supported).sort(), ["backend_version", "frontend_version"]);
@@ -24,16 +25,23 @@ assert.match(rollbackMigration, /custodial_release_authority_restore_definitions
 assert.match(rollbackMigration, /pg_get_functiondef/);
 assert.doesNotMatch(rollbackMigration, /grant execute on function public\.tool_(?:complete_session|commit_cleaning_workflow)\(/i,
   "release recovery must not revive legacy writer wrappers");
-assert.match(liveGate, /LIVE_RELEASE_PAIR_INPUT/);
+assert.match(liveGate, /LIVE_RELEASE_ATTESTATION_INPUT/);
+assert.match(liveGate, /MEMPHIS_RELEASE_ATTESTATION_PUBLIC_KEY/);
 assert.match(liveGate, /LIVE_RELEASE_SCHEMA_IDENTITY_TOKEN/);
 assert.match(liveGate, /assertObservedSchemaIdentity/);
 assert.match(liveGate, /assertManifestContract/);
 
-const pair = assertExactReleasePair({ artifact: "memphis-zoo-integrated-release-pair.v1", release_id: input.release_id,
-  backend_commit_sha: "a".repeat(40), frontend_commit_sha: "b".repeat(40) });
-assert.equal(pair.frontend_commit_sha, "b".repeat(40));
-assert.throws(() => assertExactReleasePair({ ...pair, unexpected: true }), /unexpected shape/);
-assert.throws(() => assertExactReleasePair({ ...pair, frontend_commit_sha: "b".repeat(39) }), /frontend commit/);
+const { privateKey, publicKey } = generateKeyPairSync("ed25519");
+const unsignedAttestation = { artifact: "memphis-zoo-integrated-release-attestation.v2", release_id: input.release_id,
+  backend_commit_sha: "a".repeat(40), backend_tree_sha: "b".repeat(40), backend_evidence_blob_sha: "c".repeat(40),
+  backend_evidence_sha256: "d".repeat(64), frontend_commit_sha: input.frontend_commit_sha, schema_fingerprint: "e".repeat(64),
+  signature: { algorithm: "ed25519", key_id: "release-contract-test", value_base64: "" } };
+unsignedAttestation.signature.value_base64 = sign(null, Buffer.from(`${JSON.stringify(releaseAttestationPayload(unsignedAttestation))}\n`), privateKey).toString("base64");
+const attestation = assertExactReleaseAttestation(unsignedAttestation, { publicKeyPem: publicKey.export({ type: "spki", format: "pem" }) });
+assert.equal(attestation.frontend_commit_sha, input.frontend_commit_sha);
+assert.throws(() => assertExactReleaseAttestation({ ...attestation, unexpected: true }, { publicKeyPem: publicKey.export({ type: "spki", format: "pem" }) }), /unexpected shape/);
+assert.throws(() => assertExactReleaseAttestation({ ...attestation, frontend_commit_sha: "b".repeat(39) }, { publicKeyPem: publicKey.export({ type: "spki", format: "pem" }) }), /frontend commit/);
+assert.throws(() => assertExactReleaseAttestation({ ...attestation, backend_tree_sha: "f".repeat(40) }, { publicKeyPem: publicKey.export({ type: "spki", format: "pem" }) }), /signature is invalid/);
 const contract = { release_id: input.release_id, api_contract_versions: input.api_contract_versions, queue_compatibility_versions: input.queue_compatibility_versions, minimum_supported: input.minimum_supported };
 assert.equal(assertManifestContract(contract, input), true);
 assert.throws(() => assertManifestContract({ ...contract, release_id: "release-spoofed" }, input), /release_id/);
@@ -44,6 +52,9 @@ assert.equal(assertFrontendReleaseIdentity({ frontend_commit_sha: input.frontend
 assert.throws(() => assertFrontendReleaseIdentity({ frontend_commit_sha: "b".repeat(40) }, input), /frontend_commit_sha/);
 assert.equal(assertBackendFrontendIdentity({ frontend: { commit_sha: input.frontend_commit_sha } }, input), true);
 assert.throws(() => assertBackendFrontendIdentity({ frontend: { commit_sha: "b".repeat(40) } }, input), /embedded frontend commit/);
+assert.equal(assertFrontendReleaseDeclaration({ frontend_commit_sha_source: "exact-release-pair-input-and-github-pages-deployment-commit",
+  audited_start_commit: "a".repeat(40), asset_hashes_sha256: Object.fromEntries(Array.from({ length: 50 }, (_, index) => [`asset-${index}`, "c".repeat(64)])) }), true);
+assert.throws(() => assertFrontendReleaseDeclaration({ frontend_commit_sha_source: "guessed", audited_start_commit: "a".repeat(40), asset_hashes_sha256: {} }), /delegate/);
 assert.equal(assertObservedSchemaIdentity({ observation: "connected_database_catalog.v1", fingerprint: "c".repeat(64) }, "c".repeat(64)), "c".repeat(64));
 assert.throws(() => assertObservedSchemaIdentity({ observation: "source_file", fingerprint: "c".repeat(64) }, "c".repeat(64)), /not observed/);
 assert.throws(() => assertObservedSchemaIdentity({ observation: "connected_database_catalog.v1", fingerprint: "d".repeat(64) }, "c".repeat(64)), /does not equal/);

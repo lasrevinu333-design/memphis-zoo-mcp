@@ -15,7 +15,7 @@ import {
   createScheduleRouter,
 } from "./routes/index.js";
 import { APP_VERSION, RELEASE_ID } from "./app-version.js";
-import { buildReleaseManifest } from "./release-manifest.js";
+import { assertConfiguredReleaseIdentity, buildReleaseManifest } from "./release-manifest.js";
 import { observeProductionSchemaIdentity } from "./production-schema-identity.js";
 import { authenticateOpsAccessRequest, createSupabaseTrustedDeviceStore, installSharedAuthRoutes, makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
 import { makeMcpConnectorMiddleware } from "./auth/mcp-connector-auth.js";
@@ -721,9 +721,21 @@ function safeStringEqual(left, right) {
   return timingSafeEqual(a, b);
 }
 
-function configuredReleaseCanaryDeviceId() {
+function releaseCanaryConfigurationRequired(env = process.env) {
+  return env.NODE_ENV === "production" && /^(1|true|yes)$/i.test(String(env.RENDER || ""));
+}
+
+function configuredReleaseCanaryDeviceId({ required = releaseCanaryConfigurationRequired() } = {}) {
   const deviceId = String(process.env.CUSTODIAL_RELEASE_CANARY_DEVICE_ID || "").trim().toUpperCase();
-  if (!deviceId) return null;
+  if (!deviceId) {
+    if (required) {
+      throw Object.assign(new Error("CUSTODIAL_RELEASE_CANARY_DEVICE_ID is required for the production release."), {
+        status: 503,
+        code: "release_canary_not_configured",
+      });
+    }
+    return null;
+  }
   if (!/^KIOSK_(0[2-9]|10)$/.test(deviceId)) {
     throw new Error("CUSTODIAL_RELEASE_CANARY_DEVICE_ID must identify KIOSK_02 through KIOSK_10.");
   }
@@ -2164,6 +2176,7 @@ app.get("/scheduler-runtime-config", (req, res) => {
 app.get(["/health", "/health/dependencies"], async (req, res) => {
   setPublicDashboardCors(res, req);
   try {
+    const canaryDeviceId = configuredReleaseCanaryDeviceId();
     const rows = await runReadOnlySql(`
       select
         true as database_reachable,
@@ -2179,6 +2192,15 @@ app.get(["/health", "/health/dependencies"], async (req, res) => {
         (select count(*)::int from public.operational_notification_jobs where status = 'leased' and leased_until < now()) as expired_worker_leases
     `);
     const dependencies = rows?.[0] || {};
+    let canaryPaused = null;
+    let canaryControlInitialized = false;
+    if (canaryDeviceId) {
+      canaryPaused = await runRpc("custodial_release_canary_is_paused", {
+        p_device_identifier: canaryDeviceId,
+        p_backend_execution_secret: offlineAuthoritySecret(),
+      });
+      canaryControlInitialized = typeof canaryPaused === "boolean";
+    }
     const requiredSchemaPresent = [
       "sessions_table",
       "messages_table",
@@ -2188,12 +2210,19 @@ app.get(["/health", "/health/dependencies"], async (req, res) => {
       "manager_messaging_rpc",
       "worker_claim_rpc",
     ].every((key) => dependencies[key] === true);
-    const ok = dependencies.database_reachable === true && requiredSchemaPresent;
+    const canaryReady = !releaseCanaryConfigurationRequired() || (Boolean(canaryDeviceId) && canaryControlInitialized);
+    const ok = dependencies.database_reachable === true && requiredSchemaPresent && canaryReady;
     res.status(ok ? 200 : 503).json(buildHealthPayload("dependencies", {
       ok,
       process_alive: true,
       database_reachable: dependencies.database_reachable === true,
       required_schema_present: requiredSchemaPresent,
+      release_canary: {
+        configured: Boolean(canaryDeviceId),
+        device_identifier: canaryDeviceId,
+        control_initialized: canaryControlInitialized,
+        paused: canaryPaused,
+      },
       worker: {
         durable_database_leases: dependencies.worker_claim_rpc === true,
         backlog: Number(dependencies.notification_backlog || 0),
@@ -2672,8 +2701,31 @@ app.get("/scan-api/health", (_req, res) => {
 });
 app.get("/scan-api/authority-health", async (_req, res) => {
   try {
+    const canaryDeviceId = configuredReleaseCanaryDeviceId();
+    let canaryPaused = null;
+    let canaryControlInitialized = false;
+    if (canaryDeviceId) {
+      canaryPaused = await runRpc("custodial_release_canary_is_paused", {
+        p_device_identifier: canaryDeviceId,
+        p_backend_execution_secret: offlineAuthoritySecret(),
+      });
+      canaryControlInitialized = typeof canaryPaused === "boolean";
+    }
     const data = await runRpc("custodial_backend_authority_health", { p_backend_execution_secret: offlineAuthoritySecret() });
-    res.status(200).json({ ok: true, data });
+    const canaryReady = !releaseCanaryConfigurationRequired() || (Boolean(canaryDeviceId) && canaryControlInitialized);
+    const ok = data?.ok === true && canaryReady;
+    res.status(ok ? 200 : 503).json({
+      ok,
+      data: {
+        ...data,
+        release_canary: {
+          configured: Boolean(canaryDeviceId),
+          device_identifier: canaryDeviceId,
+          control_initialized: canaryControlInitialized,
+          paused: canaryPaused,
+        },
+      },
+    });
   } catch (error) {
     const failure = authorityHttpFailure(error, "Offline authority health is unavailable.");
     res.status(failure.status).json(failure.body);
@@ -2765,6 +2817,9 @@ app.use((err, req, res, next) => {
 });
 
 const port = Number(process.env.PORT || 3000);
+// A production Render process must never start with a silently disabled canary boundary.
+configuredReleaseCanaryDeviceId();
+assertConfiguredReleaseIdentity();
 const EVENT_MAINTENANCE_SWEEP_MS = toSafeNonNegativeInt(process.env.EVENT_MAINTENANCE_SWEEP_MS, 60_000);
 if (EVENT_MAINTENANCE_SWEEP_MS > 0) {
   setInterval(() => {
