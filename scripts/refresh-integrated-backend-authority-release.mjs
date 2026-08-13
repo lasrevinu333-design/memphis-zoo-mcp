@@ -44,9 +44,9 @@ const input = JSON.parse(readFileSync(inputPath, "utf8"));
 const schemaFingerprint = readFileSync(fingerprintPath, "utf8").trim();
 const frontendManifest = JSON.parse(readFileSync(releaseManifestPath, "utf8"));
 assert.match(schemaFingerprint, /^[a-f0-9]{64}$/);
-assert.equal(input.release_contract_version, "offline-authority.v3");
+assert.equal(input.release_contract_version, "offline-authority.v4");
 assert.equal(input.accepted_engine_contract.scan, "scan.v2");
-assert.equal(input.required_engine_contract.scan, "scan.v3.offline-authority");
+assert.equal(input.required_engine_contract.scan, "scan.v4.snapshot-bound-authority");
 assert.equal(input.backend_contract.execution_boundary, "CUSTODIAL_BACKEND_PROOF_SECRET");
 assert.equal(input.backend_contract.bridge_backend_source, "src/index.js:runPreparedScanRpc");
 assert.ok(Array.isArray(input.cutover?.phase_order) && input.cutover.phase_order.length >= 6);
@@ -67,7 +67,7 @@ const authorityInventory = trackedInventory.filter(({ path }) => path !== genera
 const migrations = authorityInventory
   .filter(({ path }) => /^supabase\/migrations\/[^/]+\.sql$/.test(path))
   .map(({ path }) => ({ name: path.slice("supabase/migrations/".length) }));
-assert.equal(migrations.length, 70, "release authority inventory must bind every migration at this head");
+assert.equal(migrations.length, 71, "release authority inventory must bind every migration at this head");
 const output = {
   artifact: "integrated-backend-authority-release-evidence.v2",
   schema_fingerprint: schemaFingerprint,
@@ -83,7 +83,8 @@ const output = {
     operational_closure_phase: "20260810170000 recovers durable exact-start proofs, retires every service-role generic writer, and runs leased reconciliation notification delivery",
     final_operational_correction_phase: "20260810190000 fences reassigned proof replay, retires alternate terminal writers and purge, and records idempotent recipient delivery evidence",
     scan_snapshot_phase: "20260813035530 exposes bounded offline scan authority and enforces exact provenance evidence shape",
-    canary_rollback_audit_phase: "20260813050000 adds an audited, reversible post-enforcement canary traffic pause/resume with no alternate writer",
+    snapshot_rebind_closure_phase: "20260813050000 binds activation to an issued snapshot and derives current operational-day truth",
+    canary_operational_recovery_phase: "20260813060000 adds durable exact-device pause and known-good forward restoration of canonical authority functions",
   },
   rollback: input.rollback,
   cutover: input.cutover,

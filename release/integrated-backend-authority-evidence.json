@@ -1,10 +1,10 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
-  "schema_fingerprint": "083af8fffbb94d0228b20c817066d4564898460ecdb7e84f88142bf533453fbc",
+  "schema_fingerprint": "e2950f4cda415c298b22920624482321d9ecb9e3d352d56bf03c835a1115e8fe",
   "schema_transition": {
     "transition_id": "custodial-canary-offline-scan-authority-20260813",
     "from_fingerprint": "333ddfc8008ea0b85916de7d491b98c9b8d6a7d45d3a2947d99b4b3bb836ea00",
-    "to_fingerprint": "083af8fffbb94d0228b20c817066d4564898460ecdb7e84f88142bf533453fbc",
+    "to_fingerprint": "e2950f4cda415c298b22920624482321d9ecb9e3d352d56bf03c835a1115e8fe",
     "expires_at": "2026-08-23T23:59:59Z"
   },
   "frontend_source_fingerprint": "333ddfc8008ea0b85916de7d491b98c9b8d6a7d45d3a2947d99b4b3bb836ea00",
@@ -33,11 +33,12 @@
     "operational_closure_phase": "20260810170000 recovers durable exact-start proofs, retires every service-role generic writer, and runs leased reconciliation notification delivery",
     "final_operational_correction_phase": "20260810190000 fences reassigned proof replay, retires alternate terminal writers and purge, and records idempotent recipient delivery evidence",
     "scan_snapshot_phase": "20260813035530 exposes bounded offline scan authority and enforces exact provenance evidence shape",
-    "snapshot_rebind_closure_phase": "20260813050000 binds activation to an issued snapshot and derives never-cleaned operational truth"
+    "snapshot_rebind_closure_phase": "20260813050000 binds activation to an issued snapshot and derives current operational-day truth",
+    "canary_operational_recovery_phase": "20260813060000 adds durable exact-device pause and known-good forward restoration of canonical authority functions"
   },
   "rollback": {
     "before_enforcement": "legacy Engine and current backend completion remain available",
-    "after_enforcement": "roll traffic only to the retained bridge backend artifact; it is capability-aware and never re-enables direct SQL writers",
+    "after_enforcement": "durably pause the exact physical canary and use the reviewed forward restoration set; never re-enable a legacy or direct-SQL writer",
     "database": "forward-only; do not down-migrate contexts, proofs, reservations, reconciliation, audit, scan evidence, dispositions, or outbox evidence"
   },
   "cutover": {
@@ -66,18 +67,20 @@
       "apply 20260810190000_final_integrated_backend_operational_correction.sql",
       "apply 20260813035530_offline_scan_authority_snapshot.sql",
       "apply 20260813050000_offline_snapshot_operational_truth_closure.sql",
+      "apply 20260813060000_release_canary_operational_recovery.sql",
       "require a green authority health gate and direct-DML denial probes before routing traffic"
     ],
     "rollback": {
       "precondition": "retain the exact bridge backend artifact and the execution secret until all authority health and restoration probes are green",
-      "action": "roll traffic back to the bridge backend artifact; it selects the authoritative procedure when present and only uses legacy fallback when the procedure is absent",
+      "action": "pause the exact physical canary through the durable control; if canonical authority is missing or broken, restore the captured known-good function set forward, verify health, then explicitly resume",
       "restoration_checks": [
         "custodial_backend_authority_health returns ok=true",
         "exact start and completion replay return one durable proof, reconciliation, and completion",
         "offline snapshot activation requires exact issued identity; frozen exact replay remains attributable to the original actor after reassignment",
         "scan evidence remains exact-shape and provenance-labeled after replay",
         "service_role direct insert/update/delete/truncate probes are denied",
-        "named-manager reconciliation read, exactly-once disposition replay, and notification retry state remain available"
+        "named-manager reconciliation read, exactly-once disposition replay, and notification retry state remain available",
+        "present-but-broken and missing canonical authority functions restore to their captured known-good definitions while the canary remains paused"
       ]
     }
   },
@@ -112,7 +115,7 @@
       {
         "path": ".github/workflows/manager-inspection-readiness-monitor.yml",
         "mode": "100644",
-        "object_id": "c7322b17e1efc5ab55886052121d7d295792a3f0"
+        "object_id": "973314145ff99078ddba5e546220bd16584d04d4"
       },
       {
         "path": ".github/workflows/operational-analytics-diagnostics.yml",
@@ -137,7 +140,7 @@
       {
         "path": ".github/workflows/production-availability-monitor.yml",
         "mode": "100644",
-        "object_id": "3d7aae70fb53183272876358af229ae1b29f5850"
+        "object_id": "6653d56a2d1418d08fa66cd7723947f001dd6cb4"
       },
       {
         "path": ".github/workflows/production-database-credential-bridge.yml",
@@ -312,7 +315,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "4a984cc63d0907d14485a20a7d0d9e88ff970c6e"
+        "object_id": "3acb822cf35291ac7dae12824d29ecbaa33440cf"
       },
       {
         "path": "public/moxie-assets/contacts-creekside-animal.png",
@@ -362,12 +365,12 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "6d19373bfade94110b18c29fe3e6bf5d492820c7"
+        "object_id": "6c5e4b6a88599e7f6e376b8e3931af885b5f531b"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
         "mode": "100644",
-        "object_id": "924dae63e19c9a8c456a9261a872135b65aedc50"
+        "object_id": "eb21baecc54991cec69be2f79e670ce8519a3454"
       },
       {
         "path": "release/reviewed-migrations/20260809125735_cleaning_inspection_24_hour_freshness.sql",
@@ -377,7 +380,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "43ab9a41eb2087462279e79a35af8c92193563d7"
+        "object_id": "15a11fed75b06665746701595fbe29d57c40f62e"
       },
       {
         "path": "research/european_herbalism_through_paracelsus.md",
@@ -492,7 +495,7 @@
       {
         "path": "scripts/custodial-repair-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "c99eeeff1f72f8866a0474d16fc8a54a359d4aca"
+        "object_id": "36d99c85938572f2af4d4342fa1ccd1da1e70171"
       },
       {
         "path": "scripts/dashboard-recent-activity-contract-tests.mjs",
@@ -532,7 +535,7 @@
       {
         "path": "scripts/empty-database-rebuild-check.mjs",
         "mode": "100644",
-        "object_id": "b9f8d7c875281e5dc8d4b04e66eba5e81d4626c0"
+        "object_id": "64ca24b36a318f0b1e10d7476ef8f003f53da2ba"
       },
       {
         "path": "scripts/event-notification-retention-contract-tests.mjs",
@@ -622,12 +625,12 @@
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "1cd5c6f8340cf41b4457880f13f3d3c4bd0ad6a5"
+        "object_id": "d8121cc3332405e6f7716a29cc95cd317c44f839"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
         "mode": "100644",
-        "object_id": "af7b9ec2ebf2a0f38b5da0223b520278cf217630"
+        "object_id": "eedd2de6d9e698be7f8b9f95a6b84a2cedc0789b"
       },
       {
         "path": "scripts/integrated-backend-authority-suite-order-isolated-tests.mjs",
@@ -642,7 +645,7 @@
       {
         "path": "scripts/live-release-alignment-check.mjs",
         "mode": "100644",
-        "object_id": "38d2379309fd8806870e95ef12302313a4aa4444"
+        "object_id": "5d18ca2763e176a3c223de76c00b26c48eba35c4"
       },
       {
         "path": "scripts/location-group-audit-reminder-aware.mjs",
@@ -652,12 +655,12 @@
       {
         "path": "scripts/manager-inspection-readiness-tests.mjs",
         "mode": "100644",
-        "object_id": "fa5114b558a29a9f9500aa8c32bb650c9f911f65"
+        "object_id": "d915d5746ae8772d87619e505fdb1cf155ad0792"
       },
       {
         "path": "scripts/manager-inspection-readiness.mjs",
         "mode": "100644",
-        "object_id": "11b03add964d617b022ef71966853a4161d8609a"
+        "object_id": "85987c0fb566893a479220eeb0fd7c16c649ef0a"
       },
       {
         "path": "scripts/manager-named-enrollment-http-tests.mjs",
@@ -732,7 +735,7 @@
       {
         "path": "scripts/offline-actor-recovery-database-tests.mjs",
         "mode": "100644",
-        "object_id": "771049863f0fac3f9b4041864cf301d5aa5281ee"
+        "object_id": "e5803711a9b4c02326d8bbb9cda3f2d3bc31b034"
       },
       {
         "path": "scripts/offline-actor-recovery-route-tests.mjs",
@@ -762,7 +765,7 @@
       {
         "path": "scripts/operations-leadership-mobile-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "91b6cbd7f9c572be784a61b058944a728ebe96ec"
+        "object_id": "468e32dd56cd48bc947381ef2bc010426691d41e"
       },
       {
         "path": "scripts/operations-leadership-mobile-database-tests.mjs",
@@ -812,7 +815,7 @@
       {
         "path": "scripts/production-runtime-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "11a8fd20df198f12610125fdb64a08cf61acb71e"
+        "object_id": "9e007c4342c841d148b785bc441f70e046d89255"
       },
       {
         "path": "scripts/production-schema-c674-bootstrap-contract-tests.mjs",
@@ -842,17 +845,27 @@
       {
         "path": "scripts/refresh-integrated-backend-authority-release.mjs",
         "mode": "100644",
-        "object_id": "8087b5c17f230c06991a354fed7513f2ddb73d6b"
+        "object_id": "712012820887486316b2f10e69f8159c2c4b1115"
       },
       {
         "path": "scripts/refresh-release-schema-alignment.mjs",
         "mode": "100644",
-        "object_id": "1e6dc3b791ca8215c286eda6f7932c106d584802"
+        "object_id": "c8d4476cd51c2d8097cfe5dd686bc8032f900972"
       },
       {
         "path": "scripts/refresh-schema-fingerprint.mjs",
         "mode": "100644",
         "object_id": "5cbfbb3ea63cef321548108c6a8db54212c6a5e2"
+      },
+      {
+        "path": "scripts/release-canary-recovery-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "2f9d04b0e5bd7548e849c5fe6fac1a210578ab44"
+      },
+      {
+        "path": "scripts/release-closure-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "38bf59fda417a8e50dccdd4e1543cd1bb3027958"
       },
       {
         "path": "scripts/restroom-rebalance-route-tests.mjs",
@@ -907,7 +920,7 @@
       {
         "path": "scripts/schema-transition-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "1a76eed9fde2eb961d50c775d54dec05607fb8fa"
+        "object_id": "e8c86a03fdffe717ba313348c0e5a49654e8beea"
       },
       {
         "path": "scripts/smoke-ai-intent.mjs",
@@ -1422,7 +1435,7 @@
       {
         "path": "src/index.js",
         "mode": "100644",
-        "object_id": "d0f03f4215affda2676c16715bb2b2d383bdc53d"
+        "object_id": "e96bea890b006d543d3ec57bfc3a34f4a253aea4"
       },
       {
         "path": "src/leadership-bootstrap.js",
@@ -1495,14 +1508,24 @@
         "object_id": "8cbd72e7c536d8499eef191a9a0a0c11eace7cc6"
       },
       {
+        "path": "src/production-schema-identity.js",
+        "mode": "100644",
+        "object_id": "24c3a13878b22aad144ddee70cff3a7806ca4443"
+      },
+      {
         "path": "src/public-submission-controls.js",
         "mode": "100644",
         "object_id": "ef311da368d785ca5bf0ae306e59e1471416f7fc"
       },
       {
+        "path": "src/release-contract.js",
+        "mode": "100644",
+        "object_id": "79e7286406709cbc7c1f8a0e58d554f20bc2545e"
+      },
+      {
         "path": "src/release-manifest.js",
         "mode": "100644",
-        "object_id": "a9a9e774e7bd2a2d0c268c2e1204704ca77a621e"
+        "object_id": "168ad890354a0e79dc73e23c34ad2c7023ae4783"
       },
       {
         "path": "src/routes/index.js",
@@ -1637,12 +1660,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "847f78702a011893e59f2bc52d228f3234219385"
+        "object_id": "63a14e4d86814bb5fff100b42c76af3b5e8dc654"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "5ee0079f0671ce418f7ce95dc412f910066ff199"
+        "object_id": "9e1b1aa9adcb81e5dbbefe8088b09854fed5110d"
       },
       {
         "path": "supabase/config.toml",
@@ -2577,7 +2600,12 @@
       {
         "path": "supabase/migrations/20260813050000_offline_snapshot_operational_truth_closure.sql",
         "mode": "100644",
-        "object_id": "a0d6639e8e814d861835b1e3362140de0e395c9e"
+        "object_id": "8dc40756741e0183e90a99c9cf526aa877d61aa7"
+      },
+      {
+        "path": "supabase/migrations/20260813060000_release_canary_operational_recovery.sql",
+        "mode": "100644",
+        "object_id": "7e0fe23e7f89d96aee02a5c765501f0a5b2d6547"
       },
       {
         "path": "tmp/write_probe.txt",
@@ -2585,8 +2613,8 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 500,
-    "migration_path_count": 70,
+    "authority_path_count": 505,
+    "migration_path_count": 71,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate requires externally supplied exact expected_commit and expected_tree, deterministically enumerates every tracked expected-tree entry, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file as its exact tree blob."
   },
@@ -2806,6 +2834,9 @@
     },
     {
       "name": "20260813050000_offline_snapshot_operational_truth_closure.sql"
+    },
+    {
+      "name": "20260813060000_release_canary_operational_recovery.sql"
     }
   ],
   "release_boundary": "Configure a minimum-32-character CUSTODIAL_BACKEND_PROOF_SECRET and matching database digest before Phase A, retain the bridge backend artifact through the scan-snapshot phase, and require the executable health/restoration probes before traffic changes."

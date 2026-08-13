@@ -44,11 +44,12 @@
       "apply 20260810190000_final_integrated_backend_operational_correction.sql",
       "apply 20260813035530_offline_scan_authority_snapshot.sql",
       "apply 20260813050000_offline_snapshot_operational_truth_closure.sql",
+      "apply 20260813060000_release_canary_operational_recovery.sql",
       "require a green authority health gate and direct-DML denial probes before routing traffic"
     ],
     "rollback": {
       "precondition": "retain the exact bridge backend artifact and the execution secret until all authority health and restoration probes are green",
-      "action": "roll traffic back to the bridge backend artifact; it selects the authoritative procedure when present and only uses legacy fallback when the procedure is absent",
+      "action": "pause the exact physical canary through the durable control; if canonical authority is missing or broken, restore the captured known-good function set forward, verify health, then explicitly resume",
       "restoration_checks": [
         "custodial_backend_authority_health returns ok=true",
         "exact start and completion replay return one durable proof, reconciliation, and completion",
@@ -56,12 +57,13 @@
         "scan evidence remains exact-shape and provenance-labeled after replay",
         "service_role direct insert/update/delete/truncate probes are denied",
         "named-manager reconciliation read, exactly-once disposition replay, and notification retry state remain available"
+        ,"present-but-broken and missing canonical authority functions restore to their captured known-good definitions while the canary remains paused"
       ]
     }
   },
   "rollback": {
     "before_enforcement": "legacy Engine and current backend completion remain available",
-    "after_enforcement": "roll traffic only to the retained bridge backend artifact; it is capability-aware and never re-enables direct SQL writers",
+    "after_enforcement": "durably pause the exact physical canary and use the reviewed forward restoration set; never re-enable a legacy or direct-SQL writer",
     "database": "forward-only; do not down-migrate contexts, proofs, reservations, reconciliation, audit, scan evidence, dispositions, or outbox evidence"
   }
 }
