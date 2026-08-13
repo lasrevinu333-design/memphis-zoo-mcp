@@ -47,7 +47,7 @@ function employeeDay(projectionStatus = "current") {
   };
 }
 
-function buildApp(read) {
+function buildApp(read, requireDeviceAccess) {
   const app = express();
   app.use("/schedule-api", createScheduleRouter({
     runReadOnlySql: read,
@@ -56,6 +56,7 @@ function buildApp(read) {
     buildHealthPayload: () => ({ ok: true }),
     requireAdminApiAuth: (_req, _res, next) => next(),
     requireOpsManagerAuth: (_req, _res, next) => next(),
+    requireDeviceAccess,
     appVersion: "route-test",
     releaseId: "route-test",
     contractVersion: "schedule.route-test",
@@ -94,6 +95,51 @@ await withServer(buildApp(async (sql) => {
   assert.match(await html.text(), /Taylor New[\s\S]*Teton Restroom/);
 });
 assert.equal(currentCalls.every((sql) => sql.includes("static_weekly_v5_read_employee_day")), true, "governed dates must not read the legacy scheduler");
+
+const conflictingEmployeeId = "30000000-0000-4000-8000-000000000088";
+let authenticatedDeviceMiddlewareCalls = 0;
+const authenticatedCalls = [];
+await withServer(buildApp(async (sql) => {
+  authenticatedCalls.push(sql);
+  if (sql.includes("from public.device_aliases")) {
+    return [{
+      requested_device_id: "KIOSK_08",
+      matched_by: "canonical",
+      canonical_device_pk: "80000000-0000-4000-8000-000000000008",
+      canonical_device_id: "KIOSK_08",
+      device_id: "KIOSK_08",
+      device_name: "Employee Phone 8",
+      device_active: true,
+      assigned_employee_id: employeeId,
+      assigned_employee_name: "Taylor New",
+      employee_code: "EMP901",
+      role: "CUSTODIAL_EMPLOYEE",
+      employee_active: true,
+    }];
+  }
+  if (sql.includes("static_weekly_v5_read_employee_day")) {
+    assert.match(sql, new RegExp(employeeId));
+    assert.doesNotMatch(sql, new RegExp(conflictingEmployeeId));
+    return [{ data: employeeDay() }];
+  }
+  throw new Error(`unexpected authenticated employee-day query: ${sql}`);
+}, (req, _res, next) => {
+  authenticatedDeviceMiddlewareCalls += 1;
+  req.memphisDevice = { canonical_device_id: "KIOSK_08", device_id: "KIOSK_08" };
+  next();
+}), async (origin) => {
+  const response = await fetch(
+    `${origin}/schedule-api/my-day-summary?employee_id=${conflictingEmployeeId}&service_date=${serviceDate}`,
+    { headers: { "x-device-id": "KIOSK_08" } },
+  );
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.data.employee_id, employeeId);
+  assert.equal(payload.data.employee_name, "Taylor New");
+  assert.equal(payload.data.canonical_device_id, "KIOSK_08");
+});
+assert.equal(authenticatedDeviceMiddlewareCalls, 1, "device-addressed employee reads must authenticate the phone");
+assert.ok(authenticatedCalls.some((sql) => sql.includes("from public.device_aliases")));
 
 const staleCalls = [];
 await withServer(buildApp(async (sql) => {
