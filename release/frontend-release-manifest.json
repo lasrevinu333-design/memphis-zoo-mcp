@@ -1,13 +1,13 @@
 {
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "6c8480d3c4d161c6747fec3748e7ac0c377b2a72",
+  "frontend_commit_sha": "3fc10db3965dc582380b8872258dc4248aa0c46f",
   "frontend_commit_state": "final_pair_bound",
   "backend_minimum_version": "release-2026.07.19.custodial-v3.12",
   "schema_fingerprint": "333ddfc8008ea0b85916de7d491b98c9b8d6a7d45d3a2947d99b4b3bb836ea00",
   "schema_transition": {
     "transition_id": "custodial-canary-offline-scan-authority-20260813",
     "from_fingerprint": "333ddfc8008ea0b85916de7d491b98c9b8d6a7d45d3a2947d99b4b3bb836ea00",
-    "to_fingerprint": "d2c18557e327632fd1dd669b65a96669e74620a2cec50d08a223ff09beec5a22",
+    "to_fingerprint": "8738b47fb19d90335bfcc22ba8a3265aa5cd1f30228e4a6b9afa9b8a7af15219",
     "expires_at": "2026-08-23T23:59:59Z"
   },
   "api_contract_versions": {

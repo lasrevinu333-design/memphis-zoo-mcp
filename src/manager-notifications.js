@@ -205,7 +205,7 @@ export function createPushRuntime({ db, env }) {
     return value;
   }
 
-  async function send(job, pushDevice, { channelId = "operations" } = {}) {
+  async function send(job, pushDevice, { channelId = "operations", beforeSend = null } = {}) {
     if (!eventReminderIsCurrent(job)) {
       const error = new Error("The event occurrence is no longer upcoming.");
       error.expired = true;
@@ -214,6 +214,11 @@ export function createPushRuntime({ db, env }) {
     const token = await accessToken(PUSH_SCOPE);
     if (!eventReminderIsCurrent(job)) {
       const error = new Error("The event occurrence is no longer upcoming.");
+      error.expired = true;
+      throw error;
+    }
+    if (typeof beforeSend === "function" && await beforeSend() !== true) {
+      const error = new Error("The notification job is no longer current.");
       error.expired = true;
       throw error;
     }
@@ -276,7 +281,16 @@ export function createPushRuntime({ db, env }) {
             .eq("credential_id", job.credential_id).eq("enabled", true).is("revoked_at", null).maybeSingle();
           if (deviceResult.error) throw deviceResult.error;
           if (!deviceResult.data?.fcm_token) throw Object.assign(new Error("No active push registration exists for this manager app installation."), { permanent: true });
-          providerMessageId = await send(job, deviceResult.data);
+          providerMessageId = await send(job, deviceResult.data, {
+            beforeSend: async () => {
+              const current = await db.rpc("ops_manager_notification_job_is_current", {
+                p_queue_id: job.queue_id,
+                p_lease_token: job.lease_token,
+              });
+              if (current.error) throw current.error;
+              return current.data === true;
+            },
+          });
           succeeded = true;
           await db.from("ops_manager_push_devices").update({ last_seen_at: new Date().toISOString(), last_error: null })
             .eq("credential_id", job.credential_id);

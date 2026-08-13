@@ -8,7 +8,7 @@ const index = readFileSync(new URL("../src/index.js", import.meta.url), "utf8");
 const liveGate = readFileSync(new URL("./live-release-alignment-check.mjs", import.meta.url), "utf8");
 const rollbackMigration = readFileSync(new URL("../supabase/migrations/20260813060000_release_canary_operational_recovery.sql", import.meta.url), "utf8");
 
-assert.equal(input.frontend_commit_sha, "6c8480d3c4d161c6747fec3748e7ac0c377b2a72", "backend must pin the exact audited frontend candidate");
+assert.equal(input.frontend_commit_sha, "3fc10db3965dc582380b8872258dc4248aa0c46f", "backend must pin the exact audited frontend candidate");
 assert.equal(input.frontend_commit_state, "final_pair_bound");
 assert.deepEqual(input.queue_compatibility_versions.scan.at(-1), "indexeddb-v6-offline-authority");
 assert.deepEqual(Object.keys(input.minimum_supported).sort(), ["backend_version", "frontend_version"]);

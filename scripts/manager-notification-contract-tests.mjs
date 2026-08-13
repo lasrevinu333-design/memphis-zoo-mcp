@@ -5,9 +5,10 @@ import express from "express";
 import { createPushRuntime, installManagerNotificationRoutes } from "../src/manager-notifications.js";
 
 const root = new URL("../", import.meta.url);
-const [moduleSource, migration, indexSource] = await Promise.all([
+const [moduleSource, migration, closureMigration, indexSource] = await Promise.all([
   readFile(new URL("src/manager-notifications.js", root), "utf8"),
   readFile(new URL("supabase/migrations/20260721203000_manager_mobile_notifications.sql", root), "utf8"),
+  readFile(new URL("supabase/migrations/20260813050000_offline_snapshot_operational_truth_closure.sql", root), "utf8"),
   readFile(new URL("src/index.js", root), "utf8"),
 ]);
 
@@ -40,6 +41,8 @@ assert.match(migration, /ops_manager_enqueue_message_push/);
 assert.match(migration, /ops_manager_enqueue_scheduled_notifications/);
 assert.match(migration, /ops_manager_claim_notification_jobs/);
 assert.match(migration, /employee kiosk devices are not eligible/);
+assert.match(closureMigration, /ops_manager_notification_job_is_current/);
+assert.match(moduleSource, /beforeSend:\s*async[\s\S]*ops_manager_notification_job_is_current/);
 
 const app = express();
 installManagerNotificationRoutes(app, { env: {} });
@@ -79,12 +82,14 @@ const iosConfig = `<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><d
 const originalFetch = globalThis.fetch;
 const calls = [];
 let oauthDelayMs = 0;
+let oauthCompleted = false;
 globalThis.fetch = async (input, init = {}) => {
   const url = String(input);
   if (/^https?:\/\/127\.0\.0\.1/.test(url)) return originalFetch(input, init);
   calls.push({ url, method: String(init.method || "GET"), authorization: String(init.headers?.Authorization || init.headers?.authorization || ""), body: String(init.body || "") });
   if (url === "https://oauth2.googleapis.com/token") {
     if (oauthDelayMs) await new Promise((resolve) => setTimeout(resolve, oauthDelayMs));
+    oauthCompleted = true;
     return new Response(JSON.stringify({ access_token: "test-firebase-oauth-token", expires_in: 3600 }), { status: 200, headers: { "Content-Type": "application/json" } });
   }
   if (url.endsWith("/projects/memphis-zoo-custodial-program/androidApps?pageSize=100")) {
@@ -196,6 +201,33 @@ try {
     data_json: { next_event_starts_at: new Date(Date.now() + 30).toISOString() },
   }, { fcm_token: "test-fcm-token" }), /no longer upcoming/i);
   oauthDelayMs = 0;
+  assert.equal(calls.filter((call) => call.url.endsWith("/messages:send")).length, beforeCrossingSend);
+  oauthDelayMs = 40;
+  oauthCompleted = false;
+  let canonicalChecks = 0;
+  const canonicalRuntime = createPushRuntime({
+    db: {},
+    env: {
+      FIREBASE_SERVICE_ACCOUNT_JSON: JSON.stringify({
+        type: "service_account",
+        project_id: "memphis-zoo-custodial-program",
+        client_email: "firebase-adminsdk-canonical@memphis-zoo-custodial-program.iam.gserviceaccount.com",
+        private_key: privateKey,
+      }),
+    },
+  });
+  await assert.rejects(() => canonicalRuntime.send({
+    notification_type: "event_digest", title: "Cancelled event", body: "Must not send",
+    data_json: { next_event_starts_at: new Date(Date.now() + 60_000).toISOString() },
+  }, { fcm_token: "test-fcm-token" }, {
+    beforeSend: async () => {
+      canonicalChecks += 1;
+      assert.equal(oauthCompleted, true, "canonical validation must run after provider authentication");
+      return false;
+    },
+  }), /no longer current/i);
+  oauthDelayMs = 0;
+  assert.equal(canonicalChecks, 1);
   assert.equal(calls.filter((call) => call.url.endsWith("/messages:send")).length, beforeCrossingSend);
   const sentPushes = calls.filter((call) => call.url.endsWith("/messages:send")).map((call) => JSON.parse(call.body));
   assert.equal(sentPushes.at(-2).message.android.collapse_key, "memphis-employee-events");

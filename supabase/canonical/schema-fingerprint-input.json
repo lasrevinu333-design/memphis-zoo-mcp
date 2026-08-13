@@ -34770,6 +34770,13 @@
     },
     {
       "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.ops_manager_notification_job_is_current(p_queue_id uuid, p_lease_token uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\n  select exists (\n    select 1 from public.ops_manager_notification_queue q\n    where q.queue_id=p_queue_id and q.status='leased' and q.lease_token=p_lease_token and q.leased_until>=now()\n      and (q.notification_type<>'event_digest' or exists (\n        select 1 from public.events_app_events e\n        where e.id=case when coalesce(q.data_json->>'next_event_id','') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'\n          then (q.data_json->>'next_event_id')::uuid else null end\n          and e.status='SCHEDULED'\n          and ((e.event_date+e.start_time) at time zone 'America/Chicago')>now()\n          and to_jsonb((e.event_date+e.start_time) at time zone 'America/Chicago')=q.data_json->'next_event_starts_at'\n      ))\n  );\n$function$\n",
+      "function_name": "ops_manager_notification_job_is_current",
+      "identity_arguments": "p_queue_id uuid, p_lease_token uuid",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
       "definition": "CREATE OR REPLACE FUNCTION public.ops_manager_notification_validate_owner()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_manager_id uuid;\nbegin\n  select manager_id into v_manager_id\n  from public.ops_manager_trusted_devices\n  where credential_id=new.credential_id\n    and revoked_at is null\n    and expires_at>now();\n  if v_manager_id is null or v_manager_id is distinct from new.manager_id then\n    raise exception using errcode='23514',message='Notification record must belong to the active trusted manager device.';\n  end if;\n  new.updated_at:=now();\n  return new;\nend\n$function$\n",
       "function_name": "ops_manager_notification_validate_owner",
       "identity_arguments": "",
@@ -43639,6 +43646,14 @@
       "function_name": "ops_manager_finish_notification_job",
       "grantee": "service_role",
       "identity_arguments": "p_queue_id uuid, p_lease_token uuid, p_succeeded boolean, p_provider_message_id text, p_error text, p_retry_seconds integer",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "ops_manager_notification_job_is_current",
+      "grantee": "service_role",
+      "identity_arguments": "p_queue_id uuid, p_lease_token uuid",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"

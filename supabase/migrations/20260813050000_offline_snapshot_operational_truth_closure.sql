@@ -232,6 +232,28 @@ begin
     worker_id=left(btrim(p_worker_id),160),updated_at=now() from candidates c where q.queue_id=c.queue_id returning q.*;
 end $function$;
 
+-- The sender calls this after acquiring its provider token and immediately
+-- before dispatch so cancellation, rescheduling, or lease loss cannot cross
+-- the worker's slow external-authentication window.
+create or replace function public.ops_manager_notification_job_is_current(
+  p_queue_id uuid,p_lease_token uuid
+) returns boolean language sql stable security definer set search_path=pg_catalog,public as $function$
+  select exists (
+    select 1 from public.ops_manager_notification_queue q
+    where q.queue_id=p_queue_id and q.status='leased' and q.lease_token=p_lease_token and q.leased_until>=now()
+      and (q.notification_type<>'event_digest' or exists (
+        select 1 from public.events_app_events e
+        where e.id=case when coalesce(q.data_json->>'next_event_id','') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+          then (q.data_json->>'next_event_id')::uuid else null end
+          and e.status='SCHEDULED'
+          and ((e.event_date+e.start_time) at time zone 'America/Chicago')>now()
+          and to_jsonb((e.event_date+e.start_time) at time zone 'America/Chicago')=q.data_json->'next_event_starts_at'
+      ))
+  );
+$function$;
+revoke all on function public.ops_manager_notification_job_is_current(uuid,uuid) from public,anon,authenticated;
+grant execute on function public.ops_manager_notification_job_is_current(uuid,uuid) to postgres,service_role;
+
 create or replace function public.ops_manager_finish_notification_job(
   p_queue_id uuid,p_lease_token uuid,p_succeeded boolean,p_provider_message_id text default null,p_error text default null,p_retry_seconds integer default 30
 ) returns public.ops_manager_notification_queue language plpgsql security definer set search_path=pg_catalog,public as $function$
