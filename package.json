@@ -91,6 +91,7 @@
     "release:live:check": "node scripts/live-release-alignment-check.mjs",
     "test:release-closure": "node scripts/release-closure-contract-tests.mjs",
     "test:release-canary-recovery-db": "node scripts/release-canary-recovery-database-tests.mjs",
+    "test:final-uncertainty-closure-db": "node scripts/final-uncertainty-closure-database-tests.mjs",
     "backup:production": "node scripts/production-backup.mjs",
     "restore:verify": "node scripts/production-restore.mjs",
     "restore:production": "RESTORE_APPLY=true node scripts/production-restore.mjs",

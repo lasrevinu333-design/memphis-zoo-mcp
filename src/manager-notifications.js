@@ -84,6 +84,11 @@ function stringifyData(data = {}) {
   }
   return output;
 }
+function eventReminderIsCurrent(job, now = Date.now()) {
+  if (String(job?.notification_type || "") !== "event_digest") return true;
+  const startsAt = Date.parse(String(job?.data_json?.next_event_starts_at || ""));
+  return Number.isFinite(startsAt) && startsAt > now;
+}
 function preferenceView(row = {}) {
   return {
     messages_enabled: row.messages_enabled !== false,
@@ -201,6 +206,11 @@ export function createPushRuntime({ db, env }) {
   }
 
   async function send(job, pushDevice, { channelId = "operations" } = {}) {
+    if (!eventReminderIsCurrent(job)) {
+      const error = new Error("The event occurrence is no longer upcoming.");
+      error.expired = true;
+      throw error;
+    }
     const token = await accessToken(PUSH_SCOPE);
     const collapseKey = `memphis-${clip(channelId, 48).toLowerCase().replace(/[^a-z0-9_-]+/g, "-") || "operations"}`;
     const response = await fetch(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(account.project_id)}/messages:send`, {
@@ -255,6 +265,7 @@ export function createPushRuntime({ db, env }) {
         let providerMessageId = null;
         let errorMessage = null;
         try {
+          if (!eventReminderIsCurrent(job)) throw Object.assign(new Error("The event occurrence is no longer upcoming."), { expired: true });
           const deviceResult = await db.from("ops_manager_push_devices")
             .select("push_device_id,credential_id,manager_id,fcm_token,platform,enabled,revoked_at")
             .eq("credential_id", job.credential_id).eq("enabled", true).is("revoked_at", null).maybeSingle();
@@ -269,7 +280,7 @@ export function createPushRuntime({ db, env }) {
           if (error?.permanent) {
             await db.from("ops_manager_push_devices").update({ enabled: false, revoked_at: new Date().toISOString(), last_error: errorMessage })
               .eq("credential_id", job.credential_id);
-          } else {
+          } else if (!error?.expired) {
             await db.from("ops_manager_push_devices").update({ last_error: errorMessage }).eq("credential_id", job.credential_id);
           }
         }

@@ -35,6 +35,33 @@ create table if not exists public.custodial_release_authority_restore_definition
   captured_at timestamptz not null default statement_timestamp()
 );
 
+-- Verify every other captured canonical definition. The health function itself
+-- is captured below, so a broken or missing health RPC is also forward-restorable.
+create or replace function public.custodial_backend_authority_health(p_backend_execution_secret text)
+returns jsonb language plpgsql security definer set search_path to 'pg_catalog','public','extensions'
+as $function$
+declare
+  v_expected integer;
+  v_missing text[];
+  v_mismatched text[];
+begin
+  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);
+  select count(*) into v_expected from public.custodial_release_authority_restore_definitions;
+  select array_agg(d.function_identity order by d.restore_order) into v_missing
+  from public.custodial_release_authority_restore_definitions d
+  where to_regprocedure(d.function_identity) is null;
+  select array_agg(d.function_identity order by d.restore_order) into v_mismatched
+  from public.custodial_release_authority_restore_definitions d
+  where to_regprocedure(d.function_identity) is not null
+    and encode(extensions.digest(convert_to(pg_get_functiondef(to_regprocedure(d.function_identity)),'UTF8'),'sha256'),'hex')<>d.definition_sha256;
+  return jsonb_build_object(
+    'ok',v_expected=7 and coalesce(cardinality(v_missing),0)=0 and coalesce(cardinality(v_mismatched),0)=0,
+    'authority','offline-authority.v4','phase','release-canary-operational-recovery','configured',true,
+    'canonical_functions_expected',7,'canonical_functions_verified',v_expected-coalesce(cardinality(v_missing),0)-coalesce(cardinality(v_mismatched),0),
+    'missing_functions',to_jsonb(coalesce(v_missing,array[]::text[])),'mismatched_functions',to_jsonb(coalesce(v_mismatched,array[]::text[])),
+    'issued_snapshot_ledger',true,'frozen_exact_replay',true,'operational_day_location_truth',true);
+end $function$;
+
 with wanted(restore_order, function_identity) as (values
   (1, 'public.custodial_commit_offline_occurrence(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text)'),
   (2, 'public.tool_get_offline_scan_authority_snapshot(text,text,text)'),
@@ -88,6 +115,9 @@ declare
   v_definition public.custodial_release_authority_restore_definitions%rowtype;
   v_device text:=upper(btrim(coalesce(p_device_identifier,'')));
   v_result jsonb;
+  v_current_health jsonb;
+  v_missing text[];
+  v_mismatched text[];
   v_restored integer:=0;
 begin
   perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);
@@ -134,14 +164,22 @@ begin
     execute 'grant execute on function public.custodial_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text), public.tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text), public.tool_get_offline_scan_authority_snapshot(text,text,text), public.tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text), public.tool_complete_session_authoritative(text,jsonb,text,text,text,text), public.custodial_backend_authority_health(text) to postgres,service_role';
     v_result:=jsonb_build_object('device_identifier',v_device,'canary_paused',true,'restored_functions',v_restored);
   else
-    if p_authoritative_health->>'ok'<>'true' then
+    select array_agg(d.function_identity order by d.restore_order) into v_missing
+    from public.custodial_release_authority_restore_definitions d where to_regprocedure(d.function_identity) is null;
+    select array_agg(d.function_identity order by d.restore_order) into v_mismatched
+    from public.custodial_release_authority_restore_definitions d where to_regprocedure(d.function_identity) is not null
+      and encode(extensions.digest(convert_to(pg_get_functiondef(to_regprocedure(d.function_identity)),'UTF8'),'sha256'),'hex')<>d.definition_sha256;
+    v_current_health:=jsonb_build_object('ok',coalesce(cardinality(v_missing),0)=0 and coalesce(cardinality(v_mismatched),0)=0,
+      'canonical_functions_expected',7,'canonical_functions_verified',7-coalesce(cardinality(v_missing),0)-coalesce(cardinality(v_mismatched),0),
+      'missing_functions',to_jsonb(coalesce(v_missing,array[]::text[])),'mismatched_functions',to_jsonb(coalesce(v_mismatched,array[]::text[])));
+    if p_authoritative_health->>'ok'<>'true' or v_current_health->>'ok'<>'true' then
       raise exception using errcode='55000',message='the release canary cannot resume until authoritative health is green';
     end if;
     insert into public.custodial_release_canary_controls(device_identifier,paused,updated_by_manager_id,reason)
     values(v_device,false,p_manager_id,btrim(p_reason))
     on conflict(device_identifier) do update set paused=false,updated_at=statement_timestamp(),
       updated_by_manager_id=excluded.updated_by_manager_id,reason=excluded.reason;
-    v_result:=jsonb_build_object('device_identifier',v_device,'canary_paused',false,'restored_functions',0);
+    v_result:=jsonb_build_object('device_identifier',v_device,'canary_paused',false,'restored_functions',0,'verified_authoritative_health',v_current_health);
   end if;
 
   insert into public.custodial_release_canary_rollback_audits(

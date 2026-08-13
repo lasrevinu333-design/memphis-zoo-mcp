@@ -172,6 +172,10 @@ try {
   });
   await pushRuntime.send({ title: "Event", body: "Event body", data_json: { notification_type: "event" } }, { fcm_token: "test-fcm-token" }, { channelId: "employee-events" });
   await pushRuntime.send({ title: "Message", body: "Message body", data_json: { notification_type: "message" } }, { fcm_token: "test-fcm-token" }, { channelId: "employee-messages" });
+  await assert.rejects(() => pushRuntime.send({
+    notification_type: "event_digest", title: "Expired event", body: "Must not send",
+    data_json: { next_event_starts_at: new Date(Date.now() - 1000).toISOString() },
+  }, { fcm_token: "test-fcm-token" }), /no longer upcoming/i);
   const sentPushes = calls.filter((call) => call.url.endsWith("/messages:send")).map((call) => JSON.parse(call.body));
   assert.equal(sentPushes.at(-2).message.android.collapse_key, "memphis-employee-events");
   assert.equal(sentPushes.at(-1).message.android.collapse_key, "memphis-employee-messages");

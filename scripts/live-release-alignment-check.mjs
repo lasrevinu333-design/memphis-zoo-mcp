@@ -50,13 +50,15 @@ const frontendDeploymentUrl = requiredEnv("FRONTEND_DEPLOYMENT_MANIFEST_URL");
 const schemaToken = requiredEnv("LIVE_RELEASE_SCHEMA_IDENTITY_TOKEN");
 const identityUrl = String(process.env.BACKEND_SCHEMA_IDENTITY_URL || new URL("/admin-api/release-schema-identity", backendUrl).toString());
 const healthUrl = String(process.env.BACKEND_HEALTH_URL || new URL("/health", backendUrl).toString());
+const authorityHealthUrl = String(process.env.BACKEND_AUTHORITY_HEALTH_URL || new URL("/scan-api/authority-health", backendUrl).toString());
 
-const [frontend, deployment, backend, observed, healthProbe] = await Promise.all([
+const [frontend, deployment, backend, observed, healthProbe, authorityHealth] = await Promise.all([
   fetchJson(frontendReleaseUrl, "frontend release manifest"),
   fetchJson(frontendDeploymentUrl, "frontend deployment manifest"),
   fetchJson(backendUrl, "backend release manifest"),
   fetchJson(identityUrl, "authenticated production schema identity", { authorization: `Bearer ${schemaToken}` }),
   fetchTimedJson(healthUrl, "backend dependency health"),
+  fetchJson(authorityHealthUrl, "canonical custodial authority health"),
 ]);
 const health = healthProbe.json;
 
@@ -76,6 +78,9 @@ assert.equal(health.required_schema_present, true, "backend required schema is i
 assert.equal(health.worker?.dead_letters, 0, "backend has dead operational jobs");
 assert.equal(health.worker?.expired_leases, 0, "backend has expired operational-job leases");
 assert.ok(healthProbe.elapsed_ms <= 4_000, `backend dependency health exceeded four seconds (${healthProbe.elapsed_ms.toFixed(0)} ms)`);
+assert.equal(authorityHealth.ok, true, "canonical custodial authority health endpoint failed");
+assert.equal(authorityHealth.data?.ok, true, "canonical custodial authority inventory is not green");
+assert.equal(authorityHealth.data?.canonical_functions_verified, 7, "canonical custodial authority inventory is incomplete");
 
 console.log(JSON.stringify({ ok: true, release_id: pair.release_id, backend_commit_sha: pair.backend_commit_sha,
   frontend_commit_sha: pair.frontend_commit_sha, observed_production_schema_fingerprint: observed.fingerprint,
