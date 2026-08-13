@@ -57,6 +57,14 @@ function workerUrl() {
 }
 function refWorkerProcess(value) { value?.ref?.(); value?.channel?.ref?.(); }
 function unrefWorkerProcess(value) { value?.channel?.unref?.(); value?.unref?.(); }
+function releaseWorkerIfIdle(value) {
+  // Promise consumers resume in microtasks before this callback. A solve can
+  // therefore claim and ref the initialized child without a one-shot process
+  // exiting in the handoff between readiness and its first request.
+  setImmediate(() => {
+    if (worker === value && pending?.worker !== value) unrefWorkerProcess(value);
+  });
+}
 function solverError(code, message) { return error(code, message); }
 function monotonicNowMilliseconds() {
   return typeof performance?.now === "function" ? performance.now() : Number(process.hrtime.bigint() / 1_000_000n);
@@ -117,10 +125,10 @@ function completeInitialization(record, readyIdentity) {
   identity = Object.freeze({ ...readyIdentity, options: HIGHS_OPTIONS, runtime: "Node child process / local WebAssembly" });
   state = "ready";
   initialization = null;
-  // Idle readiness must never keep an initialize-only CLI alive.  A solve refs
-  // the worker synchronously, and finish unrefs it again.
-  unrefWorkerProcess(record.candidate);
   record.resolve(identity);
+  // Idle readiness must never keep an initialize-only CLI alive. Defer the
+  // release until awaiting solve callers have had a chance to claim the child.
+  releaseWorkerIfIdle(record.candidate);
 }
 
 function startWorker() {
