@@ -360,7 +360,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "ad3e5afe873a98dd133c38c7252beeaf3ee02697"
+        "object_id": "b9ac855f09095c7facbd8dc94999fba49bd1daed"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -375,7 +375,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "82551cedb5f9734b22306d97cb0f43f8ee1cf0f5"
+        "object_id": "2e68f40700e5fb2730a0547348fad20ee0d430a0"
       },
       {
         "path": "research/european_herbalism_through_paracelsus.md",
