@@ -42,6 +42,7 @@
       "apply 20260810160000_close_offline_authority_integrity_gaps.sql",
       "apply 20260810170000_finish_offline_authority_operational_closure.sql",
       "apply 20260810190000_final_integrated_backend_operational_correction.sql",
+      "apply 20260813035530_offline_scan_authority_snapshot.sql",
       "require a green authority health gate and direct-DML denial probes before routing traffic"
     ],
     "rollback": {
@@ -50,6 +51,8 @@
       "restoration_checks": [
         "custodial_backend_authority_health returns ok=true",
         "exact start and completion replay return one durable proof, reconciliation, and completion",
+        "offline scan authority snapshot returns only current credential/device/employee/location authority",
+        "scan evidence remains exact-shape and provenance-labeled after replay",
         "service_role direct insert/update/delete/truncate probes are denied",
         "named-manager reconciliation read, exactly-once disposition replay, and notification retry state remain available"
       ]

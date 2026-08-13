@@ -13,6 +13,7 @@ const phaseB = "20260810150000_enforce_integrated_backend_authority.sql";
 const phaseC = "20260810160000_close_offline_authority_integrity_gaps.sql";
 const phaseD = "20260810170000_finish_offline_authority_operational_closure.sql";
 const phaseE = "20260810190000_final_integrated_backend_operational_correction.sql";
+const phaseF = "20260813035530_offline_scan_authority_snapshot.sql";
 const releaseInputPath = "release/integrated-backend-authority-input.json";
 const releaseEvidencePath = "release/integrated-backend-authority-evidence.json";
 const forbiddenGitEnvironment = [
@@ -191,6 +192,7 @@ function expectedReleaseEvidence(input, schemaFingerprint, frontendManifest, aut
       closure_phase: "20260810160000 removes direct DML and legacy-writer authority, fences terminal conflicts, and writes manager outbox evidence",
       operational_closure_phase: "20260810170000 recovers durable exact-start proofs, retires every service-role generic writer, and runs leased reconciliation notification delivery",
       final_operational_correction_phase: "20260810190000 fences reassigned proof replay, retires alternate terminal writers and purge, and records idempotent recipient delivery evidence",
+      scan_snapshot_phase: "20260813035530 exposes bounded offline scan authority and enforces exact provenance evidence shape",
     },
     rollback: input.rollback,
     cutover: input.cutover,
@@ -209,7 +211,7 @@ function expectedReleaseEvidence(input, schemaFingerprint, frontendManifest, aut
       authority: "active named manager; disposition write additionally requires DIRECTOR or SECURITY_ADMIN",
     },
     migrations,
-    release_boundary: "Configure a minimum-32-character CUSTODIAL_BACKEND_PROOF_SECRET and matching database digest before Phase A, retain the bridge backend artifact through Phase C, and require the executable health/restoration probes before traffic changes.",
+    release_boundary: "Configure a minimum-32-character CUSTODIAL_BACKEND_PROOF_SECRET and matching database digest before Phase A, retain the bridge backend artifact through the scan-snapshot phase, and require the executable health/restoration probes before traffic changes.",
   };
 }
 
@@ -227,11 +229,11 @@ const evidenceBlob = expectedEntries.find(({ path }) => path === releaseEvidence
 assert.ok(evidenceBlob, "expected tree omits generated release evidence");
 const expectedBlobs = expectedEntries.filter(({ path }) => path !== releaseEvidencePath);
 assert.ok(expectedBlobs.length > 0, "release authority inventory is empty");
-assert.equal(expectedBlobs.filter(({ path }) => /^supabase\/migrations\/[^/]+\.sql$/.test(path)).length, 68, "release authority inventory must bind all 68 migrations");
+assert.equal(expectedBlobs.filter(({ path }) => /^supabase\/migrations\/[^/]+\.sql$/.test(path)).length, 69, "release authority inventory must bind all 69 migrations");
 for (const blob of [...expectedBlobs, evidenceBlob]) assertWorktreeMatchesExpectedBlob(blob);
 
 const blobByPath = new Map(expectedBlobs.map((blob) => [blob.path, blob]));
-for (const required of [releaseInputPath, "scripts/refresh-integrated-backend-authority-release.mjs", "scripts/integrated-backend-authority-cutover-check.mjs", "scripts/integrated-backend-authority-release-provenance-tests.mjs", "scripts/integrated-backend-authority-suite-order-tests.mjs", "scripts/final-operational-correction-database-tests.mjs", "scripts/named-manager-messenger-retirement-correction-database-tests.mjs", "scripts/empty-database-rebuild-check.mjs", "scripts/refresh-schema-fingerprint.mjs", "src/index.js", "src/offline-authority-http.js", `supabase/migrations/${phaseC}`, `supabase/migrations/${phaseD}`, `supabase/migrations/${phaseE}`]) {
+for (const required of [releaseInputPath, "scripts/refresh-integrated-backend-authority-release.mjs", "scripts/integrated-backend-authority-cutover-check.mjs", "scripts/integrated-backend-authority-release-provenance-tests.mjs", "scripts/integrated-backend-authority-suite-order-tests.mjs", "scripts/final-operational-correction-database-tests.mjs", "scripts/named-manager-messenger-retirement-correction-database-tests.mjs", "scripts/empty-database-rebuild-check.mjs", "scripts/refresh-schema-fingerprint.mjs", "src/index.js", "src/offline-authority-http.js", "src/scan-evidence.js", `supabase/migrations/${phaseC}`, `supabase/migrations/${phaseD}`, `supabase/migrations/${phaseE}`, `supabase/migrations/${phaseF}`]) {
   assert.ok(blobByPath.has(required), `immutable acceptance input omitted authority path ${required}`);
 }
 const input = parseJsonBlob(blobByPath.get(releaseInputPath), "release authority input");
@@ -240,17 +242,19 @@ const index = blobByPath.get("src/index.js").bytes.toString("utf8");
 const phaseCText = blobByPath.get(`supabase/migrations/${phaseC}`).bytes.toString("utf8");
 const phaseDText = blobByPath.get(`supabase/migrations/${phaseD}`).bytes.toString("utf8");
 const phaseEText = blobByPath.get(`supabase/migrations/${phaseE}`).bytes.toString("utf8");
+const phaseFText = blobByPath.get(`supabase/migrations/${phaseF}`).bytes.toString("utf8");
 const schemaFingerprint = blobByPath.get("supabase/canonical/schema-fingerprint.txt")?.bytes.toString("utf8").trim();
 const frontendManifest = parseJsonBlob(blobByPath.get("release/frontend-release-manifest.json"), "frontend release manifest");
 
 assert.equal(input.release_contract_version, "offline-authority.v3");
-assert.deepEqual(input.cutover.phase_order.slice(1, 7), [
+assert.deepEqual(input.cutover.phase_order.slice(1, 8), [
   `apply ${phaseA}`,
   "deploy the bridge backend; it falls back only on absent authoritative procedures",
   `apply ${phaseB}`,
   `apply ${phaseC}`,
   `apply ${phaseD}`,
   `apply ${phaseE}`,
+  `apply ${phaseF}`,
 ]);
 assert.equal(input.cutover.source_identity.kind, "external_immutable_acceptance_input");
 assert.equal(input.cutover.source_identity.generated_evidence_path, releaseEvidencePath);
@@ -270,6 +274,8 @@ assert.match(phaseDText, /run_sql_migration\(text,text\)/);
 assert.match(phaseEText, /custodial_terminal_writer_inventory/);
 assert.match(phaseEText, /custodial_claim_offline_reconciliation_notification_recipients/);
 assert.match(phaseEText, /assignment_fenced_proof_recovery/);
+assert.match(phaseFText, /tool_get_offline_scan_authority_snapshot/);
+assert.match(phaseFText, /custodial_scan_evidence_is_canonical/);
 assert.match(schemaFingerprint, /^[a-f0-9]{64}$/);
 assert.deepEqual(releaseEvidence, expectedReleaseEvidence(input, schemaFingerprint, frontendManifest, expectedBlobs), "generated release evidence is stale, incomplete, or self-referential");
 
@@ -291,7 +297,7 @@ const result = {
   ok: true,
   source_identity: sourceIdentity,
   authority_content: authorityContent,
-  phase_order: [phaseA, phaseB, phaseC, phaseD, phaseE],
+  phase_order: [phaseA, phaseB, phaseC, phaseD, phaseE, phaseF],
   bridge_fallback: "only absent authoritative procedure SQLSTATE 42883/PGRST202",
   database_gate: "not-requested",
 };

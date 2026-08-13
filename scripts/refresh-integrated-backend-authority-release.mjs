@@ -67,7 +67,7 @@ const authorityInventory = trackedInventory.filter(({ path }) => path !== genera
 const migrations = authorityInventory
   .filter(({ path }) => /^supabase\/migrations\/[^/]+\.sql$/.test(path))
   .map(({ path }) => ({ name: path.slice("supabase/migrations/".length) }));
-assert.equal(migrations.length, 68, "release authority inventory must bind every migration at this head");
+assert.equal(migrations.length, 69, "release authority inventory must bind every migration at this head");
 const output = {
   artifact: "integrated-backend-authority-release-evidence.v2",
   schema_fingerprint: schemaFingerprint,
@@ -82,6 +82,7 @@ const output = {
     closure_phase: "20260810160000 removes direct DML and legacy-writer authority, fences terminal conflicts, and writes manager outbox evidence",
     operational_closure_phase: "20260810170000 recovers durable exact-start proofs, retires every service-role generic writer, and runs leased reconciliation notification delivery",
     final_operational_correction_phase: "20260810190000 fences reassigned proof replay, retires alternate terminal writers and purge, and records idempotent recipient delivery evidence",
+    scan_snapshot_phase: "20260813035530 exposes bounded offline scan authority and enforces exact provenance evidence shape",
   },
   rollback: input.rollback,
   cutover: input.cutover,
@@ -100,7 +101,7 @@ const output = {
     authority: "active named manager; disposition write additionally requires DIRECTOR or SECURITY_ADMIN",
   },
   migrations,
-  release_boundary: "Configure a minimum-32-character CUSTODIAL_BACKEND_PROOF_SECRET and matching database digest before Phase A, retain the bridge backend artifact through Phase C, and require the executable health/restoration probes before traffic changes.",
+  release_boundary: "Configure a minimum-32-character CUSTODIAL_BACKEND_PROOF_SECRET and matching database digest before Phase A, retain the bridge backend artifact through the scan-snapshot phase, and require the executable health/restoration probes before traffic changes.",
 };
 const rendered = `${JSON.stringify(output, null, 2)}\n`;
 if (checkOnly) assert.equal(readFileSync(outputPath, "utf8"), rendered, "Integrated backend authority release evidence is stale.");

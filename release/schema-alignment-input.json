@@ -1,15 +1,15 @@
 {
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "64d3552d7b5cb761fe1963edd2c81af4b4c07a18",
-  "frontend_commit_state": "github_pages_production_verified",
+  "frontend_commit_sha": "99dc572d9563bffe141dd86dbac66a22a2a0d46b",
+  "frontend_commit_state": "isolated_canary_candidate_verified",
   "backend_minimum_version": "release-2026.07.19.custodial-v3.12",
   "schema_from_fingerprint": "333ddfc8008ea0b85916de7d491b98c9b8d6a7d45d3a2947d99b4b3bb836ea00",
   "schema_transition": {
-    "transition_id": "named-manager-messenger-archive-retirement-20260810",
+    "transition_id": "custodial-canary-offline-scan-authority-20260813",
     "expires_at": "2026-08-23T23:59:59Z"
   },
   "api_contract_versions": {
-    "scan": "scan.v2",
+    "scan": "scan.v3.offline-authority",
     "dashboard": "dashboard.v1",
     "messaging": "messaging.v5",
     "schedule": "schedule.v2",
