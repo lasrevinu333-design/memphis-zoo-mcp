@@ -26,7 +26,7 @@ import { createGeminiControlledRepairWorker } from "./gemini-controlled-worker.j
 import { createMcpServer as createCanonicalMcpServer } from "./mcp/create-mcp-server.js";
 import { getToolManifest } from "./mcp/tool-manifest.js";
 import { validateRuntimeEnv } from "./config/env.js";
-import { authorityHttpFailure, authorityHttpOutcome, malformedScanAuthorityOutcome, rpcFailure, sqlStateHttpStatus } from "./offline-authority-http.js";
+import { authorityHttpFailure, deferJsonParserErrors, malformedScanAuthorityOutcome, rpcFailure, scanRpcHttpOutcome, sqlStateHttpStatus } from "./offline-authority-http.js";
 import { installAnnieMoxieRoutes } from "./annie-moxie-bootstrap.js";
 import { installLeadershipHttpRoutes } from "./leadership-bootstrap.js";
 import { installCustodialEmployeeAdminRoutes } from "./custodial-employee-admin.js";
@@ -56,9 +56,9 @@ app.use((req, res, next) => {
   }
   next();
 });
-// The authority route parses after credential authentication so malformed but
-// authenticated submissions can be durably quarantined instead of disappearing
-// inside Express's global JSON parser.
+// The scan authority route owns a bounded parser that exposes valid function
+// identity to authentication while deferring malformed-input handling until an
+// authenticated device can durably quarantine it.
 const generalJsonParser = express.json({ limit: "10mb" });
 app.use((req, res, next) => {
   if (req.path === "/scan-api/rpc") return next();
@@ -502,6 +502,44 @@ async function runPreparedScanRpc(prepared) {
   }
 }
 
+async function executeScanRpcTransport(fn, args, device, credential) {
+  const normalizedFn = String(fn || "").trim();
+  if (!SCAN_RPC_ALLOWLIST.has(normalizedFn)) {
+    throw Object.assign(new Error(`Function not allowed: ${normalizedFn}`), { status: 400, code: "scan_function_not_allowed" });
+  }
+  const canonicalArgs = canonicalizeScanArguments(normalizedFn, args, device);
+  const preparedBase = prepareScanRpcCall(normalizedFn, canonicalArgs);
+  const proofBound = bindOfflineActorProof(preparedBase.fn, preparedBase.args, credential);
+  const prepared = { ...preparedBase, ...proofBound };
+  const data = await runPreparedScanRpc(prepared);
+  return scanRpcHttpOutcome(normalizedFn, data);
+}
+
+async function collectBackendAuthorityHealth() {
+  const authorityHealth = await runRpc("custodial_backend_authority_health", {
+    p_backend_execution_secret: offlineAuthoritySecret(),
+  });
+  const scanTransportProbe = await executeScanRpcTransport(
+    "tool_get_system_settings",
+    {},
+    null,
+    null,
+  );
+  const scanTransportReady = scanTransportProbe.status === 200
+    && scanTransportProbe.body?.ok === true
+    && typeof scanTransportProbe.body?.data?.system_enabled === "boolean";
+  return {
+    ...authorityHealth,
+    ok: authorityHealth?.ok === true && scanTransportReady,
+    scan_rpc_transport: {
+      ready: scanTransportReady,
+      probe_function: "tool_get_system_settings",
+      status: scanTransportProbe.status,
+      code: scanTransportProbe.body?.code || null,
+    },
+  };
+}
+
 const MAX_SCAN_RPC_BYTES = 1024 * 1024;
 const scanAuthorityJsonParser = express.json({
   limit: `${MAX_SCAN_RPC_BYTES}b`,
@@ -510,13 +548,17 @@ const scanAuthorityJsonParser = express.json({
     req.scanAuthorityRawBody = Buffer.from(buffer);
   },
 });
+const parseScanAuthorityJsonBeforeAuthentication = deferJsonParserErrors(
+  scanAuthorityJsonParser,
+  "scanAuthorityJsonError",
+);
 
-async function parseAuthenticatedScanAuthorityJson(req, res, next) {
-  scanAuthorityJsonParser(req, res, async (parseError) => {
-    if (!parseError) {
-      next();
-      return;
-    }
+async function rejectInvalidAuthenticatedScanAuthorityJson(req, res, next) {
+  const parseError = req.scanAuthorityJsonError;
+  if (!parseError) {
+    next();
+    return;
+  }
     const credentialId = String(req.memphisDeviceCredential?.credential_id || "").trim();
     const rawBody = req.scanAuthorityRawBody || parseError.body || Buffer.alloc(0);
     const declaredLength = Number.parseInt(String(req.headers["content-length"] || rawBody.length || 0), 10);
@@ -543,7 +585,6 @@ async function parseAuthenticatedScanAuthorityJson(req, res, next) {
     }
     const outcome = malformedScanAuthorityOutcome({ deviceQuarantined: Boolean(credentialId && offlineAuthoritySecret()) });
     res.status(outcome.status).json(outcome.body);
-  });
 }
 
 function scanRpcRateLimit(req, res, next) {
@@ -2258,12 +2299,18 @@ app.post("/admin-api/release-canary-rollback", requireOpsManagerWrite, async (re
     }
     let authoritativeHealth;
     try {
-      authoritativeHealth = await runRpc("custodial_backend_authority_health", { p_backend_execution_secret: offlineAuthoritySecret() });
+      authoritativeHealth = await collectBackendAuthorityHealth();
     } catch (error) {
       // A missing or failing authoritative RPC is the reason this post-
       // enforcement safety control exists. Preserve its bounded evidence;
       // never route to a legacy/direct-SQL writer.
       authoritativeHealth = { ok: false, code: error?.code || "authority_probe_failed", message: String(error?.message || "authority probe failed") };
+    }
+    if (action === "resume_canary" && authoritativeHealth?.ok !== true) {
+      throw Object.assign(new Error("The physical release canary cannot resume until database authority and scan RPC transport are healthy."), {
+        status: 503,
+        code: "release_canary_health_not_ready",
+      });
     }
     const control = await runRpc("custodial_control_release_canary", {
       p_manager_id: offlineAuthorityManagerId(req), p_request_id: requiredRequestOperationId(req),
@@ -2271,7 +2318,7 @@ app.post("/admin-api/release-canary-rollback", requireOpsManagerWrite, async (re
       p_backend_execution_secret: offlineAuthoritySecret(),
     });
     if (action === "restore_authority") {
-      authoritativeHealth = await runRpc("custodial_backend_authority_health", { p_backend_execution_secret: offlineAuthoritySecret() });
+      authoritativeHealth = await collectBackendAuthorityHealth();
     }
     res.status(200).json({ ok: true, ...control, authoritative_health: authoritativeHealth });
   } catch (error) {
@@ -2714,7 +2761,7 @@ app.get("/scan-api/authority-health", async (_req, res) => {
       });
       canaryControlInitialized = typeof canaryPaused === "boolean";
     }
-    const data = await runRpc("custodial_backend_authority_health", { p_backend_execution_secret: offlineAuthoritySecret() });
+    const data = await collectBackendAuthorityHealth();
     const canaryReady = !releaseCanaryConfigurationRequired()
       || (Boolean(canaryDeviceId) && canaryControlInitialized && canaryPaused === false);
     const ok = data?.ok === true && canaryReady;
@@ -2735,7 +2782,7 @@ app.get("/scan-api/authority-health", async (_req, res) => {
     res.status(failure.status).json(failure.body);
   }
 });
-app.post("/scan-api/rpc", requireDeviceOrOpsAccess, parseAuthenticatedScanAuthorityJson, requireScanRpcAuthorization, scanRpcRateLimit, async (req, res) => {
+app.post("/scan-api/rpc", parseScanAuthorityJsonBeforeAuthentication, requireDeviceOrOpsAccess, rejectInvalidAuthenticatedScanAuthorityJson, requireScanRpcAuthorization, scanRpcRateLimit, async (req, res) => {
   try {
     const canaryDeviceId = configuredReleaseCanaryDeviceId();
     const requestDeviceId = String(req.memphisDevice?.canonical_device_id || req.memphisDevice?.device_id || "").trim().toUpperCase();
@@ -2750,16 +2797,7 @@ app.post("/scan-api/rpc", requireDeviceOrOpsAccess, parseAuthenticatedScanAuthor
       }
     }
     const fn = String(req.body?.fn || "").trim();
-    if (!SCAN_RPC_ALLOWLIST.has(fn)) {
-      res.status(400).json({ ok: false, error: `Function not allowed: ${fn}` });
-      return;
-    }
-    const args = canonicalizeScanArguments(fn, req.body?.args, req.memphisDevice);
-    const preparedBase = prepareScanRpcCall(fn, args);
-    const proofBound = bindOfflineActorProof(preparedBase.fn, preparedBase.args, req.memphisDeviceCredential);
-    const prepared = { ...preparedBase, ...proofBound };
-    const data = await runPreparedScanRpc(prepared);
-    const outcome = authorityHttpOutcome(data);
+    const outcome = await executeScanRpcTransport(fn, req.body?.args, req.memphisDevice, req.memphisDeviceCredential);
     res.status(outcome.status).json({
       ...outcome.body,
       meta: {

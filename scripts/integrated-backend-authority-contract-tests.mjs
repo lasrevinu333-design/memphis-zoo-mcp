@@ -71,7 +71,12 @@ assert.match(index, /tool_complete_session_authoritative/);
 assert.match(index, /CUSTODIAL_BACKEND_PROOF_SECRET/);
 assert.match(index, /runPreparedScanRpc/);
 assert.match(index, /sqlStateHttpStatus/);
-assert.match(index, /authorityHttpOutcome/);
+assert.match(index, /scanRpcHttpOutcome/);
+assert.match(index, /executeScanRpcTransport/);
+assert.match(index, /collectBackendAuthorityHealth/);
+assert.match(index, /scan_rpc_transport/);
+assert.match(index, /action === "resume_canary" && authoritativeHealth\?\.ok !== true/,
+  "physical canary resume must require the combined database and real scan-transport health probe");
 assert.match(index, /runCustodialOfflineReconciliationNotificationWorker/);
 assert.doesNotMatch(index, /run_application_write|force-close-session/);
 assert.match(index, /app\.post\("\/admin-api\/close-ticket"[\s\S]{0,900}runRpc\("custodial_close_maintenance_ticket_authoritative"/);

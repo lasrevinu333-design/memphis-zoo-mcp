@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
-import { authenticateDeviceCredentialRequest } from "../src/auth/device-credential-auth.js";
+import express from "express";
+import { authenticateDeviceCredentialRequest, makeDeviceCredentialMiddleware } from "../src/auth/device-credential-auth.js";
+import { deferJsonParserErrors } from "../src/offline-authority-http.js";
 
 const credentialId = "00000000-0000-4000-8000-00000000fb01";
 const devicePk = "00000000-0000-4000-8000-00000000fb02";
@@ -70,5 +72,78 @@ const forged = await authenticateDeviceCredentialRequest(request("tool_commit_cl
 });
 assert.equal(forged.ok, false);
 assert.equal(forged.code, "device_credential_required");
+
+// Direct authentication tests do not prove production middleware order. This
+// route parses valid JSON before authentication while retaining parse failures
+// for a later authenticated quarantine handler, matching /scan-api/rpc.
+const app = express();
+const parseBeforeAuthentication = deferJsonParserErrors(express.json({ limit: "1mb", strict: true }));
+let routeCredential = revokedCredential;
+const routeStore = {
+  getPolicy: async () => ({ mode: "enforce" }),
+  findCredential: async () => routeCredential,
+  touchCredential: async () => {},
+  audit: async () => {},
+};
+app.post("/scan-api/rpc",
+  parseBeforeAuthentication,
+  makeDeviceCredentialMiddleware({ env, store: routeStore, runReadOnlySql: resolver }),
+  (req, res) => {
+    if (req.deferredJsonParseError) {
+      res.status(422).json({ ok: false, code: "invalid_json" });
+      return;
+    }
+    if (req.memphisDeviceAuth?.offline_recovery_only !== true || req.body?.fn !== "tool_commit_cleaning_workflow") {
+      res.status(403).json({ ok: false, code: "recovery_scope_violation" });
+      return;
+    }
+    res.status(200).json({ ok: true, recovery_only: true });
+  },
+);
+const server = app.listen(0, "127.0.0.1");
+await new Promise((resolve, reject) => {
+  server.once("listening", resolve);
+  server.once("error", reject);
+});
+try {
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  const routeRecovery = await fetch(`${origin}/scan-api/rpc`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Device ${credentialId}.${secret}`,
+      "X-Device-Id": "KIOSK_08",
+    },
+    body: JSON.stringify({ fn: "tool_commit_cleaning_workflow", args: { p_device_id: "KIOSK_08" } }),
+  });
+  assert.equal(routeRecovery.status, 200, "real route order exposes the terminal function before stale-credential authentication");
+  assert.deepEqual(await routeRecovery.json(), { ok: true, recovery_only: true });
+
+  const routeRead = await fetch(`${origin}/scan-api/rpc`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Device ${credentialId}.${secret}`,
+      "X-Device-Id": "KIOSK_08",
+    },
+    body: JSON.stringify({ fn: "tool_get_location_scan_state", args: { p_device_id: "KIOSK_08" } }),
+  });
+  assert.equal(routeRead.status, 401, "the same stale credential cannot use an ordinary scan RPC");
+
+  routeCredential = activeCredential;
+  const malformed = await fetch(`${origin}/scan-api/rpc`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Device ${credentialId}.${secret}`,
+      "X-Device-Id": "KIOSK_08",
+    },
+    body: '{"fn":"tool_commit_cleaning_workflow",',
+  });
+  assert.equal(malformed.status, 422, "malformed JSON remains available to the post-authentication quarantine boundary");
+  assert.deepEqual(await malformed.json(), { ok: false, code: "invalid_json" });
+} finally {
+  await new Promise((resolve) => server.close(resolve));
+}
 
 console.log("OFFLINE_ACTOR_RECOVERY_ROUTE_PASS");

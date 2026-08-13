@@ -15,7 +15,7 @@
     "authority": "offline-authority.v4",
     "execution_boundary": "CUSTODIAL_BACKEND_PROOF_SECRET",
     "bridge_backend_source": "src/index.js:runPreparedScanRpc",
-    "health_gate": "GET /scan-api/authority-health and custodial_backend_authority_health"
+    "health_gate": "GET /scan-api/authority-health and canary resume both execute the shared employee scan RPC transport probe plus custodial_backend_authority_health"
   },
   "compatibility_window": {
     "accepted_engine": {
@@ -83,6 +83,7 @@
       "action": "pause the exact physical canary through the durable control; if canonical authority is missing or broken, restore the captured known-good function set forward, verify health, then explicitly resume",
       "restoration_checks": [
         "custodial_backend_authority_health returns ok=true",
+        "the shared scan RPC transport returns a valid tool_get_system_settings payload before canary resume",
         "exact start and completion replay return one durable proof, reconciliation, and completion",
         "offline snapshot activation requires exact issued identity; frozen exact replay remains attributable to the original actor after reassignment",
         "scan evidence remains exact-shape and provenance-labeled after replay",
@@ -386,7 +387,7 @@
       {
         "path": "release/integrated-backend-authority-input.json",
         "mode": "100644",
-        "object_id": "69ce5489e9f472e5459d59ff2ac59688cbfed617"
+        "object_id": "2aca636cbda868d2c36ffd63c7b32291ca8a1c2b"
       },
       {
         "path": "release/reviewed-migrations/20260809125735_cleaning_inspection_24_hour_freshness.sql",
@@ -536,7 +537,7 @@
       {
         "path": "scripts/device-credential-foundation-tests.mjs",
         "mode": "100644",
-        "object_id": "cd7871c8e07ee975d558ce1faf36e585c09c95bc"
+        "object_id": "1463705879b88ebb0aeb8038bf42a7cb0d77f2a1"
       },
       {
         "path": "scripts/device-popup-fully-kiosk-test.mjs",
@@ -656,7 +657,7 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "16e0b805fb8de880d6ef153c400e9d2ef54f719d"
+        "object_id": "359ebd0a513dfdf65a59bfa749957d410d5f959f"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
@@ -776,12 +777,12 @@
       {
         "path": "scripts/offline-actor-recovery-route-tests.mjs",
         "mode": "100644",
-        "object_id": "16956e911cce3df10fae9668967d27e017e07b99"
+        "object_id": "25c4b776d032bb6e69486e5f77fde1be4c596468"
       },
       {
         "path": "scripts/offline-authority-route-tests.mjs",
         "mode": "100644",
-        "object_id": "b9e5608e46b7b43275a45e2831499121f840b4e3"
+        "object_id": "b8b0328cb66b21cc038d267fce466368b188c504"
       },
       {
         "path": "scripts/operational-analytics-contract-tests.mjs",
@@ -901,7 +902,7 @@
       {
         "path": "scripts/release-closure-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "f60409d7a02bf51aa0014f4295c59a9c1e4570ba"
+        "object_id": "c84b24ac8295925ba71c83118c2e7b7c493f544c"
       },
       {
         "path": "scripts/restroom-rebalance-route-tests.mjs",
@@ -936,7 +937,7 @@
       {
         "path": "scripts/scheduler-alerts-gps-foundation-tests.mjs",
         "mode": "100644",
-        "object_id": "f3a4c971f535be4ee744bc91cc71c5b96c0eb46f"
+        "object_id": "66ab685703514b04901dba03dccd1b94e6d03e63"
       },
       {
         "path": "scripts/scheduler-overhaul-contract-tests.mjs",
@@ -1471,7 +1472,7 @@
       {
         "path": "src/index.js",
         "mode": "100644",
-        "object_id": "0179a5b689d17e53ccaefcfb9e84ce1d2a6f2562"
+        "object_id": "c53b4fc859c53ef22700fe0c81b1f3487c70da2a"
       },
       {
         "path": "src/leadership-bootstrap.js",
@@ -1536,7 +1537,7 @@
       {
         "path": "src/offline-authority-http.js",
         "mode": "100644",
-        "object_id": "1a44bd103bb3e409d9bd9de21569a0c6fc6af51f"
+        "object_id": "42350eb6f224388992a33a1ef9809a2a71395818"
       },
       {
         "path": "src/operational-analytics-api.js",

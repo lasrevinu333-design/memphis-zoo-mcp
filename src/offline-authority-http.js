@@ -30,6 +30,12 @@ export function authorityHttpFailure(error, fallback) {
   };
 }
 
+const TERMINAL_SCAN_FUNCTIONS = new Set([
+  "tool_start_offline_occurrence",
+  "tool_complete_session",
+  "tool_commit_cleaning_workflow",
+]);
+
 // Canonical authority commands intentionally return durable terminal outcomes
 // for malformed or fenced evidence instead of throwing and rolling back their
 // reconciliation record.  Transport must classify those returned outcomes as
@@ -78,6 +84,49 @@ export function authorityHttpOutcome(data) {
       error: "The offline authority command returned an unrecognized outcome.",
       data: result,
     },
+  };
+}
+
+// Read, heartbeat, proximity, and other non-terminal scan RPCs return their
+// domain payload directly. Only occurrence activation/completion commands use
+// the strict terminal outcome contract above.
+export function scanRpcHttpOutcome(functionName, data) {
+  const normalizedFunction = String(functionName || "").trim();
+  if (TERMINAL_SCAN_FUNCTIONS.has(normalizedFunction)) return authorityHttpOutcome(data);
+  if (data == null || typeof data !== "object") {
+    return {
+      status: 500,
+      body: {
+        ok: false,
+        outcome: "invalid_scan_rpc_result",
+        code: "invalid_scan_rpc_result",
+        retryable: false,
+        error: "The scan RPC returned an invalid result.",
+        data: data ?? null,
+      },
+    };
+  }
+  return {
+    status: 200,
+    body: {
+      ok: true,
+      outcome: "accepted",
+      retryable: false,
+      data,
+    },
+  };
+}
+
+// Valid JSON must be available to device authentication, including the exact
+// function needed to authorize frozen terminal recovery. Parse errors are held
+// for post-authentication quarantine instead of being sent by Express.
+export function deferJsonParserErrors(parser, property = "deferredJsonParseError") {
+  if (typeof parser !== "function") throw new TypeError("A JSON parser middleware is required.");
+  return function parseBeforeAuthentication(req, res, next) {
+    parser(req, res, (parseError) => {
+      req[property] = parseError || null;
+      next();
+    });
   };
 }
 

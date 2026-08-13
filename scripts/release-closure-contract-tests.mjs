@@ -23,6 +23,8 @@ assert.match(index, /custodial_release_canary_is_paused/, "scan traffic must rea
 assert.match(index, /canaryControlInitialized\s*&&\s*canaryPaused === false/g,
   "health and authority health must reject a configured but operator-paused canary");
 assert.match(index, /custodial_control_release_canary/, "release recovery must use its durable database control");
+assert.match(index, /action === "resume_canary" && authoritativeHealth\?\.ok !== true/,
+  "release resume must fail closed unless the database and employee scan transport are both healthy");
 assert.match(rollbackMigration, /pause_canary','resume_canary','restore_authority/);
 assert.match(rollbackMigration, /custodial_release_authority_restore_definitions/);
 assert.match(rollbackMigration, /pg_get_functiondef/);

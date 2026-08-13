@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
-import { authorityHttpFailure, authorityHttpOutcome, malformedScanAuthorityOutcome, rpcFailure, sqlStateHttpStatus } from "../src/offline-authority-http.js";
+import { authorityHttpFailure, authorityHttpOutcome, malformedScanAuthorityOutcome, rpcFailure, scanRpcHttpOutcome, sqlStateHttpStatus } from "../src/offline-authority-http.js";
 
 for (const [state, expected] of [
   ["42501", 403], ["P0002", 404], ["22023", 422], ["23505", 409], ["40901", 409], ["40001", 503], ["XX000", 500],
@@ -32,6 +32,22 @@ const changedContent = authorityHttpOutcome({ status: "quarantined", reason: "pa
 assert.equal(changedContent.status, 409);
 assert.equal(changedContent.body.ok, false);
 assert.equal(changedContent.body.outcome, "changed_content");
+for (const [functionName, data] of [
+  ["tool_get_system_settings", { system_enabled: true }],
+  ["tool_get_offline_scan_authority_snapshot", { schema_version: "offline-scan-snapshot.v2", snapshot_id: "a".repeat(64) }],
+  ["tool_report_device_sync_status_v2", { ok: true, queue_count: 0 }],
+  ["tool_get_location_scan_state", { location_code: "TETM", suggested_action: "start_session" }],
+  ["tool_list_active_employees", []],
+]) {
+  const ordinary = scanRpcHttpOutcome(functionName, data);
+  assert.equal(ordinary.status, 200, `${functionName} is an ordinary successful transport payload`);
+  assert.equal(ordinary.body.ok, true);
+  assert.deepEqual(ordinary.body.data, data);
+}
+const unknownTerminal = scanRpcHttpOutcome("tool_commit_cleaning_workflow", { ok: true });
+assert.equal(unknownTerminal.status, 500, "terminal commands retain strict outcome classification");
+const invalidOrdinary = scanRpcHttpOutcome("tool_get_system_settings", null);
+assert.equal(invalidOrdinary.status, 500, "missing ordinary RPC data fails closed");
 const malformedDevice = malformedScanAuthorityOutcome({ deviceQuarantined: true });
 const malformedManager = malformedScanAuthorityOutcome({ deviceQuarantined: false });
 assert.equal(malformedDevice.status, 422);

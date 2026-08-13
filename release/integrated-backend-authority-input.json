@@ -16,7 +16,7 @@
     "authority": "offline-authority.v4",
     "execution_boundary": "CUSTODIAL_BACKEND_PROOF_SECRET",
     "bridge_backend_source": "src/index.js:runPreparedScanRpc",
-    "health_gate": "GET /scan-api/authority-health and custodial_backend_authority_health"
+    "health_gate": "GET /scan-api/authority-health and canary resume both execute the shared employee scan RPC transport probe plus custodial_backend_authority_health"
   },
   "cutover": {
     "source_identity": {
@@ -55,6 +55,7 @@
       "action": "pause the exact physical canary through the durable control; if canonical authority is missing or broken, restore the captured known-good function set forward, verify health, then explicitly resume",
       "restoration_checks": [
         "custodial_backend_authority_health returns ok=true",
+        "the shared scan RPC transport returns a valid tool_get_system_settings payload before canary resume",
         "exact start and completion replay return one durable proof, reconciliation, and completion",
         "offline snapshot activation requires exact issued identity; frozen exact replay remains attributable to the original actor after reassignment",
         "scan evidence remains exact-shape and provenance-labeled after replay",

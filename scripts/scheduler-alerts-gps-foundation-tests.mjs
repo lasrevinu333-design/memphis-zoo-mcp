@@ -74,11 +74,12 @@ assert.match(scheduleSource, /resolveRestroomRebalanceScheduler\(process\.env\)/
 assert.match(scheduleSource, /scheduler:\s*restroomRebalanceScheduler/);
 assert.doesNotMatch(scheduleSource, /explicit_runtime/);
 
-assert.match(indexSource, /const SCAN_CONTRACT_VERSION = "scan\.v3\.offline-authority"/);
+assert.match(indexSource, /const SCAN_CONTRACT_VERSION = "scan\.v4\.snapshot-bound-authority"/);
 assert.match(indexSource, /SCAN_READ_LIMIT_PER_MINUTE[^\n]*120/);
 assert.match(indexSource, /SCAN_WRITE_LIMIT_PER_MINUTE[^\n]*30/);
 assert.match(indexSource, /SCAN_SHARED_IP_EMERGENCY_LIMIT_PER_MINUTE[^\n]*1000/);
-assert.match(indexSource, /app\.post\("\/scan-api\/rpc", requireDeviceOrOpsAccess, parseAuthenticatedScanAuthorityJson, requireScanRpcAuthorization, scanRpcRateLimit/);
+assert.match(indexSource, /app\.post\("\/scan-api\/rpc", parseScanAuthorityJsonBeforeAuthentication, requireDeviceOrOpsAccess, rejectInvalidAuthenticatedScanAuthorityJson, requireScanRpcAuthorization, scanRpcRateLimit/);
+assert.match(indexSource, /executeScanRpcTransport\([\s\S]{0,160}tool_get_system_settings/);
 assert.match(indexSource, /tool_commit_cleaning_workflow/);
 assert.match(indexSource, /tool_report_device_sync_status/);
 assert.match(indexSource, /tool_evaluate_location_proximity/);
