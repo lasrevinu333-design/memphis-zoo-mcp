@@ -30,6 +30,13 @@ function terminalDeliveryError(reason) {
   error.permanent = true;
   return error;
 }
+function deferredDeliveryError(reason) {
+  const normalized = clip(reason, 160) || 'employee_push_delivery_in_flight';
+  const error = new Error(`Employee push delivery remains in flight: ${normalized}.`);
+  error.code = normalized;
+  error.deferFinish = true;
+  return error;
+}
 const EMPLOYEE_TEST_KINDS = new Set(['event', 'message', 'due_soon', 'overdue']);
 function buildManagerTestNotification(kind, { runId, deviceIdentifier }) {
   const notificationKey = `manager-test:${runId}:${kind}:${deviceIdentifier}`;
@@ -150,7 +157,12 @@ export function installEmployeeNotificationRoutes(app, {
       p_now: new Date().toISOString(),
     });
     if (result.error) throw result.error;
-    if (!result.data?.ok) throw terminalDeliveryError(result.data?.reason || 'event_push_instance_superseded');
+    if (!result.data?.ok) {
+      if (result.data?.defer_finish === true) {
+        throw deferredDeliveryError(result.data?.reason || 'event_push_delivery_in_flight');
+      }
+      throw terminalDeliveryError(result.data?.reason || 'event_push_instance_superseded');
+    }
     return result.data;
   }
 
@@ -520,6 +532,7 @@ export function installEmployeeNotificationRoutes(app, {
       return { provider_message_id: providerMessageId };
     } catch (error) {
       const errorMessage = clip(error?.message || 'FCM provider request failed.', 2000);
+      if (error?.deferFinish === true) throw error;
       if (providerBoundaryPrepared && error?.deliveryNotAccepted === true) {
         const released = eventInstance
           ? await releaseEventDelivery(job, eventInstance, credential, assignmentEpoch, registration, errorMessage)
@@ -599,13 +612,16 @@ export function installEmployeeNotificationRoutes(app, {
         let succeeded = false;
         let errorMessage = null;
         let terminal = false;
+        let deferFinish = false;
         try {
           await deliverClaimedJob(job);
           succeeded = true;
         } catch (error) {
           errorMessage = clip(error?.message || 'FCM provider request failed.', 2000);
           terminal = error?.terminal === true;
+          deferFinish = error?.deferFinish === true;
         }
+        if (deferFinish) continue;
         const finished = terminal
           ? await db.rpc('finish_operational_notification_job_terminal', {
             p_job_id: job.job_id, p_lease_token: job.lease_token, p_error: errorMessage,

@@ -602,6 +602,9 @@ begin
       or v_job.leased_until is null or v_job.leased_until<=statement_timestamp() then 'employee_event_push_lease_superseded'
     when v_instance.instance_id is null then 'event_push_instance_missing'
     when v_instance.credential_id<>p_credential_id or v_instance.assignment_epoch<>p_assignment_epoch then 'event_push_recipient_superseded'
+    when v_instance.state='leased' and v_instance.dispatch_job_id=p_job_id
+      and v_instance.dispatch_lease_token=p_lease_token and v_instance.dispatch_registration_id=p_registration_id
+      and v_instance.dispatch_token_hash=p_token_hash then 'event_push_delivery_in_flight'
     when v_instance.state='leased' and v_instance.dispatch_job_id is not null then 'event_push_delivery_outcome_unknown'
     when v_instance.state not in ('pending','failed') then 'event_push_instance_'||v_instance.state
     when v_event.id is null or v_event.revision<>v_instance.event_revision or v_event.status<>'SCHEDULED'
@@ -611,6 +614,10 @@ begin
     else null
   end;
   if v_reason is not null then
+    if v_reason='event_push_delivery_in_flight' then
+      return jsonb_build_object('ok',false,'terminal',false,'defer_finish',true,'dispatch_authorized',false,
+        'reason',v_reason,'instance_id',p_instance_id,'state','leased');
+    end if;
     update public.event_push_instances set state='cancelled',cancelled_at=coalesce(cancelled_at,p_now),
       last_error=v_reason,updated_at=p_now
     where instance_id=p_instance_id and state in ('pending','leased','failed');

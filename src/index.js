@@ -1568,6 +1568,7 @@ async function runOperationalNotificationWorker({ limit = 10 } = {}) {
       let succeeded = false;
       let errorMessage = null;
       let terminal = false;
+      let deferFinish = false;
       try {
         if (job.job_type === "guest_cleanliness_report") {
           await processGuestCleanlinessNotificationJob(job);
@@ -1580,6 +1581,11 @@ async function runOperationalNotificationWorker({ limit = 10 } = {}) {
       } catch (error) {
         errorMessage = String(error?.message || "Operational notification failed.").slice(0, 2000);
         terminal = error?.terminal === true;
+        deferFinish = error?.deferFinish === true;
+      }
+      if (deferFinish) {
+        results.push({ job_id: job.job_id, succeeded: false, terminal: false, deferred: true, error: errorMessage });
+        continue;
       }
       const retrySeconds = Math.min(3600, Math.max(15, 15 * (2 ** Math.min(8, Number(job.attempts || 1) - 1))));
       if (terminal) {

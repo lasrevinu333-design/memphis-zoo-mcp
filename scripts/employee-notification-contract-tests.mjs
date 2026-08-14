@@ -443,6 +443,36 @@ await assert.rejects(
 );
 assert.equal(cancelledEventSendCount, 0, 'FCM must not receive an event that is cancelled before provider dispatch');
 
+let duplicateClaimEventUpdates = 0;
+let duplicateClaimEventSends = 0;
+const duplicateSameLeaseClaimRuntime = installEmployeeNotificationRoutes(express(), {
+  supabase: {
+    async rpc(name) {
+      if (name === 'mz_resolve_employee_push_delivery') {
+        return { data: { ok: true, registration: authorizedRegistration }, error: null };
+      }
+      assert.equal(name, 'mz_claim_employee_event_push_delivery');
+      return { data: { ok: false, terminal: false, defer_finish: true,
+        reason: 'event_push_delivery_in_flight', state: 'leased' }, error: null };
+    },
+    from(name) {
+      assert.equal(name, 'event_push_instances');
+      return eventInstanceQuery(eventInstance, { onUpdate: () => { duplicateClaimEventUpdates += 1; } });
+    },
+  },
+  pushRuntime: {
+    configured: true,
+    async send() { duplicateClaimEventSends += 1; return 'provider-message-must-not-exist'; },
+  },
+});
+await assert.rejects(
+  () => duplicateSameLeaseClaimRuntime.deliverClaimedJob(eventClaimedJob),
+  (error) => error?.deferFinish === true && error?.terminal !== true && error?.code === 'event_push_delivery_in_flight',
+  'an exact same-lease event claim retry must leave the original provider boundary untouched',
+);
+assert.equal(duplicateClaimEventSends, 0);
+assert.equal(duplicateClaimEventUpdates, 0);
+
 let crossingEventSendCount = 0;
 const cancelledAcrossProviderRuntime = installEmployeeNotificationRoutes(express(), {
   supabase: {
@@ -577,5 +607,7 @@ assert.match(source, /providerResultSuperseded[\s\S]*push_registration_rotated_a
 assert.match(source, /\.in\('state', \['pending', 'leased', 'failed'\]\)[\s\S]*maybeSingle/);
 assert.match(source, /finish_operational_notification_job_terminal/);
 assert.match(indexSource, /error\?\.terminal === true[\s\S]*finish_operational_notification_job_terminal/);
+assert.match(source, /deferFinish[\s\S]*if \(deferFinish\) continue/);
+assert.match(indexSource, /deferFinish[\s\S]*deferred: true[\s\S]*continue/);
 
 console.log('EMPLOYEE_NATIVE_NOTIFICATION_CONTRACT_PASS');

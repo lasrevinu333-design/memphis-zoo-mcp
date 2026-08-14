@@ -383,6 +383,16 @@ assert.equal(JSON.parse(sql(`select public.mz_claim_employee_event_push_delivery
   '${successfulEmployeeEventInstanceId}'::uuid,'${employeeCredentialId}'::uuid,
   (select assignment_epoch from public.devices where id='${deviceId}'::uuid),
   '${employeeRegistrationId}'::uuid,${q(employeeTokenHashC)},now())::text;`)).ok, true);
+const sameLeaseEmployeeEventClaim = JSON.parse(sql(`select public.mz_claim_employee_event_push_delivery(
+  '${successfulEmployeeEventJob.jobId}'::uuid,'${successfulEmployeeEventJob.leaseToken}'::uuid,
+  '${successfulEmployeeEventInstanceId}'::uuid,'${employeeCredentialId}'::uuid,
+  (select assignment_epoch from public.devices where id='${deviceId}'::uuid),
+  '${employeeRegistrationId}'::uuid,${q(employeeTokenHashC)},now())::text;`));
+assert.equal(sameLeaseEmployeeEventClaim.ok, false);
+assert.equal(sameLeaseEmployeeEventClaim.defer_finish, true);
+assert.equal(sameLeaseEmployeeEventClaim.reason, "event_push_delivery_in_flight");
+assert.equal(sql(`select state from public.event_push_instances where instance_id='${successfulEmployeeEventInstanceId}'::uuid;`), "leased",
+  "an exact same-lease claim retry must not cancel the original in-flight provider boundary");
 const recordSuccessfulEmployeeEventSql = `select public.mz_record_employee_event_push_delivery(
   '${successfulEmployeeEventJob.jobId}'::uuid,'${successfulEmployeeEventJob.leaseToken}'::uuid,
   '${successfulEmployeeEventInstanceId}'::uuid,'${employeeCredentialId}'::uuid,
@@ -558,7 +568,8 @@ console.log(JSON.stringify({ ok: true, stale_session_masked: false, rollback_wit
   revoked_recipient_claimed: false, expired_recipient_recorded_sent: false, rotated_token_recorded_sent: false,
   stale_employee_token_result_recorded: false, cancelled_employee_event_claimed: false,
   cancelled_employee_event_recorded_sent: false, valid_employee_event_recorded_sent: true,
-  duplicate_event_dispatch_after_lease_expiry: false, concurrent_event_receipt_record_failed: false,
+  same_lease_event_claim_cancelled: false, duplicate_event_dispatch_after_lease_expiry: false,
+  concurrent_event_receipt_record_failed: false,
   native_push_replayed_after_receipt: false, duplicate_native_dispatch_after_lease_expiry: false,
   concurrent_native_receipt_record_failed: false, mismatched_native_receipt_accepted: false,
   missing_notification_authority_ignored: false,

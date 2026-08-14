@@ -1,15 +1,15 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "c26c987d2f56021aaef8b74f28773bb6b38f24a0",
-  "schema_fingerprint": "084cfd11b468999e4968900bb223e93b27253fb7caaf1af07e8b989bb7098bf4",
+  "frontend_commit_sha": "48885fc1274d2bbfcdedbf909ae63ec59c57a396",
+  "schema_fingerprint": "58c08e17eb22e60892fc29cd6235e933bb2b35481cdb12663bed50dd13e4c993",
   "schema_transition": {
     "transition_id": "custodial-canary-offline-scan-authority-20260813",
     "from_fingerprint": "405dfbc65393c7a1fc9ea86b9c2e1f637df185f11a8520315f61fd8a9b1e5dfc",
-    "to_fingerprint": "084cfd11b468999e4968900bb223e93b27253fb7caaf1af07e8b989bb7098bf4",
+    "to_fingerprint": "58c08e17eb22e60892fc29cd6235e933bb2b35481cdb12663bed50dd13e4c993",
     "expires_at": "2026-08-23T23:59:59Z"
   },
-  "frontend_source_fingerprint": "084cfd11b468999e4968900bb223e93b27253fb7caaf1af07e8b989bb7098bf4",
+  "frontend_source_fingerprint": "58c08e17eb22e60892fc29cd6235e933bb2b35481cdb12663bed50dd13e4c993",
   "backend_contract": {
     "scan": "scan.v4.snapshot-bound-authority",
     "authority": "offline-authority.v5",
@@ -394,7 +394,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "9413477e920d87a10d5572d29a3b48ed422c36b4"
+        "object_id": "9930f08e2e702ff3dd0296c278e7de4e95341018"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -409,7 +409,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "6bf60126df009251379b3ae44ba24a13ae0fb552"
+        "object_id": "e0a731647d83dcba95c8e743888f97cde8b94646"
       },
       {
         "path": "research/european_herbalism_through_paracelsus.md",
@@ -534,7 +534,7 @@
       {
         "path": "scripts/custodial-repair-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "cc31fb96c6b035f1e12a57e8529b9a7e1db86a24"
+        "object_id": "80d25a4e1e9b36c5bb17dedb34377d94e65c85d0"
       },
       {
         "path": "scripts/dashboard-recent-activity-contract-tests.mjs",
@@ -569,7 +569,7 @@
       {
         "path": "scripts/employee-notification-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "8444eaad2aec0992a6bcc2fd1fbe8804cbc85da4"
+        "object_id": "fc2bf6be66e4ecc9977b9fd841526bd3657dc79d"
       },
       {
         "path": "scripts/empty-database-rebuild-check.mjs",
@@ -614,7 +614,7 @@
       {
         "path": "scripts/final-uncertainty-closure-database-tests.mjs",
         "mode": "100644",
-        "object_id": "73e8d5a9e12bb7622252a63dff75a98338855ec7"
+        "object_id": "f47e17c33ec5e48d78a8e446c38f04f36abf358f"
       },
       {
         "path": "scripts/fixtures/static-weekly-scheduler/canary-authority.json",
@@ -669,7 +669,7 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "fe2bc3a6665e87d940db6aefef08bc9fd24291ef"
+        "object_id": "912a4c9c51edb4d21e890d8733e48bc522ad8270"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
@@ -824,7 +824,7 @@
       {
         "path": "scripts/operations-leadership-mobile-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "76fd562952c57d64eb21b1b99c394a3e4f559830"
+        "object_id": "56c20fe7f6cb4c2ec04e782547469995785c34aa"
       },
       {
         "path": "scripts/operations-leadership-mobile-database-tests.mjs",
@@ -924,7 +924,7 @@
       {
         "path": "scripts/release-closure-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "ed5e20660b7d9319cc963529b1cdf24da2b38bcf"
+        "object_id": "fc444ce671ce7c54e317c799900805468ed92e55"
       },
       {
         "path": "scripts/restroom-rebalance-route-tests.mjs",
@@ -1439,7 +1439,7 @@
       {
         "path": "src/employee-notifications.js",
         "mode": "100644",
-        "object_id": "deab6c87b71f0daaa9673f4edb69b49ca9dbcee4"
+        "object_id": "bfcfb58bd477e4f83164e84ae28167a763de3d24"
       },
       {
         "path": "src/events-ai-parser.js",
@@ -1494,7 +1494,7 @@
       {
         "path": "src/index.js",
         "mode": "100644",
-        "object_id": "136411d5bf690a78d1911fdf000ece8fcd9c0746"
+        "object_id": "e2d864faff1014edf5c50f1429155884b9eb1440"
       },
       {
         "path": "src/leadership-bootstrap.js",
@@ -1724,12 +1724,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "12a36e292dfc6f59e0d4dada1bc2dbaf8a3b5ebf"
+        "object_id": "ec444200dd105b9c49d95653f41a89c9d3dbda4e"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "34aa85b2331618130fb1c6ea1266904472802a0e"
+        "object_id": "5d9c824f3115e0cb6f83201b68c3ccfc21540c1d"
       },
       {
         "path": "supabase/config.toml",
@@ -2694,7 +2694,7 @@
       {
         "path": "supabase/migrations/20260813210000_custodial_u4_ops_closure.sql",
         "mode": "100644",
-        "object_id": "b1bdb1fa33247d57fe35ca9992913dd309a226b6"
+        "object_id": "c123e30c4404f1381810562abc783feea04d972d"
       },
       {
         "path": "tmp/write_probe.txt",
