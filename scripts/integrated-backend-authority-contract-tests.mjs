@@ -13,6 +13,7 @@ const schedulerClosure = readFileSync("supabase/migrations/20260810230000_static
 const index = readFileSync("src/index.js", "utf8");
 const schedulerControlPlane = readFileSync("src/static-weekly-control-plane.js", "utf8");
 const auth = readFileSync("src/auth/device-credential-auth.js", "utf8");
+const nativePhoneTransport = readFileSync("src/native-phone-transport.js", "utf8");
 const releaseInput = JSON.parse(readFileSync("release/integrated-backend-authority-input.json", "utf8"));
 const releaseEvidence = JSON.parse(readFileSync("release/integrated-backend-authority-evidence.json", "utf8"));
 
@@ -77,7 +78,9 @@ assert.match(index, /collectBackendAuthorityHealth/);
 assert.match(index, /scan_rpc_transport/);
 assert.match(index, /custodial_get_release_canary_transport_probe_health/,
   "release health must read the durable exact-phone receipt instead of invoking the RPC implementation internally");
-assert.match(index, /custodial_record_release_canary_transport_probe/,
+assert.match(index, /buildReleaseCanaryTransportProbeCall/,
+  "the authenticated native canary route must use the exact transport recorder helper");
+assert.match(nativePhoneTransport, /custodial_record_release_canary_transport_probe/,
   "the authenticated native canary route must persist its transport receipt");
 assert.doesNotMatch(index, /collectBackendAuthorityHealth\([\s\S]{0,1400}executeScanRpcTransport\(/,
   "release health must not bypass the real phone HTTP and native-vault path");
@@ -100,7 +103,7 @@ assert.equal(releaseEvidence.migrations.at(-1).name, "20260813190000_release_pho
 assert.match(releaseEvidence.compatibility_window.release_phone_transport_and_offline_activation_phase, /native-vault \/scan-api\/rpc/);
 assert.equal(releaseEvidence.artifact, "integrated-backend-authority-release-evidence.v2");
 assert.equal(releaseEvidence.release_id, "release-2026.07.19.custodial-v3.12");
-assert.equal(releaseEvidence.frontend_commit_sha, "054cf40534b568768cea321085ce1f09b2414bdc");
+assert.equal(releaseEvidence.frontend_commit_sha, "27a3448a958496dde9c640eaf3baa73907cb0af4");
 assert.equal(releaseEvidence.cutover.source_identity.kind, "external_signed_release_attestation");
 assert.equal(releaseEvidence.cutover.source_identity.generated_evidence_excluded_from_content_identity, true);
 assert.equal(Object.hasOwn(releaseInput.cutover.source_identity, "authority_content_paths"), false, "manual authority inventory is forbidden");

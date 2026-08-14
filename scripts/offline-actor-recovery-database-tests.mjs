@@ -13,6 +13,9 @@ if (!/^mz_schema_rebuild_[a-zA-Z0-9_]+$/.test(container) || !/^(postgres|mz_sche
 }
 
 const execSecret = "offline-authority-test-secret-01234567890123456789";
+const nativeRouteSecret = "offline-native-route-test-secret-0123456789012345";
+const nativeStartSignature = "a".repeat(64);
+const nativeCompletionSignature = "b".repeat(64);
 const employeeA = randomUUID(), employeeB = randomUUID();
 const deviceA = randomUUID(), deviceB = randomUUID(), deviceC = randomUUID();
 const locationA = randomUUID(), locationB = randomUUID(), locationC = randomUUID();
@@ -22,8 +25,8 @@ const codeA = `OA${stamp}A`.toUpperCase(), codeB = `OA${stamp}B`.toUpperCase(), 
 const tokenHashA = createHash("sha256").update(`offline-authority-a:${stamp}`).digest("hex");
 const tokenHashB = createHash("sha256").update(`offline-authority-b:${stamp}`).digest("hex");
 const tokenHashC = createHash("sha256").update(`offline-authority-c:${stamp}`).digest("hex");
-const startedAt = new Date(Date.now() - 8 * 60_000).toISOString();
-const endedAt = new Date(Date.now() - 3 * 60_000).toISOString();
+let startedAt;
+let endedAt;
 const entryEvidence = { entry_source: "native-nfc" };
 
 function q(value) { return `'${String(value ?? "").replaceAll("'", "''")}'`; }
@@ -50,13 +53,14 @@ function jsonSql({ session, completion, context, proof, device, location, creden
   return `select public.tool_commit_cleaning_workflow_authoritative(
     ${q(session)},${q(completion)},${q(device)},${q(location)},${q(start)},${q(end)},
     ${q(JSON.stringify(response))}::jsonb,${q(JSON.stringify(canonicalScans))}::jsonb,${q(correlation)},
-    ${q(context)},${q(proof)},${q(credential)},${q(execSecret)}
+    ${q(context)},${q(proof)},${q(credential)},'custodial-native-completion.v1',
+    ${q(nativeCompletionSignature)},${q(nativeRouteSecret)},${q(execSecret)}
   )::text;`;
 }
 let snapshot;
 const snapshotsByDevice = new Map();
 async function activate({ device, location, session, start = startedAt, credential = credentialA, authoritySnapshot = snapshotsByDevice.get(device) || snapshot }) {
-  return JSON.parse(await sql(`select public.tool_start_offline_occurrence(${q(device)},${q(location)},${q(session)},${q(start)},${q(authoritySnapshot.snapshot_id)},${q(authoritySnapshot.employee_id)},${authoritySnapshot.assignment_epoch},${q(credential)},${q(credential)},${q(execSecret)})::text;`));
+  return JSON.parse(await sql(`select public.tool_start_offline_occurrence(${q(device)},${q(location)},${q(session)},${q(start)},${q(authoritySnapshot.snapshot_id)},${q(authoritySnapshot.employee_id)},${authoritySnapshot.assignment_epoch},${q(credential)},${q(credential)},'custodial-native-start.v1',${q(nativeStartSignature)},${q(nativeRouteSecret)},${q(execSecret)})::text;`));
 }
 async function claimNotifications(workerId, limit = 50) {
   return JSON.parse(await sql(`select coalesce(jsonb_agg(to_jsonb(n)),'[]'::jsonb)::text from public.custodial_claim_offline_reconciliation_notifications(${q(workerId)},${limit},15,${q(execSecret)}) n;`));
@@ -67,6 +71,7 @@ async function finishNotification(notification, { workerId, succeeded, terminal 
 
 const setup = `
 select public.custodial_configure_backend_execution_key(encode(extensions.digest(convert_to(${q(execSecret)},'UTF8'),'sha256'),'hex'),'offline-authority-db-test');
+select public.custodial_configure_native_route_proof_key(encode(extensions.digest(convert_to(${q(nativeRouteSecret)},'UTF8'),'sha256'),'hex'),'offline-authority-db-test');
 insert into public.employees(id,employee_code,display_name,active,role,notes) values
   ('${employeeA}'::uuid,'OA${stamp}A','Offline Authority Actor A',true,'staff','disposable authority test'),
   ('${employeeB}'::uuid,'OA${stamp}B','Offline Authority Actor B',true,'staff','disposable authority test');
@@ -93,6 +98,9 @@ snapshot = JSON.parse(await sql(`select public.tool_get_offline_scan_authority_s
 snapshotsByDevice.set(`OA-${stamp}-A`, snapshot);
 snapshotsByDevice.set(`OA-${stamp}-B`, JSON.parse(await sql(`select public.tool_get_offline_scan_authority_snapshot(${q(`OA-${stamp}-B`)},${q(credentialB)},${q(execSecret)})::text;`)));
 snapshotsByDevice.set(`OA-${stamp}-C`, JSON.parse(await sql(`select public.tool_get_offline_scan_authority_snapshot(${q(`OA-${stamp}-C`)},${q(credentialC)},${q(execSecret)})::text;`)));
+const latestSnapshotGeneratedAt = Math.max(...Array.from(snapshotsByDevice.values(), (value) => Date.parse(value.generated_at)));
+startedAt = new Date(latestSnapshotGeneratedAt + 1).toISOString();
+endedAt = new Date(latestSnapshotGeneratedAt + 2).toISOString();
 assert.equal(snapshot.schema_version, "offline-scan-snapshot.v2");
 assert.equal(snapshot.contract_version, "scan.v4.snapshot-bound-authority");
 assert.equal(snapshot.canonical_device_id, `OA-${stamp}-A`);
@@ -116,11 +124,12 @@ assert.equal(startReplay.committable, true, "exact start replay remains completi
 assert.equal(startReplay.replayed, true, "exact start replay is explicitly classified");
 assert.equal(startReplay.submission_proof, contextA.submission_proof, "lost start response recovers the stable durable proof");
 assert.equal(await sql(`select count(*) from public.custodial_offline_submission_proofs p join public.custodial_offline_actor_contexts c on c.context_id=p.context_id where c.client_session_id=${q(sessionA)};`), "1");
-const changedStartDenied = await sql(`select public.tool_start_offline_occurrence(${q(`OA-${stamp}-A`)},${q(codeA)},${q(sessionA)},${q(new Date(Date.parse(startedAt) + 1000).toISOString())},${q(snapshot.snapshot_id)},${q(snapshot.employee_id)},${snapshot.assignment_epoch},${q(credentialA)},${q(credentialA)},${q(execSecret)});`, { expectFailure: true });
+const changedStartDenied = await sql(`select public.tool_start_offline_occurrence(${q(`OA-${stamp}-A`)},${q(codeA)},${q(sessionA)},${q(new Date(Date.parse(startedAt) + 1000).toISOString())},${q(snapshot.snapshot_id)},${q(snapshot.employee_id)},${snapshot.assignment_epoch},${q(credentialA)},${q(credentialA)},'custodial-native-start.v1',${q(nativeStartSignature)},${q(nativeRouteSecret)},${q(execSecret)});`, { expectFailure: true });
 assert.match(changedStartDenied, /does not match the original frozen snapshot/i, "different start content remains fenced");
 
-const genericDenied = await sql(`set role service_role; select public.tool_start_offline_occurrence('OA-${stamp}-A','${codeA}','oa-${stamp}-forged',${q(startedAt)},${q(snapshot.snapshot_id)},${q(snapshot.employee_id)},${snapshot.assignment_epoch},'${credentialA}','${credentialA}','not-the-backend-secret');`, { expectFailure: true });
-assert.match(genericDenied, /not authorized/i, "generic service_role cannot forge the backend execution proof");
+const genericDenied = await sql(`set role service_role; select public.tool_start_offline_occurrence('OA-${stamp}-A','${codeA}','oa-${stamp}-forged',${q(startedAt)},${q(snapshot.snapshot_id)},${q(snapshot.employee_id)},${snapshot.assignment_epoch},'${credentialA}','${credentialA}','custodial-native-start.v1',${q(nativeStartSignature)},${q(execSecret)},${q(execSecret)});`, { expectFailure: true });
+assert.match(genericDenied, /native phone route proof is not authorized|permission denied/i,
+  "generic service_role plus the general backend secret cannot forge native-route authority");
 assert.equal(await sql(`select has_function_privilege('service_role','public.run_sql_write(text)'::regprocedure,'EXECUTE')::text;`), "false", "the legacy one-argument SQL writer is not application-callable");
 for (const [label, statement] of [
   ["application SQL executor", `select public.run_application_write('forged','select 1');`],
@@ -150,8 +159,8 @@ const reassignedReplay = await activate({ device: `OA-${stamp}-A`, location: cod
 assert.equal(reassignedReplay.replayed, true, "reassignment preserves exact frozen start replay");
 assert.equal(reassignedReplay.submission_proof, contextA.submission_proof, "exact frozen replay returns the original proof");
 const delayedSession = `oa-${stamp}-reassigned-first-sync`;
-const delayedStart = new Date(Date.parse(snapshot.generated_at) - 10 * 60_000 + 100).toISOString();
-const delayedEnd = new Date(Date.parse(snapshot.generated_at) - 9 * 60_000).toISOString();
+const delayedStart = new Date(Date.parse(snapshot.generated_at) + 3).toISOString();
+const delayedEnd = new Date(Date.parse(snapshot.generated_at) + 4).toISOString();
 const delayedActivation = await activate({ device: `OA-${stamp}-A`, location: codeA, session: delayedSession, start: delayedStart });
 assert.equal(delayedActivation.employee_id, employeeA, "first sync after reassignment freezes snapshot employee A");
 assert.notEqual(delayedActivation.employee_id, employeeB, "replacement employee B is never credited for A's offline start");
@@ -187,19 +196,30 @@ await sql(`insert into public.locations(id,location_code,location_name,location_
   values('${recoveryDevice}'::uuid,'OA-${stamp}-R','${employeeA}'::uuid,'Offline Authority Actor A','recovery fixture','test');`);
 const recoverySnapshot = JSON.parse(await sql(`select public.tool_get_offline_scan_authority_snapshot('OA-${stamp}-R','${recoveryCredential}'::text,${q(execSecret)})::text;`));
 const recoveryStartedAt = new Date(Date.parse(recoverySnapshot.generated_at) + 1).toISOString();
-const recoveryRevokedAt = new Date(Date.parse(recoverySnapshot.generated_at) + 2).toISOString();
+const recoveryRevokedAt = new Date(Date.parse(recoverySnapshot.generated_at) + 2000).toISOString();
 await sql(`update public.device_auth_credentials set revoked_at=${q(recoveryRevokedAt)},revoked_reason='offline activation recovery test' where credential_id='${recoveryCredential}'::uuid;
-  update public.custodial_offline_scan_authority_snapshots set expires_at=generated_at+interval '2 milliseconds' where snapshot_id=${q(recoverySnapshot.snapshot_id)};`);
+  update public.custodial_offline_scan_authority_snapshots set expires_at=generated_at+interval '2 seconds' where snapshot_id=${q(recoverySnapshot.snapshot_id)};`);
 const recoveredActivation = await activate({
   device: `OA-${stamp}-R`, location: recoveryCode, session: `oa-${stamp}-revoked-recovery`,
   start: recoveryStartedAt, credential: recoveryCredential, authoritySnapshot: recoverySnapshot,
 });
 assert.equal(recoveredActivation.employee_id, employeeA,
   "work started before credential revocation and snapshot expiry retains the issued snapshot actor");
+const recoveredEndedAt = new Date(Date.parse(recoverySnapshot.generated_at) + 1000).toISOString();
+const recoveredCompletion = JSON.parse(await sql(jsonSql({
+  session: `oa-${stamp}-revoked-recovery`, completion: `oa-${stamp}-revoked-recovery-complete`,
+  context: recoveredActivation.context_id, proof: recoveredActivation.submission_proof,
+  device: `OA-${stamp}-R`, location: recoveryCode, credential: recoveryCredential,
+  start: recoveryStartedAt, end: recoveredEndedAt, correlation: `oa-${stamp}-revoked-recovery`,
+})));
+assert.equal(recoveredCompletion.status, "closed",
+  "work signed as complete before revocation remains committable when delivered after revocation");
+assert.equal(await sql(`select employee_id::text from public.sessions where client_session_id='oa-${stamp}-revoked-recovery';`), employeeA,
+  "post-revocation delivery preserves the original employee actor");
 const afterRevocationDenied = await sql(`select public.tool_start_offline_occurrence(
   'OA-${stamp}-R',${q(recoveryCode)},'oa-${stamp}-after-revoke',${q(new Date(Date.parse(recoveryRevokedAt) + 1000).toISOString())},
   ${q(recoverySnapshot.snapshot_id)},${q(recoverySnapshot.employee_id)},${recoverySnapshot.assignment_epoch},
-  '${recoveryCredential}','${recoveryCredential}',${q(execSecret)});`, { expectFailure: true });
+  '${recoveryCredential}','${recoveryCredential}','custodial-native-start.v1',${q(nativeStartSignature)},${q(nativeRouteSecret)},${q(execSecret)});`, { expectFailure: true });
 assert.match(afterRevocationDenied, /snapshot was not valid|credential was not valid/i,
   "revoked or expired authority cannot start new work");
 await sql(`update public.device_auth_credentials set confirmed_at=${q(new Date(Date.parse(recoverySnapshot.generated_at) + 1000).toISOString())},revoked_at=null,revoked_reason=null where credential_id='${recoveryCredential}'::uuid;
@@ -207,7 +227,7 @@ await sql(`update public.device_auth_credentials set confirmed_at=${q(new Date(D
 const postdatedEnrollmentDenied = await sql(`select public.tool_start_offline_occurrence(
   'OA-${stamp}-R',${q(recoveryCode)},'oa-${stamp}-postdated-enrollment',${q(recoveryStartedAt)},
   ${q(recoverySnapshot.snapshot_id)},${q(recoverySnapshot.employee_id)},${recoverySnapshot.assignment_epoch},
-  '${recoveryCredential}','${recoveryCredential}',${q(execSecret)});`, { expectFailure: true });
+  '${recoveryCredential}','${recoveryCredential}','custodial-native-start.v1',${q(nativeStartSignature)},${q(nativeRouteSecret)},${q(execSecret)});`, { expectFailure: true });
 assert.match(postdatedEnrollmentDenied, /credential was not valid/i,
   "a credential confirmation postdated after snapshot issuance cannot backdate new work");
 await sql(`update public.device_auth_credentials set revoked_at=null,revoked_reason=null where credential_id='${recoveryCredential}'::uuid;
@@ -219,7 +239,7 @@ await sql(`update public.device_auth_credentials set revoked_at=null,revoked_rea
 const afterReassignmentDenied = await sql(`select public.tool_start_offline_occurrence(
   'OA-${stamp}-R',${q(recoveryCode)},'oa-${stamp}-after-reassign',${q(new Date(Date.parse(recoverySnapshot.generated_at) + 4).toISOString())},
   ${q(recoverySnapshot.snapshot_id)},${q(recoverySnapshot.employee_id)},${recoverySnapshot.assignment_epoch},
-  '${recoveryCredential}','${recoveryCredential}',${q(execSecret)});`, { expectFailure: true });
+  '${recoveryCredential}','${recoveryCredential}','custodial-native-start.v1',${q(nativeStartSignature)},${q(nativeRouteSecret)},${q(execSecret)});`, { expectFailure: true });
 assert.match(afterReassignmentDenied, /snapshot no longer owned the phone/i,
   "an old employee snapshot cannot authorize replacement-employee work");
 const scanId = `oa-${stamp}-scan-1`;
@@ -237,29 +257,30 @@ assert.equal(correlationMismatch.reason, "payload_fingerprint_conflict");
 // A second device/actor proof at the same interval is durably quarantined by
 // exclusion constraints, including after the first interval is closed.
 const overlap = await activate({ device: `OA-${stamp}-B`, location: codeB, session: `oa-${stamp}-overlap`, credential: credentialB });
-const overlapResult = JSON.parse(await sql(`select public.tool_commit_cleaning_workflow_authoritative(${q(`oa-${stamp}-overlap`)},${q(`oa-${stamp}-overlap-complete`)},${q(`OA-${stamp}-B`)},${q(codeB)},${q(startedAt)},${q(endedAt)},'{}'::jsonb,'[]'::jsonb,'overlap',${q(overlap.context_id)},${q(overlap.submission_proof)},${q(credentialB)},${q(execSecret)})::text;`));
+const overlapResult = JSON.parse(await sql(jsonSql({ session: `oa-${stamp}-overlap`, completion: `oa-${stamp}-overlap-complete`, context: overlap.context_id, proof: overlap.submission_proof, device: `OA-${stamp}-B`, location: codeB, credential: credentialB, response: {}, correlation: "overlap" })));
 assert.equal(overlapResult.reason, "overlapping_employee_or_device_occurrence");
 
 // Malformed evidence reaches the durable quarantine boundary before any
 // completion/ticket/outbox effect, rather than aborting and leaving retryable work.
-const malformed = await activate({ device: `OA-${stamp}-C`, location: codeC, session: `oa-${stamp}-malformed`, start: new Date(Date.now() - 2 * 60_000).toISOString(), credential: credentialC });
+const malformedAt = new Date(latestSnapshotGeneratedAt + 5).toISOString();
+const malformed = await activate({ device: `OA-${stamp}-C`, location: codeC, session: `oa-${stamp}-malformed`, start: malformedAt, credential: credentialC });
 const malformedStart = malformed.started_at;
-const malformedResult = JSON.parse(await sql(`select public.tool_commit_cleaning_workflow_authoritative(${q(`oa-${stamp}-malformed`)},${q(`oa-${stamp}-malformed-complete`)},${q(`OA-${stamp}-C`)},${q(codeC)},${q(malformedStart)},${q(new Date().toISOString())},'{}'::jsonb,${q(JSON.stringify([{ event_type: "scan_finish", client_event_id: `oa-${stamp}-bad`, scanned_at: "not-a-time" }]))}::jsonb,'malformed',${q(malformed.context_id)},${q(malformed.submission_proof)},${q(credentialC)},${q(execSecret)})::text;`));
+const malformedResult = JSON.parse(await sql(jsonSql({ session: `oa-${stamp}-malformed`, completion: `oa-${stamp}-malformed-complete`, context: malformed.context_id, proof: malformed.submission_proof, device: `OA-${stamp}-C`, location: codeC, credential: credentialC, start: malformedStart, end: new Date().toISOString(), response: {}, scans: [{ event_type: "scan_finish", client_event_id: `oa-${stamp}-bad`, scanned_at: "not-a-time" }], correlation: "malformed" })));
 assert.equal(malformedResult.reason, "malformed_scan_evidence");
 assert.equal(await sql(`select count(*) from public.completion_responses where client_completion_id=${q(`oa-${stamp}-malformed-complete`)};`), "0");
 assert.equal(await sql(`select count(*) from public.custodial_offline_reconciliation_outbox o join public.custodial_offline_reconciliation_records r on r.reconciliation_id=o.reconciliation_id where r.client_completion_id=${q(`oa-${stamp}-malformed-complete`)} and o.notification_kind='offline_reconciliation_quarantine';`), "1", "each new quarantine has one deduplicated manager outbox record");
 
 const provenanceSession = `oa-${stamp}-provenance`;
-const provenanceStart = new Date(Date.now() - 2 * 60_000).toISOString();
-const provenanceEnd = new Date(Date.now() - 60_000).toISOString();
+const provenanceStart = new Date(latestSnapshotGeneratedAt + 6).toISOString();
+const provenanceEnd = new Date(latestSnapshotGeneratedAt + 7).toISOString();
 const provenance = await activate({ device: `OA-${stamp}-C`, location: codeC, session: provenanceSession, start: provenanceStart, credential: credentialC });
-const unknownProvenance = JSON.parse(await sql(`select public.tool_commit_cleaning_workflow_authoritative(${q(provenanceSession)},${q(`${provenanceSession}-complete`)},${q(`OA-${stamp}-C`)},${q(codeC)},${q(provenanceStart)},${q(provenanceEnd)},'{}'::jsonb,${q(JSON.stringify([{ client_event_id: `${provenanceSession}-event`, event_type: "scan_finish", result: "ok", notes: null, scanned_at: provenanceEnd, payload_json: { entry_source: "legacy-or-unknown" } }]))}::jsonb,'provenance',${q(provenance.context_id)},${q(provenance.submission_proof)},${q(credentialC)},${q(execSecret)})::text;`));
+const unknownProvenance = JSON.parse(await sql(jsonSql({ session: provenanceSession, completion: `${provenanceSession}-complete`, context: provenance.context_id, proof: provenance.submission_proof, device: `OA-${stamp}-C`, location: codeC, credential: credentialC, start: provenanceStart, end: provenanceEnd, response: {}, scans: [{ client_event_id: `${provenanceSession}-event`, event_type: "scan_finish", result: "ok", notes: null, scanned_at: provenanceEnd, payload_json: { entry_source: "legacy-or-unknown" } }], correlation: "provenance" })));
 assert.equal(unknownProvenance.reason, "malformed_scan_evidence");
 const extraSession = `oa-${stamp}-extra-evidence`;
-const extraStart = new Date(Date.now() - 4 * 60_000).toISOString();
-const extraEnd = new Date(Date.now() - 3 * 60_000).toISOString();
+const extraStart = new Date(latestSnapshotGeneratedAt + 8).toISOString();
+const extraEnd = new Date(latestSnapshotGeneratedAt + 9).toISOString();
 const extraContext = await activate({ device: `OA-${stamp}-C`, location: codeC, session: extraSession, start: extraStart, credential: credentialC });
-const extraEvidence = JSON.parse(await sql(`select public.tool_commit_cleaning_workflow_authoritative(${q(extraSession)},${q(`${extraSession}-complete`)},${q(`OA-${stamp}-C`)},${q(codeC)},${q(extraStart)},${q(extraEnd)},'{}'::jsonb,${q(JSON.stringify([{ client_event_id: `${extraSession}-event`, event_type: "scan_finish", result: "ok", notes: null, scanned_at: extraEnd, payload_json: { ...entryEvidence, injected: true }, injected: true }]))}::jsonb,'provenance-extra',${q(extraContext.context_id)},${q(extraContext.submission_proof)},${q(credentialC)},${q(execSecret)})::text;`));
+const extraEvidence = JSON.parse(await sql(jsonSql({ session: extraSession, completion: `${extraSession}-complete`, context: extraContext.context_id, proof: extraContext.submission_proof, device: `OA-${stamp}-C`, location: codeC, credential: credentialC, start: extraStart, end: extraEnd, response: {}, scans: [{ client_event_id: `${extraSession}-event`, event_type: "scan_finish", result: "ok", notes: null, scanned_at: extraEnd, payload_json: { ...entryEvidence, injected: true }, injected: true }], correlation: "provenance-extra" })));
 assert.equal(extraEvidence.reason, "malformed_scan_evidence");
 
 for (const table of ["custodial_offline_actor_contexts", "custodial_offline_submission_proofs", "custodial_offline_reconciliation_records", "custodial_offline_reconciliation_audits", "custodial_offline_scan_event_evidence"]) {
@@ -284,7 +305,7 @@ assert.match(truncateGuard, /explicit maintenance procedure/i, "append-only evid
 // Concurrent activation has one canonical context and every exact caller gets
 // a normal replay instead of a unique-constraint error.
 const activationSession = `oa-${stamp}-concurrent-activation`;
-const activationStartedAt = new Date(Date.now() - 90_000).toISOString();
+const activationStartedAt = new Date(latestSnapshotGeneratedAt + 10).toISOString();
 const activationResults = await Promise.all(Array.from({ length: 8 }, () => activate({
   device: `OA-${stamp}-C`, location: codeC, session: activationSession, start: activationStartedAt, credential: credentialC,
 })));
@@ -293,8 +314,8 @@ assert.equal(await sql(`select count(*) from public.custodial_offline_actor_cont
 
 // A same completion key on a second occurrence must fence that occurrence and
 // its proof; a new key cannot subsequently close it.
-const fenceStart = new Date(Date.now() - 2 * 60_000).toISOString();
-const fenceEnd = new Date(Date.now() - 70_000).toISOString();
+const fenceStart = new Date(latestSnapshotGeneratedAt + 11).toISOString();
+const fenceEnd = new Date(latestSnapshotGeneratedAt + 12).toISOString();
 const fenceA = await activate({ device: `OA-${stamp}-B`, location: codeB, session: `oa-${stamp}-fence-a`, start: fenceStart, credential: credentialB });
 const fenceKey = `oa-${stamp}-shared-fence-key`;
 assert.equal(JSON.parse(await sql(jsonSql({ session: `oa-${stamp}-fence-a`, completion: fenceKey, context: fenceA.context_id, proof: fenceA.submission_proof, device: `OA-${stamp}-B`, location: codeB, credential: credentialB, start: fenceStart, end: fenceEnd }))).status, "closed");
@@ -340,8 +361,12 @@ await sql(`update public.devices set assigned_employee_id='${employeeB}'::uuid w
   insert into public.custodial_employee_device_assignment_history(device_id,device_identifier,new_employee_id,new_employee_name,change_reason,source)
   values('${deviceB}'::uuid,'OA-${stamp}-B','${employeeB}'::uuid,'Offline Authority Actor B','race fixture','test');`);
 snapshotsByDevice.set(`OA-${stamp}-B`, JSON.parse(await sql(`select public.tool_get_offline_scan_authority_snapshot(${q(`OA-${stamp}-B`)},${q(credentialB)},${q(execSecret)})::text;`)));
-const raceStart = new Date(Date.now() - 55_000).toISOString();
-const raceEnd = new Date(Date.now() - 25_000).toISOString();
+const raceSnapshotGeneratedAt = Math.max(
+  Date.parse(snapshotsByDevice.get(`OA-${stamp}-B`).generated_at),
+  Date.parse(snapshotsByDevice.get(`OA-${stamp}-C`).generated_at),
+);
+const raceStart = new Date(raceSnapshotGeneratedAt + 1).toISOString();
+const raceEnd = new Date(raceSnapshotGeneratedAt + 2).toISOString();
 const raceA = await activate({ device: `OA-${stamp}-B`, location: codeB, session: `oa-${stamp}-race-a`, start: raceStart, credential: credentialB });
 const raceB = await activate({ device: `OA-${stamp}-C`, location: codeC, session: `oa-${stamp}-race-b`, start: raceStart, credential: credentialC });
 const sharedEvent = `oa-${stamp}-shared-event`;

@@ -717,6 +717,7 @@ values ('00000000-0000-4000-8000-00000000f126','00000000-0000-4000-8000-00000000
 insert into public.custodial_employee_device_assignment_history(device_id,device_identifier,new_employee_id,new_employee_name,change_reason,source)
 values ('00000000-0000-4000-8000-00000000f123','REBUILD-FINISH-DEVICE-SECOND','00000000-0000-4000-8000-00000000f127','Rebuild Finish Second Test','empty rebuild authority fixture','test');
 select public.custodial_configure_backend_execution_key(encode(extensions.digest(convert_to('empty-rebuild-offline-authority-secret-0123456789','UTF8'),'sha256'),'hex'),'empty-rebuild');
+select public.custodial_configure_native_route_proof_key(encode(extensions.digest(convert_to('empty-rebuild-native-route-secret-012345678901','UTF8'),'sha256'),'hex'),'empty-rebuild');
 do $functional_test$
 declare
   v_start jsonb;

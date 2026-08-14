@@ -1,5 +1,44 @@
 begin;
 
+-- The native-route proof is deliberately distinct from the general backend
+-- execution secret. A database service-role client cannot claim that an HTTP
+-- request crossed the authenticated native vault with only ordinary RPC
+-- authority.
+alter table public.custodial_backend_execution_config
+  add column native_route_secret_digest text,
+  add constraint custodial_native_route_secret_digest_check
+    check (native_route_secret_digest is null or native_route_secret_digest ~ '^[0-9a-f]{64}$');
+
+create or replace function public.custodial_configure_native_route_proof_key(
+  p_native_route_secret_digest text,p_configured_by text default 'release-owner'
+) returns void language plpgsql security definer set search_path to 'pg_catalog','public'
+as $function$
+begin
+  if coalesce(p_native_route_secret_digest,'') !~ '^[0-9a-f]{64}$' then
+    raise exception using errcode='22023',message='native route proof digest must be a lowercase SHA-256 hex digest';
+  end if;
+  update public.custodial_backend_execution_config
+     set native_route_secret_digest=p_native_route_secret_digest,
+         configured_at=statement_timestamp(),configured_by=left(coalesce(p_configured_by,'release-owner'),200)
+   where config_key=true;
+  if not found then raise exception using errcode='55000',message='backend execution configuration is not initialized'; end if;
+end
+$function$;
+
+create or replace function public.custodial_require_native_route_proof_secret(p_native_route_secret text)
+returns void language plpgsql security definer set search_path to 'pg_catalog','public','extensions'
+as $function$
+declare v_expected text;
+begin
+  select native_route_secret_digest into v_expected
+    from public.custodial_backend_execution_config where config_key=true and enabled=true;
+  if v_expected is null or length(coalesce(p_native_route_secret,''))<32
+     or encode(extensions.digest(convert_to(p_native_route_secret,'UTF8'),'sha256'),'hex')<>v_expected then
+    raise exception using errcode='42501',message='native phone route proof is not authorized';
+  end if;
+end
+$function$;
+
 -- A release resume is valid only after the designated phone has crossed the
 -- real native-vault /scan-api/rpc path on the currently deployed backend.
 create table public.custodial_release_canary_transport_probes (
@@ -10,6 +49,9 @@ create table public.custodial_release_canary_transport_probes (
   observed_at timestamptz not null default statement_timestamp(),
   expires_at timestamptz not null,
   request_sha256 text not null check (request_sha256 ~ '^[0-9a-f]{64}$'),
+  native_request_id uuid not null unique,
+  native_request_timestamp timestamptz not null,
+  native_request_attestation_sha256 text not null check (native_request_attestation_sha256 ~ '^[0-9a-f]{64}$'),
   backend_commit_sha text not null check (backend_commit_sha ~ '^[0-9a-f]{40}$'),
   release_id text not null check (length(btrim(release_id)) between 1 and 200),
   native_origin text not null check (native_origin in ('https://localhost','http://localhost','capacitor://localhost','ionic://localhost')),
@@ -26,7 +68,8 @@ alter table public.custodial_release_canary_controls
 create or replace function public.custodial_record_release_canary_transport_probe(
   p_device_identifier text,p_credential_id uuid,p_request_sha256 text,
   p_backend_commit_sha text,p_release_id text,p_native_origin text,p_app_edition text,
-  p_backend_execution_secret text
+  p_native_request_id uuid,p_native_request_timestamp text,p_native_request_attestation_sha256 text,
+  p_native_route_proof_secret text
 ) returns jsonb language plpgsql security definer set search_path to 'pg_catalog','public','extensions'
 as $function$
 declare
@@ -34,15 +77,25 @@ declare
   v_control public.custodial_release_canary_controls%rowtype;
   v_probe public.custodial_release_canary_transport_probes%rowtype;
 begin
-  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);
+  perform public.custodial_require_native_route_proof_secret(p_native_route_proof_secret);
   if v_device !~ '^KIOSK_(0[2-9]|10)$' or p_credential_id is null
      or lower(btrim(coalesce(p_request_sha256,''))) !~ '^[0-9a-f]{64}$'
      or lower(btrim(coalesce(p_backend_commit_sha,''))) !~ '^[0-9a-f]{40}$'
      or length(btrim(coalesce(p_release_id,''))) not between 1 and 200
      or btrim(coalesce(p_native_origin,'')) not in ('https://localhost','http://localhost','capacitor://localhost','ionic://localhost')
-     or lower(btrim(coalesce(p_app_edition,'')))<>'custodial' then
+     or lower(btrim(coalesce(p_app_edition,'')))<>'custodial'
+     or p_native_request_id is null
+     or lower(btrim(coalesce(p_native_request_attestation_sha256,''))) !~ '^[0-9a-f]{64}$' then
     raise exception using errcode='22023',message='exact native canary transport evidence is required';
   end if;
+  begin
+    if nullif(btrim(coalesce(p_native_request_timestamp,'')),'')::timestamptz>statement_timestamp()+interval '15 seconds'
+       or nullif(btrim(coalesce(p_native_request_timestamp,'')),'')::timestamptz<statement_timestamp()-interval '2 minutes' then
+      raise exception using errcode='42501',message='native request proof is outside its accepted time window';
+    end if;
+  exception when invalid_datetime_format then
+    raise exception using errcode='22023',message='native request proof timestamp is invalid';
+  end;
   perform pg_advisory_xact_lock(hashtextextended('custodial-release-canary:'||v_device,0));
   select * into v_control from public.custodial_release_canary_controls
    where device_identifier=v_device for update;
@@ -58,10 +111,12 @@ begin
   end if;
   insert into public.custodial_release_canary_transport_probes(
     device_identifier,credential_id,control_updated_at,expires_at,request_sha256,
+    native_request_id,native_request_timestamp,native_request_attestation_sha256,
     backend_commit_sha,release_id,native_origin,app_edition
   ) values(
     v_device,p_credential_id,v_control.updated_at,statement_timestamp()+interval '5 minutes',
-    lower(btrim(p_request_sha256)),lower(btrim(p_backend_commit_sha)),btrim(p_release_id),
+    lower(btrim(p_request_sha256)),p_native_request_id,p_native_request_timestamp::timestamptz,
+    lower(btrim(p_native_request_attestation_sha256)),lower(btrim(p_backend_commit_sha)),btrim(p_release_id),
     btrim(p_native_origin),lower(btrim(p_app_edition))
   ) returning * into v_probe;
   return jsonb_build_object(
@@ -128,6 +183,22 @@ $function$;
 -- A revoked or expired token remains useful only as cryptographic proof for
 -- work whose client start predates both credential invalidation and any later
 -- employee assignment. New work with stale authority remains rejected.
+alter table public.custodial_offline_actor_contexts
+  add column native_start_attestation_version text,
+  add column native_start_attestation_sha256 text,
+  add column native_completion_attestation_version text,
+  add column native_completion_attestation_sha256 text,
+  add column native_completed_at timestamptz,
+  add constraint custodial_offline_native_start_evidence_check check (
+    (native_start_attestation_version is null and native_start_attestation_sha256 is null)
+    or (native_start_attestation_version='custodial-native-start.v1' and native_start_attestation_sha256 ~ '^[0-9a-f]{64}$')
+  ),
+  add constraint custodial_offline_native_completion_evidence_check check (
+    (native_completion_attestation_version is null and native_completion_attestation_sha256 is null and native_completed_at is null)
+    or (native_completion_attestation_version='custodial-native-completion.v1'
+      and native_completion_attestation_sha256 ~ '^[0-9a-f]{64}$' and native_completed_at is not null)
+  );
+
 create or replace function public.custodial_start_offline_occurrence(
   p_device_id text,p_location_code text,p_client_session_id text,p_client_started_at text,
   p_snapshot_id text,p_snapshot_employee_id text,p_snapshot_assignment_epoch integer,
@@ -174,7 +245,7 @@ begin
   select * into v_snapshot from public.custodial_offline_scan_authority_snapshots where snapshot_id=lower(btrim(p_snapshot_id)) for share;
   if v_snapshot.snapshot_id is null or v_snapshot.employee_id<>v_snapshot_employee_id or v_snapshot.assignment_epoch<>p_snapshot_assignment_epoch
      or v_snapshot.credential_id<>v_snapshot_credential_id or v_started_at>=v_snapshot.expires_at
-     or v_started_at<v_snapshot.generated_at-interval '10 minutes' then
+     or v_started_at<v_snapshot.generated_at then
     raise exception using errcode='42501',message='issued offline authority snapshot was not valid when the occurrence began';
   end if;
   select d.id,d.device_id,c.confirmed_at,c.revoked_at,c.expires_at into v_device
@@ -182,7 +253,7 @@ begin
    where upper(btrim(d.device_id))=upper(btrim(coalesce(p_device_id,''))) and d.active=true for update of d;
   if v_device.id is null or v_device.id<>v_snapshot.device_id or v_device.confirmed_at is null
      or v_device.confirmed_at>v_snapshot.generated_at
-     or v_started_at<v_device.confirmed_at-interval '10 minutes'
+     or v_started_at<v_device.confirmed_at
      or v_started_at>=v_device.expires_at or (v_device.revoked_at is not null and v_started_at>=v_device.revoked_at) then
     raise exception using errcode='42501',message='the device credential was not valid when the offline occurrence began';
   end if;
@@ -212,19 +283,177 @@ begin
 end
 $function$;
 
-update public.custodial_release_authority_restore_definitions
-set function_definition=pg_get_functiondef('public.custodial_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text)'::regprocedure),
-    definition_sha256=encode(extensions.digest(convert_to(pg_get_functiondef('public.custodial_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text)'::regprocedure),'UTF8'),'sha256'),'hex'),
-    captured_at=statement_timestamp()
-where function_identity='public.custodial_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text)';
+-- Only the backend route that has already verified the phone-vault HMAC may
+-- activate a delayed occurrence. The original inner function remains useful
+-- to the accepted online compatibility path, but is not application-callable.
+create or replace function public.custodial_start_offline_occurrence_native(
+  p_device_id text,p_location_code text,p_client_session_id text,p_client_started_at text,
+  p_snapshot_id text,p_snapshot_employee_id text,p_snapshot_assignment_epoch integer,
+  p_snapshot_credential_id text,p_authenticated_credential_id text,
+  p_native_start_attestation_version text,p_native_start_attestation text,
+  p_native_route_proof_secret text,p_backend_execution_secret text
+) returns jsonb language plpgsql security definer set search_path to 'pg_catalog','public','extensions'
+as $function$
+declare v_result jsonb; v_context_id uuid; v_attestation_sha256 text;
+begin
+  perform public.custodial_require_native_route_proof_secret(p_native_route_proof_secret);
+  if btrim(coalesce(p_native_start_attestation_version,''))<>'custodial-native-start.v1'
+     or lower(btrim(coalesce(p_native_start_attestation,''))) !~ '^[0-9a-f]{64}$' then
+    raise exception using errcode='42501',message='a verified native start attestation is required';
+  end if;
+  v_result:=public.custodial_start_offline_occurrence(
+    p_device_id,p_location_code,p_client_session_id,p_client_started_at,p_snapshot_id,
+    p_snapshot_employee_id,p_snapshot_assignment_epoch,p_snapshot_credential_id,
+    p_authenticated_credential_id,p_backend_execution_secret
+  );
+  v_context_id:=(v_result->>'context_id')::uuid;
+  v_attestation_sha256:=encode(extensions.digest(convert_to(lower(btrim(p_native_start_attestation)),'UTF8'),'sha256'),'hex');
+  if exists(select 1 from public.custodial_offline_actor_contexts c where c.context_id=v_context_id
+    and (c.native_start_attestation_version is not null and (c.native_start_attestation_version<>p_native_start_attestation_version
+      or c.native_start_attestation_sha256<>v_attestation_sha256))) then
+    raise exception using errcode='23505',message='native start attestation replay does not match the frozen occurrence';
+  end if;
+  update public.custodial_offline_actor_contexts
+     set native_start_attestation_version=p_native_start_attestation_version,
+         native_start_attestation_sha256=v_attestation_sha256
+   where context_id=v_context_id and native_start_attestation_version is null;
+  return v_result||jsonb_build_object('native_start_attested',true);
+end
+$function$;
 
-insert into public.custodial_release_authority_restore_definitions(restore_order,function_identity,function_definition,definition_sha256)
-select v.restore_order,v.function_identity,pg_get_functiondef(to_regprocedure(v.function_identity)),
-  encode(extensions.digest(convert_to(pg_get_functiondef(to_regprocedure(v.function_identity)),'UTF8'),'sha256'),'hex')
-from (values
-  (8,'public.custodial_record_release_canary_transport_probe(text,uuid,text,text,text,text,text,text)'),
-  (9,'public.custodial_get_release_canary_transport_probe_health(text,text,text,text)')
-) v(restore_order,function_identity);
+drop function public.tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text);
+create function public.tool_start_offline_occurrence(
+  p_device_id text,p_location_code text,p_client_session_id text,p_client_started_at text,
+  p_snapshot_id text,p_snapshot_employee_id text,p_snapshot_assignment_epoch integer,
+  p_snapshot_credential_id text,p_authenticated_credential_id text,
+  p_native_start_attestation_version text,p_native_start_attestation text,
+  p_native_route_proof_secret text,p_backend_execution_secret text
+) returns jsonb language sql security definer set search_path to 'pg_catalog','public','extensions'
+as $function$
+  select public.custodial_start_offline_occurrence_native(
+    p_device_id,p_location_code,p_client_session_id,p_client_started_at,p_snapshot_id,
+    p_snapshot_employee_id,p_snapshot_assignment_epoch,p_snapshot_credential_id,
+    p_authenticated_credential_id,p_native_start_attestation_version,
+    p_native_start_attestation,p_native_route_proof_secret,p_backend_execution_secret
+  );
+$function$;
+
+-- Completion authority follows the native-attested occurrence times. A later
+-- revocation, expiry, employee departure, or phone reassignment must not erase
+-- valid work completed before that change, but work ending after the change is
+-- never accepted as a stale-credential recovery.
+do $native_completion_occurrence_time_closure$
+declare v_definition text; v_rewritten text;
+begin
+  v_definition:=pg_get_functiondef('public.custodial_commit_offline_occurrence(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text)'::regprocedure);
+  v_rewritten:=replace(v_definition,
+$old$  if v_device.id is null or v_device.active is not true or v_employee.id is null or v_employee.active is not true or v_credential.credential_id is null or v_credential.device_id<>v_context.device_id or v_credential.confirmed_at is null or v_credential.revoked_at is not null or v_credential.expires_at<=now() or v_location.id is null or not exists(select 1 from public.custodial_employee_device_assignment_history h where h.assignment_change_id=v_context.assignment_change_id and h.device_id=v_context.device_id and h.new_employee_id=v_context.employee_id) then
+$old$,
+$new$  if v_device.id is null or v_employee.id is null or v_credential.credential_id is null
+     or v_credential.device_id<>v_context.device_id or v_credential.confirmed_at is null
+     or v_location.id is null
+     or (v_context.snapshot_id is null and (
+       v_device.active is not true or v_employee.active is not true
+       or v_credential.revoked_at is not null or v_credential.expires_at<=now()
+       or not exists(select 1 from public.custodial_employee_device_assignment_history h
+         where h.assignment_change_id=v_context.assignment_change_id and h.device_id=v_context.device_id
+           and h.new_employee_id=v_context.employee_id)
+     ))
+     or (v_context.snapshot_id is not null and (
+       v_credential.confirmed_at>v_started_at or v_started_at>=v_credential.expires_at
+       or v_ended_at>=v_credential.expires_at
+       or (v_credential.revoked_at is not null and v_ended_at>=v_credential.revoked_at)
+       or not exists(select 1 from public.custodial_employee_device_assignment_history h
+         where h.assignment_change_id=v_context.assignment_change_id and h.device_id=v_context.device_id
+           and h.new_employee_id=v_context.employee_id and h.changed_at<=v_started_at)
+       or exists(select 1 from public.custodial_employee_device_assignment_history h
+         where h.device_id=v_context.device_id and h.assignment_change_id<>v_context.assignment_change_id
+           and h.changed_at>v_started_at and h.changed_at<=v_ended_at)
+     )) then
+$new$);
+  if v_rewritten=v_definition then raise exception 'Canonical offline completion credential predicate did not match'; end if;
+  execute v_rewritten;
+end
+$native_completion_occurrence_time_closure$;
+
+drop function public.tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text);
+create function public.tool_commit_cleaning_workflow_authoritative(
+  p_client_session_id text,p_client_completion_id text,p_device_id text,p_location_code text,
+  p_client_started_at text,p_client_ended_at text,p_response_json jsonb,p_scan_evidence jsonb,
+  p_correlation_id text,p_context_id text,p_submission_proof text,p_authenticated_credential_id text,
+  p_native_completion_attestation_version text,p_native_completion_attestation text,
+  p_native_route_proof_secret text,p_backend_execution_secret text
+) returns jsonb language plpgsql security definer set search_path to 'pg_catalog','public','extensions'
+as $function$
+declare v_result jsonb; v_context_id uuid; v_attestation_sha256 text; v_completed_at timestamptz;
+begin
+  perform public.custodial_require_native_route_proof_secret(p_native_route_proof_secret);
+  if btrim(coalesce(p_native_completion_attestation_version,''))<>'custodial-native-completion.v1'
+     or lower(btrim(coalesce(p_native_completion_attestation,''))) !~ '^[0-9a-f]{64}$' then
+    raise exception using errcode='42501',message='a verified native completion attestation is required';
+  end if;
+  begin
+    v_context_id:=lower(btrim(p_context_id))::uuid;
+    v_completed_at:=btrim(p_client_ended_at)::timestamptz;
+  exception when others then raise exception using errcode='22023',message='native completion evidence is malformed'; end;
+  v_attestation_sha256:=encode(extensions.digest(convert_to(lower(btrim(p_native_completion_attestation)),'UTF8'),'sha256'),'hex');
+  if exists(select 1 from public.custodial_offline_actor_contexts c where c.context_id=v_context_id
+    and (c.native_start_attestation_version is distinct from 'custodial-native-start.v1'
+      or (c.native_completion_attestation_version is not null and
+        (c.native_completion_attestation_version<>p_native_completion_attestation_version
+          or c.native_completion_attestation_sha256<>v_attestation_sha256
+          or c.native_completed_at<>v_completed_at)))) then
+    raise exception using errcode='23505',message='native completion attestation does not match the frozen occurrence';
+  end if;
+  v_result:=public.custodial_commit_offline_occurrence(
+    p_client_session_id,p_client_completion_id,p_device_id,p_location_code,p_client_started_at,p_client_ended_at,
+    p_response_json,p_scan_evidence,p_correlation_id,p_context_id,p_submission_proof,
+    p_authenticated_credential_id,p_backend_execution_secret
+  );
+  if v_result->>'status'='closed' then
+    update public.custodial_offline_actor_contexts
+       set native_completion_attestation_version=p_native_completion_attestation_version,
+           native_completion_attestation_sha256=v_attestation_sha256,native_completed_at=v_completed_at
+     where context_id=v_context_id and native_completion_attestation_version is null;
+  end if;
+  return v_result||jsonb_build_object('native_completion_attested',v_result->>'status'='closed');
+end
+$function$;
+
+delete from public.custodial_release_authority_restore_definitions;
+
+with wanted(restore_order,function_identity) as (values
+  (1,'public.custodial_commit_offline_occurrence(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text)'),
+  (2,'public.tool_get_offline_scan_authority_snapshot(text,text,text)'),
+  (3,'public.custodial_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text)'),
+  (4,'public.custodial_require_native_route_proof_secret(text)'),
+  (5,'public.custodial_start_offline_occurrence_native(text,text,text,text,text,text,integer,text,text,text,text,text,text)'),
+  (6,'public.tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text,text,text,text)'),
+  (7,'public.tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text,text,text,text)'),
+  (8,'public.tool_complete_session_authoritative(text,jsonb,text,text,text,text)'),
+  (9,'public.custodial_backend_authority_health(text)'),
+  (10,'public.custodial_record_release_canary_transport_probe(text,uuid,text,text,text,text,text,uuid,text,text,text)'),
+  (11,'public.custodial_get_release_canary_transport_probe_health(text,text,text,text)'),
+  (12,'public.custodial_run_release_canary_recovery_probe(text,text)'),
+  (13,'public.custodial_release_canary_is_paused(text,text)')
+), captured as (
+  select w.restore_order,w.function_identity,pg_get_functiondef(to_regprocedure(w.function_identity)) function_definition
+  from wanted w
+)
+insert into public.custodial_release_authority_restore_definitions(
+  restore_order,function_identity,function_definition,definition_sha256
+)
+select restore_order,function_identity,function_definition,
+  encode(extensions.digest(convert_to(function_definition,'UTF8'),'sha256'),'hex')
+from captured where function_definition is not null;
+
+do $complete_restore_inventory$
+begin
+  if (select count(*) from public.custodial_release_authority_restore_definitions)<>13 then
+    raise exception 'The complete live canary authority restoration set was not captured';
+  end if;
+end
+$complete_restore_inventory$;
 
 create or replace function public.custodial_backend_authority_health(p_backend_execution_secret text)
 returns jsonb language plpgsql security definer set search_path to 'pg_catalog','public','extensions'
@@ -237,7 +466,7 @@ begin
   select array_agg(d.function_identity order by d.restore_order) into v_mismatched from public.custodial_release_authority_restore_definitions d
    where to_regprocedure(d.function_identity) is not null and encode(extensions.digest(convert_to(pg_get_functiondef(to_regprocedure(d.function_identity)),'UTF8'),'sha256'),'hex')<>d.definition_sha256;
   v_checks:=jsonb_build_object(
-    'restore_set_complete',v_expected=9,
+    'restore_set_complete',v_expected=13,
     'canonical_functions_present',coalesce(cardinality(v_missing),0)=0,
     'canonical_functions_exact',coalesce(cardinality(v_mismatched),0)=0,
     'authority_ledgers_present',to_regclass('public.custodial_offline_actor_contexts') is not null
@@ -289,12 +518,26 @@ begin
       or has_table_privilege('service_role','public.custodial_release_canary_transport_probes','truncate')
     ),
     'phone_transport_resume_binding',exists(select 1 from information_schema.columns where table_schema='public' and table_name='custodial_release_canary_controls' and column_name='last_transport_probe_id')
+      and to_regprocedure('public.custodial_run_release_canary_recovery_probe(text,text)') is not null
+      and to_regprocedure('public.custodial_release_canary_is_paused(text,text)') is not null,
+    'native_route_proof_configured',exists(
+      select 1 from public.custodial_backend_execution_config c where c.config_key=true and c.enabled=true
+        and c.native_route_secret_digest is not null
+        and c.native_route_secret_digest is distinct from c.execution_secret_digest
+    ),
+    'native_occurrence_evidence_present',exists(
+      select 1 from information_schema.columns where table_schema='public' and table_name='custodial_offline_actor_contexts'
+        and column_name='native_start_attestation_sha256'
+    ) and exists(
+      select 1 from information_schema.columns where table_schema='public' and table_name='custodial_offline_actor_contexts'
+        and column_name='native_completion_attestation_sha256'
+    )
   );
   select bool_and(value::boolean) into v_ok from jsonb_each_text(v_checks);
   return jsonb_build_object(
     'ok',coalesce(v_ok,false),
     'authority','offline-authority.v4','phase','release-phone-transport-and-offline-activation-closure','configured',true,
-    'canonical_functions_expected',9,'canonical_functions_verified',v_expected-coalesce(cardinality(v_missing),0)-coalesce(cardinality(v_mismatched),0),
+    'canonical_functions_expected',13,'canonical_functions_verified',v_expected-coalesce(cardinality(v_missing),0)-coalesce(cardinality(v_mismatched),0),
     'missing_functions',to_jsonb(coalesce(v_missing,array[]::text[])),'mismatched_functions',to_jsonb(coalesce(v_mismatched,array[]::text[])),
     'issued_snapshot_ledger',true,'frozen_exact_replay',true,'operational_day_location_truth',true,'checks',v_checks);
 end
@@ -342,9 +585,9 @@ begin
     execute 'alter table public.custodial_release_canary_transport_probes enable row level security';
     execute 'alter table public.custodial_release_canary_transport_probes force row level security';
     execute 'revoke all on table public.custodial_release_canary_transport_probes from public,anon,authenticated,service_role';
-    execute 'revoke all on function public.custodial_commit_offline_occurrence(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text) from public,anon,authenticated,service_role';
-    execute 'revoke all on function public.custodial_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text),public.tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text),public.tool_get_offline_scan_authority_snapshot(text,text,text),public.tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text),public.tool_complete_session_authoritative(text,jsonb,text,text,text,text),public.custodial_backend_authority_health(text),public.custodial_record_release_canary_transport_probe(text,uuid,text,text,text,text,text,text),public.custodial_get_release_canary_transport_probe_health(text,text,text,text) from public,anon,authenticated';
-    execute 'grant execute on function public.custodial_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text),public.tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text),public.tool_get_offline_scan_authority_snapshot(text,text,text),public.tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text),public.tool_complete_session_authoritative(text,jsonb,text,text,text,text),public.custodial_backend_authority_health(text),public.custodial_record_release_canary_transport_probe(text,uuid,text,text,text,text,text,text),public.custodial_get_release_canary_transport_probe_health(text,text,text,text) to postgres,service_role';
+    execute 'revoke all on function public.custodial_commit_offline_occurrence(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text),public.custodial_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text),public.custodial_require_native_route_proof_secret(text),public.custodial_start_offline_occurrence_native(text,text,text,text,text,text,integer,text,text,text,text,text,text) from public,anon,authenticated,service_role';
+    execute 'revoke all on function public.tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text,text,text,text),public.tool_get_offline_scan_authority_snapshot(text,text,text),public.tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text,text,text,text),public.tool_complete_session_authoritative(text,jsonb,text,text,text,text),public.custodial_backend_authority_health(text),public.custodial_record_release_canary_transport_probe(text,uuid,text,text,text,text,text,uuid,text,text,text),public.custodial_get_release_canary_transport_probe_health(text,text,text,text),public.custodial_run_release_canary_recovery_probe(text,text),public.custodial_release_canary_is_paused(text,text) from public,anon,authenticated,service_role';
+    execute 'grant execute on function public.tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text,text,text,text),public.tool_get_offline_scan_authority_snapshot(text,text,text),public.tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text,text,text,text),public.tool_complete_session_authoritative(text,jsonb,text,text,text,text),public.custodial_backend_authority_health(text),public.custodial_record_release_canary_transport_probe(text,uuid,text,text,text,text,text,uuid,text,text,text),public.custodial_get_release_canary_transport_probe_health(text,text,text,text),public.custodial_run_release_canary_recovery_probe(text,text),public.custodial_release_canary_is_paused(text,text) to postgres,service_role';
     update public.custodial_release_canary_controls set updated_at=statement_timestamp(),updated_by_manager_id=p_manager_id,reason=btrim(p_reason),last_transport_probe_id=null where device_identifier=v_device;
     v_result:=jsonb_build_object('device_identifier',v_device,'canary_paused',true,'restored_functions',v_restored);
   else
@@ -377,7 +620,21 @@ create trigger trg_custodial_release_canary_transport_probes_immutable before up
 alter table public.custodial_release_canary_transport_probes enable row level security;
 alter table public.custodial_release_canary_transport_probes force row level security;
 revoke all on table public.custodial_release_canary_transport_probes from public,anon,authenticated,service_role;
-revoke all on function public.custodial_record_release_canary_transport_probe(text,uuid,text,text,text,text,text,text),public.custodial_get_release_canary_transport_probe_health(text,text,text,text) from public,anon,authenticated;
-grant execute on function public.custodial_record_release_canary_transport_probe(text,uuid,text,text,text,text,text,text),public.custodial_get_release_canary_transport_probe_health(text,text,text,text) to postgres,service_role;
+revoke all on function public.custodial_configure_native_route_proof_key(text,text),
+  public.custodial_require_native_route_proof_secret(text),
+  public.custodial_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text),
+  public.custodial_start_offline_occurrence_native(text,text,text,text,text,text,integer,text,text,text,text,text,text),
+  public.custodial_commit_offline_occurrence(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text)
+  from public,anon,authenticated,service_role;
+revoke all on function public.tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text,text,text,text),
+  public.tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text,text,text,text),
+  public.custodial_record_release_canary_transport_probe(text,uuid,text,text,text,text,text,uuid,text,text,text),
+  public.custodial_get_release_canary_transport_probe_health(text,text,text,text)
+  from public,anon,authenticated,service_role;
+grant execute on function public.tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text,text,text,text),
+  public.tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text,text,text,text),
+  public.custodial_record_release_canary_transport_probe(text,uuid,text,text,text,text,text,uuid,text,text,text),
+  public.custodial_get_release_canary_transport_probe_health(text,text,text,text)
+  to postgres,service_role;
 
 commit;

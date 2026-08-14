@@ -19,7 +19,12 @@ import { assertConfiguredReleaseIdentity, buildReleaseManifest } from "./release
 import { observeProductionSchemaIdentity } from "./production-schema-identity.js";
 import { authenticateOpsAccessRequest, createSupabaseTrustedDeviceStore, installSharedAuthRoutes, makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
 import { makeMcpConnectorMiddleware } from "./auth/mcp-connector-auth.js";
-import { installDeviceCredentialRoutes, makeDeviceCredentialMiddleware } from "./auth/device-credential-auth.js";
+import {
+  installDeviceCredentialRoutes,
+  makeDeviceCredentialMiddleware,
+  verifyNativeDeviceRequestAttestation,
+  verifyNativeOfflineWorkAttestation,
+} from "./auth/device-credential-auth.js";
 import { runReadOnlySql as runSupabaseReadOnlySql } from "./supabase/read.js";
 import { createGeminiConsoleRouter } from "./gemini-console-api.js";
 import { createGeminiControlledRepairWorker } from "./gemini-controlled-worker.js";
@@ -35,6 +40,7 @@ import { installEmployeeNotificationRoutes } from "./employee-notifications.js";
 import { installOperationalAnalyticsRoutes } from "./operational-analytics-api.js";
 import { normalizeAttendanceRecord, toNullableNonNegativeInteger } from "./attendance-state.js";
 import { normalizeCanonicalScanEvidence } from "./scan-evidence.js";
+import { buildReleaseCanaryTransportProbeCall } from "./native-phone-transport.js";
 import {
   guestFeatureState,
   normalizeFeedbackInput,
@@ -397,6 +403,17 @@ function offlineAuthoritySecret() {
   return secret;
 }
 
+function nativeRouteProofSecret() {
+  const secret = String(process.env.CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET || "").trim();
+  if (secret.length < 32 || secret === offlineAuthoritySecret()) {
+    const error = new Error("Native route authority is unavailable until a distinct CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET is configured.");
+    error.status = 503;
+    error.code = "native_route_authority_not_configured";
+    throw error;
+  }
+  return secret;
+}
+
 function bindOfflineActorProof(fn, args, credential) {
   const normalizedFn = String(fn || "").trim();
   if (!["tool_commit_cleaning_workflow", "tool_complete_session", "tool_start_offline_occurrence", "tool_get_offline_scan_authority_snapshot"].includes(normalizedFn)) return { fn: normalizedFn, args };
@@ -479,6 +496,9 @@ function bindOfflineActorProof(fn, args, credential) {
     p_context_id: String(requestedControl.context_id || ""),
     p_submission_proof: String(requestedControl.submission_proof || ""),
     p_authenticated_credential_id: credential.credential_id,
+    p_native_completion_attestation_version: nextArgs.p_native_completion_attestation_version,
+    p_native_completion_attestation: nextArgs.p_native_completion_attestation,
+    p_native_route_proof_secret: nextArgs.p_native_route_proof_secret,
     p_backend_execution_secret: secret,
   };
   return {
@@ -512,13 +532,27 @@ async function runPreparedScanRpc(prepared) {
   }
 }
 
-async function executeScanRpcTransport(fn, args, device, credential) {
+async function executeScanRpcTransport(fn, args, device, credential, req) {
   const normalizedFn = String(fn || "").trim();
   if (!SCAN_RPC_ALLOWLIST.has(normalizedFn)) {
     throw Object.assign(new Error(`Function not allowed: ${normalizedFn}`), { status: 400, code: "scan_function_not_allowed" });
   }
+  if (isNativeCustodialScanRequest(req)) {
+    req.memphisNativeRequestAttestation = verifyNativeDeviceRequestAttestation(req);
+  }
   const canonicalArgs = canonicalizeScanArguments(normalizedFn, args, device);
   const preparedBase = prepareScanRpcCall(normalizedFn, canonicalArgs);
+  if (normalizedFn === "tool_start_offline_occurrence") {
+    const attestation = verifyNativeOfflineWorkAttestation(req, preparedBase.args, "start");
+    preparedBase.args.p_native_start_attestation_version = attestation.version;
+    preparedBase.args.p_native_start_attestation = attestation.signature;
+    preparedBase.args.p_native_route_proof_secret = nativeRouteProofSecret();
+  } else if (normalizedFn === "tool_commit_cleaning_workflow") {
+    const attestation = verifyNativeOfflineWorkAttestation(req, preparedBase.args, "completion");
+    preparedBase.args.p_native_completion_attestation_version = attestation.version;
+    preparedBase.args.p_native_completion_attestation = attestation.signature;
+    preparedBase.args.p_native_route_proof_secret = nativeRouteProofSecret();
+  }
   const proofBound = bindOfflineActorProof(preparedBase.fn, preparedBase.args, credential);
   const prepared = { ...preparedBase, ...proofBound };
   const data = await runPreparedScanRpc(prepared);
@@ -558,24 +592,14 @@ function isNativeCustodialScanRequest(req) {
 }
 
 async function recordReleaseCanaryTransportProbe(req, deviceIdentifier) {
-  const credentialId = String(req.memphisDeviceCredential?.credential_id || "").trim();
-  if (!credentialId || req.memphisDeviceAuth?.credentialed !== true || req.memphisDeviceAuth?.offline_recovery_only === true) {
-    throw Object.assign(new Error("A current native canary credential is required for the release transport probe."), {
-      status: 403,
-      code: "release_canary_probe_credential_required",
-    });
-  }
-  const requestSha256 = createHash("sha256").update(req.scanAuthorityRawBody || Buffer.alloc(0)).digest("hex");
-  return runRpc("custodial_record_release_canary_transport_probe", {
-    p_device_identifier: deviceIdentifier,
-    p_credential_id: credentialId,
-    p_request_sha256: requestSha256,
-    p_backend_commit_sha: BACKEND_COMMIT_SHA,
-    p_release_id: RELEASE_ID,
-    p_native_origin: String(req.headers?.origin || "").trim(),
-    p_app_edition: String(req.headers?.["x-memphis-app-edition"] || "").trim(),
-    p_backend_execution_secret: offlineAuthoritySecret(),
+  const call = buildReleaseCanaryTransportProbeCall({
+    req,
+    deviceIdentifier,
+    backendCommitSha: BACKEND_COMMIT_SHA,
+    releaseId: RELEASE_ID,
+    nativeRouteProofSecret: nativeRouteProofSecret(),
   });
+  return runRpc(call.fn, call.args);
 }
 
 const MAX_SCAN_RPC_BYTES = 1024 * 1024;
@@ -725,6 +749,10 @@ const TRUSTED_DEVICE_CORS_HEADERS = [
   "X-Device-Credential",
   "X-Memphis-Device-Credential",
   "X-Memphis-App-Edition",
+  "X-Memphis-Native-Attestation-Version",
+  "X-Memphis-Native-Request-Id",
+  "X-Memphis-Native-Request-Timestamp",
+  "X-Memphis-Native-Request-Attestation",
   "X-Device-Security-CSRF",
   "X-Admin-Key",
   "X-Ops-Access-Key",
@@ -2838,7 +2866,7 @@ app.post("/scan-api/rpc", parseScanAuthorityJsonBeforeAuthentication, requireDev
         return;
       }
     }
-    const outcome = await executeScanRpcTransport(fn, req.body?.args, req.memphisDevice, req.memphisDeviceCredential);
+    const outcome = await executeScanRpcTransport(fn, req.body?.args, req.memphisDevice, req.memphisDeviceCredential, req);
     let canaryTransportProbe = null;
     if (canaryPaused === true && outcome.status === 200 && outcome.body?.ok === true) {
       canaryTransportProbe = await recordReleaseCanaryTransportProbe(req, canaryDeviceId);
@@ -2907,6 +2935,10 @@ app.use((err, req, res, next) => {
 const port = Number(process.env.PORT || 3000);
 // A production Render process must never start with a silently disabled canary boundary.
 configuredReleaseCanaryDeviceId();
+if (releaseCanaryConfigurationRequired()) {
+  offlineAuthoritySecret();
+  nativeRouteProofSecret();
+}
 assertConfiguredReleaseIdentity();
 const EVENT_MAINTENANCE_SWEEP_MS = toSafeNonNegativeInt(process.env.EVENT_MAINTENANCE_SWEEP_MS, 60_000);
 if (EVENT_MAINTENANCE_SWEEP_MS > 0) {

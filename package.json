@@ -45,6 +45,8 @@
     "test:moxie-route": "node scripts/moxie-route-tests.mjs",
     "test:schedule-source-type": "node scripts/schedule-source-type-contract-tests.mjs",
     "test:device-credentials": "node scripts/device-credential-foundation-tests.mjs",
+    "test:native-phone-attestation": "node scripts/native-phone-attestation-tests.mjs",
+    "test:native-canary-transport-route": "node scripts/native-canary-transport-route-tests.mjs",
     "test:operational-recovery": "node scripts/operational-recovery-tests.mjs",
     "test:foundation-repair": "node scripts/foundation-repair-tests.mjs",
     "test:custodial-repair": "node scripts/custodial-repair-contract-tests.mjs",

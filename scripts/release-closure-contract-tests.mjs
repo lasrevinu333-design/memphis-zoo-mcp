@@ -6,11 +6,12 @@ import { assertBackendFrontendIdentity, assertExactReleaseAttestation, assertFro
 
 const input = JSON.parse(readFileSync(new URL("../release/schema-alignment-input.json", import.meta.url), "utf8"));
 const index = readFileSync(new URL("../src/index.js", import.meta.url), "utf8");
+const nativePhoneTransport = readFileSync(new URL("../src/native-phone-transport.js", import.meta.url), "utf8");
 const liveGate = readFileSync(new URL("./live-release-alignment-check.mjs", import.meta.url), "utf8");
 const rollbackMigration = readFileSync(new URL("../supabase/migrations/20260813060000_release_canary_operational_recovery.sql", import.meta.url), "utf8");
 const boundaryMigration = readFileSync(new URL("../supabase/migrations/20260813141806_custodial_operational_boundary_closure.sql", import.meta.url), "utf8");
 
-assert.equal(input.frontend_commit_sha, "054cf40534b568768cea321085ce1f09b2414bdc", "backend must pin the exact audited frontend candidate");
+assert.equal(input.frontend_commit_sha, "27a3448a958496dde9c640eaf3baa73907cb0af4", "backend must pin the exact audited frontend candidate");
 assert.equal(input.frontend_commit_state, "final_pair_bound");
 assert.deepEqual(input.queue_compatibility_versions.scan.at(-1), "indexeddb-v6-offline-authority");
 assert.deepEqual(Object.keys(input.minimum_supported).sort(), ["backend_version", "frontend_version"]);
@@ -23,7 +24,9 @@ assert.match(index, /custodial_release_canary_is_paused/, "scan traffic must rea
 assert.match(index, /canaryControlInitialized\s*&&\s*canaryPaused === false/g,
   "health and authority health must reject a configured but operator-paused canary");
 assert.match(index, /custodial_control_release_canary/, "release recovery must use its durable database control");
-assert.match(index, /custodial_record_release_canary_transport_probe/,
+assert.match(index, /buildReleaseCanaryTransportProbeCall/,
+  "release recovery must route designated-phone evidence through the verified transport helper");
+assert.match(nativePhoneTransport, /custodial_record_release_canary_transport_probe/,
   "release recovery must record the designated phone's authenticated native RPC traversal");
 assert.match(index, /custodial_get_release_canary_transport_probe_health/,
   "release recovery must verify a persisted phone transport receipt");

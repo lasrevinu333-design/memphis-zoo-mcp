@@ -10,6 +10,7 @@ if (!/^mz_schema_rebuild_[a-zA-Z0-9_]+$/.test(container) || !/^(postgres|mz_sche
 }
 
 const secret = "final-uncertainty-test-012345678901234567890";
+const nativeRouteSecret = "final-uncertainty-native-route-test-01234567890";
 const managerId = "00000000-0000-4000-8000-000000000001";
 const q = (value) => `'${String(value).replaceAll("'", "''")}'`;
 function sql(statement, { expectFailure = false } = {}) {
@@ -54,23 +55,26 @@ assert.equal(sql(`select public.sch_service_date('2026-11-01 04:00:00-06'::times
 
 sql(`select public.custodial_configure_backend_execution_key(
   encode(extensions.digest(convert_to(${q(secret)},'UTF8'),'sha256'),'hex'),'final uncertainty test');`);
+sql(`select public.custodial_configure_native_route_proof_key(
+  encode(extensions.digest(convert_to(${q(nativeRouteSecret)},'UTF8'),'sha256'),'hex'),'final uncertainty test');`);
 const pause = JSON.parse(sql(`select public.custodial_control_release_canary(
   '${managerId}'::uuid,'${randomUUID()}'::uuid,'KIOSK_09','pause_canary','uncertainty health test','{"ok":true}'::jsonb,${q(secret)})::text;`));
 assert.equal(pause.canary_paused, true);
 sql(`create or replace function public.tool_start_offline_occurrence(
   p_device_id text,p_location_code text,p_client_session_id text,p_client_started_at text,p_snapshot_id text,
   p_snapshot_employee_id text,p_snapshot_assignment_epoch integer,p_snapshot_credential_id text,
-  p_authenticated_credential_id text,p_backend_execution_secret text)
+  p_authenticated_credential_id text,p_native_start_attestation_version text,
+  p_native_start_attestation text,p_native_route_proof_secret text,p_backend_execution_secret text)
   returns jsonb language sql as $$select '{"broken":true}'::jsonb$$;`);
 const unhealthy = JSON.parse(sql(`select public.custodial_backend_authority_health(${q(secret)})::text;`));
 assert.equal(unhealthy.ok, false);
-assert.ok(unhealthy.mismatched_functions.includes("public.tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text)"));
+assert.ok(unhealthy.mismatched_functions.includes("public.tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text,text,text,text)"));
 const spoofedResume = sql(`select public.custodial_control_release_canary(
   '${managerId}'::uuid,'${randomUUID()}'::uuid,'KIOSK_09','resume_canary','spoofed green health','{"ok":true}'::jsonb,${q(secret)});`, { expectFailure: true });
 assert.match(spoofedResume, /cannot resume until a fresh persisted database recovery probe is green/i);
 const restored = JSON.parse(sql(`select public.custodial_control_release_canary(
   '${managerId}'::uuid,'${randomUUID()}'::uuid,'KIOSK_09','restore_authority','restore exact authority set',${q(JSON.stringify(unhealthy))}::jsonb,${q(secret)})::text;`));
-assert.equal(restored.restored_functions, 9);
+assert.equal(restored.restored_functions, 13);
 assert.equal(JSON.parse(sql(`select public.custodial_backend_authority_health(${q(secret)})::text;`)).ok, true);
 
 const credentialId = randomUUID();

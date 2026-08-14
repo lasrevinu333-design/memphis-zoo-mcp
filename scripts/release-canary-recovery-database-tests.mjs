@@ -10,6 +10,7 @@ if (!/^mz_schema_rebuild_[a-zA-Z0-9_]+$/.test(container) || !/^(postgres|mz_sche
 }
 
 const secret = "release-canary-recovery-test-01234567890123456789";
+const nativeRouteSecret = "release-canary-native-route-test-01234567890123";
 const managerId = "00000000-0000-4000-8000-000000000001";
 const deviceId = "KIOSK_08";
 const backendCommit = "a".repeat(40);
@@ -32,6 +33,9 @@ function sql(statement, { role = "supabase_admin", expectFailure = false } = {})
 
 sql(`select public.custodial_configure_backend_execution_key(
   encode(extensions.digest(convert_to(${q(secret)},'UTF8'),'sha256'),'hex'),
+  'release-canary-recovery-database-test');`);
+sql(`select public.custodial_configure_native_route_proof_key(
+  encode(extensions.digest(convert_to(${q(nativeRouteSecret)},'UTF8'),'sha256'),'hex'),
   'release-canary-recovery-database-test');`);
 sql("revoke insert on table public.custodial_offline_scan_event_evidence from service_role;");
 sql("alter table public.custodial_release_canary_transport_probes disable trigger trg_custodial_release_canary_transport_probes_immutable;");
@@ -60,7 +64,9 @@ assert.match(sql(`select public.custodial_release_canary_is_paused('canary-check
 
 const expectedHealthDigest = sql("select definition_sha256 from public.custodial_release_authority_restore_definitions where function_identity='public.custodial_backend_authority_health(text)';");
 sql(`create or replace function public.custodial_backend_authority_health(p_backend_execution_secret text) returns jsonb language sql as $$select '{"ok":false,"broken":true}'::jsonb$$;`);
-sql("drop function public.tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text);");
+sql("drop function public.tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text,text,text,text);");
+sql("drop function public.custodial_run_release_canary_recovery_probe(text,text);");
+sql("drop function public.custodial_release_canary_is_paused(text,text);");
 sql("drop trigger trg_custodial_release_canary_transport_probes_immutable on public.custodial_release_canary_transport_probes;");
 assert.equal(JSON.parse(sql(`select public.custodial_backend_authority_health(${q(secret)})::text;`)).broken, true,
   "the test must first prove a present-but-broken authority function");
@@ -69,13 +75,15 @@ const restore = JSON.parse(sql(`select public.custodial_control_release_canary(
   '${managerId}'::uuid,'${randomUUID()}'::uuid,${q(deviceId)},'restore_authority','restore known-good authority set',
   '{"ok":false,"probe":"present-but-broken"}'::jsonb,${q(secret)})::text;`));
 assert.equal(restore.canary_paused, true);
-assert.equal(restore.restored_functions, 9);
+assert.equal(restore.restored_functions, 13);
 const health = JSON.parse(sql(`select public.custodial_backend_authority_health(${q(secret)})::text;`));
 assert.equal(health.ok, true, "forward restoration must recover the canonical authority health RPC");
 assert.equal(Object.values(health.checks).every((value) => value === true), true,
   "canary health must derive every authority, ledger, constraint, grant, writer, and operational-date check from the live catalog");
-assert.equal(sql("select to_regprocedure('public.tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text)') is not null;"), "t",
+assert.equal(sql("select to_regprocedure('public.tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text,text,text,text)') is not null;"), "t",
   "forward restoration must recover an absent canonical authority RPC");
+assert.equal(sql("select to_regprocedure('public.custodial_run_release_canary_recovery_probe(text,text)') is not null;"), "t");
+assert.equal(sql("select to_regprocedure('public.custodial_release_canary_is_paused(text,text)') is not null;"), "t");
 assert.equal(sql("select count(*) from pg_trigger where tgrelid='public.custodial_release_canary_transport_probes'::regclass and tgname='trg_custodial_release_canary_transport_probes_immutable' and tgenabled<>'D';"), "1",
   "forward restoration must recover immutable phone-transport evidence enforcement");
 assert.equal(sql("select encode(extensions.digest(convert_to(pg_get_functiondef('public.custodial_backend_authority_health(text)'::regprocedure),'UTF8'),'sha256'),'hex');"), expectedHealthDigest,
@@ -120,9 +128,14 @@ sql(`insert into public.device_auth_credentials(credential_id,device_id,token_ha
 const noPhoneHealth = JSON.parse(sql(`select public.custodial_get_release_canary_transport_probe_health(
   ${q(deviceId)},${q(backendCommit)},${q(releaseId)},${q(secret)})::text;`));
 assert.equal(noPhoneHealth.ready, false, "database-only recovery evidence cannot stand in for the physical phone path");
+assert.match(sql(`set role service_role; select public.custodial_record_release_canary_transport_probe(
+  ${q(deviceId)},'${canaryCredential}'::uuid,'${"c".repeat(64)}',${q(backendCommit)},${q(releaseId)},
+  'https://localhost','custodial','${randomUUID()}'::uuid,now()::text,'${"d".repeat(64)}',${q(secret)});`, { expectFailure: true }),
+  /native phone route proof is not authorized/i,
+  "the general service-role backend secret cannot fabricate native phone evidence");
 const phoneProbe = JSON.parse(sql(`select public.custodial_record_release_canary_transport_probe(
   ${q(deviceId)},'${canaryCredential}'::uuid,'${"c".repeat(64)}',${q(backendCommit)},${q(releaseId)},
-  'https://localhost','custodial',${q(secret)})::text;`));
+  'https://localhost','custodial','${randomUUID()}'::uuid,now()::text,'${"d".repeat(64)}',${q(nativeRouteSecret)})::text;`));
 assert.equal(phoneProbe.ready, true);
 const combinedHealth = { ...health, ok: true, scan_rpc_transport: {
   ...phoneProbe, ready: true, backend_commit_sha: backendCommit, release_id: releaseId,

@@ -1,15 +1,15 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "054cf40534b568768cea321085ce1f09b2414bdc",
-  "schema_fingerprint": "26fefdc26c0e72ca648acaafc2c3241b94d0edc83fb32b5350c593c3bc291ac8",
+  "frontend_commit_sha": "27a3448a958496dde9c640eaf3baa73907cb0af4",
+  "schema_fingerprint": "0d8cf8b3c8696d15f4ea298d69a28ff418a1e6fe383fec3ecac76d31b905a980",
   "schema_transition": {
     "transition_id": "custodial-canary-offline-scan-authority-20260813",
-    "from_fingerprint": "333ddfc8008ea0b85916de7d491b98c9b8d6a7d45d3a2947d99b4b3bb836ea00",
-    "to_fingerprint": "26fefdc26c0e72ca648acaafc2c3241b94d0edc83fb32b5350c593c3bc291ac8",
+    "from_fingerprint": "405dfbc65393c7a1fc9ea86b9c2e1f637df185f11a8520315f61fd8a9b1e5dfc",
+    "to_fingerprint": "0d8cf8b3c8696d15f4ea298d69a28ff418a1e6fe383fec3ecac76d31b905a980",
     "expires_at": "2026-08-23T23:59:59Z"
   },
-  "frontend_source_fingerprint": "333ddfc8008ea0b85916de7d491b98c9b8d6a7d45d3a2947d99b4b3bb836ea00",
+  "frontend_source_fingerprint": "405dfbc65393c7a1fc9ea86b9c2e1f637df185f11a8520315f61fd8a9b1e5dfc",
   "backend_contract": {
     "scan": "scan.v4.snapshot-bound-authority",
     "authority": "offline-authority.v4",
@@ -335,7 +335,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "ef982f61de894a60d9ecf2f7c7a12811735aa6ba"
+        "object_id": "f481f5e1f35b904d8be5de4f757d4e2ea52bef98"
       },
       {
         "path": "public/moxie-assets/contacts-creekside-animal.png",
@@ -385,7 +385,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "d4caf6bb70f0b2246e7ef8b6136d2757a49f87ad"
+        "object_id": "98ff14761e4fab4f719f4e0b5fe778daa51833a1"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -400,7 +400,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "70f3168fd5010e34577f4510f7548e23e93f9820"
+        "object_id": "e5e7a38b2660fdfa30611dce110fc120e9d5fa2d"
       },
       {
         "path": "research/european_herbalism_through_paracelsus.md",
@@ -525,7 +525,7 @@
       {
         "path": "scripts/custodial-repair-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "987fbd528655df2d53991b795b2d6f42186d18c6"
+        "object_id": "1131b9b689abf9bbe6c4d1caaa44803436d02aa0"
       },
       {
         "path": "scripts/dashboard-recent-activity-contract-tests.mjs",
@@ -565,7 +565,7 @@
       {
         "path": "scripts/empty-database-rebuild-check.mjs",
         "mode": "100644",
-        "object_id": "c98a79767e9dc4149cc2ad424e5ed5ed898f3ffe"
+        "object_id": "b1df2738717d52c82925e89f3ac25518d8002256"
       },
       {
         "path": "scripts/event-notification-retention-contract-tests.mjs",
@@ -605,7 +605,7 @@
       {
         "path": "scripts/final-uncertainty-closure-database-tests.mjs",
         "mode": "100644",
-        "object_id": "179f055ddb50c7e74288e94e8bf7f90686156fc6"
+        "object_id": "0e8bda248bdc6cdd5ef17ec08f5607a7c214b842"
       },
       {
         "path": "scripts/fixtures/static-weekly-scheduler/canary-authority.json",
@@ -660,7 +660,7 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "b10c8800dc456c32b773289bf418a9e98a7a8238"
+        "object_id": "a71b8a87c0ab1f0bd07d0823bd78f71f2ebd1b8b"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
@@ -773,9 +773,19 @@
         "object_id": "55844bf34b6bb985481f4f574531fb4ea023fbcd"
       },
       {
+        "path": "scripts/native-canary-transport-route-tests.mjs",
+        "mode": "100644",
+        "object_id": "12be60aba83d14b61786a9aefc8f5ffbfe830012"
+      },
+      {
+        "path": "scripts/native-phone-attestation-tests.mjs",
+        "mode": "100644",
+        "object_id": "9c4a3092347a1201f02b897a3ee735a0c5b54fc2"
+      },
+      {
         "path": "scripts/offline-actor-recovery-database-tests.mjs",
         "mode": "100644",
-        "object_id": "dfb64e63ef637113ef4d0940a7b6ded9e4d0bc31"
+        "object_id": "aa8de0cea6253cf0293c75709b3efca14ddfc7c6"
       },
       {
         "path": "scripts/offline-actor-recovery-route-tests.mjs",
@@ -805,7 +815,7 @@
       {
         "path": "scripts/operations-leadership-mobile-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "9cda457422af7bda528abf60fa87c6e13e7c07c8"
+        "object_id": "278745514be901b166497fa4482c6173970b3b30"
       },
       {
         "path": "scripts/operations-leadership-mobile-database-tests.mjs",
@@ -900,12 +910,12 @@
       {
         "path": "scripts/release-canary-recovery-database-tests.mjs",
         "mode": "100644",
-        "object_id": "d935161689b4905f7ee6acf723d7c4194c4ffdd9"
+        "object_id": "02150090a4998395900e74eacc8a42979d069818"
       },
       {
         "path": "scripts/release-closure-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "8b23991d6b3c8704424d211b1595f8a95a924144"
+        "object_id": "5de531fe8e63ecd413da993c84b380178fcc03e5"
       },
       {
         "path": "scripts/restroom-rebalance-route-tests.mjs",
@@ -1390,7 +1400,7 @@
       {
         "path": "src/auth/device-credential-auth.js",
         "mode": "100644",
-        "object_id": "28436e07069a25566986628143575452716fbdf8"
+        "object_id": "4803d0c0aacff48783f803396b5dcbceace86d2a"
       },
       {
         "path": "src/auth/mcp-connector-auth.js",
@@ -1405,7 +1415,7 @@
       {
         "path": "src/config/env.js",
         "mode": "100644",
-        "object_id": "7e7705a410465a414d2a684b4029746f9182a8b3"
+        "object_id": "8f483581eb106b07bf331c245db6693eea47066f"
       },
       {
         "path": "src/custodial-employee-admin.js",
@@ -1475,7 +1485,7 @@
       {
         "path": "src/index.js",
         "mode": "100644",
-        "object_id": "7e7996ce05390f839a69d496af2be1b0614cd477"
+        "object_id": "328ec447bec4a937dea6dcf3d04af8a7c57ccbee"
       },
       {
         "path": "src/leadership-bootstrap.js",
@@ -1536,6 +1546,11 @@
         "path": "src/messaging-api.js",
         "mode": "100644",
         "object_id": "b1b0f37b353e6a95a520269f11196f4df779b720"
+      },
+      {
+        "path": "src/native-phone-transport.js",
+        "mode": "100644",
+        "object_id": "10afcdc68699c9316bcf5d66b9008720994fb543"
       },
       {
         "path": "src/offline-authority-http.js",
@@ -1700,12 +1715,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "ffd01353c77c2778b6e4e91e07ae073007e29828"
+        "object_id": "ed1b378cb41281ad473c831908b70977f2f7e32c"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "6c32810085ea46029c7686abe1f3df130dac21ea"
+        "object_id": "5bfc1f777010af9b829c8d60c424756db32bf256"
       },
       {
         "path": "supabase/config.toml",
@@ -2665,7 +2680,7 @@
       {
         "path": "supabase/migrations/20260813190000_release_phone_transport_and_offline_activation_closure.sql",
         "mode": "100644",
-        "object_id": "b527f800b7c4446b8e60f6c21ccc1f6ce6818aa9"
+        "object_id": "07aa75ec80abc0ea80411206c248828155089f3b"
       },
       {
         "path": "tmp/write_probe.txt",
@@ -2673,7 +2688,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 514,
+    "authority_path_count": 517,
     "migration_path_count": 75,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
