@@ -98,7 +98,7 @@ assert.equal(sql("select has_function_privilege('service_role','public.tool_comm
   "recovery must not revive the legacy completion writer");
 assert.equal(sql(`select count(*) from public.custodial_terminal_writer_inventory where application_callable
   and (mutates_terminal_truth or delegates_alternate_terminal_authority)
-  and proname not in ('tool_start_offline_occurrence','tool_commit_cleaning_workflow_authoritative','tool_complete_session_authoritative','custodial_close_maintenance_ticket_authoritative');`), "0",
+  and proname not in ('tool_start_offline_occurrence','tool_commit_cleaning_workflow_authoritative','tool_complete_session_authoritative','custodial_close_maintenance_ticket_authoritative','custodial_finish_historical_session_authoritative');`), "0",
   "the recovery control must not become an alternate terminal writer");
 
 const expectedFingerprintDigest = sql("select definition_sha256 from public.custodial_release_authority_restore_inventory where object_kind='function' and object_identity::regprocedure='public.custodial_offline_payload_fingerprint(public.custodial_offline_actor_contexts,text,timestamp with time zone,timestamp with time zone,jsonb,jsonb,text)'::regprocedure;");
@@ -211,10 +211,13 @@ sql("drop function public.test_post_capture_terminal_writer();");
 assert.equal(JSON.parse(sql(`select public.custodial_backend_authority_health(${q(secret)})::text;`)).ok, true,
   "removing the unauthorized post-capture writer must recover live authority health");
 
-sql(`create function public.custodial_finish_historical_session_authoritative(text,text,uuid,timestamptz,text,integer)
+sql(`create function public.custodial_finish_historical_session_authoritative(
+  p_session_identifier text,p_device_id text,p_finish_operation_id uuid,
+  p_client_ended_at timestamptz,p_backend_execution_secret text,p_ignored integer)
   returns jsonb language plpgsql as $$begin
-    update public.sessions set updated_at=updated_at where false;
-    return '{"overload":"unauthorized"}'::jsonb;
+    return public.tool_finish_session_exact(
+      p_session_identifier,p_device_id,p_finish_operation_id,p_client_ended_at
+    );
   end$$;`);
 const overloadedWriterHealth = JSON.parse(sql(`select public.custodial_backend_authority_health(${q(secret)})::text;`));
 assert.equal(overloadedWriterHealth.ok, false, "a callable overload cannot inherit a canonical writer name exemption");

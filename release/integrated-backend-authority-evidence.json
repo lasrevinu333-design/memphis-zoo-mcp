@@ -2,11 +2,11 @@
   "artifact": "integrated-backend-authority-release-evidence.v2",
   "release_id": "release-2026.07.19.custodial-v3.12",
   "frontend_commit_sha": "01720a0541d059d6634a159c3326529c76c09807",
-  "schema_fingerprint": "c345a48610824694b32e71eef915dc16e3e752d22f277f07ebe5bf4e873afeaf",
+  "schema_fingerprint": "b941b03c4988a5d5b0f2c8b5e4f31aa459900d09f0a3a6d859e8ebdf966d49f5",
   "schema_transition": {
     "transition_id": "custodial-canary-offline-scan-authority-20260813",
     "from_fingerprint": "405dfbc65393c7a1fc9ea86b9c2e1f637df185f11a8520315f61fd8a9b1e5dfc",
-    "to_fingerprint": "c345a48610824694b32e71eef915dc16e3e752d22f277f07ebe5bf4e873afeaf",
+    "to_fingerprint": "b941b03c4988a5d5b0f2c8b5e4f31aa459900d09f0a3a6d859e8ebdf966d49f5",
     "expires_at": "2026-08-23T23:59:59Z"
   },
   "frontend_source_fingerprint": "405dfbc65393c7a1fc9ea86b9c2e1f637df185f11a8520315f61fd8a9b1e5dfc",
@@ -394,7 +394,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "d4c890b0af57b26b68b71523695c38a1d1c65aad"
+        "object_id": "b82053bab2761515f401bf2e89222c2307610621"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -569,7 +569,7 @@
       {
         "path": "scripts/employee-notification-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "019c4027b5cf5efe7d046ebdafcf3db4b3b5dd47"
+        "object_id": "94ba63c14aa5b098e6e16a3b0ab1066d3765126e"
       },
       {
         "path": "scripts/empty-database-rebuild-check.mjs",
@@ -614,7 +614,7 @@
       {
         "path": "scripts/final-uncertainty-closure-database-tests.mjs",
         "mode": "100644",
-        "object_id": "ec19a8e287f59677ab53d9691e2b3dd179a9036f"
+        "object_id": "64ee7fc8c83ce7b815902551804c0eeac8e436c7"
       },
       {
         "path": "scripts/fixtures/static-weekly-scheduler/canary-authority.json",
@@ -919,7 +919,7 @@
       {
         "path": "scripts/release-canary-recovery-database-tests.mjs",
         "mode": "100644",
-        "object_id": "9712ccc58af096e3576a1e2bc2e5686b6b12c603"
+        "object_id": "a5a3a1bea78937a3d79f8a051355e541f63b420c"
       },
       {
         "path": "scripts/release-closure-contract-tests.mjs",
@@ -1439,7 +1439,7 @@
       {
         "path": "src/employee-notifications.js",
         "mode": "100644",
-        "object_id": "f76ced4825ffe6d98d9212abf3752fdc94e7160d"
+        "object_id": "1d8daa90a5d3b29c426ef085bd7d2b41311d341c"
       },
       {
         "path": "src/events-ai-parser.js",
@@ -1724,12 +1724,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "66ab0336383f9e65563b66a9a869c5dadccefc23"
+        "object_id": "d5c5efa5db090d95f117271fe64e57bf529017d7"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "a180fbc09d04b43edf6270cd3a88859e0f2da764"
+        "object_id": "9cae29da4635b3c83064b340843bbc01ae061710"
       },
       {
         "path": "supabase/config.toml",
@@ -2694,7 +2694,7 @@
       {
         "path": "supabase/migrations/20260813210000_custodial_u4_ops_closure.sql",
         "mode": "100644",
-        "object_id": "7355e77cd72d09a3597b176b9be9d39a11a5a8cc"
+        "object_id": "3f801646265afc845203e8845bf3e85f81c6e37b"
       },
       {
         "path": "tmp/write_probe.txt",

@@ -206,9 +206,42 @@ sql(`insert into public.events_app_events(id,event_name,location_group_id,event_
 assert.equal(sql(`select count(*) from public.ops_manager_claim_notification_jobs('uncertainty-worker',10,120) where job_key=${q(rescheduledKey)};`), "0");
 assert.equal(sql(`select status from public.ops_manager_notification_queue where job_key=${q(rescheduledKey)};`), "cancelled");
 
+const employeeCredentialId = randomUUID();
+const employeeRegistrationId = randomUUID();
+const employeeTokenA = `employee-token-a-${stamp}-00000000000000000000`;
+const employeeTokenB = `employee-token-b-${stamp}-00000000000000000000`;
+const employeeTokenC = `employee-token-c-${stamp}-00000000000000000000`;
+const employeeTokenHashA = createHash("sha256").update(employeeTokenA).digest("hex");
+const employeeTokenHashB = createHash("sha256").update(employeeTokenB).digest("hex");
+const employeeTokenHashC = createHash("sha256").update(employeeTokenC).digest("hex");
+sql(`insert into public.device_auth_credentials(credential_id,device_id,token_hash,device_label,confirmed_at,expires_at,metadata_json)
+  values('${employeeCredentialId}'::uuid,'${deviceId}'::uuid,'${"b".repeat(64)}','employee notification race',now(),now()+interval '1 day','{}'::jsonb);
+  insert into public.employee_push_registrations(registration_id,device_id,credential_id,employee_id,assignment_epoch,platform,fcm_token,token_hash)
+  select '${employeeRegistrationId}'::uuid,'${deviceId}'::uuid,'${employeeCredentialId}'::uuid,'${employeeId}'::uuid,assignment_epoch,'android',${q(employeeTokenA)},${q(employeeTokenHashA)}
+  from public.devices where id='${deviceId}'::uuid;`);
+sql(`update public.employee_push_registrations set fcm_token=${q(employeeTokenB)},token_hash=${q(employeeTokenHashB)},last_successful_delivery_at=null,last_error=null
+  where registration_id='${employeeRegistrationId}'::uuid;`);
+const staleEmployeeSuccess = JSON.parse(sql(`select public.mz_record_employee_push_delivery(
+  '${employeeRegistrationId}'::uuid,${q(employeeTokenHashA)},true,false,null,now())::text;`));
+assert.equal(staleEmployeeSuccess.current, false, "an old token success cannot update the reused registration row");
+const staleEmployeeReject = JSON.parse(sql(`select public.mz_record_employee_push_delivery(
+  '${employeeRegistrationId}'::uuid,${q(employeeTokenHashA)},false,true,'old token rejected',now())::text;`));
+assert.equal(staleEmployeeReject.current, false, "an old token rejection cannot revoke the replacement token");
+assert.equal(sql(`select active::text||'|'||(last_successful_delivery_at is null)::text||'|'||(last_error is null)::text
+  from public.employee_push_registrations where registration_id='${employeeRegistrationId}'::uuid;`), "true|true|true");
+assert.equal(JSON.parse(sql(`select public.mz_record_employee_push_delivery(
+  '${employeeRegistrationId}'::uuid,${q(employeeTokenHashB)},true,false,null,now())::text;`)).current, true);
+assert.equal(sql(`select (last_successful_delivery_at is not null)::text from public.employee_push_registrations
+  where registration_id='${employeeRegistrationId}'::uuid;`), "true");
+sql(`select public.mz_register_employee_push('${employeeCredentialId}'::uuid,${q(employeeTokenC)},${q(employeeTokenHashC)},'android','test','test');`);
+assert.equal(sql(`select (token_hash=${q(employeeTokenHashC)})::text||'|'||(last_successful_delivery_at is null)::text
+  from public.employee_push_registrations where registration_id='${employeeRegistrationId}'::uuid;`), "true|true",
+  "rotating a reused registration must clear the previous token generation's success state");
+
 console.log(JSON.stringify({ ok: true, stale_session_masked: false, rollback_without_quiescence_accepted: false,
   rollback_after_quiescence_ready: true, spoofed_authority_health_accepted: false,
   historical_finish_adapter_replayed: true,
   expired_event_claimed: false, stale_location_claimed: false, stale_location_recorded_sent: false,
   revoked_recipient_claimed: false, expired_recipient_recorded_sent: false, rotated_token_recorded_sent: false,
+  stale_employee_token_result_recorded: false,
   cancelled_event_recorded_sent: false, rescheduled_event_claimed: false }, null, 2));

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import express from 'express';
 import {
@@ -7,13 +8,14 @@ import {
 } from '../src/employee-notifications.js';
 
 const root = new URL('../', import.meta.url);
-const [source, manager, indexSource, migration, nativeKindsMigration, boundaryMigration] = await Promise.all([
+const [source, manager, indexSource, migration, nativeKindsMigration, boundaryMigration, closureMigration] = await Promise.all([
   readFile(new URL('src/employee-notifications.js', root), 'utf8'),
   readFile(new URL('src/manager-notifications.js', root), 'utf8'),
   readFile(new URL('src/index.js', root), 'utf8'),
   readFile(new URL('supabase/migrations/20260724010000_native_employee_event_delivery.sql', root), 'utf8'),
   readFile(new URL('supabase/migrations/20260731211500_native_employee_message_location_push.sql', root), 'utf8'),
   readFile(new URL('supabase/migrations/20260813141806_custodial_operational_boundary_closure.sql', root), 'utf8'),
+  readFile(new URL('supabase/migrations/20260813210000_custodial_u4_ops_closure.sql', root), 'utf8'),
 ]);
 
 assert.match(source, /const API_PREFIX = ['"]\/employee-notifications-api['"]/);
@@ -77,6 +79,9 @@ assert.match(source, /mz_enqueue_employee_location_pushes/);
 assert.match(source, /payload\.channel_id/);
 assert.match(source, /notification_key/);
 assert.match(source, /error\?\.permanent[\s\S]*push_token_rejected/);
+assert.match(source, /mz_record_employee_push_delivery/);
+assert.match(source, /push_registration_superseded_after_provider_dispatch/);
+assert.match(closureMigration, /last_successful_delivery_at=case[\s\S]*token_hash=excluded\.token_hash[\s\S]*else null/);
 assert.match(manager, /export function createPushRuntime/);
 assert.match(manager, /channel_id: channelId/);
 assert.match(manager, /getClientConfig, send, sweep/);
@@ -247,6 +252,32 @@ await assert.rejects(
 );
 assert.equal(preClaimResolveCount, 2);
 assert.equal(sendCount, 0);
+
+let recordedBinding = null;
+const rotatedDuringProviderRuntime = installEmployeeNotificationRoutes(express(), {
+  supabase: {
+    async rpc(name, args) {
+      if (name === 'mz_resolve_employee_push_delivery') {
+        return { data: { ok: true, registration: authorizedRegistration }, error: null };
+      }
+      assert.equal(name, 'mz_record_employee_push_delivery');
+      recordedBinding = args;
+      return { data: { current: false, recorded: false, reason: 'push_registration_superseded' }, error: null };
+    },
+  },
+  pushRuntime: {
+    configured: true,
+    async send() { return 'provider-message-for-superseded-token'; },
+  },
+});
+await assert.rejects(
+  () => rotatedDuringProviderRuntime.deliverClaimedJob(claimedJob),
+  (error) => error?.terminal === true && error?.code === 'push_registration_superseded_after_provider_dispatch',
+  'a provider result cannot be committed after the exact FCM token generation rotates',
+);
+assert.equal(recordedBinding.p_registration_id, authorizedRegistration.registration_id);
+assert.equal(recordedBinding.p_token_hash, createHash('sha256').update(authorizedRegistration.fcm_token).digest('hex'));
+assert.equal(recordedBinding.p_succeeded, true);
 
 assert.match(source, /resolveAuthorizedDelivery\(credential, assignmentEpoch\)[\s\S]*beforeFinalDeliveryCheck[\s\S]*resolveAuthorizedDelivery\(credential, assignmentEpoch\)/);
 assert.match(source, /finish_operational_notification_job_terminal/);

@@ -115,6 +115,24 @@ export function installEmployeeNotificationRoutes(app, {
     return registration;
   }
 
+  async function recordRegistrationDelivery(registration, { succeeded, permanent = false, error = null } = {}) {
+    const tokenHash = crypto.createHash('sha256').update(String(registration?.fcm_token || '')).digest('hex');
+    if (!registration?.registration_id || !/^[0-9a-f]{64}$/.test(tokenHash)
+      || (registration.token_hash && registration.token_hash !== tokenHash)) {
+      throw terminalDeliveryError('push_registration_binding_invalid');
+    }
+    const result = await db.rpc('mz_record_employee_push_delivery', {
+      p_registration_id: registration.registration_id,
+      p_token_hash: tokenHash,
+      p_succeeded: succeeded === true,
+      p_permanent: permanent === true,
+      p_error: error ? clip(error, 2000) : null,
+      p_now: new Date().toISOString(),
+    });
+    if (result.error) throw result.error;
+    return result.data?.current === true;
+  }
+
   app.use(API_PREFIX, (req, res, next) => {
     setCors(req, res);
     if (req.method === 'OPTIONS') return res.sendStatus(200);
@@ -336,23 +354,25 @@ export function installEmployeeNotificationRoutes(app, {
       }
       registration = await resolveAuthorizedDelivery(credential, assignmentEpoch);
       const providerMessageId = await pushRuntime.send(push, registration, { channelId });
+      if (!await recordRegistrationDelivery(registration, { succeeded: true })) {
+        throw terminalDeliveryError('push_registration_superseded_after_provider_dispatch');
+      }
       if (eventInstance) {
         await db.from('event_push_instances').update({
           state: 'sent', sent_at: new Date().toISOString(), provider_message_id: providerMessageId, last_error: null, updated_at: new Date().toISOString(),
         }).eq('instance_id', eventInstance.instance_id);
       }
-      await db.from('employee_push_registrations').update({
-        last_successful_delivery_at: new Date().toISOString(), last_error: null, updated_at: new Date().toISOString(),
-      }).eq('registration_id', registration.registration_id);
       return { provider_message_id: providerMessageId };
     } catch (error) {
       const errorMessage = clip(error?.message || 'FCM provider request failed.', 2000);
       const authorityTerminal = error?.terminal === true;
       if (registration?.registration_id && !authorityTerminal) {
-        const registrationUpdate = error?.permanent
-          ? { active: false, revoked_at: new Date().toISOString(), revoked_reason: 'push_token_rejected', last_error: errorMessage, updated_at: new Date().toISOString() }
-          : { last_error: errorMessage, updated_at: new Date().toISOString() };
-        await db.from('employee_push_registrations').update(registrationUpdate).eq('registration_id', registration.registration_id);
+        const current = await recordRegistrationDelivery(registration, {
+          succeeded: false,
+          permanent: error?.permanent === true,
+          error: errorMessage,
+        });
+        if (!current) throw terminalDeliveryError('push_registration_superseded_after_provider_dispatch');
       }
       if (job.job_type === 'employee_event_push') {
         const eventUpdate = error?.terminal === true

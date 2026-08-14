@@ -227,6 +227,98 @@ $function$;
 revoke all on function public.custodial_finish_historical_session_authoritative(text,text,uuid,timestamptz,text) from public,anon,authenticated;
 grant execute on function public.custodial_finish_historical_session_authoritative(text,text,uuid,timestamptz,text) to postgres,service_role;
 
+-- Replace the deployed registration definition at this forward migration. A
+-- token generation must not inherit provider success from the token it replaced.
+create or replace function public.mz_register_employee_push(
+  p_credential_id uuid,p_token text,p_token_hash text,p_platform text,
+  p_app_version text default null,p_app_build text default null
+) returns public.employee_push_registrations
+language plpgsql security definer set search_path=pg_catalog,public
+as $function$
+declare v_device public.devices%rowtype; v_result public.employee_push_registrations%rowtype;
+begin
+  select d.* into v_device
+  from public.device_auth_credentials c join public.devices d on d.id=c.device_id
+  where c.credential_id=p_credential_id and c.confirmed_at is not null
+    and c.revoked_at is null and c.expires_at>now() and d.active=true
+  for update of d;
+  if v_device.id is null or v_device.assigned_employee_id is null then
+    raise exception using errcode='42501',message='Credential is not assigned to an active employee device.';
+  end if;
+  if p_platform not in ('android','ios') or length(btrim(coalesce(p_token,'')))<20
+     or coalesce(p_token_hash,'') !~ '^[0-9a-f]{64}$' then
+    raise exception using errcode='22023',message='A valid FCM token, token digest, and platform are required.';
+  end if;
+  update public.employee_push_registrations
+  set active=false,revoked_at=now(),revoked_reason='token_rotated',updated_at=now()
+  where device_id=v_device.id and active=true and revoked_at is null
+    and (credential_id<>p_credential_id or assignment_epoch<>v_device.assignment_epoch or token_hash<>p_token_hash);
+  insert into public.employee_push_registrations(
+    device_id,credential_id,employee_id,assignment_epoch,platform,fcm_token,token_hash,
+    app_version,app_build,active,registered_at,last_seen_at,revoked_at,revoked_reason,last_error,updated_at
+  ) values (
+    v_device.id,p_credential_id,v_device.assigned_employee_id,v_device.assignment_epoch,p_platform,p_token,p_token_hash,
+    nullif(left(coalesce(p_app_version,''),80),''),nullif(left(coalesce(p_app_build,''),120),''),
+    true,now(),now(),null,null,null,now()
+  ) on conflict(credential_id,assignment_epoch) do update set
+    employee_id=excluded.employee_id,platform=excluded.platform,fcm_token=excluded.fcm_token,
+    token_hash=excluded.token_hash,app_version=excluded.app_version,app_build=excluded.app_build,
+    active=true,registered_at=now(),last_seen_at=now(),
+    last_successful_delivery_at=case
+      when public.employee_push_registrations.token_hash=excluded.token_hash
+        then public.employee_push_registrations.last_successful_delivery_at
+      else null
+    end,
+    revoked_at=null,revoked_reason=null,last_error=null,updated_at=now()
+  returning * into v_result;
+  return v_result;
+end
+$function$;
+revoke all on function public.mz_register_employee_push(uuid,text,text,text,text,text) from public,anon,authenticated;
+grant execute on function public.mz_register_employee_push(uuid,text,text,text,text,text) to postgres,service_role;
+
+-- A registration row is reused when the same device credential rotates its FCM
+-- token. Provider results must therefore commit against the selected token
+-- generation, not merely the stable registration UUID.
+create or replace function public.mz_record_employee_push_delivery(
+  p_registration_id uuid,p_token_hash text,p_succeeded boolean,p_permanent boolean,
+  p_error text,p_now timestamptz default now()
+) returns jsonb language plpgsql security definer set search_path to 'pg_catalog','public'
+as $function$
+declare v_registration public.employee_push_registrations%rowtype;
+begin
+  if p_registration_id is null or coalesce(p_token_hash,'') !~ '^[0-9a-f]{64}$' or p_succeeded is null or p_permanent is null
+     or (p_succeeded and p_permanent) then
+    raise exception using errcode='22023',message='exact employee push registration binding and one delivery outcome are required';
+  end if;
+  select * into v_registration from public.employee_push_registrations
+  where registration_id=p_registration_id for update;
+  if v_registration.registration_id is null
+     or v_registration.token_hash<>p_token_hash
+     or v_registration.active is not true
+     or v_registration.revoked_at is not null then
+    return jsonb_build_object('current',false,'recorded',false,'reason','push_registration_superseded');
+  end if;
+  if p_succeeded then
+    update public.employee_push_registrations
+    set last_successful_delivery_at=p_now,last_error=null,updated_at=p_now
+    where registration_id=p_registration_id and token_hash=p_token_hash;
+  elsif p_permanent then
+    update public.employee_push_registrations
+    set active=false,revoked_at=p_now,revoked_reason='push_token_rejected',
+      last_error=left(coalesce(p_error,'FCM rejected the registration token.'),2000),updated_at=p_now
+    where registration_id=p_registration_id and token_hash=p_token_hash;
+  else
+    update public.employee_push_registrations
+    set last_error=left(coalesce(p_error,'FCM provider request failed.'),2000),updated_at=p_now
+    where registration_id=p_registration_id and token_hash=p_token_hash;
+  end if;
+  return jsonb_build_object('current',true,'recorded',true,'registration_id',p_registration_id,'succeeded',p_succeeded);
+end
+$function$;
+revoke all on function public.mz_record_employee_push_delivery(uuid,text,boolean,boolean,text,timestamptz) from public,anon,authenticated;
+grant execute on function public.mz_record_employee_push_delivery(uuid,text,boolean,boolean,text,timestamptz) to postgres,service_role;
+
 -- This inventory is a catalog-derived superset of the native/offline authority
 -- closure. It records executable definitions for functions, relation guards,
 -- relational constraints, and grants rather than assuming the controller is
@@ -405,6 +497,20 @@ begin
   return 'select public.custodial_release_authority_restore_constraint('||quote_literal(v_relation_text)||','||quote_literal(v_constraint)||','||quote_literal(v_definition)||');';
 end
 $function$;
+
+-- Approved terminal-writer names are exempt only at their exact signatures in
+-- the health function below. Mark every overload by name so a wrapper that only
+-- delegates to an exact writer cannot evade the catalog-derived inventory.
+create or replace view public.custodial_terminal_writer_inventory as
+select p.oid,p.oid::regprocedure::text as routine_identity,p.proname,
+  p.prorettype <> 'pg_catalog.trigger'::regtype and (has_function_privilege('anon',p.oid,'EXECUTE') or has_function_privilege('authenticated',p.oid,'EXECUTE') or has_function_privilege('service_role',p.oid,'EXECUTE')) as application_callable,
+  lower(pg_get_functiondef(p.oid)) as definition,
+  (lower(pg_get_functiondef(p.oid)) ~ '(insert[[:space:]]+into|update|delete[[:space:]]+from|truncate([[:space:]]+table)?)' and lower(pg_get_functiondef(p.oid)) ~ 'public[.]?(sessions|completion_responses|scan_events|maintenance_tickets)') as mutates_terminal_truth,
+  (p.proname like 'demo_scan_mock_%'
+    or p.proname='custodial_finish_historical_session_authoritative'
+    or lower(pg_get_functiondef(p.oid)) ~ 'public[.]demo_scan_mock_[a-z0-9_]*[[:space:]]*[(]'
+    or lower(pg_get_functiondef(p.oid)) ~ 'public[.](purge_closed_scan_history_before|tool_purge_closed_scan_history_before|close_maintenance_ticket|tool_close_maintenance_ticket|force_close_session|tool_force_close_session|start_session|tool_start_session|finish_session|tool_finish_session|complete_session|tool_complete_session|record_scan_event|tool_record_scan_event)[[:space:]]*[(]') as delegates_alternate_terminal_authority
+from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.prokind='f';
 
 create or replace function public.custodial_backend_authority_health(p_backend_execution_secret text)
 returns jsonb language plpgsql security definer set search_path to 'pg_catalog','public','extensions'
