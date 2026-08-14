@@ -194,11 +194,27 @@ if v_target.event_reminders_enabled and v_dow=any(v_target.event_reminder_weekda
 select count(*)::integer into v_event_count from public.events_app_events e where e.status='SCHEDULED' and e.event_date<=v_local_date+v_target.event_lookahead_days and ((e.event_date+coalesce(e.start_time,time '00:00')) at time zone 'America/Chicago')>p_now;
 if v_event_count>0 then select e.id,e.event_name,e.event_date,e.start_time,e.display_location,((e.event_date+coalesce(e.start_time,time '00:00')) at time zone 'America/Chicago') occurrence_starts_at into v_next_event from public.events_app_events e where e.status='SCHEDULED' and e.event_date<=v_local_date+v_target.event_lookahead_days and ((e.event_date+coalesce(e.start_time,time '00:00')) at time zone 'America/Chicago')>p_now order by e.event_date,e.start_time,e.event_name limit 1;
 insert into public.ops_manager_notification_queue(job_key,credential_id,manager_id,notification_type,title,body,data_json) values('manager-event-digest:'||v_target.credential_id::text||':'||v_next_event.id::text||':'||extract(epoch from v_next_event.occurrence_starts_at)::bigint::text,v_target.credential_id,v_target.manager_id,'event_digest','Upcoming Memphis Zoo Events',left(format('%s event%s in the next %s day%s. Next: %s on %s%s.',v_event_count,case when v_event_count=1 then '' else 's' end,v_target.event_lookahead_days,case when v_target.event_lookahead_days=1 then '' else 's' end,coalesce(v_next_event.event_name,'Event'),to_char(v_next_event.event_date,'Mon FMDD'),case when v_next_event.display_location is null then '' else ' at '||v_next_event.display_location end),1000),jsonb_build_object('kind','event_digest','route','events.html','service_date',v_local_date::text,'lookahead_days',v_target.event_lookahead_days,'next_event_id',v_next_event.id,'next_event_starts_at',v_next_event.occurrence_starts_at)) on conflict(job_key) do nothing; get diagnostics v_event_count=row_count; v_inserted:=v_inserted+v_event_count; end if; end if;
-if v_target.due_soon_enabled or v_target.overdue_enabled then select count(*)::integer,count(*) filter(where s.status_code='due_soon')::integer,count(*) filter(where s.status_code='overdue')::integer,md5(coalesce(string_agg(s.location_code||':'||s.status_code,',' order by s.status_code,s.location_code),'')),coalesce(jsonb_agg(jsonb_build_object('location_code',s.location_code,'location_name',s.location_name,'status',s.status_code) order by s.status_code,s.location_name),'[]'::jsonb) into v_location_count,v_due_count,v_overdue_count,v_location_fingerprint,v_location_rows from public.v_location_dashboard_status s where (v_target.due_soon_enabled and s.status_code='due_soon') or (v_target.overdue_enabled and s.status_code='overdue'); select * into v_state from public.ops_manager_notification_state where credential_id=v_target.credential_id and state_key='location_digest' for update; if v_location_count=0 then insert into public.ops_manager_notification_state(credential_id,state_key,fingerprint,metadata_json,updated_at) values(v_target.credential_id,'location_digest','',jsonb_build_object('due_soon',0,'overdue',0),p_now) on conflict(credential_id,state_key) do update set fingerprint='',metadata_json=excluded.metadata_json,updated_at=p_now; elsif v_state.credential_id is null or v_state.fingerprint is distinct from v_location_fingerprint or v_state.last_enqueued_at is null or v_state.last_enqueued_at<=p_now-make_interval(mins=>v_target.location_repeat_minutes) then v_bucket:=floor(extract(epoch from p_now)/(v_target.location_repeat_minutes*60))::bigint; insert into public.ops_manager_notification_queue(job_key,credential_id,manager_id,notification_type,title,body,data_json) values('manager-location-digest:'||v_target.credential_id::text||':'||v_location_fingerprint||':'||v_bucket::text,v_target.credential_id,v_target.manager_id,'location_digest','Custodial Location Attention',left(format('%s overdue and %s due soon across all active areas. Tap to review the dashboard.',v_overdue_count,v_due_count),1000),jsonb_build_object('kind','location_digest','route','dashboard.html','overdue_count',v_overdue_count,'due_soon_count',v_due_count,'locations',v_location_rows)) on conflict(job_key) do nothing; get diagnostics v_location_count=row_count; v_inserted:=v_inserted+v_location_count; insert into public.ops_manager_notification_state(credential_id,state_key,fingerprint,last_enqueued_at,metadata_json,updated_at) values(v_target.credential_id,'location_digest',v_location_fingerprint,p_now,jsonb_build_object('due_soon',v_due_count,'overdue',v_overdue_count),p_now) on conflict(credential_id,state_key) do update set fingerprint=excluded.fingerprint,last_enqueued_at=excluded.last_enqueued_at,metadata_json=excluded.metadata_json,updated_at=now(); end if; end if;
+if v_target.due_soon_enabled or v_target.overdue_enabled then select count(*)::integer,count(*) filter(where s.status_code='due_soon')::integer,count(*) filter(where s.status_code='overdue')::integer,md5(coalesce(string_agg(s.location_code||':'||s.status_code,',' order by s.status_code,s.location_code),'')),coalesce(jsonb_agg(jsonb_build_object('location_code',s.location_code,'location_name',s.location_name,'status',s.status_code) order by s.status_code,s.location_name),'[]'::jsonb) into v_location_count,v_due_count,v_overdue_count,v_location_fingerprint,v_location_rows from public.v_location_dashboard_status s where (v_target.due_soon_enabled and s.status_code='due_soon') or (v_target.overdue_enabled and s.status_code='overdue'); select * into v_state from public.ops_manager_notification_state where credential_id=v_target.credential_id and state_key='location_digest' for update; if v_location_count=0 then insert into public.ops_manager_notification_state(credential_id,state_key,fingerprint,metadata_json,updated_at) values(v_target.credential_id,'location_digest','',jsonb_build_object('due_soon',0,'overdue',0),p_now) on conflict(credential_id,state_key) do update set fingerprint='',metadata_json=excluded.metadata_json,updated_at=p_now; elsif v_state.credential_id is null or v_state.fingerprint is distinct from v_location_fingerprint or v_state.last_enqueued_at is null or v_state.last_enqueued_at<=p_now-make_interval(mins=>v_target.location_repeat_minutes) then v_bucket:=floor(extract(epoch from p_now)/(v_target.location_repeat_minutes*60))::bigint; insert into public.ops_manager_notification_queue(job_key,credential_id,manager_id,notification_type,title,body,data_json) values('manager-location-digest:'||v_target.credential_id::text||':'||v_location_fingerprint||':'||v_bucket::text,v_target.credential_id,v_target.manager_id,'location_digest','Custodial Location Attention',left(format('%s overdue and %s due soon across all active areas. Tap to review the dashboard.',v_overdue_count,v_due_count),1000),jsonb_build_object('kind','location_digest','route','dashboard.html','location_fingerprint',v_location_fingerprint,'overdue_count',v_overdue_count,'due_soon_count',v_due_count,'locations',v_location_rows)) on conflict(job_key) do nothing; get diagnostics v_location_count=row_count; v_inserted:=v_inserted+v_location_count; insert into public.ops_manager_notification_state(credential_id,state_key,fingerprint,last_enqueued_at,metadata_json,updated_at) values(v_target.credential_id,'location_digest',v_location_fingerprint,p_now,jsonb_build_object('due_soon',v_due_count,'overdue',v_overdue_count),p_now) on conflict(credential_id,state_key) do update set fingerprint=excluded.fingerprint,last_enqueued_at=excluded.last_enqueued_at,metadata_json=excluded.metadata_json,updated_at=now(); end if; end if;
 end loop; return jsonb_build_object('ok',true,'enqueued',v_inserted,'checked_at',p_now,'local_date',v_local_date); end $function$;
 
--- A delayed or retried event digest is useful only while the exact occurrence
--- named in its payload remains in the future.
+create or replace function public.custodial_ops_manager_location_digest_is_current(
+  p_credential_id uuid,p_expected_fingerprint text
+) returns boolean language sql stable security definer set search_path=pg_catalog,public as $function$
+  with preference as (
+    select coalesce(p.due_soon_enabled,false) due_soon_enabled,coalesce(p.overdue_enabled,false) overdue_enabled
+    from public.ops_manager_notification_preferences p where p.credential_id=p_credential_id
+  ), current_truth as (
+    select md5(coalesce(string_agg(s.location_code||':'||s.status_code,',' order by s.status_code,s.location_code),'')) fingerprint
+    from public.v_location_dashboard_status s cross join preference p
+    where (p.due_soon_enabled and s.status_code='due_soon') or (p.overdue_enabled and s.status_code='overdue')
+  )
+  select coalesce(nullif(p_expected_fingerprint,'')=(select fingerprint from current_truth),false);
+$function$;
+revoke all on function public.custodial_ops_manager_location_digest_is_current(uuid,text) from public,anon,authenticated;
+grant execute on function public.custodial_ops_manager_location_digest_is_current(uuid,text) to postgres,service_role;
+
+-- A delayed or retried digest is useful only while the exact operational truth
+-- named in its payload remains current.
 create or replace function public.ops_manager_claim_notification_jobs(
   p_worker_id text,p_limit integer default 20,p_lease_seconds integer default 120
 ) returns setof public.ops_manager_notification_queue language plpgsql security definer set search_path=pg_catalog,public as $function$
@@ -215,6 +231,10 @@ begin
         and ((e.event_date+e.start_time) at time zone 'America/Chicago')>now()
         and to_jsonb((e.event_date+e.start_time) at time zone 'America/Chicago')=q.data_json->'next_event_starts_at'
     );
+  update public.ops_manager_notification_queue q set status='cancelled',completed_at=now(),leased_until=null,lease_token=null,
+    last_error='location dashboard state has changed',updated_at=now()
+  where q.notification_type='location_digest' and (q.status='pending' or (q.status='leased' and q.leased_until<now()))
+    and not public.custodial_ops_manager_location_digest_is_current(q.credential_id,q.data_json->>'location_fingerprint');
   return query with candidates as (
     select q.queue_id from public.ops_manager_notification_queue q
     where ((q.status='pending' and q.available_at<=now()) or (q.status='leased' and q.leased_until<now())) and q.attempts<q.max_attempts
@@ -226,6 +246,7 @@ begin
           and ((e.event_date+e.start_time) at time zone 'America/Chicago')>now()
           and to_jsonb((e.event_date+e.start_time) at time zone 'America/Chicago')=q.data_json->'next_event_starts_at'
       ))
+      and (q.notification_type<>'location_digest' or public.custodial_ops_manager_location_digest_is_current(q.credential_id,q.data_json->>'location_fingerprint'))
     order by q.available_at,q.created_at,q.queue_id for update skip locked limit greatest(1,least(coalesce(p_limit,20),100))
   ) update public.ops_manager_notification_queue q set status='leased',attempts=q.attempts+1,leased_at=now(),
     leased_until=now()+make_interval(secs=>greatest(15,least(coalesce(p_lease_seconds,120),900))),lease_token=gen_random_uuid(),
@@ -249,6 +270,7 @@ create or replace function public.ops_manager_notification_job_is_current(
           and ((e.event_date+e.start_time) at time zone 'America/Chicago')>now()
           and to_jsonb((e.event_date+e.start_time) at time zone 'America/Chicago')=q.data_json->'next_event_starts_at'
       ))
+      and (q.notification_type<>'location_digest' or public.custodial_ops_manager_location_digest_is_current(q.credential_id,q.data_json->>'location_fingerprint'))
   );
 $function$;
 revoke all on function public.ops_manager_notification_job_is_current(uuid,uuid) from public,anon,authenticated;
@@ -257,7 +279,7 @@ grant execute on function public.ops_manager_notification_job_is_current(uuid,uu
 create or replace function public.ops_manager_finish_notification_job(
   p_queue_id uuid,p_lease_token uuid,p_succeeded boolean,p_provider_message_id text default null,p_error text default null,p_retry_seconds integer default 30
 ) returns public.ops_manager_notification_queue language plpgsql security definer set search_path=pg_catalog,public as $function$
-declare v_row public.ops_manager_notification_queue%rowtype; v_event_current boolean:=true;
+declare v_row public.ops_manager_notification_queue%rowtype; v_job_current boolean:=true;
 begin
   select * into v_row from public.ops_manager_notification_queue where queue_id=p_queue_id and status='leased' and lease_token=p_lease_token for update;
   if v_row.queue_id is null then raise exception using errcode='P0002',message='Notification job lease was not found'; end if;
@@ -269,11 +291,15 @@ begin
         and e.status='SCHEDULED'
         and ((e.event_date+e.start_time) at time zone 'America/Chicago')>now()
         and to_jsonb((e.event_date+e.start_time) at time zone 'America/Chicago')=v_row.data_json->'next_event_starts_at'
-    ) into v_event_current;
+    ) into v_job_current;
   end if;
-  if not v_event_current then
+  if v_row.notification_type='location_digest' then
+    v_job_current:=public.custodial_ops_manager_location_digest_is_current(v_row.credential_id,v_row.data_json->>'location_fingerprint');
+  end if;
+  if not v_job_current then
     update public.ops_manager_notification_queue set status='cancelled',completed_at=now(),leased_until=null,lease_token=null,
-      last_error='event occurrence is no longer upcoming',updated_at=now() where queue_id=p_queue_id returning * into v_row;
+      last_error=case when v_row.notification_type='location_digest' then 'location dashboard state has changed' else 'event occurrence is no longer upcoming' end,
+      updated_at=now() where queue_id=p_queue_id returning * into v_row;
   elsif p_succeeded then
     update public.ops_manager_notification_queue set status='sent',sent_at=now(),completed_at=now(),leased_until=null,lease_token=null,
       provider_message_id=nullif(left(coalesce(p_provider_message_id,''),500),''),last_error=null,updated_at=now()

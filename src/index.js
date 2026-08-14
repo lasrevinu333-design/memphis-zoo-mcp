@@ -103,6 +103,7 @@ const SCAN_RPC_ALLOWLIST = new Set([
   "tool_commit_cleaning_workflow",
   "tool_report_device_sync_status",
   "tool_report_device_sync_status_v2",
+  "tool_get_device_rollback_readiness",
   "tool_evaluate_location_proximity",
   "tool_evaluate_location_proximity_v2"
 ]);
@@ -319,6 +320,7 @@ function canonicalizeScanArguments(fn, args, device) {
     if ("p_device_identifier" in canonicalArgs || [
       "tool_report_device_sync_status",
       "tool_report_device_sync_status_v2",
+      "tool_get_device_rollback_readiness",
       "tool_evaluate_location_proximity",
       "tool_evaluate_location_proximity_v2",
     ].includes(fn)) canonicalArgs.p_device_identifier = canonicalDeviceId;

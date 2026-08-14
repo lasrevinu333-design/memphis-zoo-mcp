@@ -177,6 +177,38 @@ begin
 end
 $function$;
 
+create or replace function public.custodial_get_device_rollback_readiness(p_device_identifier text)
+returns jsonb language plpgsql stable security definer set search_path to 'pg_catalog','public'
+as $function$
+declare v_device public.devices%rowtype; v_sync public.device_sync_status%rowtype; v_open_sessions integer;
+begin
+  select d.* into v_device from public.device_aliases a join public.devices d on d.id=a.canonical_device_id
+  where a.alias_identifier=btrim(p_device_identifier) and a.active=true and d.active=true limit 1;
+  if v_device.id is null then select d.* into v_device from public.devices d where d.device_id=btrim(p_device_identifier) and d.active=true limit 1; end if;
+  if v_device.id is null then raise exception using errcode='P0002',message='Active device not found'; end if;
+  select * into v_sync from public.device_sync_status where device_id=v_device.id;
+  select count(*)::integer into v_open_sessions from public.sessions
+  where device_id=v_device.id and status in ('active','pending_submit');
+  return jsonb_build_object(
+    'contract_version','custodial-rollback-readiness.v1','device_id',v_device.device_id,
+    'backend_queue_count',coalesce(v_sync.queue_count,-1),'backend_open_session_count',v_open_sessions,
+    'backend_sync_reported_at',v_sync.updated_at,
+    'eligible',v_sync.device_id is not null and v_sync.updated_at>=now()-interval '5 minutes'
+      and v_sync.queue_count=0 and v_open_sessions=0
+  );
+end
+$function$;
+
+create or replace function public.tool_get_device_rollback_readiness(p_device_identifier text)
+returns jsonb language sql stable security definer set search_path to 'pg_catalog','public'
+as $function$
+  select public.custodial_get_device_rollback_readiness(p_device_identifier)
+$function$;
+revoke all on function public.custodial_get_device_rollback_readiness(text),public.tool_get_device_rollback_readiness(text) from public,anon,authenticated;
+revoke all on function public.custodial_get_device_rollback_readiness(text) from service_role;
+grant execute on function public.custodial_get_device_rollback_readiness(text) to postgres;
+grant execute on function public.tool_get_device_rollback_readiness(text) to postgres,service_role;
+
 -- This inventory is a catalog-derived superset of the native/offline authority
 -- closure. It records executable definitions for functions, relation guards,
 -- relational constraints, and grants rather than assuming the controller is
@@ -339,7 +371,8 @@ begin
   if v_current is null then
     execute format('alter table %s add constraint %I %s',v_relation::regclass,p_constraint_name,p_constraint_definition);
   elsif v_current<>p_constraint_definition then
-    raise exception using errcode='55000',message='structural constraint drift requires a reviewed forward migration';
+    execute format('alter table %s drop constraint %I cascade',v_relation::regclass,p_constraint_name);
+    execute format('alter table %s add constraint %I %s',v_relation::regclass,p_constraint_name,p_constraint_definition);
   end if;
 end
 $function$;
@@ -395,7 +428,6 @@ begin
     'authority_column_grants_absent',not exists(
       select 1 from pg_attribute a join pg_class c on c.oid=a.attrelid join pg_namespace n on n.oid=c.relnamespace
       where n.nspname='public' and a.attnum>0 and not a.attisdropped and a.attacl is not null
-        and (c.relname like 'custodial_%' or c.relname in ('devices','locations','device_auth_credentials','sessions','completion_responses','maintenance_tickets','scan_events'))
     ),
     'native_timestamp_renderer',public.custodial_canonical_utc_millis('2026-08-13 12:34:56.789123+00'::timestamptz)='2026-08-13T12:34:56.789Z'
   );
@@ -478,25 +510,38 @@ begin
   if exists(
     select 1 from pg_attribute a join pg_class c on c.oid=a.attrelid join pg_namespace n on n.oid=c.relnamespace
     where n.nspname='public' and a.attnum>0 and not a.attisdropped and a.attacl is not null
-      and (c.relname like 'custodial_%' or c.relname in ('devices','locations','device_auth_credentials','sessions','completion_responses','maintenance_tickets','scan_events'))
   ) then raise exception 'explicit authority-column grants require reviewed reconciliation before U4 capture'; end if;
 end
 $authority_column_acl_preflight$;
 
-with authority_functions as (
-  select p.oid,n.nspname,p.proname,pg_get_function_identity_arguments(p.oid) args
-  from pg_proc p join pg_namespace n on n.oid=p.pronamespace
-  where n.nspname='public' and (
-    p.proname like 'custodial_%'
-    or p.proname in ('create_maintenance_tickets_from_response','resolve_scan_location_code','static_weekly_reject_update_delete',
-      'tool_get_offline_scan_authority_snapshot','tool_start_offline_occurrence','tool_commit_cleaning_workflow_authoritative','tool_complete_session_authoritative')
-  )
-), authority_relations as (
+with recursive authority_relations as (
   select c.oid,n.nspname,c.relname from pg_class c join pg_namespace n on n.oid=c.relnamespace
   where n.nspname='public' and c.relkind in ('r','p') and (
     c.relname like 'custodial_%'
     or c.relname in ('devices','locations','device_auth_credentials','sessions','completion_responses','maintenance_tickets','scan_events')
   )
+  union
+  select peer.oid,pn.nspname,peer.relname
+  from authority_relations r
+  join pg_constraint fk on fk.contype='f' and (fk.conrelid=r.oid or fk.confrelid=r.oid)
+  join pg_class peer on peer.oid=case when fk.conrelid=r.oid then fk.confrelid else fk.conrelid end
+  join pg_namespace pn on pn.oid=peer.relnamespace
+  where pn.nspname='public' and peer.relkind in ('r','p')
+), authority_functions as (
+  select p.oid,n.nspname,p.proname,pg_get_function_identity_arguments(p.oid) args
+  from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+  where n.nspname='public' and (
+    p.proname like 'custodial_%'
+    or p.proname in ('create_maintenance_tickets_from_response','resolve_scan_location_code','static_weekly_reject_update_delete','tool_get_device_rollback_readiness',
+      'tool_get_offline_scan_authority_snapshot','tool_start_offline_occurrence','tool_commit_cleaning_workflow_authoritative','tool_complete_session_authoritative')
+  )
+  union
+  select p.oid,n.nspname,p.proname,pg_get_function_identity_arguments(p.oid) args
+  from pg_trigger t
+  join authority_relations r on r.oid=t.tgrelid
+  join pg_proc p on p.oid=t.tgfoid
+  join pg_namespace n on n.oid=p.pronamespace
+  where not t.tgisinternal and n.nspname='public'
 ), inventory_rows as (
   select 100+row_number() over(order by proname,args)::integer restore_order,'function'::text object_kind,
     oid::regprocedure::text object_identity,pg_get_functiondef(oid) definition_sql from authority_functions
@@ -530,18 +575,39 @@ with authority_functions as (
 insert into public.custodial_release_authority_restore_inventory(restore_order,object_kind,object_identity,definition_sql,definition_sha256)
 select restore_order,object_kind,object_identity,definition_sql,encode(extensions.digest(convert_to(definition_sql,'UTF8'),'sha256'),'hex') from inventory_rows;
 
--- Function EXECUTE grants are part of the closure and are generated separately
--- after all callable definitions so a restore cannot accidentally revive a
--- legacy writer through default ACLs.
+-- Function EXECUTE grants are generated from the same dependency-closed set as
+-- the definitions so trigger helpers cannot drift outside the recovery proof.
+with recursive authority_relations as (
+  select c.oid,n.nspname,c.relname from pg_class c join pg_namespace n on n.oid=c.relnamespace
+  where n.nspname='public' and c.relkind in ('r','p') and (
+    c.relname like 'custodial_%'
+    or c.relname in ('devices','locations','device_auth_credentials','sessions','completion_responses','maintenance_tickets','scan_events')
+  )
+  union
+  select peer.oid,pn.nspname,peer.relname
+  from authority_relations r
+  join pg_constraint fk on fk.contype='f' and (fk.conrelid=r.oid or fk.confrelid=r.oid)
+  join pg_class peer on peer.oid=case when fk.conrelid=r.oid then fk.confrelid else fk.conrelid end
+  join pg_namespace pn on pn.oid=peer.relnamespace
+  where pn.nspname='public' and peer.relkind in ('r','p')
+), authority_functions as (
+  select p.oid from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+  where n.nspname='public' and (
+    p.proname like 'custodial_%'
+    or p.proname in ('create_maintenance_tickets_from_response','resolve_scan_location_code','static_weekly_reject_update_delete','tool_get_device_rollback_readiness',
+      'tool_get_offline_scan_authority_snapshot','tool_start_offline_occurrence','tool_commit_cleaning_workflow_authoritative','tool_complete_session_authoritative')
+  )
+  union
+  select p.oid from pg_trigger t join authority_relations r on r.oid=t.tgrelid join pg_proc p on p.oid=t.tgfoid
+  join pg_namespace n on n.oid=p.pronamespace where not t.tgisinternal and n.nspname='public'
+)
 insert into public.custodial_release_authority_restore_inventory(restore_order,object_kind,object_identity,definition_sql,definition_sha256)
 select 40000+row_number() over(order by function_identity),'grant',function_identity,
   grant_sql,encode(extensions.digest(convert_to(grant_sql,'UTF8'),'sha256'),'hex')
 from (
   select p.oid::regprocedure::text function_identity,
     public.custodial_release_authority_current_grant_definition(p.oid::regprocedure::text) grant_sql
-  from pg_proc p join pg_namespace n on n.oid=p.pronamespace
-  where n.nspname='public' and (p.proname like 'custodial_%' or p.proname in ('create_maintenance_tickets_from_response','resolve_scan_location_code','static_weekly_reject_update_delete',
-    'tool_get_offline_scan_authority_snapshot','tool_start_offline_occurrence','tool_commit_cleaning_workflow_authoritative','tool_complete_session_authoritative'))
+  from pg_proc p join authority_functions f on f.oid=p.oid
 ) f;
 
 -- The bootstrap path is intentionally outside the mutable closure inventory.

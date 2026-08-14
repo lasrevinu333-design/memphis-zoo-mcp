@@ -152,9 +152,19 @@ const triggerIdentity = "public.custodial_release_canary_transport_probes.trg_cu
 const indexIdentity = sql("select object_identity from public.custodial_release_authority_restore_inventory where object_kind='index' order by object_identity limit 1;");
 const policyIdentity = "public.maintenance_tickets:maintenance_tickets_select_policy";
 const relationStateIdentity = "public.maintenance_tickets";
+const triggerHelperIdentity = "enforce_session_status_transition()";
+const constraintIdentity = "public.completion_responses:completion_responses_client_completion_id_uuid";
+const expectedTriggerHelperDigest = sql(`select definition_sha256 from public.custodial_release_authority_restore_inventory
+  where object_kind='function' and object_identity=${q(triggerHelperIdentity)};`);
+const expectedConstraintRestore = sql(`select definition_sql from public.custodial_release_authority_restore_inventory
+  where object_kind='constraint' and object_identity=${q(constraintIdentity)};`);
+assert.match(expectedTriggerHelperDigest, /^[0-9a-f]{64}$/, "direct trigger helpers must be captured");
+assert.match(expectedConstraintRestore, /completion_responses_client_completion_id_uuid/, "UUID constraint restore must be captured");
 const originalRls = sql("select relrowsecurity::text from pg_class where oid='public.maintenance_tickets'::regclass;");
 sql(`create role ${driftRole} nologin; grant select on table public.sessions to ${driftRole};`);
 sql("alter table public.custodial_release_canary_transport_probes disable trigger trg_custodial_release_canary_transport_probes_immutable;");
+sql("create or replace function public.enforce_session_status_transition() returns trigger language plpgsql as $$begin return new; end$$;");
+sql("alter table public.completion_responses drop constraint completion_responses_client_completion_id_uuid; alter table public.completion_responses add constraint completion_responses_client_completion_id_uuid check (true) not valid;");
 sql(`drop index ${indexIdentity};`);
 sql(`alter table public.maintenance_tickets ${originalRls === "true" ? "disable" : "enable"} row level security;`);
 sql("drop policy maintenance_tickets_select_policy on public.maintenance_tickets;");
@@ -163,6 +173,8 @@ assert.equal(expandedDriftHealth.ok, false, "expanded authority drift must fail 
 assert.ok(expandedDriftHealth.missing_objects.includes(indexIdentity));
 assert.ok(expandedDriftHealth.missing_objects.includes(policyIdentity));
 assert.ok(expandedDriftHealth.mismatched_objects.includes(triggerIdentity));
+assert.ok(expandedDriftHealth.mismatched_objects.includes(triggerHelperIdentity));
+assert.ok(expandedDriftHealth.mismatched_objects.includes(constraintIdentity));
 assert.ok(expandedDriftHealth.mismatched_objects.includes(relationStateIdentity));
 assert.ok(expandedDriftHealth.mismatched_objects.includes(tableGrantIdentity));
 const expandedRestore = JSON.parse(sql(`select public.custodial_control_release_canary(
@@ -170,7 +182,9 @@ const expandedRestore = JSON.parse(sql(`select public.custodial_control_release_
   '{"ok":false,"probe":"expanded-drift"}'::jsonb,${q(secret)})::text;`));
 assert.equal(expandedRestore.restored_objects, expandedDriftHealth.canonical_objects_expected);
 const expandedRestoreHealth = JSON.parse(sql(`select public.custodial_backend_authority_health(${q(secret)})::text;`));
-assert.equal(expandedRestoreHealth.ok, true, "indexes, policies, trigger state, RLS state, and arbitrary-role grants must restore exactly");
+assert.equal(expandedRestoreHealth.ok, true, "helpers, constraints, indexes, policies, trigger state, RLS state, and arbitrary-role grants must restore exactly");
+assert.equal(sql(`select encode(extensions.digest(convert_to(pg_get_functiondef(${q(triggerHelperIdentity)}::regprocedure),'UTF8'),'sha256'),'hex');`), expectedTriggerHelperDigest);
+assert.equal(sql(`select public.custodial_release_authority_current_constraint_definition(${q(constraintIdentity)})=${q(expectedConstraintRestore)};`), "t");
 assert.equal(sql(`select has_table_privilege(${q(driftRole)},'public.sessions','SELECT')::text;`), "false");
 assert.equal(sql(`select relrowsecurity::text from pg_class where oid='public.maintenance_tickets'::regclass;`), originalRls);
 sql(`drop role ${driftRole};`);

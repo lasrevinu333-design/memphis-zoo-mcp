@@ -42,6 +42,14 @@ sql(`
 `);
 const staleStatus = sql(`select status_code||'|'||coalesce(open_session_status,'none') from public.v_location_dashboard_status where location_id='${locationId}'::uuid;`);
 assert.equal(staleStatus, "not_cleaned|none", "a prior-operational-day abandoned session cannot mask current readiness as in progress");
+sql(`select public.tool_report_device_sync_status('UNCERTAINTY_${stamp}',0,null,0,now(),'test',null,'rollback-readiness-test');`);
+const blockedRollback = JSON.parse(sql(`select public.tool_get_device_rollback_readiness('UNCERTAINTY_${stamp}')::text;`));
+assert.equal(blockedRollback.eligible, false, "a backend session blocks rollback even when the browser queue is reported empty");
+assert.equal(blockedRollback.backend_open_session_count, 1);
+sql(`update public.sessions set status='cancelled',ended_at=now(),updated_at=now() where session_uuid='uncertainty-stale-${stamp}';`);
+const readyRollback = JSON.parse(sql(`select public.tool_get_device_rollback_readiness('UNCERTAINTY_${stamp}')::text;`));
+assert.equal(readyRollback.eligible, true, "a fresh zero queue report with no backend open session permits a rollback receipt");
+assert.equal(readyRollback.backend_queue_count, 0);
 assert.equal(sql(`select public.sch_service_date('2026-08-13 02:00:00-05'::timestamptz);`), "2026-08-12",
   "the schedule service date must stay on the same operational day before the 04:00 Central cutoff");
 assert.equal(sql(`select public.sch_service_date('2026-08-13 03:59:59-05'::timestamptz);`), "2026-08-12");
@@ -81,6 +89,8 @@ const credentialId = randomUUID();
 sql(`
   insert into public.ops_manager_trusted_devices(credential_id,device_id,device_label,token_hash,max_access_level,manager_id,expires_at,metadata_json)
   values ('${credentialId}'::uuid,'uncertainty-manager-${stamp}','Uncertainty Manager','${"a".repeat(64)}','full_access','${managerId}'::uuid,now()+interval '1 day','{"test":true}'::jsonb);
+  insert into public.ops_manager_notification_preferences(credential_id,manager_id,due_soon_enabled,overdue_enabled)
+  values ('${credentialId}'::uuid,'${managerId}'::uuid,true,true);
 `);
 const expiredKey = `event-expired-${stamp}`;
 sql(`insert into public.ops_manager_notification_queue(job_key,credential_id,manager_id,notification_type,title,body,data_json)
@@ -88,6 +98,26 @@ sql(`insert into public.ops_manager_notification_queue(job_key,credential_id,man
     jsonb_build_object('kind','event_digest','next_event_starts_at',to_char(now()-interval '1 minute','YYYY-MM-DD"T"HH24:MI:SSOF')));`);
 assert.equal(sql(`select count(*) from public.ops_manager_claim_notification_jobs('uncertainty-worker',10,120) where job_key=${q(expiredKey)};`), "0");
 assert.equal(sql(`select status from public.ops_manager_notification_queue where job_key=${q(expiredKey)};`), "cancelled");
+
+const staleLocationKey = `location-stale-${stamp}`;
+sql(`insert into public.ops_manager_notification_queue(job_key,credential_id,manager_id,notification_type,title,body,data_json)
+  values (${q(staleLocationKey)},'${credentialId}'::uuid,'${managerId}'::uuid,'location_digest','Stale location','Must not send',
+    jsonb_build_object('kind','location_digest','location_fingerprint','${"0".repeat(32)}'));`);
+assert.equal(sql(`select count(*) from public.ops_manager_claim_notification_jobs('uncertainty-worker',10,120) where job_key=${q(staleLocationKey)};`), "0");
+assert.equal(sql(`select status from public.ops_manager_notification_queue where job_key=${q(staleLocationKey)};`), "cancelled",
+  "a location digest must not be claimed after its dashboard state changes");
+
+const crossingLocationKey = `location-crossing-${stamp}`;
+const crossingLocationLease = randomUUID();
+sql(`insert into public.ops_manager_notification_queue(job_key,credential_id,manager_id,notification_type,title,body,data_json,status,leased_at,leased_until,lease_token,worker_id)
+  values (${q(crossingLocationKey)},'${credentialId}'::uuid,'${managerId}'::uuid,'location_digest','Crossing location','Must expire before finish',
+    jsonb_build_object('kind','location_digest','location_fingerprint','${"0".repeat(32)}'),'leased',now(),now()+interval '2 minutes','${crossingLocationLease}'::uuid,'uncertainty-worker');`);
+const crossingLocationQueueId = sql(`select queue_id from public.ops_manager_notification_queue where job_key=${q(crossingLocationKey)};`);
+assert.equal(sql(`select public.ops_manager_notification_job_is_current('${crossingLocationQueueId}'::uuid,'${crossingLocationLease}'::uuid);`), "f",
+  "the worker must revalidate location dashboard truth immediately before provider dispatch");
+const finishedLocation = JSON.parse(sql(`select row_to_json(public.ops_manager_finish_notification_job('${crossingLocationQueueId}'::uuid,'${crossingLocationLease}'::uuid,true,'must-not-be-recorded',null,30))::text;`));
+assert.equal(finishedLocation.status, "cancelled", "a stale location digest cannot be recorded as sent");
+assert.equal(finishedLocation.provider_message_id, null);
 
 const crossingKey = `event-crossing-${stamp}`;
 const eventId = randomUUID();
@@ -122,5 +152,7 @@ sql(`insert into public.events_app_events(id,event_name,location_group_id,event_
 assert.equal(sql(`select count(*) from public.ops_manager_claim_notification_jobs('uncertainty-worker',10,120) where job_key=${q(rescheduledKey)};`), "0");
 assert.equal(sql(`select status from public.ops_manager_notification_queue where job_key=${q(rescheduledKey)};`), "cancelled");
 
-console.log(JSON.stringify({ ok: true, stale_session_masked: false, spoofed_authority_health_accepted: false,
-  expired_event_claimed: false, cancelled_event_recorded_sent: false, rescheduled_event_claimed: false }, null, 2));
+console.log(JSON.stringify({ ok: true, stale_session_masked: false, rollback_without_quiescence_accepted: false,
+  rollback_after_quiescence_ready: true, spoofed_authority_health_accepted: false,
+  expired_event_claimed: false, stale_location_claimed: false, stale_location_recorded_sent: false,
+  cancelled_event_recorded_sent: false, rescheduled_event_claimed: false }, null, 2));
