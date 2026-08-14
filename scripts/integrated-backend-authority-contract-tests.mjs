@@ -115,7 +115,7 @@ assert.match(releaseEvidence.compatibility_window.u4_ops_closure_phase,
   /wire timestamps.*activation boundaries.*UUID completion.*two-phase employee notification dispatch ledgers.*durable manager dispatch preparation.*outcome-unknown restart recovery.*notification recovery authority.*terminal notification retries.*authority set/);
 assert.equal(releaseEvidence.artifact, "integrated-backend-authority-release-evidence.v2");
 assert.equal(releaseEvidence.release_id, "release-2026.07.19.custodial-v3.12");
-assert.equal(releaseEvidence.frontend_commit_sha, "2f41c9948cba44f81975411758a188f94bacb809");
+assert.equal(releaseEvidence.frontend_commit_sha, "24b4d4fd680e8b898d48392043e767daabf0ec5f");
 assert.equal(releaseEvidence.cutover.source_identity.kind, "external_signed_release_attestation");
 assert.equal(releaseEvidence.cutover.source_identity.generated_evidence_excluded_from_content_identity, true);
 assert.equal(Object.hasOwn(releaseInput.cutover.source_identity, "authority_content_paths"), false, "manual authority inventory is forbidden");
