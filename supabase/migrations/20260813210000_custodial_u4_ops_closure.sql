@@ -319,6 +319,118 @@ $function$;
 revoke all on function public.mz_record_employee_push_delivery(uuid,text,boolean,boolean,text,timestamptz) from public,anon,authenticated;
 grant execute on function public.mz_record_employee_push_delivery(uuid,text,boolean,boolean,text,timestamptz) to postgres,service_role;
 
+-- Native message/location/test jobs need one durable logical-delivery marker in
+-- addition to registration health. If a worker loses its response after this
+-- transaction commits, lease recovery reads the receipt and finalizes the job
+-- without dispatching the same notification to FCM again.
+create table public.employee_native_push_delivery_receipts (
+  job_id uuid primary key references public.operational_notification_jobs(job_id) on delete cascade,
+  job_key text not null unique,
+  source_id uuid not null,
+  lease_token uuid not null,
+  credential_id uuid not null,
+  assignment_epoch bigint not null check (assignment_epoch>0),
+  registration_id uuid not null,
+  token_hash text not null check (token_hash ~ '^[0-9a-f]{64}$'),
+  provider_message_id text not null check (length(btrim(provider_message_id)) between 1 and 1000),
+  delivered_at timestamptz not null,
+  created_at timestamptz not null default statement_timestamp()
+);
+alter table public.employee_native_push_delivery_receipts enable row level security;
+alter table public.employee_native_push_delivery_receipts force row level security;
+revoke all on table public.employee_native_push_delivery_receipts from public,anon,authenticated,service_role;
+
+create or replace function public.mz_get_employee_native_push_delivery_receipt(
+  p_job_id uuid,p_lease_token uuid,p_credential_id uuid,p_assignment_epoch bigint
+) returns jsonb language plpgsql security definer set search_path to 'pg_catalog','public'
+as $function$
+declare v_job public.operational_notification_jobs%rowtype; v_receipt public.employee_native_push_delivery_receipts%rowtype; v_reason text;
+begin
+  if p_job_id is null or p_lease_token is null or p_credential_id is null or p_assignment_epoch is null or p_assignment_epoch<1 then
+    raise exception using errcode='22023',message='exact native push job lease and assignment recipient are required';
+  end if;
+  select * into v_job from public.operational_notification_jobs where job_id=p_job_id for update;
+  v_reason:=case
+    when v_job.job_id is null then 'employee_native_push_job_missing'
+    when v_job.job_type<>'employee_native_push' then 'employee_native_push_job_type_mismatch'
+    when v_job.status<>'leased' or v_job.lease_token is distinct from p_lease_token then 'employee_native_push_lease_superseded'
+    when v_job.payload_json->>'credential_id' is distinct from p_credential_id::text
+      or v_job.payload_json->>'assignment_epoch' is distinct from p_assignment_epoch::text then 'employee_native_push_recipient_superseded'
+    else null
+  end;
+  if v_reason is not null then return jsonb_build_object('current',false,'terminal',true,'reason',v_reason); end if;
+  select * into v_receipt from public.employee_native_push_delivery_receipts where job_id=p_job_id;
+  if v_receipt.job_id is not null then
+    if v_receipt.job_key<>v_job.job_key or v_receipt.source_id<>v_job.source_id
+       or v_receipt.credential_id<>p_credential_id or v_receipt.assignment_epoch<>p_assignment_epoch then
+      raise exception using errcode='23514',message='native push delivery receipt is bound to different job inputs';
+    end if;
+    return jsonb_build_object('current',true,'already_recorded',true,'recorded',true,
+      'provider_message_id',v_receipt.provider_message_id,'delivered_at',v_receipt.delivered_at);
+  end if;
+  return jsonb_build_object('current',true,'already_recorded',false,'recorded',false);
+end
+$function$;
+
+create or replace function public.mz_record_employee_native_push_delivery(
+  p_job_id uuid,p_lease_token uuid,p_credential_id uuid,p_assignment_epoch bigint,
+  p_registration_id uuid,p_token_hash text,p_provider_message_id text,p_now timestamptz default now()
+) returns jsonb language plpgsql security definer set search_path to 'pg_catalog','public'
+as $function$
+declare v_delivery jsonb; v_job public.operational_notification_jobs%rowtype; v_receipt public.employee_native_push_delivery_receipts%rowtype; v_reason text;
+begin
+  if p_job_id is null or p_lease_token is null or p_credential_id is null or p_assignment_epoch is null or p_assignment_epoch<1
+     or p_registration_id is null or coalesce(p_token_hash,'') !~ '^[0-9a-f]{64}$'
+     or length(btrim(coalesce(p_provider_message_id,''))) not between 1 and 1000 then
+    raise exception using errcode='22023',message='exact native push job, recipient, token generation, and provider result are required';
+  end if;
+  select * into v_receipt from public.employee_native_push_delivery_receipts where job_id=p_job_id;
+  if v_receipt.job_id is not null then
+    if v_receipt.lease_token<>p_lease_token or v_receipt.credential_id<>p_credential_id
+       or v_receipt.assignment_epoch<>p_assignment_epoch or v_receipt.registration_id<>p_registration_id
+       or v_receipt.token_hash<>p_token_hash or v_receipt.provider_message_id<>btrim(p_provider_message_id) then
+      return jsonb_build_object('current',false,'recorded',false,'reason','native_push_delivery_receipt_input_mismatch');
+    end if;
+    return jsonb_build_object('current',true,'already_recorded',true,'recorded',true,
+      'provider_message_id',v_receipt.provider_message_id,'delivered_at',v_receipt.delivered_at);
+  end if;
+  v_delivery:=public.mz_resolve_employee_push_delivery(p_credential_id,p_assignment_epoch,p_now);
+  if coalesce((v_delivery->>'ok')::boolean,false) is not true then
+    return jsonb_build_object('current',false,'recorded',false,'reason',coalesce(v_delivery->>'reason','employee_push_recipient_superseded'));
+  end if;
+  if (v_delivery#>>'{registration,registration_id}')::uuid is distinct from p_registration_id
+     or v_delivery#>>'{registration,token_hash}' is distinct from p_token_hash then
+    return jsonb_build_object('current',false,'recorded',false,'reason','push_registration_superseded');
+  end if;
+  select * into v_job from public.operational_notification_jobs where job_id=p_job_id for update;
+  v_reason:=case
+    when v_job.job_id is null then 'employee_native_push_job_missing'
+    when v_job.job_type<>'employee_native_push' then 'employee_native_push_job_type_mismatch'
+    when v_job.status<>'leased' or v_job.lease_token is distinct from p_lease_token then 'employee_native_push_lease_superseded'
+    when v_job.payload_json->>'credential_id' is distinct from p_credential_id::text
+      or v_job.payload_json->>'assignment_epoch' is distinct from p_assignment_epoch::text then 'employee_native_push_recipient_superseded'
+    else null
+  end;
+  if v_reason is not null then return jsonb_build_object('current',false,'recorded',false,'reason',v_reason); end if;
+  insert into public.employee_native_push_delivery_receipts(
+    job_id,job_key,source_id,lease_token,credential_id,assignment_epoch,registration_id,token_hash,provider_message_id,delivered_at
+  ) values (
+    v_job.job_id,v_job.job_key,v_job.source_id,p_lease_token,p_credential_id,p_assignment_epoch,p_registration_id,p_token_hash,
+    btrim(p_provider_message_id),p_now
+  ) returning * into v_receipt;
+  update public.employee_push_registrations
+  set last_successful_delivery_at=p_now,last_error=null,updated_at=p_now
+  where registration_id=p_registration_id and token_hash=p_token_hash;
+  return jsonb_build_object('current',true,'already_recorded',false,'recorded',true,
+    'provider_message_id',v_receipt.provider_message_id,'delivered_at',v_receipt.delivered_at);
+end
+$function$;
+
+revoke all on function public.mz_get_employee_native_push_delivery_receipt(uuid,uuid,uuid,bigint) from public,anon,authenticated;
+revoke all on function public.mz_record_employee_native_push_delivery(uuid,uuid,uuid,bigint,uuid,text,text,timestamptz) from public,anon,authenticated;
+grant execute on function public.mz_get_employee_native_push_delivery_receipt(uuid,uuid,uuid,bigint) to postgres,service_role;
+grant execute on function public.mz_record_employee_native_push_delivery(uuid,uuid,uuid,bigint,uuid,text,text,timestamptz) to postgres,service_role;
+
 -- Event delivery has an external provider boundary, so it cannot hold a
 -- database transaction open while FCM runs. Claim immediately before that
 -- boundary, then atomically bind provider acceptance to the same event,
@@ -781,7 +893,7 @@ with recursive authority_relations as (
   where n.nspname='public' and c.relkind in ('r','p') and (
     c.relname like 'custodial_%'
     or c.relname in ('devices','locations','device_auth_credentials','sessions','completion_responses','maintenance_tickets','scan_events',
-      'employee_push_registrations','event_push_instances','events_app_events','operational_notification_jobs')
+      'employee_push_registrations','employee_native_push_delivery_receipts','event_push_instances','events_app_events','operational_notification_jobs')
   )
   union
   select peer.oid,pn.nspname,peer.relname
@@ -798,6 +910,8 @@ with recursive authority_relations as (
     or p.proname in ('create_maintenance_tickets_from_response','resolve_scan_location_code','static_weekly_reject_update_delete','tool_get_device_rollback_readiness',
       'tool_get_offline_scan_authority_snapshot','tool_start_offline_occurrence','tool_commit_cleaning_workflow_authoritative','tool_complete_session_authoritative',
       'mz_resolve_employee_push_delivery','mz_record_employee_push_delivery','mz_claim_employee_event_push_delivery','mz_record_employee_event_push_delivery',
+      'mz_register_employee_push','mz_mark_employee_event_opened','mz_enqueue_employee_event_pushes','mz_enqueue_employee_location_pushes',
+      'mz_get_employee_native_push_delivery_receipt','mz_record_employee_native_push_delivery',
       'finish_operational_notification_job','finish_operational_notification_job_terminal')
   )
   union
@@ -847,7 +961,7 @@ with recursive authority_relations as (
   where n.nspname='public' and c.relkind in ('r','p') and (
     c.relname like 'custodial_%'
     or c.relname in ('devices','locations','device_auth_credentials','sessions','completion_responses','maintenance_tickets','scan_events',
-      'employee_push_registrations','event_push_instances','events_app_events','operational_notification_jobs')
+      'employee_push_registrations','employee_native_push_delivery_receipts','event_push_instances','events_app_events','operational_notification_jobs')
   )
   union
   select peer.oid,pn.nspname,peer.relname
@@ -863,6 +977,8 @@ with recursive authority_relations as (
     or p.proname in ('create_maintenance_tickets_from_response','resolve_scan_location_code','static_weekly_reject_update_delete','tool_get_device_rollback_readiness',
       'tool_get_offline_scan_authority_snapshot','tool_start_offline_occurrence','tool_commit_cleaning_workflow_authoritative','tool_complete_session_authoritative',
       'mz_resolve_employee_push_delivery','mz_record_employee_push_delivery','mz_claim_employee_event_push_delivery','mz_record_employee_event_push_delivery',
+      'mz_register_employee_push','mz_mark_employee_event_opened','mz_enqueue_employee_event_pushes','mz_enqueue_employee_location_pushes',
+      'mz_get_employee_native_push_delivery_receipt','mz_record_employee_native_push_delivery',
       'finish_operational_notification_job','finish_operational_notification_job_terminal')
   )
   union

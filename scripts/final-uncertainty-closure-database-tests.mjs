@@ -98,6 +98,34 @@ const restored = JSON.parse(sql(`select public.custodial_control_release_canary(
 assert.equal(restored.restored_objects, unhealthy.canonical_objects_expected);
 assert.equal(JSON.parse(sql(`select public.custodial_backend_authority_health(${q(secret)})::text;`)).ok, true);
 
+const requiredNotificationAuthorityFunctions = [
+  "mz_register_employee_push(uuid,text,text,text,text,text)",
+  "mz_mark_employee_event_opened(uuid,text)",
+  "mz_enqueue_employee_event_pushes(timestamp with time zone)",
+  "mz_enqueue_employee_location_pushes(timestamp with time zone)",
+  "mz_resolve_employee_push_delivery(uuid,bigint,timestamp with time zone)",
+  "mz_record_employee_push_delivery(uuid,text,boolean,boolean,text,timestamp with time zone)",
+  "mz_claim_employee_event_push_delivery(uuid,uuid,bigint,timestamp with time zone)",
+  "mz_record_employee_event_push_delivery(uuid,uuid,bigint,uuid,text,text,timestamp with time zone)",
+  "mz_get_employee_native_push_delivery_receipt(uuid,uuid,uuid,bigint)",
+  "mz_record_employee_native_push_delivery(uuid,uuid,uuid,bigint,uuid,text,text,timestamp with time zone)",
+  "finish_operational_notification_job(uuid,uuid,boolean,text,integer)",
+  "finish_operational_notification_job_terminal(uuid,uuid,text)",
+];
+assert.equal(sql(`select count(*) from public.custodial_release_authority_restore_inventory
+  where object_kind='function' and object_identity in (${requiredNotificationAuthorityFunctions.map(q).join(',')});`),
+String(requiredNotificationAuthorityFunctions.length), "every live employee-notification boundary must be recoverable");
+sql(`drop function public.mz_register_employee_push(uuid,text,text,text,text,text);`);
+const missingNotificationAuthority = JSON.parse(sql(`select public.custodial_backend_authority_health(${q(secret)})::text;`));
+assert.equal(missingNotificationAuthority.ok, false);
+assert.ok(missingNotificationAuthority.missing_objects.includes("mz_register_employee_push(uuid,text,text,text,text,text)"),
+  "dropping a live notification RPC must fail the canonical authority health gate");
+sql(`select public.custodial_control_release_canary(
+  '${managerId}'::uuid,'${randomUUID()}'::uuid,'KIOSK_09','restore_authority','restore missing notification authority',
+  ${q(JSON.stringify(missingNotificationAuthority))}::jsonb,${q(secret)});`);
+assert.ok(sql(`select to_regprocedure('public.mz_register_employee_push(uuid,text,text,text,text,text)') is not null;`) === "t");
+assert.equal(JSON.parse(sql(`select public.custodial_backend_authority_health(${q(secret)})::text;`)).ok, true);
+
 const credentialId = randomUUID();
 const fcmToken = `uncertainty-fcm-${stamp}-00000000000000000000`;
 const fcmTokenSha256 = createHash("sha256").update(fcmToken).digest("hex");
@@ -151,7 +179,9 @@ sql(`insert into public.ops_manager_notification_queue(job_key,credential_id,man
   values (${q(revokedAfterLeaseKey)},'${credentialId}'::uuid,'${managerId}'::uuid,'test','Crossing recipient','Must not send');`);
 const recipientLease = JSON.parse(sql(`select row_to_json(q)::text from public.ops_manager_claim_notification_jobs('uncertainty-worker',10,120) q where q.job_key=${q(revokedAfterLeaseKey)};`));
 assert.equal(sql(`select public.ops_manager_notification_job_is_current('${recipientLease.queue_id}'::uuid,'${recipientLease.lease_token}'::uuid,'${pushDeviceId}'::uuid,${q(fcmTokenSha256)});`), "t");
-sql(`update public.ops_manager_trusted_devices set expires_at=now()-interval '1 second' where credential_id='${credentialId}'::uuid;`);
+sql(`update public.ops_manager_trusted_devices
+  set created_at=now()-interval '1 day',expires_at=now()-interval '1 second'
+  where credential_id='${credentialId}'::uuid;`);
 assert.equal(sql(`select public.ops_manager_notification_job_is_current('${recipientLease.queue_id}'::uuid,'${recipientLease.lease_token}'::uuid,'${pushDeviceId}'::uuid,${q(fcmTokenSha256)});`), "f",
   "the worker must revalidate exact recipient authority immediately before provider dispatch");
 const finishedRecipient = JSON.parse(sql(`select row_to_json(public.ops_manager_finish_notification_job('${recipientLease.queue_id}'::uuid,'${recipientLease.lease_token}'::uuid,'${pushDeviceId}'::uuid,${q(fcmTokenSha256)},true,'must-not-be-recorded',null,30))::text;`));
@@ -310,12 +340,51 @@ assert.equal(sql(`select state||'|'||provider_message_id||'|'||(sent_at is not n
 "sent|provider-result-committed|true");
 assert.equal(sql(`select (last_successful_delivery_at is not null)::text from public.employee_push_registrations
   where registration_id='${employeeRegistrationId}'::uuid;`), "true");
-assert.equal(sql(`select count(*) from public.custodial_release_authority_restore_inventory
-  where object_kind='function' and object_identity in (
-    'mz_claim_employee_event_push_delivery(uuid,uuid,bigint,timestamp with time zone)',
-    'mz_record_employee_event_push_delivery(uuid,uuid,bigint,uuid,text,text,timestamp with time zone)',
-    'finish_operational_notification_job(uuid,uuid,boolean,text,integer)'
-  );`), "3", "event and terminal-job boundaries must remain inside the recoverable authority inventory");
+
+const nativeReceiptJobId = randomUUID();
+const nativeReceiptLease = randomUUID();
+const nativeReceiptJobKey = `uncertainty-native-receipt-${stamp}`;
+sql(`insert into public.operational_notification_jobs(
+    job_id,job_key,job_type,source_id,available_at,payload_json,status,attempts,max_attempts,
+    leased_at,leased_until,lease_token,worker_id)
+  select '${nativeReceiptJobId}'::uuid,${q(nativeReceiptJobKey)},'employee_native_push','${randomUUID()}'::uuid,now()-interval '1 second',
+    jsonb_build_object('credential_id','${employeeCredentialId}'::uuid,'assignment_epoch',assignment_epoch,
+      'employee_id','${employeeId}'::uuid,'device_id','${deviceId}'::uuid,'channel_id','employee-messages'),
+    'leased',1,3,now(),now()+interval '2 minutes','${nativeReceiptLease}'::uuid,'uncertainty-native-worker'
+  from public.devices where id='${deviceId}'::uuid;`);
+const emptyNativeReceipt = JSON.parse(sql(`select public.mz_get_employee_native_push_delivery_receipt(
+  '${nativeReceiptJobId}'::uuid,'${nativeReceiptLease}'::uuid,'${employeeCredentialId}'::uuid,
+  (select assignment_epoch from public.devices where id='${deviceId}'::uuid))::text;`));
+assert.equal(emptyNativeReceipt.already_recorded, false);
+const recordedNativeReceipt = JSON.parse(sql(`select public.mz_record_employee_native_push_delivery(
+  '${nativeReceiptJobId}'::uuid,'${nativeReceiptLease}'::uuid,'${employeeCredentialId}'::uuid,
+  (select assignment_epoch from public.devices where id='${deviceId}'::uuid),
+  '${employeeRegistrationId}'::uuid,${q(employeeTokenHashC)},'provider-native-once',now())::text;`));
+assert.equal(recordedNativeReceipt.recorded, true);
+assert.equal(recordedNativeReceipt.already_recorded, false);
+const mismatchedNativeReceipt = JSON.parse(sql(`select public.mz_record_employee_native_push_delivery(
+  '${nativeReceiptJobId}'::uuid,'${nativeReceiptLease}'::uuid,'${employeeCredentialId}'::uuid,
+  (select assignment_epoch from public.devices where id='${deviceId}'::uuid),
+  '${employeeRegistrationId}'::uuid,${q(employeeTokenHashC)},'provider-native-duplicate',now())::text;`));
+assert.equal(mismatchedNativeReceipt.current, false,
+  "a receipt cannot make a different provider result look idempotent");
+assert.equal(mismatchedNativeReceipt.reason, "native_push_delivery_receipt_input_mismatch");
+sql(`select public.finish_operational_notification_job(
+  '${nativeReceiptJobId}'::uuid,'${nativeReceiptLease}'::uuid,false,'simulated response loss after receipt commit',5);`);
+sql(`update public.operational_notification_jobs set available_at=now()-interval '1 second'
+  where job_id='${nativeReceiptJobId}'::uuid and status='pending';`);
+const nativeReceiptRetryLease = JSON.parse(sql(`select row_to_json(public.claim_operational_notification_job_by_key(
+  ${q(nativeReceiptJobKey)},'uncertainty-native-restart',120))::text;`));
+const replayedNativeReceipt = JSON.parse(sql(`select public.mz_get_employee_native_push_delivery_receipt(
+  '${nativeReceiptJobId}'::uuid,'${nativeReceiptRetryLease.lease_token}'::uuid,'${employeeCredentialId}'::uuid,
+  (select assignment_epoch from public.devices where id='${deviceId}'::uuid))::text;`));
+assert.equal(replayedNativeReceipt.already_recorded, true,
+  "worker restart after provider acceptance must reuse the durable native delivery receipt");
+assert.equal(replayedNativeReceipt.provider_message_id, "provider-native-once");
+assert.equal(sql(`select count(*) from public.employee_native_push_delivery_receipts where job_id='${nativeReceiptJobId}'::uuid;`), "1");
+sql(`select public.finish_operational_notification_job(
+  '${nativeReceiptJobId}'::uuid,'${nativeReceiptRetryLease.lease_token}'::uuid,true,null,30);`);
+assert.equal(sql(`select status from public.operational_notification_jobs where job_id='${nativeReceiptJobId}'::uuid;`), "completed");
 
 const exhaustedJobKey = `uncertainty-exhausted-job-${stamp}`;
 sql(`insert into public.operational_notification_jobs(job_key,job_type,source_id,available_at,max_attempts)
@@ -334,5 +403,7 @@ console.log(JSON.stringify({ ok: true, stale_session_masked: false, rollback_wit
   revoked_recipient_claimed: false, expired_recipient_recorded_sent: false, rotated_token_recorded_sent: false,
   stale_employee_token_result_recorded: false, cancelled_employee_event_claimed: false,
   cancelled_employee_event_recorded_sent: false, valid_employee_event_recorded_sent: true,
+  native_push_replayed_after_receipt: false, mismatched_native_receipt_accepted: false,
+  missing_notification_authority_ignored: false,
   retry_exhausted_job_missing_completed_at: false,
   cancelled_event_recorded_sent: false, rescheduled_event_claimed: false }, null, 2));

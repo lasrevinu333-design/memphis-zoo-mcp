@@ -166,6 +166,43 @@ export function installEmployeeNotificationRoutes(app, {
     return true;
   }
 
+  async function getNativeDeliveryReceipt(job, credential, assignmentEpoch) {
+    const result = await db.rpc('mz_get_employee_native_push_delivery_receipt', {
+      p_job_id: job.job_id,
+      p_lease_token: job.lease_token,
+      p_credential_id: credential,
+      p_assignment_epoch: assignmentEpoch,
+    });
+    if (result.error) throw result.error;
+    if (result.data?.current !== true) {
+      throw terminalDeliveryError(result.data?.reason || 'employee_native_push_job_superseded');
+    }
+    return result.data;
+  }
+
+  async function recordNativeDelivery(job, credential, assignmentEpoch, registration, providerMessageId) {
+    const tokenHash = crypto.createHash('sha256').update(String(registration?.fcm_token || '')).digest('hex');
+    if (!registration?.registration_id || !/^[0-9a-f]{64}$/.test(tokenHash)
+      || (registration.token_hash && registration.token_hash !== tokenHash)) {
+      throw terminalDeliveryError('push_registration_binding_invalid');
+    }
+    const result = await db.rpc('mz_record_employee_native_push_delivery', {
+      p_job_id: job.job_id,
+      p_lease_token: job.lease_token,
+      p_credential_id: credential,
+      p_assignment_epoch: assignmentEpoch,
+      p_registration_id: registration.registration_id,
+      p_token_hash: tokenHash,
+      p_provider_message_id: providerMessageId,
+      p_now: new Date().toISOString(),
+    });
+    if (result.error) throw result.error;
+    if (result.data?.current !== true || result.data?.recorded !== true) {
+      throw terminalDeliveryError(`${result.data?.reason || 'employee_native_push_job_superseded'}_after_provider_dispatch`);
+    }
+    return true;
+  }
+
   app.use(API_PREFIX, (req, res, next) => {
     setCors(req, res);
     if (req.method === 'OPTIONS') return res.sendStatus(200);
@@ -378,6 +415,10 @@ export function installEmployeeNotificationRoutes(app, {
       if (!credential || !Number.isSafeInteger(assignmentEpoch) || assignmentEpoch < 1) {
         throw new Error('Employee native push job is missing its assignment-bound recipient.');
       }
+      if (!eventInstance) {
+        const receipt = await getNativeDeliveryReceipt(job, credential, assignmentEpoch);
+        if (receipt.already_recorded === true) return { provider_message_id: receipt.provider_message_id, replayed: true };
+      }
       // A job can outlive either its credential or employee assignment.  Check
       // once after claim, then again immediately before the provider boundary.
       // The database resolver also reconciles stale registration state.
@@ -390,7 +431,7 @@ export function installEmployeeNotificationRoutes(app, {
       const providerMessageId = await pushRuntime.send(push, registration, { channelId });
       const recorded = eventInstance
         ? await recordEventDelivery(eventInstance, credential, assignmentEpoch, registration, providerMessageId)
-        : await recordRegistrationDelivery(registration, { succeeded: true });
+        : await recordNativeDelivery(job, credential, assignmentEpoch, registration, providerMessageId);
       if (!recorded) {
         throw terminalDeliveryError('push_registration_superseded_after_provider_dispatch');
       }
@@ -398,13 +439,19 @@ export function installEmployeeNotificationRoutes(app, {
     } catch (error) {
       const errorMessage = clip(error?.message || 'FCM provider request failed.', 2000);
       const authorityTerminal = error?.terminal === true;
+      let providerResultSuperseded = false;
       if (registration?.registration_id && !authorityTerminal) {
         const current = await recordRegistrationDelivery(registration, {
           succeeded: false,
           permanent: error?.permanent === true,
           error: errorMessage,
         });
-        if (!current) throw terminalDeliveryError('push_registration_superseded_after_provider_dispatch');
+        if (!current) {
+          providerResultSuperseded = true;
+          error.permanent = false;
+          error.terminal = false;
+          error.code = 'push_registration_rotated_after_provider_failure';
+        }
       }
       if (job.job_type === 'employee_event_push') {
         const eventUpdate = error?.terminal === true
@@ -415,7 +462,7 @@ export function installEmployeeNotificationRoutes(app, {
           .select('instance_id').maybeSingle();
         if (eventResult.error) throw eventResult.error;
       }
-      if (error?.permanent === true && !authorityTerminal) {
+      if (error?.permanent === true && !authorityTerminal && !providerResultSuperseded) {
         error.terminal = true;
         error.code ||= 'push_token_rejected';
       }

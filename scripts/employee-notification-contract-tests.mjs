@@ -204,6 +204,9 @@ let resolveCount = 0;
 let credentialRevoked = false;
 const revokeAfterClaimDb = {
   async rpc(name) {
+    if (name === 'mz_get_employee_native_push_delivery_receipt') {
+      return { data: { current: true, already_recorded: false, recorded: false }, error: null };
+    }
     assert.equal(name, 'mz_resolve_employee_push_delivery');
     resolveCount += 1;
     return credentialRevoked
@@ -231,6 +234,9 @@ let preClaimResolveCount = 0;
 const revokedBeforeClaimRuntime = installEmployeeNotificationRoutes(express(), {
   supabase: {
     async rpc(name) {
+      if (name === 'mz_get_employee_native_push_delivery_receipt') {
+        return { data: { current: true, already_recorded: false, recorded: false }, error: null };
+      }
       assert.equal(name, 'mz_resolve_employee_push_delivery');
       preClaimResolveCount += 1;
       return { data: { ok: false, terminal: true, reason: 'device_credential_expired' }, error: null };
@@ -259,10 +265,13 @@ let recordedBinding = null;
 const rotatedDuringProviderRuntime = installEmployeeNotificationRoutes(express(), {
   supabase: {
     async rpc(name, args) {
+      if (name === 'mz_get_employee_native_push_delivery_receipt') {
+        return { data: { current: true, already_recorded: false, recorded: false }, error: null };
+      }
       if (name === 'mz_resolve_employee_push_delivery') {
         return { data: { ok: true, registration: authorizedRegistration }, error: null };
       }
-      assert.equal(name, 'mz_record_employee_push_delivery');
+      assert.equal(name, 'mz_record_employee_native_push_delivery');
       recordedBinding = args;
       return { data: { current: false, recorded: false, reason: 'push_registration_superseded' }, error: null };
     },
@@ -279,7 +288,35 @@ await assert.rejects(
 );
 assert.equal(recordedBinding.p_registration_id, authorizedRegistration.registration_id);
 assert.equal(recordedBinding.p_token_hash, createHash('sha256').update(authorizedRegistration.fcm_token).digest('hex'));
-assert.equal(recordedBinding.p_succeeded, true);
+assert.equal(recordedBinding.p_job_id, claimedJob.job_id);
+assert.equal(recordedBinding.p_lease_token, claimedJob.lease_token);
+
+let nativeReceiptRecorded = false;
+let nativeReplaySendCount = 0;
+const nativeReplayRuntime = installEmployeeNotificationRoutes(express(), {
+  supabase: {
+    async rpc(name) {
+      if (name === 'mz_get_employee_native_push_delivery_receipt') {
+        return nativeReceiptRecorded
+          ? { data: { current: true, already_recorded: true, recorded: true, provider_message_id: 'provider-native-once' }, error: null }
+          : { data: { current: true, already_recorded: false, recorded: false }, error: null };
+      }
+      if (name === 'mz_resolve_employee_push_delivery') {
+        return { data: { ok: true, registration: authorizedRegistration }, error: null };
+      }
+      assert.equal(name, 'mz_record_employee_native_push_delivery');
+      nativeReceiptRecorded = true;
+      return { data: { current: true, already_recorded: false, recorded: true, provider_message_id: 'provider-native-once' }, error: null };
+    },
+  },
+  pushRuntime: {
+    configured: true,
+    async send() { nativeReplaySendCount += 1; return 'provider-native-once'; },
+  },
+});
+assert.deepEqual(await nativeReplayRuntime.deliverClaimedJob(claimedJob), { provider_message_id: 'provider-native-once' });
+assert.deepEqual(await nativeReplayRuntime.deliverClaimedJob(claimedJob), { provider_message_id: 'provider-native-once', replayed: true });
+assert.equal(nativeReplaySendCount, 1, 'a durable native delivery receipt must suppress provider replay after response loss');
 
 const eventClaimedJob = {
   ...claimedJob,
@@ -299,10 +336,10 @@ const eventInstance = {
   state: 'pending',
   events_app_events: { event_name: 'Cancelled event', display_location: 'Zoo Footprint' },
 };
-function eventInstanceQuery(row) {
+function eventInstanceQuery(row, { onUpdate = null } = {}) {
   const query = {
     select() { return query; },
-    update() { return query; },
+    update() { onUpdate?.(); return query; },
     eq() { return query; },
     in() { return query; },
     single: async () => ({ data: row, error: null }),
@@ -368,9 +405,45 @@ await assert.rejects(
 );
 assert.equal(crossingEventSendCount, 1);
 
+let rotatedFailureEventUpdates = 0;
+const rotatedDuringProviderFailureRuntime = installEmployeeNotificationRoutes(express(), {
+  supabase: {
+    async rpc(name) {
+      if (name === 'mz_resolve_employee_push_delivery') {
+        return { data: { ok: true, registration: authorizedRegistration }, error: null };
+      }
+      if (name === 'mz_claim_employee_event_push_delivery') {
+        return { data: { ok: true, instance_id: eventInstance.instance_id, state: 'leased' }, error: null };
+      }
+      assert.equal(name, 'mz_record_employee_push_delivery');
+      return { data: { current: false, recorded: false, reason: 'push_registration_superseded' }, error: null };
+    },
+    from(name) {
+      assert.equal(name, 'event_push_instances');
+      return eventInstanceQuery(eventInstance, { onUpdate: () => { rotatedFailureEventUpdates += 1; } });
+    },
+  },
+  pushRuntime: {
+    configured: true,
+    async send() {
+      throw Object.assign(new Error('old provider token rejected'), { permanent: true });
+    },
+  },
+});
+await assert.rejects(
+  () => rotatedDuringProviderFailureRuntime.deliverClaimedJob(eventClaimedJob),
+  (error) => error?.terminal !== true && error?.permanent !== true
+    && error?.code === 'push_registration_rotated_after_provider_failure',
+  'an old-token provider failure must remain retryable against the replacement token',
+);
+assert.equal(rotatedFailureEventUpdates, 1, 'a stale provider failure must transition the leased event to retryable failed state');
+
 assert.match(source, /resolveAuthorizedDelivery\(credential, assignmentEpoch\)[\s\S]*beforeFinalDeliveryCheck[\s\S]*resolveAuthorizedDelivery\(credential, assignmentEpoch\)/);
 assert.match(source, /claimEventDelivery\(eventInstance, credential, assignmentEpoch\)[\s\S]*pushRuntime\.send/);
 assert.match(source, /recordEventDelivery\(eventInstance, credential, assignmentEpoch, registration, providerMessageId\)/);
+assert.match(source, /mz_get_employee_native_push_delivery_receipt/);
+assert.match(source, /mz_record_employee_native_push_delivery/);
+assert.match(source, /providerResultSuperseded[\s\S]*push_registration_rotated_after_provider_failure/);
 assert.match(source, /\.in\('state', \['pending', 'leased', 'failed'\]\)[\s\S]*maybeSingle/);
 assert.match(source, /finish_operational_notification_job_terminal/);
 assert.match(indexSource, /error\?\.terminal === true[\s\S]*finish_operational_notification_job_terminal/);

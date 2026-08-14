@@ -7646,6 +7646,149 @@
     },
     {
       "collation_name": null,
+      "column_name": "job_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 1,
+      "schema_name": "public",
+      "table_name": "employee_native_push_delivery_receipts"
+    },
+    {
+      "collation_name": null,
+      "column_name": "job_key",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 2,
+      "schema_name": "public",
+      "table_name": "employee_native_push_delivery_receipts"
+    },
+    {
+      "collation_name": null,
+      "column_name": "source_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 3,
+      "schema_name": "public",
+      "table_name": "employee_native_push_delivery_receipts"
+    },
+    {
+      "collation_name": null,
+      "column_name": "lease_token",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 4,
+      "schema_name": "public",
+      "table_name": "employee_native_push_delivery_receipts"
+    },
+    {
+      "collation_name": null,
+      "column_name": "credential_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 5,
+      "schema_name": "public",
+      "table_name": "employee_native_push_delivery_receipts"
+    },
+    {
+      "collation_name": null,
+      "column_name": "assignment_epoch",
+      "comment": null,
+      "data_type": "bigint",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 6,
+      "schema_name": "public",
+      "table_name": "employee_native_push_delivery_receipts"
+    },
+    {
+      "collation_name": null,
+      "column_name": "registration_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 7,
+      "schema_name": "public",
+      "table_name": "employee_native_push_delivery_receipts"
+    },
+    {
+      "collation_name": null,
+      "column_name": "token_hash",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 8,
+      "schema_name": "public",
+      "table_name": "employee_native_push_delivery_receipts"
+    },
+    {
+      "collation_name": null,
+      "column_name": "provider_message_id",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 9,
+      "schema_name": "public",
+      "table_name": "employee_native_push_delivery_receipts"
+    },
+    {
+      "collation_name": null,
+      "column_name": "delivered_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 10,
+      "schema_name": "public",
+      "table_name": "employee_native_push_delivery_receipts"
+    },
+    {
+      "collation_name": null,
+      "column_name": "created_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "statement_timestamp()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 11,
+      "schema_name": "public",
+      "table_name": "employee_native_push_delivery_receipts"
+    },
+    {
+      "collation_name": null,
       "column_name": "id",
       "comment": null,
       "data_type": "uuid",
@@ -28669,6 +28812,54 @@
       "validated": true
     },
     {
+      "constraint_name": "employee_native_push_delivery_receipt_provider_message_id_check",
+      "constraint_type": "c",
+      "definition": "CHECK (length(btrim(provider_message_id)) >= 1 AND length(btrim(provider_message_id)) <= 1000)",
+      "schema_name": "public",
+      "table_name": "employee_native_push_delivery_receipts",
+      "validated": true
+    },
+    {
+      "constraint_name": "employee_native_push_delivery_receipts_assignment_epoch_check",
+      "constraint_type": "c",
+      "definition": "CHECK (assignment_epoch > 0)",
+      "schema_name": "public",
+      "table_name": "employee_native_push_delivery_receipts",
+      "validated": true
+    },
+    {
+      "constraint_name": "employee_native_push_delivery_receipts_job_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (job_id) REFERENCES operational_notification_jobs(job_id) ON DELETE CASCADE",
+      "schema_name": "public",
+      "table_name": "employee_native_push_delivery_receipts",
+      "validated": true
+    },
+    {
+      "constraint_name": "employee_native_push_delivery_receipts_job_key_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (job_key)",
+      "schema_name": "public",
+      "table_name": "employee_native_push_delivery_receipts",
+      "validated": true
+    },
+    {
+      "constraint_name": "employee_native_push_delivery_receipts_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (job_id)",
+      "schema_name": "public",
+      "table_name": "employee_native_push_delivery_receipts",
+      "validated": true
+    },
+    {
+      "constraint_name": "employee_native_push_delivery_receipts_token_hash_check",
+      "constraint_type": "c",
+      "definition": "CHECK (token_hash ~ '^[0-9a-f]{64}$'::text)",
+      "schema_name": "public",
+      "table_name": "employee_native_push_delivery_receipts",
+      "validated": true
+    },
+    {
       "constraint_name": "employee_planned_time_off_date_order",
       "constraint_type": "c",
       "definition": "CHECK (end_date >= start_date)",
@@ -35791,6 +35982,13 @@
     },
     {
       "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.mz_get_employee_native_push_delivery_receipt(p_job_id uuid, p_lease_token uuid, p_credential_id uuid, p_assignment_epoch bigint)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_job public.operational_notification_jobs%rowtype; v_receipt public.employee_native_push_delivery_receipts%rowtype; v_reason text;\nbegin\n  if p_job_id is null or p_lease_token is null or p_credential_id is null or p_assignment_epoch is null or p_assignment_epoch<1 then\n    raise exception using errcode='22023',message='exact native push job lease and assignment recipient are required';\n  end if;\n  select * into v_job from public.operational_notification_jobs where job_id=p_job_id for update;\n  v_reason:=case\n    when v_job.job_id is null then 'employee_native_push_job_missing'\n    when v_job.job_type<>'employee_native_push' then 'employee_native_push_job_type_mismatch'\n    when v_job.status<>'leased' or v_job.lease_token is distinct from p_lease_token then 'employee_native_push_lease_superseded'\n    when v_job.payload_json->>'credential_id' is distinct from p_credential_id::text\n      or v_job.payload_json->>'assignment_epoch' is distinct from p_assignment_epoch::text then 'employee_native_push_recipient_superseded'\n    else null\n  end;\n  if v_reason is not null then return jsonb_build_object('current',false,'terminal',true,'reason',v_reason); end if;\n  select * into v_receipt from public.employee_native_push_delivery_receipts where job_id=p_job_id;\n  if v_receipt.job_id is not null then\n    if v_receipt.job_key<>v_job.job_key or v_receipt.source_id<>v_job.source_id\n       or v_receipt.credential_id<>p_credential_id or v_receipt.assignment_epoch<>p_assignment_epoch then\n      raise exception using errcode='23514',message='native push delivery receipt is bound to different job inputs';\n    end if;\n    return jsonb_build_object('current',true,'already_recorded',true,'recorded',true,\n      'provider_message_id',v_receipt.provider_message_id,'delivered_at',v_receipt.delivered_at);\n  end if;\n  return jsonb_build_object('current',true,'already_recorded',false,'recorded',false);\nend\n$function$\n",
+      "function_name": "mz_get_employee_native_push_delivery_receipt",
+      "identity_arguments": "p_job_id uuid, p_lease_token uuid, p_credential_id uuid, p_assignment_epoch bigint",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
       "definition": "CREATE OR REPLACE FUNCTION public.mz_mark_employee_event_opened(p_credential_id uuid, p_notification_key text)\n RETURNS event_push_instances\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_result public.event_push_instances%rowtype;\nbegin\n  update public.event_push_instances i\n     set state='opened',opened_at=coalesce(opened_at,now()),updated_at=now()\n   where i.notification_key=p_notification_key and i.credential_id=p_credential_id\n     and i.state in ('sent','opened')\n  returning * into v_result;\n  if v_result.instance_id is null then\n    raise exception using errcode='P0002',message='Notification was not found for this device credential.';\n  end if;\n  return v_result;\nend\n$function$\n",
       "function_name": "mz_mark_employee_event_opened",
       "identity_arguments": "p_credential_id uuid, p_notification_key text",
@@ -35808,6 +36006,13 @@
       "definition": "CREATE OR REPLACE FUNCTION public.mz_record_employee_event_push_delivery(p_instance_id uuid, p_credential_id uuid, p_assignment_epoch bigint, p_registration_id uuid, p_token_hash text, p_provider_message_id text, p_now timestamp with time zone DEFAULT now())\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_delivery jsonb; v_instance public.event_push_instances%rowtype; v_event public.events_app_events%rowtype; v_reason text;\nbegin\n  if p_instance_id is null or p_credential_id is null or p_assignment_epoch is null or p_assignment_epoch<1\n     or p_registration_id is null or coalesce(p_token_hash,'') !~ '^[0-9a-f]{64}$'\n     or length(btrim(coalesce(p_provider_message_id,''))) not between 1 and 1000 then\n    raise exception using errcode='22023',message='exact event, recipient, token generation, and provider result are required';\n  end if;\n  v_delivery:=public.mz_resolve_employee_push_delivery(p_credential_id,p_assignment_epoch,p_now);\n  if coalesce((v_delivery->>'ok')::boolean,false) is not true then\n    return jsonb_build_object('current',false,'recorded',false,'reason',coalesce(v_delivery->>'reason','employee_push_recipient_superseded'));\n  end if;\n  select * into v_instance from public.event_push_instances where instance_id=p_instance_id;\n  if v_instance.instance_id is not null then\n    select * into v_event from public.events_app_events where id=v_instance.event_id for key share;\n  end if;\n  select * into v_instance from public.event_push_instances where instance_id=p_instance_id for update;\n  v_reason:=case\n    when (v_delivery#>>'{registration,registration_id}')::uuid is distinct from p_registration_id\n      or v_delivery#>>'{registration,token_hash}' is distinct from p_token_hash then 'push_registration_superseded'\n    when v_instance.instance_id is null then 'event_push_instance_missing'\n    when v_instance.credential_id<>p_credential_id or v_instance.assignment_epoch<>p_assignment_epoch\n      or v_instance.employee_id is distinct from (v_delivery->>'employee_id')::uuid\n      or v_instance.device_id is distinct from (v_delivery->>'device_id')::uuid then 'event_push_recipient_superseded'\n    when v_instance.state not in ('pending','leased','failed') then 'event_push_instance_'||v_instance.state\n    when v_event.id is null or v_event.revision<>v_instance.event_revision or v_event.status<>'SCHEDULED'\n      or v_event.cancelled_at is not null or v_event.archived_at is not null then 'event_or_revision_superseded'\n    else null\n  end;\n  if v_reason is not null then\n    update public.event_push_instances set state='cancelled',cancelled_at=coalesce(cancelled_at,p_now),\n      last_error=v_reason,updated_at=p_now\n    where instance_id=p_instance_id and state in ('pending','leased','failed');\n    return jsonb_build_object('current',false,'recorded',false,'reason',v_reason,'instance_id',p_instance_id);\n  end if;\n  update public.employee_push_registrations\n  set last_successful_delivery_at=p_now,last_error=null,updated_at=p_now\n  where registration_id=p_registration_id and token_hash=p_token_hash;\n  update public.event_push_instances\n  set state='sent',sent_at=p_now,provider_message_id=btrim(p_provider_message_id),last_error=null,updated_at=p_now\n  where instance_id=p_instance_id;\n  return jsonb_build_object('current',true,'recorded',true,'instance_id',p_instance_id,'state','sent');\nend\n$function$\n",
       "function_name": "mz_record_employee_event_push_delivery",
       "identity_arguments": "p_instance_id uuid, p_credential_id uuid, p_assignment_epoch bigint, p_registration_id uuid, p_token_hash text, p_provider_message_id text, p_now timestamp with time zone",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.mz_record_employee_native_push_delivery(p_job_id uuid, p_lease_token uuid, p_credential_id uuid, p_assignment_epoch bigint, p_registration_id uuid, p_token_hash text, p_provider_message_id text, p_now timestamp with time zone DEFAULT now())\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_delivery jsonb; v_job public.operational_notification_jobs%rowtype; v_receipt public.employee_native_push_delivery_receipts%rowtype; v_reason text;\nbegin\n  if p_job_id is null or p_lease_token is null or p_credential_id is null or p_assignment_epoch is null or p_assignment_epoch<1\n     or p_registration_id is null or coalesce(p_token_hash,'') !~ '^[0-9a-f]{64}$'\n     or length(btrim(coalesce(p_provider_message_id,''))) not between 1 and 1000 then\n    raise exception using errcode='22023',message='exact native push job, recipient, token generation, and provider result are required';\n  end if;\n  select * into v_receipt from public.employee_native_push_delivery_receipts where job_id=p_job_id;\n  if v_receipt.job_id is not null then\n    if v_receipt.lease_token<>p_lease_token or v_receipt.credential_id<>p_credential_id\n       or v_receipt.assignment_epoch<>p_assignment_epoch or v_receipt.registration_id<>p_registration_id\n       or v_receipt.token_hash<>p_token_hash or v_receipt.provider_message_id<>btrim(p_provider_message_id) then\n      return jsonb_build_object('current',false,'recorded',false,'reason','native_push_delivery_receipt_input_mismatch');\n    end if;\n    return jsonb_build_object('current',true,'already_recorded',true,'recorded',true,\n      'provider_message_id',v_receipt.provider_message_id,'delivered_at',v_receipt.delivered_at);\n  end if;\n  v_delivery:=public.mz_resolve_employee_push_delivery(p_credential_id,p_assignment_epoch,p_now);\n  if coalesce((v_delivery->>'ok')::boolean,false) is not true then\n    return jsonb_build_object('current',false,'recorded',false,'reason',coalesce(v_delivery->>'reason','employee_push_recipient_superseded'));\n  end if;\n  if (v_delivery#>>'{registration,registration_id}')::uuid is distinct from p_registration_id\n     or v_delivery#>>'{registration,token_hash}' is distinct from p_token_hash then\n    return jsonb_build_object('current',false,'recorded',false,'reason','push_registration_superseded');\n  end if;\n  select * into v_job from public.operational_notification_jobs where job_id=p_job_id for update;\n  v_reason:=case\n    when v_job.job_id is null then 'employee_native_push_job_missing'\n    when v_job.job_type<>'employee_native_push' then 'employee_native_push_job_type_mismatch'\n    when v_job.status<>'leased' or v_job.lease_token is distinct from p_lease_token then 'employee_native_push_lease_superseded'\n    when v_job.payload_json->>'credential_id' is distinct from p_credential_id::text\n      or v_job.payload_json->>'assignment_epoch' is distinct from p_assignment_epoch::text then 'employee_native_push_recipient_superseded'\n    else null\n  end;\n  if v_reason is not null then return jsonb_build_object('current',false,'recorded',false,'reason',v_reason); end if;\n  insert into public.employee_native_push_delivery_receipts(\n    job_id,job_key,source_id,lease_token,credential_id,assignment_epoch,registration_id,token_hash,provider_message_id,delivered_at\n  ) values (\n    v_job.job_id,v_job.job_key,v_job.source_id,p_lease_token,p_credential_id,p_assignment_epoch,p_registration_id,p_token_hash,\n    btrim(p_provider_message_id),p_now\n  ) returning * into v_receipt;\n  update public.employee_push_registrations\n  set last_successful_delivery_at=p_now,last_error=null,updated_at=p_now\n  where registration_id=p_registration_id and token_hash=p_token_hash;\n  return jsonb_build_object('current',true,'already_recorded',false,'recorded',true,\n    'provider_message_id',v_receipt.provider_message_id,'delivered_at',v_receipt.delivered_at);\nend\n$function$\n",
+      "function_name": "mz_record_employee_native_push_delivery",
+      "identity_arguments": "p_job_id uuid, p_lease_token uuid, p_credential_id uuid, p_assignment_epoch bigint, p_registration_id uuid, p_token_hash text, p_provider_message_id text, p_now timestamp with time zone",
       "schema_name": "public"
     },
     {
@@ -39113,6 +39318,24 @@
       "is_unique": true,
       "schema_name": "public",
       "table_name": "employee_location_group_assignments"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX employee_native_push_delivery_receipts_job_key_key ON public.employee_native_push_delivery_receipts USING btree (job_key)",
+      "index_name": "employee_native_push_delivery_receipts_job_key_key",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "employee_native_push_delivery_receipts"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX employee_native_push_delivery_receipts_pkey ON public.employee_native_push_delivery_receipts USING btree (job_id)",
+      "index_name": "employee_native_push_delivery_receipts_pkey",
+      "is_primary": true,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "employee_native_push_delivery_receipts"
     },
     {
       "backs_constraint": false,
@@ -45027,6 +45250,14 @@
       "schema_name": "public"
     },
     {
+      "function_name": "mz_get_employee_native_push_delivery_receipt",
+      "grantee": "service_role",
+      "identity_arguments": "p_job_id uuid, p_lease_token uuid, p_credential_id uuid, p_assignment_epoch bigint",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
       "function_name": "mz_mark_employee_event_opened",
       "grantee": "service_role",
       "identity_arguments": "p_credential_id uuid, p_notification_key text",
@@ -45046,6 +45277,14 @@
       "function_name": "mz_record_employee_event_push_delivery",
       "grantee": "service_role",
       "identity_arguments": "p_instance_id uuid, p_credential_id uuid, p_assignment_epoch bigint, p_registration_id uuid, p_token_hash text, p_provider_message_id text, p_now timestamp with time zone",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "mz_record_employee_native_push_delivery",
+      "grantee": "service_role",
+      "identity_arguments": "p_job_id uuid, p_lease_token uuid, p_credential_id uuid, p_assignment_epoch bigint, p_registration_id uuid, p_token_hash text, p_provider_message_id text, p_now timestamp with time zone",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -54891,6 +55130,15 @@
       "rls_forced": true,
       "schema_name": "public",
       "table_name": "employee_location_group_assignments"
+    },
+    {
+      "comment": null,
+      "partition_key": null,
+      "relation_kind": "r",
+      "rls_enabled": true,
+      "rls_forced": true,
+      "schema_name": "public",
+      "table_name": "employee_native_push_delivery_receipts"
     },
     {
       "comment": null,
