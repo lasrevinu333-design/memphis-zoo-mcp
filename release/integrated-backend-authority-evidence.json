@@ -1,15 +1,15 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "2f41c9948cba44f81975411758a188f94bacb809",
-  "schema_fingerprint": "a26057ed7354bdc98db58c8577f9098f76bd6a704f5c835fdb28d1bd0e0594f0",
+  "frontend_commit_sha": "24b4d4fd680e8b898d48392043e767daabf0ec5f",
+  "schema_fingerprint": "5ba4181905ce9ee61e3df802090a3bcba407ab65964144f062243559d90a70e3",
   "schema_transition": {
     "transition_id": "custodial-canary-offline-scan-authority-20260813",
     "from_fingerprint": "405dfbc65393c7a1fc9ea86b9c2e1f637df185f11a8520315f61fd8a9b1e5dfc",
-    "to_fingerprint": "a26057ed7354bdc98db58c8577f9098f76bd6a704f5c835fdb28d1bd0e0594f0",
+    "to_fingerprint": "5ba4181905ce9ee61e3df802090a3bcba407ab65964144f062243559d90a70e3",
     "expires_at": "2026-08-23T23:59:59Z"
   },
-  "frontend_source_fingerprint": "a26057ed7354bdc98db58c8577f9098f76bd6a704f5c835fdb28d1bd0e0594f0",
+  "frontend_source_fingerprint": "5ba4181905ce9ee61e3df802090a3bcba407ab65964144f062243559d90a70e3",
   "backend_contract": {
     "scan": "scan.v4.snapshot-bound-authority",
     "authority": "offline-authority.v5",
@@ -134,7 +134,7 @@
       {
         "path": ".github/workflows/foundation-security-gate.yml",
         "mode": "100644",
-        "object_id": "5db335705bc458c4ad206725e767ea2589268fc3"
+        "object_id": "3087493361b2c67c52914fcb56eaab67c65b764c"
       },
       {
         "path": ".github/workflows/integrated-release-attestation.yml",
@@ -394,7 +394,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "4ad9638c574694a18d6c119deedfd19d716c2f4c"
+        "object_id": "a94553da4627f923daee1419c1e4ea1093d25d3e"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -474,7 +474,7 @@
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "710356ccc26b0b6c55d45c8bac0c31f7e07fdffc"
+        "object_id": "cab529ed60e1d3e353d48dc3d601e9d9b3201991"
       },
       {
         "path": "scripts/create-release-attestation.mjs",
@@ -504,7 +504,7 @@
       {
         "path": "scripts/custodial-employee-admin-authorization-tests.mjs",
         "mode": "100644",
-        "object_id": "3ac73ba57c4728adc38295ac1c0cb9d657d203e5"
+        "object_id": "a85938e1e7327af96c37c83efb9d2c316e61bb80"
       },
       {
         "path": "scripts/custodial-employee-phone-contract-tests.mjs",
@@ -589,7 +589,7 @@
       {
         "path": "scripts/events-api-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "d252fafc9b911f78ad922f2b1c0012d72372d7b7"
+        "object_id": "afad898ea110cc26117234305cd14132cff97c29"
       },
       {
         "path": "scripts/events-parser-tests.mjs",
@@ -614,7 +614,7 @@
       {
         "path": "scripts/final-uncertainty-closure-database-tests.mjs",
         "mode": "100644",
-        "object_id": "f0f303ce4b9ad7ad62b7513b4a1c5c50cfe50595"
+        "object_id": "33e2ee05f1bdd65d6e3308bf702be95564d60b76"
       },
       {
         "path": "scripts/fixtures/static-weekly-scheduler/canary-authority.json",
@@ -674,12 +674,12 @@
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "e005dd6a888ecc2fc95e2e5b75d19bfdb0245705"
+        "object_id": "46cd9471a6841c6b2fd0b43a7aaf02b4bdcb5200"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
         "mode": "100644",
-        "object_id": "ed66172ef0da8f2ada1a3f92a641dd5908bf080a"
+        "object_id": "b8b9a17fa3ef15cdd550d0afb09fed2a5faf6705"
       },
       {
         "path": "scripts/integrated-backend-authority-suite-order-isolated-tests.mjs",
@@ -794,7 +794,7 @@
       {
         "path": "scripts/offline-actor-recovery-database-tests.mjs",
         "mode": "100644",
-        "object_id": "7538a095f5f5264157a03a47d368a3b3f53ffdcb"
+        "object_id": "cd9bacdbe30a6d7346867e25fdebb57626ef127f"
       },
       {
         "path": "scripts/offline-actor-recovery-route-tests.mjs",
@@ -832,6 +832,11 @@
         "object_id": "836ed2c94152af66871c5557d493e5761f7e9b95"
       },
       {
+        "path": "scripts/phone-production-readiness-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "bdc1147f885571b1705f24f47e5b51c7fdd8e060"
+      },
+      {
         "path": "scripts/phone-production-readiness-tests.mjs",
         "mode": "100644",
         "object_id": "42536a9b8a353d04cb886ca3c0b1f37ad6edc9c7"
@@ -839,7 +844,7 @@
       {
         "path": "scripts/phone-production-readiness.mjs",
         "mode": "100644",
-        "object_id": "799baccee49ecaaa733437955522359df8ec662b"
+        "object_id": "b187e13a4fae6c4a4ba6822b1a073d45d3abe91a"
       },
       {
         "path": "scripts/production-backup.mjs",
@@ -904,7 +909,7 @@
       {
         "path": "scripts/refresh-integrated-backend-authority-release.mjs",
         "mode": "100644",
-        "object_id": "da48e273bbab5ff6a5d6c2afe8be731095bff2cc"
+        "object_id": "aaf584e5413b7c236e9ed1ee64dd114a73688213"
       },
       {
         "path": "scripts/refresh-release-schema-alignment.mjs",
@@ -969,7 +974,7 @@
       {
         "path": "scripts/schema-fingerprint-catalog.mjs",
         "mode": "100644",
-        "object_id": "7778073a4a59aea2ac9cba61c36468fdab4fe93a"
+        "object_id": "fdd14db6fa7fffe68256bb60cd6fec8adddf3dfd"
       },
       {
         "path": "scripts/schema-fingerprint-check.mjs",
@@ -979,7 +984,7 @@
       {
         "path": "scripts/schema-transition-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "9bc0e742c299430eea3fbfc0fdbf0b7387d17b20"
+        "object_id": "cf4278fec31cb76e7d6cd8f707b3fe1b23741825"
       },
       {
         "path": "scripts/smoke-ai-intent.mjs",
@@ -1084,12 +1089,12 @@
       {
         "path": "scripts/static-weekly-control-plane-runtime-tests.mjs",
         "mode": "100644",
-        "object_id": "f0ac1908c0f2aa470727cb1962f0441f2c6dac6b"
+        "object_id": "9eb19e525b692507cab8aa64f1d1e0a642738b9e"
       },
       {
         "path": "scripts/static-weekly-control-plane-tests.mjs",
         "mode": "100644",
-        "object_id": "72cbd49e0dfce68105aa67695450fb997367a963"
+        "object_id": "bd4189ce2cac1ce3f5c2470c19ce7d0a3283a53b"
       },
       {
         "path": "scripts/static-weekly-employee-day-route-tests.mjs",
@@ -1099,7 +1104,7 @@
       {
         "path": "scripts/static-weekly-schedule-authority-closure-tests.mjs",
         "mode": "100644",
-        "object_id": "3587f8117667af2cc0bc09c8d9b02a2c7681113b"
+        "object_id": "d4785b7253bc448e43455dc3ef137534294f2afb"
       },
       {
         "path": "scripts/static-weekly-schedule-authority-v3-tests.mjs",
@@ -1429,7 +1434,7 @@
       {
         "path": "src/custodial-employee-admin.js",
         "mode": "100644",
-        "object_id": "2d131a12e64d76c9cf355913d8dd11c017b189bd"
+        "object_id": "45279599f885b326221f5c9f0d9211ffbce6cac7"
       },
       {
         "path": "src/device-identity.js",
@@ -1449,7 +1454,7 @@
       {
         "path": "src/events-api.js",
         "mode": "100644",
-        "object_id": "3485ba26d1a81040c02c6d3d2651a3b13b49359e"
+        "object_id": "219ecf74ce8ff5585fc512602d7f5128102f7173"
       },
       {
         "path": "src/gemini-console-api.js",
@@ -1634,12 +1639,12 @@
       {
         "path": "src/static-weekly-control-plane-runtime.js",
         "mode": "100644",
-        "object_id": "49f7b793d8c0124e1c303c8eb5383b9454e70e0c"
+        "object_id": "7e2ce57a6075c0de2203b0dc1e836fd1d3b224e8"
       },
       {
         "path": "src/static-weekly-control-plane.js",
         "mode": "100644",
-        "object_id": "1875f2cb10da8480534d666c763d98ce5ab56d8a"
+        "object_id": "d6d861d5b7f5fc0a0d45c107f81f17fc02438208"
       },
       {
         "path": "src/static-weekly-schedule-compiler.js",
@@ -1724,12 +1729,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "0609c80f1e00210dce108b98b76faef44b55fa9b"
+        "object_id": "22670560e667606a54512737242f28a215609a4a"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "3343163512be2c479a35012313fe90b9fb5f71a4"
+        "object_id": "670eb1001584cdddde492502b5669283e42421f6"
       },
       {
         "path": "supabase/config.toml",
@@ -2694,7 +2699,7 @@
       {
         "path": "supabase/migrations/20260813210000_custodial_u4_ops_closure.sql",
         "mode": "100644",
-        "object_id": "e3ff60e3dc9849d8b733fed3a107e951a0463976"
+        "object_id": "3f6323be3f40bb715ec47dd16aa2c5a4af78774e"
       },
       {
         "path": "tmp/write_probe.txt",
@@ -2702,7 +2707,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 519,
+    "authority_path_count": 520,
     "migration_path_count": 76,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
