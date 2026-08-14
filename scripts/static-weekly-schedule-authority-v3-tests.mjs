@@ -19,10 +19,13 @@ const quote = (value) => `'${String(value).replaceAll("'", "''")}'`;
 const json = (value) => `$$${JSON.stringify(value)}$$::jsonb`;
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const docker = (args, options = {}) => execFileAsync("docker", args, { maxBuffer: 32 * 1024 * 1024, ...options });
-const dateInMemphis = () => Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date()).map(({ type, value }) => [type, value]));
 const shiftDays = (date, days) => { const value = new Date(`${date}T12:00:00Z`); value.setUTCDate(value.getUTCDate() + days); return value.toISOString().slice(0, 10); };
-const memphisParts = dateInMemphis();
-const turnoverDate = `${memphisParts.year}-${memphisParts.month}-${memphisParts.day}`;
+const dateTimeInMemphis = () => Object.fromEntries(new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/Chicago", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hourCycle: "h23",
+}).formatToParts(new Date()).map(({ type, value }) => [type, value]));
+const memphisParts = dateTimeInMemphis();
+const memphisCalendarDate = `${memphisParts.year}-${memphisParts.month}-${memphisParts.day}`;
+const turnoverDate = Number(memphisParts.hour) < 4 ? shiftDays(memphisCalendarDate, -1) : memphisCalendarDate;
 const turnoverWeekday = new Date(`${turnoverDate}T12:00:00Z`).getUTCDay();
 const turnoverWeek = shiftDays(turnoverDate, turnoverWeekday === 0 ? -6 : 1 - turnoverWeekday);
 const initialWeek = shiftDays(turnoverWeek, -42);

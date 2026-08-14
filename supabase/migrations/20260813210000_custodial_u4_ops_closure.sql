@@ -600,6 +600,15 @@ with recursive authority_relations as (
   union
   select p.oid from pg_trigger t join authority_relations r on r.oid=t.tgrelid join pg_proc p on p.oid=t.tgfoid
   join pg_namespace n on n.oid=p.pronamespace where not t.tgisinternal and n.nspname='public'
+  union
+  select i.oid from public.custodial_terminal_writer_inventory i
+  where i.mutates_terminal_truth or i.delegates_alternate_terminal_authority
+  union
+  select p.oid from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+  where n.nspname='public' and p.proname in (
+    'run_application_write','run_sql_write','run_sql_migration','force_close_session','tool_force_close_session',
+    'purge_closed_scan_history_before','tool_purge_closed_scan_history_before'
+  )
 )
 insert into public.custodial_release_authority_restore_inventory(restore_order,object_kind,object_identity,definition_sql,definition_sha256)
 select 40000+row_number() over(order by function_identity),'grant',function_identity,

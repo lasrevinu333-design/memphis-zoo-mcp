@@ -919,7 +919,7 @@
       {
         "path": "scripts/release-canary-recovery-database-tests.mjs",
         "mode": "100644",
-        "object_id": "bea1c728407d69bd8e4b1899ef4333101733019f"
+        "object_id": "d8b704bd0f2fc5208994511f275dcecf2d097387"
       },
       {
         "path": "scripts/release-closure-contract-tests.mjs",
@@ -1104,7 +1104,7 @@
       {
         "path": "scripts/static-weekly-schedule-authority-v3-tests.mjs",
         "mode": "100644",
-        "object_id": "8fba406b2e5be79062bf24c97ff644ad17143bca"
+        "object_id": "bfc1ed8eb618f6b42ae5065bd3c4c165c2f03210"
       },
       {
         "path": "scripts/static-weekly-schedule-candidate-importer.mjs",
@@ -2694,7 +2694,7 @@
       {
         "path": "supabase/migrations/20260813210000_custodial_u4_ops_closure.sql",
         "mode": "100644",
-        "object_id": "0a17cdf9549ddcdb62f0e187929ab9de4f168f38"
+        "object_id": "6dd94b66549ef288da326b1de152f6c7fdef66e0"
       },
       {
         "path": "tmp/write_probe.txt",
