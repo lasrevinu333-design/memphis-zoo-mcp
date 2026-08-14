@@ -1,5 +1,5 @@
 {
-  "release_contract_version": "offline-authority.v4",
+  "release_contract_version": "offline-authority.v5",
   "accepted_engine_contract": {
     "scan": "scan.v2",
     "queue": "indexeddb-v4",
@@ -13,7 +13,7 @@
   },
   "backend_contract": {
     "scan": "scan.v4.snapshot-bound-authority",
-    "authority": "offline-authority.v4",
+    "authority": "offline-authority.v5",
     "execution_boundary": "CUSTODIAL_BACKEND_PROOF_SECRET",
     "bridge_backend_source": "src/index.js:runPreparedScanRpc",
     "health_gate": "GET /scan-api/authority-health reads custodial_backend_authority_health plus the durable receipt produced only after the designated phone traverses the authenticated native-vault /scan-api/rpc route; canary resume binds that exact receipt"
@@ -36,6 +36,7 @@
     },
     "phase_order": [
       "configure CUSTODIAL_BACKEND_PROOF_SECRET (minimum 32 characters) and matching database SHA-256 digest",
+      "run npm run release:populated-schema:preflight through the read-only production MCP and preserve its exact source-fingerprint receipt before any migration",
       "apply 20260810143000_offline_actor_occurrence_reconciliation.sql",
       "deploy the bridge backend; it falls back only on absent authoritative procedures",
       "apply 20260810150000_enforce_integrated_backend_authority.sql",

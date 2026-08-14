@@ -71,6 +71,7 @@
     "test:schema-fingerprint": "node scripts/schema-fingerprint-check.mjs",
     "test:schema-transition": "node scripts/refresh-release-schema-alignment.mjs --check && node scripts/schema-transition-contract-tests.mjs",
     "release:schema-alignment:refresh": "node scripts/refresh-release-schema-alignment.mjs",
+    "release:populated-schema:preflight": "node scripts/refresh-schema-fingerprint.mjs --preflight",
     "release:integrated-backend-authority:refresh": "node scripts/refresh-integrated-backend-authority-release.mjs",
     "release:integrated-backend-authority:check": "node scripts/refresh-integrated-backend-authority-release.mjs --check",
     "schema:fingerprint:refresh": "node scripts/refresh-schema-fingerprint.mjs",

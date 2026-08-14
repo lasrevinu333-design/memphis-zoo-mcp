@@ -147,6 +147,34 @@ assert.equal(sql(`select public.custodial_release_authority_current_grant_defini
 assert.equal(sql("select has_function_privilege('service_role','public.tool_get_offline_scan_authority_snapshot(text,text,text)'::regprocedure,'EXECUTE')::text;"), "true");
 assert.equal(sql("select has_table_privilege('service_role','public.sessions','SELECT')::text;"), "true");
 
+const driftRole = `custodial_inventory_drift_${Date.now().toString(36)}`;
+const triggerIdentity = "public.custodial_release_canary_transport_probes.trg_custodial_release_canary_transport_probes_immutable";
+const indexIdentity = sql("select object_identity from public.custodial_release_authority_restore_inventory where object_kind='index' order by object_identity limit 1;");
+const policyIdentity = "public.maintenance_tickets:maintenance_tickets_select_policy";
+const relationStateIdentity = "public.maintenance_tickets";
+const originalRls = sql("select relrowsecurity::text from pg_class where oid='public.maintenance_tickets'::regclass;");
+sql(`create role ${driftRole} nologin; grant select on table public.sessions to ${driftRole};`);
+sql("alter table public.custodial_release_canary_transport_probes disable trigger trg_custodial_release_canary_transport_probes_immutable;");
+sql(`drop index ${indexIdentity};`);
+sql(`alter table public.maintenance_tickets ${originalRls === "true" ? "disable" : "enable"} row level security;`);
+sql("drop policy maintenance_tickets_select_policy on public.maintenance_tickets;");
+const expandedDriftHealth = JSON.parse(sql(`select public.custodial_backend_authority_health(${q(secret)})::text;`));
+assert.equal(expandedDriftHealth.ok, false, "expanded authority drift must fail the canary health gate");
+assert.ok(expandedDriftHealth.missing_objects.includes(indexIdentity));
+assert.ok(expandedDriftHealth.missing_objects.includes(policyIdentity));
+assert.ok(expandedDriftHealth.mismatched_objects.includes(triggerIdentity));
+assert.ok(expandedDriftHealth.mismatched_objects.includes(relationStateIdentity));
+assert.ok(expandedDriftHealth.mismatched_objects.includes(tableGrantIdentity));
+const expandedRestore = JSON.parse(sql(`select public.custodial_control_release_canary(
+  '${managerId}'::uuid,'${randomUUID()}'::uuid,${q(deviceId)},'restore_authority','restore expanded authority drift',
+  '{"ok":false,"probe":"expanded-drift"}'::jsonb,${q(secret)})::text;`));
+assert.equal(expandedRestore.restored_objects, expandedDriftHealth.canonical_objects_expected);
+const expandedRestoreHealth = JSON.parse(sql(`select public.custodial_backend_authority_health(${q(secret)})::text;`));
+assert.equal(expandedRestoreHealth.ok, true, "indexes, policies, trigger state, RLS state, and arbitrary-role grants must restore exactly");
+assert.equal(sql(`select has_table_privilege(${q(driftRole)},'public.sessions','SELECT')::text;`), "false");
+assert.equal(sql(`select relrowsecurity::text from pg_class where oid='public.maintenance_tickets'::regclass;`), originalRls);
+sql(`drop role ${driftRole};`);
+
 sql("drop function public.custodial_control_release_canary(uuid,uuid,text,text,text,jsonb,text);");
 const bootstrapRestore = JSON.parse(sql(`select public.custodial_bootstrap_restore_release_authority(
   '${managerId}'::uuid,'${randomUUID()}'::uuid,${q(deviceId)},${q(secret)})::text;`));

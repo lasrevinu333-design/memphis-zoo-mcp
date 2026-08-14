@@ -15,7 +15,10 @@ if(mcpUrl&&!/^https:\/\//i.test(mcpUrl)&&!/^http:\/\/(127\.0\.0\.1|localhost)(?:
 const root=resolve(new URL("..",import.meta.url).pathname);
 const inputPath=resolve(root,"supabase/canonical/schema-fingerprint-input.json");
 const hashPath=resolve(root,"supabase/canonical/schema-fingerprint.txt");
-const checkOnly=process.argv.slice(2).includes("--check");
+const args=process.argv.slice(2);
+const checkOnly=args.length===1&&args[0]==="--check";
+const preflightOnly=args.length===1&&args[0]==="--preflight";
+if(args.length>0&&!checkOnly&&!preflightOnly)throw new Error("Usage: refresh-schema-fingerprint.mjs [--check|--preflight]");
 const queryNames=new Map(Object.entries(SCHEMA_CATALOG_QUERIES).map(([name,sql])=>[sql,name]));
 
 function queryDocker(sql,name){
@@ -50,11 +53,16 @@ if(mcpClient)await mcpClient.close();
 const {normalized,fingerprint}=fingerprintSchemaCatalog(inventory);
 const inputText=`${JSON.stringify(normalized,null,2)}\n`;
 const hashText=`${fingerprint}\n`;
-if(checkOnly){
+if(preflightOnly){
+  const releaseInput=JSON.parse(readFileSync(resolve(root,"release/schema-alignment-input.json"),"utf8"));
+  const expected=String(releaseInput.schema_from_fingerprint||"");
+  if(!/^[0-9a-f]{64}$/.test(expected))throw new Error("Release source schema fingerprint is invalid.");
+  if(fingerprint!==expected)throw new Error(`Populated database preflight rejected schema fingerprint ${fingerprint}; expected ${expected}.`);
+}else if(checkOnly){
   if(readFileSync(inputPath,"utf8")!==inputText)throw new Error("Committed canonical schema-fingerprint-input.json does not equal the clean rebuild inventory.");
   if(readFileSync(hashPath,"utf8")!==hashText)throw new Error("Committed canonical schema-fingerprint.txt does not equal the clean rebuild inventory.");
 }else{
   writeFileSync(inputPath,inputText);
   writeFileSync(hashPath,hashText);
 }
-console.log(JSON.stringify({ok:true,checked:checkOnly,schema_fingerprint:fingerprint,counts:Object.fromEntries(Object.entries(inventory).map(([name,rows])=>[name,rows.length]))},null,2));
+console.log(JSON.stringify({ok:true,mode:preflightOnly?"populated-preflight":checkOnly?"check":"refresh",checked:checkOnly||preflightOnly,schema_fingerprint:fingerprint,counts:Object.fromEntries(Object.entries(inventory).map(([name,rows])=>[name,rows.length]))},null,2));

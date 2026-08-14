@@ -68,13 +68,13 @@ sql(`create or replace function public.tool_start_offline_occurrence(
   returns jsonb language sql as $$select '{"broken":true}'::jsonb$$;`);
 const unhealthy = JSON.parse(sql(`select public.custodial_backend_authority_health(${q(secret)})::text;`));
 assert.equal(unhealthy.ok, false);
-assert.ok(unhealthy.mismatched_functions.includes("public.tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text,text,text,text,text)"));
+assert.ok(unhealthy.mismatched_objects.includes("tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text,text,text,text,text)"));
 const spoofedResume = sql(`select public.custodial_control_release_canary(
   '${managerId}'::uuid,'${randomUUID()}'::uuid,'KIOSK_09','resume_canary','spoofed green health','{"ok":true}'::jsonb,${q(secret)});`, { expectFailure: true });
-assert.match(spoofedResume, /cannot resume until a fresh persisted database recovery probe is green/i);
+assert.match(spoofedResume, /fresh persisted database recovery probe is green before canary resume/i);
 const restored = JSON.parse(sql(`select public.custodial_control_release_canary(
   '${managerId}'::uuid,'${randomUUID()}'::uuid,'KIOSK_09','restore_authority','restore exact authority set',${q(JSON.stringify(unhealthy))}::jsonb,${q(secret)})::text;`));
-assert.equal(restored.restored_functions, 15);
+assert.equal(restored.restored_objects, unhealthy.canonical_objects_expected);
 assert.equal(JSON.parse(sql(`select public.custodial_backend_authority_health(${q(secret)})::text;`)).ok, true);
 
 const credentialId = randomUUID();
@@ -92,8 +92,8 @@ assert.equal(sql(`select status from public.ops_manager_notification_queue where
 const crossingKey = `event-crossing-${stamp}`;
 const eventId = randomUUID();
 sql(`insert into public.events_app_events(id,event_name,location_group_id,event_date,start_time,end_date,status,event_scope,display_location,needs_review)
-  select '${eventId}'::uuid,'Uncertainty canonical event',id,(now() at time zone 'America/Chicago')::date,
-    ((now() at time zone 'America/Chicago')+interval '1 hour')::time,(now() at time zone 'America/Chicago')::date,
+  select '${eventId}'::uuid,'Uncertainty canonical event',id,((now()+interval '1 hour') at time zone 'America/Chicago')::date,
+    ((now()+interval '1 hour') at time zone 'America/Chicago')::time,((now()+interval '1 hour') at time zone 'America/Chicago')::date,
     'SCHEDULED','ZOO_WIDE','Zoo Footprint',false from public.location_groups order by id limit 1;
   insert into public.ops_manager_notification_queue(job_key,credential_id,manager_id,notification_type,title,body,data_json)
   values (${q(crossingKey)},'${credentialId}'::uuid,'${managerId}'::uuid,'event_digest','Crossing event','Must expire before finish',
@@ -111,8 +111,8 @@ assert.equal(finished.provider_message_id, null);
 const rescheduledId = randomUUID();
 const rescheduledKey = `event-rescheduled-${stamp}`;
 sql(`insert into public.events_app_events(id,event_name,location_group_id,event_date,start_time,end_date,status,event_scope,display_location,needs_review)
-  select '${rescheduledId}'::uuid,'Uncertainty rescheduled event',id,(now() at time zone 'America/Chicago')::date,
-    ((now() at time zone 'America/Chicago')+interval '2 hours')::time,(now() at time zone 'America/Chicago')::date,
+  select '${rescheduledId}'::uuid,'Uncertainty rescheduled event',id,((now()+interval '2 hours') at time zone 'America/Chicago')::date,
+    ((now()+interval '2 hours') at time zone 'America/Chicago')::time,((now()+interval '2 hours') at time zone 'America/Chicago')::date,
     'SCHEDULED','ZOO_WIDE','Zoo Footprint',false from public.location_groups order by id limit 1;
   insert into public.ops_manager_notification_queue(job_key,credential_id,manager_id,notification_type,title,body,data_json)
   values (${q(rescheduledKey)},'${credentialId}'::uuid,'${managerId}'::uuid,'event_digest','Rescheduled event','Old occurrence must not send',

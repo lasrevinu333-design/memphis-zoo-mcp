@@ -44,7 +44,7 @@ const input = JSON.parse(readFileSync(inputPath, "utf8"));
 const schemaFingerprint = readFileSync(fingerprintPath, "utf8").trim();
 const frontendManifest = JSON.parse(readFileSync(releaseManifestPath, "utf8"));
 assert.match(schemaFingerprint, /^[a-f0-9]{64}$/);
-assert.equal(input.release_contract_version, "offline-authority.v4");
+assert.equal(input.release_contract_version, "offline-authority.v5");
 assert.equal(input.accepted_engine_contract.scan, "scan.v2");
 assert.equal(input.required_engine_contract.scan, "scan.v4.snapshot-bound-authority");
 assert.equal(input.backend_contract.execution_boundary, "CUSTODIAL_BACKEND_PROOF_SECRET");

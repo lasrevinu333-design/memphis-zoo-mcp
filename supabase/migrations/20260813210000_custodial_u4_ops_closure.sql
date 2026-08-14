@@ -184,7 +184,7 @@ $function$;
 create table public.custodial_release_authority_restore_inventory (
   inventory_id uuid primary key default gen_random_uuid(),
   restore_order integer not null,
-  object_kind text not null check (object_kind in ('function','constraint','trigger','grant')),
+  object_kind text not null check (object_kind in ('function','constraint','index','trigger','policy','relation_state','grant')),
   object_identity text not null,
   definition_sql text not null,
   definition_sha256 text not null check (definition_sha256 ~ '^[0-9a-f]{64}$'),
@@ -217,8 +217,41 @@ before update or delete on public.custodial_release_authority_bootstrap_definiti
 for each row execute function public.custodial_reject_release_authority_inventory_mutation();
 revoke all on table public.custodial_release_authority_bootstrap_definitions from public,anon,authenticated,service_role;
 
+create or replace function public.custodial_release_authority_reset_grants(p_object_identity text)
+returns void language plpgsql security definer set search_path to 'pg_catalog','public'
+as $function$
+declare v_relation oid:=to_regclass(p_object_identity); v_function oid:=to_regprocedure(p_object_identity); v_role record; v_column record;
+begin
+  if v_relation is not null then
+    execute format('revoke all privileges on table %s from public',v_relation::regclass);
+    for v_role in
+      select distinct r.rolname from pg_class c cross join lateral aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a join pg_roles r on r.oid=a.grantee
+      where c.oid=v_relation and a.grantee<>c.relowner
+    loop execute format('revoke all privileges on table %s from %I',v_relation::regclass,v_role.rolname); end loop;
+    for v_column in
+      select a.attname,x.grantee,r.rolname from pg_attribute a join pg_class c on c.oid=a.attrelid
+      cross join lateral aclexplode(a.attacl) x left join pg_roles r on r.oid=x.grantee
+      where c.oid=v_relation and a.attnum>0 and not a.attisdropped and a.attacl is not null and x.grantee<>c.relowner
+    loop
+      execute format('revoke all privileges (%I) on table %s from %s',v_column.attname,v_relation::regclass,case when v_column.grantee=0 then 'public' else quote_ident(v_column.rolname) end);
+    end loop;
+    return;
+  end if;
+  if v_function is not null then
+    execute format('revoke all privileges on function %s from public',v_function::regprocedure);
+    for v_role in
+      select distinct r.rolname from pg_proc p cross join lateral aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a join pg_roles r on r.oid=a.grantee
+      where p.oid=v_function and a.grantee<>p.proowner
+    loop execute format('revoke all privileges on function %s from %I',v_function::regprocedure,v_role.rolname); end loop;
+    return;
+  end if;
+  raise exception using errcode='42704',message='release authority grant target is missing';
+end
+$function$;
+
 -- Keep this renderer byte-for-byte aligned with the grant rows captured below.
--- Health must derive the current ACL from the catalog, not re-hash inventory text.
+-- Health derives every non-owner ACL from the catalogs, including arbitrary
+-- roles and grant options. The reset helper removes unexpected future grants.
 create or replace function public.custodial_release_authority_current_grant_definition(p_object_identity text)
 returns text language plpgsql stable security invoker set search_path to 'pg_catalog','public'
 as $function$
@@ -226,16 +259,16 @@ declare v_relation oid:=to_regclass(p_object_identity); v_function oid:=to_regpr
 begin
   if v_relation is not null then
     return (
-      select 'revoke all on table '||quote_ident(n.nspname)||'.'||quote_ident(c.relname)||' from public,anon,authenticated,service_role;'
+      select 'select public.custodial_release_authority_reset_grants('||quote_literal(p_object_identity)||');'
         ||coalesce((
           select string_agg(
             ' grant '||g.privilege_type||' on table '||quote_ident(n.nspname)||'.'||quote_ident(c.relname)||' to '
-              ||case when lower(g.grantee)='public' then 'public' else quote_ident(g.grantee) end||';',
-            '' order by g.grantee,g.privilege_type
+              ||case when g.grantee=0 then 'public' else quote_ident(r.rolname) end
+              ||case when g.is_grantable then ' with grant option' else '' end||';',
+            '' order by g.grantee,g.privilege_type,g.is_grantable
           )
-          from information_schema.role_table_grants g
-          where g.table_schema=n.nspname and g.table_name=c.relname
-            and lower(g.grantee) in ('public','anon','authenticated','service_role','postgres')
+          from aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) g left join pg_roles r on r.oid=g.grantee
+          where g.grantee<>c.relowner
         ),'')
       from pg_class c join pg_namespace n on n.oid=c.relnamespace
       where c.oid=v_relation
@@ -243,23 +276,82 @@ begin
   end if;
   if v_function is not null then
     return (
-      select 'revoke all on function '||p.oid::regprocedure::text||' from public,anon,authenticated,service_role;'
+      select 'select public.custodial_release_authority_reset_grants('||quote_literal(p_object_identity)||');'
         ||coalesce((
           select string_agg(
             ' grant execute on function '||p.oid::regprocedure::text||' to '
-              ||case when a.grantee=0 then 'public' else quote_ident(r.rolname) end||';',
-            '' order by a.grantee
+              ||case when a.grantee=0 then 'public' else quote_ident(r.rolname) end
+              ||case when a.is_grantable then ' with grant option' else '' end||';',
+            '' order by a.grantee,a.is_grantable
           )
           from aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
           left join pg_roles r on r.oid=a.grantee
-          where a.privilege_type='EXECUTE'
-            and (a.grantee=0 or r.rolname in ('anon','authenticated','service_role','postgres'))
+          where a.privilege_type='EXECUTE' and a.grantee<>p.proowner
         ),'')
       from pg_proc p
       where p.oid=v_function
     );
   end if;
   return null;
+end
+$function$;
+
+create or replace function public.custodial_release_authority_current_index_definition(p_object_identity text)
+returns text language sql stable strict set search_path to 'pg_catalog','public'
+as $function$
+  select 'drop index if exists '||quote_ident(n.nspname)||'.'||quote_ident(i.relname)||'; '||pg_get_indexdef(i.oid)||';'
+  from pg_class i join pg_namespace n on n.oid=i.relnamespace where i.oid=to_regclass(p_object_identity) and i.relkind='i'
+$function$;
+
+create or replace function public.custodial_release_authority_current_relation_state_definition(p_object_identity text)
+returns text language sql stable strict set search_path to 'pg_catalog','public'
+as $function$
+  select 'alter table '||quote_ident(n.nspname)||'.'||quote_ident(c.relname)||' '||case when c.relrowsecurity then 'enable' else 'disable' end||' row level security; alter table '
+    ||quote_ident(n.nspname)||'.'||quote_ident(c.relname)||' '||case when c.relforcerowsecurity then 'force' else 'no force' end||' row level security;'
+  from pg_class c join pg_namespace n on n.oid=c.relnamespace where c.oid=to_regclass(p_object_identity) and c.relkind in ('r','p')
+$function$;
+
+create or replace function public.custodial_release_authority_current_policy_definition(p_object_identity text)
+returns text language plpgsql stable strict set search_path to 'pg_catalog','public'
+as $function$
+declare v_relation oid:=to_regclass(split_part(p_object_identity,':',1)); v_policy text:=substr(p_object_identity,position(':' in p_object_identity)+1);
+begin
+  return (
+    select 'drop policy if exists '||quote_ident(p.polname)||' on '||quote_ident(n.nspname)||'.'||quote_ident(c.relname)||'; create policy '
+      ||quote_ident(p.polname)||' on '||quote_ident(n.nspname)||'.'||quote_ident(c.relname)||' as '||case when p.polpermissive then 'permissive' else 'restrictive' end
+      ||' for '||case p.polcmd when '*' then 'all' when 'r' then 'select' when 'a' then 'insert' when 'w' then 'update' when 'd' then 'delete' end
+      ||' to '||(select string_agg(case when role_oid=0 then 'public' else quote_ident(r.rolname) end,',' order by role_oid) from unnest(p.polroles) role_oid left join pg_roles r on r.oid=role_oid)
+      ||case when p.polqual is null then '' else ' using ('||pg_get_expr(p.polqual,p.polrelid)||')' end
+      ||case when p.polwithcheck is null then '' else ' with check ('||pg_get_expr(p.polwithcheck,p.polrelid)||')' end||';'
+    from pg_policy p join pg_class c on c.oid=p.polrelid join pg_namespace n on n.oid=c.relnamespace
+    where p.polrelid=v_relation and p.polname=v_policy
+  );
+end
+$function$;
+
+create or replace function public.custodial_release_authority_restore_constraint(p_relation_identity text,p_constraint_name text,p_constraint_definition text)
+returns void language plpgsql security definer set search_path to 'pg_catalog','public'
+as $function$
+declare v_relation oid:=to_regclass(p_relation_identity); v_current text;
+begin
+  if v_relation is null then raise exception using errcode='42704',message='release authority constraint relation is missing'; end if;
+  select pg_get_constraintdef(c.oid,true) into v_current from pg_constraint c where c.conrelid=v_relation and c.conname=p_constraint_name;
+  if v_current is null then
+    execute format('alter table %s add constraint %I %s',v_relation::regclass,p_constraint_name,p_constraint_definition);
+  elsif v_current<>p_constraint_definition then
+    raise exception using errcode='55000',message='structural constraint drift requires a reviewed forward migration';
+  end if;
+end
+$function$;
+
+create or replace function public.custodial_release_authority_current_constraint_definition(p_object_identity text)
+returns text language plpgsql stable strict set search_path to 'pg_catalog','public'
+as $function$
+declare v_relation_text text:=split_part(p_object_identity,':',1); v_relation oid:=to_regclass(v_relation_text); v_constraint text:=substr(p_object_identity,position(':' in p_object_identity)+1); v_definition text;
+begin
+  select pg_get_constraintdef(c.oid,true) into v_definition from pg_constraint c where c.conrelid=v_relation and c.conname=v_constraint;
+  if v_definition is null then return null; end if;
+  return 'select public.custodial_release_authority_restore_constraint('||quote_literal(v_relation_text)||','||quote_literal(v_constraint)||','||quote_literal(v_definition)||');';
 end
 $function$;
 
@@ -272,14 +364,20 @@ begin
   select array_agg(i.object_identity order by i.restore_order,i.object_identity) into v_missing
   from public.custodial_release_authority_restore_inventory i
   where (i.object_kind='function' and to_regprocedure(i.object_identity) is null)
-     or (i.object_kind='constraint' and not exists(select 1 from pg_constraint c join pg_class r on r.oid=c.conrelid join pg_namespace n on n.oid=r.relnamespace where i.object_identity=quote_ident(n.nspname)||'.'||quote_ident(r.relname)||'.'||quote_ident(c.conname)))
+     or (i.object_kind='constraint' and public.custodial_release_authority_current_constraint_definition(i.object_identity) is null)
+     or (i.object_kind='index' and public.custodial_release_authority_current_index_definition(i.object_identity) is null)
      or (i.object_kind='trigger' and not exists(select 1 from pg_trigger t join pg_class r on r.oid=t.tgrelid join pg_namespace n on n.oid=r.relnamespace where i.object_identity=quote_ident(n.nspname)||'.'||quote_ident(r.relname)||'.'||quote_ident(t.tgname) and not t.tgisinternal))
+     or (i.object_kind='policy' and public.custodial_release_authority_current_policy_definition(i.object_identity) is null)
+     or (i.object_kind='relation_state' and public.custodial_release_authority_current_relation_state_definition(i.object_identity) is null)
      or (i.object_kind='grant' and public.custodial_release_authority_current_grant_definition(i.object_identity) is null);
   select array_agg(i.object_identity order by i.restore_order,i.object_identity) into v_mismatched
   from public.custodial_release_authority_restore_inventory i
   where (i.object_kind='function' and to_regprocedure(i.object_identity) is not null and encode(extensions.digest(convert_to(pg_get_functiondef(to_regprocedure(i.object_identity)),'UTF8'),'sha256'),'hex')<>i.definition_sha256)
-     or (i.object_kind='constraint' and exists(select 1 from pg_constraint c join pg_class r on r.oid=c.conrelid join pg_namespace n on n.oid=r.relnamespace where i.object_identity=quote_ident(n.nspname)||'.'||quote_ident(r.relname)||'.'||quote_ident(c.conname) and encode(extensions.digest(convert_to('alter table '||quote_ident(n.nspname)||'.'||quote_ident(r.relname)||' drop constraint if exists '||quote_ident(c.conname)||'; alter table '||quote_ident(n.nspname)||'.'||quote_ident(r.relname)||' add constraint '||quote_ident(c.conname)||' '||pg_get_constraintdef(c.oid,true)||';','UTF8'),'sha256'),'hex')<>i.definition_sha256))
-     or (i.object_kind='trigger' and exists(select 1 from pg_trigger t join pg_class r on r.oid=t.tgrelid join pg_namespace n on n.oid=r.relnamespace where i.object_identity=quote_ident(n.nspname)||'.'||quote_ident(r.relname)||'.'||quote_ident(t.tgname) and not t.tgisinternal and encode(extensions.digest(convert_to('drop trigger if exists '||quote_ident(t.tgname)||' on '||quote_ident(n.nspname)||'.'||quote_ident(r.relname)||'; '||pg_get_triggerdef(t.oid,true)||';','UTF8'),'sha256'),'hex')<>i.definition_sha256))
+     or (i.object_kind='constraint' and encode(extensions.digest(convert_to(public.custodial_release_authority_current_constraint_definition(i.object_identity),'UTF8'),'sha256'),'hex') is distinct from i.definition_sha256)
+     or (i.object_kind='index' and encode(extensions.digest(convert_to(public.custodial_release_authority_current_index_definition(i.object_identity),'UTF8'),'sha256'),'hex') is distinct from i.definition_sha256)
+     or (i.object_kind='trigger' and exists(select 1 from pg_trigger t join pg_class r on r.oid=t.tgrelid join pg_namespace n on n.oid=r.relnamespace where i.object_identity=quote_ident(n.nspname)||'.'||quote_ident(r.relname)||'.'||quote_ident(t.tgname) and not t.tgisinternal and encode(extensions.digest(convert_to('drop trigger if exists '||quote_ident(t.tgname)||' on '||quote_ident(n.nspname)||'.'||quote_ident(r.relname)||'; '||pg_get_triggerdef(t.oid,true)||'; alter table '||quote_ident(n.nspname)||'.'||quote_ident(r.relname)||' '||case t.tgenabled when 'O' then 'enable' when 'D' then 'disable' when 'R' then 'enable replica' when 'A' then 'enable always' end||' trigger '||quote_ident(t.tgname)||';','UTF8'),'sha256'),'hex')<>i.definition_sha256))
+     or (i.object_kind='policy' and encode(extensions.digest(convert_to(public.custodial_release_authority_current_policy_definition(i.object_identity),'UTF8'),'sha256'),'hex') is distinct from i.definition_sha256)
+     or (i.object_kind='relation_state' and encode(extensions.digest(convert_to(public.custodial_release_authority_current_relation_state_definition(i.object_identity),'UTF8'),'sha256'),'hex') is distinct from i.definition_sha256)
      or (i.object_kind='grant' and encode(extensions.digest(convert_to(public.custodial_release_authority_current_grant_definition(i.object_identity),'UTF8'),'sha256'),'hex') is distinct from i.definition_sha256);
   v_checks:=jsonb_build_object(
     'restore_inventory_present',(select count(*)>40 from public.custodial_release_authority_restore_inventory),
@@ -294,6 +392,11 @@ begin
       or has_table_privilege('service_role','public.custodial_offline_reconciliation_records','insert')
       or has_table_privilege('service_role','public.custodial_offline_scan_event_evidence','insert')
     ),
+    'authority_column_grants_absent',not exists(
+      select 1 from pg_attribute a join pg_class c on c.oid=a.attrelid join pg_namespace n on n.oid=c.relnamespace
+      where n.nspname='public' and a.attnum>0 and not a.attisdropped and a.attacl is not null
+        and (c.relname like 'custodial_%' or c.relname in ('devices','locations','device_auth_credentials','sessions','completion_responses','maintenance_tickets','scan_events'))
+    ),
     'native_timestamp_renderer',public.custodial_canonical_utc_millis('2026-08-13 12:34:56.789123+00'::timestamptz)='2026-08-13T12:34:56.789Z'
   );
   select bool_and(value::boolean) into v_ok from jsonb_each_text(v_checks);
@@ -306,7 +409,7 @@ create or replace function public.custodial_control_release_canary(
 ) returns jsonb language plpgsql security definer set search_path to 'pg_catalog','public','extensions'
 as $function$
 declare v_device text:=upper(btrim(coalesce(p_device_identifier,''))); v_existing public.custodial_release_canary_rollback_audits%rowtype;
-  v_entry public.custodial_release_authority_restore_inventory%rowtype; v_result jsonb; v_restored integer:=0;
+  v_entry public.custodial_release_authority_restore_inventory%rowtype; v_entries public.custodial_release_authority_restore_inventory[]; v_result jsonb; v_restored integer:=0;
   v_secret_digest text; v_health jsonb; v_transport jsonb;
 begin
   select execution_secret_digest into v_secret_digest from public.custodial_backend_execution_config where config_key=true and enabled=true;
@@ -324,7 +427,8 @@ begin
     v_result:=jsonb_build_object('device_identifier',v_device,'canary_paused',true,'restored_objects',0);
   elsif p_action='restore_authority' then
     if not coalesce((select paused from public.custodial_release_canary_controls where device_identifier=v_device),false) then raise exception using errcode='55000',message='the exact release canary must be paused before authority restoration'; end if;
-    for v_entry in select * from public.custodial_release_authority_restore_inventory order by restore_order,object_identity loop
+    select array_agg(i order by i.restore_order,i.object_identity) into v_entries from public.custodial_release_authority_restore_inventory i;
+    foreach v_entry in array v_entries loop
       if encode(extensions.digest(convert_to(v_entry.definition_sql,'UTF8'),'sha256'),'hex')<>v_entry.definition_sha256 then raise exception using errcode='23514',message='a captured authority restoration definition failed its digest'; end if;
       execute v_entry.definition_sql; v_restored:=v_restored+1;
     end loop;
@@ -369,6 +473,16 @@ $function$;
 revoke all on function public.custodial_bootstrap_restore_release_authority(uuid,uuid,text,text) from public,anon,authenticated;
 grant execute on function public.custodial_bootstrap_restore_release_authority(uuid,uuid,text,text) to postgres,service_role;
 
+do $authority_column_acl_preflight$
+begin
+  if exists(
+    select 1 from pg_attribute a join pg_class c on c.oid=a.attrelid join pg_namespace n on n.oid=c.relnamespace
+    where n.nspname='public' and a.attnum>0 and not a.attisdropped and a.attacl is not null
+      and (c.relname like 'custodial_%' or c.relname in ('devices','locations','device_auth_credentials','sessions','completion_responses','maintenance_tickets','scan_events'))
+  ) then raise exception 'explicit authority-column grants require reviewed reconciliation before U4 capture'; end if;
+end
+$authority_column_acl_preflight$;
+
 with authority_functions as (
   select p.oid,n.nspname,p.proname,pg_get_function_identity_arguments(p.oid) args
   from pg_proc p join pg_namespace n on n.oid=p.pronamespace
@@ -379,39 +493,38 @@ with authority_functions as (
   )
 ), authority_relations as (
   select c.oid,n.nspname,c.relname from pg_class c join pg_namespace n on n.oid=c.relnamespace
-  where n.nspname='public' and c.relname in (
-    'devices','locations','device_auth_credentials','sessions','completion_responses','maintenance_tickets','scan_events',
-    'custodial_offline_actor_contexts','custodial_offline_submission_proofs','custodial_offline_scan_authority_snapshots',
-    'custodial_offline_authority_activation_events','custodial_offline_reconciliation_records','custodial_offline_reconciliation_audits',
-    'custodial_offline_scan_event_evidence','custodial_offline_time_reservations','custodial_offline_reconciliation_dispositions',
-    'custodial_offline_reconciliation_outbox','custodial_release_canary_controls','custodial_release_canary_transport_probes'
+  where n.nspname='public' and c.relkind in ('r','p') and (
+    c.relname like 'custodial_%'
+    or c.relname in ('devices','locations','device_auth_credentials','sessions','completion_responses','maintenance_tickets','scan_events')
   )
 ), inventory_rows as (
   select 100+row_number() over(order by proname,args)::integer restore_order,'function'::text object_kind,
     oid::regprocedure::text object_identity,pg_get_functiondef(oid) definition_sql from authority_functions
   union all
-  select 10000+row_number() over(order by r.relname,c.conname)::integer,'constraint',quote_ident(r.nspname)||'.'||quote_ident(r.relname)||'.'||quote_ident(c.conname),
-    'alter table '||quote_ident(r.nspname)||'.'||quote_ident(r.relname)||' drop constraint if exists '||quote_ident(c.conname)||'; alter table '||quote_ident(r.nspname)||'.'||quote_ident(r.relname)||' add constraint '||quote_ident(c.conname)||' '||pg_get_constraintdef(c.oid,true)||';'
+  select 9000+row_number() over(order by r.relname)::integer,'relation_state',quote_ident(r.nspname)||'.'||quote_ident(r.relname),
+    public.custodial_release_authority_current_relation_state_definition(quote_ident(r.nspname)||'.'||quote_ident(r.relname)) from authority_relations r
+  union all
+  select 10000+row_number() over(order by case c.contype when 'p' then 1 when 'u' then 2 when 'f' then 3 else 4 end,r.relname,c.conname)::integer,
+    'constraint',quote_ident(r.nspname)||'.'||quote_ident(r.relname)||':'||c.conname,
+    public.custodial_release_authority_current_constraint_definition(quote_ident(r.nspname)||'.'||quote_ident(r.relname)||':'||c.conname)
   from pg_constraint c join authority_relations r on r.oid=c.conrelid
-  where c.contype in ('c','x')
-     or c.conname in ('custodial_offline_reconciliation_client_completion_id_uuid','completion_responses_client_completion_id_uuid')
+  union all
+  select 15000+row_number() over(order by r.relname,i.relname)::integer,'index',quote_ident(ns.nspname)||'.'||quote_ident(i.relname),
+    public.custodial_release_authority_current_index_definition(quote_ident(ns.nspname)||'.'||quote_ident(i.relname))
+  from pg_index ix join authority_relations r on r.oid=ix.indrelid join pg_class i on i.oid=ix.indexrelid join pg_namespace ns on ns.oid=i.relnamespace
+  where not exists(select 1 from pg_constraint c where c.conindid=ix.indexrelid)
   union all
   select 20000+row_number() over(order by r.relname,t.tgname)::integer,'trigger',quote_ident(r.nspname)||'.'||quote_ident(r.relname)||'.'||quote_ident(t.tgname),
-    'drop trigger if exists '||quote_ident(t.tgname)||' on '||quote_ident(r.nspname)||'.'||quote_ident(r.relname)||'; '||pg_get_triggerdef(t.oid,true)||';'
+    'drop trigger if exists '||quote_ident(t.tgname)||' on '||quote_ident(r.nspname)||'.'||quote_ident(r.relname)||'; '||pg_get_triggerdef(t.oid,true)||'; alter table '
+      ||quote_ident(r.nspname)||'.'||quote_ident(r.relname)||' '||case t.tgenabled when 'O' then 'enable' when 'D' then 'disable' when 'R' then 'enable replica' when 'A' then 'enable always' end||' trigger '||quote_ident(t.tgname)||';'
   from pg_trigger t join authority_relations r on r.oid=t.tgrelid where not t.tgisinternal
   union all
+  select 25000+row_number() over(order by r.relname,p.polname)::integer,'policy',quote_ident(r.nspname)||'.'||quote_ident(r.relname)||':'||p.polname,
+    public.custodial_release_authority_current_policy_definition(quote_ident(r.nspname)||'.'||quote_ident(r.relname)||':'||p.polname)
+  from pg_policy p join authority_relations r on r.oid=p.polrelid
+  union all
   select 30000+row_number() over(order by nspname,relname)::integer,'grant',quote_ident(nspname)||'.'||quote_ident(relname),
-    'revoke all on table '||quote_ident(nspname)||'.'||quote_ident(relname)||' from public,anon,authenticated,service_role;'
-    || coalesce((
-      select string_agg(
-        ' grant '||g.privilege_type||' on table '||quote_ident(r.nspname)||'.'||quote_ident(r.relname)||' to '
-        || case when lower(g.grantee)='public' then 'public' else quote_ident(g.grantee) end||';',
-        '' order by g.grantee,g.privilege_type
-      )
-      from information_schema.role_table_grants g
-      where g.table_schema=r.nspname and g.table_name=r.relname
-        and lower(g.grantee) in ('public','anon','authenticated','service_role','postgres')
-    ),'')
+    public.custodial_release_authority_current_grant_definition(quote_ident(nspname)||'.'||quote_ident(relname))
   from authority_relations r
 )
 insert into public.custodial_release_authority_restore_inventory(restore_order,object_kind,object_identity,definition_sql,definition_sha256)
@@ -425,17 +538,7 @@ select 40000+row_number() over(order by function_identity),'grant',function_iden
   grant_sql,encode(extensions.digest(convert_to(grant_sql,'UTF8'),'sha256'),'hex')
 from (
   select p.oid::regprocedure::text function_identity,
-    'revoke all on function '||p.oid::regprocedure::text||' from public,anon,authenticated,service_role;'
-    || coalesce((
-      select string_agg(
-        ' grant execute on function '||p.oid::regprocedure::text||' to '
-        || case when a.grantee=0 then 'public' else quote_ident(r.rolname) end||';',
-        '' order by a.grantee
-      )
-      from aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
-      left join pg_roles r on r.oid=a.grantee
-      where a.privilege_type='EXECUTE' and (a.grantee=0 or r.rolname in ('anon','authenticated','service_role','postgres'))
-    ),'') grant_sql
+    public.custodial_release_authority_current_grant_definition(p.oid::regprocedure::text) grant_sql
   from pg_proc p join pg_namespace n on n.oid=p.pronamespace
   where n.nspname='public' and (p.proname like 'custodial_%' or p.proname in ('create_maintenance_tickets_from_response','resolve_scan_location_code','static_weekly_reject_update_delete',
     'tool_get_offline_scan_authority_snapshot','tool_start_offline_occurrence','tool_commit_cleaning_workflow_authoritative','tool_complete_session_authoritative'))
