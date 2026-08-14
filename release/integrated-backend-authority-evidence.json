@@ -2,14 +2,14 @@
   "artifact": "integrated-backend-authority-release-evidence.v2",
   "release_id": "release-2026.07.19.custodial-v3.12",
   "frontend_commit_sha": "0182ff112690d6ab621159b65e7fa59babbe01a9",
-  "schema_fingerprint": "5ba4181905ce9ee61e3df802090a3bcba407ab65964144f062243559d90a70e3",
+  "schema_fingerprint": "2afd6e6154bd62c8974c72a794e08e621df5c3f04a1e88399227f15bb7a0a41e",
   "schema_transition": {
     "transition_id": "custodial-canary-offline-scan-authority-20260813",
     "from_fingerprint": "405dfbc65393c7a1fc9ea86b9c2e1f637df185f11a8520315f61fd8a9b1e5dfc",
-    "to_fingerprint": "5ba4181905ce9ee61e3df802090a3bcba407ab65964144f062243559d90a70e3",
+    "to_fingerprint": "2afd6e6154bd62c8974c72a794e08e621df5c3f04a1e88399227f15bb7a0a41e",
     "expires_at": "2026-08-23T23:59:59Z"
   },
-  "frontend_source_fingerprint": "5ba4181905ce9ee61e3df802090a3bcba407ab65964144f062243559d90a70e3",
+  "frontend_source_fingerprint": "2afd6e6154bd62c8974c72a794e08e621df5c3f04a1e88399227f15bb7a0a41e",
   "backend_contract": {
     "scan": "scan.v4.snapshot-bound-authority",
     "authority": "offline-authority.v5",
@@ -41,7 +41,8 @@
     "operational_boundary_closure_phase": "20260813141806 aligns notification service dates, exact activation replay identity, and the captured rollback definition",
     "device_sync_actor_groups_phase": "20260813173000 stores verified pending work groups by issued snapshot, employee, and assignment epoch while retaining the Build 22 aggregate reporter",
     "release_phone_transport_and_offline_activation_phase": "20260813190000 requires a fresh immutable receipt from the designated phone's native-vault /scan-api/rpc path before resume and permits delayed activation only for work begun while snapshot, credential, and assignment authority were valid",
-    "u4_ops_closure_phase": "20260813210000 canonicalizes native wire timestamps, records immutable activation boundaries, enforces UUID completion identities, installs two-phase employee notification dispatch ledgers, durable manager dispatch preparation with terminal outcome-unknown restart recovery, complete notification recovery authority, and terminal notification retries, and restores the catalog-derived authority set"
+    "u4_ops_closure_phase": "20260813210000 canonicalizes native wire timestamps, records immutable activation boundaries, enforces UUID completion identities, installs two-phase employee notification dispatch ledgers, durable manager dispatch preparation with terminal outcome-unknown restart recovery, complete notification recovery authority, and terminal notification retries, and restores the catalog-derived authority set",
+    "atomic_day_change_reconciliation_phase": "20260814224034 converges both preserved U4 migration histories and recognizes the existing complete child/projection receipt chain before mutable Weekly Schedule authority is reread"
   },
   "rollback": {
     "before_enforcement": "legacy Engine and current backend completion remain available",
@@ -81,6 +82,7 @@
       "apply 20260813173000_device_sync_actor_groups.sql",
       "apply 20260813190000_release_phone_transport_and_offline_activation_closure.sql",
       "apply 20260813210000_custodial_u4_ops_closure.sql",
+      "apply 20260814224034_reconcile_static_weekly_day_change_receipts.sql",
       "require a green authority health gate and direct-DML denial probes before routing traffic"
     ],
     "rollback": {
@@ -99,7 +101,8 @@
         "employee and manager notifications use the same service date; activation replay returns frozen actor identity and its rollback definition remains exact",
         "pending phone work reports every issued snapshot employee and assignment epoch separately; legacy aggregate-only reports remain explicitly unbound",
         "offline work begun while snapshot, credential, and assignment authority were valid can activate after reconnect, while work begun after revocation, expiry, or reassignment is rejected",
-        "native wire timestamps are canonical UTC milliseconds; immutable activation boundaries and catalog-derived authority restoration remain healthy after negative mutations"
+        "native wire timestamps are canonical UTC milliseconds; immutable activation boundaries and catalog-derived authority restoration remain healthy after negative mutations",
+        "complete Weekly Schedule day-change batches pass the database receipt-chain health gate; exact replay is read-only and prefix, extension, reorder, and content conflicts fail atomically"
       ]
     }
   },
@@ -344,7 +347,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "1cc5f2e5724514d5ba5aad742f1cd9b14e24591f"
+        "object_id": "57b4baf39900e3811bdc6c3247e5d7aad03ad7f5"
       },
       {
         "path": "public/moxie-assets/contacts-creekside-animal.png",
@@ -394,12 +397,12 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "a94553da4627f923daee1419c1e4ea1093d25d3e"
+        "object_id": "11d516e0b20bd806168d12180bd0cf07ff8e1f99"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
         "mode": "100644",
-        "object_id": "7adde90f10396afb7010b3f7416751a6bb6932dc"
+        "object_id": "9ceeb1a6ebf494dd441ea9e71e7de78bb6ee9a1f"
       },
       {
         "path": "release/reviewed-migrations/20260809125735_cleaning_inspection_24_hour_freshness.sql",
@@ -409,7 +412,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "21df1599a009679dc571da22817654161a0804e0"
+        "object_id": "6aa4ea66ff0c8bfaea43f32ca93b34d3326b0e4e"
       },
       {
         "path": "research/european_herbalism_through_paracelsus.md",
@@ -534,7 +537,12 @@
       {
         "path": "scripts/custodial-repair-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "990626210c6b095a31c568b62174fb32c787e943"
+        "object_id": "9aecc092c958744d67ae6c2f75b936f05721ac73"
+      },
+      {
+        "path": "scripts/custodial-u4-migration-convergence-tests.mjs",
+        "mode": "100644",
+        "object_id": "5ad125020700825568fc3337762a22b0ae067978"
       },
       {
         "path": "scripts/dashboard-recent-activity-contract-tests.mjs",
@@ -669,17 +677,17 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "ddd41a5a9db22984f02b7f75a7b8ba97f0efa966"
+        "object_id": "34b9d405d031fda32b390a642d29159f54b8dc3f"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "46cd9471a6841c6b2fd0b43a7aaf02b4bdcb5200"
+        "object_id": "54a1af354ef3ff7c25e988921752e0d5fe88f45f"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
         "mode": "100644",
-        "object_id": "b8b9a17fa3ef15cdd550d0afb09fed2a5faf6705"
+        "object_id": "c0273e9ed7b6e7c12e0300ec20072e2f1c3962b5"
       },
       {
         "path": "scripts/integrated-backend-authority-suite-order-isolated-tests.mjs",
@@ -789,12 +797,12 @@
       {
         "path": "scripts/native-phone-attestation-tests.mjs",
         "mode": "100644",
-        "object_id": "e8a30c9daa82a3103211758d300f5166fe463d70"
+        "object_id": "6d454ac70e51b181b3f0818bd944559854d5ee07"
       },
       {
         "path": "scripts/offline-actor-recovery-database-tests.mjs",
         "mode": "100644",
-        "object_id": "cd9bacdbe30a6d7346867e25fdebb57626ef127f"
+        "object_id": "6f12a99453c3beec44c4a6c7ad60199e21dd999b"
       },
       {
         "path": "scripts/offline-actor-recovery-route-tests.mjs",
@@ -824,7 +832,7 @@
       {
         "path": "scripts/operations-leadership-mobile-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "046821b27534dc3f7d25419745270d6bea1ee4c5"
+        "object_id": "b95eba1e12a3c176ee32c9cbaa4b191bd27499eb"
       },
       {
         "path": "scripts/operations-leadership-mobile-database-tests.mjs",
@@ -844,7 +852,7 @@
       {
         "path": "scripts/phone-production-readiness.mjs",
         "mode": "100644",
-        "object_id": "b187e13a4fae6c4a4ba6822b1a073d45d3abe91a"
+        "object_id": "364312d92c66efa82530635c2c25fe0a3d78463e"
       },
       {
         "path": "scripts/production-backup.mjs",
@@ -909,7 +917,7 @@
       {
         "path": "scripts/refresh-integrated-backend-authority-release.mjs",
         "mode": "100644",
-        "object_id": "aaf584e5413b7c236e9ed1ee64dd114a73688213"
+        "object_id": "dade806bd16c229a820e85829c67ec51763373e9"
       },
       {
         "path": "scripts/refresh-release-schema-alignment.mjs",
@@ -929,7 +937,7 @@
       {
         "path": "scripts/release-closure-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "af18e7ea2ce3dde5a82568beee081aef660569e5"
+        "object_id": "78494ccd5d5cc38dc3d00d23799b3573d504a3af"
       },
       {
         "path": "scripts/restroom-rebalance-route-tests.mjs",
@@ -1089,12 +1097,17 @@
       {
         "path": "scripts/static-weekly-control-plane-runtime-tests.mjs",
         "mode": "100644",
-        "object_id": "9eb19e525b692507cab8aa64f1d1e0a642738b9e"
+        "object_id": "e11f84c58f45eb443869cfdb461419fd0aefbf62"
       },
       {
         "path": "scripts/static-weekly-control-plane-tests.mjs",
         "mode": "100644",
-        "object_id": "bd4189ce2cac1ce3f5c2470c19ce7d0a3283a53b"
+        "object_id": "87edeb0688201c6529117d08433586f20aa8492e"
+      },
+      {
+        "path": "scripts/static-weekly-day-changes-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "f748a39ec977f9c2a369583683bc1d67f736c6d5"
       },
       {
         "path": "scripts/static-weekly-employee-day-route-tests.mjs",
@@ -1414,7 +1427,7 @@
       {
         "path": "src/auth/device-credential-auth.js",
         "mode": "100644",
-        "object_id": "738a932c9b00395fa36a414728ecb92818566dff"
+        "object_id": "5686494257af5276d4dd5a143af4f2e96ffb1ddb"
       },
       {
         "path": "src/auth/mcp-connector-auth.js",
@@ -1499,7 +1512,7 @@
       {
         "path": "src/index.js",
         "mode": "100644",
-        "object_id": "e2d864faff1014edf5c50f1429155884b9eb1440"
+        "object_id": "bdd100ee4d6cc284df4a2388b43288da7fe5764b"
       },
       {
         "path": "src/leadership-bootstrap.js",
@@ -1639,12 +1652,12 @@
       {
         "path": "src/static-weekly-control-plane-runtime.js",
         "mode": "100644",
-        "object_id": "7e2ce57a6075c0de2203b0dc1e836fd1d3b224e8"
+        "object_id": "5a74b376d8111df80826a4031ffe024c37b53140"
       },
       {
         "path": "src/static-weekly-control-plane.js",
         "mode": "100644",
-        "object_id": "d6d861d5b7f5fc0a0d45c107f81f17fc02438208"
+        "object_id": "a2de75459e0f4eabdaf16c14264a9659bcd3763e"
       },
       {
         "path": "src/static-weekly-schedule-compiler.js",
@@ -1729,12 +1742,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "22670560e667606a54512737242f28a215609a4a"
+        "object_id": "83fbace424482bb8a314dfe0aed29d1b3a2019db"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "670eb1001584cdddde492502b5669283e42421f6"
+        "object_id": "4ca73e8bb267795d7de81573234e6e1137fac343"
       },
       {
         "path": "supabase/config.toml",
@@ -2699,7 +2712,12 @@
       {
         "path": "supabase/migrations/20260813210000_custodial_u4_ops_closure.sql",
         "mode": "100644",
-        "object_id": "3f6323be3f40bb715ec47dd16aa2c5a4af78774e"
+        "object_id": "84c65592a6127485d0cfd27e42c3189dfa8f0b27"
+      },
+      {
+        "path": "supabase/migrations/20260814224034_reconcile_static_weekly_day_change_receipts.sql",
+        "mode": "100644",
+        "object_id": "ee40cb30b9af78beb0b90e55330f6d85ae9f9fd4"
       },
       {
         "path": "tmp/write_probe.txt",
@@ -2707,8 +2725,8 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 520,
-    "migration_path_count": 76,
+    "authority_path_count": 523,
+    "migration_path_count": 77,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
   },
@@ -2946,6 +2964,9 @@
     },
     {
       "name": "20260813210000_custodial_u4_ops_closure.sql"
+    },
+    {
+      "name": "20260814224034_reconcile_static_weekly_day_change_receipts.sql"
     }
   ],
   "release_boundary": "Configure a minimum-32-character CUSTODIAL_BACKEND_PROOF_SECRET and matching database digest before Phase A, retain the bridge backend artifact through the scan-snapshot phase, and require the executable health/restoration probes before traffic changes."
