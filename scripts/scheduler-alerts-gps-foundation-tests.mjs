@@ -11,6 +11,7 @@ const read = (relative) => {
 };
 
 const indexSource = read('src/index.js');
+const nativePhoneTransport = read('src/native-phone-transport.js');
 const scheduleSource = read('src/schedule-api.js');
 const messagingSource = read('src/messaging-api.js');
 const eventsSource = read('src/events-api.js');
@@ -80,7 +81,8 @@ assert.match(indexSource, /SCAN_WRITE_LIMIT_PER_MINUTE[^\n]*30/);
 assert.match(indexSource, /SCAN_SHARED_IP_EMERGENCY_LIMIT_PER_MINUTE[^\n]*1000/);
 assert.match(indexSource, /app\.post\("\/scan-api\/rpc", parseScanAuthorityJsonBeforeAuthentication, requireDeviceOrOpsAccess, rejectInvalidAuthenticatedScanAuthorityJson, requireScanRpcAuthorization, scanRpcRateLimit/);
 assert.match(indexSource, /custodial_get_release_canary_transport_probe_health/);
-assert.match(indexSource, /custodial_record_release_canary_transport_probe/);
+assert.match(indexSource, /buildReleaseCanaryTransportProbeCall/);
+assert.match(nativePhoneTransport, /custodial_record_release_canary_transport_probe/);
 assert.doesNotMatch(indexSource, /collectBackendAuthorityHealth\([\s\S]{0,1400}executeScanRpcTransport\(/);
 assert.match(indexSource, /tool_commit_cleaning_workflow/);
 assert.match(indexSource, /tool_report_device_sync_status/);
