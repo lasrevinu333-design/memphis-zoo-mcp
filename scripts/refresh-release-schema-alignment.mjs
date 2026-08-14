@@ -28,7 +28,7 @@ const manifest = {
   frontend_commit_sha: input.frontend_commit_sha,
   frontend_commit_state: input.frontend_commit_state,
   backend_minimum_version: input.backend_minimum_version,
-  schema_fingerprint: input.schema_from_fingerprint,
+  schema_fingerprint: fingerprint,
   schema_transition: {
     transition_id: input.schema_transition.transition_id,
     from_fingerprint: input.schema_from_fingerprint,

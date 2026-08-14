@@ -133,6 +133,39 @@ export function installEmployeeNotificationRoutes(app, {
     return result.data?.current === true;
   }
 
+  async function claimEventDelivery(instance, credential, assignmentEpoch) {
+    const result = await db.rpc('mz_claim_employee_event_push_delivery', {
+      p_instance_id: instance.instance_id,
+      p_credential_id: credential,
+      p_assignment_epoch: assignmentEpoch,
+      p_now: new Date().toISOString(),
+    });
+    if (result.error) throw result.error;
+    if (!result.data?.ok) throw terminalDeliveryError(result.data?.reason || 'event_push_instance_superseded');
+  }
+
+  async function recordEventDelivery(instance, credential, assignmentEpoch, registration, providerMessageId) {
+    const tokenHash = crypto.createHash('sha256').update(String(registration?.fcm_token || '')).digest('hex');
+    if (!registration?.registration_id || !/^[0-9a-f]{64}$/.test(tokenHash)
+      || (registration.token_hash && registration.token_hash !== tokenHash)) {
+      throw terminalDeliveryError('push_registration_binding_invalid');
+    }
+    const result = await db.rpc('mz_record_employee_event_push_delivery', {
+      p_instance_id: instance.instance_id,
+      p_credential_id: credential,
+      p_assignment_epoch: assignmentEpoch,
+      p_registration_id: registration.registration_id,
+      p_token_hash: tokenHash,
+      p_provider_message_id: providerMessageId,
+      p_now: new Date().toISOString(),
+    });
+    if (result.error) throw result.error;
+    if (result.data?.current !== true || result.data?.recorded !== true) {
+      throw terminalDeliveryError(`${result.data?.reason || 'event_push_instance_superseded'}_after_provider_dispatch`);
+    }
+    return true;
+  }
+
   app.use(API_PREFIX, (req, res, next) => {
     setCors(req, res);
     if (req.method === 'OPTIONS') return res.sendStatus(200);
@@ -353,14 +386,13 @@ export function installEmployeeNotificationRoutes(app, {
         await beforeFinalDeliveryCheck({ job, credential, assignmentEpoch, registration });
       }
       registration = await resolveAuthorizedDelivery(credential, assignmentEpoch);
+      if (eventInstance) await claimEventDelivery(eventInstance, credential, assignmentEpoch);
       const providerMessageId = await pushRuntime.send(push, registration, { channelId });
-      if (!await recordRegistrationDelivery(registration, { succeeded: true })) {
+      const recorded = eventInstance
+        ? await recordEventDelivery(eventInstance, credential, assignmentEpoch, registration, providerMessageId)
+        : await recordRegistrationDelivery(registration, { succeeded: true });
+      if (!recorded) {
         throw terminalDeliveryError('push_registration_superseded_after_provider_dispatch');
-      }
-      if (eventInstance) {
-        await db.from('event_push_instances').update({
-          state: 'sent', sent_at: new Date().toISOString(), provider_message_id: providerMessageId, last_error: null, updated_at: new Date().toISOString(),
-        }).eq('instance_id', eventInstance.instance_id);
       }
       return { provider_message_id: providerMessageId };
     } catch (error) {
@@ -378,7 +410,10 @@ export function installEmployeeNotificationRoutes(app, {
         const eventUpdate = error?.terminal === true
           ? { state: 'cancelled', cancelled_at: new Date().toISOString(), last_error: errorMessage, updated_at: new Date().toISOString() }
           : { state: 'failed', last_error: errorMessage, updated_at: new Date().toISOString() };
-        await db.from('event_push_instances').update(eventUpdate).eq('instance_id', job.source_id);
+        const eventResult = await db.from('event_push_instances').update(eventUpdate)
+          .eq('instance_id', job.source_id).in('state', ['pending', 'leased', 'failed'])
+          .select('instance_id').maybeSingle();
+        if (eventResult.error) throw eventResult.error;
       }
       if (error?.permanent === true && !authorityTerminal) {
         error.terminal = true;

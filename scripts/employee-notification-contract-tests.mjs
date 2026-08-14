@@ -80,6 +80,8 @@ assert.match(source, /payload\.channel_id/);
 assert.match(source, /notification_key/);
 assert.match(source, /error\?\.permanent[\s\S]*push_token_rejected/);
 assert.match(source, /mz_record_employee_push_delivery/);
+assert.match(source, /mz_claim_employee_event_push_delivery/);
+assert.match(source, /mz_record_employee_event_push_delivery/);
 assert.match(source, /push_registration_superseded_after_provider_dispatch/);
 assert.match(closureMigration, /last_successful_delivery_at=case[\s\S]*token_hash=excluded\.token_hash[\s\S]*else null/);
 assert.match(manager, /export function createPushRuntime/);
@@ -279,7 +281,97 @@ assert.equal(recordedBinding.p_registration_id, authorizedRegistration.registrat
 assert.equal(recordedBinding.p_token_hash, createHash('sha256').update(authorizedRegistration.fcm_token).digest('hex'));
 assert.equal(recordedBinding.p_succeeded, true);
 
+const eventClaimedJob = {
+  ...claimedJob,
+  job_id: '88888888-8888-4888-8888-888888888881',
+  job_key: 'employee-event:cancel-boundary',
+  job_type: 'employee_event_push',
+  source_id: '88888888-8888-4888-8888-888888888882',
+};
+const eventInstance = {
+  instance_id: eventClaimedJob.source_id,
+  event_id: '88888888-8888-4888-8888-888888888883',
+  event_revision: 1,
+  notification_key: 'event:cancel-boundary',
+  notification_kind: 'day_before',
+  credential_id: canonicalCredentialId,
+  assignment_epoch: 4,
+  state: 'pending',
+  events_app_events: { event_name: 'Cancelled event', display_location: 'Zoo Footprint' },
+};
+function eventInstanceQuery(row) {
+  const query = {
+    select() { return query; },
+    update() { return query; },
+    eq() { return query; },
+    in() { return query; },
+    single: async () => ({ data: row, error: null }),
+    maybeSingle: async () => ({ data: null, error: null }),
+  };
+  return query;
+}
+
+let cancelledEventSendCount = 0;
+const cancelledBeforeProviderRuntime = installEmployeeNotificationRoutes(express(), {
+  supabase: {
+    async rpc(name) {
+      if (name === 'mz_resolve_employee_push_delivery') {
+        return { data: { ok: true, registration: authorizedRegistration }, error: null };
+      }
+      assert.equal(name, 'mz_claim_employee_event_push_delivery');
+      return { data: { ok: false, terminal: true, reason: 'event_push_instance_cancelled' }, error: null };
+    },
+    from(name) {
+      assert.equal(name, 'event_push_instances');
+      return eventInstanceQuery(eventInstance);
+    },
+  },
+  pushRuntime: {
+    configured: true,
+    async send() { cancelledEventSendCount += 1; return 'provider-message-must-not-exist'; },
+  },
+});
+await assert.rejects(
+  () => cancelledBeforeProviderRuntime.deliverClaimedJob(eventClaimedJob),
+  (error) => error?.terminal === true && error?.code === 'event_push_instance_cancelled',
+  'an event cancelled after job claim must fail the database-bound pre-provider check',
+);
+assert.equal(cancelledEventSendCount, 0, 'FCM must not receive an event that is cancelled before provider dispatch');
+
+let crossingEventSendCount = 0;
+const cancelledAcrossProviderRuntime = installEmployeeNotificationRoutes(express(), {
+  supabase: {
+    async rpc(name) {
+      if (name === 'mz_resolve_employee_push_delivery') {
+        return { data: { ok: true, registration: authorizedRegistration }, error: null };
+      }
+      if (name === 'mz_claim_employee_event_push_delivery') {
+        return { data: { ok: true, instance_id: eventInstance.instance_id, state: 'leased' }, error: null };
+      }
+      assert.equal(name, 'mz_record_employee_event_push_delivery');
+      return { data: { current: false, recorded: false, reason: 'event_or_revision_superseded' }, error: null };
+    },
+    from(name) {
+      assert.equal(name, 'event_push_instances');
+      return eventInstanceQuery(eventInstance);
+    },
+  },
+  pushRuntime: {
+    configured: true,
+    async send() { crossingEventSendCount += 1; return 'provider-message-cancelled-at-boundary'; },
+  },
+});
+await assert.rejects(
+  () => cancelledAcrossProviderRuntime.deliverClaimedJob(eventClaimedJob),
+  (error) => error?.terminal === true && error?.code === 'event_or_revision_superseded_after_provider_dispatch',
+  'a cancellation crossing the provider boundary cannot be recorded as a successful event delivery',
+);
+assert.equal(crossingEventSendCount, 1);
+
 assert.match(source, /resolveAuthorizedDelivery\(credential, assignmentEpoch\)[\s\S]*beforeFinalDeliveryCheck[\s\S]*resolveAuthorizedDelivery\(credential, assignmentEpoch\)/);
+assert.match(source, /claimEventDelivery\(eventInstance, credential, assignmentEpoch\)[\s\S]*pushRuntime\.send/);
+assert.match(source, /recordEventDelivery\(eventInstance, credential, assignmentEpoch, registration, providerMessageId\)/);
+assert.match(source, /\.in\('state', \['pending', 'leased', 'failed'\]\)[\s\S]*maybeSingle/);
 assert.match(source, /finish_operational_notification_job_terminal/);
 assert.match(indexSource, /error\?\.terminal === true[\s\S]*finish_operational_notification_job_terminal/);
 

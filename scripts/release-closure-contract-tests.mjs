@@ -11,7 +11,7 @@ const liveGate = readFileSync(new URL("./live-release-alignment-check.mjs", impo
 const rollbackMigration = readFileSync(new URL("../supabase/migrations/20260813060000_release_canary_operational_recovery.sql", import.meta.url), "utf8");
 const boundaryMigration = readFileSync(new URL("../supabase/migrations/20260813141806_custodial_operational_boundary_closure.sql", import.meta.url), "utf8");
 
-assert.equal(input.frontend_commit_sha, "60f38048dd44fd8321154ac62d2424c987dfdf4f", "backend must pin the exact audited frontend candidate");
+assert.equal(input.frontend_commit_sha, "563c9870460a74a4fc322d4855d56d1569410f63", "backend must pin the exact audited frontend candidate");
 assert.equal(input.frontend_commit_state, "final_pair_bound");
 assert.deepEqual(input.queue_compatibility_versions.scan.at(-1), "indexeddb-v6-offline-authority");
 assert.deepEqual(Object.keys(input.minimum_supported).sort(), ["backend_version", "frontend_version"]);
@@ -48,6 +48,11 @@ assert.match(liveGate, /MEMPHIS_RELEASE_ATTESTATION_PUBLIC_KEY/);
 assert.match(liveGate, /LIVE_RELEASE_SCHEMA_IDENTITY_TOKEN/);
 assert.match(liveGate, /assertObservedSchemaIdentity/);
 assert.match(liveGate, /assertManifestContract/);
+assert.match(liveGate, /canonical_objects_expected/);
+assert.match(liveGate, /missing_objects/);
+assert.match(liveGate, /mismatched_objects/);
+assert.doesNotMatch(liveGate, /canonical_functions_verified/,
+  "the live gate must consume the current catalog-derived authority contract");
 assert.match(liveGate, /release_canary\?\.paused, false/g,
   "the live release gate must reject a paused canary in both health views");
 

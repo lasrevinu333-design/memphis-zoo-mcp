@@ -89,7 +89,15 @@ assert.equal(health.worker?.expired_leases, 0, "backend has expired operational-
 assert.ok(healthProbe.elapsed_ms <= 4_000, `backend dependency health exceeded four seconds (${healthProbe.elapsed_ms.toFixed(0)} ms)`);
 assert.equal(authorityHealth.ok, true, "canonical custodial authority health endpoint failed");
 assert.equal(authorityHealth.data?.ok, true, "canonical custodial authority inventory is not green");
-assert.equal(authorityHealth.data?.canonical_functions_verified, 7, "canonical custodial authority inventory is incomplete");
+assert.equal(authorityHealth.data?.authority, "offline-authority.v5", "canonical custodial authority contract is unexpected");
+assert.ok(Number.isSafeInteger(authorityHealth.data?.canonical_objects_expected)
+  && authorityHealth.data.canonical_objects_expected > 40, "canonical custodial authority inventory is incomplete");
+assert.deepEqual(authorityHealth.data?.missing_objects, [], "canonical custodial authority inventory has missing objects");
+assert.deepEqual(authorityHealth.data?.mismatched_objects, [], "canonical custodial authority inventory has mismatched objects");
+assert.ok(authorityHealth.data?.checks && typeof authorityHealth.data.checks === "object"
+  && Object.values(authorityHealth.data.checks).length > 0
+  && Object.values(authorityHealth.data.checks).every((value) => value === true),
+"canonical custodial authority checks are incomplete");
 assert.equal(health.release_canary?.configured, true, "one-phone release canary is not configured");
 assert.equal(health.release_canary?.control_initialized, true, "one-phone release canary control is not initialized");
 assert.equal(health.release_canary?.paused, false, "one-phone release canary remains operator-paused");

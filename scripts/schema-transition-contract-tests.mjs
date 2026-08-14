@@ -11,6 +11,7 @@ const now = Date.parse("2026-08-13T00:00:00Z");
 
 assert.equal(frontend.frontend_commit_sha, input.frontend_commit_sha, "the backend manifest must pin the exact audited frontend");
 assert.equal(frontend.frontend_commit_state, "final_pair_bound");
+assert.equal(frontend.schema_fingerprint, target, "the exact frontend pair must declare the canonical target schema");
 assert.deepEqual(frontend.minimum_supported, input.minimum_supported);
 const backend = buildReleaseManifest({ appVersion: "test-release" });
 assert.deepEqual(backend.api_contract_versions, input.api_contract_versions);
@@ -24,7 +25,8 @@ const aligned = assertSchemaAlignment({
   deploymentManifest: { schema_fingerprint: frontend.schema_fingerprint, schema_transition: transition },
   now,
 });
-assert.equal(aligned.mode, "transition");
+assert.equal(aligned.mode, "declared");
+assert.equal(transition.from_fingerprint, input.schema_from_fingerprint);
 assert.equal(target, transition.to_fingerprint);
 assert.throws(() => assertSchemaAlignment({
   backendManifest: backend,

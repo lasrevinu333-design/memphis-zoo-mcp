@@ -1,15 +1,15 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "60f38048dd44fd8321154ac62d2424c987dfdf4f",
-  "schema_fingerprint": "b941b03c4988a5d5b0f2c8b5e4f31aa459900d09f0a3a6d859e8ebdf966d49f5",
+  "frontend_commit_sha": "563c9870460a74a4fc322d4855d56d1569410f63",
+  "schema_fingerprint": "de16e6ca9ef0b84188ab3642e190ed459ac9b875a228dc8b47fbb57f04acf01c",
   "schema_transition": {
     "transition_id": "custodial-canary-offline-scan-authority-20260813",
     "from_fingerprint": "405dfbc65393c7a1fc9ea86b9c2e1f637df185f11a8520315f61fd8a9b1e5dfc",
-    "to_fingerprint": "b941b03c4988a5d5b0f2c8b5e4f31aa459900d09f0a3a6d859e8ebdf966d49f5",
+    "to_fingerprint": "de16e6ca9ef0b84188ab3642e190ed459ac9b875a228dc8b47fbb57f04acf01c",
     "expires_at": "2026-08-23T23:59:59Z"
   },
-  "frontend_source_fingerprint": "405dfbc65393c7a1fc9ea86b9c2e1f637df185f11a8520315f61fd8a9b1e5dfc",
+  "frontend_source_fingerprint": "de16e6ca9ef0b84188ab3642e190ed459ac9b875a228dc8b47fbb57f04acf01c",
   "backend_contract": {
     "scan": "scan.v4.snapshot-bound-authority",
     "authority": "offline-authority.v5",
@@ -41,7 +41,7 @@
     "operational_boundary_closure_phase": "20260813141806 aligns notification service dates, exact activation replay identity, and the captured rollback definition",
     "device_sync_actor_groups_phase": "20260813173000 stores verified pending work groups by issued snapshot, employee, and assignment epoch while retaining the Build 22 aggregate reporter",
     "release_phone_transport_and_offline_activation_phase": "20260813190000 requires a fresh immutable receipt from the designated phone's native-vault /scan-api/rpc path before resume and permits delayed activation only for work begun while snapshot, credential, and assignment authority were valid",
-    "u4_ops_closure_phase": "20260813210000 canonicalizes native wire timestamps, records immutable activation boundaries, enforces UUID completion identities, and restores the catalog-derived authority set"
+    "u4_ops_closure_phase": "20260813210000 canonicalizes native wire timestamps, records immutable activation boundaries, enforces UUID completion identities, atomically binds employee event delivery and terminal notification retries, and restores the catalog-derived authority set"
   },
   "rollback": {
     "before_enforcement": "legacy Engine and current backend completion remain available",
@@ -394,7 +394,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "7389b2f72a9dfc47ffc80f46136dfb66ec9d16d9"
+        "object_id": "9d91faa88b9242b83a5d545e5f4e06917107f6c0"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -409,7 +409,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "96d1b9b89f3ecbf73e6f4896d074d05b217d27f8"
+        "object_id": "fb3c07355a236afad481d61f53f4fd165f5262c9"
       },
       {
         "path": "research/european_herbalism_through_paracelsus.md",
@@ -534,7 +534,7 @@
       {
         "path": "scripts/custodial-repair-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "391854a224c0bb8d7943afacf7a5ef0e7741e37d"
+        "object_id": "a841fbd4e494e3380dedefcfe92d971342b0db49"
       },
       {
         "path": "scripts/dashboard-recent-activity-contract-tests.mjs",
@@ -569,7 +569,7 @@
       {
         "path": "scripts/employee-notification-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "94ba63c14aa5b098e6e16a3b0ab1066d3765126e"
+        "object_id": "11acb0f7825162ad9ae9160e63cd0beba9d0ac16"
       },
       {
         "path": "scripts/empty-database-rebuild-check.mjs",
@@ -614,7 +614,7 @@
       {
         "path": "scripts/final-uncertainty-closure-database-tests.mjs",
         "mode": "100644",
-        "object_id": "64ee7fc8c83ce7b815902551804c0eeac8e436c7"
+        "object_id": "fa2d655c12ce87e2e1be453c5184658061c8dfad"
       },
       {
         "path": "scripts/fixtures/static-weekly-scheduler/canary-authority.json",
@@ -669,12 +669,12 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "4966e74187800c4449d71f586237ae698dd735d7"
+        "object_id": "06536c172839098b356385068a1f376e751f0966"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "e312063329fc13bfed89ebc2c2cc78c519d084dd"
+        "object_id": "770de0cc06a3d3b7d8912f2ee6a1a123bc04d47b"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
@@ -694,7 +694,7 @@
       {
         "path": "scripts/live-release-alignment-check.mjs",
         "mode": "100644",
-        "object_id": "e1aabbe5bb57801f62da23faa9f23e188a01e614"
+        "object_id": "a1f0902b2fad20c0e3bf9df272c94fe6225077cd"
       },
       {
         "path": "scripts/location-group-audit-reminder-aware.mjs",
@@ -824,7 +824,7 @@
       {
         "path": "scripts/operations-leadership-mobile-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "550636070c6467094154e680df120418604a9118"
+        "object_id": "a6952f95a5ea4a5064bfc445075ba603adb7db03"
       },
       {
         "path": "scripts/operations-leadership-mobile-database-tests.mjs",
@@ -904,12 +904,12 @@
       {
         "path": "scripts/refresh-integrated-backend-authority-release.mjs",
         "mode": "100644",
-        "object_id": "189758992b639adae79f9ca7858f55a29c8a7279"
+        "object_id": "3c6ac5e65ba2064bfe367324bb830245548a7212"
       },
       {
         "path": "scripts/refresh-release-schema-alignment.mjs",
         "mode": "100644",
-        "object_id": "c8d4476cd51c2d8097cfe5dd686bc8032f900972"
+        "object_id": "4b112d56132de7f7a1c4fa7baf09204784232c9f"
       },
       {
         "path": "scripts/refresh-schema-fingerprint.mjs",
@@ -924,7 +924,7 @@
       {
         "path": "scripts/release-closure-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "da8142178e14e73bec3b5f4f8ce2aa1a1aa7900a"
+        "object_id": "bdfc3a1194d77740f860579e3f5f90c6308ea31f"
       },
       {
         "path": "scripts/restroom-rebalance-route-tests.mjs",
@@ -979,7 +979,7 @@
       {
         "path": "scripts/schema-transition-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "e8c86a03fdffe717ba313348c0e5a49654e8beea"
+        "object_id": "57f66533ae44e7a33d8c1d97bdd887076fa92cff"
       },
       {
         "path": "scripts/smoke-ai-intent.mjs",
@@ -1439,7 +1439,7 @@
       {
         "path": "src/employee-notifications.js",
         "mode": "100644",
-        "object_id": "1d8daa90a5d3b29c426ef085bd7d2b41311d341c"
+        "object_id": "e7ccc2a3b958ad42f76144d15ba2f7760685a2c1"
       },
       {
         "path": "src/events-ai-parser.js",
@@ -1724,12 +1724,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "d5c5efa5db090d95f117271fe64e57bf529017d7"
+        "object_id": "b40d1869d3f2b98c4a1415d861acda60590c4f58"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "9cae29da4635b3c83064b340843bbc01ae061710"
+        "object_id": "aa229f411c8b13c04e8c63cb7a1ecc0b1d3a2e6e"
       },
       {
         "path": "supabase/config.toml",
@@ -2694,7 +2694,7 @@
       {
         "path": "supabase/migrations/20260813210000_custodial_u4_ops_closure.sql",
         "mode": "100644",
-        "object_id": "3f801646265afc845203e8845bf3e85f81c6e37b"
+        "object_id": "0b8072888ffeab4587aaeed50e6fc2430b642c9a"
       },
       {
         "path": "tmp/write_probe.txt",

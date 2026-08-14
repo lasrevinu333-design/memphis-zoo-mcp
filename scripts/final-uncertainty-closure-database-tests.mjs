@@ -214,8 +214,9 @@ const employeeTokenC = `employee-token-c-${stamp}-00000000000000000000`;
 const employeeTokenHashA = createHash("sha256").update(employeeTokenA).digest("hex");
 const employeeTokenHashB = createHash("sha256").update(employeeTokenB).digest("hex");
 const employeeTokenHashC = createHash("sha256").update(employeeTokenC).digest("hex");
+const employeeCredentialTokenHash = createHash("sha256").update(`employee-credential-${stamp}`).digest("hex");
 sql(`insert into public.device_auth_credentials(credential_id,device_id,token_hash,device_label,confirmed_at,expires_at,metadata_json)
-  values('${employeeCredentialId}'::uuid,'${deviceId}'::uuid,'${"b".repeat(64)}','employee notification race',now(),now()+interval '1 day','{}'::jsonb);
+  values('${employeeCredentialId}'::uuid,'${deviceId}'::uuid,'${employeeCredentialTokenHash}','employee notification race',now(),now()+interval '1 day','{}'::jsonb);
   insert into public.employee_push_registrations(registration_id,device_id,credential_id,employee_id,assignment_epoch,platform,fcm_token,token_hash)
   select '${employeeRegistrationId}'::uuid,'${deviceId}'::uuid,'${employeeCredentialId}'::uuid,'${employeeId}'::uuid,assignment_epoch,'android',${q(employeeTokenA)},${q(employeeTokenHashA)}
   from public.devices where id='${deviceId}'::uuid;`);
@@ -238,10 +239,100 @@ assert.equal(sql(`select (token_hash=${q(employeeTokenHashC)})::text||'|'||(last
   from public.employee_push_registrations where registration_id='${employeeRegistrationId}'::uuid;`), "true|true",
   "rotating a reused registration must clear the previous token generation's success state");
 
+const cancelledEmployeeEventInstanceId = randomUUID();
+sql(`insert into public.event_push_instances(
+    instance_id,notification_key,event_id,event_revision,service_date,employee_id,device_id,credential_id,
+    assignment_epoch,notification_kind,scheduled_for,state,cancelled_at,last_error)
+  select '${cancelledEmployeeEventInstanceId}'::uuid,${q(`employee-event-cancelled-${stamp}`)},e.id,e.revision,e.event_date,
+    '${employeeId}'::uuid,'${deviceId}'::uuid,'${employeeCredentialId}'::uuid,d.assignment_epoch,
+    'day_before',now()-interval '1 minute','cancelled',now(),'cancelled before provider claim'
+  from public.events_app_events e cross join public.devices d
+  where e.id='${rescheduledId}'::uuid and d.id='${deviceId}'::uuid;`);
+const cancelledEmployeeEventClaim = JSON.parse(sql(`select public.mz_claim_employee_event_push_delivery(
+  '${cancelledEmployeeEventInstanceId}'::uuid,'${employeeCredentialId}'::uuid,
+  (select assignment_epoch from public.devices where id='${deviceId}'::uuid),now())::text;`));
+assert.equal(cancelledEmployeeEventClaim.ok, false);
+assert.equal(cancelledEmployeeEventClaim.reason, "event_push_instance_cancelled",
+  "a cancelled employee event must fail the database-bound pre-provider claim");
+
+const crossingEmployeeEventInstanceId = randomUUID();
+sql(`insert into public.event_push_instances(
+    instance_id,notification_key,event_id,event_revision,service_date,employee_id,device_id,credential_id,
+    assignment_epoch,notification_kind,scheduled_for,state)
+  select '${crossingEmployeeEventInstanceId}'::uuid,${q(`employee-event-crossing-${stamp}`)},e.id,e.revision,e.event_date,
+    '${employeeId}'::uuid,'${deviceId}'::uuid,'${employeeCredentialId}'::uuid,d.assignment_epoch,
+    'shift_plus_15',now()-interval '1 minute','pending'
+  from public.events_app_events e cross join public.devices d
+  where e.id='${rescheduledId}'::uuid and d.id='${deviceId}'::uuid;`);
+const crossingEmployeeEventClaim = JSON.parse(sql(`select public.mz_claim_employee_event_push_delivery(
+  '${crossingEmployeeEventInstanceId}'::uuid,'${employeeCredentialId}'::uuid,
+  (select assignment_epoch from public.devices where id='${deviceId}'::uuid),now())::text;`));
+assert.equal(crossingEmployeeEventClaim.ok, true);
+assert.equal(sql(`select state from public.event_push_instances where instance_id='${crossingEmployeeEventInstanceId}'::uuid;`), "leased");
+sql(`update public.events_app_events set status='CANCELLED',cancelled_at=now(),cancelled_by='employee provider boundary test'
+  where id='${rescheduledId}'::uuid;`);
+const crossingEmployeeEventFinish = JSON.parse(sql(`select public.mz_record_employee_event_push_delivery(
+  '${crossingEmployeeEventInstanceId}'::uuid,'${employeeCredentialId}'::uuid,
+  (select assignment_epoch from public.devices where id='${deviceId}'::uuid),
+  '${employeeRegistrationId}'::uuid,${q(employeeTokenHashC)},'provider-result-must-not-commit',now())::text;`));
+assert.equal(crossingEmployeeEventFinish.current, false,
+  "an event cancelled across the provider boundary cannot be recorded as delivered");
+assert.equal(crossingEmployeeEventFinish.recorded, false);
+assert.equal(sql(`select state from public.event_push_instances where instance_id='${crossingEmployeeEventInstanceId}'::uuid;`), "cancelled");
+assert.equal(sql(`select (last_successful_delivery_at is null)::text from public.employee_push_registrations
+  where registration_id='${employeeRegistrationId}'::uuid;`), "true");
+
+const successfulEmployeeEventId = randomUUID();
+const successfulEmployeeEventInstanceId = randomUUID();
+sql(`insert into public.events_app_events(id,event_name,location_group_id,event_date,start_time,end_date,status,event_scope,display_location,needs_review)
+  select '${successfulEmployeeEventId}'::uuid,'Uncertainty employee delivery',id,((now()+interval '4 hours') at time zone 'America/Chicago')::date,
+    ((now()+interval '4 hours') at time zone 'America/Chicago')::time,((now()+interval '4 hours') at time zone 'America/Chicago')::date,
+    'SCHEDULED','ZOO_WIDE','Zoo Footprint',false from public.location_groups order by id limit 1;
+  insert into public.event_push_instances(
+    instance_id,notification_key,event_id,event_revision,service_date,employee_id,device_id,credential_id,
+    assignment_epoch,notification_kind,scheduled_for,state)
+  select '${successfulEmployeeEventInstanceId}'::uuid,${q(`employee-event-success-${stamp}`)},e.id,e.revision,e.event_date,
+    '${employeeId}'::uuid,'${deviceId}'::uuid,'${employeeCredentialId}'::uuid,d.assignment_epoch,
+    'day_before',now()-interval '1 minute','pending'
+  from public.events_app_events e cross join public.devices d
+  where e.id='${successfulEmployeeEventId}'::uuid and d.id='${deviceId}'::uuid;`);
+assert.equal(JSON.parse(sql(`select public.mz_claim_employee_event_push_delivery(
+  '${successfulEmployeeEventInstanceId}'::uuid,'${employeeCredentialId}'::uuid,
+  (select assignment_epoch from public.devices where id='${deviceId}'::uuid),now())::text;`)).ok, true);
+const successfulEmployeeEventFinish = JSON.parse(sql(`select public.mz_record_employee_event_push_delivery(
+  '${successfulEmployeeEventInstanceId}'::uuid,'${employeeCredentialId}'::uuid,
+  (select assignment_epoch from public.devices where id='${deviceId}'::uuid),
+  '${employeeRegistrationId}'::uuid,${q(employeeTokenHashC)},'provider-result-committed',now())::text;`));
+assert.equal(successfulEmployeeEventFinish.current, true);
+assert.equal(successfulEmployeeEventFinish.recorded, true);
+assert.equal(sql(`select state||'|'||provider_message_id||'|'||(sent_at is not null)::text
+  from public.event_push_instances where instance_id='${successfulEmployeeEventInstanceId}'::uuid;`),
+"sent|provider-result-committed|true");
+assert.equal(sql(`select (last_successful_delivery_at is not null)::text from public.employee_push_registrations
+  where registration_id='${employeeRegistrationId}'::uuid;`), "true");
+assert.equal(sql(`select count(*) from public.custodial_release_authority_restore_inventory
+  where object_kind='function' and object_identity in (
+    'mz_claim_employee_event_push_delivery(uuid,uuid,bigint,timestamp with time zone)',
+    'mz_record_employee_event_push_delivery(uuid,uuid,bigint,uuid,text,text,timestamp with time zone)',
+    'finish_operational_notification_job(uuid,uuid,boolean,text,integer)'
+  );`), "3", "event and terminal-job boundaries must remain inside the recoverable authority inventory");
+
+const exhaustedJobKey = `uncertainty-exhausted-job-${stamp}`;
+sql(`insert into public.operational_notification_jobs(job_key,job_type,source_id,available_at,max_attempts)
+  values (${q(exhaustedJobKey)},'employee_native_push','${randomUUID()}'::uuid,now()-interval '1 second',1);`);
+const exhaustedLease = JSON.parse(sql(`select row_to_json(public.claim_operational_notification_job_by_key(
+  ${q(exhaustedJobKey)},'final-uncertainty-worker',120))::text;`));
+const exhaustedFinish = JSON.parse(sql(`select row_to_json(public.finish_operational_notification_job(
+  '${exhaustedLease.job_id}'::uuid,'${exhaustedLease.lease_token}'::uuid,false,'expected final failure',30))::text;`));
+assert.equal(exhaustedFinish.status, "dead");
+assert.ok(exhaustedFinish.completed_at, "a retry-exhausted dead job must carry a terminal completion timestamp");
+
 console.log(JSON.stringify({ ok: true, stale_session_masked: false, rollback_without_quiescence_accepted: false,
   rollback_after_quiescence_ready: true, spoofed_authority_health_accepted: false,
   historical_finish_adapter_replayed: true,
   expired_event_claimed: false, stale_location_claimed: false, stale_location_recorded_sent: false,
   revoked_recipient_claimed: false, expired_recipient_recorded_sent: false, rotated_token_recorded_sent: false,
-  stale_employee_token_result_recorded: false,
+  stale_employee_token_result_recorded: false, cancelled_employee_event_claimed: false,
+  cancelled_employee_event_recorded_sent: false, valid_employee_event_recorded_sent: true,
+  retry_exhausted_job_missing_completed_at: false,
   cancelled_event_recorded_sent: false, rescheduled_event_claimed: false }, null, 2));

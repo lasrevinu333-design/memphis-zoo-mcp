@@ -319,6 +319,128 @@ $function$;
 revoke all on function public.mz_record_employee_push_delivery(uuid,text,boolean,boolean,text,timestamptz) from public,anon,authenticated;
 grant execute on function public.mz_record_employee_push_delivery(uuid,text,boolean,boolean,text,timestamptz) to postgres,service_role;
 
+-- Event delivery has an external provider boundary, so it cannot hold a
+-- database transaction open while FCM runs. Claim immediately before that
+-- boundary, then atomically bind provider acceptance to the same event,
+-- assignment, registration, and token generation afterward.
+create or replace function public.mz_claim_employee_event_push_delivery(
+  p_instance_id uuid,p_credential_id uuid,p_assignment_epoch bigint,
+  p_now timestamptz default now()
+) returns jsonb language plpgsql security definer set search_path to 'pg_catalog','public'
+as $function$
+declare v_delivery jsonb; v_instance public.event_push_instances%rowtype; v_event public.events_app_events%rowtype; v_reason text;
+begin
+  if p_instance_id is null or p_credential_id is null or p_assignment_epoch is null or p_assignment_epoch<1 then
+    raise exception using errcode='22023',message='exact event instance, credential, and assignment epoch are required';
+  end if;
+  v_delivery:=public.mz_resolve_employee_push_delivery(p_credential_id,p_assignment_epoch,p_now);
+  if coalesce((v_delivery->>'ok')::boolean,false) is not true then return v_delivery; end if;
+  select * into v_instance from public.event_push_instances where instance_id=p_instance_id;
+  if v_instance.instance_id is not null then
+    select * into v_event from public.events_app_events where id=v_instance.event_id for key share;
+  end if;
+  select * into v_instance from public.event_push_instances where instance_id=p_instance_id for update;
+  v_reason:=case
+    when v_instance.instance_id is null then 'event_push_instance_missing'
+    when v_instance.credential_id<>p_credential_id or v_instance.assignment_epoch<>p_assignment_epoch then 'event_push_recipient_superseded'
+    when v_instance.state not in ('pending','leased','failed') then 'event_push_instance_'||v_instance.state
+    when v_event.id is null or v_event.revision<>v_instance.event_revision or v_event.status<>'SCHEDULED'
+      or v_event.cancelled_at is not null or v_event.archived_at is not null then 'event_or_revision_superseded'
+    when v_instance.employee_id is distinct from (v_delivery->>'employee_id')::uuid
+      or v_instance.device_id is distinct from (v_delivery->>'device_id')::uuid then 'event_push_recipient_superseded'
+    else null
+  end;
+  if v_reason is not null then
+    update public.event_push_instances set state='cancelled',cancelled_at=coalesce(cancelled_at,p_now),
+      last_error=v_reason,updated_at=p_now
+    where instance_id=p_instance_id and state in ('pending','leased','failed');
+    return jsonb_build_object('ok',false,'terminal',true,'reason',v_reason,'instance_id',p_instance_id);
+  end if;
+  update public.event_push_instances set state='leased',last_error=null,updated_at=p_now
+  where instance_id=p_instance_id;
+  return jsonb_build_object('ok',true,'terminal',false,'instance_id',p_instance_id,'state','leased');
+end
+$function$;
+
+create or replace function public.mz_record_employee_event_push_delivery(
+  p_instance_id uuid,p_credential_id uuid,p_assignment_epoch bigint,
+  p_registration_id uuid,p_token_hash text,p_provider_message_id text,
+  p_now timestamptz default now()
+) returns jsonb language plpgsql security definer set search_path to 'pg_catalog','public'
+as $function$
+declare v_delivery jsonb; v_instance public.event_push_instances%rowtype; v_event public.events_app_events%rowtype; v_reason text;
+begin
+  if p_instance_id is null or p_credential_id is null or p_assignment_epoch is null or p_assignment_epoch<1
+     or p_registration_id is null or coalesce(p_token_hash,'') !~ '^[0-9a-f]{64}$'
+     or length(btrim(coalesce(p_provider_message_id,''))) not between 1 and 1000 then
+    raise exception using errcode='22023',message='exact event, recipient, token generation, and provider result are required';
+  end if;
+  v_delivery:=public.mz_resolve_employee_push_delivery(p_credential_id,p_assignment_epoch,p_now);
+  if coalesce((v_delivery->>'ok')::boolean,false) is not true then
+    return jsonb_build_object('current',false,'recorded',false,'reason',coalesce(v_delivery->>'reason','employee_push_recipient_superseded'));
+  end if;
+  select * into v_instance from public.event_push_instances where instance_id=p_instance_id;
+  if v_instance.instance_id is not null then
+    select * into v_event from public.events_app_events where id=v_instance.event_id for key share;
+  end if;
+  select * into v_instance from public.event_push_instances where instance_id=p_instance_id for update;
+  v_reason:=case
+    when (v_delivery#>>'{registration,registration_id}')::uuid is distinct from p_registration_id
+      or v_delivery#>>'{registration,token_hash}' is distinct from p_token_hash then 'push_registration_superseded'
+    when v_instance.instance_id is null then 'event_push_instance_missing'
+    when v_instance.credential_id<>p_credential_id or v_instance.assignment_epoch<>p_assignment_epoch
+      or v_instance.employee_id is distinct from (v_delivery->>'employee_id')::uuid
+      or v_instance.device_id is distinct from (v_delivery->>'device_id')::uuid then 'event_push_recipient_superseded'
+    when v_instance.state not in ('pending','leased','failed') then 'event_push_instance_'||v_instance.state
+    when v_event.id is null or v_event.revision<>v_instance.event_revision or v_event.status<>'SCHEDULED'
+      or v_event.cancelled_at is not null or v_event.archived_at is not null then 'event_or_revision_superseded'
+    else null
+  end;
+  if v_reason is not null then
+    update public.event_push_instances set state='cancelled',cancelled_at=coalesce(cancelled_at,p_now),
+      last_error=v_reason,updated_at=p_now
+    where instance_id=p_instance_id and state in ('pending','leased','failed');
+    return jsonb_build_object('current',false,'recorded',false,'reason',v_reason,'instance_id',p_instance_id);
+  end if;
+  update public.employee_push_registrations
+  set last_successful_delivery_at=p_now,last_error=null,updated_at=p_now
+  where registration_id=p_registration_id and token_hash=p_token_hash;
+  update public.event_push_instances
+  set state='sent',sent_at=p_now,provider_message_id=btrim(p_provider_message_id),last_error=null,updated_at=p_now
+  where instance_id=p_instance_id;
+  return jsonb_build_object('current',true,'recorded',true,'instance_id',p_instance_id,'state','sent');
+end
+$function$;
+
+revoke all on function public.mz_claim_employee_event_push_delivery(uuid,uuid,bigint,timestamptz) from public,anon,authenticated;
+revoke all on function public.mz_record_employee_event_push_delivery(uuid,uuid,bigint,uuid,text,text,timestamptz) from public,anon,authenticated;
+grant execute on function public.mz_claim_employee_event_push_delivery(uuid,uuid,bigint,timestamptz) to postgres,service_role;
+grant execute on function public.mz_record_employee_event_push_delivery(uuid,uuid,bigint,uuid,text,text,timestamptz) to postgres,service_role;
+
+-- Exhausting the final retry is a terminal outcome just like success. Preserve
+-- that invariant for every notification job, including older job types.
+create or replace function public.finish_operational_notification_job(
+  p_job_id uuid,p_lease_token uuid,p_succeeded boolean,p_error text default null,p_retry_seconds integer default 30
+) returns public.operational_notification_jobs language plpgsql security definer set search_path to 'pg_catalog','public'
+as $function$
+declare v_row public.operational_notification_jobs;
+begin
+  update public.operational_notification_jobs j
+  set status=case when p_succeeded then 'completed' when j.attempts>=j.max_attempts then 'dead' else 'pending' end,
+      completed_at=case when p_succeeded or j.attempts>=j.max_attempts then now() else null end,
+      available_at=case when p_succeeded then j.available_at else now()+make_interval(secs=>greatest(5,least(coalesce(p_retry_seconds,30),3600))) end,
+      leased_at=null,leased_until=null,lease_token=null,worker_id=null,
+      last_error=case when p_succeeded then null else left(coalesce(p_error,'notification failed'),2000) end,
+      updated_at=now()
+  where j.job_id=p_job_id and j.status='leased' and j.lease_token=p_lease_token
+  returning j.* into v_row;
+  if v_row.job_id is null then raise exception 'notification job lease is no longer authoritative'; end if;
+  return v_row;
+end
+$function$;
+revoke all on function public.finish_operational_notification_job(uuid,uuid,boolean,text,integer) from public,anon,authenticated;
+grant execute on function public.finish_operational_notification_job(uuid,uuid,boolean,text,integer) to postgres,service_role;
+
 -- This inventory is a catalog-derived superset of the native/offline authority
 -- closure. It records executable definitions for functions, relation guards,
 -- relational constraints, and grants rather than assuming the controller is
@@ -658,7 +780,8 @@ with recursive authority_relations as (
   select c.oid,n.nspname,c.relname from pg_class c join pg_namespace n on n.oid=c.relnamespace
   where n.nspname='public' and c.relkind in ('r','p') and (
     c.relname like 'custodial_%'
-    or c.relname in ('devices','locations','device_auth_credentials','sessions','completion_responses','maintenance_tickets','scan_events')
+    or c.relname in ('devices','locations','device_auth_credentials','sessions','completion_responses','maintenance_tickets','scan_events',
+      'employee_push_registrations','event_push_instances','events_app_events','operational_notification_jobs')
   )
   union
   select peer.oid,pn.nspname,peer.relname
@@ -673,7 +796,9 @@ with recursive authority_relations as (
   where n.nspname='public' and (
     p.proname like 'custodial_%'
     or p.proname in ('create_maintenance_tickets_from_response','resolve_scan_location_code','static_weekly_reject_update_delete','tool_get_device_rollback_readiness',
-      'tool_get_offline_scan_authority_snapshot','tool_start_offline_occurrence','tool_commit_cleaning_workflow_authoritative','tool_complete_session_authoritative')
+      'tool_get_offline_scan_authority_snapshot','tool_start_offline_occurrence','tool_commit_cleaning_workflow_authoritative','tool_complete_session_authoritative',
+      'mz_resolve_employee_push_delivery','mz_record_employee_push_delivery','mz_claim_employee_event_push_delivery','mz_record_employee_event_push_delivery',
+      'finish_operational_notification_job','finish_operational_notification_job_terminal')
   )
   union
   select p.oid,n.nspname,p.proname,pg_get_function_identity_arguments(p.oid) args
@@ -721,7 +846,8 @@ with recursive authority_relations as (
   select c.oid,n.nspname,c.relname from pg_class c join pg_namespace n on n.oid=c.relnamespace
   where n.nspname='public' and c.relkind in ('r','p') and (
     c.relname like 'custodial_%'
-    or c.relname in ('devices','locations','device_auth_credentials','sessions','completion_responses','maintenance_tickets','scan_events')
+    or c.relname in ('devices','locations','device_auth_credentials','sessions','completion_responses','maintenance_tickets','scan_events',
+      'employee_push_registrations','event_push_instances','events_app_events','operational_notification_jobs')
   )
   union
   select peer.oid,pn.nspname,peer.relname
@@ -735,7 +861,9 @@ with recursive authority_relations as (
   where n.nspname='public' and (
     p.proname like 'custodial_%'
     or p.proname in ('create_maintenance_tickets_from_response','resolve_scan_location_code','static_weekly_reject_update_delete','tool_get_device_rollback_readiness',
-      'tool_get_offline_scan_authority_snapshot','tool_start_offline_occurrence','tool_commit_cleaning_workflow_authoritative','tool_complete_session_authoritative')
+      'tool_get_offline_scan_authority_snapshot','tool_start_offline_occurrence','tool_commit_cleaning_workflow_authoritative','tool_complete_session_authoritative',
+      'mz_resolve_employee_push_delivery','mz_record_employee_push_delivery','mz_claim_employee_event_push_delivery','mz_record_employee_event_push_delivery',
+      'finish_operational_notification_job','finish_operational_notification_job_terminal')
   )
   union
   select p.oid from pg_trigger t join authority_relations r on r.oid=t.tgrelid join pg_proc p on p.oid=t.tgfoid
