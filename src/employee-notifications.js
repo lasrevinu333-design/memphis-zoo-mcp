@@ -133,24 +133,36 @@ export function installEmployeeNotificationRoutes(app, {
     return result.data?.current === true;
   }
 
-  async function claimEventDelivery(instance, credential, assignmentEpoch) {
+  async function claimEventDelivery(job, instance, credential, assignmentEpoch, registration) {
+    const tokenHash = crypto.createHash('sha256').update(String(registration?.fcm_token || '')).digest('hex');
+    if (!registration?.registration_id || !/^[0-9a-f]{64}$/.test(tokenHash)
+      || (registration.token_hash && registration.token_hash !== tokenHash)) {
+      throw terminalDeliveryError('push_registration_binding_invalid');
+    }
     const result = await db.rpc('mz_claim_employee_event_push_delivery', {
+      p_job_id: job.job_id,
+      p_lease_token: job.lease_token,
       p_instance_id: instance.instance_id,
       p_credential_id: credential,
       p_assignment_epoch: assignmentEpoch,
+      p_registration_id: registration.registration_id,
+      p_token_hash: tokenHash,
       p_now: new Date().toISOString(),
     });
     if (result.error) throw result.error;
     if (!result.data?.ok) throw terminalDeliveryError(result.data?.reason || 'event_push_instance_superseded');
+    return result.data;
   }
 
-  async function recordEventDelivery(instance, credential, assignmentEpoch, registration, providerMessageId) {
+  async function recordEventDelivery(job, instance, credential, assignmentEpoch, registration, providerMessageId) {
     const tokenHash = crypto.createHash('sha256').update(String(registration?.fcm_token || '')).digest('hex');
     if (!registration?.registration_id || !/^[0-9a-f]{64}$/.test(tokenHash)
       || (registration.token_hash && registration.token_hash !== tokenHash)) {
       throw terminalDeliveryError('push_registration_binding_invalid');
     }
     const result = await db.rpc('mz_record_employee_event_push_delivery', {
+      p_job_id: job.job_id,
+      p_lease_token: job.lease_token,
       p_instance_id: instance.instance_id,
       p_credential_id: credential,
       p_assignment_epoch: assignmentEpoch,
@@ -166,6 +178,23 @@ export function installEmployeeNotificationRoutes(app, {
     return true;
   }
 
+  async function releaseEventDelivery(job, instance, credential, assignmentEpoch, registration, errorMessage) {
+    const tokenHash = crypto.createHash('sha256').update(String(registration?.fcm_token || '')).digest('hex');
+    const result = await db.rpc('mz_release_employee_event_push_delivery', {
+      p_job_id: job.job_id,
+      p_lease_token: job.lease_token,
+      p_instance_id: instance.instance_id,
+      p_credential_id: credential,
+      p_assignment_epoch: assignmentEpoch,
+      p_registration_id: registration.registration_id,
+      p_token_hash: tokenHash,
+      p_error: errorMessage,
+      p_now: new Date().toISOString(),
+    });
+    if (result.error) throw result.error;
+    return result.data?.current === true && result.data?.released === true;
+  }
+
   async function getNativeDeliveryReceipt(job, credential, assignmentEpoch) {
     const result = await db.rpc('mz_get_employee_native_push_delivery_receipt', {
       p_job_id: job.job_id,
@@ -176,6 +205,43 @@ export function installEmployeeNotificationRoutes(app, {
     if (result.error) throw result.error;
     if (result.data?.current !== true) {
       throw terminalDeliveryError(result.data?.reason || 'employee_native_push_job_superseded');
+    }
+    return result.data;
+  }
+
+  async function releaseNativeDelivery(job, credential, assignmentEpoch, registration) {
+    const tokenHash = crypto.createHash('sha256').update(String(registration?.fcm_token || '')).digest('hex');
+    const result = await db.rpc('mz_release_employee_native_push_delivery', {
+      p_job_id: job.job_id,
+      p_lease_token: job.lease_token,
+      p_credential_id: credential,
+      p_assignment_epoch: assignmentEpoch,
+      p_registration_id: registration.registration_id,
+      p_token_hash: tokenHash,
+    });
+    if (result.error) throw result.error;
+    return result.data?.current === true && result.data?.released === true;
+  }
+
+  async function prepareNativeDelivery(job, credential, assignmentEpoch, registration) {
+    const tokenHash = crypto.createHash('sha256').update(String(registration?.fcm_token || '')).digest('hex');
+    if (!registration?.registration_id || !/^[0-9a-f]{64}$/.test(tokenHash)
+      || (registration.token_hash && registration.token_hash !== tokenHash)) {
+      throw terminalDeliveryError('push_registration_binding_invalid');
+    }
+    const result = await db.rpc('mz_prepare_employee_native_push_delivery', {
+      p_job_id: job.job_id,
+      p_lease_token: job.lease_token,
+      p_credential_id: credential,
+      p_assignment_epoch: assignmentEpoch,
+      p_registration_id: registration.registration_id,
+      p_token_hash: tokenHash,
+      p_now: new Date().toISOString(),
+    });
+    if (result.error) throw result.error;
+    if (result.data?.already_recorded === true) return result.data;
+    if (result.data?.current !== true || result.data?.dispatch_authorized !== true) {
+      throw terminalDeliveryError(result.data?.reason || 'native_push_delivery_not_authorized');
     }
     return result.data;
   }
@@ -373,9 +439,10 @@ export function installEmployeeNotificationRoutes(app, {
   async function deliverClaimedJob(job) {
     let registration = null;
     let eventInstance = null;
+    let credential = null;
+    let assignmentEpoch = null;
+    let providerBoundaryPrepared = false;
     try {
-      let credential;
-      let assignmentEpoch;
       let push;
       let channelId;
       if (job.job_type === 'employee_event_push') {
@@ -418,6 +485,9 @@ export function installEmployeeNotificationRoutes(app, {
       if (!eventInstance) {
         const receipt = await getNativeDeliveryReceipt(job, credential, assignmentEpoch);
         if (receipt.already_recorded === true) return { provider_message_id: receipt.provider_message_id, replayed: true };
+        if (receipt.delivery_outcome_unknown === true) {
+          throw terminalDeliveryError(receipt.reason || 'native_push_delivery_outcome_unknown');
+        }
       }
       // A job can outlive either its credential or employee assignment.  Check
       // once after claim, then again immediately before the provider boundary.
@@ -427,10 +497,22 @@ export function installEmployeeNotificationRoutes(app, {
         await beforeFinalDeliveryCheck({ job, credential, assignmentEpoch, registration });
       }
       registration = await resolveAuthorizedDelivery(credential, assignmentEpoch);
-      if (eventInstance) await claimEventDelivery(eventInstance, credential, assignmentEpoch);
+      if (eventInstance) {
+        const claimed = await claimEventDelivery(job, eventInstance, credential, assignmentEpoch, registration);
+        if (claimed.already_recorded === true) {
+          return { provider_message_id: claimed.provider_message_id, replayed: true };
+        }
+        providerBoundaryPrepared = true;
+      } else {
+        const prepared = await prepareNativeDelivery(job, credential, assignmentEpoch, registration);
+        if (prepared.already_recorded === true) {
+          return { provider_message_id: prepared.provider_message_id, replayed: true };
+        }
+        providerBoundaryPrepared = true;
+      }
       const providerMessageId = await pushRuntime.send(push, registration, { channelId });
       const recorded = eventInstance
-        ? await recordEventDelivery(eventInstance, credential, assignmentEpoch, registration, providerMessageId)
+        ? await recordEventDelivery(job, eventInstance, credential, assignmentEpoch, registration, providerMessageId)
         : await recordNativeDelivery(job, credential, assignmentEpoch, registration, providerMessageId);
       if (!recorded) {
         throw terminalDeliveryError('push_registration_superseded_after_provider_dispatch');
@@ -438,6 +520,22 @@ export function installEmployeeNotificationRoutes(app, {
       return { provider_message_id: providerMessageId };
     } catch (error) {
       const errorMessage = clip(error?.message || 'FCM provider request failed.', 2000);
+      if (providerBoundaryPrepared && error?.deliveryNotAccepted === true) {
+        const released = eventInstance
+          ? await releaseEventDelivery(job, eventInstance, credential, assignmentEpoch, registration, errorMessage)
+          : await releaseNativeDelivery(job, credential, assignmentEpoch, registration);
+        if (!released) {
+          throw terminalDeliveryError(eventInstance
+            ? 'event_push_delivery_release_superseded'
+            : 'native_push_delivery_release_superseded');
+        }
+        providerBoundaryPrepared = false;
+      }
+      if (providerBoundaryPrepared && error?.deliveryNotAccepted !== true && error?.terminal !== true) {
+        error.terminal = true;
+        error.permanent = true;
+        error.code = eventInstance ? 'event_push_delivery_outcome_unknown' : 'native_push_delivery_outcome_unknown';
+      }
       const authorityTerminal = error?.terminal === true;
       let providerResultSuperseded = false;
       if (registration?.registration_id && !authorityTerminal) {
@@ -456,7 +554,10 @@ export function installEmployeeNotificationRoutes(app, {
       if (job.job_type === 'employee_event_push') {
         const eventUpdate = error?.terminal === true
           ? { state: 'cancelled', cancelled_at: new Date().toISOString(), last_error: errorMessage, updated_at: new Date().toISOString() }
-          : { state: 'failed', last_error: errorMessage, updated_at: new Date().toISOString() };
+          : {
+            state: 'failed', dispatch_job_id: null, dispatch_lease_token: null, dispatch_registration_id: null,
+            dispatch_token_hash: null, dispatch_started_at: null, last_error: errorMessage, updated_at: new Date().toISOString(),
+          };
         const eventResult = await db.from('event_push_instances').update(eventUpdate)
           .eq('instance_id', job.source_id).in('state', ['pending', 'leased', 'failed'])
           .select('instance_id').maybeSingle();

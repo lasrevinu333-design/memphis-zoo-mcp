@@ -7750,14 +7750,40 @@
     },
     {
       "collation_name": null,
+      "column_name": "delivery_state",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": "'prepared'::text",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 9,
+      "schema_name": "public",
+      "table_name": "employee_native_push_delivery_receipts"
+    },
+    {
+      "collation_name": null,
       "column_name": "provider_message_id",
       "comment": null,
       "data_type": "text",
       "default_expression": null,
       "generated_kind": "",
       "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 10,
+      "schema_name": "public",
+      "table_name": "employee_native_push_delivery_receipts"
+    },
+    {
+      "collation_name": null,
+      "column_name": "prepared_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "statement_timestamp()",
+      "generated_kind": "",
+      "identity_kind": "",
       "not_null": true,
-      "ordinal_position": 9,
+      "ordinal_position": 11,
       "schema_name": "public",
       "table_name": "employee_native_push_delivery_receipts"
     },
@@ -7769,8 +7795,8 @@
       "default_expression": null,
       "generated_kind": "",
       "identity_kind": "",
-      "not_null": true,
-      "ordinal_position": 10,
+      "not_null": false,
+      "ordinal_position": 12,
       "schema_name": "public",
       "table_name": "employee_native_push_delivery_receipts"
     },
@@ -7783,7 +7809,7 @@
       "generated_kind": "",
       "identity_kind": "",
       "not_null": true,
-      "ordinal_position": 11,
+      "ordinal_position": 13,
       "schema_name": "public",
       "table_name": "employee_native_push_delivery_receipts"
     },
@@ -9396,6 +9422,71 @@
       "identity_kind": "",
       "not_null": true,
       "ordinal_position": 19,
+      "schema_name": "public",
+      "table_name": "event_push_instances"
+    },
+    {
+      "collation_name": null,
+      "column_name": "dispatch_job_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 20,
+      "schema_name": "public",
+      "table_name": "event_push_instances"
+    },
+    {
+      "collation_name": null,
+      "column_name": "dispatch_lease_token",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 21,
+      "schema_name": "public",
+      "table_name": "event_push_instances"
+    },
+    {
+      "collation_name": null,
+      "column_name": "dispatch_registration_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 22,
+      "schema_name": "public",
+      "table_name": "event_push_instances"
+    },
+    {
+      "collation_name": null,
+      "column_name": "dispatch_token_hash",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 23,
+      "schema_name": "public",
+      "table_name": "event_push_instances"
+    },
+    {
+      "collation_name": null,
+      "column_name": "dispatch_started_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 24,
       "schema_name": "public",
       "table_name": "event_push_instances"
     },
@@ -27694,7 +27785,7 @@
     {
       "constraint_name": "custodial_release_authority_restore_inventory_object_kind_check",
       "constraint_type": "c",
-      "definition": "CHECK (object_kind = ANY (ARRAY['function'::text, 'constraint'::text, 'index'::text, 'trigger'::text, 'policy'::text, 'relation_state'::text, 'grant'::text]))",
+      "definition": "CHECK (object_kind = ANY (ARRAY['function'::text, 'relation'::text, 'constraint'::text, 'index'::text, 'trigger'::text, 'policy'::text, 'relation_state'::text, 'grant'::text]))",
       "schema_name": "public",
       "table_name": "custodial_release_authority_restore_inventory",
       "validated": true
@@ -28814,7 +28905,7 @@
     {
       "constraint_name": "employee_native_push_delivery_receipt_provider_message_id_check",
       "constraint_type": "c",
-      "definition": "CHECK (length(btrim(provider_message_id)) >= 1 AND length(btrim(provider_message_id)) <= 1000)",
+      "definition": "CHECK (provider_message_id IS NULL OR length(btrim(provider_message_id)) >= 1 AND length(btrim(provider_message_id)) <= 1000)",
       "schema_name": "public",
       "table_name": "employee_native_push_delivery_receipts",
       "validated": true
@@ -28823,6 +28914,22 @@
       "constraint_name": "employee_native_push_delivery_receipts_assignment_epoch_check",
       "constraint_type": "c",
       "definition": "CHECK (assignment_epoch > 0)",
+      "schema_name": "public",
+      "table_name": "employee_native_push_delivery_receipts",
+      "validated": true
+    },
+    {
+      "constraint_name": "employee_native_push_delivery_receipts_check",
+      "constraint_type": "c",
+      "definition": "CHECK (delivery_state = 'prepared'::text AND provider_message_id IS NULL AND delivered_at IS NULL OR delivery_state = 'delivered'::text AND provider_message_id IS NOT NULL AND delivered_at IS NOT NULL)",
+      "schema_name": "public",
+      "table_name": "employee_native_push_delivery_receipts",
+      "validated": true
+    },
+    {
+      "constraint_name": "employee_native_push_delivery_receipts_delivery_state_check",
+      "constraint_type": "c",
+      "definition": "CHECK (delivery_state = ANY (ARRAY['prepared'::text, 'delivered'::text]))",
       "schema_name": "public",
       "table_name": "employee_native_push_delivery_receipts",
       "validated": true
@@ -29223,6 +29330,14 @@
       "constraint_name": "event_push_instances_device_id_fkey",
       "constraint_type": "f",
       "definition": "FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE",
+      "schema_name": "public",
+      "table_name": "event_push_instances",
+      "validated": true
+    },
+    {
+      "constraint_name": "event_push_instances_dispatch_binding",
+      "constraint_type": "c",
+      "definition": "CHECK (dispatch_job_id IS NULL AND dispatch_lease_token IS NULL AND dispatch_registration_id IS NULL AND dispatch_token_hash IS NULL AND dispatch_started_at IS NULL OR dispatch_job_id IS NOT NULL AND dispatch_lease_token IS NOT NULL AND dispatch_registration_id IS NOT NULL AND dispatch_token_hash ~ '^[0-9a-f]{64}$'::text AND dispatch_started_at IS NOT NULL)",
       "schema_name": "public",
       "table_name": "event_push_instances",
       "validated": true
@@ -34659,7 +34774,7 @@
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.custodial_backend_authority_health(p_backend_execution_secret text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare v_missing text[]; v_mismatched text[]; v_checks jsonb; v_ok boolean;\nbegin\n  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  select array_agg(i.object_identity order by i.restore_order,i.object_identity) into v_missing\n  from public.custodial_release_authority_restore_inventory i\n  where (i.object_kind='function' and to_regprocedure(i.object_identity) is null)\n     or (i.object_kind='constraint' and public.custodial_release_authority_current_constraint_definition(i.object_identity) is null)\n     or (i.object_kind='index' and public.custodial_release_authority_current_index_definition(i.object_identity) is null)\n     or (i.object_kind='trigger' and not exists(select 1 from pg_trigger t join pg_class r on r.oid=t.tgrelid join pg_namespace n on n.oid=r.relnamespace where i.object_identity=quote_ident(n.nspname)||'.'||quote_ident(r.relname)||'.'||quote_ident(t.tgname) and not t.tgisinternal))\n     or (i.object_kind='policy' and public.custodial_release_authority_current_policy_definition(i.object_identity) is null)\n     or (i.object_kind='relation_state' and public.custodial_release_authority_current_relation_state_definition(i.object_identity) is null)\n     or (i.object_kind='grant' and public.custodial_release_authority_current_grant_definition(i.object_identity) is null);\n  select array_agg(i.object_identity order by i.restore_order,i.object_identity) into v_mismatched\n  from public.custodial_release_authority_restore_inventory i\n  where (i.object_kind='function' and to_regprocedure(i.object_identity) is not null and encode(extensions.digest(convert_to(pg_get_functiondef(to_regprocedure(i.object_identity)),'UTF8'),'sha256'),'hex')<>i.definition_sha256)\n     or (i.object_kind='constraint' and encode(extensions.digest(convert_to(public.custodial_release_authority_current_constraint_definition(i.object_identity),'UTF8'),'sha256'),'hex') is distinct from i.definition_sha256)\n     or (i.object_kind='index' and encode(extensions.digest(convert_to(public.custodial_release_authority_current_index_definition(i.object_identity),'UTF8'),'sha256'),'hex') is distinct from i.definition_sha256)\n     or (i.object_kind='trigger' and exists(select 1 from pg_trigger t join pg_class r on r.oid=t.tgrelid join pg_namespace n on n.oid=r.relnamespace where i.object_identity=quote_ident(n.nspname)||'.'||quote_ident(r.relname)||'.'||quote_ident(t.tgname) and not t.tgisinternal and encode(extensions.digest(convert_to('drop trigger if exists '||quote_ident(t.tgname)||' on '||quote_ident(n.nspname)||'.'||quote_ident(r.relname)||'; '||pg_get_triggerdef(t.oid,true)||'; alter table '||quote_ident(n.nspname)||'.'||quote_ident(r.relname)||' '||case t.tgenabled when 'O' then 'enable' when 'D' then 'disable' when 'R' then 'enable replica' when 'A' then 'enable always' end||' trigger '||quote_ident(t.tgname)||';','UTF8'),'sha256'),'hex')<>i.definition_sha256))\n     or (i.object_kind='policy' and encode(extensions.digest(convert_to(public.custodial_release_authority_current_policy_definition(i.object_identity),'UTF8'),'sha256'),'hex') is distinct from i.definition_sha256)\n     or (i.object_kind='relation_state' and encode(extensions.digest(convert_to(public.custodial_release_authority_current_relation_state_definition(i.object_identity),'UTF8'),'sha256'),'hex') is distinct from i.definition_sha256)\n     or (i.object_kind='grant' and encode(extensions.digest(convert_to(public.custodial_release_authority_current_grant_definition(i.object_identity),'UTF8'),'sha256'),'hex') is distinct from i.definition_sha256);\n  v_checks:=jsonb_build_object(\n    'restore_inventory_present',(select count(*)>40 from public.custodial_release_authority_restore_inventory),\n    'restore_inventory_exact',coalesce(cardinality(v_missing),0)=0 and coalesce(cardinality(v_mismatched),0)=0,\n    'bootstrap_controller_seed_present',exists(select 1 from public.custodial_release_authority_bootstrap_definitions),\n    'authority_activation_history',to_regclass('public.custodial_offline_authority_activation_events') is not null\n      and to_regprocedure('public.custodial_offline_authority_active_at(text,uuid,timestamptz)') is not null,\n    'completion_uuid_constraints',exists(select 1 from pg_constraint where conrelid='public.custodial_offline_reconciliation_records'::regclass and conname='custodial_offline_reconciliation_client_completion_id_uuid')\n      and exists(select 1 from pg_constraint where conrelid='public.completion_responses'::regclass and conname='completion_responses_client_completion_id_uuid'),\n    'offline_evidence_direct_dml_denied',not (\n      has_table_privilege('service_role','public.custodial_offline_actor_contexts','insert')\n      or has_table_privilege('service_role','public.custodial_offline_reconciliation_records','insert')\n      or has_table_privilege('service_role','public.custodial_offline_scan_event_evidence','insert')\n    ),\n    'authority_column_grants_absent',not exists(\n      select 1 from pg_attribute a join pg_class c on c.oid=a.attrelid join pg_namespace n on n.oid=c.relnamespace\n      where n.nspname='public' and a.attnum>0 and not a.attisdropped and a.attacl is not null\n    ),\n    'alternate_terminal_writers_absent',not exists(\n      select 1 from public.custodial_terminal_writer_inventory i\n      where i.application_callable and (i.mutates_terminal_truth or i.delegates_alternate_terminal_authority)\n        and i.oid is distinct from to_regprocedure('public.tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text,text,text,text,text)')\n        and i.oid is distinct from to_regprocedure('public.tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text)')\n        and i.oid is distinct from to_regprocedure('public.tool_complete_session_authoritative(text,jsonb,text,text,text,text)')\n        and i.oid is distinct from to_regprocedure('public.custodial_close_maintenance_ticket_authoritative(uuid,text,text,text)')\n        and i.oid is distinct from to_regprocedure('public.custodial_finish_historical_session_authoritative(text,text,uuid,timestamptz,text)')\n    ),\n    'generic_terminal_writer_execute_denied',not exists(\n      select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace\n      where n.nspname='public' and p.proname in (\n        'run_application_write','run_sql_write','run_sql_migration','force_close_session','tool_force_close_session',\n        'purge_closed_scan_history_before','tool_purge_closed_scan_history_before'\n      ) and (has_function_privilege('anon',p.oid,'EXECUTE') or has_function_privilege('authenticated',p.oid,'EXECUTE') or has_function_privilege('service_role',p.oid,'EXECUTE'))\n    ),\n    'native_timestamp_renderer',public.custodial_canonical_utc_millis('2026-08-13 12:34:56.789123+00'::timestamptz)='2026-08-13T12:34:56.789Z'\n  );\n  select bool_and(value::boolean) into v_ok from jsonb_each_text(v_checks);\n  return jsonb_build_object('ok',coalesce(v_ok,false),'authority','offline-authority.v5','canonical_objects_expected',(select count(*) from public.custodial_release_authority_restore_inventory),'missing_objects',to_jsonb(coalesce(v_missing,array[]::text[])),'mismatched_objects',to_jsonb(coalesce(v_mismatched,array[]::text[])),'checks',v_checks);\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_backend_authority_health(p_backend_execution_secret text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare v_missing text[]; v_mismatched text[]; v_checks jsonb; v_ok boolean;\nbegin\n  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  select array_agg(i.object_identity order by i.restore_order,i.object_identity) into v_missing\n  from public.custodial_release_authority_restore_inventory i\n  where (i.object_kind='function' and to_regprocedure(i.object_identity) is null)\n     or (i.object_kind='relation' and public.custodial_release_authority_current_relation_definition(i.object_identity) is null)\n     or (i.object_kind='constraint' and public.custodial_release_authority_current_constraint_definition(i.object_identity) is null)\n     or (i.object_kind='index' and public.custodial_release_authority_current_index_definition(i.object_identity) is null)\n     or (i.object_kind='trigger' and not exists(select 1 from pg_trigger t join pg_class r on r.oid=t.tgrelid join pg_namespace n on n.oid=r.relnamespace where i.object_identity=quote_ident(n.nspname)||'.'||quote_ident(r.relname)||'.'||quote_ident(t.tgname) and not t.tgisinternal))\n     or (i.object_kind='policy' and public.custodial_release_authority_current_policy_definition(i.object_identity) is null)\n     or (i.object_kind='relation_state' and public.custodial_release_authority_current_relation_state_definition(i.object_identity) is null)\n     or (i.object_kind='grant' and public.custodial_release_authority_current_grant_definition(i.object_identity) is null);\n  select array_agg(i.object_identity order by i.restore_order,i.object_identity) into v_mismatched\n  from public.custodial_release_authority_restore_inventory i\n  where (i.object_kind='function' and to_regprocedure(i.object_identity) is not null and encode(extensions.digest(convert_to(pg_get_functiondef(to_regprocedure(i.object_identity)),'UTF8'),'sha256'),'hex')<>i.definition_sha256)\n     or (i.object_kind='relation' and encode(extensions.digest(convert_to(public.custodial_release_authority_current_relation_definition(i.object_identity),'UTF8'),'sha256'),'hex') is distinct from i.definition_sha256)\n     or (i.object_kind='constraint' and encode(extensions.digest(convert_to(public.custodial_release_authority_current_constraint_definition(i.object_identity),'UTF8'),'sha256'),'hex') is distinct from i.definition_sha256)\n     or (i.object_kind='index' and encode(extensions.digest(convert_to(public.custodial_release_authority_current_index_definition(i.object_identity),'UTF8'),'sha256'),'hex') is distinct from i.definition_sha256)\n     or (i.object_kind='trigger' and exists(select 1 from pg_trigger t join pg_class r on r.oid=t.tgrelid join pg_namespace n on n.oid=r.relnamespace where i.object_identity=quote_ident(n.nspname)||'.'||quote_ident(r.relname)||'.'||quote_ident(t.tgname) and not t.tgisinternal and encode(extensions.digest(convert_to('drop trigger if exists '||quote_ident(t.tgname)||' on '||quote_ident(n.nspname)||'.'||quote_ident(r.relname)||'; '||pg_get_triggerdef(t.oid,true)||'; alter table '||quote_ident(n.nspname)||'.'||quote_ident(r.relname)||' '||case t.tgenabled when 'O' then 'enable' when 'D' then 'disable' when 'R' then 'enable replica' when 'A' then 'enable always' end||' trigger '||quote_ident(t.tgname)||';','UTF8'),'sha256'),'hex')<>i.definition_sha256))\n     or (i.object_kind='policy' and encode(extensions.digest(convert_to(public.custodial_release_authority_current_policy_definition(i.object_identity),'UTF8'),'sha256'),'hex') is distinct from i.definition_sha256)\n     or (i.object_kind='relation_state' and encode(extensions.digest(convert_to(public.custodial_release_authority_current_relation_state_definition(i.object_identity),'UTF8'),'sha256'),'hex') is distinct from i.definition_sha256)\n     or (i.object_kind='grant' and encode(extensions.digest(convert_to(public.custodial_release_authority_current_grant_definition(i.object_identity),'UTF8'),'sha256'),'hex') is distinct from i.definition_sha256);\n  v_checks:=jsonb_build_object(\n    'restore_inventory_present',(select count(*)>40 from public.custodial_release_authority_restore_inventory),\n    'restore_inventory_exact',coalesce(cardinality(v_missing),0)=0 and coalesce(cardinality(v_mismatched),0)=0,\n    'bootstrap_controller_seed_present',exists(select 1 from public.custodial_release_authority_bootstrap_definitions),\n    'authority_activation_history',to_regclass('public.custodial_offline_authority_activation_events') is not null\n      and to_regprocedure('public.custodial_offline_authority_active_at(text,uuid,timestamptz)') is not null,\n    'completion_uuid_constraints',exists(select 1 from pg_constraint where conrelid='public.custodial_offline_reconciliation_records'::regclass and conname='custodial_offline_reconciliation_client_completion_id_uuid')\n      and exists(select 1 from pg_constraint where conrelid='public.completion_responses'::regclass and conname='completion_responses_client_completion_id_uuid'),\n    'offline_evidence_direct_dml_denied',not (\n      has_table_privilege('service_role','public.custodial_offline_actor_contexts','insert')\n      or has_table_privilege('service_role','public.custodial_offline_reconciliation_records','insert')\n      or has_table_privilege('service_role','public.custodial_offline_scan_event_evidence','insert')\n    ),\n    'authority_column_grants_absent',not exists(\n      select 1 from pg_attribute a join pg_class c on c.oid=a.attrelid join pg_namespace n on n.oid=c.relnamespace\n      where n.nspname='public' and a.attnum>0 and not a.attisdropped and a.attacl is not null\n    ),\n    'alternate_terminal_writers_absent',not exists(\n      select 1 from public.custodial_terminal_writer_inventory i\n      where i.application_callable and (i.mutates_terminal_truth or i.delegates_alternate_terminal_authority)\n        and i.oid is distinct from to_regprocedure('public.tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text,text,text,text,text)')\n        and i.oid is distinct from to_regprocedure('public.tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text)')\n        and i.oid is distinct from to_regprocedure('public.tool_complete_session_authoritative(text,jsonb,text,text,text,text)')\n        and i.oid is distinct from to_regprocedure('public.custodial_close_maintenance_ticket_authoritative(uuid,text,text,text)')\n        and i.oid is distinct from to_regprocedure('public.custodial_finish_historical_session_authoritative(text,text,uuid,timestamptz,text)')\n    ),\n    'generic_terminal_writer_execute_denied',not exists(\n      select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace\n      where n.nspname='public' and p.proname in (\n        'run_application_write','run_sql_write','run_sql_migration','force_close_session','tool_force_close_session',\n        'purge_closed_scan_history_before','tool_purge_closed_scan_history_before'\n      ) and (has_function_privilege('anon',p.oid,'EXECUTE') or has_function_privilege('authenticated',p.oid,'EXECUTE') or has_function_privilege('service_role',p.oid,'EXECUTE'))\n    ),\n    'native_timestamp_renderer',public.custodial_canonical_utc_millis('2026-08-13 12:34:56.789123+00'::timestamptz)='2026-08-13T12:34:56.789Z'\n  );\n  select bool_and(value::boolean) into v_ok from jsonb_each_text(v_checks);\n  return jsonb_build_object('ok',coalesce(v_ok,false),'authority','offline-authority.v5','canonical_objects_expected',(select count(*) from public.custodial_release_authority_restore_inventory),'missing_objects',to_jsonb(coalesce(v_missing,array[]::text[])),'mismatched_objects',to_jsonb(coalesce(v_mismatched,array[]::text[])),'checks',v_checks);\nend\n$function$\n",
       "function_name": "custodial_backend_authority_health",
       "identity_arguments": "p_backend_execution_secret text",
       "schema_name": "public"
@@ -34969,6 +35084,13 @@
       "comment": null,
       "definition": "CREATE OR REPLACE FUNCTION public.custodial_release_authority_current_policy_definition(p_object_identity text)\n RETURNS text\n LANGUAGE plpgsql\n STABLE STRICT\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_relation oid:=to_regclass(split_part(p_object_identity,':',1)); v_policy text:=substr(p_object_identity,position(':' in p_object_identity)+1);\nbegin\n  return (\n    select 'drop policy if exists '||quote_ident(p.polname)||' on '||quote_ident(n.nspname)||'.'||quote_ident(c.relname)||'; create policy '\n      ||quote_ident(p.polname)||' on '||quote_ident(n.nspname)||'.'||quote_ident(c.relname)||' as '||case when p.polpermissive then 'permissive' else 'restrictive' end\n      ||' for '||case p.polcmd when '*' then 'all' when 'r' then 'select' when 'a' then 'insert' when 'w' then 'update' when 'd' then 'delete' end\n      ||' to '||(select string_agg(case when role_oid=0 then 'public' else quote_ident(r.rolname) end,',' order by role_oid) from unnest(p.polroles) role_oid left join pg_roles r on r.oid=role_oid)\n      ||case when p.polqual is null then '' else ' using ('||pg_get_expr(p.polqual,p.polrelid)||')' end\n      ||case when p.polwithcheck is null then '' else ' with check ('||pg_get_expr(p.polwithcheck,p.polrelid)||')' end||';'\n    from pg_policy p join pg_class c on c.oid=p.polrelid join pg_namespace n on n.oid=c.relnamespace\n    where p.polrelid=v_relation and p.polname=v_policy\n  );\nend\n$function$\n",
       "function_name": "custodial_release_authority_current_policy_definition",
+      "identity_arguments": "p_object_identity text",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_release_authority_current_relation_definition(p_object_identity text)\n RETURNS text\n LANGUAGE plpgsql\n STABLE STRICT\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_relation oid:=to_regclass(p_object_identity); v_schema text; v_name text; v_kind \"char\"; v_persistence \"char\"; v_columns text;\nbegin\n  select n.nspname,c.relname,c.relkind,c.relpersistence into v_schema,v_name,v_kind,v_persistence\n  from pg_class c join pg_namespace n on n.oid=c.relnamespace\n  where c.oid=v_relation and c.relkind in ('r','p') and not c.relispartition;\n  if v_schema is null then return null; end if;\n  select string_agg(\n    quote_ident(a.attname)||' '||format_type(a.atttypid,a.atttypmod)\n      ||case when a.attcollation<>0 and a.attcollation is distinct from t.typcollation\n        then ' collate '||quote_ident(cn.nspname)||'.'||quote_ident(co.collname) else '' end\n      ||case\n        when a.attidentity<>'' then ' generated '||case a.attidentity when 'a' then 'always' else 'by default' end||' as identity'\n        when a.attgenerated<>'' then ' generated always as ('||pg_get_expr(d.adbin,d.adrelid)||') stored'\n        when d.adbin is not null then ' default '||pg_get_expr(d.adbin,d.adrelid)\n        else ''\n      end\n      ||case when a.attnotnull then ' not null' else '' end,\n    E',\\n  ' order by a.attnum\n  ) into v_columns\n  from pg_attribute a\n  join pg_type t on t.oid=a.atttypid\n  left join pg_attrdef d on d.adrelid=a.attrelid and d.adnum=a.attnum\n  left join pg_collation co on co.oid=a.attcollation\n  left join pg_namespace cn on cn.oid=co.collnamespace\n  where a.attrelid=v_relation and a.attnum>0 and not a.attisdropped;\n  return 'create '||case when v_persistence='u' then 'unlogged ' else '' end||'table if not exists '\n    ||quote_ident(v_schema)||'.'||quote_ident(v_name)||E' (\\n  '||coalesce(v_columns,'')||E'\\n)'\n    ||case when v_kind='p' then ' partition by '||pg_get_partkeydef(v_relation) else '' end||';';\nend\n$function$\n",
+      "function_name": "custodial_release_authority_current_relation_definition",
       "identity_arguments": "p_object_identity text",
       "schema_name": "public"
     },
@@ -35947,9 +36069,9 @@
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.mz_claim_employee_event_push_delivery(p_instance_id uuid, p_credential_id uuid, p_assignment_epoch bigint, p_now timestamp with time zone DEFAULT now())\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_delivery jsonb; v_instance public.event_push_instances%rowtype; v_event public.events_app_events%rowtype; v_reason text;\nbegin\n  if p_instance_id is null or p_credential_id is null or p_assignment_epoch is null or p_assignment_epoch<1 then\n    raise exception using errcode='22023',message='exact event instance, credential, and assignment epoch are required';\n  end if;\n  v_delivery:=public.mz_resolve_employee_push_delivery(p_credential_id,p_assignment_epoch,p_now);\n  if coalesce((v_delivery->>'ok')::boolean,false) is not true then return v_delivery; end if;\n  select * into v_instance from public.event_push_instances where instance_id=p_instance_id;\n  if v_instance.instance_id is not null then\n    select * into v_event from public.events_app_events where id=v_instance.event_id for key share;\n  end if;\n  select * into v_instance from public.event_push_instances where instance_id=p_instance_id for update;\n  v_reason:=case\n    when v_instance.instance_id is null then 'event_push_instance_missing'\n    when v_instance.credential_id<>p_credential_id or v_instance.assignment_epoch<>p_assignment_epoch then 'event_push_recipient_superseded'\n    when v_instance.state not in ('pending','leased','failed') then 'event_push_instance_'||v_instance.state\n    when v_event.id is null or v_event.revision<>v_instance.event_revision or v_event.status<>'SCHEDULED'\n      or v_event.cancelled_at is not null or v_event.archived_at is not null then 'event_or_revision_superseded'\n    when v_instance.employee_id is distinct from (v_delivery->>'employee_id')::uuid\n      or v_instance.device_id is distinct from (v_delivery->>'device_id')::uuid then 'event_push_recipient_superseded'\n    else null\n  end;\n  if v_reason is not null then\n    update public.event_push_instances set state='cancelled',cancelled_at=coalesce(cancelled_at,p_now),\n      last_error=v_reason,updated_at=p_now\n    where instance_id=p_instance_id and state in ('pending','leased','failed');\n    return jsonb_build_object('ok',false,'terminal',true,'reason',v_reason,'instance_id',p_instance_id);\n  end if;\n  update public.event_push_instances set state='leased',last_error=null,updated_at=p_now\n  where instance_id=p_instance_id;\n  return jsonb_build_object('ok',true,'terminal',false,'instance_id',p_instance_id,'state','leased');\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.mz_claim_employee_event_push_delivery(p_job_id uuid, p_lease_token uuid, p_instance_id uuid, p_credential_id uuid, p_assignment_epoch bigint, p_registration_id uuid, p_token_hash text, p_now timestamp with time zone DEFAULT now())\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_delivery jsonb; v_job public.operational_notification_jobs%rowtype; v_instance public.event_push_instances%rowtype; v_event public.events_app_events%rowtype; v_reason text;\nbegin\n  if p_job_id is null or p_lease_token is null or p_instance_id is null or p_credential_id is null\n     or p_assignment_epoch is null or p_assignment_epoch<1 or p_registration_id is null\n     or coalesce(p_token_hash,'') !~ '^[0-9a-f]{64}$' then\n    raise exception using errcode='22023',message='exact event job, lease, recipient, and token generation are required';\n  end if;\n  v_delivery:=public.mz_resolve_employee_push_delivery(p_credential_id,p_assignment_epoch,p_now);\n  if coalesce((v_delivery->>'ok')::boolean,false) is not true then return v_delivery; end if;\n  if (v_delivery#>>'{registration,registration_id}')::uuid is distinct from p_registration_id\n     or v_delivery#>>'{registration,token_hash}' is distinct from p_token_hash then\n    return jsonb_build_object('ok',false,'terminal',true,'reason','push_registration_superseded');\n  end if;\n  select * into v_job from public.operational_notification_jobs where job_id=p_job_id for update;\n  select * into v_instance from public.event_push_instances where instance_id=p_instance_id;\n  if v_instance.instance_id is not null then\n    select * into v_event from public.events_app_events where id=v_instance.event_id for share;\n  end if;\n  select * into v_instance from public.event_push_instances where instance_id=p_instance_id for update;\n  if v_job.job_id is not null and v_job.job_type='employee_event_push' and v_job.source_id=p_instance_id\n     and v_job.status='leased' and v_job.lease_token is not distinct from p_lease_token\n     and v_job.leased_until>statement_timestamp() and v_instance.state='sent'\n     and v_instance.credential_id=p_credential_id and v_instance.assignment_epoch=p_assignment_epoch\n     and v_instance.provider_message_id is not null and v_event.id is not null\n     and v_event.revision=v_instance.event_revision then\n    return jsonb_build_object('ok',true,'terminal',false,'dispatch_authorized',false,'already_recorded',true,\n      'instance_id',p_instance_id,'state','sent','provider_message_id',v_instance.provider_message_id);\n  end if;\n  v_reason:=case\n    when v_job.job_id is null then 'employee_event_push_job_missing'\n    when v_job.job_type<>'employee_event_push' or v_job.source_id<>p_instance_id then 'employee_event_push_job_mismatch'\n    when v_job.status<>'leased' or v_job.lease_token is distinct from p_lease_token\n      or v_job.leased_until is null or v_job.leased_until<=statement_timestamp() then 'employee_event_push_lease_superseded'\n    when v_instance.instance_id is null then 'event_push_instance_missing'\n    when v_instance.credential_id<>p_credential_id or v_instance.assignment_epoch<>p_assignment_epoch then 'event_push_recipient_superseded'\n    when v_instance.state='leased' and v_instance.dispatch_job_id is not null then 'event_push_delivery_outcome_unknown'\n    when v_instance.state not in ('pending','failed') then 'event_push_instance_'||v_instance.state\n    when v_event.id is null or v_event.revision<>v_instance.event_revision or v_event.status<>'SCHEDULED'\n      or v_event.cancelled_at is not null or v_event.archived_at is not null then 'event_or_revision_superseded'\n    when v_instance.employee_id is distinct from (v_delivery->>'employee_id')::uuid\n      or v_instance.device_id is distinct from (v_delivery->>'device_id')::uuid then 'event_push_recipient_superseded'\n    else null\n  end;\n  if v_reason is not null then\n    update public.event_push_instances set state='cancelled',cancelled_at=coalesce(cancelled_at,p_now),\n      last_error=v_reason,updated_at=p_now\n    where instance_id=p_instance_id and state in ('pending','leased','failed');\n    return jsonb_build_object('ok',false,'terminal',true,'reason',v_reason,'instance_id',p_instance_id);\n  end if;\n  update public.event_push_instances set state='leased',dispatch_job_id=p_job_id,dispatch_lease_token=p_lease_token,\n    dispatch_registration_id=p_registration_id,dispatch_token_hash=p_token_hash,dispatch_started_at=p_now,\n    last_error=null,updated_at=p_now\n  where instance_id=p_instance_id;\n  return jsonb_build_object('ok',true,'terminal',false,'dispatch_authorized',true,'instance_id',p_instance_id,'state','leased');\nend\n$function$\n",
       "function_name": "mz_claim_employee_event_push_delivery",
-      "identity_arguments": "p_instance_id uuid, p_credential_id uuid, p_assignment_epoch bigint, p_now timestamp with time zone",
+      "identity_arguments": "p_job_id uuid, p_lease_token uuid, p_instance_id uuid, p_credential_id uuid, p_assignment_epoch bigint, p_registration_id uuid, p_token_hash text, p_now timestamp with time zone",
       "schema_name": "public"
     },
     {
@@ -35982,7 +36104,7 @@
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.mz_get_employee_native_push_delivery_receipt(p_job_id uuid, p_lease_token uuid, p_credential_id uuid, p_assignment_epoch bigint)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_job public.operational_notification_jobs%rowtype; v_receipt public.employee_native_push_delivery_receipts%rowtype; v_reason text;\nbegin\n  if p_job_id is null or p_lease_token is null or p_credential_id is null or p_assignment_epoch is null or p_assignment_epoch<1 then\n    raise exception using errcode='22023',message='exact native push job lease and assignment recipient are required';\n  end if;\n  select * into v_job from public.operational_notification_jobs where job_id=p_job_id for update;\n  v_reason:=case\n    when v_job.job_id is null then 'employee_native_push_job_missing'\n    when v_job.job_type<>'employee_native_push' then 'employee_native_push_job_type_mismatch'\n    when v_job.status<>'leased' or v_job.lease_token is distinct from p_lease_token then 'employee_native_push_lease_superseded'\n    when v_job.payload_json->>'credential_id' is distinct from p_credential_id::text\n      or v_job.payload_json->>'assignment_epoch' is distinct from p_assignment_epoch::text then 'employee_native_push_recipient_superseded'\n    else null\n  end;\n  if v_reason is not null then return jsonb_build_object('current',false,'terminal',true,'reason',v_reason); end if;\n  select * into v_receipt from public.employee_native_push_delivery_receipts where job_id=p_job_id;\n  if v_receipt.job_id is not null then\n    if v_receipt.job_key<>v_job.job_key or v_receipt.source_id<>v_job.source_id\n       or v_receipt.credential_id<>p_credential_id or v_receipt.assignment_epoch<>p_assignment_epoch then\n      raise exception using errcode='23514',message='native push delivery receipt is bound to different job inputs';\n    end if;\n    return jsonb_build_object('current',true,'already_recorded',true,'recorded',true,\n      'provider_message_id',v_receipt.provider_message_id,'delivered_at',v_receipt.delivered_at);\n  end if;\n  return jsonb_build_object('current',true,'already_recorded',false,'recorded',false);\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.mz_get_employee_native_push_delivery_receipt(p_job_id uuid, p_lease_token uuid, p_credential_id uuid, p_assignment_epoch bigint)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_job public.operational_notification_jobs%rowtype; v_receipt public.employee_native_push_delivery_receipts%rowtype; v_reason text;\nbegin\n  if p_job_id is null or p_lease_token is null or p_credential_id is null or p_assignment_epoch is null or p_assignment_epoch<1 then\n    raise exception using errcode='22023',message='exact native push job lease and assignment recipient are required';\n  end if;\n  select * into v_job from public.operational_notification_jobs where job_id=p_job_id for update;\n  v_reason:=case\n    when v_job.job_id is null then 'employee_native_push_job_missing'\n    when v_job.job_type<>'employee_native_push' then 'employee_native_push_job_type_mismatch'\n    when v_job.status<>'leased' or v_job.lease_token is distinct from p_lease_token\n      or v_job.leased_until is null or v_job.leased_until<=statement_timestamp() then 'employee_native_push_lease_superseded'\n    when v_job.payload_json->>'credential_id' is distinct from p_credential_id::text\n      or v_job.payload_json->>'assignment_epoch' is distinct from p_assignment_epoch::text then 'employee_native_push_recipient_superseded'\n    else null\n  end;\n  if v_reason is not null then return jsonb_build_object('current',false,'terminal',true,'reason',v_reason); end if;\n  select * into v_receipt from public.employee_native_push_delivery_receipts where job_id=p_job_id;\n  if v_receipt.job_id is not null then\n    if v_receipt.job_key<>v_job.job_key or v_receipt.source_id<>v_job.source_id\n       or v_receipt.credential_id<>p_credential_id or v_receipt.assignment_epoch<>p_assignment_epoch then\n      raise exception using errcode='23514',message='native push delivery receipt is bound to different job inputs';\n    end if;\n    if v_receipt.delivery_state='prepared' then\n      return jsonb_build_object('current',true,'terminal',true,'already_recorded',false,'recorded',false,\n        'dispatch_prepared',true,'delivery_outcome_unknown',true,'reason','native_push_delivery_outcome_unknown',\n        'prepared_at',v_receipt.prepared_at);\n    end if;\n    return jsonb_build_object('current',true,'already_recorded',true,'recorded',true,\n      'dispatch_prepared',true,'delivery_outcome_unknown',false,\n      'provider_message_id',v_receipt.provider_message_id,'delivered_at',v_receipt.delivered_at);\n  end if;\n  return jsonb_build_object('current',true,'already_recorded',false,'recorded',false);\nend\n$function$\n",
       "function_name": "mz_get_employee_native_push_delivery_receipt",
       "identity_arguments": "p_job_id uuid, p_lease_token uuid, p_credential_id uuid, p_assignment_epoch bigint",
       "schema_name": "public"
@@ -35996,6 +36118,13 @@
     },
     {
       "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.mz_prepare_employee_native_push_delivery(p_job_id uuid, p_lease_token uuid, p_credential_id uuid, p_assignment_epoch bigint, p_registration_id uuid, p_token_hash text, p_now timestamp with time zone DEFAULT now())\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_delivery jsonb; v_job public.operational_notification_jobs%rowtype; v_receipt public.employee_native_push_delivery_receipts%rowtype; v_reason text;\nbegin\n  if p_job_id is null or p_lease_token is null or p_credential_id is null or p_assignment_epoch is null or p_assignment_epoch<1\n     or p_registration_id is null or coalesce(p_token_hash,'') !~ '^[0-9a-f]{64}$' then\n    raise exception using errcode='22023',message='exact native push job, recipient, and token generation are required';\n  end if;\n  v_delivery:=public.mz_resolve_employee_push_delivery(p_credential_id,p_assignment_epoch,p_now);\n  if coalesce((v_delivery->>'ok')::boolean,false) is not true then\n    return jsonb_build_object('current',false,'dispatch_authorized',false,\n      'reason',coalesce(v_delivery->>'reason','employee_push_recipient_superseded'));\n  end if;\n  if (v_delivery#>>'{registration,registration_id}')::uuid is distinct from p_registration_id\n     or v_delivery#>>'{registration,token_hash}' is distinct from p_token_hash then\n    return jsonb_build_object('current',false,'dispatch_authorized',false,'reason','push_registration_superseded');\n  end if;\n  select * into v_job from public.operational_notification_jobs where job_id=p_job_id for update;\n  v_reason:=case\n    when v_job.job_id is null then 'employee_native_push_job_missing'\n    when v_job.job_type<>'employee_native_push' then 'employee_native_push_job_type_mismatch'\n    when v_job.status<>'leased' or v_job.lease_token is distinct from p_lease_token\n      or v_job.leased_until is null or v_job.leased_until<=statement_timestamp() then 'employee_native_push_lease_superseded'\n    when v_job.payload_json->>'credential_id' is distinct from p_credential_id::text\n      or v_job.payload_json->>'assignment_epoch' is distinct from p_assignment_epoch::text then 'employee_native_push_recipient_superseded'\n    else null\n  end;\n  if v_reason is not null then\n    return jsonb_build_object('current',false,'dispatch_authorized',false,'reason',v_reason);\n  end if;\n  select * into v_receipt from public.employee_native_push_delivery_receipts where job_id=p_job_id for update;\n  if v_receipt.job_id is not null then\n    if v_receipt.job_key<>v_job.job_key or v_receipt.source_id<>v_job.source_id\n       or v_receipt.credential_id<>p_credential_id or v_receipt.assignment_epoch<>p_assignment_epoch\n       or v_receipt.registration_id<>p_registration_id or v_receipt.token_hash<>p_token_hash then\n      return jsonb_build_object('current',false,'dispatch_authorized',false,'reason','native_push_delivery_receipt_input_mismatch');\n    end if;\n    return jsonb_build_object('current',true,'dispatch_authorized',false,'already_prepared',true,\n      'already_recorded',v_receipt.delivery_state='delivered','delivery_state',v_receipt.delivery_state,\n      'delivery_outcome_unknown',v_receipt.delivery_state='prepared','reason',\n      case when v_receipt.delivery_state='prepared' then 'native_push_delivery_outcome_unknown' else 'native_push_delivery_already_recorded' end,\n      'provider_message_id',v_receipt.provider_message_id,'prepared_at',v_receipt.prepared_at,'delivered_at',v_receipt.delivered_at);\n  end if;\n  insert into public.employee_native_push_delivery_receipts(\n    job_id,job_key,source_id,lease_token,credential_id,assignment_epoch,registration_id,token_hash,delivery_state,prepared_at\n  ) values (\n    v_job.job_id,v_job.job_key,v_job.source_id,p_lease_token,p_credential_id,p_assignment_epoch,\n    p_registration_id,p_token_hash,'prepared',p_now\n  ) returning * into v_receipt;\n  return jsonb_build_object('current',true,'dispatch_authorized',true,'already_prepared',false,\n    'already_recorded',false,'delivery_state','prepared','delivery_outcome_unknown',false,'prepared_at',v_receipt.prepared_at);\nend\n$function$\n",
+      "function_name": "mz_prepare_employee_native_push_delivery",
+      "identity_arguments": "p_job_id uuid, p_lease_token uuid, p_credential_id uuid, p_assignment_epoch bigint, p_registration_id uuid, p_token_hash text, p_now timestamp with time zone",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
       "definition": "CREATE OR REPLACE FUNCTION public.mz_reconcile_employee_push_credential_state()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_reason text;\nbegin\n  if new.revoked_at is null and new.expires_at>clock_timestamp() then\n    return new;\n  end if;\n  v_reason:=case when new.revoked_at is not null then 'device_credential_revoked' else 'device_credential_expired' end;\n  update public.employee_push_registrations\n     set active=false,revoked_at=coalesce(revoked_at,clock_timestamp()),revoked_reason=v_reason,updated_at=clock_timestamp()\n   where credential_id=new.credential_id and (active=true or revoked_at is null);\n  update public.event_push_instances\n     set state='cancelled',cancelled_at=coalesce(cancelled_at,clock_timestamp()),last_error=v_reason,updated_at=clock_timestamp()\n   where credential_id=new.credential_id and state in ('pending','leased');\n  update public.operational_notification_jobs\n     set status='dead',completed_at=coalesce(completed_at,clock_timestamp()),last_error=v_reason,updated_at=clock_timestamp()\n   where job_type in ('employee_event_push','employee_native_push')\n     and status in ('pending','leased')\n     and payload_json->>'credential_id'=new.credential_id::text\n     and (status='pending' or leased_until<clock_timestamp());\n  return new;\nend\n$function$\n",
       "function_name": "mz_reconcile_employee_push_credential_state",
       "identity_arguments": "",
@@ -36003,14 +36132,14 @@
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.mz_record_employee_event_push_delivery(p_instance_id uuid, p_credential_id uuid, p_assignment_epoch bigint, p_registration_id uuid, p_token_hash text, p_provider_message_id text, p_now timestamp with time zone DEFAULT now())\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_delivery jsonb; v_instance public.event_push_instances%rowtype; v_event public.events_app_events%rowtype; v_reason text;\nbegin\n  if p_instance_id is null or p_credential_id is null or p_assignment_epoch is null or p_assignment_epoch<1\n     or p_registration_id is null or coalesce(p_token_hash,'') !~ '^[0-9a-f]{64}$'\n     or length(btrim(coalesce(p_provider_message_id,''))) not between 1 and 1000 then\n    raise exception using errcode='22023',message='exact event, recipient, token generation, and provider result are required';\n  end if;\n  v_delivery:=public.mz_resolve_employee_push_delivery(p_credential_id,p_assignment_epoch,p_now);\n  if coalesce((v_delivery->>'ok')::boolean,false) is not true then\n    return jsonb_build_object('current',false,'recorded',false,'reason',coalesce(v_delivery->>'reason','employee_push_recipient_superseded'));\n  end if;\n  select * into v_instance from public.event_push_instances where instance_id=p_instance_id;\n  if v_instance.instance_id is not null then\n    select * into v_event from public.events_app_events where id=v_instance.event_id for key share;\n  end if;\n  select * into v_instance from public.event_push_instances where instance_id=p_instance_id for update;\n  v_reason:=case\n    when (v_delivery#>>'{registration,registration_id}')::uuid is distinct from p_registration_id\n      or v_delivery#>>'{registration,token_hash}' is distinct from p_token_hash then 'push_registration_superseded'\n    when v_instance.instance_id is null then 'event_push_instance_missing'\n    when v_instance.credential_id<>p_credential_id or v_instance.assignment_epoch<>p_assignment_epoch\n      or v_instance.employee_id is distinct from (v_delivery->>'employee_id')::uuid\n      or v_instance.device_id is distinct from (v_delivery->>'device_id')::uuid then 'event_push_recipient_superseded'\n    when v_instance.state not in ('pending','leased','failed') then 'event_push_instance_'||v_instance.state\n    when v_event.id is null or v_event.revision<>v_instance.event_revision or v_event.status<>'SCHEDULED'\n      or v_event.cancelled_at is not null or v_event.archived_at is not null then 'event_or_revision_superseded'\n    else null\n  end;\n  if v_reason is not null then\n    update public.event_push_instances set state='cancelled',cancelled_at=coalesce(cancelled_at,p_now),\n      last_error=v_reason,updated_at=p_now\n    where instance_id=p_instance_id and state in ('pending','leased','failed');\n    return jsonb_build_object('current',false,'recorded',false,'reason',v_reason,'instance_id',p_instance_id);\n  end if;\n  update public.employee_push_registrations\n  set last_successful_delivery_at=p_now,last_error=null,updated_at=p_now\n  where registration_id=p_registration_id and token_hash=p_token_hash;\n  update public.event_push_instances\n  set state='sent',sent_at=p_now,provider_message_id=btrim(p_provider_message_id),last_error=null,updated_at=p_now\n  where instance_id=p_instance_id;\n  return jsonb_build_object('current',true,'recorded',true,'instance_id',p_instance_id,'state','sent');\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.mz_record_employee_event_push_delivery(p_job_id uuid, p_lease_token uuid, p_instance_id uuid, p_credential_id uuid, p_assignment_epoch bigint, p_registration_id uuid, p_token_hash text, p_provider_message_id text, p_now timestamp with time zone DEFAULT now())\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_delivery jsonb; v_job public.operational_notification_jobs%rowtype; v_instance public.event_push_instances%rowtype; v_event public.events_app_events%rowtype; v_reason text;\nbegin\n  if p_job_id is null or p_lease_token is null or p_instance_id is null or p_credential_id is null or p_assignment_epoch is null or p_assignment_epoch<1\n     or p_registration_id is null or coalesce(p_token_hash,'') !~ '^[0-9a-f]{64}$'\n     or length(btrim(coalesce(p_provider_message_id,''))) not between 1 and 1000 then\n    raise exception using errcode='22023',message='exact event, recipient, token generation, and provider result are required';\n  end if;\n  v_delivery:=public.mz_resolve_employee_push_delivery(p_credential_id,p_assignment_epoch,p_now);\n  if coalesce((v_delivery->>'ok')::boolean,false) is not true then\n    return jsonb_build_object('current',false,'recorded',false,'reason',coalesce(v_delivery->>'reason','employee_push_recipient_superseded'));\n  end if;\n  select * into v_job from public.operational_notification_jobs where job_id=p_job_id for update;\n  select * into v_instance from public.event_push_instances where instance_id=p_instance_id;\n  if v_instance.instance_id is not null then\n    select * into v_event from public.events_app_events where id=v_instance.event_id for share;\n  end if;\n  select * into v_instance from public.event_push_instances where instance_id=p_instance_id for update;\n  if v_instance.state='sent' then\n    if v_instance.dispatch_job_id=p_job_id and v_instance.dispatch_lease_token=p_lease_token\n       and v_instance.credential_id=p_credential_id and v_instance.assignment_epoch=p_assignment_epoch\n       and v_instance.dispatch_registration_id=p_registration_id and v_instance.dispatch_token_hash=p_token_hash\n       and v_instance.provider_message_id=btrim(p_provider_message_id) then\n      return jsonb_build_object('current',true,'already_recorded',true,'recorded',true,\n        'instance_id',p_instance_id,'state','sent','provider_message_id',v_instance.provider_message_id);\n    end if;\n    return jsonb_build_object('current',false,'recorded',false,'reason','event_push_delivery_receipt_input_mismatch');\n  end if;\n  v_reason:=case\n    when v_job.job_id is null then 'employee_event_push_job_missing'\n    when v_job.job_type<>'employee_event_push' or v_job.source_id<>p_instance_id then 'employee_event_push_job_mismatch'\n    when v_job.status<>'leased' or v_job.lease_token is distinct from p_lease_token\n      or v_job.leased_until is null or v_job.leased_until<=statement_timestamp() then 'employee_event_push_lease_superseded'\n    when (v_delivery#>>'{registration,registration_id}')::uuid is distinct from p_registration_id\n      or v_delivery#>>'{registration,token_hash}' is distinct from p_token_hash then 'push_registration_superseded'\n    when v_instance.instance_id is null then 'event_push_instance_missing'\n    when v_instance.credential_id<>p_credential_id or v_instance.assignment_epoch<>p_assignment_epoch\n      or v_instance.employee_id is distinct from (v_delivery->>'employee_id')::uuid\n      or v_instance.device_id is distinct from (v_delivery->>'device_id')::uuid then 'event_push_recipient_superseded'\n    when v_instance.state<>'leased' then 'event_push_instance_'||v_instance.state\n    when v_instance.dispatch_job_id<>p_job_id or v_instance.dispatch_lease_token<>p_lease_token\n      or v_instance.dispatch_registration_id<>p_registration_id or v_instance.dispatch_token_hash<>p_token_hash then 'event_push_dispatch_superseded'\n    when v_event.id is null or v_event.revision<>v_instance.event_revision or v_event.status<>'SCHEDULED'\n      or v_event.cancelled_at is not null or v_event.archived_at is not null then 'event_or_revision_superseded'\n    else null\n  end;\n  if v_reason is not null then\n    update public.event_push_instances set state='cancelled',cancelled_at=coalesce(cancelled_at,p_now),\n      last_error=v_reason,updated_at=p_now\n    where instance_id=p_instance_id and state in ('pending','leased','failed');\n    return jsonb_build_object('current',false,'recorded',false,'reason',v_reason,'instance_id',p_instance_id);\n  end if;\n  update public.employee_push_registrations\n  set last_successful_delivery_at=p_now,last_error=null,updated_at=p_now\n  where registration_id=p_registration_id and token_hash=p_token_hash;\n  update public.event_push_instances\n  set state='sent',sent_at=p_now,provider_message_id=btrim(p_provider_message_id),last_error=null,updated_at=p_now\n  where instance_id=p_instance_id;\n  return jsonb_build_object('current',true,'already_recorded',false,'recorded',true,\n    'instance_id',p_instance_id,'state','sent','provider_message_id',btrim(p_provider_message_id));\nend\n$function$\n",
       "function_name": "mz_record_employee_event_push_delivery",
-      "identity_arguments": "p_instance_id uuid, p_credential_id uuid, p_assignment_epoch bigint, p_registration_id uuid, p_token_hash text, p_provider_message_id text, p_now timestamp with time zone",
+      "identity_arguments": "p_job_id uuid, p_lease_token uuid, p_instance_id uuid, p_credential_id uuid, p_assignment_epoch bigint, p_registration_id uuid, p_token_hash text, p_provider_message_id text, p_now timestamp with time zone",
       "schema_name": "public"
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.mz_record_employee_native_push_delivery(p_job_id uuid, p_lease_token uuid, p_credential_id uuid, p_assignment_epoch bigint, p_registration_id uuid, p_token_hash text, p_provider_message_id text, p_now timestamp with time zone DEFAULT now())\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_delivery jsonb; v_job public.operational_notification_jobs%rowtype; v_receipt public.employee_native_push_delivery_receipts%rowtype; v_reason text;\nbegin\n  if p_job_id is null or p_lease_token is null or p_credential_id is null or p_assignment_epoch is null or p_assignment_epoch<1\n     or p_registration_id is null or coalesce(p_token_hash,'') !~ '^[0-9a-f]{64}$'\n     or length(btrim(coalesce(p_provider_message_id,''))) not between 1 and 1000 then\n    raise exception using errcode='22023',message='exact native push job, recipient, token generation, and provider result are required';\n  end if;\n  select * into v_receipt from public.employee_native_push_delivery_receipts where job_id=p_job_id;\n  if v_receipt.job_id is not null then\n    if v_receipt.lease_token<>p_lease_token or v_receipt.credential_id<>p_credential_id\n       or v_receipt.assignment_epoch<>p_assignment_epoch or v_receipt.registration_id<>p_registration_id\n       or v_receipt.token_hash<>p_token_hash or v_receipt.provider_message_id<>btrim(p_provider_message_id) then\n      return jsonb_build_object('current',false,'recorded',false,'reason','native_push_delivery_receipt_input_mismatch');\n    end if;\n    return jsonb_build_object('current',true,'already_recorded',true,'recorded',true,\n      'provider_message_id',v_receipt.provider_message_id,'delivered_at',v_receipt.delivered_at);\n  end if;\n  v_delivery:=public.mz_resolve_employee_push_delivery(p_credential_id,p_assignment_epoch,p_now);\n  if coalesce((v_delivery->>'ok')::boolean,false) is not true then\n    return jsonb_build_object('current',false,'recorded',false,'reason',coalesce(v_delivery->>'reason','employee_push_recipient_superseded'));\n  end if;\n  if (v_delivery#>>'{registration,registration_id}')::uuid is distinct from p_registration_id\n     or v_delivery#>>'{registration,token_hash}' is distinct from p_token_hash then\n    return jsonb_build_object('current',false,'recorded',false,'reason','push_registration_superseded');\n  end if;\n  select * into v_job from public.operational_notification_jobs where job_id=p_job_id for update;\n  v_reason:=case\n    when v_job.job_id is null then 'employee_native_push_job_missing'\n    when v_job.job_type<>'employee_native_push' then 'employee_native_push_job_type_mismatch'\n    when v_job.status<>'leased' or v_job.lease_token is distinct from p_lease_token then 'employee_native_push_lease_superseded'\n    when v_job.payload_json->>'credential_id' is distinct from p_credential_id::text\n      or v_job.payload_json->>'assignment_epoch' is distinct from p_assignment_epoch::text then 'employee_native_push_recipient_superseded'\n    else null\n  end;\n  if v_reason is not null then return jsonb_build_object('current',false,'recorded',false,'reason',v_reason); end if;\n  insert into public.employee_native_push_delivery_receipts(\n    job_id,job_key,source_id,lease_token,credential_id,assignment_epoch,registration_id,token_hash,provider_message_id,delivered_at\n  ) values (\n    v_job.job_id,v_job.job_key,v_job.source_id,p_lease_token,p_credential_id,p_assignment_epoch,p_registration_id,p_token_hash,\n    btrim(p_provider_message_id),p_now\n  ) returning * into v_receipt;\n  update public.employee_push_registrations\n  set last_successful_delivery_at=p_now,last_error=null,updated_at=p_now\n  where registration_id=p_registration_id and token_hash=p_token_hash;\n  return jsonb_build_object('current',true,'already_recorded',false,'recorded',true,\n    'provider_message_id',v_receipt.provider_message_id,'delivered_at',v_receipt.delivered_at);\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.mz_record_employee_native_push_delivery(p_job_id uuid, p_lease_token uuid, p_credential_id uuid, p_assignment_epoch bigint, p_registration_id uuid, p_token_hash text, p_provider_message_id text, p_now timestamp with time zone DEFAULT now())\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_delivery jsonb; v_job public.operational_notification_jobs%rowtype; v_receipt public.employee_native_push_delivery_receipts%rowtype; v_reason text;\nbegin\n  if p_job_id is null or p_lease_token is null or p_credential_id is null or p_assignment_epoch is null or p_assignment_epoch<1\n     or p_registration_id is null or coalesce(p_token_hash,'') !~ '^[0-9a-f]{64}$'\n     or length(btrim(coalesce(p_provider_message_id,''))) not between 1 and 1000 then\n    raise exception using errcode='22023',message='exact native push job, recipient, token generation, and provider result are required';\n  end if;\n  v_delivery:=public.mz_resolve_employee_push_delivery(p_credential_id,p_assignment_epoch,p_now);\n  if coalesce((v_delivery->>'ok')::boolean,false) is not true then\n    return jsonb_build_object('current',false,'recorded',false,'reason',coalesce(v_delivery->>'reason','employee_push_recipient_superseded'));\n  end if;\n  if (v_delivery#>>'{registration,registration_id}')::uuid is distinct from p_registration_id\n     or v_delivery#>>'{registration,token_hash}' is distinct from p_token_hash then\n    return jsonb_build_object('current',false,'recorded',false,'reason','push_registration_superseded');\n  end if;\n  select * into v_job from public.operational_notification_jobs where job_id=p_job_id for update;\n  v_reason:=case\n    when v_job.job_id is null then 'employee_native_push_job_missing'\n    when v_job.job_type<>'employee_native_push' then 'employee_native_push_job_type_mismatch'\n    when v_job.status<>'leased' or v_job.lease_token is distinct from p_lease_token\n      or v_job.leased_until is null or v_job.leased_until<=statement_timestamp() then 'employee_native_push_lease_superseded'\n    when v_job.payload_json->>'credential_id' is distinct from p_credential_id::text\n      or v_job.payload_json->>'assignment_epoch' is distinct from p_assignment_epoch::text then 'employee_native_push_recipient_superseded'\n    else null\n  end;\n  if v_reason is not null then return jsonb_build_object('current',false,'recorded',false,'reason',v_reason); end if;\n  select * into v_receipt from public.employee_native_push_delivery_receipts where job_id=p_job_id for update;\n  if v_receipt.job_id is null then\n    return jsonb_build_object('current',false,'recorded',false,'reason','native_push_delivery_not_prepared');\n  end if;\n  if v_receipt.job_key<>v_job.job_key or v_receipt.source_id<>v_job.source_id\n     or v_receipt.lease_token<>p_lease_token or v_receipt.credential_id<>p_credential_id\n     or v_receipt.assignment_epoch<>p_assignment_epoch or v_receipt.registration_id<>p_registration_id\n     or v_receipt.token_hash<>p_token_hash then\n    return jsonb_build_object('current',false,'recorded',false,'reason','native_push_delivery_receipt_input_mismatch');\n  end if;\n  if v_receipt.delivery_state='delivered' then\n    if v_receipt.provider_message_id<>btrim(p_provider_message_id) then\n      return jsonb_build_object('current',false,'recorded',false,'reason','native_push_delivery_receipt_input_mismatch');\n    end if;\n    return jsonb_build_object('current',true,'already_recorded',true,'recorded',true,\n      'provider_message_id',v_receipt.provider_message_id,'delivered_at',v_receipt.delivered_at);\n  end if;\n  update public.employee_native_push_delivery_receipts\n  set delivery_state='delivered',provider_message_id=btrim(p_provider_message_id),delivered_at=p_now\n  where job_id=p_job_id and delivery_state='prepared'\n  returning * into v_receipt;\n  if v_receipt.job_id is null then\n    raise exception using errcode='40001',message='native push delivery preparation changed concurrently';\n  end if;\n  update public.employee_push_registrations\n  set last_successful_delivery_at=p_now,last_error=null,updated_at=p_now\n  where registration_id=p_registration_id and token_hash=p_token_hash;\n  return jsonb_build_object('current',true,'already_recorded',false,'recorded',true,\n    'provider_message_id',v_receipt.provider_message_id,'delivered_at',v_receipt.delivered_at);\nend\n$function$\n",
       "function_name": "mz_record_employee_native_push_delivery",
       "identity_arguments": "p_job_id uuid, p_lease_token uuid, p_credential_id uuid, p_assignment_epoch bigint, p_registration_id uuid, p_token_hash text, p_provider_message_id text, p_now timestamp with time zone",
       "schema_name": "public"
@@ -36034,6 +36163,20 @@
       "definition": "CREATE OR REPLACE FUNCTION public.mz_reject_event_messenger_message()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\nbegin\n  if lower(coalesce(new.metadata_json->>'source',''))='events_app' then\n    raise exception using\n      errcode='23514',\n      message='Event notifications are native-only and cannot create Messenger messages';\n  end if;\n  return new;\nend\n$function$\n",
       "function_name": "mz_reject_event_messenger_message",
       "identity_arguments": "",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.mz_release_employee_event_push_delivery(p_job_id uuid, p_lease_token uuid, p_instance_id uuid, p_credential_id uuid, p_assignment_epoch bigint, p_registration_id uuid, p_token_hash text, p_error text, p_now timestamp with time zone DEFAULT now())\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_job public.operational_notification_jobs%rowtype; v_instance public.event_push_instances%rowtype; v_reason text;\nbegin\n  select * into v_job from public.operational_notification_jobs where job_id=p_job_id for update;\n  select * into v_instance from public.event_push_instances where instance_id=p_instance_id for update;\n  v_reason:=case\n    when v_job.job_id is null then 'employee_event_push_job_missing'\n    when v_job.job_type<>'employee_event_push' or v_job.source_id<>p_instance_id then 'employee_event_push_job_mismatch'\n    when v_job.status<>'leased' or v_job.lease_token is distinct from p_lease_token\n      or v_job.leased_until is null or v_job.leased_until<=statement_timestamp() then 'employee_event_push_lease_superseded'\n    when v_instance.instance_id is null then 'event_push_instance_missing'\n    when v_instance.state<>'leased' then 'event_push_instance_'||v_instance.state\n    when v_instance.dispatch_job_id<>p_job_id or v_instance.dispatch_lease_token<>p_lease_token\n      or v_instance.credential_id<>p_credential_id or v_instance.assignment_epoch<>p_assignment_epoch\n      or v_instance.dispatch_registration_id<>p_registration_id or v_instance.dispatch_token_hash<>p_token_hash\n      then 'event_push_dispatch_superseded'\n    else null\n  end;\n  if v_reason is not null then\n    return jsonb_build_object('current',false,'released',false,'reason',v_reason,'instance_id',p_instance_id);\n  end if;\n  update public.event_push_instances\n  set state='failed',dispatch_job_id=null,dispatch_lease_token=null,dispatch_registration_id=null,\n      dispatch_token_hash=null,dispatch_started_at=null,last_error=left(coalesce(p_error,'provider did not accept event push'),2000),updated_at=p_now\n  where instance_id=p_instance_id;\n  return jsonb_build_object('current',true,'released',true,'instance_id',p_instance_id,'state','failed');\nend\n$function$\n",
+      "function_name": "mz_release_employee_event_push_delivery",
+      "identity_arguments": "p_job_id uuid, p_lease_token uuid, p_instance_id uuid, p_credential_id uuid, p_assignment_epoch bigint, p_registration_id uuid, p_token_hash text, p_error text, p_now timestamp with time zone",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.mz_release_employee_native_push_delivery(p_job_id uuid, p_lease_token uuid, p_credential_id uuid, p_assignment_epoch bigint, p_registration_id uuid, p_token_hash text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_job public.operational_notification_jobs%rowtype; v_receipt public.employee_native_push_delivery_receipts%rowtype; v_reason text;\nbegin\n  select * into v_job from public.operational_notification_jobs where job_id=p_job_id for update;\n  v_reason:=case\n    when v_job.job_id is null then 'employee_native_push_job_missing'\n    when v_job.job_type<>'employee_native_push' then 'employee_native_push_job_type_mismatch'\n    when v_job.status<>'leased' or v_job.lease_token is distinct from p_lease_token\n      or v_job.leased_until is null or v_job.leased_until<=statement_timestamp() then 'employee_native_push_lease_superseded'\n    else null\n  end;\n  if v_reason is not null then return jsonb_build_object('current',false,'released',false,'reason',v_reason); end if;\n  select * into v_receipt from public.employee_native_push_delivery_receipts where job_id=p_job_id for update;\n  if v_receipt.job_id is null then return jsonb_build_object('current',true,'released',false,'reason','native_push_delivery_not_prepared'); end if;\n  if v_receipt.delivery_state<>'prepared' or v_receipt.lease_token<>p_lease_token\n     or v_receipt.credential_id<>p_credential_id or v_receipt.assignment_epoch<>p_assignment_epoch\n     or v_receipt.registration_id<>p_registration_id or v_receipt.token_hash<>p_token_hash then\n    return jsonb_build_object('current',false,'released',false,'reason','native_push_delivery_receipt_input_mismatch');\n  end if;\n  delete from public.employee_native_push_delivery_receipts where job_id=p_job_id;\n  return jsonb_build_object('current',true,'released',true,'job_id',p_job_id);\nend\n$function$\n",
+      "function_name": "mz_release_employee_native_push_delivery",
+      "identity_arguments": "p_job_id uuid, p_lease_token uuid, p_credential_id uuid, p_assignment_epoch bigint, p_registration_id uuid, p_token_hash text",
       "schema_name": "public"
     },
     {
@@ -39696,6 +39839,15 @@
       "is_unique": false,
       "schema_name": "public",
       "table_name": "event_default_rules"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE UNIQUE INDEX event_push_instances_dispatch_job_idx ON public.event_push_instances USING btree (dispatch_job_id) WHERE (dispatch_job_id IS NOT NULL)",
+      "index_name": "event_push_instances_dispatch_job_idx",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "event_push_instances"
     },
     {
       "backs_constraint": true,
@@ -44434,6 +44586,22 @@
       "schema_name": "public"
     },
     {
+      "function_name": "custodial_release_authority_current_relation_definition",
+      "grantee": "PUBLIC",
+      "identity_arguments": "p_object_identity text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "custodial_release_authority_current_relation_definition",
+      "grantee": "service_role",
+      "identity_arguments": "p_object_identity text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
       "function_name": "custodial_release_authority_current_relation_state_definition",
       "grantee": "PUBLIC",
       "identity_arguments": "p_object_identity text",
@@ -45212,7 +45380,7 @@
     {
       "function_name": "mz_claim_employee_event_push_delivery",
       "grantee": "service_role",
-      "identity_arguments": "p_instance_id uuid, p_credential_id uuid, p_assignment_epoch bigint, p_now timestamp with time zone",
+      "identity_arguments": "p_job_id uuid, p_lease_token uuid, p_instance_id uuid, p_credential_id uuid, p_assignment_epoch bigint, p_registration_id uuid, p_token_hash text, p_now timestamp with time zone",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -45266,6 +45434,14 @@
       "schema_name": "public"
     },
     {
+      "function_name": "mz_prepare_employee_native_push_delivery",
+      "grantee": "service_role",
+      "identity_arguments": "p_job_id uuid, p_lease_token uuid, p_credential_id uuid, p_assignment_epoch bigint, p_registration_id uuid, p_token_hash text, p_now timestamp with time zone",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
       "function_name": "mz_reconcile_employee_push_credential_state",
       "grantee": "service_role",
       "identity_arguments": "",
@@ -45276,7 +45452,7 @@
     {
       "function_name": "mz_record_employee_event_push_delivery",
       "grantee": "service_role",
-      "identity_arguments": "p_instance_id uuid, p_credential_id uuid, p_assignment_epoch bigint, p_registration_id uuid, p_token_hash text, p_provider_message_id text, p_now timestamp with time zone",
+      "identity_arguments": "p_job_id uuid, p_lease_token uuid, p_instance_id uuid, p_credential_id uuid, p_assignment_epoch bigint, p_registration_id uuid, p_token_hash text, p_provider_message_id text, p_now timestamp with time zone",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -45309,6 +45485,22 @@
       "function_name": "mz_reject_event_messenger_message",
       "grantee": "service_role",
       "identity_arguments": "",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "mz_release_employee_event_push_delivery",
+      "grantee": "service_role",
+      "identity_arguments": "p_job_id uuid, p_lease_token uuid, p_instance_id uuid, p_credential_id uuid, p_assignment_epoch bigint, p_registration_id uuid, p_token_hash text, p_error text, p_now timestamp with time zone",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "mz_release_employee_native_push_delivery",
+      "grantee": "service_role",
+      "identity_arguments": "p_job_id uuid, p_lease_token uuid, p_credential_id uuid, p_assignment_epoch bigint, p_registration_id uuid, p_token_hash text",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"

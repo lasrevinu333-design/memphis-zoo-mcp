@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
+import { promisify } from "node:util";
 
 const container = String(process.env.FINAL_UNCERTAINTY_TEST_DOCKER_CONTAINER || "").trim();
 const database = String(process.env.FINAL_UNCERTAINTY_TEST_DATABASE || "postgres").trim();
@@ -13,6 +14,7 @@ const secret = "final-uncertainty-test-012345678901234567890";
 const nativeRouteSecret = "final-uncertainty-native-route-test-01234567890";
 const managerId = "00000000-0000-4000-8000-000000000001";
 const q = (value) => `'${String(value).replaceAll("'", "''")}'`;
+const execFileAsync = promisify(execFile);
 function sql(statement, { expectFailure = false } = {}) {
   try {
     const result = execFileSync("docker", ["exec", container, "psql", "-v", "ON_ERROR_STOP=1", "-At", "-U", "supabase_admin", "-d", database, "-c", statement], {
@@ -24,6 +26,12 @@ function sql(statement, { expectFailure = false } = {}) {
     if (!expectFailure) throw error;
     return String(error.stderr || error.message);
   }
+}
+async function sqlAsync(statement) {
+  const { stdout } = await execFileAsync("docker", [
+    "exec", container, "psql", "-v", "ON_ERROR_STOP=1", "-At", "-U", "supabase_admin", "-d", database, "-c", statement,
+  ], { encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });
+  return String(stdout || "").trim().split("\n").at(-1) || "";
 }
 
 const stamp = randomUUID().replaceAll("-", "").slice(0, 12);
@@ -105,9 +113,12 @@ const requiredNotificationAuthorityFunctions = [
   "mz_enqueue_employee_location_pushes(timestamp with time zone)",
   "mz_resolve_employee_push_delivery(uuid,bigint,timestamp with time zone)",
   "mz_record_employee_push_delivery(uuid,text,boolean,boolean,text,timestamp with time zone)",
-  "mz_claim_employee_event_push_delivery(uuid,uuid,bigint,timestamp with time zone)",
-  "mz_record_employee_event_push_delivery(uuid,uuid,bigint,uuid,text,text,timestamp with time zone)",
+  "mz_claim_employee_event_push_delivery(uuid,uuid,uuid,uuid,bigint,uuid,text,timestamp with time zone)",
+  "mz_release_employee_event_push_delivery(uuid,uuid,uuid,uuid,bigint,uuid,text,text,timestamp with time zone)",
+  "mz_record_employee_event_push_delivery(uuid,uuid,uuid,uuid,bigint,uuid,text,text,timestamp with time zone)",
   "mz_get_employee_native_push_delivery_receipt(uuid,uuid,uuid,bigint)",
+  "mz_prepare_employee_native_push_delivery(uuid,uuid,uuid,bigint,uuid,text,timestamp with time zone)",
+  "mz_release_employee_native_push_delivery(uuid,uuid,uuid,bigint,uuid,text)",
   "mz_record_employee_native_push_delivery(uuid,uuid,uuid,bigint,uuid,text,text,timestamp with time zone)",
   "finish_operational_notification_job(uuid,uuid,boolean,text,integer)",
   "finish_operational_notification_job_terminal(uuid,uuid,text)",
@@ -115,6 +126,18 @@ const requiredNotificationAuthorityFunctions = [
 assert.equal(sql(`select count(*) from public.custodial_release_authority_restore_inventory
   where object_kind='function' and object_identity in (${requiredNotificationAuthorityFunctions.map(q).join(',')});`),
 String(requiredNotificationAuthorityFunctions.length), "every live employee-notification boundary must be recoverable");
+assert.equal(sql(`select coalesce(string_agg(p.oid::regprocedure::text,',' order by p.oid::regprocedure::text),'')
+  from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+  where n.nspname='public' and (p.proname like '%notification%' or p.proname like '%push%')
+    and not exists(select 1 from public.custodial_release_authority_restore_inventory i
+      where i.object_kind='function' and i.object_identity=p.oid::regprocedure::text);`), "",
+"every live notification and push function must be generated into the recovery inventory");
+assert.equal(sql(`select coalesce(string_agg(c.relname,',' order by c.relname),'')
+  from pg_class c join pg_namespace n on n.oid=c.relnamespace
+  where n.nspname='public' and c.relkind in ('r','p') and (c.relname like '%notification%' or c.relname like '%push%')
+    and not exists(select 1 from public.custodial_release_authority_restore_inventory i
+      where i.object_kind='relation' and i.object_identity=quote_ident(n.nspname)||'.'||quote_ident(c.relname));`), "",
+"every live notification and push relation must be generated into the recovery inventory");
 sql(`drop function public.mz_register_employee_push(uuid,text,text,text,text,text);`);
 const missingNotificationAuthority = JSON.parse(sql(`select public.custodial_backend_authority_health(${q(secret)})::text;`));
 assert.equal(missingNotificationAuthority.ok, false);
@@ -124,6 +147,16 @@ sql(`select public.custodial_control_release_canary(
   '${managerId}'::uuid,'${randomUUID()}'::uuid,'KIOSK_09','restore_authority','restore missing notification authority',
   ${q(JSON.stringify(missingNotificationAuthority))}::jsonb,${q(secret)});`);
 assert.ok(sql(`select to_regprocedure('public.mz_register_employee_push(uuid,text,text,text,text,text)') is not null;`) === "t");
+assert.equal(JSON.parse(sql(`select public.custodial_backend_authority_health(${q(secret)})::text;`)).ok, true);
+sql(`drop table public.device_notification_acknowledgements;`);
+const missingNotificationRelation = JSON.parse(sql(`select public.custodial_backend_authority_health(${q(secret)})::text;`));
+assert.equal(missingNotificationRelation.ok, false);
+assert.ok(missingNotificationRelation.missing_objects.includes("public.device_notification_acknowledgements"),
+  "dropping a live notification relation must fail the canonical authority health gate");
+sql(`select public.custodial_control_release_canary(
+  '${managerId}'::uuid,'${randomUUID()}'::uuid,'KIOSK_09','restore_authority','restore missing notification relation',
+  ${q(JSON.stringify(missingNotificationRelation))}::jsonb,${q(secret)});`);
+assert.equal(sql(`select (to_regclass('public.device_notification_acknowledgements') is not null)::text;`), "true");
 assert.equal(JSON.parse(sql(`select public.custodial_backend_authority_health(${q(secret)})::text;`)).ok, true);
 
 const credentialId = randomUUID();
@@ -245,6 +278,17 @@ const employeeTokenHashA = createHash("sha256").update(employeeTokenA).digest("h
 const employeeTokenHashB = createHash("sha256").update(employeeTokenB).digest("hex");
 const employeeTokenHashC = createHash("sha256").update(employeeTokenC).digest("hex");
 const employeeCredentialTokenHash = createHash("sha256").update(`employee-credential-${stamp}`).digest("hex");
+function leaseEmployeeEventJob(instanceId, label) {
+  const jobId = randomUUID();
+  const leaseToken = randomUUID();
+  const jobKey = `uncertainty-event-${label}-${stamp}-${jobId}`;
+  sql(`insert into public.operational_notification_jobs(
+      job_id,job_key,job_type,source_id,available_at,payload_json,status,attempts,max_attempts,
+      leased_at,leased_until,lease_token,worker_id)
+    values('${jobId}'::uuid,${q(jobKey)},'employee_event_push','${instanceId}'::uuid,now()-interval '1 second',
+      '{}'::jsonb,'leased',1,3,now(),now()+interval '2 minutes','${leaseToken}'::uuid,${q(`uncertainty-${label}`)});`);
+  return { jobId, leaseToken, jobKey };
+}
 sql(`insert into public.device_auth_credentials(credential_id,device_id,token_hash,device_label,confirmed_at,expires_at,metadata_json)
   values('${employeeCredentialId}'::uuid,'${deviceId}'::uuid,'${employeeCredentialTokenHash}','employee notification race',now(),now()+interval '1 day','{}'::jsonb);
   insert into public.employee_push_registrations(registration_id,device_id,credential_id,employee_id,assignment_epoch,platform,fcm_token,token_hash)
@@ -278,9 +322,12 @@ sql(`insert into public.event_push_instances(
     'day_before',now()-interval '1 minute','cancelled',now(),'cancelled before provider claim'
   from public.events_app_events e cross join public.devices d
   where e.id='${rescheduledId}'::uuid and d.id='${deviceId}'::uuid;`);
+const cancelledEmployeeEventJob = leaseEmployeeEventJob(cancelledEmployeeEventInstanceId, "cancelled");
 const cancelledEmployeeEventClaim = JSON.parse(sql(`select public.mz_claim_employee_event_push_delivery(
+  '${cancelledEmployeeEventJob.jobId}'::uuid,'${cancelledEmployeeEventJob.leaseToken}'::uuid,
   '${cancelledEmployeeEventInstanceId}'::uuid,'${employeeCredentialId}'::uuid,
-  (select assignment_epoch from public.devices where id='${deviceId}'::uuid),now())::text;`));
+  (select assignment_epoch from public.devices where id='${deviceId}'::uuid),
+  '${employeeRegistrationId}'::uuid,${q(employeeTokenHashC)},now())::text;`));
 assert.equal(cancelledEmployeeEventClaim.ok, false);
 assert.equal(cancelledEmployeeEventClaim.reason, "event_push_instance_cancelled",
   "a cancelled employee event must fail the database-bound pre-provider claim");
@@ -294,14 +341,18 @@ sql(`insert into public.event_push_instances(
     'shift_plus_15',now()-interval '1 minute','pending'
   from public.events_app_events e cross join public.devices d
   where e.id='${rescheduledId}'::uuid and d.id='${deviceId}'::uuid;`);
+const crossingEmployeeEventJob = leaseEmployeeEventJob(crossingEmployeeEventInstanceId, "crossing");
 const crossingEmployeeEventClaim = JSON.parse(sql(`select public.mz_claim_employee_event_push_delivery(
+  '${crossingEmployeeEventJob.jobId}'::uuid,'${crossingEmployeeEventJob.leaseToken}'::uuid,
   '${crossingEmployeeEventInstanceId}'::uuid,'${employeeCredentialId}'::uuid,
-  (select assignment_epoch from public.devices where id='${deviceId}'::uuid),now())::text;`));
+  (select assignment_epoch from public.devices where id='${deviceId}'::uuid),
+  '${employeeRegistrationId}'::uuid,${q(employeeTokenHashC)},now())::text;`));
 assert.equal(crossingEmployeeEventClaim.ok, true);
 assert.equal(sql(`select state from public.event_push_instances where instance_id='${crossingEmployeeEventInstanceId}'::uuid;`), "leased");
 sql(`update public.events_app_events set status='CANCELLED',cancelled_at=now(),cancelled_by='employee provider boundary test'
   where id='${rescheduledId}'::uuid;`);
 const crossingEmployeeEventFinish = JSON.parse(sql(`select public.mz_record_employee_event_push_delivery(
+  '${crossingEmployeeEventJob.jobId}'::uuid,'${crossingEmployeeEventJob.leaseToken}'::uuid,
   '${crossingEmployeeEventInstanceId}'::uuid,'${employeeCredentialId}'::uuid,
   (select assignment_epoch from public.devices where id='${deviceId}'::uuid),
   '${employeeRegistrationId}'::uuid,${q(employeeTokenHashC)},'provider-result-must-not-commit',now())::text;`));
@@ -326,20 +377,73 @@ sql(`insert into public.events_app_events(id,event_name,location_group_id,event_
     'day_before',now()-interval '1 minute','pending'
   from public.events_app_events e cross join public.devices d
   where e.id='${successfulEmployeeEventId}'::uuid and d.id='${deviceId}'::uuid;`);
+const successfulEmployeeEventJob = leaseEmployeeEventJob(successfulEmployeeEventInstanceId, "success");
 assert.equal(JSON.parse(sql(`select public.mz_claim_employee_event_push_delivery(
-  '${successfulEmployeeEventInstanceId}'::uuid,'${employeeCredentialId}'::uuid,
-  (select assignment_epoch from public.devices where id='${deviceId}'::uuid),now())::text;`)).ok, true);
-const successfulEmployeeEventFinish = JSON.parse(sql(`select public.mz_record_employee_event_push_delivery(
+  '${successfulEmployeeEventJob.jobId}'::uuid,'${successfulEmployeeEventJob.leaseToken}'::uuid,
   '${successfulEmployeeEventInstanceId}'::uuid,'${employeeCredentialId}'::uuid,
   (select assignment_epoch from public.devices where id='${deviceId}'::uuid),
-  '${employeeRegistrationId}'::uuid,${q(employeeTokenHashC)},'provider-result-committed',now())::text;`));
-assert.equal(successfulEmployeeEventFinish.current, true);
-assert.equal(successfulEmployeeEventFinish.recorded, true);
+  '${employeeRegistrationId}'::uuid,${q(employeeTokenHashC)},now())::text;`)).ok, true);
+const recordSuccessfulEmployeeEventSql = `select public.mz_record_employee_event_push_delivery(
+  '${successfulEmployeeEventJob.jobId}'::uuid,'${successfulEmployeeEventJob.leaseToken}'::uuid,
+  '${successfulEmployeeEventInstanceId}'::uuid,'${employeeCredentialId}'::uuid,
+  (select assignment_epoch from public.devices where id='${deviceId}'::uuid),
+  '${employeeRegistrationId}'::uuid,${q(employeeTokenHashC)},'provider-result-committed',now())::text;`;
+const successfulEmployeeEventFinishes = (await Promise.all(
+  Array.from({ length: 4 }, () => sqlAsync(recordSuccessfulEmployeeEventSql)),
+)).map((value) => JSON.parse(value));
+assert.ok(successfulEmployeeEventFinishes.every((result) => result.current === true && result.recorded === true));
+assert.equal(successfulEmployeeEventFinishes.filter((result) => result.already_recorded === false).length, 1,
+  "one concurrent event result advances the durable dispatch and the rest replay it");
+assert.equal(successfulEmployeeEventFinishes.filter((result) => result.already_recorded === true).length, 3);
 assert.equal(sql(`select state||'|'||provider_message_id||'|'||(sent_at is not null)::text
   from public.event_push_instances where instance_id='${successfulEmployeeEventInstanceId}'::uuid;`),
 "sent|provider-result-committed|true");
 assert.equal(sql(`select (last_successful_delivery_at is not null)::text from public.employee_push_registrations
   where registration_id='${employeeRegistrationId}'::uuid;`), "true");
+
+const ambiguousEmployeeEventId = randomUUID();
+const ambiguousEmployeeEventInstanceId = randomUUID();
+sql(`insert into public.events_app_events(id,event_name,location_group_id,event_date,start_time,end_date,status,event_scope,display_location,needs_review)
+  select '${ambiguousEmployeeEventId}'::uuid,'Uncertainty ambiguous employee delivery',id,((now()+interval '5 hours') at time zone 'America/Chicago')::date,
+    ((now()+interval '5 hours') at time zone 'America/Chicago')::time,((now()+interval '5 hours') at time zone 'America/Chicago')::date,
+    'SCHEDULED','ZOO_WIDE','Zoo Footprint',false from public.location_groups order by id limit 1;
+  insert into public.event_push_instances(
+    instance_id,notification_key,event_id,event_revision,service_date,employee_id,device_id,credential_id,
+    assignment_epoch,notification_kind,scheduled_for,state)
+  select '${ambiguousEmployeeEventInstanceId}'::uuid,${q(`employee-event-ambiguous-${stamp}`)},e.id,e.revision,e.event_date,
+    '${employeeId}'::uuid,'${deviceId}'::uuid,'${employeeCredentialId}'::uuid,d.assignment_epoch,
+    'day_before',now()-interval '1 minute','pending'
+  from public.events_app_events e cross join public.devices d
+  where e.id='${ambiguousEmployeeEventId}'::uuid and d.id='${deviceId}'::uuid;`);
+const ambiguousEmployeeEventJob = leaseEmployeeEventJob(ambiguousEmployeeEventInstanceId, "ambiguous");
+assert.equal(JSON.parse(sql(`select public.mz_claim_employee_event_push_delivery(
+  '${ambiguousEmployeeEventJob.jobId}'::uuid,'${ambiguousEmployeeEventJob.leaseToken}'::uuid,
+  '${ambiguousEmployeeEventInstanceId}'::uuid,'${employeeCredentialId}'::uuid,
+  (select assignment_epoch from public.devices where id='${deviceId}'::uuid),
+  '${employeeRegistrationId}'::uuid,${q(employeeTokenHashC)},now())::text;`)).dispatch_authorized, true);
+sql(`update public.operational_notification_jobs set leased_until=now()-interval '1 second'
+  where job_id='${ambiguousEmployeeEventJob.jobId}'::uuid;`);
+const ambiguousEmployeeEventRetryLease = JSON.parse(sql(`select row_to_json(public.claim_operational_notification_job_by_key(
+  ${q(ambiguousEmployeeEventJob.jobKey)},'uncertainty-event-reclaimed-worker',120))::text;`));
+const ambiguousEmployeeEventClaim = JSON.parse(sql(`select public.mz_claim_employee_event_push_delivery(
+  '${ambiguousEmployeeEventJob.jobId}'::uuid,'${ambiguousEmployeeEventRetryLease.lease_token}'::uuid,
+  '${ambiguousEmployeeEventInstanceId}'::uuid,'${employeeCredentialId}'::uuid,
+  (select assignment_epoch from public.devices where id='${deviceId}'::uuid),
+  '${employeeRegistrationId}'::uuid,${q(employeeTokenHashC)},now())::text;`));
+assert.equal(ambiguousEmployeeEventClaim.ok, false);
+assert.equal(ambiguousEmployeeEventClaim.reason, "event_push_delivery_outcome_unknown",
+  "a reclaimed event worker must never repeat an unresolved provider dispatch");
+const staleEmployeeEventRecord = JSON.parse(sql(`select public.mz_record_employee_event_push_delivery(
+  '${ambiguousEmployeeEventJob.jobId}'::uuid,'${ambiguousEmployeeEventJob.leaseToken}'::uuid,
+  '${ambiguousEmployeeEventInstanceId}'::uuid,'${employeeCredentialId}'::uuid,
+  (select assignment_epoch from public.devices where id='${deviceId}'::uuid),
+  '${employeeRegistrationId}'::uuid,${q(employeeTokenHashC)},'provider-event-stale-worker',now())::text;`));
+assert.equal(staleEmployeeEventRecord.current, false);
+assert.equal(staleEmployeeEventRecord.reason, "employee_event_push_lease_superseded");
+sql(`select public.finish_operational_notification_job_terminal(
+  '${ambiguousEmployeeEventJob.jobId}'::uuid,'${ambiguousEmployeeEventRetryLease.lease_token}'::uuid,
+  'event push delivery outcome unknown');`);
+assert.equal(sql(`select status from public.operational_notification_jobs where job_id='${ambiguousEmployeeEventJob.jobId}'::uuid;`), "dead");
 
 const nativeReceiptJobId = randomUUID();
 const nativeReceiptLease = randomUUID();
@@ -356,12 +460,28 @@ const emptyNativeReceipt = JSON.parse(sql(`select public.mz_get_employee_native_
   '${nativeReceiptJobId}'::uuid,'${nativeReceiptLease}'::uuid,'${employeeCredentialId}'::uuid,
   (select assignment_epoch from public.devices where id='${deviceId}'::uuid))::text;`));
 assert.equal(emptyNativeReceipt.already_recorded, false);
-const recordedNativeReceipt = JSON.parse(sql(`select public.mz_record_employee_native_push_delivery(
+const preparedNativeReceipt = JSON.parse(sql(`select public.mz_prepare_employee_native_push_delivery(
   '${nativeReceiptJobId}'::uuid,'${nativeReceiptLease}'::uuid,'${employeeCredentialId}'::uuid,
   (select assignment_epoch from public.devices where id='${deviceId}'::uuid),
-  '${employeeRegistrationId}'::uuid,${q(employeeTokenHashC)},'provider-native-once',now())::text;`));
-assert.equal(recordedNativeReceipt.recorded, true);
-assert.equal(recordedNativeReceipt.already_recorded, false);
+  '${employeeRegistrationId}'::uuid,${q(employeeTokenHashC)},now())::text;`));
+assert.equal(preparedNativeReceipt.dispatch_authorized, true);
+assert.equal(preparedNativeReceipt.already_prepared, false);
+const unresolvedNativeReceipt = JSON.parse(sql(`select public.mz_get_employee_native_push_delivery_receipt(
+  '${nativeReceiptJobId}'::uuid,'${nativeReceiptLease}'::uuid,'${employeeCredentialId}'::uuid,
+  (select assignment_epoch from public.devices where id='${deviceId}'::uuid))::text;`));
+assert.equal(unresolvedNativeReceipt.delivery_outcome_unknown, true,
+  "a prepared provider boundary must suppress a second dispatch until its exact result is recorded");
+const recordNativeSql = `select public.mz_record_employee_native_push_delivery(
+  '${nativeReceiptJobId}'::uuid,'${nativeReceiptLease}'::uuid,'${employeeCredentialId}'::uuid,
+  (select assignment_epoch from public.devices where id='${deviceId}'::uuid),
+  '${employeeRegistrationId}'::uuid,${q(employeeTokenHashC)},'provider-native-once',now())::text;`;
+const concurrentNativeRecords = (await Promise.all(Array.from({ length: 4 }, () => sqlAsync(recordNativeSql))))
+  .map((value) => JSON.parse(value));
+assert.ok(concurrentNativeRecords.every((result) => result.current === true && result.recorded === true),
+  "concurrent duplicate provider results must all reconcile idempotently");
+assert.equal(concurrentNativeRecords.filter((result) => result.already_recorded === false).length, 1,
+  "one concurrent caller advances prepared to delivered and the rest replay it");
+assert.equal(concurrentNativeRecords.filter((result) => result.already_recorded === true).length, 3);
 const mismatchedNativeReceipt = JSON.parse(sql(`select public.mz_record_employee_native_push_delivery(
   '${nativeReceiptJobId}'::uuid,'${nativeReceiptLease}'::uuid,'${employeeCredentialId}'::uuid,
   (select assignment_epoch from public.devices where id='${deviceId}'::uuid),
@@ -386,6 +506,41 @@ sql(`select public.finish_operational_notification_job(
   '${nativeReceiptJobId}'::uuid,'${nativeReceiptRetryLease.lease_token}'::uuid,true,null,30);`);
 assert.equal(sql(`select status from public.operational_notification_jobs where job_id='${nativeReceiptJobId}'::uuid;`), "completed");
 
+const ambiguousNativeJobId = randomUUID();
+const ambiguousNativeLease = randomUUID();
+const ambiguousNativeJobKey = `uncertainty-native-ambiguous-${stamp}`;
+sql(`insert into public.operational_notification_jobs(
+    job_id,job_key,job_type,source_id,available_at,payload_json,status,attempts,max_attempts,
+    leased_at,leased_until,lease_token,worker_id)
+  select '${ambiguousNativeJobId}'::uuid,${q(ambiguousNativeJobKey)},'employee_native_push','${randomUUID()}'::uuid,now()-interval '1 second',
+    jsonb_build_object('credential_id','${employeeCredentialId}'::uuid,'assignment_epoch',assignment_epoch,
+      'employee_id','${employeeId}'::uuid,'device_id','${deviceId}'::uuid,'channel_id','employee-messages'),
+    'leased',1,3,now(),now()+interval '2 minutes','${ambiguousNativeLease}'::uuid,'uncertainty-native-stale-worker'
+  from public.devices where id='${deviceId}'::uuid;`);
+assert.equal(JSON.parse(sql(`select public.mz_prepare_employee_native_push_delivery(
+  '${ambiguousNativeJobId}'::uuid,'${ambiguousNativeLease}'::uuid,'${employeeCredentialId}'::uuid,
+  (select assignment_epoch from public.devices where id='${deviceId}'::uuid),
+  '${employeeRegistrationId}'::uuid,${q(employeeTokenHashC)},now())::text;`)).dispatch_authorized, true);
+sql(`update public.operational_notification_jobs set leased_until=now()-interval '1 second'
+  where job_id='${ambiguousNativeJobId}'::uuid;`);
+const ambiguousNativeRetryLease = JSON.parse(sql(`select row_to_json(public.claim_operational_notification_job_by_key(
+  ${q(ambiguousNativeJobKey)},'uncertainty-native-reclaimed-worker',120))::text;`));
+const ambiguousNativeReceipt = JSON.parse(sql(`select public.mz_get_employee_native_push_delivery_receipt(
+  '${ambiguousNativeJobId}'::uuid,'${ambiguousNativeRetryLease.lease_token}'::uuid,'${employeeCredentialId}'::uuid,
+  (select assignment_epoch from public.devices where id='${deviceId}'::uuid))::text;`));
+assert.equal(ambiguousNativeReceipt.delivery_outcome_unknown, true,
+  "lease recovery must expose an unresolved provider boundary instead of authorizing a duplicate dispatch");
+assert.equal(ambiguousNativeReceipt.reason, "native_push_delivery_outcome_unknown");
+const staleNativeRecord = JSON.parse(sql(`select public.mz_record_employee_native_push_delivery(
+  '${ambiguousNativeJobId}'::uuid,'${ambiguousNativeLease}'::uuid,'${employeeCredentialId}'::uuid,
+  (select assignment_epoch from public.devices where id='${deviceId}'::uuid),
+  '${employeeRegistrationId}'::uuid,${q(employeeTokenHashC)},'provider-stale-worker',now())::text;`));
+assert.equal(staleNativeRecord.current, false);
+assert.equal(staleNativeRecord.reason, "employee_native_push_lease_superseded");
+sql(`select public.finish_operational_notification_job_terminal(
+  '${ambiguousNativeJobId}'::uuid,'${ambiguousNativeRetryLease.lease_token}'::uuid,'native push delivery outcome unknown');`);
+assert.equal(sql(`select status from public.operational_notification_jobs where job_id='${ambiguousNativeJobId}'::uuid;`), "dead");
+
 const exhaustedJobKey = `uncertainty-exhausted-job-${stamp}`;
 sql(`insert into public.operational_notification_jobs(job_key,job_type,source_id,available_at,max_attempts)
   values (${q(exhaustedJobKey)},'employee_native_push','${randomUUID()}'::uuid,now()-interval '1 second',1);`);
@@ -403,7 +558,9 @@ console.log(JSON.stringify({ ok: true, stale_session_masked: false, rollback_wit
   revoked_recipient_claimed: false, expired_recipient_recorded_sent: false, rotated_token_recorded_sent: false,
   stale_employee_token_result_recorded: false, cancelled_employee_event_claimed: false,
   cancelled_employee_event_recorded_sent: false, valid_employee_event_recorded_sent: true,
-  native_push_replayed_after_receipt: false, mismatched_native_receipt_accepted: false,
+  duplicate_event_dispatch_after_lease_expiry: false, concurrent_event_receipt_record_failed: false,
+  native_push_replayed_after_receipt: false, duplicate_native_dispatch_after_lease_expiry: false,
+  concurrent_native_receipt_record_failed: false, mismatched_native_receipt_accepted: false,
   missing_notification_authority_ignored: false,
   retry_exhausted_job_missing_completed_at: false,
   cancelled_event_recorded_sent: false, rescheduled_event_claimed: false }, null, 2));

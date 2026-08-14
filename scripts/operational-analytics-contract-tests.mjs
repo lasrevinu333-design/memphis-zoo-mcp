@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
+import express from "express";
 import { readFileSync } from "node:fs";
+import { createOpsManagerSession } from "../src/auth/shared-access-auth.js";
 import {
   INSPECTION_FRESHNESS_WINDOW_HOURS,
   chicagoServiceDateStartIso,
@@ -178,5 +180,53 @@ await inspectionPost.at(-1)({
 assert.equal(responseStatus, 422);
 assert.match(responseBody.error, /assigned by the server/i);
 assert.equal(databaseCalled, false, "a backdated API request must fail before any database write");
+
+const authorizationEnv = {
+  NODE_ENV: "production",
+  OPS_MANAGER_AUTH_REQUIRED: "true",
+  OPS_MANAGER_SESSION_SECRET: "operational-analytics-write-authorization-contract-secret",
+};
+let unauthorizedDatabaseCall = false;
+const authorizationApp = express();
+authorizationApp.use(express.json());
+installOperationalAnalyticsRoutes(authorizationApp, {
+  env: authorizationEnv,
+  supabase: {
+    from() {
+      unauthorizedDatabaseCall = true;
+      throw new Error("read-only inspection request reached the database");
+    },
+  },
+});
+const authorizationServer = authorizationApp.listen(0, "127.0.0.1");
+await new Promise((resolve, reject) => {
+  authorizationServer.once("listening", resolve);
+  authorizationServer.once("error", reject);
+});
+try {
+  const readOnlyToken = createOpsManagerSession({
+    deviceId: "operational-analytics-read-only-contract",
+    manager: { manager_id: managerId, display_name: "Read Only Custodial Manager", roles: ["CUSTODIAL_MANAGER"] },
+    authMode: "operations_first",
+    accessLevel: "read_only",
+    maximumAccessLevel: "full_access",
+    env: authorizationEnv,
+  }).token;
+  const address = authorizationServer.address();
+  const denied = await fetch(`http://127.0.0.1:${address.port}/analytics-api/inspections`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${readOnlyToken}`, "content-type": "application/json", "idempotency-key": operationId },
+    body: JSON.stringify(input),
+  });
+  const deniedBody = await denied.json();
+  assert.equal(denied.status, 403, "read-only manager sessions cannot create authoritative inspection evidence");
+  assert.match(deniedBody.error, /read-only/i);
+  assert.equal(unauthorizedDatabaseCall, false);
+} finally {
+  await new Promise((resolve) => authorizationServer.close(resolve));
+}
+
+assert.match(api, /makeOpsAccessMiddleware\(\{ env, supabase: db, requireWrite: true \}\)/);
+assert.match(api, /app\.post\("\/analytics-api\/inspections", configured, requireCustodialWrite/);
 
 console.log("OPERATIONAL_ANALYTICS_SOURCE_CONTRACT_PASS");

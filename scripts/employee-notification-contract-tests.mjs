@@ -81,6 +81,7 @@ assert.match(source, /notification_key/);
 assert.match(source, /error\?\.permanent[\s\S]*push_token_rejected/);
 assert.match(source, /mz_record_employee_push_delivery/);
 assert.match(source, /mz_claim_employee_event_push_delivery/);
+assert.match(source, /mz_release_employee_event_push_delivery/);
 assert.match(source, /mz_record_employee_event_push_delivery/);
 assert.match(source, /push_registration_superseded_after_provider_dispatch/);
 assert.match(closureMigration, /last_successful_delivery_at=case[\s\S]*token_hash=excluded\.token_hash[\s\S]*else null/);
@@ -271,6 +272,9 @@ const rotatedDuringProviderRuntime = installEmployeeNotificationRoutes(express()
       if (name === 'mz_resolve_employee_push_delivery') {
         return { data: { ok: true, registration: authorizedRegistration }, error: null };
       }
+      if (name === 'mz_prepare_employee_native_push_delivery') {
+        return { data: { current: true, dispatch_authorized: true, already_prepared: false }, error: null };
+      }
       assert.equal(name, 'mz_record_employee_native_push_delivery');
       recordedBinding = args;
       return { data: { current: false, recorded: false, reason: 'push_registration_superseded' }, error: null };
@@ -292,6 +296,7 @@ assert.equal(recordedBinding.p_job_id, claimedJob.job_id);
 assert.equal(recordedBinding.p_lease_token, claimedJob.lease_token);
 
 let nativeReceiptRecorded = false;
+let nativeDispatchPrepared = false;
 let nativeReplaySendCount = 0;
 const nativeReplayRuntime = installEmployeeNotificationRoutes(express(), {
   supabase: {
@@ -303,6 +308,11 @@ const nativeReplayRuntime = installEmployeeNotificationRoutes(express(), {
       }
       if (name === 'mz_resolve_employee_push_delivery') {
         return { data: { ok: true, registration: authorizedRegistration }, error: null };
+      }
+      if (name === 'mz_prepare_employee_native_push_delivery') {
+        assert.equal(nativeDispatchPrepared, false);
+        nativeDispatchPrepared = true;
+        return { data: { current: true, dispatch_authorized: true, already_prepared: false }, error: null };
       }
       assert.equal(name, 'mz_record_employee_native_push_delivery');
       nativeReceiptRecorded = true;
@@ -317,6 +327,64 @@ const nativeReplayRuntime = installEmployeeNotificationRoutes(express(), {
 assert.deepEqual(await nativeReplayRuntime.deliverClaimedJob(claimedJob), { provider_message_id: 'provider-native-once' });
 assert.deepEqual(await nativeReplayRuntime.deliverClaimedJob(claimedJob), { provider_message_id: 'provider-native-once', replayed: true });
 assert.equal(nativeReplaySendCount, 1, 'a durable native delivery receipt must suppress provider replay after response loss');
+
+let releaseLeaseExpirySend;
+let markLeaseExpirySendStarted;
+let preparedLease = null;
+let currentLease = claimedJob.lease_token;
+let leaseExpirySendCount = 0;
+const leaseExpirySendStarted = new Promise((resolve) => { markLeaseExpirySendStarted = resolve; });
+const leaseExpirySendRelease = new Promise((resolve) => { releaseLeaseExpirySend = resolve; });
+const reclaimedJob = { ...claimedJob, lease_token: '77777777-7777-4777-8777-777777777799' };
+const leaseExpiryRuntime = installEmployeeNotificationRoutes(express(), {
+  supabase: {
+    async rpc(name, args) {
+      if (name === 'mz_get_employee_native_push_delivery_receipt') {
+        if (preparedLease) {
+          return { data: { current: true, terminal: true, already_recorded: false, recorded: false,
+            dispatch_prepared: true, delivery_outcome_unknown: true, reason: 'native_push_delivery_outcome_unknown' }, error: null };
+        }
+        return { data: { current: true, already_recorded: false, recorded: false }, error: null };
+      }
+      if (name === 'mz_resolve_employee_push_delivery') {
+        return { data: { ok: true, registration: authorizedRegistration }, error: null };
+      }
+      if (name === 'mz_prepare_employee_native_push_delivery') {
+        assert.equal(args.p_lease_token, currentLease);
+        assert.equal(preparedLease, null);
+        preparedLease = args.p_lease_token;
+        return { data: { current: true, dispatch_authorized: true, already_prepared: false }, error: null };
+      }
+      assert.equal(name, 'mz_record_employee_native_push_delivery');
+      return args.p_lease_token === currentLease
+        ? { data: { current: true, recorded: true }, error: null }
+        : { data: { current: false, recorded: false, reason: 'employee_native_push_lease_superseded' }, error: null };
+    },
+  },
+  pushRuntime: {
+    configured: true,
+    async send() {
+      leaseExpirySendCount += 1;
+      markLeaseExpirySendStarted();
+      await leaseExpirySendRelease;
+      return 'provider-native-lease-expiry';
+    },
+  },
+});
+const staleWorkerDelivery = leaseExpiryRuntime.deliverClaimedJob(claimedJob);
+await leaseExpirySendStarted;
+currentLease = reclaimedJob.lease_token;
+await assert.rejects(
+  () => leaseExpiryRuntime.deliverClaimedJob(reclaimedJob),
+  (error) => error?.terminal === true && error?.code === 'native_push_delivery_outcome_unknown',
+  'a reclaimed worker must not cross an unresolved provider dispatch boundary',
+);
+releaseLeaseExpirySend();
+await assert.rejects(
+  () => staleWorkerDelivery,
+  (error) => error?.terminal === true && error?.code === 'employee_native_push_lease_superseded_after_provider_dispatch',
+);
+assert.equal(leaseExpirySendCount, 1, 'lease expiry during FCM must not permit a second provider dispatch');
 
 const eventClaimedJob = {
   ...claimedJob,
@@ -405,6 +473,63 @@ await assert.rejects(
 );
 assert.equal(crossingEventSendCount, 1);
 
+let releaseEventLeaseExpirySend;
+let markEventLeaseExpirySendStarted;
+let preparedEventLease = null;
+let currentEventLease = eventClaimedJob.lease_token;
+let eventLeaseExpirySendCount = 0;
+const eventLeaseExpirySendStarted = new Promise((resolve) => { markEventLeaseExpirySendStarted = resolve; });
+const eventLeaseExpirySendRelease = new Promise((resolve) => { releaseEventLeaseExpirySend = resolve; });
+const reclaimedEventJob = { ...eventClaimedJob, lease_token: '88888888-8888-4888-8888-888888888899' };
+const eventLeaseExpiryRuntime = installEmployeeNotificationRoutes(express(), {
+  supabase: {
+    async rpc(name, args) {
+      if (name === 'mz_resolve_employee_push_delivery') {
+        return { data: { ok: true, registration: authorizedRegistration }, error: null };
+      }
+      if (name === 'mz_claim_employee_event_push_delivery') {
+        if (preparedEventLease) {
+          return { data: { ok: false, terminal: true, dispatch_authorized: false,
+            reason: 'event_push_delivery_outcome_unknown' }, error: null };
+        }
+        preparedEventLease = args.p_lease_token;
+        return { data: { ok: true, dispatch_authorized: true, instance_id: eventInstance.instance_id, state: 'leased' }, error: null };
+      }
+      assert.equal(name, 'mz_record_employee_event_push_delivery');
+      return args.p_lease_token === currentEventLease
+        ? { data: { current: true, recorded: true }, error: null }
+        : { data: { current: false, recorded: false, reason: 'employee_event_push_lease_superseded' }, error: null };
+    },
+    from(name) {
+      assert.equal(name, 'event_push_instances');
+      return eventInstanceQuery(eventInstance);
+    },
+  },
+  pushRuntime: {
+    configured: true,
+    async send() {
+      eventLeaseExpirySendCount += 1;
+      markEventLeaseExpirySendStarted();
+      await eventLeaseExpirySendRelease;
+      return 'provider-event-lease-expiry';
+    },
+  },
+});
+const staleEventWorkerDelivery = eventLeaseExpiryRuntime.deliverClaimedJob(eventClaimedJob);
+await eventLeaseExpirySendStarted;
+currentEventLease = reclaimedEventJob.lease_token;
+await assert.rejects(
+  () => eventLeaseExpiryRuntime.deliverClaimedJob(reclaimedEventJob),
+  (error) => error?.terminal === true && error?.code === 'event_push_delivery_outcome_unknown',
+  'a reclaimed event worker must not repeat an unresolved provider dispatch',
+);
+releaseEventLeaseExpirySend();
+await assert.rejects(
+  () => staleEventWorkerDelivery,
+  (error) => error?.terminal === true && error?.code === 'employee_event_push_lease_superseded_after_provider_dispatch',
+);
+assert.equal(eventLeaseExpirySendCount, 1, 'lease expiry during event FCM must not permit a second provider dispatch');
+
 let rotatedFailureEventUpdates = 0;
 const rotatedDuringProviderFailureRuntime = installEmployeeNotificationRoutes(express(), {
   supabase: {
@@ -414,6 +539,9 @@ const rotatedDuringProviderFailureRuntime = installEmployeeNotificationRoutes(ex
       }
       if (name === 'mz_claim_employee_event_push_delivery') {
         return { data: { ok: true, instance_id: eventInstance.instance_id, state: 'leased' }, error: null };
+      }
+      if (name === 'mz_release_employee_event_push_delivery') {
+        return { data: { current: true, released: true, state: 'failed' }, error: null };
       }
       assert.equal(name, 'mz_record_employee_push_delivery');
       return { data: { current: false, recorded: false, reason: 'push_registration_superseded' }, error: null };
@@ -426,7 +554,7 @@ const rotatedDuringProviderFailureRuntime = installEmployeeNotificationRoutes(ex
   pushRuntime: {
     configured: true,
     async send() {
-      throw Object.assign(new Error('old provider token rejected'), { permanent: true });
+      throw Object.assign(new Error('old provider token rejected'), { permanent: true, deliveryNotAccepted: true });
     },
   },
 });
@@ -439,9 +567,11 @@ await assert.rejects(
 assert.equal(rotatedFailureEventUpdates, 1, 'a stale provider failure must transition the leased event to retryable failed state');
 
 assert.match(source, /resolveAuthorizedDelivery\(credential, assignmentEpoch\)[\s\S]*beforeFinalDeliveryCheck[\s\S]*resolveAuthorizedDelivery\(credential, assignmentEpoch\)/);
-assert.match(source, /claimEventDelivery\(eventInstance, credential, assignmentEpoch\)[\s\S]*pushRuntime\.send/);
-assert.match(source, /recordEventDelivery\(eventInstance, credential, assignmentEpoch, registration, providerMessageId\)/);
+assert.match(source, /claimEventDelivery\(job, eventInstance, credential, assignmentEpoch, registration\)[\s\S]*pushRuntime\.send/);
+assert.match(source, /recordEventDelivery\(job, eventInstance, credential, assignmentEpoch, registration, providerMessageId\)/);
 assert.match(source, /mz_get_employee_native_push_delivery_receipt/);
+assert.match(source, /mz_prepare_employee_native_push_delivery/);
+assert.match(source, /mz_release_employee_native_push_delivery/);
 assert.match(source, /mz_record_employee_native_push_delivery/);
 assert.match(source, /providerResultSuperseded[\s\S]*push_registration_rotated_after_provider_failure/);
 assert.match(source, /\.in\('state', \['pending', 'leased', 'failed'\]\)[\s\S]*maybeSingle/);

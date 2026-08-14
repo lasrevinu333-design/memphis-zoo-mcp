@@ -332,9 +332,15 @@ create table public.employee_native_push_delivery_receipts (
   assignment_epoch bigint not null check (assignment_epoch>0),
   registration_id uuid not null,
   token_hash text not null check (token_hash ~ '^[0-9a-f]{64}$'),
-  provider_message_id text not null check (length(btrim(provider_message_id)) between 1 and 1000),
-  delivered_at timestamptz not null,
-  created_at timestamptz not null default statement_timestamp()
+  delivery_state text not null default 'prepared' check (delivery_state in ('prepared','delivered')),
+  provider_message_id text check (provider_message_id is null or length(btrim(provider_message_id)) between 1 and 1000),
+  prepared_at timestamptz not null default statement_timestamp(),
+  delivered_at timestamptz,
+  created_at timestamptz not null default statement_timestamp(),
+  check (
+    (delivery_state='prepared' and provider_message_id is null and delivered_at is null)
+    or (delivery_state='delivered' and provider_message_id is not null and delivered_at is not null)
+  )
 );
 alter table public.employee_native_push_delivery_receipts enable row level security;
 alter table public.employee_native_push_delivery_receipts force row level security;
@@ -353,7 +359,8 @@ begin
   v_reason:=case
     when v_job.job_id is null then 'employee_native_push_job_missing'
     when v_job.job_type<>'employee_native_push' then 'employee_native_push_job_type_mismatch'
-    when v_job.status<>'leased' or v_job.lease_token is distinct from p_lease_token then 'employee_native_push_lease_superseded'
+    when v_job.status<>'leased' or v_job.lease_token is distinct from p_lease_token
+      or v_job.leased_until is null or v_job.leased_until<=statement_timestamp() then 'employee_native_push_lease_superseded'
     when v_job.payload_json->>'credential_id' is distinct from p_credential_id::text
       or v_job.payload_json->>'assignment_epoch' is distinct from p_assignment_epoch::text then 'employee_native_push_recipient_superseded'
     else null
@@ -365,10 +372,101 @@ begin
        or v_receipt.credential_id<>p_credential_id or v_receipt.assignment_epoch<>p_assignment_epoch then
       raise exception using errcode='23514',message='native push delivery receipt is bound to different job inputs';
     end if;
+    if v_receipt.delivery_state='prepared' then
+      return jsonb_build_object('current',true,'terminal',true,'already_recorded',false,'recorded',false,
+        'dispatch_prepared',true,'delivery_outcome_unknown',true,'reason','native_push_delivery_outcome_unknown',
+        'prepared_at',v_receipt.prepared_at);
+    end if;
     return jsonb_build_object('current',true,'already_recorded',true,'recorded',true,
+      'dispatch_prepared',true,'delivery_outcome_unknown',false,
       'provider_message_id',v_receipt.provider_message_id,'delivered_at',v_receipt.delivered_at);
   end if;
   return jsonb_build_object('current',true,'already_recorded',false,'recorded',false);
+end
+$function$;
+
+create or replace function public.mz_prepare_employee_native_push_delivery(
+  p_job_id uuid,p_lease_token uuid,p_credential_id uuid,p_assignment_epoch bigint,
+  p_registration_id uuid,p_token_hash text,p_now timestamptz default now()
+) returns jsonb language plpgsql security definer set search_path to 'pg_catalog','public'
+as $function$
+declare v_delivery jsonb; v_job public.operational_notification_jobs%rowtype; v_receipt public.employee_native_push_delivery_receipts%rowtype; v_reason text;
+begin
+  if p_job_id is null or p_lease_token is null or p_credential_id is null or p_assignment_epoch is null or p_assignment_epoch<1
+     or p_registration_id is null or coalesce(p_token_hash,'') !~ '^[0-9a-f]{64}$' then
+    raise exception using errcode='22023',message='exact native push job, recipient, and token generation are required';
+  end if;
+  v_delivery:=public.mz_resolve_employee_push_delivery(p_credential_id,p_assignment_epoch,p_now);
+  if coalesce((v_delivery->>'ok')::boolean,false) is not true then
+    return jsonb_build_object('current',false,'dispatch_authorized',false,
+      'reason',coalesce(v_delivery->>'reason','employee_push_recipient_superseded'));
+  end if;
+  if (v_delivery#>>'{registration,registration_id}')::uuid is distinct from p_registration_id
+     or v_delivery#>>'{registration,token_hash}' is distinct from p_token_hash then
+    return jsonb_build_object('current',false,'dispatch_authorized',false,'reason','push_registration_superseded');
+  end if;
+  select * into v_job from public.operational_notification_jobs where job_id=p_job_id for update;
+  v_reason:=case
+    when v_job.job_id is null then 'employee_native_push_job_missing'
+    when v_job.job_type<>'employee_native_push' then 'employee_native_push_job_type_mismatch'
+    when v_job.status<>'leased' or v_job.lease_token is distinct from p_lease_token
+      or v_job.leased_until is null or v_job.leased_until<=statement_timestamp() then 'employee_native_push_lease_superseded'
+    when v_job.payload_json->>'credential_id' is distinct from p_credential_id::text
+      or v_job.payload_json->>'assignment_epoch' is distinct from p_assignment_epoch::text then 'employee_native_push_recipient_superseded'
+    else null
+  end;
+  if v_reason is not null then
+    return jsonb_build_object('current',false,'dispatch_authorized',false,'reason',v_reason);
+  end if;
+  select * into v_receipt from public.employee_native_push_delivery_receipts where job_id=p_job_id for update;
+  if v_receipt.job_id is not null then
+    if v_receipt.job_key<>v_job.job_key or v_receipt.source_id<>v_job.source_id
+       or v_receipt.credential_id<>p_credential_id or v_receipt.assignment_epoch<>p_assignment_epoch
+       or v_receipt.registration_id<>p_registration_id or v_receipt.token_hash<>p_token_hash then
+      return jsonb_build_object('current',false,'dispatch_authorized',false,'reason','native_push_delivery_receipt_input_mismatch');
+    end if;
+    return jsonb_build_object('current',true,'dispatch_authorized',false,'already_prepared',true,
+      'already_recorded',v_receipt.delivery_state='delivered','delivery_state',v_receipt.delivery_state,
+      'delivery_outcome_unknown',v_receipt.delivery_state='prepared','reason',
+      case when v_receipt.delivery_state='prepared' then 'native_push_delivery_outcome_unknown' else 'native_push_delivery_already_recorded' end,
+      'provider_message_id',v_receipt.provider_message_id,'prepared_at',v_receipt.prepared_at,'delivered_at',v_receipt.delivered_at);
+  end if;
+  insert into public.employee_native_push_delivery_receipts(
+    job_id,job_key,source_id,lease_token,credential_id,assignment_epoch,registration_id,token_hash,delivery_state,prepared_at
+  ) values (
+    v_job.job_id,v_job.job_key,v_job.source_id,p_lease_token,p_credential_id,p_assignment_epoch,
+    p_registration_id,p_token_hash,'prepared',p_now
+  ) returning * into v_receipt;
+  return jsonb_build_object('current',true,'dispatch_authorized',true,'already_prepared',false,
+    'already_recorded',false,'delivery_state','prepared','delivery_outcome_unknown',false,'prepared_at',v_receipt.prepared_at);
+end
+$function$;
+
+create or replace function public.mz_release_employee_native_push_delivery(
+  p_job_id uuid,p_lease_token uuid,p_credential_id uuid,p_assignment_epoch bigint,
+  p_registration_id uuid,p_token_hash text
+) returns jsonb language plpgsql security definer set search_path to 'pg_catalog','public'
+as $function$
+declare v_job public.operational_notification_jobs%rowtype; v_receipt public.employee_native_push_delivery_receipts%rowtype; v_reason text;
+begin
+  select * into v_job from public.operational_notification_jobs where job_id=p_job_id for update;
+  v_reason:=case
+    when v_job.job_id is null then 'employee_native_push_job_missing'
+    when v_job.job_type<>'employee_native_push' then 'employee_native_push_job_type_mismatch'
+    when v_job.status<>'leased' or v_job.lease_token is distinct from p_lease_token
+      or v_job.leased_until is null or v_job.leased_until<=statement_timestamp() then 'employee_native_push_lease_superseded'
+    else null
+  end;
+  if v_reason is not null then return jsonb_build_object('current',false,'released',false,'reason',v_reason); end if;
+  select * into v_receipt from public.employee_native_push_delivery_receipts where job_id=p_job_id for update;
+  if v_receipt.job_id is null then return jsonb_build_object('current',true,'released',false,'reason','native_push_delivery_not_prepared'); end if;
+  if v_receipt.delivery_state<>'prepared' or v_receipt.lease_token<>p_lease_token
+     or v_receipt.credential_id<>p_credential_id or v_receipt.assignment_epoch<>p_assignment_epoch
+     or v_receipt.registration_id<>p_registration_id or v_receipt.token_hash<>p_token_hash then
+    return jsonb_build_object('current',false,'released',false,'reason','native_push_delivery_receipt_input_mismatch');
+  end if;
+  delete from public.employee_native_push_delivery_receipts where job_id=p_job_id;
+  return jsonb_build_object('current',true,'released',true,'job_id',p_job_id);
 end
 $function$;
 
@@ -384,16 +482,6 @@ begin
      or length(btrim(coalesce(p_provider_message_id,''))) not between 1 and 1000 then
     raise exception using errcode='22023',message='exact native push job, recipient, token generation, and provider result are required';
   end if;
-  select * into v_receipt from public.employee_native_push_delivery_receipts where job_id=p_job_id;
-  if v_receipt.job_id is not null then
-    if v_receipt.lease_token<>p_lease_token or v_receipt.credential_id<>p_credential_id
-       or v_receipt.assignment_epoch<>p_assignment_epoch or v_receipt.registration_id<>p_registration_id
-       or v_receipt.token_hash<>p_token_hash or v_receipt.provider_message_id<>btrim(p_provider_message_id) then
-      return jsonb_build_object('current',false,'recorded',false,'reason','native_push_delivery_receipt_input_mismatch');
-    end if;
-    return jsonb_build_object('current',true,'already_recorded',true,'recorded',true,
-      'provider_message_id',v_receipt.provider_message_id,'delivered_at',v_receipt.delivered_at);
-  end if;
   v_delivery:=public.mz_resolve_employee_push_delivery(p_credential_id,p_assignment_epoch,p_now);
   if coalesce((v_delivery->>'ok')::boolean,false) is not true then
     return jsonb_build_object('current',false,'recorded',false,'reason',coalesce(v_delivery->>'reason','employee_push_recipient_superseded'));
@@ -406,18 +494,37 @@ begin
   v_reason:=case
     when v_job.job_id is null then 'employee_native_push_job_missing'
     when v_job.job_type<>'employee_native_push' then 'employee_native_push_job_type_mismatch'
-    when v_job.status<>'leased' or v_job.lease_token is distinct from p_lease_token then 'employee_native_push_lease_superseded'
+    when v_job.status<>'leased' or v_job.lease_token is distinct from p_lease_token
+      or v_job.leased_until is null or v_job.leased_until<=statement_timestamp() then 'employee_native_push_lease_superseded'
     when v_job.payload_json->>'credential_id' is distinct from p_credential_id::text
       or v_job.payload_json->>'assignment_epoch' is distinct from p_assignment_epoch::text then 'employee_native_push_recipient_superseded'
     else null
   end;
   if v_reason is not null then return jsonb_build_object('current',false,'recorded',false,'reason',v_reason); end if;
-  insert into public.employee_native_push_delivery_receipts(
-    job_id,job_key,source_id,lease_token,credential_id,assignment_epoch,registration_id,token_hash,provider_message_id,delivered_at
-  ) values (
-    v_job.job_id,v_job.job_key,v_job.source_id,p_lease_token,p_credential_id,p_assignment_epoch,p_registration_id,p_token_hash,
-    btrim(p_provider_message_id),p_now
-  ) returning * into v_receipt;
+  select * into v_receipt from public.employee_native_push_delivery_receipts where job_id=p_job_id for update;
+  if v_receipt.job_id is null then
+    return jsonb_build_object('current',false,'recorded',false,'reason','native_push_delivery_not_prepared');
+  end if;
+  if v_receipt.job_key<>v_job.job_key or v_receipt.source_id<>v_job.source_id
+     or v_receipt.lease_token<>p_lease_token or v_receipt.credential_id<>p_credential_id
+     or v_receipt.assignment_epoch<>p_assignment_epoch or v_receipt.registration_id<>p_registration_id
+     or v_receipt.token_hash<>p_token_hash then
+    return jsonb_build_object('current',false,'recorded',false,'reason','native_push_delivery_receipt_input_mismatch');
+  end if;
+  if v_receipt.delivery_state='delivered' then
+    if v_receipt.provider_message_id<>btrim(p_provider_message_id) then
+      return jsonb_build_object('current',false,'recorded',false,'reason','native_push_delivery_receipt_input_mismatch');
+    end if;
+    return jsonb_build_object('current',true,'already_recorded',true,'recorded',true,
+      'provider_message_id',v_receipt.provider_message_id,'delivered_at',v_receipt.delivered_at);
+  end if;
+  update public.employee_native_push_delivery_receipts
+  set delivery_state='delivered',provider_message_id=btrim(p_provider_message_id),delivered_at=p_now
+  where job_id=p_job_id and delivery_state='prepared'
+  returning * into v_receipt;
+  if v_receipt.job_id is null then
+    raise exception using errcode='40001',message='native push delivery preparation changed concurrently';
+  end if;
   update public.employee_push_registrations
   set last_successful_delivery_at=p_now,last_error=null,updated_at=p_now
   where registration_id=p_registration_id and token_hash=p_token_hash;
@@ -427,35 +534,76 @@ end
 $function$;
 
 revoke all on function public.mz_get_employee_native_push_delivery_receipt(uuid,uuid,uuid,bigint) from public,anon,authenticated;
+revoke all on function public.mz_prepare_employee_native_push_delivery(uuid,uuid,uuid,bigint,uuid,text,timestamptz) from public,anon,authenticated;
+revoke all on function public.mz_release_employee_native_push_delivery(uuid,uuid,uuid,bigint,uuid,text) from public,anon,authenticated;
 revoke all on function public.mz_record_employee_native_push_delivery(uuid,uuid,uuid,bigint,uuid,text,text,timestamptz) from public,anon,authenticated;
 grant execute on function public.mz_get_employee_native_push_delivery_receipt(uuid,uuid,uuid,bigint) to postgres,service_role;
+grant execute on function public.mz_prepare_employee_native_push_delivery(uuid,uuid,uuid,bigint,uuid,text,timestamptz) to postgres,service_role;
+grant execute on function public.mz_release_employee_native_push_delivery(uuid,uuid,uuid,bigint,uuid,text) to postgres,service_role;
 grant execute on function public.mz_record_employee_native_push_delivery(uuid,uuid,uuid,bigint,uuid,text,text,timestamptz) to postgres,service_role;
 
 -- Event delivery has an external provider boundary, so it cannot hold a
 -- database transaction open while FCM runs. Claim immediately before that
 -- boundary, then atomically bind provider acceptance to the same event,
 -- assignment, registration, and token generation afterward.
+alter table public.event_push_instances
+  add column dispatch_job_id uuid,
+  add column dispatch_lease_token uuid,
+  add column dispatch_registration_id uuid,
+  add column dispatch_token_hash text,
+  add column dispatch_started_at timestamptz,
+  add constraint event_push_instances_dispatch_binding check (
+    (dispatch_job_id is null and dispatch_lease_token is null and dispatch_registration_id is null
+      and dispatch_token_hash is null and dispatch_started_at is null)
+    or (dispatch_job_id is not null and dispatch_lease_token is not null and dispatch_registration_id is not null
+      and dispatch_token_hash ~ '^[0-9a-f]{64}$' and dispatch_started_at is not null)
+  );
+create unique index event_push_instances_dispatch_job_idx on public.event_push_instances(dispatch_job_id) where dispatch_job_id is not null;
+drop function if exists public.mz_claim_employee_event_push_delivery(uuid,uuid,bigint,timestamptz);
+
 create or replace function public.mz_claim_employee_event_push_delivery(
-  p_instance_id uuid,p_credential_id uuid,p_assignment_epoch bigint,
+  p_job_id uuid,p_lease_token uuid,p_instance_id uuid,p_credential_id uuid,p_assignment_epoch bigint,
+  p_registration_id uuid,p_token_hash text,
   p_now timestamptz default now()
 ) returns jsonb language plpgsql security definer set search_path to 'pg_catalog','public'
 as $function$
-declare v_delivery jsonb; v_instance public.event_push_instances%rowtype; v_event public.events_app_events%rowtype; v_reason text;
+declare v_delivery jsonb; v_job public.operational_notification_jobs%rowtype; v_instance public.event_push_instances%rowtype; v_event public.events_app_events%rowtype; v_reason text;
 begin
-  if p_instance_id is null or p_credential_id is null or p_assignment_epoch is null or p_assignment_epoch<1 then
-    raise exception using errcode='22023',message='exact event instance, credential, and assignment epoch are required';
+  if p_job_id is null or p_lease_token is null or p_instance_id is null or p_credential_id is null
+     or p_assignment_epoch is null or p_assignment_epoch<1 or p_registration_id is null
+     or coalesce(p_token_hash,'') !~ '^[0-9a-f]{64}$' then
+    raise exception using errcode='22023',message='exact event job, lease, recipient, and token generation are required';
   end if;
   v_delivery:=public.mz_resolve_employee_push_delivery(p_credential_id,p_assignment_epoch,p_now);
   if coalesce((v_delivery->>'ok')::boolean,false) is not true then return v_delivery; end if;
+  if (v_delivery#>>'{registration,registration_id}')::uuid is distinct from p_registration_id
+     or v_delivery#>>'{registration,token_hash}' is distinct from p_token_hash then
+    return jsonb_build_object('ok',false,'terminal',true,'reason','push_registration_superseded');
+  end if;
+  select * into v_job from public.operational_notification_jobs where job_id=p_job_id for update;
   select * into v_instance from public.event_push_instances where instance_id=p_instance_id;
   if v_instance.instance_id is not null then
-    select * into v_event from public.events_app_events where id=v_instance.event_id for key share;
+    select * into v_event from public.events_app_events where id=v_instance.event_id for share;
   end if;
   select * into v_instance from public.event_push_instances where instance_id=p_instance_id for update;
+  if v_job.job_id is not null and v_job.job_type='employee_event_push' and v_job.source_id=p_instance_id
+     and v_job.status='leased' and v_job.lease_token is not distinct from p_lease_token
+     and v_job.leased_until>statement_timestamp() and v_instance.state='sent'
+     and v_instance.credential_id=p_credential_id and v_instance.assignment_epoch=p_assignment_epoch
+     and v_instance.provider_message_id is not null and v_event.id is not null
+     and v_event.revision=v_instance.event_revision then
+    return jsonb_build_object('ok',true,'terminal',false,'dispatch_authorized',false,'already_recorded',true,
+      'instance_id',p_instance_id,'state','sent','provider_message_id',v_instance.provider_message_id);
+  end if;
   v_reason:=case
+    when v_job.job_id is null then 'employee_event_push_job_missing'
+    when v_job.job_type<>'employee_event_push' or v_job.source_id<>p_instance_id then 'employee_event_push_job_mismatch'
+    when v_job.status<>'leased' or v_job.lease_token is distinct from p_lease_token
+      or v_job.leased_until is null or v_job.leased_until<=statement_timestamp() then 'employee_event_push_lease_superseded'
     when v_instance.instance_id is null then 'event_push_instance_missing'
     when v_instance.credential_id<>p_credential_id or v_instance.assignment_epoch<>p_assignment_epoch then 'event_push_recipient_superseded'
-    when v_instance.state not in ('pending','leased','failed') then 'event_push_instance_'||v_instance.state
+    when v_instance.state='leased' and v_instance.dispatch_job_id is not null then 'event_push_delivery_outcome_unknown'
+    when v_instance.state not in ('pending','failed') then 'event_push_instance_'||v_instance.state
     when v_event.id is null or v_event.revision<>v_instance.event_revision or v_event.status<>'SCHEDULED'
       or v_event.cancelled_at is not null or v_event.archived_at is not null then 'event_or_revision_superseded'
     when v_instance.employee_id is distinct from (v_delivery->>'employee_id')::uuid
@@ -468,21 +616,59 @@ begin
     where instance_id=p_instance_id and state in ('pending','leased','failed');
     return jsonb_build_object('ok',false,'terminal',true,'reason',v_reason,'instance_id',p_instance_id);
   end if;
-  update public.event_push_instances set state='leased',last_error=null,updated_at=p_now
+  update public.event_push_instances set state='leased',dispatch_job_id=p_job_id,dispatch_lease_token=p_lease_token,
+    dispatch_registration_id=p_registration_id,dispatch_token_hash=p_token_hash,dispatch_started_at=p_now,
+    last_error=null,updated_at=p_now
   where instance_id=p_instance_id;
-  return jsonb_build_object('ok',true,'terminal',false,'instance_id',p_instance_id,'state','leased');
+  return jsonb_build_object('ok',true,'terminal',false,'dispatch_authorized',true,'instance_id',p_instance_id,'state','leased');
+end
+$function$;
+
+drop function if exists public.mz_record_employee_event_push_delivery(uuid,uuid,bigint,uuid,text,text,timestamptz);
+
+create or replace function public.mz_release_employee_event_push_delivery(
+  p_job_id uuid,p_lease_token uuid,p_instance_id uuid,p_credential_id uuid,p_assignment_epoch bigint,
+  p_registration_id uuid,p_token_hash text,p_error text,
+  p_now timestamptz default now()
+) returns jsonb language plpgsql security definer set search_path to 'pg_catalog','public'
+as $function$
+declare v_job public.operational_notification_jobs%rowtype; v_instance public.event_push_instances%rowtype; v_reason text;
+begin
+  select * into v_job from public.operational_notification_jobs where job_id=p_job_id for update;
+  select * into v_instance from public.event_push_instances where instance_id=p_instance_id for update;
+  v_reason:=case
+    when v_job.job_id is null then 'employee_event_push_job_missing'
+    when v_job.job_type<>'employee_event_push' or v_job.source_id<>p_instance_id then 'employee_event_push_job_mismatch'
+    when v_job.status<>'leased' or v_job.lease_token is distinct from p_lease_token
+      or v_job.leased_until is null or v_job.leased_until<=statement_timestamp() then 'employee_event_push_lease_superseded'
+    when v_instance.instance_id is null then 'event_push_instance_missing'
+    when v_instance.state<>'leased' then 'event_push_instance_'||v_instance.state
+    when v_instance.dispatch_job_id<>p_job_id or v_instance.dispatch_lease_token<>p_lease_token
+      or v_instance.credential_id<>p_credential_id or v_instance.assignment_epoch<>p_assignment_epoch
+      or v_instance.dispatch_registration_id<>p_registration_id or v_instance.dispatch_token_hash<>p_token_hash
+      then 'event_push_dispatch_superseded'
+    else null
+  end;
+  if v_reason is not null then
+    return jsonb_build_object('current',false,'released',false,'reason',v_reason,'instance_id',p_instance_id);
+  end if;
+  update public.event_push_instances
+  set state='failed',dispatch_job_id=null,dispatch_lease_token=null,dispatch_registration_id=null,
+      dispatch_token_hash=null,dispatch_started_at=null,last_error=left(coalesce(p_error,'provider did not accept event push'),2000),updated_at=p_now
+  where instance_id=p_instance_id;
+  return jsonb_build_object('current',true,'released',true,'instance_id',p_instance_id,'state','failed');
 end
 $function$;
 
 create or replace function public.mz_record_employee_event_push_delivery(
-  p_instance_id uuid,p_credential_id uuid,p_assignment_epoch bigint,
+  p_job_id uuid,p_lease_token uuid,p_instance_id uuid,p_credential_id uuid,p_assignment_epoch bigint,
   p_registration_id uuid,p_token_hash text,p_provider_message_id text,
   p_now timestamptz default now()
 ) returns jsonb language plpgsql security definer set search_path to 'pg_catalog','public'
 as $function$
-declare v_delivery jsonb; v_instance public.event_push_instances%rowtype; v_event public.events_app_events%rowtype; v_reason text;
+declare v_delivery jsonb; v_job public.operational_notification_jobs%rowtype; v_instance public.event_push_instances%rowtype; v_event public.events_app_events%rowtype; v_reason text;
 begin
-  if p_instance_id is null or p_credential_id is null or p_assignment_epoch is null or p_assignment_epoch<1
+  if p_job_id is null or p_lease_token is null or p_instance_id is null or p_credential_id is null or p_assignment_epoch is null or p_assignment_epoch<1
      or p_registration_id is null or coalesce(p_token_hash,'') !~ '^[0-9a-f]{64}$'
      or length(btrim(coalesce(p_provider_message_id,''))) not between 1 and 1000 then
     raise exception using errcode='22023',message='exact event, recipient, token generation, and provider result are required';
@@ -491,19 +677,36 @@ begin
   if coalesce((v_delivery->>'ok')::boolean,false) is not true then
     return jsonb_build_object('current',false,'recorded',false,'reason',coalesce(v_delivery->>'reason','employee_push_recipient_superseded'));
   end if;
+  select * into v_job from public.operational_notification_jobs where job_id=p_job_id for update;
   select * into v_instance from public.event_push_instances where instance_id=p_instance_id;
   if v_instance.instance_id is not null then
-    select * into v_event from public.events_app_events where id=v_instance.event_id for key share;
+    select * into v_event from public.events_app_events where id=v_instance.event_id for share;
   end if;
   select * into v_instance from public.event_push_instances where instance_id=p_instance_id for update;
+  if v_instance.state='sent' then
+    if v_instance.dispatch_job_id=p_job_id and v_instance.dispatch_lease_token=p_lease_token
+       and v_instance.credential_id=p_credential_id and v_instance.assignment_epoch=p_assignment_epoch
+       and v_instance.dispatch_registration_id=p_registration_id and v_instance.dispatch_token_hash=p_token_hash
+       and v_instance.provider_message_id=btrim(p_provider_message_id) then
+      return jsonb_build_object('current',true,'already_recorded',true,'recorded',true,
+        'instance_id',p_instance_id,'state','sent','provider_message_id',v_instance.provider_message_id);
+    end if;
+    return jsonb_build_object('current',false,'recorded',false,'reason','event_push_delivery_receipt_input_mismatch');
+  end if;
   v_reason:=case
+    when v_job.job_id is null then 'employee_event_push_job_missing'
+    when v_job.job_type<>'employee_event_push' or v_job.source_id<>p_instance_id then 'employee_event_push_job_mismatch'
+    when v_job.status<>'leased' or v_job.lease_token is distinct from p_lease_token
+      or v_job.leased_until is null or v_job.leased_until<=statement_timestamp() then 'employee_event_push_lease_superseded'
     when (v_delivery#>>'{registration,registration_id}')::uuid is distinct from p_registration_id
       or v_delivery#>>'{registration,token_hash}' is distinct from p_token_hash then 'push_registration_superseded'
     when v_instance.instance_id is null then 'event_push_instance_missing'
     when v_instance.credential_id<>p_credential_id or v_instance.assignment_epoch<>p_assignment_epoch
       or v_instance.employee_id is distinct from (v_delivery->>'employee_id')::uuid
       or v_instance.device_id is distinct from (v_delivery->>'device_id')::uuid then 'event_push_recipient_superseded'
-    when v_instance.state not in ('pending','leased','failed') then 'event_push_instance_'||v_instance.state
+    when v_instance.state<>'leased' then 'event_push_instance_'||v_instance.state
+    when v_instance.dispatch_job_id<>p_job_id or v_instance.dispatch_lease_token<>p_lease_token
+      or v_instance.dispatch_registration_id<>p_registration_id or v_instance.dispatch_token_hash<>p_token_hash then 'event_push_dispatch_superseded'
     when v_event.id is null or v_event.revision<>v_instance.event_revision or v_event.status<>'SCHEDULED'
       or v_event.cancelled_at is not null or v_event.archived_at is not null then 'event_or_revision_superseded'
     else null
@@ -520,14 +723,17 @@ begin
   update public.event_push_instances
   set state='sent',sent_at=p_now,provider_message_id=btrim(p_provider_message_id),last_error=null,updated_at=p_now
   where instance_id=p_instance_id;
-  return jsonb_build_object('current',true,'recorded',true,'instance_id',p_instance_id,'state','sent');
+  return jsonb_build_object('current',true,'already_recorded',false,'recorded',true,
+    'instance_id',p_instance_id,'state','sent','provider_message_id',btrim(p_provider_message_id));
 end
 $function$;
 
-revoke all on function public.mz_claim_employee_event_push_delivery(uuid,uuid,bigint,timestamptz) from public,anon,authenticated;
-revoke all on function public.mz_record_employee_event_push_delivery(uuid,uuid,bigint,uuid,text,text,timestamptz) from public,anon,authenticated;
-grant execute on function public.mz_claim_employee_event_push_delivery(uuid,uuid,bigint,timestamptz) to postgres,service_role;
-grant execute on function public.mz_record_employee_event_push_delivery(uuid,uuid,bigint,uuid,text,text,timestamptz) to postgres,service_role;
+revoke all on function public.mz_claim_employee_event_push_delivery(uuid,uuid,uuid,uuid,bigint,uuid,text,timestamptz) from public,anon,authenticated;
+revoke all on function public.mz_release_employee_event_push_delivery(uuid,uuid,uuid,uuid,bigint,uuid,text,text,timestamptz) from public,anon,authenticated;
+revoke all on function public.mz_record_employee_event_push_delivery(uuid,uuid,uuid,uuid,bigint,uuid,text,text,timestamptz) from public,anon,authenticated;
+grant execute on function public.mz_claim_employee_event_push_delivery(uuid,uuid,uuid,uuid,bigint,uuid,text,timestamptz) to postgres,service_role;
+grant execute on function public.mz_release_employee_event_push_delivery(uuid,uuid,uuid,uuid,bigint,uuid,text,text,timestamptz) to postgres,service_role;
+grant execute on function public.mz_record_employee_event_push_delivery(uuid,uuid,uuid,uuid,bigint,uuid,text,text,timestamptz) to postgres,service_role;
 
 -- Exhausting the final retry is a terminal outcome just like success. Preserve
 -- that invariant for every notification job, including older job types.
@@ -560,7 +766,7 @@ grant execute on function public.finish_operational_notification_job(uuid,uuid,b
 create table public.custodial_release_authority_restore_inventory (
   inventory_id uuid primary key default gen_random_uuid(),
   restore_order integer not null,
-  object_kind text not null check (object_kind in ('function','constraint','index','trigger','policy','relation_state','grant')),
+  object_kind text not null check (object_kind in ('function','relation','constraint','index','trigger','policy','relation_state','grant')),
   object_identity text not null,
   definition_sql text not null,
   definition_sha256 text not null check (definition_sha256 ~ '^[0-9a-f]{64}$'),
@@ -679,6 +885,40 @@ as $function$
   from pg_class i join pg_namespace n on n.oid=i.relnamespace where i.oid=to_regclass(p_object_identity) and i.relkind='i'
 $function$;
 
+create or replace function public.custodial_release_authority_current_relation_definition(p_object_identity text)
+returns text language plpgsql stable strict set search_path to 'pg_catalog','public'
+as $function$
+declare v_relation oid:=to_regclass(p_object_identity); v_schema text; v_name text; v_kind "char"; v_persistence "char"; v_columns text;
+begin
+  select n.nspname,c.relname,c.relkind,c.relpersistence into v_schema,v_name,v_kind,v_persistence
+  from pg_class c join pg_namespace n on n.oid=c.relnamespace
+  where c.oid=v_relation and c.relkind in ('r','p') and not c.relispartition;
+  if v_schema is null then return null; end if;
+  select string_agg(
+    quote_ident(a.attname)||' '||format_type(a.atttypid,a.atttypmod)
+      ||case when a.attcollation<>0 and a.attcollation is distinct from t.typcollation
+        then ' collate '||quote_ident(cn.nspname)||'.'||quote_ident(co.collname) else '' end
+      ||case
+        when a.attidentity<>'' then ' generated '||case a.attidentity when 'a' then 'always' else 'by default' end||' as identity'
+        when a.attgenerated<>'' then ' generated always as ('||pg_get_expr(d.adbin,d.adrelid)||') stored'
+        when d.adbin is not null then ' default '||pg_get_expr(d.adbin,d.adrelid)
+        else ''
+      end
+      ||case when a.attnotnull then ' not null' else '' end,
+    E',\n  ' order by a.attnum
+  ) into v_columns
+  from pg_attribute a
+  join pg_type t on t.oid=a.atttypid
+  left join pg_attrdef d on d.adrelid=a.attrelid and d.adnum=a.attnum
+  left join pg_collation co on co.oid=a.attcollation
+  left join pg_namespace cn on cn.oid=co.collnamespace
+  where a.attrelid=v_relation and a.attnum>0 and not a.attisdropped;
+  return 'create '||case when v_persistence='u' then 'unlogged ' else '' end||'table if not exists '
+    ||quote_ident(v_schema)||'.'||quote_ident(v_name)||E' (\n  '||coalesce(v_columns,'')||E'\n)'
+    ||case when v_kind='p' then ' partition by '||pg_get_partkeydef(v_relation) else '' end||';';
+end
+$function$;
+
 create or replace function public.custodial_release_authority_current_relation_state_definition(p_object_identity text)
 returns text language sql stable strict set search_path to 'pg_catalog','public'
 as $function$
@@ -755,6 +995,7 @@ begin
   select array_agg(i.object_identity order by i.restore_order,i.object_identity) into v_missing
   from public.custodial_release_authority_restore_inventory i
   where (i.object_kind='function' and to_regprocedure(i.object_identity) is null)
+     or (i.object_kind='relation' and public.custodial_release_authority_current_relation_definition(i.object_identity) is null)
      or (i.object_kind='constraint' and public.custodial_release_authority_current_constraint_definition(i.object_identity) is null)
      or (i.object_kind='index' and public.custodial_release_authority_current_index_definition(i.object_identity) is null)
      or (i.object_kind='trigger' and not exists(select 1 from pg_trigger t join pg_class r on r.oid=t.tgrelid join pg_namespace n on n.oid=r.relnamespace where i.object_identity=quote_ident(n.nspname)||'.'||quote_ident(r.relname)||'.'||quote_ident(t.tgname) and not t.tgisinternal))
@@ -764,6 +1005,7 @@ begin
   select array_agg(i.object_identity order by i.restore_order,i.object_identity) into v_mismatched
   from public.custodial_release_authority_restore_inventory i
   where (i.object_kind='function' and to_regprocedure(i.object_identity) is not null and encode(extensions.digest(convert_to(pg_get_functiondef(to_regprocedure(i.object_identity)),'UTF8'),'sha256'),'hex')<>i.definition_sha256)
+     or (i.object_kind='relation' and encode(extensions.digest(convert_to(public.custodial_release_authority_current_relation_definition(i.object_identity),'UTF8'),'sha256'),'hex') is distinct from i.definition_sha256)
      or (i.object_kind='constraint' and encode(extensions.digest(convert_to(public.custodial_release_authority_current_constraint_definition(i.object_identity),'UTF8'),'sha256'),'hex') is distinct from i.definition_sha256)
      or (i.object_kind='index' and encode(extensions.digest(convert_to(public.custodial_release_authority_current_index_definition(i.object_identity),'UTF8'),'sha256'),'hex') is distinct from i.definition_sha256)
      or (i.object_kind='trigger' and exists(select 1 from pg_trigger t join pg_class r on r.oid=t.tgrelid join pg_namespace n on n.oid=r.relnamespace where i.object_identity=quote_ident(n.nspname)||'.'||quote_ident(r.relname)||'.'||quote_ident(t.tgname) and not t.tgisinternal and encode(extensions.digest(convert_to('drop trigger if exists '||quote_ident(t.tgname)||' on '||quote_ident(n.nspname)||'.'||quote_ident(r.relname)||'; '||pg_get_triggerdef(t.oid,true)||'; alter table '||quote_ident(n.nspname)||'.'||quote_ident(r.relname)||' '||case t.tgenabled when 'O' then 'enable' when 'D' then 'disable' when 'R' then 'enable replica' when 'A' then 'enable always' end||' trigger '||quote_ident(t.tgname)||';','UTF8'),'sha256'),'hex')<>i.definition_sha256))
@@ -892,6 +1134,8 @@ with recursive authority_relations as (
   select c.oid,n.nspname,c.relname from pg_class c join pg_namespace n on n.oid=c.relnamespace
   where n.nspname='public' and c.relkind in ('r','p') and (
     c.relname like 'custodial_%'
+    or c.relname like '%notification%'
+    or c.relname like '%push%'
     or c.relname in ('devices','locations','device_auth_credentials','sessions','completion_responses','maintenance_tickets','scan_events',
       'employee_push_registrations','employee_native_push_delivery_receipts','event_push_instances','events_app_events','operational_notification_jobs')
   )
@@ -907,11 +1151,13 @@ with recursive authority_relations as (
   from pg_proc p join pg_namespace n on n.oid=p.pronamespace
   where n.nspname='public' and (
     p.proname like 'custodial_%'
+    or p.proname like '%notification%'
+    or p.proname like '%push%'
     or p.proname in ('create_maintenance_tickets_from_response','resolve_scan_location_code','static_weekly_reject_update_delete','tool_get_device_rollback_readiness',
       'tool_get_offline_scan_authority_snapshot','tool_start_offline_occurrence','tool_commit_cleaning_workflow_authoritative','tool_complete_session_authoritative',
       'mz_resolve_employee_push_delivery','mz_record_employee_push_delivery','mz_claim_employee_event_push_delivery','mz_record_employee_event_push_delivery',
       'mz_register_employee_push','mz_mark_employee_event_opened','mz_enqueue_employee_event_pushes','mz_enqueue_employee_location_pushes',
-      'mz_get_employee_native_push_delivery_receipt','mz_record_employee_native_push_delivery',
+      'mz_get_employee_native_push_delivery_receipt','mz_prepare_employee_native_push_delivery','mz_record_employee_native_push_delivery',
       'finish_operational_notification_job','finish_operational_notification_job_terminal')
   )
   union
@@ -922,7 +1168,12 @@ with recursive authority_relations as (
   join pg_namespace n on n.oid=p.pronamespace
   where not t.tgisinternal and n.nspname='public'
 ), inventory_rows as (
-  select 100+row_number() over(order by proname,args)::integer restore_order,'function'::text object_kind,
+  select 10+row_number() over(order by r.relname)::integer restore_order,'relation'::text object_kind,
+    quote_ident(r.nspname)||'.'||quote_ident(r.relname) object_identity,
+    public.custodial_release_authority_current_relation_definition(quote_ident(r.nspname)||'.'||quote_ident(r.relname)) definition_sql
+  from authority_relations r
+  union all
+  select 100+row_number() over(order by proname,args)::integer,'function',
     oid::regprocedure::text object_identity,pg_get_functiondef(oid) definition_sql from authority_functions
   union all
   select 9000+row_number() over(order by r.relname)::integer,'relation_state',quote_ident(r.nspname)||'.'||quote_ident(r.relname),
@@ -960,6 +1211,8 @@ with recursive authority_relations as (
   select c.oid,n.nspname,c.relname from pg_class c join pg_namespace n on n.oid=c.relnamespace
   where n.nspname='public' and c.relkind in ('r','p') and (
     c.relname like 'custodial_%'
+    or c.relname like '%notification%'
+    or c.relname like '%push%'
     or c.relname in ('devices','locations','device_auth_credentials','sessions','completion_responses','maintenance_tickets','scan_events',
       'employee_push_registrations','employee_native_push_delivery_receipts','event_push_instances','events_app_events','operational_notification_jobs')
   )
@@ -974,11 +1227,13 @@ with recursive authority_relations as (
   select p.oid from pg_proc p join pg_namespace n on n.oid=p.pronamespace
   where n.nspname='public' and (
     p.proname like 'custodial_%'
+    or p.proname like '%notification%'
+    or p.proname like '%push%'
     or p.proname in ('create_maintenance_tickets_from_response','resolve_scan_location_code','static_weekly_reject_update_delete','tool_get_device_rollback_readiness',
       'tool_get_offline_scan_authority_snapshot','tool_start_offline_occurrence','tool_commit_cleaning_workflow_authoritative','tool_complete_session_authoritative',
       'mz_resolve_employee_push_delivery','mz_record_employee_push_delivery','mz_claim_employee_event_push_delivery','mz_record_employee_event_push_delivery',
       'mz_register_employee_push','mz_mark_employee_event_opened','mz_enqueue_employee_event_pushes','mz_enqueue_employee_location_pushes',
-      'mz_get_employee_native_push_delivery_receipt','mz_record_employee_native_push_delivery',
+      'mz_get_employee_native_push_delivery_receipt','mz_prepare_employee_native_push_delivery','mz_record_employee_native_push_delivery',
       'finish_operational_notification_job','finish_operational_notification_job_terminal')
   )
   union

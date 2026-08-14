@@ -215,7 +215,7 @@ function expectedReleaseEvidence(input, schemaFingerprint, frontendManifest, aut
       operational_boundary_closure_phase: "20260813141806 aligns notification service dates, exact activation replay identity, and the captured rollback definition",
       device_sync_actor_groups_phase: "20260813173000 stores verified pending work groups by issued snapshot, employee, and assignment epoch while retaining the Build 22 aggregate reporter",
       release_phone_transport_and_offline_activation_phase: "20260813190000 requires a fresh immutable receipt from the designated phone's native-vault /scan-api/rpc path before resume and permits delayed activation only for work begun while snapshot, credential, and assignment authority were valid",
-      u4_ops_closure_phase: "20260813210000 canonicalizes native wire timestamps, records immutable activation boundaries, enforces UUID completion identities, atomically binds event delivery, durable native notification receipts, complete notification recovery authority, and terminal notification retries, and restores the catalog-derived authority set",
+      u4_ops_closure_phase: "20260813210000 canonicalizes native wire timestamps, records immutable activation boundaries, enforces UUID completion identities, installs two-phase employee notification dispatch ledgers, complete notification recovery authority, and terminal notification retries, and restores the catalog-derived authority set",
     },
     rollback: input.rollback,
     cutover: input.cutover,

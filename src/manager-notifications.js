@@ -209,17 +209,26 @@ export function createPushRuntime({ db, env }) {
     if (!eventReminderIsCurrent(job)) {
       const error = new Error("The event occurrence is no longer upcoming.");
       error.expired = true;
+      error.deliveryNotAccepted = true;
       throw error;
     }
-    const token = await accessToken(PUSH_SCOPE);
+    let token;
+    try {
+      token = await accessToken(PUSH_SCOPE);
+    } catch (error) {
+      error.deliveryNotAccepted = true;
+      throw error;
+    }
     if (!eventReminderIsCurrent(job)) {
       const error = new Error("The event occurrence is no longer upcoming.");
       error.expired = true;
+      error.deliveryNotAccepted = true;
       throw error;
     }
     if (typeof beforeSend === "function" && await beforeSend() !== true) {
       const error = new Error("The notification job is no longer current.");
       error.expired = true;
+      error.deliveryNotAccepted = true;
       throw error;
     }
     const collapseKey = `memphis-${clip(channelId, 48).toLowerCase().replace(/[^a-z0-9_-]+/g, "-") || "operations"}`;
@@ -249,6 +258,7 @@ export function createPushRuntime({ db, env }) {
       const code = String(payload?.error?.details?.[0]?.errorCode || payload?.error?.status || "");
       const error = new Error(message);
       error.permanent = response.status === 404 || /UNREGISTERED|INVALID_ARGUMENT/i.test(`${code} ${message}`);
+      error.deliveryNotAccepted = true;
       throw error;
     }
     return payload.name;
