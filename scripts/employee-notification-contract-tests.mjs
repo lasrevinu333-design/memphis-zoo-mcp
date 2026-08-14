@@ -596,6 +596,44 @@ await assert.rejects(
 );
 assert.equal(rotatedFailureEventUpdates, 1, 'a stale provider failure must transition the leased event to retryable failed state');
 
+let ambiguousReleaseCalls = 0;
+let ambiguousEventUpdates = 0;
+const ambiguousProviderRuntime = installEmployeeNotificationRoutes(express(), {
+  supabase: {
+    async rpc(name) {
+      if (name === 'mz_resolve_employee_push_delivery') {
+        return { data: { ok: true, registration: authorizedRegistration }, error: null };
+      }
+      if (name === 'mz_claim_employee_event_push_delivery') {
+        return { data: { ok: true, instance_id: eventInstance.instance_id, state: 'leased' }, error: null };
+      }
+      if (name === 'mz_release_employee_event_push_delivery') {
+        ambiguousReleaseCalls += 1;
+        return { data: { current: true, released: true }, error: null };
+      }
+      throw new Error(`unexpected ambiguous-provider RPC ${name}`);
+    },
+    from(name) {
+      assert.equal(name, 'event_push_instances');
+      return eventInstanceQuery(eventInstance, { onUpdate: () => { ambiguousEventUpdates += 1; } });
+    },
+  },
+  pushRuntime: {
+    configured: true,
+    async send() {
+      throw Object.assign(new Error('FCM returned HTTP 200.'), { deliveryNotAccepted: false });
+    },
+  },
+});
+await assert.rejects(
+  () => ambiguousProviderRuntime.deliverClaimedJob(eventClaimedJob),
+  (error) => error?.terminal === true && error?.permanent === true
+    && error?.code === 'event_push_delivery_outcome_unknown',
+  'an ambiguous FCM 200 must terminally preserve the prepared at-most-once marker',
+);
+assert.equal(ambiguousReleaseCalls, 0, 'ambiguous provider acceptance must never release the durable dispatch marker');
+assert.equal(ambiguousEventUpdates, 1, 'ambiguous provider acceptance terminally cancels the event instead of creating a retryable state');
+
 assert.match(source, /resolveAuthorizedDelivery\(credential, assignmentEpoch\)[\s\S]*beforeFinalDeliveryCheck[\s\S]*resolveAuthorizedDelivery\(credential, assignmentEpoch\)/);
 assert.match(source, /claimEventDelivery\(job, eventInstance, credential, assignmentEpoch, registration\)[\s\S]*pushRuntime\.send/);
 assert.match(source, /recordEventDelivery\(job, eventInstance, credential, assignmentEpoch, registration, providerMessageId\)/);

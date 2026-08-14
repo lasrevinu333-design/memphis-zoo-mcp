@@ -258,7 +258,11 @@ export function createPushRuntime({ db, env }) {
       const code = String(payload?.error?.details?.[0]?.errorCode || payload?.error?.status || "");
       const error = new Error(message);
       error.permanent = response.status === 404 || /UNREGISTERED|INVALID_ARGUMENT/i.test(`${code} ${message}`);
-      error.deliveryNotAccepted = true;
+      // A non-2xx response is an explicit provider rejection. A 2xx response
+      // with an unreadable or incomplete body is ambiguous: FCM may have
+      // accepted the message before the response was truncated, so releasing
+      // an at-most-once marker would permit a duplicate send.
+      error.deliveryNotAccepted = !response.ok;
       throw error;
     }
     return payload.name;

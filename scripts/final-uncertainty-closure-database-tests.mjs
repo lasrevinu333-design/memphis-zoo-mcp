@@ -70,6 +70,35 @@ assert.equal(sql(`select public.sch_service_date('2026-11-01 03:59:59-06'::times
   "fall DST transition must preserve the configured Central operational boundary");
 assert.equal(sql(`select public.sch_service_date('2026-11-01 04:00:00-06'::timestamptz);`), "2026-11-01");
 
+const unexpectedAuthorityRole = `custodial_uncertainty_${stamp}`;
+sql(`create role ${unexpectedAuthorityRole} login bypassrls;
+  grant service_role to ${unexpectedAuthorityRole};`);
+let unexpectedAuthorityDetected = false;
+try {
+  execFileSync(process.execPath, ["scripts/refresh-schema-fingerprint.mjs", "--check"], {
+    cwd: process.cwd(), encoding: "utf8", stdio: "pipe",
+    env: {
+      ...process.env,
+      SCHEMA_FINGERPRINT_DOCKER_CONTAINER: container,
+      SCHEMA_FINGERPRINT_DATABASE: database,
+    },
+  });
+} catch {
+  unexpectedAuthorityDetected = true;
+} finally {
+  sql(`revoke service_role from ${unexpectedAuthorityRole}; drop role ${unexpectedAuthorityRole};`);
+}
+assert.equal(unexpectedAuthorityDetected, true,
+  "an arbitrary BYPASSRLS login with service-role membership must change connected schema identity");
+execFileSync(process.execPath, ["scripts/refresh-schema-fingerprint.mjs", "--check"], {
+  cwd: process.cwd(), encoding: "utf8", stdio: "pipe",
+  env: {
+    ...process.env,
+    SCHEMA_FINGERPRINT_DOCKER_CONTAINER: container,
+    SCHEMA_FINGERPRINT_DATABASE: database,
+  },
+});
+
 sql(`select public.custodial_configure_backend_execution_key(
   encode(extensions.digest(convert_to(${q(secret)},'UTF8'),'sha256'),'hex'),'final uncertainty test');`);
 sql(`select public.custodial_configure_native_route_proof_key(
@@ -157,6 +186,30 @@ sql(`select public.custodial_control_release_canary(
   '${managerId}'::uuid,'${randomUUID()}'::uuid,'KIOSK_09','restore_authority','restore missing notification relation',
   ${q(JSON.stringify(missingNotificationRelation))}::jsonb,${q(secret)});`);
 assert.equal(sql(`select (to_regclass('public.device_notification_acknowledgements') is not null)::text;`), "true");
+assert.equal(JSON.parse(sql(`select public.custodial_backend_authority_health(${q(secret)})::text;`)).ok, true);
+
+sql(`alter table public.custodial_release_canary_controls
+  alter column paused drop not null,
+  alter column paused set default false,
+  add column unreviewed_restore_drift text;
+`);
+const inPlaceRelationDrift = JSON.parse(sql(`select public.custodial_backend_authority_health(${q(secret)})::text;`));
+assert.equal(inPlaceRelationDrift.ok, false);
+assert.ok(inPlaceRelationDrift.mismatched_objects.includes("public.custodial_release_canary_controls"),
+  "default, nullability, and extra-column drift must fail canonical relation health");
+assert.ok(inPlaceRelationDrift.mismatched_objects.includes("public.custodial_release_canary_controls:paused"));
+sql(`select public.custodial_control_release_canary(
+  '${managerId}'::uuid,'${randomUUID()}'::uuid,'KIOSK_09','restore_authority','restore in-place relation drift',
+  ${q(JSON.stringify(inPlaceRelationDrift))}::jsonb,${q(secret)});`);
+const restoredPausedColumn = sql(`select a.attnotnull::text||'|'||pg_get_expr(d.adbin,d.adrelid)
+  from pg_attribute a left join pg_attrdef d on d.adrelid=a.attrelid and d.adnum=a.attnum
+  where a.attrelid='public.custodial_release_canary_controls'::regclass and a.attname='paused';`);
+assert.equal(restoredPausedColumn, "true|true", "in-place nullability and default drift must restore exactly");
+assert.equal(sql(`select (not exists(select 1 from pg_attribute where attrelid='public.custodial_release_canary_controls'::regclass
+  and attname='unreviewed_restore_drift' and attnum>0 and not attisdropped))::text;`), "true",
+"unexpected columns must be removed by the exact column-set restoration entry");
+assert.equal(sql(`select paused::text from public.custodial_release_canary_controls where device_identifier='KIOSK_09';`), "true",
+  "in-place restoration must preserve canonical canary control data");
 assert.equal(JSON.parse(sql(`select public.custodial_backend_authority_health(${q(secret)})::text;`)).ok, true);
 
 const credentialId = randomUUID();

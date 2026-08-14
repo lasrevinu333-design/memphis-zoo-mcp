@@ -135,6 +135,28 @@ assert.match(invalidCompletionIdDenied, /p_client_completion_id must be a UUID/i
 assert.equal(await sql("select count(*) from pg_constraint where conname in ('custodial_offline_reconciliation_client_completion_id_uuid','completion_responses_client_completion_id_uuid') and convalidated is false;"), "2",
   "new completion storage checks protect future writes while retaining historical rows");
 
+// The location row lock must serialize an offline activation with a concurrent
+// deactivation. The deactivation boundary is written before its transaction
+// sleeps; activation starts afterward and must wait for, then observe, it.
+const locationRaceSession = `oa-${stamp}-location-deactivation-race`;
+const pendingLocationDeactivation = sql(`begin;
+  update public.locations set active=false where id='${locationB}'::uuid;
+  select pg_sleep(1.5);
+  commit;
+  select 'deactivated';`);
+await new Promise((resolve) => setTimeout(resolve, 400));
+const locationRaceStartedAt = new Date().toISOString();
+const locationRaceDenied = await activate({
+  device: `OA-${stamp}-B`, location: codeB, session: locationRaceSession,
+  start: locationRaceStartedAt, credential: credentialB,
+  authoritySnapshot: snapshotsByDevice.get(`OA-${stamp}-B`),
+}).then(() => "", (error) => String(error.stderr || error.message));
+await pendingLocationDeactivation;
+assert.match(locationRaceDenied, /device or location was not active when the offline occurrence began/i,
+  "an activation racing a committed location deactivation must not use a stale authority snapshot");
+assert.equal(await sql(`select count(*) from public.custodial_offline_actor_contexts where client_session_id=${q(locationRaceSession)};`), "0");
+await sql(`update public.locations set active=true where id='${locationB}'::uuid;`);
+
 await sql(`update public.devices set active=false where id='${deviceC}'::uuid;
   update public.locations set active=false where id='${locationC}'::uuid;`);
 const inactiveNewSnapshotDenied = await sql(

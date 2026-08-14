@@ -10,8 +10,10 @@ if (!process.argv[2]) throw new Error("Output directory is required.");
 
 const required = [
   "extensions", "types", "sequences", "tables", "columns", "constraints",
-  "indexes", "functions", "views", "triggers", "policies", "table_grants",
-  "routine_grants", "cron_jobs",
+  "indexes", "functions", "views", "triggers", "policies", "owned_scheduler_roles",
+  "owned_scheduler_role_memberships", "privilege_bearing_roles", "role_memberships",
+  "table_grants", "column_grants", "sequence_grants", "routine_grants", "type_grants",
+  "schema_grants", "default_privileges", "cron_jobs",
 ];
 const inventory = {};
 const encodedChunks = new Map();

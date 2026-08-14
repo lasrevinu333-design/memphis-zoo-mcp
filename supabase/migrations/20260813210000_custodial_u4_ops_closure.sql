@@ -112,7 +112,7 @@ $canonical_snapshot_wire_timestamps$;
 -- start can be delivered later. New contexts must have both immutable
 -- activation boundaries open at their signed started_at.
 do $offline_start_activation_boundaries$
-declare v_definition text; v_rewritten text;
+declare v_definition text; v_rewritten text; v_locked text;
 begin
   v_definition:=pg_get_functiondef('public.custodial_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text)'::regprocedure);
   v_rewritten:=replace(v_definition,
@@ -123,6 +123,11 @@ begin
     raise exception using errcode='42501',message='device or location was not active when the offline occurrence began';
   end if;$new$);
   if v_rewritten=v_definition then raise exception 'offline start location authority boundary was not found'; end if;
+  v_locked:=replace(v_rewritten,
+    $old$from public.locations l where l.location_code=v_snapshot_location_code;$old$,
+    $new$from public.locations l where l.location_code=v_snapshot_location_code for share;$new$);
+  if v_locked=v_rewritten then raise exception 'offline start location serialization boundary was not found'; end if;
+  v_rewritten:=v_locked;
   v_rewritten:=replace(v_rewritten,$old$'started_at',v_existing.started_at$old$,$new$'started_at',public.custodial_canonical_utc_millis(v_existing.started_at)$new$);
   v_rewritten:=replace(v_rewritten,$old$'started_at',v_context.started_at$old$,$new$'started_at',public.custodial_canonical_utc_millis(v_context.started_at)$new$);
   v_rewritten:=replace(v_rewritten,$old$'expires_at',v_existing.expires_at$old$,$new$'expires_at',public.custodial_canonical_utc_millis(v_existing.expires_at)$new$);
@@ -773,7 +778,7 @@ grant execute on function public.finish_operational_notification_job(uuid,uuid,b
 create table public.custodial_release_authority_restore_inventory (
   inventory_id uuid primary key default gen_random_uuid(),
   restore_order integer not null,
-  object_kind text not null check (object_kind in ('function','relation','constraint','index','trigger','policy','relation_state','grant')),
+  object_kind text not null check (object_kind in ('function','relation','column','column_set','constraint','index','trigger','policy','relation_state','grant')),
   object_identity text not null,
   definition_sql text not null,
   definition_sha256 text not null check (definition_sha256 ~ '^[0-9a-f]{64}$'),
@@ -912,7 +917,7 @@ begin
         else ''
       end
       ||case when a.attnotnull then ' not null' else '' end,
-    E',\n  ' order by a.attnum
+    E',\n  ' order by a.attname
   ) into v_columns
   from pg_attribute a
   join pg_type t on t.oid=a.atttypid
@@ -923,6 +928,113 @@ begin
   return 'create '||case when v_persistence='u' then 'unlogged ' else '' end||'table if not exists '
     ||quote_ident(v_schema)||'.'||quote_ident(v_name)||E' (\n  '||coalesce(v_columns,'')||E'\n)'
     ||case when v_kind='p' then ' partition by '||pg_get_partkeydef(v_relation) else '' end||';';
+end
+$function$;
+
+create or replace function public.custodial_release_authority_restore_column(
+  p_relation_identity text,p_column_name text,p_data_type text,p_collation_identity text,
+  p_identity_kind text,p_generated_kind text,p_expression text,p_not_null boolean
+) returns void language plpgsql security definer set search_path to 'pg_catalog','public'
+as $function$
+declare
+  v_relation oid:=to_regclass(p_relation_identity); v_current record; v_target_type text;
+  v_declaration text; v_expected_identity text:=coalesce(p_identity_kind,'');
+  v_expected_generated text:=coalesce(p_generated_kind,'');
+begin
+  if v_relation is null then raise exception using errcode='42704',message='release authority column relation is missing'; end if;
+  if p_column_name is null or p_column_name='' or p_data_type is null or p_data_type='' then
+    raise exception using errcode='22023',message='release authority column definition is incomplete';
+  end if;
+  v_target_type:=p_data_type||case when p_collation_identity is null then '' else ' collate '||p_collation_identity end;
+  v_declaration:=quote_ident(p_column_name)||' '||v_target_type
+    ||case
+      when v_expected_generated<>'' then ' generated always as ('||p_expression||') stored'
+      when v_expected_identity<>'' then ' generated '||case v_expected_identity when 'a' then 'always' else 'by default' end||' as identity'
+      when p_expression is not null then ' default '||p_expression
+      else ''
+    end
+    ||case when p_not_null then ' not null' else '' end;
+  select format_type(a.atttypid,a.atttypmod) data_type,a.attidentity identity_kind,a.attgenerated generated_kind,
+    pg_get_expr(d.adbin,d.adrelid) expression,a.attnotnull not_null,
+    case when a.attcollation<>t.typcollation then quote_ident(cn.nspname)||'.'||quote_ident(co.collname) end collation_identity
+  into v_current
+  from pg_attribute a join pg_type t on t.oid=a.atttypid
+  left join pg_attrdef d on d.adrelid=a.attrelid and d.adnum=a.attnum
+  left join pg_collation co on co.oid=a.attcollation left join pg_namespace cn on cn.oid=co.collnamespace
+  where a.attrelid=v_relation and a.attname=p_column_name and a.attnum>0 and not a.attisdropped;
+  if not found then
+    execute format('alter table %s add column %s',v_relation::regclass,v_declaration);
+    return;
+  end if;
+  if v_expected_generated<>'' or coalesce(v_current.generated_kind,'')<>'' then
+    if v_current.data_type=p_data_type and v_current.collation_identity is not distinct from p_collation_identity
+       and coalesce(v_current.generated_kind,'')=v_expected_generated
+       and v_current.expression is not distinct from p_expression and v_current.not_null=p_not_null then return; end if;
+    execute format('alter table %s drop column %I cascade',v_relation::regclass,p_column_name);
+    execute format('alter table %s add column %s',v_relation::regclass,v_declaration);
+    return;
+  end if;
+  if v_current.data_type<>p_data_type or v_current.collation_identity is distinct from p_collation_identity then
+    execute format('alter table %s alter column %I type %s using %I::%s',v_relation::regclass,p_column_name,v_target_type,p_column_name,p_data_type);
+  end if;
+  if coalesce(v_current.identity_kind,'')<>v_expected_identity then
+    if coalesce(v_current.identity_kind,'')<>'' then execute format('alter table %s alter column %I drop identity if exists',v_relation::regclass,p_column_name); end if;
+    if v_expected_identity<>'' then execute format('alter table %s alter column %I add generated %s as identity',v_relation::regclass,p_column_name,case v_expected_identity when 'a' then 'always' else 'by default' end); end if;
+  end if;
+  if v_expected_identity='' then
+    execute format('alter table %s alter column %I drop default',v_relation::regclass,p_column_name);
+    if p_expression is not null then execute format('alter table %s alter column %I set default %s',v_relation::regclass,p_column_name,p_expression); end if;
+  end if;
+  execute format('alter table %s alter column %I %s not null',v_relation::regclass,p_column_name,case when p_not_null then 'set' else 'drop' end);
+end
+$function$;
+
+create or replace function public.custodial_release_authority_current_column_definition(p_object_identity text)
+returns text language plpgsql stable strict set search_path to 'pg_catalog','public'
+as $function$
+declare
+  v_relation_text text:=split_part(p_object_identity,':',1); v_column_name text:=substr(p_object_identity,position(':' in p_object_identity)+1);
+  v_relation oid:=to_regclass(v_relation_text); v_row record;
+begin
+  select format_type(a.atttypid,a.atttypmod) data_type,a.attidentity identity_kind,a.attgenerated generated_kind,
+    pg_get_expr(d.adbin,d.adrelid) expression,a.attnotnull not_null,
+    case when a.attcollation<>t.typcollation then quote_ident(cn.nspname)||'.'||quote_ident(co.collname) end collation_identity
+  into v_row
+  from pg_attribute a join pg_type t on t.oid=a.atttypid
+  left join pg_attrdef d on d.adrelid=a.attrelid and d.adnum=a.attnum
+  left join pg_collation co on co.oid=a.attcollation left join pg_namespace cn on cn.oid=co.collnamespace
+  where a.attrelid=v_relation and a.attname=v_column_name and a.attnum>0 and not a.attisdropped;
+  if not found then return null; end if;
+  return 'select public.custodial_release_authority_restore_column('
+    ||quote_literal(v_relation_text)||','||quote_literal(v_column_name)||','||quote_literal(v_row.data_type)||','
+    ||coalesce(quote_literal(v_row.collation_identity),'null')||','||quote_literal(v_row.identity_kind::text)||','||quote_literal(v_row.generated_kind::text)||','
+    ||coalesce(quote_literal(v_row.expression),'null')||','||case when v_row.not_null then 'true' else 'false' end||');';
+end
+$function$;
+
+create or replace function public.custodial_release_authority_restore_column_set(p_relation_identity text,p_expected_columns text[])
+returns void language plpgsql security definer set search_path to 'pg_catalog','public'
+as $function$
+declare v_relation oid:=to_regclass(p_relation_identity); v_column record;
+begin
+  if v_relation is null then raise exception using errcode='42704',message='release authority column-set relation is missing'; end if;
+  for v_column in select a.attname from pg_attribute a
+    where a.attrelid=v_relation and a.attnum>0 and not a.attisdropped and not (a.attname=any(p_expected_columns))
+    order by a.attname
+  loop execute format('alter table %s drop column %I cascade',v_relation::regclass,v_column.attname); end loop;
+end
+$function$;
+
+create or replace function public.custodial_release_authority_current_column_set_definition(p_relation_identity text)
+returns text language plpgsql stable strict set search_path to 'pg_catalog','public'
+as $function$
+declare v_relation oid:=to_regclass(p_relation_identity); v_columns text;
+begin
+  if v_relation is null then return null; end if;
+  select string_agg(quote_literal(a.attname),',' order by a.attname) into v_columns
+  from pg_attribute a where a.attrelid=v_relation and a.attnum>0 and not a.attisdropped;
+  return 'select public.custodial_release_authority_restore_column_set('||quote_literal(p_relation_identity)
+    ||',array['||coalesce(v_columns,'')||']::text[]);';
 end
 $function$;
 
@@ -1003,6 +1115,8 @@ begin
   from public.custodial_release_authority_restore_inventory i
   where (i.object_kind='function' and to_regprocedure(i.object_identity) is null)
      or (i.object_kind='relation' and public.custodial_release_authority_current_relation_definition(i.object_identity) is null)
+     or (i.object_kind='column' and public.custodial_release_authority_current_column_definition(i.object_identity) is null)
+     or (i.object_kind='column_set' and public.custodial_release_authority_current_column_set_definition(i.object_identity) is null)
      or (i.object_kind='constraint' and public.custodial_release_authority_current_constraint_definition(i.object_identity) is null)
      or (i.object_kind='index' and public.custodial_release_authority_current_index_definition(i.object_identity) is null)
      or (i.object_kind='trigger' and not exists(select 1 from pg_trigger t join pg_class r on r.oid=t.tgrelid join pg_namespace n on n.oid=r.relnamespace where i.object_identity=quote_ident(n.nspname)||'.'||quote_ident(r.relname)||'.'||quote_ident(t.tgname) and not t.tgisinternal))
@@ -1013,6 +1127,8 @@ begin
   from public.custodial_release_authority_restore_inventory i
   where (i.object_kind='function' and to_regprocedure(i.object_identity) is not null and encode(extensions.digest(convert_to(pg_get_functiondef(to_regprocedure(i.object_identity)),'UTF8'),'sha256'),'hex')<>i.definition_sha256)
      or (i.object_kind='relation' and encode(extensions.digest(convert_to(public.custodial_release_authority_current_relation_definition(i.object_identity),'UTF8'),'sha256'),'hex') is distinct from i.definition_sha256)
+     or (i.object_kind='column' and encode(extensions.digest(convert_to(public.custodial_release_authority_current_column_definition(i.object_identity),'UTF8'),'sha256'),'hex') is distinct from i.definition_sha256)
+     or (i.object_kind='column_set' and encode(extensions.digest(convert_to(public.custodial_release_authority_current_column_set_definition(i.object_identity),'UTF8'),'sha256'),'hex') is distinct from i.definition_sha256)
      or (i.object_kind='constraint' and encode(extensions.digest(convert_to(public.custodial_release_authority_current_constraint_definition(i.object_identity),'UTF8'),'sha256'),'hex') is distinct from i.definition_sha256)
      or (i.object_kind='index' and encode(extensions.digest(convert_to(public.custodial_release_authority_current_index_definition(i.object_identity),'UTF8'),'sha256'),'hex') is distinct from i.definition_sha256)
      or (i.object_kind='trigger' and exists(select 1 from pg_trigger t join pg_class r on r.oid=t.tgrelid join pg_namespace n on n.oid=r.relnamespace where i.object_identity=quote_ident(n.nspname)||'.'||quote_ident(r.relname)||'.'||quote_ident(t.tgname) and not t.tgisinternal and encode(extensions.digest(convert_to('drop trigger if exists '||quote_ident(t.tgname)||' on '||quote_ident(n.nspname)||'.'||quote_ident(r.relname)||'; '||pg_get_triggerdef(t.oid,true)||'; alter table '||quote_ident(n.nspname)||'.'||quote_ident(r.relname)||' '||case t.tgenabled when 'O' then 'enable' when 'D' then 'disable' when 'R' then 'enable replica' when 'A' then 'enable always' end||' trigger '||quote_ident(t.tgname)||';','UTF8'),'sha256'),'hex')<>i.definition_sha256))
@@ -1175,37 +1291,45 @@ with recursive authority_relations as (
   join pg_namespace n on n.oid=p.pronamespace
   where not t.tgisinternal and n.nspname='public'
 ), inventory_rows as (
-  select 10+row_number() over(order by r.relname)::integer restore_order,'relation'::text object_kind,
+  select 1000+row_number() over(order by r.relname)::integer restore_order,'relation'::text object_kind,
     quote_ident(r.nspname)||'.'||quote_ident(r.relname) object_identity,
     public.custodial_release_authority_current_relation_definition(quote_ident(r.nspname)||'.'||quote_ident(r.relname)) definition_sql
   from authority_relations r
   union all
-  select 100+row_number() over(order by proname,args)::integer,'function',
+  select 100000+row_number() over(order by proname,args)::integer,'function',
     oid::regprocedure::text object_identity,pg_get_functiondef(oid) definition_sql from authority_functions
   union all
-  select 9000+row_number() over(order by r.relname)::integer,'relation_state',quote_ident(r.nspname)||'.'||quote_ident(r.relname),
+  select 200000+row_number() over(order by r.relname,a.attname)::integer,'column',
+    quote_ident(r.nspname)||'.'||quote_ident(r.relname)||':'||a.attname,
+    public.custodial_release_authority_current_column_definition(quote_ident(r.nspname)||'.'||quote_ident(r.relname)||':'||a.attname)
+  from authority_relations r join pg_attribute a on a.attrelid=r.oid and a.attnum>0 and not a.attisdropped
+  union all
+  select 300000+row_number() over(order by r.relname)::integer,'column_set',quote_ident(r.nspname)||'.'||quote_ident(r.relname),
+    public.custodial_release_authority_current_column_set_definition(quote_ident(r.nspname)||'.'||quote_ident(r.relname)) from authority_relations r
+  union all
+  select 400000+row_number() over(order by r.relname)::integer,'relation_state',quote_ident(r.nspname)||'.'||quote_ident(r.relname),
     public.custodial_release_authority_current_relation_state_definition(quote_ident(r.nspname)||'.'||quote_ident(r.relname)) from authority_relations r
   union all
-  select 10000+row_number() over(order by case c.contype when 'p' then 1 when 'u' then 2 when 'f' then 3 else 4 end,r.relname,c.conname)::integer,
+  select 500000+row_number() over(order by case c.contype when 'p' then 1 when 'u' then 2 when 'f' then 3 else 4 end,r.relname,c.conname)::integer,
     'constraint',quote_ident(r.nspname)||'.'||quote_ident(r.relname)||':'||c.conname,
     public.custodial_release_authority_current_constraint_definition(quote_ident(r.nspname)||'.'||quote_ident(r.relname)||':'||c.conname)
   from pg_constraint c join authority_relations r on r.oid=c.conrelid
   union all
-  select 15000+row_number() over(order by r.relname,i.relname)::integer,'index',quote_ident(ns.nspname)||'.'||quote_ident(i.relname),
+  select 600000+row_number() over(order by r.relname,i.relname)::integer,'index',quote_ident(ns.nspname)||'.'||quote_ident(i.relname),
     public.custodial_release_authority_current_index_definition(quote_ident(ns.nspname)||'.'||quote_ident(i.relname))
   from pg_index ix join authority_relations r on r.oid=ix.indrelid join pg_class i on i.oid=ix.indexrelid join pg_namespace ns on ns.oid=i.relnamespace
   where not exists(select 1 from pg_constraint c where c.conindid=ix.indexrelid)
   union all
-  select 20000+row_number() over(order by r.relname,t.tgname)::integer,'trigger',quote_ident(r.nspname)||'.'||quote_ident(r.relname)||'.'||quote_ident(t.tgname),
+  select 700000+row_number() over(order by r.relname,t.tgname)::integer,'trigger',quote_ident(r.nspname)||'.'||quote_ident(r.relname)||'.'||quote_ident(t.tgname),
     'drop trigger if exists '||quote_ident(t.tgname)||' on '||quote_ident(r.nspname)||'.'||quote_ident(r.relname)||'; '||pg_get_triggerdef(t.oid,true)||'; alter table '
       ||quote_ident(r.nspname)||'.'||quote_ident(r.relname)||' '||case t.tgenabled when 'O' then 'enable' when 'D' then 'disable' when 'R' then 'enable replica' when 'A' then 'enable always' end||' trigger '||quote_ident(t.tgname)||';'
   from pg_trigger t join authority_relations r on r.oid=t.tgrelid where not t.tgisinternal
   union all
-  select 25000+row_number() over(order by r.relname,p.polname)::integer,'policy',quote_ident(r.nspname)||'.'||quote_ident(r.relname)||':'||p.polname,
+  select 800000+row_number() over(order by r.relname,p.polname)::integer,'policy',quote_ident(r.nspname)||'.'||quote_ident(r.relname)||':'||p.polname,
     public.custodial_release_authority_current_policy_definition(quote_ident(r.nspname)||'.'||quote_ident(r.relname)||':'||p.polname)
   from pg_policy p join authority_relations r on r.oid=p.polrelid
   union all
-  select 30000+row_number() over(order by nspname,relname)::integer,'grant',quote_ident(nspname)||'.'||quote_ident(relname),
+  select 900000+row_number() over(order by nspname,relname)::integer,'grant',quote_ident(nspname)||'.'||quote_ident(relname),
     public.custodial_release_authority_current_grant_definition(quote_ident(nspname)||'.'||quote_ident(relname))
   from authority_relations r
 )
@@ -1257,7 +1381,7 @@ with recursive authority_relations as (
   )
 )
 insert into public.custodial_release_authority_restore_inventory(restore_order,object_kind,object_identity,definition_sql,definition_sha256)
-select 40000+row_number() over(order by function_identity),'grant',function_identity,
+select 1000000+row_number() over(order by function_identity),'grant',function_identity,
   grant_sql,encode(extensions.digest(convert_to(grant_sql,'UTF8'),'sha256'),'hex')
 from (
   select p.oid::regprocedure::text function_identity,

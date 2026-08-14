@@ -1,15 +1,15 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "48885fc1274d2bbfcdedbf909ae63ec59c57a396",
-  "schema_fingerprint": "58c08e17eb22e60892fc29cd6235e933bb2b35481cdb12663bed50dd13e4c993",
+  "frontend_commit_sha": "0578785ed7701fc6c1c24825887d4dc1665e0303",
+  "schema_fingerprint": "cde8c33040c7f533e4cf14eda456180672793975a3960e3c1a8b5b198dc5833b",
   "schema_transition": {
     "transition_id": "custodial-canary-offline-scan-authority-20260813",
     "from_fingerprint": "405dfbc65393c7a1fc9ea86b9c2e1f637df185f11a8520315f61fd8a9b1e5dfc",
-    "to_fingerprint": "58c08e17eb22e60892fc29cd6235e933bb2b35481cdb12663bed50dd13e4c993",
+    "to_fingerprint": "cde8c33040c7f533e4cf14eda456180672793975a3960e3c1a8b5b198dc5833b",
     "expires_at": "2026-08-23T23:59:59Z"
   },
-  "frontend_source_fingerprint": "58c08e17eb22e60892fc29cd6235e933bb2b35481cdb12663bed50dd13e4c993",
+  "frontend_source_fingerprint": "cde8c33040c7f533e4cf14eda456180672793975a3960e3c1a8b5b198dc5833b",
   "backend_contract": {
     "scan": "scan.v4.snapshot-bound-authority",
     "authority": "offline-authority.v5",
@@ -394,7 +394,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "9930f08e2e702ff3dd0296c278e7de4e95341018"
+        "object_id": "8af505345cf5f0f204f55f13d9cbe4c3be01eaee"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -409,7 +409,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "e0a731647d83dcba95c8e743888f97cde8b94646"
+        "object_id": "5494ff65a697d41ee2ac5ff6eda3fabde5aecb6c"
       },
       {
         "path": "research/european_herbalism_through_paracelsus.md",
@@ -469,7 +469,7 @@
       {
         "path": "scripts/capture-schema-catalog-stdin.mjs",
         "mode": "100644",
-        "object_id": "235766b670697b492ca31ad91cfa7d33b7dbf55c"
+        "object_id": "503bd2982921fd8c2aea831c650f3746012b5a54"
       },
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
@@ -534,7 +534,7 @@
       {
         "path": "scripts/custodial-repair-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "80d25a4e1e9b36c5bb17dedb34377d94e65c85d0"
+        "object_id": "db03c334e7ead05f5ac9bf2a5271368dd14de510"
       },
       {
         "path": "scripts/dashboard-recent-activity-contract-tests.mjs",
@@ -569,7 +569,7 @@
       {
         "path": "scripts/employee-notification-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "fc2bf6be66e4ecc9977b9fd841526bd3657dc79d"
+        "object_id": "4ad22564c6f87182fd4d2b4455a3a14a2312b88a"
       },
       {
         "path": "scripts/empty-database-rebuild-check.mjs",
@@ -614,7 +614,7 @@
       {
         "path": "scripts/final-uncertainty-closure-database-tests.mjs",
         "mode": "100644",
-        "object_id": "f47e17c33ec5e48d78a8e446c38f04f36abf358f"
+        "object_id": "8d659b05d19acc0caf33fffe38fa304d7fe6d288"
       },
       {
         "path": "scripts/fixtures/static-weekly-scheduler/canary-authority.json",
@@ -669,7 +669,7 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "912a4c9c51edb4d21e890d8733e48bc522ad8270"
+        "object_id": "27538ea160e4cc685000d10fc79194e789c11b9a"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
@@ -719,7 +719,7 @@
       {
         "path": "scripts/manager-notification-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "369c1e5a078340eda5047cae2f53aef70aedc9da"
+        "object_id": "21cfea3b638267c802473da4a3b1c5f3f1969811"
       },
       {
         "path": "scripts/mcp-connector-auth-tests.mjs",
@@ -794,7 +794,7 @@
       {
         "path": "scripts/offline-actor-recovery-database-tests.mjs",
         "mode": "100644",
-        "object_id": "e1d7cc45f3741f3894ea4fd12f5ef750ba531d4f"
+        "object_id": "7538a095f5f5264157a03a47d368a3b3f53ffdcb"
       },
       {
         "path": "scripts/offline-actor-recovery-route-tests.mjs",
@@ -824,7 +824,7 @@
       {
         "path": "scripts/operations-leadership-mobile-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "56c20fe7f6cb4c2ec04e782547469995785c34aa"
+        "object_id": "73a7e7ac98af2c29e9eec8b60a99487af450937a"
       },
       {
         "path": "scripts/operations-leadership-mobile-database-tests.mjs",
@@ -924,7 +924,7 @@
       {
         "path": "scripts/release-closure-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "fc444ce671ce7c54e317c799900805468ed92e55"
+        "object_id": "fc14066405ec915031f15f704f0e85ff63cb1ca9"
       },
       {
         "path": "scripts/restroom-rebalance-route-tests.mjs",
@@ -969,7 +969,7 @@
       {
         "path": "scripts/schema-fingerprint-catalog.mjs",
         "mode": "100644",
-        "object_id": "e67a88195329bed730c776b1bf7ad4517cec0c2c"
+        "object_id": "7778073a4a59aea2ac9cba61c36468fdab4fe93a"
       },
       {
         "path": "scripts/schema-fingerprint-check.mjs",
@@ -979,7 +979,7 @@
       {
         "path": "scripts/schema-transition-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "57f66533ae44e7a33d8c1d97bdd887076fa92cff"
+        "object_id": "9bc0e742c299430eea3fbfc0fdbf0b7387d17b20"
       },
       {
         "path": "scripts/smoke-ai-intent.mjs",
@@ -1504,7 +1504,7 @@
       {
         "path": "src/manager-notifications.js",
         "mode": "100644",
-        "object_id": "e71d468313a16f781161228356d2795fcb03bd40"
+        "object_id": "7f0e36c480f056c0fdc2b35b8d8ca4a3544e0a0f"
       },
       {
         "path": "src/mcp/create-mcp-server.js",
@@ -1724,12 +1724,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "ec444200dd105b9c49d95653f41a89c9d3dbda4e"
+        "object_id": "c2a43b5f07362096974348442ba2bb5e81fe3d43"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "5d9c824f3115e0cb6f83201b68c3ccfc21540c1d"
+        "object_id": "b5ee1811279254b7f28782cd6d71e22a24a9a3e9"
       },
       {
         "path": "supabase/config.toml",
@@ -2694,7 +2694,7 @@
       {
         "path": "supabase/migrations/20260813210000_custodial_u4_ops_closure.sql",
         "mode": "100644",
-        "object_id": "c123e30c4404f1381810562abc783feea04d972d"
+        "object_id": "51c0bcf5114e880f193c085e3bdad834775105cd"
       },
       {
         "path": "tmp/write_probe.txt",

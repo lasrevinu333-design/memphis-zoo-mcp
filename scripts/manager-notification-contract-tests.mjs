@@ -93,6 +93,7 @@ const originalFetch = globalThis.fetch;
 const calls = [];
 let oauthDelayMs = 0;
 let oauthCompleted = false;
+let fcmResponseMode = "accepted";
 globalThis.fetch = async (input, init = {}) => {
   const url = String(input);
   if (/^https?:\/\/127\.0\.0\.1/.test(url)) return originalFetch(input, init);
@@ -121,6 +122,12 @@ globalThis.fetch = async (input, init = {}) => {
     return new Response(JSON.stringify({ configFilename: "GoogleService-Info.plist", configFileContents: Buffer.from(iosConfig).toString("base64") }), { status: 200, headers: { "Content-Type": "application/json" } });
   }
   if (url.endsWith("/v1/projects/memphis-zoo-custodial-program/messages:send")) {
+    if (fcmResponseMode === "ambiguous-200") {
+      return new Response("{truncated", { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    if (fcmResponseMode === "rejected-400") {
+      return new Response(JSON.stringify({ error: { status: "INVALID_ARGUMENT", message: "Rejected test token" } }), { status: 400, headers: { "Content-Type": "application/json" } });
+    }
     return new Response(JSON.stringify({ name: "projects/memphis-zoo-custodial-program/messages/test-provider-id" }), { status: 200, headers: { "Content-Type": "application/json" } });
   }
   return new Response(JSON.stringify({ error: { message: `Unexpected test URL: ${url}` } }), { status: 500, headers: { "Content-Type": "application/json" } });
@@ -189,6 +196,19 @@ try {
   });
   await pushRuntime.send({ title: "Event", body: "Event body", data_json: { notification_type: "event" } }, { fcm_token: "test-fcm-token" }, { channelId: "employee-events" });
   await pushRuntime.send({ title: "Message", body: "Message body", data_json: { notification_type: "message" } }, { fcm_token: "test-fcm-token" }, { channelId: "employee-messages" });
+  fcmResponseMode = "ambiguous-200";
+  await assert.rejects(
+    () => pushRuntime.send({ title: "Ambiguous", body: "Do not retry", data_json: {} }, { fcm_token: "test-fcm-token" }),
+    (error) => error?.deliveryNotAccepted === false && error?.permanent !== true,
+    "an unreadable HTTP 200 is an ambiguous provider outcome, not a proven rejection",
+  );
+  fcmResponseMode = "rejected-400";
+  await assert.rejects(
+    () => pushRuntime.send({ title: "Rejected", body: "May retry", data_json: {} }, { fcm_token: "test-fcm-token" }),
+    (error) => error?.deliveryNotAccepted === true && error?.permanent === true,
+    "an explicit FCM rejection may release the prepared dispatch marker",
+  );
+  fcmResponseMode = "accepted";
   await assert.rejects(() => pushRuntime.send({
     notification_type: "event_digest", title: "Expired event", body: "Must not send",
     data_json: { next_event_starts_at: new Date(Date.now() - 1000).toISOString() },
@@ -240,9 +260,9 @@ try {
   assert.equal(canonicalChecks, 1);
   assert.equal(calls.filter((call) => call.url.endsWith("/messages:send")).length, beforeCrossingSend);
   const sentPushes = calls.filter((call) => call.url.endsWith("/messages:send")).map((call) => JSON.parse(call.body));
-  assert.equal(sentPushes.at(-2).message.android.collapse_key, "memphis-employee-events");
-  assert.equal(sentPushes.at(-1).message.android.collapse_key, "memphis-employee-messages");
-  assert.notEqual(sentPushes.at(-2).message.android.collapse_key, sentPushes.at(-1).message.android.collapse_key);
+  const collapseKeys = new Set(sentPushes.map((push) => push.message.android.collapse_key));
+  assert.equal(collapseKeys.has("memphis-employee-events"), true);
+  assert.equal(collapseKeys.has("memphis-employee-messages"), true);
 } finally {
   globalThis.fetch = originalFetch;
   await new Promise((resolve, reject) => configuredServer.close((error) => error ? reject(error) : resolve()));

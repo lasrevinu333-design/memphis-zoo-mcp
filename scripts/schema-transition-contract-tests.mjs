@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { buildReleaseManifest } from "../src/release-manifest.js";
 import { assertSchemaAlignment } from "../src/schema-transition.js";
+import { fingerprintSchemaCatalog, SCHEMA_CATALOG_QUERIES } from "./schema-fingerprint-catalog.mjs";
 
 const input = JSON.parse(readFileSync(new URL("../release/schema-alignment-input.json", import.meta.url), "utf8"));
 const frontend = JSON.parse(readFileSync(new URL("../release/frontend-release-manifest.json", import.meta.url), "utf8"));
@@ -28,6 +29,25 @@ const aligned = assertSchemaAlignment({
 assert.equal(aligned.mode, "declared");
 assert.equal(transition.from_fingerprint, input.schema_from_fingerprint);
 assert.equal(target, transition.to_fingerprint);
+for (const section of [
+  "privilege_bearing_roles", "role_memberships", "column_grants", "sequence_grants",
+  "type_grants", "schema_grants", "default_privileges",
+]) assert.equal(typeof SCHEMA_CATALOG_QUERIES[section], "string", `schema identity must include ${section}`);
+for (const section of ["table_grants", "routine_grants", "schema_grants"]) {
+  assert.doesNotMatch(SCHEMA_CATALOG_QUERIES[section], /grantee\s+in\s*\(/i,
+    `${section} must not hide authority granted to an unrecognized role`);
+}
+assert.match(SCHEMA_CATALOG_QUERIES.privilege_bearing_roles, /from pg_roles order by rolname/);
+assert.match(SCHEMA_CATALOG_QUERIES.role_memberships, /from pg_auth_members/);
+const authorityBaseline = { privilege_bearing_roles: [], role_memberships: [], table_grants: [] };
+const unexpectedRole = structuredClone(authorityBaseline);
+unexpectedRole.privilege_bearing_roles.push({ role_name: "unexpected_login", can_login: true, bypasses_rls: true });
+assert.notEqual(fingerprintSchemaCatalog(authorityBaseline).fingerprint, fingerprintSchemaCatalog(unexpectedRole).fingerprint,
+  "an arbitrary privilege-bearing role must change connected schema identity");
+const unexpectedMembership = structuredClone(authorityBaseline);
+unexpectedMembership.role_memberships.push({ granted_role: "service_role", member_role: "unexpected_login", admin_option: false });
+assert.notEqual(fingerprintSchemaCatalog(authorityBaseline).fingerprint, fingerprintSchemaCatalog(unexpectedMembership).fingerprint,
+  "an arbitrary service-role membership must change connected schema identity");
 assert.throws(() => assertSchemaAlignment({
   backendManifest: backend,
   frontendManifest: { schema_fingerprint: "f".repeat(64), schema_transition: transition },
