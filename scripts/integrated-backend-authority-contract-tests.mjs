@@ -103,7 +103,7 @@ assert.equal(releaseEvidence.migrations.at(-1).name, "20260813190000_release_pho
 assert.match(releaseEvidence.compatibility_window.release_phone_transport_and_offline_activation_phase, /native-vault \/scan-api\/rpc/);
 assert.equal(releaseEvidence.artifact, "integrated-backend-authority-release-evidence.v2");
 assert.equal(releaseEvidence.release_id, "release-2026.07.19.custodial-v3.12");
-assert.equal(releaseEvidence.frontend_commit_sha, "131757b6c6e925f7b2f84d84398aadcd535ec4e2");
+assert.equal(releaseEvidence.frontend_commit_sha, "44d97c1fb50dfb56b5d13dc4bb554d867c9acc20");
 assert.equal(releaseEvidence.cutover.source_identity.kind, "external_signed_release_attestation");
 assert.equal(releaseEvidence.cutover.source_identity.generated_evidence_excluded_from_content_identity, true);
 assert.equal(Object.hasOwn(releaseInput.cutover.source_identity, "authority_content_paths"), false, "manual authority inventory is forbidden");
