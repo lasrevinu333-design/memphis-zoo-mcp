@@ -278,7 +278,8 @@ export function createPushRuntime({ db, env }) {
           if (!eventReminderIsCurrent(job)) throw Object.assign(new Error("The event occurrence is no longer upcoming."), { expired: true });
           const deviceResult = await db.from("ops_manager_push_devices")
             .select("push_device_id,credential_id,manager_id,fcm_token,platform,enabled,revoked_at")
-            .eq("credential_id", job.credential_id).eq("enabled", true).is("revoked_at", null).maybeSingle();
+            .eq("credential_id", job.credential_id).eq("manager_id", job.manager_id)
+            .eq("enabled", true).is("revoked_at", null).maybeSingle();
           if (deviceResult.error) throw deviceResult.error;
           if (!deviceResult.data?.fcm_token) throw Object.assign(new Error("No active push registration exists for this manager app installation."), { permanent: true });
           providerMessageId = await send(job, deviceResult.data, {

@@ -190,7 +190,7 @@ begin
   select count(*)::integer into v_open_sessions from public.sessions
   where device_id=v_device.id and status in ('active','pending_submit');
   return jsonb_build_object(
-    'contract_version','custodial-rollback-readiness.v1','device_id',v_device.device_id,
+    'contract_version','custodial-rollback-readiness.v2','device_id',v_device.device_id,
     'backend_queue_count',coalesce(v_sync.queue_count,-1),'backend_open_session_count',v_open_sessions,
     'backend_sync_reported_at',v_sync.updated_at,
     'eligible',v_sync.device_id is not null and v_sync.updated_at>=now()-interval '5 minutes'
@@ -208,6 +208,24 @@ revoke all on function public.custodial_get_device_rollback_readiness(text),publ
 revoke all on function public.custodial_get_device_rollback_readiness(text) from service_role;
 grant execute on function public.custodial_get_device_rollback_readiness(text) to postgres;
 grant execute on function public.tool_get_device_rollback_readiness(text) to postgres,service_role;
+
+-- Build 22 can leave an exact, UUID-bound finish transition in the durable
+-- queue. Drain only that exact identity through the retired function's proven
+-- implementation; never revive its location/device replacement path.
+create or replace function public.custodial_finish_historical_session_authoritative(
+  p_session_identifier text,p_device_id text,p_finish_operation_id uuid,
+  p_client_ended_at timestamptz,p_backend_execution_secret text
+) returns jsonb language plpgsql security definer set search_path to 'pg_catalog','public','extensions'
+as $function$
+begin
+  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);
+  return public.tool_finish_session_exact(
+    p_session_identifier,p_device_id,p_finish_operation_id,p_client_ended_at
+  );
+end
+$function$;
+revoke all on function public.custodial_finish_historical_session_authoritative(text,text,uuid,timestamptz,text) from public,anon,authenticated;
+grant execute on function public.custodial_finish_historical_session_authoritative(text,text,uuid,timestamptz,text) to postgres,service_role;
 
 -- This inventory is a catalog-derived superset of the native/offline authority
 -- closure. It records executable definitions for functions, relation guards,
@@ -428,6 +446,18 @@ begin
     'authority_column_grants_absent',not exists(
       select 1 from pg_attribute a join pg_class c on c.oid=a.attrelid join pg_namespace n on n.oid=c.relnamespace
       where n.nspname='public' and a.attnum>0 and not a.attisdropped and a.attacl is not null
+    ),
+    'alternate_terminal_writers_absent',not exists(
+      select 1 from public.custodial_terminal_writer_inventory i
+      where i.application_callable and (i.mutates_terminal_truth or i.delegates_alternate_terminal_authority)
+        and i.proname not in ('tool_start_offline_occurrence','tool_commit_cleaning_workflow_authoritative','tool_complete_session_authoritative','custodial_close_maintenance_ticket_authoritative','custodial_finish_historical_session_authoritative')
+    ),
+    'generic_terminal_writer_execute_denied',not exists(
+      select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+      where n.nspname='public' and p.proname in (
+        'run_application_write','run_sql_write','run_sql_migration','force_close_session','tool_force_close_session',
+        'purge_closed_scan_history_before','tool_purge_closed_scan_history_before'
+      ) and (has_function_privilege('anon',p.oid,'EXECUTE') or has_function_privilege('authenticated',p.oid,'EXECUTE') or has_function_privilege('service_role',p.oid,'EXECUTE'))
     ),
     'native_timestamp_renderer',public.custodial_canonical_utc_millis('2026-08-13 12:34:56.789123+00'::timestamptz)='2026-08-13T12:34:56.789Z'
   );

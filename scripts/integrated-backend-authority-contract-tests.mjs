@@ -74,6 +74,9 @@ assert.match(index, /tool_commit_cleaning_workflow_authoritative/);
 assert.match(index, /tool_complete_session_authoritative/);
 assert.match(index, /CUSTODIAL_BACKEND_PROOF_SECRET/);
 assert.match(index, /runPreparedScanRpc/);
+assert.match(index, /tool_finish_session/);
+assert.match(index, /custodial_finish_historical_session_authoritative/);
+assert.match(index, /Exact UUID session and finish operation identities are required/);
 assert.match(index, /sqlStateHttpStatus/);
 assert.match(index, /scanRpcHttpOutcome/);
 assert.match(index, /executeScanRpcTransport/);
@@ -111,7 +114,7 @@ assert.match(releaseEvidence.compatibility_window.release_phone_transport_and_of
 assert.match(releaseEvidence.compatibility_window.u4_ops_closure_phase, /wire timestamps.*activation boundaries.*UUID completion.*authority set/);
 assert.equal(releaseEvidence.artifact, "integrated-backend-authority-release-evidence.v2");
 assert.equal(releaseEvidence.release_id, "release-2026.07.19.custodial-v3.12");
-assert.equal(releaseEvidence.frontend_commit_sha, "17b9ba3040850a786073394865762c5a98517f55");
+assert.equal(releaseEvidence.frontend_commit_sha, "88d28cad7c7d4d4842870758f90216318faf40d0");
 assert.equal(releaseEvidence.cutover.source_identity.kind, "external_signed_release_attestation");
 assert.equal(releaseEvidence.cutover.source_identity.generated_evidence_excluded_from_content_identity, true);
 assert.equal(Object.hasOwn(releaseInput.cutover.source_identity, "authority_content_paths"), false, "manual authority inventory is forbidden");

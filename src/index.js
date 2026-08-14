@@ -98,6 +98,7 @@ const SCAN_RPC_ALLOWLIST = new Set([
   "tool_get_location_scan_state",
   "tool_get_offline_scan_authority_snapshot",
   "tool_start_offline_occurrence",
+  "tool_finish_session",
   "tool_complete_session",
   "tool_ping_device",
   "tool_commit_cleaning_workflow",
@@ -313,6 +314,7 @@ function canonicalizeScanArguments(fn, args, device) {
       "tool_get_location_scan_state",
       "tool_get_offline_scan_authority_snapshot",
       "tool_start_offline_occurrence",
+      "tool_finish_session",
       "tool_complete_session",
       "tool_ping_device",
       "tool_commit_cleaning_workflow",
@@ -379,6 +381,27 @@ function prepareScanRpcCall(fn, args) {
         p_submitted_by_employee_name: nextArgs.p_submitted_by_employee_name || null,
         p_device_id: nextArgs.p_device_id || null,
         p_client_completion_id: completionId,
+      },
+    };
+  }
+  if (normalizedFn === "tool_finish_session") {
+    const sessionIdentifier = String(nextArgs.p_session_uuid || nextArgs.p_client_session_id || "").trim();
+    const finishOperationId = String(nextArgs.p_finish_operation_id || nextArgs.p_operation_id || "").trim();
+    const clientEndedAt = String(nextArgs.p_client_ended_at || "").trim();
+    if (!UUID_PATTERN.test(sessionIdentifier) || !UUID_PATTERN.test(finishOperationId)) {
+      throw Object.assign(new Error("Exact UUID session and finish operation identities are required for a historical finish."), { status: 422, code: "22023" });
+    }
+    if (clientEndedAt && !Number.isFinite(Date.parse(clientEndedAt))) {
+      throw Object.assign(new Error("p_client_ended_at must be an ISO-8601 timestamp when supplied."), { status: 422, code: "22007" });
+    }
+    return {
+      fn: "custodial_finish_historical_session_authoritative",
+      args: {
+        p_session_identifier: sessionIdentifier,
+        p_device_id: nextArgs.p_device_id,
+        p_finish_operation_id: finishOperationId,
+        p_client_ended_at: clientEndedAt || null,
+        p_backend_execution_secret: offlineAuthoritySecret(),
       },
     };
   }

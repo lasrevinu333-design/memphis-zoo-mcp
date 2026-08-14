@@ -44,6 +44,7 @@ const staleStatus = sql(`select status_code||'|'||coalesce(open_session_status,'
 assert.equal(staleStatus, "not_cleaned|none", "a prior-operational-day abandoned session cannot mask current readiness as in progress");
 sql(`select public.tool_report_device_sync_status('UNCERTAINTY_${stamp}',0,null,0,now(),'test',null,'rollback-readiness-test');`);
 const blockedRollback = JSON.parse(sql(`select public.tool_get_device_rollback_readiness('UNCERTAINTY_${stamp}')::text;`));
+assert.equal(blockedRollback.contract_version, "custodial-rollback-readiness.v2");
 assert.equal(blockedRollback.eligible, false, "a backend session blocks rollback even when the browser queue is reported empty");
 assert.equal(blockedRollback.backend_open_session_count, 1);
 sql(`update public.sessions set status='cancelled',ended_at=now(),updated_at=now() where session_uuid='uncertainty-stale-${stamp}';`);
@@ -65,6 +66,18 @@ sql(`select public.custodial_configure_backend_execution_key(
   encode(extensions.digest(convert_to(${q(secret)},'UTF8'),'sha256'),'hex'),'final uncertainty test');`);
 sql(`select public.custodial_configure_native_route_proof_key(
   encode(extensions.digest(convert_to(${q(nativeRouteSecret)},'UTF8'),'sha256'),'hex'),'final uncertainty test');`);
+const historicalSessionId = randomUUID();
+const historicalFinishId = randomUUID();
+sql(`insert into public.sessions(session_uuid,client_session_id,location_id,employee_id,device_id,status,started_at)
+  values ('${historicalSessionId}','${historicalSessionId}','${locationId}'::uuid,'${employeeId}'::uuid,'${deviceId}'::uuid,'active',now()-interval '10 minutes');`);
+const historicalFinish = JSON.parse(sql(`select public.custodial_finish_historical_session_authoritative(
+  '${historicalSessionId}','UNCERTAINTY_${stamp}','${historicalFinishId}'::uuid,now(),${q(secret)})::text;`));
+assert.equal(historicalFinish.status, "pending_submit");
+assert.equal(historicalFinish.finish_operation_id, historicalFinishId);
+const historicalFinishReplay = JSON.parse(sql(`select public.custodial_finish_historical_session_authoritative(
+  '${historicalSessionId}','UNCERTAINTY_${stamp}','${historicalFinishId}'::uuid,now(),${q(secret)})::text;`));
+assert.equal(historicalFinishReplay.replayed, true, "the exact Build 22 finish adapter must replay one stable operation");
+sql(`update public.sessions set status='cancelled',updated_at=now() where session_uuid='${historicalSessionId}';`);
 const pause = JSON.parse(sql(`select public.custodial_control_release_canary(
   '${managerId}'::uuid,'${randomUUID()}'::uuid,'KIOSK_09','pause_canary','uncertainty health test','{"ok":true}'::jsonb,${q(secret)})::text;`));
 assert.equal(pause.canary_paused, true);
@@ -91,6 +104,8 @@ sql(`
   values ('${credentialId}'::uuid,'uncertainty-manager-${stamp}','Uncertainty Manager','${"a".repeat(64)}','full_access','${managerId}'::uuid,now()+interval '1 day','{"test":true}'::jsonb);
   insert into public.ops_manager_notification_preferences(credential_id,manager_id,due_soon_enabled,overdue_enabled)
   values ('${credentialId}'::uuid,'${managerId}'::uuid,true,true);
+  insert into public.ops_manager_push_devices(credential_id,manager_id,device_id,platform,fcm_token)
+  values ('${credentialId}'::uuid,'${managerId}'::uuid,'uncertainty-manager-${stamp}','android','uncertainty-fcm-${stamp}-00000000000000000000');
 `);
 const expiredKey = `event-expired-${stamp}`;
 sql(`insert into public.ops_manager_notification_queue(job_key,credential_id,manager_id,notification_type,title,body,data_json)
@@ -118,6 +133,29 @@ assert.equal(sql(`select public.ops_manager_notification_job_is_current('${cross
 const finishedLocation = JSON.parse(sql(`select row_to_json(public.ops_manager_finish_notification_job('${crossingLocationQueueId}'::uuid,'${crossingLocationLease}'::uuid,true,'must-not-be-recorded',null,30))::text;`));
 assert.equal(finishedLocation.status, "cancelled", "a stale location digest cannot be recorded as sent");
 assert.equal(finishedLocation.provider_message_id, null);
+
+const revokedBeforeClaimKey = `recipient-revoked-before-claim-${stamp}`;
+sql(`insert into public.ops_manager_notification_queue(job_key,credential_id,manager_id,notification_type,title,body)
+  values (${q(revokedBeforeClaimKey)},'${credentialId}'::uuid,'${managerId}'::uuid,'test','Revoked recipient','Must not send');
+  update public.ops_manager_trusted_devices set revoked_at=now() where credential_id='${credentialId}'::uuid;`);
+assert.equal(sql(`select count(*) from public.ops_manager_claim_notification_jobs('uncertainty-worker',10,120) where job_key=${q(revokedBeforeClaimKey)};`), "0");
+assert.equal(sql(`select status from public.ops_manager_notification_queue where job_key=${q(revokedBeforeClaimKey)};`), "cancelled",
+  "a notification must not be claimed after its recipient authority is revoked");
+sql(`update public.ops_manager_trusted_devices set revoked_at=null,expires_at=now()+interval '1 day' where credential_id='${credentialId}'::uuid;`);
+
+const revokedAfterLeaseKey = `recipient-revoked-after-lease-${stamp}`;
+sql(`insert into public.ops_manager_notification_queue(job_key,credential_id,manager_id,notification_type,title,body)
+  values (${q(revokedAfterLeaseKey)},'${credentialId}'::uuid,'${managerId}'::uuid,'test','Crossing recipient','Must not send');`);
+const recipientLease = JSON.parse(sql(`select row_to_json(q)::text from public.ops_manager_claim_notification_jobs('uncertainty-worker',10,120) q where q.job_key=${q(revokedAfterLeaseKey)};`));
+assert.equal(sql(`select public.ops_manager_notification_job_is_current('${recipientLease.queue_id}'::uuid,'${recipientLease.lease_token}'::uuid);`), "t");
+sql(`update public.ops_manager_trusted_devices set expires_at=now()-interval '1 second' where credential_id='${credentialId}'::uuid;`);
+assert.equal(sql(`select public.ops_manager_notification_job_is_current('${recipientLease.queue_id}'::uuid,'${recipientLease.lease_token}'::uuid);`), "f",
+  "the worker must revalidate exact recipient authority immediately before provider dispatch");
+const finishedRecipient = JSON.parse(sql(`select row_to_json(public.ops_manager_finish_notification_job('${recipientLease.queue_id}'::uuid,'${recipientLease.lease_token}'::uuid,true,'must-not-be-recorded',null,30))::text;`));
+assert.equal(finishedRecipient.status, "cancelled", "an expired recipient cannot be recorded as sent");
+assert.equal(finishedRecipient.provider_message_id, null);
+assert.match(finishedRecipient.last_error, /recipient authority/i);
+sql(`update public.ops_manager_trusted_devices set expires_at=now()+interval '1 day' where credential_id='${credentialId}'::uuid;`);
 
 const crossingKey = `event-crossing-${stamp}`;
 const eventId = randomUUID();
@@ -154,5 +192,7 @@ assert.equal(sql(`select status from public.ops_manager_notification_queue where
 
 console.log(JSON.stringify({ ok: true, stale_session_masked: false, rollback_without_quiescence_accepted: false,
   rollback_after_quiescence_ready: true, spoofed_authority_health_accepted: false,
+  historical_finish_adapter_replayed: true,
   expired_event_claimed: false, stale_location_claimed: false, stale_location_recorded_sent: false,
+  revoked_recipient_claimed: false, expired_recipient_recorded_sent: false,
   cancelled_event_recorded_sent: false, rescheduled_event_claimed: false }, null, 2));

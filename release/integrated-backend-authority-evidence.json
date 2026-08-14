@@ -1,12 +1,12 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "17b9ba3040850a786073394865762c5a98517f55",
-  "schema_fingerprint": "bfa5e927f668ea4f5d649540e70933ba05e02730d739ee0791d733821279f25d",
+  "frontend_commit_sha": "88d28cad7c7d4d4842870758f90216318faf40d0",
+  "schema_fingerprint": "2b84cbde75f173bea9b62fcdefc1c88dda1a1c521b2c3e995b75e0b1119aaaee",
   "schema_transition": {
     "transition_id": "custodial-canary-offline-scan-authority-20260813",
     "from_fingerprint": "405dfbc65393c7a1fc9ea86b9c2e1f637df185f11a8520315f61fd8a9b1e5dfc",
-    "to_fingerprint": "bfa5e927f668ea4f5d649540e70933ba05e02730d739ee0791d733821279f25d",
+    "to_fingerprint": "2b84cbde75f173bea9b62fcdefc1c88dda1a1c521b2c3e995b75e0b1119aaaee",
     "expires_at": "2026-08-23T23:59:59Z"
   },
   "frontend_source_fingerprint": "405dfbc65393c7a1fc9ea86b9c2e1f637df185f11a8520315f61fd8a9b1e5dfc",
@@ -394,7 +394,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "3df7dc99473c418f02a589c12200d2fa3601580b"
+        "object_id": "5ffab51a990f78a070e9bb8083bdeda1d72ad091"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -409,7 +409,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "6f71cdbf06a0634e47a6f0e5814cfdf01efee179"
+        "object_id": "7ee7c11d360a95a5bd59d96e1bbd3b8e2f65c417"
       },
       {
         "path": "research/european_herbalism_through_paracelsus.md",
@@ -534,7 +534,7 @@
       {
         "path": "scripts/custodial-repair-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "ef6d48388221a892d6c985e7aff49a589e94d80c"
+        "object_id": "63d95b4ec4a9abc6395db8736be1f19ba6f35b44"
       },
       {
         "path": "scripts/dashboard-recent-activity-contract-tests.mjs",
@@ -614,7 +614,7 @@
       {
         "path": "scripts/final-uncertainty-closure-database-tests.mjs",
         "mode": "100644",
-        "object_id": "1c25b3058a4ff9b2bb4fac871060bf797fb013fa"
+        "object_id": "b993b4e8e1ded55a46279fa2b5749536e1ea0e6a"
       },
       {
         "path": "scripts/fixtures/static-weekly-scheduler/canary-authority.json",
@@ -669,7 +669,7 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "d2122e761c1edf26586d08d4f01dd8ea010fd145"
+        "object_id": "3c0e64b19cb033c95b70e43cc53189a97497a330"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
@@ -824,7 +824,7 @@
       {
         "path": "scripts/operations-leadership-mobile-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "653c7ca7816785ed6655dfd9ddf0a79bf58eb8b3"
+        "object_id": "cee6b8ff51c07491caf493b182e38d882fed39dc"
       },
       {
         "path": "scripts/operations-leadership-mobile-database-tests.mjs",
@@ -919,12 +919,12 @@
       {
         "path": "scripts/release-canary-recovery-database-tests.mjs",
         "mode": "100644",
-        "object_id": "d8b704bd0f2fc5208994511f275dcecf2d097387"
+        "object_id": "801fb40fd6b50c018343e032dce4d156db7702b6"
       },
       {
         "path": "scripts/release-closure-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "a118299dabc575410d8c44cab2d1ae8715cf4151"
+        "object_id": "2c85321addf6de1b5ddad007e5add0ce565945de"
       },
       {
         "path": "scripts/restroom-rebalance-route-tests.mjs",
@@ -1494,7 +1494,7 @@
       {
         "path": "src/index.js",
         "mode": "100644",
-        "object_id": "e2df5b7baa17ce3a572fa671d1f589202388ddda"
+        "object_id": "136411d5bf690a78d1911fdf000ece8fcd9c0746"
       },
       {
         "path": "src/leadership-bootstrap.js",
@@ -1504,7 +1504,7 @@
       {
         "path": "src/manager-notifications.js",
         "mode": "100644",
-        "object_id": "91c1e4276f43344f66071100489d7b2000203baf"
+        "object_id": "4a021b62bb3ee71ec0e28ccb0238c7dad8cdda4f"
       },
       {
         "path": "src/mcp/create-mcp-server.js",
@@ -1724,12 +1724,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "a21f7a5ddb4486e3d029707b8b027e29cf8e940d"
+        "object_id": "e281de912dfbe5a9be581a4fa377d934a84dd41f"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "0e4200e695347b25a896fa10aeacbf83acffccc9"
+        "object_id": "4bae61138d8af7d18fa6a30c9c9bdf0861a0fc53"
       },
       {
         "path": "supabase/config.toml",
@@ -2664,7 +2664,7 @@
       {
         "path": "supabase/migrations/20260813050000_offline_snapshot_operational_truth_closure.sql",
         "mode": "100644",
-        "object_id": "d0d6ebbe099685d43d8b4e707b9dcd6beff0e40d"
+        "object_id": "6d5018e6e6db33d82d71e513966c58404b6d4268"
       },
       {
         "path": "supabase/migrations/20260813060000_release_canary_operational_recovery.sql",
@@ -2694,7 +2694,7 @@
       {
         "path": "supabase/migrations/20260813210000_custodial_u4_ops_closure.sql",
         "mode": "100644",
-        "object_id": "6dd94b66549ef288da326b1de152f6c7fdef66e0"
+        "object_id": "fc7bcff9e123926ebf7b570d1a99b5f390e27b06"
       },
       {
         "path": "tmp/write_probe.txt",

@@ -198,6 +198,19 @@ assert.equal(sql("select has_function_privilege('service_role','public.tool_forc
 assert.equal(sql(`select relrowsecurity::text from pg_class where oid='public.maintenance_tickets'::regclass;`), originalRls);
 sql(`drop role ${driftRole};`);
 
+sql(`create function public.test_post_capture_terminal_writer() returns void language plpgsql
+  as $$begin update public.sessions set updated_at=updated_at where false; end$$;`);
+const postCaptureWriterHealth = JSON.parse(sql(`select public.custodial_backend_authority_health(${q(secret)})::text;`));
+assert.equal(postCaptureWriterHealth.ok, false, "a callable terminal writer created after inventory capture must fail live health");
+assert.equal(postCaptureWriterHealth.checks.alternate_terminal_writers_absent, false);
+const postCaptureWriterResume = sql(`select public.custodial_control_release_canary(
+  '${managerId}'::uuid,'${randomUUID()}'::uuid,${q(deviceId)},'resume_canary','post-capture writer must block resume',
+  '{"ok":true}'::jsonb,${q(secret)});`, { expectFailure: true });
+assert.match(postCaptureWriterResume, /fresh persisted database recovery probe is green/i);
+sql("drop function public.test_post_capture_terminal_writer();");
+assert.equal(JSON.parse(sql(`select public.custodial_backend_authority_health(${q(secret)})::text;`)).ok, true,
+  "removing the unauthorized post-capture writer must recover live authority health");
+
 sql("drop function public.custodial_control_release_canary(uuid,uuid,text,text,text,jsonb,text);");
 const bootstrapRestore = JSON.parse(sql(`select public.custodial_bootstrap_restore_release_authority(
   '${managerId}'::uuid,'${randomUUID()}'::uuid,${q(deviceId)},${q(secret)})::text;`));
