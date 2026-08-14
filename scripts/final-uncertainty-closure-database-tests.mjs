@@ -48,7 +48,8 @@ sql(`
   insert into public.devices(id,device_id,device_name,active,assigned_employee_id)
   values ('${deviceId}'::uuid,'UNCERTAINTY_${stamp}','Uncertainty Device',true,'${employeeId}'::uuid);
   insert into public.devices(id,device_id,device_name,active,assigned_employee_id)
-  values ('${assignmentDeviceId}'::uuid,'KIOSK_10','Uncertainty Assignment Device',true,null);
+  values ('${assignmentDeviceId}'::uuid,'KIOSK_10','Uncertainty Assignment Device',true,null)
+  on conflict (device_id) do nothing;
   insert into public.sessions(session_uuid,client_session_id,location_id,employee_id,device_id,status,started_at)
   values ('uncertainty-stale-${stamp}','uncertainty-stale-${stamp}','${locationId}'::uuid,'${employeeId}'::uuid,'${deviceId}'::uuid,'active',public.operational_day_start(now())-interval '1 minute');
 `);
@@ -159,6 +160,7 @@ const assignmentManagerId = sql(`select manager_id::text from public.ops_manager
 assert.ok(assignmentManagerId, "disposable baseline must contain an assignment manager principal");
 const initialNullCas = sql(`begin;
   update public.devices set assigned_employee_id=null where device_id in ('KIOSK_10','UNCERTAINTY_${stamp}');
+  update public.devices set active=true where device_id='KIOSK_10';
   select public.custodial_assign_employee_device('KIOSK_10','${employeeId}'::uuid,'${assignmentManagerId}'::uuid,
     'explicit null CAS database test',false,true,null);
   do $$begin if (select assigned_employee_id from public.devices where device_id='KIOSK_10') is distinct from '${employeeId}'::uuid
@@ -167,7 +169,7 @@ const initialNullCas = sql(`begin;
   select 'explicit-null-cas-ok';`);
 assert.equal(initialNullCas, "explicit-null-cas-ok");
 const staleNullCas = sql(`begin;
-  update public.devices set assigned_employee_id='${employeeId}'::uuid where device_id='KIOSK_10';
+  update public.devices set assigned_employee_id='${employeeId}'::uuid,active=true where device_id='KIOSK_10';
   select public.custodial_assign_employee_device('KIOSK_10','${employeeId}'::uuid,'${assignmentManagerId}'::uuid,
     'stale explicit null CAS database test',false,true,null);`, { expectFailure: true });
 assert.match(staleNullCas, /This phone assignment changed/i,
