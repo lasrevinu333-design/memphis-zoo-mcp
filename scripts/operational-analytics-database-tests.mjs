@@ -133,7 +133,9 @@ await sql(`
   ) values
     ('${ids.fastSession}','analytics-fast-session','analytics-fast-session','${ids.location}','${ids.fastEmployee}','${ids.fastDevice}','closed',now()-interval '45 minutes',now(),45,'45 min','kiosk_form'),
     ('${ids.slowSession}','analytics-slow-session','analytics-slow-session','${ids.location}','${ids.slowEmployee}','${ids.slowDevice}','closed',now()-interval '90 minutes',now(),90,'90 min','kiosk_form'),
-    ('${ids.replaySession}','analytics-replay-session','analytics-replay-session','${ids.replayLocation}','${ids.fastEmployee}','${ids.fastDevice}','closed',now()-interval '4 hours',now()-interval '3 hours',60,'60 min','kiosk_form');
+    ('${ids.replaySession}','analytics-replay-session','analytics-replay-session','${ids.replayLocation}','${ids.fastEmployee}','${ids.fastDevice}','closed',
+      greatest(operational_day_start(statement_timestamp()),statement_timestamp()-interval '1 minute')-interval '60 minutes',
+      greatest(operational_day_start(statement_timestamp()),statement_timestamp()-interval '1 minute'),60,'60 min','kiosk_form');
   insert into public.sessions(
     id,session_uuid,client_session_id,location_id,employee_id,device_id,status,
     started_at,ended_at,duration_minutes,duration_display,completion_source
