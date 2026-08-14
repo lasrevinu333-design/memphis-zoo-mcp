@@ -510,7 +510,7 @@
       {
         "path": "scripts/custodial-enrollment-security-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "1ad89ba4e61667282b4e84ec096fb1e11a50a53c"
+        "object_id": "7dffa15d6c97d3002d329b49e59a6bf70a996cd3"
       },
       {
         "path": "scripts/custodial-enrollment-security-database-tests.mjs",
