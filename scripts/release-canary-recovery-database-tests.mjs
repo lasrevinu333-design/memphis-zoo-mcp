@@ -63,8 +63,12 @@ assert.equal(JSON.parse(sql(`select public.custodial_control_release_canary(
 assert.match(sql(`select public.custodial_release_canary_is_paused('canary-check',${q(secret)});`, { expectFailure: true }), /exact employee-phone canary/i);
 
 const expectedHealthDigest = sql("select definition_sha256 from public.custodial_release_authority_restore_definitions where function_identity='public.custodial_backend_authority_health(text)';");
+const expectedSecretVerifierDigest = sql("select definition_sha256 from public.custodial_release_authority_restore_definitions where function_identity='public.custodial_require_backend_execution_secret(text)';");
+assert.match(sql("select definition_sha256 from public.custodial_release_authority_restore_definitions where function_identity='public.custodial_control_release_canary(uuid,uuid,text,text,text,jsonb,text)';"), /^[0-9a-f]{64}$/,
+  "the restoration inventory includes its exact release control surface");
 sql(`create or replace function public.custodial_backend_authority_health(p_backend_execution_secret text) returns jsonb language sql as $$select '{"ok":false,"broken":true}'::jsonb$$;`);
-sql("drop function public.tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text,text,text,text);");
+sql(`create or replace function public.custodial_require_backend_execution_secret(p_execution_secret text) returns void language plpgsql as $$begin raise exception 'broken verifier'; end$$;`);
+sql("drop function public.tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text,text,text,text,text);");
 sql("drop function public.custodial_run_release_canary_recovery_probe(text,text);");
 sql("drop function public.custodial_release_canary_is_paused(text,text);");
 sql("drop trigger trg_custodial_release_canary_transport_probes_immutable on public.custodial_release_canary_transport_probes;");
@@ -75,12 +79,12 @@ const restore = JSON.parse(sql(`select public.custodial_control_release_canary(
   '${managerId}'::uuid,'${randomUUID()}'::uuid,${q(deviceId)},'restore_authority','restore known-good authority set',
   '{"ok":false,"probe":"present-but-broken"}'::jsonb,${q(secret)})::text;`));
 assert.equal(restore.canary_paused, true);
-assert.equal(restore.restored_functions, 13);
+assert.equal(restore.restored_functions, 15);
 const health = JSON.parse(sql(`select public.custodial_backend_authority_health(${q(secret)})::text;`));
 assert.equal(health.ok, true, "forward restoration must recover the canonical authority health RPC");
 assert.equal(Object.values(health.checks).every((value) => value === true), true,
   "canary health must derive every authority, ledger, constraint, grant, writer, and operational-date check from the live catalog");
-assert.equal(sql("select to_regprocedure('public.tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text,text,text,text)') is not null;"), "t",
+assert.equal(sql("select to_regprocedure('public.tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text,text,text,text,text)') is not null;"), "t",
   "forward restoration must recover an absent canonical authority RPC");
 assert.equal(sql("select to_regprocedure('public.custodial_run_release_canary_recovery_probe(text,text)') is not null;"), "t");
 assert.equal(sql("select to_regprocedure('public.custodial_release_canary_is_paused(text,text)') is not null;"), "t");
@@ -88,6 +92,8 @@ assert.equal(sql("select count(*) from pg_trigger where tgrelid='public.custodia
   "forward restoration must recover immutable phone-transport evidence enforcement");
 assert.equal(sql("select encode(extensions.digest(convert_to(pg_get_functiondef('public.custodial_backend_authority_health(text)'::regprocedure),'UTF8'),'sha256'),'hex');"), expectedHealthDigest,
   "restored function must equal the captured known-good definition");
+assert.equal(sql("select encode(extensions.digest(convert_to(pg_get_functiondef('public.custodial_require_backend_execution_secret(text)'::regprocedure),'UTF8'),'sha256'),'hex');"), expectedSecretVerifierDigest,
+  "the inline-authenticated controller must recover a broken secret verifier before dependent functions");
 assert.equal(sql("select has_function_privilege('service_role','public.tool_commit_cleaning_workflow(text,text,text,text,timestamptz,timestamptz,jsonb,jsonb,text)'::regprocedure,'EXECUTE')::text;"), "false",
   "recovery must not revive the legacy completion writer");
 assert.equal(sql(`select count(*) from public.custodial_terminal_writer_inventory where application_callable

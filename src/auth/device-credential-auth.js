@@ -181,13 +181,15 @@ export function verifyNativeOfflineWorkAttestation(req, args, kind) {
     const employeeId = String(args.p_snapshot_employee_id || "").trim().toLowerCase();
     const epoch = Number(args.p_snapshot_assignment_epoch);
     const snapshotCredentialId = String(args.p_snapshot_credential_id || "").trim().toLowerCase();
+    const nativeScanEntryId = String(args.p_native_scan_entry_id || "").trim().toLowerCase();
     if (version !== "custodial-native-start.v1" || !startedAt || !/^[0-9a-f]{64}$/.test(snapshotId)
-        || !UUID_PATTERN.test(employeeId) || !Number.isSafeInteger(epoch) || epoch < 0 || snapshotCredentialId !== credentialId) {
+        || !UUID_PATTERN.test(employeeId) || !Number.isSafeInteger(epoch) || epoch < 1
+        || snapshotCredentialId !== credentialId || !UUID_PATTERN.test(nativeScanEntryId)) {
       throw Object.assign(new Error("Complete native start attestation is required."), { status: 403, code: "native_start_attestation_required" });
     }
-    const message = [version, credentialId, deviceId, location, sessionId, snapshotId, employeeId, String(epoch), snapshotCredentialId, startedAt].join("\n");
+    const message = [version, credentialId, deviceId, location, sessionId, snapshotId, employeeId, String(epoch), snapshotCredentialId, nativeScanEntryId, startedAt].join("\n");
     const signature = verifyNativeHmac(secret, message, args.p_native_start_attestation, "native_start_attestation_invalid");
-    return { version, signature, started_at: startedAt };
+    return { version, signature, started_at: startedAt, native_scan_entry_id: nativeScanEntryId };
   }
 
   if (kind === "completion") {

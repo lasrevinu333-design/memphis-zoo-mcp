@@ -1,12 +1,12 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "faeebb3369f64872c83701e274bcd7a1dc19e03b",
-  "schema_fingerprint": "0d8cf8b3c8696d15f4ea298d69a28ff418a1e6fe383fec3ecac76d31b905a980",
+  "frontend_commit_sha": "131757b6c6e925f7b2f84d84398aadcd535ec4e2",
+  "schema_fingerprint": "65cee780b78d5b8400ad6be58a0d5044db171efbe201d6da284aadcafc30e08c",
   "schema_transition": {
     "transition_id": "custodial-canary-offline-scan-authority-20260813",
     "from_fingerprint": "405dfbc65393c7a1fc9ea86b9c2e1f637df185f11a8520315f61fd8a9b1e5dfc",
-    "to_fingerprint": "0d8cf8b3c8696d15f4ea298d69a28ff418a1e6fe383fec3ecac76d31b905a980",
+    "to_fingerprint": "65cee780b78d5b8400ad6be58a0d5044db171efbe201d6da284aadcafc30e08c",
     "expires_at": "2026-08-23T23:59:59Z"
   },
   "frontend_source_fingerprint": "405dfbc65393c7a1fc9ea86b9c2e1f637df185f11a8520315f61fd8a9b1e5dfc",
@@ -385,7 +385,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "095bfcdb06a2a6f52939c27912af9daff3b95cf8"
+        "object_id": "7ab1300e7d783807ea94845b9486af4b99b8d7ee"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -400,7 +400,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "d2464e760490d4d2f377d1a68f527476d1690de2"
+        "object_id": "cc61326ff58dcc03c8a4e0726cefc3ff5b11cefb"
       },
       {
         "path": "research/european_herbalism_through_paracelsus.md",
@@ -525,7 +525,7 @@
       {
         "path": "scripts/custodial-repair-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "e5c4d1122005f5c04e1dec432ac691f2fa9f3da9"
+        "object_id": "603944f0091c9d14843ca85dce213a21c0766e3a"
       },
       {
         "path": "scripts/dashboard-recent-activity-contract-tests.mjs",
@@ -605,7 +605,7 @@
       {
         "path": "scripts/final-uncertainty-closure-database-tests.mjs",
         "mode": "100644",
-        "object_id": "0e8bda248bdc6cdd5ef17ec08f5607a7c214b842"
+        "object_id": "4f394e1a9acc8c7d3ab2ccb9ad5056aebc38c19d"
       },
       {
         "path": "scripts/fixtures/static-weekly-scheduler/canary-authority.json",
@@ -660,7 +660,7 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "d638e6acbee6610cc950a426e9603563cc386427"
+        "object_id": "6e80a3eb0668f06dcc9870b9094c888e62194435"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
@@ -780,12 +780,12 @@
       {
         "path": "scripts/native-phone-attestation-tests.mjs",
         "mode": "100644",
-        "object_id": "9c4a3092347a1201f02b897a3ee735a0c5b54fc2"
+        "object_id": "90acb6af122873cd03ab2c46f720e4aac3ce571c"
       },
       {
         "path": "scripts/offline-actor-recovery-database-tests.mjs",
         "mode": "100644",
-        "object_id": "aa8de0cea6253cf0293c75709b3efca14ddfc7c6"
+        "object_id": "b906ff8a8935e41f02701785eb058562ce2d40ba"
       },
       {
         "path": "scripts/offline-actor-recovery-route-tests.mjs",
@@ -815,7 +815,7 @@
       {
         "path": "scripts/operations-leadership-mobile-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "69816ed164e7d88fd6ec79b129bb5b07aadc7833"
+        "object_id": "62b3ce2a1523328cb5f93ce14e5126e750c76a54"
       },
       {
         "path": "scripts/operations-leadership-mobile-database-tests.mjs",
@@ -910,12 +910,12 @@
       {
         "path": "scripts/release-canary-recovery-database-tests.mjs",
         "mode": "100644",
-        "object_id": "02150090a4998395900e74eacc8a42979d069818"
+        "object_id": "1dea276e64b377c4ab403c74adc0e9fc18819796"
       },
       {
         "path": "scripts/release-closure-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "085d5bec3732723d79b57571fceedf1ec3e8553f"
+        "object_id": "ea2e865b175cccf3b4a2099e1b0061809115b81f"
       },
       {
         "path": "scripts/restroom-rebalance-route-tests.mjs",
@@ -1400,7 +1400,7 @@
       {
         "path": "src/auth/device-credential-auth.js",
         "mode": "100644",
-        "object_id": "4803d0c0aacff48783f803396b5dcbceace86d2a"
+        "object_id": "8f90f0f14a9ebec7e40802f2ed55a6ae2a304a85"
       },
       {
         "path": "src/auth/mcp-connector-auth.js",
@@ -1485,7 +1485,7 @@
       {
         "path": "src/index.js",
         "mode": "100644",
-        "object_id": "328ec447bec4a937dea6dcf3d04af8a7c57ccbee"
+        "object_id": "2d2949f22ec4d7e9bd4b3a80e5bdb04ecce473e0"
       },
       {
         "path": "src/leadership-bootstrap.js",
@@ -1715,12 +1715,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "ed1b378cb41281ad473c831908b70977f2f7e32c"
+        "object_id": "243a3c5f914eda41b0598a4e9a6c6de7c3178618"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "5bfc1f777010af9b829c8d60c424756db32bf256"
+        "object_id": "2befadb21119678a022c3d577cddd186d23d9172"
       },
       {
         "path": "supabase/config.toml",
@@ -2680,7 +2680,7 @@
       {
         "path": "supabase/migrations/20260813190000_release_phone_transport_and_offline_activation_closure.sql",
         "mode": "100644",
-        "object_id": "07aa75ec80abc0ea80411206c248828155089f3b"
+        "object_id": "2c76a427319e8ef38140102e3453062f2612c2ce"
       },
       {
         "path": "tmp/write_probe.txt",

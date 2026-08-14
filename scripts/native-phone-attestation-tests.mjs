@@ -74,11 +74,13 @@ const startArgs = {
   p_snapshot_employee_id: employeeId,
   p_snapshot_assignment_epoch: 3,
   p_snapshot_credential_id: credentialId,
+  p_native_scan_entry_id: "423e4567-e89b-42d3-a456-426614174111",
   p_native_start_attestation_version: "custodial-native-start.v1",
 };
 startArgs.p_native_start_attestation = hmac([
   startArgs.p_native_start_attestation_version, credentialId, "KIOSK_08", "TETM",
   startArgs.p_client_session_id, startArgs.p_snapshot_id, employeeId, "3", credentialId,
+  startArgs.p_native_scan_entry_id,
   startArgs.p_client_started_at,
 ].join("\n"));
 assert.equal(verifyNativeOfflineWorkAttestation(request(), startArgs, "start").started_at, startArgs.p_client_started_at);
@@ -86,6 +88,16 @@ assert.throws(
   () => verifyNativeOfflineWorkAttestation(request(), { ...startArgs, p_location_code: "TETX" }, "start"),
   (error) => error?.code === "native_start_attestation_invalid",
   "a signed start cannot be moved to another location",
+);
+assert.throws(
+  () => verifyNativeOfflineWorkAttestation(request(), { ...startArgs, p_native_scan_entry_id: "423e4567-e89b-42d3-a456-426614174112" }, "start"),
+  (error) => error?.code === "native_start_attestation_invalid",
+  "a native start proof cannot be moved to another NFC handoff",
+);
+assert.throws(
+  () => verifyNativeOfflineWorkAttestation(request(), { ...startArgs, p_native_scan_entry_id: undefined }, "start"),
+  (error) => error?.code === "native_start_attestation_required",
+  "a native start proof without an NFC handoff is refused",
 );
 assert.throws(
   () => verifyNativeOfflineWorkAttestation(request(), { ...startArgs, p_snapshot_credential_id: "523e4567-e89b-42d3-a456-426614174000" }, "start"),

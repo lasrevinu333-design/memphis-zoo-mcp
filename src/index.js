@@ -344,12 +344,16 @@ function prepareScanRpcCall(fn, args) {
     const snapshotId = String(nextArgs.p_snapshot_id || nextArgs.snapshot_id || "").trim().toLowerCase();
     const snapshotEmployeeId = String(nextArgs.p_snapshot_employee_id || nextArgs.snapshot_employee_id || nextArgs.employee_id || "").trim().toLowerCase();
     const snapshotEpoch = Number(nextArgs.p_snapshot_assignment_epoch ?? nextArgs.snapshot_assignment_epoch ?? nextArgs.assignment_epoch);
-    if (!/^[0-9a-f]{64}$/.test(snapshotId) || !/^[0-9a-f-]{36}$/.test(snapshotEmployeeId) || !Number.isInteger(snapshotEpoch) || snapshotEpoch < 0) {
+    const nativeScanEntryId = String(nextArgs.p_native_scan_entry_id || "").trim().toLowerCase();
+    if (!/^[0-9a-f]{64}$/.test(snapshotId) || !/^[0-9a-f-]{36}$/.test(snapshotEmployeeId)
+        || !Number.isInteger(snapshotEpoch) || snapshotEpoch < 1
+        || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(nativeScanEntryId)) {
       throw Object.assign(new Error("p_snapshot_id, p_snapshot_employee_id, and p_snapshot_assignment_epoch from the issued offline snapshot are required."), { status: 422, code: "22023" });
     }
     nextArgs.p_snapshot_id = snapshotId;
     nextArgs.p_snapshot_employee_id = snapshotEmployeeId;
     nextArgs.p_snapshot_assignment_epoch = snapshotEpoch;
+    nextArgs.p_native_scan_entry_id = nativeScanEntryId;
   }
   if (normalizedFn === "tool_complete_session") {
     const sessionIdentifier = String(nextArgs.p_session_uuid || nextArgs.p_client_session_id || "").trim();
@@ -546,6 +550,7 @@ async function executeScanRpcTransport(fn, args, device, credential, req) {
     const attestation = verifyNativeOfflineWorkAttestation(req, preparedBase.args, "start");
     preparedBase.args.p_native_start_attestation_version = attestation.version;
     preparedBase.args.p_native_start_attestation = attestation.signature;
+    preparedBase.args.p_native_scan_entry_id = attestation.native_scan_entry_id;
     preparedBase.args.p_native_route_proof_secret = nativeRouteProofSecret();
   } else if (normalizedFn === "tool_commit_cleaning_workflow") {
     const attestation = verifyNativeOfflineWorkAttestation(req, preparedBase.args, "completion");

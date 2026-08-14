@@ -59,8 +59,11 @@ function jsonSql({ session, completion, context, proof, device, location, creden
 }
 let snapshot;
 const snapshotsByDevice = new Map();
-async function activate({ device, location, session, start = startedAt, credential = credentialA, authoritySnapshot = snapshotsByDevice.get(device) || snapshot }) {
-  return JSON.parse(await sql(`select public.tool_start_offline_occurrence(${q(device)},${q(location)},${q(session)},${q(start)},${q(authoritySnapshot.snapshot_id)},${q(authoritySnapshot.employee_id)},${authoritySnapshot.assignment_epoch},${q(credential)},${q(credential)},'custodial-native-start.v1',${q(nativeStartSignature)},${q(nativeRouteSecret)},${q(execSecret)})::text;`));
+const nativeScanEntries = new Map();
+async function activate({ device, location, session, start = startedAt, credential = credentialA, authoritySnapshot = snapshotsByDevice.get(device) || snapshot, nativeScanEntry = null }) {
+  const entry = nativeScanEntry || nativeScanEntries.get(session) || randomUUID();
+  if (!nativeScanEntries.has(session)) nativeScanEntries.set(session, entry);
+  return JSON.parse(await sql(`select public.tool_start_offline_occurrence(${q(device)},${q(location)},${q(session)},${q(start)},${q(authoritySnapshot.snapshot_id)},${q(authoritySnapshot.employee_id)},${authoritySnapshot.assignment_epoch},${q(credential)},${q(credential)},${q(entry)},'custodial-native-start.v1',${q(nativeStartSignature)},${q(nativeRouteSecret)},${q(execSecret)})::text;`));
 }
 async function claimNotifications(workerId, limit = 50) {
   return JSON.parse(await sql(`select coalesce(jsonb_agg(to_jsonb(n)),'[]'::jsonb)::text from public.custodial_claim_offline_reconciliation_notifications(${q(workerId)},${limit},15,${q(execSecret)}) n;`));
@@ -82,7 +85,7 @@ insert into public.locations(id,location_code,location_name,location_type,active
 insert into public.devices(id,device_id,device_name,active,assigned_employee_id,notes) values
   ('${deviceA}'::uuid,'OA-${stamp}-A','Offline Authority Device A',true,'${employeeA}'::uuid,'disposable authority test'),
   ('${deviceB}'::uuid,'OA-${stamp}-B','Offline Authority Device B',true,'${employeeA}'::uuid,'disposable authority test'),
-  ('${deviceC}'::uuid,'OA-${stamp}-C','Offline Authority Device C',true,'${employeeA}'::uuid,'disposable authority test');
+  ('${deviceC}'::uuid,'OA-${stamp}-C','Offline Authority Device C',true,'${employeeB}'::uuid,'disposable authority test');
 insert into public.device_auth_credentials(credential_id,device_id,token_hash,device_label,confirmed_at,expires_at,metadata_json) values
   ('${credentialA}'::uuid,'${deviceA}'::uuid,'${tokenHashA}','authority A',now(),now()+interval '30 days','{}'::jsonb),
   ('${credentialB}'::uuid,'${deviceB}'::uuid,'${tokenHashB}','authority B',now(),now()+interval '30 days','{}'::jsonb),
@@ -90,7 +93,7 @@ insert into public.device_auth_credentials(credential_id,device_id,token_hash,de
 insert into public.custodial_employee_device_assignment_history(device_id,device_identifier,new_employee_id,new_employee_name,change_reason,source) values
   ('${deviceA}'::uuid,'OA-${stamp}-A','${employeeA}'::uuid,'Offline Authority Actor A','fixture','test'),
   ('${deviceB}'::uuid,'OA-${stamp}-B','${employeeA}'::uuid,'Offline Authority Actor A','fixture','test'),
-  ('${deviceC}'::uuid,'OA-${stamp}-C','${employeeA}'::uuid,'Offline Authority Actor A','fixture','test');`;
+  ('${deviceC}'::uuid,'OA-${stamp}-C','${employeeB}'::uuid,'Offline Authority Actor B','fixture','test');`;
 
 await sql(setup);
 assert.equal(await sql(`select count(*) from public.custodial_offline_actor_contexts where client_session_id like 'oa-${stamp}%';`), "0", "state reads must create no proof/context");
@@ -112,6 +115,37 @@ assert.equal(Date.parse(snapshot.expires_at) - Date.parse(snapshot.generated_at)
 const foreignSnapshotDenied = await sql(`select public.tool_get_offline_scan_authority_snapshot(${q(`OA-${stamp}-A`)},${q(credentialB)},${q(execSecret)});`, { expectFailure: true });
 assert.match(foreignSnapshotDenied, /active authenticated employee-device assignment is required/i);
 
+await sql(`update public.devices set active=false where id='${deviceC}'::uuid;
+  update public.locations set active=false where id='${locationC}'::uuid;`);
+const inactiveNewSnapshotDenied = await sql(
+  `select public.tool_get_offline_scan_authority_snapshot(${q(`OA-${stamp}-C`)},${q(credentialC)},${q(execSecret)});`,
+  { expectFailure: true },
+);
+assert.match(inactiveNewSnapshotDenied, /active authenticated employee-device assignment is required/i,
+  "inactive devices cannot obtain new offline authority");
+const deactivatedDelayedSession = `oa-${stamp}-deactivated-delayed`;
+const deactivatedDelayed = await activate({
+  device: `OA-${stamp}-C`, location: codeC, session: deactivatedDelayedSession,
+  credential: credentialC, authoritySnapshot: snapshotsByDevice.get(`OA-${stamp}-C`),
+});
+assert.equal(deactivatedDelayed.employee_id, employeeB,
+  "work validly started under the issued snapshot survives later device and location deactivation");
+const deactivatedDelayedCompletion = JSON.parse(await sql(jsonSql({
+  session: deactivatedDelayedSession,
+  completion: `${deactivatedDelayedSession}-complete`,
+  context: deactivatedDelayed.context_id,
+  proof: deactivatedDelayed.submission_proof,
+  device: `OA-${stamp}-C`,
+  location: codeC,
+  credential: credentialC,
+  start: startedAt,
+  end: endedAt,
+  response: {},
+  correlation: `${deactivatedDelayedSession}-correlation`,
+})));
+assert.equal(deactivatedDelayedCompletion.status, "closed",
+  "snapshot-bound work also completes after later device and location deactivation");
+
 const sessionA = `oa-${stamp}-accepted`;
 const contextA = await activate({ device: `OA-${stamp}-A`, location: codeA, session: sessionA });
 assert.equal(contextA.committable, true);
@@ -124,10 +158,15 @@ assert.equal(startReplay.committable, true, "exact start replay remains completi
 assert.equal(startReplay.replayed, true, "exact start replay is explicitly classified");
 assert.equal(startReplay.submission_proof, contextA.submission_proof, "lost start response recovers the stable durable proof");
 assert.equal(await sql(`select count(*) from public.custodial_offline_submission_proofs p join public.custodial_offline_actor_contexts c on c.context_id=p.context_id where c.client_session_id=${q(sessionA)};`), "1");
-const changedStartDenied = await sql(`select public.tool_start_offline_occurrence(${q(`OA-${stamp}-A`)},${q(codeA)},${q(sessionA)},${q(new Date(Date.parse(startedAt) + 1000).toISOString())},${q(snapshot.snapshot_id)},${q(snapshot.employee_id)},${snapshot.assignment_epoch},${q(credentialA)},${q(credentialA)},'custodial-native-start.v1',${q(nativeStartSignature)},${q(nativeRouteSecret)},${q(execSecret)});`, { expectFailure: true });
+const changedStartDenied = await sql(`select public.tool_start_offline_occurrence(${q(`OA-${stamp}-A`)},${q(codeA)},${q(sessionA)},${q(new Date(Date.parse(startedAt) + 1000).toISOString())},${q(snapshot.snapshot_id)},${q(snapshot.employee_id)},${snapshot.assignment_epoch},${q(credentialA)},${q(credentialA)},${q(nativeScanEntries.get(sessionA))},'custodial-native-start.v1',${q(nativeStartSignature)},${q(nativeRouteSecret)},${q(execSecret)});`, { expectFailure: true });
 assert.match(changedStartDenied, /does not match the original frozen snapshot/i, "different start content remains fenced");
+const changedScanEntryDenied = await activate({
+  device: `OA-${stamp}-A`, location: codeA, session: sessionA, nativeScanEntry: randomUUID(),
+}).then(() => "", (error) => String(error.stderr || error.message));
+assert.match(changedScanEntryDenied, /native start attestation replay does not match/i,
+  "an NFC handoff cannot be replayed onto an existing frozen occurrence");
 
-const genericDenied = await sql(`set role service_role; select public.tool_start_offline_occurrence('OA-${stamp}-A','${codeA}','oa-${stamp}-forged',${q(startedAt)},${q(snapshot.snapshot_id)},${q(snapshot.employee_id)},${snapshot.assignment_epoch},'${credentialA}','${credentialA}','custodial-native-start.v1',${q(nativeStartSignature)},${q(execSecret)},${q(execSecret)});`, { expectFailure: true });
+const genericDenied = await sql(`set role service_role; select public.tool_start_offline_occurrence('OA-${stamp}-A','${codeA}','oa-${stamp}-forged',${q(startedAt)},${q(snapshot.snapshot_id)},${q(snapshot.employee_id)},${snapshot.assignment_epoch},'${credentialA}','${credentialA}','${randomUUID()}','custodial-native-start.v1',${q(nativeStartSignature)},${q(execSecret)},${q(execSecret)});`, { expectFailure: true });
 assert.match(genericDenied, /native phone route proof is not authorized|permission denied/i,
   "generic service_role plus the general backend secret cannot forge native-route authority");
 assert.equal(await sql(`select has_function_privilege('service_role','public.run_sql_write(text)'::regprocedure,'EXECUTE')::text;`), "false", "the legacy one-argument SQL writer is not application-callable");
@@ -219,7 +258,7 @@ assert.equal(await sql(`select employee_id::text from public.sessions where clie
 const afterRevocationDenied = await sql(`select public.tool_start_offline_occurrence(
   'OA-${stamp}-R',${q(recoveryCode)},'oa-${stamp}-after-revoke',${q(new Date(Date.parse(recoveryRevokedAt) + 1000).toISOString())},
   ${q(recoverySnapshot.snapshot_id)},${q(recoverySnapshot.employee_id)},${recoverySnapshot.assignment_epoch},
-  '${recoveryCredential}','${recoveryCredential}','custodial-native-start.v1',${q(nativeStartSignature)},${q(nativeRouteSecret)},${q(execSecret)});`, { expectFailure: true });
+  '${recoveryCredential}','${recoveryCredential}','${randomUUID()}','custodial-native-start.v1',${q(nativeStartSignature)},${q(nativeRouteSecret)},${q(execSecret)});`, { expectFailure: true });
 assert.match(afterRevocationDenied, /snapshot was not valid|credential was not valid/i,
   "revoked or expired authority cannot start new work");
 await sql(`update public.device_auth_credentials set confirmed_at=${q(new Date(Date.parse(recoverySnapshot.generated_at) + 1000).toISOString())},revoked_at=null,revoked_reason=null where credential_id='${recoveryCredential}'::uuid;
@@ -227,7 +266,7 @@ await sql(`update public.device_auth_credentials set confirmed_at=${q(new Date(D
 const postdatedEnrollmentDenied = await sql(`select public.tool_start_offline_occurrence(
   'OA-${stamp}-R',${q(recoveryCode)},'oa-${stamp}-postdated-enrollment',${q(recoveryStartedAt)},
   ${q(recoverySnapshot.snapshot_id)},${q(recoverySnapshot.employee_id)},${recoverySnapshot.assignment_epoch},
-  '${recoveryCredential}','${recoveryCredential}','custodial-native-start.v1',${q(nativeStartSignature)},${q(nativeRouteSecret)},${q(execSecret)});`, { expectFailure: true });
+  '${recoveryCredential}','${recoveryCredential}','${randomUUID()}','custodial-native-start.v1',${q(nativeStartSignature)},${q(nativeRouteSecret)},${q(execSecret)});`, { expectFailure: true });
 assert.match(postdatedEnrollmentDenied, /credential was not valid/i,
   "a credential confirmation postdated after snapshot issuance cannot backdate new work");
 await sql(`update public.device_auth_credentials set revoked_at=null,revoked_reason=null where credential_id='${recoveryCredential}'::uuid;
@@ -239,7 +278,7 @@ await sql(`update public.device_auth_credentials set revoked_at=null,revoked_rea
 const afterReassignmentDenied = await sql(`select public.tool_start_offline_occurrence(
   'OA-${stamp}-R',${q(recoveryCode)},'oa-${stamp}-after-reassign',${q(new Date(Date.parse(recoverySnapshot.generated_at) + 4).toISOString())},
   ${q(recoverySnapshot.snapshot_id)},${q(recoverySnapshot.employee_id)},${recoverySnapshot.assignment_epoch},
-  '${recoveryCredential}','${recoveryCredential}','custodial-native-start.v1',${q(nativeStartSignature)},${q(nativeRouteSecret)},${q(execSecret)});`, { expectFailure: true });
+  '${recoveryCredential}','${recoveryCredential}','${randomUUID()}','custodial-native-start.v1',${q(nativeStartSignature)},${q(nativeRouteSecret)},${q(execSecret)});`, { expectFailure: true });
 assert.match(afterReassignmentDenied, /snapshot no longer owned the phone/i,
   "an old employee snapshot cannot authorize replacement-employee work");
 const scanId = `oa-${stamp}-scan-1`;
