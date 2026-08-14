@@ -409,7 +409,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "32faddaf592da94ede5a1175c035fb279f00406b"
+        "object_id": "21df1599a009679dc571da22817654161a0804e0"
       },
       {
         "path": "research/european_herbalism_through_paracelsus.md",
@@ -534,7 +534,7 @@
       {
         "path": "scripts/custodial-repair-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "3dc20d37dec54615a162e30b277a11aa797b7434"
+        "object_id": "990626210c6b095a31c568b62174fb32c787e943"
       },
       {
         "path": "scripts/dashboard-recent-activity-contract-tests.mjs",
@@ -669,7 +669,7 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "50b454e5b71884436d31019135eea5138e761c59"
+        "object_id": "ddd41a5a9db22984f02b7f75a7b8ba97f0efa966"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
@@ -824,7 +824,7 @@
       {
         "path": "scripts/operations-leadership-mobile-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "6e77a1c5c07c7fda94641d43cfb5c5d9772e4914"
+        "object_id": "046821b27534dc3f7d25419745270d6bea1ee4c5"
       },
       {
         "path": "scripts/operations-leadership-mobile-database-tests.mjs",
@@ -929,7 +929,7 @@
       {
         "path": "scripts/release-closure-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "390b2223471443a9bfe876dbba5f13edc8d4d666"
+        "object_id": "af18e7ea2ce3dde5a82568beee081aef660569e5"
       },
       {
         "path": "scripts/restroom-rebalance-route-tests.mjs",
