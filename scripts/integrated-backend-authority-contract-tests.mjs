@@ -114,7 +114,7 @@ assert.match(releaseEvidence.compatibility_window.release_phone_transport_and_of
 assert.match(releaseEvidence.compatibility_window.u4_ops_closure_phase, /wire timestamps.*activation boundaries.*UUID completion.*authority set/);
 assert.equal(releaseEvidence.artifact, "integrated-backend-authority-release-evidence.v2");
 assert.equal(releaseEvidence.release_id, "release-2026.07.19.custodial-v3.12");
-assert.equal(releaseEvidence.frontend_commit_sha, "88d28cad7c7d4d4842870758f90216318faf40d0");
+assert.equal(releaseEvidence.frontend_commit_sha, "01720a0541d059d6634a159c3326529c76c09807");
 assert.equal(releaseEvidence.cutover.source_identity.kind, "external_signed_release_attestation");
 assert.equal(releaseEvidence.cutover.source_identity.generated_evidence_excluded_from_content_identity, true);
 assert.equal(Object.hasOwn(releaseInput.cutover.source_identity, "authority_content_paths"), false, "manual authority inventory is forbidden");

@@ -211,6 +211,18 @@ sql("drop function public.test_post_capture_terminal_writer();");
 assert.equal(JSON.parse(sql(`select public.custodial_backend_authority_health(${q(secret)})::text;`)).ok, true,
   "removing the unauthorized post-capture writer must recover live authority health");
 
+sql(`create function public.custodial_finish_historical_session_authoritative(text,text,uuid,timestamptz,text,integer)
+  returns jsonb language plpgsql as $$begin
+    update public.sessions set updated_at=updated_at where false;
+    return '{"overload":"unauthorized"}'::jsonb;
+  end$$;`);
+const overloadedWriterHealth = JSON.parse(sql(`select public.custodial_backend_authority_health(${q(secret)})::text;`));
+assert.equal(overloadedWriterHealth.ok, false, "a callable overload cannot inherit a canonical writer name exemption");
+assert.equal(overloadedWriterHealth.checks.alternate_terminal_writers_absent, false);
+sql("drop function public.custodial_finish_historical_session_authoritative(text,text,uuid,timestamptz,text,integer);");
+assert.equal(JSON.parse(sql(`select public.custodial_backend_authority_health(${q(secret)})::text;`)).ok, true,
+  "removing the unauthorized same-name overload must recover exact writer health");
+
 sql("drop function public.custodial_control_release_canary(uuid,uuid,text,text,text,jsonb,text);");
 const bootstrapRestore = JSON.parse(sql(`select public.custodial_bootstrap_restore_release_authority(
   '${managerId}'::uuid,'${randomUUID()}'::uuid,${q(deviceId)},${q(secret)})::text;`));

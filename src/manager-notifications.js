@@ -274,6 +274,7 @@ export function createPushRuntime({ db, env }) {
         let succeeded = false;
         let providerMessageId = null;
         let errorMessage = null;
+        let pushDevice = null;
         try {
           if (!eventReminderIsCurrent(job)) throw Object.assign(new Error("The event occurrence is no longer upcoming."), { expired: true });
           const deviceResult = await db.from("ops_manager_push_devices")
@@ -282,11 +283,17 @@ export function createPushRuntime({ db, env }) {
             .eq("enabled", true).is("revoked_at", null).maybeSingle();
           if (deviceResult.error) throw deviceResult.error;
           if (!deviceResult.data?.fcm_token) throw Object.assign(new Error("No active push registration exists for this manager app installation."), { permanent: true });
-          providerMessageId = await send(job, deviceResult.data, {
+          pushDevice = deviceResult.data;
+          const pushDeviceId = pushDevice.push_device_id;
+          const fcmToken = pushDevice.fcm_token;
+          const fcmTokenSha256 = crypto.createHash("sha256").update(fcmToken).digest("hex");
+          providerMessageId = await send(job, pushDevice, {
             beforeSend: async () => {
               const current = await db.rpc("ops_manager_notification_job_is_current", {
                 p_queue_id: job.queue_id,
                 p_lease_token: job.lease_token,
+                p_push_device_id: pushDeviceId,
+                p_fcm_token_sha256: fcmTokenSha256,
               });
               if (current.error) throw current.error;
               return current.data === true;
@@ -294,19 +301,24 @@ export function createPushRuntime({ db, env }) {
           });
           succeeded = true;
           await db.from("ops_manager_push_devices").update({ last_seen_at: new Date().toISOString(), last_error: null })
-            .eq("credential_id", job.credential_id);
+            .eq("push_device_id", pushDeviceId).eq("fcm_token", fcmToken);
         } catch (error) {
           errorMessage = clip(error?.message || "Push delivery failed.", 2000);
-          if (error?.permanent) {
+          if (error?.permanent && pushDevice) {
             await db.from("ops_manager_push_devices").update({ enabled: false, revoked_at: new Date().toISOString(), last_error: errorMessage })
-              .eq("credential_id", job.credential_id);
-          } else if (!error?.expired) {
-            await db.from("ops_manager_push_devices").update({ last_error: errorMessage }).eq("credential_id", job.credential_id);
+              .eq("push_device_id", pushDevice?.push_device_id).eq("fcm_token", pushDevice?.fcm_token);
+          } else if (!error?.expired && pushDevice) {
+            await db.from("ops_manager_push_devices").update({ last_error: errorMessage })
+              .eq("push_device_id", pushDevice?.push_device_id).eq("fcm_token", pushDevice?.fcm_token);
           }
         }
         const finished = await db.rpc("ops_manager_finish_notification_job", {
           p_queue_id: job.queue_id,
           p_lease_token: job.lease_token,
+          p_push_device_id: pushDevice?.push_device_id || null,
+          p_fcm_token_sha256: pushDevice?.fcm_token
+            ? crypto.createHash("sha256").update(pushDevice.fcm_token).digest("hex")
+            : "",
           p_succeeded: succeeded,
           p_provider_message_id: providerMessageId,
           p_error: errorMessage,

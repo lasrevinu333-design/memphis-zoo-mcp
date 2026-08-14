@@ -215,6 +215,26 @@ $function$;
 revoke all on function public.custodial_ops_manager_notification_recipient_is_current(uuid,uuid,timestamptz) from public,anon,authenticated;
 grant execute on function public.custodial_ops_manager_notification_recipient_is_current(uuid,uuid,timestamptz) to postgres,service_role;
 
+create or replace function public.custodial_ops_manager_notification_binding_is_current(
+  p_push_device_id uuid,p_credential_id uuid,p_manager_id uuid,p_fcm_token_sha256 text,p_now timestamptz default now()
+) returns boolean language sql stable security definer set search_path=pg_catalog,public,extensions as $function$
+  select exists (
+    select 1
+    from public.ops_manager_push_devices pd
+    join public.ops_manager_trusted_devices td
+      on td.credential_id=pd.credential_id and td.manager_id=pd.manager_id
+    join public.ops_manager_managers m on m.manager_id=pd.manager_id
+    where pd.push_device_id=p_push_device_id
+      and pd.credential_id=p_credential_id and pd.manager_id=p_manager_id
+      and encode(extensions.digest(convert_to(pd.fcm_token,'UTF8'),'sha256'),'hex')=p_fcm_token_sha256
+      and pd.enabled=true and pd.revoked_at is null
+      and td.revoked_at is null and td.expires_at>p_now
+      and m.active=true and m.revoked_at is null and m.is_system_principal=false
+  );
+$function$;
+revoke all on function public.custodial_ops_manager_notification_binding_is_current(uuid,uuid,uuid,text,timestamptz) from public,anon,authenticated;
+grant execute on function public.custodial_ops_manager_notification_binding_is_current(uuid,uuid,uuid,text,timestamptz) to postgres,service_role;
+
 create or replace function public.custodial_ops_manager_location_digest_is_current(
   p_credential_id uuid,p_expected_fingerprint text
 ) returns boolean language sql stable security definer set search_path=pg_catalog,public as $function$
@@ -279,13 +299,16 @@ end $function$;
 -- The sender calls this after acquiring its provider token and immediately
 -- before dispatch so cancellation, rescheduling, or lease loss cannot cross
 -- the worker's slow external-authentication window.
-create or replace function public.ops_manager_notification_job_is_current(
-  p_queue_id uuid,p_lease_token uuid
+drop function if exists public.ops_manager_notification_job_is_current(uuid,uuid);
+create function public.ops_manager_notification_job_is_current(
+  p_queue_id uuid,p_lease_token uuid,p_push_device_id uuid,p_fcm_token_sha256 text
 ) returns boolean language sql stable security definer set search_path=pg_catalog,public as $function$
   select exists (
     select 1 from public.ops_manager_notification_queue q
     where q.queue_id=p_queue_id and q.status='leased' and q.lease_token=p_lease_token and q.leased_until>=now()
-      and public.custodial_ops_manager_notification_recipient_is_current(q.credential_id,q.manager_id,now())
+      and public.custodial_ops_manager_notification_binding_is_current(
+        p_push_device_id,q.credential_id,q.manager_id,p_fcm_token_sha256,now()
+      )
       and (q.notification_type<>'event_digest' or exists (
         select 1 from public.events_app_events e
         where e.id=case when coalesce(q.data_json->>'next_event_id','') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
@@ -297,17 +320,21 @@ create or replace function public.ops_manager_notification_job_is_current(
       and (q.notification_type<>'location_digest' or public.custodial_ops_manager_location_digest_is_current(q.credential_id,q.data_json->>'location_fingerprint'))
   );
 $function$;
-revoke all on function public.ops_manager_notification_job_is_current(uuid,uuid) from public,anon,authenticated;
-grant execute on function public.ops_manager_notification_job_is_current(uuid,uuid) to postgres,service_role;
+revoke all on function public.ops_manager_notification_job_is_current(uuid,uuid,uuid,text) from public,anon,authenticated;
+grant execute on function public.ops_manager_notification_job_is_current(uuid,uuid,uuid,text) to postgres,service_role;
 
-create or replace function public.ops_manager_finish_notification_job(
-  p_queue_id uuid,p_lease_token uuid,p_succeeded boolean,p_provider_message_id text default null,p_error text default null,p_retry_seconds integer default 30
+drop function if exists public.ops_manager_finish_notification_job(uuid,uuid,boolean,text,text,integer);
+create function public.ops_manager_finish_notification_job(
+  p_queue_id uuid,p_lease_token uuid,p_push_device_id uuid,p_fcm_token_sha256 text,
+  p_succeeded boolean,p_provider_message_id text default null,p_error text default null,p_retry_seconds integer default 30
 ) returns public.ops_manager_notification_queue language plpgsql security definer set search_path=pg_catalog,public as $function$
 declare v_row public.ops_manager_notification_queue%rowtype; v_job_current boolean; v_recipient_current boolean;
 begin
   select * into v_row from public.ops_manager_notification_queue where queue_id=p_queue_id and status='leased' and lease_token=p_lease_token for update;
   if v_row.queue_id is null then raise exception using errcode='P0002',message='Notification job lease was not found'; end if;
-  v_recipient_current:=public.custodial_ops_manager_notification_recipient_is_current(v_row.credential_id,v_row.manager_id,now());
+  v_recipient_current:=public.custodial_ops_manager_notification_binding_is_current(
+    p_push_device_id,v_row.credential_id,v_row.manager_id,p_fcm_token_sha256,now()
+  );
   v_job_current:=v_recipient_current;
   if v_row.notification_type='event_digest' then
     select v_job_current and exists (
@@ -340,5 +367,7 @@ begin
   end if;
   return v_row;
 end $function$;
+revoke all on function public.ops_manager_finish_notification_job(uuid,uuid,uuid,text,boolean,text,text,integer) from public,anon,authenticated;
+grant execute on function public.ops_manager_finish_notification_job(uuid,uuid,uuid,text,boolean,text,text,integer) to postgres,service_role;
 
 commit;

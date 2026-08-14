@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 const container = String(process.env.FINAL_UNCERTAINTY_TEST_DOCKER_CONTAINER || "").trim();
 const database = String(process.env.FINAL_UNCERTAINTY_TEST_DATABASE || "postgres").trim();
@@ -99,14 +99,17 @@ assert.equal(restored.restored_objects, unhealthy.canonical_objects_expected);
 assert.equal(JSON.parse(sql(`select public.custodial_backend_authority_health(${q(secret)})::text;`)).ok, true);
 
 const credentialId = randomUUID();
+const fcmToken = `uncertainty-fcm-${stamp}-00000000000000000000`;
+const fcmTokenSha256 = createHash("sha256").update(fcmToken).digest("hex");
 sql(`
   insert into public.ops_manager_trusted_devices(credential_id,device_id,device_label,token_hash,max_access_level,manager_id,expires_at,metadata_json)
   values ('${credentialId}'::uuid,'uncertainty-manager-${stamp}','Uncertainty Manager','${"a".repeat(64)}','full_access','${managerId}'::uuid,now()+interval '1 day','{"test":true}'::jsonb);
   insert into public.ops_manager_notification_preferences(credential_id,manager_id,due_soon_enabled,overdue_enabled)
   values ('${credentialId}'::uuid,'${managerId}'::uuid,true,true);
   insert into public.ops_manager_push_devices(credential_id,manager_id,device_id,platform,fcm_token)
-  values ('${credentialId}'::uuid,'${managerId}'::uuid,'uncertainty-manager-${stamp}','android','uncertainty-fcm-${stamp}-00000000000000000000');
+  values ('${credentialId}'::uuid,'${managerId}'::uuid,'uncertainty-manager-${stamp}','android',${q(fcmToken)});
 `);
+const pushDeviceId = sql(`select push_device_id from public.ops_manager_push_devices where credential_id='${credentialId}'::uuid;`);
 const expiredKey = `event-expired-${stamp}`;
 sql(`insert into public.ops_manager_notification_queue(job_key,credential_id,manager_id,notification_type,title,body,data_json)
   values (${q(expiredKey)},'${credentialId}'::uuid,'${managerId}'::uuid,'event_digest','Expired event','Must not send',
@@ -128,9 +131,9 @@ sql(`insert into public.ops_manager_notification_queue(job_key,credential_id,man
   values (${q(crossingLocationKey)},'${credentialId}'::uuid,'${managerId}'::uuid,'location_digest','Crossing location','Must expire before finish',
     jsonb_build_object('kind','location_digest','location_fingerprint','${"0".repeat(32)}'),'leased',now(),now()+interval '2 minutes','${crossingLocationLease}'::uuid,'uncertainty-worker');`);
 const crossingLocationQueueId = sql(`select queue_id from public.ops_manager_notification_queue where job_key=${q(crossingLocationKey)};`);
-assert.equal(sql(`select public.ops_manager_notification_job_is_current('${crossingLocationQueueId}'::uuid,'${crossingLocationLease}'::uuid);`), "f",
+assert.equal(sql(`select public.ops_manager_notification_job_is_current('${crossingLocationQueueId}'::uuid,'${crossingLocationLease}'::uuid,'${pushDeviceId}'::uuid,${q(fcmTokenSha256)});`), "f",
   "the worker must revalidate location dashboard truth immediately before provider dispatch");
-const finishedLocation = JSON.parse(sql(`select row_to_json(public.ops_manager_finish_notification_job('${crossingLocationQueueId}'::uuid,'${crossingLocationLease}'::uuid,true,'must-not-be-recorded',null,30))::text;`));
+const finishedLocation = JSON.parse(sql(`select row_to_json(public.ops_manager_finish_notification_job('${crossingLocationQueueId}'::uuid,'${crossingLocationLease}'::uuid,'${pushDeviceId}'::uuid,${q(fcmTokenSha256)},true,'must-not-be-recorded',null,30))::text;`));
 assert.equal(finishedLocation.status, "cancelled", "a stale location digest cannot be recorded as sent");
 assert.equal(finishedLocation.provider_message_id, null);
 
@@ -147,15 +150,28 @@ const revokedAfterLeaseKey = `recipient-revoked-after-lease-${stamp}`;
 sql(`insert into public.ops_manager_notification_queue(job_key,credential_id,manager_id,notification_type,title,body)
   values (${q(revokedAfterLeaseKey)},'${credentialId}'::uuid,'${managerId}'::uuid,'test','Crossing recipient','Must not send');`);
 const recipientLease = JSON.parse(sql(`select row_to_json(q)::text from public.ops_manager_claim_notification_jobs('uncertainty-worker',10,120) q where q.job_key=${q(revokedAfterLeaseKey)};`));
-assert.equal(sql(`select public.ops_manager_notification_job_is_current('${recipientLease.queue_id}'::uuid,'${recipientLease.lease_token}'::uuid);`), "t");
+assert.equal(sql(`select public.ops_manager_notification_job_is_current('${recipientLease.queue_id}'::uuid,'${recipientLease.lease_token}'::uuid,'${pushDeviceId}'::uuid,${q(fcmTokenSha256)});`), "t");
 sql(`update public.ops_manager_trusted_devices set expires_at=now()-interval '1 second' where credential_id='${credentialId}'::uuid;`);
-assert.equal(sql(`select public.ops_manager_notification_job_is_current('${recipientLease.queue_id}'::uuid,'${recipientLease.lease_token}'::uuid);`), "f",
+assert.equal(sql(`select public.ops_manager_notification_job_is_current('${recipientLease.queue_id}'::uuid,'${recipientLease.lease_token}'::uuid,'${pushDeviceId}'::uuid,${q(fcmTokenSha256)});`), "f",
   "the worker must revalidate exact recipient authority immediately before provider dispatch");
-const finishedRecipient = JSON.parse(sql(`select row_to_json(public.ops_manager_finish_notification_job('${recipientLease.queue_id}'::uuid,'${recipientLease.lease_token}'::uuid,true,'must-not-be-recorded',null,30))::text;`));
+const finishedRecipient = JSON.parse(sql(`select row_to_json(public.ops_manager_finish_notification_job('${recipientLease.queue_id}'::uuid,'${recipientLease.lease_token}'::uuid,'${pushDeviceId}'::uuid,${q(fcmTokenSha256)},true,'must-not-be-recorded',null,30))::text;`));
 assert.equal(finishedRecipient.status, "cancelled", "an expired recipient cannot be recorded as sent");
 assert.equal(finishedRecipient.provider_message_id, null);
 assert.match(finishedRecipient.last_error, /recipient authority/i);
 sql(`update public.ops_manager_trusted_devices set expires_at=now()+interval '1 day' where credential_id='${credentialId}'::uuid;`);
+
+const rotatedTokenKey = `recipient-token-rotated-${stamp}`;
+sql(`insert into public.ops_manager_notification_queue(job_key,credential_id,manager_id,notification_type,title,body)
+  values (${q(rotatedTokenKey)},'${credentialId}'::uuid,'${managerId}'::uuid,'test','Rotated recipient','Must not reach the stale registration');`);
+const rotatedTokenLease = JSON.parse(sql(`select row_to_json(q)::text from public.ops_manager_claim_notification_jobs('uncertainty-worker',10,120) q where q.job_key=${q(rotatedTokenKey)};`));
+assert.equal(sql(`select public.ops_manager_notification_job_is_current('${rotatedTokenLease.queue_id}'::uuid,'${rotatedTokenLease.lease_token}'::uuid,'${pushDeviceId}'::uuid,${q(fcmTokenSha256)});`), "t");
+sql(`update public.ops_manager_push_devices set fcm_token=${q(`${fcmToken}-rotated`)} where push_device_id='${pushDeviceId}'::uuid;`);
+assert.equal(sql(`select public.ops_manager_notification_job_is_current('${rotatedTokenLease.queue_id}'::uuid,'${rotatedTokenLease.lease_token}'::uuid,'${pushDeviceId}'::uuid,${q(fcmTokenSha256)});`), "f",
+  "a token rotation must invalidate the exact registration selected by the worker");
+const finishedRotatedToken = JSON.parse(sql(`select row_to_json(public.ops_manager_finish_notification_job('${rotatedTokenLease.queue_id}'::uuid,'${rotatedTokenLease.lease_token}'::uuid,'${pushDeviceId}'::uuid,${q(fcmTokenSha256)},true,'must-not-be-recorded',null,30))::text;`));
+assert.equal(finishedRotatedToken.status, "cancelled", "a stale push registration cannot be recorded as sent");
+assert.equal(finishedRotatedToken.provider_message_id, null);
+sql(`update public.ops_manager_push_devices set fcm_token=${q(fcmToken)} where push_device_id='${pushDeviceId}'::uuid;`);
 
 const crossingKey = `event-crossing-${stamp}`;
 const eventId = randomUUID();
@@ -168,11 +184,11 @@ sql(`insert into public.events_app_events(id,event_name,location_group_id,event_
     jsonb_build_object('kind','event_digest','next_event_id','${eventId}'::uuid,'next_event_starts_at',
       (select (event_date+start_time) at time zone 'America/Chicago' from public.events_app_events where id='${eventId}'::uuid)));`);
 const lease = JSON.parse(sql(`select row_to_json(q)::text from public.ops_manager_claim_notification_jobs('uncertainty-worker',10,120) q where q.job_key=${q(crossingKey)};`));
-assert.equal(sql(`select public.ops_manager_notification_job_is_current('${lease.queue_id}'::uuid,'${lease.lease_token}'::uuid);`), "t");
+assert.equal(sql(`select public.ops_manager_notification_job_is_current('${lease.queue_id}'::uuid,'${lease.lease_token}'::uuid,'${pushDeviceId}'::uuid,${q(fcmTokenSha256)});`), "t");
 sql(`update public.events_app_events set status='CANCELLED',cancelled_at=now(),cancelled_by='final uncertainty test' where id='${eventId}'::uuid;`);
-assert.equal(sql(`select public.ops_manager_notification_job_is_current('${lease.queue_id}'::uuid,'${lease.lease_token}'::uuid);`), "f",
+assert.equal(sql(`select public.ops_manager_notification_job_is_current('${lease.queue_id}'::uuid,'${lease.lease_token}'::uuid,'${pushDeviceId}'::uuid,${q(fcmTokenSha256)});`), "f",
   "the worker must revalidate the canonical event immediately before provider dispatch");
-const finished = JSON.parse(sql(`select row_to_json(public.ops_manager_finish_notification_job('${lease.queue_id}'::uuid,'${lease.lease_token}'::uuid,true,'must-not-be-recorded',null,30))::text;`));
+const finished = JSON.parse(sql(`select row_to_json(public.ops_manager_finish_notification_job('${lease.queue_id}'::uuid,'${lease.lease_token}'::uuid,'${pushDeviceId}'::uuid,${q(fcmTokenSha256)},true,'must-not-be-recorded',null,30))::text;`));
 assert.equal(finished.status, "cancelled", "an event cancelled while leased cannot be recorded as sent");
 assert.equal(finished.provider_message_id, null);
 
@@ -194,5 +210,5 @@ console.log(JSON.stringify({ ok: true, stale_session_masked: false, rollback_wit
   rollback_after_quiescence_ready: true, spoofed_authority_health_accepted: false,
   historical_finish_adapter_replayed: true,
   expired_event_claimed: false, stale_location_claimed: false, stale_location_recorded_sent: false,
-  revoked_recipient_claimed: false, expired_recipient_recorded_sent: false,
+  revoked_recipient_claimed: false, expired_recipient_recorded_sent: false, rotated_token_recorded_sent: false,
   cancelled_event_recorded_sent: false, rescheduled_event_claimed: false }, null, 2));

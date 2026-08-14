@@ -450,7 +450,11 @@ begin
     'alternate_terminal_writers_absent',not exists(
       select 1 from public.custodial_terminal_writer_inventory i
       where i.application_callable and (i.mutates_terminal_truth or i.delegates_alternate_terminal_authority)
-        and i.proname not in ('tool_start_offline_occurrence','tool_commit_cleaning_workflow_authoritative','tool_complete_session_authoritative','custodial_close_maintenance_ticket_authoritative','custodial_finish_historical_session_authoritative')
+        and i.oid is distinct from to_regprocedure('public.tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text,text,text,text,text)')
+        and i.oid is distinct from to_regprocedure('public.tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text)')
+        and i.oid is distinct from to_regprocedure('public.tool_complete_session_authoritative(text,jsonb,text,text,text,text)')
+        and i.oid is distinct from to_regprocedure('public.custodial_close_maintenance_ticket_authoritative(uuid,text,text,text)')
+        and i.oid is distinct from to_regprocedure('public.custodial_finish_historical_session_authoritative(text,text,uuid,timestamptz,text)')
     ),
     'generic_terminal_writer_execute_denied',not exists(
       select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace

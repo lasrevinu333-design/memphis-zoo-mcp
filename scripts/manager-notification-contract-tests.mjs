@@ -43,10 +43,16 @@ assert.match(migration, /ops_manager_enqueue_scheduled_notifications/);
 assert.match(migration, /ops_manager_claim_notification_jobs/);
 assert.match(migration, /employee kiosk devices are not eligible/);
 assert.match(closureMigration, /ops_manager_notification_job_is_current/);
+assert.match(closureMigration, /custodial_ops_manager_notification_binding_is_current/);
+assert.match(closureMigration, /p_push_device_id uuid,p_credential_id uuid,p_manager_id uuid,p_fcm_token_sha256 text/);
+assert.match(closureMigration, /encode\(extensions\.digest\(convert_to\(pd\.fcm_token,'UTF8'\),'sha256'\),'hex'\)=p_fcm_token_sha256/);
 assert.match(boundaryMigration, /ops_manager_enqueue_scheduled_notifications\(timestamp with time zone\)/);
 assert.match(boundaryMigration, /v_local_date date:=public\.sch_service_date\(p_now\)/);
 assert.match(boundaryMigration, /extract\(dow from v_local_date\)/);
 assert.match(moduleSource, /beforeSend:\s*async[\s\S]*ops_manager_notification_job_is_current/);
+assert.match(moduleSource, /p_push_device_id:\s*pushDeviceId/);
+assert.match(moduleSource, /p_fcm_token_sha256:\s*fcmTokenSha256/);
+assert.match(moduleSource, /ops_manager_push_devices"\)\.update\(\{ last_seen_at:[\s\S]*\.eq\("push_device_id", pushDeviceId\)\.eq\("fcm_token", fcmToken\)/);
 
 const app = express();
 installManagerNotificationRoutes(app, { env: {} });

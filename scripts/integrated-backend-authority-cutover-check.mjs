@@ -378,9 +378,22 @@ if (databaseMode) {
   assert.equal(run(`select public.custodial_backend_authority_health(${q(secret)})->>'ok';`).split("\n").at(-1), "true", "configured secret must pass the canonical health gate");
   assert.equal(run(`select public.custodial_backend_authority_health(${q(secret)})->>'authority';`).split("\n").at(-1), "offline-authority.v5", "final health must expose the complete U4 authority closure");
   assert.equal(run(`select count(*) from information_schema.role_table_grants where table_schema='public' and grantee='service_role' and table_name in ('sessions','completion_responses','scan_events','maintenance_tickets') and privilege_type in ('INSERT','UPDATE','DELETE','TRUNCATE');`).split("\n").at(-1), "0", "service role must not retain operational DML grants");
-  assert.equal(run(`select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('tool_get_offline_scan_authority_snapshot','tool_start_offline_occurrence','tool_commit_cleaning_workflow_authoritative','tool_complete_session_authoritative','custodial_backend_authority_health','custodial_close_maintenance_ticket_authoritative');`).split("\n").at(-1), "6", "bounded canonical command and snapshot surface must be present");
+  assert.equal(run(`select count(*) from unnest(array[
+    to_regprocedure('public.tool_get_offline_scan_authority_snapshot(text,text,text)'),
+    to_regprocedure('public.tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text,text,text,text,text)'),
+    to_regprocedure('public.tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text)'),
+    to_regprocedure('public.tool_complete_session_authoritative(text,jsonb,text,text,text,text)'),
+    to_regprocedure('public.custodial_close_maintenance_ticket_authoritative(uuid,text,text,text)'),
+    to_regprocedure('public.custodial_finish_historical_session_authoritative(text,text,uuid,timestamptz,text)'),
+    to_regprocedure('public.custodial_backend_authority_health(text)')
+  ]) p(oid) where oid is not null;`).split("\n").at(-1), "7", "the exact bounded canonical command, historical-finish, snapshot, and health surface must be present");
   assert.equal(run(`select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('run_application_write','run_sql_write','run_sql_migration','force_close_session','tool_force_close_session') and has_function_privilege('service_role',p.oid,'EXECUTE');`).split("\n").at(-1), "0", "service role must not retain a generic or force-close writer");
-  assert.equal(run(`select count(*) from public.custodial_terminal_writer_inventory where application_callable and (mutates_terminal_truth or delegates_alternate_terminal_authority) and proname not in ('tool_start_offline_occurrence','tool_commit_cleaning_workflow_authoritative','tool_complete_session_authoritative','custodial_close_maintenance_ticket_authoritative');`).split("\n").at(-1), "0", "service roles must not retain an alternate terminal writer by capability or wrapper delegation");
+  assert.equal(run(`select count(*) from public.custodial_terminal_writer_inventory i where application_callable and (mutates_terminal_truth or delegates_alternate_terminal_authority)
+    and i.oid is distinct from to_regprocedure('public.tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text,text,text,text,text)')
+    and i.oid is distinct from to_regprocedure('public.tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text)')
+    and i.oid is distinct from to_regprocedure('public.tool_complete_session_authoritative(text,jsonb,text,text,text,text)')
+    and i.oid is distinct from to_regprocedure('public.custodial_close_maintenance_ticket_authoritative(uuid,text,text,text)')
+    and i.oid is distinct from to_regprocedure('public.custodial_finish_historical_session_authoritative(text,text,uuid,timestamptz,text)');`).split("\n").at(-1), "0", "service roles must not retain an alternate terminal writer by exact procedure identity");
   assert.equal(run(`select (has_function_privilege('service_role','public.purge_closed_scan_history_before(timestamp with time zone,text)'::regprocedure,'EXECUTE') or has_function_privilege('service_role','public.tool_purge_closed_scan_history_before(timestamp with time zone,text)'::regprocedure,'EXECUTE'))::text;`).split("\n").at(-1), "false", "service role must not retain either purge signature");
   const directWrite = spawnSync("docker", ["exec", container, "psql", "-v", "ON_ERROR_STOP=1", "-At", "-U", "supabase_admin", "-d", database, "-c", "set role service_role; insert into public.sessions default values;"], { encoding: "utf8" });
   assert.notEqual(directWrite.status, 0, "restoration check must prove direct application DML remains denied");
