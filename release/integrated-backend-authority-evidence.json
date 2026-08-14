@@ -808,7 +808,7 @@
       {
         "path": "scripts/operational-analytics-database-tests.mjs",
         "mode": "100644",
-        "object_id": "62c89c695dd212ffbf42cbd78e82fd78bb76be46"
+        "object_id": "0e25b062b9ef8075538f466f4b0d71d777aa82cf"
       },
       {
         "path": "scripts/operational-recovery-tests.mjs",

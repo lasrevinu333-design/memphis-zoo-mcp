@@ -145,9 +145,9 @@ await sql(`
     id,session_id,location_id,submitted_by_employee_id,device_id,response_json,client_completion_id
   ) values
     ('${ids.fastCompletion}','${ids.fastSession}','${ids.location}','${ids.fastEmployee}','${ids.fastDevice}',
-      '{"form_type":"exhibit","services_performed":["Full cleaning services"],"note":"Inspection-ready"}','analytics-fast-completion'),
+      '{"form_type":"exhibit","services_performed":["Full cleaning services"],"note":"Inspection-ready"}','${ids.fastCompletion}'),
     ('${ids.slowCompletion}','${ids.slowSession}','${ids.location}','${ids.slowEmployee}','${ids.slowDevice}',
-      '{"form_type":"exhibit","services_performed":["Full cleaning services"],"note":"Inspection-ready"}','analytics-slow-completion');
+      '{"form_type":"exhibit","services_performed":["Full cleaning services"],"note":"Inspection-ready"}','${ids.slowCompletion}');
   insert into public.cleaning_inspections(
     id,operation_id,request_fingerprint,session_id,inspector_name_snapshot,
     inspection_type,rubric_version,overall_score,appearance_score,sanitation_score,
@@ -180,7 +180,7 @@ await sql(`
       client_completion_id,submitted_at,created_at
     ) values (
       '${ids.fallbackCompletion}','${ids.fallbackSession}','${ids.boundaryLocation}',
-      '${ids.fastEmployee}','${ids.fastDevice}','{}','analytics-fallback-completion',
+      '${ids.fastEmployee}','${ids.fastDevice}','{}','${ids.fallbackCompletion}',
       statement_timestamp()-interval '24 hours',statement_timestamp()-interval '24 hours'
     )
     returning session_id,submitted_at
