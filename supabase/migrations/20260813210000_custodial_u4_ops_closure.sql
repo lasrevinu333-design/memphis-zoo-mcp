@@ -771,6 +771,61 @@ $function$;
 revoke all on function public.finish_operational_notification_job(uuid,uuid,boolean,text,integer) from public,anon,authenticated;
 grant execute on function public.finish_operational_notification_job(uuid,uuid,boolean,text,integer) to postgres,service_role;
 
+-- Manager pushes cross the same non-transactional provider boundary as employee
+-- pushes. An unreadable 2xx or transport loss may already represent an accepted
+-- FCM request, so it is terminal outcome-unknown and can never be requeued.
+drop function if exists public.ops_manager_finish_notification_job(uuid,uuid,uuid,text,boolean,text,text,integer);
+create function public.ops_manager_finish_notification_job(
+  p_queue_id uuid,p_lease_token uuid,p_push_device_id uuid,p_fcm_token_sha256 text,
+  p_succeeded boolean,p_provider_message_id text default null,p_error text default null,
+  p_retry_seconds integer default 30,p_delivery_outcome_unknown boolean default false
+) returns public.ops_manager_notification_queue language plpgsql security definer set search_path=pg_catalog,public as $function$
+declare v_row public.ops_manager_notification_queue%rowtype; v_job_current boolean; v_recipient_current boolean;
+begin
+  if p_succeeded and p_delivery_outcome_unknown then raise exception using errcode='22023',message='a successful manager push cannot have an unknown provider outcome'; end if;
+  select * into v_row from public.ops_manager_notification_queue where queue_id=p_queue_id and status='leased' and lease_token=p_lease_token for update;
+  if v_row.queue_id is null then raise exception using errcode='P0002',message='Notification job lease was not found'; end if;
+  v_recipient_current:=public.custodial_ops_manager_notification_binding_is_current(
+    p_push_device_id,v_row.credential_id,v_row.manager_id,p_fcm_token_sha256,now()
+  );
+  v_job_current:=v_recipient_current;
+  if v_row.notification_type='event_digest' then
+    select v_job_current and exists (
+      select 1 from public.events_app_events e
+      where e.id=case when coalesce(v_row.data_json->>'next_event_id','') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+        then (v_row.data_json->>'next_event_id')::uuid else null end
+        and e.status='SCHEDULED' and ((e.event_date+e.start_time) at time zone 'America/Chicago')>now()
+        and to_jsonb((e.event_date+e.start_time) at time zone 'America/Chicago')=v_row.data_json->'next_event_starts_at'
+    ) into v_job_current;
+  end if;
+  if v_row.notification_type='location_digest' then
+    v_job_current:=v_job_current and public.custodial_ops_manager_location_digest_is_current(v_row.credential_id,v_row.data_json->>'location_fingerprint');
+  end if;
+  if p_delivery_outcome_unknown then
+    update public.ops_manager_notification_queue set status='failed',completed_at=now(),leased_until=null,lease_token=null,
+      provider_message_id=null,last_error=left('provider delivery outcome unknown: '||coalesce(p_error,'FCM response was not authoritative'),2000),updated_at=now()
+    where queue_id=p_queue_id returning * into v_row;
+  elsif not v_job_current then
+    update public.ops_manager_notification_queue set status='cancelled',completed_at=now(),leased_until=null,lease_token=null,
+      last_error=case when not v_recipient_current then 'notification recipient authority is no longer current' when v_row.notification_type='location_digest' then 'location dashboard state has changed' else 'event occurrence is no longer upcoming' end,
+      updated_at=now() where queue_id=p_queue_id returning * into v_row;
+  elsif p_succeeded then
+    update public.ops_manager_notification_queue set status='sent',sent_at=now(),completed_at=now(),leased_until=null,lease_token=null,
+      provider_message_id=nullif(left(coalesce(p_provider_message_id,''),500),''),last_error=null,updated_at=now()
+    where queue_id=p_queue_id returning * into v_row;
+    update public.ops_manager_notification_state set last_sent_at=now(),updated_at=now()
+    where credential_id=v_row.credential_id and state_key=case when v_row.notification_type='location_digest' then 'location_digest' else '__none__' end;
+  else
+    update public.ops_manager_notification_queue set status=case when attempts>=max_attempts then 'failed' else 'pending' end,
+      available_at=case when attempts>=max_attempts then available_at else now()+make_interval(secs=>greatest(15,least(coalesce(p_retry_seconds,30),86400))) end,
+      completed_at=case when attempts>=max_attempts then now() else null end,leased_until=null,lease_token=null,
+      last_error=left(coalesce(p_error,'Notification delivery failed'),2000),updated_at=now() where queue_id=p_queue_id returning * into v_row;
+  end if;
+  return v_row;
+end $function$;
+revoke all on function public.ops_manager_finish_notification_job(uuid,uuid,uuid,text,boolean,text,text,integer,boolean) from public,anon,authenticated;
+grant execute on function public.ops_manager_finish_notification_job(uuid,uuid,uuid,text,boolean,text,text,integer,boolean) to postgres,service_role;
+
 -- This inventory is a catalog-derived superset of the native/offline authority
 -- closure. It records executable definitions for functions, relation guards,
 -- relational constraints, and grants rather than assuming the controller is

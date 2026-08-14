@@ -151,6 +151,7 @@ const requiredNotificationAuthorityFunctions = [
   "mz_record_employee_native_push_delivery(uuid,uuid,uuid,bigint,uuid,text,text,timestamp with time zone)",
   "finish_operational_notification_job(uuid,uuid,boolean,text,integer)",
   "finish_operational_notification_job_terminal(uuid,uuid,text)",
+  "ops_manager_finish_notification_job(uuid,uuid,uuid,text,boolean,text,text,integer,boolean)",
 ];
 assert.equal(sql(`select count(*) from public.custodial_release_authority_restore_inventory
   where object_kind='function' and object_identity in (${requiredNotificationAuthorityFunctions.map(q).join(',')});`),
@@ -224,6 +225,19 @@ sql(`
   values ('${credentialId}'::uuid,'${managerId}'::uuid,'uncertainty-manager-${stamp}','android',${q(fcmToken)});
 `);
 const pushDeviceId = sql(`select push_device_id from public.ops_manager_push_devices where credential_id='${credentialId}'::uuid;`);
+const ambiguousManagerKey = `manager-ambiguous-${stamp}`;
+sql(`insert into public.ops_manager_notification_queue(job_key,credential_id,manager_id,notification_type,title,body)
+  values (${q(ambiguousManagerKey)},'${credentialId}'::uuid,'${managerId}'::uuid,'test','Ambiguous provider outcome','Must not be sent twice');`);
+const ambiguousManagerLease = JSON.parse(sql(`select row_to_json(q)::text from public.ops_manager_claim_notification_jobs(
+  'uncertainty-worker',10,120) q where q.job_key=${q(ambiguousManagerKey)};`));
+const ambiguousManagerFinish = JSON.parse(sql(`select row_to_json(public.ops_manager_finish_notification_job(
+  '${ambiguousManagerLease.queue_id}'::uuid,'${ambiguousManagerLease.lease_token}'::uuid,'${pushDeviceId}'::uuid,
+  ${q(fcmTokenSha256)},false,null,'FCM returned an unreadable HTTP 200',30,true))::text;`));
+assert.equal(ambiguousManagerFinish.status, "failed", "an ambiguous manager provider outcome must be terminal");
+assert.ok(ambiguousManagerFinish.completed_at, "an ambiguous manager provider outcome must close the queue job");
+assert.match(ambiguousManagerFinish.last_error, /provider delivery outcome unknown/i);
+assert.equal(sql(`select count(*) from public.ops_manager_claim_notification_jobs('uncertainty-worker',10,120)
+  where job_key=${q(ambiguousManagerKey)};`), "0", "an ambiguous manager provider outcome can never be claimed for a second send");
 const expiredKey = `event-expired-${stamp}`;
 sql(`insert into public.ops_manager_notification_queue(job_key,credential_id,manager_id,notification_type,title,body,data_json)
   values (${q(expiredKey)},'${credentialId}'::uuid,'${managerId}'::uuid,'event_digest','Expired event','Must not send',

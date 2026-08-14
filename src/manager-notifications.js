@@ -232,26 +232,35 @@ export function createPushRuntime({ db, env }) {
       throw error;
     }
     const collapseKey = `memphis-${clip(channelId, 48).toLowerCase().replace(/[^a-z0-9_-]+/g, "-") || "operations"}`;
-    const response = await fetch(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(account.project_id)}/messages:send`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        message: {
-          token: pushDevice.fcm_token,
-          notification: { title: clip(job.title, 180), body: clip(job.body, 1000) },
-          data: stringifyData(job.data_json),
-          android: {
-            priority: "high",
-            collapse_key: collapseKey,
-            notification: { channel_id: channelId, sound: "default", default_vibrate_timings: true },
+    let response;
+    try {
+      response = await fetch(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(account.project_id)}/messages:send`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: {
+            token: pushDevice.fcm_token,
+            notification: { title: clip(job.title, 180), body: clip(job.body, 1000) },
+            data: stringifyData(job.data_json),
+            android: {
+              priority: "high",
+              collapse_key: collapseKey,
+              notification: { channel_id: channelId, sound: "default", default_vibrate_timings: true },
+            },
+            apns: {
+              headers: { "apns-priority": "10" },
+              payload: { aps: { sound: "default", badge: 1 } },
+            },
           },
-          apns: {
-            headers: { "apns-priority": "10" },
-            payload: { aps: { sound: "default", badge: 1 } },
-          },
-        },
-      }),
-    });
+        }),
+      });
+    } catch (error) {
+      // Once fetch starts, a network/transport exception cannot prove that FCM
+      // rejected the request. Preserve an at-most-once outcome instead of
+      // allowing the queue to call the provider again.
+      error.deliveryNotAccepted = false;
+      throw error;
+    }
     const payload = await response.json().catch(() => null);
     if (!response.ok || !payload?.name) {
       const message = payload?.error?.message || `FCM returned HTTP ${response.status}.`;
@@ -289,6 +298,7 @@ export function createPushRuntime({ db, env }) {
         let providerMessageId = null;
         let errorMessage = null;
         let pushDevice = null;
+        let deliveryOutcomeUnknown = false;
         try {
           if (!eventReminderIsCurrent(job)) throw Object.assign(new Error("The event occurrence is no longer upcoming."), { expired: true });
           const deviceResult = await db.from("ops_manager_push_devices")
@@ -318,6 +328,7 @@ export function createPushRuntime({ db, env }) {
             .eq("push_device_id", pushDeviceId).eq("fcm_token", fcmToken);
         } catch (error) {
           errorMessage = clip(error?.message || "Push delivery failed.", 2000);
+          deliveryOutcomeUnknown = error?.deliveryNotAccepted === false;
           if (error?.permanent && pushDevice) {
             await db.from("ops_manager_push_devices").update({ enabled: false, revoked_at: new Date().toISOString(), last_error: errorMessage })
               .eq("push_device_id", pushDevice?.push_device_id).eq("fcm_token", pushDevice?.fcm_token);
@@ -334,12 +345,13 @@ export function createPushRuntime({ db, env }) {
             ? crypto.createHash("sha256").update(pushDevice.fcm_token).digest("hex")
             : "",
           p_succeeded: succeeded,
+          p_delivery_outcome_unknown: deliveryOutcomeUnknown,
           p_provider_message_id: providerMessageId,
           p_error: errorMessage,
           p_retry_seconds: succeeded ? 30 : (errorMessage ? 120 : 30),
         });
         if (finished.error) throw finished.error;
-        results.push({ queue_id: job.queue_id, succeeded, error: errorMessage });
+        results.push({ queue_id: job.queue_id, succeeded, delivery_outcome_unknown: deliveryOutcomeUnknown, error: errorMessage });
       }
       return { ok: true, claimed: jobs.length, sent: results.filter((row) => row.succeeded).length, results };
     } finally {

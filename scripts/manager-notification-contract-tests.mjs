@@ -122,6 +122,9 @@ globalThis.fetch = async (input, init = {}) => {
     return new Response(JSON.stringify({ configFilename: "GoogleService-Info.plist", configFileContents: Buffer.from(iosConfig).toString("base64") }), { status: 200, headers: { "Content-Type": "application/json" } });
   }
   if (url.endsWith("/v1/projects/memphis-zoo-custodial-program/messages:send")) {
+    if (fcmResponseMode === "transport-error") {
+      throw new Error("Simulated transport loss after dispatch began");
+    }
     if (fcmResponseMode === "ambiguous-200") {
       return new Response("{truncated", { status: 200, headers: { "Content-Type": "application/json" } });
     }
@@ -202,12 +205,104 @@ try {
     (error) => error?.deliveryNotAccepted === false && error?.permanent !== true,
     "an unreadable HTTP 200 is an ambiguous provider outcome, not a proven rejection",
   );
+  fcmResponseMode = "transport-error";
+  await assert.rejects(
+    () => pushRuntime.send({ title: "Transport loss", body: "Do not retry", data_json: {} }, { fcm_token: "test-fcm-token" }),
+    (error) => error?.deliveryNotAccepted === false && error?.permanent !== true,
+    "transport loss after dispatch begins is an ambiguous provider outcome, not a proven rejection",
+  );
   fcmResponseMode = "rejected-400";
   await assert.rejects(
     () => pushRuntime.send({ title: "Rejected", body: "May retry", data_json: {} }, { fcm_token: "test-fcm-token" }),
     (error) => error?.deliveryNotAccepted === true && error?.permanent === true,
     "an explicit FCM rejection may release the prepared dispatch marker",
   );
+  const ambiguousQueue = {
+    status: "pending",
+    providerCallsBefore: calls.filter((call) => call.url.endsWith("/messages:send")).length,
+    finishArgs: [],
+  };
+  const ambiguousJob = {
+    queue_id: "00000000-0000-4000-8000-000000000101",
+    lease_token: "00000000-0000-4000-8000-000000000102",
+    credential_id: "00000000-0000-4000-8000-000000000103",
+    manager_id: "00000000-0000-4000-8000-000000000104",
+    notification_type: "test",
+    title: "Ambiguous manager push",
+    body: "Must not be sent twice",
+    data_json: {},
+  };
+  const ambiguousPushDevice = {
+    push_device_id: "00000000-0000-4000-8000-000000000105",
+    credential_id: ambiguousJob.credential_id,
+    manager_id: ambiguousJob.manager_id,
+    fcm_token: "ambiguous-manager-fcm-token",
+    platform: "android",
+    enabled: true,
+    revoked_at: null,
+  };
+  const resolvedQuery = () => {
+    const query = {
+      eq: () => query,
+      is: () => query,
+      then: (resolve, reject) => Promise.resolve({ data: null, error: null }).then(resolve, reject),
+    };
+    return query;
+  };
+  const ambiguousDb = {
+    async rpc(name, args) {
+      if (name === "ops_manager_enqueue_scheduled_notifications") return { data: null, error: null };
+      if (name === "ops_manager_claim_notification_jobs") {
+        if (ambiguousQueue.status !== "pending") return { data: [], error: null };
+        ambiguousQueue.status = "leased";
+        return { data: [ambiguousJob], error: null };
+      }
+      if (name === "ops_manager_notification_job_is_current") return { data: true, error: null };
+      if (name === "ops_manager_finish_notification_job") {
+        ambiguousQueue.finishArgs.push(args);
+        assert.equal(args.p_delivery_outcome_unknown, true);
+        assert.equal(args.p_succeeded, false);
+        ambiguousQueue.status = "failed";
+        return { data: { status: "failed" }, error: null };
+      }
+      throw new Error(`Unexpected manager sweep RPC: ${name}`);
+    },
+    from(table) {
+      assert.equal(table, "ops_manager_push_devices");
+      return {
+        select() {
+          const query = {
+            eq: () => query,
+            is: () => query,
+            maybeSingle: async () => ({ data: ambiguousPushDevice, error: null }),
+          };
+          return query;
+        },
+        update: resolvedQuery,
+      };
+    },
+  };
+  const ambiguousSweepRuntime = createPushRuntime({
+    db: ambiguousDb,
+    env: {
+      FIREBASE_SERVICE_ACCOUNT_JSON: JSON.stringify({
+        type: "service_account",
+        project_id: "memphis-zoo-custodial-program",
+        client_email: "firebase-adminsdk-ambiguous@memphis-zoo-custodial-program.iam.gserviceaccount.com",
+        private_key: privateKey,
+      }),
+    },
+  });
+  fcmResponseMode = "ambiguous-200";
+  const firstAmbiguousSweep = await ambiguousSweepRuntime.sweep();
+  const secondAmbiguousSweep = await ambiguousSweepRuntime.sweep();
+  assert.equal(firstAmbiguousSweep.claimed, 1);
+  assert.equal(firstAmbiguousSweep.results[0].delivery_outcome_unknown, true);
+  assert.equal(secondAmbiguousSweep.claimed, 0);
+  assert.equal(ambiguousQueue.status, "failed");
+  assert.equal(ambiguousQueue.finishArgs.length, 1);
+  assert.equal(calls.filter((call) => call.url.endsWith("/messages:send")).length, ambiguousQueue.providerCallsBefore + 1,
+    "an ambiguous manager provider outcome must produce one provider call across repeated sweeps");
   fcmResponseMode = "accepted";
   await assert.rejects(() => pushRuntime.send({
     notification_type: "event_digest", title: "Expired event", body: "Must not send",
