@@ -36,11 +36,13 @@ let snapshots = 0;
 let rebuilds = 0;
 let exceptionRequest = null;
 let rebuildRequest = null;
+let dayChangesRequest = null;
 const controlPlane = {
   async health() { return { ready: true }; },
   async getManagerSnapshot({ weekStart }) { snapshots += 1; return { schema: "memphis-zoo.static-weekly-manager-snapshot.v1", week_start: weekStart, authority_revision: 0 }; },
   async applyContractorCapacity() { mutations += 1; return { revision: mutations, data: { exception_id: `contractor-${mutations}` } }; },
   async applyException(request) { exceptionRequest = request; mutations += 1; return { revision: mutations, data: { exception_id: `runtime-${mutations}` } }; },
+  async applyDayChanges(request) { dayChangesRequest = request; mutations += 1; return { operation: "apply_day_changes", revision: mutations, data: { mutation_count: request.operations.length } }; },
   async rebuildCurrentProjection(request) { rebuildRequest = request; rebuilds += 1; return { revision: request.expectedRevision + 1, data: { projection_id: `rebuild-${request.weekStart}-${request.idempotencyKey}` } }; },
 };
 const runtime = createStaticWeeklyControlPlaneRuntime({ env, trustedDeviceStore: store, database: {}, controlPlane });
@@ -69,6 +71,21 @@ async function rebuildCurrentProjection() {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
     body: JSON.stringify({ week_start: "2026-10-05", expected_revision: 0, idempotency_key: "runtime-rebuild" }),
+  });
+  return { status: response.status, body: await response.json() };
+}
+
+async function dayChanges() {
+  const response = await fetch(`${origin}/static-weekly/day-changes/batch`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
+    body: JSON.stringify({
+      service_date: "2026-10-06", week_start: "2026-10-05", publication_id: "70000000-0000-4000-8000-000000000091", base_version_id: "60000000-0000-4000-8000-000000000091", version_id: "60000000-0000-4000-8000-000000000091", expected_revision: 1, idempotency_key: "runtime-day-changes",
+      operations: [
+        { operation: "exception", exception_type: "pto", reason: "runtime call-out", payload: { slotId: "20000000-0000-4000-8000-000000000091" } },
+        { operation: "cover_all", slot_id: "20000000-0000-4000-8000-000000000092", reason: "runtime CoverAll" },
+      ],
+    }),
   });
   return { status: response.status, body: await response.json() };
 }
@@ -107,6 +124,15 @@ try {
   assert.equal(mutations, 1);
   assert.equal(exceptionRequest.projectionWeekStart, "2026-10-05", "the runtime binds each atomic mutation to the requested Monday projection week");
 
+  response = await dayChanges();
+  assert.equal(response.status, 200, "a valid trusted named-manager credential may submit one bounded daily batch");
+  assert.equal(response.body.data.operation, "apply_day_changes");
+  assert.equal(mutations, 2);
+  assert.equal(dayChangesRequest.manager.manager_id, manager.manager_id, "the daily batch receives only the authenticated manager identity");
+  assert.equal(dayChangesRequest.projectionWeekStart, "2026-10-05");
+  assert.equal(dayChangesRequest.versionId, "60000000-0000-4000-8000-000000000091");
+  assert.equal(dayChangesRequest.operations.length, 2, "the runtime forwards the complete daily operation set as one authority request");
+
   response = await rebuildCurrentProjection();
   assert.equal(response.status, 200, "a valid trusted named-manager credential may invoke rebuild-only projection recovery");
   assert.equal(response.body.data.revision, 1);
@@ -119,17 +145,17 @@ try {
     body: JSON.stringify({ slot_id: "20000000-0000-4000-8000-000000000091", person_id: "30000000-0000-4000-8000-000000000091", effective_start: "2099-01-01" }),
   });
   assert.equal(retiredIncumbency.status, 404, "the arbitrary person/date incumbency endpoint is retired");
-  assert.equal(mutations, 1, "the retired endpoint cannot reach any scheduler mutation");
+  assert.equal(mutations, 2, "the retired endpoint cannot reach any scheduler mutation");
 
   lookup = async () => ({ credential_id: credentialId, device_id: deviceId, max_access_level: "full_access", expires_at: future(), revoked_at: new Date().toISOString(), manager_id: manager.manager_id, manager: { ...manager } });
   response = await mutation();
   assert.equal(response.status, 401, "a revoked trusted-device credential must be rejected before scheduler mutation");
-  assert.equal(mutations, 1);
+  assert.equal(mutations, 2);
 
   lookup = async () => ({ credential_id: credentialId, device_id: deviceId, max_access_level: "full_access", expires_at: future(), manager_id: manager.manager_id, manager: { ...manager, active: false, revoked_at: new Date().toISOString() } });
   response = await mutation();
   assert.equal(response.status, 403, "a revoked manager/device association must be rejected before scheduler mutation");
-  assert.equal(mutations, 1);
+  assert.equal(mutations, 2);
 
   lookup = async () => ({ credential_id: credentialId, device_id: deviceId, max_access_level: "full_access", expires_at: future(), manager_id: null, manager: null });
   snapshot = await managerSnapshot();
@@ -137,29 +163,29 @@ try {
   assert.equal(snapshots, 1);
   response = await mutation();
   assert.equal(response.status, 403, "a removed manager/device association must be rejected before scheduler mutation");
-  assert.equal(mutations, 1);
+  assert.equal(mutations, 2);
 
   const otherManager = { ...manager, manager_id: "10000000-0000-4000-8000-000000000092", display_name: "Other Runtime Manager" };
   lookup = async () => ({ credential_id: credentialId, device_id: deviceId, max_access_level: "full_access", expires_at: future(), manager_id: otherManager.manager_id, manager: otherManager });
   response = await mutation();
   assert.equal(response.status, 403, "a changed manager/device association must be rejected before scheduler mutation");
-  assert.equal(mutations, 1);
+  assert.equal(mutations, 2);
 
   lookup = async () => ({ credential_id: credentialId, device_id: deviceId, max_access_level: "full_access", expires_at: future(), manager_id: manager.manager_id, manager: { ...manager } });
   response = await mutation();
   assert.equal(response.status, 200, "the current matching manager/device association may reach the scheduler mutation boundary");
-  assert.equal(mutations, 2);
+  assert.equal(mutations, 3);
 
   lookup = async () => { throw new Error("trusted store unavailable"); };
   response = await mutation();
   assert.equal(response.status, 500, "a trusted-device lookup failure must fail closed before scheduler mutation");
-  assert.equal(mutations, 2);
+  assert.equal(mutations, 3);
 
   const savedFind = store.find;
   delete store.find;
   response = await mutation();
   assert.equal(response.status, 503, "an unavailable trusted-device lookup method must fail closed before scheduler mutation");
-  assert.equal(mutations, 2);
+  assert.equal(mutations, 3);
   store.find = savedFind;
 } finally {
   await new Promise((resolve) => server.close(resolve));

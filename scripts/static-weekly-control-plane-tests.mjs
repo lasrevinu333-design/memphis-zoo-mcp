@@ -4,6 +4,7 @@
 // this test proves the ordinary process cannot quietly become an authority
 // caller or signer again.
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createStaticWeeklyControlPlane } from "../src/static-weekly-control-plane.js";
@@ -25,6 +26,9 @@ assert.match(runtimeSource, /\/static-weekly\/drafts\/initial/, "the separately 
 assert.match(runtimeSource, /\/static-weekly\/employees\/departed/, "the control plane must expose one bounded departure transaction");
 assert.match(runtimeSource, /\/static-weekly\/employees\/replacements/, "the control plane must expose one bounded fresh-start replacement transaction");
 assert.match(runtimeSource, /\/static-weekly\/rebuild-current-projection/, "the control plane must expose the named rebuild-only recovery command");
+assert.match(runtimeSource, /\/static-weekly\/day-changes\/batch[^\n]+requireManagerWrite, namedManager/, "the bounded daily batch route must require a trusted named manager writer");
+assert.match(controlPlaneSource, /async applyDayChanges\(/, "the control plane must own the daily batch transaction rather than split it across HTTP requests");
+assert.match(controlPlaneSource, /dayChangeOperationIdempotencyKey/, "daily batch child mutations must use deterministic idempotency keys");
 assert.match(controlPlaneSource, /projectionIdempotencyKey/, "atomic projection subcommands must derive their own idempotency key");
 assert.doesNotMatch(runtimeSource, /\/static-weekly\/incumbencies/, "the arbitrary person/date incumbency writer must not be routable");
 assert.doesNotMatch(controlPlaneSource, /replaceIncumbency|static_weekly_v3_replace_incumbency/, "the legacy incumbency client must be removed, not hidden");
@@ -37,6 +41,8 @@ const manager = { manager_id: "10000000-0000-4000-8000-000000000001", manager_di
 const publicationId = "70000000-0000-4000-8000-000000000001";
 const versionId = "60000000-0000-4000-8000-000000000001";
 const contractorSlot = "20000000-0000-4000-8000-000000000099";
+const childKey = (parent, index) => `day-change-${createHash("sha256").update(`${parent}:${index}`).digest("hex")}`;
+const projectionKey = (parent) => `projection-${createHash("sha256").update(parent).digest("hex")}`;
 
 function compilerInput() {
   const availability = {
@@ -58,47 +64,85 @@ const acceptedProjection = await compileStaticWeeklySchedule(compilerInput());
 assert.equal(acceptedProjection.status, "FEASIBLE", "the control-plane transaction test needs one independently accepted projection");
 assert.equal(acceptedProjection.verifier.ok, true);
 
-function createAuthorityDatabase({ revision: initialRevision = 0 } = {}) {
+function createAuthorityDatabase({ revision: initialRevision = 0, failMutationAt = null } = {}) {
   const queries = [];
   const materializations = new Map();
+  const projectionSnapshots = new Map();
+  const mutations = new Map();
   let revision = initialRevision;
   let projection = null;
-  let transactionRevision = null;
+  let transactionState = null;
   let commits = 0;
+  let mutationAttempts = 0;
   const source = {
     compiler_input: {
       slots: [{ id: contractorSlot, contractorCapacity: true, contractorAvailability: [{ dayOfWeek: 2, shift: { start: "07:00", end: "16:00" }, productiveCapacityProvenance: "approved contractor shift", maxServiceEffortMinutes: 300, maxServiceEffortProvenance: "approved contractor limit", qualifications: ["general"], qualificationProvenance: "approved contractor role", restrictions: [], restrictionProvenance: "approved contractor restrictions", acceptedRouteAnchorLocationId: "40000000-0000-4000-8000-000000000099", acceptedRouteProvenance: "approved contractor staging" }] }],
       version: { slotAvailability: [] }, proximity: [],
     },
     exceptions: [],
+    publication_id: publicationId,
+    version_id: versionId,
   };
   const client = {
     async query(statement, values = []) {
       queries.push({ statement, values });
-      if (statement === "begin") { transactionRevision = revision; return { rows: [] }; }
-      if (statement === "commit") { commits += 1; transactionRevision = null; return { rows: [] }; }
-      if (statement === "rollback") { revision = transactionRevision; transactionRevision = null; return { rows: [] }; }
+      if (statement === "begin") {
+        transactionState = { revision, projection, materializations: new Map(materializations), projectionSnapshots: new Map(projectionSnapshots), mutations: new Map(mutations) };
+        return { rows: [] };
+      }
+      if (statement === "commit") { commits += 1; transactionState = null; return { rows: [] }; }
+      if (statement === "rollback") {
+        revision = transactionState.revision;
+        projection = transactionState.projection;
+        materializations.clear(); for (const [key, value] of transactionState.materializations) materializations.set(key, value);
+        projectionSnapshots.clear(); for (const [key, value] of transactionState.projectionSnapshots) projectionSnapshots.set(key, value);
+        mutations.clear(); for (const [key, value] of transactionState.mutations) mutations.set(key, value);
+        transactionState = null;
+        return { rows: [] };
+      }
       if (statement.includes("static_weekly_v3_authority_health")) return { rows: [{ result: { ready: true, active_key_count: 1, key_ids: [{ key_id: "static-weekly-authority-hmac-v3", state: "active" }] } }] };
+      if (statement.includes("static_weekly_v4_day_changes_health")) return { rows: [{ result: { ready: true, receipt_model: "deterministic_child_projection_chain.v1" } }] };
+      if (statement.includes("static_weekly_v4_begin_day_changes")) {
+        const operations = JSON.parse(values[4]);
+        const parent = values[7];
+        const children = operations.map((_, index) => mutations.get(childKey(parent, index)));
+        const materialized = materializations.get(projectionKey(parent));
+        if (!materialized && children.every((item) => item == null)) return { rows: [{ result: { replayed: false } }] };
+        if (!materialized || children.some((item) => item == null)) throw Object.assign(new Error("idempotency key is bound to a different complete day-change batch"), { code: "23505" });
+        return { rows: [{ result: { replayed: true, response: { ...materialized, operation: "apply_day_changes", data: { ...materialized.data, current_projection: projectionSnapshots.get(projectionKey(parent)), mutations: children.map((item) => item.data) } } } }] };
+      }
       if (statement.includes("static_weekly_v3_read_publication_source")) return { rows: [{ result: source }] };
       if (statement.includes("static_weekly_v3_read_manager_snapshot")) return { rows: [{ result: { schema: "memphis-zoo.static-weekly-manager-snapshot.v1", week_start: values[0], authority_revision: revision, current_publication: { publication_id: publicationId, version_id: versionId }, projection_status: projection ? "current" : "missing", latest_projection: projection } }] };
       if (statement.includes("static_weekly_v3_publish_draft")) { revision = values[2] + 1; return { rows: [{ result: { revision, data: { publication_id: publicationId, version_id: versionId, effective_start: "2026-10-05" } } }] }; }
-      if (statement.includes("static_weekly_v3_apply_exception")) { revision = values[8] + 1; return { rows: [{ result: { revision, data: { exception_id: `exception-${revision}` } } }] }; }
+      if (statement.includes("static_weekly_v3_apply_exception")) {
+        const key = values[10];
+        if (mutations.has(key)) return { rows: [{ result: mutations.get(key) }] };
+        if (values[8] !== revision) throw Object.assign(new Error("authority revision conflict"), { code: "static_weekly_control_plane_revision_conflict" });
+        mutationAttempts += 1;
+        if (failMutationAt === mutationAttempts) throw Object.assign(new Error("infeasible day change"), { code: "static_weekly_control_plane_compiler_rejected" });
+        revision += 1;
+        const result = { revision, data: { exception_id: `exception-${revision}` } };
+        mutations.set(key, result);
+        return { rows: [{ result }] };
+      }
       if (statement.includes("static_weekly_v4_mark_employee_departed")) { revision = values[2] + 1; return { rows: [{ result: { revision, data: { slot_id: values[0] } } }] }; }
       if (statement.includes("static_weekly_v4_replace_employee")) { revision = values[3] + 1; return { rows: [{ result: { revision, data: { new_employee_name: values[1] } } }] }; }
       if (statement.includes("static_weekly_v3_materialize_projection")) {
         const key = values[10];
         if (materializations.has(key)) return { rows: [{ result: materializations.get(key) }] };
-        revision = values[8] + 1;
+        if (values[8] !== revision) throw Object.assign(new Error("authority revision conflict"), { code: "static_weekly_control_plane_revision_conflict" });
+        revision += 1;
         projection = { projection_id: `projection-${revision}`, publication_id: values[0], week_start: values[1], assignments: [{ work_id: "work-a" }] };
         const result = { operation: "materialize_projection", revision, data: { projection_id: projection.projection_id, publication_id: values[0], week_start: values[1] } };
         materializations.set(key, result);
+        projectionSnapshots.set(key, projection);
         return { rows: [{ result }] };
       }
       return { rows: [] };
     },
     release() {},
   };
-  return { database: { async connect() { return client; } }, queries, revision: () => revision, commits: () => commits };
+  return { database: { async connect() { return client; } }, queries, revision: () => revision, commits: () => commits, mutationAttempts: () => mutationAttempts };
 }
 
 function controlPlaneFor(authority, compiler = async () => acceptedProjection) {
@@ -170,6 +214,67 @@ assert.equal(failedAuthority.commits(), 0, "a compile failure prevents the staff
 assert.equal(failedAuthority.revision(), 0, "a compile failure rolls the mutation authority revision back");
 assert.equal(failedAuthority.queries.some((entry) => entry.statement.includes("static_weekly_v3_materialize_projection")), false, "a failed compile never reaches projection materialization");
 assert.equal(failedAuthority.queries.at(-1).statement, "rollback", "a failed compile rolls back the same database transaction");
+
+const dayChangesAuthority = createAuthorityDatabase();
+let dayChangesCompilerCalls = 0;
+const dayChangesControlPlane = controlPlaneFor(dayChangesAuthority, async () => { dayChangesCompilerCalls += 1; return acceptedProjection; });
+const dayChangesRequest = {
+  manager,
+  serviceDate: "2026-10-06",
+  projectionWeekStart: "2026-10-05",
+  publicationId,
+  baseVersionId: versionId,
+  versionId,
+  expectedRevision: 0,
+  idempotencyKey: "day-changes-atomic-replay",
+  operations: [
+    { operation: "exception", exceptionType: "pto", reason: "approved call-out", payload: { slotId: "20000000-0000-4000-8000-000000000001" } },
+    { operation: "cover_all", slotId: contractorSlot, shift: { start: "08:00", end: "17:00" }, reason: "approved CoverAll help" },
+  ],
+};
+const dayChanges = await dayChangesControlPlane.applyDayChanges(dayChangesRequest);
+assert.equal(dayChanges.operation, "apply_day_changes");
+assert.equal(dayChanges.revision, 3, "one daily batch advances authority for each accepted change and one final projection");
+assert.equal(dayChanges.data.mutations.length, 2, "the batch returns every applied daily mutation");
+assert.equal(dayChanges.data.current_projection.projection_id, "projection-3");
+assert.equal(dayChangesCompilerCalls, 1, "the complete daily operation set compiles exactly once");
+assert.equal(dayChangesAuthority.queries.filter((entry) => entry.statement.includes("static_weekly_v4_begin_day_changes")).length, 1, "a batch reaches the database-authoritative recognition gate before source reads");
+assert.equal(dayChangesAuthority.queries.filter((entry) => entry.statement.includes("static_weekly_v3_materialize_projection")).length, 1, "the complete daily operation set materializes exactly once");
+const dayChangeCommands = dayChangesAuthority.queries.filter((entry) => entry.statement.includes("static_weekly_v3_apply_exception"));
+assert.deepEqual(dayChangeCommands.map((entry) => entry.values[8]), [0, 1], "batch child mutations advance from one shared expected revision");
+assert.equal(dayChangeCommands.every((entry) => entry.values[4] === versionId && entry.values[5] === publicationId), true, "every batch child mutation is bound to the requested published version");
+assert.match(dayChangeCommands[0].values[10], /^day-change-[0-9a-f]{64}$/, "batch child mutations receive deterministic derived idempotency keys");
+const dayChangesReplay = await dayChangesControlPlane.applyDayChanges(dayChangesRequest);
+assert.deepEqual(dayChangesReplay, dayChanges, "replaying an accepted daily batch returns the same result");
+assert.equal(dayChangesAuthority.mutationAttempts(), 2, "replaying a daily batch does not apply any child mutation again");
+assert.equal(dayChangesAuthority.revision(), 3, "replaying a daily batch does not advance authority revision");
+const replayQueries = dayChangesAuthority.queries.slice(dayChangesAuthority.queries.findLastIndex((entry) => entry.statement === "begin"));
+assert.deepEqual(replayQueries.map((entry) => entry.statement), ["begin", "set local role static_weekly_control_plane", "select public.static_weekly_v4_begin_day_changes($1,$2,$3,$4,$5,$6,$7,$8) as result", "commit"], "accepted whole-action replay stops before mutable publication authority is reread");
+
+const invalidDayChangesAuthority = createAuthorityDatabase();
+await assert.rejects(() => controlPlaneFor(invalidDayChangesAuthority).applyDayChanges({
+  ...dayChangesRequest,
+  operations: [{ operation: "cover_all", slotId: "unregistered-contractor", reason: "invalid CoverAll request" }],
+}), /not registered contractor capacity/i);
+assert.equal(invalidDayChangesAuthority.commits(), 0, "an invalid operation anywhere in a daily batch commits nothing");
+assert.equal(invalidDayChangesAuthority.mutationAttempts(), 0, "every daily operation is validated before the first batch mutation");
+assert.equal(invalidDayChangesAuthority.revision(), 0);
+
+const failedDayChangesAuthority = createAuthorityDatabase({ failMutationAt: 2 });
+await assert.rejects(() => controlPlaneFor(failedDayChangesAuthority).applyDayChanges(dayChangesRequest), /infeasible day change/i);
+assert.equal(failedDayChangesAuthority.commits(), 0, "a later daily mutation failure rolls back the accepted prefix");
+assert.equal(failedDayChangesAuthority.revision(), 0, "a later daily mutation failure leaves no partial authority revision");
+assert.equal(failedDayChangesAuthority.queries.some((entry) => entry.statement.includes("static_weekly_v3_materialize_projection")), false, "a failed daily batch never materializes a prefix");
+
+const concurrentDayChangesAuthority = createAuthorityDatabase({ revision: 1 });
+await assert.rejects(() => controlPlaneFor(concurrentDayChangesAuthority).applyDayChanges(dayChangesRequest), /revision conflict/i);
+assert.equal(concurrentDayChangesAuthority.commits(), 0, "a stale expected revision commits no daily mutation");
+assert.equal(concurrentDayChangesAuthority.revision(), 1, "a stale expected revision preserves the concurrent authority state");
+
+const versionMismatchAuthority = createAuthorityDatabase();
+await assert.rejects(() => controlPlaneFor(versionMismatchAuthority).applyDayChanges({ ...dayChangesRequest, versionId: "60000000-0000-4000-8000-000000000099" }), /one published schedule version/i);
+assert.equal(versionMismatchAuthority.commits(), 0, "a mismatched version is rejected before any daily mutation commits");
+assert.equal(versionMismatchAuthority.mutationAttempts(), 0);
 
 const recoveryAuthority = createAuthorityDatabase({ revision: 12 });
 const recoveryControlPlane = controlPlaneFor(recoveryAuthority);

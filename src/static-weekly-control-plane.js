@@ -93,6 +93,11 @@ function projectionIdempotencyKey(value) {
   return `projection-${createHash("sha256").update(requireIdempotencyKey(value)).digest("hex")}`;
 }
 
+function dayChangeOperationIdempotencyKey(value, index) {
+  if (!Number.isSafeInteger(index) || index < 0) throw fail("static_weekly_control_plane_day_changes_invalid");
+  return `day-change-${createHash("sha256").update(`${requireIdempotencyKey(value)}:${index}`).digest("hex")}`;
+}
+
 function requireSourceId(value) {
   const sourceId = text(value);
   if (!sourceId) throw fail("static_weekly_control_plane_source_required");
@@ -112,6 +117,41 @@ function requireWindow(value, label) {
     throw fail("static_weekly_control_plane_invalid_window", `${label} must be one ordered HH:MM window.`);
   }
   return { start, end };
+}
+
+function requireDayChangeOperations(value) {
+  if (!Array.isArray(value) || value.length < 1 || value.length > 25) {
+    throw fail("static_weekly_control_plane_day_changes_invalid", "Day changes must contain between one and 25 operations.");
+  }
+  return value.map((entry, index) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) throw fail("static_weekly_control_plane_day_changes_invalid", `Day change ${index + 1} must be an object.`);
+    const operation = text(entry.operation || entry.type);
+    const reason = text(entry.reason);
+    if (!reason) throw fail("static_weekly_control_plane_day_changes_invalid", `Day change ${index + 1} requires a reason.`);
+    if (operation === "exception") {
+      const exceptionType = text(entry.exceptionType || entry.exception_type);
+      const startsAt = text(entry.startsAt || entry.starts_at) || null;
+      const endsAt = text(entry.endsAt || entry.ends_at) || null;
+      if (!exceptionType || Boolean(startsAt) !== Boolean(endsAt) || !entry.payload || typeof entry.payload !== "object" || Array.isArray(entry.payload)) {
+        throw fail("static_weekly_control_plane_day_changes_invalid", `Day change ${index + 1} has an invalid exception payload.`);
+      }
+      return { operation, exceptionType, startsAt, endsAt, reason, payload: clone(entry.payload), reversesExceptionId: text(entry.reversesExceptionId || entry.reverses_exception_id) || null };
+    }
+    if (operation === "cover_all" || operation === "contractor_capacity") {
+      const slotId = text(entry.slotId || entry.slot_id);
+      if (!slotId) throw fail("static_weekly_control_plane_day_changes_invalid", `Day change ${index + 1} requires a contractor slot.`);
+      if (entry.shift != null && (!entry.shift || typeof entry.shift !== "object" || Array.isArray(entry.shift))) throw fail("static_weekly_control_plane_day_changes_invalid", `Day change ${index + 1} has an invalid contractor shift.`);
+      return { operation: "cover_all", slotId, shift: entry.shift == null ? null : requireWindow(entry.shift, "contractor shift"), reason };
+    }
+    throw fail("static_weekly_control_plane_day_changes_invalid", `Day change ${index + 1} has an unsupported operation.`);
+  });
+}
+
+function requireBatchPublicationSource(source, publicationId, versionId) {
+  if (text(source?.publication_id) !== publicationId || text(source?.version_id) !== versionId) {
+    throw fail("static_weekly_control_plane_day_changes_publication_mismatch", "Day changes must name the effective published schedule version.");
+  }
+  return source;
 }
 
 function contractorAvailabilityFromSource(source, slotId, serviceDate, requestedShift) {
@@ -276,7 +316,15 @@ export function createStaticWeeklyControlPlane({
   return {
     schema: STATIC_WEEKLY_CONTROL_PLANE_SCHEMA,
     async health() {
-      const authority = await transaction((client) => call(client, "static_weekly_v3_authority_health", []));
+      const authority = await transaction(async (client) => {
+        const base = await call(client, "static_weekly_v3_authority_health", []);
+        const dayChanges = await call(client, "static_weekly_v4_day_changes_health", []);
+        return {
+          ...base,
+          day_changes: dayChanges,
+          ready: base?.ready === true && dayChanges?.ready === true,
+        };
+      });
       try {
         await initializeSolver();
       } catch (error) {
@@ -349,6 +397,58 @@ export function createStaticWeeklyControlPlane({
           idempotencyKey: key,
           mutate: () => call(client, "static_weekly_v3_apply_exception", ["cover_all", date, null, null, text(baseVersionId), effectivePublicationId, text(reason), { availability }, requireRevision(expectedRevision), actor.managerId, key, null]),
         });
+      });
+    },
+    async applyDayChanges({ manager, serviceDate, baseVersionId, publicationId, versionId = null, operations, expectedRevision, idempotencyKey, projectionWeekStart }) {
+      const actor = requireManager(manager);
+      const weekStart = projectionWeekForDate(projectionWeekStart, serviceDate);
+      const date = requireDateInWeek(serviceDate, weekStart, "service date");
+      const key = requireIdempotencyKey(idempotencyKey);
+      const effectivePublicationId = requirePublicationId(publicationId);
+      const effectiveVersionId = text(versionId || baseVersionId);
+      const requestedBaseVersionId = text(baseVersionId);
+      const initialRevision = requireRevision(expectedRevision);
+      const requestedOperations = requireDayChangeOperations(operations);
+      if (!effectiveVersionId || !requestedBaseVersionId || (text(versionId) && requestedBaseVersionId !== effectiveVersionId)) {
+        throw fail("static_weekly_control_plane_day_changes_version_required", "Day changes must name one published schedule version.");
+      }
+      return transaction(async (client) => {
+        // PostgreSQL reauthorizes the current manager, acquires the global
+        // authority transaction lock, and recognizes an already accepted
+        // complete child/projection receipt chain before any mutable authority
+        // is reread. The lock remains held for a fresh batch through commit.
+        const batch = await call(client, "static_weekly_v4_begin_day_changes", [date, weekStart, effectiveVersionId, effectivePublicationId, JSON.stringify(requestedOperations), initialRevision, actor.managerId, key]);
+        if (batch?.replayed === true) return batch.response;
+        // Resolve and validate every operation before invoking the first writer;
+        // a malformed CoverAll entry therefore cannot leave a call-out prefix.
+        const source = requireBatchPublicationSource(await sourceFor(client, effectivePublicationId, date), effectivePublicationId, effectiveVersionId);
+        const commands = requestedOperations.map((operation, index) => operation.operation === "cover_all"
+          ? { ...operation, payload: { availability: contractorAvailabilityFromSource(source, operation.slotId, date, operation.shift) }, idempotencyKey: dayChangeOperationIdempotencyKey(key, index) }
+          : { ...operation, idempotencyKey: dayChangeOperationIdempotencyKey(key, index) });
+        let revision = initialRevision;
+        const mutations = [];
+        for (const command of commands) {
+          const mutation = await call(client, "static_weekly_v3_apply_exception", command.operation === "cover_all"
+            ? ["cover_all", date, null, null, effectiveVersionId, effectivePublicationId, command.reason, command.payload, revision, actor.managerId, command.idempotencyKey, null]
+            : [command.exceptionType, date, command.startsAt, command.endsAt, effectiveVersionId, effectivePublicationId, command.reason, command.payload, revision, actor.managerId, command.idempotencyKey, command.reversesExceptionId]);
+          revision = requireRevision(mutation?.revision);
+          mutations.push(mutation?.data);
+        }
+        const projection = await materializeCurrentProjection(client, {
+          actor,
+          publicationId: effectivePublicationId,
+          weekStart,
+          expectedRevision: revision,
+          idempotencyKey: projectionIdempotencyKey(key),
+        });
+        return {
+          ...projection,
+          operation: "apply_day_changes",
+          data: {
+            ...projection.data,
+            mutations,
+          },
+        };
       });
     },
     async markEmployeeDeparted({ manager, slotId, reason, expectedRevision, idempotencyKey, projectionWeekStart }) {

@@ -22,6 +22,7 @@ const phaseJ = "20260813141806_custodial_operational_boundary_closure.sql";
 const phaseK = "20260813173000_device_sync_actor_groups.sql";
 const phaseL = "20260813190000_release_phone_transport_and_offline_activation_closure.sql";
 const phaseM = "20260813210000_custodial_u4_ops_closure.sql";
+const phaseN = "20260814224034_reconcile_static_weekly_day_change_receipts.sql";
 const releaseInputPath = "release/integrated-backend-authority-input.json";
 const releaseEvidencePath = "release/integrated-backend-authority-evidence.json";
 const forbiddenGitEnvironment = [
@@ -216,6 +217,7 @@ function expectedReleaseEvidence(input, schemaFingerprint, frontendManifest, aut
       device_sync_actor_groups_phase: "20260813173000 stores verified pending work groups by issued snapshot, employee, and assignment epoch while retaining the Build 22 aggregate reporter",
       release_phone_transport_and_offline_activation_phase: "20260813190000 requires a fresh immutable receipt from the designated phone's native-vault /scan-api/rpc path before resume and permits delayed activation only for work begun while snapshot, credential, and assignment authority were valid",
       u4_ops_closure_phase: "20260813210000 canonicalizes native wire timestamps, records immutable activation boundaries, enforces UUID completion identities, installs two-phase employee notification dispatch ledgers, durable manager dispatch preparation with terminal outcome-unknown restart recovery, complete notification recovery authority, and terminal notification retries, and restores the catalog-derived authority set",
+      atomic_day_change_reconciliation_phase: "20260814224034 converges both preserved U4 migration histories and recognizes the existing complete child/projection receipt chain before mutable Weekly Schedule authority is reread",
     },
     rollback: input.rollback,
     cutover: input.cutover,
@@ -252,13 +254,13 @@ const evidenceBlob = expectedEntries.find(({ path }) => path === releaseEvidence
 assert.ok(evidenceBlob, "expected tree omits generated release evidence");
 const expectedBlobs = expectedEntries.filter(({ path }) => path !== releaseEvidencePath);
 assert.ok(expectedBlobs.length > 0, "release authority inventory is empty");
-assert.equal(expectedBlobs.filter(({ path }) => /^supabase\/migrations\/[^/]+\.sql$/.test(path)).length, 76, "release authority inventory must bind all 76 migrations");
+assert.equal(expectedBlobs.filter(({ path }) => /^supabase\/migrations\/[^/]+\.sql$/.test(path)).length, 77, "release authority inventory must bind all 77 migrations");
 for (const blob of [...expectedBlobs, evidenceBlob]) assertWorktreeMatchesExpectedBlob(blob);
 assert.equal(evidenceBlob.object_id, acceptance.backend_evidence_blob_sha, "signed release attestation names the wrong evidence blob");
 assert.equal(hash(evidenceBlob.bytes), acceptance.backend_evidence_sha256, "signed release attestation names the wrong evidence digest");
 
 const blobByPath = new Map(expectedBlobs.map((blob) => [blob.path, blob]));
-for (const required of [releaseInputPath, "scripts/refresh-integrated-backend-authority-release.mjs", "scripts/integrated-backend-authority-cutover-check.mjs", "scripts/integrated-backend-authority-release-provenance-tests.mjs", "scripts/integrated-backend-authority-suite-order-tests.mjs", "scripts/final-operational-correction-database-tests.mjs", "scripts/named-manager-messenger-retirement-correction-database-tests.mjs", "scripts/empty-database-rebuild-check.mjs", "scripts/refresh-schema-fingerprint.mjs", "src/index.js", "src/offline-authority-http.js", "src/scan-evidence.js", `supabase/migrations/${phaseC}`, `supabase/migrations/${phaseD}`, `supabase/migrations/${phaseE}`, `supabase/migrations/${phaseF}`, `supabase/migrations/${phaseG}`, `supabase/migrations/${phaseH}`, `supabase/migrations/${phaseI}`, `supabase/migrations/${phaseJ}`, `supabase/migrations/${phaseK}`, `supabase/migrations/${phaseL}`, `supabase/migrations/${phaseM}`]) {
+for (const required of [releaseInputPath, "scripts/refresh-integrated-backend-authority-release.mjs", "scripts/integrated-backend-authority-cutover-check.mjs", "scripts/integrated-backend-authority-release-provenance-tests.mjs", "scripts/integrated-backend-authority-suite-order-tests.mjs", "scripts/final-operational-correction-database-tests.mjs", "scripts/named-manager-messenger-retirement-correction-database-tests.mjs", "scripts/empty-database-rebuild-check.mjs", "scripts/refresh-schema-fingerprint.mjs", "src/index.js", "src/offline-authority-http.js", "src/scan-evidence.js", `supabase/migrations/${phaseC}`, `supabase/migrations/${phaseD}`, `supabase/migrations/${phaseE}`, `supabase/migrations/${phaseF}`, `supabase/migrations/${phaseG}`, `supabase/migrations/${phaseH}`, `supabase/migrations/${phaseI}`, `supabase/migrations/${phaseJ}`, `supabase/migrations/${phaseK}`, `supabase/migrations/${phaseL}`, `supabase/migrations/${phaseM}`, `supabase/migrations/${phaseN}`]) {
   assert.ok(blobByPath.has(required), `immutable acceptance input omitted authority path ${required}`);
 }
 const input = parseJsonBlob(blobByPath.get(releaseInputPath), "release authority input");
@@ -275,12 +277,13 @@ const phaseJText = blobByPath.get(`supabase/migrations/${phaseJ}`).bytes.toStrin
 const phaseKText = blobByPath.get(`supabase/migrations/${phaseK}`).bytes.toString("utf8");
 const phaseLText = blobByPath.get(`supabase/migrations/${phaseL}`).bytes.toString("utf8");
 const phaseMText = blobByPath.get(`supabase/migrations/${phaseM}`).bytes.toString("utf8");
+const phaseNText = blobByPath.get(`supabase/migrations/${phaseN}`).bytes.toString("utf8");
 const schemaFingerprint = blobByPath.get("supabase/canonical/schema-fingerprint.txt")?.bytes.toString("utf8").trim();
 const frontendManifest = parseJsonBlob(blobByPath.get("release/frontend-release-manifest.json"), "frontend release manifest");
 
 assert.equal(input.release_contract_version, "offline-authority.v5");
 assert.match(input.cutover.phase_order[1], /release:populated-schema:preflight/);
-assert.deepEqual(input.cutover.phase_order.slice(2, 16), [
+assert.deepEqual(input.cutover.phase_order.slice(2, 17), [
   `apply ${phaseA}`,
   "deploy the bridge backend; it falls back only on absent authoritative procedures",
   `apply ${phaseB}`,
@@ -295,6 +298,7 @@ assert.deepEqual(input.cutover.phase_order.slice(2, 16), [
   `apply ${phaseK}`,
   `apply ${phaseL}`,
   `apply ${phaseM}`,
+  `apply ${phaseN}`,
 ]);
 assert.equal(input.cutover.source_identity.kind, "external_signed_release_attestation");
 assert.equal(input.cutover.source_identity.generated_evidence_path, releaseEvidencePath);
@@ -336,6 +340,8 @@ assert.match(phaseMText, /custodial_canonical_utc_millis/);
 assert.match(phaseMText, /custodial_offline_authority_activation_events/);
 assert.match(phaseMText, /custodial_release_authority_restore_inventory/);
 assert.match(phaseMText, /custodial_release_authority_current_grant_definition/);
+assert.match(phaseNText, /static_weekly_v4_begin_day_changes/);
+assert.match(phaseNText, /deterministic_child_projection_chain\.v1/);
 assert.match(schemaFingerprint, /^[a-f0-9]{64}$/);
 assert.equal(frontendManifest.frontend_commit_sha, acceptance.frontend_commit_sha, "signed release attestation names the wrong frontend commit");
 assert.equal(frontendManifest.release_id, acceptance.release_id, "signed release attestation names the wrong semantic release");
@@ -361,7 +367,7 @@ const result = {
   ok: true,
   source_identity: sourceIdentity,
   authority_content: authorityContent,
-  phase_order: [phaseA, phaseB, phaseC, phaseD, phaseE, phaseF, phaseG, phaseH, phaseI, phaseJ, phaseK, phaseL, phaseM],
+  phase_order: [phaseA, phaseB, phaseC, phaseD, phaseE, phaseF, phaseG, phaseH, phaseI, phaseJ, phaseK, phaseL, phaseM, phaseN],
   bridge_fallback: "only absent authoritative procedure SQLSTATE 42883/PGRST202",
   database_gate: "not-requested",
 };
@@ -381,7 +387,7 @@ if (databaseMode) {
   assert.equal(run(`select count(*) from unnest(array[
     to_regprocedure('public.tool_get_offline_scan_authority_snapshot(text,text,text)'),
     to_regprocedure('public.tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text,text,text,text,text)'),
-    to_regprocedure('public.tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text,text,text,text)'),
+    to_regprocedure('public.tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text,text,text,text,text)'),
     to_regprocedure('public.tool_complete_session_authoritative(text,jsonb,text,text,text,text)'),
     to_regprocedure('public.custodial_close_maintenance_ticket_authoritative(uuid,text,text,text)'),
     to_regprocedure('public.custodial_finish_historical_session_authoritative(text,text,uuid,timestamptz,text)'),
@@ -390,7 +396,7 @@ if (databaseMode) {
   assert.equal(run(`select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('run_application_write','run_sql_write','run_sql_migration','force_close_session','tool_force_close_session') and has_function_privilege('service_role',p.oid,'EXECUTE');`).split("\n").at(-1), "0", "service role must not retain a generic or force-close writer");
   assert.equal(run(`select count(*) from public.custodial_terminal_writer_inventory i where application_callable and (mutates_terminal_truth or delegates_alternate_terminal_authority)
     and i.oid is distinct from to_regprocedure('public.tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text,text,text,text,text)')
-    and i.oid is distinct from to_regprocedure('public.tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text,text,text,text)')
+    and i.oid is distinct from to_regprocedure('public.tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text,text,text,text,text)')
     and i.oid is distinct from to_regprocedure('public.tool_complete_session_authoritative(text,jsonb,text,text,text,text)')
     and i.oid is distinct from to_regprocedure('public.custodial_close_maintenance_ticket_authoritative(uuid,text,text,text)')
     and i.oid is distinct from to_regprocedure('public.custodial_finish_historical_session_authoritative(text,text,uuid,timestamptz,text)');`).split("\n").at(-1), "0", "service roles must not retain an alternate terminal writer by exact procedure identity");

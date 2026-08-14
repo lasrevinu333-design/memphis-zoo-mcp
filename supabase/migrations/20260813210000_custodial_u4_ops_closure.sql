@@ -291,16 +291,32 @@ alter table public.completion_responses
   add constraint completion_responses_client_completion_id_uuid
   check (client_completion_id is null or client_completion_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$') not valid;
 
-create or replace function public.tool_commit_cleaning_workflow_authoritative(
+alter table public.custodial_offline_actor_contexts
+  add column native_finish_scan_entry_id uuid,
+  drop constraint custodial_offline_native_completion_evidence_check,
+  add constraint custodial_offline_native_completion_evidence_check check (
+    (native_completion_attestation_version is null and native_completion_attestation_sha256 is null
+      and native_completed_at is null and native_finish_scan_entry_id is null)
+    or (native_completion_attestation_version='custodial-native-completion.v1'
+      and native_completion_attestation_sha256 ~ '^[0-9a-f]{64}$' and native_completed_at is not null
+      and native_finish_scan_entry_id is null)
+    or (native_completion_attestation_version='custodial-native-completion.v2'
+      and native_completion_attestation_sha256 ~ '^[0-9a-f]{64}$' and native_completed_at is not null
+      and native_finish_scan_entry_id is not null)
+  ),
+  add constraint uq_custodial_offline_native_finish_scan_entry unique(native_finish_scan_entry_id);
+
+drop function public.tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text,text,text,text);
+create function public.tool_commit_cleaning_workflow_authoritative(
   p_client_session_id text,p_client_completion_id text,p_device_id text,p_location_code text,
   p_client_started_at text,p_client_ended_at text,p_response_json jsonb,p_scan_evidence jsonb,
-  p_correlation_id text,p_context_id text,p_submission_proof text,p_authenticated_credential_id text,
+  p_correlation_id text,p_context_id text,p_submission_proof text,p_authenticated_credential_id text,p_native_finish_scan_entry_id text,
   p_native_completion_attestation_version text,p_native_completion_attestation text,
   p_native_route_proof_secret text,p_backend_execution_secret text
 ) returns jsonb language plpgsql security definer set search_path to 'pg_catalog','public','extensions'
 as $function$
 declare
-  v_completion_id uuid; v_context_id uuid; v_result jsonb; v_started_at timestamptz; v_completed_at timestamptz;
+  v_completion_id uuid; v_context_id uuid; v_finish_scan_entry_id uuid; v_result jsonb; v_started_at timestamptz; v_completed_at timestamptz;
   v_native_completed_at timestamptz; v_attestation_sha256 text;
 begin
   begin
@@ -309,18 +325,31 @@ begin
     raise exception using errcode='22023',message='p_client_completion_id must be a UUID';
   end;
   perform public.custodial_require_native_route_proof_secret(p_native_route_proof_secret);
-  if btrim(coalesce(p_native_completion_attestation_version,''))<>'custodial-native-completion.v1'
+  if btrim(coalesce(p_native_completion_attestation_version,''))<>'custodial-native-completion.v2'
      or lower(btrim(coalesce(p_native_completion_attestation,''))) !~ '^[0-9a-f]{64}$' then
     raise exception using errcode='42501',message='a verified native completion attestation is required';
   end if;
   begin
     v_context_id:=lower(btrim(p_context_id))::uuid;
+    v_finish_scan_entry_id:=lower(btrim(p_native_finish_scan_entry_id))::uuid;
     v_native_completed_at:=btrim(p_client_ended_at)::timestamptz;
   exception when others then
     raise exception using errcode='22023',message='native completion evidence is malformed';
   end;
   if not isfinite(v_native_completed_at) then
     raise exception using errcode='22023',message='native completion evidence is malformed';
+  end if;
+  if jsonb_typeof(p_scan_evidence)<>'array'
+     or (select count(*) from jsonb_array_elements(p_scan_evidence) e where e->>'event_type'='scan_finish')<>1
+     or not exists(
+       select 1 from jsonb_array_elements(p_scan_evidence) e
+       where e->>'event_type'='scan_finish'
+         and lower(e->>'client_event_id')=v_finish_scan_entry_id::text
+         and e->>'result'='ok'
+         and e->>'scanned_at'=public.custodial_canonical_utc_millis(v_native_completed_at)
+         and e->'payload_json'->>'entry_source'='native-nfc'
+     ) then
+    raise exception using errcode='42501',message='the signed physical NFC finish scan is required';
   end if;
   v_attestation_sha256:=encode(extensions.digest(convert_to(lower(btrim(p_native_completion_attestation)),'UTF8'),'sha256'),'hex');
   if exists(
@@ -330,7 +359,8 @@ begin
         or (c.native_completion_attestation_version is not null and
           (c.native_completion_attestation_version<>p_native_completion_attestation_version
             or c.native_completion_attestation_sha256<>v_attestation_sha256
-            or c.native_completed_at<>v_native_completed_at)))
+            or c.native_completed_at<>v_native_completed_at
+            or c.native_finish_scan_entry_id<>v_finish_scan_entry_id)))
   ) then
     raise exception using errcode='23505',message='native completion attestation does not match the frozen occurrence';
   end if;
@@ -342,7 +372,8 @@ begin
     update public.custodial_offline_actor_contexts
        set native_completion_attestation_version=p_native_completion_attestation_version,
            native_completion_attestation_sha256=v_attestation_sha256,
-           native_completed_at=v_native_completed_at
+           native_completed_at=v_native_completed_at,
+           native_finish_scan_entry_id=v_finish_scan_entry_id
      where context_id=v_context_id and native_completion_attestation_version is null;
     if not found and not exists(
       select 1 from public.custodial_offline_actor_contexts c
@@ -350,6 +381,7 @@ begin
         and c.native_completion_attestation_version=p_native_completion_attestation_version
         and c.native_completion_attestation_sha256=v_attestation_sha256
         and c.native_completed_at=v_native_completed_at
+        and c.native_finish_scan_entry_id=v_finish_scan_entry_id
     ) then
       raise exception using errcode='23505',message='native completion attestation does not match the frozen occurrence';
     end if;
@@ -364,10 +396,13 @@ begin
     'started_at',public.custodial_canonical_utc_millis(v_started_at),
     'ended_at',public.custodial_canonical_utc_millis(v_completed_at),
     'completed_at',public.custodial_canonical_utc_millis(v_completed_at),
-    'native_completion_attested',v_result->>'status'='closed'
+    'native_completion_attested',v_result->>'status'='closed',
+    'native_finish_scan_entry_id',case when v_result->>'status'='closed' then v_finish_scan_entry_id end
   ));
 end
 $function$;
+revoke all on function public.tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text,text,text,text,text) from public,anon,authenticated;
+grant execute on function public.tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text,text,text,text,text) to postgres,service_role;
 
 create or replace function public.custodial_get_device_rollback_readiness(p_device_identifier text)
 returns jsonb language plpgsql stable security definer set search_path to 'pg_catalog','public'
@@ -1480,7 +1515,7 @@ as $function$
     ('relation','public.device_notification_acknowledgements','phone notification acceptance'),
     ('function','tool_get_offline_scan_authority_snapshot(text,text,text)','offline snapshot boundary'),
     ('function','tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text,text,text,text,text)','native offline start boundary'),
-    ('function','tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text,text,text,text)','native completion boundary'),
+    ('function','tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text,text,text,text,text)','native completion boundary'),
     ('function','tool_complete_session_authoritative(text,jsonb,text,text,text,text)','online completion boundary'),
     ('function','custodial_close_maintenance_ticket_authoritative(uuid,text,text,text)','maintenance terminal boundary'),
     ('function','custodial_finish_historical_session_authoritative(text,text,uuid,timestamp with time zone,text)','historical exact-finish adapter'),
@@ -1550,6 +1585,18 @@ begin
       and to_regprocedure('public.custodial_offline_authority_active_at(text,uuid,timestamptz)') is not null,
     'completion_uuid_constraints',exists(select 1 from pg_constraint where conrelid='public.custodial_offline_reconciliation_records'::regclass and conname='custodial_offline_reconciliation_client_completion_id_uuid')
       and exists(select 1 from pg_constraint where conrelid='public.completion_responses'::regclass and conname='completion_responses_client_completion_id_uuid'),
+    'native_finish_scan_authority',exists(
+      select 1 from pg_attribute
+      where attrelid='public.custodial_offline_actor_contexts'::regclass
+        and attname='native_finish_scan_entry_id' and attnum>0 and not attisdropped
+    )
+      and exists(select 1 from pg_constraint where conrelid='public.custodial_offline_actor_contexts'::regclass and conname='custodial_offline_native_completion_evidence_check')
+      and exists(select 1 from pg_constraint where conrelid='public.custodial_offline_actor_contexts'::regclass and conname='uq_custodial_offline_native_finish_scan_entry')
+      and to_regprocedure('public.tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text,text,text,text,text)') is not null
+      and to_regprocedure('public.tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text,text,text,text)') is null
+      and not has_function_privilege('anon','public.tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text,text,text,text,text)','EXECUTE')
+      and not has_function_privilege('authenticated','public.tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text,text,text,text,text)','EXECUTE')
+      and has_function_privilege('service_role','public.tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text,text,text,text,text)','EXECUTE'),
     'offline_evidence_direct_dml_denied',not (
       has_table_privilege('service_role','public.custodial_offline_actor_contexts','insert')
       or has_table_privilege('service_role','public.custodial_offline_reconciliation_records','insert')
@@ -1563,7 +1610,7 @@ begin
       select 1 from public.custodial_terminal_writer_inventory i
       where i.application_callable and (i.mutates_terminal_truth or i.delegates_alternate_terminal_authority)
         and i.oid is distinct from to_regprocedure('public.tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text,text,text,text,text)')
-        and i.oid is distinct from to_regprocedure('public.tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text,text,text,text)')
+        and i.oid is distinct from to_regprocedure('public.tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text,text,text,text,text)')
         and i.oid is distinct from to_regprocedure('public.tool_complete_session_authoritative(text,jsonb,text,text,text,text)')
         and i.oid is distinct from to_regprocedure('public.custodial_close_maintenance_ticket_authoritative(uuid,text,text,text)')
         and i.oid is distinct from to_regprocedure('public.custodial_finish_historical_session_authoritative(text,text,uuid,timestamptz,text)')

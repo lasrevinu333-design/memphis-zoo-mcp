@@ -71,6 +71,7 @@ left join lateral (
   join public.custodial_offline_scan_event_evidence finish_evidence
     on finish_evidence.context_id=context.context_id
    and finish_evidence.reconciliation_id=reconciliation.reconciliation_id
+   and finish_evidence.client_event_id=context.native_finish_scan_entry_id::text
   join public.scan_events finish_event
     on finish_event.client_event_id=finish_evidence.client_event_id
    and finish_event.session_id=reconciliation.session_id
@@ -80,7 +81,8 @@ left join lateral (
     and context.native_scan_entry_id is not null
     and context.native_start_attestation_version='custodial-native-start.v1'
     and context.native_start_attestation_sha256 ~ '^[0-9a-f]{64}$'
-    and context.native_completion_attestation_version='custodial-native-completion.v1'
+    and context.native_finish_scan_entry_id is not null
+    and context.native_completion_attestation_version='custodial-native-completion.v2'
     and context.native_completion_attestation_sha256 ~ '^[0-9a-f]{64}$'
     and context.native_completed_at is not null
     and start_event.device_id=context.device_id

@@ -51,6 +51,7 @@
       "apply 20260813173000_device_sync_actor_groups.sql",
       "apply 20260813190000_release_phone_transport_and_offline_activation_closure.sql",
       "apply 20260813210000_custodial_u4_ops_closure.sql",
+      "apply 20260814224034_reconcile_static_weekly_day_change_receipts.sql",
       "require a green authority health gate and direct-DML denial probes before routing traffic"
     ],
     "rollback": {
@@ -70,6 +71,7 @@
         ,"pending phone work reports every issued snapshot employee and assignment epoch separately; legacy aggregate-only reports remain explicitly unbound"
         ,"offline work begun while snapshot, credential, and assignment authority were valid can activate after reconnect, while work begun after revocation, expiry, or reassignment is rejected"
         ,"native wire timestamps are canonical UTC milliseconds; immutable activation boundaries and catalog-derived authority restoration remain healthy after negative mutations"
+        ,"complete Weekly Schedule day-change batches pass the database receipt-chain health gate; exact replay is read-only and prefix, extension, reorder, and content conflicts fail atomically"
       ]
     }
   },

@@ -197,14 +197,16 @@ export function verifyNativeOfflineWorkAttestation(req, args, kind) {
     const completionId = String(args.p_client_completion_id || "").trim();
     const reconciliation = args.p_response_json?.__custodial_offline_reconciliation_v1;
     const contextId = String(reconciliation?.context_id || "").trim().toLowerCase();
+    const nativeFinishScanEntryId = String(args.p_native_finish_scan_entry_id || "").trim().toLowerCase();
     const startedAt = canonicalNativeTimestamp(args.p_client_started_at);
     const endedAt = canonicalNativeTimestamp(args.p_client_ended_at);
-    if (version !== "custodial-native-completion.v1" || !UUID_PATTERN.test(completionId) || !UUID_PATTERN.test(contextId) || !startedAt || !endedAt) {
+    if (version !== "custodial-native-completion.v2" || !UUID_PATTERN.test(completionId)
+        || !UUID_PATTERN.test(contextId) || !UUID_PATTERN.test(nativeFinishScanEntryId) || !startedAt || !endedAt) {
       throw Object.assign(new Error("Complete native completion attestation is required."), { status: 403, code: "native_completion_attestation_required" });
     }
-    const message = [version, credentialId, deviceId, location, sessionId, completionId, contextId, startedAt, endedAt].join("\n");
+    const message = [version, credentialId, deviceId, location, sessionId, completionId, contextId, nativeFinishScanEntryId, startedAt, endedAt].join("\n");
     const signature = verifyNativeHmac(secret, message, args.p_native_completion_attestation, "native_completion_attestation_invalid");
-    return { version, signature, started_at: startedAt, ended_at: endedAt, context_id: contextId };
+    return { version, signature, started_at: startedAt, ended_at: endedAt, context_id: contextId, native_finish_scan_entry_id: nativeFinishScanEntryId };
   }
   throw new Error(`Unsupported native work attestation kind: ${kind}`);
 }

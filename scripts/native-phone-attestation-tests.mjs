@@ -10,6 +10,7 @@ import {
 const credentialId = "123e4567-e89b-42d3-a456-426614174000";
 const employeeId = "223e4567-e89b-42d3-a456-426614174000";
 const contextId = "323e4567-e89b-42d3-a456-426614174000";
+const finishScanEntryId = "623e4567-e89b-42d3-a456-426614174000";
 const requestId = "423e4567-e89b-42d3-a456-426614174000";
 const secret = "native_phone_attestation_test_secret_0123456789";
 const token = `${credentialId}.${secret}`;
@@ -112,11 +113,12 @@ const completionArgs = {
   p_client_started_at: startArgs.p_client_started_at,
   p_client_ended_at: "2026-08-13T14:55:00.000Z",
   p_response_json: { __custodial_offline_reconciliation_v1: { context_id: contextId, submission_proof: "b".repeat(64) } },
-  p_native_completion_attestation_version: "custodial-native-completion.v1",
+  p_native_finish_scan_entry_id: finishScanEntryId,
+  p_native_completion_attestation_version: "custodial-native-completion.v2",
 };
 completionArgs.p_native_completion_attestation = hmac([
   completionArgs.p_native_completion_attestation_version, credentialId, "KIOSK_08", "TETM",
-  completionArgs.p_client_session_id, completionArgs.p_client_completion_id, contextId,
+  completionArgs.p_client_session_id, completionArgs.p_client_completion_id, contextId, finishScanEntryId,
   completionArgs.p_client_started_at, completionArgs.p_client_ended_at,
 ].join("\n"));
 assert.equal(verifyNativeOfflineWorkAttestation(request(), completionArgs, "completion").ended_at, completionArgs.p_client_ended_at);
@@ -124,6 +126,16 @@ assert.throws(
   () => verifyNativeOfflineWorkAttestation(request(), { ...completionArgs, p_client_completion_id: "not-a-uuid" }, "completion"),
   (error) => error?.code === "native_completion_attestation_required",
   "native completion identity must be a UUID before its attestation is accepted",
+);
+assert.throws(
+  () => verifyNativeOfflineWorkAttestation(request(), { ...completionArgs, p_native_finish_scan_entry_id: requestId }, "completion"),
+  (error) => error?.code === "native_completion_attestation_invalid",
+  "a signed completion cannot be moved to another physical NFC finish scan",
+);
+assert.throws(
+  () => verifyNativeOfflineWorkAttestation(request(), { ...completionArgs, p_native_finish_scan_entry_id: undefined }, "completion"),
+  (error) => error?.code === "native_completion_attestation_required",
+  "a native completion without a physical NFC finish identity is refused",
 );
 assert.throws(
   () => verifyNativeOfflineWorkAttestation(request(), { ...completionArgs, p_client_ended_at: "2026-08-13T14:56:00.000Z" }, "completion"),

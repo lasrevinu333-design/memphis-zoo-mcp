@@ -526,6 +526,7 @@ function bindOfflineActorProof(fn, args, credential) {
     p_context_id: String(requestedControl.context_id || ""),
     p_submission_proof: String(requestedControl.submission_proof || ""),
     p_authenticated_credential_id: credential.credential_id,
+    p_native_finish_scan_entry_id: nextArgs.p_native_finish_scan_entry_id,
     p_native_completion_attestation_version: nextArgs.p_native_completion_attestation_version,
     p_native_completion_attestation: nextArgs.p_native_completion_attestation,
     p_native_route_proof_secret: nextArgs.p_native_route_proof_secret,
@@ -582,6 +583,7 @@ async function executeScanRpcTransport(fn, args, device, credential, req) {
     const attestation = verifyNativeOfflineWorkAttestation(req, preparedBase.args, "completion");
     preparedBase.args.p_native_completion_attestation_version = attestation.version;
     preparedBase.args.p_native_completion_attestation = attestation.signature;
+    preparedBase.args.p_native_finish_scan_entry_id = attestation.native_finish_scan_entry_id;
     preparedBase.args.p_native_route_proof_secret = nativeRouteProofSecret();
   }
   const proofBound = bindOfflineActorProof(preparedBase.fn, preparedBase.args, credential);
