@@ -277,6 +277,7 @@ const SCAN_READ_FUNCTIONS = new Set([
   "tool_get_location_scan_state",
   "tool_get_offline_scan_authority_snapshot",
 ]);
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function clientIp(req) {
   return String(req.headers["x-forwarded-for"] || req.ip || req.socket?.remoteAddress || "unknown")
@@ -363,8 +364,8 @@ function prepareScanRpcCall(fn, args) {
       error.status = 422;
       throw error;
     }
-    if (!completionId) {
-      const error = new Error("p_client_completion_id is required for idempotent completion.");
+    if (!UUID_PATTERN.test(completionId)) {
+      const error = new Error("p_client_completion_id must be a UUID for idempotent completion.");
       error.status = 422;
       throw error;
     }
@@ -382,8 +383,8 @@ function prepareScanRpcCall(fn, args) {
   if (normalizedFn === "tool_commit_cleaning_workflow") {
     const clientSessionId = String(nextArgs.p_client_session_id || "").trim();
     const clientCompletionId = String(nextArgs.p_client_completion_id || "").trim();
-    if (!clientSessionId || !clientCompletionId) {
-      const error = new Error("p_client_session_id and p_client_completion_id are required for idempotent completion.");
+    if (!clientSessionId || !UUID_PATTERN.test(clientCompletionId)) {
+      const error = new Error("p_client_session_id is required and p_client_completion_id must be a UUID for idempotent completion.");
       error.status = 422;
       throw error;
     }

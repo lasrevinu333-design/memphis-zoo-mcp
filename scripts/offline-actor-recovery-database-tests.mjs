@@ -30,6 +30,16 @@ let endedAt;
 const entryEvidence = { entry_source: "native-nfc" };
 
 function q(value) { return `'${String(value ?? "").replaceAll("'", "''")}'`; }
+function completionUuid(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(raw)) return raw;
+  const hex = createHash("sha256").update(`offline-completion:${raw}`).digest("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+}
+function assertCanonicalUtcMillis(value, label) {
+  assert.match(value, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/, `${label} must be canonical UTC milliseconds`);
+  assert.equal(value, new Date(value).toISOString(), `${label} bytes must equal native canonical UTC text`);
+}
 async function sql(statement, { expectFailure = false } = {}) {
   try {
     const result = await execFileAsync("docker", ["exec", container, "psql", "-v", "ON_ERROR_STOP=1", "-At", "-U", "supabase_admin", "-d", database, "-c", statement], { maxBuffer: 16 * 1024 * 1024 });
@@ -51,7 +61,7 @@ function jsonSql({ session, completion, context, proof, device, location, creden
     payload_json: event.payload_json ?? entryEvidence,
   }));
   return `select public.tool_commit_cleaning_workflow_authoritative(
-    ${q(session)},${q(completion)},${q(device)},${q(location)},${q(start)},${q(end)},
+    ${q(session)},${q(completionUuid(completion))},${q(device)},${q(location)},${q(start)},${q(end)},
     ${q(JSON.stringify(response))}::jsonb,${q(JSON.stringify(canonicalScans))}::jsonb,${q(correlation)},
     ${q(context)},${q(proof)},${q(credential)},'custodial-native-completion.v1',
     ${q(nativeCompletionSignature)},${q(nativeRouteSecret)},${q(execSecret)}
@@ -112,8 +122,18 @@ assert.equal(snapshot.employee_name, "Offline Authority Actor A");
 assert.equal(snapshot.assignment_epoch, 1);
 assert.equal(snapshot.locations.some((row) => row.location_code === codeA), true);
 assert.equal(Date.parse(snapshot.expires_at) - Date.parse(snapshot.generated_at) <= 24 * 60 * 60 * 1000, true);
+assertCanonicalUtcMillis(snapshot.generated_at, "snapshot.generated_at");
+assertCanonicalUtcMillis(snapshot.expires_at, "snapshot.expires_at");
 const foreignSnapshotDenied = await sql(`select public.tool_get_offline_scan_authority_snapshot(${q(`OA-${stamp}-A`)},${q(credentialB)},${q(execSecret)});`, { expectFailure: true });
 assert.match(foreignSnapshotDenied, /active authenticated employee-device assignment is required/i);
+const invalidCompletionIdDenied = await sql(`select public.tool_commit_cleaning_workflow_authoritative(
+  'invalid-uuid-session','not-a-uuid',${q(`OA-${stamp}-A`)},${q(codeA)},${q(startedAt)},${q(endedAt)},
+  '{}'::jsonb,'[]'::jsonb,null,${q(randomUUID())},${q("a".repeat(64))},${q(credentialA)},
+  'custodial-native-completion.v1',${q(nativeCompletionSignature)},${q(nativeRouteSecret)},${q(execSecret)});`, { expectFailure: true });
+assert.match(invalidCompletionIdDenied, /p_client_completion_id must be a UUID/i,
+  "SQL rejects non-UUID completion identity before any reconciliation storage write");
+assert.equal(await sql("select count(*) from pg_constraint where conname in ('custodial_offline_reconciliation_client_completion_id_uuid','completion_responses_client_completion_id_uuid') and convalidated is false;"), "2",
+  "new completion storage checks protect future writes while retaining historical rows");
 
 await sql(`update public.devices set active=false where id='${deviceC}'::uuid;
   update public.locations set active=false where id='${locationC}'::uuid;`);
@@ -145,6 +165,13 @@ const deactivatedDelayedCompletion = JSON.parse(await sql(jsonSql({
 })));
 assert.equal(deactivatedDelayedCompletion.status, "closed",
   "snapshot-bound work also completes after later device and location deactivation");
+const postDeactivationNewStartDenied = await sql(`select public.tool_start_offline_occurrence(
+  ${q(`OA-${stamp}-C`)},${q(codeC)},${q(`oa-${stamp}-deactivated-new`)},
+  ${q(new Date(Date.now() + 5_000).toISOString())},${q(snapshotsByDevice.get(`OA-${stamp}-C`).snapshot_id)},
+  ${q(snapshotsByDevice.get(`OA-${stamp}-C`).employee_id)},${snapshotsByDevice.get(`OA-${stamp}-C`).assignment_epoch},
+  ${q(credentialC)},${q(credentialC)},${q(randomUUID())},'custodial-native-start.v1',${q(nativeStartSignature)},${q(nativeRouteSecret)},${q(execSecret)});`, { expectFailure: true });
+assert.match(postDeactivationNewStartDenied, /device or location was not active when the offline occurrence began/i,
+  "an old snapshot cannot authorize a new physical start after deactivation");
 
 const sessionA = `oa-${stamp}-accepted`;
 const contextA = await activate({ device: `OA-${stamp}-A`, location: codeA, session: sessionA });
@@ -285,6 +312,8 @@ const scanId = `oa-${stamp}-scan-1`;
 const acceptedSql = jsonSql({ session: sessionA, completion: `oa-${stamp}-complete-1`, context: contextA.context_id, proof: contextA.submission_proof, device: `OA-${stamp}-A`, location: codeA, scans: [{ event_type: "scan_finish", client_event_id: scanId, scanned_at: endedAt, result: "ok", payload_json: entryEvidence }] });
 const accepted = JSON.parse(await sql(acceptedSql));
 assert.equal(accepted.status, "closed");
+assertCanonicalUtcMillis(accepted.started_at, "accepted.started_at");
+assertCanonicalUtcMillis(accepted.completed_at, "accepted.completed_at");
 assert.equal(await sql(`select employee_id::text from public.sessions where client_session_id=${q(sessionA)};`), employeeA);
 const replays = await Promise.all(Array.from({ length: 8 }, () => sql(acceptedSql).then(JSON.parse)));
 assert.equal(replays.filter((result) => result.replayed === true).length, 8, "concurrent exact retries converge");
@@ -306,8 +335,8 @@ const malformed = await activate({ device: `OA-${stamp}-C`, location: codeC, ses
 const malformedStart = malformed.started_at;
 const malformedResult = JSON.parse(await sql(jsonSql({ session: `oa-${stamp}-malformed`, completion: `oa-${stamp}-malformed-complete`, context: malformed.context_id, proof: malformed.submission_proof, device: `OA-${stamp}-C`, location: codeC, credential: credentialC, start: malformedStart, end: new Date().toISOString(), response: {}, scans: [{ event_type: "scan_finish", client_event_id: `oa-${stamp}-bad`, scanned_at: "not-a-time" }], correlation: "malformed" })));
 assert.equal(malformedResult.reason, "malformed_scan_evidence");
-assert.equal(await sql(`select count(*) from public.completion_responses where client_completion_id=${q(`oa-${stamp}-malformed-complete`)};`), "0");
-assert.equal(await sql(`select count(*) from public.custodial_offline_reconciliation_outbox o join public.custodial_offline_reconciliation_records r on r.reconciliation_id=o.reconciliation_id where r.client_completion_id=${q(`oa-${stamp}-malformed-complete`)} and o.notification_kind='offline_reconciliation_quarantine';`), "1", "each new quarantine has one deduplicated manager outbox record");
+assert.equal(await sql(`select count(*) from public.completion_responses where client_completion_id=${q(completionUuid(`oa-${stamp}-malformed-complete`))};`), "0");
+assert.equal(await sql(`select count(*) from public.custodial_offline_reconciliation_outbox o join public.custodial_offline_reconciliation_records r on r.reconciliation_id=o.reconciliation_id where r.client_completion_id=${q(completionUuid(`oa-${stamp}-malformed-complete`))} and o.notification_kind='offline_reconciliation_quarantine';`), "1", "each new quarantine has one deduplicated manager outbox record");
 
 const provenanceSession = `oa-${stamp}-provenance`;
 const provenanceStart = new Date(latestSnapshotGeneratedAt + 6).toISOString();
@@ -365,7 +394,7 @@ assert.equal(await sql(`select status from public.custodial_offline_actor_contex
 assert.equal(await sql(`select state from public.custodial_offline_submission_proofs where context_id=${q(fenceB.context_id)}::uuid;`), "quarantined");
 const fencedRetry = JSON.parse(await sql(jsonSql({ session: `oa-${stamp}-fence-b`, completion: `oa-${stamp}-fence-b-new-key`, context: fenceB.context_id, proof: fenceB.submission_proof, device: `OA-${stamp}-C`, location: codeC, credential: credentialC, start: fenceStart, end: fenceEnd })));
 assert.equal(fencedRetry.status, "quarantined");
-assert.equal(await sql(`select count(*) from public.completion_responses where client_completion_id=${q(`oa-${stamp}-fence-b-new-key`)};`), "0", "fenced proof never mints a second completion");
+assert.equal(await sql(`select count(*) from public.completion_responses where client_completion_id=${q(completionUuid(`oa-${stamp}-fence-b-new-key`))};`), "0", "fenced proof never mints a second completion");
 
 const duplicate = await activate({ device: `OA-${stamp}-C`, location: codeC, session: `oa-${stamp}-duplicate-events`, start: fenceStart, credential: credentialC });
 const duplicateResult = JSON.parse(await sql(jsonSql({
@@ -399,7 +428,10 @@ assert.equal(oversizedResult.reason, "invalid_payload_shape_or_bounds", "oversiz
 await sql(`update public.devices set assigned_employee_id='${employeeB}'::uuid where id='${deviceB}'::uuid;
   insert into public.custodial_employee_device_assignment_history(device_id,device_identifier,new_employee_id,new_employee_name,change_reason,source)
   values('${deviceB}'::uuid,'OA-${stamp}-B','${employeeB}'::uuid,'Offline Authority Actor B','race fixture','test');`);
+await sql(`update public.devices set active=true where id='${deviceC}'::uuid;
+  update public.locations set active=true where id='${locationC}'::uuid;`);
 snapshotsByDevice.set(`OA-${stamp}-B`, JSON.parse(await sql(`select public.tool_get_offline_scan_authority_snapshot(${q(`OA-${stamp}-B`)},${q(credentialB)},${q(execSecret)})::text;`)));
+snapshotsByDevice.set(`OA-${stamp}-C`, JSON.parse(await sql(`select public.tool_get_offline_scan_authority_snapshot(${q(`OA-${stamp}-C`)},${q(credentialC)},${q(execSecret)})::text;`)));
 const raceSnapshotGeneratedAt = Math.max(
   Date.parse(snapshotsByDevice.get(`OA-${stamp}-B`).generated_at),
   Date.parse(snapshotsByDevice.get(`OA-${stamp}-C`).generated_at),
@@ -414,10 +446,10 @@ const [raceResultA, raceResultB] = await Promise.all([
   sql(jsonSql({ session: `oa-${stamp}-race-b`, completion: `oa-${stamp}-race-b-complete`, context: raceB.context_id, proof: raceB.submission_proof, device: `OA-${stamp}-C`, location: codeC, credential: credentialC, start: raceStart, end: raceEnd, scans: [{ event_type: "scan_finish", client_event_id: sharedEvent, scanned_at: raceEnd, result: "B" }] })).then(JSON.parse),
 ]);
 assert.equal([raceResultA, raceResultB].filter((result) => result.status === "closed").length, 1);
-const raceLoser = raceResultA.status === "quarantined" ? `oa-${stamp}-race-a-complete` : `oa-${stamp}-race-b-complete`;
+const raceLoser = completionUuid(raceResultA.status === "quarantined" ? `oa-${stamp}-race-a-complete` : `oa-${stamp}-race-b-complete`);
 assert.equal(await sql(`select count(*) from public.custodial_offline_reconciliation_outbox o join public.custodial_offline_reconciliation_records r on r.reconciliation_id=o.reconciliation_id where r.client_completion_id=${q(raceLoser)};`), "1", "cross-submission event race leaves a durable manager follow-up record");
 
-const reconciliationId = await sql(`select reconciliation_id::text from public.custodial_offline_reconciliation_records where client_completion_id=${q(`oa-${stamp}-malformed-complete`)};`);
+const reconciliationId = await sql(`select reconciliation_id::text from public.custodial_offline_reconciliation_records where client_completion_id=${q(completionUuid(`oa-${stamp}-malformed-complete`))};`);
 const managerId = "00000000-0000-4000-8000-000000000001";
 const dispositionRequestId = randomUUID();
 const dispositionSql = `select public.custodial_manager_dispose_offline_reconciliation('${managerId}'::uuid,${q(reconciliationId)}::uuid,'reviewed','validated exactly-once recovery disposition','${dispositionRequestId}'::uuid,${q(execSecret)})::text;`;

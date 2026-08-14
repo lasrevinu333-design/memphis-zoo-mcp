@@ -199,7 +199,7 @@ export function verifyNativeOfflineWorkAttestation(req, args, kind) {
     const contextId = String(reconciliation?.context_id || "").trim().toLowerCase();
     const startedAt = canonicalNativeTimestamp(args.p_client_started_at);
     const endedAt = canonicalNativeTimestamp(args.p_client_ended_at);
-    if (version !== "custodial-native-completion.v1" || !completionId || !UUID_PATTERN.test(contextId) || !startedAt || !endedAt) {
+    if (version !== "custodial-native-completion.v1" || !UUID_PATTERN.test(completionId) || !UUID_PATTERN.test(contextId) || !startedAt || !endedAt) {
       throw Object.assign(new Error("Complete native completion attestation is required."), { status: 403, code: "native_completion_attestation_required" });
     }
     const message = [version, credentialId, deviceId, location, sessionId, completionId, contextId, startedAt, endedAt].join("\n");

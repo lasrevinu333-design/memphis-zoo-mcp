@@ -832,7 +832,7 @@ begin
     v_session_uuid,
     '{"services_performed":["trash_removed"],"notes":"Routine cleaning completed without a maintenance issue."}'::jsonb,
     'REBUILD-FINISH-DEVICE',
-    'rebuild-routine-notes-completion',
+    '10000000-0000-4000-8000-000000000011',
     '00000000-0000-4000-8000-00000000f110',
     'empty-rebuild-offline-authority-secret-0123456789'
   );
@@ -843,7 +843,7 @@ begin
     v_session_uuid,
     '{"services_performed":["trash_removed"],"notes":"Routine cleaning completed without a maintenance issue."}'::jsonb,
     'REBUILD-FINISH-DEVICE',
-    'rebuild-routine-notes-completion',
+    '10000000-0000-4000-8000-000000000011',
     '00000000-0000-4000-8000-00000000f110',
     'empty-rebuild-offline-authority-secret-0123456789'
   );
@@ -872,7 +872,7 @@ begin
     v_issue_session_uuid,
     '{"services_performed":["trash_removed"],"notes":"Routine context.","maintenance_issues":[{"label":"Leaking toilet","fixture_identifier":"stall 2"}]}'::jsonb,
     'REBUILD-FINISH-DEVICE-SECOND',
-    'rebuild-explicit-issue-completion',
+    '10000000-0000-4000-8000-000000000012',
     '00000000-0000-4000-8000-00000000f126',
     'empty-rebuild-offline-authority-secret-0123456789'
   );

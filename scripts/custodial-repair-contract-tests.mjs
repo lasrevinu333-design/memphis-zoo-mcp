@@ -44,7 +44,7 @@ const foreignKeyIndexMigration = readFileSync(
 
 assert.doesNotMatch(indexSource, /"tool_start_session_v2"/);
 assert.doesNotMatch(indexSource, /"tool_record_scan_event"/);
-assert.match(indexSource, /p_client_completion_id are required for idempotent completion/);
+assert.match(indexSource, /p_client_session_id is required and p_client_completion_id must be a UUID for idempotent completion/);
 assert.match(indexSource, /prepareScanRpcCall/);
 assert.match(indexSource, /bindOfflineActorProof/);
 assert.match(indexSource, /tool_start_offline_occurrence/);
@@ -80,7 +80,7 @@ assert.match(releaseManifestSource, /schema-fingerprint\.txt/);
 assert.match(releaseManifestSource, /supabase\/migrations/);
 assert.match(releaseManifestSource, /queue_compatibility_versions/);
 assert.match(releaseManifestSource, /minimum_supported/);
-assert.equal(frontendReleaseManifest.frontend_commit_sha, "44d97c1fb50dfb56b5d13dc4bb554d867c9acc20");
+assert.equal(frontendReleaseManifest.frontend_commit_sha, "c90e1260876990f9139e19a80f81d626aa57a77b");
 assert.equal(frontendReleaseManifest.frontend_commit_state, "final_pair_bound");
 assert.equal(frontendReleaseManifest.api_contract_versions.operational_analytics, "operational-analytics.v1");
 assert.equal(packageJson.scripts["test:schema-fingerprint"], "node scripts/schema-fingerprint-check.mjs");

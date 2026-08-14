@@ -108,7 +108,7 @@ assert.throws(
 const completionArgs = {
   p_location_code: "TETM",
   p_client_session_id: startArgs.p_client_session_id,
-  p_client_completion_id: "native-attestation-completion-1",
+  p_client_completion_id: "523e4567-e89b-42d3-a456-426614174000",
   p_client_started_at: startArgs.p_client_started_at,
   p_client_ended_at: "2026-08-13T14:55:00.000Z",
   p_response_json: { __custodial_offline_reconciliation_v1: { context_id: contextId, submission_proof: "b".repeat(64) } },
@@ -120,6 +120,11 @@ completionArgs.p_native_completion_attestation = hmac([
   completionArgs.p_client_started_at, completionArgs.p_client_ended_at,
 ].join("\n"));
 assert.equal(verifyNativeOfflineWorkAttestation(request(), completionArgs, "completion").ended_at, completionArgs.p_client_ended_at);
+assert.throws(
+  () => verifyNativeOfflineWorkAttestation(request(), { ...completionArgs, p_client_completion_id: "not-a-uuid" }, "completion"),
+  (error) => error?.code === "native_completion_attestation_required",
+  "native completion identity must be a UUID before its attestation is accepted",
+);
 assert.throws(
   () => verifyNativeOfflineWorkAttestation(request(), { ...completionArgs, p_client_ended_at: "2026-08-13T14:56:00.000Z" }, "completion"),
   (error) => error?.code === "native_completion_attestation_invalid",
