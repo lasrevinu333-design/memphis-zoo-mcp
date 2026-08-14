@@ -48,6 +48,15 @@ function isUuid(value) {
   );
 }
 
+function authenticatedEventActor(req) {
+  const managerId = String(req?.memphisAuth?.manager_id || "").trim();
+  const displayName = String(req?.memphisAuth?.manager_display_name || "").replace(/\s+/g, " ").trim();
+  if (!isUuid(managerId) || !displayName) {
+    throw Object.assign(new Error("Authenticated named manager identity is required."), { status: 403 });
+  }
+  return { manager_id: managerId, display_name: displayName.slice(0, 200) };
+}
+
 function normalizeTimeInput(value) {
   const raw = String(value || "").trim().toLowerCase();
   if (!raw) throw new Error("Time is required.");
@@ -190,7 +199,6 @@ function normalizeEventLocationPayload(payload = {}, referenceData = {}) {
   const sourceText = String(payload.source_text || payload.raw_text || "").trim() || null;
   const sourceFormat = String(payload.source_format || "").trim() || null;
   const manuallyOverridden = Boolean(payload.manually_overridden);
-  const overriddenBy = payload.overridden_by == null ? null : String(payload.overridden_by).trim() || null;
   const eventTimezone = String(payload.event_timezone || EVENTS_TIME_ZONE).trim() || EVENTS_TIME_ZONE;
 
   if (eventTimezone !== EVENTS_TIME_ZONE) throw new Error(`event_timezone must be ${EVENTS_TIME_ZONE}.`);
@@ -310,8 +318,8 @@ function normalizeEventLocationPayload(payload = {}, referenceData = {}) {
     source_text: sourceText,
     source_format: sourceFormat,
     manually_overridden: manuallyOverridden,
-    overridden_by: overriddenBy,
-    overridden_at: manuallyOverridden ? new Date().toISOString() : null,
+    overridden_by: null,
+    overridden_at: null,
     event_timezone: eventTimezone,
     location_group_id: finalLegacyLocationGroupId,
   };
@@ -344,7 +352,6 @@ function normalizeEventPayload(payload = {}, referenceData = {}) {
   const endTime = normalizeTimeInput(payload.end_time);
   const attendeeCount = toNullableInt(payload.attendee_count);
   const notes = sanitizeEventNotes(payload.notes, attendeeCount);
-  const createdBy = payload.created_by == null ? null : String(payload.created_by).trim() || null;
   const operationId = payload.operation_id == null || payload.operation_id === "" ? null : String(payload.operation_id).trim();
   const location = normalizeEventLocationPayload(payload, referenceData);
 
@@ -368,7 +375,6 @@ function normalizeEventPayload(payload = {}, referenceData = {}) {
     end_time: endTime,
     attendee_count: attendeeCount,
     notes,
-    created_by: createdBy,
     spans_overnight: spansOvernight,
     operation_id: operationId,
   };
@@ -415,6 +421,7 @@ function buildEventResponseSelectSql(whereSql, suffixSql = "") {
       coalesce(e.status, 'SCHEDULED') as status,
       e.cancelled_at,
       e.cancelled_by,
+      e.cancelled_by_manager_id,
       e.cancellation_reason,
       e.archived_at,
       e.primary_venue_id,
@@ -447,6 +454,8 @@ function buildEventResponseSelectSql(whereSql, suffixSql = "") {
         else e.notes
       end as notes,
       e.created_by,
+      e.created_by_manager_id,
+      e.updated_by_manager_id,
       e.created_at,
       e.updated_at
     from public.events_app_events e
@@ -631,10 +640,16 @@ function normalizeWriteResultRows(result) {
   return [];
 }
 
-async function createEventRecord(runReadOnlySql, runCommand, payload) {
+async function createEventRecord(runReadOnlySql, runCommand, payload, actor) {
   const referenceData = await getEventReferenceData(runReadOnlySql);
-  const record = normalizeEventPayload(payload, referenceData);
-  const rows = normalizeWriteResultRows(await runCommand("event_create", { record }));
+  const normalized = normalizeEventPayload(payload, referenceData);
+  const record = {
+    ...normalized,
+    actor_manager_id: actor.manager_id,
+    created_by: actor.display_name,
+    overridden_by: normalized.manually_overridden ? actor.display_name : null,
+  };
+  const rows = normalizeWriteResultRows(await runCommand("event_create", { record, actor: actor.display_name }));
   const writeRow = rows.find((row) => row?.id);
   if (writeRow) return { ...record, ...writeRow };
   const authoritativeRow = await readEventByOperationId(runReadOnlySql, record.operation_id);
@@ -642,14 +657,18 @@ async function createEventRecord(runReadOnlySql, runCommand, payload) {
   return record;
 }
 
-async function updateEventRecord(runReadOnlySql, runCommand, eventId, payload) {
+async function updateEventRecord(runReadOnlySql, runCommand, eventId, payload, actor) {
   const normalizedId = String(eventId || "").trim();
   if (!isUuid(normalizedId)) throw new Error("A valid event id is required.");
   const referenceData = await getEventReferenceData(runReadOnlySql);
-  const record = normalizeEventPayload({ ...payload, manually_overridden: true }, referenceData);
+  const record = {
+    ...normalizeEventPayload({ ...payload, manually_overridden: true }, referenceData),
+    actor_manager_id: actor.manager_id,
+    overridden_by: actor.display_name,
+  };
   const rows = normalizeWriteResultRows(await runCommand("event_update", {
     event_id: normalizedId, record,
-    actor: record.overridden_by || record.created_by || "Input Console",
+    actor: actor.display_name,
     reason: record.parse_reason || "Event updated from Event Input Console.",
   }));
   const writeRow = rows.find((row) => row?.id);
@@ -659,11 +678,13 @@ async function updateEventRecord(runReadOnlySql, runCommand, eventId, payload) {
   throw new Error("Event not found.");
 }
 
-async function deleteEventRecord(runCommand, eventId, actor = "Input Console", reason = "Event cancelled from Event Input Console.") {
+async function deleteEventRecord(runCommand, eventId, actor, reason = "Event cancelled from Event Input Console.") {
   const normalizedId = String(eventId || "").trim();
   if (!isUuid(normalizedId)) throw new Error("A valid event id is required.");
   const rows = normalizeWriteResultRows(await runCommand("event_cancel", {
-    event_id: normalizedId, actor: String(actor || "Input Console").slice(0, 200),
+    event_id: normalizedId,
+    record: { actor_manager_id: actor.manager_id },
+    actor: actor.display_name,
     reason: String(reason || "Event cancelled.").slice(0, 1000),
   }));
   const row = rows.find((item) => item?.id);
@@ -1011,7 +1032,8 @@ export function createEventsAdminRouter({
       const record = await createEventRecord(
         runReadOnlySql,
         runCommand,
-        req.body && typeof req.body === "object" ? req.body : {}
+        req.body && typeof req.body === "object" ? req.body : {},
+        authenticatedEventActor(req),
       );
       maintenanceController?.kick("events_admin_create_after");
       res.status(200).json({
@@ -1024,7 +1046,7 @@ export function createEventsAdminRouter({
         },
       });
     } catch (error) {
-      fail(res, error, "Create event failed", 400);
+      fail(res, error, "Create event failed", Number(error?.status) || 400);
     }
   });
 
@@ -1034,7 +1056,8 @@ export function createEventsAdminRouter({
         runReadOnlySql,
         runCommand,
         req.params.eventId,
-        req.body && typeof req.body === "object" ? req.body : {}
+        req.body && typeof req.body === "object" ? req.body : {},
+        authenticatedEventActor(req),
       );
       maintenanceController?.kick("events_admin_update_after");
       res.status(200).json({
@@ -1047,7 +1070,7 @@ export function createEventsAdminRouter({
         },
       });
     } catch (error) {
-      fail(res, error, "Update event failed", 400);
+      fail(res, error, "Update event failed", Number(error?.status) || 400);
     }
   });
 
@@ -1056,7 +1079,7 @@ export function createEventsAdminRouter({
       const result = await deleteEventRecord(
         runCommand,
         req.params.eventId,
-        req.body?.cancelled_by || req.body?.actor || "Input Console",
+        authenticatedEventActor(req),
         req.body?.reason || "Event cancelled from Event Input Console.",
       );
       res.status(200).json({
@@ -1069,7 +1092,7 @@ export function createEventsAdminRouter({
         },
       });
     } catch (error) {
-      fail(res, error, "Delete event failed", 400);
+      fail(res, error, "Delete event failed", Number(error?.status) || 400);
     }
   });
 

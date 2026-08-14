@@ -37,14 +37,18 @@ async function sqlAsync(statement) {
 const stamp = randomUUID().replaceAll("-", "").slice(0, 12);
 const locationId = randomUUID();
 const employeeId = randomUUID();
+const employeeCode = `EMP${BigInt(`0x${stamp}`).toString()}`;
 const deviceId = randomUUID();
+const assignmentDeviceId = randomUUID();
 sql(`
   insert into public.locations(id,location_code,location_name,location_type,form_type,active)
   values ('${locationId}'::uuid,'UNCERTAINTY_${stamp}','Uncertainty stale session','restroom','restroom',true);
   insert into public.employees(id,employee_code,display_name,active,role)
-  values ('${employeeId}'::uuid,'UNC${stamp}','Uncertainty Employee',true,'staff');
+  values ('${employeeId}'::uuid,'${employeeCode}','Uncertainty Employee',true,'staff');
   insert into public.devices(id,device_id,device_name,active,assigned_employee_id)
   values ('${deviceId}'::uuid,'UNCERTAINTY_${stamp}','Uncertainty Device',true,'${employeeId}'::uuid);
+  insert into public.devices(id,device_id,device_name,active,assigned_employee_id)
+  values ('${assignmentDeviceId}'::uuid,'KIOSK_10','Uncertainty Assignment Device',true,null);
   insert into public.sessions(session_uuid,client_session_id,location_id,employee_id,device_id,status,started_at)
   values ('uncertainty-stale-${stamp}','uncertainty-stale-${stamp}','${locationId}'::uuid,'${employeeId}'::uuid,'${deviceId}'::uuid,'active',public.operational_day_start(now())-interval '1 minute');
 `);
@@ -103,6 +107,72 @@ sql(`select public.custodial_configure_backend_execution_key(
   encode(extensions.digest(convert_to(${q(secret)},'UTF8'),'sha256'),'hex'),'final uncertainty test');`);
 sql(`select public.custodial_configure_native_route_proof_key(
   encode(extensions.digest(convert_to(${q(nativeRouteSecret)},'UTF8'),'sha256'),'hex'),'final uncertainty test');`);
+
+const eventActorName = sql(`select display_name from public.ops_manager_managers where manager_id='${managerId}'::uuid;`);
+const eventGroupId = sql(`select id::text from public.location_groups order by id limit 1;`);
+const actorEventOperationId = randomUUID();
+const actorEventRecord = {
+  event_name: "Authenticated actor authority test",
+  location_group_id: eventGroupId,
+  event_scope: "ZOO_WIDE",
+  primary_venue_id: null,
+  venue_ids: [],
+  display_location: "Zoo Footprint",
+  coverage_location_ids: [],
+  staffing_area_ids: [],
+  needs_review: false,
+  manually_overridden: false,
+  event_timezone: "America/Chicago",
+  operation_id: actorEventOperationId,
+  event_date: "2026-08-14",
+  end_date: "2026-08-14",
+  start_time: "18:00:00",
+  end_time: "20:00:00",
+  attendee_count: 10,
+  notes: "actor authority test",
+  created_by: "Forged Client Creator",
+  overridden_by: "Forged Client Editor",
+  actor_manager_id: managerId,
+};
+const actorEvent = JSON.parse(sql(`select public.app_apply_event_command(
+  'create',null,${q(JSON.stringify(actorEventRecord))}::jsonb,'Forged RPC Actor','create actor test')::text;`));
+assert.equal(actorEvent.created_by_manager_id, managerId);
+assert.equal(actorEvent.created_by, eventActorName, "SQL must derive the event actor snapshot from the manager UUID");
+assert.notEqual(actorEvent.created_by, actorEventRecord.created_by);
+const updatedActorEvent = JSON.parse(sql(`select public.app_apply_event_command(
+  'update','${actorEvent.id}'::uuid,${q(JSON.stringify({ ...actorEventRecord, event_name: "Authenticated actor update", actor_manager_id: managerId }))}::jsonb,
+  'Forged Update Actor','update actor test')::text;`));
+assert.equal(updatedActorEvent.updated_by_manager_id, managerId);
+assert.equal(updatedActorEvent.overridden_by, eventActorName);
+const cancelledActorEvent = JSON.parse(sql(`select public.app_apply_event_command(
+  'cancel','${actorEvent.id}'::uuid,jsonb_build_object('actor_manager_id','${managerId}'),'Forged Cancel Actor','cancel actor test')::text;`));
+assert.equal(cancelledActorEvent.cancelled_by_manager_id, managerId);
+assert.equal(cancelledActorEvent.updated_by_manager_id, managerId);
+assert.equal(cancelledActorEvent.cancelled_by, eventActorName);
+assert.equal(sql(`select count(*) from public.events_app_event_history where event_id='${actorEvent.id}'::uuid and actor_manager_id='${managerId}'::uuid and actor=${q(eventActorName)};`), "2");
+const forgedManagerEvent = sql(`select public.app_apply_event_command(
+  'cancel','${actorEvent.id}'::uuid,jsonb_build_object('actor_manager_id','${randomUUID()}'),'Forged','forged manager')`, { expectFailure: true });
+assert.match(forgedManagerEvent, /authorized active named manager principal is required/i);
+
+const assignmentManagerId = sql(`select manager_id::text from public.ops_manager_managers
+  where active and revoked_at is null and is_system_principal=false and 'CUSTODIAL_MANAGER'=any(roles) order by manager_id limit 1;`);
+assert.ok(assignmentManagerId, "disposable baseline must contain an assignment manager principal");
+const initialNullCas = sql(`begin;
+  update public.devices set assigned_employee_id=null where device_id in ('KIOSK_10','UNCERTAINTY_${stamp}');
+  select public.custodial_assign_employee_device('KIOSK_10','${employeeId}'::uuid,'${assignmentManagerId}'::uuid,
+    'explicit null CAS database test',false,true,null);
+  do $$begin if (select assigned_employee_id from public.devices where device_id='KIOSK_10') is distinct from '${employeeId}'::uuid
+    then raise exception 'explicit null CAS did not assign'; end if; end$$;
+  rollback;
+  select 'explicit-null-cas-ok';`);
+assert.equal(initialNullCas, "explicit-null-cas-ok");
+const staleNullCas = sql(`begin;
+  update public.devices set assigned_employee_id='${employeeId}'::uuid where device_id='KIOSK_10';
+  select public.custodial_assign_employee_device('KIOSK_10','${employeeId}'::uuid,'${assignmentManagerId}'::uuid,
+    'stale explicit null CAS database test',false,true,null);`, { expectFailure: true });
+assert.match(staleNullCas, /This phone assignment changed/i,
+  "explicit expected null must be compared under the serialized assignment transaction");
+
 const historicalSessionId = randomUUID();
 const historicalFinishId = randomUUID();
 sql(`insert into public.sessions(session_uuid,client_session_id,location_id,employee_id,device_id,status,started_at)
@@ -118,6 +188,22 @@ sql(`update public.sessions set status='cancelled',updated_at=now() where sessio
 const pause = JSON.parse(sql(`select public.custodial_control_release_canary(
   '${managerId}'::uuid,'${randomUUID()}'::uuid,'KIOSK_09','pause_canary','uncertainty health test','{"ok":true}'::jsonb,${q(secret)})::text;`));
 assert.equal(pause.canary_paused, true);
+const coveredSurface = JSON.parse(sql(`select public.custodial_backend_authority_health(${q(secret)})::text;`));
+assert.equal(coveredSurface.checks.canary_authority_surface_live, true);
+assert.equal(coveredSurface.checks.canary_authority_surface_captured, true);
+assert.ok(coveredSurface.canary_surface_objects_expected > 20);
+assert.equal(sql(`select count(*) from public.custodial_release_authority_restore_inventory
+  where object_kind='function' and object_identity='app_apply_event_command(text,uuid,jsonb,text,text)';`), "1",
+"an exact canary root with an unrelated name must be captured independently of naming heuristics");
+sql(`drop function public.app_apply_event_command(text,uuid,jsonb,text,text);`);
+const missingUnrelatedSurface = JSON.parse(sql(`select public.custodial_backend_authority_health(${q(secret)})::text;`));
+assert.equal(missingUnrelatedSurface.ok, false);
+assert.equal(missingUnrelatedSurface.checks.canary_authority_surface_live, false);
+assert.ok(missingUnrelatedSurface.surface_missing_objects.includes("app_apply_event_command(text,uuid,jsonb,text,text)"));
+sql(`select public.custodial_control_release_canary(
+  '${managerId}'::uuid,'${randomUUID()}'::uuid,'KIOSK_09','restore_authority','restore unrelated exact surface root',
+  ${q(JSON.stringify(missingUnrelatedSurface))}::jsonb,${q(secret)});`);
+assert.ok(sql(`select to_regprocedure('public.app_apply_event_command(text,uuid,jsonb,text,text)') is not null;`) === "t");
 sql(`create or replace function public.tool_start_offline_occurrence(
   p_device_id text,p_location_code text,p_client_session_id text,p_client_started_at text,p_snapshot_id text,
   p_snapshot_employee_id text,p_snapshot_assignment_epoch integer,p_snapshot_credential_id text,

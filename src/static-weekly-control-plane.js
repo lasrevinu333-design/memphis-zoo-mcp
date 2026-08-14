@@ -8,7 +8,7 @@
  * rotation state, and every mutation. Manager identity comes from the trusted
  * request session and the database re-resolves its active display name.
  */
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { compileStaticWeeklySchedule } from "./static-weekly-schedule-compiler.js";
 import { createStaticWeeklyDraftRpcInput, createStaticWeeklyProjectionRpcInput } from "./static-weekly-schedule-database-adapter.js";
@@ -40,6 +40,44 @@ function requireDate(value, label) {
   return date;
 }
 
+function requireMonday(value, label) {
+  const date = requireDate(value, label);
+  const parsed = new Date(`${date}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date || parsed.getUTCDay() !== 1) {
+    throw fail("static_weekly_control_plane_projection_week_required", `${label} must be a Monday-aligned YYYY-MM-DD date.`);
+  }
+  return date;
+}
+
+function requireDateInWeek(value, weekStart, label) {
+  const date = requireDate(value, label);
+  const startsAt = Date.parse(`${weekStart}T00:00:00Z`);
+  const occursAt = Date.parse(`${date}T00:00:00Z`);
+  if (Number.isNaN(occursAt) || date !== new Date(occursAt).toISOString().slice(0, 10) || occursAt < startsAt || occursAt > startsAt + (6 * 86_400_000)) {
+    throw fail("static_weekly_control_plane_projection_week_mismatch", `${label} must fall within the Monday-aligned projection week.`);
+  }
+  return date;
+}
+
+function mondayForDate(value, label) {
+  const date = requireDate(value, label);
+  const parsed = new Date(`${date}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date) {
+    throw fail("static_weekly_control_plane_invalid_date", `${label} must be YYYY-MM-DD.`);
+  }
+  const daysSinceMonday = (parsed.getUTCDay() + 6) % 7;
+  parsed.setUTCDate(parsed.getUTCDate() - daysSinceMonday);
+  return parsed.toISOString().slice(0, 10);
+}
+
+function projectionWeekForDate(projectionWeekStart, serviceDate) {
+  const weekStart = text(projectionWeekStart)
+    ? requireMonday(projectionWeekStart, "projection week start")
+    : mondayForDate(serviceDate, "service date");
+  requireDateInWeek(serviceDate, weekStart, "service date");
+  return weekStart;
+}
+
 function requireRevision(value) {
   if (!Number.isSafeInteger(value) || value < 0) throw fail("static_weekly_control_plane_expected_revision_required");
   return value;
@@ -51,10 +89,20 @@ function requireIdempotencyKey(value) {
   return key;
 }
 
+function projectionIdempotencyKey(value) {
+  return `projection-${createHash("sha256").update(requireIdempotencyKey(value)).digest("hex")}`;
+}
+
 function requireSourceId(value) {
   const sourceId = text(value);
   if (!sourceId) throw fail("static_weekly_control_plane_source_required");
   return sourceId;
+}
+
+function requirePublicationId(value) {
+  const publicationId = text(value);
+  if (!publicationId) throw fail("static_weekly_control_plane_current_publication_required", "A current published schedule is required before its weekly projection can be compiled.");
+  return publicationId;
 }
 
 function requireWindow(value, label) {
@@ -166,6 +214,10 @@ export function createStaticWeeklyControlPlane({
     return call(client, "static_weekly_v3_read_publication_source", [publicationId, serviceDate]);
   }
 
+  async function snapshotFor(client, weekStart) {
+    return call(client, "static_weekly_v3_read_manager_snapshot", [weekStart]);
+  }
+
   async function registeredSourceFor(client, sourceId) {
     return call(client, "static_weekly_v3_read_authority_source", [requireSourceId(sourceId)]);
   }
@@ -176,6 +228,49 @@ export function createStaticWeeklyControlPlane({
       throw fail("static_weekly_control_plane_compiler_rejected", "Canonical source did not produce a publishable verified schedule.");
     }
     return result;
+  }
+
+  async function materializeCurrentProjection(client, { actor, publicationId, weekStart, expectedRevision, idempotencyKey }) {
+    const source = await sourceFor(client, requirePublicationId(publicationId), weekStart);
+    const result = await compileOrFail(compilerInputFromPublishedSource(source, weekStart));
+    const projection = createStaticWeeklyProjectionRpcInput({
+      result,
+      publicationId: requirePublicationId(publicationId),
+      expectedRevision: requireRevision(expectedRevision),
+      actor: { ...actor, idempotencyKey: requireIdempotencyKey(idempotencyKey) },
+    });
+    const materialized = await call(client, "static_weekly_v3_materialize_projection", [projection.publicationId, projection.serviceDate, projection.exceptionSetDigest, projection.compilerVersion, projection.objective, projection.metrics, projection.replayDigest, projection.envelope, projection.expectedRevision, actor.managerId, projection.idempotencyKey]);
+    const current = await snapshotFor(client, weekStart);
+    if (current?.projection_status !== "current" || text(current?.current_publication?.publication_id) !== projection.publicationId || text(current?.latest_projection?.projection_id) !== text(materialized?.data?.projection_id)) {
+      throw fail("static_weekly_control_plane_projection_not_current", "The compiled weekly projection did not become the current authority projection.");
+    }
+    return {
+      ...materialized,
+      data: {
+        ...materialized.data,
+        current_projection: current.latest_projection,
+      },
+    };
+  }
+
+  async function mutateAndMaterializeCurrentProjection(client, { actor, publicationId, weekStart, idempotencyKey, mutate }) {
+    const mutation = await mutate();
+    const effectiveWeekStart = typeof weekStart === "function" ? await weekStart(mutation) : weekStart;
+    const projection = await materializeCurrentProjection(client, {
+      actor,
+      publicationId: typeof publicationId === "function" ? await publicationId(mutation) : publicationId,
+      weekStart: effectiveWeekStart,
+      expectedRevision: requireRevision(mutation?.revision),
+      idempotencyKey: projectionIdempotencyKey(idempotencyKey),
+    });
+    return {
+      ...projection,
+      data: {
+        ...mutation.data,
+        ...projection.data,
+        mutation: mutation.data,
+      },
+    };
   }
 
   return {
@@ -202,7 +297,7 @@ export function createStaticWeeklyControlPlane({
     },
     async getManagerSnapshot({ manager, weekStart }) {
       requireManager(manager);
-      return transaction((client) => call(client, "static_weekly_v3_read_manager_snapshot", [requireDate(weekStart, "week start")]));
+      return transaction((client) => snapshotFor(client, requireMonday(weekStart, "week start")));
     },
     async createReplacementDraft({ manager, sourcePublicationId, effectiveStart, expectedRevision, idempotencyKey }) {
       const actor = requireManager(manager); const date = requireDate(effectiveStart, "effective start");
@@ -222,37 +317,90 @@ export function createStaticWeeklyControlPlane({
         return call(client, "static_weekly_v3_create_draft", [draft.effectiveStart, draft.objectiveVersion, draft.objective, draft.inputProvenance, draft.document, draft.expectedRevision, actor.managerId, draft.idempotencyKey, requireSourceId(source.source_id)]);
       });
     },
-    async publishDraft({ manager, draftVersionId, expectedDraftRevision, expectedRevision, idempotencyKey, publicationKind = "publish", rollbackOfVersionId = null }) {
-      const actor = requireManager(manager);
-      return transaction((client) => call(client, "static_weekly_v3_publish_draft", [text(draftVersionId), requireRevision(expectedDraftRevision), requireRevision(expectedRevision), actor.managerId, requireIdempotencyKey(idempotencyKey), text(publicationKind), rollbackOfVersionId || null]));
+    async publishDraft({ manager, draftVersionId, expectedDraftRevision, expectedRevision, idempotencyKey, projectionWeekStart, publicationKind = "publish", rollbackOfVersionId = null }) {
+      const actor = requireManager(manager); const requestedWeekStart = text(projectionWeekStart) ? requireMonday(projectionWeekStart, "projection week start") : null; const key = requireIdempotencyKey(idempotencyKey);
+      return transaction((client) => mutateAndMaterializeCurrentProjection(client, {
+        actor,
+        weekStart: (mutation) => requireMonday(requestedWeekStart || mutation?.data?.effective_start, "projection week start"),
+        idempotencyKey: key,
+        publicationId: (mutation) => requirePublicationId(mutation?.data?.publication_id),
+        mutate: () => call(client, "static_weekly_v3_publish_draft", [text(draftVersionId), requireRevision(expectedDraftRevision), requireRevision(expectedRevision), actor.managerId, key, text(publicationKind), rollbackOfVersionId || null]),
+      }));
     },
-    async applyException({ manager, exceptionType, serviceDate, startsAt = null, endsAt = null, baseVersionId, publicationId, reason, payload, expectedRevision, idempotencyKey, reversesExceptionId = null }) {
-      const actor = requireManager(manager);
-      return transaction((client) => call(client, "static_weekly_v3_apply_exception", [text(exceptionType), requireDate(serviceDate, "service date"), startsAt || null, endsAt || null, text(baseVersionId), text(publicationId), text(reason), payload, requireRevision(expectedRevision), actor.managerId, requireIdempotencyKey(idempotencyKey), reversesExceptionId || null]));
+    async applyException({ manager, exceptionType, serviceDate, startsAt = null, endsAt = null, baseVersionId, publicationId, reason, payload, expectedRevision, idempotencyKey, projectionWeekStart, reversesExceptionId = null }) {
+      const actor = requireManager(manager); const weekStart = projectionWeekForDate(projectionWeekStart, serviceDate); const date = requireDateInWeek(serviceDate, weekStart, "service date"); const key = requireIdempotencyKey(idempotencyKey);
+      return transaction((client) => mutateAndMaterializeCurrentProjection(client, {
+        actor,
+        publicationId: requirePublicationId(publicationId),
+        weekStart,
+        idempotencyKey: key,
+        mutate: () => call(client, "static_weekly_v3_apply_exception", [text(exceptionType), date, startsAt || null, endsAt || null, text(baseVersionId), requirePublicationId(publicationId), text(reason), payload, requireRevision(expectedRevision), actor.managerId, key, reversesExceptionId || null]),
+      }));
     },
-    async applyContractorCapacity({ manager, serviceDate, baseVersionId, publicationId, slotId, shift, reason, expectedRevision, idempotencyKey }) {
-      const actor = requireManager(manager); const date = requireDate(serviceDate, "service date");
+    async applyContractorCapacity({ manager, serviceDate, baseVersionId, publicationId, slotId, shift, reason, expectedRevision, idempotencyKey, projectionWeekStart }) {
+      const actor = requireManager(manager); const weekStart = projectionWeekForDate(projectionWeekStart, serviceDate); const date = requireDateInWeek(serviceDate, weekStart, "service date"); const key = requireIdempotencyKey(idempotencyKey); const effectivePublicationId = requirePublicationId(publicationId);
       return transaction(async (client) => {
-        const source = await sourceFor(client, text(publicationId), date);
+        const source = await sourceFor(client, effectivePublicationId, date);
         const availability = contractorAvailabilityFromSource(source, slotId, date, shift);
-        return call(client, "static_weekly_v3_apply_exception", ["cover_all", date, null, null, text(baseVersionId), text(publicationId), text(reason), { availability }, requireRevision(expectedRevision), actor.managerId, requireIdempotencyKey(idempotencyKey), null]);
+        return mutateAndMaterializeCurrentProjection(client, {
+          actor,
+          publicationId: effectivePublicationId,
+          weekStart,
+          idempotencyKey: key,
+          mutate: () => call(client, "static_weekly_v3_apply_exception", ["cover_all", date, null, null, text(baseVersionId), effectivePublicationId, text(reason), { availability }, requireRevision(expectedRevision), actor.managerId, key, null]),
+        });
       });
     },
-    async markEmployeeDeparted({ manager, slotId, reason, expectedRevision, idempotencyKey }) {
-      const actor = requireManager(manager);
-      return transaction((client) => call(client, "static_weekly_v4_mark_employee_departed", [text(slotId), text(reason), requireRevision(expectedRevision), actor.managerId, requireIdempotencyKey(idempotencyKey)]));
+    async markEmployeeDeparted({ manager, slotId, reason, expectedRevision, idempotencyKey, projectionWeekStart }) {
+      const actor = requireManager(manager); const weekStart = requireMonday(projectionWeekStart, "projection week start"); const key = requireIdempotencyKey(idempotencyKey);
+      return transaction((client) => mutateAndMaterializeCurrentProjection(client, {
+        actor,
+        weekStart,
+        idempotencyKey: key,
+        publicationId: async () => requirePublicationId((await snapshotFor(client, weekStart))?.current_publication?.publication_id),
+        mutate: () => call(client, "static_weekly_v4_mark_employee_departed", [text(slotId), text(reason), requireRevision(expectedRevision), actor.managerId, key]),
+      }));
     },
-    async replaceEmployee({ manager, slotId, newEmployeeName, reason, expectedRevision, idempotencyKey }) {
-      const actor = requireManager(manager);
-      return transaction((client) => call(client, "static_weekly_v4_replace_employee", [text(slotId), text(newEmployeeName), text(reason), requireRevision(expectedRevision), actor.managerId, requireIdempotencyKey(idempotencyKey)]));
+    async replaceEmployee({ manager, slotId, newEmployeeName, reason, expectedRevision, idempotencyKey, projectionWeekStart }) {
+      const actor = requireManager(manager); const weekStart = requireMonday(projectionWeekStart, "projection week start"); const key = requireIdempotencyKey(idempotencyKey);
+      return transaction((client) => mutateAndMaterializeCurrentProjection(client, {
+        actor,
+        weekStart,
+        idempotencyKey: key,
+        publicationId: async () => requirePublicationId((await snapshotFor(client, weekStart))?.current_publication?.publication_id),
+        mutate: () => call(client, "static_weekly_v4_replace_employee", [text(slotId), text(newEmployeeName), text(reason), requireRevision(expectedRevision), actor.managerId, key]),
+      }));
     },
     async materializeProjection({ manager, publicationId, serviceDate, expectedRevision, idempotencyKey }) {
-      const actor = requireManager(manager); const date = requireDate(serviceDate, "projection start");
+      const actor = requireManager(manager); const weekStart = requireMonday(serviceDate, "projection start"); const effectivePublicationId = requirePublicationId(publicationId); const revision = requireRevision(expectedRevision); const key = requireIdempotencyKey(idempotencyKey);
       return transaction(async (client) => {
-        const source = await sourceFor(client, text(publicationId), date);
-        const result = await compileOrFail(compilerInputFromPublishedSource(source, date));
-        const projection = createStaticWeeklyProjectionRpcInput({ result, publicationId: text(publicationId), expectedRevision: requireRevision(expectedRevision), actor: { ...actor, idempotencyKey: requireIdempotencyKey(idempotencyKey) } });
-        return call(client, "static_weekly_v3_materialize_projection", [projection.publicationId, projection.serviceDate, projection.exceptionSetDigest, projection.compilerVersion, projection.objective, projection.metrics, projection.replayDigest, projection.envelope, projection.expectedRevision, actor.managerId, projection.idempotencyKey]);
+        const current = await snapshotFor(client, weekStart);
+        if (current?.projection_status === "current" && text(current?.current_publication?.publication_id) === effectivePublicationId && text(current?.latest_projection?.week_start) === weekStart) {
+          return {
+            operation: "materialize_projection",
+            revision: current.authority_revision,
+            replayed: true,
+            data: {
+              ...current.latest_projection,
+              current_projection: current.latest_projection,
+              no_op: true,
+            },
+          };
+        }
+        return materializeCurrentProjection(client, { actor, publicationId: effectivePublicationId, weekStart, expectedRevision: revision, idempotencyKey: key });
+      });
+    },
+    async rebuildCurrentProjection({ manager, weekStart, expectedRevision, idempotencyKey }) {
+      const actor = requireManager(manager); const projectionWeekStart = requireMonday(weekStart, "projection week start"); const key = requireIdempotencyKey(idempotencyKey);
+      return transaction(async (client) => {
+        const snapshot = await snapshotFor(client, projectionWeekStart);
+        return materializeCurrentProjection(client, {
+          actor,
+          publicationId: requirePublicationId(snapshot?.current_publication?.publication_id),
+          weekStart: projectionWeekStart,
+          expectedRevision: requireRevision(expectedRevision),
+          idempotencyKey: projectionIdempotencyKey(key),
+        });
       });
     },
     async close() {

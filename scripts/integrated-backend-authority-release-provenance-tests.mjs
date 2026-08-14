@@ -11,6 +11,7 @@ import { releaseAttestationPayload } from "../src/release-contract.js";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const checker = "scripts/integrated-backend-authority-cutover-check.mjs";
+const refresher = "scripts/refresh-integrated-backend-authority-release.mjs";
 const evidencePath = "release/integrated-backend-authority-evidence.json";
 const omittedMigration = "supabase/migrations/20260810120000_retire_named_manager_shared_room_authority.sql";
 const omittedGate = "scripts/integrated-backend-authority-suite-order-tests.mjs";
@@ -50,7 +51,7 @@ function copyCompleteTrackedWorktree(destination) {
   return paths;
 }
 
-function createFixture({ beforeCommit = null } = {}) {
+function createFixture({ beforeCommit = null, skipEvidenceRefresh = false } = {}) {
   const fixture = mkdtempSync(join(tmpdir(), "integrated-backend-release-provenance-"));
   const acceptanceDirectory = mkdtempSync(join(tmpdir(), "integrated-backend-release-acceptance-"));
   try {
@@ -59,10 +60,21 @@ function createFixture({ beforeCommit = null } = {}) {
     git(fixture, ["init", "-q"]);
     git(fixture, ["add", "."]);
     git(fixture, ["-c", "user.name=Release Provenance Test", "-c", "user.email=release-provenance@example.invalid", "commit", "-qm", "fixture"]);
+    if (!skipEvidenceRefresh) {
+      const refreshResult = spawnSync(process.execPath, [resolve(fixture, refresher)], {
+        cwd: fixture,
+        env: cleanEnvironment(),
+        encoding: "utf8",
+        maxBuffer: 64 * 1024 * 1024,
+      });
+      assert.equal(refreshResult.status, 0, `${refreshResult.stderr}\n${refreshResult.stdout}`);
+      git(fixture, ["add", evidencePath]);
+      if (git(fixture, ["status", "--short"])) {
+        git(fixture, ["-c", "user.name=Release Provenance Test", "-c", "user.email=release-provenance@example.invalid", "commit", "-qm", "refresh evidence"]);
+      }
+    }
     const commit = git(fixture, ["rev-parse", "HEAD"]);
     const tree = git(fixture, ["rev-parse", "HEAD^{tree}"]);
-    const evidenceBytes = readFileSync(join(fixture, evidencePath));
-    const evidenceBlob = git(fixture, ["rev-parse", `${commit}:${evidencePath}`]);
     const schemaInput = JSON.parse(readFileSync(join(fixture, "release/schema-alignment-input.json"), "utf8"));
     const schemaFingerprint = readFileSync(join(fixture, "supabase/canonical/schema-fingerprint.txt"), "utf8").trim();
     const { privateKey, publicKey } = generateKeyPairSync("ed25519");
@@ -73,6 +85,8 @@ function createFixture({ beforeCommit = null } = {}) {
       try { chmodSync(acceptancePath, 0o644); } catch { /* first write */ }
       let rendered = document;
       if (!rendered) {
+        const evidenceBytes = readFileSync(join(fixture, evidencePath));
+        const evidenceBlob = git(fixture, ["rev-parse", `HEAD:${evidencePath}`]);
         rendered = {
           artifact: "memphis-zoo-integrated-release-attestation.v2",
           release_id: schemaInput.release_id,
@@ -118,6 +132,15 @@ function runGate(fixture, { cwd = fixture.fixture, env = {}, database = false, a
   });
 }
 
+function runRefresh(fixture, { cwd = fixture.fixture, args = ["--check"], env = {} } = {}) {
+  return spawnSync(process.execPath, [resolve(fixture.fixture, refresher), ...args], {
+    cwd,
+    env: cleanEnvironment(env),
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+  });
+}
+
 function expectRejected(name, mutate, expected) {
   const fixture = createFixture();
   try {
@@ -149,6 +172,32 @@ function expectCommittedRejected(name, beforeCommit, expected) {
   }
 }
 
+function expectRefreshRejected(name, mutate, expected) {
+  const fixture = createFixture();
+  try {
+    const options = mutate(fixture) || {};
+    const result = runRefresh(fixture, options);
+    assert.notEqual(result.status, 0, `${name} unexpectedly passed release evidence refresh/check`);
+    const output = `${result.stderr}\n${result.stdout}`;
+    assert.match(output, expected, `${name} did not fail for the expected release-evidence provenance reason: ${output}`);
+    return output;
+  } finally {
+    disposeFixture(fixture);
+  }
+}
+
+const refreshPositive = createFixture();
+try {
+  const result = runRefresh(refreshPositive);
+  assert.equal(result.status, 0, `${result.stderr}\n${result.stdout}`);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.mode, "check");
+  assert.equal(payload.source_tree, refreshPositive.tree);
+} finally {
+  disposeFixture(refreshPositive);
+}
+
 const positive = createFixture();
 try {
   positive.writeAcceptance();
@@ -165,6 +214,31 @@ try {
 } finally {
   disposeFixture(positive);
 }
+
+expectRefreshRejected("refresh rejects unstaged tracked bytes", (fixture) => {
+  const path = resolve(fixture.fixture, "src/index.js");
+  writeFileSync(path, `${readFileSync(path, "utf8")}\n// disposable unstaged refresh mutation\n`);
+}, /staged, unstaged, tracked, or untracked content is forbidden before release evidence refresh\/check/i);
+
+expectRefreshRejected("refresh rejects staged tracked bytes", (fixture) => {
+  const path = resolve(fixture.fixture, "src/index.js");
+  writeFileSync(path, `${readFileSync(path, "utf8")}\n// disposable staged refresh mutation\n`);
+  git(fixture.fixture, ["add", "src/index.js"]);
+}, /staged, unstaged, tracked, or untracked content is forbidden before release evidence refresh\/check/i);
+
+expectRefreshRejected("refresh rejects untracked bytes", (fixture) => {
+  writeFileSync(resolve(fixture.fixture, "release/untracked-refresh-substitution.json"), "{\"substitutedAuthority\":true}\n");
+}, /staged, unstaged, tracked, or untracked content is forbidden before release evidence refresh\/check/i);
+
+expectRefreshRejected("refresh rejects skip-worktree evidence exclusion loophole", (fixture) => {
+  git(fixture.fixture, ["update-index", "--skip-worktree", evidencePath]);
+}, /skip-worktree index flag is forbidden: release\/integrated-backend-authority-evidence\.json/i);
+
+expectRefreshRejected("refresh rejects assume-unchanged tracked authority bytes", (fixture) => {
+  git(fixture.fixture, ["update-index", "--assume-unchanged", omittedMigration]);
+  const path = resolve(fixture.fixture, omittedMigration);
+  writeFileSync(path, `${readFileSync(path, "utf8")}\n-- hidden refresh authority mutation\n`);
+}, /assume-unchanged index flag is forbidden: supabase\/migrations\/20260810120000_retire_named_manager_shared_room_authority\.sql/i);
 
 expectRejected("modified tracked runtime bytes", (fixture) => {
   const path = resolve(fixture.fixture, "src/index.js");
@@ -219,13 +293,32 @@ expectRejected("worktree symlink replacement", (fixture) => {
   symlinkSync("offline-authority-http.js", path);
 }, /staged, unstaged, tracked, or untracked content is forbidden/i);
 
-expectCommittedRejected("stale generated complete inventory", (fixture) => {
-  const path = resolve(fixture, evidencePath);
-  const stale = JSON.parse(readFileSync(path, "utf8"));
-  stale.authority_content_identity.expected_tree_inventory = stale.authority_content_identity.expected_tree_inventory.slice(0, 1);
-  stale.authority_content_identity.authority_path_count = 1;
-  writeFileSync(path, `${JSON.stringify(stale, null, 2)}\n`);
-}, /generated release evidence is stale, incomplete, or self-referential/i);
+{
+  const fixture = createFixture();
+  try {
+    const path = resolve(fixture.fixture, evidencePath);
+    const stale = JSON.parse(readFileSync(path, "utf8"));
+    stale.authority_content_identity.expected_tree_inventory = stale.authority_content_identity.expected_tree_inventory.slice(0, 1);
+    stale.authority_content_identity.authority_path_count = 1;
+    writeFileSync(path, `${JSON.stringify(stale, null, 2)}\n`);
+    git(fixture.fixture, ["add", evidencePath]);
+    git(
+      fixture.fixture,
+      ["-c", "user.name=Release Provenance Test", "-c", "user.email=release-provenance@example.invalid", "commit", "-qm", "stale evidence"],
+    );
+    fixture.writeAcceptance({
+      expectedCommit: git(fixture.fixture, ["rev-parse", "HEAD"]),
+      expectedTree: git(fixture.fixture, ["rev-parse", "HEAD^{tree}"]),
+    });
+    const result = runGate(fixture, { database: true });
+    assert.notEqual(result.status, 0, "stale generated complete inventory unexpectedly passed release acceptance");
+    const output = `${result.stderr}\n${result.stdout}`;
+    assert.match(output, /generated release evidence is stale, incomplete, or self-referential/i);
+    assert.doesNotMatch(output, /database gate requires|configured secret must pass|docker/i);
+  } finally {
+    disposeFixture(fixture);
+  }
+}
 
 expectRejected("wrong expected commit", (fixture) => {
   fixture.writeAcceptance({ expectedCommit: "0000000000000000000000000000000000000000" });
@@ -278,6 +371,7 @@ expectRejected("symlink external acceptance input", (fixture) => {
 }, /acceptance input must not be a symlink/i);
 
 const symlinkTreeFixture = createFixture({
+  skipEvidenceRefresh: true,
   beforeCommit(fixture) {
     const path = resolve(fixture, "src/index.js");
     const substitute = resolve(fixture, "src/index-substitute.js");

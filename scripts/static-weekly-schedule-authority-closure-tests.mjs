@@ -179,13 +179,14 @@ try {
     { label: "blank", reason: "   ", accepted: false },
     { label: "control", reason: "approved\nchange", accepted: false },
   ]) {
-    const portable = { id: `closure-${label}`, type: "pto", serviceDate: "2026-11-03", actorId: manager.manager_id, reason, idempotencyKey: `closure-${label}`, expectedRevision: 5, payload: { slotId } };
+    const payload = { slotId, status: "working", shift: { start: "07:00", end: "16:00" } };
+    const portable = { id: `closure-${label}`, type: "shift_override", serviceDate: "2026-11-03", actorId: manager.manager_id, reason, idempotencyKey: `closure-${label}`, expectedRevision: 5, payload };
     if (accepted) assert.doesNotThrow(() => assertExceptionCommand(portable), `${label} must be portable-valid`);
     else assert.throws(() => assertExceptionCommand(portable), `${label} must be portable-invalid`);
-    const action = () => controlPlane.applyException({ manager, exceptionType: "pto", serviceDate: "2026-11-03", baseVersionId: versionId, publicationId, reason, payload: { slotId }, expectedRevision: 5, idempotencyKey: `closure-sql-${label}` });
+    const action = () => controlPlane.applyException({ manager, exceptionType: "shift_override", serviceDate: "2026-11-03", baseVersionId: versionId, publicationId, reason, payload, expectedRevision: 5, idempotencyKey: `closure-sql-${label}` });
     if (accepted) {
       const acceptedResult = await action();
-      assert.equal(acceptedResult.revision, 6, "500-character reason advances only the valid exception command");
+      assert.equal(acceptedResult.revision, 7, "500-character reason advances the valid exception and its current projection atomically");
     } else await expectNoMutation(action, /reason|500|control/i, `${label} SQL reason`);
   }
 

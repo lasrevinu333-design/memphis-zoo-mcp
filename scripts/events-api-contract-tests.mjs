@@ -7,6 +7,8 @@ const TEST_VENUE_ID = "10000000-0000-4000-8000-000000000001";
 const TEST_ZOO_GROUP_ID = "20000000-0000-4000-8000-000000000000";
 const TEST_ZOO_VENUE_ID = "10000000-0000-4000-8000-000000000000";
 const TEST_RESTROOM_GROUP_ID = "30000000-0000-4000-8000-000000000001";
+const TEST_MANAGER_ID = "90000000-0000-4000-8000-000000000001";
+const TEST_MANAGER_NAME = "Authenticated Event Manager";
 
 function buildApp({ writeCalls = [], readCalls = [], writeResults = {}, eventRows = [] } = {}) {
   const app = express();
@@ -110,7 +112,10 @@ function buildApp({ writeCalls = [], readCalls = [], writeResults = {}, eventRow
     appVersion: "test",
     releaseId: "test",
     maintenanceController: { kick() {} },
-    requireAdminApiAuth: (_req, _res, next) => next(),
+    requireAdminApiAuth: (req, _res, next) => {
+      req.memphisAuth = { manager_id: TEST_MANAGER_ID, manager_display_name: TEST_MANAGER_NAME };
+      next();
+    },
   }));
   return app;
 }
@@ -214,7 +219,11 @@ assert.equal(createCall.payload.record.event_scope, "SINGLE_VENUE", "legacy loca
 assert.equal(createCall.payload.record.primary_venue_id, TEST_VENUE_ID, "legacy event-group input should resolve to the event venue id");
 assert.deepEqual(createCall.payload.record.coverage_location_ids, [], "coverage remains separate from event venue");
 assert.equal(createCall.payload.record.notes, "Catering, extra trash, restroom check before dinner and after dessert");
+assert.equal(createCall.payload.record.actor_manager_id, TEST_MANAGER_ID);
+assert.equal(createCall.payload.record.created_by, TEST_MANAGER_NAME, "client created_by must be replaced by the authenticated manager snapshot");
+assert.equal(createCall.payload.actor, TEST_MANAGER_NAME);
 assert.doesNotMatch(JSON.stringify(createCall.payload), /Operational flags/i);
+assert.doesNotMatch(JSON.stringify(createCall.payload), /contract test/i, "client actor fields must not reach event mutation authority");
 
 await withServer(buildApp({
   writeResults: {
@@ -464,6 +473,7 @@ await withServer(buildApp({ writeCalls: updateWriteCalls }), async (baseUrl) => 
       end_time: "20:30",
       created_by: "contract test",
       overridden_by: "contract editor",
+      actor_manager_id: "60000000-0000-4000-8000-000000000099",
     }),
   });
   assert.equal(response.status, 400, "mock write returning no updated rows should surface not found rather than false success");
@@ -475,6 +485,11 @@ const updateCall = updateWriteCalls.find((call) => call.name === "event_update")
 assert.ok(updateCall, "typed event update should run");
 assert.equal(updateCall.payload.event_id, "60000000-0000-4000-8000-000000000001");
 assert.equal(updateCall.payload.record.event_scope, "ZOO_WIDE", "event update should write canonical event scope");
+assert.equal(updateCall.payload.record.actor_manager_id, TEST_MANAGER_ID);
+assert.equal(updateCall.payload.record.overridden_by, TEST_MANAGER_NAME);
+assert.equal(updateCall.payload.actor, TEST_MANAGER_NAME);
+assert.doesNotMatch(JSON.stringify(updateCall.payload), /contract editor|000000000099/i,
+  "client update actor fields must not reach event mutation authority");
 assert.ok(updateCall.payload.reason, "event correction history reason is explicit in the bounded command");
 
 await withServer(buildApp({
@@ -551,6 +566,38 @@ await withServer(buildApp({
   assert.equal(payload.data.revision, 3);
   assert.equal(payload.data.notes, "Updated through authoritative readback.");
 });
+
+const cancelWriteCalls = [];
+await withServer(buildApp({
+  writeCalls: cancelWriteCalls,
+  writeResults: {
+    events_app_cancel: {
+      id: "60000000-0000-4000-8000-000000000003",
+      status: "CANCELLED",
+      cancelled_by: TEST_MANAGER_NAME,
+      cancelled_by_manager_id: TEST_MANAGER_ID,
+    },
+  },
+}), async (baseUrl) => {
+  const response = await fetch(`${baseUrl}/admin-api/events/60000000-0000-4000-8000-000000000003`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      cancelled_by: "Forged Canceller",
+      actor: "Forged Actor",
+      actor_manager_id: "60000000-0000-4000-8000-000000000099",
+      reason: "Verified cancellation reason",
+    }),
+  });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).data.cancelled_by_manager_id, TEST_MANAGER_ID);
+});
+const cancelCall = cancelWriteCalls.find((call) => call.name === "event_cancel");
+assert.deepEqual(cancelCall.payload.record, { actor_manager_id: TEST_MANAGER_ID });
+assert.equal(cancelCall.payload.actor, TEST_MANAGER_NAME);
+assert.equal(cancelCall.payload.reason, "Verified cancellation reason");
+assert.doesNotMatch(JSON.stringify(cancelCall.payload), /Forged|000000000099/,
+  "client cancellation actor fields must not reach event mutation authority");
 
 const notificationReadCalls = [];
 const notificationWriteCalls = [];

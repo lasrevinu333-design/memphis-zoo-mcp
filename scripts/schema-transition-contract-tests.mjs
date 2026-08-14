@@ -3,7 +3,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { buildReleaseManifest } from "../src/release-manifest.js";
 import { assertSchemaAlignment } from "../src/schema-transition.js";
-import { fingerprintSchemaCatalog, SCHEMA_CATALOG_QUERIES } from "./schema-fingerprint-catalog.mjs";
+import {
+  captureSchemaCatalog,
+  fingerprintSchemaCatalog,
+  SCHEMA_CATALOG_QUERIES,
+  UNSUPPORTED_PUBLIC_RELATION_CLASSES_QUERY,
+  UNSUPPORTED_PUBLIC_TYPE_CLASSES_QUERY,
+} from "./schema-fingerprint-catalog.mjs";
 
 const input = JSON.parse(readFileSync(new URL("../release/schema-alignment-input.json", import.meta.url), "utf8"));
 const frontend = JSON.parse(readFileSync(new URL("../release/frontend-release-manifest.json", import.meta.url), "utf8"));
@@ -48,6 +54,58 @@ const unexpectedMembership = structuredClone(authorityBaseline);
 unexpectedMembership.role_memberships.push({ granted_role: "service_role", member_role: "unexpected_login", admin_option: false });
 assert.notEqual(fingerprintSchemaCatalog(authorityBaseline).fingerprint, fingerprintSchemaCatalog(unexpectedMembership).fingerprint,
   "an arbitrary service-role membership must change connected schema identity");
+const supportedRelationBaseline = { tables: [], views: [] };
+const materializedViewAddition = structuredClone(supportedRelationBaseline);
+materializedViewAddition.views.push({
+  schema_name: "public",
+  view_name: "identity_materialized",
+  relation_kind: "m",
+  owner_name: "postgres",
+  definition: " select 1 as value;",
+  comment: null,
+});
+assert.notEqual(
+  fingerprintSchemaCatalog(supportedRelationBaseline).fingerprint,
+  fingerprintSchemaCatalog(materializedViewAddition).fingerprint,
+  "a public materialized view addition must change schema identity",
+);
+const partitionedTableAddition = structuredClone(supportedRelationBaseline);
+partitionedTableAddition.tables.push({
+  schema_name: "public",
+  table_name: "identity_partitioned",
+  relation_kind: "p",
+  owner_name: "postgres",
+  rls_enabled: false,
+  rls_forced: false,
+  partition_key: "LIST (bucket)",
+  comment: null,
+});
+assert.notEqual(
+  fingerprintSchemaCatalog(supportedRelationBaseline).fingerprint,
+  fingerprintSchemaCatalog(partitionedTableAddition).fingerprint,
+  "a public partitioned table addition must change schema identity",
+);
+const queryNames = new Map([
+  ...Object.entries(SCHEMA_CATALOG_QUERIES),
+  ["unsupported_relations", UNSUPPORTED_PUBLIC_RELATION_CLASSES_QUERY],
+  ["unsupported_types", UNSUPPORTED_PUBLIC_TYPE_CLASSES_QUERY],
+].map(([name, sql]) => [sql, name]));
+await assert.rejects(() => captureSchemaCatalog({
+  async query(sql) {
+    const name = queryNames.get(sql);
+    if (name === "unsupported_relations") return { rows: [{ relation_name: "foreign_bridge", relation_kind: "f" }] };
+    if (name === "unsupported_types") return { rows: [] };
+    return { rows: [] };
+  },
+}), /Unsupported public foreign table must be reviewed before schema fingerprint capture: foreign_bridge/);
+await assert.rejects(() => captureSchemaCatalog({
+  async query(sql) {
+    const name = queryNames.get(sql);
+    if (name === "unsupported_types") return { rows: [{ type_name: "composite_bridge", type_kind: "c" }] };
+    if (name === "unsupported_relations") return { rows: [] };
+    return { rows: [] };
+  },
+}), /Unsupported public composite type must be reviewed before schema fingerprint capture: composite_bridge/);
 assert.throws(() => assertSchemaAlignment({
   backendManifest: backend,
   frontendManifest: { schema_fingerprint: "f".repeat(64), schema_transition: transition },

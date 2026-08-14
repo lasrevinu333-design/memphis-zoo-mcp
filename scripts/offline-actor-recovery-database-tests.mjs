@@ -51,7 +51,7 @@ async function sql(statement, { expectFailure = false } = {}) {
     return String(error.stderr || error.message);
   }
 }
-function jsonSql({ session, completion, context, proof, device, location, credential = credentialA, start = startedAt, end = endedAt, response = { issues: [{ label: "Authority test faucet", category: "plumbing" }], alpha: 1 }, scans = [], correlation = "correlation-a" }) {
+function jsonSql({ session, completion, context, proof, device, location, credential = credentialA, start = startedAt, end = endedAt, response = { issues: [{ label: "Authority test faucet", category: "plumbing" }], alpha: 1 }, scans = [], correlation = "correlation-a", nativeCompletionVersion = "custodial-native-completion.v1", nativeCompletionAttestation = nativeCompletionSignature, nativeProofSecret = nativeRouteSecret }) {
   const canonicalScans = scans.map((event) => ({
     client_event_id: event.client_event_id,
     event_type: event.event_type,
@@ -63,8 +63,8 @@ function jsonSql({ session, completion, context, proof, device, location, creden
   return `select public.tool_commit_cleaning_workflow_authoritative(
     ${q(session)},${q(completionUuid(completion))},${q(device)},${q(location)},${q(start)},${q(end)},
     ${q(JSON.stringify(response))}::jsonb,${q(JSON.stringify(canonicalScans))}::jsonb,${q(correlation)},
-    ${q(context)},${q(proof)},${q(credential)},'custodial-native-completion.v1',
-    ${q(nativeCompletionSignature)},${q(nativeRouteSecret)},${q(execSecret)}
+    ${q(context)},${q(proof)},${q(credential)},${q(nativeCompletionVersion)},
+    ${q(nativeCompletionAttestation)},${q(nativeProofSecret)},${q(execSecret)}
   )::text;`;
 }
 let snapshot;
@@ -215,6 +215,22 @@ const changedScanEntryDenied = await activate({
 assert.match(changedScanEntryDenied, /native start attestation replay does not match/i,
   "an NFC handoff cannot be replayed onto an existing frozen occurrence");
 
+const forgedNativeCompletion = await sql(jsonSql({
+  session: sessionA, completion: `oa-${stamp}-forged-native-complete`, context: contextA.context_id,
+  proof: contextA.submission_proof, device: `OA-${stamp}-A`, location: codeA,
+  nativeProofSecret: execSecret,
+}), { expectFailure: true });
+assert.match(forgedNativeCompletion, /native phone route proof is not authorized/i,
+  "the general backend secret cannot substitute for native completion route proof");
+const invalidNativeCompletion = await sql(jsonSql({
+  session: sessionA, completion: `oa-${stamp}-invalid-native-complete`, context: contextA.context_id,
+  proof: contextA.submission_proof, device: `OA-${stamp}-A`, location: codeA,
+  nativeCompletionVersion: "custodial-native-completion.v0",
+}), { expectFailure: true });
+assert.match(invalidNativeCompletion, /verified native completion attestation is required/i);
+assert.equal(await sql(`select (native_completion_attestation_version is null and native_completion_attestation_sha256 is null and native_completed_at is null)::text from public.custodial_offline_actor_contexts where context_id=${q(contextA.context_id)}::uuid;`), "true",
+  "rejected completion proofs must persist no native completion evidence");
+
 const genericDenied = await sql(`set role service_role; select public.tool_start_offline_occurrence('OA-${stamp}-A','${codeA}','oa-${stamp}-forged',${q(startedAt)},${q(snapshot.snapshot_id)},${q(snapshot.employee_id)},${snapshot.assignment_epoch},'${credentialA}','${credentialA}','${randomUUID()}','custodial-native-start.v1',${q(nativeStartSignature)},${q(execSecret)},${q(execSecret)});`, { expectFailure: true });
 assert.match(genericDenied, /native phone route proof is not authorized|permission denied/i,
   "generic service_role plus the general backend secret cannot forge native-route authority");
@@ -239,7 +255,7 @@ for (const [label, statement] of [
 assert.equal(await sql(`select count(*) from public.custodial_terminal_writer_inventory
   where application_callable and (mutates_terminal_truth or delegates_alternate_terminal_authority)
     and oid is distinct from to_regprocedure('public.tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text,text,text,text,text)')
-    and oid is distinct from to_regprocedure('public.tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text)')
+    and oid is distinct from to_regprocedure('public.tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text,text,text,text)')
     and oid is distinct from to_regprocedure('public.tool_complete_session_authoritative(text,jsonb,text,text,text,text)')
     and oid is distinct from to_regprocedure('public.custodial_close_maintenance_ticket_authoritative(uuid,text,text,text)')
     and oid is distinct from to_regprocedure('public.custodial_finish_historical_session_authoritative(text,text,uuid,timestamptz,text)');`),
@@ -338,15 +354,39 @@ const afterReassignmentDenied = await sql(`select public.tool_start_offline_occu
 assert.match(afterReassignmentDenied, /snapshot no longer owned the phone/i,
   "an old employee snapshot cannot authorize replacement-employee work");
 const scanId = `oa-${stamp}-scan-1`;
-const acceptedSql = jsonSql({ session: sessionA, completion: `oa-${stamp}-complete-1`, context: contextA.context_id, proof: contextA.submission_proof, device: `OA-${stamp}-A`, location: codeA, scans: [{ event_type: "scan_finish", client_event_id: scanId, scanned_at: endedAt, result: "ok", payload_json: entryEvidence }] });
+const acceptedSql = jsonSql({ session: sessionA, completion: `oa-${stamp}-complete-1`, context: contextA.context_id, proof: contextA.submission_proof, device: `OA-${stamp}-A`, location: codeA, scans: [
+  { event_type: "scan_start", client_event_id: nativeScanEntries.get(sessionA), scanned_at: startedAt, result: "ok", payload_json: entryEvidence },
+  { event_type: "scan_finish", client_event_id: scanId, scanned_at: endedAt, result: "ok", payload_json: entryEvidence },
+] });
 const accepted = JSON.parse(await sql(acceptedSql));
 assert.equal(accepted.status, "closed");
+assert.equal(accepted.native_completion_attested, true);
 assertCanonicalUtcMillis(accepted.started_at, "accepted.started_at");
 assertCanonicalUtcMillis(accepted.completed_at, "accepted.completed_at");
 assert.equal(await sql(`select employee_id::text from public.sessions where client_session_id=${q(sessionA)};`), employeeA);
+const persistedNativeCompletion = (await sql(`select native_completion_attestation_version||'|'||native_completion_attestation_sha256||'|'||public.custodial_canonical_utc_millis(native_completed_at) from public.custodial_offline_actor_contexts where context_id=${q(contextA.context_id)}::uuid;`)).split("|");
+assert.deepEqual(persistedNativeCompletion, [
+  "custodial-native-completion.v1",
+  createHash("sha256").update(nativeCompletionSignature).digest("hex"),
+  endedAt,
+], "accepted native completion must retain its attestation digest and canonical completion timestamp");
+const changedNativeCompletionReplay = await sql(jsonSql({
+  session: sessionA, completion: `oa-${stamp}-complete-1`, context: contextA.context_id,
+  proof: contextA.submission_proof, device: `OA-${stamp}-A`, location: codeA,
+  scans: [
+    { event_type: "scan_start", client_event_id: nativeScanEntries.get(sessionA), scanned_at: startedAt, result: "ok", payload_json: entryEvidence },
+    { event_type: "scan_finish", client_event_id: scanId, scanned_at: endedAt, result: "ok", payload_json: entryEvidence },
+  ],
+  nativeCompletionAttestation: "c".repeat(64),
+}), { expectFailure: true });
+assert.match(changedNativeCompletionReplay, /native completion attestation does not match the frozen occurrence/i,
+  "a completion replay cannot replace persisted native evidence");
 const replays = await Promise.all(Array.from({ length: 8 }, () => sql(acceptedSql).then(JSON.parse)));
 assert.equal(replays.filter((result) => result.replayed === true).length, 8, "concurrent exact retries converge");
-const reorderedReplay = JSON.parse(await sql(jsonSql({ session: sessionA, completion: `oa-${stamp}-complete-1`, context: contextA.context_id, proof: contextA.submission_proof, device: `OA-${stamp}-A`, location: codeA, response: { alpha: 1, issues: [{ category: "plumbing", label: "Authority test faucet" }] }, scans: [{ payload_json: entryEvidence, result: "ok", scanned_at: endedAt, client_event_id: scanId, event_type: "scan_finish" }] })));
+const reorderedReplay = JSON.parse(await sql(jsonSql({ session: sessionA, completion: `oa-${stamp}-complete-1`, context: contextA.context_id, proof: contextA.submission_proof, device: `OA-${stamp}-A`, location: codeA, response: { alpha: 1, issues: [{ category: "plumbing", label: "Authority test faucet" }] }, scans: [
+  { payload_json: entryEvidence, result: "ok", scanned_at: startedAt, client_event_id: nativeScanEntries.get(sessionA), event_type: "scan_start" },
+  { payload_json: entryEvidence, result: "ok", scanned_at: endedAt, client_event_id: scanId, event_type: "scan_finish" },
+] })));
 assert.equal(reorderedReplay.replayed, true, "JSON object order is canonical replay");
 const correlationMismatch = JSON.parse(await sql(jsonSql({ session: sessionA, completion: `oa-${stamp}-complete-1`, context: contextA.context_id, proof: contextA.submission_proof, device: `OA-${stamp}-A`, location: codeA, correlation: "correlation-b" })));
 assert.equal(correlationMismatch.reason, "payload_fingerprint_conflict");

@@ -13,6 +13,148 @@ as $function$
   select to_char(date_trunc('milliseconds', p_value at time zone 'UTC'), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
 $function$;
 
+-- Event display names remain immutable historical snapshots even if a manager
+-- is later renamed or removed. UUID columns retain the accountable principal
+-- while ON DELETE SET NULL deliberately leaves the snapshot text untouched.
+alter table public.events_app_events
+  add column created_by_manager_id uuid,
+  add column updated_by_manager_id uuid,
+  add column cancelled_by_manager_id uuid,
+  add constraint events_app_events_created_by_manager_id_fkey foreign key(created_by_manager_id)
+    references public.ops_manager_managers(manager_id) on delete set null,
+  add constraint events_app_events_updated_by_manager_id_fkey foreign key(updated_by_manager_id)
+    references public.ops_manager_managers(manager_id) on delete set null,
+  add constraint events_app_events_cancelled_by_manager_id_fkey foreign key(cancelled_by_manager_id)
+    references public.ops_manager_managers(manager_id) on delete set null,
+  add constraint events_app_events_created_actor_snapshot_check
+    check(created_by_manager_id is null or nullif(btrim(created_by),'') is not null),
+  add constraint events_app_events_updated_actor_snapshot_check
+    check(updated_by_manager_id is null or nullif(btrim(overridden_by),'') is not null),
+  add constraint events_app_events_cancelled_actor_snapshot_check
+    check(cancelled_by_manager_id is null or nullif(btrim(cancelled_by),'') is not null);
+
+alter table public.events_app_event_history
+  add column actor_manager_id uuid,
+  add constraint events_app_event_history_actor_manager_id_fkey foreign key(actor_manager_id)
+    references public.ops_manager_managers(manager_id) on delete set null,
+  add constraint events_app_event_history_actor_snapshot_check
+    check(actor_manager_id is null or nullif(btrim(actor),'') is not null);
+
+comment on column public.events_app_events.created_by_manager_id is 'Authenticated manager UUID for creation; created_by is the historical display-name snapshot.';
+comment on column public.events_app_events.updated_by_manager_id is 'Authenticated manager UUID for the latest update; overridden_by is the historical display-name snapshot.';
+comment on column public.events_app_events.cancelled_by_manager_id is 'Authenticated manager UUID for cancellation; cancelled_by is the historical display-name snapshot.';
+
+create or replace function public.app_apply_event_command(
+  p_command text,p_event_id uuid,p_record jsonb,p_actor text default null,p_reason text default null
+) returns jsonb language plpgsql security definer set search_path to 'pg_catalog','public','extensions'
+as $function$
+declare
+  v_command text:=nullif(btrim(coalesce(p_command,'')),''); v_record jsonb:=coalesce(p_record,'{}'::jsonb);
+  v_row public.events_app_events%rowtype; v_previous jsonb; v_manager public.ops_manager_managers%rowtype;
+  v_actor_manager_id uuid; v_actor text; v_reason text:=left(coalesce(nullif(btrim(p_reason),''),'Event updated from Event Input Console.'),1000);
+  v_now timestamptz:=statement_timestamp();
+begin
+  if jsonb_typeof(v_record)<>'object' then raise exception using errcode='22023',message='event command record must be an object'; end if;
+  begin v_actor_manager_id:=nullif(lower(btrim(coalesce(v_record->>'actor_manager_id',''))),'')::uuid;
+  exception when others then raise exception using errcode='22023',message='authenticated manager UUID is required for event mutation'; end;
+  select * into v_manager from public.ops_manager_managers m
+  where m.manager_id=v_actor_manager_id and m.active=true and m.revoked_at is null and m.is_system_principal=false
+    and m.roles && array['OPS_MANAGER','CUSTODIAL_MANAGER','DIRECTOR','SECURITY_ADMIN']::text[] for share;
+  if v_manager.manager_id is null or nullif(btrim(v_manager.display_name),'') is null then
+    raise exception using errcode='42501',message='an authorized active named manager principal is required for event mutation';
+  end if;
+  v_actor:=left(btrim(v_manager.display_name),200);
+  if v_command='create' then
+    insert into public.events_app_events(
+      event_name,location_group_id,event_scope,primary_venue_id,venue_ids,display_location,coverage_location_ids,staffing_area_ids,
+      source_location_text,parser_confidence,needs_review,parse_reason,source_text,source_format,manually_overridden,overridden_by,
+      overridden_at,event_timezone,operation_id,event_date,end_date,start_time,end_time,attendee_count,notes,created_by,
+      created_by_manager_id,updated_by_manager_id,updated_at
+    ) values(
+      v_record->>'event_name',(v_record->>'location_group_id')::uuid,v_record->>'event_scope',nullif(v_record->>'primary_venue_id','')::uuid,
+      coalesce(array(select jsonb_array_elements_text(coalesce(v_record->'venue_ids','[]'::jsonb)))::uuid[],'{}'::uuid[]),v_record->>'display_location',
+      coalesce(array(select jsonb_array_elements_text(coalesce(v_record->'coverage_location_ids','[]'::jsonb)))::uuid[],'{}'::uuid[]),
+      coalesce(array(select jsonb_array_elements_text(coalesce(v_record->'staffing_area_ids','[]'::jsonb)))::uuid[],'{}'::uuid[]),
+      nullif(v_record->>'source_location_text',''),nullif(v_record->>'parser_confidence',''),coalesce((v_record->>'needs_review')::boolean,false),
+      nullif(v_record->>'parse_reason',''),nullif(v_record->>'source_text',''),nullif(v_record->>'source_format',''),
+      coalesce((v_record->>'manually_overridden')::boolean,false),case when coalesce((v_record->>'manually_overridden')::boolean,false) then v_actor end,
+      case when coalesce((v_record->>'manually_overridden')::boolean,false) then v_now end,
+      coalesce(nullif(v_record->>'event_timezone',''),'America/Chicago'),nullif(v_record->>'operation_id','')::uuid,(v_record->>'event_date')::date,
+      (v_record->>'end_date')::date,(v_record->>'start_time')::time,(v_record->>'end_time')::time,nullif(v_record->>'attendee_count','')::integer,
+      nullif(v_record->>'notes',''),v_actor,v_actor_manager_id,
+      case when coalesce((v_record->>'manually_overridden')::boolean,false) then v_actor_manager_id end,v_now
+    ) on conflict(operation_id) where operation_id is not null do update set updated_at=public.events_app_events.updated_at
+    returning * into v_row;
+    return to_jsonb(v_row);
+  elsif v_command='update' then
+    select to_jsonb(e.*) into v_previous from public.events_app_events e where e.id=p_event_id for update;
+    if v_previous is null then raise exception using errcode='P0002',message='event not found'; end if;
+    update public.events_app_events set
+      event_name=v_record->>'event_name',location_group_id=(v_record->>'location_group_id')::uuid,event_scope=v_record->>'event_scope',
+      primary_venue_id=nullif(v_record->>'primary_venue_id','')::uuid,
+      venue_ids=coalesce(array(select jsonb_array_elements_text(coalesce(v_record->'venue_ids','[]'::jsonb)))::uuid[],'{}'::uuid[]),
+      display_location=v_record->>'display_location',
+      coverage_location_ids=coalesce(array(select jsonb_array_elements_text(coalesce(v_record->'coverage_location_ids','[]'::jsonb)))::uuid[],'{}'::uuid[]),
+      staffing_area_ids=coalesce(array(select jsonb_array_elements_text(coalesce(v_record->'staffing_area_ids','[]'::jsonb)))::uuid[],'{}'::uuid[]),
+      source_location_text=nullif(v_record->>'source_location_text',''),parser_confidence=nullif(v_record->>'parser_confidence',''),
+      needs_review=coalesce((v_record->>'needs_review')::boolean,false),parse_reason=nullif(v_record->>'parse_reason',''),
+      source_text=nullif(v_record->>'source_text',''),source_format=nullif(v_record->>'source_format',''),manually_overridden=true,
+      overridden_by=v_actor,overridden_at=v_now,updated_by_manager_id=v_actor_manager_id,
+      event_timezone=coalesce(nullif(v_record->>'event_timezone',''),'America/Chicago'),event_date=(v_record->>'event_date')::date,
+      end_date=(v_record->>'end_date')::date,start_time=(v_record->>'start_time')::time,end_time=(v_record->>'end_time')::time,
+      attendee_count=nullif(v_record->>'attendee_count','')::integer,notes=nullif(v_record->>'notes',''),revision=coalesce(revision,1)+1,updated_at=v_now
+    where id=p_event_id returning * into v_row;
+    insert into public.events_app_event_history(event_id,action,actor,actor_manager_id,reason,previous_record,new_record,created_at)
+    values(v_row.id,'update',v_actor,v_actor_manager_id,v_reason,v_previous,to_jsonb(v_row),v_now);
+    return to_jsonb(v_row);
+  elsif v_command='cancel' then
+    select to_jsonb(e.*) into v_previous from public.events_app_events e where e.id=p_event_id for update;
+    if v_previous is null then raise exception using errcode='P0002',message='event not found'; end if;
+    update public.events_app_events set status='CANCELLED',cancelled_at=coalesce(cancelled_at,v_now),cancelled_by=v_actor,
+      cancelled_by_manager_id=v_actor_manager_id,cancellation_reason=v_reason,overridden_by=v_actor,overridden_at=v_now,
+      updated_by_manager_id=v_actor_manager_id,revision=coalesce(revision,1)+1,updated_at=v_now
+    where id=p_event_id returning * into v_row;
+    insert into public.events_app_event_history(event_id,action,actor,actor_manager_id,reason,previous_record,new_record,created_at)
+    values(v_row.id,'cancel',v_actor,v_actor_manager_id,v_reason,v_previous,to_jsonb(v_row),v_now);
+    return to_jsonb(v_row);
+  end if;
+  raise exception using errcode='22023',message='unsupported bounded event command';
+end
+$function$;
+
+revoke all on function public.app_apply_event_command(text,uuid,jsonb,text,text) from public,anon,authenticated;
+grant execute on function public.app_apply_event_command(text,uuid,jsonb,text,text) to postgres,service_role;
+
+-- The original five-argument assignment function remains the roster authority.
+-- Manager routes use this overload so expected NULL is distinct from omission,
+-- and the comparison executes under the same lock as the assignment mutation.
+create or replace function public.custodial_assign_employee_device(
+  p_device_identifier text,p_employee_id uuid,p_changed_by_manager_id uuid,p_reason text,p_move_existing boolean,
+  p_expected_owner_provided boolean,p_expected_current_employee_id uuid
+) returns jsonb language plpgsql security definer set search_path to 'pg_catalog','public','extensions'
+as $function$
+declare v_identifier text:=upper(regexp_replace(btrim(coalesce(p_device_identifier,'')),'^KIOSK[-_ ]?','KIOSK_','i'));
+  v_current_employee_id uuid;
+begin
+  perform public.custodial_assert_manager(p_changed_by_manager_id);
+  if v_identifier ~ '^KIOSK_[2-9]$' then v_identifier:='KIOSK_0'||substring(v_identifier from 7); end if;
+  if p_expected_owner_provided is null then raise exception using errcode='22023',message='expected-owner presence must be explicit'; end if;
+  perform pg_advisory_xact_lock(hashtextextended('custodial-device-assignment:'||v_identifier,0));
+  select d.assigned_employee_id into v_current_employee_id from public.devices d
+  where upper(d.device_id)=v_identifier and d.active=true for update;
+  if not found then raise exception using errcode='P0002',message='Active employee kiosk not found.'; end if;
+  if p_expected_owner_provided and v_current_employee_id is distinct from p_expected_current_employee_id then
+    raise exception using errcode='40001',message='This phone assignment changed. Refresh and try again.';
+  end if;
+  return public.custodial_assign_employee_device(
+    v_identifier,p_employee_id,p_changed_by_manager_id,p_reason,p_move_existing
+  );
+end
+$function$;
+
+revoke all on function public.custodial_assign_employee_device(text,uuid,uuid,text,boolean,boolean,uuid) from public,anon,authenticated;
+grant execute on function public.custodial_assign_employee_device(text,uuid,uuid,text,boolean,boolean,uuid) to postgres,service_role;
+
 create table public.custodial_offline_authority_activation_events (
   event_id uuid primary key default gen_random_uuid(),
   authority_kind text not null check (authority_kind in ('device','location')),
@@ -157,27 +299,72 @@ create or replace function public.tool_commit_cleaning_workflow_authoritative(
   p_native_route_proof_secret text,p_backend_execution_secret text
 ) returns jsonb language plpgsql security definer set search_path to 'pg_catalog','public','extensions'
 as $function$
-declare v_completion_id uuid; v_result jsonb; v_started_at timestamptz; v_completed_at timestamptz;
+declare
+  v_completion_id uuid; v_context_id uuid; v_result jsonb; v_started_at timestamptz; v_completed_at timestamptz;
+  v_native_completed_at timestamptz; v_attestation_sha256 text;
 begin
   begin
     v_completion_id:=lower(btrim(coalesce(p_client_completion_id,'')))::uuid;
   exception when others then
     raise exception using errcode='22023',message='p_client_completion_id must be a UUID';
   end;
+  perform public.custodial_require_native_route_proof_secret(p_native_route_proof_secret);
+  if btrim(coalesce(p_native_completion_attestation_version,''))<>'custodial-native-completion.v1'
+     or lower(btrim(coalesce(p_native_completion_attestation,''))) !~ '^[0-9a-f]{64}$' then
+    raise exception using errcode='42501',message='a verified native completion attestation is required';
+  end if;
+  begin
+    v_context_id:=lower(btrim(p_context_id))::uuid;
+    v_native_completed_at:=btrim(p_client_ended_at)::timestamptz;
+  exception when others then
+    raise exception using errcode='22023',message='native completion evidence is malformed';
+  end;
+  if not isfinite(v_native_completed_at) then
+    raise exception using errcode='22023',message='native completion evidence is malformed';
+  end if;
+  v_attestation_sha256:=encode(extensions.digest(convert_to(lower(btrim(p_native_completion_attestation)),'UTF8'),'sha256'),'hex');
+  if exists(
+    select 1 from public.custodial_offline_actor_contexts c where c.context_id=v_context_id
+      and (c.native_start_attestation_version is distinct from 'custodial-native-start.v1'
+        or c.native_scan_entry_id is null
+        or (c.native_completion_attestation_version is not null and
+          (c.native_completion_attestation_version<>p_native_completion_attestation_version
+            or c.native_completion_attestation_sha256<>v_attestation_sha256
+            or c.native_completed_at<>v_native_completed_at)))
+  ) then
+    raise exception using errcode='23505',message='native completion attestation does not match the frozen occurrence';
+  end if;
   v_result:=public.custodial_commit_offline_occurrence(
     p_client_session_id,v_completion_id::text,p_device_id,p_location_code,p_client_started_at,p_client_ended_at,
     p_response_json,p_scan_evidence,p_correlation_id,p_context_id,p_submission_proof,p_authenticated_credential_id,p_backend_execution_secret
   );
+  if v_result->>'status'='closed' then
+    update public.custodial_offline_actor_contexts
+       set native_completion_attestation_version=p_native_completion_attestation_version,
+           native_completion_attestation_sha256=v_attestation_sha256,
+           native_completed_at=v_native_completed_at
+     where context_id=v_context_id and native_completion_attestation_version is null;
+    if not found and not exists(
+      select 1 from public.custodial_offline_actor_contexts c
+      where c.context_id=v_context_id
+        and c.native_completion_attestation_version=p_native_completion_attestation_version
+        and c.native_completion_attestation_sha256=v_attestation_sha256
+        and c.native_completed_at=v_native_completed_at
+    ) then
+      raise exception using errcode='23505',message='native completion attestation does not match the frozen occurrence';
+    end if;
+  end if;
   begin
     v_started_at:=nullif(v_result->>'started_at','')::timestamptz;
     v_completed_at:=nullif(coalesce(v_result->>'completed_at',v_result->>'ended_at'),'')::timestamptz;
   exception when others then
-    return v_result;
+    return v_result||jsonb_build_object('native_completion_attested',v_result->>'status'='closed');
   end;
   return v_result || jsonb_strip_nulls(jsonb_build_object(
     'started_at',public.custodial_canonical_utc_millis(v_started_at),
     'ended_at',public.custodial_canonical_utc_millis(v_completed_at),
-    'completed_at',public.custodial_canonical_utc_millis(v_completed_at)
+    'completed_at',public.custodial_canonical_utc_millis(v_completed_at),
+    'native_completion_attested',v_result->>'status'='closed'
   ));
 end
 $function$;
@@ -1256,12 +1443,79 @@ select p.oid,p.oid::regprocedure::text as routine_identity,p.proname,
     or lower(pg_get_functiondef(p.oid)) ~ 'public[.](purge_closed_scan_history_before|tool_purge_closed_scan_history_before|close_maintenance_ticket|tool_close_maintenance_ticket|force_close_session|tool_force_close_session|start_session|tool_start_session|finish_session|tool_finish_session|complete_session|tool_complete_session|record_scan_event|tool_record_scan_event)[[:space:]]*[(]') as delegates_alternate_terminal_authority
 from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.prokind='f';
 
+-- This is the reviewed canary-authority root surface, independent of the
+-- name-based catalog capture below. It is intentionally narrower than the
+-- public application schema. Catalog capture expands these exact roots through
+-- relation and trigger dependencies, while health proves every root is live and
+-- represented in that larger recovery inventory.
+create or replace function public.custodial_release_canary_authority_surface()
+returns table(object_kind text,object_identity text,purpose text)
+language sql immutable set search_path to 'pg_catalog','public'
+as $function$
+  values
+    ('relation','public.devices','phone identity and assignment'),
+    ('relation','public.locations','scan location authority'),
+    ('relation','public.device_auth_credentials','native credential authority'),
+    ('relation','public.device_sync_status','phone queue and release readiness'),
+    ('relation','public.device_location_proximity_status','current accepted proximity'),
+    ('relation','public.sessions','canonical cleaning session truth'),
+    ('relation','public.completion_responses','canonical completion response truth'),
+    ('relation','public.scan_events','accepted scan event truth'),
+    ('relation','public.maintenance_tickets','completion-derived maintenance truth'),
+    ('relation','public.custodial_offline_actor_contexts','frozen offline actor and native evidence'),
+    ('relation','public.custodial_offline_submission_proofs','offline submission proof state'),
+    ('relation','public.custodial_offline_reconciliation_records','offline reconciliation decision'),
+    ('relation','public.custodial_offline_scan_event_evidence','immutable scan evidence binding'),
+    ('relation','public.custodial_release_canary_controls','exact canary pause state'),
+    ('relation','public.custodial_release_canary_transport_probes','native canary transport proof'),
+    ('relation','public.custodial_release_canary_recovery_probes','database canary recovery proof'),
+    ('relation','public.events_app_events','canonical event mutation truth'),
+    ('relation','public.events_app_event_history','event actor history'),
+    ('relation','public.event_push_instances','event push occurrence authority'),
+    ('relation','public.employee_push_registrations','employee push recipient authority'),
+    ('relation','public.employee_native_push_delivery_receipts','employee push delivery truth'),
+    ('relation','public.operational_notification_jobs','durable operational notification jobs'),
+    ('relation','public.ops_manager_notification_queue','manager notification jobs'),
+    ('relation','public.ops_manager_push_devices','manager push recipient authority'),
+    ('relation','public.device_notification_acknowledgements','phone notification acceptance'),
+    ('function','tool_get_offline_scan_authority_snapshot(text,text,text)','offline snapshot boundary'),
+    ('function','tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text,text,text,text,text)','native offline start boundary'),
+    ('function','tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text,text,text,text)','native completion boundary'),
+    ('function','tool_complete_session_authoritative(text,jsonb,text,text,text,text)','online completion boundary'),
+    ('function','custodial_close_maintenance_ticket_authoritative(uuid,text,text,text)','maintenance terminal boundary'),
+    ('function','custodial_finish_historical_session_authoritative(text,text,uuid,timestamp with time zone,text)','historical exact-finish adapter'),
+    ('function','custodial_record_release_canary_transport_probe(text,uuid,text,text,text,text,text,uuid,text,text,text)','native canary transport recorder'),
+    ('function','custodial_get_release_canary_transport_probe_health(text,text,text,text)','native canary transport health'),
+    ('function','custodial_run_release_canary_recovery_probe(text,text)','persisted recovery probe'),
+    ('function','custodial_control_release_canary(uuid,uuid,text,text,text,jsonb,text)','release canary controller'),
+    ('function','custodial_backend_authority_health(text)','database authority health'),
+    ('function','app_apply_event_command(text,uuid,jsonb,text,text)','bounded event mutation authority'),
+    ('function','custodial_assign_employee_device(text,uuid,uuid,text,boolean,boolean,uuid)','serialized manager assignment CAS'),
+    ('function','mz_register_employee_push(uuid,text,text,text,text,text)','employee push registration authority'),
+    ('function','mz_enqueue_employee_event_pushes(timestamp with time zone)','event push enqueue authority'),
+    ('function','mz_enqueue_employee_location_pushes(timestamp with time zone)','location push enqueue authority'),
+    ('function','mz_prepare_employee_native_push_delivery(uuid,uuid,uuid,bigint,uuid,text,timestamp with time zone)','employee push dispatch preparation'),
+    ('function','mz_record_employee_native_push_delivery(uuid,uuid,uuid,bigint,uuid,text,text,timestamp with time zone)','employee push dispatch completion'),
+    ('function','ops_manager_prepare_notification_dispatch(uuid,uuid,uuid,text)','manager push dispatch preparation'),
+    ('function','ops_manager_finish_notification_job(uuid,uuid,uuid,text,boolean,text,text,integer,boolean)','manager push dispatch completion');
+$function$;
+
 create or replace function public.custodial_backend_authority_health(p_backend_execution_secret text)
 returns jsonb language plpgsql security definer set search_path to 'pg_catalog','public','extensions'
 as $function$
-declare v_missing text[]; v_mismatched text[]; v_checks jsonb; v_ok boolean;
+declare v_missing text[]; v_mismatched text[]; v_surface_missing text[]; v_surface_uncovered text[]; v_checks jsonb; v_ok boolean;
 begin
   perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);
+  select array_agg(s.object_identity order by s.object_kind,s.object_identity) into v_surface_missing
+  from public.custodial_release_canary_authority_surface() s
+  where (s.object_kind='function' and to_regprocedure(s.object_identity) is null)
+     or (s.object_kind='relation' and to_regclass(s.object_identity) is null);
+  select array_agg(s.object_identity order by s.object_kind,s.object_identity) into v_surface_uncovered
+  from public.custodial_release_canary_authority_surface() s
+  where not exists(
+    select 1 from public.custodial_release_authority_restore_inventory i
+    where i.object_kind=s.object_kind and i.object_identity=s.object_identity
+  );
   select array_agg(i.object_identity order by i.restore_order,i.object_identity) into v_missing
   from public.custodial_release_authority_restore_inventory i
   where (i.object_kind='function' and to_regprocedure(i.object_identity) is null)
@@ -1289,6 +1543,8 @@ begin
   v_checks:=jsonb_build_object(
     'restore_inventory_present',(select count(*)>40 from public.custodial_release_authority_restore_inventory),
     'restore_inventory_exact',coalesce(cardinality(v_missing),0)=0 and coalesce(cardinality(v_mismatched),0)=0,
+    'canary_authority_surface_live',coalesce(cardinality(v_surface_missing),0)=0,
+    'canary_authority_surface_captured',coalesce(cardinality(v_surface_uncovered),0)=0,
     'bootstrap_controller_seed_present',exists(select 1 from public.custodial_release_authority_bootstrap_definitions),
     'authority_activation_history',to_regclass('public.custodial_offline_authority_activation_events') is not null
       and to_regprocedure('public.custodial_offline_authority_active_at(text,uuid,timestamptz)') is not null,
@@ -1307,7 +1563,7 @@ begin
       select 1 from public.custodial_terminal_writer_inventory i
       where i.application_callable and (i.mutates_terminal_truth or i.delegates_alternate_terminal_authority)
         and i.oid is distinct from to_regprocedure('public.tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text,text,text,text,text)')
-        and i.oid is distinct from to_regprocedure('public.tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text)')
+        and i.oid is distinct from to_regprocedure('public.tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text,text,text,text)')
         and i.oid is distinct from to_regprocedure('public.tool_complete_session_authoritative(text,jsonb,text,text,text,text)')
         and i.oid is distinct from to_regprocedure('public.custodial_close_maintenance_ticket_authoritative(uuid,text,text,text)')
         and i.oid is distinct from to_regprocedure('public.custodial_finish_historical_session_authoritative(text,text,uuid,timestamptz,text)')
@@ -1322,7 +1578,16 @@ begin
     'native_timestamp_renderer',public.custodial_canonical_utc_millis('2026-08-13 12:34:56.789123+00'::timestamptz)='2026-08-13T12:34:56.789Z'
   );
   select bool_and(value::boolean) into v_ok from jsonb_each_text(v_checks);
-  return jsonb_build_object('ok',coalesce(v_ok,false),'authority','offline-authority.v5','canonical_objects_expected',(select count(*) from public.custodial_release_authority_restore_inventory),'missing_objects',to_jsonb(coalesce(v_missing,array[]::text[])),'mismatched_objects',to_jsonb(coalesce(v_mismatched,array[]::text[])),'checks',v_checks);
+  return jsonb_build_object(
+    'ok',coalesce(v_ok,false),'authority','offline-authority.v5',
+    'canonical_objects_expected',(select count(*) from public.custodial_release_authority_restore_inventory),
+    'canary_surface_objects_expected',(select count(*) from public.custodial_release_canary_authority_surface()),
+    'missing_objects',to_jsonb(coalesce(v_missing,array[]::text[])),
+    'mismatched_objects',to_jsonb(coalesce(v_mismatched,array[]::text[])),
+    'surface_missing_objects',to_jsonb(coalesce(v_surface_missing,array[]::text[])),
+    'surface_uncovered_objects',to_jsonb(coalesce(v_surface_uncovered,array[]::text[])),
+    'checks',v_checks
+  );
 end
 $function$;
 
@@ -1412,6 +1677,9 @@ with recursive authority_relations as (
     or c.relname like '%push%'
     or c.relname in ('devices','locations','device_auth_credentials','sessions','completion_responses','maintenance_tickets','scan_events',
       'employee_push_registrations','employee_native_push_delivery_receipts','event_push_instances','events_app_events','operational_notification_jobs')
+    or quote_ident(n.nspname)||'.'||quote_ident(c.relname) in (
+      select s.object_identity from public.custodial_release_canary_authority_surface() s where s.object_kind='relation'
+    )
   )
   union
   select peer.oid,pn.nspname,peer.relname
@@ -1433,6 +1701,9 @@ with recursive authority_relations as (
       'mz_register_employee_push','mz_mark_employee_event_opened','mz_enqueue_employee_event_pushes','mz_enqueue_employee_location_pushes',
       'mz_get_employee_native_push_delivery_receipt','mz_prepare_employee_native_push_delivery','mz_record_employee_native_push_delivery',
       'finish_operational_notification_job','finish_operational_notification_job_terminal')
+    or p.oid::regprocedure::text in (
+      select s.object_identity from public.custodial_release_canary_authority_surface() s where s.object_kind='function'
+    )
   )
   union
   select p.oid,n.nspname,p.proname,pg_get_function_identity_arguments(p.oid) args
@@ -1497,6 +1768,9 @@ with recursive authority_relations as (
     or c.relname like '%push%'
     or c.relname in ('devices','locations','device_auth_credentials','sessions','completion_responses','maintenance_tickets','scan_events',
       'employee_push_registrations','employee_native_push_delivery_receipts','event_push_instances','events_app_events','operational_notification_jobs')
+    or quote_ident(n.nspname)||'.'||quote_ident(c.relname) in (
+      select s.object_identity from public.custodial_release_canary_authority_surface() s where s.object_kind='relation'
+    )
   )
   union
   select peer.oid,pn.nspname,peer.relname
@@ -1517,6 +1791,9 @@ with recursive authority_relations as (
       'mz_register_employee_push','mz_mark_employee_event_opened','mz_enqueue_employee_event_pushes','mz_enqueue_employee_location_pushes',
       'mz_get_employee_native_push_delivery_receipt','mz_prepare_employee_native_push_delivery','mz_record_employee_native_push_delivery',
       'finish_operational_notification_job','finish_operational_notification_job_terminal')
+    or p.oid::regprocedure::text in (
+      select s.object_identity from public.custodial_release_canary_authority_surface() s where s.object_kind='function'
+    )
   )
   union
   select p.oid from pg_trigger t join authority_relations r on r.oid=t.tgrelid join pg_proc p on p.oid=t.tgfoid

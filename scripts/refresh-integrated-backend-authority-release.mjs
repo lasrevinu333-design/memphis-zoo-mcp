@@ -21,6 +21,33 @@ function gitBytes(args) {
   return execFileSync("git", args, { cwd: root, maxBuffer: 64 * 1024 * 1024 });
 }
 
+function assertNoForbiddenIndexFlags() {
+  const records = gitBytes(["ls-files", "-v", "-z"]).toString("utf8").split("\0").filter(Boolean);
+  for (const record of records) {
+    const marker = record.slice(0, 1);
+    const path = record.slice(2);
+    assert.equal(record.slice(1, 2), " ", `invalid index flag record: ${record}`);
+    assert.equal(marker === "S", false, `skip-worktree index flag is forbidden: ${path}`);
+    assert.equal(/[a-z]/.test(marker), false, `assume-unchanged index flag is forbidden: ${path}`);
+  }
+}
+
+function assertExactHeadWorktree() {
+  assertNoForbiddenIndexFlags();
+  assert.equal(
+    gitText(["status", "--porcelain=v1", "--untracked-files=all", "--ignored=no"]),
+    "",
+    "staged, unstaged, tracked, or untracked content is forbidden before release evidence refresh/check",
+  );
+  for (const args of [["diff", "--quiet", "--ignore-submodules", "--"], ["diff", "--cached", "--quiet", "--ignore-submodules", "--"]]) {
+    try {
+      execFileSync("git", args, { cwd: root, stdio: ["ignore", "ignore", "ignore"] });
+    } catch {
+      assert.fail(`wrong or dirty Git index: git ${args.join(" ")}`);
+    }
+  }
+}
+
 function assertRepositoryPath(path) {
   assert.match(path, /^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[A-Za-z0-9._/-]+$/, `invalid tracked path: ${path}`);
   return path;
@@ -58,10 +85,8 @@ assert.equal(Object.hasOwn(input.cutover.source_identity, "authority_content_pat
 assert.deepEqual(input.cutover?.source_identity?.authority_inventory?.exclude, [outputPath.slice(root.length + 1)]);
 assert.equal(input.cutover?.source_identity?.authority_inventory?.source, "all-tracked-paths-in-external-expected-tree");
 const generatedEvidencePath = outputPath.slice(root.length + 1);
-// The staged tree is the exact pre-commit source tree. The only subsequent
-// staged change is this generated evidence path, which is deliberately excluded
-// from its own inventory and verified separately by the executable checker.
-const sourceTree = gitText(["write-tree"]);
+assertExactHeadWorktree();
+const sourceTree = gitText(["rev-parse", "HEAD^{tree}"]);
 const trackedInventory = inventoryFromExactTree(sourceTree);
 const authorityInventory = trackedInventory.filter(({ path }) => path !== generatedEvidencePath);
 const migrations = authorityInventory

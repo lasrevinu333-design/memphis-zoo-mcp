@@ -27,6 +27,8 @@ export const SCHEMA_CATALOG_QUERIES = Object.freeze({
 });
 
 export const SCHEMA_CATALOG_NAMES = Object.freeze(Object.keys(SCHEMA_CATALOG_QUERIES));
+export const UNSUPPORTED_PUBLIC_RELATION_CLASSES_QUERY = `select c.relname as relation_name,c.relkind as relation_kind from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind in ('f') order by c.relkind,c.relname`;
+export const UNSUPPORTED_PUBLIC_TYPE_CLASSES_QUERY = `select t.typname as type_name,t.typtype as type_kind from pg_type t join pg_namespace n on n.oid=t.typnamespace join pg_class c on c.oid=t.typrelid where n.nspname='public' and t.typtype='c' and c.relkind='c' order by t.typtype,t.typname`;
 
 export function stableSchemaJson(value) {
   if (Array.isArray(value)) return value.map(stableSchemaJson);
@@ -46,11 +48,34 @@ export function fingerprintSchemaCatalog(inventory) {
   };
 }
 
+function assertSupportedPublicSchemaObjects({ unsupportedRelations, unsupportedTypes }) {
+  for (const relation of unsupportedRelations) {
+    if (relation.relation_kind === "f") {
+      throw new Error(`Unsupported public foreign table must be reviewed before schema fingerprint capture: ${relation.relation_name}`);
+    }
+    throw new Error(`Unsupported public relation class ${relation.relation_kind} must be reviewed before schema fingerprint capture: ${relation.relation_name}`);
+  }
+  for (const type of unsupportedTypes) {
+    if (type.type_kind === "c") {
+      throw new Error(`Unsupported public composite type must be reviewed before schema fingerprint capture: ${type.type_name}`);
+    }
+    throw new Error(`Unsupported public type class ${type.type_kind} must be reviewed before schema fingerprint capture: ${type.type_name}`);
+  }
+}
+
 export async function captureSchemaCatalog(client) {
   const inventory = {};
   for (const [name, sql] of Object.entries(SCHEMA_CATALOG_QUERIES)) {
     const result = await client.query(sql);
     inventory[name] = result.rows;
   }
+  const [unsupportedRelations, unsupportedTypes] = await Promise.all([
+    client.query(UNSUPPORTED_PUBLIC_RELATION_CLASSES_QUERY),
+    client.query(UNSUPPORTED_PUBLIC_TYPE_CLASSES_QUERY),
+  ]);
+  assertSupportedPublicSchemaObjects({
+    unsupportedRelations: unsupportedRelations.rows,
+    unsupportedTypes: unsupportedTypes.rows,
+  });
   return inventory;
 }

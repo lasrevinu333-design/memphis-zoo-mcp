@@ -381,7 +381,7 @@ if (databaseMode) {
   assert.equal(run(`select count(*) from unnest(array[
     to_regprocedure('public.tool_get_offline_scan_authority_snapshot(text,text,text)'),
     to_regprocedure('public.tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text,text,text,text,text)'),
-    to_regprocedure('public.tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text)'),
+    to_regprocedure('public.tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text,text,text,text)'),
     to_regprocedure('public.tool_complete_session_authoritative(text,jsonb,text,text,text,text)'),
     to_regprocedure('public.custodial_close_maintenance_ticket_authoritative(uuid,text,text,text)'),
     to_regprocedure('public.custodial_finish_historical_session_authoritative(text,text,uuid,timestamptz,text)'),
@@ -390,7 +390,7 @@ if (databaseMode) {
   assert.equal(run(`select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('run_application_write','run_sql_write','run_sql_migration','force_close_session','tool_force_close_session') and has_function_privilege('service_role',p.oid,'EXECUTE');`).split("\n").at(-1), "0", "service role must not retain a generic or force-close writer");
   assert.equal(run(`select count(*) from public.custodial_terminal_writer_inventory i where application_callable and (mutates_terminal_truth or delegates_alternate_terminal_authority)
     and i.oid is distinct from to_regprocedure('public.tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text,text,text,text,text)')
-    and i.oid is distinct from to_regprocedure('public.tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text)')
+    and i.oid is distinct from to_regprocedure('public.tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text,text,text,text)')
     and i.oid is distinct from to_regprocedure('public.tool_complete_session_authoritative(text,jsonb,text,text,text,text)')
     and i.oid is distinct from to_regprocedure('public.custodial_close_maintenance_ticket_authoritative(uuid,text,text,text)')
     and i.oid is distinct from to_regprocedure('public.custodial_finish_historical_session_authoritative(text,text,uuid,timestamptz,text)');`).split("\n").at(-1), "0", "service roles must not retain an alternate terminal writer by exact procedure identity");

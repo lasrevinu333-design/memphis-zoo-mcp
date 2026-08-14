@@ -300,14 +300,26 @@ async function resolveNativeDevice(db, identifier) {
 }
 
 async function assignDevice(db, req, deviceId, employeeId, values = {}) {
+  const expectedOwnerProvided = Object.prototype.hasOwnProperty.call(values, "expected_current_employee_id");
+  const expectedOwner = expectedOwnerProvided && values.expected_current_employee_id != null
+    ? String(values.expected_current_employee_id).trim()
+    : null;
+  if (expectedOwner && !validUuid(expectedOwner)) {
+    throw Object.assign(new Error("expected_current_employee_id must be a valid employee ID or null."), { status: 400 });
+  }
   const result = await db.rpc("custodial_assign_employee_device", {
     p_device_identifier: normalizeDeviceId(deviceId),
     p_employee_id: employeeId || null,
     p_changed_by_manager_id: req.memphisAuth.manager_id,
     p_reason: clip(values.reason, 500) || null,
     p_move_existing: values.move_existing === true,
+    p_expected_owner_provided: expectedOwnerProvided,
+    p_expected_current_employee_id: expectedOwner,
   });
-  if (result.error) throw result.error;
+  if (result.error) {
+    if (String(result.error.code || "") === "40001") result.error.status = 409;
+    throw result.error;
+  }
   return result.data;
 }
 
@@ -388,9 +400,6 @@ export function installCustodialEmployeeAdminRoutes(app, { env = process.env, su
       if (req.body?.deactivate_previous === true) return res.status(409).json({ ok: false, error: "Employee departures must be recorded from Weekly Schedule before reassigning a phone." });
       if (!validKioskId(deviceId)) return res.status(400).json({ ok: false, error: "Choose KIOSK_02 through KIOSK_10." });
       if (employeeId && !validUuid(employeeId)) return res.status(400).json({ ok: false, error: "A valid employee ID is required." });
-      const current = await resolveNativeDevice(db, deviceId);
-      const expected = String(req.body?.expected_current_employee_id || "").trim();
-      if (expected && String(current?.assigned_employee_id || "") !== expected) return res.status(409).json({ ok: false, error: "This phone assignment changed. Refresh and try again." });
       const assignment = await assignDevice(db, req, deviceId, employeeId || null, req.body || {});
       res.json({ ok: true, data: assignment });
     } catch (error) { fail(res, error, "Phone assignment could not be changed."); }
@@ -419,12 +428,12 @@ export function installCustodialEmployeeAdminRoutes(app, { env = process.env, su
       let employeeId = String(req.body?.employee_id || "").trim() || null;
       if (employeeId && !validUuid(employeeId)) return res.status(400).json({ ok: false, error: "A valid employee ID is required." });
       if (!validKioskId(requestedDevice)) return res.status(400).json({ ok: false, error: "Choose KIOSK_02 through KIOSK_10." });
-      const current = await resolveNativeDevice(db, requestedDevice);
-      const expected = String(req.body?.expected_current_employee_id || "").trim();
-      if (expected && String(current?.assigned_employee_id || "") !== expected) return res.status(409).json({ ok: false, error: "This phone assignment changed. Refresh and try again." });
       const assignment = await assignDevice(db, req, requestedDevice, employeeId, {
         reason: "Phone assignment updated",
         move_existing: false,
+        ...(Object.prototype.hasOwnProperty.call(req.body || {}, "expected_current_employee_id")
+          ? { expected_current_employee_id: req.body.expected_current_employee_id }
+          : {}),
       });
       if (!employee && employeeId) {
         const employeeResult = await db.from("employees").select("id,employee_code,display_name,active,role").eq("id", employeeId).maybeSingle();

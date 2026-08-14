@@ -115,7 +115,13 @@ const db = {
     databaseCalls.push({ kind: "rpc", name, args: structuredClone(args) });
     if (name === "custodial_create_employee") return { data: { employee: structuredClone(employee) }, error: null };
     if (name === "custodial_set_employee_active") return { data: { employee: { ...structuredClone(employee), active: args.p_active } }, error: null };
-    if (name === "custodial_assign_employee_device") return { data: { device: structuredClone(device) }, error: null };
+    if (name === "custodial_assign_employee_device") {
+      if (args.p_expected_owner_provided === true
+          && (device.assigned_employee_id || null) !== (args.p_expected_current_employee_id || null)) {
+        return { data: null, error: { code: "40001", message: "This phone assignment changed. Refresh and try again." } };
+      }
+      return { data: { device: structuredClone(device) }, error: null };
+    }
     if (name === "device_auth_issue_enrollment_code") {
       return { data: {
         enrollment_id: "51000000-0000-4000-8000-000000000005",
@@ -255,6 +261,35 @@ try {
     );
   }
 
+  const assignmentCalls = databaseCalls.filter((call) => call.kind === "rpc" && call.name === "custodial_assign_employee_device");
+  assert.equal(assignmentCalls[0].args.p_expected_owner_provided, false,
+    "omitted expected owner must remain distinguishable from expected null");
+  assert.equal(assignmentCalls[0].args.p_expected_current_employee_id, null);
+  assert.equal(assignmentCalls[1].args.p_expected_owner_provided, true);
+  assert.equal(assignmentCalls[1].args.p_expected_current_employee_id, employeeId);
+
+  const staleUnassigned = await request("/custodial-admin-api/devices/KIOSK_02/assignment", {
+    method: "PUT",
+    token: fullAccessToken,
+    body: { employee_id: employeeId, expected_current_employee_id: null, reason: "Expected unassigned" },
+  });
+  assert.equal(staleUnassigned.status, 409,
+    "explicit expected null must conflict when the serialized current owner is non-null");
+  assert.match(staleUnassigned.body.error, /assignment changed/i);
+  const staleNullCall = databaseCalls.filter((call) => call.kind === "rpc" && call.name === "custodial_assign_employee_device").at(-1);
+  assert.equal(staleNullCall.args.p_expected_owner_provided, true);
+  assert.equal(staleNullCall.args.p_expected_current_employee_id, null);
+
+  device.assigned_employee_id = null;
+  const initiallyUnassigned = await request("/custodial-admin-api/devices/KIOSK_02/assignment", {
+    method: "PUT",
+    token: fullAccessToken,
+    body: { employee_id: employeeId, expected_current_employee_id: null, reason: "Claim initially unassigned phone" },
+  });
+  assert.equal(initiallyUnassigned.status, 200,
+    "explicit expected null must succeed when the serialized current owner is null");
+  device.assigned_employee_id = employeeId;
+
   for (const route of rosterOnlyMutations) {
     const callsBefore = databaseCalls.length;
     const result = await request(route.path, { method: route.method, token: fullAccessToken, body: route.body });
@@ -326,6 +361,12 @@ assert.match(routeSource, /missingRelation\(result\.error, "custodial_offline_sc
   "the transition-compatible manager read may omit only an absent snapshot ledger, not arbitrary query errors");
 assert.match(routeSource, /\.eq\("device_id", deviceRow\.id\)[\s\S]*?\.limit\(1\)[\s\S]*?\.maybeSingle\(\)/,
   "manager reads must fetch the newest valid offline authority independently for each phone");
+assert.match(routeSource, /Object\.prototype\.hasOwnProperty\.call\(values, "expected_current_employee_id"\)/,
+  "assignment CAS must preserve omitted versus explicit null owner input");
+assert.match(routeSource, /p_expected_owner_provided: expectedOwnerProvided/,
+  "assignment CAS presence must reach the serialized database RPC");
+assert.doesNotMatch(routeSource, /if \(expected && String\(current\?\.assigned_employee_id/,
+  "assignment CAS must not use the old truthy JavaScript pre-read check");
 
 // Native lifecycle routes act as the employee phone, not as an Ops Manager.
 // Their enrollment-code or device-credential proofs remain purpose-specific;

@@ -33,11 +33,15 @@ let lookup = async () => ({
 const store = { async find(id) { return lookup(id); } };
 let mutations = 0;
 let snapshots = 0;
+let rebuilds = 0;
+let exceptionRequest = null;
+let rebuildRequest = null;
 const controlPlane = {
   async health() { return { ready: true }; },
   async getManagerSnapshot({ weekStart }) { snapshots += 1; return { schema: "memphis-zoo.static-weekly-manager-snapshot.v1", week_start: weekStart, authority_revision: 0 }; },
   async applyContractorCapacity() { mutations += 1; return { revision: mutations, data: { exception_id: `contractor-${mutations}` } }; },
-  async applyException() { mutations += 1; return { revision: mutations, data: { exception_id: `runtime-${mutations}` } }; },
+  async applyException(request) { exceptionRequest = request; mutations += 1; return { revision: mutations, data: { exception_id: `runtime-${mutations}` } }; },
+  async rebuildCurrentProjection(request) { rebuildRequest = request; rebuilds += 1; return { revision: request.expectedRevision + 1, data: { projection_id: `rebuild-${request.weekStart}-${request.idempotencyKey}` } }; },
 };
 const runtime = createStaticWeeklyControlPlaneRuntime({ env, trustedDeviceStore: store, database: {}, controlPlane });
 const server = createServer(runtime.app);
@@ -48,7 +52,7 @@ async function mutation() {
   const response = await fetch(`${origin}/static-weekly/exceptions`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
-    body: JSON.stringify({ exception_type: "pto", service_date: "2026-10-06", base_version_id: "60000000-0000-4000-8000-000000000091", publication_id: "70000000-0000-4000-8000-000000000091", reason: "runtime test", payload: { slotId: "20000000-0000-4000-8000-000000000091" }, expected_revision: 0, idempotency_key: "runtime-test" }),
+    body: JSON.stringify({ exception_type: "pto", service_date: "2026-10-06", base_version_id: "60000000-0000-4000-8000-000000000091", publication_id: "70000000-0000-4000-8000-000000000091", reason: "runtime test", payload: { slotId: "20000000-0000-4000-8000-000000000091" }, expected_revision: 0, idempotency_key: "runtime-test", week_start: "2026-10-05" }),
   });
   return { status: response.status, body: await response.json() };
 }
@@ -56,6 +60,15 @@ async function mutation() {
 async function managerSnapshot() {
   const response = await fetch(`${origin}/static-weekly/manager-snapshot?week_start=2026-10-05`, {
     headers: { Authorization: `Bearer ${session.token}` },
+  });
+  return { status: response.status, body: await response.json() };
+}
+
+async function rebuildCurrentProjection() {
+  const response = await fetch(`${origin}/static-weekly/rebuild-current-projection`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
+    body: JSON.stringify({ week_start: "2026-10-05", expected_revision: 0, idempotency_key: "runtime-rebuild" }),
   });
   return { status: response.status, body: await response.json() };
 }
@@ -92,6 +105,13 @@ try {
   let response = await mutation();
   assert.equal(response.status, 200, "a valid trusted named-manager credential may reach the scheduler mutation boundary");
   assert.equal(mutations, 1);
+  assert.equal(exceptionRequest.projectionWeekStart, "2026-10-05", "the runtime binds each atomic mutation to the requested Monday projection week");
+
+  response = await rebuildCurrentProjection();
+  assert.equal(response.status, 200, "a valid trusted named-manager credential may invoke rebuild-only projection recovery");
+  assert.equal(response.body.data.revision, 1);
+  assert.equal(rebuilds, 1);
+  assert.deepEqual(rebuildRequest, { manager: exceptionRequest.manager, weekStart: "2026-10-05", expectedRevision: 0, idempotencyKey: "runtime-rebuild" }, "the named recovery endpoint passes only its manager authority and rebuild command identity");
 
   const retiredIncumbency = await fetch(`${origin}/static-weekly/incumbencies`, {
     method: "POST",
