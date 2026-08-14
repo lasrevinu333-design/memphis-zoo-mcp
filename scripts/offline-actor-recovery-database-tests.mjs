@@ -214,7 +214,14 @@ for (const [label, statement] of [
   const denial = await sql(`set role service_role; ${statement}`, { expectFailure: true });
   assert.match(denial, /permission denied/i, `${label} is not application-callable`);
 }
-assert.equal(await sql(`select count(*) from public.custodial_terminal_writer_inventory where application_callable and (mutates_terminal_truth or delegates_alternate_terminal_authority) and proname not in ('tool_start_offline_occurrence','tool_commit_cleaning_workflow_authoritative','tool_complete_session_authoritative','custodial_close_maintenance_ticket_authoritative');`), "0", "capability/grant inventory leaves no application-callable alternate terminal writer");
+assert.equal(await sql(`select count(*) from public.custodial_terminal_writer_inventory
+  where application_callable and (mutates_terminal_truth or delegates_alternate_terminal_authority)
+    and oid is distinct from to_regprocedure('public.tool_start_offline_occurrence(text,text,text,text,text,text,integer,text,text,text,text,text,text,text)')
+    and oid is distinct from to_regprocedure('public.tool_commit_cleaning_workflow_authoritative(text,text,text,text,text,text,jsonb,jsonb,text,text,text,text,text)')
+    and oid is distinct from to_regprocedure('public.tool_complete_session_authoritative(text,jsonb,text,text,text,text)')
+    and oid is distinct from to_regprocedure('public.custodial_close_maintenance_ticket_authoritative(uuid,text,text,text)')
+    and oid is distinct from to_regprocedure('public.custodial_finish_historical_session_authoritative(text,text,uuid,timestamptz,text)');`),
+"0", "capability/grant inventory leaves no application-callable alternate terminal writer or same-name overload");
 
 // A start genuinely begun offline under A may first reach the server after the
 // phone is assigned to B. The unexpired issued snapshot preserves A as actor.
