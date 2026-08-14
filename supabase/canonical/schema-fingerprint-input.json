@@ -18255,6 +18255,58 @@
     },
     {
       "collation_name": null,
+      "column_name": "dispatch_lease_token",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 24,
+      "schema_name": "public",
+      "table_name": "ops_manager_notification_queue"
+    },
+    {
+      "collation_name": null,
+      "column_name": "dispatch_push_device_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 25,
+      "schema_name": "public",
+      "table_name": "ops_manager_notification_queue"
+    },
+    {
+      "collation_name": null,
+      "column_name": "dispatch_fcm_token_sha256",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 26,
+      "schema_name": "public",
+      "table_name": "ops_manager_notification_queue"
+    },
+    {
+      "collation_name": null,
+      "column_name": "dispatch_started_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 27,
+      "schema_name": "public",
+      "table_name": "ops_manager_notification_queue"
+    },
+    {
+      "collation_name": null,
       "column_name": "credential_id",
       "comment": null,
       "data_type": "uuid",
@@ -31904,6 +31956,14 @@
       "validated": true
     },
     {
+      "constraint_name": "ops_manager_notification_queue_dispatch_binding",
+      "constraint_type": "c",
+      "definition": "CHECK (dispatch_lease_token IS NULL AND dispatch_push_device_id IS NULL AND dispatch_fcm_token_sha256 IS NULL AND dispatch_started_at IS NULL OR dispatch_lease_token IS NOT NULL AND dispatch_push_device_id IS NOT NULL AND dispatch_fcm_token_sha256 ~ '^[0-9a-f]{64}$'::text AND dispatch_started_at IS NOT NULL)",
+      "schema_name": "public",
+      "table_name": "ops_manager_notification_queue",
+      "validated": true
+    },
+    {
       "constraint_name": "ops_manager_notification_queue_job_key_key",
       "constraint_type": "u",
       "definition": "UNIQUE (job_key)",
@@ -37113,7 +37173,7 @@
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.ops_manager_claim_notification_jobs(p_worker_id text, p_limit integer DEFAULT 20, p_lease_seconds integer DEFAULT 120)\n RETURNS SETOF ops_manager_notification_queue\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\nbegin\n  if nullif(btrim(p_worker_id),'') is null then raise exception using errcode='22023',message='worker id is required'; end if;\n  update public.ops_manager_notification_queue q set status='cancelled',completed_at=now(),leased_until=null,lease_token=null,\n    last_error='notification recipient authority is no longer current',updated_at=now()\n  where (q.status='pending' or (q.status='leased' and q.leased_until<now()))\n    and not public.custodial_ops_manager_notification_recipient_is_current(q.credential_id,q.manager_id,now());\n  update public.ops_manager_notification_queue q set status='cancelled',completed_at=now(),leased_until=null,lease_token=null,\n    last_error='event occurrence is no longer upcoming',updated_at=now()\n  where q.notification_type='event_digest' and (q.status='pending' or (q.status='leased' and q.leased_until<now()))\n    and not exists (\n      select 1 from public.events_app_events e\n      where e.id=case when coalesce(q.data_json->>'next_event_id','') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'\n        then (q.data_json->>'next_event_id')::uuid else null end\n        and e.status='SCHEDULED'\n        and ((e.event_date+e.start_time) at time zone 'America/Chicago')>now()\n        and to_jsonb((e.event_date+e.start_time) at time zone 'America/Chicago')=q.data_json->'next_event_starts_at'\n    );\n  update public.ops_manager_notification_queue q set status='cancelled',completed_at=now(),leased_until=null,lease_token=null,\n    last_error='location dashboard state has changed',updated_at=now()\n  where q.notification_type='location_digest' and (q.status='pending' or (q.status='leased' and q.leased_until<now()))\n    and not public.custodial_ops_manager_location_digest_is_current(q.credential_id,q.data_json->>'location_fingerprint');\n  return query with candidates as (\n    select q.queue_id from public.ops_manager_notification_queue q\n    where ((q.status='pending' and q.available_at<=now()) or (q.status='leased' and q.leased_until<now())) and q.attempts<q.max_attempts\n      and public.custodial_ops_manager_notification_recipient_is_current(q.credential_id,q.manager_id,now())\n      and (q.notification_type<>'event_digest' or exists (\n        select 1 from public.events_app_events e\n        where e.id=case when coalesce(q.data_json->>'next_event_id','') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'\n          then (q.data_json->>'next_event_id')::uuid else null end\n          and e.status='SCHEDULED'\n          and ((e.event_date+e.start_time) at time zone 'America/Chicago')>now()\n          and to_jsonb((e.event_date+e.start_time) at time zone 'America/Chicago')=q.data_json->'next_event_starts_at'\n      ))\n      and (q.notification_type<>'location_digest' or public.custodial_ops_manager_location_digest_is_current(q.credential_id,q.data_json->>'location_fingerprint'))\n    order by q.available_at,q.created_at,q.queue_id for update skip locked limit greatest(1,least(coalesce(p_limit,20),100))\n  ) update public.ops_manager_notification_queue q set status='leased',attempts=q.attempts+1,leased_at=now(),\n    leased_until=now()+make_interval(secs=>greatest(15,least(coalesce(p_lease_seconds,120),900))),lease_token=gen_random_uuid(),\n    worker_id=left(btrim(p_worker_id),160),updated_at=now() from candidates c where q.queue_id=c.queue_id returning q.*;\nend $function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.ops_manager_claim_notification_jobs(p_worker_id text, p_limit integer DEFAULT 20, p_lease_seconds integer DEFAULT 120)\n RETURNS SETOF ops_manager_notification_queue\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\nbegin\n  if nullif(btrim(p_worker_id),'') is null then raise exception using errcode='22023',message='worker id is required'; end if;\n  update public.ops_manager_notification_queue q set status='failed',completed_at=now(),leased_until=null,lease_token=null,worker_id=null,\n    provider_message_id=null,last_error='provider delivery outcome unknown after manager notification worker interruption',updated_at=now()\n  where q.status='leased' and q.leased_until<now() and q.dispatch_started_at is not null;\n  update public.ops_manager_notification_queue q set status='cancelled',completed_at=now(),leased_until=null,lease_token=null,worker_id=null,\n    last_error='notification recipient authority is no longer current',updated_at=now()\n  where (q.status='pending' or (q.status='leased' and q.leased_until<now()))\n    and q.dispatch_started_at is null\n    and not public.custodial_ops_manager_notification_recipient_is_current(q.credential_id,q.manager_id,now());\n  update public.ops_manager_notification_queue q set status='cancelled',completed_at=now(),leased_until=null,lease_token=null,worker_id=null,\n    last_error='event occurrence is no longer upcoming',updated_at=now()\n  where q.notification_type='event_digest' and (q.status='pending' or (q.status='leased' and q.leased_until<now()))\n    and q.dispatch_started_at is null\n    and not exists (\n      select 1 from public.events_app_events e\n      where e.id=case when coalesce(q.data_json->>'next_event_id','') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'\n        then (q.data_json->>'next_event_id')::uuid else null end\n        and e.status='SCHEDULED'\n        and ((e.event_date+e.start_time) at time zone 'America/Chicago')>now()\n        and to_jsonb((e.event_date+e.start_time) at time zone 'America/Chicago')=q.data_json->'next_event_starts_at'\n    );\n  update public.ops_manager_notification_queue q set status='cancelled',completed_at=now(),leased_until=null,lease_token=null,worker_id=null,\n    last_error='location dashboard state has changed',updated_at=now()\n  where q.notification_type='location_digest' and (q.status='pending' or (q.status='leased' and q.leased_until<now()))\n    and q.dispatch_started_at is null\n    and not public.custodial_ops_manager_location_digest_is_current(q.credential_id,q.data_json->>'location_fingerprint');\n  return query with candidates as (\n    select q.queue_id from public.ops_manager_notification_queue q\n    where ((q.status='pending' and q.available_at<=now()) or (q.status='leased' and q.leased_until<now()))\n      and q.dispatch_started_at is null and q.attempts<q.max_attempts\n      and public.custodial_ops_manager_notification_recipient_is_current(q.credential_id,q.manager_id,now())\n      and (q.notification_type<>'event_digest' or exists (\n        select 1 from public.events_app_events e\n        where e.id=case when coalesce(q.data_json->>'next_event_id','') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'\n          then (q.data_json->>'next_event_id')::uuid else null end\n          and e.status='SCHEDULED'\n          and ((e.event_date+e.start_time) at time zone 'America/Chicago')>now()\n          and to_jsonb((e.event_date+e.start_time) at time zone 'America/Chicago')=q.data_json->'next_event_starts_at'\n      ))\n      and (q.notification_type<>'location_digest' or public.custodial_ops_manager_location_digest_is_current(q.credential_id,q.data_json->>'location_fingerprint'))\n    order by q.available_at,q.created_at,q.queue_id for update skip locked limit greatest(1,least(coalesce(p_limit,20),100))\n  ) update public.ops_manager_notification_queue q set status='leased',attempts=q.attempts+1,leased_at=now(),\n    leased_until=now()+make_interval(secs=>greatest(15,least(coalesce(p_lease_seconds,120),900))),lease_token=gen_random_uuid(),\n    worker_id=left(btrim(p_worker_id),160),updated_at=now() from candidates c where q.queue_id=c.queue_id returning q.*;\nend $function$\n",
       "function_name": "ops_manager_claim_notification_jobs",
       "identity_arguments": "p_worker_id text, p_limit integer, p_lease_seconds integer",
       "owner_name": "supabase_admin",
@@ -37193,7 +37253,7 @@
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.ops_manager_finish_notification_job(p_queue_id uuid, p_lease_token uuid, p_push_device_id uuid, p_fcm_token_sha256 text, p_succeeded boolean, p_provider_message_id text DEFAULT NULL::text, p_error text DEFAULT NULL::text, p_retry_seconds integer DEFAULT 30, p_delivery_outcome_unknown boolean DEFAULT false)\n RETURNS ops_manager_notification_queue\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_row public.ops_manager_notification_queue%rowtype; v_job_current boolean; v_recipient_current boolean;\nbegin\n  if p_succeeded and p_delivery_outcome_unknown then raise exception using errcode='22023',message='a successful manager push cannot have an unknown provider outcome'; end if;\n  select * into v_row from public.ops_manager_notification_queue where queue_id=p_queue_id and status='leased' and lease_token=p_lease_token for update;\n  if v_row.queue_id is null then raise exception using errcode='P0002',message='Notification job lease was not found'; end if;\n  v_recipient_current:=public.custodial_ops_manager_notification_binding_is_current(\n    p_push_device_id,v_row.credential_id,v_row.manager_id,p_fcm_token_sha256,now()\n  );\n  v_job_current:=v_recipient_current;\n  if v_row.notification_type='event_digest' then\n    select v_job_current and exists (\n      select 1 from public.events_app_events e\n      where e.id=case when coalesce(v_row.data_json->>'next_event_id','') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'\n        then (v_row.data_json->>'next_event_id')::uuid else null end\n        and e.status='SCHEDULED' and ((e.event_date+e.start_time) at time zone 'America/Chicago')>now()\n        and to_jsonb((e.event_date+e.start_time) at time zone 'America/Chicago')=v_row.data_json->'next_event_starts_at'\n    ) into v_job_current;\n  end if;\n  if v_row.notification_type='location_digest' then\n    v_job_current:=v_job_current and public.custodial_ops_manager_location_digest_is_current(v_row.credential_id,v_row.data_json->>'location_fingerprint');\n  end if;\n  if p_delivery_outcome_unknown then\n    update public.ops_manager_notification_queue set status='failed',completed_at=now(),leased_until=null,lease_token=null,\n      provider_message_id=null,last_error=left('provider delivery outcome unknown: '||coalesce(p_error,'FCM response was not authoritative'),2000),updated_at=now()\n    where queue_id=p_queue_id returning * into v_row;\n  elsif not v_job_current then\n    update public.ops_manager_notification_queue set status='cancelled',completed_at=now(),leased_until=null,lease_token=null,\n      last_error=case when not v_recipient_current then 'notification recipient authority is no longer current' when v_row.notification_type='location_digest' then 'location dashboard state has changed' else 'event occurrence is no longer upcoming' end,\n      updated_at=now() where queue_id=p_queue_id returning * into v_row;\n  elsif p_succeeded then\n    update public.ops_manager_notification_queue set status='sent',sent_at=now(),completed_at=now(),leased_until=null,lease_token=null,\n      provider_message_id=nullif(left(coalesce(p_provider_message_id,''),500),''),last_error=null,updated_at=now()\n    where queue_id=p_queue_id returning * into v_row;\n    update public.ops_manager_notification_state set last_sent_at=now(),updated_at=now()\n    where credential_id=v_row.credential_id and state_key=case when v_row.notification_type='location_digest' then 'location_digest' else '__none__' end;\n  else\n    update public.ops_manager_notification_queue set status=case when attempts>=max_attempts then 'failed' else 'pending' end,\n      available_at=case when attempts>=max_attempts then available_at else now()+make_interval(secs=>greatest(15,least(coalesce(p_retry_seconds,30),86400))) end,\n      completed_at=case when attempts>=max_attempts then now() else null end,leased_until=null,lease_token=null,\n      last_error=left(coalesce(p_error,'Notification delivery failed'),2000),updated_at=now() where queue_id=p_queue_id returning * into v_row;\n  end if;\n  return v_row;\nend $function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.ops_manager_finish_notification_job(p_queue_id uuid, p_lease_token uuid, p_push_device_id uuid, p_fcm_token_sha256 text, p_succeeded boolean, p_provider_message_id text DEFAULT NULL::text, p_error text DEFAULT NULL::text, p_retry_seconds integer DEFAULT 30, p_delivery_outcome_unknown boolean DEFAULT false)\n RETURNS ops_manager_notification_queue\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_row public.ops_manager_notification_queue%rowtype; v_job_current boolean; v_recipient_current boolean; v_dispatch_matches boolean;\nbegin\n  if p_succeeded and p_delivery_outcome_unknown then raise exception using errcode='22023',message='a successful manager push cannot have an unknown provider outcome'; end if;\n  select * into v_row from public.ops_manager_notification_queue where queue_id=p_queue_id and status='leased' and lease_token=p_lease_token for update;\n  if v_row.queue_id is null then raise exception using errcode='P0002',message='Notification job lease was not found'; end if;\n  v_dispatch_matches:=v_row.dispatch_started_at is not null\n    and v_row.dispatch_lease_token=p_lease_token and v_row.dispatch_push_device_id=p_push_device_id\n    and v_row.dispatch_fcm_token_sha256=p_fcm_token_sha256;\n  if (p_succeeded or p_delivery_outcome_unknown or v_row.dispatch_started_at is not null) and not v_dispatch_matches then\n    raise exception using errcode='22023',message='manager notification dispatch preparation does not match the exact lease and provider target';\n  end if;\n  v_recipient_current:=public.custodial_ops_manager_notification_binding_is_current(\n    p_push_device_id,v_row.credential_id,v_row.manager_id,p_fcm_token_sha256,now()\n  );\n  v_job_current:=v_recipient_current;\n  if v_row.notification_type='event_digest' then\n    select v_job_current and exists (\n      select 1 from public.events_app_events e\n      where e.id=case when coalesce(v_row.data_json->>'next_event_id','') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'\n        then (v_row.data_json->>'next_event_id')::uuid else null end\n        and e.status='SCHEDULED' and ((e.event_date+e.start_time) at time zone 'America/Chicago')>now()\n        and to_jsonb((e.event_date+e.start_time) at time zone 'America/Chicago')=v_row.data_json->'next_event_starts_at'\n    ) into v_job_current;\n  end if;\n  if v_row.notification_type='location_digest' then\n    v_job_current:=v_job_current and public.custodial_ops_manager_location_digest_is_current(v_row.credential_id,v_row.data_json->>'location_fingerprint');\n  end if;\n  if p_delivery_outcome_unknown then\n    update public.ops_manager_notification_queue set status='failed',completed_at=now(),leased_until=null,lease_token=null,worker_id=null,\n      provider_message_id=null,last_error=left('provider delivery outcome unknown: '||coalesce(p_error,'FCM response was not authoritative'),2000),updated_at=now()\n    where queue_id=p_queue_id returning * into v_row;\n  elsif not v_job_current then\n    update public.ops_manager_notification_queue set status='cancelled',completed_at=now(),leased_until=null,lease_token=null,worker_id=null,\n      last_error=case when not v_recipient_current then 'notification recipient authority is no longer current' when v_row.notification_type='location_digest' then 'location dashboard state has changed' else 'event occurrence is no longer upcoming' end,\n      updated_at=now() where queue_id=p_queue_id returning * into v_row;\n  elsif p_succeeded then\n    update public.ops_manager_notification_queue set status='sent',sent_at=now(),completed_at=now(),leased_until=null,lease_token=null,worker_id=null,\n      provider_message_id=nullif(left(coalesce(p_provider_message_id,''),500),''),last_error=null,updated_at=now()\n    where queue_id=p_queue_id returning * into v_row;\n    update public.ops_manager_notification_state set last_sent_at=now(),updated_at=now()\n    where credential_id=v_row.credential_id and state_key=case when v_row.notification_type='location_digest' then 'location_digest' else '__none__' end;\n  else\n    update public.ops_manager_notification_queue set status=case when attempts>=max_attempts then 'failed' else 'pending' end,\n      available_at=case when attempts>=max_attempts then available_at else now()+make_interval(secs=>greatest(15,least(coalesce(p_retry_seconds,30),86400))) end,\n      completed_at=case when attempts>=max_attempts then now() else null end,leased_until=null,lease_token=null,worker_id=null,\n      dispatch_lease_token=null,dispatch_push_device_id=null,dispatch_fcm_token_sha256=null,dispatch_started_at=null,\n      last_error=left(coalesce(p_error,'Notification delivery failed'),2000),updated_at=now() where queue_id=p_queue_id returning * into v_row;\n  end if;\n  return v_row;\nend $function$\n",
       "function_name": "ops_manager_finish_notification_job",
       "identity_arguments": "p_queue_id uuid, p_lease_token uuid, p_push_device_id uuid, p_fcm_token_sha256 text, p_succeeded boolean, p_provider_message_id text, p_error text, p_retry_seconds integer, p_delivery_outcome_unknown boolean",
       "owner_name": "supabase_admin",
@@ -37212,6 +37272,14 @@
       "definition": "CREATE OR REPLACE FUNCTION public.ops_manager_notification_validate_owner()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_manager_id uuid;\nbegin\n  select manager_id into v_manager_id\n  from public.ops_manager_trusted_devices\n  where credential_id=new.credential_id\n    and revoked_at is null\n    and expires_at>now();\n  if v_manager_id is null or v_manager_id is distinct from new.manager_id then\n    raise exception using errcode='23514',message='Notification record must belong to the active trusted manager device.';\n  end if;\n  new.updated_at:=now();\n  return new;\nend\n$function$\n",
       "function_name": "ops_manager_notification_validate_owner",
       "identity_arguments": "",
+      "owner_name": "supabase_admin",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.ops_manager_prepare_notification_dispatch(p_queue_id uuid, p_lease_token uuid, p_push_device_id uuid, p_fcm_token_sha256 text)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_row public.ops_manager_notification_queue%rowtype;\nbegin\n  if p_queue_id is null or p_lease_token is null or p_push_device_id is null\n     or coalesce(p_fcm_token_sha256,'') !~ '^[0-9a-f]{64}$' then\n    raise exception using errcode='22023',message='exact manager notification lease, device, and token generation are required';\n  end if;\n  select * into v_row from public.ops_manager_notification_queue\n  where queue_id=p_queue_id and status='leased' and lease_token=p_lease_token and leased_until>=now() for update;\n  if v_row.queue_id is null or v_row.dispatch_started_at is not null then return false; end if;\n  if public.ops_manager_notification_job_is_current(\n    p_queue_id,p_lease_token,p_push_device_id,p_fcm_token_sha256\n  ) is not true then return false; end if;\n  update public.ops_manager_notification_queue set\n    dispatch_lease_token=p_lease_token,dispatch_push_device_id=p_push_device_id,\n    dispatch_fcm_token_sha256=p_fcm_token_sha256,dispatch_started_at=now(),updated_at=now()\n  where queue_id=p_queue_id;\n  return true;\nend $function$\n",
+      "function_name": "ops_manager_prepare_notification_dispatch",
+      "identity_arguments": "p_queue_id uuid, p_lease_token uuid, p_push_device_id uuid, p_fcm_token_sha256 text",
       "owner_name": "supabase_admin",
       "schema_name": "public"
     },
@@ -51922,6 +51990,33 @@
       "grantee": "supabase_admin",
       "grantor": "supabase_admin",
       "identity_arguments": "",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "ops_manager_prepare_notification_dispatch",
+      "grantee": "postgres",
+      "grantor": "supabase_admin",
+      "identity_arguments": "p_queue_id uuid, p_lease_token uuid, p_push_device_id uuid, p_fcm_token_sha256 text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "ops_manager_prepare_notification_dispatch",
+      "grantee": "service_role",
+      "grantor": "supabase_admin",
+      "identity_arguments": "p_queue_id uuid, p_lease_token uuid, p_push_device_id uuid, p_fcm_token_sha256 text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "ops_manager_prepare_notification_dispatch",
+      "grantee": "supabase_admin",
+      "grantor": "supabase_admin",
+      "identity_arguments": "p_queue_id uuid, p_lease_token uuid, p_push_device_id uuid, p_fcm_token_sha256 text",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"

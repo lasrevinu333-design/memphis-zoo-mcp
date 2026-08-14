@@ -313,7 +313,7 @@ export function createPushRuntime({ db, env }) {
           const fcmTokenSha256 = crypto.createHash("sha256").update(fcmToken).digest("hex");
           providerMessageId = await send(job, pushDevice, {
             beforeSend: async () => {
-              const current = await db.rpc("ops_manager_notification_job_is_current", {
+              const current = await db.rpc("ops_manager_prepare_notification_dispatch", {
                 p_queue_id: job.queue_id,
                 p_lease_token: job.lease_token,
                 p_push_device_id: pushDeviceId,

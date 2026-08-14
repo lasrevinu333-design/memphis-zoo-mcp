@@ -5,11 +5,12 @@ import express from "express";
 import { createPushRuntime, installManagerNotificationRoutes } from "../src/manager-notifications.js";
 
 const root = new URL("../", import.meta.url);
-const [moduleSource, migration, closureMigration, boundaryMigration, indexSource] = await Promise.all([
+const [moduleSource, migration, closureMigration, boundaryMigration, u4Migration, indexSource] = await Promise.all([
   readFile(new URL("src/manager-notifications.js", root), "utf8"),
   readFile(new URL("supabase/migrations/20260721203000_manager_mobile_notifications.sql", root), "utf8"),
   readFile(new URL("supabase/migrations/20260813050000_offline_snapshot_operational_truth_closure.sql", root), "utf8"),
   readFile(new URL("supabase/migrations/20260813141806_custodial_operational_boundary_closure.sql", root), "utf8"),
+  readFile(new URL("supabase/migrations/20260813210000_custodial_u4_ops_closure.sql", root), "utf8"),
   readFile(new URL("src/index.js", root), "utf8"),
 ]);
 
@@ -49,7 +50,11 @@ assert.match(closureMigration, /encode\(extensions\.digest\(convert_to\(pd\.fcm_
 assert.match(boundaryMigration, /ops_manager_enqueue_scheduled_notifications\(timestamp with time zone\)/);
 assert.match(boundaryMigration, /v_local_date date:=public\.sch_service_date\(p_now\)/);
 assert.match(boundaryMigration, /extract\(dow from v_local_date\)/);
-assert.match(moduleSource, /beforeSend:\s*async[\s\S]*ops_manager_notification_job_is_current/);
+assert.match(moduleSource, /beforeSend:\s*async[\s\S]*ops_manager_prepare_notification_dispatch/);
+assert.match(u4Migration, /dispatch_lease_token uuid/);
+assert.match(u4Migration, /ops_manager_prepare_notification_dispatch/);
+assert.match(u4Migration, /provider delivery outcome unknown after manager notification worker interruption/);
+assert.match(u4Migration, /q\.dispatch_started_at is null and q\.attempts<q\.max_attempts/);
 assert.match(moduleSource, /p_push_device_id:\s*pushDeviceId/);
 assert.match(moduleSource, /p_fcm_token_sha256:\s*fcmTokenSha256/);
 assert.match(moduleSource, /ops_manager_push_devices"\)\.update\(\{ last_seen_at:[\s\S]*\.eq\("push_device_id", pushDeviceId\)\.eq\("fcm_token", fcmToken\)/);
@@ -220,6 +225,7 @@ try {
   const ambiguousQueue = {
     status: "pending",
     providerCallsBefore: calls.filter((call) => call.url.endsWith("/messages:send")).length,
+    prepareArgs: [],
     finishArgs: [],
   };
   const ambiguousJob = {
@@ -257,7 +263,10 @@ try {
         ambiguousQueue.status = "leased";
         return { data: [ambiguousJob], error: null };
       }
-      if (name === "ops_manager_notification_job_is_current") return { data: true, error: null };
+      if (name === "ops_manager_prepare_notification_dispatch") {
+        ambiguousQueue.prepareArgs.push(args);
+        return { data: true, error: null };
+      }
       if (name === "ops_manager_finish_notification_job") {
         ambiguousQueue.finishArgs.push(args);
         assert.equal(args.p_delivery_outcome_unknown, true);
@@ -300,6 +309,7 @@ try {
   assert.equal(firstAmbiguousSweep.results[0].delivery_outcome_unknown, true);
   assert.equal(secondAmbiguousSweep.claimed, 0);
   assert.equal(ambiguousQueue.status, "failed");
+  assert.equal(ambiguousQueue.prepareArgs.length, 1);
   assert.equal(ambiguousQueue.finishArgs.length, 1);
   assert.equal(calls.filter((call) => call.url.endsWith("/messages:send")).length, ambiguousQueue.providerCallsBefore + 1,
     "an ambiguous manager provider outcome must produce one provider call across repeated sweeps");
