@@ -1,7 +1,38 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "257de53680eb305191d42b396098e42b69be5e91",
+  "frontend_commit_sha": "71fc3f8861c88a9f455b6e3cd44cfc615ebb714f",
+  "frontend_tree_sha": "4da0e408f541445b077b0388c924d945742a71e3",
+  "frontend_candidate": {
+    "version_code": 27,
+    "build_authority": "codemagic",
+    "build_workflow": "custodial-android",
+    "build_id": "6a80bd84bfdeb9f936680ab7",
+    "artifact_sha256": "3c23de0d39ddb59a62ccad41ca2f4eb15d7541bda416076afb0fd8fd2e8181f9",
+    "artifact_size_bytes": 6442769,
+    "provenance_sha256": "710ea1889b259f22bb62a202db0e483b4df1d5d50198db78e2b5e0cc3b6d24a7",
+    "signer_certificate_sha256": "dd2e0b44abee02b4d9e1be74edaa05587a93f5e4c502716df99639bc96e7a0bf",
+    "signer_public_key_sha256": "5bbf30c71444534f189f75cfa3e65779285a4e8e25ff3fd7cbfa1cbc86de1d4c"
+  },
+  "frontend_rollback_recovery": {
+    "strategy": "forward_versioned_recovery_apk",
+    "source_capability_version_code": 25,
+    "package_version_code": 28,
+    "source_commit_sha": "78f8bf499829f2b2c5f240a1265ebe7282a3f82d",
+    "source_tree_sha": "bc5faf5d18b70ee9224a0238b8e4a083f5b9b532",
+    "artifact_sha256": "678c786e56e5f26098f799155b2fe990e4dae3d8fb38cc38f498ab3ebe221116",
+    "artifact_size_bytes": 6443005,
+    "provenance_sha256": "7fb3e0175777c2813a0354e7aa31d53faebf583522482f081520c3eacfe55c74",
+    "direct_version_downgrade_supported": false,
+    "physical_rollback_drill_complete": true
+  },
+  "physical_gate": {
+    "device_identifier": "KIOSK_08",
+    "software_and_lifecycle_checks_complete": true,
+    "physical_rollback_drill_complete": true,
+    "real_nfc_workflow_complete": false,
+    "fleet_authorized": false
+  },
   "schema_fingerprint": "c8b6c811c52a3275290c6b8944f3692121c40e92c9efd84c5eb92baff91bc5ac",
   "schema_transition": {
     "transition_id": "custodial-managed-schema-authority-normalization-20260815",
@@ -19,9 +50,10 @@
   },
   "compatibility_window": {
     "accepted_engine": {
-      "scan": "scan.v2",
-      "queue": "indexeddb-v4",
-      "completion": "tool_complete_session via authenticated compatibility adapter"
+      "scan": "scan.v4.snapshot-bound-authority",
+      "queue": "indexeddb-v6-offline-authority",
+      "activation": "tool_start_offline_occurrence",
+      "completion": "tool_commit_cleaning_workflow with context_id and submission_proof"
     },
     "required_engine": {
       "scan": "scan.v4.snapshot-bound-authority",
@@ -414,12 +446,12 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "966c87e003a8b487bfddde148d360af764c4436c"
+        "object_id": "9e5217f630b8cca570c858e7f32027ec123fc48b"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
         "mode": "100644",
-        "object_id": "243d82d1f0432f8ac3ffdf2c73f03ec3a87cb3bc"
+        "object_id": "34ace97a834b0ec30cdbb3ed06c342b96bca51de"
       },
       {
         "path": "release/reviewed-migrations/20260809125735_cleaning_inspection_24_hour_freshness.sql",
@@ -429,7 +461,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "0e1e4c931e810f9b328e3009040e44154b4bd20d"
+        "object_id": "35a0de504bdf4202e99f27540296a28e7b3fe3b9"
       },
       {
         "path": "research/european_herbalism_through_paracelsus.md",
@@ -554,7 +586,7 @@
       {
         "path": "scripts/custodial-repair-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "395a15c6dfbcc2fb37c0982b7887be21d2101945"
+        "object_id": "b5c01c0224c5d092f5dc48ea0665f539f82d9857"
       },
       {
         "path": "scripts/custodial-u4-migration-convergence-tests.mjs",
@@ -694,12 +726,12 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "bef8a337129818c06aa32d4f99acce1137a942b4"
+        "object_id": "d69342fcc317e678748d8fa96a5a1f9ddf8df767"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "c81147c71e3438b7178df458703226789cca2309"
+        "object_id": "3de9b947de6713ce838d52d1313ed88ae04f39cb"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
@@ -849,7 +881,7 @@
       {
         "path": "scripts/operations-leadership-mobile-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "c3dd56569029e1d44d5ac948cc316295962cf3ef"
+        "object_id": "867dfd277f0b242b661bb3a83e0a4de729247925"
       },
       {
         "path": "scripts/operations-leadership-mobile-database-tests.mjs",
@@ -934,12 +966,12 @@
       {
         "path": "scripts/refresh-integrated-backend-authority-release.mjs",
         "mode": "100644",
-        "object_id": "1667e656c1ab75e159cee58a95dad5f9a3ccf61a"
+        "object_id": "3256c3fe0854e8f56e9aaad0ea933f9b29bcd594"
       },
       {
         "path": "scripts/refresh-release-schema-alignment.mjs",
         "mode": "100644",
-        "object_id": "4b112d56132de7f7a1c4fa7baf09204784232c9f"
+        "object_id": "56fa631029aade1b05aec35076b0e5fd09362699"
       },
       {
         "path": "scripts/refresh-schema-fingerprint.mjs",
@@ -954,7 +986,7 @@
       {
         "path": "scripts/release-closure-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "994b3c8bc2edfb7bed10f716ecdf8588a077200a"
+        "object_id": "5d009fa7c0b7b91f42ba5ac4a7ca99317a208215"
       },
       {
         "path": "scripts/restroom-rebalance-route-tests.mjs",
@@ -1009,7 +1041,7 @@
       {
         "path": "scripts/schema-transition-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "c3dc7f00518d50e989e261e6a5abe5a224553852"
+        "object_id": "a7f5420419d04576766411211bae9679804330b3"
       },
       {
         "path": "scripts/smoke-ai-intent.mjs",
@@ -1619,12 +1651,12 @@
       {
         "path": "src/release-contract.js",
         "mode": "100644",
-        "object_id": "ba4f24f47c74bd5566bcf63cb609a6108267e199"
+        "object_id": "dc7e36b91de0161649c8962033105a559f4b7414"
       },
       {
         "path": "src/release-manifest.js",
         "mode": "100644",
-        "object_id": "7978ce065ac1bcd1c55ad49e455c40fb677d1384"
+        "object_id": "9cb5607bc64c072e9c9ae3a43c66e397c2949f18"
       },
       {
         "path": "src/routes/index.js",
