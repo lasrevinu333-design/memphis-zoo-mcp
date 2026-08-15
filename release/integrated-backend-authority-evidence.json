@@ -2,14 +2,14 @@
   "artifact": "integrated-backend-authority-release-evidence.v2",
   "release_id": "release-2026.07.19.custodial-v3.12",
   "frontend_commit_sha": "07a01a9e08bf09c5093fe42766c937f8589ef0f2",
-  "schema_fingerprint": "1bc92d78a167c8b36b9d2a56de7963e002687562a41ff5e129404f5ef4230b98",
+  "schema_fingerprint": "c8b6c811c52a3275290c6b8944f3692121c40e92c9efd84c5eb92baff91bc5ac",
   "schema_transition": {
     "transition_id": "custodial-managed-schema-authority-normalization-20260815",
     "from_fingerprint": "2afd6e6154bd62c8974c72a794e08e621df5c3f04a1e88399227f15bb7a0a41e",
-    "to_fingerprint": "1bc92d78a167c8b36b9d2a56de7963e002687562a41ff5e129404f5ef4230b98",
+    "to_fingerprint": "c8b6c811c52a3275290c6b8944f3692121c40e92c9efd84c5eb92baff91bc5ac",
     "expires_at": "2026-08-23T23:59:59Z"
   },
-  "frontend_source_fingerprint": "1bc92d78a167c8b36b9d2a56de7963e002687562a41ff5e129404f5ef4230b98",
+  "frontend_source_fingerprint": "c8b6c811c52a3275290c6b8944f3692121c40e92c9efd84c5eb92baff91bc5ac",
   "backend_contract": {
     "scan": "scan.v4.snapshot-bound-authority",
     "authority": "offline-authority.v5",
@@ -43,7 +43,7 @@
     "release_phone_transport_and_offline_activation_phase": "20260813190000 requires a fresh immutable receipt from the designated phone's native-vault /scan-api/rpc path before resume and permits delayed activation only for work begun while snapshot, credential, and assignment authority were valid",
     "u4_ops_closure_phase": "20260813210000 canonicalizes native wire timestamps, records immutable activation boundaries, enforces UUID completion identities, installs two-phase employee notification dispatch ledgers, durable manager dispatch preparation with terminal outcome-unknown restart recovery, complete notification recovery authority, and terminal notification retries, and restores the catalog-derived authority set",
     "atomic_day_change_reconciliation_phase": "20260814224034 converges both preserved U4 migration histories and recognizes the existing complete child/projection receipt chain before mutable Weekly Schedule authority is reread",
-    "managed_schema_authority_normalization_phase": "20260815160613 removes broad future-object defaults and makes managed postgres/supabase_admin deployment authority comparable without hiding application grants or role memberships"
+    "managed_schema_authority_normalization_phase": "20260815160613 removes broad future-object defaults; 20260815163346 preserves application and scheduler access through explicit role grants while keeping PUBLIC revoked, and managed postgres/supabase_admin deployment authority remains comparable without hiding application grants or role memberships"
   },
   "rollback": {
     "before_enforcement": "legacy Engine and current backend completion remain available",
@@ -189,7 +189,7 @@
       {
         "path": ".github/workflows/production-backup-migration-rehearsal.yml",
         "mode": "100644",
-        "object_id": "0dda90de2c5dc67b98e62cd20ace1fed51301388"
+        "object_id": "ef667bac1cfa8a61c85556d913ff3e0f2cacf72f"
       },
       {
         "path": ".github/workflows/production-database-credential-bridge.yml",
@@ -414,7 +414,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "194b74c5d34439acebe1bab221958a91d9f5ce70"
+        "object_id": "ffc01ffd92cac2f1f8580cd9c8993b8e15280ec0"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -694,12 +694,12 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "6a11390b1af8e2e09036c238cd2b2471328b56dd"
+        "object_id": "5708bf9e8a3ae6200ea0002daa94d5c290f1a3c3"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "15e012d2a82826009a1400f861bc7be002755f56"
+        "object_id": "85ac2ac9949347bb3656daf468d7b404e047cbc4"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
@@ -934,7 +934,7 @@
       {
         "path": "scripts/refresh-integrated-backend-authority-release.mjs",
         "mode": "100644",
-        "object_id": "c5548fbffe25a28055fef4cc3df4d84e2ac4e16c"
+        "object_id": "1667e656c1ab75e159cee58a95dad5f9a3ccf61a"
       },
       {
         "path": "scripts/refresh-release-schema-alignment.mjs",
@@ -1764,12 +1764,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "1ee880bec5ceadc8dfc6bdd1c90b31469a348bbf"
+        "object_id": "e76b59872fb055abe1c12c8aea600c1ca5eeff95"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "c4d1494acfef465e3d31902c9053a6686e86c6e2"
+        "object_id": "015e01ee4a5746c1ef1ed76044991527e5f84269"
       },
       {
         "path": "supabase/config.toml",
@@ -2747,13 +2747,18 @@
         "object_id": "cb1bd6c8709d485af62564a0b8de651f96202bc8"
       },
       {
+        "path": "supabase/migrations/20260815163346_restore_explicit_public_schema_usage.sql",
+        "mode": "100644",
+        "object_id": "ca78fe0bf1871bf943e38536d066296a372fbcb6"
+      },
+      {
         "path": "tmp/write_probe.txt",
         "mode": "100644",
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 526,
-    "migration_path_count": 78,
+    "authority_path_count": 527,
+    "migration_path_count": 79,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
   },
@@ -2997,6 +3002,9 @@
     },
     {
       "name": "20260815160613_normalize_managed_production_schema_security.sql"
+    },
+    {
+      "name": "20260815163346_restore_explicit_public_schema_usage.sql"
     }
   ],
   "release_boundary": "Prepare distinct minimum-32-character backend and native-route secrets before cutover; configure their database digests immediately after the migrations that create each configuration function, retain the bridge backend artifact through the scan-snapshot phase, and require the executable health/restoration probes before traffic changes."
