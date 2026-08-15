@@ -109,7 +109,7 @@ assert.equal(packageManifest.scripts["release:populated-schema:preflight"], "nod
 assert.match(schemaFingerprintRefresh, /schema_from_fingerprint/);
 assert.match(populatedPreflightWorkflow, /release:populated-schema:preflight/);
 assert.match(releaseInput.cutover.phase_order[1], /release:populated-schema:preflight/);
-assert.equal(releaseEvidence.compatibility_window.accepted_engine.scan, "scan.v2");
+assert.equal(releaseEvidence.compatibility_window.accepted_engine.scan, "scan.v4.snapshot-bound-authority");
 assert.equal(releaseEvidence.compatibility_window.required_engine.scan, "scan.v4.snapshot-bound-authority");
 assert.equal(releaseEvidence.migrations.at(-1).name, "20260815163346_restore_explicit_public_schema_usage.sql");
 assert.match(managedSchemaUsage, /grant usage on schema public[\s\S]*anon[\s\S]*authenticated[\s\S]*service_role[\s\S]*static_weekly_control_plane[\s\S]*static_weekly_release_operator/i);
@@ -122,7 +122,13 @@ assert.match(releaseEvidence.compatibility_window.managed_schema_authority_norma
 assert.match(dayChangeReconciliation, /static_weekly_v4_begin_day_changes/);
 assert.equal(releaseEvidence.artifact, "integrated-backend-authority-release-evidence.v2");
 assert.equal(releaseEvidence.release_id, "release-2026.07.19.custodial-v3.12");
-assert.equal(releaseEvidence.frontend_commit_sha, "257de53680eb305191d42b396098e42b69be5e91");
+assert.equal(releaseEvidence.frontend_commit_sha, "71fc3f8861c88a9f455b6e3cd44cfc615ebb714f");
+assert.equal(releaseEvidence.frontend_tree_sha, "4da0e408f541445b077b0388c924d945742a71e3");
+assert.equal(releaseEvidence.frontend_candidate.version_code, 27);
+assert.equal(releaseEvidence.frontend_rollback_recovery.package_version_code, 28);
+assert.equal(releaseEvidence.frontend_rollback_recovery.physical_rollback_drill_complete, true);
+assert.equal(releaseEvidence.physical_gate.real_nfc_workflow_complete, false);
+assert.equal(releaseEvidence.physical_gate.fleet_authorized, false);
 assert.equal(releaseEvidence.cutover.source_identity.kind, "external_signed_release_attestation");
 assert.equal(releaseEvidence.cutover.source_identity.generated_evidence_excluded_from_content_identity, true);
 assert.equal(Object.hasOwn(releaseInput.cutover.source_identity, "authority_content_paths"), false, "manual authority inventory is forbidden");

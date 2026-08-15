@@ -70,6 +70,10 @@ export function assertManifestContract(manifest, expected) {
 export function assertFrontendReleaseIdentity(manifest, expected) {
   assert.equal(manifest?.frontend_commit_sha, expected.frontend_commit_sha,
     "frontend_commit_sha must equal the source-controlled frontend identity");
+  if (expected.frontend_tree_sha) {
+    assert.equal(manifest?.frontend_tree_sha, expected.frontend_tree_sha,
+      "frontend_tree_sha must equal the source-controlled frontend tree identity");
+  }
   return true;
 }
 
@@ -87,5 +91,9 @@ export function assertFrontendReleaseDeclaration(manifest) {
 export function assertBackendFrontendIdentity(manifest, expected) {
   assert.equal(manifest?.frontend?.commit_sha, expected.frontend_commit_sha,
     "backend embedded frontend commit must equal the source-controlled frontend identity");
+  if (expected.frontend_tree_sha) {
+    assert.equal(manifest?.frontend?.tree_sha, expected.frontend_tree_sha,
+      "backend embedded frontend tree must equal the source-controlled frontend tree identity");
+  }
   return true;
 }

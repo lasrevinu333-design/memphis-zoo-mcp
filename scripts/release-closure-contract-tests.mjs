@@ -11,7 +11,15 @@ const liveGate = readFileSync(new URL("./live-release-alignment-check.mjs", impo
 const rollbackMigration = readFileSync(new URL("../supabase/migrations/20260813060000_release_canary_operational_recovery.sql", import.meta.url), "utf8");
 const boundaryMigration = readFileSync(new URL("../supabase/migrations/20260813141806_custodial_operational_boundary_closure.sql", import.meta.url), "utf8");
 
-assert.equal(input.frontend_commit_sha, "257de53680eb305191d42b396098e42b69be5e91", "backend must pin the exact audited frontend candidate");
+assert.equal(input.frontend_commit_sha, "71fc3f8861c88a9f455b6e3cd44cfc615ebb714f", "backend must pin the exact audited frontend candidate");
+assert.equal(input.frontend_tree_sha, "4da0e408f541445b077b0388c924d945742a71e3", "backend must pin the exact audited frontend tree");
+assert.equal(input.frontend_candidate.version_code, 27);
+assert.equal(input.frontend_candidate.artifact_sha256, "3c23de0d39ddb59a62ccad41ca2f4eb15d7541bda416076afb0fd8fd2e8181f9");
+assert.equal(input.frontend_rollback_recovery.package_version_code, 28);
+assert.equal(input.frontend_rollback_recovery.artifact_sha256, "678c786e56e5f26098f799155b2fe990e4dae3d8fb38cc38f498ab3ebe221116");
+assert.equal(input.frontend_rollback_recovery.physical_rollback_drill_complete, true);
+assert.equal(input.physical_gate.real_nfc_workflow_complete, false);
+assert.equal(input.physical_gate.fleet_authorized, false);
 assert.equal(input.frontend_commit_state, "final_pair_bound");
 assert.deepEqual(input.queue_compatibility_versions.scan.at(-1), "indexeddb-v6-offline-authority");
 assert.deepEqual(Object.keys(input.minimum_supported).sort(), ["backend_version", "frontend_version"]);
@@ -73,10 +81,12 @@ assert.throws(() => assertManifestContract({ ...contract, release_id: "release-s
 assert.throws(() => assertManifestContract({ ...contract, api_contract_versions: { ...contract.api_contract_versions, events: "events.v0" } }, input), /api_contract_versions/);
 assert.throws(() => assertManifestContract({ ...contract, queue_compatibility_versions: { ...contract.queue_compatibility_versions, scan: [] } }, input), /queue_compatibility_versions/);
 assert.throws(() => assertManifestContract({ ...contract, minimum_supported: { ...contract.minimum_supported, backend_version: "old" } }, input), /minimum_supported/);
-assert.equal(assertFrontendReleaseIdentity({ frontend_commit_sha: input.frontend_commit_sha }, input), true);
+assert.equal(assertFrontendReleaseIdentity({ frontend_commit_sha: input.frontend_commit_sha, frontend_tree_sha: input.frontend_tree_sha }, input), true);
 assert.throws(() => assertFrontendReleaseIdentity({ frontend_commit_sha: "b".repeat(40) }, input), /frontend_commit_sha/);
-assert.equal(assertBackendFrontendIdentity({ frontend: { commit_sha: input.frontend_commit_sha } }, input), true);
+assert.throws(() => assertFrontendReleaseIdentity({ frontend_commit_sha: input.frontend_commit_sha, frontend_tree_sha: "b".repeat(40) }, input), /frontend_tree_sha/);
+assert.equal(assertBackendFrontendIdentity({ frontend: { commit_sha: input.frontend_commit_sha, tree_sha: input.frontend_tree_sha } }, input), true);
 assert.throws(() => assertBackendFrontendIdentity({ frontend: { commit_sha: "b".repeat(40) } }, input), /embedded frontend commit/);
+assert.throws(() => assertBackendFrontendIdentity({ frontend: { commit_sha: input.frontend_commit_sha, tree_sha: "b".repeat(40) } }, input), /embedded frontend tree/);
 assert.equal(assertFrontendReleaseDeclaration({ frontend_commit_sha_source: "exact-release-pair-input-and-github-pages-deployment-commit",
   audited_start_commit: "a".repeat(40), asset_hashes_sha256: Object.fromEntries(Array.from({ length: 50 }, (_, index) => [`asset-${index}`, "c".repeat(64)])) }), true);
 assert.throws(() => assertFrontendReleaseDeclaration({ frontend_commit_sha_source: "guessed", audited_start_commit: "a".repeat(40), asset_hashes_sha256: {} }), /delegate/);

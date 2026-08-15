@@ -18,10 +18,19 @@ const target = readFileSync(new URL("../supabase/canonical/schema-fingerprint.tx
 const now = Date.parse("2026-08-13T00:00:00Z");
 
 assert.equal(frontend.frontend_commit_sha, input.frontend_commit_sha, "the backend manifest must pin the exact audited frontend");
+assert.equal(frontend.frontend_tree_sha, input.frontend_tree_sha, "the backend manifest must pin the exact audited frontend tree");
 assert.equal(frontend.frontend_commit_state, "final_pair_bound");
+assert.deepEqual(frontend.frontend_candidate, input.frontend_candidate);
+assert.deepEqual(frontend.frontend_rollback_recovery, input.frontend_rollback_recovery);
+assert.deepEqual(frontend.physical_gate, input.physical_gate);
 assert.equal(frontend.schema_fingerprint, target, "the exact frontend pair must declare the canonical target schema");
 assert.deepEqual(frontend.minimum_supported, input.minimum_supported);
 const backend = buildReleaseManifest({ appVersion: "test-release" });
+assert.equal(backend.frontend.commit_sha, input.frontend_commit_sha);
+assert.equal(backend.frontend.tree_sha, input.frontend_tree_sha);
+assert.deepEqual(backend.frontend.candidate, input.frontend_candidate);
+assert.deepEqual(backend.frontend.rollback_recovery, input.frontend_rollback_recovery);
+assert.deepEqual(backend.frontend.physical_gate, input.physical_gate);
 assert.deepEqual(backend.api_contract_versions, input.api_contract_versions);
 assert.deepEqual(backend.queue_compatibility_versions, input.queue_compatibility_versions);
 assert.deepEqual(backend.minimum_supported, input.minimum_supported);

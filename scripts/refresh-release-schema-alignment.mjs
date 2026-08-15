@@ -18,7 +18,25 @@ assert.match(String(input.schema_from_fingerprint || ""), /^[a-f0-9]{64}$/, "rel
 assert.notEqual(input.schema_from_fingerprint, fingerprint, "a release transition requires distinct fingerprints");
 assert.ok(input.frontend_commit_sha === null || /^[a-f0-9]{40}$/.test(String(input.frontend_commit_sha || "")),
   "frontend commit identity must be null until final rebind or an exact commit");
+assert.match(String(input.frontend_tree_sha || ""), /^[a-f0-9]{40}$/, "frontend tree identity must be exact");
 assert.ok(["final_rebind_required", "final_pair_bound"].includes(input.frontend_commit_state), "frontend commit state is invalid");
+assert.equal(input.frontend_candidate?.version_code, 27, "the frozen Android candidate must be Build 27");
+assert.match(String(input.frontend_candidate?.build_id || ""), /^[a-f0-9]{24}$/, "candidate build identity is invalid");
+assert.match(String(input.frontend_candidate?.artifact_sha256 || ""), /^[a-f0-9]{64}$/, "candidate APK digest is invalid");
+assert.match(String(input.frontend_candidate?.provenance_sha256 || ""), /^[a-f0-9]{64}$/, "candidate provenance digest is invalid");
+assert.equal(input.frontend_rollback_recovery?.strategy, "forward_versioned_recovery_apk");
+assert.equal(input.frontend_rollback_recovery?.package_version_code, 28);
+assert.ok(input.frontend_rollback_recovery.package_version_code > input.frontend_candidate.version_code,
+  "the recovery APK must have a higher Android versionCode than the candidate");
+assert.match(String(input.frontend_rollback_recovery?.source_commit_sha || ""), /^[a-f0-9]{40}$/, "recovery source commit is invalid");
+assert.match(String(input.frontend_rollback_recovery?.source_tree_sha || ""), /^[a-f0-9]{40}$/, "recovery source tree is invalid");
+assert.match(String(input.frontend_rollback_recovery?.artifact_sha256 || ""), /^[a-f0-9]{64}$/, "recovery APK digest is invalid");
+assert.equal(input.frontend_rollback_recovery?.direct_version_downgrade_supported, false);
+assert.equal(input.frontend_rollback_recovery?.physical_rollback_drill_complete, true);
+assert.equal(input.physical_gate?.software_and_lifecycle_checks_complete, true);
+assert.equal(input.physical_gate?.physical_rollback_drill_complete, true);
+assert.equal(input.physical_gate?.real_nfc_workflow_complete, false);
+assert.equal(input.physical_gate?.fleet_authorized, false);
 assert.deepEqual(Object.keys(input.minimum_supported || {}).sort(), ["backend_version", "frontend_version"]);
 assert.match(String(input.schema_transition?.transition_id || ""), /^[a-z0-9][a-z0-9.-]{1,126}[a-z0-9]$/, "release transition identity is invalid");
 assert.match(String(input.schema_transition?.expires_at || ""), /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/, "release transition expiry is invalid");
@@ -26,7 +44,11 @@ assert.match(String(input.schema_transition?.expires_at || ""), /^\d{4}-\d{2}-\d
 const manifest = {
   release_id: input.release_id,
   frontend_commit_sha: input.frontend_commit_sha,
+  frontend_tree_sha: input.frontend_tree_sha,
   frontend_commit_state: input.frontend_commit_state,
+  frontend_candidate: input.frontend_candidate,
+  frontend_rollback_recovery: input.frontend_rollback_recovery,
+  physical_gate: input.physical_gate,
   backend_minimum_version: input.backend_minimum_version,
   schema_fingerprint: fingerprint,
   schema_transition: {

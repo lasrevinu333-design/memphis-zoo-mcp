@@ -1,9 +1,10 @@
 {
   "release_contract_version": "offline-authority.v5",
   "accepted_engine_contract": {
-    "scan": "scan.v2",
-    "queue": "indexeddb-v4",
-    "completion": "tool_complete_session via authenticated compatibility adapter"
+    "scan": "scan.v4.snapshot-bound-authority",
+    "queue": "indexeddb-v6-offline-authority",
+    "activation": "tool_start_offline_occurrence",
+    "completion": "tool_commit_cleaning_workflow with context_id and submission_proof"
   },
   "required_engine_contract": {
     "scan": "scan.v4.snapshot-bound-authority",
