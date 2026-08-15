@@ -494,7 +494,7 @@
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "414e495bcbe174a108faca1bd21572ad3162a299"
+        "object_id": "b0a8d005ea391e37769adf10c560767afa38a5dd"
       },
       {
         "path": "scripts/create-release-attestation.mjs",
