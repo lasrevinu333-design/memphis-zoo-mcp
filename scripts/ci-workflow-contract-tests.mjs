@@ -10,6 +10,7 @@ const workflowDirectory = resolve(root, ".github", "workflows");
 const approvedActions = new Map([
   ["actions/checkout", ["3d3c42e5aac5ba805825da76410c181273ba90b1", "v7.0.1"]],
   ["actions/setup-node", ["820762786026740c76f36085b0efc47a31fe5020", "v7.0.0"]],
+  ["actions/download-artifact", ["d3f86a106a0bac45b974a628896c90dbdf5c8093", "v4.3.0"]],
   ["actions/upload-artifact", ["043fb46d1a93c77aae656e7c1c64a875d1fc6a0a", "v7.0.1"]],
 ]);
 
@@ -135,6 +136,20 @@ assert.ok(
 );
 assert.match(parsedPackageManifest.scripts["test:integrated-backend-authority-cutover:database"], / --database$/,
   "the signed release database command must not silently degrade to source-only acceptance");
+const populatedSchemaPreflight = readFileSync(resolve(workflowDirectory, "custodial-populated-schema-preflight.yml"), "utf8");
+assert.match(populatedSchemaPreflight, /test -n "\$SCHEMA_FINGERPRINT_MCP_URL"/,
+  "the production schema preflight must reject a missing read-only MCP endpoint");
+assert.match(populatedSchemaPreflight, /set -euo pipefail[\s\S]*release:populated-schema:preflight \| tee[\s\S]*test -s \/tmp\/custodial-populated-schema-preflight\.json/,
+  "the production schema preflight must preserve command failure and require a non-empty receipt");
+const productionBackupRehearsal = readFileSync(resolve(workflowDirectory, "production-backup-migration-rehearsal.yml"), "utf8");
+assert.match(productionBackupRehearsal, /RESTORE_DATABASE_ONLY=true[\s\S]*release:populated-schema:preflight/,
+  "the production-backup rehearsal must restore data before checking the exact live source fingerprint");
+assert.equal((productionBackupRehearsal.match(/202608\d+_[a-z0-9_]+\.sql/g) || []).filter((name, index, values) => values.indexOf(name) === index).length, 23,
+  "the production-backup rehearsal must apply the exact 23 pending migrations");
+assert.match(productionBackupRehearsal, /custodial_configure_backend_execution_key[\s\S]*custodial_configure_native_route_proof_key[\s\S]*custodial_backend_authority_health/,
+  "the production-backup rehearsal must configure both secret boundaries and prove final authority health");
+assert.match(productionBackupRehearsal, /set role service_role; truncate public\.sessions/,
+  "the production-backup rehearsal must attack direct terminal DML after migration");
 
 const workflowFixture = (commands) => `name: fixture\njobs:\n  validate:\n    steps:\n      - run: |\n${commands.map((command) => `          ${command}`).join("\n")}\n`;
 assert.doesNotThrow(() => assertExactCommandsInJob(

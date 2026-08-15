@@ -1,0 +1,159 @@
+name: Production backup migration rehearsal
+
+on:
+  workflow_dispatch:
+    inputs:
+      backup_run_id:
+        description: Successful production disaster-recovery backup run ID
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: production-backup-migration-rehearsal
+  cancel-in-progress: false
+
+jobs:
+  rehearse:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.23.1'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: memphis-zoo-disaster-recovery-${{ inputs.backup_run_id }}
+          path: ${{ runner.temp }}/encrypted-backup
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.backup_run_id }}
+      - name: Verify, restore, migrate, and attack the production snapshot
+        shell: bash
+        env:
+          BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          test -n "$BACKUP_ENCRYPTION_PASSPHRASE"
+          test -n "$SUPABASE_DB_URL"
+          image='supabase/postgres@sha256:80d7b27c3e8d77cfa7226eee9508671796da214781ff15a35b3670d7ad5ee453'
+          container="mz_schema_rebuild_${GITHUB_RUN_ID}"
+          database="mz_schema_rebuild_${GITHUB_RUN_ID}"
+          backup_dir="${RUNNER_TEMP}/production-backup"
+          schema_dump="${RUNNER_TEMP}/production-schema.sql"
+          ledger_dump="${RUNNER_TEMP}/production-ledger.sql"
+          receipt="${RUNNER_TEMP}/production-backup-migration-rehearsal.jsonl"
+          trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
+          mkdir -p "$backup_dir"
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 250000 \
+            -in "${RUNNER_TEMP}/encrypted-backup/memphis-zoo-backup.tar.gz.enc" \
+            -out "${RUNNER_TEMP}/memphis-zoo-backup.tar.gz" \
+            -pass env:BACKUP_ENCRYPTION_PASSPHRASE
+          tar -C "$backup_dir" -xzf "${RUNNER_TEMP}/memphis-zoo-backup.tar.gz"
+          RESTORE_SOURCE_DIR="$backup_dir" npm run --silent restore:verify
+          docker pull "$image"
+          docker run --rm --entrypoint pg_dump \
+            -e PGOPTIONS='-c default_transaction_read_only=on' \
+            -e PGSSLMODE=verify-full -e PGSSLROOTCERT=/cert/prod-ca.crt \
+            -v "${GITHUB_WORKSPACE}/.github/certs/prod-ca-2021.crt:/cert/prod-ca.crt:ro" \
+            -v "${RUNNER_TEMP}:${RUNNER_TEMP}" \
+            "$image" "$SUPABASE_DB_URL" --schema-only --clean --if-exists --no-owner --no-privileges \
+            --file="$schema_dump"
+          docker run --rm --entrypoint pg_dump \
+            -e PGOPTIONS='-c default_transaction_read_only=on' \
+            -e PGSSLMODE=verify-full -e PGSSLROOTCERT=/cert/prod-ca.crt \
+            -v "${GITHUB_WORKSPACE}/.github/certs/prod-ca-2021.crt:/cert/prod-ca.crt:ro" \
+            -v "${RUNNER_TEMP}:${RUNNER_TEMP}" \
+            "$image" "$SUPABASE_DB_URL" --data-only --inserts --no-owner --no-privileges \
+            --table=cron.job --table=supabase_migrations.schema_migrations \
+            --file="$ledger_dump"
+          docker run -d --name "$container" --tmpfs /var/lib/postgresql/data:rw,size=1g \
+            -p 127.0.0.1::5432 -e POSTGRES_PASSWORD=postgres "$image" \
+            -c shared_preload_libraries=pg_cron,pg_net,pg_stat_statements
+          ready='false'
+          for attempt in $(seq 1 600); do
+            if docker exec "$container" psql -At -U supabase_admin -d postgres -c 'select 1' 2>/dev/null | grep -qx 1; then
+              ready='true'
+              break
+            fi
+            sleep 1
+          done
+          test "$ready" = 'true'
+          docker exec "$container" createdb -U supabase_admin -T template0 "$database"
+          docker exec -i "$container" psql -v ON_ERROR_STOP=1 -U supabase_admin -d "$database" < "$schema_dump"
+          docker exec -i "$container" psql -v ON_ERROR_STOP=1 -U supabase_admin -d "$database" < "$ledger_dump"
+          port="$(docker port "$container" 5432/tcp | sed -E 's/.*:([0-9]+)$/\1/')"
+          test -n "$port"
+          RESTORE_APPLY=true RESTORE_DATABASE_ONLY=true RESTORE_SOURCE_DIR="$backup_dir" \
+            SUPABASE_DB_URL="postgresql://supabase_admin:postgres@127.0.0.1:${port}/${database}" \
+            npm run --silent restore:verify
+          SCHEMA_FINGERPRINT_DOCKER_CONTAINER="$container" SCHEMA_FINGERPRINT_DATABASE="$database" \
+            npm run --silent release:populated-schema:preflight | tee -a "$receipt"
+          backend_secret="$(openssl rand -hex 32)"
+          native_secret="$(openssl rand -hex 32)"
+          test "$backend_secret" != "$native_secret"
+          backend_digest="$(printf '%s' "$backend_secret" | sha256sum | awk '{print $1}')"
+          native_digest="$(printf '%s' "$native_secret" | sha256sum | awk '{print $1}')"
+          migrations=(
+            20260810120000_retire_named_manager_shared_room_authority.sql
+            20260810130000_harden_named_manager_retired_archive_and_concurrency.sql
+            20260810140000_finalize_named_manager_messenger_retirement_integrity.sql
+            20260810143000_offline_actor_occurrence_reconciliation.sql
+            20260810150000_enforce_integrated_backend_authority.sql
+            20260810160000_close_offline_authority_integrity_gaps.sql
+            20260810170000_finish_offline_authority_operational_closure.sql
+            20260810190000_final_integrated_backend_operational_correction.sql
+            20260810200000_static_weekly_scheduler_authority_integrated.sql
+            20260810210000_static_weekly_scheduler_three_high_foundation_correction.sql
+            20260810220000_static_weekly_scheduler_complete_authority_correction.sql
+            20260810230000_static_weekly_scheduler_authority_closure_correction.sql
+            20260812032055_static_weekly_manager_snapshot.sql
+            20260812130000_static_weekly_employee_turnover.sql
+            20260813035530_offline_scan_authority_snapshot.sql
+            20260813050000_offline_snapshot_operational_truth_closure.sql
+            20260813060000_release_canary_operational_recovery.sql
+            20260813070000_operational_service_date_foundation.sql
+            20260813141806_custodial_operational_boundary_closure.sql
+            20260813173000_device_sync_actor_groups.sql
+            20260813190000_release_phone_transport_and_offline_activation_closure.sql
+            20260813210000_custodial_u4_ops_closure.sql
+            20260814224034_reconcile_static_weekly_day_change_receipts.sql
+          )
+          for migration in "${migrations[@]}"; do
+            docker exec -i "$container" psql -v ON_ERROR_STOP=1 -U supabase_admin -d "$database" \
+              < "supabase/migrations/$migration"
+            printf '{"migration":"%s","status":"passed"}\n' "$migration" >> "$receipt"
+            if test "$migration" = '20260810143000_offline_actor_occurrence_reconciliation.sql'; then
+              docker exec "$container" psql -v ON_ERROR_STOP=1 -At -U supabase_admin -d "$database" \
+                -c "select public.custodial_configure_backend_execution_key('$backend_digest','production-backup-rehearsal');"
+            fi
+            if test "$migration" = '20260813190000_release_phone_transport_and_offline_activation_closure.sql'; then
+              docker exec "$container" psql -v ON_ERROR_STOP=1 -At -U supabase_admin -d "$database" \
+                -c "select public.custodial_configure_native_route_proof_key('$native_digest','production-backup-rehearsal');"
+            fi
+          done
+          SCHEMA_FINGERPRINT_DOCKER_CONTAINER="$container" SCHEMA_FINGERPRINT_DATABASE="$database" \
+            npm run --silent test:schema-fingerprint | tee -a "$receipt"
+          test "$(docker exec "$container" psql -v ON_ERROR_STOP=1 -At -U supabase_admin -d "$database" \
+            -c "select public.custodial_backend_authority_health('$backend_secret')->>'ok';" | tail -n 1)" = 'true'
+          if docker exec "$container" psql -v ON_ERROR_STOP=1 -At -U supabase_admin -d "$database" \
+            -c 'set role service_role; truncate public.sessions;' >/dev/null 2>&1; then
+            echo 'service_role unexpectedly retained direct terminal DML' >&2
+            exit 1
+          fi
+          printf '{"ok":true,"backup_run_id":"%s","source_fingerprint":"31d6d629f22db2fbef15cc31c51cd29c71571f86c8b8eadbad5ecff1489c3a4d","target_fingerprint":"2afd6e6154bd62c8974c72a794e08e621df5c3f04a1e88399227f15bb7a0a41e","migrations":23,"authority_health":true,"direct_dml_denied":true}\n' \
+            '${{ inputs.backup_run_id }}' >> "$receipt"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: production-backup-migration-rehearsal-${{ github.run_id }}
+          path: ${{ runner.temp }}/production-backup-migration-rehearsal.jsonl
+          if-no-files-found: warn
+          retention-days: 30

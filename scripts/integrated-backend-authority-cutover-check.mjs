@@ -9,11 +9,20 @@ import { fileURLToPath } from "node:url";
 import { assertExactReleaseAttestation } from "../src/release-contract.js";
 
 const root = realpathSync(resolve(fileURLToPath(new URL("..", import.meta.url))));
+const retirementA = "20260810120000_retire_named_manager_shared_room_authority.sql";
+const retirementB = "20260810130000_harden_named_manager_retired_archive_and_concurrency.sql";
+const retirementC = "20260810140000_finalize_named_manager_messenger_retirement_integrity.sql";
 const phaseA = "20260810143000_offline_actor_occurrence_reconciliation.sql";
 const phaseB = "20260810150000_enforce_integrated_backend_authority.sql";
 const phaseC = "20260810160000_close_offline_authority_integrity_gaps.sql";
 const phaseD = "20260810170000_finish_offline_authority_operational_closure.sql";
 const phaseE = "20260810190000_final_integrated_backend_operational_correction.sql";
+const schedulerA = "20260810200000_static_weekly_scheduler_authority_integrated.sql";
+const schedulerB = "20260810210000_static_weekly_scheduler_three_high_foundation_correction.sql";
+const schedulerC = "20260810220000_static_weekly_scheduler_complete_authority_correction.sql";
+const schedulerD = "20260810230000_static_weekly_scheduler_authority_closure_correction.sql";
+const schedulerE = "20260812032055_static_weekly_manager_snapshot.sql";
+const schedulerF = "20260812130000_static_weekly_employee_turnover.sql";
 const phaseF = "20260813035530_offline_scan_authority_snapshot.sql";
 const phaseG = "20260813050000_offline_snapshot_operational_truth_closure.sql";
 const phaseH = "20260813060000_release_canary_operational_recovery.sql";
@@ -23,6 +32,11 @@ const phaseK = "20260813173000_device_sync_actor_groups.sql";
 const phaseL = "20260813190000_release_phone_transport_and_offline_activation_closure.sql";
 const phaseM = "20260813210000_custodial_u4_ops_closure.sql";
 const phaseN = "20260814224034_reconcile_static_weekly_day_change_receipts.sql";
+const pendingProductionMigrations = [
+  retirementA, retirementB, retirementC, phaseA, phaseB, phaseC, phaseD, phaseE,
+  schedulerA, schedulerB, schedulerC, schedulerD, schedulerE, schedulerF,
+  phaseF, phaseG, phaseH, phaseI, phaseJ, phaseK, phaseL, phaseM, phaseN,
+];
 const releaseInputPath = "release/integrated-backend-authority-input.json";
 const releaseEvidencePath = "release/integrated-backend-authority-evidence.json";
 const forbiddenGitEnvironment = [
@@ -236,7 +250,7 @@ function expectedReleaseEvidence(input, schemaFingerprint, frontendManifest, aut
       authority: "active named manager; disposition write additionally requires DIRECTOR or SECURITY_ADMIN",
     },
     migrations,
-    release_boundary: "Configure a minimum-32-character CUSTODIAL_BACKEND_PROOF_SECRET and matching database digest before Phase A, retain the bridge backend artifact through the scan-snapshot phase, and require the executable health/restoration probes before traffic changes.",
+    release_boundary: "Prepare distinct minimum-32-character backend and native-route secrets before cutover; configure their database digests immediately after the migrations that create each configuration function, retain the bridge backend artifact through the scan-snapshot phase, and require the executable health/restoration probes before traffic changes.",
   };
 }
 
@@ -260,7 +274,7 @@ assert.equal(evidenceBlob.object_id, acceptance.backend_evidence_blob_sha, "sign
 assert.equal(hash(evidenceBlob.bytes), acceptance.backend_evidence_sha256, "signed release attestation names the wrong evidence digest");
 
 const blobByPath = new Map(expectedBlobs.map((blob) => [blob.path, blob]));
-for (const required of [releaseInputPath, "scripts/refresh-integrated-backend-authority-release.mjs", "scripts/integrated-backend-authority-cutover-check.mjs", "scripts/integrated-backend-authority-release-provenance-tests.mjs", "scripts/integrated-backend-authority-suite-order-tests.mjs", "scripts/final-operational-correction-database-tests.mjs", "scripts/named-manager-messenger-retirement-correction-database-tests.mjs", "scripts/empty-database-rebuild-check.mjs", "scripts/refresh-schema-fingerprint.mjs", "src/index.js", "src/offline-authority-http.js", "src/scan-evidence.js", `supabase/migrations/${phaseC}`, `supabase/migrations/${phaseD}`, `supabase/migrations/${phaseE}`, `supabase/migrations/${phaseF}`, `supabase/migrations/${phaseG}`, `supabase/migrations/${phaseH}`, `supabase/migrations/${phaseI}`, `supabase/migrations/${phaseJ}`, `supabase/migrations/${phaseK}`, `supabase/migrations/${phaseL}`, `supabase/migrations/${phaseM}`, `supabase/migrations/${phaseN}`]) {
+for (const required of [releaseInputPath, "scripts/refresh-integrated-backend-authority-release.mjs", "scripts/integrated-backend-authority-cutover-check.mjs", "scripts/integrated-backend-authority-release-provenance-tests.mjs", "scripts/integrated-backend-authority-suite-order-tests.mjs", "scripts/final-operational-correction-database-tests.mjs", "scripts/named-manager-messenger-retirement-correction-database-tests.mjs", "scripts/empty-database-rebuild-check.mjs", "scripts/refresh-schema-fingerprint.mjs", "src/index.js", "src/offline-authority-http.js", "src/scan-evidence.js", ...pendingProductionMigrations.map((name) => `supabase/migrations/${name}`)]) {
   assert.ok(blobByPath.has(required), `immutable acceptance input omitted authority path ${required}`);
 }
 const input = parseJsonBlob(blobByPath.get(releaseInputPath), "release authority input");
@@ -282,14 +296,25 @@ const schemaFingerprint = blobByPath.get("supabase/canonical/schema-fingerprint.
 const frontendManifest = parseJsonBlob(blobByPath.get("release/frontend-release-manifest.json"), "frontend release manifest");
 
 assert.equal(input.release_contract_version, "offline-authority.v5");
-assert.match(input.cutover.phase_order[1], /release:populated-schema:preflight/);
-assert.deepEqual(input.cutover.phase_order.slice(2, 17), [
+assert.deepEqual(input.cutover.phase_order, [
+  "prepare distinct CUSTODIAL_BACKEND_PROOF_SECRET and CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET values (minimum 32 characters each) without exposing either value",
+  "run npm run release:populated-schema:preflight through the read-only production MCP and preserve its exact source-fingerprint receipt before any migration",
+  `apply ${retirementA}`,
+  `apply ${retirementB}`,
+  `apply ${retirementC}`,
   `apply ${phaseA}`,
+  "configure the database SHA-256 digest for CUSTODIAL_BACKEND_PROOF_SECRET through custodial_configure_backend_execution_key before deploying the bridge backend",
   "deploy the bridge backend; it falls back only on absent authoritative procedures",
   `apply ${phaseB}`,
   `apply ${phaseC}`,
   `apply ${phaseD}`,
   `apply ${phaseE}`,
+  `apply ${schedulerA}`,
+  `apply ${schedulerB}`,
+  `apply ${schedulerC}`,
+  `apply ${schedulerD}`,
+  `apply ${schedulerE}`,
+  `apply ${schedulerF}`,
   `apply ${phaseF}`,
   `apply ${phaseG}`,
   `apply ${phaseH}`,
@@ -297,8 +322,10 @@ assert.deepEqual(input.cutover.phase_order.slice(2, 17), [
   `apply ${phaseJ}`,
   `apply ${phaseK}`,
   `apply ${phaseL}`,
+  "configure the database SHA-256 digest for CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET through custodial_configure_native_route_proof_key before native canary traffic",
   `apply ${phaseM}`,
   `apply ${phaseN}`,
+  "require a green authority health gate and direct-DML denial probes before routing traffic",
 ]);
 assert.equal(input.cutover.source_identity.kind, "external_signed_release_attestation");
 assert.equal(input.cutover.source_identity.generated_evidence_path, releaseEvidencePath);
@@ -367,7 +394,7 @@ const result = {
   ok: true,
   source_identity: sourceIdentity,
   authority_content: authorityContent,
-  phase_order: [phaseA, phaseB, phaseC, phaseD, phaseE, phaseF, phaseG, phaseH, phaseI, phaseJ, phaseK, phaseL, phaseM, phaseN],
+  phase_order: pendingProductionMigrations,
   bridge_fallback: "only absent authoritative procedure SQLSTATE 42883/PGRST202",
   database_gate: "not-requested",
 };

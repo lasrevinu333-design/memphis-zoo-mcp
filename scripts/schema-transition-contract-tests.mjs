@@ -10,6 +10,7 @@ import {
   UNSUPPORTED_PUBLIC_RELATION_CLASSES_QUERY,
   UNSUPPORTED_PUBLIC_TYPE_CLASSES_QUERY,
 } from "./schema-fingerprint-catalog.mjs";
+import { sanitizeReadOnlySql } from "../src/supabase/read.js";
 
 const input = JSON.parse(readFileSync(new URL("../release/schema-alignment-input.json", import.meta.url), "utf8"));
 const frontend = JSON.parse(readFileSync(new URL("../release/frontend-release-manifest.json", import.meta.url), "utf8"));
@@ -39,6 +40,12 @@ for (const section of [
   "privilege_bearing_roles", "role_memberships", "column_grants", "sequence_grants",
   "type_grants", "schema_grants", "default_privileges",
 ]) assert.equal(typeof SCHEMA_CATALOG_QUERIES[section], "string", `schema identity must include ${section}`);
+for (const [section, sql] of Object.entries(SCHEMA_CATALOG_QUERIES)) {
+  assert.doesNotThrow(
+    () => sanitizeReadOnlySql(sql),
+    `${section} schema inventory must pass the production read-only SQL boundary`,
+  );
+}
 for (const section of ["table_grants", "routine_grants", "schema_grants"]) {
   assert.doesNotMatch(SCHEMA_CATALOG_QUERIES[section], /grantee\s+in\s*\(/i,
     `${section} must not hide authority granted to an unrecognized role`);

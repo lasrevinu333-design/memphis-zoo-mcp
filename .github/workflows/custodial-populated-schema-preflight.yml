@@ -21,10 +21,17 @@ jobs:
           node-version: '22.23.1'
           cache: npm
       - run: npm ci --ignore-scripts
+      - name: Require configured read-only production MCP
+        env:
+          SCHEMA_FINGERPRINT_MCP_URL: ${{ secrets.SCHEMA_FINGERPRINT_MCP_URL }}
+        run: test -n "$SCHEMA_FINGERPRINT_MCP_URL"
       - name: Verify exact populated source schema without mutation
         env:
           SCHEMA_FINGERPRINT_MCP_URL: ${{ secrets.SCHEMA_FINGERPRINT_MCP_URL }}
-        run: npm run --silent release:populated-schema:preflight | tee /tmp/custodial-populated-schema-preflight.json
+        run: |
+          set -euo pipefail
+          npm run --silent release:populated-schema:preflight | tee /tmp/custodial-populated-schema-preflight.json
+          test -s /tmp/custodial-populated-schema-preflight.json
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
