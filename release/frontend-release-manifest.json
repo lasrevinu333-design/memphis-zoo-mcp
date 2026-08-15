@@ -1,7 +1,38 @@
 {
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "257de53680eb305191d42b396098e42b69be5e91",
+  "frontend_commit_sha": "71fc3f8861c88a9f455b6e3cd44cfc615ebb714f",
+  "frontend_tree_sha": "4da0e408f541445b077b0388c924d945742a71e3",
   "frontend_commit_state": "final_pair_bound",
+  "frontend_candidate": {
+    "version_code": 27,
+    "build_authority": "codemagic",
+    "build_workflow": "custodial-android",
+    "build_id": "6a80bd84bfdeb9f936680ab7",
+    "artifact_sha256": "3c23de0d39ddb59a62ccad41ca2f4eb15d7541bda416076afb0fd8fd2e8181f9",
+    "artifact_size_bytes": 6442769,
+    "provenance_sha256": "710ea1889b259f22bb62a202db0e483b4df1d5d50198db78e2b5e0cc3b6d24a7",
+    "signer_certificate_sha256": "dd2e0b44abee02b4d9e1be74edaa05587a93f5e4c502716df99639bc96e7a0bf",
+    "signer_public_key_sha256": "5bbf30c71444534f189f75cfa3e65779285a4e8e25ff3fd7cbfa1cbc86de1d4c"
+  },
+  "frontend_rollback_recovery": {
+    "strategy": "forward_versioned_recovery_apk",
+    "source_capability_version_code": 25,
+    "package_version_code": 28,
+    "source_commit_sha": "78f8bf499829f2b2c5f240a1265ebe7282a3f82d",
+    "source_tree_sha": "bc5faf5d18b70ee9224a0238b8e4a083f5b9b532",
+    "artifact_sha256": "678c786e56e5f26098f799155b2fe990e4dae3d8fb38cc38f498ab3ebe221116",
+    "artifact_size_bytes": 6443005,
+    "provenance_sha256": "7fb3e0175777c2813a0354e7aa31d53faebf583522482f081520c3eacfe55c74",
+    "direct_version_downgrade_supported": false,
+    "physical_rollback_drill_complete": true
+  },
+  "physical_gate": {
+    "device_identifier": "KIOSK_08",
+    "software_and_lifecycle_checks_complete": true,
+    "physical_rollback_drill_complete": true,
+    "real_nfc_workflow_complete": false,
+    "fleet_authorized": false
+  },
   "backend_minimum_version": "release-2026.07.19.custodial-v3.12",
   "schema_fingerprint": "c8b6c811c52a3275290c6b8944f3692121c40e92c9efd84c5eb92baff91bc5ac",
   "schema_transition": {

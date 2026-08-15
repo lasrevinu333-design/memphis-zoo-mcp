@@ -131,7 +131,11 @@ export function buildReleaseManifest({ appVersion, releaseId, contracts = {} } =
       // This source tree intentionally contains no guessed final frontend.
       // The live gate accepts a caller-supplied exact pair only after rebind.
       commit_sha: frontendManifest?.frontend_commit_sha || null,
+      tree_sha: frontendManifest?.frontend_tree_sha || null,
       pair_state: frontendManifest?.frontend_commit_state || "final_rebind_required",
+      candidate: frontendManifest?.frontend_candidate || null,
+      rollback_recovery: frontendManifest?.frontend_rollback_recovery || null,
+      physical_gate: frontendManifest?.physical_gate || null,
       manifest: frontendManifest,
     },
     schema: {
