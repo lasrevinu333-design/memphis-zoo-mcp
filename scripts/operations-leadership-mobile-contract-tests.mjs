@@ -47,7 +47,7 @@ assert.match(authSource, /named_manager_enrollment:\s*!config\.passwordlessManag
 assert.match(authSource, /shared_48_hour_enrollment:\s*false/);
 assert.match(indexSource, /ops-manager-auth\.v5\.named-leadership/);
 assert.doesNotMatch(indexSource, /ops-manager-auth\.v4\.shared-48h/);
-assert.equal(releaseManifest.frontend_commit_sha, "0182ff112690d6ab621159b65e7fa59babbe01a9",
+assert.equal(releaseManifest.frontend_commit_sha, "372132f4cf5bdde837f54ba5221dd851cd5d8d17",
   "backend source must pin the exact audited frontend candidate");
 assert.equal(releaseManifest.api_contract_versions.ops_manager_auth, "ops-manager-auth.v5.named-leadership");
 assert.equal(releaseManifest.api_contract_versions.operational_analytics, "operational-analytics.v1");

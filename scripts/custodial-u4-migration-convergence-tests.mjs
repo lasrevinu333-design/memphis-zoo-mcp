@@ -16,11 +16,15 @@ const migrationsDir = path.join(root, "supabase/migrations");
 const migrationNames = fs.readdirSync(migrationsDir).filter((name) => name.endsWith(".sql")).sort();
 const uncertainMigration = "20260813210000_custodial_u4_ops_closure.sql";
 const additiveMigration = "20260814224034_reconcile_static_weekly_day_change_receipts.sql";
+const oldHistoryCommit = "3900f7db34ba8ed9aa7a743db4a2dee112e82c4c";
 const image = process.env.SCHEMA_REBUILD_DOCKER_IMAGE || "supabase/postgres@sha256:80d7b27c3e8d77cfa7226eee9508671796da214781ff15a35b3670d7ad5ee453";
 const docker = (args, options = {}) => execFileAsync("docker", args, { maxBuffer: 64 * 1024 * 1024, ...options });
 
 assert.equal(migrationNames.at(-1), additiveMigration, "the reconciliation migration must remain the terminal local migration during this focused proof");
-const oldUncertainBody = (await execFileAsync("git", ["show", `HEAD:supabase/migrations/${uncertainMigration}`], { cwd: root, maxBuffer: 64 * 1024 * 1024 })).stdout;
+await execFileAsync("git", ["merge-base", "--is-ancestor", oldHistoryCommit, "HEAD"], { cwd: root });
+const oldUncertainBody = (await execFileAsync("git", ["show", `${oldHistoryCommit}:supabase/migrations/${uncertainMigration}`], { cwd: root, maxBuffer: 64 * 1024 * 1024 })).stdout;
+const preservedUncertainBody = fs.readFileSync(path.join(migrationsDir, uncertainMigration), "utf8");
+assert.notEqual(oldUncertainBody, preservedUncertainBody, "old and preserved U4 migration histories must remain distinct fixtures");
 
 async function psql(container, statement) {
   return new Promise((resolve, reject) => {
@@ -123,8 +127,8 @@ assert.deepEqual(oldLedger.inventory, preservedLedger.inventory, "both histories
 assert.deepEqual(oldLedger.capability, preservedLedger.capability, "both histories must expose identical bounded capabilities");
 console.log(JSON.stringify({
   ok: true,
-  old_history: `${uncertainMigration}@HEAD + ${additiveMigration}`,
-  preserved_history: `${uncertainMigration}@working-tree + ${additiveMigration}`,
+  old_history: `${uncertainMigration}@${oldHistoryCommit} + ${additiveMigration}`,
+  preserved_history: `${uncertainMigration}@HEAD + ${additiveMigration}`,
   converged_schema_fingerprint: oldLedger.fingerprint,
   recovery_inventory_entries: oldLedger.inventory.length,
 }, null, 2));
