@@ -77,7 +77,7 @@ jobs:
             -e PGSSLMODE=verify-full -e PGSSLROOTCERT=/cert/prod-ca.crt \
             -v "${GITHUB_WORKSPACE}/.github/certs/prod-ca-2021.crt:/cert/prod-ca.crt:ro" \
             -v "${RUNNER_TEMP}:${RUNNER_TEMP}" \
-            "$image" "$SUPABASE_DB_URL" --schema-only --clean --if-exists --no-owner --no-privileges \
+            "$image" "$SUPABASE_DB_URL" --schema-only --clean --if-exists \
             --file="$schema_dump"
           docker run --rm --entrypoint pg_dump \
             -e PGOPTIONS='-c default_transaction_read_only=on' \

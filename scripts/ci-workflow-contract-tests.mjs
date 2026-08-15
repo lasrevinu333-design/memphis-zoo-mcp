@@ -144,6 +144,8 @@ assert.match(populatedSchemaPreflight, /set -euo pipefail[\s\S]*release:populate
 const productionBackupRehearsal = readFileSync(resolve(workflowDirectory, "production-backup-migration-rehearsal.yml"), "utf8");
 assert.match(productionBackupRehearsal, /RESTORE_DATABASE_ONLY=true[\s\S]*release:populated-schema:preflight/,
   "the production-backup rehearsal must restore data before checking the exact live source fingerprint");
+assert.doesNotMatch(productionBackupRehearsal, /--schema-only[^\n]*(?:--no-owner|--no-privileges)/,
+  "the production-backup rehearsal must preserve ownership and grants because both are part of the accepted schema fingerprint");
 assert.match(productionBackupRehearsal, /cron\.database_name="\$database"/,
   "the production-backup rehearsal must bind pg_cron to its isolated restored database");
 assert.match(productionBackupRehearsal, /-p 127\.0\.0\.1::5432[\s\S]*listen_addresses='\*'[\s\S]*SUPABASE_DB_URL="postgresql:\/\/supabase_admin:postgres@127\.0\.0\.1:/,
