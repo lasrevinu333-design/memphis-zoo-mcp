@@ -144,6 +144,8 @@ assert.match(populatedSchemaPreflight, /set -euo pipefail[\s\S]*release:populate
 const productionBackupRehearsal = readFileSync(resolve(workflowDirectory, "production-backup-migration-rehearsal.yml"), "utf8");
 assert.match(productionBackupRehearsal, /RESTORE_DATABASE_ONLY=true[\s\S]*release:populated-schema:preflight/,
   "the production-backup rehearsal must restore data before checking the exact live source fingerprint");
+assert.match(productionBackupRehearsal, /cron\.database_name="\$database"/,
+  "the production-backup rehearsal must bind pg_cron to its isolated restored database");
 assert.equal((productionBackupRehearsal.match(/202608\d+_[a-z0-9_]+\.sql/g) || []).filter((name, index, values) => values.indexOf(name) === index).length, 23,
   "the production-backup rehearsal must apply the exact 23 pending migrations");
 assert.match(productionBackupRehearsal, /custodial_configure_backend_execution_key[\s\S]*custodial_configure_native_route_proof_key[\s\S]*custodial_backend_authority_health/,
