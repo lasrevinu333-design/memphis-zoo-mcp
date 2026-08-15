@@ -50,7 +50,19 @@ jobs:
           schema_dump="${RUNNER_TEMP}/production-schema.sql"
           ledger_dump="${RUNNER_TEMP}/production-ledger.sql"
           receipt="${RUNNER_TEMP}/production-backup-migration-rehearsal.jsonl"
-          trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
+          postgres_log="${RUNNER_TEMP}/production-backup-migration-rehearsal-postgres.log"
+          cleanup() {
+            status=$?
+            if test "$status" -ne 0 && docker inspect "$container" >/dev/null 2>&1; then
+              {
+                docker inspect --format 'state={{.State.Status}} oom_killed={{.State.OOMKilled}} exit_code={{.State.ExitCode}} restart_count={{.RestartCount}} health={{if .State.Health}}{{.State.Health.Status}}{{end}}' "$container"
+                docker logs --timestamps --tail 2000 "$container"
+              } > "$postgres_log" 2>&1 || true
+            fi
+            docker rm -f "$container" >/dev/null 2>&1 || true
+            return "$status"
+          }
+          trap cleanup EXIT
           printf '{"started":true,"backup_run_id":"%s"}\n' '${{ inputs.backup_run_id }}' > "$receipt"
           mkdir -p "$backup_dir"
           openssl enc -d -aes-256-cbc -pbkdf2 -iter 250000 \
@@ -102,6 +114,7 @@ jobs:
           docker exec "$container" createdb -U supabase_admin -T template0 "$database"
           docker exec -i "$container" psql -v ON_ERROR_STOP=1 -U supabase_admin -d "$database" < "$schema_dump"
           docker exec -i "$container" psql -v ON_ERROR_STOP=1 -U supabase_admin -d "$database" < "$ledger_dump"
+          printf '{"stage":"schema_and_ledger_restored"}\n' >> "$receipt"
           port="$(docker port "$container" 5432/tcp | sed -E 's/.*:([0-9]+)$/\1/')"
           test -n "$port"
           RESTORE_APPLY=true RESTORE_DATABASE_ONLY=true RESTORE_SOURCE_DIR="$backup_dir" \
@@ -167,6 +180,8 @@ jobs:
         if: always()
         with:
           name: production-backup-migration-rehearsal-${{ github.run_id }}
-          path: ${{ runner.temp }}/production-backup-migration-rehearsal.jsonl
+          path: |
+            ${{ runner.temp }}/production-backup-migration-rehearsal.jsonl
+            ${{ runner.temp }}/production-backup-migration-rehearsal-postgres.log
           if-no-files-found: warn
           retention-days: 30
