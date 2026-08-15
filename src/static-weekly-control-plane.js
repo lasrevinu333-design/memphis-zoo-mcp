@@ -15,6 +15,7 @@ import { createStaticWeeklyDraftRpcInput, createStaticWeeklyProjectionRpcInput }
 import { getStaticWeeklySolverReadiness, initializeStaticWeeklySolver } from "./static-weekly-schedule-solver.js";
 
 export const STATIC_WEEKLY_CONTROL_PLANE_SCHEMA = "memphis-zoo.static-weekly-control-plane.v1";
+const STATIC_WEEKLY_AUTHORITY_LOCK_IDENTITY = "memphis-static-weekly-authority";
 
 const text = (value) => typeof value === "string" ? value.trim() : "";
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -250,6 +251,13 @@ export function createStaticWeeklyControlPlane({
     return rows[0]?.result;
   }
 
+  async function lockStaticWeeklyAuthority(client) {
+    await client.query(
+      "select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended($1,0))",
+      [STATIC_WEEKLY_AUTHORITY_LOCK_IDENTITY],
+    );
+  }
+
   async function sourceFor(client, publicationId, serviceDate) {
     return call(client, "static_weekly_v3_read_publication_source", [publicationId, serviceDate]);
   }
@@ -413,10 +421,11 @@ export function createStaticWeeklyControlPlane({
         throw fail("static_weekly_control_plane_day_changes_version_required", "Day changes must name one published schedule version.");
       }
       return transaction(async (client) => {
-        // PostgreSQL reauthorizes the current manager, acquires the global
-        // authority transaction lock, and recognizes an already accepted
-        // complete child/projection receipt chain before any mutable authority
-        // is reread. The lock remains held for a fresh batch through commit.
+        // Acquire the transaction lock in its own top-level statement so a
+        // waiter begins the receipt-gate statement with a snapshot taken after
+        // the winner commits. The gate reauthorizes the current manager and
+        // reacquires the same lock defensively; it remains held through commit.
+        await lockStaticWeeklyAuthority(client);
         const batch = await call(client, "static_weekly_v4_begin_day_changes", [date, weekStart, effectiveVersionId, effectivePublicationId, JSON.stringify(requestedOperations), initialRevision, actor.managerId, key]);
         if (batch?.replayed === true) return batch.response;
         // Resolve and validate every operation before invoking the first writer;

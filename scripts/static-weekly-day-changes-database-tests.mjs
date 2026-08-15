@@ -2,6 +2,7 @@
 // Real-PostgreSQL evidence for the outer, transaction-owning daily batch and
 // its database-authoritative complete-chain replay contract.
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import fs from "node:fs";
@@ -77,13 +78,15 @@ async function containerSql(statement) {
 const scalar = async (statement) => (await containerSql(statement)).split("\n").at(-1);
 
 function tracedDatabase(pool, trace, { failProjection = false, terminateProjection = false, adminPool = null } = {}) {
+  let nextConnectionId = 0;
   return {
     async connect() {
       const raw = await pool.connect();
+      const connectionId = ++nextConnectionId;
       if (terminateProjection) raw.on("error", () => {});
       return {
         async query(statement, values) {
-          const entry = { statement, values: values || [] };
+          const entry = { connectionId, statement, values: values || [], startedAt: Date.now() };
           trace.push(entry);
           try {
             if (statement.includes("static_weekly_v3_materialize_projection") && failProjection) return await raw.query("select 1/0");
@@ -91,8 +94,12 @@ function tracedDatabase(pool, trace, { failProjection = false, terminateProjecti
               const pid = Number((await raw.query("select pg_backend_pid() as pid")).rows[0].pid);
               await adminPool.query("select pg_terminate_backend($1)", [pid]);
             }
-            return await raw.query(statement, values);
+            const result = await raw.query(statement, values);
+            entry.finishedAt = Date.now();
+            if (statement.includes("pg_advisory_xact_lock") || statement.includes("static_weekly_v4_begin_day_changes")) entry.rows = result.rows;
+            return result;
           } catch (error) {
+            entry.finishedAt = Date.now();
             entry.sqlstate = error?.code || null;
             entry.error = error?.message || String(error);
             throw error;
@@ -133,7 +140,10 @@ const ptoOperations = [
   { operation: "exception", exceptionType: "pto", reason: "Batch PTO 1", payload: { slotId: slotIds[0] } },
   { operation: "cover_all", slotId: contractorSlotId, reason: "Batch CoverAll 1" },
 ];
-const lunchOperations = slotIds.map((slotId, index) => ({ operation: "exception", exceptionType: "lunch", startsAt: index ? "12:30" : "12:00", endsAt: index ? "13:00" : "12:30", reason: `Batch lunch ${index + 1}`, payload: { slotId } }));
+const alternatePtoOperations = [
+  { operation: "exception", exceptionType: "pto", reason: "Alternate batch PTO", payload: { slotId: slotIds[1] } },
+  { operation: "cover_all", slotId: contractorSlotId, reason: "Alternate batch CoverAll" },
+];
 const correctionOperations = slotIds.map((slotId, index) => ({ operation: "exception", exceptionType: "manager_correction", reason: `Batch correction ${index + 1}`, payload: { locks: [{ workId: `batch-work-2-${index}`, slotId }] } }));
 
 let pool = null;
@@ -210,10 +220,21 @@ try {
   const conflictKey = "outer-conflicting-race";
   const conflicts = await Promise.allSettled([
     controlPlane.applyDayChanges(batchRequest(conflictKey, afterIdentical, ptoOperations)),
-    controlPlane.applyDayChanges(batchRequest(conflictKey, afterIdentical, lunchOperations)),
+    controlPlane.applyDayChanges(batchRequest(conflictKey, afterIdentical, alternatePtoOperations)),
   ]);
-  assert.equal(conflicts.filter((item) => item.status === "fulfilled").length, 1, "one conflicting complete batch wins");
-  assert.equal(conflicts.filter((item) => item.status === "rejected" && item.reason?.code === "23505").length, 1, "the other conflicting batch fails by parent idempotency identity");
+  const conflictSummary = conflicts.map((item) => item.status === "fulfilled"
+    ? { status: item.status, revision: item.value?.revision }
+    : { status: item.status, code: item.reason?.code || null, message: item.reason?.message || String(item.reason) });
+  const conflictConnectionIds = new Set(trace.filter((entry) => entry.statement.includes("static_weekly_v4_begin_day_changes") && entry.values[7] === conflictKey).map((entry) => entry.connectionId));
+  const conflictTrace = trace.filter((entry) => conflictConnectionIds.has(entry.connectionId)).map(({ connectionId, statement, startedAt, finishedAt, rows, sqlstate }) => ({ connectionId, statement, startedAt, finishedAt, rows, sqlstate }));
+  const conflictReceiptKeys = [0, 1].map((index) => `day-change-${createHash("sha256").update(`${conflictKey}:${index}`).digest("hex")}`);
+  conflictReceiptKeys.push(`projection-${createHash("sha256").update(conflictKey).digest("hex")}`);
+  const conflictReceipts = (await pool.query("select idempotency_key,command_type,expected_revision from public.weekly_schedule_command_receipts where actor_manager_id=$1 and idempotency_key=any($2::text[]) order by expected_revision", [actor.manager_id, conflictReceiptKeys])).rows;
+  const conflictDiagnostic = JSON.stringify({ outcomes: conflictSummary, receipts: conflictReceipts, trace: conflictTrace });
+  assert.equal(conflictConnectionIds.size, 2, `conflicting requests must execute through independent database sessions: ${conflictDiagnostic}`);
+  assert.equal(conflicts.filter((item) => item.status === "fulfilled").length, 1, `one conflicting complete batch wins: ${conflictDiagnostic}`);
+  assert.equal(conflicts.filter((item) => item.status === "rejected" && item.reason?.code === "23505").length, 1, `the other conflicting batch fails by parent idempotency identity: ${conflictDiagnostic}`);
+  assert.equal(conflictReceipts.length, 3, `only the winner's two child receipts and final projection receipt may persist: ${conflictDiagnostic}`);
   const conflictWinner = conflicts.find((item) => item.status === "fulfilled").value;
   const lateFailureOperations = conflictWinner.data.mutations.map((mutation, index) => ({ operation: "exception", exceptionType: "reverse", reason: `Late-failure rollback ${index + 1}`, payload: { reversesExceptionId: mutation.exception_id }, reversesExceptionId: mutation.exception_id }));
 

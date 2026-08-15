@@ -28,6 +28,7 @@ assert.match(runtimeSource, /\/static-weekly\/employees\/replacements/, "the con
 assert.match(runtimeSource, /\/static-weekly\/rebuild-current-projection/, "the control plane must expose the named rebuild-only recovery command");
 assert.match(runtimeSource, /\/static-weekly\/day-changes\/batch[^\n]+requireManagerWrite, namedManager/, "the bounded daily batch route must require a trusted named manager writer");
 assert.match(controlPlaneSource, /async applyDayChanges\(/, "the control plane must own the daily batch transaction rather than split it across HTTP requests");
+assert.match(controlPlaneSource, /pg_advisory_xact_lock\(pg_catalog\.hashtextextended\(\$1,0\)\)/, "the outer batch must acquire the database transaction lock before starting the receipt-gate statement snapshot");
 assert.match(controlPlaneSource, /dayChangeOperationIdempotencyKey/, "daily batch child mutations must use deterministic idempotency keys");
 assert.match(controlPlaneSource, /projectionIdempotencyKey/, "atomic projection subcommands must derive their own idempotency key");
 assert.doesNotMatch(runtimeSource, /\/static-weekly\/incumbencies/, "the arbitrary person/date incumbency writer must not be routable");
@@ -238,6 +239,9 @@ assert.equal(dayChanges.revision, 3, "one daily batch advances authority for eac
 assert.equal(dayChanges.data.mutations.length, 2, "the batch returns every applied daily mutation");
 assert.equal(dayChanges.data.current_projection.projection_id, "projection-3");
 assert.equal(dayChangesCompilerCalls, 1, "the complete daily operation set compiles exactly once");
+const dayChangesLockIndex = dayChangesAuthority.queries.findIndex((entry) => entry.statement.includes("pg_advisory_xact_lock"));
+const dayChangesGateIndex = dayChangesAuthority.queries.findIndex((entry) => entry.statement.includes("static_weekly_v4_begin_day_changes"));
+assert.equal(dayChangesLockIndex > 1 && dayChangesLockIndex < dayChangesGateIndex, true, "the batch acquires its transaction lock in a completed statement before the receipt gate takes a snapshot");
 assert.equal(dayChangesAuthority.queries.filter((entry) => entry.statement.includes("static_weekly_v4_begin_day_changes")).length, 1, "a batch reaches the database-authoritative recognition gate before source reads");
 assert.equal(dayChangesAuthority.queries.filter((entry) => entry.statement.includes("static_weekly_v3_materialize_projection")).length, 1, "the complete daily operation set materializes exactly once");
 const dayChangeCommands = dayChangesAuthority.queries.filter((entry) => entry.statement.includes("static_weekly_v3_apply_exception"));
@@ -249,7 +253,7 @@ assert.deepEqual(dayChangesReplay, dayChanges, "replaying an accepted daily batc
 assert.equal(dayChangesAuthority.mutationAttempts(), 2, "replaying a daily batch does not apply any child mutation again");
 assert.equal(dayChangesAuthority.revision(), 3, "replaying a daily batch does not advance authority revision");
 const replayQueries = dayChangesAuthority.queries.slice(dayChangesAuthority.queries.findLastIndex((entry) => entry.statement === "begin"));
-assert.deepEqual(replayQueries.map((entry) => entry.statement), ["begin", "set local role static_weekly_control_plane", "select public.static_weekly_v4_begin_day_changes($1,$2,$3,$4,$5,$6,$7,$8) as result", "commit"], "accepted whole-action replay stops before mutable publication authority is reread");
+assert.deepEqual(replayQueries.map((entry) => entry.statement), ["begin", "set local role static_weekly_control_plane", "select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended($1,0))", "select public.static_weekly_v4_begin_day_changes($1,$2,$3,$4,$5,$6,$7,$8) as result", "commit"], "accepted whole-action replay locks and stops before mutable publication authority is reread");
 
 const invalidDayChangesAuthority = createAuthorityDatabase();
 await assert.rejects(() => controlPlaneFor(invalidDayChangesAuthority).applyDayChanges({
