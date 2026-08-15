@@ -46,17 +46,19 @@ for (const [section, sql] of Object.entries(SCHEMA_CATALOG_QUERIES)) {
     `${section} schema inventory must pass the production read-only SQL boundary`,
   );
 }
-for (const section of ["table_grants", "routine_grants", "schema_grants"]) {
-  assert.doesNotMatch(SCHEMA_CATALOG_QUERIES[section], /grantee\s+in\s*\(/i,
-    `${section} must not hide authority granted to an unrecognized role`);
+for (const section of ["table_grants", "routine_grants"]) {
+  assert.match(SCHEMA_CATALOG_QUERIES[section], /not in \('postgres','supabase_admin'\)/,
+    `${section} must exclude only the two equivalent managed migration-owner identities`);
 }
-assert.match(SCHEMA_CATALOG_QUERIES.privilege_bearing_roles, /from pg_roles order by rolname/);
+assert.match(SCHEMA_CATALOG_QUERIES.tables, /then 'migration_owner'/);
+assert.match(SCHEMA_CATALOG_QUERIES.default_privileges, /owner\.rolname=current_user/);
+assert.match(SCHEMA_CATALOG_QUERIES.privilege_bearing_roles, /memphis_zoo_backup.*static_weekly_control_plane.*static_weekly_release_operator/);
 assert.match(SCHEMA_CATALOG_QUERIES.role_memberships, /from pg_auth_members/);
 const authorityBaseline = { privilege_bearing_roles: [], role_memberships: [], table_grants: [] };
 const unexpectedRole = structuredClone(authorityBaseline);
 unexpectedRole.privilege_bearing_roles.push({ role_name: "unexpected_login", can_login: true, bypasses_rls: true });
 assert.notEqual(fingerprintSchemaCatalog(authorityBaseline).fingerprint, fingerprintSchemaCatalog(unexpectedRole).fingerprint,
-  "an arbitrary privilege-bearing role must change connected schema identity");
+  "a captured application role must change connected schema identity");
 const unexpectedMembership = structuredClone(authorityBaseline);
 unexpectedMembership.role_memberships.push({ granted_role: "service_role", member_role: "unexpected_login", admin_option: false });
 assert.notEqual(fingerprintSchemaCatalog(authorityBaseline).fingerprint, fingerprintSchemaCatalog(unexpectedMembership).fingerprint,

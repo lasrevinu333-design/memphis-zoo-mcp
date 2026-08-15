@@ -168,8 +168,8 @@ assert.match(emptyDatabaseRebuild, /shared_preload_libraries=pg_cron,pg_net,pg_s
   "the clean-rebuild test must retain cron catalog evidence without letting wall-clock jobs mutate its disposable fixtures");
 assert.match(productionBackupRehearsal, /oom_killed=\{\{\.State\.OOMKilled\}\}[\s\S]*docker logs --timestamps --tail 2000[\s\S]*production-backup-migration-rehearsal-postgres\.log/,
   "the production-backup rehearsal must retain bounded Postgres failure evidence instead of retrying blind");
-assert.equal((productionBackupRehearsal.match(/202608\d+_[a-z0-9_]+\.sql/g) || []).filter((name, index, values) => values.indexOf(name) === index).length, 23,
-  "the production-backup rehearsal must apply the exact 23 pending migrations");
+assert.equal((productionBackupRehearsal.match(/202608\d+_[a-z0-9_]+\.sql/g) || []).filter((name, index, values) => values.indexOf(name) === index).length, 24,
+  "the production-backup rehearsal must apply the exact 24 pending migrations");
 assert.match(productionBackupRehearsal, /custodial_configure_backend_execution_key[\s\S]*custodial_configure_native_route_proof_key[\s\S]*custodial_backend_authority_health/,
   "the production-backup rehearsal must configure both secret boundaries and prove final authority health");
 assert.match(productionBackupRehearsal, /set role service_role; truncate public\.sessions/,
