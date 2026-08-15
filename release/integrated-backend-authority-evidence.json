@@ -699,12 +699,12 @@
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "85ac2ac9949347bb3656daf468d7b404e047cbc4"
+        "object_id": "c81147c71e3438b7178df458703226789cca2309"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
         "mode": "100644",
-        "object_id": "f7385168c0b1bb9b159f6a7b0a010246a413f868"
+        "object_id": "ab92a0a6a4d4c211606c2b87c1db64dce4ac772f"
       },
       {
         "path": "scripts/integrated-backend-authority-suite-order-isolated-tests.mjs",
