@@ -110,11 +110,12 @@ assert.match(populatedPreflightWorkflow, /release:populated-schema:preflight/);
 assert.match(releaseInput.cutover.phase_order[1], /release:populated-schema:preflight/);
 assert.equal(releaseEvidence.compatibility_window.accepted_engine.scan, "scan.v2");
 assert.equal(releaseEvidence.compatibility_window.required_engine.scan, "scan.v4.snapshot-bound-authority");
-assert.equal(releaseEvidence.migrations.at(-1).name, "20260814224034_reconcile_static_weekly_day_change_receipts.sql");
+assert.equal(releaseEvidence.migrations.at(-1).name, "20260815160613_normalize_managed_production_schema_security.sql");
 assert.match(releaseEvidence.compatibility_window.release_phone_transport_and_offline_activation_phase, /native-vault \/scan-api\/rpc/);
 assert.match(releaseEvidence.compatibility_window.u4_ops_closure_phase,
   /wire timestamps.*activation boundaries.*UUID completion.*two-phase employee notification dispatch ledgers.*durable manager dispatch preparation.*outcome-unknown restart recovery.*notification recovery authority.*terminal notification retries.*authority set/);
 assert.match(releaseEvidence.compatibility_window.atomic_day_change_reconciliation_phase, /existing complete child\/projection receipt chain.*before mutable Weekly Schedule authority/i);
+assert.match(releaseEvidence.compatibility_window.managed_schema_authority_normalization_phase, /broad future-object defaults.*managed postgres\/supabase_admin deployment authority/i);
 assert.match(dayChangeReconciliation, /static_weekly_v4_begin_day_changes/);
 assert.equal(releaseEvidence.artifact, "integrated-backend-authority-release-evidence.v2");
 assert.equal(releaseEvidence.release_id, "release-2026.07.19.custodial-v3.12");
