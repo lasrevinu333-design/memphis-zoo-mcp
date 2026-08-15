@@ -42,7 +42,8 @@
     "device_sync_actor_groups_phase": "20260813173000 stores verified pending work groups by issued snapshot, employee, and assignment epoch while retaining the Build 22 aggregate reporter",
     "release_phone_transport_and_offline_activation_phase": "20260813190000 requires a fresh immutable receipt from the designated phone's native-vault /scan-api/rpc path before resume and permits delayed activation only for work begun while snapshot, credential, and assignment authority were valid",
     "u4_ops_closure_phase": "20260813210000 canonicalizes native wire timestamps, records immutable activation boundaries, enforces UUID completion identities, installs two-phase employee notification dispatch ledgers, durable manager dispatch preparation with terminal outcome-unknown restart recovery, complete notification recovery authority, and terminal notification retries, and restores the catalog-derived authority set",
-    "atomic_day_change_reconciliation_phase": "20260814224034 converges both preserved U4 migration histories and recognizes the existing complete child/projection receipt chain before mutable Weekly Schedule authority is reread"
+    "atomic_day_change_reconciliation_phase": "20260814224034 converges both preserved U4 migration histories and recognizes the existing complete child/projection receipt chain before mutable Weekly Schedule authority is reread",
+    "managed_schema_authority_normalization_phase": "20260815160613 removes broad future-object defaults and makes managed postgres/supabase_admin deployment authority comparable without hiding application grants or role memberships"
   },
   "rollback": {
     "before_enforcement": "legacy Engine and current backend completion remain available",
@@ -693,12 +694,12 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "148984cf033546e527d5e5911d0eb0965a3a51a8"
+        "object_id": "6a11390b1af8e2e09036c238cd2b2471328b56dd"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "bb9a1958948c376a39657e1471858ce430c00e89"
+        "object_id": "15e012d2a82826009a1400f861bc7be002755f56"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
@@ -933,7 +934,7 @@
       {
         "path": "scripts/refresh-integrated-backend-authority-release.mjs",
         "mode": "100644",
-        "object_id": "fc364b9117475a55fac54d99ab29e61f3ca8a5e1"
+        "object_id": "c5548fbffe25a28055fef4cc3df4d84e2ac4e16c"
       },
       {
         "path": "scripts/refresh-release-schema-alignment.mjs",
