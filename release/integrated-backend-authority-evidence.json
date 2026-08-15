@@ -142,7 +142,7 @@
       {
         "path": ".github/workflows/integrated-release-attestation.yml",
         "mode": "100644",
-        "object_id": "53d8f757815493bacc6f31651a32a66f56ba9d32"
+        "object_id": "5081bacc046dd1d5ddfb246e1c5d1c61d561d468"
       },
       {
         "path": ".github/workflows/manager-inspection-readiness-monitor.yml",
@@ -477,7 +477,7 @@
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "cab529ed60e1d3e353d48dc3d601e9d9b3201991"
+        "object_id": "1034c9b389d6a4493a445ac89fd33cf62670e561"
       },
       {
         "path": "scripts/create-release-attestation.mjs",
