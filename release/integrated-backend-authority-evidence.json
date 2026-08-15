@@ -188,7 +188,7 @@
       {
         "path": ".github/workflows/production-backup-migration-rehearsal.yml",
         "mode": "100644",
-        "object_id": "1e1e6a86e0faa750845a33d52df879fc357971be"
+        "object_id": "0420ad5e080411f1d1f2741267ed0c872e89815b"
       },
       {
         "path": ".github/workflows/production-database-credential-bridge.yml",
@@ -448,7 +448,7 @@
       {
         "path": "scripts/audit3-repair-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "1d208d20ef192d22fdeb5b75659594b7e936e259"
+        "object_id": "df802dacffe69cf4c3a78d9a25411898b6c322fd"
       },
       {
         "path": "scripts/audit4-repair-contract-tests.mjs",
@@ -493,7 +493,7 @@
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "8ae6b02ff7a1df4ec0298d56360e1937ac9b2fd6"
+        "object_id": "d11583826d0a89b971658a05db434622326cf1d2"
       },
       {
         "path": "scripts/create-release-attestation.mjs",
@@ -598,7 +598,7 @@
       {
         "path": "scripts/empty-database-rebuild-check.mjs",
         "mode": "100644",
-        "object_id": "31d4dd6157084809c6e83a42c4879d774fd402a3"
+        "object_id": "26ddb3b09cea8291c32841432a72506c9fda49e2"
       },
       {
         "path": "scripts/event-notification-retention-contract-tests.mjs",
@@ -898,7 +898,7 @@
       {
         "path": "scripts/production-restore.mjs",
         "mode": "100644",
-        "object_id": "8bf048fe04dbd978956750fa98c978aa4b8a4814"
+        "object_id": "44742be6a05ebffbfe293cb59963627e52dedf58"
       },
       {
         "path": "scripts/production-runtime-contract-tests.mjs",
@@ -1754,6 +1754,11 @@
         "path": "supabase/canonical/production-schema-fingerprint.txt",
         "mode": "100644",
         "object_id": "cd7ef7823292c90df6f9bf31570fd4a1a39f420b"
+      },
+      {
+        "path": "supabase/canonical/production-source-role-catalog.sql",
+        "mode": "100644",
+        "object_id": "9047c11de4a0f2c7f1f8ebe230a5c7e9586351c0"
       },
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
@@ -2741,7 +2746,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 524,
+    "authority_path_count": 525,
     "migration_path_count": 77,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
