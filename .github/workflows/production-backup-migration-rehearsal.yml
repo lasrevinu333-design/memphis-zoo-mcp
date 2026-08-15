@@ -156,7 +156,7 @@ jobs:
             20260813210000_custodial_u4_ops_closure.sql
             20260814224034_reconcile_static_weekly_day_change_receipts.sql
             20260815160613_normalize_managed_production_schema_security.sql
-            20260815163500_restore_explicit_public_schema_usage.sql
+            20260815163346_restore_explicit_public_schema_usage.sql
           )
           for migration in "${migrations[@]}"; do
             docker exec -i "$container" psql -v ON_ERROR_STOP=1 -U supabase_admin -d "$database" \

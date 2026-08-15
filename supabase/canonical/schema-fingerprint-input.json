@@ -48353,6 +48353,20 @@
       "is_grantable": false,
       "privilege_type": "USAGE",
       "schema_name": "public"
+    },
+    {
+      "grantee": "static_weekly_control_plane",
+      "grantor": "pg_database_owner",
+      "is_grantable": false,
+      "privilege_type": "USAGE",
+      "schema_name": "public"
+    },
+    {
+      "grantee": "static_weekly_release_operator",
+      "grantor": "pg_database_owner",
+      "is_grantable": false,
+      "privilege_type": "USAGE",
+      "schema_name": "public"
     }
   ],
   "sequence_grants": [],
