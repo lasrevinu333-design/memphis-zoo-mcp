@@ -146,6 +146,8 @@ assert.match(productionBackupRehearsal, /RESTORE_DATABASE_ONLY=true[\s\S]*releas
   "the production-backup rehearsal must restore data before checking the exact live source fingerprint");
 assert.match(productionBackupRehearsal, /cron\.database_name="\$database"/,
   "the production-backup rehearsal must bind pg_cron to its isolated restored database");
+assert.match(productionBackupRehearsal, /-p 127\.0\.0\.1::5432[\s\S]*listen_addresses='\*'[\s\S]*SUPABASE_DB_URL="postgresql:\/\/supabase_admin:postgres@127\.0\.0\.1:/,
+  "the production-backup rehearsal must expose Postgres only on runner loopback while making the mapped container interface reachable");
 assert.match(productionBackupRehearsal, /State\.Health[\s\S]*test "\$healthy" = 'true'[\s\S]*sleep 10[\s\S]*createdb/,
   "the production-backup rehearsal must survive the Supabase image's first-boot restart before creating its database");
 assert.match(productionBackupRehearsal, /oom_killed=\{\{\.State\.OOMKilled\}\}[\s\S]*docker logs --timestamps --tail 2000[\s\S]*production-backup-migration-rehearsal-postgres\.log/,

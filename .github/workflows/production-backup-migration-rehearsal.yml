@@ -89,6 +89,7 @@ jobs:
             --file="$ledger_dump"
           docker run -d --name "$container" --tmpfs /var/lib/postgresql/data:rw,size=1g \
             -p 127.0.0.1::5432 -e POSTGRES_PASSWORD=postgres "$image" \
+            -c listen_addresses='*' \
             -c shared_preload_libraries=pg_cron,pg_net,pg_stat_statements \
             -c cron.database_name="$database"
           ready='false'
