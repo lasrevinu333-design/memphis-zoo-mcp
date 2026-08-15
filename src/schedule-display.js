@@ -88,6 +88,8 @@ export function scheduleSectionKey(item = {}) {
 }
 
 function groupIdentity(item = {}) {
+  const occurrenceId = normalizedText(item.occurrence_id);
+  if (occurrenceId) return `occurrence:${occurrenceId.toLowerCase()}`;
   const stableId = normalizedText(item.location_group_id || item.group_code);
   if (stableId) return stableId.toLowerCase();
   return normalizedKey(item.group_name || item.name || item.location_name || "assigned area");
@@ -156,6 +158,7 @@ export function consolidateScheduleItems(items = []) {
     let bucket = buckets.get(bucketKey);
     if (!bucket) {
       bucket = {
+        occurrence_id: item.occurrence_id || null,
         section_key: sectionKey,
         location_group_id: item.location_group_id || null,
         group_code: item.group_code || null,
@@ -200,6 +203,7 @@ export function consolidateScheduleItems(items = []) {
     const firstRange = timeRanges.find((range) => range.start != null) || timeRanges[0] || null;
     const lastRange = [...timeRanges].reverse().find((range) => range.end != null) || timeRanges[timeRanges.length - 1] || null;
     displayItems.push({
+      occurrence_id: bucket.occurrence_id,
       location_group_id: bucket.location_group_id,
       group_code: bucket.group_code,
       group_name: bucket.group_name,

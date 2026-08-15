@@ -14,6 +14,7 @@ const env = {
 };
 const managerId = "51000000-0000-4000-8000-000000000001";
 const employeeId = "51000000-0000-4000-8000-000000000002";
+const priorEmployeeId = "51000000-0000-4000-8000-000000000006";
 const devicePk = "51000000-0000-4000-8000-000000000003";
 const employee = {
   id: employeeId,
@@ -24,12 +25,22 @@ const employee = {
   notes: null,
   updated_at: new Date().toISOString(),
 };
+const priorEmployee = {
+  id: priorEmployeeId,
+  employee_code: "EMP001",
+  display_name: "Departed Authorization Employee",
+  active: false,
+  role: "staff",
+  notes: null,
+  updated_at: new Date().toISOString(),
+};
 const device = {
   id: devicePk,
   device_id: "KIOSK_02",
   device_name: "Authorization Contract Phone",
   active: true,
   assigned_employee_id: employeeId,
+  assignment_epoch: 4,
   last_seen_at: null,
   updated_at: new Date().toISOString(),
   employees: employee,
@@ -53,7 +64,7 @@ class Query {
 
   result() {
     if (this.table === "devices") return { data: [structuredClone(device)], error: null };
-    if (this.table === "employees") return { data: [structuredClone(employee)], error: null };
+    if (this.table === "employees") return { data: [structuredClone(employee), structuredClone(priorEmployee)], error: null };
     if (this.table === "device_auth_credentials") {
       return { data: [{
         credential_id: "51000000-0000-4000-8000-000000000004",
@@ -66,6 +77,18 @@ class Query {
       }], error: null };
     }
     if (this.table === "custodial_employee_device_assignment_history") return { data: [], error: null };
+    if (this.table === "device_sync_status") return { data: [{
+      device_id: devicePk, queue_count: 2, oldest_item_at: "2026-08-13T12:00:00.000Z",
+      retry_count: 1, last_error: "offline", updated_at: new Date().toISOString(),
+      queue_authority_groups: [{
+        employee_id: priorEmployeeId, assignment_epoch: 3, snapshot_id: "a".repeat(64),
+        queue_count: 1, oldest_item_at: "2026-08-13T12:00:00.000Z",
+      }],
+    }], error: null };
+    if (this.table === "custodial_offline_scan_authority_snapshots") return { data: [{
+      device_id: devicePk, employee_id: employeeId, assignment_epoch: 4,
+      generated_at: "2026-08-13T12:00:00.000Z", expires_at: "2026-08-14T12:00:00.000Z",
+    }], error: null };
     throw new Error(`Unexpected table in authorization contract: ${this.table}`);
   }
 
@@ -73,6 +96,10 @@ class Query {
     databaseCalls.push({ kind: "query", table: this.table, terminal: "maybeSingle", filters: structuredClone(this.filters) });
     if (this.table === "devices") return { data: structuredClone(device), error: null };
     if (this.table === "employees") return { data: structuredClone(employee), error: null };
+    if (this.table === "custodial_offline_scan_authority_snapshots") return { data: {
+      device_id: devicePk, employee_id: employeeId, assignment_epoch: 4,
+      generated_at: "2026-08-13T12:00:00.000Z", expires_at: "2026-08-14T12:00:00.000Z",
+    }, error: null };
     throw new Error(`Unexpected maybeSingle table in authorization contract: ${this.table}`);
   }
 
@@ -88,7 +115,13 @@ const db = {
     databaseCalls.push({ kind: "rpc", name, args: structuredClone(args) });
     if (name === "custodial_create_employee") return { data: { employee: structuredClone(employee) }, error: null };
     if (name === "custodial_set_employee_active") return { data: { employee: { ...structuredClone(employee), active: args.p_active } }, error: null };
-    if (name === "custodial_assign_employee_device") return { data: { device: structuredClone(device) }, error: null };
+    if (name === "custodial_assign_employee_device") {
+      if (args.p_expected_owner_provided === true
+          && (device.assigned_employee_id || null) !== (args.p_expected_current_employee_id || null)) {
+        return { data: null, error: { code: "40001", message: "This phone assignment changed. Refresh and try again." } };
+      }
+      return { data: { device: structuredClone(device) }, error: null };
+    }
     if (name === "device_auth_issue_enrollment_code") {
       return { data: {
         enrollment_id: "51000000-0000-4000-8000-000000000005",
@@ -139,20 +172,6 @@ const managerReads = [
 ];
 const managerMutations = [
   {
-    family: "employee creation",
-    method: "POST",
-    path: "/custodial-admin-api/employees",
-    body: { display_name: "Replacement Employee" },
-    rpc: "custodial_create_employee",
-  },
-  {
-    family: "employee status",
-    method: "PATCH",
-    path: `/custodial-admin-api/employees/${employeeId}/status`,
-    body: { active: false, reason: "Authorization contract" },
-    rpc: "custodial_set_employee_active",
-  },
-  {
     family: "device assignment",
     method: "PUT",
     path: "/custodial-admin-api/devices/KIOSK_02/assignment",
@@ -167,11 +186,11 @@ const managerMutations = [
     rpc: "device_auth_issue_enrollment_code",
   },
   {
-    family: "legacy employee creation",
+    family: "legacy device assignment",
     method: "POST",
-    path: "/leadership-api/phone-assignments/unassigned",
-    body: { new_employee_name: "Legacy Replacement Employee" },
-    rpc: "custodial_create_employee",
+    path: "/leadership-api/phone-assignments/KIOSK_02",
+    body: { employee_id: employeeId, expected_current_employee_id: employeeId },
+    rpc: "custodial_assign_employee_device",
   },
   {
     family: "legacy enrollment-code issuance",
@@ -181,6 +200,13 @@ const managerMutations = [
     rpc: "device_auth_issue_enrollment_code",
   },
 ];
+const rosterOnlyMutations = [
+  { family: "employee creation", method: "POST", path: "/custodial-admin-api/employees", body: { display_name: "Replacement Employee" } },
+  { family: "employee status", method: "PATCH", path: `/custodial-admin-api/employees/${employeeId}/status`, body: { active: false, reason: "Authorization contract" } },
+  { family: "legacy employee creation", method: "POST", path: "/leadership-api/phone-assignments/unassigned", body: { new_employee_name: "Legacy Replacement Employee" } },
+  { family: "embedded employee creation", method: "POST", path: "/leadership-api/phone-assignments/KIOSK_02", body: { new_employee_name: "Legacy Replacement Employee" } },
+  { family: "departure during phone assignment", method: "PUT", path: "/custodial-admin-api/devices/KIOSK_02/assignment", body: { employee_id: null, deactivate_previous: true } },
+];
 
 try {
   const readOnlyToken = managerToken("read_only");
@@ -188,9 +214,26 @@ try {
     const result = await request(route.path, { method: route.method, token: readOnlyToken });
     assert.equal(result.status, 200, `read-only Custodial Manager should retain ${route.method} ${route.path}`);
     assert.equal(result.body.ok, true);
+    if (route.path === "/leadership-api/phone-assignments") {
+      assert.equal(result.body.data.devices[0].assignment_epoch, 4);
+      assert.equal(result.body.data.devices[0].pending_work_count, 2);
+      assert.equal(result.body.data.devices[0].pending_work_status, "current");
+      assert.equal(result.body.data.devices[0].pending_work_unbound_count, 1);
+      assert.deepEqual(result.body.data.devices[0].pending_work_groups, [{
+        employee_id: priorEmployeeId,
+        employee_name: priorEmployee.display_name,
+        assignment_epoch: 3,
+        snapshot_id: "a".repeat(64),
+        queue_count: 1,
+        oldest_item_at: "2026-08-13T12:00:00.000Z",
+      }]);
+      assert.equal(result.body.data.devices[0].offline_authority_assignment_epoch, 4);
+      assert.equal(result.body.data.devices[0].offline_authority_employee_id, employeeId);
+      assert.equal(result.body.data.devices[0].offline_authority_employee_name, employee.display_name);
+    }
   }
 
-  for (const route of managerMutations) {
+  for (const route of [...managerMutations, ...rosterOnlyMutations]) {
     const callsBefore = databaseCalls.length;
     const result = await request(route.path, {
       method: route.method,
@@ -216,6 +259,43 @@ try {
       databaseCalls.slice(callsBefore).some((call) => call.kind === "rpc" && call.name === route.rpc),
       `${route.family} did not reach its expected authorized RPC`,
     );
+  }
+
+  const assignmentCalls = databaseCalls.filter((call) => call.kind === "rpc" && call.name === "custodial_assign_employee_device");
+  assert.equal(assignmentCalls[0].args.p_expected_owner_provided, false,
+    "omitted expected owner must remain distinguishable from expected null");
+  assert.equal(assignmentCalls[0].args.p_expected_current_employee_id, null);
+  assert.equal(assignmentCalls[1].args.p_expected_owner_provided, true);
+  assert.equal(assignmentCalls[1].args.p_expected_current_employee_id, employeeId);
+
+  const staleUnassigned = await request("/custodial-admin-api/devices/KIOSK_02/assignment", {
+    method: "PUT",
+    token: fullAccessToken,
+    body: { employee_id: employeeId, expected_current_employee_id: null, reason: "Expected unassigned" },
+  });
+  assert.equal(staleUnassigned.status, 409,
+    "explicit expected null must conflict when the serialized current owner is non-null");
+  assert.match(staleUnassigned.body.error, /assignment changed/i);
+  const staleNullCall = databaseCalls.filter((call) => call.kind === "rpc" && call.name === "custodial_assign_employee_device").at(-1);
+  assert.equal(staleNullCall.args.p_expected_owner_provided, true);
+  assert.equal(staleNullCall.args.p_expected_current_employee_id, null);
+
+  device.assigned_employee_id = null;
+  const initiallyUnassigned = await request("/custodial-admin-api/devices/KIOSK_02/assignment", {
+    method: "PUT",
+    token: fullAccessToken,
+    body: { employee_id: employeeId, expected_current_employee_id: null, reason: "Claim initially unassigned phone" },
+  });
+  assert.equal(initiallyUnassigned.status, 200,
+    "explicit expected null must succeed when the serialized current owner is null");
+  device.assigned_employee_id = employeeId;
+
+  for (const route of rosterOnlyMutations) {
+    const callsBefore = databaseCalls.length;
+    const result = await request(route.path, { method: route.method, token: fullAccessToken, body: route.body });
+    assert.equal(result.status, 409, `full-access Custodial Manager bypassed the roster authority through ${route.family}`);
+    assert.match(result.body.error, /weekly schedule/i);
+    assert.equal(databaseCalls.length, callsBefore, `${route.family} touched the database outside the roster transaction`);
   }
 
   const ordinaryManagerToken = managerToken("full_access", ["OPS_MANAGER"]);
@@ -277,6 +357,16 @@ for (const route of [
   );
 }
 assert.match(routeSource, /makeOpsAccessMiddleware\(\{ env, supabase: db, requireWrite: true \}\)/);
+assert.match(routeSource, /missingRelation\(result\.error, "custodial_offline_scan_authority_snapshots"\)/,
+  "the transition-compatible manager read may omit only an absent snapshot ledger, not arbitrary query errors");
+assert.match(routeSource, /\.eq\("device_id", deviceRow\.id\)[\s\S]*?\.limit\(1\)[\s\S]*?\.maybeSingle\(\)/,
+  "manager reads must fetch the newest valid offline authority independently for each phone");
+assert.match(routeSource, /Object\.prototype\.hasOwnProperty\.call\(values, "expected_current_employee_id"\)/,
+  "assignment CAS must preserve omitted versus explicit null owner input");
+assert.match(routeSource, /p_expected_owner_provided: expectedOwnerProvided/,
+  "assignment CAS presence must reach the serialized database RPC");
+assert.doesNotMatch(routeSource, /if \(expected && String\(current\?\.assigned_employee_id/,
+  "assignment CAS must not use the old truthy JavaScript pre-read check");
 
 // Native lifecycle routes act as the employee phone, not as an Ops Manager.
 // Their enrollment-code or device-credential proofs remain purpose-specific;

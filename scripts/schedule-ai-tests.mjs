@@ -15,6 +15,8 @@ const exceptionLunchGuardMigrationPath = path.resolve("sql/2026-06-10_scheduler_
 const responseOnlyStaleLunchRepairPath = path.resolve("sql/2026-06-10_repair_response_only_stale_lunch_rows.sql");
 const restoreOpenOwnerRowsPath = path.resolve("sql/2026-06-10_restore_scheduler_open_owner_rows.sql");
 const productionBaselinePath = path.resolve("supabase/migrations/00000000000000_production_baseline.sql");
+const boundedScheduleMigrationPath = path.resolve("supabase/migrations/20260810170000_finish_offline_authority_operational_closure.sql");
+const boundedScheduleMigration = fs.readFileSync(boundedScheduleMigrationPath, "utf8");
 
 function extractFunction(name) {
   const startToken = `function ${name}(`;
@@ -78,7 +80,6 @@ const needed = [
   "buildCoverAllRebalancePlan",
   "normalizeRestroomRebalanceCompletionRow",
   "buildRestroomRebalanceCompletionSelectSql",
-  "buildRestroomRebalanceCompletionUpsertSql",
   "summarizeAssignmentDiff",
   "summarizeWeekWindow",
   "buildWeekSummaryText",
@@ -195,12 +196,14 @@ assert.equal(context.isRestroomRebalanceRosterEligible({ shift_start: "10:00:00"
 const staticRestoreSqlStart = source.indexOf("async function restoreStaticOwnersForDate");
 const staticRestoreSqlEnd = source.indexOf("function addDaysToIsoDate", staticRestoreSqlStart);
 const staticRestoreSql = source.slice(staticRestoreSqlStart, staticRestoreSqlEnd);
-assert.match(staticRestoreSql, /coalesce\(dsa\.coverage_purpose, ''\) <> 'lunch_coverage'/, "static owner restore must never overwrite generated lunch coverage rows");
-const dwrJoinBlock = (staticRestoreSql.match(/join public\.daily_work_roster dwr[\s\S]*?(?=\n\s+where dsa\.service_date)/) || [""])[0];
-assert.match(staticRestoreSql, /where dsa\.service_date = '[^']+'::date\s+and dwr\.shift_start <= dsa\.coverage_start/, "static owner restore must verify the owner is on shift at the row start in WHERE, not JOIN ON");
+assert.match(staticRestoreSql, /runCommand\("restore_static_schedule_owners"/, "static owner restore must use its bounded command");
+const boundedStaticRestore = boundedScheduleMigration.match(/elsif v_command = 'restore_static_schedule_owners' then[\s\S]*?return jsonb_build_object\('ok',true\);/)?.[0] || "";
+assert.match(boundedStaticRestore, /coalesce\(dsa\.coverage_purpose,''\)<>'lunch_coverage'/, "static owner restore must never overwrite generated lunch coverage rows");
+const dwrJoinBlock = (boundedStaticRestore.match(/join public\.daily_work_roster dwr[\s\S]*?(?=\n\s+where dsa\.service_date)/) || [""])[0];
+assert.match(boundedStaticRestore, /where dsa\.service_date=v_date and dwr\.shift_start<=dsa\.coverage_start/, "static owner restore must verify the owner is on shift at the row start in WHERE, not JOIN ON");
 assert.doesNotMatch(dwrJoinBlock, /on[\s\S]*?dsa\./, "Postgres UPDATE target alias dsa must not be referenced inside FROM JOIN ON clauses");
-assert.match(staticRestoreSql, /ct\.coverage_start = dsa\.coverage_start/, "static owner restore must only touch unsplit original template rows");
-assert.match(staticRestoreSql, /not\s+public\.sch_is_employee_location_group_restricted\(\s*ct\.assigned_employee_id,\s*ct\.location_group_id,/i, "static owner restore must not restore restricted employee/location pairings such as Kathy east of Tropical Birds");
+assert.match(boundedStaticRestore, /ct\.coverage_start=dsa\.coverage_start/, "static owner restore must only touch unsplit original template rows");
+assert.match(boundedStaticRestore, /not\s+public\.sch_is_employee_location_group_restricted\(ct\.assigned_employee_id,ct\.location_group_id,/i, "static owner restore must not restore restricted employee/location pairings such as Kathy east of Tropical Birds");
 
 const restroomAssignmentSqlStart = source.indexOf("async function listRestroomAssignmentsForRebalance");
 const restroomAssignmentSqlEnd = source.indexOf("async function rebalanceRestroomAssignments", restroomAssignmentSqlStart);
@@ -217,18 +220,20 @@ assert.match(source, /RESTROOM_REBALANCE_IMPLEMENTATION_MODE\s*=\s*"dynamic_rout
 assert.doesNotMatch(restroomUpdateSql, /static_pdf_templates_control_0945_phase/, "runtime must not return before the tested rebalance planner executes");
 assert.match(restroomUpdateSql, /const activeRoster = await listActiveRosterForRestroomRebalance/, "runtime must load the active roster before planning");
 assert.match(restroomUpdateSql, /const plan = buildRestroomRebalancePlan\(assignments, activeRoster, routeFitRows\)/, "runtime must execute the tested route-fit/load planner");
-assert.match(restroomUpdateSql, /pg_advisory_xact_lock\(hashtextextended/, "concurrent cron/manual rebalances must serialize in PostgreSQL");
-assert.match(restroomUpdateSql, /not\s+public\.sch_is_employee_location_group_restricted/i, "restroom rebalance write must have a DB-side restriction guard");
-assert.match(restroomUpdateSql, /dsa\.service_date\s*=\s*'\$\{esc\(serviceDate\)\}'::date/, "restroom rebalance write must be scoped to the requested service date");
-assert.match(restroomUpdateSql, /dsa\.status\s*=\s*'ASSIGNED'/, "restroom rebalance write must only update currently assigned rows");
-assert.match(restroomUpdateSql, /dsa\.owner_type\s*=\s*'EMPLOYEE'/, "restroom rebalance write must only update employee-owned rows");
-assert.match(restroomUpdateSql, /dsa\.assigned_employee_id\s*=\s*moved\.from_employee_id/, "restroom rebalance write must not overwrite a row whose owner changed after planning");
-assert.match(restroomUpdateSql, /coalesce\(dsa\.coverage_purpose, ''\) <> 'lunch_coverage'/, "restroom rebalance write must not touch lunch rows");
-assert.match(restroomUpdateSql, /coalesce\(dsa\.source_type, ''\) not ilike '%manual%'/, "restroom rebalance write must not touch manual source rows");
-assert.match(restroomUpdateSql, /coalesce\(dsa\.source_type, ''\) not ilike '%override%'/, "restroom rebalance write must not touch override source rows");
-assert.match(restroomUpdateSql, /coalesce\(dsa\.source_type, ''\) not ilike '%manager%'/, "restroom rebalance write must not touch manager source rows");
-assert.match(restroomUpdateSql, /r\.shift_start\s*<=\s*dsa\.coverage_start/, "restroom rebalance write must verify receiver shift covers row start");
-assert.match(restroomUpdateSql, /r\.shift_end\s*>=\s*dsa\.coverage_end/, "restroom rebalance write must verify receiver shift covers row end");
+assert.match(restroomUpdateSql, /runCommand\("restroom_rebalance_0945"/, "runtime must call the one bounded rebalance command");
+const boundedRestroomCommand = boundedScheduleMigration.match(/elsif v_command = 'restroom_rebalance_0945' then[\s\S]*?return v_rows;/)?.[0] || "";
+assert.match(boundedRestroomCommand, /pg_advisory_xact_lock\(hashtextextended/, "concurrent cron/manual rebalances must serialize in PostgreSQL");
+assert.match(boundedRestroomCommand, /not\s+public\.sch_is_employee_location_group_restricted/i, "restroom rebalance write must have a DB-side restriction guard");
+assert.match(boundedRestroomCommand, /dsa\.service_date=v_date/, "restroom rebalance write must be scoped to the requested service date");
+assert.match(boundedRestroomCommand, /dsa\.status='ASSIGNED'/, "restroom rebalance write must only update currently assigned rows");
+assert.match(boundedRestroomCommand, /dsa\.owner_type='EMPLOYEE'/, "restroom rebalance write must only update employee-owned rows");
+assert.match(boundedRestroomCommand, /dsa\.assigned_employee_id=\(v_item->>'from_employee_id'\)::uuid/, "restroom rebalance write must not overwrite a row whose owner changed after planning");
+assert.match(boundedRestroomCommand, /coalesce\(dsa\.coverage_purpose,''\)<>'lunch_coverage'/, "restroom rebalance write must not touch lunch rows");
+assert.match(boundedRestroomCommand, /coalesce\(dsa\.source_type,''\) not ilike '%manual%'/, "restroom rebalance write must not touch manual source rows");
+assert.match(boundedRestroomCommand, /coalesce\(dsa\.source_type,''\) not ilike '%override%'/, "restroom rebalance write must not touch override source rows");
+assert.match(boundedRestroomCommand, /coalesce\(dsa\.source_type,''\) not ilike '%manager%'/, "restroom rebalance write must not touch manager source rows");
+assert.match(boundedRestroomCommand, /r\.shift_start<=dsa\.coverage_start/, "restroom rebalance write must verify receiver shift covers row start");
+assert.match(boundedRestroomCommand, /r\.shift_end>=dsa\.coverage_end/, "restroom rebalance write must verify receiver shift covers row end");
 
 assert.equal(fs.existsSync(openOwnerContractSqlPath), true, "open-owner SQL contract probe must exist");
 const openOwnerContractSql = fs.readFileSync(openOwnerContractSqlPath, "utf8");
@@ -331,8 +336,10 @@ assert.match(liveMyScheduleRebalanceSql, /'coverage_start',\s*to_char\(greatest\
 const manualAbsencePublishStart = source.indexOf('router.post("/manual-absences/publish"');
 const manualAbsencePublishEnd = source.indexOf('router.post("/manual-absences/return"', manualAbsencePublishStart);
 const manualAbsencePublishSource = source.slice(manualAbsencePublishStart, manualAbsencePublishEnd);
-assert.match(manualAbsencePublishSource, /set active = \(dao\.employee_id = any\(\$\{idsSql\}::uuid\[\]\)\)/, "manual absence publish must reactivate existing selected rows instead of inserting duplicates");
-assert.doesNotMatch(manualAbsencePublishSource, /and y\.active = true/, "manual absence insert existence check must include inactive rows to avoid unique-key retries");
+assert.match(manualAbsencePublishSource, /runCommand\("manual_absence_publish"/, "manual absence publish must use its bounded command");
+const boundedManualAbsencePublish = boundedScheduleMigration.match(/elsif v_command = 'manual_absence_publish' then[\s\S]*?return jsonb_build_object\('ok',true\);/)?.[0] || "";
+assert.match(boundedManualAbsencePublish, /set active=dao\.employee_id=any\(coalesce\(array\(select jsonb_array_elements_text/, "manual absence publish must reactivate existing selected rows instead of inserting duplicates");
+assert.doesNotMatch(boundedManualAbsencePublish, /and y\.active = true/, "manual absence insert existence check must include inactive rows to avoid unique-key retries");
 assert.match(manualAbsencePublishSource, /publishCoverAllSlotsForDate\(serviceDate, requestedCoverAllSlots, \{ regenerate: false, restoreStatic: false, rebalance: false \}\)/, "manual absence publish must add CoverAll roster slots without a second full regeneration before final absence application");
 assert.match(manualAbsencePublishSource, /coverallPlan = await applyCoverAllPlan\(serviceDate, coverallPlan\);[\s\S]*coverallBalanceResult[\s\S]*await rebalanceCoverAllAssignments\(serviceDate\)/, "manual absence publish must run final CoverAll rebalance after applying 3+ absence CoverAll workload");
 assert.match(manualAbsencePublishSource, /coverall_balance_result: coverallBalanceResult/, "manual absence publish response must expose the final CoverAll rebalance proof");
@@ -452,10 +459,9 @@ const completionSelectSql = context.buildRestroomRebalanceCompletionSelectSql("2
 assert.match(completionSelectSql, /schedule_automation_runs/);
 assert.match(completionSelectSql, /restroom_rebalance_0945/);
 assert.match(completionSelectSql, /2026-06-02/);
-const completionUpsertSql = context.buildRestroomRebalanceCompletionUpsertSql("2026-06-02", { ok: true, moved_count: 2 });
-assert.doesNotMatch(completionUpsertSql, /create table/i, "request-time schedule writes must not mutate schema");
-assert.match(completionUpsertSql, /on conflict \(automation_key, service_date\)/);
-assert.match(completionUpsertSql, /completed/);
+const boundedCompletionCommand = boundedScheduleMigration.match(/elsif v_command = 'restroom_rebalance_completion' then[\s\S]*?return jsonb_build_object\('ok',true\);/)?.[0] || "";
+assert.match(boundedCompletionCommand, /on conflict\(automation_key,service_date\)/, "the bounded completion command must retain idempotent upsert behavior");
+assert.match(boundedCompletionCommand, /restroom_rebalance_0945/);
 assert.match(
   fs.readFileSync(productionBaselinePath, "utf8"),
   /create table "public"\."schedule_automation_runs"/i,
@@ -504,9 +510,9 @@ const absenceSummaryText = context.buildAbsenceSummaryText({
 }, { generated_before_preview: true }, "2026-05-14");
 assert.match(absenceSummaryText, /auto-generated before previewing absences/i);
 assert.match(absenceSummaryText, /1 assignments would be removed/i);
-assert.match(source, /source_type, ''\) not ilike '%manual%'/i, "manager/manual overrides must survive static owner restore");
-assert.match(source, /source_type, ''\) not ilike '%override%'/i, "explicit override assignments must not be overwritten by static restore");
-assert.match(source, /source_type, ''\) not ilike '%manager%'/i, "manager overrides must not be overwritten by static restore");
+assert.match(boundedStaticRestore, /source_type,''\) not ilike '%manual%'/i, "manager/manual overrides must survive static owner restore");
+assert.match(boundedStaticRestore, /source_type,''\) not ilike '%override%'/i, "explicit override assignments must not be overwritten by static restore");
+assert.match(boundedStaticRestore, /source_type,''\) not ilike '%manager%'/i, "manager overrides must not be overwritten by static restore");
 
 const matchedGroup = context.matchLocationGroup([
   { group_name: "Primate", group_code: "PRI", included_locations: ["Primate House"] },

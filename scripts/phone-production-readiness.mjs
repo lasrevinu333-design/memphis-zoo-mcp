@@ -47,15 +47,64 @@ select
      and p.employee_id=d.assigned_employee_id and p.assignment_epoch=d.assignment_epoch) as last_push_delivery_at,
   (select max(a.created_at) from public.device_auth_events a
    where a.device_id=d.id and a.success) as last_successful_auth_at,
-  (select max(se.created_at) from public.scan_events se
-   where se.device_id=d.id and coalesce(se.result,'') not ilike '%fail%') as last_scan_at,
-  (select max(p.evaluated_at) from public.device_location_proximity_status p
-   where p.device_id=d.id) as last_proximity_at,
+  nfc.last_scan_start_at,
+  nfc.last_scan_at,
+  proximity.last_proximity_at,
   (select max(n.created_at) from public.device_notification_acknowledgements n
    where n.device_identifier=e.device_id) as last_notification_ack_at
 from expected e
 left join public.devices d on d.device_id=e.device_id
 left join public.device_sync_status s on s.device_id=d.id
+left join lateral (
+  select max(start_event.scanned_at) as last_scan_start_at,
+         max(finish_event.scanned_at) as last_scan_at
+  from public.custodial_offline_actor_contexts context
+  join public.custodial_offline_reconciliation_records reconciliation
+    on reconciliation.context_id=context.context_id and reconciliation.state='committed'
+  join public.custodial_offline_scan_event_evidence start_evidence
+    on start_evidence.context_id=context.context_id
+   and start_evidence.reconciliation_id=reconciliation.reconciliation_id
+   and start_evidence.client_event_id=context.native_scan_entry_id::text
+  join public.scan_events start_event
+    on start_event.client_event_id=start_evidence.client_event_id
+   and start_event.session_id=reconciliation.session_id
+  join public.custodial_offline_scan_event_evidence finish_evidence
+    on finish_evidence.context_id=context.context_id
+   and finish_evidence.reconciliation_id=reconciliation.reconciliation_id
+   and finish_evidence.client_event_id=context.native_finish_scan_entry_id::text
+  join public.scan_events finish_event
+    on finish_event.client_event_id=finish_evidence.client_event_id
+   and finish_event.session_id=reconciliation.session_id
+  join public.sessions completed_session
+    on completed_session.id=reconciliation.session_id and completed_session.status='closed'
+  where context.device_id=d.id and context.status='committed'
+    and context.native_scan_entry_id is not null
+    and context.native_start_attestation_version='custodial-native-start.v1'
+    and context.native_start_attestation_sha256 ~ '^[0-9a-f]{64}$'
+    and context.native_finish_scan_entry_id is not null
+    and context.native_completion_attestation_version='custodial-native-completion.v2'
+    and context.native_completion_attestation_sha256 ~ '^[0-9a-f]{64}$'
+    and context.native_completed_at is not null
+    and start_event.device_id=context.device_id
+    and start_event.event_type='scan_start' and start_event.result='ok'
+    and start_event.payload_json->>'entry_source'='native-nfc'
+    and start_event.scanned_at=context.started_at
+    and finish_event.device_id=context.device_id
+    and finish_event.event_type='scan_finish' and finish_event.result='ok'
+    and finish_event.payload_json->>'entry_source'='native-nfc'
+    and finish_event.scanned_at=context.native_completed_at
+) nfc on true
+left join lateral (
+  select case when latest.result='near' then latest.observed_at end as last_proximity_at
+  from (
+    select lower(btrim(p.result)) as result,
+           coalesce(p.observed_at,p.evaluated_at) as observed_at
+    from public.device_location_proximity_status p
+    where p.device_id=d.id
+    order by coalesce(p.observed_at,p.evaluated_at) desc,p.evaluated_at desc,p.location_id,p.session_uuid
+    limit 1
+  ) latest
+) proximity on true
 order by e.device_id
 `;
 
@@ -87,7 +136,7 @@ export function evaluatePhoneReadiness(rows, {
     if (Number(row.active_credentials || 0) < 1) gaps.push("active confirmed device credential is missing");
     if (Number(row.active_push_registrations || 0) < 1) gaps.push("employee-bound active push registration is missing");
     if (!recent(row.last_successful_auth_at, activityCutoff)) gaps.push(`successful device authentication is missing within ${activityWindowHours} hours`);
-    if (!recent(row.last_scan_at, activityCutoff)) gaps.push(`successful NFC scan is missing within ${activityWindowHours} hours`);
+    if (!recent(row.last_scan_at, activityCutoff)) gaps.push(`accepted native NFC scan is missing within ${activityWindowHours} hours (start/finish required)`);
     if (!recent(row.last_proximity_at, activityCutoff)) gaps.push(`GPS proximity result is missing within ${activityWindowHours} hours`);
     if (!recent(row.last_notification_ack_at, activityCutoff)) gaps.push(`notification acknowledgement is missing within ${activityWindowHours} hours`);
     if (!recent(row.last_push_delivery_at, activityCutoff)) gaps.push(`successful native push delivery is missing within ${activityWindowHours} hours`);
@@ -102,6 +151,7 @@ export function evaluatePhoneReadiness(rows, {
         last_seen_at: row.last_seen_at || null,
         sync_updated_at: row.sync_updated_at || null,
         last_successful_auth_at: row.last_successful_auth_at || null,
+        last_scan_start_at: row.last_scan_start_at || null,
         last_scan_at: row.last_scan_at || null,
         last_proximity_at: row.last_proximity_at || null,
         last_notification_ack_at: row.last_notification_ack_at || null,

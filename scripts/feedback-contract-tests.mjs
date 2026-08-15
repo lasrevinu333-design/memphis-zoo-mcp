@@ -46,7 +46,11 @@ assertContains(apiSource, "last_feedback_reminder_at", "schema may retain legacy
 assertContains(apiSource, "feedback_reminder_count", "schema may retain legacy reminder count for compatibility");
 assertMatches(apiSource, /feedback-api\/acknowledge\/:feedbackId/, "backend should expose an acknowledgement endpoint");
 assertMatches(apiSource, /dashboard-api\/system-feedback\/:feedbackId\/status/, "backend should expose manager feedback triage actions");
-assertMatches(apiSource, /status\s*=\s*'acknowledged'/i, "acknowledgement should mark the feedback item as acknowledged");
+assertMatches(
+  apiSource,
+  /async function acknowledgeSystemFeedbackItem[\s\S]*?runOperationalCommand\("feedback_status",\s*\{[\s\S]*?status:\s*"acknowledged"/,
+  "acknowledgement should use the canonical operational command to mark the item as acknowledged",
+);
 const feedbackSubmitBlock = apiSource.slice(apiSource.indexOf('app.post("/feedback-api/submit"'), apiSource.indexOf('app.get("/guest-api/locations'));
 assert.ok(feedbackSubmitBlock.includes("dashboard_only"), "feedback submit should report dashboard-only notification handling");
 assert.ok(!/notifySystemFeedbackRecipients\s*\(/.test(feedbackSubmitBlock), "feedback submit must not notify ops managers in Messenger");

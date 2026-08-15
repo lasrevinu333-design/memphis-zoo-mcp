@@ -503,7 +503,7 @@ export function authenticateOpsAccessRequest(req, { env = process.env, now = new
   return { ok: false, status: 401, error: "Ops Manager authentication required." };
 }
 
-export function makeOpsAccessMiddleware({ env = process.env, requireWrite = false, trustedDeviceStore = null, supabase = null } = {}) {
+export function makeOpsAccessMiddleware({ env = process.env, requireWrite = false, trustedDeviceStore = null, supabase = null, requireTrustedDeviceStore = false, requireCurrentManagerAssociation = false } = {}) {
   const store = trustedDeviceStore || createSupabaseTrustedDeviceStore(supabase);
   return async function requireOpsAccess(req, res, next) {
     const result = authenticateOpsAccessRequest(req, { env });
@@ -513,7 +513,12 @@ export function makeOpsAccessMiddleware({ env = process.env, requireWrite = fals
     }
     let session = result.session;
     try {
-      const trustedState = await verifySessionAgainstTrustedDeviceStore(session, { store, env });
+      const trustedState = await verifySessionAgainstTrustedDeviceStore(session, {
+        store,
+        env,
+        requireTrustedDeviceStore,
+        requireCurrentManagerAssociation,
+      });
       if (!trustedState.ok) {
         res.status(trustedState.status || 401).json({ ok: false, error: trustedState.error || "Unauthorized" });
         return;
@@ -810,9 +815,18 @@ function trustedDevicePublicView(row) {
   };
 }
 
-async function verifySessionAgainstTrustedDeviceStore(session, { store, env = process.env, now = new Date() } = {}) {
+async function verifySessionAgainstTrustedDeviceStore(session, {
+  store,
+  env = process.env,
+  now = new Date(),
+  requireTrustedDeviceStore = false,
+  requireCurrentManagerAssociation = false,
+} = {}) {
   if (!session?.trusted_device) return { ok: true, session };
-  if (!store?.find) return { ok: true, session };
+  if (!store?.find) {
+    if (requireTrustedDeviceStore) return { ok: false, status: 503, error: "Trusted-device revocation verification is unavailable." };
+    return { ok: true, session };
+  }
   const credentialId = String(session.credential_id || "").trim();
   if (!credentialId) return { ok: false, status: 401, error: "This manager device session is no longer trusted." };
   const row = await store.find(credentialId);
@@ -829,6 +843,17 @@ async function verifySessionAgainstTrustedDeviceStore(session, { store, env = pr
   }
   if (row.manager && (!row.manager.active || row.manager.revoked_at)) {
     return { ok: false, status: 403, error: "This manager is no longer active." };
+  }
+  if (requireCurrentManagerAssociation) {
+    const associationManagerId = String(row.manager_id || "").trim();
+    const currentManagerId = String(row.manager?.manager_id || "").trim();
+    const sessionManagerId = String(session.manager_id || "").trim();
+    if (!associationManagerId || !currentManagerId) {
+      return { ok: false, status: 403, error: "This manager device is no longer assigned to an active manager." };
+    }
+    if (associationManagerId !== currentManagerId || currentManagerId !== sessionManagerId) {
+      return { ok: false, status: 403, error: "This manager device assignment changed. Sign in again." };
+    }
   }
   const accessLevel = clampAccessLevel(session.access_level, row.max_access_level);
   return {

@@ -66,13 +66,9 @@ const thread = await json(`(
     'title',t.title,
     'system_key',t.system_key,
     'is_active',t.is_active,
-    'canonical_participants',(
+    'active_participants',(
       select count(*) from public.msg_thread_participants p
-      join public.msg_users u on u.id=p.user_id
-      join public.ops_manager_managers m on m.manager_id=u.ops_manager_id
-      where p.thread_id=t.id and p.left_at is null and u.is_active=true
-        and m.active=true and m.revoked_at is null and m.is_system_principal=false
-        and m.metadata_json @> '{"canonical_leadership_roster":true}'::jsonb
+      where p.thread_id=t.id and p.left_at is null
     )
   )
   from public.msg_threads t
@@ -81,7 +77,8 @@ const thread = await json(`(
 )`);
 assert.equal(thread.title, "Operations Leadership Chat (Retired)");
 assert.equal(thread.is_active, false, "the unrequested automatic leadership room must stay archived");
-assert.equal(Number(thread.canonical_participants), 6);
+assert.equal(Number(thread.active_participants), 0, "archived shared-room participants must all remain left");
+assert.equal(await sql("select to_regprocedure('public.msg_get_or_create_ops_manager_thread(uuid)') is null;"), "t");
 assert.equal(await sql("select count(*) from public.msg_users u join public.ops_manager_managers m on m.manager_id=u.ops_manager_id where m.active=true and m.revoked_at is null and m.is_system_principal=false and m.metadata_json @> '{\"canonical_leadership_roster\":true}'::jsonb and u.is_active=true;"), "6");
 assert.equal(await sql("select count(*) from public.msg_users where display_name='Legacy Shared Ops Manager' and is_active=false;"), "1");
 
@@ -125,8 +122,11 @@ assert.deepEqual(notificationDefaults, {
 await sql(`insert into public.ops_manager_push_devices(credential_id,manager_id,device_id,platform,fcm_token)
   values ('${credentialId}'::uuid,'${annieId}'::uuid,'annie-android-acceptance','android','${"fcm-test-token-" + "x".repeat(40)}');`);
 const ericId = await sql("select manager_id from public.ops_manager_managers where system_key='eric_custodial_manager';");
-const leadershipThreadId = await sql("select id from public.msg_threads where system_key='ops_manager_shared_chat_v1';");
-const notificationMessageId = await sql(`select (public.msg_send_message_as_ops_manager('${ericId}'::uuid,'${leadershipThreadId}'::uuid,'Named manager push acceptance','text','{}'::jsonb,'db-notification-acceptance')).id;`);
+const annieUserId = await sql(`select id from public.msg_users where ops_manager_id='${annieId}'::uuid;`);
+const ericUserId = await sql(`select id from public.msg_users where ops_manager_id='${ericId}'::uuid;`);
+const namedManagerDirectThreadId = await sql(`select (public.msg_get_or_create_direct_thread('${ericUserId}'::uuid,'${annieUserId}'::uuid)).id;`);
+assert.equal(await sql(`select count(*) from public.msg_thread_participants where thread_id='${namedManagerDirectThreadId}'::uuid and left_at is null;`), "2");
+const notificationMessageId = await sql(`select (public.msg_send_message_as_ops_manager('${ericId}'::uuid,'${namedManagerDirectThreadId}'::uuid,'Named manager direct push acceptance','text','{}'::jsonb,'db-notification-acceptance')).id;`);
 assert.match(notificationMessageId, /^[0-9a-f-]{36}$/i);
 assert.equal(await sql(`select u.display_name from public.msg_messages m join public.msg_users u on u.id=m.sender_user_id where m.id='${notificationMessageId}'::uuid;`), "Eric Operle");
 assert.equal(await sql(`select count(*) from public.ops_manager_notification_queue where source_id='${notificationMessageId}'::uuid and credential_id='${credentialId}'::uuid and notification_type='message';`), "1");

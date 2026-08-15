@@ -44,6 +44,14 @@ function fail(res, error, fallback = "Custodial employee administration failed."
   const status = Number(error?.status || error?.statusCode) || (/permission|access/i.test(String(error?.message || "")) ? 403 : 500);
   res.status(Math.max(400, Math.min(599, status))).json({ ok: false, error: clip(error?.message || fallback, 1000) });
 }
+function missingRelation(error, relation) {
+  const code = String(error?.code || "").toUpperCase();
+  const message = [error?.message, error?.details, error?.hint, error]
+    .map((value) => String(value || ""))
+    .join(" ");
+  return ["42P01", "PGRST205"].includes(code)
+    && (!relation || message.toLowerCase().includes(String(relation).toLowerCase()));
+}
 function normalizeDeviceId(value) {
   const raw = String(value || "").trim().toUpperCase().replace(/^KIOSK[-_ ]?/, "KIOSK_");
   if (/^KIOSK_[2-9]$/.test(raw)) return `KIOSK_0${raw.slice(7)}`;
@@ -175,9 +183,9 @@ function consumeNativeAttempt(req, deviceId) {
 
 async function loadPhoneAdminSnapshot(db) {
   const expected = Array.from({ length: 9 }, (_value, index) => `KIOSK_${String(index + 2).padStart(2, "0")}`);
-  const [devicesResult, employeesResult, credentialsResult, historyResult] = await Promise.all([
+  const [devicesResult, employeesResult, credentialsResult, historyResult, syncResult] = await Promise.all([
     db.from("devices")
-      .select("id,device_id,device_name,active,assigned_employee_id,last_seen_at,updated_at,employees!devices_assigned_employee_id_fkey(id,employee_code,display_name,active,role)")
+      .select("id,device_id,device_name,active,assigned_employee_id,assignment_epoch,last_seen_at,updated_at,employees!devices_assigned_employee_id_fkey(id,employee_code,display_name,active,role)")
       .in("device_id", expected).order("device_id"),
     db.from("employees").select("id,employee_code,display_name,active,role,notes,updated_at")
       .eq("role", "staff").like("employee_code", "EMP%").order("active", { ascending: false }).order("display_name"),
@@ -186,26 +194,73 @@ async function loadPhoneAdminSnapshot(db) {
     db.from("custodial_employee_device_assignment_history")
       .select("assignment_change_id,device_identifier,previous_employee_name,new_employee_name,change_reason,changed_at")
       .order("changed_at", { ascending: false }).limit(30),
+    db.from("device_sync_status")
+      .select("device_id,queue_count,oldest_item_at,retry_count,last_error,queue_authority_groups,updated_at"),
   ]);
-  for (const result of [devicesResult, employeesResult, credentialsResult, historyResult]) if (result.error) throw result.error;
+  for (const result of [devicesResult, employeesResult, credentialsResult, historyResult, syncResult]) if (result.error) throw result.error;
+  const snapshotEntries = await Promise.all((devicesResult.data || []).map(async (deviceRow) => {
+    const result = await db.from("custodial_offline_scan_authority_snapshots")
+      .select("device_id,employee_id,assignment_epoch,generated_at,expires_at")
+      .eq("device_id", deviceRow.id)
+      .gt("expires_at", new Date().toISOString())
+      .order("generated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (result.error) {
+      if (missingRelation(result.error, "custodial_offline_scan_authority_snapshots")) return [String(deviceRow.id), null];
+      throw result.error;
+    }
+    return [String(deviceRow.id), result.data || null];
+  }));
   const credentialByDevicePk = new Map((credentialsResult.data || []).map((row) => [String(row.device_id), row]));
+  const syncByDevicePk = new Map((syncResult.data || []).map((row) => [String(row.device_id), row]));
+  const snapshotByDevicePk = new Map(snapshotEntries);
+  const employeeById = new Map((employeesResult.data || []).map((row) => [String(row.id), row]));
   const deviceById = new Map((devicesResult.data || []).map((row) => [String(row.device_id).toUpperCase(), row]));
   const phones = expected.map((deviceId) => {
     const row = deviceById.get(deviceId) || null;
     const employee = Array.isArray(row?.employees) ? row.employees[0] : row?.employees;
     const credential = row ? credentialByDevicePk.get(String(row.id)) || null : null;
+    const sync = row ? syncByDevicePk.get(String(row.id)) || null : null;
+    const snapshot = row ? snapshotByDevicePk.get(String(row.id)) || null : null;
+    const syncReportedAt = Date.parse(String(sync?.updated_at || ""));
+    const pendingWorkStatus = !sync
+      ? "unavailable"
+      : (!Number.isFinite(syncReportedAt) || Date.now() - syncReportedAt > 5 * 60 * 1000 ? "stale" : "current");
+    const pendingWorkGroups = (Array.isArray(sync?.queue_authority_groups) ? sync.queue_authority_groups : []).map((group) => ({
+      employee_id: group.employee_id || null,
+      employee_name: employeeById.get(String(group.employee_id || ""))?.display_name || null,
+      assignment_epoch: Number(group.assignment_epoch),
+      snapshot_id: group.snapshot_id || null,
+      queue_count: Math.max(0, Number(group.queue_count || 0)),
+      oldest_item_at: group.oldest_item_at || null,
+    })).filter((group) => group.employee_id && Number.isSafeInteger(group.assignment_epoch) && group.assignment_epoch >= 1 && group.queue_count > 0);
     return {
       device_pk: row?.id || null,
       device_id: deviceId,
       device_name: row?.device_name || `Unregistered ${deviceId}`,
       active: row?.active === true,
       assigned_employee_id: row?.assigned_employee_id || null,
+      assignment_epoch: row?.assignment_epoch == null ? null : Number(row.assignment_epoch),
       assigned_employee: employee || null,
       last_seen_at: row?.last_seen_at || null,
       updated_at: row?.updated_at || null,
       enrolled: Boolean(credential),
       credential_confirmed: Boolean(credential?.confirmed_at),
       credential_last_used_at: credential?.last_used_at || null,
+      pending_work_count: Math.max(0, Number(sync?.queue_count || 0)),
+      pending_work_status: pendingWorkStatus,
+      pending_work_oldest_at: sync?.oldest_item_at || null,
+      pending_work_retry_count: Math.max(0, Number(sync?.retry_count || 0)),
+      pending_work_last_error: sync?.last_error || null,
+      pending_work_reported_at: sync?.updated_at || null,
+      pending_work_groups: pendingWorkGroups,
+      pending_work_unbound_count: Math.max(0, Number(sync?.queue_count || 0) - pendingWorkGroups.reduce((total, group) => total + group.queue_count, 0)),
+      offline_authority_expires_at: snapshot?.expires_at || null,
+      offline_authority_generated_at: snapshot?.generated_at || null,
+      offline_authority_employee_id: snapshot?.employee_id || null,
+      offline_authority_employee_name: employeeById.get(String(snapshot?.employee_id || ""))?.display_name || null,
+      offline_authority_assignment_epoch: snapshot?.assignment_epoch == null ? null : Number(snapshot.assignment_epoch),
     };
   });
   return {
@@ -244,38 +299,27 @@ async function resolveNativeDevice(db, identifier) {
   return direct.data || null;
 }
 
-async function createEmployee(db, req, values = {}) {
-  const result = await db.rpc("custodial_create_employee", {
-    p_display_name: clip(values.display_name, 160),
-    p_employee_code: clip(values.employee_code, 32) || null,
-    p_notes: clip(values.notes, 2000) || null,
-    p_changed_by_manager_id: req.memphisAuth.manager_id,
-  });
-  if (result.error) throw result.error;
-  return result.data;
-}
-
-async function setEmployeeStatus(db, req, employeeId, active, values = {}) {
-  const result = await db.rpc("custodial_set_employee_active", {
-    p_employee_id: employeeId,
-    p_active: active === true,
-    p_changed_by_manager_id: req.memphisAuth.manager_id,
-    p_reason: clip(values.reason, 500) || null,
-    p_release_devices: values.release_devices !== false,
-  });
-  if (result.error) throw result.error;
-  return result.data;
-}
-
 async function assignDevice(db, req, deviceId, employeeId, values = {}) {
+  const expectedOwnerProvided = Object.prototype.hasOwnProperty.call(values, "expected_current_employee_id");
+  const expectedOwner = expectedOwnerProvided && values.expected_current_employee_id != null
+    ? String(values.expected_current_employee_id).trim()
+    : null;
+  if (expectedOwner && !validUuid(expectedOwner)) {
+    throw Object.assign(new Error("expected_current_employee_id must be a valid employee ID or null."), { status: 400 });
+  }
   const result = await db.rpc("custodial_assign_employee_device", {
     p_device_identifier: normalizeDeviceId(deviceId),
     p_employee_id: employeeId || null,
     p_changed_by_manager_id: req.memphisAuth.manager_id,
     p_reason: clip(values.reason, 500) || null,
     p_move_existing: values.move_existing === true,
+    p_expected_owner_provided: expectedOwnerProvided,
+    p_expected_current_employee_id: expectedOwner,
   });
-  if (result.error) throw result.error;
+  if (result.error) {
+    if (String(result.error.code || "") === "40001") result.error.status = 409;
+    throw result.error;
+  }
   return result.data;
 }
 
@@ -342,34 +386,22 @@ export function installCustodialEmployeeAdminRoutes(app, { env = process.env, su
   });
 
   app.post("/custodial-admin-api/employees", configured, requireCustodialWrite, async (req, res) => {
-    try { res.status(201).json({ ok: true, data: await createEmployee(db, req, req.body || {}) }); }
-    catch (error) { fail(res, error, "Employee could not be created."); }
+    res.status(409).json({ ok: false, error: "Employee roster changes must be made from Weekly Schedule." });
   });
 
   app.patch("/custodial-admin-api/employees/:employeeId/status", configured, requireCustodialWrite, async (req, res) => {
-    try {
-      const employeeId = String(req.params?.employeeId || "").trim();
-      if (!validUuid(employeeId)) return res.status(400).json({ ok: false, error: "A valid employee ID is required." });
-      res.json({ ok: true, data: await setEmployeeStatus(db, req, employeeId, req.body?.active === true, req.body || {}) });
-    } catch (error) { fail(res, error, "Employee status could not be changed."); }
+    res.status(409).json({ ok: false, error: "Employee roster changes must be made from Weekly Schedule." });
   });
 
   app.put("/custodial-admin-api/devices/:deviceId/assignment", configured, requireCustodialWrite, async (req, res) => {
     try {
       const deviceId = normalizeDeviceId(req.params?.deviceId || req.body?.device_id);
       const employeeId = String(req.body?.employee_id || "").trim();
+      if (req.body?.deactivate_previous === true) return res.status(409).json({ ok: false, error: "Employee departures must be recorded from Weekly Schedule before reassigning a phone." });
       if (!validKioskId(deviceId)) return res.status(400).json({ ok: false, error: "Choose KIOSK_02 through KIOSK_10." });
       if (employeeId && !validUuid(employeeId)) return res.status(400).json({ ok: false, error: "A valid employee ID is required." });
-      const current = await resolveNativeDevice(db, deviceId);
-      const expected = String(req.body?.expected_current_employee_id || "").trim();
-      if (expected && String(current?.assigned_employee_id || "") !== expected) return res.status(409).json({ ok: false, error: "This phone assignment changed. Refresh and try again." });
-      const previousId = current?.assigned_employee_id || null;
       const assignment = await assignDevice(db, req, deviceId, employeeId || null, req.body || {});
-      let formerEmployee = null;
-      if (req.body?.deactivate_previous === true && previousId && previousId !== employeeId) {
-        formerEmployee = await setEmployeeStatus(db, req, previousId, false, { reason: req.body?.reason || "Phone reassigned to replacement employee", release_devices: true });
-      }
-      res.json({ ok: true, data: { ...assignment, former_employee_status: formerEmployee } });
+      res.json({ ok: true, data: assignment });
     } catch (error) { fail(res, error, "Phone assignment could not be changed."); }
   });
 
@@ -389,37 +421,26 @@ export function installCustodialEmployeeAdminRoutes(app, { env = process.env, su
     try {
       const requestedDevice = normalizeDeviceId(req.params?.deviceId);
       const createsOnly = String(req.params?.deviceId || "").trim().toLowerCase() === "unassigned";
+      if (createsOnly || clip(req.body?.new_employee_name, 160) || req.body?.deactivate_previous === true) {
+        return res.status(409).json({ ok: false, error: "Employee roster changes must be made from Weekly Schedule." });
+      }
       let employee = null;
       let employeeId = String(req.body?.employee_id || "").trim() || null;
-      if (clip(req.body?.new_employee_name, 160)) {
-        const created = await createEmployee(db, req, { display_name: req.body.new_employee_name, notes: "Created from Phone Assignments" });
-        employee = created?.employee || created;
-        employeeId = employee?.id || null;
-      }
       if (employeeId && !validUuid(employeeId)) return res.status(400).json({ ok: false, error: "A valid employee ID is required." });
-      if (createsOnly) {
-        if (!employee) return res.status(400).json({ ok: false, error: "Enter a new employee name." });
-        return res.status(201).json({ ok: true, data: { employee, device: null } });
-      }
       if (!validKioskId(requestedDevice)) return res.status(400).json({ ok: false, error: "Choose KIOSK_02 through KIOSK_10." });
-      const current = await resolveNativeDevice(db, requestedDevice);
-      const expected = String(req.body?.expected_current_employee_id || "").trim();
-      if (expected && String(current?.assigned_employee_id || "") !== expected) return res.status(409).json({ ok: false, error: "This phone assignment changed. Refresh and try again." });
-      const previousId = current?.assigned_employee_id || null;
       const assignment = await assignDevice(db, req, requestedDevice, employeeId, {
-        reason: employee ? `Assigned to newly created employee ${employee.display_name}` : "Phone assignment updated",
+        reason: "Phone assignment updated",
         move_existing: false,
+        ...(Object.prototype.hasOwnProperty.call(req.body || {}, "expected_current_employee_id")
+          ? { expected_current_employee_id: req.body.expected_current_employee_id }
+          : {}),
       });
       if (!employee && employeeId) {
         const employeeResult = await db.from("employees").select("id,employee_code,display_name,active,role").eq("id", employeeId).maybeSingle();
         if (employeeResult.error) throw employeeResult.error;
         employee = employeeResult.data;
       }
-      let formerEmployee = null;
-      if (req.body?.deactivate_previous === true && previousId && previousId !== employeeId) {
-        formerEmployee = await setEmployeeStatus(db, req, previousId, false, { reason: "Employment ended during phone reassignment", release_devices: true });
-      }
-      res.json({ ok: true, data: { employee: employee || null, device: assignment?.device || assignment, assignment, former_employee_status: formerEmployee } });
+      res.json({ ok: true, data: { employee: employee || null, device: assignment?.device || assignment, assignment } });
     } catch (error) { fail(res, error, "Phone assignment could not be changed."); }
   });
 

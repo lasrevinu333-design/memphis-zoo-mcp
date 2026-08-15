@@ -11,6 +11,7 @@ const read = (relative) => {
 };
 
 const indexSource = read('src/index.js');
+const nativePhoneTransport = read('src/native-phone-transport.js');
 const scheduleSource = read('src/schedule-api.js');
 const messagingSource = read('src/messaging-api.js');
 const eventsSource = read('src/events-api.js');
@@ -63,7 +64,7 @@ assert.match(scheduleSource, /canonical_device_id/);
 assert.match(scheduleSource, /router\.get\("\/my-day-summary"/);
 assert.match(scheduleSource, /assertScheduleReadyForRead/);
 const readinessHelper = scheduleSource.match(/async function assertScheduleReadyForRead[\s\S]*?\n  }\n  async function loadFullDayScheduleItems/)?.[0] || "";
-assert.doesNotMatch(readinessHelper, /runRpc|runWriteSql|sch_ensure_daily_schedule/);
+assert.doesNotMatch(readinessHelper, /runRpc|runCommand|sch_ensure_daily_schedule/);
 assert.match(scheduleSource, /loadFullDayScheduleItems/);
 assert.match(scheduleSource, /combineFullDaySchedule/);
 assert.match(scheduleSource, /Not scheduled to work today\./);
@@ -74,19 +75,23 @@ assert.match(scheduleSource, /resolveRestroomRebalanceScheduler\(process\.env\)/
 assert.match(scheduleSource, /scheduler:\s*restroomRebalanceScheduler/);
 assert.doesNotMatch(scheduleSource, /explicit_runtime/);
 
-assert.match(indexSource, /const SCAN_CONTRACT_VERSION = "scan\.v2"/);
+assert.match(indexSource, /const SCAN_CONTRACT_VERSION = "scan\.v4\.snapshot-bound-authority"/);
 assert.match(indexSource, /SCAN_READ_LIMIT_PER_MINUTE[^\n]*120/);
 assert.match(indexSource, /SCAN_WRITE_LIMIT_PER_MINUTE[^\n]*30/);
 assert.match(indexSource, /SCAN_SHARED_IP_EMERGENCY_LIMIT_PER_MINUTE[^\n]*1000/);
-assert.match(indexSource, /app\.post\("\/scan-api\/rpc", requireDeviceOrOpsAccess, requireScanRpcAuthorization, scanRpcRateLimit/);
+assert.match(indexSource, /app\.post\("\/scan-api\/rpc", parseScanAuthorityJsonBeforeAuthentication, requireDeviceOrOpsAccess, rejectInvalidAuthenticatedScanAuthorityJson, requireScanRpcAuthorization, scanRpcRateLimit/);
+assert.match(indexSource, /custodial_get_release_canary_transport_probe_health/);
+assert.match(indexSource, /buildReleaseCanaryTransportProbeCall/);
+assert.match(nativePhoneTransport, /custodial_record_release_canary_transport_probe/);
+assert.doesNotMatch(indexSource, /collectBackendAuthorityHealth\([\s\S]{0,1400}executeScanRpcTransport\(/);
 assert.match(indexSource, /tool_commit_cleaning_workflow/);
 assert.match(indexSource, /tool_report_device_sync_status/);
 assert.match(indexSource, /tool_evaluate_location_proximity/);
 assert.match(indexSource, /tool_evaluate_location_proximity_v2/);
 assert.match(indexSource, /canonicalizeScanArguments/);
-assert.match(indexSource, /run_application_write/);
-assert.match(indexSource, /async function runWriteSql\(namePrefix, sql\)[\s\S]{0,500}client\.rpc\("run_application_write"/);
-assert.doesNotMatch(indexSource.match(/async function runWriteSql\(namePrefix, sql\)[\s\S]*?\n}\n/)?.[0] || '', /run_sql_migration/);
+assert.doesNotMatch(indexSource, /run_application_write/);
+assert.match(indexSource, /async function runOperationalCommand\(command, payload = \{\}\)[\s\S]{0,300}app_apply_operational_command/);
+assert.match(indexSource, /async function runScheduleCommand\(command, payload = \{\}\)[\s\S]{0,300}app_apply_schedule_command/);
 assert.doesNotMatch(indexSource, /app\.post\("\/scan-api\/rpc", rateLimit/);
 assert.doesNotMatch(indexSource, /eventMaintenanceController\.kick\("scan_api_rpc"\)/);
 assert.doesNotMatch(indexSource, /eventMaintenanceController\.kick\("messaging_api_request"\)/);

@@ -26,7 +26,7 @@ async function rejectsSql(statement, pattern) {
 const userA = '00000000-0000-4000-8000-00000000b201';
 const userB = '00000000-0000-4000-8000-00000000b202';
 const admin = '00000000-0000-4000-8000-00000000b203';
-const memphisBot = '00000000-0000-4000-8000-00000000b204';
+const adminManager = '00000000-0000-4000-8000-00000000b204';
 const directThread = '00000000-0000-4000-8000-00000000b210';
 const globalThread = '00000000-0000-4000-8000-00000000b211';
 const opUser = '00000000-0000-4000-8000-00000000b220';
@@ -34,12 +34,15 @@ const opGlobal = '00000000-0000-4000-8000-00000000b221';
 const oldMessage = '00000000-0000-4000-8000-00000000b230';
 
 await sql(`
-  insert into public.msg_users(id,display_name,role,is_active)
+  insert into public.ops_manager_managers(manager_id,display_name,roles,active,is_system_principal)
+  values ('${adminManager}'::uuid,'Batch 2 Security Administrator',array['SECURITY_ADMIN'],true,false)
+  on conflict(manager_id) do update set roles=excluded.roles,active=true,revoked_at=null,is_system_principal=false;
+
+  insert into public.msg_users(id,display_name,role,is_active,ops_manager_id)
   values
-    ('${userA}'::uuid,'Batch 2 Manager A','manager',true),
-    ('${userB}'::uuid,'Batch 2 Manager B','manager',true),
-    ('${admin}'::uuid,'Batch 2 Database Admin','admin',true),
-    ('${memphisBot}'::uuid,'Memphis','bot',true);
+    ('${userA}'::uuid,'Batch 2 Manager A','manager',true,null),
+    ('${userB}'::uuid,'Batch 2 Manager B','manager',true,null),
+    ('${admin}'::uuid,'Batch 2 Security Administrator','manager',true,'${adminManager}'::uuid);
 
   insert into public.msg_threads(id,thread_type,title,created_by_user_id,is_active)
   values

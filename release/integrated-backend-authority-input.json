@@ -1,0 +1,83 @@
+{
+  "release_contract_version": "offline-authority.v5",
+  "accepted_engine_contract": {
+    "scan": "scan.v2",
+    "queue": "indexeddb-v4",
+    "completion": "tool_complete_session via authenticated compatibility adapter"
+  },
+  "required_engine_contract": {
+    "scan": "scan.v4.snapshot-bound-authority",
+    "queue": "indexeddb-v6-offline-authority",
+    "activation": "tool_start_offline_occurrence",
+    "completion": "tool_commit_cleaning_workflow with context_id and submission_proof"
+  },
+  "backend_contract": {
+    "scan": "scan.v4.snapshot-bound-authority",
+    "authority": "offline-authority.v5",
+    "execution_boundary": "CUSTODIAL_BACKEND_PROOF_SECRET",
+    "bridge_backend_source": "src/index.js:runPreparedScanRpc",
+    "health_gate": "GET /scan-api/authority-health reads custodial_backend_authority_health plus the durable receipt produced only after the designated phone traverses the authenticated native-vault /scan-api/rpc route; canary resume binds that exact receipt"
+  },
+  "cutover": {
+    "source_identity": {
+      "kind": "external_signed_release_attestation",
+      "acceptance_input_contract": "The cutover invocation must supply a regular, mode-0444, Ed25519-signed release attestation outside this worktree. It binds the semantic release, backend commit/tree/evidence digest/evidence blob, frontend commit, and schema fingerprint. The executable gate deterministically enumerates every tracked path and Git mode from that exact tree, compares every worktree path directly with its exact tree blob and mode, and rejects hidden index flags or Git-environment substitution before any database access. Generated evidence is never its own identity authority.",
+      "generated_evidence_path": "release/integrated-backend-authority-evidence.json",
+      "generated_evidence_excluded_from_content_identity": true,
+      "authority_inventory": {
+        "source": "all-tracked-paths-in-external-expected-tree",
+        "order": "git ls-tree -r -z bytewise path order",
+        "include": "every regular tracked path in the caller-supplied expected tree",
+        "exclude": [
+          "release/integrated-backend-authority-evidence.json"
+        ],
+        "reason": "The generated evidence is separately compared with its exact expected-tree blob and is excluded only to prevent self-reference. All migrations, release inputs, schema-fingerprint inputs, rebuild and database suites, provenance and suite-order gates, final-operational and named-manager gates, generator, checker, package commands, and every other tracked source path are included without a hand-maintained allowlist."
+      }
+    },
+    "phase_order": [
+      "configure CUSTODIAL_BACKEND_PROOF_SECRET (minimum 32 characters) and matching database SHA-256 digest",
+      "run npm run release:populated-schema:preflight through the read-only production MCP and preserve its exact source-fingerprint receipt before any migration",
+      "apply 20260810143000_offline_actor_occurrence_reconciliation.sql",
+      "deploy the bridge backend; it falls back only on absent authoritative procedures",
+      "apply 20260810150000_enforce_integrated_backend_authority.sql",
+      "apply 20260810160000_close_offline_authority_integrity_gaps.sql",
+      "apply 20260810170000_finish_offline_authority_operational_closure.sql",
+      "apply 20260810190000_final_integrated_backend_operational_correction.sql",
+      "apply 20260813035530_offline_scan_authority_snapshot.sql",
+      "apply 20260813050000_offline_snapshot_operational_truth_closure.sql",
+      "apply 20260813060000_release_canary_operational_recovery.sql",
+      "apply 20260813070000_operational_service_date_foundation.sql",
+      "apply 20260813141806_custodial_operational_boundary_closure.sql",
+      "apply 20260813173000_device_sync_actor_groups.sql",
+      "apply 20260813190000_release_phone_transport_and_offline_activation_closure.sql",
+      "apply 20260813210000_custodial_u4_ops_closure.sql",
+      "apply 20260814224034_reconcile_static_weekly_day_change_receipts.sql",
+      "require a green authority health gate and direct-DML denial probes before routing traffic"
+    ],
+    "rollback": {
+      "precondition": "retain the exact bridge backend artifact and the execution secret until all authority health and restoration probes are green",
+      "action": "pause the exact physical canary through the durable control; if canonical authority is missing or broken, restore the captured known-good function set forward, verify health, then explicitly resume",
+      "restoration_checks": [
+        "custodial_backend_authority_health returns ok=true",
+        "the designated phone's authenticated native-vault /scan-api/rpc request records an immutable exact-device, credential, backend-commit, and release receipt before canary resume",
+        "exact start and completion replay return one durable proof, reconciliation, and completion",
+        "offline snapshot activation requires exact issued identity; frozen exact replay remains attributable to the original actor after reassignment",
+        "scan evidence remains exact-shape and provenance-labeled after replay",
+        "service_role direct insert/update/delete/truncate probes are denied",
+        "named-manager reconciliation read, exactly-once disposition replay, and notification retry state remain available"
+        ,"present-but-broken and missing canonical authority functions restore to their captured known-good definitions while the canary remains paused"
+        ,"schedule, turnover, occurrence, and dashboard service dates all change at the same 04:00 America/Chicago boundary"
+        ,"employee and manager notifications use the same service date; activation replay returns frozen actor identity and its rollback definition remains exact"
+        ,"pending phone work reports every issued snapshot employee and assignment epoch separately; legacy aggregate-only reports remain explicitly unbound"
+        ,"offline work begun while snapshot, credential, and assignment authority were valid can activate after reconnect, while work begun after revocation, expiry, or reassignment is rejected"
+        ,"native wire timestamps are canonical UTC milliseconds; immutable activation boundaries and catalog-derived authority restoration remain healthy after negative mutations"
+        ,"complete Weekly Schedule day-change batches pass the database receipt-chain health gate; exact replay is read-only and prefix, extension, reorder, and content conflicts fail atomically"
+      ]
+    }
+  },
+  "rollback": {
+    "before_enforcement": "legacy Engine and current backend completion remain available",
+    "after_enforcement": "durably pause the exact physical canary and use the reviewed forward restoration set; never re-enable a legacy or direct-SQL writer",
+    "database": "forward-only; do not down-migrate contexts, proofs, reservations, reconciliation, audit, scan evidence, dispositions, or outbox evidence"
+  }
+}

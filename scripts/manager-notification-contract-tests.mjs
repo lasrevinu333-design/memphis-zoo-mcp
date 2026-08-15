@@ -5,9 +5,12 @@ import express from "express";
 import { createPushRuntime, installManagerNotificationRoutes } from "../src/manager-notifications.js";
 
 const root = new URL("../", import.meta.url);
-const [moduleSource, migration, indexSource] = await Promise.all([
+const [moduleSource, migration, closureMigration, boundaryMigration, u4Migration, indexSource] = await Promise.all([
   readFile(new URL("src/manager-notifications.js", root), "utf8"),
   readFile(new URL("supabase/migrations/20260721203000_manager_mobile_notifications.sql", root), "utf8"),
+  readFile(new URL("supabase/migrations/20260813050000_offline_snapshot_operational_truth_closure.sql", root), "utf8"),
+  readFile(new URL("supabase/migrations/20260813141806_custodial_operational_boundary_closure.sql", root), "utf8"),
+  readFile(new URL("supabase/migrations/20260813210000_custodial_u4_ops_closure.sql", root), "utf8"),
   readFile(new URL("src/index.js", root), "utf8"),
 ]);
 
@@ -40,6 +43,21 @@ assert.match(migration, /ops_manager_enqueue_message_push/);
 assert.match(migration, /ops_manager_enqueue_scheduled_notifications/);
 assert.match(migration, /ops_manager_claim_notification_jobs/);
 assert.match(migration, /employee kiosk devices are not eligible/);
+assert.match(closureMigration, /ops_manager_notification_job_is_current/);
+assert.match(closureMigration, /custodial_ops_manager_notification_binding_is_current/);
+assert.match(closureMigration, /p_push_device_id uuid,p_credential_id uuid,p_manager_id uuid,p_fcm_token_sha256 text/);
+assert.match(closureMigration, /encode\(extensions\.digest\(convert_to\(pd\.fcm_token,'UTF8'\),'sha256'\),'hex'\)=p_fcm_token_sha256/);
+assert.match(boundaryMigration, /ops_manager_enqueue_scheduled_notifications\(timestamp with time zone\)/);
+assert.match(boundaryMigration, /v_local_date date:=public\.sch_service_date\(p_now\)/);
+assert.match(boundaryMigration, /extract\(dow from v_local_date\)/);
+assert.match(moduleSource, /beforeSend:\s*async[\s\S]*ops_manager_prepare_notification_dispatch/);
+assert.match(u4Migration, /dispatch_lease_token uuid/);
+assert.match(u4Migration, /ops_manager_prepare_notification_dispatch/);
+assert.match(u4Migration, /provider delivery outcome unknown after manager notification worker interruption/);
+assert.match(u4Migration, /q\.dispatch_started_at is null and q\.attempts<q\.max_attempts/);
+assert.match(moduleSource, /p_push_device_id:\s*pushDeviceId/);
+assert.match(moduleSource, /p_fcm_token_sha256:\s*fcmTokenSha256/);
+assert.match(moduleSource, /ops_manager_push_devices"\)\.update\(\{ last_seen_at:[\s\S]*\.eq\("push_device_id", pushDeviceId\)\.eq\("fcm_token", fcmToken\)/);
 
 const app = express();
 installManagerNotificationRoutes(app, { env: {} });
@@ -78,11 +96,16 @@ const custodialAndroidConfig = {
 const iosConfig = `<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>GOOGLE_APP_ID</key><string>1:123456789:ios:test</string><key>BUNDLE_ID</key><string>org.memphiszoo.ops</string><key>PROJECT_ID</key><string>memphis-zoo-custodial-program</string></dict></plist>`;
 const originalFetch = globalThis.fetch;
 const calls = [];
+let oauthDelayMs = 0;
+let oauthCompleted = false;
+let fcmResponseMode = "accepted";
 globalThis.fetch = async (input, init = {}) => {
   const url = String(input);
   if (/^https?:\/\/127\.0\.0\.1/.test(url)) return originalFetch(input, init);
   calls.push({ url, method: String(init.method || "GET"), authorization: String(init.headers?.Authorization || init.headers?.authorization || ""), body: String(init.body || "") });
   if (url === "https://oauth2.googleapis.com/token") {
+    if (oauthDelayMs) await new Promise((resolve) => setTimeout(resolve, oauthDelayMs));
+    oauthCompleted = true;
     return new Response(JSON.stringify({ access_token: "test-firebase-oauth-token", expires_in: 3600 }), { status: 200, headers: { "Content-Type": "application/json" } });
   }
   if (url.endsWith("/projects/memphis-zoo-custodial-program/androidApps?pageSize=100")) {
@@ -104,6 +127,15 @@ globalThis.fetch = async (input, init = {}) => {
     return new Response(JSON.stringify({ configFilename: "GoogleService-Info.plist", configFileContents: Buffer.from(iosConfig).toString("base64") }), { status: 200, headers: { "Content-Type": "application/json" } });
   }
   if (url.endsWith("/v1/projects/memphis-zoo-custodial-program/messages:send")) {
+    if (fcmResponseMode === "transport-error") {
+      throw new Error("Simulated transport loss after dispatch began");
+    }
+    if (fcmResponseMode === "ambiguous-200") {
+      return new Response("{truncated", { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    if (fcmResponseMode === "rejected-400") {
+      return new Response(JSON.stringify({ error: { status: "INVALID_ARGUMENT", message: "Rejected test token" } }), { status: 400, headers: { "Content-Type": "application/json" } });
+    }
     return new Response(JSON.stringify({ name: "projects/memphis-zoo-custodial-program/messages/test-provider-id" }), { status: 200, headers: { "Content-Type": "application/json" } });
   }
   return new Response(JSON.stringify({ error: { message: `Unexpected test URL: ${url}` } }), { status: 500, headers: { "Content-Type": "application/json" } });
@@ -172,10 +204,170 @@ try {
   });
   await pushRuntime.send({ title: "Event", body: "Event body", data_json: { notification_type: "event" } }, { fcm_token: "test-fcm-token" }, { channelId: "employee-events" });
   await pushRuntime.send({ title: "Message", body: "Message body", data_json: { notification_type: "message" } }, { fcm_token: "test-fcm-token" }, { channelId: "employee-messages" });
+  fcmResponseMode = "ambiguous-200";
+  await assert.rejects(
+    () => pushRuntime.send({ title: "Ambiguous", body: "Do not retry", data_json: {} }, { fcm_token: "test-fcm-token" }),
+    (error) => error?.deliveryNotAccepted === false && error?.permanent !== true,
+    "an unreadable HTTP 200 is an ambiguous provider outcome, not a proven rejection",
+  );
+  fcmResponseMode = "transport-error";
+  await assert.rejects(
+    () => pushRuntime.send({ title: "Transport loss", body: "Do not retry", data_json: {} }, { fcm_token: "test-fcm-token" }),
+    (error) => error?.deliveryNotAccepted === false && error?.permanent !== true,
+    "transport loss after dispatch begins is an ambiguous provider outcome, not a proven rejection",
+  );
+  fcmResponseMode = "rejected-400";
+  await assert.rejects(
+    () => pushRuntime.send({ title: "Rejected", body: "May retry", data_json: {} }, { fcm_token: "test-fcm-token" }),
+    (error) => error?.deliveryNotAccepted === true && error?.permanent === true,
+    "an explicit FCM rejection may release the prepared dispatch marker",
+  );
+  const ambiguousQueue = {
+    status: "pending",
+    providerCallsBefore: calls.filter((call) => call.url.endsWith("/messages:send")).length,
+    prepareArgs: [],
+    finishArgs: [],
+  };
+  const ambiguousJob = {
+    queue_id: "00000000-0000-4000-8000-000000000101",
+    lease_token: "00000000-0000-4000-8000-000000000102",
+    credential_id: "00000000-0000-4000-8000-000000000103",
+    manager_id: "00000000-0000-4000-8000-000000000104",
+    notification_type: "test",
+    title: "Ambiguous manager push",
+    body: "Must not be sent twice",
+    data_json: {},
+  };
+  const ambiguousPushDevice = {
+    push_device_id: "00000000-0000-4000-8000-000000000105",
+    credential_id: ambiguousJob.credential_id,
+    manager_id: ambiguousJob.manager_id,
+    fcm_token: "ambiguous-manager-fcm-token",
+    platform: "android",
+    enabled: true,
+    revoked_at: null,
+  };
+  const resolvedQuery = () => {
+    const query = {
+      eq: () => query,
+      is: () => query,
+      then: (resolve, reject) => Promise.resolve({ data: null, error: null }).then(resolve, reject),
+    };
+    return query;
+  };
+  const ambiguousDb = {
+    async rpc(name, args) {
+      if (name === "ops_manager_enqueue_scheduled_notifications") return { data: null, error: null };
+      if (name === "ops_manager_claim_notification_jobs") {
+        if (ambiguousQueue.status !== "pending") return { data: [], error: null };
+        ambiguousQueue.status = "leased";
+        return { data: [ambiguousJob], error: null };
+      }
+      if (name === "ops_manager_prepare_notification_dispatch") {
+        ambiguousQueue.prepareArgs.push(args);
+        return { data: true, error: null };
+      }
+      if (name === "ops_manager_finish_notification_job") {
+        ambiguousQueue.finishArgs.push(args);
+        assert.equal(args.p_delivery_outcome_unknown, true);
+        assert.equal(args.p_succeeded, false);
+        ambiguousQueue.status = "failed";
+        return { data: { status: "failed" }, error: null };
+      }
+      throw new Error(`Unexpected manager sweep RPC: ${name}`);
+    },
+    from(table) {
+      assert.equal(table, "ops_manager_push_devices");
+      return {
+        select() {
+          const query = {
+            eq: () => query,
+            is: () => query,
+            maybeSingle: async () => ({ data: ambiguousPushDevice, error: null }),
+          };
+          return query;
+        },
+        update: resolvedQuery,
+      };
+    },
+  };
+  const ambiguousSweepRuntime = createPushRuntime({
+    db: ambiguousDb,
+    env: {
+      FIREBASE_SERVICE_ACCOUNT_JSON: JSON.stringify({
+        type: "service_account",
+        project_id: "memphis-zoo-custodial-program",
+        client_email: "firebase-adminsdk-ambiguous@memphis-zoo-custodial-program.iam.gserviceaccount.com",
+        private_key: privateKey,
+      }),
+    },
+  });
+  fcmResponseMode = "ambiguous-200";
+  const firstAmbiguousSweep = await ambiguousSweepRuntime.sweep();
+  const secondAmbiguousSweep = await ambiguousSweepRuntime.sweep();
+  assert.equal(firstAmbiguousSweep.claimed, 1);
+  assert.equal(firstAmbiguousSweep.results[0].delivery_outcome_unknown, true);
+  assert.equal(secondAmbiguousSweep.claimed, 0);
+  assert.equal(ambiguousQueue.status, "failed");
+  assert.equal(ambiguousQueue.prepareArgs.length, 1);
+  assert.equal(ambiguousQueue.finishArgs.length, 1);
+  assert.equal(calls.filter((call) => call.url.endsWith("/messages:send")).length, ambiguousQueue.providerCallsBefore + 1,
+    "an ambiguous manager provider outcome must produce one provider call across repeated sweeps");
+  fcmResponseMode = "accepted";
+  await assert.rejects(() => pushRuntime.send({
+    notification_type: "event_digest", title: "Expired event", body: "Must not send",
+    data_json: { next_event_starts_at: new Date(Date.now() - 1000).toISOString() },
+  }, { fcm_token: "test-fcm-token" }), /no longer upcoming/i);
+  const beforeCrossingSend = calls.filter((call) => call.url.endsWith("/messages:send")).length;
+  oauthDelayMs = 80;
+  const crossingRuntime = createPushRuntime({
+    db: {},
+    env: {
+      FIREBASE_SERVICE_ACCOUNT_JSON: JSON.stringify({
+        type: "service_account",
+        project_id: "memphis-zoo-custodial-program",
+        client_email: "firebase-adminsdk-crossing@memphis-zoo-custodial-program.iam.gserviceaccount.com",
+        private_key: privateKey,
+      }),
+    },
+  });
+  await assert.rejects(() => crossingRuntime.send({
+    notification_type: "event_digest", title: "Crossing event", body: "Must not send",
+    data_json: { next_event_starts_at: new Date(Date.now() + 30).toISOString() },
+  }, { fcm_token: "test-fcm-token" }), /no longer upcoming/i);
+  oauthDelayMs = 0;
+  assert.equal(calls.filter((call) => call.url.endsWith("/messages:send")).length, beforeCrossingSend);
+  oauthDelayMs = 40;
+  oauthCompleted = false;
+  let canonicalChecks = 0;
+  const canonicalRuntime = createPushRuntime({
+    db: {},
+    env: {
+      FIREBASE_SERVICE_ACCOUNT_JSON: JSON.stringify({
+        type: "service_account",
+        project_id: "memphis-zoo-custodial-program",
+        client_email: "firebase-adminsdk-canonical@memphis-zoo-custodial-program.iam.gserviceaccount.com",
+        private_key: privateKey,
+      }),
+    },
+  });
+  await assert.rejects(() => canonicalRuntime.send({
+    notification_type: "event_digest", title: "Cancelled event", body: "Must not send",
+    data_json: { next_event_starts_at: new Date(Date.now() + 60_000).toISOString() },
+  }, { fcm_token: "test-fcm-token" }, {
+    beforeSend: async () => {
+      canonicalChecks += 1;
+      assert.equal(oauthCompleted, true, "canonical validation must run after provider authentication");
+      return false;
+    },
+  }), /no longer current/i);
+  oauthDelayMs = 0;
+  assert.equal(canonicalChecks, 1);
+  assert.equal(calls.filter((call) => call.url.endsWith("/messages:send")).length, beforeCrossingSend);
   const sentPushes = calls.filter((call) => call.url.endsWith("/messages:send")).map((call) => JSON.parse(call.body));
-  assert.equal(sentPushes.at(-2).message.android.collapse_key, "memphis-employee-events");
-  assert.equal(sentPushes.at(-1).message.android.collapse_key, "memphis-employee-messages");
-  assert.notEqual(sentPushes.at(-2).message.android.collapse_key, sentPushes.at(-1).message.android.collapse_key);
+  const collapseKeys = new Set(sentPushes.map((push) => push.message.android.collapse_key));
+  assert.equal(collapseKeys.has("memphis-employee-events"), true);
+  assert.equal(collapseKeys.has("memphis-employee-messages"), true);
 } finally {
   globalThis.fetch = originalFetch;
   await new Promise((resolve, reject) => configuredServer.close((error) => error ? reject(error) : resolve()));

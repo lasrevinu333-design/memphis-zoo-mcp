@@ -204,9 +204,11 @@ try {
     }),
     { secret: "authenticated" },
   );
+  const tamperedCiphertext = Buffer.from(encrypted.ciphertext, "base64url");
+  tamperedCiphertext[0] ^= 0x01;
   await assert.rejects(async () => custodialEmployeeAdminInternals.decryptEnrollmentResult(env, operationId, {
     encryption_version: encrypted.encryptionVersion,
-    result_ciphertext: `${encrypted.ciphertext.slice(0, -1)}A`,
+    result_ciphertext: tamperedCiphertext.toString("base64url"),
     result_iv: encrypted.iv,
     result_auth_tag: encrypted.authTag,
   }), /could not be authenticated/i);

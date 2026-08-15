@@ -7,7 +7,7 @@ const MANAGER_ID = "00000000-0000-4000-8000-000000000701";
 const MANAGER_USER_ID = "00000000-0000-4000-8000-000000000702";
 const FORGED_EMPLOYEE_ID = "00000000-0000-4000-8000-000000000703";
 const THREAD_ID = "00000000-0000-4000-8000-000000000704";
-const SHARED_THREAD_ID = "00000000-0000-4000-8000-000000000707";
+const ARCHIVED_THREAD_ID = "00000000-0000-4000-8000-000000000709";
 const calls = [];
 
 async function runRpc(fn, args) {
@@ -16,10 +16,7 @@ async function runRpc(fn, args) {
     assert.equal(args.p_manager_id, MANAGER_ID);
     return { id: MANAGER_USER_ID, user_id: MANAGER_USER_ID, display_name: "Authority Test Manager", role: "manager", is_active: true, ops_manager_id: MANAGER_ID };
   }
-  if (fn === "msg_get_or_create_ops_manager_thread") {
-    assert.equal(args.p_manager_id, MANAGER_ID);
-    return { id: SHARED_THREAD_ID, thread_type: "group", title: "Ops Manager Chat", system_key: "ops_manager_shared_chat_v1" };
-  }
+  if (fn === "msg_get_or_create_ops_manager_thread") throw new Error("named manager identity must not depend on the retired shared room");
   if (fn === "msg_send_broadcast") return { id: "broadcast-test", sender_user_id: args.p_sender_user_id };
   if (fn === "msg_create_group_thread_v2") return { id: THREAD_ID, created_by_user_id: args.p_created_by_user_id, title: args.p_title, client_thread_id: args.p_client_thread_id };
   if (fn === "msg_send_message") return { id: "message-test", sender_user_id: args.p_sender_user_id };
@@ -48,6 +45,16 @@ async function runReadOnlySql(sql) {
     return [{ id: "00000000-0000-4000-8000-000000000708", thread_id: THREAD_ID, sender_user_id: MANAGER_USER_ID, is_deleted: false }];
   }
   if (/from public\.msg_threads t/i.test(sql)) {
+    if (sql.includes(ARCHIVED_THREAD_ID)) {
+      return [{
+        id: ARCHIVED_THREAD_ID,
+        thread_type: "group",
+        title: "Operations Leadership Chat (Retired)",
+        system_key: "ops_manager_shared_chat_v1",
+        is_active: false,
+        has_memphis_bot: false,
+      }];
+    }
     return [{ id: THREAD_ID, thread_type: "group", title: "Authority test", is_active: true, has_memphis_bot: false }];
   }
   if (/from public\.msg_thread_participants/i.test(sql)) return [];
@@ -102,6 +109,8 @@ try {
   assert.equal(identity.body.data.display_name, "Authority Test Manager");
   assert.equal(identity.body.data.role_title, "Director of Test Operations");
   assert.equal(identity.body.data.department_key, "operations");
+  assert.equal(Object.hasOwn(identity.body.data, "ops_manager_thread_id"), false);
+  assert.equal(calls.some((call) => call.fn === "msg_get_or_create_ops_manager_thread"), false);
 
   const users = await get("/messaging-api/users");
   assert.equal(users.status, 200);
@@ -120,6 +129,21 @@ try {
 
   const forgedRead = await post(`/messaging-api/thread/${THREAD_ID}/read`, { user_id: FORGED_EMPLOYEE_ID });
   assert.equal(forgedRead.status, 403);
+
+  const archivedRead = await post(`/messaging-api/thread/${ARCHIVED_THREAD_ID}/read`, {});
+  assert.equal(archivedRead.status, 409);
+  assert.match(archivedRead.body.error, /retired or inactive/i);
+  const archivedMessage = await post(`/messaging-api/thread/${ARCHIVED_THREAD_ID}/message`, {
+    sender_user_id: MANAGER_USER_ID,
+    body: "attempt archived write",
+    client_message_id: "archived-route-write-attempt",
+  });
+  assert.equal(archivedMessage.status, 409);
+  assert.match(archivedMessage.body.error, /retired or inactive/i);
+  assert.equal(calls.some((call) => call.fn === "msg_mark_thread_read" && call.args.p_thread_id === ARCHIVED_THREAD_ID), false,
+    "the HTTP read route must reject the archive before reaching its writer RPC");
+  assert.equal(calls.some((call) => call.fn === "msg_send_message" && call.args.p_thread_id === ARCHIVED_THREAD_ID), false,
+    "the HTTP send route must reject the archive before reaching its writer RPC");
 
   const retiredMessageDelete = await post(`/messaging-api/thread/${THREAD_ID}/message/00000000-0000-4000-8000-000000000708/delete`, {
     user_id: FORGED_EMPLOYEE_ID,
@@ -174,6 +198,7 @@ try {
 
   assert.equal(calls.some((call) => call.fn === "msg_send_message"), false);
   assert.equal(calls.some((call) => call.fn === "msg_mark_thread_read"), false);
+  assert.equal(calls.some((call) => call.fn === "msg_get_or_create_ops_manager_thread"), false);
   console.log("MESSAGING_MANAGER_SERVER_AUTHORITY_INTEGRATION_PASS");
 } finally {
   await new Promise((resolve) => server.close(resolve));

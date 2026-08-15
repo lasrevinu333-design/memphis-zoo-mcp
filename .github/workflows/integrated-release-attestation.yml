@@ -1,0 +1,55 @@
+name: Integrated Release Attestation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: integrated-release-attestation-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.23.1'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Rebuild exact disposable schema
+        env:
+          SCHEMA_REBUILD_DOCKER_IMAGE: supabase/postgres@sha256:80d7b27c3e8d77cfa7226eee9508671796da214781ff15a35b3670d7ad5ee453
+          SCHEMA_REBUILD_KEEP_DATABASE: '1'
+        run: npm run --silent test:empty-db-rebuild | tee /tmp/integrated-release-rebuild.log
+      - name: Verify signed source, evidence, schema, and canary authority
+        env:
+          MEMPHIS_RELEASE_ATTESTATION_JSON: ${{ secrets.MEMPHIS_RELEASE_ATTESTATION_JSON }}
+          MEMPHIS_RELEASE_ATTESTATION_PUBLIC_KEY: ${{ secrets.MEMPHIS_RELEASE_ATTESTATION_PUBLIC_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          container="$(sed -n 's/.*"retained_test_container":"\([^"]*\)".*/\1/p' /tmp/integrated-release-rebuild.log | tail -n 1)"
+          test -n "$container"
+          trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
+          export INTEGRATED_RELEASE_ATTESTATION_INPUT=/tmp/memphis-integrated-release-attestation.json
+          umask 077
+          printf '%s' "$MEMPHIS_RELEASE_ATTESTATION_JSON" > "$INTEGRATED_RELEASE_ATTESTATION_INPUT"
+          chmod 0444 "$INTEGRATED_RELEASE_ATTESTATION_INPUT"
+          CUSTODIAL_CUTOVER_DOCKER_CONTAINER="$container" \
+          CUSTODIAL_CUTOVER_DATABASE=postgres \
+          CUSTODIAL_BACKEND_PROOF_SECRET=empty-rebuild-offline-authority-secret-0123456789 \
+            npm run --silent test:integrated-backend-authority-cutover:database | tee /tmp/integrated-release-verification.json
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: integrated-release-attestation-${{ github.sha }}
+          path: |
+            /tmp/integrated-release-rebuild.log
+            /tmp/integrated-release-verification.json
+          if-no-files-found: warn
+          retention-days: 30

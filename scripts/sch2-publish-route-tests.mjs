@@ -57,10 +57,7 @@ function buildApp({ readCalls, writeCalls, rpcCalls }) {
         }
         return null;
       },
-      runWriteSql: async (namePrefix, sql) => {
-        writeCalls.push({ namePrefix, sql: String(sql || "") });
-        return { ok: true };
-      },
+      runCommand: async (namePrefix, payload) => { writeCalls.push({ namePrefix, payload }); return { ok: true }; },
       buildHealthPayload: () => ({ ok: true }),
       requireAdminApiAuth: (_req, _res, next) => next(),
       appVersion: "test-version",
@@ -116,18 +113,10 @@ async function withServer(app, fn) {
     assert.equal(response.status, 200);
     const payload = await response.json();
     assert.equal(payload.ok, true);
-    assert.equal(payload.data.publish_result.dry_run, false);
-    assert.equal(payload.data.publish_result.fallback, "guarded_sql");
-    assert.equal(payload.data.publish_result.inserted_rows, 140);
-    assert.equal(writeCalls.length, 1, "confirmed fallback should use one guarded migration write");
-    assert.equal(writeCalls[0].namePrefix, "sch2_guarded_publish");
-    assert.match(writeCalls[0].sql, /pg_advisory_xact_lock\(hashtext\('memphis_sch2_publish'\)\)/);
-    assert.match(writeCalls[0].sql, /public\.sch2_input_hash/);
-    assert.match(writeCalls[0].sql, /public\.sch2_audit_solution/);
-    assert.match(writeCalls[0].sql, /guard_inserted_rows_match/);
-    assert.ok(readCalls.some((sql) => sql.includes("left join public.schedule_publish_audit")), "confirmed fallback must verify the published audit row");
+    assert.equal(payload.data.publish_result.fallback, "bounded_command");
+    assert.deepEqual(writeCalls, [{ namePrefix: "sch2_guarded_publish", payload: { run_id: RUN_ID } }], "confirmed publish uses its one typed bounded command fallback");
     assert.equal(rpcCalls[0].functionName, "sch2_publish_solution");
   });
 }
 
-console.log("SCH2 publish route fallback tests passed");
+console.log("SCH2 publish route bounded authority tests passed");

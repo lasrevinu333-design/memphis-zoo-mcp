@@ -72,9 +72,8 @@ function buildApp({ readCalls, writeCalls, rpcCalls }) {
       if (functionName === "sch_apply_lunch_coverage") return { ok: true, applied: false };
       throw new Error(`Unexpected RPC: ${functionName}`);
     },
-    runWriteSql: async (namePrefix, sql) => {
-      const query = String(sql || "");
-      writeCalls.push({ namePrefix, sql: query });
+    runCommand: async (namePrefix, payload) => {
+      writeCalls.push({ namePrefix, payload });
       if (namePrefix !== "restroom_rebalance_0945") return [];
       return [
         { assignment_id: ASSIGNMENTS[0], assigned_employee_id: EMPLOYEE_B, status: "ASSIGNED", owner_type: "EMPLOYEE", source_type: "restroom_rebalance_0945" },
@@ -136,9 +135,9 @@ await withServer(buildApp({ readCalls, writeCalls, rpcCalls }), async (baseUrl) 
 
 const rebalanceWrite = writeCalls.find((call) => call.namePrefix === "restroom_rebalance_0945");
 assert.ok(rebalanceWrite, "the HTTP route must execute the planner's guarded write");
-assert.match(rebalanceWrite.sql, /pg_advisory_xact_lock\(hashtextextended/);
-assert.match(rebalanceWrite.sql, /dsa\.assigned_employee_id = moved\.from_employee_id/);
-assert.match(rebalanceWrite.sql, /not public\.sch_is_employee_location_group_restricted/);
+assert.equal(rebalanceWrite.payload.service_date, SERVICE_DATE);
+assert.equal(rebalanceWrite.payload.moves.length, 2);
+assert.equal(rebalanceWrite.payload.source, "restroom_rebalance_0945");
 assert.ok(readCalls.some((sql) => sql.includes("coalesce(route.zone_codes")), "the route must load active route context");
 assert.ok(readCalls.some((sql) => sql.includes("with target(location_group_id)")), "the route must load configured proximity data");
 assert.equal(rpcCalls.filter((call) => call.functionName === "sch_apply_lunch_coverage").length, 1);

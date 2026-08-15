@@ -7,6 +7,7 @@ const schedule = fs.readFileSync("src/schedule-api.js", "utf8");
 const index = fs.readFileSync("src/index.js", "utf8");
 const migration = fs.readFileSync("supabase/migrations/20260730142940_audit6_coverall_assignment_link_security.sql", "utf8");
 const policyMigration = fs.readFileSync("supabase/migrations/20260730143853_audit6_coverall_assignment_link_service_policy.sql", "utf8");
+const boundedScheduleMigration = fs.readFileSync("supabase/migrations/20260810170000_finish_offline_authority_operational_closure.sql", "utf8");
 
 const assignmentRoute = schedule.match(/router\.get\("\/coverall\/assignment"[\s\S]*?\n  \}\);/)?.[0] || "";
 const slotRead = schedule.match(/async function getCoverAllSlots\(\)[\s\S]*?\n  \}/)?.[0] || "";
@@ -17,7 +18,8 @@ assert.match(schedule, /randomBytes\(32\)\.toString\("base64url"\)/);
 assert.match(schedule, /createHash\("sha256"\).*digest\("hex"\)/);
 assert.match(schedule, /ttl_hours must be between 1 and 168/);
 assert.match(schedule, /revoked_at is null[\s\S]*expires_at > now\(\)/);
-assert.match(schedule, /set revoked_at = now\(\), revoked_by/);
+assert.match(schedule, /runCommand\("coverall_assignment_link_revoke"/);
+assert.match(boundedScheduleMigration, /elsif v_command = 'coverall_assignment_link_revoke' then[\s\S]*set revoked_at=now\(\),revoked_by=/);
 assert.match(schedule, /router\.get\("\/coverall\/assignment", limitPublicCoverAll/);
 assert.match(assignmentRoute, /authorizeCoverAllAssignmentLink/);
 assert.match(assignmentRoute, /setCoverAllAssignmentSecurityHeaders/);
@@ -62,7 +64,7 @@ app.use("/schedule-api", createScheduleRouter({
     return [];
   },
   runRpc: async () => ({}),
-  runWriteSql: async () => { writeCount += 1; return []; },
+  runCommand: async () => { writeCount += 1; return []; },
   buildHealthPayload: () => ({ ok: true }),
   requireAdminApiAuth: (_req, res) => res.status(401).json({ ok: false, error: "Unauthorized" }),
   requireOpsManagerAuth: (_req, res) => res.status(401).json({ ok: false, error: "Unauthorized" }),

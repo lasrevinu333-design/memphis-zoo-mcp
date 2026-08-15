@@ -60,8 +60,11 @@ try {
 }
 
 const canonical = JSON.parse(readFileSync(resolve(root, "supabase", "canonical", "schema-fingerprint-input.json"), "utf8"));
-assert.equal(fingerprintSchemaCatalog(canonical).fingerprint, BOOTSTRAP.to_fingerprint,
-  "production verifier must use the canonical catalog normalization and hash");
+const canonicalFingerprint = readFileSync(resolve(root, "supabase", "canonical", "schema-fingerprint.txt"), "utf8").trim();
+assert.equal(fingerprintSchemaCatalog(canonical).fingerprint, canonicalFingerprint,
+  "current canonical catalog and fingerprint must use the production verifier normalization");
+assert.notEqual(canonicalFingerprint, BOOTSTRAP.to_fingerprint,
+  "the one-migration c674 bootstrap target is historical and must not masquerade as current schema truth");
 
 assert.match(workflow, /^on:\n  workflow_dispatch:/m);
 assert.doesNotMatch(workflow, /^\s+(?:push|pull_request|schedule):/m,

@@ -79,7 +79,7 @@ jobs:
       - name: Empty database migration rebuild and database concurrency
         shell: bash
         env:
-          SCHEMA_REBUILD_DOCKER_IMAGE: supabase/postgres:17.6.1.143
+          SCHEMA_REBUILD_DOCKER_IMAGE: supabase/postgres@sha256:80d7b27c3e8d77cfa7226eee9508671796da214781ff15a35b3670d7ad5ee453
         run: |
           set -euo pipefail
           export SCHEMA_REBUILD_KEEP_DATABASE=1
@@ -117,3 +117,10 @@ jobs:
           OPERATIONAL_ANALYTICS_TEST_DOCKER_CONTAINER="$container" \
             OPERATIONAL_ANALYTICS_TEST_DATABASE=postgres \
             npm run --silent test:operational-analytics-db
+          RELEASE_CANARY_TEST_DOCKER_CONTAINER="$container" \
+            RELEASE_CANARY_TEST_DATABASE=postgres \
+            npm run --silent test:release-canary-recovery-db
+          FINAL_UNCERTAINTY_TEST_DOCKER_CONTAINER="$container" \
+            FINAL_UNCERTAINTY_TEST_DATABASE=postgres \
+            npm run --silent test:final-uncertainty-closure-db
+          npm run --silent test:release-closure

@@ -191,11 +191,15 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     const row = Array.isArray(data) ? data[0] : data;
     const userId = String(row?.msg_user_id || row?.user_id || row?.id || "").trim();
     if (!isUuid(userId)) throw Object.assign(new Error("Authenticated manager has no server messaging principal."), { status: 403 });
-    const leadershipProfile = await getLeadershipProfileForMessagingUser(userId);
-    const sharedThreadData = await runRpc("msg_get_or_create_ops_manager_thread", { p_manager_id: managerId });
-    const sharedThread = Array.isArray(sharedThreadData) ? sharedThreadData[0] : sharedThreadData;
-    const sharedThreadId = String(sharedThread?.thread_id || sharedThread?.id || "").trim();
-    if (!isUuid(sharedThreadId)) throw Object.assign(new Error("The Operations Leadership chat is unavailable."), { status: 503 });
+    // Principal resolution above is authoritative. Leadership-profile data is
+    // presentational enrichment only, so a transient read failure must not
+    // turn a valid named-manager Messenger session into a false 401.
+    let leadershipProfile = null;
+    try {
+      leadershipProfile = await getLeadershipProfileForMessagingUser(userId);
+    } catch {
+      leadershipProfile = null;
+    }
     return {
       ...row,
       msg_user_id: userId,
@@ -209,7 +213,6 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       manager_roles: Array.isArray(leadershipProfile?.manager_roles) ? leadershipProfile.manager_roles : [],
       canonical_device_id: String(managerSession?.device_id || managerSession?.credential_id || "manager-session"),
       identity_source: "trusted_manager_session",
-      ops_manager_thread_id: sharedThreadId,
     };
   }
 
@@ -297,6 +300,37 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       limit 1
     `);
     return Array.isArray(rows) && rows.length ? rows[0] : null;
+  }
+
+  async function getMessageThreadIdentity(messageId) {
+    const normalizedMessageId = String(messageId || "").trim();
+    if (!isUuid(normalizedMessageId)) return null;
+    const rows = await runReadOnlySql(`
+      select
+        m.id as message_id,
+        t.id,
+        t.system_key,
+        t.is_active
+      from public.msg_messages m
+      join public.msg_threads t on t.id = m.thread_id
+      where m.id = '${esc(normalizedMessageId)}'::uuid
+      limit 1
+    `);
+    return Array.isArray(rows) && rows.length ? rows[0] : null;
+  }
+
+  function isRetiredOpsManagerSharedThread(thread = {}) {
+    return String(thread?.system_key || "").trim() === "ops_manager_shared_chat_v1";
+  }
+
+  function assertActiveMutableThread(thread) {
+    if (!thread || thread.is_active === false || isRetiredOpsManagerSharedThread(thread)) {
+      throw Object.assign(
+        new Error("The retired or inactive conversation cannot be modified."),
+        { status: 409 },
+      );
+    }
+    return thread;
   }
 
   function isMemphisThread(thread = {}) {
@@ -1235,8 +1269,11 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       select m.id, m.thread_id, m.sender_user_id, m.body, m.metadata_json,
              coalesce(m.metadata_json->>'device_id','') as device_id
       from public.msg_messages m
+      join public.msg_threads t on t.id = m.thread_id
       where m.id = '${esc(sourceMessageId)}'::uuid
         and m.is_deleted is false
+        and t.is_active is true
+        and t.system_key is distinct from 'ops_manager_shared_chat_v1'
       limit 1
     `);
     const source = Array.isArray(sourceRows) && sourceRows.length ? sourceRows[0] : null;
@@ -1555,22 +1592,29 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const metadata = req.body?.metadata && typeof req.body.metadata === 'object' && !Array.isArray(req.body.metadata)
         ? req.body.metadata
         : {};
-      const data = await runRpc("ack_device_notification", {
-        p_device_identifier: canonicalDeviceId,
-        p_notification_key: notificationKey,
-        p_notification_type: notificationType,
-        p_action: action,
-        p_metadata_json: metadata,
-      });
-      if (notificationType === 'event' && req.body?.message_id && device.assigned_employee_id) {
+      let data;
+      if (notificationType === 'event') {
         const viewer = await getViewerIdentity(canonicalDeviceId);
-        if (viewer?.msg_user_id) {
-          await runRpc("msg_acknowledge_message", {
-            p_message_id: String(req.body.message_id),
-            p_user_id: viewer.msg_user_id,
-            p_device_identifier: canonicalDeviceId,
-          });
-        }
+        // The database derives any Messenger link from the authoritative Event
+        // notification record. A body message_id can only assert equality; an
+        // omitted id must never bypass a linked Messenger acknowledgement.
+        data = await runRpc("msg_acknowledge_event_device_notification", {
+          p_device_identifier: canonicalDeviceId,
+          p_notification_key: notificationKey,
+          p_notification_type: notificationType,
+          p_action: action,
+          p_metadata_json: metadata,
+          p_message_id: req.body?.message_id ? String(req.body.message_id) : null,
+          p_user_id: viewer?.msg_user_id ? String(viewer.msg_user_id) : null,
+        });
+      } else {
+        data = await runRpc("ack_device_notification", {
+          p_device_identifier: canonicalDeviceId,
+          p_notification_key: notificationKey,
+          p_notification_type: notificationType,
+          p_action: action,
+          p_metadata_json: metadata,
+        });
       }
       res.status(200).json({ ok: true, data, meta: messagingMeta() });
     } catch (error) {
@@ -1728,7 +1772,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         return;
       }
       const thread = await getThreadIdentity(threadId);
-      if (!thread || thread.is_active === false) throw new Error("Active thread not found.");
+      assertActiveMutableThread(thread);
       if (isMemphisThread(thread)) {
         const canonicalDeviceId = String(viewer.identity?.canonical_device_id || deviceId).trim();
         const data = await sendMemphisConversationMessage({
@@ -1793,9 +1837,10 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         return;
       }
       if (String(thread.system_key || "") === "ops_manager_shared_chat_v1") {
-        res.status(409).json({ ok: false, error: "The shared Ops Manager conversation stays available to authorized manager devices." });
+        res.status(409).json({ ok: false, error: "The retired Operations Leadership conversation is preserved for audit and cannot be deleted." });
         return;
       }
+      assertActiveMutableThread(thread);
       if (!viewer.isManagerOverview) {
         const isParticipant = await isThreadParticipant(threadId, viewer.effectiveUserId);
         if (!isParticipant) {
@@ -1850,6 +1895,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         return;
       }
       const viewer = await resolveViewerContext({ managerSession: req.memphisAuth });
+      assertActiveMutableThread(await getThreadIdentity(threadId));
       const data = await runRpc("msg_admin_tombstone_thread", {
         p_thread_id: threadId,
         p_request_user_id: viewer.effectiveUserId,
@@ -1893,6 +1939,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         res.status(403).json({ ok: false, error: "Read acknowledgement user ID must match the authenticated viewer." });
         return;
       }
+      assertActiveMutableThread(await getThreadIdentity(threadId));
       const data = await runRpc("msg_mark_thread_read", { p_thread_id: threadId, p_user_id: viewer.effectiveUserId });
       res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {

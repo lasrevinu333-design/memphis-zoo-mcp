@@ -79,9 +79,9 @@ function addCalendarDays(value, days) {
   return `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, "0")}-${String(next.getUTCDate()).padStart(2, "0")}`;
 }
 
-export function chicagoDateStartIso(value) {
+export function chicagoServiceDateStartIso(value) {
   const desiredParts = calendarDateParts(value);
-  const desired = Date.UTC(desiredParts.year, desiredParts.month - 1, desiredParts.day);
+  const desired = Date.UTC(desiredParts.year, desiredParts.month - 1, desiredParts.day, 4);
   const formatter = new Intl.DateTimeFormat("en-US", {
     timeZone: OPERATIONAL_TIME_ZONE,
     year: "numeric", month: "2-digit", day: "2-digit",
@@ -159,7 +159,9 @@ export function normalizeInspectionPayload(values = {}, auth = {}, idempotencyKe
     safety_score: boundedInt(values.safety_score ?? values.safetyScore, { name: "safety_score" }),
     pass_threshold: passThreshold,
     critical_failure: criticalFailure,
-    follow_up_required: values.follow_up_required === true || values.followUpRequired === true || criticalFailure || overallScore < passThreshold,
+    // A failed inspection is never readiness evidence.  The server derives
+    // follow-up rather than allowing a client to suppress it.
+    follow_up_required: criticalFailure || overallScore < passThreshold,
     findings_json: findings,
     notes: clip(values.notes, 8000) || null,
   };
@@ -181,11 +183,14 @@ export function installOperationalAnalyticsRoutes(app, { env = process.env, supa
   if (!app || app.__operationalAnalyticsRoutesInstalled) return;
   Object.defineProperty(app, "__operationalAnalyticsRoutesInstalled", { value: true });
   const db = supabase || createSupabase(env);
-  const requireManager = makeOpsAccessMiddleware({ supabase: db });
+  const requireManagerRead = makeOpsAccessMiddleware({ env, supabase: db });
+  const requireManagerWrite = makeOpsAccessMiddleware({ env, supabase: db, requireWrite: true });
   const configured = (_req, res, next) => db ? next() : res.status(503).json({ ok: false, error: "Database connection is not configured." });
-  const requireCustodial = (req, res, next) => requireManager(req, res, () => hasRole(req.memphisAuth, "CUSTODIAL_MANAGER")
+  const custodialRole = (req, res, next) => hasRole(req.memphisAuth, "CUSTODIAL_MANAGER")
     ? next()
-    : res.status(403).json({ ok: false, error: "Custodial Manager access is required." }));
+    : res.status(403).json({ ok: false, error: "Custodial Manager access is required." });
+  const requireCustodialRead = (req, res, next) => requireManagerRead(req, res, () => custodialRole(req, res, next));
+  const requireCustodialWrite = (req, res, next) => requireManagerWrite(req, res, () => custodialRole(req, res, next));
 
   app.use("/analytics-api", (req, res, next) => {
     setCors(req, res, env);
@@ -203,7 +208,7 @@ export function installOperationalAnalyticsRoutes(app, { env = process.env, supa
     maintenance_ticket_history: "preserved",
   }));
 
-  app.get("/analytics-api/cleaning-performance", configured, requireCustodial, async (req, res) => {
+  app.get("/analytics-api/cleaning-performance", configured, requireCustodialRead, async (req, res) => {
     try {
       let query = db.from("v_cleaning_performance_comparison").select("*");
       if (validUuid(req.query?.employee_id)) query = query.eq("employee_id", String(req.query.employee_id));
@@ -217,7 +222,7 @@ export function installOperationalAnalyticsRoutes(app, { env = process.env, supa
     } catch (error) { fail(res, error, "Cleaning performance could not be loaded."); }
   });
 
-  app.get("/analytics-api/ticket-trends", configured, requireCustodial, async (req, res) => {
+  app.get("/analytics-api/ticket-trends", configured, requireCustodialRead, async (req, res) => {
     try {
       const windowDays = [7, 30, 90].includes(Number(req.query?.window_days)) ? Number(req.query.window_days) : 30;
       const countColumn = `ticket_count_last_${windowDays}_days`;
@@ -233,7 +238,7 @@ export function installOperationalAnalyticsRoutes(app, { env = process.env, supa
     } catch (error) { fail(res, error, "Maintenance ticket trends could not be loaded."); }
   });
 
-  app.get("/analytics-api/session-facts", configured, requireCustodial, async (req, res) => {
+  app.get("/analytics-api/session-facts", configured, requireCustodialRead, async (req, res) => {
     try {
       let query = db.from("v_cleaning_session_facts").select("*");
       if (validUuid(req.query?.employee_id)) query = query.eq("employee_id", String(req.query.employee_id));
@@ -241,11 +246,11 @@ export function installOperationalAnalyticsRoutes(app, { env = process.env, supa
       if (req.query?.location_code) query = query.eq("location_code", clip(req.query.location_code, 80).toUpperCase());
       if (req.query?.date_from) {
         if (!validIsoDate(req.query.date_from)) throw Object.assign(new Error("date_from must be YYYY-MM-DD."), { status: 422 });
-        query = query.gte("started_at", chicagoDateStartIso(req.query.date_from));
+        query = query.gte("started_at", chicagoServiceDateStartIso(req.query.date_from));
       }
       if (req.query?.date_to) {
         if (!validIsoDate(req.query.date_to)) throw Object.assign(new Error("date_to must be YYYY-MM-DD."), { status: 422 });
-        query = query.lt("started_at", chicagoDateStartIso(addCalendarDays(req.query.date_to, 1)));
+        query = query.lt("started_at", chicagoServiceDateStartIso(addCalendarDays(req.query.date_to, 1)));
       }
       query = query.order("started_at", { ascending: false }).limit(normalizeLimit(req.query?.limit, 250, 1000));
       const result = await query;
@@ -267,7 +272,7 @@ export function installOperationalAnalyticsRoutes(app, { env = process.env, supa
     } catch (error) { fail(res, error, "Cleaning session facts could not be loaded."); }
   });
 
-  app.get("/analytics-api/inspections", configured, requireCustodial, async (req, res) => {
+  app.get("/analytics-api/inspections", configured, requireCustodialRead, async (req, res) => {
     try {
       let query = db.from("cleaning_inspections").select("*");
       if (validUuid(req.query?.session_id)) query = query.eq("session_id", String(req.query.session_id));
@@ -280,7 +285,7 @@ export function installOperationalAnalyticsRoutes(app, { env = process.env, supa
     } catch (error) { fail(res, error, "Cleaning inspections could not be loaded."); }
   });
 
-  app.get("/analytics-api/inspection-coverage", configured, requireCustodial, async (_req, res) => {
+  app.get("/analytics-api/inspection-coverage", configured, requireCustodialRead, async (_req, res) => {
     try {
       const result = await db.from("v_cleaning_inspection_coverage").select("*").single();
       if (result.error) throw result.error;
@@ -288,7 +293,7 @@ export function installOperationalAnalyticsRoutes(app, { env = process.env, supa
     } catch (error) { fail(res, error, "Inspection coverage could not be loaded."); }
   });
 
-  app.post("/analytics-api/inspections", configured, requireCustodial, async (req, res) => {
+  app.post("/analytics-api/inspections", configured, requireCustodialWrite, async (req, res) => {
     try {
       const payload = normalizeInspectionPayload(req.body || {}, req.memphisAuth || {}, req.get?.("Idempotency-Key") || "");
       const existing = await loadExistingInspection(db, payload.operation_id);

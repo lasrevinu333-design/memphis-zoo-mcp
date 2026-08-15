@@ -30,6 +30,13 @@ function terminalDeliveryError(reason) {
   error.permanent = true;
   return error;
 }
+function deferredDeliveryError(reason) {
+  const normalized = clip(reason, 160) || 'employee_push_delivery_in_flight';
+  const error = new Error(`Employee push delivery remains in flight: ${normalized}.`);
+  error.code = normalized;
+  error.deferFinish = true;
+  return error;
+}
 const EMPLOYEE_TEST_KINDS = new Set(['event', 'message', 'due_soon', 'overdue']);
 function buildManagerTestNotification(kind, { runId, deviceIdentifier }) {
   const notificationKey = `manager-test:${runId}:${kind}:${deviceIdentifier}`;
@@ -113,6 +120,165 @@ export function installEmployeeNotificationRoutes(app, {
       throw terminalDeliveryError('push_registration_missing');
     }
     return registration;
+  }
+
+  async function recordRegistrationDelivery(registration, { succeeded, permanent = false, error = null } = {}) {
+    const tokenHash = crypto.createHash('sha256').update(String(registration?.fcm_token || '')).digest('hex');
+    if (!registration?.registration_id || !/^[0-9a-f]{64}$/.test(tokenHash)
+      || (registration.token_hash && registration.token_hash !== tokenHash)) {
+      throw terminalDeliveryError('push_registration_binding_invalid');
+    }
+    const result = await db.rpc('mz_record_employee_push_delivery', {
+      p_registration_id: registration.registration_id,
+      p_token_hash: tokenHash,
+      p_succeeded: succeeded === true,
+      p_permanent: permanent === true,
+      p_error: error ? clip(error, 2000) : null,
+      p_now: new Date().toISOString(),
+    });
+    if (result.error) throw result.error;
+    return result.data?.current === true;
+  }
+
+  async function claimEventDelivery(job, instance, credential, assignmentEpoch, registration) {
+    const tokenHash = crypto.createHash('sha256').update(String(registration?.fcm_token || '')).digest('hex');
+    if (!registration?.registration_id || !/^[0-9a-f]{64}$/.test(tokenHash)
+      || (registration.token_hash && registration.token_hash !== tokenHash)) {
+      throw terminalDeliveryError('push_registration_binding_invalid');
+    }
+    const result = await db.rpc('mz_claim_employee_event_push_delivery', {
+      p_job_id: job.job_id,
+      p_lease_token: job.lease_token,
+      p_instance_id: instance.instance_id,
+      p_credential_id: credential,
+      p_assignment_epoch: assignmentEpoch,
+      p_registration_id: registration.registration_id,
+      p_token_hash: tokenHash,
+      p_now: new Date().toISOString(),
+    });
+    if (result.error) throw result.error;
+    if (!result.data?.ok) {
+      if (result.data?.defer_finish === true) {
+        throw deferredDeliveryError(result.data?.reason || 'event_push_delivery_in_flight');
+      }
+      throw terminalDeliveryError(result.data?.reason || 'event_push_instance_superseded');
+    }
+    return result.data;
+  }
+
+  async function recordEventDelivery(job, instance, credential, assignmentEpoch, registration, providerMessageId) {
+    const tokenHash = crypto.createHash('sha256').update(String(registration?.fcm_token || '')).digest('hex');
+    if (!registration?.registration_id || !/^[0-9a-f]{64}$/.test(tokenHash)
+      || (registration.token_hash && registration.token_hash !== tokenHash)) {
+      throw terminalDeliveryError('push_registration_binding_invalid');
+    }
+    const result = await db.rpc('mz_record_employee_event_push_delivery', {
+      p_job_id: job.job_id,
+      p_lease_token: job.lease_token,
+      p_instance_id: instance.instance_id,
+      p_credential_id: credential,
+      p_assignment_epoch: assignmentEpoch,
+      p_registration_id: registration.registration_id,
+      p_token_hash: tokenHash,
+      p_provider_message_id: providerMessageId,
+      p_now: new Date().toISOString(),
+    });
+    if (result.error) throw result.error;
+    if (result.data?.current !== true || result.data?.recorded !== true) {
+      throw terminalDeliveryError(`${result.data?.reason || 'event_push_instance_superseded'}_after_provider_dispatch`);
+    }
+    return true;
+  }
+
+  async function releaseEventDelivery(job, instance, credential, assignmentEpoch, registration, errorMessage) {
+    const tokenHash = crypto.createHash('sha256').update(String(registration?.fcm_token || '')).digest('hex');
+    const result = await db.rpc('mz_release_employee_event_push_delivery', {
+      p_job_id: job.job_id,
+      p_lease_token: job.lease_token,
+      p_instance_id: instance.instance_id,
+      p_credential_id: credential,
+      p_assignment_epoch: assignmentEpoch,
+      p_registration_id: registration.registration_id,
+      p_token_hash: tokenHash,
+      p_error: errorMessage,
+      p_now: new Date().toISOString(),
+    });
+    if (result.error) throw result.error;
+    return result.data?.current === true && result.data?.released === true;
+  }
+
+  async function getNativeDeliveryReceipt(job, credential, assignmentEpoch) {
+    const result = await db.rpc('mz_get_employee_native_push_delivery_receipt', {
+      p_job_id: job.job_id,
+      p_lease_token: job.lease_token,
+      p_credential_id: credential,
+      p_assignment_epoch: assignmentEpoch,
+    });
+    if (result.error) throw result.error;
+    if (result.data?.current !== true) {
+      throw terminalDeliveryError(result.data?.reason || 'employee_native_push_job_superseded');
+    }
+    return result.data;
+  }
+
+  async function releaseNativeDelivery(job, credential, assignmentEpoch, registration) {
+    const tokenHash = crypto.createHash('sha256').update(String(registration?.fcm_token || '')).digest('hex');
+    const result = await db.rpc('mz_release_employee_native_push_delivery', {
+      p_job_id: job.job_id,
+      p_lease_token: job.lease_token,
+      p_credential_id: credential,
+      p_assignment_epoch: assignmentEpoch,
+      p_registration_id: registration.registration_id,
+      p_token_hash: tokenHash,
+    });
+    if (result.error) throw result.error;
+    return result.data?.current === true && result.data?.released === true;
+  }
+
+  async function prepareNativeDelivery(job, credential, assignmentEpoch, registration) {
+    const tokenHash = crypto.createHash('sha256').update(String(registration?.fcm_token || '')).digest('hex');
+    if (!registration?.registration_id || !/^[0-9a-f]{64}$/.test(tokenHash)
+      || (registration.token_hash && registration.token_hash !== tokenHash)) {
+      throw terminalDeliveryError('push_registration_binding_invalid');
+    }
+    const result = await db.rpc('mz_prepare_employee_native_push_delivery', {
+      p_job_id: job.job_id,
+      p_lease_token: job.lease_token,
+      p_credential_id: credential,
+      p_assignment_epoch: assignmentEpoch,
+      p_registration_id: registration.registration_id,
+      p_token_hash: tokenHash,
+      p_now: new Date().toISOString(),
+    });
+    if (result.error) throw result.error;
+    if (result.data?.already_recorded === true) return result.data;
+    if (result.data?.current !== true || result.data?.dispatch_authorized !== true) {
+      throw terminalDeliveryError(result.data?.reason || 'native_push_delivery_not_authorized');
+    }
+    return result.data;
+  }
+
+  async function recordNativeDelivery(job, credential, assignmentEpoch, registration, providerMessageId) {
+    const tokenHash = crypto.createHash('sha256').update(String(registration?.fcm_token || '')).digest('hex');
+    if (!registration?.registration_id || !/^[0-9a-f]{64}$/.test(tokenHash)
+      || (registration.token_hash && registration.token_hash !== tokenHash)) {
+      throw terminalDeliveryError('push_registration_binding_invalid');
+    }
+    const result = await db.rpc('mz_record_employee_native_push_delivery', {
+      p_job_id: job.job_id,
+      p_lease_token: job.lease_token,
+      p_credential_id: credential,
+      p_assignment_epoch: assignmentEpoch,
+      p_registration_id: registration.registration_id,
+      p_token_hash: tokenHash,
+      p_provider_message_id: providerMessageId,
+      p_now: new Date().toISOString(),
+    });
+    if (result.error) throw result.error;
+    if (result.data?.current !== true || result.data?.recorded !== true) {
+      throw terminalDeliveryError(`${result.data?.reason || 'employee_native_push_job_superseded'}_after_provider_dispatch`);
+    }
+    return true;
   }
 
   app.use(API_PREFIX, (req, res, next) => {
@@ -285,9 +451,10 @@ export function installEmployeeNotificationRoutes(app, {
   async function deliverClaimedJob(job) {
     let registration = null;
     let eventInstance = null;
+    let credential = null;
+    let assignmentEpoch = null;
+    let providerBoundaryPrepared = false;
     try {
-      let credential;
-      let assignmentEpoch;
       let push;
       let channelId;
       if (job.job_type === 'employee_event_push') {
@@ -327,6 +494,13 @@ export function installEmployeeNotificationRoutes(app, {
       if (!credential || !Number.isSafeInteger(assignmentEpoch) || assignmentEpoch < 1) {
         throw new Error('Employee native push job is missing its assignment-bound recipient.');
       }
+      if (!eventInstance) {
+        const receipt = await getNativeDeliveryReceipt(job, credential, assignmentEpoch);
+        if (receipt.already_recorded === true) return { provider_message_id: receipt.provider_message_id, replayed: true };
+        if (receipt.delivery_outcome_unknown === true) {
+          throw terminalDeliveryError(receipt.reason || 'native_push_delivery_outcome_unknown');
+        }
+      }
       // A job can outlive either its credential or employee assignment.  Check
       // once after claim, then again immediately before the provider boundary.
       // The database resolver also reconciles stale registration state.
@@ -335,32 +509,74 @@ export function installEmployeeNotificationRoutes(app, {
         await beforeFinalDeliveryCheck({ job, credential, assignmentEpoch, registration });
       }
       registration = await resolveAuthorizedDelivery(credential, assignmentEpoch);
-      const providerMessageId = await pushRuntime.send(push, registration, { channelId });
       if (eventInstance) {
-        await db.from('event_push_instances').update({
-          state: 'sent', sent_at: new Date().toISOString(), provider_message_id: providerMessageId, last_error: null, updated_at: new Date().toISOString(),
-        }).eq('instance_id', eventInstance.instance_id);
+        const claimed = await claimEventDelivery(job, eventInstance, credential, assignmentEpoch, registration);
+        if (claimed.already_recorded === true) {
+          return { provider_message_id: claimed.provider_message_id, replayed: true };
+        }
+        providerBoundaryPrepared = true;
+      } else {
+        const prepared = await prepareNativeDelivery(job, credential, assignmentEpoch, registration);
+        if (prepared.already_recorded === true) {
+          return { provider_message_id: prepared.provider_message_id, replayed: true };
+        }
+        providerBoundaryPrepared = true;
       }
-      await db.from('employee_push_registrations').update({
-        last_successful_delivery_at: new Date().toISOString(), last_error: null, updated_at: new Date().toISOString(),
-      }).eq('registration_id', registration.registration_id);
+      const providerMessageId = await pushRuntime.send(push, registration, { channelId });
+      const recorded = eventInstance
+        ? await recordEventDelivery(job, eventInstance, credential, assignmentEpoch, registration, providerMessageId)
+        : await recordNativeDelivery(job, credential, assignmentEpoch, registration, providerMessageId);
+      if (!recorded) {
+        throw terminalDeliveryError('push_registration_superseded_after_provider_dispatch');
+      }
       return { provider_message_id: providerMessageId };
     } catch (error) {
       const errorMessage = clip(error?.message || 'FCM provider request failed.', 2000);
+      if (error?.deferFinish === true) throw error;
+      if (providerBoundaryPrepared && error?.deliveryNotAccepted === true) {
+        const released = eventInstance
+          ? await releaseEventDelivery(job, eventInstance, credential, assignmentEpoch, registration, errorMessage)
+          : await releaseNativeDelivery(job, credential, assignmentEpoch, registration);
+        if (!released) {
+          throw terminalDeliveryError(eventInstance
+            ? 'event_push_delivery_release_superseded'
+            : 'native_push_delivery_release_superseded');
+        }
+        providerBoundaryPrepared = false;
+      }
+      if (providerBoundaryPrepared && error?.deliveryNotAccepted !== true && error?.terminal !== true) {
+        error.terminal = true;
+        error.permanent = true;
+        error.code = eventInstance ? 'event_push_delivery_outcome_unknown' : 'native_push_delivery_outcome_unknown';
+      }
       const authorityTerminal = error?.terminal === true;
+      let providerResultSuperseded = false;
       if (registration?.registration_id && !authorityTerminal) {
-        const registrationUpdate = error?.permanent
-          ? { active: false, revoked_at: new Date().toISOString(), revoked_reason: 'push_token_rejected', last_error: errorMessage, updated_at: new Date().toISOString() }
-          : { last_error: errorMessage, updated_at: new Date().toISOString() };
-        await db.from('employee_push_registrations').update(registrationUpdate).eq('registration_id', registration.registration_id);
+        const current = await recordRegistrationDelivery(registration, {
+          succeeded: false,
+          permanent: error?.permanent === true,
+          error: errorMessage,
+        });
+        if (!current) {
+          providerResultSuperseded = true;
+          error.permanent = false;
+          error.terminal = false;
+          error.code = 'push_registration_rotated_after_provider_failure';
+        }
       }
       if (job.job_type === 'employee_event_push') {
         const eventUpdate = error?.terminal === true
           ? { state: 'cancelled', cancelled_at: new Date().toISOString(), last_error: errorMessage, updated_at: new Date().toISOString() }
-          : { state: 'failed', last_error: errorMessage, updated_at: new Date().toISOString() };
-        await db.from('event_push_instances').update(eventUpdate).eq('instance_id', job.source_id);
+          : {
+            state: 'failed', dispatch_job_id: null, dispatch_lease_token: null, dispatch_registration_id: null,
+            dispatch_token_hash: null, dispatch_started_at: null, last_error: errorMessage, updated_at: new Date().toISOString(),
+          };
+        const eventResult = await db.from('event_push_instances').update(eventUpdate)
+          .eq('instance_id', job.source_id).in('state', ['pending', 'leased', 'failed'])
+          .select('instance_id').maybeSingle();
+        if (eventResult.error) throw eventResult.error;
       }
-      if (error?.permanent === true && !authorityTerminal) {
+      if (error?.permanent === true && !authorityTerminal && !providerResultSuperseded) {
         error.terminal = true;
         error.code ||= 'push_token_rejected';
       }
@@ -396,13 +612,16 @@ export function installEmployeeNotificationRoutes(app, {
         let succeeded = false;
         let errorMessage = null;
         let terminal = false;
+        let deferFinish = false;
         try {
           await deliverClaimedJob(job);
           succeeded = true;
         } catch (error) {
           errorMessage = clip(error?.message || 'FCM provider request failed.', 2000);
           terminal = error?.terminal === true;
+          deferFinish = error?.deferFinish === true;
         }
+        if (deferFinish) continue;
         const finished = terminal
           ? await db.rpc('finish_operational_notification_job_terminal', {
             p_job_id: job.job_id, p_lease_token: job.lease_token, p_error: errorMessage,

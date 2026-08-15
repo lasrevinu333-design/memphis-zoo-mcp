@@ -6209,7 +6209,13 @@ CREATE OR REPLACE FUNCTION public.sch_service_date(p_at timestamp with time zone
  LANGUAGE sql
  STABLE
 AS $function$
-  select (p_at at time zone 'America/Chicago')::date;
+  select (
+    date_trunc(
+      'day',
+      timezone('America/Chicago', p_at)
+        - make_interval(hours => public.get_setting_int('operational_day_start_hour', 4))
+    )
+  )::date;
 $function$;
 
 CREATE OR REPLACE FUNCTION public.sch_set_employee_alias_active(p_alias_id uuid, p_active boolean DEFAULT true)

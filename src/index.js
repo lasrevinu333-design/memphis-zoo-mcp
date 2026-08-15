@@ -15,16 +15,23 @@ import {
   createScheduleRouter,
 } from "./routes/index.js";
 import { APP_VERSION, RELEASE_ID } from "./app-version.js";
-import { buildReleaseManifest } from "./release-manifest.js";
+import { assertConfiguredReleaseIdentity, buildReleaseManifest } from "./release-manifest.js";
+import { observeProductionSchemaIdentity } from "./production-schema-identity.js";
 import { authenticateOpsAccessRequest, createSupabaseTrustedDeviceStore, installSharedAuthRoutes, makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
 import { makeMcpConnectorMiddleware } from "./auth/mcp-connector-auth.js";
-import { installDeviceCredentialRoutes, makeDeviceCredentialMiddleware } from "./auth/device-credential-auth.js";
+import {
+  installDeviceCredentialRoutes,
+  makeDeviceCredentialMiddleware,
+  verifyNativeDeviceRequestAttestation,
+  verifyNativeOfflineWorkAttestation,
+} from "./auth/device-credential-auth.js";
 import { runReadOnlySql as runSupabaseReadOnlySql } from "./supabase/read.js";
 import { createGeminiConsoleRouter } from "./gemini-console-api.js";
 import { createGeminiControlledRepairWorker } from "./gemini-controlled-worker.js";
 import { createMcpServer as createCanonicalMcpServer } from "./mcp/create-mcp-server.js";
 import { getToolManifest } from "./mcp/tool-manifest.js";
 import { validateRuntimeEnv } from "./config/env.js";
+import { authorityHttpFailure, deferJsonParserErrors, malformedScanAuthorityOutcome, rpcFailure, scanRpcHttpOutcome, sqlStateHttpStatus } from "./offline-authority-http.js";
 import { installAnnieMoxieRoutes } from "./annie-moxie-bootstrap.js";
 import { installLeadershipHttpRoutes } from "./leadership-bootstrap.js";
 import { installCustodialEmployeeAdminRoutes } from "./custodial-employee-admin.js";
@@ -32,6 +39,8 @@ import { installManagerNotificationRoutes } from "./manager-notifications.js";
 import { installEmployeeNotificationRoutes } from "./employee-notifications.js";
 import { installOperationalAnalyticsRoutes } from "./operational-analytics-api.js";
 import { normalizeAttendanceRecord, toNullableNonNegativeInteger } from "./attendance-state.js";
+import { normalizeCanonicalScanEvidence } from "./scan-evidence.js";
+import { buildReleaseCanaryTransportProbeCall } from "./native-phone-transport.js";
 import {
   guestFeatureState,
   normalizeFeedbackInput,
@@ -53,7 +62,14 @@ app.use((req, res, next) => {
   }
   next();
 });
-app.use(express.json({ limit: "10mb" }));
+// The scan authority route owns a bounded parser that exposes valid function
+// identity to authentication while deferring malformed-input handling until an
+// authenticated device can durably quarantine it.
+const generalJsonParser = express.json({ limit: "10mb" });
+app.use((req, res, next) => {
+  if (req.path === "/scan-api/rpc") return next();
+  return generalJsonParser(req, res, next);
+});
 app.use(express.urlencoded({ extended: false, limit: "32kb" }));
 
 const MOXIE_MOUNT_PATH = (String(process.env.MOXIE_PREFIX || "/moxie").trim() || "/moxie").replace(/\/+$/, "") || "/moxie";
@@ -80,19 +96,30 @@ const SCAN_RPC_ALLOWLIST = new Set([
   "tool_get_system_settings",
   "tool_list_active_employees",
   "tool_get_location_scan_state",
-  "tool_start_session",
-  "tool_start_session_v2",
+  "tool_get_offline_scan_authority_snapshot",
+  "tool_start_offline_occurrence",
   "tool_finish_session",
   "tool_complete_session",
   "tool_ping_device",
-  "tool_record_scan_event",
   "tool_commit_cleaning_workflow",
   "tool_report_device_sync_status",
+  "tool_report_device_sync_status_v2",
+  "tool_get_device_rollback_readiness",
   "tool_evaluate_location_proximity",
   "tool_evaluate_location_proximity_v2"
 ]);
+const OFFLINE_RECOVERY_FUNCTIONS = new Set([
+  "tool_start_offline_occurrence",
+  "tool_commit_cleaning_workflow",
+]);
+const NATIVE_CUSTODIAL_ORIGINS = new Set([
+  "https://localhost",
+  "http://localhost",
+  "capacitor://localhost",
+  "ionic://localhost",
+]);
 
-const SCAN_CONTRACT_VERSION = "scan.v2";
+const SCAN_CONTRACT_VERSION = "scan.v4.snapshot-bound-authority";
 const DASHBOARD_CONTRACT_VERSION = "dashboard.v1";
 const MESSAGING_CONTRACT_VERSION = "messaging.v5";
 const SCHEDULE_CONTRACT_VERSION = "schedule.v2";
@@ -104,7 +131,7 @@ const OPS_MANAGER_AUTH_CONTRACT_VERSION = "ops-manager-auth.v5.named-leadership"
 const GEMINI_CONSOLE_CONTRACT_VERSION = "gemini-console.v2";
 const CANARY_RESTROOM_CODE = "TETM";
 const CANARY_EXHIBIT_CODE = "TETX";
-const CANARY_DEVICE_ID = "canary-check";
+const HEALTH_PROBE_DEVICE_ID = "canary-check";
 const ATTENDANCE_SOURCE_URL = String(process.env.ND_MEMZOO_ATTENDANCE_URL || "https://nd.memzoo.org").trim();
 const ATTENDANCE_TIMEOUT_MS = toSafeInt(process.env.ND_MEMZOO_ATTENDANCE_TIMEOUT_MS, 8000);
 const ATTENDANCE_CACHE_MS = toSafeInt(process.env.ND_MEMZOO_ATTENDANCE_CACHE_MS, 60000);
@@ -193,6 +220,10 @@ function requireDeviceOrOpsAccess(req, res, next) {
 
 function requireScanRpcAuthorization(req, res, next) {
   const fn = String(req.body?.fn || "").trim();
+  if (req.memphisDeviceAuth?.offline_recovery_only === true && !OFFLINE_RECOVERY_FUNCTIONS.has(fn)) {
+    res.status(403).json({ ok: false, error: "A revoked or stale device credential may activate or submit only work bound to its frozen offline snapshot." });
+    return;
+  }
   if (req.memphisAuth?.read_only && !SCAN_READ_FUNCTIONS.has(fn)) {
     res.status(403).json({ ok: false, error: "Read-only Ops Manager access cannot run scan mutations." });
     return;
@@ -209,23 +240,7 @@ function publicSubmissionRateLimit(scope) {
     try {
       const ip = String(req.ip || req.socket?.remoteAddress || "unknown").trim();
       const bucketKey = createHmac("sha256", getFeedbackLinkSecret()).update(`${scope}:${ip}`).digest("hex");
-      await runWriteSql(
-        `public_${scope}_rate_limit`,
-        `insert into public.public_submission_rate_limits(bucket_key,scope,window_started_at,request_count,updated_at)
-         values (${sqlLiteral(bucketKey)},${sqlLiteral(scope)},now(),1,now())
-         on conflict(bucket_key) do update
-         set scope=excluded.scope,
-             window_started_at=case
-               when public.public_submission_rate_limits.window_started_at <= now() - interval '60 seconds' then now()
-               else public.public_submission_rate_limits.window_started_at
-             end,
-             request_count=case
-               when public.public_submission_rate_limits.window_started_at <= now() - interval '60 seconds' then 1
-               else public.public_submission_rate_limits.request_count + 1
-             end,
-             updated_at=now()
-         ;`
-      );
+      await runOperationalCommand("public_rate_limit", { bucket_key: bucketKey, scope });
       const rows = await runReadOnlySql(
         `select request_count from public.public_submission_rate_limits where bucket_key=${sqlLiteral(bucketKey)} limit 1`
       );
@@ -262,7 +277,9 @@ const SCAN_READ_FUNCTIONS = new Set([
   "tool_get_system_settings",
   "tool_list_active_employees",
   "tool_get_location_scan_state",
+  "tool_get_offline_scan_authority_snapshot",
 ]);
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function clientIp(req) {
   return String(req.headers["x-forwarded-for"] || req.ip || req.socket?.remoteAddress || "unknown")
@@ -287,84 +304,61 @@ function consumeRateLimitBucket({ key, limit, now = Date.now() }) {
 }
 
 function canonicalizeScanArguments(fn, args, device) {
-  const canonicalArgs = { ...(args && typeof args === "object" ? args : {}) };
+  if (!args || typeof args !== "object" || Array.isArray(args)) {
+    throw Object.assign(new Error("Scan RPC args must be a JSON object."), { status: 422, code: "22023" });
+  }
+  const canonicalArgs = { ...args };
   const canonicalDeviceId = String(device?.canonical_device_id || device?.device_id || "").trim();
   if (canonicalDeviceId) {
     if ("p_device_id" in canonicalArgs || [
       "tool_get_location_scan_state",
-      "tool_start_session",
+      "tool_get_offline_scan_authority_snapshot",
+      "tool_start_offline_occurrence",
       "tool_finish_session",
       "tool_complete_session",
       "tool_ping_device",
       "tool_commit_cleaning_workflow",
     ].includes(fn)) canonicalArgs.p_device_id = canonicalDeviceId;
     if ("p_device_identifier" in canonicalArgs || [
-      "tool_record_scan_event",
       "tool_report_device_sync_status",
+      "tool_report_device_sync_status_v2",
+      "tool_get_device_rollback_readiness",
       "tool_evaluate_location_proximity",
       "tool_evaluate_location_proximity_v2",
     ].includes(fn)) canonicalArgs.p_device_identifier = canonicalDeviceId;
   }
 
   const assignedEmployeeName = String(device?.assigned_employee_name || "").trim();
-  if (assignedEmployeeName && fn === "tool_start_session") canonicalArgs.p_employee_name = assignedEmployeeName;
   if (assignedEmployeeName && fn === "tool_complete_session") canonicalArgs.p_submitted_by_employee_name = assignedEmployeeName;
   return canonicalArgs;
 }
 
 function prepareScanRpcCall(fn, args) {
   const normalizedFn = String(fn || "").trim();
-  const nextArgs = { ...(args && typeof args === "object" ? args : {}) };
-  if (normalizedFn === "tool_start_session") {
+  const nextArgs = { ...args };
+  if (normalizedFn === "tool_start_offline_occurrence") {
     const clientSessionId = String(nextArgs.p_client_session_id || nextArgs.client_session_id || "").trim();
-    if (!clientSessionId) {
-      const error = new Error("p_client_session_id is required for scan start idempotency.");
-      error.status = 422;
-      throw error;
-    }
-    return {
-      fn: "tool_start_session_v2",
-      args: {
-        p_location_code: nextArgs.p_location_code,
-        p_device_id: nextArgs.p_device_id,
-        p_client_session_id: clientSessionId,
-        p_client_started_at: nextArgs.p_client_started_at || nextArgs.started_at || null,
-        p_correlation_id: nextArgs.p_correlation_id || `scan-start:${clientSessionId}`,
-      },
-    };
-  }
-  if (normalizedFn === "tool_start_session_v2") {
-    const clientSessionId = String(nextArgs.p_client_session_id || nextArgs.client_session_id || "").trim();
-    if (!clientSessionId) {
-      const error = new Error("p_client_session_id is required for scan start idempotency.");
+    const clientStartedAt = String(nextArgs.p_client_started_at || nextArgs.started_at || "").trim();
+    if (!clientSessionId || !clientStartedAt) {
+      const error = new Error("p_client_session_id and p_client_started_at are required to activate an offline occurrence.");
       error.status = 422;
       throw error;
     }
     nextArgs.p_client_session_id = clientSessionId;
-    if (!nextArgs.p_correlation_id) nextArgs.p_correlation_id = `scan-start:${clientSessionId}`;
-  }
-  if (normalizedFn === "tool_finish_session") {
-    const sessionIdentifier = String(nextArgs.p_session_uuid || nextArgs.p_client_session_id || "").trim();
-    const finishOperationId = String(nextArgs.p_finish_operation_id || nextArgs.p_operation_id || nextArgs.p_client_event_id || "").trim();
-    if (!sessionIdentifier) {
-      const error = new Error("Exact p_session_uuid or p_client_session_id is required for a finish transition.");
-      error.status = 422;
-      throw error;
+    nextArgs.p_client_started_at = clientStartedAt;
+    const snapshotId = String(nextArgs.p_snapshot_id || nextArgs.snapshot_id || "").trim().toLowerCase();
+    const snapshotEmployeeId = String(nextArgs.p_snapshot_employee_id || nextArgs.snapshot_employee_id || nextArgs.employee_id || "").trim().toLowerCase();
+    const snapshotEpoch = Number(nextArgs.p_snapshot_assignment_epoch ?? nextArgs.snapshot_assignment_epoch ?? nextArgs.assignment_epoch);
+    const nativeScanEntryId = String(nextArgs.p_native_scan_entry_id || "").trim().toLowerCase();
+    if (!/^[0-9a-f]{64}$/.test(snapshotId) || !/^[0-9a-f-]{36}$/.test(snapshotEmployeeId)
+        || !Number.isInteger(snapshotEpoch) || snapshotEpoch < 1
+        || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(nativeScanEntryId)) {
+      throw Object.assign(new Error("p_snapshot_id, p_snapshot_employee_id, and p_snapshot_assignment_epoch from the issued offline snapshot are required."), { status: 422, code: "22023" });
     }
-    if (!isUuid(finishOperationId)) {
-      const error = new Error("p_finish_operation_id must be a stable UUID for a finish transition.");
-      error.status = 422;
-      throw error;
-    }
-    return {
-      fn: "tool_finish_session_exact",
-      args: {
-        p_session_identifier: sessionIdentifier,
-        p_device_id: nextArgs.p_device_id,
-        p_finish_operation_id: finishOperationId,
-        p_client_ended_at: nextArgs.p_client_ended_at || nextArgs.ended_at || null,
-      },
-    };
+    nextArgs.p_snapshot_id = snapshotId;
+    nextArgs.p_snapshot_employee_id = snapshotEmployeeId;
+    nextArgs.p_snapshot_assignment_epoch = snapshotEpoch;
+    nextArgs.p_native_scan_entry_id = nativeScanEntryId;
   }
   if (normalizedFn === "tool_complete_session") {
     const sessionIdentifier = String(nextArgs.p_session_uuid || nextArgs.p_client_session_id || "").trim();
@@ -374,8 +368,8 @@ function prepareScanRpcCall(fn, args) {
       error.status = 422;
       throw error;
     }
-    if (!completionId) {
-      const error = new Error("p_client_completion_id is required for idempotent completion.");
+    if (!UUID_PATTERN.test(completionId)) {
+      const error = new Error("p_client_completion_id must be a UUID for idempotent completion.");
       error.status = 422;
       throw error;
     }
@@ -383,24 +377,309 @@ function prepareScanRpcCall(fn, args) {
       fn: normalizedFn,
       args: {
         p_session_uuid: sessionIdentifier,
-        p_response_json: nextArgs.p_response_json || {},
+        p_response_json: nextArgs.p_response_json,
         p_submitted_by_employee_name: nextArgs.p_submitted_by_employee_name || null,
         p_device_id: nextArgs.p_device_id || null,
         p_client_completion_id: completionId,
       },
     };
   }
+  if (normalizedFn === "tool_finish_session") {
+    const sessionIdentifier = String(nextArgs.p_session_uuid || nextArgs.p_client_session_id || "").trim();
+    const finishOperationId = String(nextArgs.p_finish_operation_id || nextArgs.p_operation_id || "").trim();
+    const clientEndedAt = String(nextArgs.p_client_ended_at || "").trim();
+    if (!UUID_PATTERN.test(sessionIdentifier) || !UUID_PATTERN.test(finishOperationId)) {
+      throw Object.assign(new Error("Exact UUID session and finish operation identities are required for a historical finish."), { status: 422, code: "22023" });
+    }
+    if (clientEndedAt && !Number.isFinite(Date.parse(clientEndedAt))) {
+      throw Object.assign(new Error("p_client_ended_at must be an ISO-8601 timestamp when supplied."), { status: 422, code: "22007" });
+    }
+    return {
+      fn: "custodial_finish_historical_session_authoritative",
+      args: {
+        p_session_identifier: sessionIdentifier,
+        p_device_id: nextArgs.p_device_id,
+        p_finish_operation_id: finishOperationId,
+        p_client_ended_at: clientEndedAt || null,
+        p_backend_execution_secret: offlineAuthoritySecret(),
+      },
+    };
+  }
   if (normalizedFn === "tool_commit_cleaning_workflow") {
     const clientSessionId = String(nextArgs.p_client_session_id || "").trim();
     const clientCompletionId = String(nextArgs.p_client_completion_id || "").trim();
-    if (!clientSessionId || !clientCompletionId) {
-      const error = new Error("p_client_session_id and p_client_completion_id are required for idempotent completion.");
+    if (!clientSessionId || !UUID_PATTERN.test(clientCompletionId)) {
+      const error = new Error("p_client_session_id is required and p_client_completion_id must be a UUID for idempotent completion.");
       error.status = 422;
       throw error;
     }
     if (!nextArgs.p_correlation_id) nextArgs.p_correlation_id = `scan-commit:${clientSessionId}:${clientCompletionId}`;
+    if (!nextArgs.p_response_json || typeof nextArgs.p_response_json !== "object" || Array.isArray(nextArgs.p_response_json)) {
+      throw Object.assign(new Error("p_response_json must be a JSON object."), { status: 422, code: "22023" });
+    }
+    nextArgs.p_scan_evidence = normalizeCanonicalScanEvidence(nextArgs.p_scan_evidence);
   }
   return { fn: normalizedFn, args: nextArgs };
+}
+
+function offlineAuthoritySecret() {
+  const secret = String(process.env.CUSTODIAL_BACKEND_PROOF_SECRET || "").trim();
+  if (secret.length < 32) {
+    const error = new Error("Offline authority is unavailable until CUSTODIAL_BACKEND_PROOF_SECRET is configured.");
+    error.status = 503;
+    error.code = "offline_authority_not_configured";
+    throw error;
+  }
+  return secret;
+}
+
+function nativeRouteProofSecret() {
+  const secret = String(process.env.CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET || "").trim();
+  if (secret.length < 32 || secret === offlineAuthoritySecret()) {
+    const error = new Error("Native route authority is unavailable until a distinct CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET is configured.");
+    error.status = 503;
+    error.code = "native_route_authority_not_configured";
+    throw error;
+  }
+  return secret;
+}
+
+function bindOfflineActorProof(fn, args, credential) {
+  const normalizedFn = String(fn || "").trim();
+  if (!["tool_commit_cleaning_workflow", "tool_complete_session", "tool_start_offline_occurrence", "tool_get_offline_scan_authority_snapshot"].includes(normalizedFn)) return { fn: normalizedFn, args };
+  if (!args || typeof args !== "object" || Array.isArray(args)) {
+    throw Object.assign(new Error("Offline authority arguments must be a JSON object."), { status: 422, code: "22023" });
+  }
+  const nextArgs = { ...args };
+  const secret = offlineAuthoritySecret();
+  if (!credential?.credential_id) {
+    const error = new Error("An authenticated device credential is required for offline authority.");
+    error.status = 401;
+    throw error;
+  }
+  if (normalizedFn === "tool_get_offline_scan_authority_snapshot") {
+    return {
+      fn: normalizedFn,
+      args: {
+        p_device_id: nextArgs.p_device_id,
+        p_authenticated_credential_id: credential.credential_id,
+        p_backend_execution_secret: secret,
+      },
+    };
+  }
+  if (normalizedFn === "tool_start_offline_occurrence") {
+    nextArgs.p_authenticated_credential_id = credential.credential_id;
+    // Credential identity is authenticated server-side; never accept a
+    // client-provided snapshot credential as authority.
+    nextArgs.p_snapshot_credential_id = credential.credential_id;
+    nextArgs.p_backend_execution_secret = secret;
+    return { fn: normalizedFn, args: nextArgs };
+  }
+  if (normalizedFn === "tool_complete_session") {
+    const authoritativeArgs = {
+      p_session_uuid: nextArgs.p_session_uuid,
+      p_response_json: nextArgs.p_response_json,
+      p_device_id: nextArgs.p_device_id || null,
+      p_client_completion_id: nextArgs.p_client_completion_id,
+      p_authenticated_credential_id: credential.credential_id,
+      p_backend_execution_secret: secret,
+    };
+    return {
+      fn: "tool_complete_session_authoritative",
+      args: authoritativeArgs,
+      // The bridge release is safe to deploy before Phase B: while the new
+      // command does not exist it calls the accepted legacy writer; the first
+      // Phase B transaction atomically makes the canonical command available.
+      fallback: {
+        fn: "tool_complete_session",
+        args: {
+          p_session_uuid: nextArgs.p_session_uuid,
+          p_response_json: nextArgs.p_response_json,
+          p_submitted_by_employee_name: nextArgs.p_submitted_by_employee_name || null,
+          p_device_id: nextArgs.p_device_id || null,
+          p_client_completion_id: nextArgs.p_client_completion_id,
+        },
+      },
+    };
+  }
+  if (!nextArgs.p_response_json || typeof nextArgs.p_response_json !== "object" || Array.isArray(nextArgs.p_response_json)) {
+    throw Object.assign(new Error("p_response_json must be a JSON object."), { status: 422, code: "22023" });
+  }
+  nextArgs.p_scan_evidence = normalizeCanonicalScanEvidence(nextArgs.p_scan_evidence);
+  const response = { ...nextArgs.p_response_json };
+  const requested = response.__custodial_offline_reconciliation_v1;
+  if (!requested || typeof requested !== "object" || Array.isArray(requested)) {
+    throw Object.assign(new Error("A canonical offline reconciliation control object is required."), { status: 422, code: "22023" });
+  }
+  const requestedControl = requested;
+  delete response.__custodial_offline_reconciliation_v1;
+  const authoritativeArgs = {
+    p_client_session_id: nextArgs.p_client_session_id,
+    p_client_completion_id: nextArgs.p_client_completion_id,
+    p_device_id: nextArgs.p_device_id,
+    p_location_code: nextArgs.p_location_code,
+    p_client_started_at: String(nextArgs.p_client_started_at || ""),
+    p_client_ended_at: String(nextArgs.p_client_ended_at || ""),
+    p_response_json: response,
+    p_scan_evidence: nextArgs.p_scan_evidence,
+    p_correlation_id: nextArgs.p_correlation_id || null,
+    p_context_id: String(requestedControl.context_id || ""),
+    p_submission_proof: String(requestedControl.submission_proof || ""),
+    p_authenticated_credential_id: credential.credential_id,
+    p_native_finish_scan_entry_id: nextArgs.p_native_finish_scan_entry_id,
+    p_native_completion_attestation_version: nextArgs.p_native_completion_attestation_version,
+    p_native_completion_attestation: nextArgs.p_native_completion_attestation,
+    p_native_route_proof_secret: nextArgs.p_native_route_proof_secret,
+    p_backend_execution_secret: secret,
+  };
+  return {
+    fn: "tool_commit_cleaning_workflow_authoritative",
+    args: authoritativeArgs,
+    fallback: {
+      fn: "tool_commit_cleaning_workflow",
+      args: {
+        p_client_session_id: nextArgs.p_client_session_id,
+        p_client_completion_id: nextArgs.p_client_completion_id,
+        p_device_id: nextArgs.p_device_id,
+        p_location_code: nextArgs.p_location_code,
+        p_client_started_at: nextArgs.p_client_started_at,
+        p_client_ended_at: nextArgs.p_client_ended_at,
+        p_response_json: response,
+        p_scan_evidence: nextArgs.p_scan_evidence,
+        p_correlation_id: nextArgs.p_correlation_id || null,
+      },
+    },
+  };
+}
+
+async function runPreparedScanRpc(prepared) {
+  try {
+    return await runRpc(prepared.fn, prepared.args);
+  } catch (error) {
+    if (["42883", "PGRST202"].includes(error?.code) && prepared?.fallback?.fn) {
+      return runRpc(prepared.fallback.fn, prepared.fallback.args);
+    }
+    throw error;
+  }
+}
+
+async function executeScanRpcTransport(fn, args, device, credential, req) {
+  const normalizedFn = String(fn || "").trim();
+  if (!SCAN_RPC_ALLOWLIST.has(normalizedFn)) {
+    throw Object.assign(new Error(`Function not allowed: ${normalizedFn}`), { status: 400, code: "scan_function_not_allowed" });
+  }
+  if (isNativeCustodialScanRequest(req)) {
+    req.memphisNativeRequestAttestation = verifyNativeDeviceRequestAttestation(req);
+  }
+  const canonicalArgs = canonicalizeScanArguments(normalizedFn, args, device);
+  const preparedBase = prepareScanRpcCall(normalizedFn, canonicalArgs);
+  if (normalizedFn === "tool_start_offline_occurrence") {
+    const attestation = verifyNativeOfflineWorkAttestation(req, preparedBase.args, "start");
+    preparedBase.args.p_native_start_attestation_version = attestation.version;
+    preparedBase.args.p_native_start_attestation = attestation.signature;
+    preparedBase.args.p_native_scan_entry_id = attestation.native_scan_entry_id;
+    preparedBase.args.p_native_route_proof_secret = nativeRouteProofSecret();
+  } else if (normalizedFn === "tool_commit_cleaning_workflow") {
+    const attestation = verifyNativeOfflineWorkAttestation(req, preparedBase.args, "completion");
+    preparedBase.args.p_native_completion_attestation_version = attestation.version;
+    preparedBase.args.p_native_completion_attestation = attestation.signature;
+    preparedBase.args.p_native_finish_scan_entry_id = attestation.native_finish_scan_entry_id;
+    preparedBase.args.p_native_route_proof_secret = nativeRouteProofSecret();
+  }
+  const proofBound = bindOfflineActorProof(preparedBase.fn, preparedBase.args, credential);
+  const prepared = { ...preparedBase, ...proofBound };
+  const data = await runPreparedScanRpc(prepared);
+  return scanRpcHttpOutcome(normalizedFn, data);
+}
+
+async function collectBackendAuthorityHealth() {
+  const authorityHealth = await runRpc("custodial_backend_authority_health", {
+    p_backend_execution_secret: offlineAuthoritySecret(),
+  });
+  const canaryDeviceId = configuredReleaseCanaryDeviceId();
+  const scanTransportProbe = canaryDeviceId
+    ? await runRpc("custodial_get_release_canary_transport_probe_health", {
+        p_device_identifier: canaryDeviceId,
+        p_backend_commit_sha: BACKEND_COMMIT_SHA,
+        p_release_id: RELEASE_ID,
+        p_backend_execution_secret: offlineAuthoritySecret(),
+      })
+    : { ready: true, configured: false, reason: "release_canary_not_required" };
+  const scanTransportReady = scanTransportProbe?.ready === true;
+  return {
+    ...authorityHealth,
+    ok: authorityHealth?.ok === true && scanTransportReady,
+    scan_rpc_transport: {
+      ...scanTransportProbe,
+      ready: scanTransportReady,
+      probe_function: "tool_get_system_settings",
+      path: "/scan-api/rpc",
+    },
+  };
+}
+
+function isNativeCustodialScanRequest(req) {
+  const origin = String(req.headers?.origin || "").trim();
+  const edition = String(req.headers?.["x-memphis-app-edition"] || "").trim().toLowerCase();
+  return NATIVE_CUSTODIAL_ORIGINS.has(origin) && edition === "custodial";
+}
+
+async function recordReleaseCanaryTransportProbe(req, deviceIdentifier) {
+  const call = buildReleaseCanaryTransportProbeCall({
+    req,
+    deviceIdentifier,
+    backendCommitSha: BACKEND_COMMIT_SHA,
+    releaseId: RELEASE_ID,
+    nativeRouteProofSecret: nativeRouteProofSecret(),
+  });
+  return runRpc(call.fn, call.args);
+}
+
+const MAX_SCAN_RPC_BYTES = 1024 * 1024;
+const scanAuthorityJsonParser = express.json({
+  limit: `${MAX_SCAN_RPC_BYTES}b`,
+  strict: true,
+  verify(req, _res, buffer) {
+    req.scanAuthorityRawBody = Buffer.from(buffer);
+  },
+});
+const parseScanAuthorityJsonBeforeAuthentication = deferJsonParserErrors(
+  scanAuthorityJsonParser,
+  "scanAuthorityJsonError",
+);
+
+async function rejectInvalidAuthenticatedScanAuthorityJson(req, res, next) {
+  const parseError = req.scanAuthorityJsonError;
+  if (!parseError) {
+    next();
+    return;
+  }
+    const credentialId = String(req.memphisDeviceCredential?.credential_id || "").trim();
+    const rawBody = req.scanAuthorityRawBody || parseError.body || Buffer.alloc(0);
+    const declaredLength = Number.parseInt(String(req.headers["content-length"] || rawBody.length || 0), 10);
+    const contentLength = Number.isFinite(declaredLength) && declaredLength >= 0
+      ? Math.min(declaredLength, 10 * 1024 * 1024)
+      : Math.min(rawBody.length, 10 * 1024 * 1024);
+    const digest = createHash("sha256")
+      .update(`${credentialId}:${parseError.type || "invalid_json"}:${contentLength}:`)
+      .update(rawBody)
+      .digest("hex");
+    try {
+      if (credentialId && offlineAuthoritySecret()) {
+        await runRpc("custodial_quarantine_malformed_scan_http", {
+          p_request_digest: digest,
+          p_authenticated_credential_id: credentialId,
+          p_content_length: contentLength,
+          p_backend_execution_secret: offlineAuthoritySecret(),
+        });
+      }
+    } catch (quarantineError) {
+      const failure = authorityHttpFailure(quarantineError, "Malformed scan payload quarantine is unavailable.");
+      res.status(failure.status).json(failure.body);
+      return;
+    }
+    const outcome = malformedScanAuthorityOutcome({ deviceQuarantined: Boolean(credentialId && offlineAuthoritySecret()) });
+    res.status(outcome.status).json(outcome.body);
 }
 
 function scanRpcRateLimit(req, res, next) {
@@ -461,6 +740,15 @@ function buildHealthPayload(area, extra = {}) {
   };
 }
 
+function staticWeeklyControlPlanePublicUrl(env = process.env) {
+  const value = String(env.STATIC_WEEKLY_CONTROL_PLANE_PUBLIC_URL || "").trim().replace(/\/+$/, "");
+  if (!value) return null;
+  if (!/^https:\/\/[a-z0-9.-]+(?::\d+)?$/i.test(value) && !/^http:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?$/i.test(value)) {
+    throw new Error("STATIC_WEEKLY_CONTROL_PLANE_PUBLIC_URL must be one HTTPS origin or a local HTTP origin.");
+  }
+  return value;
+}
+
 function getSupabaseConfig() {
   if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY || !supabaseAdmin) {
     throw new Error("Supabase is not configured. Check SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env.");
@@ -493,6 +781,11 @@ const TRUSTED_DEVICE_CORS_HEADERS = [
   "X-Device-Label",
   "X-Device-Credential",
   "X-Memphis-Device-Credential",
+  "X-Memphis-App-Edition",
+  "X-Memphis-Native-Attestation-Version",
+  "X-Memphis-Native-Request-Id",
+  "X-Memphis-Native-Request-Timestamp",
+  "X-Memphis-Native-Request-Attestation",
   "X-Device-Security-CSRF",
   "X-Admin-Key",
   "X-Ops-Access-Key",
@@ -571,6 +864,42 @@ function safeStringEqual(left, right) {
   return timingSafeEqual(a, b);
 }
 
+function releaseCanaryConfigurationRequired(env = process.env) {
+  return env.NODE_ENV === "production" && /^(1|true|yes)$/i.test(String(env.RENDER || ""));
+}
+
+function configuredReleaseCanaryDeviceId({ required = releaseCanaryConfigurationRequired() } = {}) {
+  const deviceId = String(process.env.CUSTODIAL_RELEASE_CANARY_DEVICE_ID || "").trim().toUpperCase();
+  if (!deviceId) {
+    if (required) {
+      throw Object.assign(new Error("CUSTODIAL_RELEASE_CANARY_DEVICE_ID is required for the production release."), {
+        status: 503,
+        code: "release_canary_not_configured",
+      });
+    }
+    return null;
+  }
+  if (!/^KIOSK_(0[2-9]|10)$/.test(deviceId)) {
+    throw new Error("CUSTODIAL_RELEASE_CANARY_DEVICE_ID must identify KIOSK_02 through KIOSK_10.");
+  }
+  return deviceId;
+}
+
+function requireReleaseSchemaIdentityToken(req, res, next) {
+  const configured = String(process.env.MEMPHIS_RELEASE_SCHEMA_IDENTITY_TOKEN || "").trim();
+  if (configured.length < 32) {
+    res.status(503).json({ ok: false, error: "Release schema observation is not configured." });
+    return;
+  }
+  const match = String(req.get("authorization") || "").match(/^Bearer\s+(.+)$/i);
+  const supplied = String(match?.[1] || "").trim();
+  if (!supplied || !safeStringEqual(supplied, configured)) {
+    res.status(401).json({ ok: false, error: "Unauthorized" });
+    return;
+  }
+  next();
+}
+
 let _feedbackLinkSecretGenerated = null;
 function getFeedbackLinkSecret() {
   const secret = String(process.env.FEEDBACK_LINK_SECRET || "").trim();
@@ -636,12 +965,12 @@ async function runRpc(functionName, args = {}) {
       p_service_date: args?.p_service_date,
       p_force: args?.p_force === true,
     });
-    if (error) throw new Error(error.message || "RPC failed: sch_generate_daily_schedule_privileged");
+    if (error) throw rpcFailure(error, "sch_generate_daily_schedule_privileged");
     return data;
   }
   const client = getSupabaseConfig();
   const { data, error } = await client.rpc(functionName, args);
-  if (error) throw new Error(error.message || `RPC failed: ${functionName}`);
+  if (error) throw rpcFailure(error, functionName);
   return data;
 }
 
@@ -680,6 +1009,19 @@ function requestOperationId(req) {
   ).trim();
   if (!value) return randomUUID();
   if (!isUuid(value)) throw Object.assign(new Error("operation_id must be a UUID."), { status: 422 });
+  return value;
+}
+
+function requiredRequestOperationId(req) {
+  const value = String(
+    req?.body?.operation_id
+      || req?.body?.operationId
+      || req?.header?.("idempotency-key")
+      || "",
+  ).trim();
+  if (!isUuid(value)) {
+    throw Object.assign(new Error("operation_id must be a stable UUID."), { status: 422, code: "22023" });
+  }
   return value;
 }
 
@@ -745,31 +1087,10 @@ async function persistAttendanceState(payload = {}) {
     }
   }
 
-  await runWriteSql(
-    "attendance_state_upsert",
-    `insert into public.current_attendance_state (
-       id, attendance, last_year, planned, yesterday, yesterday_plan, source, fetched_at, updated_at
-     ) values (
-       1,
-       ${sqlLiteral(attendance)},
-       ${sqlLiteral(lastYear)},
-       ${sqlLiteral(planned)},
-       ${sqlLiteral(yesterday)},
-       ${sqlLiteral(yesterdayPlan)},
-       ${sqlLiteral(source)},
-       ${fetchedAt ? `${sqlLiteral(fetchedAt)}::timestamptz` : "null"},
-       now()
-     )
-     on conflict (id) do update set
-       attendance = excluded.attendance,
-       last_year = excluded.last_year,
-       planned = excluded.planned,
-       yesterday = excluded.yesterday,
-       yesterday_plan = excluded.yesterday_plan,
-       source = excluded.source,
-       fetched_at = excluded.fetched_at,
-       updated_at = now();`
-  );
+  await runOperationalCommand("attendance_state_upsert", {
+    attendance, last_year: lastYear, planned, yesterday, yesterday_plan: yesterdayPlan,
+    source, fetched_at: fetchedAt,
+  });
 
   return await loadStoredAttendance();
 }
@@ -851,18 +1172,48 @@ async function runReadOnlySql(sql) {
   return result.rows;
 }
 
-async function runWriteSql(namePrefix, sql) {
-  const client = getSupabaseConfig();
-  const operationName = String(namePrefix || "application_write").trim().slice(0, 120) || "application_write";
-  const { data, error } = await client.rpc("run_application_write", {
-    p_name: operationName,
-    p_sql: String(sql || "").trim(),
+async function runSchemaCatalogSql(sql) {
+  return runSupabaseReadOnlySql({
+    client: getSupabaseConfig(),
+    sql,
+    maxRows: 250_000,
+    maxResponseBytes: 100_000_000,
   });
-  if (error) throw new Error(error.message || "run_application_write failed");
-  return data;
 }
 
-const eventMaintenanceController = createEventMaintenanceController({ runReadOnlySql, runWriteSql, runRpc });
+async function runOperationalCommand(command, payload = {}) {
+  return runRpc("app_apply_operational_command", {
+    p_command: String(command || "").trim(),
+    p_payload: payload,
+  });
+}
+
+async function runEventCommand(command, payload = {}) {
+  const normalized = String(command || "").trim();
+  const commands = {
+    event_create: "create",
+    event_update: "update",
+    event_cancel: "cancel",
+  };
+  const eventCommand = commands[normalized];
+  if (!eventCommand) throw new Error(`Unsupported bounded event command: ${normalized}`);
+  return runRpc("app_apply_event_command", {
+    p_command: eventCommand,
+    p_event_id: payload.event_id || null,
+    p_record: payload.record || {},
+    p_actor: payload.actor || null,
+    p_reason: payload.reason || null,
+  });
+}
+
+async function runScheduleCommand(command, payload = {}) {
+  return runRpc("app_apply_schedule_command", {
+    p_command: String(command || "").trim(),
+    p_payload: payload,
+  });
+}
+
+const eventMaintenanceController = createEventMaintenanceController({ runReadOnlySql, runCommand: runEventCommand, runRpc });
 
 async function runAdminBundleViaSqlRead(limits = {}) {
   const pLocationLimit = toSafeInt(limits.p_location_limit, 60);
@@ -899,17 +1250,155 @@ async function resolveGuestReportLocation(locationCode) {
 
 async function resolveOpsManagerRecipients() {
   const rows = await runReadOnlySql(`
-    select distinct mu.id as user_id, mu.display_name, mu.role
+    select distinct mu.id as user_id, mu.display_name, mu.role, m.manager_id
     from public.msg_users mu
+    join public.ops_manager_managers m on m.manager_id = mu.ops_manager_id
     where coalesce(mu.is_active, true) = true
-      and (
-        lower(coalesce(mu.role, '')) like '%ops manager%'
-        or lower(coalesce(mu.role, '')) like '%operations manager%'
-        or lower(coalesce(mu.role, '')) = 'manager'
-      )
+      and m.active = true
+      and m.revoked_at is null
+      and m.is_system_principal = false
     order by mu.display_name
   `);
   return Array.isArray(rows) ? rows.filter((row) => isUuid(row.user_id)) : [];
+}
+
+async function deliverCustodialOfflineReconciliationNotification(notification) {
+  const recipients = await resolveOpsManagerRecipients();
+  if (!recipients.length) {
+    const error = new Error("No active named manager recipient is available for offline reconciliation recovery.");
+    error.terminal = true;
+    throw error;
+  }
+  const memphisRows = await runReadOnlySql("select public.msg_get_memphis_user_id() as memphis_user_id");
+  const memphisUserId = Array.isArray(memphisRows) && memphisRows.length ? memphisRows[0].memphis_user_id : null;
+  if (!isUuid(memphisUserId)) throw new Error("Memphis bot identity is unavailable.");
+  const payload = notification?.payload_json && typeof notification.payload_json === "object" ? notification.payload_json : {};
+  const isDisposition = notification?.notification_kind === "offline_reconciliation_disposition";
+  const subject = isDisposition ? "Offline reconciliation disposition recorded" : "Offline reconciliation quarantined";
+  const body = [
+    subject,
+    `Reconciliation: ${payload.reconciliation_id || notification?.reconciliation_id || "unknown"}`,
+    isDisposition ? `Disposition: ${payload.disposition || "recorded"}` : `Reason: ${payload.reason || "offline_authority_rejected"}`,
+    "Open the named-manager offline reconciliation queue to review immutable evidence.",
+  ].join("\n");
+  const claimed = await runRpc("custodial_claim_offline_reconciliation_notification_recipients", {
+    p_outbox_id: notification.outbox_id,
+    p_worker_id: OPERATIONAL_NOTIFICATION_WORKER_ID,
+    p_outbox_lease_token: notification.lease_token,
+    p_recipients: recipients.map((recipient) => ({ manager_id: recipient.manager_id, user_id: recipient.user_id })),
+    p_backend_execution_secret: offlineAuthoritySecret(),
+  });
+  const claimedRecipients = Array.isArray(claimed) ? claimed : (claimed ? [claimed] : []);
+  const results = [];
+  for (const recipient of claimedRecipients) {
+    let succeeded = false;
+    let terminal = false;
+    let errorMessage = null;
+    let message = null;
+    try {
+      const thread = await runRpc("msg_get_or_create_direct_thread", { p_user_a: memphisUserId, p_user_b: recipient.recipient_user_id });
+      message = await runRpc("msg_send_message", {
+        p_thread_id: thread.id,
+        p_sender_user_id: memphisUserId,
+        p_body: body,
+        p_message_type: "bot_response",
+        p_metadata_json: {
+          channel: "offline_reconciliation_recovery",
+          reconciliation_id: payload.reconciliation_id || notification?.reconciliation_id || null,
+          disposition_id: payload.disposition_id || notification?.disposition_id || null,
+          recipient_manager_id: recipient.manager_id || null,
+          client_message_id: recipient.client_message_id,
+          notification_instance_key: recipient.notification_instance_key,
+        },
+      });
+      if (!isUuid(message?.id)) throw new Error("Messenger did not return the durable message identity.");
+      succeeded = true;
+    } catch (error) {
+      terminal = error?.terminal === true;
+      errorMessage = String(error?.message || "Offline reconciliation recipient delivery failed.").slice(0, 500);
+    }
+    const retrySeconds = Math.min(3600, Math.max(15, 15 * (2 ** Math.min(8, Number(recipient.attempts || 1) - 1))));
+    const finished = await runRpc("custodial_finish_offline_reconciliation_notification_recipient", {
+      p_delivery_recipient_id: recipient.delivery_recipient_id,
+      p_worker_id: OPERATIONAL_NOTIFICATION_WORKER_ID,
+      p_lease_token: recipient.lease_token,
+      p_succeeded: succeeded,
+      p_message_id: message?.id || null,
+      p_error: errorMessage,
+      p_retry_seconds: retrySeconds,
+      p_terminal: terminal,
+      p_delivery_evidence: {
+        channel: "messenger",
+        reconciliation_id: payload.reconciliation_id || notification?.reconciliation_id || null,
+        disposition_id: payload.disposition_id || notification?.disposition_id || null,
+        recipient_manager_id: recipient.manager_id || null,
+      },
+      p_backend_execution_secret: offlineAuthoritySecret(),
+    });
+    results.push({
+      manager_id: recipient.manager_id,
+      recipient_user_id: recipient.recipient_user_id,
+      state: finished?.state,
+      message_id: finished?.message_id || message?.id || null,
+      error: errorMessage,
+    });
+  }
+  const failed = results.filter((result) => result.state === "failed");
+  const incomplete = results.filter((result) => result.state !== "delivered");
+  return {
+    recipient_manager_ids: recipients.map((recipient) => recipient.manager_id).filter(isUuid),
+    delivered_count: results.filter((result) => result.state === "delivered").length,
+    recipient_results: results,
+    succeeded: incomplete.length === 0,
+    terminal: failed.length > 0,
+    error: failed.length ? "One or more named-manager recipients are unavailable." : (incomplete.length ? "One or more named-manager recipient deliveries are pending retry." : null),
+  };
+}
+
+async function runCustodialOfflineReconciliationNotificationWorker({ limit = 10 } = {}) {
+  let executionSecret;
+  try {
+    executionSecret = offlineAuthoritySecret();
+  } catch (error) {
+    return { claimed: 0, completed: 0, skipped: "offline_authority_not_configured", error: error.code || "offline_authority_not_configured", results: [] };
+  }
+  const claimed = await runRpc("custodial_claim_offline_reconciliation_notifications", {
+    p_worker_id: OPERATIONAL_NOTIFICATION_WORKER_ID,
+    p_limit: Math.max(1, Math.min(50, Number(limit) || 10)),
+    p_lease_seconds: 120,
+    p_backend_execution_secret: executionSecret,
+  });
+  const notifications = Array.isArray(claimed) ? claimed : (claimed ? [claimed] : []);
+  const results = [];
+  for (const notification of notifications) {
+    let succeeded = false;
+    let terminal = false;
+    let errorMessage = null;
+    let delivery = {};
+    try {
+      delivery = await deliverCustodialOfflineReconciliationNotification(notification);
+      succeeded = delivery?.succeeded === true;
+      terminal = delivery?.terminal === true;
+      errorMessage = delivery?.error || null;
+    } catch (error) {
+      terminal = error?.terminal === true;
+      errorMessage = String(error?.message || "Offline reconciliation notification delivery failed.").slice(0, 2000);
+    }
+    const retrySeconds = Math.min(3600, Math.max(15, 15 * (2 ** Math.min(8, Number(notification.attempts || 1) - 1))));
+    const finished = await runRpc("custodial_finish_offline_reconciliation_notification", {
+      p_outbox_id: notification.outbox_id,
+      p_worker_id: OPERATIONAL_NOTIFICATION_WORKER_ID,
+      p_lease_token: notification.lease_token,
+      p_succeeded: succeeded,
+      p_error: errorMessage,
+      p_retry_seconds: retrySeconds,
+      p_terminal: terminal,
+      p_delivery_json: delivery,
+      p_backend_execution_secret: executionSecret,
+    });
+    results.push({ outbox_id: notification.outbox_id, succeeded, terminal: finished?.terminal === true, state: finished?.state, error: errorMessage });
+  }
+  return { claimed: notifications.length, completed: results.filter((result) => result.succeeded).length, results };
 }
 
 async function createGuestCleanlinessReport({ operationId, requestFingerprint, location, issueType, severity, notes, reporter = {}, reporterContext = {} }) {
@@ -942,28 +1431,11 @@ async function createGuestCleanlinessReport({ operationId, requestFingerprint, l
     return { ...existingRows[0], newly_inserted: false };
   }
   const reportId = randomUUID();
-  await runWriteSql(
-    "guest_cleanliness_report_insert",
-    `insert into public.guest_cleanliness_reports (
-         id, operation_id, request_fingerprint, location_code, location_name,
-         issue_type, severity, notes, status, marketing_review_status,
-         notification_status, metadata_json
-       ) values (
-         ${sqlLiteral(reportId)}::uuid,
-         ${sqlLiteral(operationId)}::uuid,
-         ${sqlLiteral(requestFingerprint)},
-         ${sqlLiteral(location.location_code)},
-         ${sqlLiteral(location.location_name || null)},
-         ${sqlLiteral(issue)},
-         ${sqlLiteral(level)},
-         ${sqlLiteral(noteText)},
-         'pending_marketing_review',
-         'pending',
-         'awaiting_marketing_review',
-         ${sqlLiteral(JSON.stringify(metadata))}::jsonb
-       )
-       on conflict (operation_id) do nothing`
-  );
+  await runOperationalCommand("guest_report_create", {
+    id: reportId, operation_id: operationId, request_fingerprint: requestFingerprint,
+    location_code: location.location_code, location_name: location.location_name || null,
+    issue_type: issue, severity: level, notes: noteText, metadata_json: metadata,
+  });
   const rows = await runReadOnlySql(`
     select id, operation_id, request_fingerprint, location_code, location_name,
            issue_type, severity, notes, status, source, submitted_at, resolved_at,
@@ -1037,16 +1509,11 @@ async function notifyGuestReportRecipients({ report, currentOwner, opsRecipients
     ? "failed"
     : (notified.errors.length === 0 ? "sent" : (totalSucceeded === 0 ? "failed" : "partial"));
 
-  await runWriteSql(
-    "guest_report_notification_status",
-    `update public.guest_cleanliness_reports
-       set notification_status = ${sqlLiteral(notificationStatus)},
-           notified_employee_user_id = ${sqlLiteral(notified.employee_user_id)}${notified.employee_user_id ? "::uuid" : ""},
-           notified_ops_count = ${Number(notified.ops_count || 0)},
-           dispatched_at = case when ${Number(totalSucceeded)} > 0 then now() else dispatched_at end,
-           metadata_json = coalesce(metadata_json, '{}'::jsonb) || ${sqlLiteral(JSON.stringify({ notification_errors: notified.errors }))}::jsonb
-     where id = ${sqlLiteral(report.id)}::uuid`
-  );
+  await runOperationalCommand("guest_report_notification", {
+    id: report.id, notification_status: notificationStatus, notified_employee_user_id: notified.employee_user_id,
+    notified_ops_count: Number(notified.ops_count || 0), delivered_count: totalSucceeded,
+    notification_errors: notified.errors,
+  });
 
   return notified;
 }
@@ -1103,6 +1570,7 @@ async function runOperationalNotificationWorker({ limit = 10 } = {}) {
       let succeeded = false;
       let errorMessage = null;
       let terminal = false;
+      let deferFinish = false;
       try {
         if (job.job_type === "guest_cleanliness_report") {
           await processGuestCleanlinessNotificationJob(job);
@@ -1115,6 +1583,11 @@ async function runOperationalNotificationWorker({ limit = 10 } = {}) {
       } catch (error) {
         errorMessage = String(error?.message || "Operational notification failed.").slice(0, 2000);
         terminal = error?.terminal === true;
+        deferFinish = error?.deferFinish === true;
+      }
+      if (deferFinish) {
+        results.push({ job_id: job.job_id, succeeded: false, terminal: false, deferred: true, error: errorMessage });
+        continue;
       }
       const retrySeconds = Math.min(3600, Math.max(15, 15 * (2 ** Math.min(8, Number(job.attempts || 1) - 1))));
       if (terminal) {
@@ -1134,11 +1607,13 @@ async function runOperationalNotificationWorker({ limit = 10 } = {}) {
       }
       results.push({ job_id: job.job_id, succeeded, terminal, error: errorMessage });
     }
+    const custodial = await runCustodialOfflineReconciliationNotificationWorker({ limit });
     return {
       ok: true,
       claimed: jobs.length,
       completed: results.filter((item) => item.succeeded).length,
       results,
+      custodial_offline_reconciliation: custodial,
     };
   } finally {
     operationalNotificationWorkerInFlight = false;
@@ -1178,43 +1653,9 @@ async function reviewGuestCleanlinessReport(reportId, { action, actor, notes = n
     throw Object.assign(new Error("Guest report is not awaiting Marketing review."), { status: 409 });
   }
   if (normalizedAction === "approve") {
-    await runWriteSql(
-      "guest_marketing_approve",
-      `update public.guest_cleanliness_reports
-         set marketing_review_status='approved',
-             marketing_reviewed_at=now(),
-             marketing_reviewed_by=${sqlLiteral(reviewedBy)},
-             marketing_review_notes=${sqlLiteral(reviewNotes)},
-             status='open',
-             notification_status='pending'
-         where id=${sqlLiteral(reportId)}::uuid
-           and status='pending_marketing_review'
-           and marketing_review_status='pending';
-       insert into public.operational_notification_jobs(job_key,job_type,source_id,payload_json)
-         select 'guest-report:' || id::text,'guest_cleanliness_report',id,
-                jsonb_build_object('operation_id',operation_id,'marketing_approved',true)
-         from public.guest_cleanliness_reports
-         where id=${sqlLiteral(reportId)}::uuid
-           and status='open'
-           and marketing_review_status='approved'
-         on conflict(job_key) do nothing;`
-    );
+    await runOperationalCommand("guest_report_review", { id: reportId, action: "approve", actor: reviewedBy, notes: reviewNotes });
   } else {
-    await runWriteSql(
-      "guest_marketing_reject",
-      `update public.guest_cleanliness_reports
-       set marketing_review_status='rejected',
-           marketing_reviewed_at=now(),
-           marketing_reviewed_by=${sqlLiteral(reviewedBy)},
-           marketing_review_notes=${sqlLiteral(reviewNotes)},
-           status='rejected',
-           resolved_at=now(),
-           resolved_by=${sqlLiteral(reviewedBy)},
-           notification_status='not_dispatched'
-       where id=${sqlLiteral(reportId)}::uuid
-         and status='pending_marketing_review'
-         and marketing_review_status='pending'`
-    );
+    await runOperationalCommand("guest_report_review", { id: reportId, action: "reject", actor: reviewedBy, notes: reviewNotes });
   }
   const reviewed = await getGuestCleanlinessReportById(reportId);
   if (reviewed.marketing_review_status !== (normalizedAction === "approve" ? "approved" : "rejected")) {
@@ -1231,15 +1672,7 @@ async function resolveGuestCleanlinessReport(reportId, { actor, notes = null } =
   if (before.status !== "open" || before.marketing_review_status !== "approved") {
     throw Object.assign(new Error("Only an approved open guest report can be resolved."), { status: 409 });
   }
-  await runWriteSql(
-    "guest_report_resolve",
-    `update public.guest_cleanliness_reports
-     set status='resolved',resolved_at=now(),resolved_by=${sqlLiteral(resolvedBy)},
-         metadata_json=coalesce(metadata_json,'{}'::jsonb) || ${sqlLiteral(JSON.stringify({ resolution_notes: closeNotes }))}::jsonb
-     where id=${sqlLiteral(reportId)}::uuid
-       and status='open'
-       and marketing_review_status='approved'`
-  );
+  await runOperationalCommand("guest_report_resolve", { id: reportId, actor: resolvedBy, notes: closeNotes });
   const resolved = await getGuestCleanlinessReportById(reportId);
   if (resolved.status !== "resolved") throw Object.assign(new Error("Guest report resolution did not complete."), { status: 409 });
   return resolved;
@@ -1423,19 +1856,10 @@ async function migrateLegacySystemFeedbackImageJob(job) {
   const persistedImage = persistedSystemFeedbackImageMetadata(storedImage);
   const updatedMetadata = { ...metadata, image_attachment: persistedImage };
   try {
-    await runWriteSql(
-      "system_feedback_legacy_image_migration",
-      `update public.system_feedback_items
-          set metadata_json = ${sqlLiteral(JSON.stringify(updatedMetadata))}::jsonb,
-              updated_at = now()
-        where id = ${sqlLiteral(feedbackId)}::uuid
-          and metadata_json->'image_attachment'->>'data_url' is not null;
-       update public.system_feedback_legacy_image_backups
-          set migrated_at = now(),
-              storage_bucket = ${sqlLiteral(persistedImage.storage_bucket)},
-              storage_path = ${sqlLiteral(persistedImage.storage_path)}
-        where feedback_id = ${sqlLiteral(feedbackId)}::uuid;`,
-    );
+    await runOperationalCommand("feedback_legacy_image_migration", {
+      id: feedbackId, metadata_json: updatedMetadata,
+      storage_bucket: persistedImage.storage_bucket, storage_path: persistedImage.storage_path,
+    });
   } catch (error) {
     await removeUnreferencedSystemFeedbackImage(storedImage);
     throw error;
@@ -1497,25 +1921,11 @@ async function createSystemFeedbackItem(payload = {}) {
   };
   const summary = summarizeSystemFeedback({ category, priority, message, hubContext, submittedBy });
   try {
-    await runWriteSql(
-      "system_feedback_insert",
-      `insert into public.system_feedback_items (
-       id, operation_id, request_fingerprint, category, priority, message, submitted_by, hub_context, device_id, page_url, summary, metadata_json
-     ) values (
-       ${sqlLiteral(feedbackId)}::uuid,
-       ${sqlLiteral(operationId)}::uuid,
-       ${sqlLiteral(requestFingerprint)},
-       ${sqlLiteral(category)},
-       ${sqlLiteral(priority)},
-       ${sqlLiteral(message)},
-       ${sqlLiteral(submittedBy)},
-       ${sqlLiteral(hubContext)},
-       ${sqlLiteral(deviceId)},
-       ${sqlLiteral(pageUrl)},
-       ${sqlLiteral(summary)},
-       ${sqlLiteral(JSON.stringify(metadata))}::jsonb
-       ) on conflict (operation_id) do nothing`,
-    );
+    await runOperationalCommand("feedback_create", {
+      id: feedbackId, operation_id: operationId, request_fingerprint: requestFingerprint,
+      category, priority, message, submitted_by: submittedBy, hub_context: hubContext,
+      device_id: deviceId, page_url: pageUrl, summary, metadata_json: metadata,
+    });
 
     const rows = await runReadOnlySql(`
       select id, operation_id, request_fingerprint, category, priority, message, submitted_by, hub_context, device_id, page_url,
@@ -1577,17 +1987,12 @@ async function notifySystemFeedbackRecipients({ item, opsRecipients, memphisUser
     }
   }
 
-  await runWriteSql(
-      "system_feedback_notification_status",
-    `update public.system_feedback_items
-       set notification_status = ${sqlLiteral(eligibleRecipients.length === 0 ? "failed" : (notified.errors.length === 0 ? "sent" : (notified.ops_count ? "partial" : "failed")))},
-           notified_ops_count = coalesce(notified_ops_count, 0) + ${Number(notified.ops_count || 0)},
-           last_feedback_reminder_at = now(),
-           feedback_reminder_count = coalesce(feedback_reminder_count, 0) + ${reminder ? 1 : 0},
-           updated_at = now(),
-           metadata_json = coalesce(metadata_json, '{}'::jsonb) || ${sqlLiteral(JSON.stringify({ notification_errors: notified.errors }))}::jsonb
-     where id = ${sqlLiteral(item.id)}::uuid`
-  );
+  await runOperationalCommand("feedback_notification", {
+    id: item.id,
+    notification_status: eligibleRecipients.length === 0 ? "failed" : (notified.errors.length === 0 ? "sent" : (notified.ops_count ? "partial" : "failed")),
+    notified_ops_count: Number(notified.ops_count || 0), reminder_increment: reminder ? 1 : 0,
+    notification_errors: notified.errors,
+  });
 
   return notified;
 }
@@ -1627,16 +2032,9 @@ async function getSystemFeedbackItemById(feedbackId) {
 async function acknowledgeSystemFeedbackItem(feedbackId, acknowledgedBy = "ops_manager") {
   if (!isUuid(feedbackId)) throw new Error("feedback id is invalid.");
   const actor = String(acknowledgedBy || "ops_manager").trim().slice(0, 120) || "ops_manager";
-  await runWriteSql(
-    "system_feedback_acknowledge",
-    `update public.system_feedback_items
-       set status = 'acknowledged',
-           acknowledged_at = now(),
-           acknowledged_by = ${sqlLiteral(actor)},
-           updated_at = now(),
-           metadata_json = coalesce(metadata_json, '{}'::jsonb) || ${sqlLiteral(JSON.stringify({ acknowledged_via: "feedback-api" }))}::jsonb
-     where id = ${sqlLiteral(feedbackId)}::uuid`
-  );
+  await runOperationalCommand("feedback_status", {
+    id: feedbackId, status: "acknowledged", actor, metadata_patch: { acknowledged_via: "feedback-api" },
+  });
   return getSystemFeedbackItemById(feedbackId);
 }
 
@@ -1649,17 +2047,10 @@ async function setSystemFeedbackStatus(feedbackId, status, actor = "ops_manager"
   if (["closed", "resolved"].includes(before.status)) {
     throw Object.assign(new Error("Feedback item is already resolved or unavailable."), { status: 409 });
   }
-  await runWriteSql(
-    "system_feedback_status",
-    `update public.system_feedback_items
-     set status=${sqlLiteral(normalizedStatus)},
-         acknowledged_at=case when ${sqlLiteral(normalizedStatus)}='acknowledged' then now() else acknowledged_at end,
-         acknowledged_by=case when ${sqlLiteral(normalizedStatus)}='acknowledged' then ${sqlLiteral(changedBy)} else acknowledged_by end,
-         updated_at=now(),
-         metadata_json=coalesce(metadata_json,'{}'::jsonb) || ${sqlLiteral(JSON.stringify({ status_changed_via: "manager_feedback_inbox", status_changed_by: changedBy }))}::jsonb
-     where id=${sqlLiteral(feedbackId)}::uuid
-       and status not in ('closed','resolved')`
-  );
+  await runOperationalCommand("feedback_status", {
+    id: feedbackId, status: normalizedStatus, actor: changedBy,
+    metadata_patch: { status_changed_via: "manager_feedback_inbox", status_changed_by: changedBy },
+  });
   const changed = await getSystemFeedbackItemById(feedbackId);
   if (changed.status !== normalizedStatus) throw Object.assign(new Error("Feedback status update did not complete."), { status: 409 });
   return changed;
@@ -1682,15 +2073,7 @@ async function listSystemFeedbackReminderDueItems({ limit = 25 } = {}) {
 
 async function markSystemFeedbackReminderExhausted(item, reason = "max_reminders_reached") {
   if (!item?.id) return null;
-  await runWriteSql(
-    "system_feedback_reminder_exhausted",
-    `update public.system_feedback_items
-       set status = 'reminder_exhausted',
-           updated_at = now(),
-           metadata_json = coalesce(metadata_json, '{}'::jsonb) || ${sqlLiteral(JSON.stringify({ reminder_exhausted_reason: reason }))}::jsonb
-     where id = ${sqlLiteral(item.id)}::uuid
-       and status not in ('acknowledged', 'resolved', 'closed')`
-  );
+  await runOperationalCommand("feedback_reminder_exhausted", { id: item.id, reason });
   return { ...item, status: "reminder_exhausted" };
 }
 
@@ -1777,7 +2160,7 @@ async function runCanaryChecks() {
   await safeCheck("restroom_scan_state", async () => {
     const state = await runRpc("tool_get_location_scan_state", {
       p_location_code: CANARY_RESTROOM_CODE,
-      p_device_id: CANARY_DEVICE_ID,
+      p_device_id: HEALTH_PROBE_DEVICE_ID,
     });
     if (!state || state.location_code !== CANARY_RESTROOM_CODE) throw new Error("restroom scan state missing expected location code");
     if (String(state.form_type || state.location_type || "").toLowerCase() !== "restroom") throw new Error(`expected restroom form_type, got ${state.form_type || state.location_type || "unknown"}`);
@@ -1787,7 +2170,7 @@ async function runCanaryChecks() {
   await safeCheck("exhibit_scan_state", async () => {
     const state = await runRpc("tool_get_location_scan_state", {
       p_location_code: CANARY_EXHIBIT_CODE,
-      p_device_id: CANARY_DEVICE_ID,
+      p_device_id: HEALTH_PROBE_DEVICE_ID,
     });
     if (!state || state.location_code !== CANARY_EXHIBIT_CODE) throw new Error("exhibit scan state missing expected location code");
     if (String(state.form_type || state.location_type || "").toLowerCase() !== "exhibit") throw new Error(`expected exhibit form_type, got ${state.form_type || state.location_type || "unknown"}`);
@@ -1895,7 +2278,7 @@ app.use("/admin-api", (req, res, next) => { setAdminApiCors(res, req); if (req.m
 app.use("/dashboard-api", (req, res, next) => { setPublicDashboardCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/scan-api", (req, res, next) => { setScanApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/messaging-api", (req, res, next) => { setMessagingApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); }, createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPayload, requireDeviceAccess: requireDeviceOrOpsAccess, requireOpsManagerAuth, registerOperationalJobHandler: registerOperationalNotificationJobHandler, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: MESSAGING_CONTRACT_VERSION }));
-app.use("/schedule-api", (req, res, next) => { setScheduleApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); }, createScheduleRouter({ runReadOnlySql, runRpc, runWriteSql, buildHealthPayload, requireAdminApiAuth: requireOpsManagerWrite, requireOpsManagerAuth, requireDeviceAccess: requireDeviceOrOpsAccess, publicTrafficRateLimit: publicSubmissionRateLimit, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: SCHEDULE_CONTRACT_VERSION }));
+app.use("/schedule-api", (req, res, next) => { setScheduleApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); }, createScheduleRouter({ runReadOnlySql, runRpc, runCommand: runScheduleCommand, buildHealthPayload, requireAdminApiAuth: requireOpsManagerWrite, requireOpsManagerAuth, requireDeviceAccess: requireDeviceOrOpsAccess, publicTrafficRateLimit: publicSubmissionRateLimit, appVersion: APP_VERSION, releaseId: RELEASE_ID, contractVersion: SCHEDULE_CONTRACT_VERSION }));
 app.use("/guest-api", (req, res, next) => { setGuestApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use("/feedback-api", (req, res, next) => { setFeedbackApiCors(res, req); if (req.method === "OPTIONS") { res.sendStatus(200); return; } next(); });
 app.use(
@@ -1913,9 +2296,9 @@ app.use(
     frontendCommit: buildReleaseManifest({ appVersion: APP_VERSION, releaseId: RELEASE_ID }).frontend.commit_sha,
   }),
 );
-app.use("/dashboard-api/events", createEventsPublicRouter({ runReadOnlySql, runWriteSql, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController }));
-app.use("/admin-api/events", createEventsAdminRouter({ runReadOnlySql, runWriteSql, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController, requireAdminApiAuth: requireOpsManagerAuth, requireAdminApiWrite: requireOpsManagerWrite }));
-app.use(["/version", "/release-manifest", "/health", "/health/dependencies"], (req, res, next) => {
+app.use("/dashboard-api/events", createEventsPublicRouter({ runReadOnlySql, runCommand: runEventCommand, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController }));
+app.use("/admin-api/events", createEventsAdminRouter({ runReadOnlySql, runCommand: runEventCommand, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController, requireAdminApiAuth: requireOpsManagerAuth, requireAdminApiWrite: requireOpsManagerWrite }));
+app.use(["/version", "/release-manifest", "/scheduler-runtime-config", "/health", "/health/dependencies"], (req, res, next) => {
   setPublicDashboardCors(res, req);
   if (req.method === "OPTIONS") {
     res.sendStatus(200);
@@ -1925,9 +2308,24 @@ app.use(["/version", "/release-manifest", "/health", "/health/dependencies"], (r
 });
 app.get("/version", (_req, res) => { setPublicDashboardCors(res, _req); res.status(200).json(buildHealthPayload("version")); });
 app.get("/release-manifest", (_req, res) => { setPublicDashboardCors(res, _req); res.status(200).json(buildReleaseManifest({ appVersion: APP_VERSION, releaseId: RELEASE_ID, contracts: buildHealthPayload("contracts").contracts })); });
+app.get("/scheduler-runtime-config", (req, res) => {
+  setPublicDashboardCors(res, req);
+  try {
+    const publicUrl = staticWeeklyControlPlanePublicUrl();
+    res.status(publicUrl ? 200 : 503).json({
+      ok: Boolean(publicUrl),
+      data: { configured: Boolean(publicUrl), public_url: publicUrl },
+      meta: { version: APP_VERSION, release_id: RELEASE_ID },
+      ...(publicUrl ? {} : { error: "The weekly scheduler service is not configured." }),
+    });
+  } catch (error) {
+    res.status(503).json({ ok: false, data: { configured: false, public_url: null }, error: error.message });
+  }
+});
 app.get(["/health", "/health/dependencies"], async (req, res) => {
   setPublicDashboardCors(res, req);
   try {
+    const canaryDeviceId = configuredReleaseCanaryDeviceId();
     const rows = await runReadOnlySql(`
       select
         true as database_reachable,
@@ -1943,6 +2341,15 @@ app.get(["/health", "/health/dependencies"], async (req, res) => {
         (select count(*)::int from public.operational_notification_jobs where status = 'leased' and leased_until < now()) as expired_worker_leases
     `);
     const dependencies = rows?.[0] || {};
+    let canaryPaused = null;
+    let canaryControlInitialized = false;
+    if (canaryDeviceId) {
+      canaryPaused = await runRpc("custodial_release_canary_is_paused", {
+        p_device_identifier: canaryDeviceId,
+        p_backend_execution_secret: offlineAuthoritySecret(),
+      });
+      canaryControlInitialized = typeof canaryPaused === "boolean";
+    }
     const requiredSchemaPresent = [
       "sessions_table",
       "messages_table",
@@ -1952,12 +2359,20 @@ app.get(["/health", "/health/dependencies"], async (req, res) => {
       "manager_messaging_rpc",
       "worker_claim_rpc",
     ].every((key) => dependencies[key] === true);
-    const ok = dependencies.database_reachable === true && requiredSchemaPresent;
+    const canaryReady = !releaseCanaryConfigurationRequired()
+      || (Boolean(canaryDeviceId) && canaryControlInitialized && canaryPaused === false);
+    const ok = dependencies.database_reachable === true && requiredSchemaPresent && canaryReady;
     res.status(ok ? 200 : 503).json(buildHealthPayload("dependencies", {
       ok,
       process_alive: true,
       database_reachable: dependencies.database_reachable === true,
       required_schema_present: requiredSchemaPresent,
+      release_canary: {
+        configured: Boolean(canaryDeviceId),
+        device_identifier: canaryDeviceId,
+        control_initialized: canaryControlInitialized,
+        paused: canaryPaused,
+      },
       worker: {
         durable_database_leases: dependencies.worker_claim_rpc === true,
         backlog: Number(dependencies.notification_backlog || 0),
@@ -1977,6 +2392,57 @@ app.get(["/health", "/health/dependencies"], async (req, res) => {
   }
 });
 app.get("/admin-api/health", requireOpsManagerAuth, (_req, res) => { res.status(200).json(buildHealthPayload("admin", { authenticated: true })); });
+app.post("/admin-api/release-canary-rollback", requireOpsManagerWrite, async (req, res) => {
+  try {
+    const action = String(req.body?.action || "").trim();
+    const reason = String(req.body?.reason || "").trim();
+    const canaryDeviceId = configuredReleaseCanaryDeviceId();
+    if (!canaryDeviceId) {
+      throw Object.assign(new Error("No physical release canary is configured."), { status: 503, code: "release_canary_not_configured" });
+    }
+    if (!["pause_canary", "resume_canary", "restore_authority"].includes(action) || !reason) {
+      throw Object.assign(new Error("action, reason, and the configured physical canary are required."), { status: 422 });
+    }
+    let authoritativeHealth;
+    try {
+      authoritativeHealth = await collectBackendAuthorityHealth();
+    } catch (error) {
+      // A missing or failing authoritative RPC is the reason this post-
+      // enforcement safety control exists. Preserve its bounded evidence;
+      // never route to a legacy/direct-SQL writer.
+      authoritativeHealth = { ok: false, code: error?.code || "authority_probe_failed", message: String(error?.message || "authority probe failed") };
+    }
+    if (action === "resume_canary" && authoritativeHealth?.ok !== true) {
+      throw Object.assign(new Error("The physical release canary cannot resume until database authority and scan RPC transport are healthy."), {
+        status: 503,
+        code: "release_canary_health_not_ready",
+      });
+    }
+    const control = await runRpc("custodial_control_release_canary", {
+      p_manager_id: offlineAuthorityManagerId(req), p_request_id: requiredRequestOperationId(req),
+      p_device_identifier: canaryDeviceId, p_action: action, p_reason: reason, p_authoritative_health: authoritativeHealth,
+      p_backend_execution_secret: offlineAuthoritySecret(),
+    });
+    if (action === "restore_authority") {
+      authoritativeHealth = await collectBackendAuthorityHealth();
+    }
+    res.status(200).json({ ok: true, ...control, authoritative_health: authoritativeHealth });
+  } catch (error) {
+    const failure = authorityHttpFailure(error, "Canary rollback control is unavailable.");
+    res.status(failure.status).json(failure.body);
+  }
+});
+app.get("/admin-api/release-schema-identity", requireReleaseSchemaIdentityToken, async (_req, res) => {
+  try {
+    // This endpoint is intentionally authenticated and uses only the shared
+    // SELECT-only executor. It reports a fingerprint calculated from the
+    // connected catalog, never the source target fingerprint.
+    const observed = await observeProductionSchemaIdentity({ runReadOnlySql: runSchemaCatalogSql });
+    res.status(200).json({ ok: true, ...observed });
+  } catch (error) {
+    res.status(503).json({ ok: false, error: "Production schema identity observation failed." });
+  }
+});
 app.get("/dashboard-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("dashboard")); });
 app.get("/schedule-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("schedule", { contract_version: SCHEDULE_CONTRACT_VERSION })); });
 app.get("/guest-api/health", (_req, res) => { res.status(200).json(buildHealthPayload("guest_reports", { contract_version: GUEST_REPORTS_CONTRACT_VERSION })); });
@@ -2058,15 +2524,7 @@ app.post("/feedback-api/submit", publicSubmissionRateLimit("feedback"), async (r
       operation_id: operationId,
       user_agent: String(req.get("user-agent") || "").slice(0, 500),
     });
-    await runWriteSql(
-      "system_feedback_dashboard_only",
-      `update public.system_feedback_items
-         set notification_status = 'dashboard_only',
-             notified_ops_count = 0,
-             updated_at = now(),
-             metadata_json = coalesce(metadata_json, '{}'::jsonb) || ${sqlLiteral(JSON.stringify({ notification_delivery: "dashboard_only" }))}::jsonb
-       where id = ${sqlLiteral(item.id)}::uuid`
-    );
+    await runOperationalCommand("feedback_dashboard_only", { id: item.id });
     item.notification_status = "dashboard_only";
     item.notified_ops_count = 0;
     const notification = { ops_count: 0, errors: [], skipped: "dashboard_only" };
@@ -2274,12 +2732,8 @@ app.post("/admin-api/bundle", requireOpsManagerWrite, async (req, res) => {
   catch (error) { console.error("admin bundle failed:", error); res.status(500).json({ ok: false, error: error.message || "Admin bundle failed" }); }
 });
 app.post("/admin-api/close-ticket", requireOpsManagerWrite, async (req, res) => {
-  try { const ticketId = String(req.body?.ticket_id || "").trim(); const closedBy = String(req.body?.closed_by || "").trim(); const closeNotes = req.body?.close_notes == null ? null : String(req.body.close_notes); if (!ticketId || !closedBy) { res.status(400).json({ ok: false, error: "ticket_id and closed_by are required." }); return; } await runWriteSql("admin_close_ticket", `select public.close_maintenance_ticket(${sqlLiteral(ticketId)}::uuid, ${sqlLiteral(closedBy)}, ${sqlLiteral(closeNotes)});`); res.status(200).json({ ok: true, ticket_id: ticketId, status: "closed" }); }
+  try { const ticketId = String(req.body?.ticket_id || "").trim(); const closedBy = String(req.body?.closed_by || "").trim(); const closeNotes = req.body?.close_notes == null ? null : String(req.body.close_notes); if (!ticketId || !closedBy) { res.status(400).json({ ok: false, error: "ticket_id and closed_by are required." }); return; } await runRpc("custodial_close_maintenance_ticket_authoritative", { p_ticket_id: ticketId, p_closed_by: closedBy, p_close_notes: closeNotes, p_backend_execution_secret: offlineAuthoritySecret() }); res.status(200).json({ ok: true, ticket_id: ticketId, status: "closed" }); }
   catch (error) { console.error("close ticket failed:", error); res.status(500).json({ ok: false, error: error.message || "Close ticket failed" }); }
-});
-app.post("/admin-api/force-close-session", requireOpsManagerWrite, async (req, res) => {
-  try { const sessionUuid = String(req.body?.session_uuid || "").trim(); const closedBy = String(req.body?.closed_by || "").trim(); const reason = req.body?.reason == null ? null : String(req.body.reason); if (!sessionUuid || !closedBy) { res.status(400).json({ ok: false, error: "session_uuid and closed_by are required." }); return; } await runWriteSql("admin_force_close_session", `select public.force_close_session(${sqlLiteral(sessionUuid)}, ${sqlLiteral(closedBy)}, ${sqlLiteral(reason)});`); res.status(200).json({ ok: true, session_uuid: sessionUuid, status: "closed" }); }
-  catch (error) { console.error("force close session failed:", error); res.status(500).json({ ok: false, error: error.message || "Force close session failed" }); }
 });
 app.get("/dashboard-api/summary", requireOpsManagerAuth, async (_req, res) => {
   try { const data = await runPublicDashboardSummary(); res.status(200).json({ ok: true, data }); }
@@ -2335,10 +2789,61 @@ app.post("/dashboard-api/close-ticket", requireOpsManagerWrite, async (req, res)
       res.status(400).json({ ok: false, error: "ticket_id is required." });
       return;
     }
-    await runWriteSql("dashboard_close_ticket", `select public.close_maintenance_ticket(${sqlLiteral(ticketId)}::uuid, ${sqlLiteral(closedBy)}, null);`);
+    await runRpc("custodial_close_maintenance_ticket_authoritative", { p_ticket_id: ticketId, p_closed_by: closedBy, p_close_notes: null, p_backend_execution_secret: offlineAuthoritySecret() });
     res.status(200).json({ ok: true, ticket_id: ticketId, status: "closed" });
   }
   catch (error) { console.error("dashboard close ticket failed:", error); res.status(500).json({ ok: false, error: error.message || "Dashboard close ticket failed" }); }
+});
+function offlineAuthorityManagerId(req) {
+  const managerId = String(req?.memphisAuth?.manager_id || "").trim();
+  if (!isUuid(managerId)) {
+    const error = new Error("An authenticated named manager identity is required.");
+    error.status = 403;
+    throw error;
+  }
+  return managerId;
+}
+
+// Original occurrence evidence is append-only. These bounded, named-manager
+// endpoints can inspect it and append a disposition, never rewrite it.
+app.get("/admin-api/custodial/offline-reconciliations", requireOpsManagerAuth, async (req, res) => {
+  try {
+    const limit = Math.max(1, Math.min(100, Number.parseInt(String(req.query?.limit || "50"), 10) || 50));
+    const before = String(req.query?.before || "").trim() || null;
+    if (before && Number.isNaN(Date.parse(before))) throw Object.assign(new Error("before must be an ISO timestamp."), { status: 400 });
+    const data = await runRpc("custodial_manager_list_offline_reconciliations", {
+      p_manager_id: offlineAuthorityManagerId(req), p_limit: limit, p_before: before,
+      p_backend_execution_secret: offlineAuthoritySecret(),
+    });
+    res.status(200).json({ ok: true, contract_version: "offline-authority.v2", data });
+  } catch (error) { const failure = authorityHttpFailure(error, "Offline reconciliation recovery is unavailable."); res.status(failure.status).json(failure.body); }
+});
+app.get("/admin-api/custodial/offline-reconciliations/:reconciliationId", requireOpsManagerAuth, async (req, res) => {
+  try {
+    const reconciliationId = String(req.params?.reconciliationId || "").trim();
+    if (!isUuid(reconciliationId)) throw Object.assign(new Error("reconciliationId must be a UUID."), { status: 400 });
+    const data = await runRpc("custodial_manager_get_offline_reconciliation", {
+      p_manager_id: offlineAuthorityManagerId(req), p_reconciliation_id: reconciliationId,
+      p_backend_execution_secret: offlineAuthoritySecret(),
+    });
+    res.status(200).json({ ok: true, contract_version: "offline-authority.v2", data });
+  } catch (error) { const failure = authorityHttpFailure(error, "Offline reconciliation recovery is unavailable."); res.status(failure.status).json(failure.body); }
+});
+app.post("/admin-api/custodial/offline-reconciliations/:reconciliationId/dispositions", requireOpsManagerWrite, async (req, res) => {
+  try {
+    const reconciliationId = String(req.params?.reconciliationId || "").trim();
+    const disposition = String(req.body?.disposition || "").trim();
+    const reason = String(req.body?.reason || "").trim();
+    if (!isUuid(reconciliationId) || !["reviewed", "retained_for_recovery", "superseded_by_new_occurrence"].includes(disposition) || !reason) {
+      throw Object.assign(new Error("A reconciliation UUID, supported disposition, and reason are required."), { status: 400 });
+    }
+    const data = await runRpc("custodial_manager_dispose_offline_reconciliation", {
+      p_manager_id: offlineAuthorityManagerId(req), p_reconciliation_id: reconciliationId,
+      p_disposition: disposition, p_reason: reason, p_request_id: requiredRequestOperationId(req),
+      p_backend_execution_secret: offlineAuthoritySecret(),
+    });
+    res.status(data?.replayed === true ? 200 : 201).json({ ok: true, contract_version: "offline-authority.v2", data });
+  } catch (error) { const failure = authorityHttpFailure(error, "Offline reconciliation disposition is unavailable."); res.status(failure.status).json(failure.body); }
 });
 app.get("/scan-api/health", (_req, res) => {
   res.status(200).json(buildHealthPayload("scan", {
@@ -2350,41 +2855,76 @@ app.get("/scan-api/health", (_req, res) => {
     },
   }));
 });
-app.post("/scan-api/rpc", requireDeviceOrOpsAccess, requireScanRpcAuthorization, scanRpcRateLimit, async (req, res) => {
+app.get("/scan-api/authority-health", async (_req, res) => {
   try {
-    const fn = String(req.body?.fn || "").trim();
-    if (!SCAN_RPC_ALLOWLIST.has(fn)) {
-      res.status(400).json({ ok: false, error: `Function not allowed: ${fn}` });
-      return;
+    const canaryDeviceId = configuredReleaseCanaryDeviceId();
+    let canaryPaused = null;
+    let canaryControlInitialized = false;
+    if (canaryDeviceId) {
+      canaryPaused = await runRpc("custodial_release_canary_is_paused", {
+        p_device_identifier: canaryDeviceId,
+        p_backend_execution_secret: offlineAuthoritySecret(),
+      });
+      canaryControlInitialized = typeof canaryPaused === "boolean";
     }
-    const args = canonicalizeScanArguments(fn, req.body?.args, req.memphisDevice);
-    const prepared = prepareScanRpcCall(fn, args);
-    const data = await runRpc(prepared.fn, prepared.args);
-    res.status(200).json({
-      ok: true,
-      data,
+    const data = await collectBackendAuthorityHealth();
+    const canaryReady = !releaseCanaryConfigurationRequired()
+      || (Boolean(canaryDeviceId) && canaryControlInitialized && canaryPaused === false);
+    const ok = data?.ok === true && canaryReady;
+    res.status(ok ? 200 : 503).json({
+      ok,
+      data: {
+        ...data,
+        release_canary: {
+          configured: Boolean(canaryDeviceId),
+          device_identifier: canaryDeviceId,
+          control_initialized: canaryControlInitialized,
+          paused: canaryPaused,
+        },
+      },
+    });
+  } catch (error) {
+    const failure = authorityHttpFailure(error, "Offline authority health is unavailable.");
+    res.status(failure.status).json(failure.body);
+  }
+});
+app.post("/scan-api/rpc", parseScanAuthorityJsonBeforeAuthentication, requireDeviceOrOpsAccess, rejectInvalidAuthenticatedScanAuthorityJson, requireScanRpcAuthorization, scanRpcRateLimit, async (req, res) => {
+  try {
+    const canaryDeviceId = configuredReleaseCanaryDeviceId();
+    const requestDeviceId = String(req.memphisDevice?.canonical_device_id || req.memphisDevice?.device_id || "").trim().toUpperCase();
+    const fn = String(req.body?.fn || "").trim();
+    let canaryPaused = false;
+    if (canaryDeviceId && requestDeviceId === canaryDeviceId) {
+      canaryPaused = await runRpc("custodial_release_canary_is_paused", {
+        p_device_identifier: canaryDeviceId,
+        p_backend_execution_secret: offlineAuthoritySecret(),
+      });
+      const nativeProbe = fn === "tool_get_system_settings" && isNativeCustodialScanRequest(req);
+      if (canaryPaused === true && !nativeProbe) {
+        res.status(503).json({ ok: false, code: "release_canary_paused", retryable: false, error: "The physical release canary is operator-paused." });
+        return;
+      }
+    }
+    const outcome = await executeScanRpcTransport(fn, req.body?.args, req.memphisDevice, req.memphisDeviceCredential, req);
+    let canaryTransportProbe = null;
+    if (canaryPaused === true && outcome.status === 200 && outcome.body?.ok === true) {
+      canaryTransportProbe = await recordReleaseCanaryTransportProbe(req, canaryDeviceId);
+    }
+    res.status(outcome.status).json({
+      ...outcome.body,
       meta: {
         version: APP_VERSION,
         release_id: RELEASE_ID,
         contract_version: SCAN_CONTRACT_VERSION,
         requested_device_id: req.memphisDevice?.requested_device_id || null,
         canonical_device_id: req.memphisDevice?.canonical_device_id || req.memphisDevice?.device_id || null,
+        release_canary_transport_probe: canaryTransportProbe,
       },
     });
   } catch (error) {
     console.error("scan rpc failed:", error);
-    const message = String(error?.message || "Scan RPC failed");
-    const status = error?.status
-      || (/not found/i.test(message)
-        ? 404
-        : /invalid|required|cannot|must|too (?:old|far|large)|exceeds/i.test(message)
-          ? 422
-      : /already has|already bound|manager recovery|required review|transition/i.test(message)
-        ? 409
-      : /unauthor|not assigned|another device/i.test(message)
-        ? 403
-        : 500);
-    res.status(status).json({ ok: false, error: message });
+    const failure = authorityHttpFailure(error, "Scan RPC failed.");
+    res.status(failure.status).json(failure.body);
   }
 });
 app.get("/", (_req, res) => { res.status(200).send("Memphis Zoo MCP server is running."); });
@@ -2432,6 +2972,13 @@ app.use((err, req, res, next) => {
 });
 
 const port = Number(process.env.PORT || 3000);
+// A production Render process must never start with a silently disabled canary boundary.
+configuredReleaseCanaryDeviceId();
+if (releaseCanaryConfigurationRequired()) {
+  offlineAuthoritySecret();
+  nativeRouteProofSecret();
+}
+assertConfiguredReleaseIdentity();
 const EVENT_MAINTENANCE_SWEEP_MS = toSafeNonNegativeInt(process.env.EVENT_MAINTENANCE_SWEEP_MS, 60_000);
 if (EVENT_MAINTENANCE_SWEEP_MS > 0) {
   setInterval(() => {

@@ -13,8 +13,28 @@ const atomicCommitMigration = readFileSync(
   "supabase/migrations/20260801131340_custodial_atomic_offline_completion_identity.sql",
   "utf8",
 );
+const offlineActorRecoveryMigration = readFileSync(
+  "supabase/migrations/20260810143000_offline_actor_occurrence_reconciliation.sql",
+  "utf8",
+);
+const offlineAuthorityEnforcementMigration = readFileSync(
+  "supabase/migrations/20260810150000_enforce_integrated_backend_authority.sql",
+  "utf8",
+);
+const offlineAuthorityClosureMigration = readFileSync(
+  "supabase/migrations/20260810160000_close_offline_authority_integrity_gaps.sql",
+  "utf8",
+);
 const schemaReconciliationMigration = readFileSync(
   "supabase/migrations/20260801134430_reconcile_canonical_schema_security_metadata.sql",
+  "utf8",
+);
+const namedManagerSharedRoomRetirementMigration = readFileSync(
+  "supabase/migrations/20260810120000_retire_named_manager_shared_room_authority.sql",
+  "utf8",
+);
+const namedManagerSharedRoomRetirementCorrectionMigration = readFileSync(
+  "supabase/migrations/20260810130000_harden_named_manager_retired_archive_and_concurrency.sql",
   "utf8",
 );
 const foreignKeyIndexMigration = readFileSync(
@@ -22,17 +42,31 @@ const foreignKeyIndexMigration = readFileSync(
   "utf8",
 );
 
-assert.match(indexSource, /tool_start_session_v2/);
-assert.match(indexSource, /p_client_session_id is required for scan start idempotency/);
-assert.match(indexSource, /p_client_completion_id are required for idempotent completion/);
+assert.doesNotMatch(indexSource, /"tool_start_session_v2"/);
+assert.doesNotMatch(indexSource, /"tool_record_scan_event"/);
+assert.match(indexSource, /p_client_session_id is required and p_client_completion_id must be a UUID for idempotent completion/);
 assert.match(indexSource, /prepareScanRpcCall/);
-assert.match(indexSource, /error\?\.status/);
+assert.match(indexSource, /bindOfflineActorProof/);
+assert.match(indexSource, /tool_start_offline_occurrence/);
+assert.match(indexSource, /tool_commit_cleaning_workflow_authoritative/);
+assert.match(indexSource, /CUSTODIAL_BACKEND_PROOF_SECRET/);
+assert.doesNotMatch(indexSource, /custodial_issue_offline_actor_context/);
+assert.match(indexSource, /sqlStateHttpStatus/);
+assert.match(indexSource, /custodial_quarantine_malformed_scan_http/);
+assert.match(indexSource, /requiredRequestOperationId/);
+assert.match(indexSource, /authorityHttpFailure/);
+assert.match(offlineAuthorityClosureMigration, /custodial_offline_reconciliation_outbox/);
+assert.match(offlineAuthorityClosureMigration, /custodial_reject_offline_evidence_truncate/);
+assert.match(offlineAuthorityClosureMigration, /invalid_payload_shape_or_bounds/);
+assert.match(offlineAuthorityClosureMigration, /duplicate scan event identity in one payload/);
+assert.match(offlineAuthorityClosureMigration, /scan_event_identity_already_bound/);
+assert.match(offlineAuthorityClosureMigration, /revoke all on table public\.sessions,public\.completion_responses,public\.scan_events,public\.maintenance_tickets/);
 assert.doesNotMatch(indexSource, /create table if not exists public\.guest_cleanliness_reports/i);
 assert.doesNotMatch(indexSource, /create table if not exists public\.system_feedback_items/i);
 assert.match(indexSource, /storage_bucket/);
 assert.match(indexSource, /supabaseAdmin\.storage/);
 assert.match(indexSource, /\/release-manifest/);
-assert.match(indexSource, /app\.use\(\["\/version", "\/release-manifest", "\/health", "\/health\/dependencies"\]/);
+assert.match(indexSource, /app\.use\(\["\/version", "\/release-manifest", "\/scheduler-runtime-config", "\/health", "\/health\/dependencies"\]/);
 assert.match(indexSource, /app\.get\(\["\/health", "\/health\/dependencies"\]/);
 assert.match(indexSource, /req\.method === "OPTIONS"/);
 assert.match(indexSource, /\/health\/dependencies/);
@@ -46,8 +80,8 @@ assert.match(releaseManifestSource, /schema-fingerprint\.txt/);
 assert.match(releaseManifestSource, /supabase\/migrations/);
 assert.match(releaseManifestSource, /queue_compatibility_versions/);
 assert.match(releaseManifestSource, /minimum_supported/);
-assert.match(frontendReleaseManifest.frontend_commit_sha, /^[a-f0-9]{40}$/);
-assert.equal(frontendReleaseManifest.frontend_commit_state, "github_pages_production_verified");
+assert.equal(frontendReleaseManifest.frontend_commit_sha, "372132f4cf5bdde837f54ba5221dd851cd5d8d17");
+assert.equal(frontendReleaseManifest.frontend_commit_state, "final_pair_bound");
 assert.equal(frontendReleaseManifest.api_contract_versions.operational_analytics, "operational-analytics.v1");
 assert.equal(packageJson.scripts["test:schema-fingerprint"], "node scripts/schema-fingerprint-check.mjs");
 assert.equal(packageJson.scripts["test:empty-db-rebuild"], "node scripts/empty-database-rebuild-check.mjs");
@@ -69,6 +103,38 @@ assert.match(
   /v_session_location_id, v_session_device_pk, v_session_employee_id\s+from public\.sessions/i,
   "optional session lookup must write only to session identity variables",
 );
+
+for (const contract of [
+  "custodial_offline_actor_contexts",
+  "custodial_offline_submission_proofs",
+  "occurrence_id",
+  "assignment_epoch",
+  "assignment_change_id",
+  "occurrence_fingerprint",
+  "custodial_start_offline_occurrence",
+  "custodial_backend_execution_config",
+]) assert.match(offlineActorRecoveryMigration, new RegExp(contract.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"));
+for (const contract of [
+  "custodial_offline_reconciliation_records",
+  "custodial_offline_reconciliation_audits",
+  "custodial_offline_scan_event_evidence",
+  "custodial_offline_time_reservations",
+  "payload_fingerprint",
+  "payload_fingerprint_conflict",
+  "custodial_quarantine_offline_submission",
+  "tool_complete_session_authoritative",
+  "custodial_offline_employee_time_no_overlap",
+  "custodial_offline_device_time_no_overlap",
+]) assert.match(offlineAuthorityEnforcementMigration, new RegExp(contract.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"));
+assert.doesNotMatch(
+  offlineActorRecoveryMigration,
+  /identity_source','devices\.assigned_employee_id'/,
+  "forward commit authority must not rebind an offline occurrence to the device's current employee",
+);
+assert.match(deviceAuthSource, /offline_recovery_only/);
+assert.match(deviceAuthSource, /isOfflineRecoveryRequest/);
+assert.match(deviceAuthSource, /tool_start_offline_occurrence[\s\S]*tool_commit_cleaning_workflow/,
+  "stale credential recovery is limited to snapshot activation and terminal submission");
 assert.doesNotMatch(
   atomicCommitMigration,
   /v_location_id, v_device_pk, v_employee_id\s+from public\.sessions/i,
@@ -93,28 +159,33 @@ assert.match(
   /grant execute on function public\.commit_cleaning_workflow[\s\S]*to postgres, service_role/i,
 );
 
-for (const functionName of [
-  "msg_ensure_ops_manager_user",
-  "msg_get_or_create_ops_manager_thread",
-]) {
-  assert.match(
-    schemaReconciliationMigration,
-    new RegExp(`create or replace function public\\.${functionName}`, "i"),
-  );
-  assert.match(
-    schemaReconciliationMigration,
-    new RegExp(`revoke all on function public\\.${functionName}[\\s\\S]*from public, anon, authenticated`, "i"),
-  );
-  assert.match(
-    schemaReconciliationMigration,
-    new RegExp(`grant execute on function public\\.${functionName}[\\s\\S]*to service_role`, "i"),
-  );
-}
+assert.match(schemaReconciliationMigration, /create or replace function public\.msg_ensure_ops_manager_user/i);
+assert.match(schemaReconciliationMigration, /grant execute on function public\.msg_ensure_ops_manager_user[\s\S]*to service_role/i);
 assert.match(schemaReconciliationMigration, /set search_path=pg_catalog,public/);
 assert.match(schemaReconciliationMigration, /set local lock_timeout = '5s'/i);
 assert.match(schemaReconciliationMigration, /set local statement_timeout = '60s'/i);
 assert.match(schemaReconciliationMigration, /Prefer the exact real name/);
-assert.match(schemaReconciliationMigration, /Preserve the historical participant\/audit relationship/);
+assert.match(namedManagerSharedRoomRetirementMigration, /drop function if exists public\.msg_get_or_create_ops_manager_thread\(uuid\)/i);
+assert.match(namedManagerSharedRoomRetirementMigration, /update public\.msg_threads[\s\S]*is_active = false[\s\S]*ops_manager_shared_chat_v1/i);
+assert.match(namedManagerSharedRoomRetirementMigration, /update public\.msg_thread_participants p[\s\S]*set left_at = coalesce\(p\.left_at, now\(\)\)[\s\S]*ops_manager_shared_chat_v1/i);
+assert.match(namedManagerSharedRoomRetirementMigration, /create trigger trg_msg_reject_retired_ops_manager_shared_thread_mutation/i);
+assert.match(namedManagerSharedRoomRetirementMigration, /before insert or update of system_key, is_active on public\.msg_threads/i);
+assert.match(namedManagerSharedRoomRetirementMigration, /create trigger trg_msg_reject_retired_ops_manager_shared_participation/i);
+assert.match(namedManagerSharedRoomRetirementMigration, /before insert or update of thread_id, left_at on public\.msg_thread_participants/i);
+assert.match(namedManagerSharedRoomRetirementCorrectionMigration, /where system_key = 'ops_manager_shared_chat_v1'[\s\S]*is_active is distinct from false/i);
+assert.match(namedManagerSharedRoomRetirementCorrectionMigration, /and p\.left_at is null/i,
+  "the forward correction must only canonicalize active legacy participation");
+assert.match(namedManagerSharedRoomRetirementCorrectionMigration, /before insert or update or delete on public\.msg_threads/i);
+assert.match(namedManagerSharedRoomRetirementCorrectionMigration, /before insert or update or delete on public\.msg_thread_participants/i);
+assert.match(namedManagerSharedRoomRetirementCorrectionMigration, /before insert or update or delete on public\.msg_messages/i);
+assert.match(namedManagerSharedRoomRetirementCorrectionMigration, /before insert or update or delete on public\.msg_message_audit/i);
+assert.match(namedManagerSharedRoomRetirementCorrectionMigration, /before insert or update or delete on public\.msg_receipts/i);
+assert.match(namedManagerSharedRoomRetirementCorrectionMigration, /msg_canonical_thread_pairs/i);
+assert.match(namedManagerSharedRoomRetirementCorrectionMigration, /pg_advisory_xact_lock/i);
+assert.match(namedManagerSharedRoomRetirementCorrectionMigration, /msg_mark_thread_read/i);
+assert.match(namedManagerSharedRoomRetirementMigration, /cannot be recreated/i);
+assert.match(namedManagerSharedRoomRetirementMigration, /must remain inactive/i);
+assert.match(namedManagerSharedRoomRetirementMigration, /cannot have active participants/i);
 for (const tableName of [
   "custodial_employee_device_assignment_history",
   "custodial_employee_status_history",
@@ -178,5 +249,10 @@ assert.match(messagingSource, /p_client_message_id: clientMessageId \|\| null/);
 assert.match(messagingSource, /Sender user ID must match the authenticated viewer/);
 assert.match(messagingSource, /Read acknowledgement user ID must match the authenticated viewer/);
 assert.match(messagingSource, /p_user_id: viewer\.effectiveUserId/);
+assert.doesNotMatch(
+  messagingSource,
+  /runRpc\(\s*["']msg_get_or_create_ops_manager_thread["']/,
+  "current Messenger routes must not bootstrap the retired shared room",
+);
 
 console.log("CUSTODIAL_REPAIR_CONTRACT_TESTS_PASS");

@@ -25,6 +25,7 @@ async function json(statement) {
 const ids = {
   location: "00000000-0000-4000-8000-00000000a101",
   boundaryLocation: "00000000-0000-4000-8000-00000000a130",
+  replayLocation: "00000000-0000-4000-8000-00000000a133",
   fastEmployee: "00000000-0000-4000-8000-00000000a102",
   slowEmployee: "00000000-0000-4000-8000-00000000a103",
   fastDevice: "00000000-0000-4000-8000-00000000a104",
@@ -42,6 +43,8 @@ const ids = {
   fallbackInspection: "00000000-0000-4000-8000-00000000a129",
   missingCompletionSession: "00000000-0000-4000-8000-00000000a132",
   staleSession: "00000000-0000-4000-8000-00000000a131",
+  replaySession: "00000000-0000-4000-8000-00000000a134",
+  replayCompletion: "00000000-0000-4000-8000-00000000a135",
   thread: "00000000-0000-4000-8000-00000000a113",
   oldMessage: "00000000-0000-4000-8000-00000000a114",
   recentMessage: "00000000-0000-4000-8000-00000000a115",
@@ -116,7 +119,8 @@ await sql(`
   insert into public.locations(id,location_code,location_name,location_type,form_type,active)
   values
     ('${ids.location}','ANALYTICS_TETON','Analytics Teton','exhibit','exhibit',true),
-    ('${ids.boundaryLocation}','ANALYTICS_BOUNDARY','Analytics Boundary','exhibit','exhibit',true);
+    ('${ids.boundaryLocation}','ANALYTICS_BOUNDARY','Analytics Boundary','exhibit','exhibit',true),
+    ('${ids.replayLocation}','ANALYTICS_REPLAY','Analytics Replay','exhibit','exhibit',true);
   insert into public.employees(id,employee_code,display_name,active,role,notes) values
     ('${ids.fastEmployee}','EMP990101','Analytics Tammy',true,'staff','analytics acceptance'),
     ('${ids.slowEmployee}','EMP990102','Analytics Sherita',true,'staff','analytics acceptance');
@@ -128,7 +132,10 @@ await sql(`
     started_at,ended_at,duration_minutes,duration_display,completion_source
   ) values
     ('${ids.fastSession}','analytics-fast-session','analytics-fast-session','${ids.location}','${ids.fastEmployee}','${ids.fastDevice}','closed',now()-interval '45 minutes',now(),45,'45 min','kiosk_form'),
-    ('${ids.slowSession}','analytics-slow-session','analytics-slow-session','${ids.location}','${ids.slowEmployee}','${ids.slowDevice}','closed',now()-interval '90 minutes',now(),90,'90 min','kiosk_form');
+    ('${ids.slowSession}','analytics-slow-session','analytics-slow-session','${ids.location}','${ids.slowEmployee}','${ids.slowDevice}','closed',now()-interval '90 minutes',now(),90,'90 min','kiosk_form'),
+    ('${ids.replaySession}','analytics-replay-session','analytics-replay-session','${ids.replayLocation}','${ids.fastEmployee}','${ids.fastDevice}','closed',
+      greatest(operational_day_start(statement_timestamp()),statement_timestamp()-interval '1 minute')-interval '60 minutes',
+      greatest(operational_day_start(statement_timestamp()),statement_timestamp()-interval '1 minute'),60,'60 min','kiosk_form');
   insert into public.sessions(
     id,session_uuid,client_session_id,location_id,employee_id,device_id,status,
     started_at,ended_at,duration_minutes,duration_display,completion_source
@@ -145,9 +152,11 @@ await sql(`
     id,session_id,location_id,submitted_by_employee_id,device_id,response_json,client_completion_id
   ) values
     ('${ids.fastCompletion}','${ids.fastSession}','${ids.location}','${ids.fastEmployee}','${ids.fastDevice}',
-      '{"form_type":"exhibit","services_performed":["Full cleaning services"],"note":"Inspection-ready"}','analytics-fast-completion'),
+      '{"form_type":"exhibit","services_performed":["Full cleaning services"],"note":"Inspection-ready"}','${ids.fastCompletion}'),
     ('${ids.slowCompletion}','${ids.slowSession}','${ids.location}','${ids.slowEmployee}','${ids.slowDevice}',
-      '{"form_type":"exhibit","services_performed":["Full cleaning services"],"note":"Inspection-ready"}','analytics-slow-completion');
+      '{"form_type":"exhibit","services_performed":["Full cleaning services"],"note":"Inspection-ready"}','${ids.slowCompletion}'),
+    ('${ids.replayCompletion}','${ids.replaySession}','${ids.replayLocation}','${ids.fastEmployee}','${ids.fastDevice}',
+      '{"form_type":"exhibit","services_performed":["Full cleaning services"],"note":"Delayed replay"}','${ids.replayCompletion}');
   insert into public.cleaning_inspections(
     id,operation_id,request_fingerprint,session_id,inspector_name_snapshot,
     inspection_type,rubric_version,overall_score,appearance_score,sanitation_score,
@@ -180,7 +189,7 @@ await sql(`
       client_completion_id,submitted_at,created_at
     ) values (
       '${ids.fallbackCompletion}','${ids.fallbackSession}','${ids.boundaryLocation}',
-      '${ids.fastEmployee}','${ids.fastDevice}','{}','analytics-fallback-completion',
+      '${ids.fastEmployee}','${ids.fastDevice}','{}','${ids.fallbackCompletion}',
       statement_timestamp()-interval '24 hours',statement_timestamp()-interval '24 hours'
     )
     returning session_id,submitted_at
@@ -207,6 +216,12 @@ await sql(`
     'Database Inspector','Resolved for acceptance','manager'
   from generate_series(1,3) with ordinality as occurrence(value,ordinality);
 `);
+
+assert.equal(await sql(`
+  select (latest_completed_at=latest_ended_at and latest_submitted_at>latest_completed_at)::text
+  from public.v_location_dashboard_status
+  where location_id='${ids.replayLocation}';
+`), "true", "manager readiness must use native completion time while retaining the later replay receipt time");
 
 assert.equal(await sql(`select count(*) from pg_constraint where conrelid='public.current_attendance_state'::regclass and conname like 'current_attendance_state_%_nonnegative' and convalidated;`), "5");
 assert.equal(await sql(`select count(*) from pg_constraint where conrelid='public.cleaning_inspections'::regclass and conname in ('cleaning_inspections_rubric_nonblank','cleaning_inspections_failed_requires_follow_up') and convalidated;`), "2");

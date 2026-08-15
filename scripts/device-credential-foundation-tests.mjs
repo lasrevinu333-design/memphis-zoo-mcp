@@ -302,7 +302,8 @@ assert.doesNotMatch(moduleSource, /res\.status\(200\).*rawToken/s);
 
 const indexSource = read("src/index.js");
 assert.match(indexSource, /installDeviceCredentialRoutes/);
-assert.match(indexSource, /requireDeviceOrOpsAccess, requireScanRpcAuthorization, scanRpcRateLimit/);
+assert.match(indexSource, /parseScanAuthorityJsonBeforeAuthentication, requireDeviceOrOpsAccess, rejectInvalidAuthenticatedScanAuthorityJson, requireScanRpcAuthorization, scanRpcRateLimit/);
+assert.match(indexSource, /deferJsonParserErrors/);
 assert.match(indexSource, /X-Device-Credential/);
 assert.match(indexSource, /X-Device-Label/);
 assert.match(indexSource, /Access-Control-Expose-Headers", "X-Device-Enrollment-Required, Retry-After"/);

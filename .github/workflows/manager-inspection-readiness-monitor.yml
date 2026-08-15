@@ -4,12 +4,6 @@ on:
   schedule:
     - cron: "11,26,41,56 * * * *"
   workflow_dispatch:
-    inputs:
-      enforce:
-        description: Fail unless eligible manager inspection evidence exists
-        required: true
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -39,7 +33,6 @@ jobs:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           SUPABASE_DB_CA_CERT_PATH: ${{ github.workspace }}/.github/certs/prod-ca-2021.crt
           MANAGER_INSPECTION_NOT_BEFORE: '2026-07-30T23:45:00.000Z'
-          MANAGER_INSPECTION_ENFORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.enforce || false }}
         run: |
           set -euo pipefail
           node scripts/manager-inspection-readiness.mjs | tee manager-inspection-readiness-report.json

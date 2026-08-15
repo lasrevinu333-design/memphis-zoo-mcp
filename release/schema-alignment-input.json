@@ -1,0 +1,34 @@
+{
+  "release_id": "release-2026.07.19.custodial-v3.12",
+  "frontend_commit_sha": "372132f4cf5bdde837f54ba5221dd851cd5d8d17",
+  "frontend_commit_state": "final_pair_bound",
+  "backend_minimum_version": "release-2026.07.19.custodial-v3.12",
+  "schema_from_fingerprint": "405dfbc65393c7a1fc9ea86b9c2e1f637df185f11a8520315f61fd8a9b1e5dfc",
+  "schema_transition": {
+    "transition_id": "custodial-canary-offline-scan-authority-20260813",
+    "expires_at": "2026-08-23T23:59:59Z"
+  },
+  "api_contract_versions": {
+    "scan": "scan.v4.snapshot-bound-authority",
+    "dashboard": "dashboard.v1",
+    "messaging": "messaging.v5",
+    "schedule": "schedule.v2",
+    "coverall_assignments": "coverall-assignments.v2.secure-links",
+    "operational_analytics": "operational-analytics.v1",
+    "events": "events.v3",
+    "ops_manager_auth": "ops-manager-auth.v5.named-leadership",
+    "gemini_console": "gemini-console.v2",
+    "guest_reports": "guest-reports.v2.approval-gated",
+    "feedback": "feedback.v2.json-triage"
+  },
+  "queue_compatibility_versions": {
+    "scan": ["legacy-local-storage", "indexeddb-v1", "indexeddb-v2", "indexeddb-v3", "indexeddb-v4", "indexeddb-v6-offline-authority"],
+    "native_notification_actions": ["local-storage-outbox-v1"],
+    "messaging": ["local-storage-outbox-v1"],
+    "gemini_console": ["indexeddb-outbox-v1"]
+  },
+  "minimum_supported": {
+    "frontend_version": "release-2026.07.19.custodial-v3.12",
+    "backend_version": "release-2026.07.19.custodial-v3.12"
+  }
+}

@@ -84,6 +84,11 @@ function stringifyData(data = {}) {
   }
   return output;
 }
+function eventReminderIsCurrent(job, now = Date.now()) {
+  if (String(job?.notification_type || "") !== "event_digest") return true;
+  const startsAt = Date.parse(String(job?.data_json?.next_event_starts_at || ""));
+  return Number.isFinite(startsAt) && startsAt > now;
+}
 function preferenceView(row = {}) {
   return {
     messages_enabled: row.messages_enabled !== false,
@@ -200,35 +205,73 @@ export function createPushRuntime({ db, env }) {
     return value;
   }
 
-  async function send(job, pushDevice, { channelId = "operations" } = {}) {
-    const token = await accessToken(PUSH_SCOPE);
+  async function send(job, pushDevice, { channelId = "operations", beforeSend = null } = {}) {
+    if (!eventReminderIsCurrent(job)) {
+      const error = new Error("The event occurrence is no longer upcoming.");
+      error.expired = true;
+      error.deliveryNotAccepted = true;
+      throw error;
+    }
+    let token;
+    try {
+      token = await accessToken(PUSH_SCOPE);
+    } catch (error) {
+      error.deliveryNotAccepted = true;
+      throw error;
+    }
+    if (!eventReminderIsCurrent(job)) {
+      const error = new Error("The event occurrence is no longer upcoming.");
+      error.expired = true;
+      error.deliveryNotAccepted = true;
+      throw error;
+    }
+    if (typeof beforeSend === "function" && await beforeSend() !== true) {
+      const error = new Error("The notification job is no longer current.");
+      error.expired = true;
+      error.deliveryNotAccepted = true;
+      throw error;
+    }
     const collapseKey = `memphis-${clip(channelId, 48).toLowerCase().replace(/[^a-z0-9_-]+/g, "-") || "operations"}`;
-    const response = await fetch(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(account.project_id)}/messages:send`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        message: {
-          token: pushDevice.fcm_token,
-          notification: { title: clip(job.title, 180), body: clip(job.body, 1000) },
-          data: stringifyData(job.data_json),
-          android: {
-            priority: "high",
-            collapse_key: collapseKey,
-            notification: { channel_id: channelId, sound: "default", default_vibrate_timings: true },
+    let response;
+    try {
+      response = await fetch(`https://fcm.googleapis.com/v1/projects/${encodeURIComponent(account.project_id)}/messages:send`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: {
+            token: pushDevice.fcm_token,
+            notification: { title: clip(job.title, 180), body: clip(job.body, 1000) },
+            data: stringifyData(job.data_json),
+            android: {
+              priority: "high",
+              collapse_key: collapseKey,
+              notification: { channel_id: channelId, sound: "default", default_vibrate_timings: true },
+            },
+            apns: {
+              headers: { "apns-priority": "10" },
+              payload: { aps: { sound: "default", badge: 1 } },
+            },
           },
-          apns: {
-            headers: { "apns-priority": "10" },
-            payload: { aps: { sound: "default", badge: 1 } },
-          },
-        },
-      }),
-    });
+        }),
+      });
+    } catch (error) {
+      // Once fetch starts, a network/transport exception cannot prove that FCM
+      // rejected the request. Preserve an at-most-once outcome instead of
+      // allowing the queue to call the provider again.
+      error.deliveryNotAccepted = false;
+      throw error;
+    }
     const payload = await response.json().catch(() => null);
     if (!response.ok || !payload?.name) {
       const message = payload?.error?.message || `FCM returned HTTP ${response.status}.`;
       const code = String(payload?.error?.details?.[0]?.errorCode || payload?.error?.status || "");
       const error = new Error(message);
       error.permanent = response.status === 404 || /UNREGISTERED|INVALID_ARGUMENT/i.test(`${code} ${message}`);
+      // A non-2xx response is an explicit provider rejection. A 2xx response
+      // with an unreadable or incomplete body is ambiguous: FCM may have
+      // accepted the message before the response was truncated, so releasing
+      // an at-most-once marker would permit a duplicate send.
+      error.deliveryNotAccepted = !response.ok;
       throw error;
     }
     return payload.name;
@@ -254,35 +297,61 @@ export function createPushRuntime({ db, env }) {
         let succeeded = false;
         let providerMessageId = null;
         let errorMessage = null;
+        let pushDevice = null;
+        let deliveryOutcomeUnknown = false;
         try {
+          if (!eventReminderIsCurrent(job)) throw Object.assign(new Error("The event occurrence is no longer upcoming."), { expired: true });
           const deviceResult = await db.from("ops_manager_push_devices")
             .select("push_device_id,credential_id,manager_id,fcm_token,platform,enabled,revoked_at")
-            .eq("credential_id", job.credential_id).eq("enabled", true).is("revoked_at", null).maybeSingle();
+            .eq("credential_id", job.credential_id).eq("manager_id", job.manager_id)
+            .eq("enabled", true).is("revoked_at", null).maybeSingle();
           if (deviceResult.error) throw deviceResult.error;
           if (!deviceResult.data?.fcm_token) throw Object.assign(new Error("No active push registration exists for this manager app installation."), { permanent: true });
-          providerMessageId = await send(job, deviceResult.data);
+          pushDevice = deviceResult.data;
+          const pushDeviceId = pushDevice.push_device_id;
+          const fcmToken = pushDevice.fcm_token;
+          const fcmTokenSha256 = crypto.createHash("sha256").update(fcmToken).digest("hex");
+          providerMessageId = await send(job, pushDevice, {
+            beforeSend: async () => {
+              const current = await db.rpc("ops_manager_prepare_notification_dispatch", {
+                p_queue_id: job.queue_id,
+                p_lease_token: job.lease_token,
+                p_push_device_id: pushDeviceId,
+                p_fcm_token_sha256: fcmTokenSha256,
+              });
+              if (current.error) throw current.error;
+              return current.data === true;
+            },
+          });
           succeeded = true;
           await db.from("ops_manager_push_devices").update({ last_seen_at: new Date().toISOString(), last_error: null })
-            .eq("credential_id", job.credential_id);
+            .eq("push_device_id", pushDeviceId).eq("fcm_token", fcmToken);
         } catch (error) {
           errorMessage = clip(error?.message || "Push delivery failed.", 2000);
-          if (error?.permanent) {
+          deliveryOutcomeUnknown = error?.deliveryNotAccepted === false;
+          if (error?.permanent && pushDevice) {
             await db.from("ops_manager_push_devices").update({ enabled: false, revoked_at: new Date().toISOString(), last_error: errorMessage })
-              .eq("credential_id", job.credential_id);
-          } else {
-            await db.from("ops_manager_push_devices").update({ last_error: errorMessage }).eq("credential_id", job.credential_id);
+              .eq("push_device_id", pushDevice?.push_device_id).eq("fcm_token", pushDevice?.fcm_token);
+          } else if (!error?.expired && pushDevice) {
+            await db.from("ops_manager_push_devices").update({ last_error: errorMessage })
+              .eq("push_device_id", pushDevice?.push_device_id).eq("fcm_token", pushDevice?.fcm_token);
           }
         }
         const finished = await db.rpc("ops_manager_finish_notification_job", {
           p_queue_id: job.queue_id,
           p_lease_token: job.lease_token,
+          p_push_device_id: pushDevice?.push_device_id || null,
+          p_fcm_token_sha256: pushDevice?.fcm_token
+            ? crypto.createHash("sha256").update(pushDevice.fcm_token).digest("hex")
+            : "",
           p_succeeded: succeeded,
+          p_delivery_outcome_unknown: deliveryOutcomeUnknown,
           p_provider_message_id: providerMessageId,
           p_error: errorMessage,
           p_retry_seconds: succeeded ? 30 : (errorMessage ? 120 : 30),
         });
         if (finished.error) throw finished.error;
-        results.push({ queue_id: job.queue_id, succeeded, error: errorMessage });
+        results.push({ queue_id: job.queue_id, succeeded, delivery_outcome_unknown: deliveryOutcomeUnknown, error: errorMessage });
       }
       return { ok: true, claimed: jobs.length, sent: results.filter((row) => row.succeeded).length, results };
     } finally {

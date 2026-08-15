@@ -1,0 +1,2973 @@
+{
+  "artifact": "integrated-backend-authority-release-evidence.v2",
+  "release_id": "release-2026.07.19.custodial-v3.12",
+  "frontend_commit_sha": "372132f4cf5bdde837f54ba5221dd851cd5d8d17",
+  "schema_fingerprint": "2afd6e6154bd62c8974c72a794e08e621df5c3f04a1e88399227f15bb7a0a41e",
+  "schema_transition": {
+    "transition_id": "custodial-canary-offline-scan-authority-20260813",
+    "from_fingerprint": "405dfbc65393c7a1fc9ea86b9c2e1f637df185f11a8520315f61fd8a9b1e5dfc",
+    "to_fingerprint": "2afd6e6154bd62c8974c72a794e08e621df5c3f04a1e88399227f15bb7a0a41e",
+    "expires_at": "2026-08-23T23:59:59Z"
+  },
+  "frontend_source_fingerprint": "2afd6e6154bd62c8974c72a794e08e621df5c3f04a1e88399227f15bb7a0a41e",
+  "backend_contract": {
+    "scan": "scan.v4.snapshot-bound-authority",
+    "authority": "offline-authority.v5",
+    "execution_boundary": "CUSTODIAL_BACKEND_PROOF_SECRET",
+    "bridge_backend_source": "src/index.js:runPreparedScanRpc",
+    "health_gate": "GET /scan-api/authority-health reads custodial_backend_authority_health plus the durable receipt produced only after the designated phone traverses the authenticated native-vault /scan-api/rpc route; canary resume binds that exact receipt"
+  },
+  "compatibility_window": {
+    "accepted_engine": {
+      "scan": "scan.v2",
+      "queue": "indexeddb-v4",
+      "completion": "tool_complete_session via authenticated compatibility adapter"
+    },
+    "required_engine": {
+      "scan": "scan.v4.snapshot-bound-authority",
+      "queue": "indexeddb-v6-offline-authority",
+      "activation": "tool_start_offline_occurrence",
+      "completion": "tool_commit_cleaning_workflow with context_id and submission_proof"
+    },
+    "additive_phase": "20260810143000 supplies explicit activation and records no state-read proof",
+    "enforcement_phase": "20260810150000 routes both canonical and legacy completion through one server-authenticated transaction",
+    "closure_phase": "20260810160000 removes direct DML and legacy-writer authority, fences terminal conflicts, and writes manager outbox evidence",
+    "operational_closure_phase": "20260810170000 recovers durable exact-start proofs, retires every service-role generic writer, and runs leased reconciliation notification delivery",
+    "final_operational_correction_phase": "20260810190000 fences reassigned proof replay, retires alternate terminal writers and purge, and records idempotent recipient delivery evidence",
+    "scan_snapshot_phase": "20260813035530 exposes bounded offline scan authority and enforces exact provenance evidence shape",
+    "snapshot_rebind_closure_phase": "20260813050000 binds activation to an issued snapshot and derives current operational-day truth",
+    "canary_operational_recovery_phase": "20260813060000 adds durable exact-device pause and known-good forward restoration of canonical authority functions",
+    "operational_service_date_phase": "20260813070000 unifies schedules, turnover, occurrences, dashboard truth, and recovery probes at the 04:00 Central service date",
+    "operational_boundary_closure_phase": "20260813141806 aligns notification service dates, exact activation replay identity, and the captured rollback definition",
+    "device_sync_actor_groups_phase": "20260813173000 stores verified pending work groups by issued snapshot, employee, and assignment epoch while retaining the Build 22 aggregate reporter",
+    "release_phone_transport_and_offline_activation_phase": "20260813190000 requires a fresh immutable receipt from the designated phone's native-vault /scan-api/rpc path before resume and permits delayed activation only for work begun while snapshot, credential, and assignment authority were valid",
+    "u4_ops_closure_phase": "20260813210000 canonicalizes native wire timestamps, records immutable activation boundaries, enforces UUID completion identities, installs two-phase employee notification dispatch ledgers, durable manager dispatch preparation with terminal outcome-unknown restart recovery, complete notification recovery authority, and terminal notification retries, and restores the catalog-derived authority set",
+    "atomic_day_change_reconciliation_phase": "20260814224034 converges both preserved U4 migration histories and recognizes the existing complete child/projection receipt chain before mutable Weekly Schedule authority is reread"
+  },
+  "rollback": {
+    "before_enforcement": "legacy Engine and current backend completion remain available",
+    "after_enforcement": "durably pause the exact physical canary and use the reviewed forward restoration set; never re-enable a legacy or direct-SQL writer",
+    "database": "forward-only; do not down-migrate contexts, proofs, reservations, reconciliation, audit, scan evidence, dispositions, or outbox evidence"
+  },
+  "cutover": {
+    "source_identity": {
+      "kind": "external_signed_release_attestation",
+      "acceptance_input_contract": "The cutover invocation must supply a regular, mode-0444, Ed25519-signed release attestation outside this worktree. It binds the semantic release, backend commit/tree/evidence digest/evidence blob, frontend commit, and schema fingerprint. The executable gate deterministically enumerates every tracked path and Git mode from that exact tree, compares every worktree path directly with its exact tree blob and mode, and rejects hidden index flags or Git-environment substitution before any database access. Generated evidence is never its own identity authority.",
+      "generated_evidence_path": "release/integrated-backend-authority-evidence.json",
+      "generated_evidence_excluded_from_content_identity": true,
+      "authority_inventory": {
+        "source": "all-tracked-paths-in-external-expected-tree",
+        "order": "git ls-tree -r -z bytewise path order",
+        "include": "every regular tracked path in the caller-supplied expected tree",
+        "exclude": [
+          "release/integrated-backend-authority-evidence.json"
+        ],
+        "reason": "The generated evidence is separately compared with its exact expected-tree blob and is excluded only to prevent self-reference. All migrations, release inputs, schema-fingerprint inputs, rebuild and database suites, provenance and suite-order gates, final-operational and named-manager gates, generator, checker, package commands, and every other tracked source path are included without a hand-maintained allowlist."
+      }
+    },
+    "phase_order": [
+      "configure CUSTODIAL_BACKEND_PROOF_SECRET (minimum 32 characters) and matching database SHA-256 digest",
+      "run npm run release:populated-schema:preflight through the read-only production MCP and preserve its exact source-fingerprint receipt before any migration",
+      "apply 20260810143000_offline_actor_occurrence_reconciliation.sql",
+      "deploy the bridge backend; it falls back only on absent authoritative procedures",
+      "apply 20260810150000_enforce_integrated_backend_authority.sql",
+      "apply 20260810160000_close_offline_authority_integrity_gaps.sql",
+      "apply 20260810170000_finish_offline_authority_operational_closure.sql",
+      "apply 20260810190000_final_integrated_backend_operational_correction.sql",
+      "apply 20260813035530_offline_scan_authority_snapshot.sql",
+      "apply 20260813050000_offline_snapshot_operational_truth_closure.sql",
+      "apply 20260813060000_release_canary_operational_recovery.sql",
+      "apply 20260813070000_operational_service_date_foundation.sql",
+      "apply 20260813141806_custodial_operational_boundary_closure.sql",
+      "apply 20260813173000_device_sync_actor_groups.sql",
+      "apply 20260813190000_release_phone_transport_and_offline_activation_closure.sql",
+      "apply 20260813210000_custodial_u4_ops_closure.sql",
+      "apply 20260814224034_reconcile_static_weekly_day_change_receipts.sql",
+      "require a green authority health gate and direct-DML denial probes before routing traffic"
+    ],
+    "rollback": {
+      "precondition": "retain the exact bridge backend artifact and the execution secret until all authority health and restoration probes are green",
+      "action": "pause the exact physical canary through the durable control; if canonical authority is missing or broken, restore the captured known-good function set forward, verify health, then explicitly resume",
+      "restoration_checks": [
+        "custodial_backend_authority_health returns ok=true",
+        "the designated phone's authenticated native-vault /scan-api/rpc request records an immutable exact-device, credential, backend-commit, and release receipt before canary resume",
+        "exact start and completion replay return one durable proof, reconciliation, and completion",
+        "offline snapshot activation requires exact issued identity; frozen exact replay remains attributable to the original actor after reassignment",
+        "scan evidence remains exact-shape and provenance-labeled after replay",
+        "service_role direct insert/update/delete/truncate probes are denied",
+        "named-manager reconciliation read, exactly-once disposition replay, and notification retry state remain available",
+        "present-but-broken and missing canonical authority functions restore to their captured known-good definitions while the canary remains paused",
+        "schedule, turnover, occurrence, and dashboard service dates all change at the same 04:00 America/Chicago boundary",
+        "employee and manager notifications use the same service date; activation replay returns frozen actor identity and its rollback definition remains exact",
+        "pending phone work reports every issued snapshot employee and assignment epoch separately; legacy aggregate-only reports remain explicitly unbound",
+        "offline work begun while snapshot, credential, and assignment authority were valid can activate after reconnect, while work begun after revocation, expiry, or reassignment is rejected",
+        "native wire timestamps are canonical UTC milliseconds; immutable activation boundaries and catalog-derived authority restoration remain healthy after negative mutations",
+        "complete Weekly Schedule day-change batches pass the database receipt-chain health gate; exact replay is read-only and prefix, extension, reorder, and content conflicts fail atomically"
+      ]
+    }
+  },
+  "authority_content_identity": {
+    "source": "complete_tracked_git_tree_from_external_signed_release_attestation",
+    "expected_tree_inventory": [
+      {
+        "path": ".github/certs/prod-ca-2021.crt",
+        "mode": "100644",
+        "object_id": "3d693669b23c340c57a3457bdc8b6fefe1806cc5"
+      },
+      {
+        "path": ".github/workflows/custodial-populated-schema-preflight.yml",
+        "mode": "100644",
+        "object_id": "37a9b37aa2d5c5de2eeb439766f0b6c94855c999"
+      },
+      {
+        "path": ".github/workflows/custodial-production-repair.yml",
+        "mode": "100644",
+        "object_id": "2712962db3230742820506fc2b2d912d477f89f4"
+      },
+      {
+        "path": ".github/workflows/device-credential-foundation.yml",
+        "mode": "100644",
+        "object_id": "e70b6697ff51b59ab10419ecfa5793556e3f9fbc"
+      },
+      {
+        "path": ".github/workflows/event-integrity-diagnostics.yml",
+        "mode": "100644",
+        "object_id": "233dab87521a740ec54ef3d90e9c86112b53f157"
+      },
+      {
+        "path": ".github/workflows/foundation-security-gate.yml",
+        "mode": "100644",
+        "object_id": "3087493361b2c67c52914fcb56eaab67c65b764c"
+      },
+      {
+        "path": ".github/workflows/integrated-release-attestation.yml",
+        "mode": "100644",
+        "object_id": "53d8f757815493bacc6f31651a32a66f56ba9d32"
+      },
+      {
+        "path": ".github/workflows/manager-inspection-readiness-monitor.yml",
+        "mode": "100644",
+        "object_id": "973314145ff99078ddba5e546220bd16584d04d4"
+      },
+      {
+        "path": ".github/workflows/operational-analytics-diagnostics.yml",
+        "mode": "100644",
+        "object_id": "38b44520f0370285a3a488fc7b718608de133076"
+      },
+      {
+        "path": ".github/workflows/operational-recovery-live.yml",
+        "mode": "100644",
+        "object_id": "2e67b2d145eeeaea8fd1557e4b0763e03695f65d"
+      },
+      {
+        "path": ".github/workflows/operations-leadership-mobile-foundation.yml",
+        "mode": "100644",
+        "object_id": "48cbb191a1cd7786aa84af0ac29b02827e9e1d22"
+      },
+      {
+        "path": ".github/workflows/phone-production-handoff-monitor.yml",
+        "mode": "100644",
+        "object_id": "dc867a1fe794a11a2abd4c762111e8ed83ada9d7"
+      },
+      {
+        "path": ".github/workflows/production-availability-monitor.yml",
+        "mode": "100644",
+        "object_id": "ad465e47fd7a22795b497791e19bc0b7a5f722ef"
+      },
+      {
+        "path": ".github/workflows/production-database-credential-bridge.yml",
+        "mode": "100644",
+        "object_id": "2c3ebbf23a681bf86fda5440c294190915ff47df"
+      },
+      {
+        "path": ".github/workflows/production-disaster-recovery-backup.yml",
+        "mode": "100644",
+        "object_id": "b3718e8e3e756057b5a9d29aefac264510709f33"
+      },
+      {
+        "path": ".github/workflows/production-schema-c674-bootstrap.yml",
+        "mode": "100644",
+        "object_id": "5045332189ca4944cddd0efb0c98170edc7cd726"
+      },
+      {
+        "path": ".github/workflows/production-schema-inspection-freshness.yml",
+        "mode": "100644",
+        "object_id": "339e81028ea609a271381f2d88cae87e53b2f61f"
+      },
+      {
+        "path": ".gitignore",
+        "mode": "100644",
+        "object_id": "62cadec92f1559d0b1c70b278e6d9bcb0d955a3e"
+      },
+      {
+        "path": "GEMINI_HANDOFF.md",
+        "mode": "100644",
+        "object_id": "3a3971ff0f243c509484e21bd1584fd3fd3e9539"
+      },
+      {
+        "path": "MEMPHIS_MESSENGER_REGRESSION_FIXTURES.md",
+        "mode": "100644",
+        "object_id": "9d433e8f41f620bcd4fa9d952e96e45ea948c450"
+      },
+      {
+        "path": "POST_DEPLOY_REGRESSION_CHECKLIST.md",
+        "mode": "100644",
+        "object_id": "e08b10c21087e0f95d9ae5309d655600c79fadc2"
+      },
+      {
+        "path": "README.md",
+        "mode": "100644",
+        "object_id": "06cc5801636d741c7a38d0b9b57536ba559e270e"
+      },
+      {
+        "path": "athanor-results/custodial-ops-manager-messenger-access-repair-and-v43-continuation-r1.json",
+        "mode": "100644",
+        "object_id": "a23587904a1303eefd75f14d64aa3d49972d27d7"
+      },
+      {
+        "path": "config/fully-kiosk-devices.example.json",
+        "mode": "100644",
+        "object_id": "7a680bc3f6800ddaf5c5d6e81f813aceae2f765b"
+      },
+      {
+        "path": "config/location-classification.json",
+        "mode": "100644",
+        "object_id": "f362dce1dc63784024bddcce134e287f27714a2a"
+      },
+      {
+        "path": "deploy/static-weekly-control-plane.render.yaml",
+        "mode": "100644",
+        "object_id": "dec875c55edd6387c3d97e924986732ad6b75cc8"
+      },
+      {
+        "path": "docs/AI_INTEGRATION_ARCHITECTURE.md",
+        "mode": "100644",
+        "object_id": "936586f668d82a5e63a386cf4726e7db10bb9f03"
+      },
+      {
+        "path": "docs/env.md",
+        "mode": "100644",
+        "object_id": "ca423487704771fe86d2dd76d2df047cc949a470"
+      },
+      {
+        "path": "docs/github-json-commands.md",
+        "mode": "100644",
+        "object_id": "c9f897b14223fb1ecbe18813e5ad5e2fbb640501"
+      },
+      {
+        "path": "docs/mcp-repair-note.md",
+        "mode": "100644",
+        "object_id": "28bff1a6645d9716a94e27749f8199ce334a82eb"
+      },
+      {
+        "path": "docs/mcp-tools.md",
+        "mode": "100644",
+        "object_id": "8a5bdd6222008da5c274a3206a50629f3fe2350b"
+      },
+      {
+        "path": "docs/memphis-ai-split.md",
+        "mode": "100644",
+        "object_id": "9c39d01d7ff096d274b1d14ffa76c825ab32bdb4"
+      },
+      {
+        "path": "docs/messaging-regression-pack.md",
+        "mode": "100644",
+        "object_id": "e37e5ef4ac9f318eed04cafa254ada57458f7221"
+      },
+      {
+        "path": "docs/moxie-authentication-repair-20260716.md",
+        "mode": "100644",
+        "object_id": "d869807a127494c9ad2592ccd6d7a979ea659c0d"
+      },
+      {
+        "path": "docs/ops-manager-trusted-device-auth.md",
+        "mode": "100644",
+        "object_id": "330af443d5888e059cc5a318bd7437c07b4be799"
+      },
+      {
+        "path": "docs/plans/2026-06-09-scheduler-open-owner-repair.md",
+        "mode": "100644",
+        "object_id": "571624968a65ce4457de4165ae1965b988a1665d"
+      },
+      {
+        "path": "docs/pr-4-review-checklist.md",
+        "mode": "100644",
+        "object_id": "1ff754b5f34f4e2faacf6e2782b461ddb530603b"
+      },
+      {
+        "path": "docs/rebuild-plan.md",
+        "mode": "100644",
+        "object_id": "132cb5b2ca757682b83ddbefb22c2e88779e5fbc"
+      },
+      {
+        "path": "docs/reminder-aware-location-policy.md",
+        "mode": "100644",
+        "object_id": "c8bccd14ac043a3b76670c722e61f3d460c52d97"
+      },
+      {
+        "path": "docs/restored-scan-lunch-20260628.md",
+        "mode": "100644",
+        "object_id": "9722b2951005ddb1447f08e6c01ea5edfe233121"
+      },
+      {
+        "path": "docs/routes.md",
+        "mode": "100644",
+        "object_id": "8c653b958567663766913c597130d115cc2e7273"
+      },
+      {
+        "path": "docs/scheduler-overhaul/baseline-2026-06-11.md",
+        "mode": "100644",
+        "object_id": "441b10ec34764b57623bf2324b9d5d31d6b59d6b"
+      },
+      {
+        "path": "docs/static-schedule-publishing-pipeline.md",
+        "mode": "100644",
+        "object_id": "19b0000d69eb9b80ec2be28a862ac98af23d7571"
+      },
+      {
+        "path": "home/eric/greek_roman_herbal_medicine.md",
+        "mode": "100644",
+        "object_id": "95e5fa7ea54f82366198939a0eadbff256946d6b"
+      },
+      {
+        "path": "home/eric/islamic_golden_age_medicine.md",
+        "mode": "100644",
+        "object_id": "b6a2a653fe43fc8ac61df126f92b00ce202f4d05"
+      },
+      {
+        "path": "memphis_ai/prompt-replay-tests-reminder-aware.json",
+        "mode": "100644",
+        "object_id": "4fcdca76d818ee16e681faca3b1252380cf31dc0"
+      },
+      {
+        "path": "package-lock.json",
+        "mode": "100644",
+        "object_id": "891f963038bff00ad9fb1b9b867b9fe12e552322"
+      },
+      {
+        "path": "package.json",
+        "mode": "100644",
+        "object_id": "57b4baf39900e3811bdc6c3247e5d7aad03ad7f5"
+      },
+      {
+        "path": "public/moxie-assets/contacts-creekside-animal.png",
+        "mode": "100644",
+        "object_id": "be41d29c6e49f3d0fd7f712bf2b5415469f883f1"
+      },
+      {
+        "path": "public/moxie-assets/frog-on-log-writing-pad.png",
+        "mode": "100644",
+        "object_id": "d241ab7c001a0963abff39e8d45248ba7191f6c7"
+      },
+      {
+        "path": "public/moxie-assets/moxie-avatar.jpg",
+        "mode": "100644",
+        "object_id": "8938d0bc445ae486eaf53dc757e1f82d680706f8"
+      },
+      {
+        "path": "public/moxie-assets/ops-dashboard.png",
+        "mode": "100644",
+        "object_id": "4133ea1d8c7084de696bb01db51f271119253513"
+      },
+      {
+        "path": "public/moxie-assets/ops-events.png",
+        "mode": "100644",
+        "object_id": "71d24d5aa0e6e88c4d4ac2f604902e173b8df619"
+      },
+      {
+        "path": "public/moxie-assets/ops-messaging.png",
+        "mode": "100644",
+        "object_id": "46aed7b0c8be0fad31ec0e25ae67a8779c1a1b00"
+      },
+      {
+        "path": "public/moxie-assets/ops-schedule.png",
+        "mode": "100644",
+        "object_id": "6f1b1a2ccd64779a3d1a5cbd8f6675c1f4b2bb5e"
+      },
+      {
+        "path": "public/moxie-assets/reminders-woodland-animal.png",
+        "mode": "100644",
+        "object_id": "d66b6e8a54bebf6e8d372d8fd0d0e6176ba3a2e3"
+      },
+      {
+        "path": "public/moxie-assets/settings-woodland-cog.png",
+        "mode": "100644",
+        "object_id": "3e06fc6aaea8f2af937b1436560fc5805dcf2652"
+      },
+      {
+        "path": "release/frontend-release-manifest.json",
+        "mode": "100644",
+        "object_id": "5ccf6d4dd8eed324b36836705c97180766884bc2"
+      },
+      {
+        "path": "release/integrated-backend-authority-input.json",
+        "mode": "100644",
+        "object_id": "9ceeb1a6ebf494dd441ea9e71e7de78bb6ee9a1f"
+      },
+      {
+        "path": "release/reviewed-migrations/20260809125735_cleaning_inspection_24_hour_freshness.sql",
+        "mode": "100644",
+        "object_id": "5b47706e8a319fd23b8245fb6e3e83f65f20b7a1"
+      },
+      {
+        "path": "release/schema-alignment-input.json",
+        "mode": "100644",
+        "object_id": "1c957ad9960670a394fd8dd326388ecbb0de36f7"
+      },
+      {
+        "path": "research/european_herbalism_through_paracelsus.md",
+        "mode": "100644",
+        "object_id": "8fef45595785feb20691c7bc44c7225d759bea87"
+      },
+      {
+        "path": "scraping_results.md",
+        "mode": "100644",
+        "object_id": "2f2ae6f36c94016d5873ca546f4208b3b640580d"
+      },
+      {
+        "path": "scripts/apply-annie-migration.mjs",
+        "mode": "100644",
+        "object_id": "aff3e6215b90ecdc337fdf3e1c8a08a4f7c4485d"
+      },
+      {
+        "path": "scripts/audit3-repair-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "06914893998d9541c71859670f70a5a15c8e0bb9"
+      },
+      {
+        "path": "scripts/audit4-repair-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "825e3e68eb7b00e1d92a6c81b4551d010bdd223e"
+      },
+      {
+        "path": "scripts/audit5-feedback-guest-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "324ad8aa6b05604fee5914ae0f74b90204bbc2d7"
+      },
+      {
+        "path": "scripts/audit6-coverall-security-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "9cec14e875700a13142c8aba767634ebfa81b085"
+      },
+      {
+        "path": "scripts/batch-2-event-messenger-cutover-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "41c7abfe7f887e9ba984d65b9ceacc410a342a55"
+      },
+      {
+        "path": "scripts/batch-2-event-messenger-cutover-tests.mjs",
+        "mode": "100644",
+        "object_id": "8b7800fb76fb8c7010645f0bf7b624e16cd3494e"
+      },
+      {
+        "path": "scripts/canonical-schema-reconciliation-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "aaa924cca7c3501973b8d8743c309f07d5763fe4"
+      },
+      {
+        "path": "scripts/capture-private-json-stdin.mjs",
+        "mode": "100644",
+        "object_id": "b810c414cdd3096491b0b7d8825207b8e5b22e4f"
+      },
+      {
+        "path": "scripts/capture-schema-catalog-stdin.mjs",
+        "mode": "100644",
+        "object_id": "503bd2982921fd8c2aea831c650f3746012b5a54"
+      },
+      {
+        "path": "scripts/ci-workflow-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "cab529ed60e1d3e353d48dc3d601e9d9b3201991"
+      },
+      {
+        "path": "scripts/create-release-attestation.mjs",
+        "mode": "100644",
+        "object_id": "f8286e751a6f1451437b9e5f505c0baecee2da11"
+      },
+      {
+        "path": "scripts/create-release-signing-key.mjs",
+        "mode": "100644",
+        "object_id": "834e7c87d2ce34562e0e4dff45e5acb999d582f1"
+      },
+      {
+        "path": "scripts/custodial-atomic-commit-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "c2a3366ab833ba9dc129713db30423f0360a7aa4"
+      },
+      {
+        "path": "scripts/custodial-device-removal-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "aeeba0b154bc0b6ad84f4ebd8b5af5c8d282d025"
+      },
+      {
+        "path": "scripts/custodial-device-removal-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "5e3e69cc66f75d4f996dfc2e3faa7135c685ab2a"
+      },
+      {
+        "path": "scripts/custodial-employee-admin-authorization-tests.mjs",
+        "mode": "100644",
+        "object_id": "a85938e1e7327af96c37c83efb9d2c316e61bb80"
+      },
+      {
+        "path": "scripts/custodial-employee-phone-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "8420c12b96ec341664898b2088807243684b8f42"
+      },
+      {
+        "path": "scripts/custodial-employee-phone-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "a2cebbc057d339eff63dce21ff25e6c61c5bfeb6"
+      },
+      {
+        "path": "scripts/custodial-enrollment-security-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "7dffa15d6c97d3002d329b49e59a6bf70a996cd3"
+      },
+      {
+        "path": "scripts/custodial-enrollment-security-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "802045a1008b627f38e5c54611e2180f321e1106"
+      },
+      {
+        "path": "scripts/custodial-operational-notes-tests.mjs",
+        "mode": "100644",
+        "object_id": "592dfdfa20b836b98b4b38fc532591469e8f655e"
+      },
+      {
+        "path": "scripts/custodial-repair-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "d8279766622034d6f3ec2457f7a6683ae143aed7"
+      },
+      {
+        "path": "scripts/custodial-u4-migration-convergence-tests.mjs",
+        "mode": "100644",
+        "object_id": "599ea66539ba601293975bf9246f909429f3968d"
+      },
+      {
+        "path": "scripts/dashboard-recent-activity-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "04c1b236e6ad2d855be1390500703b77140064cd"
+      },
+      {
+        "path": "scripts/demo-leadership-blank-schedule-tests.mjs",
+        "mode": "100644",
+        "object_id": "ac7c5b52c129089399504e23340b4835ab3438c9"
+      },
+      {
+        "path": "scripts/device-credential-foundation-tests.mjs",
+        "mode": "100644",
+        "object_id": "1463705879b88ebb0aeb8038bf42a7cb0d77f2a1"
+      },
+      {
+        "path": "scripts/device-popup-fully-kiosk-test.mjs",
+        "mode": "100644",
+        "object_id": "c189e773763ffa928dd6471cc135a52dadb2a0e8"
+      },
+      {
+        "path": "scripts/device-security-app-tests.mjs",
+        "mode": "100644",
+        "object_id": "0d09a7cfd0fdf4230b4998da5374478f485322b2"
+      },
+      {
+        "path": "scripts/device-security-password-admin.mjs",
+        "mode": "100644",
+        "object_id": "bcd18be23f24c5ee4cd7238ce295d64e1283a160"
+      },
+      {
+        "path": "scripts/employee-notification-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "4ad22564c6f87182fd4d2b4455a3a14a2312b88a"
+      },
+      {
+        "path": "scripts/empty-database-rebuild-check.mjs",
+        "mode": "100644",
+        "object_id": "31d4dd6157084809c6e83a42c4879d774fd402a3"
+      },
+      {
+        "path": "scripts/event-notification-retention-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "a91517df806121bcfede22034e2b07a2b4764620"
+      },
+      {
+        "path": "scripts/event-notification-retention-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "94665b059969390ac3c6a664bd7b906ab2ee1614"
+      },
+      {
+        "path": "scripts/events-api-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "afad898ea110cc26117234305cd14132cff97c29"
+      },
+      {
+        "path": "scripts/events-parser-tests.mjs",
+        "mode": "100644",
+        "object_id": "4fb026c3bfa386f8c6235e7f8721fa4f5499e16c"
+      },
+      {
+        "path": "scripts/feedback-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "bf042c996f5997eed3ac9f1ff0447c7c5e4b0eb8"
+      },
+      {
+        "path": "scripts/final-closure-database-isolated-tests.mjs",
+        "mode": "100644",
+        "object_id": "4e4bce22915c1c467c5029eeeaa6996170413715"
+      },
+      {
+        "path": "scripts/final-operational-correction-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "454c30f89363a1d03038af8df5c711aa60fcaced"
+      },
+      {
+        "path": "scripts/final-uncertainty-closure-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "98134076e1171162ecef7a5f89a1390694a1d197"
+      },
+      {
+        "path": "scripts/fixtures/static-weekly-scheduler/canary-authority.json",
+        "mode": "100644",
+        "object_id": "4d22eeec506909e49fce9b3e6edb3a3207bacba1"
+      },
+      {
+        "path": "scripts/fixtures/static-weekly-scheduler/candidate-workbook-authority.json",
+        "mode": "100644",
+        "object_id": "cb1413c7683a5da0cce3c4c70556a4ae2d014869"
+      },
+      {
+        "path": "scripts/fixtures/static-weekly-scheduler/highs-1.15.2-result-shape.json",
+        "mode": "100644",
+        "object_id": "abe15f923d631e645775e62fb02163eb091b53cd"
+      },
+      {
+        "path": "scripts/fixtures/static-weekly-scheduler/monotonic-leximax-exhaustive-oracle.json",
+        "mode": "100644",
+        "object_id": "77d93fdc3cb84f7403ebf87e00d7b624c4697ce3"
+      },
+      {
+        "path": "scripts/foundation-repair-tests.mjs",
+        "mode": "100644",
+        "object_id": "12ab77c2f57cbfde14c6b77088fc2c1eb157636b"
+      },
+      {
+        "path": "scripts/full-window-absence-coverage-tests.mjs",
+        "mode": "100644",
+        "object_id": "092bfaf0ff724dd9ef0c2db6bd73d96a18baa92f"
+      },
+      {
+        "path": "scripts/gemini-console-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "5378e001c7aad5b29ada82c4fa43699494652302"
+      },
+      {
+        "path": "scripts/gemini-console-foundation-tests.mjs",
+        "mode": "100644",
+        "object_id": "11df7764faf1bf5bd75d725c7f1c058de4e39edd"
+      },
+      {
+        "path": "scripts/generate-v3-source-review.mjs",
+        "mode": "100644",
+        "object_id": "5cce77e32939e7a0ab9b47d0ad7da9b1ba40fe05"
+      },
+      {
+        "path": "scripts/hash-backup-directory.mjs",
+        "mode": "100644",
+        "object_id": "ec5207f6d8dd386392ab4abc5444691cc1fe769f"
+      },
+      {
+        "path": "scripts/integrated-backend-authority-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "f531a142ed00407cf768e677b03917d8396767bb"
+      },
+      {
+        "path": "scripts/integrated-backend-authority-cutover-check.mjs",
+        "mode": "100644",
+        "object_id": "54a1af354ef3ff7c25e988921752e0d5fe88f45f"
+      },
+      {
+        "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
+        "mode": "100644",
+        "object_id": "c0273e9ed7b6e7c12e0300ec20072e2f1c3962b5"
+      },
+      {
+        "path": "scripts/integrated-backend-authority-suite-order-isolated-tests.mjs",
+        "mode": "100644",
+        "object_id": "7f1dc416c9929a4958c1d67caa142859499374bb"
+      },
+      {
+        "path": "scripts/integrated-backend-authority-suite-order-tests.mjs",
+        "mode": "100644",
+        "object_id": "a2e56a2df4eddcd526de7954156cb59ed36335a8"
+      },
+      {
+        "path": "scripts/live-release-alignment-check.mjs",
+        "mode": "100644",
+        "object_id": "a1f0902b2fad20c0e3bf9df272c94fe6225077cd"
+      },
+      {
+        "path": "scripts/location-group-audit-reminder-aware.mjs",
+        "mode": "100755",
+        "object_id": "f776fcfe08bdb363769dbc910d657c35b761b640"
+      },
+      {
+        "path": "scripts/manager-inspection-readiness-tests.mjs",
+        "mode": "100644",
+        "object_id": "d915d5746ae8772d87619e505fdb1cf155ad0792"
+      },
+      {
+        "path": "scripts/manager-inspection-readiness.mjs",
+        "mode": "100644",
+        "object_id": "85987c0fb566893a479220eeb0fd7c16c649ef0a"
+      },
+      {
+        "path": "scripts/manager-named-enrollment-http-tests.mjs",
+        "mode": "100644",
+        "object_id": "08c6656016c668fda69397ec5d116c762e8745a2"
+      },
+      {
+        "path": "scripts/manager-notification-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "e5b65f7727260e8fab0d8c550d84ba11a4c445f8"
+      },
+      {
+        "path": "scripts/mcp-connector-auth-tests.mjs",
+        "mode": "100644",
+        "object_id": "a1d44cda5a1a121ac9dfbf005e4f32efc452e0e4"
+      },
+      {
+        "path": "scripts/mcp-transport-tool-surface-tests.mjs",
+        "mode": "100644",
+        "object_id": "2d4ab7df9fdf624fab85d026ac39516655a400d6"
+      },
+      {
+        "path": "scripts/memphis-messaging-regression-tests.mjs",
+        "mode": "100644",
+        "object_id": "35c592af630c1a8c5ff7db41debf1087019954d9"
+      },
+      {
+        "path": "scripts/memphis-messaging-route-recovery-tests.mjs",
+        "mode": "100644",
+        "object_id": "62ab269533fed093f09046837f5725e53935a40b"
+      },
+      {
+        "path": "scripts/messaging-incremental-sync-tests.mjs",
+        "mode": "100644",
+        "object_id": "65504c976d2e6e4bc5d8ef40ebba092122d54a36"
+      },
+      {
+        "path": "scripts/messaging-manager-authority-tests.mjs",
+        "mode": "100644",
+        "object_id": "0a57dae9fa62772317198c2a8b9a48553b9386cd"
+      },
+      {
+        "path": "scripts/migrate-annie-log.mjs",
+        "mode": "100644",
+        "object_id": "2c8319e3fba002f303b9195048a6657b26c2a7f4"
+      },
+      {
+        "path": "scripts/moxie-route-tests.mjs",
+        "mode": "100644",
+        "object_id": "6a99c9a0971919c58761054a70c4c743b66be39e"
+      },
+      {
+        "path": "scripts/named-manager-messenger-admin-route-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "c28595e6e78ef2bb9ffa5442b0adeb9eba08afa7"
+      },
+      {
+        "path": "scripts/named-manager-messenger-identity-tests.mjs",
+        "mode": "100644",
+        "object_id": "17ee2ce71908b39de2eaa56acf5f0899d495c705"
+      },
+      {
+        "path": "scripts/named-manager-messenger-retirement-correction-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "dd9c45cd08e27944431772f7bbd91a3036020f48"
+      },
+      {
+        "path": "scripts/named-manager-messenger-retirement-correction-route-tests.mjs",
+        "mode": "100644",
+        "object_id": "55844bf34b6bb985481f4f574531fb4ea023fbcd"
+      },
+      {
+        "path": "scripts/native-canary-transport-route-tests.mjs",
+        "mode": "100644",
+        "object_id": "12be60aba83d14b61786a9aefc8f5ffbfe830012"
+      },
+      {
+        "path": "scripts/native-phone-attestation-tests.mjs",
+        "mode": "100644",
+        "object_id": "6d454ac70e51b181b3f0818bd944559854d5ee07"
+      },
+      {
+        "path": "scripts/offline-actor-recovery-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "6f12a99453c3beec44c4a6c7ad60199e21dd999b"
+      },
+      {
+        "path": "scripts/offline-actor-recovery-route-tests.mjs",
+        "mode": "100644",
+        "object_id": "cc7b3efa900d67b32628b0b1ecb32075f1a5db73"
+      },
+      {
+        "path": "scripts/offline-authority-route-tests.mjs",
+        "mode": "100644",
+        "object_id": "b8b0328cb66b21cc038d267fce466368b188c504"
+      },
+      {
+        "path": "scripts/operational-analytics-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "7be66ed3ef4150e027f05dd2f0f18d7a31040431"
+      },
+      {
+        "path": "scripts/operational-analytics-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "01cda7e50adc101d12d7dada4baaae30772007e6"
+      },
+      {
+        "path": "scripts/operational-recovery-tests.mjs",
+        "mode": "100644",
+        "object_id": "a6dc1232b830403e73ecc24a1dd9834cd5ef15c9"
+      },
+      {
+        "path": "scripts/operations-leadership-mobile-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "77f8696205a1ae9a0d62b93cab0df7c910185159"
+      },
+      {
+        "path": "scripts/operations-leadership-mobile-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "836ed2c94152af66871c5557d493e5761f7e9b95"
+      },
+      {
+        "path": "scripts/phone-production-readiness-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "bdc1147f885571b1705f24f47e5b51c7fdd8e060"
+      },
+      {
+        "path": "scripts/phone-production-readiness-tests.mjs",
+        "mode": "100644",
+        "object_id": "42536a9b8a353d04cb886ca3c0b1f37ad6edc9c7"
+      },
+      {
+        "path": "scripts/phone-production-readiness.mjs",
+        "mode": "100644",
+        "object_id": "364312d92c66efa82530635c2c25fe0a3d78463e"
+      },
+      {
+        "path": "scripts/production-backup.mjs",
+        "mode": "100644",
+        "object_id": "af80293635695a105920a84e1a07e0a09035e92f"
+      },
+      {
+        "path": "scripts/production-database-credential-bridge.mjs",
+        "mode": "100644",
+        "object_id": "4f61b6ed7ffaa5a89e31e6d5850585534e2a7bd5"
+      },
+      {
+        "path": "scripts/production-database-identity-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "acd5a78ebeab23d11231b93a7af90fee84e66ab5"
+      },
+      {
+        "path": "scripts/production-database-identity.mjs",
+        "mode": "100644",
+        "object_id": "666c60c503e4024ae62efe35778be9d8c9be2da2"
+      },
+      {
+        "path": "scripts/production-restore-drill.mjs",
+        "mode": "100644",
+        "object_id": "9d8e3c640618a24835159e4faf16c4679771ea5c"
+      },
+      {
+        "path": "scripts/production-restore.mjs",
+        "mode": "100644",
+        "object_id": "27ac28a2d072ce4c0f0dd9a8a2f93febdfb17cfc"
+      },
+      {
+        "path": "scripts/production-runtime-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "c1e6320fca3dc0ceabfc2000aaf37294f51ac80d"
+      },
+      {
+        "path": "scripts/production-schema-c674-bootstrap-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "b11ccb9bceaa26b4cf9caedf96418970203addf9"
+      },
+      {
+        "path": "scripts/production-schema-c674-bootstrap.mjs",
+        "mode": "100644",
+        "object_id": "aac4a01ccd8f67a3b3c5272a7462a490b06cb1a2"
+      },
+      {
+        "path": "scripts/production-schema-c674-github-evidence.mjs",
+        "mode": "100644",
+        "object_id": "f9c501a75c5de57e7f4393e93ecf07bdb1d614b7"
+      },
+      {
+        "path": "scripts/production-schema-inspection-freshness-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "81109ca2c2fb51d311cb25b650cd4a63e700c18f"
+      },
+      {
+        "path": "scripts/production-schema-inspection-freshness.mjs",
+        "mode": "100644",
+        "object_id": "cf51272ffa46e264e7c22948f570dd7add968fd8"
+      },
+      {
+        "path": "scripts/refresh-integrated-backend-authority-release.mjs",
+        "mode": "100644",
+        "object_id": "dade806bd16c229a820e85829c67ec51763373e9"
+      },
+      {
+        "path": "scripts/refresh-release-schema-alignment.mjs",
+        "mode": "100644",
+        "object_id": "4b112d56132de7f7a1c4fa7baf09204784232c9f"
+      },
+      {
+        "path": "scripts/refresh-schema-fingerprint.mjs",
+        "mode": "100644",
+        "object_id": "ceebc98ed850578c627f33e1e5c87ffecd48712e"
+      },
+      {
+        "path": "scripts/release-canary-recovery-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "a5a3a1bea78937a3d79f8a051355e541f63b420c"
+      },
+      {
+        "path": "scripts/release-closure-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "2131b8cf23450d32773f6f1902fcc4df5d3bd2c4"
+      },
+      {
+        "path": "scripts/restroom-rebalance-route-tests.mjs",
+        "mode": "100644",
+        "object_id": "c4a1a63881d5b3b7464b9a277776afe617122d97"
+      },
+      {
+        "path": "scripts/scan-evidence-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "71dd841683e57081ec16439e46b1f2a3b78a2485"
+      },
+      {
+        "path": "scripts/sch2-publish-route-tests.mjs",
+        "mode": "100644",
+        "object_id": "66e9631ee09e7d9d697c487f35f441d20e47881f"
+      },
+      {
+        "path": "scripts/schedule-ai-tests.mjs",
+        "mode": "100644",
+        "object_id": "c49f0b6fbadaa21f403a06529aeca67f223aef6f"
+      },
+      {
+        "path": "scripts/schedule-display-tests.mjs",
+        "mode": "100644",
+        "object_id": "5e3a90158b77a7ea2f8262b5a217a98da365fe76"
+      },
+      {
+        "path": "scripts/schedule-source-type-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "1246f21289c9def15755177ab573dd7f8c9be64b"
+      },
+      {
+        "path": "scripts/scheduler-alerts-gps-foundation-tests.mjs",
+        "mode": "100644",
+        "object_id": "785c0523c24ebb58c46e1e6f16f1141e8d7e2921"
+      },
+      {
+        "path": "scripts/scheduler-overhaul-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "d76c66450696dcaaadb78d1686299139375423d3"
+      },
+      {
+        "path": "scripts/schema-fingerprint-catalog.mjs",
+        "mode": "100644",
+        "object_id": "fdd14db6fa7fffe68256bb60cd6fec8adddf3dfd"
+      },
+      {
+        "path": "scripts/schema-fingerprint-check.mjs",
+        "mode": "100644",
+        "object_id": "6b02dce807438ee83c5f93d8403a178570dd93c3"
+      },
+      {
+        "path": "scripts/schema-transition-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "cf4278fec31cb76e7d6cd8f707b3fe1b23741825"
+      },
+      {
+        "path": "scripts/smoke-ai-intent.mjs",
+        "mode": "100644",
+        "object_id": "9b7c69d485f70f64093aeeaaa14c33ddae4955f1"
+      },
+      {
+        "path": "scripts/smoke-ai-utils.mjs",
+        "mode": "100644",
+        "object_id": "3220cf2147f2852539c99a5282d95f2a05b774bf"
+      },
+      {
+        "path": "scripts/smoke-memphis-context.mjs",
+        "mode": "100644",
+        "object_id": "0756f558f0c3a4b2f9b56c64f9a41411da3abdac"
+      },
+      {
+        "path": "scripts/smoke.mjs",
+        "mode": "100644",
+        "object_id": "93fe081ce3d2f78734af05c0ff6cf0ae5cc03b54"
+      },
+      {
+        "path": "scripts/sql/check-alijah-herpetarium-rule.sql",
+        "mode": "100644",
+        "object_id": "8ecc18e4c43185b25bc822cae99e51f0c8950c07"
+      },
+      {
+        "path": "scripts/sql/check-custodial-operational-notes-policy.sql",
+        "mode": "100644",
+        "object_id": "84e5e80c125b723c3283b7a6dd0644f9250ad6ed"
+      },
+      {
+        "path": "scripts/sql/check-kathy-east-boundary.sql",
+        "mode": "100644",
+        "object_id": "69fcd301d6242c4e80c48a7f858550d9aa8a8106"
+      },
+      {
+        "path": "scripts/sql/check-my-schedule-live-rebalance-contract.sql",
+        "mode": "100644",
+        "object_id": "398e3d24cba721f1648863cc5b64e1e536fc47af"
+      },
+      {
+        "path": "scripts/sql/check-my-schedule-source-contract.sql",
+        "mode": "100644",
+        "object_id": "886c6521ecfbacd68947a887e30cb0e078dc059a"
+      },
+      {
+        "path": "scripts/sql/check-sch2-hard-constraints.sql",
+        "mode": "100644",
+        "object_id": "9e367ab021850a4be56234061dcf8aaafb4fdcf5"
+      },
+      {
+        "path": "scripts/sql/check-sch2-lunch-coverage.sql",
+        "mode": "100644",
+        "object_id": "a2588864105fe33d7c4326993d3c5d636c5701bc"
+      },
+      {
+        "path": "scripts/sql/check-sch2-monday-balanced-preview.sql",
+        "mode": "100644",
+        "object_id": "3ea09d53f9808eb2accf9eeadf048305478005ed"
+      },
+      {
+        "path": "scripts/sql/check-sch2-publish-compatibility.sql",
+        "mode": "100644",
+        "object_id": "7d2746fd5627bbf10eb0e1a6c89288b944ee34ca"
+      },
+      {
+        "path": "scripts/sql/check-sch2-restroom-rebalance.sql",
+        "mode": "100644",
+        "object_id": "91c664dfaa6925e604018035ece5256e77555c36"
+      },
+      {
+        "path": "scripts/sql/check-sch2-route-span.sql",
+        "mode": "100644",
+        "object_id": "dfb6bf242e509e3c05a9ce2943688edfec378bad"
+      },
+      {
+        "path": "scripts/sql/check-sch2-workload-fairness.sql",
+        "mode": "100644",
+        "object_id": "8c2731e2a42868ef73c3d038aa6ae731f222e86c"
+      },
+      {
+        "path": "scripts/sql/check-scheduler-exception-contract.sql",
+        "mode": "100644",
+        "object_id": "6792d3a52dbb7fb9c55f81e6d5c08aea87b2c547"
+      },
+      {
+        "path": "scripts/sql/check-scheduler-open-owner-contract.sql",
+        "mode": "100644",
+        "object_id": "8520cd4d7950bc3d9e4e433aa23a0865549ebee6"
+      },
+      {
+        "path": "scripts/sql/missing-assignments-report.sql",
+        "mode": "100644",
+        "object_id": "d1fc2839a3061df922e8ef891089dbde26d3a8c2"
+      },
+      {
+        "path": "scripts/static-weekly-control-plane-deployment-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "11c333d3619c946a0f3f0abb5da88b72cae12a64"
+      },
+      {
+        "path": "scripts/static-weekly-control-plane-runtime-tests.mjs",
+        "mode": "100644",
+        "object_id": "e11f84c58f45eb443869cfdb461419fd0aefbf62"
+      },
+      {
+        "path": "scripts/static-weekly-control-plane-tests.mjs",
+        "mode": "100644",
+        "object_id": "d3123414292f58ea84a6f5a32ae9a235d585bb00"
+      },
+      {
+        "path": "scripts/static-weekly-day-changes-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "0eeff99f95b31918232b1be93265873340af788e"
+      },
+      {
+        "path": "scripts/static-weekly-employee-day-route-tests.mjs",
+        "mode": "100644",
+        "object_id": "25b36ee73ccdddfc929a707c1cc1993c32ef1cba"
+      },
+      {
+        "path": "scripts/static-weekly-schedule-authority-closure-tests.mjs",
+        "mode": "100644",
+        "object_id": "d4785b7253bc448e43455dc3ef137534294f2afb"
+      },
+      {
+        "path": "scripts/static-weekly-schedule-authority-v3-tests.mjs",
+        "mode": "100644",
+        "object_id": "bfc1ed8eb618f6b42ae5065bd3c4c165c2f03210"
+      },
+      {
+        "path": "scripts/static-weekly-schedule-candidate-importer.mjs",
+        "mode": "100644",
+        "object_id": "74276a06f8ca22c03a7bfb46ae015b23adc24ada"
+      },
+      {
+        "path": "scripts/static-weekly-schedule-compiler-tests.mjs",
+        "mode": "100644",
+        "object_id": "cdc29a9766de7ba9809807393ffc4ee5743f39e0"
+      },
+      {
+        "path": "scripts/static-weekly-schedule-concurrency-tests.mjs",
+        "mode": "100644",
+        "object_id": "94f77338252421ad51416f41e92295d74cae1f69"
+      },
+      {
+        "path": "scripts/static-weekly-schedule-database-adapter-tests.mjs",
+        "mode": "100644",
+        "object_id": "4b75443bb1d4d2c0d7d62a227f98867f244d71bd"
+      },
+      {
+        "path": "scripts/static-weekly-schedule-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "edd49d06ddf9c785372f79f661e68b97e9765c28"
+      },
+      {
+        "path": "scripts/static-weekly-schedule-exception-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "518f647724729832762edb42918b5be9653c7b4f"
+      },
+      {
+        "path": "scripts/static-weekly-schedule-model-tests.mjs",
+        "mode": "100644",
+        "object_id": "434fc569e834d846b7e9e9d961fa8a5cea675899"
+      },
+      {
+        "path": "scripts/static-weekly-schedule-solver-lifecycle-tests.mjs",
+        "mode": "100644",
+        "object_id": "163d3cd019a17d4e3ce8d73f912047ec6b43411b"
+      },
+      {
+        "path": "scripts/thursday-notification-presentation-tests.mjs",
+        "mode": "100644",
+        "object_id": "3708ab6e7a642eae8f989fba3ef1c925bdd5fc45"
+      },
+      {
+        "path": "scripts/thursday-notification-presentation.mjs",
+        "mode": "100644",
+        "object_id": "6396303b980d52a1ac01533cfd8c42603a411445"
+      },
+      {
+        "path": "sql/2026-05-29_primate_pavillion_daily_nfc_postcheck.sql",
+        "mode": "100644",
+        "object_id": "86f5976ef2e694db78bf21cb69fc209c00f3c586"
+      },
+      {
+        "path": "sql/2026-06-02_cleanup_duplicate_lunch_coverage.sql",
+        "mode": "100644",
+        "object_id": "c6adcdf02a5a4a632a61670713c5fe8b860583b1"
+      },
+      {
+        "path": "sql/2026-06-02_cleanup_michael_stale_rebalance_notes.sql",
+        "mode": "100644",
+        "object_id": "babe55ef06333cc6c0698838408b4b9c279798c0"
+      },
+      {
+        "path": "sql/2026-06-02_lunch_coverage_idempotent_existing_rows.sql",
+        "mode": "100644",
+        "object_id": "bfa67f6cd0eecb84dde8f0eb92a476177d2aaaac"
+      },
+      {
+        "path": "sql/2026-06-02_lunch_coverage_incremental_fix.sql",
+        "mode": "100644",
+        "object_id": "ee094da95fc132baa0679f8c3174390f48a28457"
+      },
+      {
+        "path": "sql/2026-06-02_michael_evening_call_coverage.sql",
+        "mode": "100644",
+        "object_id": "69747079b7cfaa5dde19b7b53b63fdb7e80beb39"
+      },
+      {
+        "path": "sql/2026-06-02_restore_michael_daily_device_rows.sql",
+        "mode": "100644",
+        "object_id": "bff65cf6069d71e18fdd4e00d2e377f580d71e2b"
+      },
+      {
+        "path": "sql/2026-06-02_restore_michael_device_late_coverage.sql",
+        "mode": "100644",
+        "object_id": "4886702a38f33498352d3b519ef24c359174ee43"
+      },
+      {
+        "path": "sql/2026-06-02_schedule_automation_runs.sql",
+        "mode": "100644",
+        "object_id": "b4eec8e2240d405873b49c1e2e610320e5ceacb6"
+      },
+      {
+        "path": "sql/2026-06-03_alijah_herpetarium_safety_guard.sql",
+        "mode": "100644",
+        "object_id": "50b8f5adf8ca184160d81df4ba1c25b4cdca07f1"
+      },
+      {
+        "path": "sql/2026-06-03_custodial_operational_notes_policy.sql",
+        "mode": "100644",
+        "object_id": "f6bd6b9395ae64a2aba9df18cb20641a9e756d45"
+      },
+      {
+        "path": "sql/2026-06-03_repair_lunch_coverer_static_restore_mismatches.sql",
+        "mode": "100644",
+        "object_id": "841c434717e8153c717a6ee29e79455c5af01bcb"
+      },
+      {
+        "path": "sql/2026-06-03_repair_michael_lunch_coverage_shift_windows.sql",
+        "mode": "100644",
+        "object_id": "91684478d66ce6be1023bf452e271285f329de1e"
+      },
+      {
+        "path": "sql/2026-06-04_event_reminder_kinds.sql",
+        "mode": "100644",
+        "object_id": "2f3c7173ea66b26fd73e4d365b27370f6f078d6f"
+      },
+      {
+        "path": "sql/2026-06-04_free_tier_retention_policy.sql",
+        "mode": "100644",
+        "object_id": "e2cfc3f4febc5d3198623989eefbdcb1737198c7"
+      },
+      {
+        "path": "sql/2026-06-09_daily_assignment_my_schedule_page.sql",
+        "mode": "100644",
+        "object_id": "326428c2b89cf90e5453b567bd55056eb4ed8c90"
+      },
+      {
+        "path": "sql/2026-06-10_events_overnight_end_date.sql",
+        "mode": "100644",
+        "object_id": "9571aec5bcc82d7ef4be3f102c6a5369ac9a98c0"
+      },
+      {
+        "path": "sql/2026-06-10_kathy_east_boundary.sql",
+        "mode": "100644",
+        "object_id": "a2ab06b719033d92742b167ffb2b7444cb339d2e"
+      },
+      {
+        "path": "sql/2026-06-10_repair_response_only_stale_lunch_rows.sql",
+        "mode": "100644",
+        "object_id": "abb2e9eb95fcce5471cbc81469213a4880b898b0"
+      },
+      {
+        "path": "sql/2026-06-10_restore_scheduler_open_owner_rows.sql",
+        "mode": "100644",
+        "object_id": "a64cd05e929accfa46f019acf532f75d64370bb6"
+      },
+      {
+        "path": "sql/2026-06-10_scheduler_exception_lunch_guards.sql",
+        "mode": "100644",
+        "object_id": "18378d4f375eaed3f115b8e596be4ac91022630e"
+      },
+      {
+        "path": "sql/2026-06-11_sch2_preview_scheduler.sql",
+        "mode": "100644",
+        "object_id": "414a0ed23b6c65a2d0230c909c5dca2c81d76d68"
+      },
+      {
+        "path": "sql/2026-06-12_sch2_api_security_and_zero_guard.sql",
+        "mode": "100644",
+        "object_id": "13f756eec362afe7502c794bbd904dde0dcd4350"
+      },
+      {
+        "path": "sql/2026-06-13_sch2_workload_audit_view_refresh.sql",
+        "mode": "100644",
+        "object_id": "599915933e539c9b9c259252915f1b354106b783"
+      },
+      {
+        "path": "sql/2026-06-20_audit_security_fixes.sql",
+        "mode": "100644",
+        "object_id": "6893a1e266d60ef62b101ee047cdcbc4f5879685"
+      },
+      {
+        "path": "sql/2026-06-20_guard_fixes.sql",
+        "mode": "100644",
+        "object_id": "ffee62791a99a9945bc0e5cb5d236f873f2e31e8"
+      },
+      {
+        "path": "sql/2026-06-20_lunch_coverage_idempotency_fix.sql",
+        "mode": "100644",
+        "object_id": "673f369bcc103f33827b7cd04a62a935ae3970af"
+      },
+      {
+        "path": "sql/2026-06-20_retention_batch_caps.sql",
+        "mode": "100644",
+        "object_id": "09ed9c876516247a335a9971e25c3d2a9d0578a5"
+      },
+      {
+        "path": "sql/2026-06-20_rls_policies.sql",
+        "mode": "100644",
+        "object_id": "856e5687ee22c6446acae5dc9695302500f2dfc3"
+      },
+      {
+        "path": "sql/2026-06-20_sch2_publish_safety.sql",
+        "mode": "100644",
+        "object_id": "f6689c6a5ef417d52e02af07782770275bf234fe"
+      },
+      {
+        "path": "sql/2026-06-30_my_schedule_live_rebalance.sql",
+        "mode": "100644",
+        "object_id": "4dfb5516aba7b8e5a871ce3fd842d0aeb178709f"
+      },
+      {
+        "path": "sql/2026-06-30_my_schedule_live_rebalance_handoff_start_fix.sql",
+        "mode": "100644",
+        "object_id": "ab932c9023b500b56d6cf60ee1da633dd5e8982b"
+      },
+      {
+        "path": "sql/2026-06-30_my_schedule_single_remaining_all_locations.sql",
+        "mode": "100644",
+        "object_id": "863e7fa4854a1b74dc2593b40e89a48eab1d608c"
+      },
+      {
+        "path": "sql/2026-07-14_scheduler_notifications_gps_foundation.sql",
+        "mode": "100644",
+        "object_id": "786cafd6ca9486add2204eda4c7880f244514759"
+      },
+      {
+        "path": "sql/READ_ME_NO_LOCATION_SEEDING.md",
+        "mode": "100644",
+        "object_id": "b661c6477ddaec34092fa94c63c928b8cd503948"
+      },
+      {
+        "path": "src/ai/index.js",
+        "mode": "100644",
+        "object_id": "5b4eca72c0b869db04bf1092e0ddd7ea1aa5c7b8"
+      },
+      {
+        "path": "src/ai/memphis-ai-contacts.js",
+        "mode": "100644",
+        "object_id": "a1cbcfaf5dd43614b1d24b4674ecfdf287433945"
+      },
+      {
+        "path": "src/ai/memphis-ai-daily.js",
+        "mode": "100644",
+        "object_id": "e92796778635a64d520a8f98af8688d26ee5e0e2"
+      },
+      {
+        "path": "src/ai/memphis-ai-employee-resolver.js",
+        "mode": "100644",
+        "object_id": "7f80dc09e3b433689e39fa30fabf449524a66f2f"
+      },
+      {
+        "path": "src/ai/memphis-ai-employee-week.js",
+        "mode": "100644",
+        "object_id": "a6b8ec76971dcac1b26d15caa7ce8a8237c7a266"
+      },
+      {
+        "path": "src/ai/memphis-ai-intent.js",
+        "mode": "100644",
+        "object_id": "573e8c360892c2f595e8e03ad72b2113ff47a375"
+      },
+      {
+        "path": "src/ai/memphis-ai-ops-schedule.js",
+        "mode": "100644",
+        "object_id": "d413a0a8e3d2992b10c40f49d5a0673447be8018"
+      },
+      {
+        "path": "src/ai/memphis-ai-thread-context.js",
+        "mode": "100644",
+        "object_id": "4f2da8b8fcd6fd224042f4df24dc73ff61aeebec"
+      },
+      {
+        "path": "src/ai/memphis-ai-utils.js",
+        "mode": "100644",
+        "object_id": "0e8952679de77461f0f709e80b1f7676c6de15f8"
+      },
+      {
+        "path": "src/ai/memphis-ai-weather.js",
+        "mode": "100644",
+        "object_id": "c83b33f4b70353a31d30afeb5d4c881173d382ea"
+      },
+      {
+        "path": "src/ai/memphis-ai-weekly.js",
+        "mode": "100644",
+        "object_id": "b63aae912dd6b24a775a7f0f60b58fa4dcf637f1"
+      },
+      {
+        "path": "src/ai/memphis-ai-work-status.js",
+        "mode": "100644",
+        "object_id": "6bc105cb3a9e762a77d260ca3f4b181a3819ad4b"
+      },
+      {
+        "path": "src/annie-moxie-bootstrap.js",
+        "mode": "100644",
+        "object_id": "097ac74828ad660d9070d760470e57e7fa2253b1"
+      },
+      {
+        "path": "src/app-version.js",
+        "mode": "100644",
+        "object_id": "448e6dc79edfda5b4e51d8ac77eda3945f06a544"
+      },
+      {
+        "path": "src/attendance-state.js",
+        "mode": "100644",
+        "object_id": "0cee592fe1975a131ba2e4b9cf4df121ed74c325"
+      },
+      {
+        "path": "src/auth/device-credential-auth.js",
+        "mode": "100644",
+        "object_id": "5686494257af5276d4dd5a143af4f2e96ffb1ddb"
+      },
+      {
+        "path": "src/auth/mcp-connector-auth.js",
+        "mode": "100644",
+        "object_id": "9b4942fd5be8eba70b1832673e786c2907a003b2"
+      },
+      {
+        "path": "src/auth/shared-access-auth.js",
+        "mode": "100644",
+        "object_id": "e6fa6b64e97fcafda82ec5d080bd1c914c315846"
+      },
+      {
+        "path": "src/config/env.js",
+        "mode": "100644",
+        "object_id": "8f483581eb106b07bf331c245db6693eea47066f"
+      },
+      {
+        "path": "src/custodial-employee-admin.js",
+        "mode": "100644",
+        "object_id": "45279599f885b326221f5c9f0d9211ffbce6cac7"
+      },
+      {
+        "path": "src/device-identity.js",
+        "mode": "100644",
+        "object_id": "9417225b0d4381251b6f47703dba2bdae82c3fa5"
+      },
+      {
+        "path": "src/employee-notifications.js",
+        "mode": "100644",
+        "object_id": "bfcfb58bd477e4f83164e84ae28167a763de3d24"
+      },
+      {
+        "path": "src/events-ai-parser.js",
+        "mode": "100644",
+        "object_id": "bfec9715b13edff18ff9b644c3948aeb8f9761d5"
+      },
+      {
+        "path": "src/events-api.js",
+        "mode": "100644",
+        "object_id": "219ecf74ce8ff5585fc512602d7f5128102f7173"
+      },
+      {
+        "path": "src/gemini-console-api.js",
+        "mode": "100644",
+        "object_id": "d28393cd9912e780a6e8329e136f623d88d594aa"
+      },
+      {
+        "path": "src/gemini-controlled-worker.js",
+        "mode": "100644",
+        "object_id": "a8a2082fb186f352265910a5d47af5030acd881b"
+      },
+      {
+        "path": "src/github/branch.js",
+        "mode": "100644",
+        "object_id": "2084e84065f1b1641e42e5589360cb46e6d4d6a3"
+      },
+      {
+        "path": "src/github/client.js",
+        "mode": "100644",
+        "object_id": "00eb8891b0358422b6677df43192be47dff2a3bc"
+      },
+      {
+        "path": "src/github/patch.js",
+        "mode": "100644",
+        "object_id": "d08df74609c11c734697e1c00583d03cd4f041c2"
+      },
+      {
+        "path": "src/github/read.js",
+        "mode": "100644",
+        "object_id": "967fe2eb255983d4287a390f4f32a23b1c248c88"
+      },
+      {
+        "path": "src/github/search.js",
+        "mode": "100644",
+        "object_id": "e113ec67fe61819fb1e506217bc352aafb9fcccc"
+      },
+      {
+        "path": "src/github/write.js",
+        "mode": "100644",
+        "object_id": "ab67275d662d301e36970928bdcb1731cd603442"
+      },
+      {
+        "path": "src/index.js",
+        "mode": "100644",
+        "object_id": "bdd100ee4d6cc284df4a2388b43288da7fe5764b"
+      },
+      {
+        "path": "src/leadership-bootstrap.js",
+        "mode": "100644",
+        "object_id": "90c4345944ce79089bf6300fb8aedcb8d2d29bba"
+      },
+      {
+        "path": "src/manager-notifications.js",
+        "mode": "100644",
+        "object_id": "1447634d66a6833a29cedc0a5cb920ae2ccb62f3"
+      },
+      {
+        "path": "src/mcp/create-mcp-server.js",
+        "mode": "100644",
+        "object_id": "cde000e43773f158bfc9bcbb7baecb940e511506"
+      },
+      {
+        "path": "src/mcp/github-tools.js",
+        "mode": "100644",
+        "object_id": "83cf8c00b9f71b81bca48766e9737cc8643a73f6"
+      },
+      {
+        "path": "src/mcp/register.js",
+        "mode": "100644",
+        "object_id": "c09564572238bc4a9fa3be8ba65d3fa269d52b97"
+      },
+      {
+        "path": "src/mcp/responses.js",
+        "mode": "100644",
+        "object_id": "d79041ad6b7b03d7e9d11714c89b805bd5065c72"
+      },
+      {
+        "path": "src/mcp/schemas.js",
+        "mode": "100644",
+        "object_id": "8dfeb1991f848e1f8df073d8bfbd3c80e0bee2dd"
+      },
+      {
+        "path": "src/mcp/server-tools.js",
+        "mode": "100644",
+        "object_id": "58b01f80ee3bc421c536a7d6117a1531d4a8b147"
+      },
+      {
+        "path": "src/mcp/supabase-tools.js",
+        "mode": "100644",
+        "object_id": "235aa6cecb987a6f8840bcea49dd455d7ca6ebe0"
+      },
+      {
+        "path": "src/mcp/tool-manifest.js",
+        "mode": "100644",
+        "object_id": "9be8c7df35bfa48c26336fba9e3d761aec5168a0"
+      },
+      {
+        "path": "src/memphis-ai.js",
+        "mode": "100644",
+        "object_id": "fda9b3c888bbb7295c96f7bb90e08f2aff0278f7"
+      },
+      {
+        "path": "src/messaging-api.js",
+        "mode": "100644",
+        "object_id": "b1b0f37b353e6a95a520269f11196f4df779b720"
+      },
+      {
+        "path": "src/native-phone-transport.js",
+        "mode": "100644",
+        "object_id": "10afcdc68699c9316bcf5d66b9008720994fb543"
+      },
+      {
+        "path": "src/offline-authority-http.js",
+        "mode": "100644",
+        "object_id": "42350eb6f224388992a33a1ef9809a2a71395818"
+      },
+      {
+        "path": "src/operational-analytics-api.js",
+        "mode": "100644",
+        "object_id": "cc646ddc24280980107d7feef837dd9b98dfea57"
+      },
+      {
+        "path": "src/production-schema-identity.js",
+        "mode": "100644",
+        "object_id": "24c3a13878b22aad144ddee70cff3a7806ca4443"
+      },
+      {
+        "path": "src/public-submission-controls.js",
+        "mode": "100644",
+        "object_id": "ef311da368d785ca5bf0ae306e59e1471416f7fc"
+      },
+      {
+        "path": "src/release-contract.js",
+        "mode": "100644",
+        "object_id": "ba4f24f47c74bd5566bcf63cb609a6108267e199"
+      },
+      {
+        "path": "src/release-manifest.js",
+        "mode": "100644",
+        "object_id": "7978ce065ac1bcd1c55ad49e455c40fb677d1384"
+      },
+      {
+        "path": "src/routes/index.js",
+        "mode": "100644",
+        "object_id": "96831f6e2b924706e9ad386c88c49bb6758c6123"
+      },
+      {
+        "path": "src/routes/moxie-templates.js",
+        "mode": "100644",
+        "object_id": "8c2a03ed4818ffb9e8af70f75dd574eca2b80649"
+      },
+      {
+        "path": "src/routes/moxie.js",
+        "mode": "100644",
+        "object_id": "42f42c2b979458d289b4f74bc0bf3c12846c8c00"
+      },
+      {
+        "path": "src/scan-evidence.js",
+        "mode": "100644",
+        "object_id": "cb592ae0ab43e1b6a5957cdc620da0ba507a3167"
+      },
+      {
+        "path": "src/schedule-api.js",
+        "mode": "100644",
+        "object_id": "6082a593205c9866a3c5d05281fcfae0b3f9b2ac"
+      },
+      {
+        "path": "src/schedule-display.js",
+        "mode": "100644",
+        "object_id": "6d7e0a810d8efa16f47597d1c5f6cdf605f5dbd4"
+      },
+      {
+        "path": "src/schema-transition.js",
+        "mode": "100644",
+        "object_id": "7e4b35875a63a8015fe55df16536457b91aeacd9"
+      },
+      {
+        "path": "src/services/index.js",
+        "mode": "100644",
+        "object_id": "eac65dfc558d5ed30d97087b86e5074a0ca490dc"
+      },
+      {
+        "path": "src/static-weekly-control-plane-runtime.js",
+        "mode": "100644",
+        "object_id": "5a74b376d8111df80826a4031ffe024c37b53140"
+      },
+      {
+        "path": "src/static-weekly-control-plane.js",
+        "mode": "100644",
+        "object_id": "05b1ee7c70ded32b6b828236225dde7e7b16f8ca"
+      },
+      {
+        "path": "src/static-weekly-schedule-compiler.js",
+        "mode": "100644",
+        "object_id": "7b08dff175d89901867d72cec3f8fd90fc55c12a"
+      },
+      {
+        "path": "src/static-weekly-schedule-database-adapter.js",
+        "mode": "100644",
+        "object_id": "46c85e5cce4f03608a23a300b47b43796f1cae4f"
+      },
+      {
+        "path": "src/static-weekly-schedule-model.js",
+        "mode": "100644",
+        "object_id": "afcef45dede961fab08ec9217e3678122175a7c9"
+      },
+      {
+        "path": "src/static-weekly-schedule-program.js",
+        "mode": "100644",
+        "object_id": "5142d5037ffb56cdcefb27366d6cb4df78910a7e"
+      },
+      {
+        "path": "src/static-weekly-schedule-solver-worker.js",
+        "mode": "100644",
+        "object_id": "4eca20855492df396d07c86a99a426e98fd16ef3"
+      },
+      {
+        "path": "src/static-weekly-schedule-solver.js",
+        "mode": "100644",
+        "object_id": "3d6eea13ec4b29ca5cd168c9777f9e519c263dd2"
+      },
+      {
+        "path": "src/static-weekly-schedule-verifier.js",
+        "mode": "100644",
+        "object_id": "bc264b8571ffbb1c76e14d2679a27b6fecee62c3"
+      },
+      {
+        "path": "src/supabase/client.js",
+        "mode": "100644",
+        "object_id": "b8ddd3f765f56985b5820e0426158d76ef16bc5e"
+      },
+      {
+        "path": "src/supabase/migrations.js",
+        "mode": "100644",
+        "object_id": "12f5a43a166fe548ca1ff29a47e8b91d6810ce62"
+      },
+      {
+        "path": "src/supabase/read.js",
+        "mode": "100644",
+        "object_id": "0b76aa7d702a892d48563f03f3b2dfc0d31c7ceb"
+      },
+      {
+        "path": "src/utils/diff.js",
+        "mode": "100644",
+        "object_id": "a7caec2e4eb2c87cb837b943cf9001fd59921cb9"
+      },
+      {
+        "path": "src/utils/gemini-config.js",
+        "mode": "100644",
+        "object_id": "bee47aefc4e2a870c80a6d45c14bc1681d122293"
+      },
+      {
+        "path": "src/utils/redact-secrets.js",
+        "mode": "100644",
+        "object_id": "f4ee6bc640173624028024841ea0a317370782ab"
+      },
+      {
+        "path": "supabase/.gitignore",
+        "mode": "100644",
+        "object_id": "ad9264f0b14b294627f8e77383875c994af54865"
+      },
+      {
+        "path": "supabase/canonical/production-schema-fingerprint-input.json",
+        "mode": "100644",
+        "object_id": "909e289d0208984289e942ff661946a35a266c16"
+      },
+      {
+        "path": "supabase/canonical/production-schema-fingerprint.txt",
+        "mode": "100644",
+        "object_id": "cd7ef7823292c90df6f9bf31570fd4a1a39f420b"
+      },
+      {
+        "path": "supabase/canonical/schema-fingerprint-input.json",
+        "mode": "100644",
+        "object_id": "83fbace424482bb8a314dfe0aed29d1b3a2019db"
+      },
+      {
+        "path": "supabase/canonical/schema-fingerprint.txt",
+        "mode": "100644",
+        "object_id": "4ca73e8bb267795d7de81573234e6e1137fac343"
+      },
+      {
+        "path": "supabase/config.toml",
+        "mode": "100644",
+        "object_id": "4c4a84a2c61340dd6da519755150da9f39dcec08"
+      },
+      {
+        "path": "supabase/deployed_history/20260514224806_install_demo_scan_mock_engine_v2.sql",
+        "mode": "100644",
+        "object_id": "f6e93fbaf458018c5b66d769167af1f30725553b"
+      },
+      {
+        "path": "supabase/deployed_history/20260514224945_patch_demo_scan_mock_make_interval_int_casts.sql",
+        "mode": "100644",
+        "object_id": "a8c4b9aa7ea627ae5d8f45f9cd79093573ea7eee"
+      },
+      {
+        "path": "supabase/deployed_history/20260514225332_patch_demo_scan_mock_advance_transition.sql",
+        "mode": "100644",
+        "object_id": "d89cb37743014092f7f6a888886331d960d81b7d"
+      },
+      {
+        "path": "supabase/deployed_history/20260514225800_enable_demo_scan_mock_cron_20m.sql",
+        "mode": "100644",
+        "object_id": "3cb6eb3b0f9bf2e9d5a663d2e643e4166cf511c5"
+      },
+      {
+        "path": "supabase/deployed_history/20260514225919_patch_demo_scan_mock_stop_cancel_open.sql",
+        "mode": "100644",
+        "object_id": "e0703aa8a204f313ff8fa45293affa9f27c60daf"
+      },
+      {
+        "path": "supabase/deployed_history/20260514225955_add_safe_demo_scan_mock_cron_wrapper.sql",
+        "mode": "100644",
+        "object_id": "b89b8db9dce8428856147ff030e78da172b10451"
+      },
+      {
+        "path": "supabase/deployed_history/20260515023051_demo_scan_mock_shift_schedule_mode.sql",
+        "mode": "100644",
+        "object_id": "6e0133a62c5d22db8c98e8ac4410219c8df31b57"
+      },
+      {
+        "path": "supabase/deployed_history/20260515023123_switch_demo_cron_to_shift_schedule.sql",
+        "mode": "100644",
+        "object_id": "933cd88d9c0d7eee7decdb23919f8f33c819954b"
+      },
+      {
+        "path": "supabase/deployed_history/20260515145134_demo_mock_v4_complete_dynamic_helper.sql",
+        "mode": "100644",
+        "object_id": "25d04260f6c0acb56c7efb993ddaa5eac0c8aed1"
+      },
+      {
+        "path": "supabase/deployed_history/20260515145151_demo_mock_v4_assigned_locations_view.sql",
+        "mode": "100644",
+        "object_id": "3a2bd1202bddc331d1b003eaace48cddede68793"
+      },
+      {
+        "path": "supabase/deployed_history/20260515145238_demo_mock_v4_assigned_area_tick.sql",
+        "mode": "100644",
+        "object_id": "ba672e76533d20cef56c6958ce02ba71e159f7e3"
+      },
+      {
+        "path": "supabase/deployed_history/20260515150336_demo_mock_v4_wire_cron_to_assigned_area.sql",
+        "mode": "100644",
+        "object_id": "26cd9d652548fbb85b558e3decdeacee751d09ef"
+      },
+      {
+        "path": "supabase/deployed_history/20260517031749_demo_mock_v4_start_515_triple_sessions.sql",
+        "mode": "100644",
+        "object_id": "ae65287788e3475c47004cad23c06cc43a5dee4f"
+      },
+      {
+        "path": "supabase/deployed_history/20260517111535_demo_mock_v4_view_515_simple.sql",
+        "mode": "100644",
+        "object_id": "63511835cdf55096905c80c898d8b0a4cf27eecb"
+      },
+      {
+        "path": "supabase/deployed_history/20260517111943_demo_mock_v4_distinct_employee_wave_fix.sql",
+        "mode": "100644",
+        "object_id": "dd3d015be9034061aaf0f17359302cd307808435"
+      },
+      {
+        "path": "supabase/deployed_history/20260714115918_security_and_stale_session_foundation_20260714.sql",
+        "mode": "100644",
+        "object_id": "9e38e0ba06307e29644a994667257f3bb866fffc"
+      },
+      {
+        "path": "supabase/deployed_history/20260714120020_expand_session_completion_source_contract_20260714.sql",
+        "mode": "100644",
+        "object_id": "6de1440cbcfff98ed1564a3d131b5eff713093fb"
+      },
+      {
+        "path": "supabase/deployed_history/20260714121817_atomic_scan_and_messaging_foundation_20260714.sql",
+        "mode": "100644",
+        "object_id": "522df97c5f27378be4fdfd0a22a4f7fd54705a85"
+      },
+      {
+        "path": "supabase/deployed_history/20260714123412_scan_state_v2_recovery_20260714.sql",
+        "mode": "100644",
+        "object_id": "1bfd11cca0e857ca484c62dfd7a1f60e2a551d77"
+      },
+      {
+        "path": "supabase/deployed_history/20260714130037_custodial_api_boundary_20260714.sql",
+        "mode": "100644",
+        "object_id": "0f6a7049e13a116344d52e35639b12db5437a764"
+      },
+      {
+        "path": "supabase/deployed_history/20260714130742_custodial_foundation_v2_20260714.sql",
+        "mode": "100644",
+        "object_id": "bafd812054befc07fd01818faa7bd390775d8f32"
+      },
+      {
+        "path": "supabase/deployed_history/20260714131105_custodial_scan_atomic_v2_20260714.sql",
+        "mode": "100644",
+        "object_id": "14e49c5d029e0fa5b072ed59162e2a33ab0db094"
+      },
+      {
+        "path": "supabase/deployed_history/20260714131222_custodial_data_write_and_stale_v2_20260714.sql",
+        "mode": "100644",
+        "object_id": "5e012a34005489c3a0fcb7d2fa2ae07ba666caa8"
+      },
+      {
+        "path": "supabase/deployed_history/20260714131352_custodial_messenger_lifecycle_v2_20260714.sql",
+        "mode": "100644",
+        "object_id": "519c633c95dffb479087b5dad67ec6c9dafe42d9"
+      },
+      {
+        "path": "supabase/deployed_history/20260714134046_custodial_legacy_scan_compatibility_v2_20260714.sql",
+        "mode": "100644",
+        "object_id": "161c3e3e93c69e8afeb7b041c1c07561fb69a88c"
+      },
+      {
+        "path": "supabase/deployed_history/20260714135144_custodial_public_rpc_lockdown_v2_20260714.sql",
+        "mode": "100644",
+        "object_id": "1f36c46a154a3ab2e7eb0ffbb43549e56e626adc"
+      },
+      {
+        "path": "supabase/deployed_history/20260714141721_custodial_archive_runtime_migration_log_20260714.sql",
+        "mode": "100644",
+        "object_id": "d20198c3d41fc76822492f337992966391a7505f"
+      },
+      {
+        "path": "supabase/deployed_history/20260714141837_custodial_remove_obsolete_scan_overloads_20260714.sql",
+        "mode": "100644",
+        "object_id": "929afe55f2c8304b4b9264ad2eedd6fae6aaadc0"
+      },
+      {
+        "path": "supabase/deployed_history/20260714164028_scheduler_foundation_application_write_20260714.sql",
+        "mode": "100644",
+        "object_id": "703a01400ef325d66e6d42a64c060fab57d362d9"
+      },
+      {
+        "path": "supabase/deployed_history/20260714164308_scheduler_foundation_durable_reminders_20260714.sql",
+        "mode": "100644",
+        "object_id": "5f82bac77782a4ad91892489956276c074ceb3f4"
+      },
+      {
+        "path": "supabase/deployed_history/20260714164417_scheduler_foundation_static_readiness_20260714.sql",
+        "mode": "100644",
+        "object_id": "39426bd62b3dc3297e79548a8903fbe7a2163893"
+      },
+      {
+        "path": "supabase/deployed_history/20260714164746_scheduler_foundation_authoritative_gps_20260714.sql",
+        "mode": "100644",
+        "object_id": "d0f44302c937e2f8390df88fb582eba5cb817981"
+      },
+      {
+        "path": "supabase/deployed_history/20260714174214_scheduler_foundation_notification_ack_canonical_20260714.sql",
+        "mode": "100644",
+        "object_id": "eef6fc62629461b812b27751fd95b3144b5d8260"
+      },
+      {
+        "path": "supabase/deployed_history/20260714201504_update_markiesha_shift_8_to_5_20260714.sql",
+        "mode": "100644",
+        "object_id": "5f2137d573ccbcfedda0250c4b5333da45fd6710"
+      },
+      {
+        "path": "supabase/deployed_history/20260714202221_temporary_source_repair_payloads_20260714.sql",
+        "mode": "100644",
+        "object_id": "daf6c4f67a2ead877662a66c444b080bb989355f"
+      },
+      {
+        "path": "supabase/deployed_history/20260714210209_temporary_repair_payload_upload_rpc_20260714.sql",
+        "mode": "100644",
+        "object_id": "47b8b41fcd0124a2030c40b7e34b0467461d1aaf"
+      },
+      {
+        "path": "supabase/deployed_history/20260714213818_temporary_repair_payload_staging_20260714.sql",
+        "mode": "100644",
+        "object_id": "7b3292521e9c1e895ad85c451dc514d43d83ab40"
+      },
+      {
+        "path": "supabase/deployed_history/20260714214652_remove_temporary_repair_payload_channel_20260714.sql",
+        "mode": "100644",
+        "object_id": "f7f8836821dbcecee32dae828bd7c4d436534c2e"
+      },
+      {
+        "path": "supabase/deployed_history/20260714220206_markiesha_shift_0800_1700_20260714.sql",
+        "mode": "100644",
+        "object_id": "270b6c23181fe9ace28df950deb1a27c69875475"
+      },
+      {
+        "path": "supabase/deployed_history/20260714223858_temporary_repair_payload_chunks_20260714.sql",
+        "mode": "100644",
+        "object_id": "25fd71986dc86421b5df325a7f0fbf38830362ce"
+      },
+      {
+        "path": "supabase/deployed_history/20260714224744_scheduler_full_day_my_schedule_contract_20260714.sql",
+        "mode": "100644",
+        "object_id": "7bd812364f47a29003498374df9003bbf6988b13"
+      },
+      {
+        "path": "supabase/deployed_history/20260714224811_messenger_notification_instance_deduplication_20260714.sql",
+        "mode": "100644",
+        "object_id": "8fa3432630080eded978a27a0439f6e606dd71d1"
+      },
+      {
+        "path": "supabase/deployed_history/20260714224925_device_notification_acknowledgement_list_20260714.sql",
+        "mode": "100644",
+        "object_id": "108b8fa0a72feb8206f9ca661ae5e3e7d0b54202"
+      },
+      {
+        "path": "supabase/deployed_history/20260714225409_release_validation_ledger_20260714.sql",
+        "mode": "100644",
+        "object_id": "0a0b1fc2409ac6bad562ba0adde37ccf2827249b"
+      },
+      {
+        "path": "supabase/deployed_history/20260714231421_internal_http_health_monitor_pg_net_20260714.sql",
+        "mode": "100644",
+        "object_id": "3b9f02b2aae2e8387f05c14210a78e8d1667079e"
+      },
+      {
+        "path": "supabase/deployed_history/20260714232148_my_schedule_current_and_full_day_contract_20260714.sql",
+        "mode": "100644",
+        "object_id": "f08683ce7257d60fc458a5a9b616e7d5e6ae1357"
+      },
+      {
+        "path": "supabase/deployed_history/20260714232459_backfill_event_read_acknowledgements_20260714.sql",
+        "mode": "100644",
+        "object_id": "97ddcba6ec53fe24254603d9fbf49c8bbe8a77a7"
+      },
+      {
+        "path": "supabase/deployed_history/20260714235212_scheduler_full_window_absence_coverage_20260714.sql",
+        "mode": "100644",
+        "object_id": "237076c526240e15e9909fd57776e02ed8e76e0e"
+      },
+      {
+        "path": "supabase/deployed_history/20260715004418_terminal_cancelled_queue_reconciliation_20260715.sql",
+        "mode": "100644",
+        "object_id": "10fd7a96a3b3b7c3d3421fb0486c1f9b55ef8909"
+      },
+      {
+        "path": "supabase/deployed_history/20260715012451_messenger_thread_foundation_20260715.sql",
+        "mode": "100644",
+        "object_id": "fa055d3af4cd147dddff96850060253642782bd2"
+      },
+      {
+        "path": "supabase/deployed_history/20260715013305_schedule_assignment_exact_duplicate_guard_20260715_v2.sql",
+        "mode": "100644",
+        "object_id": "61f2baf995e60e006d8ec3a873c8b1ffc57db674"
+      },
+      {
+        "path": "supabase/deployed_history/20260715013329_messenger_orphan_reply_recovery_and_smoke_cleanup_20260715.sql",
+        "mode": "100644",
+        "object_id": "68160aad7325b19c92eac29393862246db69b35c"
+      },
+      {
+        "path": "supabase/deployed_history/20260715013904_temporary_fleet_acceptance_rpc_20260715.sql",
+        "mode": "100644",
+        "object_id": "f900b98bc07db34403f3f54d41bba1d0fda786ca"
+      },
+      {
+        "path": "supabase/deployed_history/20260715014014_remove_temporary_fleet_acceptance_rpc_20260715.sql",
+        "mode": "100644",
+        "object_id": "4856367fba8397bcaff946294f9d6aaaa8d07653"
+      },
+      {
+        "path": "supabase/deployed_history/20260715021137_dedupe_schedule_display_rows_20260715.sql",
+        "mode": "100644",
+        "object_id": "523732656492827d51f2e82b5462aece35e736aa"
+      },
+      {
+        "path": "supabase/deployed_history/20260715021411_event_notification_one_instance_guarantee_v2_20260715.sql",
+        "mode": "100644",
+        "object_id": "a63a41d558eec08f1561a19d8cd68e803f86fc90"
+      },
+      {
+        "path": "supabase/deployed_history/20260715035139_archive_automated_acceptance_cleaning_sessions_20260715.sql",
+        "mode": "100644",
+        "object_id": "8a66ce9be319ebcdd6ec96ae98b7dcade380a0e0"
+      },
+      {
+        "path": "supabase/deployed_history/20260715035227_archive_all_message_state_before_clear_20260715.sql",
+        "mode": "100644",
+        "object_id": "144644ad92d32406e228fdacfd50f510c3b1ed15"
+      },
+      {
+        "path": "supabase/deployed_history/20260715035431_isolate_moxie_private_data_from_memphis_clients_20260715.sql",
+        "mode": "100644",
+        "object_id": "6de6bf52c20010f92cd98c949a02c5867376cf40"
+      },
+      {
+        "path": "supabase/deployed_history/20260715040708_foundational_runtime_schema_preprovision_20260715.sql",
+        "mode": "100644",
+        "object_id": "61de6f84159fe41f4e6dca51ae714c6a1d5d1eea"
+      },
+      {
+        "path": "supabase/deployed_history/20260715041327_lock_moxie_private_tables_20260715.sql",
+        "mode": "100644",
+        "object_id": "2827762b0f47ae0ed4be867615c155c82371cd0e"
+      },
+      {
+        "path": "supabase/deployed_history/20260715042105_secure_moxie_private_data_boundary_20260715.sql",
+        "mode": "100644",
+        "object_id": "e77e075dceb3c3ed579198061a17c056cf360113"
+      },
+      {
+        "path": "supabase/deployed_history/20260715042229_remove_foundation_concurrency_locations_20260715.sql",
+        "mode": "100644",
+        "object_id": "0a4c0e05369f660c3abad363ab02c08af75c5761"
+      },
+      {
+        "path": "supabase/deployed_history/20260715043004_disable_destructive_retention_jobs_20260715.sql",
+        "mode": "100644",
+        "object_id": "bd9ae2a86e94367816e438036a488242db03490d"
+      },
+      {
+        "path": "supabase/deployed_history/20260715043255_retired_identity_archive_20260715.sql",
+        "mode": "100644",
+        "object_id": "04a340b7833be01c5f09456d0aea08955ae46949"
+      },
+      {
+        "path": "supabase/deployed_history/20260715043425_event_notification_superseded_state_20260715.sql",
+        "mode": "100644",
+        "object_id": "5aabee2b9d73fe790097f020c8e678ef63906973"
+      },
+      {
+        "path": "supabase/deployed_history/20260715043547_revoke_trigger_function_public_execute_20260715.sql",
+        "mode": "100644",
+        "object_id": "858ab9325fa9fc1d28591f019dcca8787d8f1c72"
+      },
+      {
+        "path": "supabase/deployed_history/20260715044458_isolate_moxie_private_data_20260715.sql",
+        "mode": "100644",
+        "object_id": "a4acda605eb8281f809c9c4a6fe7993cf6f3212f"
+      },
+      {
+        "path": "supabase/deployed_history/20260715112141_fix_schedule_source_type_contract_20260715.sql",
+        "mode": "100644",
+        "object_id": "6de1e15f20b9c93fdde2af740b76dc77950a3ddc"
+      },
+      {
+        "path": "supabase/deployed_history/20260715121049_remove_demo_people_and_harden_messenger_identity_20260715.sql",
+        "mode": "100644",
+        "object_id": "135516a83b8f007e53685080d151f69686af0593"
+      },
+      {
+        "path": "supabase/deployed_history/20260715130556_messenger_runtime_membership_and_thread_visibility_20260715.sql",
+        "mode": "100644",
+        "object_id": "47dde94d39d80d1abe58e047fdff1f7fd41a8132"
+      },
+      {
+        "path": "supabase/deployed_history/20260715130800_messenger_thread_delete_server_authority_20260715.sql",
+        "mode": "100644",
+        "object_id": "dca030c0dc6d2d6c12d87da05e4ee5f76afb0185"
+      },
+      {
+        "path": "supabase/deployed_history/20260715200108_ops_manager_trusted_device_auth.sql",
+        "mode": "100644",
+        "object_id": "06bb8178439406b5923d252c1607d2c6e8383cd3"
+      },
+      {
+        "path": "supabase/deployed_history/20260715233040_device_credential_foundation.sql",
+        "mode": "100644",
+        "object_id": "e80eadf681826f351d9a1fc6b1b9f07b1f9768b8"
+      },
+      {
+        "path": "supabase/deployed_history/20260716000250_device_credential_foundation.sql",
+        "mode": "100644",
+        "object_id": "5aaa1ab8f900ad50640778b2849f689f2e373bc2"
+      },
+      {
+        "path": "supabase/deployed_history/20260716001029_add_missing_foreign_key_indexes.sql",
+        "mode": "100644",
+        "object_id": "873667135ebe4784a87214480984b8860c2e790a"
+      },
+      {
+        "path": "supabase/deployed_history/20260716001048_retire_abandoned_repair_payload_tables.sql",
+        "mode": "100644",
+        "object_id": "cc4661b86838be5f5da8c8b50ce24bfdd762c542"
+      },
+      {
+        "path": "supabase/deployed_history/20260716001441_moxie_persistent_password_credentials.sql",
+        "mode": "100644",
+        "object_id": "7fc80241bcb80073995e230683350199f1663428"
+      },
+      {
+        "path": "supabase/deployed_history/20260716001701_release_deployment_manifest.sql",
+        "mode": "100644",
+        "object_id": "28795f3e88f8b914d5f597c983943a64160b5057"
+      },
+      {
+        "path": "supabase/deployed_history/20260716001853_ai_provider_data_boundary.sql",
+        "mode": "100644",
+        "object_id": "f89783320df764ecc99e853c1f2887a8173f60ab"
+      },
+      {
+        "path": "supabase/deployed_history/20260716001958_retire_legacy_backup_tables.sql",
+        "mode": "100644",
+        "object_id": "5b503c44c29677c70466d82d5c3061a2f348745e"
+      },
+      {
+        "path": "supabase/deployed_history/20260716002449_harden_dynamic_sql_functions.sql",
+        "mode": "100644",
+        "object_id": "738ce75b9ef977b5b4b40c278c65c811bea4ecb6"
+      },
+      {
+        "path": "supabase/deployed_history/20260716002500_migration_log_governance.sql",
+        "mode": "100644",
+        "object_id": "c0061bb7912827484b21f44736cedbf35bb5de89"
+      },
+      {
+        "path": "supabase/deployed_history/20260716002543_harden_security_definer_search_paths.sql",
+        "mode": "100644",
+        "object_id": "7fd715078d5870a7c2bb8968c875dc387f55fe1a"
+      },
+      {
+        "path": "supabase/deployed_history/20260716003127_force_rls_public_tables.sql",
+        "mode": "100644",
+        "object_id": "ef38cf6058804df2015e03c0977945469fdfc54e"
+      },
+      {
+        "path": "supabase/deployed_history/20260716003629_auto_enforce_device_credentials_v2.sql",
+        "mode": "100644",
+        "object_id": "8894de34ebccccf82b1889ab1202cc38505e19b0"
+      },
+      {
+        "path": "supabase/deployed_history/20260716004053_retire_mcp_write_test_table.sql",
+        "mode": "100644",
+        "object_id": "9123459a6d5e60b577e5e786578d40b666cc3275"
+      },
+      {
+        "path": "supabase/deployed_history/20260716010600_residual_database_hygiene.sql",
+        "mode": "100644",
+        "object_id": "bdf0f272880b10e23b17e89ad214ed867ca4ceed"
+      },
+      {
+        "path": "supabase/deployed_history/20260716010648_rls_and_function_hardening.sql",
+        "mode": "100644",
+        "object_id": "bb9fc91d60c5ec12acc76019024acda5beadac8c"
+      },
+      {
+        "path": "supabase/deployed_history/20260716121245_operational_recovery_20260716.sql",
+        "mode": "100644",
+        "object_id": "17f66ab4cacfc50914fb0672fc7fc603a515f632"
+      },
+      {
+        "path": "supabase/deployed_history/20260716193526_foundation_repair_archive_cleanup.sql",
+        "mode": "100644",
+        "object_id": "8c85f677314c64d5c436bce2ab55b3d4291c7081"
+      },
+      {
+        "path": "supabase/deployed_history/20260716193547_foundation_repair_schedule_audit.sql",
+        "mode": "100644",
+        "object_id": "5993691e98c6a39542315467f44591f3ab1d9275"
+      },
+      {
+        "path": "supabase/deployed_history/20260716193606_foundation_repair_schedule_window.sql",
+        "mode": "100644",
+        "object_id": "b5d10cb357b52e9a6d6c1da85a889a6548c7cf19"
+      },
+      {
+        "path": "supabase/deployed_history/20260716193627_foundation_repair_schedule_cron.sql",
+        "mode": "100644",
+        "object_id": "ebc4fdb5a8aa226cf4e3777be6d58a557d2c6414"
+      },
+      {
+        "path": "supabase/deployed_history/20260716193644_foundation_repair_migration_log_compaction.sql",
+        "mode": "100644",
+        "object_id": "a7a904a8719510132466c9efa1140db645e35817"
+      },
+      {
+        "path": "supabase/deployed_history/20260716193725_foundation_repair_migration_runner_governance.sql",
+        "mode": "100644",
+        "object_id": "cacfc5818eb9097deeda453206f9091294f63432"
+      },
+      {
+        "path": "supabase/deployed_history/20260716194539_foundation_repair_legacy_ledger_rollup.sql",
+        "mode": "100644",
+        "object_id": "bf2588eaae97ce5936addf6a9550933045367483"
+      },
+      {
+        "path": "supabase/legacy_migrations/005_annie_log.sql",
+        "mode": "100644",
+        "object_id": "a154fc9138e1eb77946e2eaa87eb0c88bd368c0e"
+      },
+      {
+        "path": "supabase/legacy_migrations/20260714230000_scheduler_alerts_gps_foundation.sql",
+        "mode": "100644",
+        "object_id": "200b03e458563dd9a4e5bb789c52c0f081928a9b"
+      },
+      {
+        "path": "supabase/legacy_migrations/20260714233000_my_schedule_contract_v3.sql",
+        "mode": "100644",
+        "object_id": "8bc5d25386eba7d9be6036955122400f4eac0915"
+      },
+      {
+        "path": "supabase/legacy_migrations/20260714235500_full_window_absence_coverage.sql",
+        "mode": "100644",
+        "object_id": "8909f6044eec4c869e76b303b9cf47a352df9c7c"
+      },
+      {
+        "path": "supabase/legacy_migrations/20260715004500_terminal_cancelled_queue_reconciliation.sql",
+        "mode": "100644",
+        "object_id": "d4a7c918571fdce9511302127084e3093c55ca30"
+      },
+      {
+        "path": "supabase/legacy_migrations/20260715010000_cancelled_scan_workflow_terminal_reconciliation.sql",
+        "mode": "100644",
+        "object_id": "a04239a9638893ec96facdfcddb863a76b50f809"
+      },
+      {
+        "path": "supabase/legacy_migrations/20260715010100_cancelled_finish_latest_terminal_selection.sql",
+        "mode": "100644",
+        "object_id": "a257ae5528cbd97dad5bf6274eaf438edcc2c6f6"
+      },
+      {
+        "path": "supabase/legacy_migrations/20260715011000_messenger_thread_foundation.sql",
+        "mode": "100644",
+        "object_id": "3805c0e8b070e35bfbe8a10b1b2ba05917cde576"
+      },
+      {
+        "path": "supabase/legacy_migrations/20260715062000_schedule_source_type_contract.sql",
+        "mode": "100644",
+        "object_id": "e13cd9d86caf1b37fdebf0627856922522204ae4"
+      },
+      {
+        "path": "supabase/legacy_migrations/20260715180000_ops_manager_trusted_device_auth.sql",
+        "mode": "100644",
+        "object_id": "488052b14d656c012feae3dc35fc8e7c74e38dd7"
+      },
+      {
+        "path": "supabase/legacy_migrations/20260715213000_device_credential_foundation.sql",
+        "mode": "100644",
+        "object_id": "95d437221b8cb09824047dce13f410f9750cc81b"
+      },
+      {
+        "path": "supabase/legacy_migrations/20260716130000_operational_recovery.sql",
+        "mode": "100644",
+        "object_id": "2705f0aef0999d1238b3cd15fa72425fcc0083fc"
+      },
+      {
+        "path": "supabase/legacy_migrations/20260716193526_foundation_repair_archive_cleanup.sql",
+        "mode": "100644",
+        "object_id": "736218beb91e45f4f9f376f4e155527726f908ec"
+      },
+      {
+        "path": "supabase/legacy_migrations/20260716193547_foundation_repair_schedule_audit.sql",
+        "mode": "100644",
+        "object_id": "732fa1308fbefbc4f2c441075d06c4ecdbc24db9"
+      },
+      {
+        "path": "supabase/legacy_migrations/20260716193606_foundation_repair_schedule_window.sql",
+        "mode": "100644",
+        "object_id": "ca8e5dc649d35d2dfef6db338a93bf9cc3349e74"
+      },
+      {
+        "path": "supabase/legacy_migrations/20260716193627_foundation_repair_schedule_cron.sql",
+        "mode": "100644",
+        "object_id": "1161e8e93928b320241d138a2d12381181a906a1"
+      },
+      {
+        "path": "supabase/legacy_migrations/20260716193644_foundation_repair_migration_log_compaction.sql",
+        "mode": "100644",
+        "object_id": "ff9811110dff88c35e8b597dc96293014ab058fc"
+      },
+      {
+        "path": "supabase/legacy_migrations/20260716193725_foundation_repair_migration_runner_governance.sql",
+        "mode": "100644",
+        "object_id": "85f3462e7967ed081a1873d4b4d5b4edf6e861cb"
+      },
+      {
+        "path": "supabase/legacy_migrations/20260716194539_foundation_repair_legacy_ledger_rollup.sql",
+        "mode": "100644",
+        "object_id": "a2d175ab2ac936c6e0a8887b1b594a706792b54e"
+      },
+      {
+        "path": "supabase/migrations/00000000000000_production_baseline.sql",
+        "mode": "100644",
+        "object_id": "0aba197bf7de67b8487aa9da37d4a21ee344a40a"
+      },
+      {
+        "path": "supabase/migrations/20260717161000_custodial_foundation_repair_delta.sql",
+        "mode": "100644",
+        "object_id": "07376e0e3b05a8b2feb40cf3ddd563a0b4d43324"
+      },
+      {
+        "path": "supabase/migrations/20260717170136_custodial_foundation_repair_device_eval_fix.sql",
+        "mode": "100644",
+        "object_id": "2385ba5d508174ae82baf8ffd92a71f0f4faa9c3"
+      },
+      {
+        "path": "supabase/migrations/20260717175320_ops_manager_pairing_links.sql",
+        "mode": "100644",
+        "object_id": "afdd95b888cef8668b147a1b57db9d28bd806f00"
+      },
+      {
+        "path": "supabase/migrations/20260717200242_manager_passwordless_onboarding_security_app.sql",
+        "mode": "100644",
+        "object_id": "9d2f475849c51d970717d5e8cef6ce1830c9aabe"
+      },
+      {
+        "path": "supabase/migrations/20260717210744_device_security_code_rpc_qualification.sql",
+        "mode": "100644",
+        "object_id": "3f1fb53a3580ca5f28bd46ae3ee9c5de3bcac4c1"
+      },
+      {
+        "path": "supabase/migrations/20260717235932_ops_manager_one_time_codes.sql",
+        "mode": "100644",
+        "object_id": "deb49bf5310b709596ec05e0ad0ea123ab2fa6ce"
+      },
+      {
+        "path": "supabase/migrations/20260718021910_event_input_console_scope_venue_taxonomy.sql",
+        "mode": "100644",
+        "object_id": "8f0cb1f4abb05a448ddae374026d87609f903980"
+      },
+      {
+        "path": "supabase/migrations/20260718022648_event_input_console_verified_venue_backfill_20260718.sql",
+        "mode": "100644",
+        "object_id": "633c91201f5b50bf4b5081b83f0fe4d006870f1a"
+      },
+      {
+        "path": "supabase/migrations/20260718055946_ops_manager_shared_48_hour_enrollment.sql",
+        "mode": "100644",
+        "object_id": "d6ed76d734f7489c867cd558c2ffeb1e09f0e9ae"
+      },
+      {
+        "path": "supabase/migrations/20260718071500_ops_manager_shared_enrollment_fk_indexes.sql",
+        "mode": "100644",
+        "object_id": "0fc5cb918a888ead56b5a9f3c8b014e0e8018202"
+      },
+      {
+        "path": "supabase/migrations/20260718075000_gemini_console_professional_foundation.sql",
+        "mode": "100644",
+        "object_id": "823dbcf66ca27f8a5e11f5870b8b29e910e0dc8b"
+      },
+      {
+        "path": "supabase/migrations/20260718083000_schema_authority_cron_jobs.sql",
+        "mode": "100644",
+        "object_id": "766baca660e438ecfae1ad113349fc0968838ce7"
+      },
+      {
+        "path": "supabase/migrations/20260718083100_reconstruct_public_grant_hardening.sql",
+        "mode": "100644",
+        "object_id": "87c1f7959140e8ea07db4e476589153cebbd324a"
+      },
+      {
+        "path": "supabase/migrations/20260718084600_schema_authority_comments.sql",
+        "mode": "100644",
+        "object_id": "02f18678cb2d67655f7821ee371526d0e57503ac"
+      },
+      {
+        "path": "supabase/migrations/20260718103215_custodial_v3_reliability_and_retention.sql",
+        "mode": "100644",
+        "object_id": "bb5a7a91c7e737b2b24c7bca3980e20220025eac"
+      },
+      {
+        "path": "supabase/migrations/20260718104747_restore_members_night_retention_recovery.sql",
+        "mode": "100644",
+        "object_id": "6231e7555a7e556d7683b7c19e0dd3881012a8d9"
+      },
+      {
+        "path": "supabase/migrations/20260718130700_prevent_cleaning_notes_false_maintenance_tickets.sql",
+        "mode": "100644",
+        "object_id": "4c21e9d6c27565132f4da4c18739aa423a24a689"
+      },
+      {
+        "path": "supabase/migrations/20260718141948_moxie_password_rotation.sql",
+        "mode": "100644",
+        "object_id": "29f60dcaa9f0054fd39b5b7e81346907b9d22dfb"
+      },
+      {
+        "path": "supabase/migrations/20260718152337_ops_manager_shared_messenger.sql",
+        "mode": "100644",
+        "object_id": "66e4306db26f799339adb1648527258ec7c69c65"
+      },
+      {
+        "path": "supabase/migrations/20260718172800_professional_employee_messenger.sql",
+        "mode": "100644",
+        "object_id": "dc52294890adc35cf0fc98b591f67b254ce9a894"
+      },
+      {
+        "path": "supabase/migrations/20260718184652_messenger_delete_retention_shared_identity.sql",
+        "mode": "100644",
+        "object_id": "c89e026dab9213fc425e86168f8e718435bc1ed7"
+      },
+      {
+        "path": "supabase/migrations/20260718195210_messenger_delete_actor_fk_indexes.sql",
+        "mode": "100644",
+        "object_id": "0b9cfdb0ba24b03359aecf68729e2c9126a1dbb9"
+      },
+      {
+        "path": "supabase/migrations/20260719231728_gps_proximity_motion_hardening.sql",
+        "mode": "100644",
+        "object_id": "b831828ccd8068de6e46261f3c6459f0e092d6bf"
+      },
+      {
+        "path": "supabase/migrations/20260721190000_operations_leadership_mobile_foundation.sql",
+        "mode": "100644",
+        "object_id": "2596810da24f620c795f9364a0bf3b9e7531a07a"
+      },
+      {
+        "path": "supabase/migrations/20260721203000_manager_mobile_notifications.sql",
+        "mode": "100644",
+        "object_id": "6e09aeeeeda60c6c918ee38dc6b788276c0c0fb4"
+      },
+      {
+        "path": "supabase/migrations/20260722143000_custodial_employee_phone_foundation.sql",
+        "mode": "100644",
+        "object_id": "cd57a9cef2d17b6c5987f33600bf9a51df2c5871"
+      },
+      {
+        "path": "supabase/migrations/20260722143100_custodial_employee_phone_assignment.sql",
+        "mode": "100644",
+        "object_id": "0859f89e73d6d4279b22cab836d2a880d0a5b9f4"
+      },
+      {
+        "path": "supabase/migrations/20260722143200_custodial_employee_status_management.sql",
+        "mode": "100644",
+        "object_id": "706f367f652c8eb53c819ec4d3decfe6eeaa6c42"
+      },
+      {
+        "path": "supabase/migrations/20260722143300_retire_forced_operations_leadership_thread.sql",
+        "mode": "100644",
+        "object_id": "85e1f8913b231adc06b6e3096b8100c8fcf1ca3c"
+      },
+      {
+        "path": "supabase/migrations/20260722224000_event_notification_retention_integrity.sql",
+        "mode": "100644",
+        "object_id": "92daf8c24d4f0ad8ef3b8dfe4c693743071b7786"
+      },
+      {
+        "path": "supabase/migrations/20260722233500_operational_retention_and_analytics.sql",
+        "mode": "100644",
+        "object_id": "812947a49269cfd8dddf65350496c37348219b3d"
+      },
+      {
+        "path": "supabase/migrations/20260722233600_event_retention_history_guard.sql",
+        "mode": "100644",
+        "object_id": "24f9943abcba238325c077bb1a78d17948d76679"
+      },
+      {
+        "path": "supabase/migrations/20260723111020_v17_trigger_privilege_hardening.sql",
+        "mode": "100644",
+        "object_id": "e209762e89928bc5d31032e60e79d007622b8ecc"
+      },
+      {
+        "path": "supabase/migrations/20260724010000_native_employee_event_delivery.sql",
+        "mode": "100644",
+        "object_id": "ecff2fa8b7aee548ae22a961b159cad28d48c169"
+      },
+      {
+        "path": "supabase/migrations/20260724020000_event_messenger_cutover_deletion_semantics.sql",
+        "mode": "100644",
+        "object_id": "81be28fbf79f44c520eac592ad03a5eb853378c9"
+      },
+      {
+        "path": "supabase/migrations/20260724023000_msg_thread_deletion_operations_user_index.sql",
+        "mode": "100644",
+        "object_id": "8fed83a6cce8e89843c590a59e9de6b066086e18"
+      },
+      {
+        "path": "supabase/migrations/20260729150527_audit_defense_in_depth_hardening.sql",
+        "mode": "100644",
+        "object_id": "a7103967612a33925c86e3c49f5c2e3b4cf8ee11"
+      },
+      {
+        "path": "supabase/migrations/20260729203938_third_audit_recovery_gemini_gps.sql",
+        "mode": "100644",
+        "object_id": "9314030b559fa0bf800a472316fe8d86f72f3172"
+      },
+      {
+        "path": "supabase/migrations/20260729215914_audit4_attendance_inspection_integrity.sql",
+        "mode": "100644",
+        "object_id": "94f974c4a8f93f2046ff23ba14501579f7eac184"
+      },
+      {
+        "path": "supabase/migrations/20260729225858_audit5_feedback_guest_approval_lifecycle.sql",
+        "mode": "100644",
+        "object_id": "8fad0e8128ba4957de68fb4e807ea6710db1767c"
+      },
+      {
+        "path": "supabase/migrations/20260730142940_audit6_coverall_assignment_link_security.sql",
+        "mode": "100644",
+        "object_id": "f3998adf6e45bd63d36ba26f6cbb453911af998b"
+      },
+      {
+        "path": "supabase/migrations/20260730143853_audit6_coverall_assignment_link_service_policy.sql",
+        "mode": "100644",
+        "object_id": "f868ffe820a1fb42726dc50192f464fbaaf886ee"
+      },
+      {
+        "path": "supabase/migrations/20260730183500_disaster_recovery_backup_reader.sql",
+        "mode": "100644",
+        "object_id": "30c289b2ed1851a649964bd0a5f5fe83d5916f4d"
+      },
+      {
+        "path": "supabase/migrations/20260730221607_production_availability_warm_bridge.sql",
+        "mode": "100644",
+        "object_id": "2357a56516e9d7bedea12a70c4d544f890d03c6a"
+      },
+      {
+        "path": "supabase/migrations/20260730222357_index_remaining_foreign_keys.sql",
+        "mode": "100644",
+        "object_id": "7a2346b870160e6d12ca5a0797fa1b73afd5d63e"
+      },
+      {
+        "path": "supabase/migrations/20260731003221_deactivate_render_free_tier_warm_bridge.sql",
+        "mode": "100644",
+        "object_id": "634f40e4cc31a4d16a230d85c46e105b996c3e61"
+      },
+      {
+        "path": "supabase/migrations/20260731141831_inspection_spot_check_policy.sql",
+        "mode": "100644",
+        "object_id": "b69ff18942673b7cc833f917e688194ddb007f9a"
+      },
+      {
+        "path": "supabase/migrations/20260731211500_native_employee_message_location_push.sql",
+        "mode": "100644",
+        "object_id": "ada8743ee52c0cae0b0434aafc803880625939c7"
+      },
+      {
+        "path": "supabase/migrations/20260801131340_custodial_atomic_offline_completion_identity.sql",
+        "mode": "100644",
+        "object_id": "12474240f5fc1db2d0d841d06e72c20a2b6e8a42"
+      },
+      {
+        "path": "supabase/migrations/20260801134430_reconcile_canonical_schema_security_metadata.sql",
+        "mode": "100644",
+        "object_id": "2774b7324a8f56cdc8b0cae3f4212b48ac660d84"
+      },
+      {
+        "path": "supabase/migrations/20260801164407_custodial_enrollment_resume_and_push_revocation.sql",
+        "mode": "100644",
+        "object_id": "820e0f1e1bb583969899a4164711bca43a88e851"
+      },
+      {
+        "path": "supabase/migrations/20260801195620_custodial_device_removal_operation.sql",
+        "mode": "100644",
+        "object_id": "60bd2e743d14d41648ad36e632f1dbf43c18b13a"
+      },
+      {
+        "path": "supabase/migrations/20260809125735_cleaning_inspection_24_hour_freshness.sql",
+        "mode": "100644",
+        "object_id": "5b47706e8a319fd23b8245fb6e3e83f65f20b7a1"
+      },
+      {
+        "path": "supabase/migrations/20260810120000_retire_named_manager_shared_room_authority.sql",
+        "mode": "100644",
+        "object_id": "9f5e9a74aa116929f37d95f48bb69f4ac704a157"
+      },
+      {
+        "path": "supabase/migrations/20260810130000_harden_named_manager_retired_archive_and_concurrency.sql",
+        "mode": "100644",
+        "object_id": "7350b458e14df713fe60a47e200420de222c06d3"
+      },
+      {
+        "path": "supabase/migrations/20260810140000_finalize_named_manager_messenger_retirement_integrity.sql",
+        "mode": "100644",
+        "object_id": "bd37d3623d273cb63fe0833b71f512ae3442f4c9"
+      },
+      {
+        "path": "supabase/migrations/20260810143000_offline_actor_occurrence_reconciliation.sql",
+        "mode": "100644",
+        "object_id": "7bc70699c9d913825bee24d9960b71bf16be95d7"
+      },
+      {
+        "path": "supabase/migrations/20260810150000_enforce_integrated_backend_authority.sql",
+        "mode": "100644",
+        "object_id": "dd9b21213ee56075f7dd389b8b290f2f0d7728dd"
+      },
+      {
+        "path": "supabase/migrations/20260810160000_close_offline_authority_integrity_gaps.sql",
+        "mode": "100644",
+        "object_id": "fd6e707f24e7f2262ade7efab768ce25f050b0e3"
+      },
+      {
+        "path": "supabase/migrations/20260810170000_finish_offline_authority_operational_closure.sql",
+        "mode": "100644",
+        "object_id": "0a39150314ad9d5ae18827a3d2d6c6ddc952294e"
+      },
+      {
+        "path": "supabase/migrations/20260810190000_final_integrated_backend_operational_correction.sql",
+        "mode": "100644",
+        "object_id": "14dd4bccb0a9551fc76d7952600bc67953f71611"
+      },
+      {
+        "path": "supabase/migrations/20260810200000_static_weekly_scheduler_authority_integrated.sql",
+        "mode": "100644",
+        "object_id": "8ee6511a9580792b0a4b490dfdc813b050eef9d9"
+      },
+      {
+        "path": "supabase/migrations/20260810210000_static_weekly_scheduler_three_high_foundation_correction.sql",
+        "mode": "100644",
+        "object_id": "a8c5a9c72c261ee834fafc37028cf686fa0ff231"
+      },
+      {
+        "path": "supabase/migrations/20260810220000_static_weekly_scheduler_complete_authority_correction.sql",
+        "mode": "100644",
+        "object_id": "433543ea210ec505d9ca1ef92dd1900bede785d2"
+      },
+      {
+        "path": "supabase/migrations/20260810230000_static_weekly_scheduler_authority_closure_correction.sql",
+        "mode": "100644",
+        "object_id": "46654c2fbb3d07828f1c6516c66645509c680696"
+      },
+      {
+        "path": "supabase/migrations/20260812032055_static_weekly_manager_snapshot.sql",
+        "mode": "100644",
+        "object_id": "95eb13a9681fdcb7b936439a8818451e8bafdba3"
+      },
+      {
+        "path": "supabase/migrations/20260812130000_static_weekly_employee_turnover.sql",
+        "mode": "100644",
+        "object_id": "6c2c7d77fdf3dcf1c58c814e92f2895c87292598"
+      },
+      {
+        "path": "supabase/migrations/20260813035530_offline_scan_authority_snapshot.sql",
+        "mode": "100644",
+        "object_id": "3cfd55dee0388bab0773df8a5314f81a4162eb15"
+      },
+      {
+        "path": "supabase/migrations/20260813050000_offline_snapshot_operational_truth_closure.sql",
+        "mode": "100644",
+        "object_id": "a47449c77b041f033879bd50b11cf1a470a15bf6"
+      },
+      {
+        "path": "supabase/migrations/20260813060000_release_canary_operational_recovery.sql",
+        "mode": "100644",
+        "object_id": "38bb3a1aa6c4cd100984845fa0dfed51efc20469"
+      },
+      {
+        "path": "supabase/migrations/20260813070000_operational_service_date_foundation.sql",
+        "mode": "100644",
+        "object_id": "94bc63fbeb9e07a0d4890b58f984752500edf42e"
+      },
+      {
+        "path": "supabase/migrations/20260813141806_custodial_operational_boundary_closure.sql",
+        "mode": "100644",
+        "object_id": "e13a22ba037660b71da224e3bf7bcd5a83cd6fb7"
+      },
+      {
+        "path": "supabase/migrations/20260813173000_device_sync_actor_groups.sql",
+        "mode": "100644",
+        "object_id": "4db473083ba8ee841b9a5f8ebfdc6c04d1010591"
+      },
+      {
+        "path": "supabase/migrations/20260813190000_release_phone_transport_and_offline_activation_closure.sql",
+        "mode": "100644",
+        "object_id": "2c76a427319e8ef38140102e3453062f2612c2ce"
+      },
+      {
+        "path": "supabase/migrations/20260813210000_custodial_u4_ops_closure.sql",
+        "mode": "100644",
+        "object_id": "84c65592a6127485d0cfd27e42c3189dfa8f0b27"
+      },
+      {
+        "path": "supabase/migrations/20260814224034_reconcile_static_weekly_day_change_receipts.sql",
+        "mode": "100644",
+        "object_id": "ee40cb30b9af78beb0b90e55330f6d85ae9f9fd4"
+      },
+      {
+        "path": "tmp/write_probe.txt",
+        "mode": "100644",
+        "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
+      }
+    ],
+    "authority_path_count": 523,
+    "migration_path_count": 77,
+    "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
+    "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
+  },
+  "manager_recovery": {
+    "list": "GET /admin-api/custodial/offline-reconciliations?limit=1..100&before=<ISO-8601>",
+    "detail": "GET /admin-api/custodial/offline-reconciliations/:reconciliationId",
+    "disposition": "POST /admin-api/custodial/offline-reconciliations/:reconciliationId/dispositions",
+    "authority": "active named manager; disposition write additionally requires DIRECTOR or SECURITY_ADMIN"
+  },
+  "migrations": [
+    {
+      "name": "00000000000000_production_baseline.sql"
+    },
+    {
+      "name": "20260717161000_custodial_foundation_repair_delta.sql"
+    },
+    {
+      "name": "20260717170136_custodial_foundation_repair_device_eval_fix.sql"
+    },
+    {
+      "name": "20260717175320_ops_manager_pairing_links.sql"
+    },
+    {
+      "name": "20260717200242_manager_passwordless_onboarding_security_app.sql"
+    },
+    {
+      "name": "20260717210744_device_security_code_rpc_qualification.sql"
+    },
+    {
+      "name": "20260717235932_ops_manager_one_time_codes.sql"
+    },
+    {
+      "name": "20260718021910_event_input_console_scope_venue_taxonomy.sql"
+    },
+    {
+      "name": "20260718022648_event_input_console_verified_venue_backfill_20260718.sql"
+    },
+    {
+      "name": "20260718055946_ops_manager_shared_48_hour_enrollment.sql"
+    },
+    {
+      "name": "20260718071500_ops_manager_shared_enrollment_fk_indexes.sql"
+    },
+    {
+      "name": "20260718075000_gemini_console_professional_foundation.sql"
+    },
+    {
+      "name": "20260718083000_schema_authority_cron_jobs.sql"
+    },
+    {
+      "name": "20260718083100_reconstruct_public_grant_hardening.sql"
+    },
+    {
+      "name": "20260718084600_schema_authority_comments.sql"
+    },
+    {
+      "name": "20260718103215_custodial_v3_reliability_and_retention.sql"
+    },
+    {
+      "name": "20260718104747_restore_members_night_retention_recovery.sql"
+    },
+    {
+      "name": "20260718130700_prevent_cleaning_notes_false_maintenance_tickets.sql"
+    },
+    {
+      "name": "20260718141948_moxie_password_rotation.sql"
+    },
+    {
+      "name": "20260718152337_ops_manager_shared_messenger.sql"
+    },
+    {
+      "name": "20260718172800_professional_employee_messenger.sql"
+    },
+    {
+      "name": "20260718184652_messenger_delete_retention_shared_identity.sql"
+    },
+    {
+      "name": "20260718195210_messenger_delete_actor_fk_indexes.sql"
+    },
+    {
+      "name": "20260719231728_gps_proximity_motion_hardening.sql"
+    },
+    {
+      "name": "20260721190000_operations_leadership_mobile_foundation.sql"
+    },
+    {
+      "name": "20260721203000_manager_mobile_notifications.sql"
+    },
+    {
+      "name": "20260722143000_custodial_employee_phone_foundation.sql"
+    },
+    {
+      "name": "20260722143100_custodial_employee_phone_assignment.sql"
+    },
+    {
+      "name": "20260722143200_custodial_employee_status_management.sql"
+    },
+    {
+      "name": "20260722143300_retire_forced_operations_leadership_thread.sql"
+    },
+    {
+      "name": "20260722224000_event_notification_retention_integrity.sql"
+    },
+    {
+      "name": "20260722233500_operational_retention_and_analytics.sql"
+    },
+    {
+      "name": "20260722233600_event_retention_history_guard.sql"
+    },
+    {
+      "name": "20260723111020_v17_trigger_privilege_hardening.sql"
+    },
+    {
+      "name": "20260724010000_native_employee_event_delivery.sql"
+    },
+    {
+      "name": "20260724020000_event_messenger_cutover_deletion_semantics.sql"
+    },
+    {
+      "name": "20260724023000_msg_thread_deletion_operations_user_index.sql"
+    },
+    {
+      "name": "20260729150527_audit_defense_in_depth_hardening.sql"
+    },
+    {
+      "name": "20260729203938_third_audit_recovery_gemini_gps.sql"
+    },
+    {
+      "name": "20260729215914_audit4_attendance_inspection_integrity.sql"
+    },
+    {
+      "name": "20260729225858_audit5_feedback_guest_approval_lifecycle.sql"
+    },
+    {
+      "name": "20260730142940_audit6_coverall_assignment_link_security.sql"
+    },
+    {
+      "name": "20260730143853_audit6_coverall_assignment_link_service_policy.sql"
+    },
+    {
+      "name": "20260730183500_disaster_recovery_backup_reader.sql"
+    },
+    {
+      "name": "20260730221607_production_availability_warm_bridge.sql"
+    },
+    {
+      "name": "20260730222357_index_remaining_foreign_keys.sql"
+    },
+    {
+      "name": "20260731003221_deactivate_render_free_tier_warm_bridge.sql"
+    },
+    {
+      "name": "20260731141831_inspection_spot_check_policy.sql"
+    },
+    {
+      "name": "20260731211500_native_employee_message_location_push.sql"
+    },
+    {
+      "name": "20260801131340_custodial_atomic_offline_completion_identity.sql"
+    },
+    {
+      "name": "20260801134430_reconcile_canonical_schema_security_metadata.sql"
+    },
+    {
+      "name": "20260801164407_custodial_enrollment_resume_and_push_revocation.sql"
+    },
+    {
+      "name": "20260801195620_custodial_device_removal_operation.sql"
+    },
+    {
+      "name": "20260809125735_cleaning_inspection_24_hour_freshness.sql"
+    },
+    {
+      "name": "20260810120000_retire_named_manager_shared_room_authority.sql"
+    },
+    {
+      "name": "20260810130000_harden_named_manager_retired_archive_and_concurrency.sql"
+    },
+    {
+      "name": "20260810140000_finalize_named_manager_messenger_retirement_integrity.sql"
+    },
+    {
+      "name": "20260810143000_offline_actor_occurrence_reconciliation.sql"
+    },
+    {
+      "name": "20260810150000_enforce_integrated_backend_authority.sql"
+    },
+    {
+      "name": "20260810160000_close_offline_authority_integrity_gaps.sql"
+    },
+    {
+      "name": "20260810170000_finish_offline_authority_operational_closure.sql"
+    },
+    {
+      "name": "20260810190000_final_integrated_backend_operational_correction.sql"
+    },
+    {
+      "name": "20260810200000_static_weekly_scheduler_authority_integrated.sql"
+    },
+    {
+      "name": "20260810210000_static_weekly_scheduler_three_high_foundation_correction.sql"
+    },
+    {
+      "name": "20260810220000_static_weekly_scheduler_complete_authority_correction.sql"
+    },
+    {
+      "name": "20260810230000_static_weekly_scheduler_authority_closure_correction.sql"
+    },
+    {
+      "name": "20260812032055_static_weekly_manager_snapshot.sql"
+    },
+    {
+      "name": "20260812130000_static_weekly_employee_turnover.sql"
+    },
+    {
+      "name": "20260813035530_offline_scan_authority_snapshot.sql"
+    },
+    {
+      "name": "20260813050000_offline_snapshot_operational_truth_closure.sql"
+    },
+    {
+      "name": "20260813060000_release_canary_operational_recovery.sql"
+    },
+    {
+      "name": "20260813070000_operational_service_date_foundation.sql"
+    },
+    {
+      "name": "20260813141806_custodial_operational_boundary_closure.sql"
+    },
+    {
+      "name": "20260813173000_device_sync_actor_groups.sql"
+    },
+    {
+      "name": "20260813190000_release_phone_transport_and_offline_activation_closure.sql"
+    },
+    {
+      "name": "20260813210000_custodial_u4_ops_closure.sql"
+    },
+    {
+      "name": "20260814224034_reconcile_static_weekly_day_change_receipts.sql"
+    }
+  ],
+  "release_boundary": "Configure a minimum-32-character CUSTODIAL_BACKEND_PROOF_SECRET and matching database digest before Phase A, retain the bridge backend artifact through the scan-snapshot phase, and require the executable health/restoration probes before traffic changes."
+}

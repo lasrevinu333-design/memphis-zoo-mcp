@@ -39,6 +39,11 @@ export function getRuntimeEnv() {
       service_role_key_present: present("SUPABASE_SERVICE_ROLE_KEY"),
       configured: present("SUPABASE_URL") && present("SUPABASE_SERVICE_ROLE_KEY"),
     },
+    custodial_authority: {
+      backend_proof_secret_present: present("CUSTODIAL_BACKEND_PROOF_SECRET"),
+      native_route_proof_secret_present: present("CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET"),
+      release_canary_device_present: present("CUSTODIAL_RELEASE_CANARY_DEVICE_ID"),
+    },
     ai: {
       gemini_configured: gemini.gemini_configured,
       gemini_key_source: gemini.gemini_key_source,
@@ -57,6 +62,11 @@ export function validateRuntimeEnv({ strict = false } = {}) {
   if (!env.github.token_present) errors.push("GITHUB_TOKEN or GH_TOKEN is missing.");
   if (!env.supabase.url_present) errors.push("SUPABASE_URL is missing.");
   if (!env.supabase.service_role_key_present) errors.push("SUPABASE_SERVICE_ROLE_KEY is missing.");
+
+  if (env.app.node_env === "production") {
+    if (!env.custodial_authority.backend_proof_secret_present) errors.push("CUSTODIAL_BACKEND_PROOF_SECRET is missing.");
+    if (!env.custodial_authority.native_route_proof_secret_present) errors.push("CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET is missing.");
+  }
 
   if (!env.ai.gemini_configured) {
     warnings.push("GEMINI_API_KEY or GOOGLE_API_KEY is missing. Memphis AI will use fallback replies.");

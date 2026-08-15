@@ -1,6 +1,6 @@
-import { createHmac, randomBytes, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import argon2 from "argon2";
-import { isCanonicalEmployeeKiosk, normalizeDeviceIdentifier, resolveActiveAssignedDevice } from "../device-identity.js";
+import { isCanonicalEmployeeKiosk, normalizeDeviceIdentifier, resolveActiveAssignedDevice, resolveCanonicalDevice } from "../device-identity.js";
 
 const DEVICE_COOKIE_NAME = "memphis_device_credential";
 const DEVICE_SECURITY_COOKIE_NAME = "memphis_device_security_session";
@@ -103,6 +103,112 @@ function credentialTokenParts(value) {
   const secret = raw.slice(dot + 1);
   if (!UUID_PATTERN.test(credentialId) || !/^[A-Za-z0-9_-]{32,}$/.test(secret)) return null;
   return { credentialId, secret };
+}
+
+function canonicalNativeTimestamp(value) {
+  const text = String(value || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(text)) return "";
+  const parsed = Date.parse(text);
+  return Number.isFinite(parsed) && new Date(parsed).toISOString() === text ? text : "";
+}
+
+function nativeAttestationCredential(req) {
+  const parts = credentialTokenParts(requestCredentialToken(req));
+  const authenticatedId = String(req?.memphisDeviceCredential?.credential_id || "").trim().toLowerCase();
+  if (!parts || parts.credentialId.toLowerCase() !== authenticatedId) {
+    throw Object.assign(new Error("Native request attestation is not bound to the authenticated credential."), {
+      status: 403,
+      code: "native_attestation_credential_mismatch",
+    });
+  }
+  return { ...parts, credentialId: authenticatedId };
+}
+
+function verifyNativeHmac(secret, message, supplied, code) {
+  const signature = String(supplied || "").trim().toLowerCase();
+  const expected = createHmac("sha256", secret).update(message, "utf8").digest("hex");
+  if (!/^[0-9a-f]{64}$/.test(signature) || !safeEqual(signature, expected)) {
+    throw Object.assign(new Error("Native phone attestation could not be verified."), { status: 403, code });
+  }
+  return signature;
+}
+
+function nativeAttestationDevice(req) {
+  const value = normalizeDeviceIdentifier(req?.memphisDevice?.canonical_device_id || req?.memphisDevice?.device_id || "");
+  if (!value) throw Object.assign(new Error("Native attestation requires an authenticated canonical device."), { status: 403 });
+  return value.toUpperCase();
+}
+
+export function verifyNativeDeviceRequestAttestation(req, { now = new Date(), maxAgeMs = 2 * 60 * 1000 } = {}) {
+  const version = String(req?.headers?.["x-memphis-native-attestation-version"] || "").trim();
+  const requestId = String(req?.headers?.["x-memphis-native-request-id"] || "").trim().toLowerCase();
+  const timestamp = canonicalNativeTimestamp(req?.headers?.["x-memphis-native-request-timestamp"]);
+  const edition = String(req?.headers?.["x-memphis-app-edition"] || "").trim().toLowerCase();
+  if (version !== "custodial-native-request.v1"
+      || !UUID_PATTERN.test(requestId)
+      || !timestamp
+      || edition !== "custodial") {
+    throw Object.assign(new Error("Complete native request attestation is required."), { status: 403, code: "native_request_attestation_required" });
+  }
+  const timestampMs = Date.parse(timestamp);
+  if (timestampMs > now.getTime() + 15_000 || now.getTime() - timestampMs > maxAgeMs) {
+    throw Object.assign(new Error("Native request attestation is outside its accepted time window."), { status: 403, code: "native_request_attestation_expired" });
+  }
+  const { credentialId, secret } = nativeAttestationCredential(req);
+  const deviceId = nativeAttestationDevice(req);
+  const method = String(req?.method || "").trim().toUpperCase();
+  const path = String(req?.originalUrl || req?.url || "").trim();
+  const bodySha256 = createHash("sha256").update(req?.scanAuthorityRawBody || Buffer.alloc(0)).digest("hex");
+  const message = [version, credentialId, deviceId, method, path, bodySha256, requestId, timestamp, edition].join("\n");
+  const signature = verifyNativeHmac(secret, message, req?.headers?.["x-memphis-native-request-attestation"], "native_request_attestation_invalid");
+  return { version, request_id: requestId, timestamp, credential_id: credentialId, device_id: deviceId, method, path, body_sha256: bodySha256, signature };
+}
+
+export function verifyNativeOfflineWorkAttestation(req, args, kind) {
+  if (!args || typeof args !== "object" || Array.isArray(args)) {
+    throw Object.assign(new Error("Native work attestation requires canonical arguments."), { status: 422 });
+  }
+  const { credentialId, secret } = nativeAttestationCredential(req);
+  const deviceId = nativeAttestationDevice(req);
+  const location = String(args.p_location_code || "").trim().toUpperCase();
+  const sessionId = String(args.p_client_session_id || "").trim();
+  if (!location || !sessionId) throw Object.assign(new Error("Native work attestation is missing occurrence identity."), { status: 422 });
+
+  if (kind === "start") {
+    const version = String(args.p_native_start_attestation_version || "").trim();
+    const startedAt = canonicalNativeTimestamp(args.p_client_started_at);
+    const snapshotId = String(args.p_snapshot_id || "").trim().toLowerCase();
+    const employeeId = String(args.p_snapshot_employee_id || "").trim().toLowerCase();
+    const epoch = Number(args.p_snapshot_assignment_epoch);
+    const snapshotCredentialId = String(args.p_snapshot_credential_id || "").trim().toLowerCase();
+    const nativeScanEntryId = String(args.p_native_scan_entry_id || "").trim().toLowerCase();
+    if (version !== "custodial-native-start.v1" || !startedAt || !/^[0-9a-f]{64}$/.test(snapshotId)
+        || !UUID_PATTERN.test(employeeId) || !Number.isSafeInteger(epoch) || epoch < 1
+        || snapshotCredentialId !== credentialId || !UUID_PATTERN.test(nativeScanEntryId)) {
+      throw Object.assign(new Error("Complete native start attestation is required."), { status: 403, code: "native_start_attestation_required" });
+    }
+    const message = [version, credentialId, deviceId, location, sessionId, snapshotId, employeeId, String(epoch), snapshotCredentialId, nativeScanEntryId, startedAt].join("\n");
+    const signature = verifyNativeHmac(secret, message, args.p_native_start_attestation, "native_start_attestation_invalid");
+    return { version, signature, started_at: startedAt, native_scan_entry_id: nativeScanEntryId };
+  }
+
+  if (kind === "completion") {
+    const version = String(args.p_native_completion_attestation_version || "").trim();
+    const completionId = String(args.p_client_completion_id || "").trim();
+    const reconciliation = args.p_response_json?.__custodial_offline_reconciliation_v1;
+    const contextId = String(reconciliation?.context_id || "").trim().toLowerCase();
+    const nativeFinishScanEntryId = String(args.p_native_finish_scan_entry_id || "").trim().toLowerCase();
+    const startedAt = canonicalNativeTimestamp(args.p_client_started_at);
+    const endedAt = canonicalNativeTimestamp(args.p_client_ended_at);
+    if (version !== "custodial-native-completion.v2" || !UUID_PATTERN.test(completionId)
+        || !UUID_PATTERN.test(contextId) || !UUID_PATTERN.test(nativeFinishScanEntryId) || !startedAt || !endedAt) {
+      throw Object.assign(new Error("Complete native completion attestation is required."), { status: 403, code: "native_completion_attestation_required" });
+    }
+    const message = [version, credentialId, deviceId, location, sessionId, completionId, contextId, nativeFinishScanEntryId, startedAt, endedAt].join("\n");
+    const signature = verifyNativeHmac(secret, message, args.p_native_completion_attestation, "native_completion_attestation_invalid");
+    return { version, signature, started_at: startedAt, ended_at: endedAt, context_id: contextId, native_finish_scan_entry_id: nativeFinishScanEntryId };
+  }
+  throw new Error(`Unsupported native work attestation kind: ${kind}`);
 }
 
 function requestDeviceIdentifier(req) {
@@ -565,10 +671,21 @@ function authEvent(req, device, { credentialId = null, eventType, success, reaso
   };
 }
 
-async function resolveDevice(req, runReadOnlySql) {
+const OFFLINE_RECOVERY_FUNCTIONS = new Set([
+  "tool_start_offline_occurrence",
+  "tool_commit_cleaning_workflow",
+]);
+
+function isOfflineRecoveryRequest(req) {
+  return OFFLINE_RECOVERY_FUNCTIONS.has(String(req?.body?.fn || "").trim());
+}
+
+async function resolveDevice(req, runReadOnlySql, { allowTerminalOfflineRecovery = false } = {}) {
   const identifier = requestDeviceIdentifier(req);
   if (!identifier) return { identifier: "", device: null };
-  const device = await resolveActiveAssignedDevice({ runReadOnlySql, deviceIdentifier: identifier });
+  const device = allowTerminalOfflineRecovery
+    ? await resolveCanonicalDevice({ runReadOnlySql, deviceIdentifier: identifier })
+    : await resolveActiveAssignedDevice({ runReadOnlySql, deviceIdentifier: identifier });
   return { identifier, device };
 }
 
@@ -594,10 +711,11 @@ export async function authenticateDeviceCredentialRequest(req, {
   const store = suppliedStore || createSupabaseDeviceCredentialStore(supabase);
   if (!store) return { ok: false, status: 503, code: "device_auth_unavailable", error: "Device authentication store is unavailable." };
 
-  const { identifier, device } = await resolveDevice(req, runReadOnlySql);
+  const terminalOfflineRecovery = isOfflineRecoveryRequest(req);
+  const { identifier, device } = await resolveDevice(req, runReadOnlySql, { allowTerminalOfflineRecovery: terminalOfflineRecovery });
   if (!identifier) return { ok: false, status: 401, code: "device_id_required", error: "device_id is required." };
-  if (!device || !device.device_active) return { ok: false, status: 401, code: "device_not_registered", error: "Registered device is required." };
-  if (!isEligibleEmployeeDevice(device)) {
+  if (!device || (!device.device_active && !terminalOfflineRecovery)) return { ok: false, status: 401, code: "device_not_registered", error: "Registered device is required." };
+  if (!isEligibleEmployeeDevice(device) && !terminalOfflineRecovery) {
     return { ok: false, status: 403, code: "device_not_eligible", error: "An active canonical employee kiosk assignment is required." };
   }
 
@@ -607,16 +725,15 @@ export async function authenticateDeviceCredentialRequest(req, {
   if (parts) {
     const row = await store.findCredential(parts.credentialId);
     const expiresAt = Date.parse(String(row?.expires_at || ""));
-    const valid = Boolean(
+    const tokenMatchesDevice = Boolean(
       row
-      && !row.revoked_at
-      && Number.isFinite(expiresAt)
-      && expiresAt > now.getTime()
       && String(row.device_id || "") === String(device.canonical_device_pk || "")
       && row.token_hash
       && safeEqual(row.token_hash, tokenHash(parts.secret, env))
     );
-    if (valid) {
+    const valid = Boolean(tokenMatchesDevice && !row.revoked_at && Number.isFinite(expiresAt) && expiresAt > now.getTime());
+    const normalCommitEligible = Boolean(device?.device_active && isEligibleEmployeeDevice(device));
+    if (valid && normalCommitEligible) {
       const metadata = row?.metadata_json;
       const operationBound = Boolean(
         metadata
@@ -674,6 +791,29 @@ export async function authenticateDeviceCredentialRequest(req, {
         device,
         credentialed: true,
         credential,
+        policy_mode: policy.mode,
+        enrollment_required: false,
+      };
+    }
+    // A token that still cryptographically proves this canonical device may
+    // activate or submit only work bound to its previously issued snapshot.
+    // It never restores general access after revocation, expiry, deactivation,
+    // or assignment loss; the database verifies that the work began while the
+    // snapshot and credential were valid.
+    if (terminalOfflineRecovery && tokenMatchesDevice) {
+      await audit(store, authEvent(req, device, {
+        credentialId: row.credential_id,
+        eventType: "device_offline_recovery_submission",
+        success: true,
+        reason: row?.revoked_at ? "revoked_credential_recovery_only" : "expired_or_ineligible_credential_recovery_only",
+        env,
+      }));
+      return {
+        ok: true,
+        device,
+        credentialed: true,
+        credential: row,
+        offline_recovery_only: true,
         policy_mode: policy.mode,
         enrollment_required: false,
       };

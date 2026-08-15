@@ -9,6 +9,7 @@ const adminUrl = process.env.SCHEMA_REBUILD_ADMIN_URL || process.env.DATABASE_UR
 let dockerContainer = process.env.SCHEMA_REBUILD_DOCKER_CONTAINER;
 const dockerImage = process.env.SCHEMA_REBUILD_DOCKER_IMAGE;
 const keepDatabase = /^(1|true|yes)$/i.test(String(process.env.SCHEMA_REBUILD_KEEP_DATABASE || ""));
+const useEmptyContainerPostgres = /^(1|true|yes)$/i.test(String(process.env.SCHEMA_REBUILD_USE_EMPTY_CONTAINER_POSTGRES || ""));
 let ownsDockerContainer = false;
 
 if (!adminUrl && !dockerContainer && !dockerImage) {
@@ -24,6 +25,16 @@ if (adminUrl && !/(localhost|127\.0\.0\.1|memphis-rebuild|schema-rebuild|test|ci
 const root = resolve(new URL("..", import.meta.url).pathname);
 const migrationsDir = resolve(root, "supabase/migrations");
 const migrationFiles = readdirSync(migrationsDir).filter((name) => name.endsWith(".sql")).sort();
+const retirementCorrectionPath = resolve(migrationsDir, "20260810130000_harden_named_manager_retired_archive_and_concurrency.sql");
+const retirementCorrection = readFileSync(retirementCorrectionPath, "utf8");
+const retirementCorrectionBody = retirementCorrection
+  .replace(/^\s*begin;\s*/i, "")
+  .replace(/\s*commit;\s*$/i, "");
+const finalCorrectionPath = resolve(migrationsDir, "20260810140000_finalize_named_manager_messenger_retirement_integrity.sql");
+const finalCorrection = readFileSync(finalCorrectionPath, "utf8");
+const finalCorrectionBody = finalCorrection
+  .replace(/^\s*begin;\s*/i, "")
+  .replace(/\s*commit;\s*$/i, "");
 const requestedDatabaseName = String(process.env.SCHEMA_REBUILD_DATABASE_NAME || "").trim();
 if (requestedDatabaseName && !/^mz_schema_rebuild_[a-zA-Z0-9_]+$/.test(requestedDatabaseName)) {
   throw new Error("SCHEMA_REBUILD_DATABASE_NAME must use the disposable mz_schema_rebuild_* namespace.");
@@ -65,6 +76,103 @@ function dockerPsqlConcurrent(database, sql) {
 
 function outputLines(result) {
   return String(result.stdout || "").split("\n").map((line) => line.trim()).filter(Boolean);
+}
+
+async function verifyNamedManagerRetirementMigrationModes(database) {
+  const archiveState = () => dockerPsql(database, `
+    select count(*)::text || '|' || bool_and(is_active is false)::text || '|' ||
+      bool_and(title='Operations Leadership Chat (Retired)')::text || '|' ||
+      (select count(*)::text from public.msg_thread_participants p join public.msg_threads t on t.id=p.thread_id where t.system_key='ops_manager_shared_chat_v1' and p.left_at is null)
+    from public.msg_threads where system_key='ops_manager_shared_chat_v1';
+  `).trim();
+  const canonicalState = archiveState();
+  if (canonicalState !== "1|true|true|0") throw new Error(`One-archive precondition failed: ${canonicalState}`);
+
+  const absentOutput = dockerPsql(database, `
+    begin;
+    alter table public.msg_threads disable trigger trg_msg_reject_retired_ops_manager_shared_thread_mutation;
+    alter table public.msg_thread_participants disable trigger trg_msg_reject_retired_ops_manager_shared_participation;
+    alter table public.msg_messages disable trigger trg_msg_reject_retired_ops_manager_shared_message_mutation;
+    alter table public.msg_message_audit disable trigger trg_msg_reject_retired_ops_manager_shared_audit_guard;
+    alter table public.msg_receipts disable trigger trg_msg_reject_retired_ops_manager_shared_receipt_mutation;
+    alter table public.msg_message_deletions disable trigger trg_msg_reject_retired_ops_manager_shared_message_delete;
+    delete from public.msg_threads where system_key='ops_manager_shared_chat_v1';
+    ${retirementCorrectionBody}
+    ${finalCorrectionBody}
+    do $absent_archive$
+    declare v_user uuid;
+    begin
+      select id into v_user from public.msg_users where is_active is true order by id limit 1;
+      begin
+        insert into public.msg_threads(thread_type,title,created_by_user_id,is_active,system_key)
+        values('group','fabricated retired room',v_user,true,'ops_manager_shared_chat_v1');
+        raise exception 'absent archive could be recreated';
+      exception when check_violation then null;
+      end;
+    end
+    $absent_archive$;
+    select 'ABSENT:' || count(*)::text || ':' ||
+      (to_regprocedure('public.msg_get_or_create_ops_manager_thread(uuid)') is null)::text || ':' ||
+      (to_regclass('public.msg_canonical_thread_pairs') is not null)::text
+    from public.msg_threads where system_key='ops_manager_shared_chat_v1';
+    rollback;
+  `);
+  const absentState = absentOutput.split("\n").find((line) => line.startsWith("ABSENT:"));
+  if (absentState !== "ABSENT:0:true:true") throw new Error(`Absent-archive correction failed: ${absentOutput}`);
+  if (archiveState() !== canonicalState) throw new Error("Absent-archive test did not roll back to the exact preserved archive state.");
+
+  const duplicatePairInjection = await dockerPsqlConcurrent(database, `
+    begin;
+    alter table public.msg_threads disable trigger trg_msg_enforce_canonical_active_pair_thread;
+    alter table public.msg_thread_participants disable trigger trg_msg_enforce_canonical_active_pair_participants;
+    do $duplicate_pair$
+    declare
+      v_user_a uuid;
+      v_user_b uuid;
+      v_thread uuid;
+    begin
+      select p.user_id into v_user_a
+      from public.msg_thread_participants p join public.msg_threads t on t.id=p.thread_id
+      where t.system_key='ops_manager_shared_chat_v1' order by p.id limit 1;
+      select p.user_id into v_user_b
+      from public.msg_thread_participants p join public.msg_threads t on t.id=p.thread_id
+      where t.system_key='ops_manager_shared_chat_v1' order by p.id offset 1 limit 1;
+      for ordinal in 1..2 loop
+        insert into public.msg_threads(thread_type,created_by_user_id,is_active)
+        values('direct',v_user_a,true) returning id into v_thread;
+        insert into public.msg_thread_participants(thread_id,user_id)
+        values(v_thread,v_user_a),(v_thread,v_user_b);
+      end loop;
+    end
+    $duplicate_pair$;
+    ${retirementCorrectionBody}
+    commit;
+  `);
+  if (duplicatePairInjection.status === 0 || !/duplicate active direct or bot conversations/i.test(duplicatePairInjection.stderr)) {
+    throw new Error(`Pre-existing duplicate direct/Memphis pair did not fail closed: ${JSON.stringify(duplicatePairInjection)}`);
+  }
+  if (archiveState() !== canonicalState) throw new Error("Duplicate-pair rejection leaked a partial archive mutation.");
+
+  const rollbackInjection = await dockerPsqlConcurrent(database, `
+    begin;
+    alter table public.msg_threads disable trigger trg_msg_reject_retired_ops_manager_shared_thread_mutation;
+    alter table public.msg_thread_participants disable trigger trg_msg_reject_retired_ops_manager_shared_participation;
+    update public.msg_threads
+    set is_active=true,title='Operations Leadership Chat'
+    where system_key='ops_manager_shared_chat_v1';
+    update public.msg_thread_participants p
+    set left_at=null
+    from public.msg_threads t
+    where t.id=p.thread_id and t.system_key='ops_manager_shared_chat_v1';
+    ${retirementCorrectionBody}
+    ${finalCorrectionBody}
+    select 1/0;
+    commit;
+  `);
+  if (rollbackInjection.status === 0 || !/division by zero/i.test(rollbackInjection.stderr)) {
+    throw new Error(`Retirement rollback injection did not fail inside the migration transaction: ${JSON.stringify(rollbackInjection)}`);
+  }
+  if (archiveState() !== canonicalState) throw new Error("Rollback injection leaked partial retirement normalization or guard DDL.");
 }
 
 async function verifyDockerConcurrency(database) {
@@ -307,44 +415,91 @@ async function verifyDockerConcurrency(database) {
     insert into public.ops_manager_managers(manager_id, display_name, roles, active)
     select
       ('00000000-0000-4000-8000-' || lpad((9000 + value)::text, 12, '0'))::uuid,
-      'Concurrent Shared Messenger Manager ' || value,
+      'Concurrent Named Messenger Manager ' || value,
       array['OPS_MANAGER']::text[],
       true
     from generate_series(1, 10) value;
   `);
-  const sharedRoomCalls = await Promise.all(Array.from({ length: 10 }, (_, index) => {
+  const namedIdentityCalls = await Promise.all(Array.from({ length: 10 }, (_, index) => {
     const managerId = `00000000-0000-4000-8000-${String(9001 + index).padStart(12, "0")}`;
-    return dockerPsqlConcurrent(database, `select id from public.msg_get_or_create_ops_manager_thread('${managerId}'::uuid);`);
+    return dockerPsqlConcurrent(database, `select id from public.msg_ensure_ops_manager_user('${managerId}'::uuid);`);
   }));
-  if (sharedRoomCalls.some((result) => result.status !== 0)) {
-    throw new Error(`Concurrent Ops Manager room reconciliation failed:\n${sharedRoomCalls.map((item) => item.stderr).filter(Boolean).join("\n")}`);
+  if (namedIdentityCalls.some((result) => result.status !== 0)) {
+    throw new Error(`Concurrent named-manager identity reconciliation failed:\n${namedIdentityCalls.map((item) => item.stderr).filter(Boolean).join("\n")}`);
   }
-  const sharedRoomIds = sharedRoomCalls.flatMap(outputLines);
-  if (sharedRoomIds.length !== 10 || new Set(sharedRoomIds).size !== 1) {
-    throw new Error(`Concurrent Ops Managers did not converge on one room: ${JSON.stringify(sharedRoomIds)}`);
+  const namedIdentityIds = namedIdentityCalls.flatMap(outputLines);
+  if (namedIdentityIds.length !== 10 || new Set(namedIdentityIds).size !== 10) {
+    throw new Error(`Concurrent named managers did not retain distinct principals: ${JSON.stringify(namedIdentityIds)}`);
   }
-  const sharedRoomState = dockerPsql(database, `
+  const repeatedIdentityCalls = await Promise.all(Array.from({ length: 10 }, (_, index) => {
+    const managerId = `00000000-0000-4000-8000-${String(9001 + index).padStart(12, "0")}`;
+    return dockerPsqlConcurrent(database, `select id from public.msg_ensure_ops_manager_user('${managerId}'::uuid);`);
+  }));
+  if (repeatedIdentityCalls.some((result) => result.status !== 0)) {
+    throw new Error(`Repeated named-manager identity reconciliation failed:\n${repeatedIdentityCalls.map((item) => item.stderr).filter(Boolean).join("\n")}`);
+  }
+  const repeatedIdentityIds = repeatedIdentityCalls.flatMap(outputLines);
+  if (repeatedIdentityIds.length !== 10 || repeatedIdentityIds.some((id, index) => id !== namedIdentityIds[index])) {
+    throw new Error(`Named manager principal was not stable across sessions: ${JSON.stringify({ namedIdentityIds, repeatedIdentityIds })}`);
+  }
+  const retiredRoomState = dockerPsql(database, `
     with room as (
-      select id from public.msg_threads where system_key = 'ops_manager_shared_chat_v1'
+      select id, is_active from public.msg_threads where system_key = 'ops_manager_shared_chat_v1'
     ), concurrent_managers as (
       select ('00000000-0000-4000-8000-' || lpad((9000 + value)::text, 12, '0'))::uuid as manager_id
       from generate_series(1, 10) value
     )
     select
       (select count(*) from room)::text || '|' ||
+      (select bool_and(is_active is false)::text from room) || '|' ||
       (select count(*)
        from public.msg_thread_participants p
-       join public.msg_users u on u.id = p.user_id
        where p.thread_id = (select id from room)
-         and p.left_at is null
-         and u.ops_manager_id in (select manager_id from concurrent_managers))::text || '|' ||
+         and p.left_at is null)::text || '|' ||
       (select count(*)
        from public.msg_users u
        where u.is_active is true
          and u.role='manager'
          and u.ops_manager_id in (select manager_id from concurrent_managers))::text;
   `).trim();
-  if (sharedRoomState !== "1|10|10") throw new Error(`Named Ops Manager identity/room invariant failed: ${sharedRoomState}`);
+  if (retiredRoomState !== "1|true|0|10") throw new Error(`Named manager/archive invariant failed: ${retiredRoomState}`);
+  const retiredRpcCount = dockerPsql(database, `
+    select count(*) from pg_proc
+    where pronamespace='public'::regnamespace
+      and proname='msg_get_or_create_ops_manager_thread'
+      and pg_get_function_identity_arguments(oid)='p_manager_id uuid';
+  `).trim();
+  if (retiredRpcCount !== "0") throw new Error("Retired Ops Manager shared-room RPC remains available.");
+  const archivedThreadId = dockerPsql(database, `
+    select id from public.msg_threads where system_key='ops_manager_shared_chat_v1';
+  `).trim();
+  const reactivateArchivedRoom = await dockerPsqlConcurrent(database, `
+    update public.msg_threads set is_active=true where id='${archivedThreadId}'::uuid;
+  `);
+  if (reactivateArchivedRoom.status === 0 || !/immutable/i.test(reactivateArchivedRoom.stderr)) {
+    throw new Error(`Archived Ops Manager room reactivation did not fail closed: ${reactivateArchivedRoom.stderr}`);
+  }
+  const recreateArchivedRoom = await dockerPsqlConcurrent(database, `
+    insert into public.msg_threads(thread_type,title,created_by_user_id,is_active,system_key)
+    values ('group','Illegal Operations Leadership recreation','${namedIdentityIds[0]}'::uuid,true,'ops_manager_shared_chat_v1');
+  `);
+  if (recreateArchivedRoom.status === 0 || !/cannot be recreated/i.test(recreateArchivedRoom.stderr)) {
+    throw new Error(`Archived Ops Manager room recreation did not fail closed: ${recreateArchivedRoom.stderr}`);
+  }
+  const addArchivedParticipant = await dockerPsqlConcurrent(database, `
+    insert into public.msg_thread_participants(thread_id,user_id,left_at)
+    values ('${archivedThreadId}'::uuid,'${namedIdentityIds[0]}'::uuid,null);
+  `);
+  if (addArchivedParticipant.status === 0 || !/participant history is immutable/i.test(addArchivedParticipant.stderr)) {
+    throw new Error(`Archived Ops Manager participant insertion did not fail closed: ${addArchivedParticipant.stderr}`);
+  }
+  const restoreArchivedParticipant = await dockerPsqlConcurrent(database, `
+    update public.msg_thread_participants set left_at=null
+    where id=(select id from public.msg_thread_participants where thread_id='${archivedThreadId}'::uuid order by id limit 1);
+  `);
+  if (restoreArchivedParticipant.status === 0 || !/participant history is immutable/i.test(restoreArchivedParticipant.stderr)) {
+    throw new Error(`Archived Ops Manager participant restoration did not fail closed: ${restoreArchivedParticipant.stderr}`);
+  }
   const teamRoomCall = await dockerPsqlConcurrent(database, `select id from public.msg_get_or_create_custodial_team_thread((select id from public.msg_users where ops_manager_id='00000000-0000-4000-8000-000000009001'::uuid));`);
   if (teamRoomCall.status === 0 || !/retired/i.test(teamRoomCall.stderr)) {
     throw new Error(`Retired Custodial Team room entry point did not fail closed: ${teamRoomCall.stderr}`);
@@ -366,6 +521,54 @@ async function verifyDockerConcurrency(database) {
       ('REBUILD-GROUP-DEVICE-2','00000000-0000-4000-8000-000000009112',true),
       ('REBUILD-GROUP-DEVICE-3','00000000-0000-4000-8000-000000009113',true);
   `);
+
+  // Every caller waits on one database-clock barrier, then resolves the same
+  // principal pair together. This makes the ten-way race reproducible instead
+  // of relying on scheduler luck; the replay must return the original id too.
+  const barrierSql = (expression, barrierAt) => `
+    select pg_sleep(greatest(0, extract(epoch from ('${barrierAt}'::timestamptz - clock_timestamp()))));
+    select (${expression}).id;
+  `;
+  const assertTenWayStable = async (label, expression) => {
+    const run = async () => {
+      const barrierAt = new Date(Date.now() + 1500).toISOString();
+      const calls = await Promise.all(Array.from(
+        { length: 10 },
+        () => dockerPsqlConcurrent(database, barrierSql(expression, barrierAt)),
+      ));
+      if (calls.some((result) => result.status !== 0)) {
+        throw new Error(`${label} ten-way barrier calls failed:\n${calls.map((item) => item.stderr).filter(Boolean).join("\n")}`);
+      }
+      const ids = calls.flatMap(outputLines);
+      if (ids.length !== 10 || new Set(ids).size !== 1) {
+        throw new Error(`${label} ten-way barrier calls did not converge: ${JSON.stringify(ids)}`);
+      }
+      return ids[0];
+    };
+    const first = await run();
+    const replay = await run();
+    if (first !== replay) throw new Error(`${label} replay changed the canonical thread id: ${JSON.stringify({ first, replay })}`);
+    return first;
+  };
+  const directThreadId = await assertTenWayStable(
+    "direct get-or-create",
+    "public.msg_get_or_create_direct_thread('00000000-0000-4000-8000-000000009111'::uuid,'00000000-0000-4000-8000-000000009112'::uuid)",
+  );
+  if (dockerPsql(database, `select count(*) from public.msg_canonical_thread_pairs where thread_id='${directThreadId}'::uuid;`).trim() !== "1") {
+    throw new Error("Direct get-or-create did not record exactly one canonical pair authority row.");
+  }
+  dockerPsql(database, `
+    insert into public.msg_users(id,display_name,role,is_active)
+    values ('00000000-0000-4000-8000-000000009119','Memphis','bot',true)
+    on conflict (id) do update set display_name='Memphis',role='bot',is_active=true;
+  `);
+  const memphisThreadId = await assertTenWayStable(
+    "Memphis get-or-create",
+    "public.msg_get_or_create_memphis_thread('00000000-0000-4000-8000-000000009113'::uuid)",
+  );
+  if (dockerPsql(database, `select count(*) from public.msg_canonical_thread_pairs where thread_id='${memphisThreadId}'::uuid and conversation_type='bot';`).trim() !== "1") {
+    throw new Error("Memphis get-or-create did not record exactly one canonical pair authority row.");
+  }
   const groupOperationCalls = await Promise.all([
     dockerPsqlConcurrent(database, `select id from public.msg_create_group_thread_v2(
       '00000000-0000-4000-8000-000000009111'::uuid,
@@ -420,21 +623,21 @@ async function verifyDockerConcurrency(database) {
     throw new Error(`Concurrent user-scoped conversation removal invariant failed: ${threadDeletionState}`);
   }
   const deletionMessageId = dockerPsql(database, `
-    select id from public.msg_send_message_as_ops_manager(
-      '00000000-0000-4000-8000-000000009001'::uuid,
-      (select id from public.msg_threads where system_key = 'ops_manager_shared_chat_v1'),
-      'Retired individual deletion test', 'text', '{}'::jsonb,
+    select id from public.msg_send_message(
+      '${deletionThreadId}'::uuid,
+      '00000000-0000-4000-8000-000000009111'::uuid,
+      'Named group individual deletion test', 'text', '{}'::jsonb,
       '00000000-0000-4000-8000-000000009901'
     );
   `).trim();
   const retiredMessageDelete = await dockerPsqlConcurrent(
     database,
-    `select id from public.msg_delete_message('${deletionMessageId}'::uuid, (select id from public.msg_users where ops_manager_id='00000000-0000-4000-8000-000000009001'::uuid));`
+    `select id from public.msg_delete_message('${deletionMessageId}'::uuid, '00000000-0000-4000-8000-000000009111'::uuid);`
   );
   if (retiredMessageDelete.status === 0 || !/Individual-message deletion is retired/i.test(retiredMessageDelete.stderr)) {
     throw new Error(`Individual-message deletion did not fail closed: ${retiredMessageDelete.stderr}`);
   }
-  console.log("verified 10-way exact finish, GPS freshness/boundary/motion/replay/duplicate handling, two-worker outbox claims, restart lease recovery, two-browser Moxie CAS, atomic Moxie password rotation, 10-manager named-identity convergence, retired automatic team room, idempotent ordinary group creation, concurrent user-scoped conversation removal, and retired individual-message deletion");
+  console.log("verified 10-way exact finish, direct/Memphis canonical-pair barrier races with replay, GPS freshness/boundary/motion/replay/duplicate handling, two-worker outbox claims, restart lease recovery, two-browser Moxie CAS, atomic Moxie password rotation, stable/distinct named-manager identities, archived shared-room authority closure, idempotent ordinary group creation, concurrent user-scoped conversation removal, and retired individual-message deletion");
 }
 
 function runDocker(args, options = {}) {
@@ -461,7 +664,7 @@ function assertRebuildInvariants(result) {
   if (result.history_delete_rule !== "r") failures.push("Event history foreign key must use ON DELETE RESTRICT");
   if (result.exact_finish_rpc !== true) failures.push("Exact session finish RPC is missing");
   if (result.manager_messaging_rpc !== true) failures.push("Server-derived manager messaging RPC is missing");
-  if (result.manager_shared_messaging_rpc !== true) failures.push("Canonical shared Ops Manager messaging RPC is missing");
+  if (result.manager_shared_messaging_rpc !== false) failures.push("Retired shared Ops Manager messaging RPC remains available");
   if (result.custodial_team_retired_rpc !== true) failures.push("Fail-closed retired Custodial Team compatibility RPC is missing");
   if (result.employee_group_messaging_rpc !== true) failures.push("Idempotent employee group messaging RPC is missing");
   if (result.thread_client_operation !== true) failures.push("Stable group operation identity column is missing");
@@ -495,6 +698,26 @@ insert into public.locations(id, location_code, location_name, location_type, fo
 values ('00000000-0000-4000-8000-00000000f102', 'REBUILD_FINISH', 'Rebuild Finish Location', 'restroom', 'restroom', true);
 insert into public.devices(id, device_id, device_name, active, assigned_employee_id)
 values ('00000000-0000-4000-8000-00000000f103', 'REBUILD-FINISH-DEVICE', 'Rebuild Finish Device', true, '00000000-0000-4000-8000-00000000f101');
+insert into public.device_auth_credentials(credential_id,device_id,token_hash,confirmed_at,expires_at)
+values ('00000000-0000-4000-8000-00000000f110','00000000-0000-4000-8000-00000000f103',repeat('f',64),now(),now()+interval '1 day');
+insert into public.custodial_offline_scan_authority_snapshots(
+  snapshot_id,device_id,employee_id,assignment_epoch,credential_id,generated_at,expires_at,locations_json
+) values (
+  repeat('1',64),'00000000-0000-4000-8000-00000000f103','00000000-0000-4000-8000-00000000f101',1,
+  '00000000-0000-4000-8000-00000000f110',now(),now()+interval '12 hours','[]'::jsonb
+);
+insert into public.custodial_employee_device_assignment_history(device_id,device_identifier,new_employee_id,new_employee_name,change_reason,source)
+values ('00000000-0000-4000-8000-00000000f103','REBUILD-FINISH-DEVICE','00000000-0000-4000-8000-00000000f101','Rebuild Finish Test','empty rebuild authority fixture','test');
+insert into public.employees(id, employee_code, display_name, active, role)
+values ('00000000-0000-4000-8000-00000000f127', 'REBUILD-FINISH-SECOND', 'Rebuild Finish Second Test', true, 'staff');
+insert into public.devices(id, device_id, device_name, active, assigned_employee_id)
+values ('00000000-0000-4000-8000-00000000f123', 'REBUILD-FINISH-DEVICE-SECOND', 'Rebuild Finish Second Device', true, '00000000-0000-4000-8000-00000000f127');
+insert into public.device_auth_credentials(credential_id,device_id,token_hash,confirmed_at,expires_at)
+values ('00000000-0000-4000-8000-00000000f126','00000000-0000-4000-8000-00000000f123',repeat('e',64),now(),now()+interval '1 day');
+insert into public.custodial_employee_device_assignment_history(device_id,device_identifier,new_employee_id,new_employee_name,change_reason,source)
+values ('00000000-0000-4000-8000-00000000f123','REBUILD-FINISH-DEVICE-SECOND','00000000-0000-4000-8000-00000000f127','Rebuild Finish Second Test','empty rebuild authority fixture','test');
+select public.custodial_configure_backend_execution_key(encode(extensions.digest(convert_to('empty-rebuild-offline-authority-secret-0123456789','UTF8'),'sha256'),'hex'),'empty-rebuild');
+select public.custodial_configure_native_route_proof_key(encode(extensions.digest(convert_to('empty-rebuild-native-route-secret-012345678901','UTF8'),'sha256'),'hex'),'empty-rebuild');
 do $functional_test$
 declare
   v_start jsonb;
@@ -502,11 +725,13 @@ declare
   v_replay jsonb;
   v_session_uuid text;
   v_issue_start jsonb;
+  v_issue_completion jsonb;
   v_issue_session_uuid text;
   v_manager_user public.msg_users%rowtype;
+  v_manager_user_again public.msg_users%rowtype;
   v_manager_user_b public.msg_users%rowtype;
-  v_shared_thread_a public.msg_threads%rowtype;
-  v_shared_thread_b public.msg_threads%rowtype;
+  v_direct_thread public.msg_threads%rowtype;
+  v_memphis_thread public.msg_threads%rowtype;
   v_group_thread_a public.msg_threads%rowtype;
   v_group_thread_b public.msg_threads%rowtype;
   v_delete jsonb;
@@ -514,11 +739,56 @@ declare
   v_message public.msg_messages%rowtype;
   v_old_message public.msg_messages%rowtype;
 begin
+  perform public.tool_report_device_sync_status_v2(
+    'REBUILD-FINISH-DEVICE',3,now()-interval '3 hours',2,null,'rebuild-v2',null,'rebuild-sync-v2',
+    jsonb_build_array(jsonb_build_object(
+      'employee_id','00000000-0000-4000-8000-00000000f101','assignment_epoch',1,
+      'snapshot_id',repeat('1',64),'queue_count',2,'oldest_item_at',now()-interval '2 hours'))
+  );
+  if not exists(
+    select 1 from public.device_sync_status s
+    where s.device_id='00000000-0000-4000-8000-00000000f103'
+      and s.queue_count=3 and jsonb_array_length(s.queue_authority_groups)=1
+      and s.queue_authority_groups->0->>'employee_id'='00000000-0000-4000-8000-00000000f101'
+      and (s.queue_authority_groups->0->>'assignment_epoch')::integer=1
+      and (s.queue_authority_groups->0->>'queue_count')::integer=2
+  ) then raise exception 'Actor-bound device sync status was not persisted exactly'; end if;
+  begin
+    perform public.tool_report_device_sync_status_v2(
+      'REBUILD-FINISH-DEVICE',1,now(),0,null,'rebuild-v2',null,'wrong-epoch',
+      jsonb_build_array(jsonb_build_object(
+        'employee_id','00000000-0000-4000-8000-00000000f101','assignment_epoch',2,
+        'snapshot_id',repeat('1',64),'queue_count',1,'oldest_item_at',now()))
+    );
+    raise exception 'Wrong assignment epoch was accepted for actor-bound pending work';
+  exception when insufficient_privilege then null; end;
+  begin
+    perform public.tool_report_device_sync_status_v2(
+      'REBUILD-FINISH-DEVICE',1,now(),0,null,'rebuild-v2',null,'missing-epoch',
+      jsonb_build_array(jsonb_build_object(
+        'employee_id','00000000-0000-4000-8000-00000000f101',
+        'snapshot_id',repeat('1',64),'queue_count',1,'oldest_item_at',now()))
+    );
+    raise exception 'Missing assignment epoch was accepted for actor-bound pending work';
+  exception when invalid_parameter_value then null; end;
+  perform public.tool_report_device_sync_status(
+    'REBUILD-FINISH-DEVICE',1,now(),0,null,'build-22',null,'rebuild-sync-legacy'
+  );
+  if not exists(
+    select 1 from public.device_sync_status s
+    where s.device_id='00000000-0000-4000-8000-00000000f103'
+      and s.queue_count=1 and s.queue_authority_groups='[]'::jsonb
+  ) then raise exception 'Build 22 aggregate sync reporter compatibility was not retained'; end if;
+  if has_function_privilege(
+    'service_role',
+    'public.custodial_report_device_sync_status_internal(text,integer,timestamp with time zone,integer,timestamp with time zone,text,text,text,jsonb)',
+    'EXECUTE'
+  ) then raise exception 'Service role can execute the internal device sync reporter directly'; end if;
   v_start := public.tool_start_session_v2(
     'REBUILD_FINISH',
     'REBUILD-FINISH-DEVICE',
     '00000000-0000-4000-8000-00000000f104',
-    now() - interval '5 minutes',
+    now() - interval '120 minutes',
     'rebuild-functional-start'
   );
   v_session_uuid := v_start ->> 'session_uuid';
@@ -529,7 +799,7 @@ begin
     v_session_uuid,
     'REBUILD-FINISH-DEVICE',
     '00000000-0000-4000-8000-00000000f105',
-    now() - interval '1 minute'
+    now() - interval '90 minutes'
   );
   if v_finish ->> 'status' <> 'pending_submit' or (v_finish ->> 'replayed')::boolean is not false then
     raise exception 'First exact finish did not produce one authoritative transition: %', v_finish;
@@ -538,7 +808,7 @@ begin
     v_session_uuid,
     'REBUILD-FINISH-DEVICE',
     '00000000-0000-4000-8000-00000000f105',
-    now() - interval '1 minute'
+    now() - interval '90 minutes'
   );
   if v_replay ->> 'status' <> 'pending_submit' or (v_replay ->> 'replayed')::boolean is not true then
     raise exception 'Exact finish replay was not recognized idempotently: %', v_replay;
@@ -548,7 +818,7 @@ begin
       v_session_uuid,
       'REBUILD-FINISH-DEVICE',
       '00000000-0000-4000-8000-00000000f106',
-      now()
+    now() - interval '89 minutes'
     );
     raise exception 'A second finish operation id was incorrectly accepted';
   exception when unique_violation then
@@ -558,87 +828,110 @@ begin
     raise exception 'Exact finish functional check produced a duplicate session';
   end if;
 
-  perform public.tool_complete_session(
+  v_issue_completion := public.tool_complete_session_authoritative(
     v_session_uuid,
     '{"services_performed":["trash_removed"],"notes":"Routine cleaning completed without a maintenance issue."}'::jsonb,
-    'Rebuild Finish Test',
     'REBUILD-FINISH-DEVICE',
-    'rebuild-routine-notes-completion'
+    '10000000-0000-4000-8000-000000000011',
+    '00000000-0000-4000-8000-00000000f110',
+    'empty-rebuild-offline-authority-secret-0123456789'
   );
+  if v_issue_completion->>'status' <> 'closed' then
+    raise exception 'Explicit maintenance issue completion was not accepted: %', v_issue_completion;
+  end if;
+  v_issue_completion := public.tool_complete_session_authoritative(
+    v_session_uuid,
+    '{"services_performed":["trash_removed"],"notes":"Routine cleaning completed without a maintenance issue."}'::jsonb,
+    'REBUILD-FINISH-DEVICE',
+    '10000000-0000-4000-8000-000000000011',
+    '00000000-0000-4000-8000-00000000f110',
+    'empty-rebuild-offline-authority-secret-0123456789'
+  );
+  if v_issue_completion->>'status' <> 'closed' or coalesce((v_issue_completion->>'replayed')::boolean,false) is not true then
+    raise exception 'Legacy adapter exact replay was not accepted idempotently: %', v_issue_completion;
+  end if;
   if exists (select 1 from public.maintenance_tickets where session_id = (select id from public.sessions where session_uuid = v_session_uuid)) then
     raise exception 'Routine cleaning notes incorrectly created a maintenance ticket';
   end if;
 
   v_issue_start := public.tool_start_session_v2(
     'REBUILD_FINISH',
-    'REBUILD-FINISH-DEVICE',
+    'REBUILD-FINISH-DEVICE-SECOND',
     '00000000-0000-4000-8000-00000000f111',
-    now() - interval '5 minutes',
+    now() - interval '60 minutes',
     'rebuild-explicit-issue-start'
   );
   v_issue_session_uuid := v_issue_start ->> 'session_uuid';
   perform public.tool_finish_session_exact(
     v_issue_session_uuid,
-    'REBUILD-FINISH-DEVICE',
+    'REBUILD-FINISH-DEVICE-SECOND',
     '00000000-0000-4000-8000-00000000f112',
-    now() - interval '1 minute'
+    now() - interval '30 minutes'
   );
-  perform public.tool_complete_session(
+  v_issue_completion := public.tool_complete_session_authoritative(
     v_issue_session_uuid,
     '{"services_performed":["trash_removed"],"notes":"Routine context.","maintenance_issues":[{"label":"Leaking toilet","fixture_identifier":"stall 2"}]}'::jsonb,
-    'Rebuild Finish Test',
-    'REBUILD-FINISH-DEVICE',
-    'rebuild-explicit-issue-completion'
+    'REBUILD-FINISH-DEVICE-SECOND',
+    '10000000-0000-4000-8000-000000000012',
+    '00000000-0000-4000-8000-00000000f126',
+    'empty-rebuild-offline-authority-secret-0123456789'
   );
+  if v_issue_completion->>'status' <> 'closed' then
+    raise exception 'Explicit maintenance issue completion was not accepted: %', v_issue_completion;
+  end if;
   if (select count(*) from public.maintenance_tickets where session_id = (select id from public.sessions where session_uuid = v_issue_session_uuid)) <> 1 then
-    raise exception 'Explicit maintenance issue did not create exactly one ticket';
+    raise exception 'Explicit maintenance issue did not create exactly one ticket: %', (select count(*) from public.maintenance_tickets where session_id = (select id from public.sessions where session_uuid = v_issue_session_uuid));
   end if;
 
   insert into public.ops_manager_managers(manager_id, display_name, roles, active)
-  values ('00000000-0000-4000-8000-00000000f107', 'Rebuild Messaging Manager', array['OPS_MANAGER','CUSTODIAL_MANAGER']::text[], true);
+  values ('00000000-0000-4000-8000-00000000f107', 'Rebuild Messaging Manager', array['OPS_MANAGER','CUSTODIAL_MANAGER','SECURITY_ADMIN']::text[], true);
   v_manager_user := public.msg_ensure_ops_manager_user('00000000-0000-4000-8000-00000000f107');
-  if v_manager_user.messaging_identity_key is not null
+  if v_manager_user.messaging_identity_key <> 'ops_manager_named_0000000000004000800000000000f107'
      or v_manager_user.ops_manager_id <> '00000000-0000-4000-8000-00000000f107'::uuid
      or v_manager_user.display_name <> 'Rebuild Messaging Manager'
      or v_manager_user.role <> 'manager' then
     raise exception 'Named manager messaging principal was not server-derived correctly: %', row_to_json(v_manager_user);
   end if;
-  v_shared_thread_a := public.msg_get_or_create_ops_manager_thread('00000000-0000-4000-8000-00000000f107');
-  v_message := public.msg_send_message_as_ops_manager(
-    '00000000-0000-4000-8000-00000000f107', v_shared_thread_a.id,
-    'Shared manager history before second manager joins', 'text', '{}'::jsonb,
-    '00000000-0000-4000-8000-00000000f114'
-  );
   insert into public.ops_manager_managers(manager_id, display_name, roles, active)
   values ('00000000-0000-4000-8000-00000000f115', 'Rebuild Messaging Manager Two', array['OPS_MANAGER']::text[], true);
   v_manager_user_b := public.msg_ensure_ops_manager_user('00000000-0000-4000-8000-00000000f115');
-  v_shared_thread_b := public.msg_get_or_create_ops_manager_thread('00000000-0000-4000-8000-00000000f115');
+  v_manager_user_again := public.msg_ensure_ops_manager_user('00000000-0000-4000-8000-00000000f107');
+  if v_manager_user.id <> v_manager_user_again.id then
+    raise exception 'Named manager identity was not stable across devices';
+  end if;
+  v_direct_thread := public.msg_get_or_create_direct_thread(v_manager_user.id, v_manager_user_b.id);
   if v_manager_user.id = v_manager_user_b.id
      or v_manager_user_b.ops_manager_id <> '00000000-0000-4000-8000-00000000f115'::uuid
      or v_manager_user_b.display_name <> 'Rebuild Messaging Manager Two'
-     or v_shared_thread_a.id <> v_shared_thread_b.id
-     or v_shared_thread_a.system_key <> 'ops_manager_shared_chat_v1'
-     or not exists (
-       select 1 from public.msg_thread_participants
-       where thread_id = v_shared_thread_a.id and user_id = v_manager_user.id and left_at is null
-     )
-     or not exists (
-       select 1 from public.msg_thread_participants
-       where thread_id = v_shared_thread_a.id and user_id = v_manager_user_b.id and left_at is null
-     )
+     or v_direct_thread.thread_type <> 'direct'
+     or (select count(*) from public.msg_thread_participants where thread_id = v_direct_thread.id and left_at is null) <> 2
      or (select count(*) from public.msg_users where is_active is true and role='manager' and ops_manager_id in (
        '00000000-0000-4000-8000-00000000f107'::uuid,
        '00000000-0000-4000-8000-00000000f115'::uuid
      )) <> 2 then
-    raise exception 'Named Ops Managers did not retain distinct identities in the shared room';
+    raise exception 'Named Ops Managers did not retain distinct identities in a direct conversation';
   end if;
+  v_message := public.msg_send_message_as_ops_manager(
+    '00000000-0000-4000-8000-00000000f107', v_direct_thread.id,
+    'Named manager direct conversation', 'text', '{}'::jsonb,
+    '00000000-0000-4000-8000-00000000f114'
+  );
   if not exists (
     select 1 from public.msg_message_audit a
     where a.message_id=v_message.id
       and a.sender_user_id=v_manager_user.id
       and a.sender_ops_manager_id='00000000-0000-4000-8000-00000000f107'::uuid
   ) then
-    raise exception 'Named authenticated manager attribution was not preserved behind the shared public identity';
+    raise exception 'Named authenticated manager attribution was not preserved in a direct conversation';
+  end if;
+  insert into public.msg_users(id,display_name,role,is_active)
+  values ('00000000-0000-4000-8000-00000000f125','Memphis','bot',true)
+  on conflict (id) do update set display_name='Memphis',role='bot',is_active=true;
+  v_memphis_thread := public.msg_get_or_create_memphis_thread(v_manager_user.id);
+  if v_memphis_thread.thread_type <> 'bot'
+     or v_memphis_thread.title <> 'Memphis'
+     or (select count(*) from public.msg_thread_participants where thread_id=v_memphis_thread.id and left_at is null) <> 2 then
+    raise exception 'Named manager Memphis conversation was not created correctly';
   end if;
   insert into public.msg_threads(id, thread_type, title, created_by_user_id, is_active)
   values ('00000000-0000-4000-8000-00000000f108', 'group', 'Rebuild messaging authority', v_manager_user.id, true);
@@ -754,13 +1047,9 @@ begin
     null;
   end;
 
-  insert into public.msg_users(id,display_name,role,is_active)
-  values ('00000000-0000-4000-8000-00000000f123','Empty DB Messenger Admin','admin',true)
-  on conflict(id) do update set role='admin',is_active=true;
-
   v_delete := public.msg_admin_tombstone_thread(
     v_group_thread_a.id,
-    '00000000-0000-4000-8000-00000000f123',
+    v_manager_user.id,
     '00000000-0000-4000-8000-00000000f124'
   );
   if (v_delete->>'deleted')::boolean is not true
@@ -781,9 +1070,9 @@ begin
      or not exists (select 1 from public.msg_messages where id=v_old_message.id and is_deleted is false) then
     raise exception 'Retention purge removed ordinary old history or failed to purge an admin tombstone: %',v_purge;
   end if;
-  v_message := public.msg_send_message(
-    '00000000-0000-4000-8000-00000000f108', v_manager_user.id,
-    'Durable Memphis job test', 'text', '{"channel":"memphis","device_id":"REBUILD-FINISH-DEVICE"}'::jsonb,
+  v_message := public.msg_send_message_as_ops_manager(
+    '00000000-0000-4000-8000-00000000f107', v_memphis_thread.id,
+    'Durable named-manager Memphis job test', 'text', '{"channel":"memphis","device_id":"REBUILD-FINISH-DEVICE"}'::jsonb,
     '00000000-0000-4000-8000-00000000f110'
   );
   if not exists (
@@ -911,15 +1200,33 @@ if (dockerImage) {
 if (dockerContainer) {
   try {
     execFileSync("docker", ["inspect", dockerContainer], { stdio: "ignore" });
-    const targetDatabase = ownsDockerContainer ? "postgres" : databaseName;
-    if (!ownsDockerContainer) dockerPsql("postgres", `create database ${quoteIdentifier(databaseName)};`);
+    const targetDatabase = ownsDockerContainer || useEmptyContainerPostgres ? "postgres" : databaseName;
+    if (useEmptyContainerPostgres) {
+      const publicObjects = dockerPsql("postgres", `select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public';`).trim();
+      if (publicObjects !== "0") throw new Error("SCHEMA_REBUILD_USE_EMPTY_CONTAINER_POSTGRES requires an empty disposable public schema.");
+    } else if (!ownsDockerContainer) {
+      dockerPsql("postgres", `create database ${quoteIdentifier(databaseName)};`);
+    }
     for (const file of migrationFiles) {
       const sql = readFileSync(resolve(migrationsDir, file), "utf8");
       dockerPsql(targetDatabase, sql);
       console.log(`applied ${file}`);
     }
+    execFileSync(process.execPath, [resolve(root, "scripts/refresh-schema-fingerprint.mjs"), "--check"], {
+      cwd: root,
+      env: {
+        ...process.env,
+        SCHEMA_FINGERPRINT_DOCKER_CONTAINER: dockerContainer,
+        SCHEMA_FINGERPRINT_DATABASE: targetDatabase,
+        SCHEMA_FINGERPRINT_MCP_URL: "",
+      },
+      stdio: "inherit",
+    });
+    console.log("verified clean-rebuild schema inventory equals the committed canonical fingerprint");
     dockerPsql(targetDatabase, exactFinishFunctionalSql);
     console.log("verified exact session finish transition and idempotent replay");
+    await verifyNamedManagerRetirementMigrationModes(targetDatabase);
+    console.log("verified absent/one/replay retirement migration behavior, duplicate-pair fail-closed handling, and rollback injection");
     await verifyDockerConcurrency(targetDatabase);
     const counts = dockerPsql(
       targetDatabase,
@@ -994,7 +1301,7 @@ if (dockerContainer) {
     console.log(JSON.stringify({ ok: true, database: targetDatabase, migrations: migrationFiles.length, counts: rebuildResult }, null, 2));
   } finally {
     try {
-      if (!ownsDockerContainer && !keepDatabase) {
+      if (!ownsDockerContainer && !useEmptyContainerPostgres && !keepDatabase) {
         dockerPsql(
           "postgres",
           `
@@ -1005,7 +1312,7 @@ if (dockerContainer) {
         );
         dockerPsql("postgres", `drop database if exists ${quoteIdentifier(databaseName)};`);
       }
-      if (!ownsDockerContainer && keepDatabase) console.log(JSON.stringify({ retained_test_database: databaseName }));
+      if (!ownsDockerContainer && keepDatabase) console.log(JSON.stringify({ retained_test_database: targetDatabase }));
     } catch {
       // Best-effort cleanup for local/CI disposable databases.
     } finally {

@@ -61,6 +61,8 @@ for (const invalid of [
   { manager_active: false },
   { manager_revoked_at: "2026-07-30T23:00:00.000Z" },
   { is_system_principal: true },
+  { passed: false },
+  { follow_up_required: true },
   { session_status: "active" },
   { session_ended_at: "2026-07-30T23:40:00.000Z" },
   { current_session_location_id: "20000000-0000-4000-8000-000000000005" },
@@ -85,7 +87,8 @@ assert.doesNotMatch(
   /continue-on-error/,
   "monitor infrastructure and query failures must fail the workflow",
 );
-assert.match(workflow, /MANAGER_INSPECTION_ENFORCE:/);
+assert.doesNotMatch(workflow, /MANAGER_INSPECTION_ENFORCE:/);
+assert.match(readFileSync(resolve(root, "scripts/manager-inspection-readiness.mjs"), "utf8"), /if \(!report\.ok\) process\.exitCode = 1;/);
 
 assert.throws(() => evaluateManagerInspectionReadiness([], { notBefore: "bad", nowMs }), /valid timestamp/i);
 

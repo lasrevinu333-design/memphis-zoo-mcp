@@ -7,6 +7,8 @@ const TEST_VENUE_ID = "10000000-0000-4000-8000-000000000001";
 const TEST_ZOO_GROUP_ID = "20000000-0000-4000-8000-000000000000";
 const TEST_ZOO_VENUE_ID = "10000000-0000-4000-8000-000000000000";
 const TEST_RESTROOM_GROUP_ID = "30000000-0000-4000-8000-000000000001";
+const TEST_MANAGER_ID = "90000000-0000-4000-8000-000000000001";
+const TEST_MANAGER_NAME = "Authenticated Event Manager";
 
 function buildApp({ writeCalls = [], readCalls = [], writeResults = {}, eventRows = [] } = {}) {
   const app = express();
@@ -101,15 +103,19 @@ function buildApp({ writeCalls = [], readCalls = [], writeResults = {}, eventRow
         },
       ];
     },
-    runWriteSql: async (name, sql) => {
-      writeCalls.push({ name, sql });
-      return Object.prototype.hasOwnProperty.call(writeResults, name) ? writeResults[name] : [];
+    runCommand: async (name, payload) => {
+      writeCalls.push({ name, payload });
+      const legacyName = { event_create: "events_app_create", event_update: "events_app_update", event_cancel: "events_app_cancel" }[name];
+      return Object.prototype.hasOwnProperty.call(writeResults, legacyName) ? writeResults[legacyName] : [];
     },
     buildHealthPayload: (area, extra) => ({ ok: true, area, ...extra }),
     appVersion: "test",
     releaseId: "test",
     maintenanceController: { kick() {} },
-    requireAdminApiAuth: (_req, _res, next) => next(),
+    requireAdminApiAuth: (req, _res, next) => {
+      req.memphisAuth = { manager_id: TEST_MANAGER_ID, manager_display_name: TEST_MANAGER_NAME };
+      next();
+    },
   }));
   return app;
 }
@@ -130,7 +136,7 @@ function buildPublicApp(eventRows = []) {
   const app = express();
   app.use("/dashboard-api/events", createEventsPublicRouter({
     runReadOnlySql: async (sql) => /from public\.events_app_events/i.test(sql) ? eventRows : [],
-    runWriteSql: async () => [],
+    runCommand: async () => [],
     buildHealthPayload: (area, extra) => ({ ok: true, area, ...extra }),
     appVersion: "test",
     releaseId: "test",
@@ -206,16 +212,18 @@ await withServer(buildApp({ writeCalls }), async (baseUrl) => {
   assert.equal(payload.data.notes, "Catering, extra trash, restroom check before dinner and after dessert");
 });
 
-const createCall = writeCalls.find((call) => call.name === "events_app_create");
-assert.ok(createCall, "event creation SQL should run");
-assert.match(createCall.sql, /insert into public\.events_app_events/i);
-assert.match(createCall.sql, /event_scope/i, "event creation SQL should persist canonical event scope");
-assert.match(createCall.sql, /primary_venue_id/i, "event creation SQL should persist canonical event venue");
-assert.match(createCall.sql, /coverage_location_ids/i, "event creation SQL should persist coverage separately from venue");
-assert.match(createCall.sql, /'SINGLE_VENUE'/, "legacy location_group_id should resolve to SINGLE_VENUE when it maps to an eligible venue");
-assert.match(createCall.sql, new RegExp(`${TEST_VENUE_ID.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}'::uuid`), "legacy event-group input should resolve to the event venue id");
-assert.match(createCall.sql, /Catering, extra trash, restroom check before dinner and after dessert/);
-assert.doesNotMatch(createCall.sql, /Operational flags/i);
+const createCall = writeCalls.find((call) => call.name === "event_create");
+assert.ok(createCall, "typed event creation command should run");
+assert.equal(createCall.name, "event_create");
+assert.equal(createCall.payload.record.event_scope, "SINGLE_VENUE", "legacy location_group_id should resolve to the canonical event scope");
+assert.equal(createCall.payload.record.primary_venue_id, TEST_VENUE_ID, "legacy event-group input should resolve to the event venue id");
+assert.deepEqual(createCall.payload.record.coverage_location_ids, [], "coverage remains separate from event venue");
+assert.equal(createCall.payload.record.notes, "Catering, extra trash, restroom check before dinner and after dessert");
+assert.equal(createCall.payload.record.actor_manager_id, TEST_MANAGER_ID);
+assert.equal(createCall.payload.record.created_by, TEST_MANAGER_NAME, "client created_by must be replaced by the authenticated manager snapshot");
+assert.equal(createCall.payload.actor, TEST_MANAGER_NAME);
+assert.doesNotMatch(JSON.stringify(createCall.payload), /Operational flags/i);
+assert.doesNotMatch(JSON.stringify(createCall.payload), /contract test/i, "client actor fields must not reach event mutation authority");
 
 await withServer(buildApp({
   writeResults: {
@@ -308,9 +316,10 @@ await withServer(buildApp({ writeCalls: numericNotesWriteCalls }), async (baseUr
   assert.equal(payload.data.attendee_count, 85);
   assert.equal(payload.data.notes, null, "numeric-only notes matching attendee_count should be removed before save");
 });
-const numericNotesCreateCall = numericNotesWriteCalls.find((call) => call.name === "events_app_create");
-assert.ok(numericNotesCreateCall, "numeric-notes event creation SQL should run");
-assert.match(numericNotesCreateCall.sql, /85,\s*\n\s*null,\s*\n\s*'contract test'/, "numeric-only notes matching attendee_count should be written as SQL null");
+const numericNotesCreateCall = numericNotesWriteCalls.find((call) => call.name === "event_create");
+assert.ok(numericNotesCreateCall, "numeric-notes typed event creation should run");
+assert.equal(numericNotesCreateCall.payload.record.attendee_count, 85);
+assert.equal(numericNotesCreateCall.payload.record.notes, null, "numeric-only notes matching attendee_count should be canonical null");
 
 const overnightWriteCalls = [];
 await withServer(buildApp({ writeCalls: overnightWriteCalls }), async (baseUrl) => {
@@ -338,11 +347,13 @@ await withServer(buildApp({ writeCalls: overnightWriteCalls }), async (baseUrl) 
   assert.equal(payload.data.spans_overnight, true);
   assert.equal(payload.data.overnight_split, undefined, "overnight events must remain one logical event, not split into fake day rows");
 });
-const overnightCreateCall = overnightWriteCalls.find((call) => call.name === "events_app_create");
-assert.ok(overnightCreateCall, "overnight event creation SQL should run");
-assert.match(overnightCreateCall.sql, /event_date,[\s\S]*end_date,[\s\S]*start_time,[\s\S]*end_time/i, "creation SQL should persist both start date and end date");
-assert.match(overnightCreateCall.sql, /'2026-06-19'::date[\s\S]*'2026-06-20'::date[\s\S]*'22:00:00'::time[\s\S]*'08:00:00'::time/, "overnight event should be inserted as one row with next-day end_date");
-assert.doesNotMatch(overnightCreateCall.sql, /'23:59:00'::time|\('ARP Zoo Snooze'[\s\S]*'2026-06-20'::date[\s\S]*'00:00:00'::time/, "overnight insert should not use the old two-row split workaround");
+const overnightCreateCall = overnightWriteCalls.find((call) => call.name === "event_create");
+assert.ok(overnightCreateCall, "overnight typed event creation should run");
+assert.deepEqual(
+  { event_date: overnightCreateCall.payload.record.event_date, end_date: overnightCreateCall.payload.record.end_date, start_time: overnightCreateCall.payload.record.start_time, end_time: overnightCreateCall.payload.record.end_time },
+  { event_date: "2026-06-19", end_date: "2026-06-20", start_time: "22:00:00", end_time: "08:00:00" },
+  "overnight event remains one canonical row with next-day end_date",
+);
 
 const zooWideWriteCalls = [];
 await withServer(buildApp({ writeCalls: zooWideWriteCalls }), async (baseUrl) => {
@@ -371,11 +382,11 @@ await withServer(buildApp({ writeCalls: zooWideWriteCalls }), async (baseUrl) =>
   assert.equal(payload.data.location_group_id, TEST_ZOO_GROUP_ID);
   assert.deepEqual(payload.data.coverage_location_ids, [TEST_RESTROOM_GROUP_ID]);
 });
-const zooWideCreateCall = zooWideWriteCalls.find((call) => call.name === "events_app_create");
-assert.ok(zooWideCreateCall, "zoo-wide event creation SQL should run");
-assert.match(zooWideCreateCall.sql, /'ZOO_WIDE'/, "zoo-wide SQL should persist ZOO_WIDE");
-assert.match(zooWideCreateCall.sql, /'Zoo Footprint'/, "zoo-wide SQL should normalize display location to Zoo Footprint");
-assert.match(zooWideCreateCall.sql, /on conflict \(operation_id\) where operation_id is not null/i, "event creation should dedupe retries by operation_id");
+const zooWideCreateCall = zooWideWriteCalls.find((call) => call.name === "event_create");
+assert.ok(zooWideCreateCall, "zoo-wide typed event creation should run");
+assert.equal(zooWideCreateCall.payload.record.event_scope, "ZOO_WIDE");
+assert.equal(zooWideCreateCall.payload.record.display_location, "Zoo Footprint");
+assert.equal(zooWideCreateCall.payload.record.operation_id, "50000000-0000-4000-8000-000000000001", "operation identity is explicit in the typed command");
 
 await withServer(buildApp(), async (baseUrl) => {
   const response = await fetch(`${baseUrl}/admin-api/events/`, {
@@ -462,6 +473,7 @@ await withServer(buildApp({ writeCalls: updateWriteCalls }), async (baseUrl) => 
       end_time: "20:30",
       created_by: "contract test",
       overridden_by: "contract editor",
+      actor_manager_id: "60000000-0000-4000-8000-000000000099",
     }),
   });
   assert.equal(response.status, 400, "mock write returning no updated rows should surface not found rather than false success");
@@ -469,11 +481,16 @@ await withServer(buildApp({ writeCalls: updateWriteCalls }), async (baseUrl) => 
   assert.equal(payload.ok, false);
   assert.match(payload.error, /not found/i);
 });
-const updateCall = updateWriteCalls.find((call) => call.name === "events_app_update");
-assert.ok(updateCall, "event update SQL should run");
-assert.match(updateCall.sql, /for update/i, "event update should lock the intended event row");
-assert.match(updateCall.sql, /insert into public\.events_app_event_history/i, "event update should append correction history");
-assert.match(updateCall.sql, /event_scope = 'ZOO_WIDE'/i, "event update should write canonical event scope");
+const updateCall = updateWriteCalls.find((call) => call.name === "event_update");
+assert.ok(updateCall, "typed event update should run");
+assert.equal(updateCall.payload.event_id, "60000000-0000-4000-8000-000000000001");
+assert.equal(updateCall.payload.record.event_scope, "ZOO_WIDE", "event update should write canonical event scope");
+assert.equal(updateCall.payload.record.actor_manager_id, TEST_MANAGER_ID);
+assert.equal(updateCall.payload.record.overridden_by, TEST_MANAGER_NAME);
+assert.equal(updateCall.payload.actor, TEST_MANAGER_NAME);
+assert.doesNotMatch(JSON.stringify(updateCall.payload), /contract editor|000000000099/i,
+  "client update actor fields must not reach event mutation authority");
+assert.ok(updateCall.payload.reason, "event correction history reason is explicit in the bounded command");
 
 await withServer(buildApp({
   writeResults: {
@@ -550,6 +567,38 @@ await withServer(buildApp({
   assert.equal(payload.data.notes, "Updated through authoritative readback.");
 });
 
+const cancelWriteCalls = [];
+await withServer(buildApp({
+  writeCalls: cancelWriteCalls,
+  writeResults: {
+    events_app_cancel: {
+      id: "60000000-0000-4000-8000-000000000003",
+      status: "CANCELLED",
+      cancelled_by: TEST_MANAGER_NAME,
+      cancelled_by_manager_id: TEST_MANAGER_ID,
+    },
+  },
+}), async (baseUrl) => {
+  const response = await fetch(`${baseUrl}/admin-api/events/60000000-0000-4000-8000-000000000003`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      cancelled_by: "Forged Canceller",
+      actor: "Forged Actor",
+      actor_manager_id: "60000000-0000-4000-8000-000000000099",
+      reason: "Verified cancellation reason",
+    }),
+  });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).data.cancelled_by_manager_id, TEST_MANAGER_ID);
+});
+const cancelCall = cancelWriteCalls.find((call) => call.name === "event_cancel");
+assert.deepEqual(cancelCall.payload.record, { actor_manager_id: TEST_MANAGER_ID });
+assert.equal(cancelCall.payload.actor, TEST_MANAGER_NAME);
+assert.equal(cancelCall.payload.reason, "Verified cancellation reason");
+assert.doesNotMatch(JSON.stringify(cancelCall.payload), /Forged|000000000099/,
+  "client cancellation actor fields must not reach event mutation authority");
+
 const notificationReadCalls = [];
 const notificationWriteCalls = [];
 const rpcCalls = [];
@@ -558,8 +607,8 @@ const maintenance = createEventMaintenanceController({
     notificationReadCalls.push(String(sql || ""));
     return [];
   },
-  runWriteSql: async (name, sql) => {
-    notificationWriteCalls.push({ name, sql: String(sql || "") });
+  runCommand: async (name, payload) => {
+    notificationWriteCalls.push({ name, payload });
     return [];
   },
   runRpc: async (name, params) => {

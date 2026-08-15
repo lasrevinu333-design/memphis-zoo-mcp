@@ -15,140 +15,32 @@ concurrency:
 jobs:
   probe:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 8
     steps:
-      - name: Enforce live dependency health and four-second response budget
-        shell: bash
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.23.1'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Enforce exact integrated pair and observed production schema
         env:
-          GH_API_TOKEN: ${{ github.token }}
+          BACKEND_RELEASE_MANIFEST_URL: ${{ secrets.MEMPHIS_BACKEND_RELEASE_MANIFEST_URL }}
+          BACKEND_SCHEMA_IDENTITY_URL: ${{ secrets.MEMPHIS_BACKEND_SCHEMA_IDENTITY_URL }}
+          FRONTEND_RELEASE_MANIFEST_URL: ${{ secrets.MEMPHIS_FRONTEND_RELEASE_MANIFEST_URL }}
+          FRONTEND_DEPLOYMENT_MANIFEST_URL: ${{ secrets.MEMPHIS_FRONTEND_DEPLOYMENT_MANIFEST_URL }}
+          LIVE_RELEASE_SCHEMA_IDENTITY_TOKEN: ${{ secrets.MEMPHIS_RELEASE_SCHEMA_IDENTITY_TOKEN }}
+          MEMPHIS_RELEASE_ATTESTATION_JSON: ${{ secrets.MEMPHIS_RELEASE_ATTESTATION_JSON }}
+          MEMPHIS_RELEASE_ATTESTATION_PUBLIC_KEY: ${{ secrets.MEMPHIS_RELEASE_ATTESTATION_PUBLIC_KEY }}
+          STATIC_WEEKLY_CONTROL_PLANE_READY_URL: ${{ secrets.MEMPHIS_STATIC_WEEKLY_CONTROL_PLANE_READY_URL }}
+        shell: bash
         run: |
           set -euo pipefail
-          backend='https://memphis-zoo-mcp.onrender.com'
-          frontend='https://lasrevinu333-design.github.io/Engine'
-
-          curl -fsSL --max-time 4 \
-            -w '%{time_total}\n' \
-            -o /tmp/health.json \
-            "$backend/health?probe=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
-            > /tmp/backend-latency.txt
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-
-          health = json.loads(Path('/tmp/health.json').read_text())
-          latency = float(Path('/tmp/backend-latency.txt').read_text().strip())
-          assert health['ok'] is True, health
-          assert health['database_reachable'] is True, health
-          assert health['required_schema_present'] is True, health
-          assert health['worker']['dead_letters'] == 0, health
-          assert health['worker']['expired_leases'] == 0, health
-          assert latency <= 4.0, f'backend health exceeded four seconds: {latency:.3f}s'
-          print(f'backend_health_ok latency={latency:.3f}s')
-          PY
-
-          curl -fsSL --max-time 4 \
-            -w '%{time_total}\n' \
-            -o /tmp/version.json \
-            "$backend/version?probe=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
-            > /tmp/version-latency.txt
-          curl -fsSL --max-time 4 \
-            -w '%{time_total}\n' \
-            -o /tmp/frontend-manifest.json \
-            "$frontend/frontend-release-manifest.json?probe=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
-            > /tmp/frontend-latency.txt
-          curl -fsSL --max-time 4 \
-            -w '%{time_total}\n' \
-            -o /tmp/frontend-deployment.json \
-            "$frontend/frontend-deployment-manifest.json?probe=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
-            > /tmp/frontend-deployment-latency.txt
-          read -r baseline_frontend_commit deployed_frontend_commit < <(python3 - <<'PY'
-          import json
-          import re
-          from pathlib import Path
-
-          version = json.loads(Path('/tmp/version.json').read_text())
-          deployment = json.loads(Path('/tmp/frontend-deployment.json').read_text())
-          baseline = version['release_manifest']['frontend']['commit_sha']
-          deployed = deployment['frontend_commit_sha']
-          assert re.fullmatch(r'[a-f0-9]{40}', baseline), baseline
-          assert re.fullmatch(r'[a-f0-9]{40}', deployed), deployed
-          print(baseline, deployed)
-          PY
-          )
-          if [[ "$baseline_frontend_commit" == "$deployed_frontend_commit" ]]; then
-            printf '%s\n' '{"status":"identical"}' > /tmp/frontend-compare.json
-          else
-            curl -fsSL --retry 2 --max-time 15 \
-              -H 'Accept: application/vnd.github+json' \
-              -H "Authorization: Bearer $GH_API_TOKEN" \
-              -o /tmp/frontend-compare.json \
-              "https://api.github.com/repos/lasrevinu333-design/Engine/compare/${baseline_frontend_commit}...${deployed_frontend_commit}"
-          fi
-          python3 - <<'PY'
-          import json
-          import re
-          from datetime import datetime, timezone
-          from pathlib import Path
-
-          version = json.loads(Path('/tmp/version.json').read_text())
-          frontend = json.loads(Path('/tmp/frontend-manifest.json').read_text())
-          deployment = json.loads(Path('/tmp/frontend-deployment.json').read_text())
-          comparison = json.loads(Path('/tmp/frontend-compare.json').read_text())
-          version_latency = float(Path('/tmp/version-latency.txt').read_text().strip())
-          frontend_latency = float(Path('/tmp/frontend-latency.txt').read_text().strip())
-          deployment_latency = float(Path('/tmp/frontend-deployment-latency.txt').read_text().strip())
-          assert version['ok'] is True, version
-          assert version['version'] == frontend['release_id'], (version, frontend)
-          assert deployment['release_id'] == frontend['release_id'], (deployment, frontend)
-          assert comparison['status'] in ('identical', 'ahead'), comparison
-
-          backend_manifest = version['release_manifest']
-          primary_fingerprints = {
-              'backend': backend_manifest['schema']['fingerprint'],
-              'frontend release': frontend['schema_fingerprint'],
-              'frontend deployment': deployment['schema_fingerprint'],
-          }
-          for label, fingerprint in primary_fingerprints.items():
-              assert re.fullmatch(r'[a-f0-9]{64}', fingerprint or ''), (label, fingerprint)
-
-          transitions = {
-              'backend': backend_manifest.get('schema_transition'),
-              'frontend release': frontend.get('schema_transition'),
-              'frontend deployment': deployment.get('schema_transition'),
-          }
-          declared = [(label, transition) for label, transition in transitions.items() if transition is not None]
-          distinct_primary = set(primary_fingerprints.values())
-          transition_keys = {'transition_id', 'from_fingerprint', 'to_fingerprint', 'expires_at'}
-
-          if len(distinct_primary) == 1 and not declared:
-              assert version['release_manifest']['schema']['fingerprint'] == frontend['schema_fingerprint'], (version, frontend)
-              assert deployment['schema_fingerprint'] == frontend['schema_fingerprint'], (deployment, frontend)
-              schema_alignment_mode = 'exact'
-              transition_id = None
-          else:
-              for label, transition in declared:
-                  assert isinstance(transition, dict), (label, transition)
-                  assert set(transition) == transition_keys, (label, transition)
-                  assert re.fullmatch(r'[a-z0-9](?:[a-z0-9.-]{0,126}[a-z0-9])?', transition['transition_id']), (label, transition)
-                  assert re.fullmatch(r'[a-f0-9]{64}', transition['from_fingerprint']), (label, transition)
-                  assert re.fullmatch(r'[a-f0-9]{64}', transition['to_fingerprint']), (label, transition)
-                  assert transition['from_fingerprint'] != transition['to_fingerprint'], (label, transition)
-                  expires_at = datetime.strptime(transition['expires_at'], '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc)
-                  remaining_seconds = (expires_at - datetime.now(timezone.utc)).total_seconds()
-                  assert 0 < remaining_seconds <= 14 * 24 * 60 * 60, (label, transition)
-              assert declared, (primary_fingerprints, transitions)
-              assert all(transition == declared[0][1] for _, transition in declared[1:]), transitions
-              if len(distinct_primary) > 1:
-                  assert len(declared) == len(transitions), transitions
-              transition = declared[0][1]
-              allowed_fingerprints = {transition['from_fingerprint'], transition['to_fingerprint']}
-              assert len(allowed_fingerprints) == 2, transition
-              assert all(fingerprint in allowed_fingerprints for fingerprint in primary_fingerprints.values()), (primary_fingerprints, transition)
-              schema_alignment_mode = 'declared' if len(distinct_primary) == 1 else 'transition'
-              transition_id = transition['transition_id']
-
-          assert version_latency <= 4.0, f'version exceeded four seconds: {version_latency:.3f}s'
-          assert frontend_latency <= 4.0, f'frontend exceeded four seconds: {frontend_latency:.3f}s'
-          assert deployment_latency <= 4.0, f'frontend deployment manifest exceeded four seconds: {deployment_latency:.3f}s'
-          print(f'release_alignment_ok release={frontend["release_id"]} frontend_commit={deployment["frontend_commit_sha"]} schema_mode={schema_alignment_mode} transition={transition_id or "none"} backend={version_latency:.3f}s frontend={frontend_latency:.3f}s deployment={deployment_latency:.3f}s')
-          PY
+          test -n "$MEMPHIS_RELEASE_ATTESTATION_JSON"
+          test -n "$MEMPHIS_RELEASE_ATTESTATION_PUBLIC_KEY"
+          LIVE_RELEASE_ATTESTATION_INPUT=/tmp/memphis-live-release-attestation.json
+          export LIVE_RELEASE_ATTESTATION_INPUT
+          umask 077
+          printf '%s' "$MEMPHIS_RELEASE_ATTESTATION_JSON" > "$LIVE_RELEASE_ATTESTATION_INPUT"
+          chmod 0444 "$LIVE_RELEASE_ATTESTATION_INPUT"
+          npm run --silent release:live:check
