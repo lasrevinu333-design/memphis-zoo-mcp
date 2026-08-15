@@ -112,6 +112,9 @@ jobs:
           done
           test "$healthy" = 'true'
           sleep 10
+          docker exec -i "$container" psql -v ON_ERROR_STOP=1 -U supabase_admin -d postgres \
+            < supabase/canonical/production-source-role-catalog.sql
+          printf '{"stage":"source_roles_reconciled"}\n' >> "$receipt"
           docker exec "$container" createdb -U supabase_admin -T template0 "$database"
           docker exec -i "$container" psql -v ON_ERROR_STOP=1 -U supabase_admin -d "$database" < "$schema_dump"
           docker exec -i "$container" psql -v ON_ERROR_STOP=1 -U supabase_admin -d "$database" < "$ledger_dump"
