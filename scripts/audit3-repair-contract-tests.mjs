@@ -23,6 +23,8 @@ assert.match(restore, /archive_verified/);
 assert.match(restore, /RESTORE_CONFIRM_PROJECT_REF/);
 assert.match(restore, /RESTORE_DATABASE_ONLY/);
 assert.match(restore, /loopback mz_schema_rebuild_\* database/);
+assert.match(restore, /restore_phase/);
+assert.match(restore, /truncate_target_tables/);
 assert.match(restore, /storage_objects_skipped/);
 assert.match(restore, /json_populate_record/);
 assert.match(restore, /storage\.createBucket/);
