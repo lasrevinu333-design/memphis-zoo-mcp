@@ -127,6 +127,12 @@ assert.match(packageManifest, /"test:final-closure-database-isolated":\s*"node s
 const releaseGate = readFileSync(resolve(workflowDirectory, "integrated-release-attestation.yml"), "utf8");
 assert.match(releaseGate, /test:integrated-backend-authority-cutover:database/,
   "the manual signed release gate must invoke the database-enabled cutover checker");
+assert.match(releaseGate, /custodial_configure_backend_execution_key/,
+  "the manual signed release gate must configure its disposable database execution boundary");
+assert.ok(
+  releaseGate.indexOf("custodial_configure_backend_execution_key") < releaseGate.indexOf("test:integrated-backend-authority-cutover:database"),
+  "the disposable execution boundary must be configured before the signed database cutover gate",
+);
 assert.match(parsedPackageManifest.scripts["test:integrated-backend-authority-cutover:database"], / --database$/,
   "the signed release database command must not silently degrade to source-only acceptance");
 

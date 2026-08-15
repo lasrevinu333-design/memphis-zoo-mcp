@@ -36,13 +36,18 @@ jobs:
           container="$(sed -n 's/.*"retained_test_container":"\([^"]*\)".*/\1/p' /tmp/integrated-release-rebuild.log | tail -n 1)"
           test -n "$container"
           trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
+          proof_secret='empty-rebuild-offline-authority-secret-0123456789'
+          proof_digest="$(printf '%s' "$proof_secret" | sha256sum | awk '{print $1}')"
+          [[ "$proof_digest" =~ ^[0-9a-f]{64}$ ]]
+          docker exec "$container" psql -v ON_ERROR_STOP=1 -At -U supabase_admin -d postgres \
+            -c "select public.custodial_configure_backend_execution_key('$proof_digest','integrated-release-attestation');"
           export INTEGRATED_RELEASE_ATTESTATION_INPUT=/tmp/memphis-integrated-release-attestation.json
           umask 077
           printf '%s' "$MEMPHIS_RELEASE_ATTESTATION_JSON" > "$INTEGRATED_RELEASE_ATTESTATION_INPUT"
           chmod 0444 "$INTEGRATED_RELEASE_ATTESTATION_INPUT"
           CUSTODIAL_CUTOVER_DOCKER_CONTAINER="$container" \
           CUSTODIAL_CUTOVER_DATABASE=postgres \
-          CUSTODIAL_BACKEND_PROOF_SECRET=empty-rebuild-offline-authority-secret-0123456789 \
+          CUSTODIAL_BACKEND_PROOF_SECRET="$proof_secret" \
             npm run --silent test:integrated-backend-authority-cutover:database | tee /tmp/integrated-release-verification.json
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
