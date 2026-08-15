@@ -146,6 +146,8 @@ assert.match(productionBackupRehearsal, /RESTORE_DATABASE_ONLY=true[\s\S]*releas
   "the production-backup rehearsal must restore data before checking the exact live source fingerprint");
 assert.match(productionBackupRehearsal, /cron\.database_name="\$database"/,
   "the production-backup rehearsal must bind pg_cron to its isolated restored database");
+assert.match(productionBackupRehearsal, /State\.Health[\s\S]*test "\$healthy" = 'true'[\s\S]*sleep 10[\s\S]*createdb/,
+  "the production-backup rehearsal must survive the Supabase image's first-boot restart before creating its database");
 assert.equal((productionBackupRehearsal.match(/202608\d+_[a-z0-9_]+\.sql/g) || []).filter((name, index, values) => values.indexOf(name) === index).length, 23,
   "the production-backup rehearsal must apply the exact 23 pending migrations");
 assert.match(productionBackupRehearsal, /custodial_configure_backend_execution_key[\s\S]*custodial_configure_native_route_proof_key[\s\S]*custodial_backend_authority_health/,

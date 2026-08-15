@@ -51,6 +51,7 @@ jobs:
           ledger_dump="${RUNNER_TEMP}/production-ledger.sql"
           receipt="${RUNNER_TEMP}/production-backup-migration-rehearsal.jsonl"
           trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
+          printf '{"started":true,"backup_run_id":"%s"}\n' '${{ inputs.backup_run_id }}' > "$receipt"
           mkdir -p "$backup_dir"
           openssl enc -d -aes-256-cbc -pbkdf2 -iter 250000 \
             -in "${RUNNER_TEMP}/encrypted-backup/memphis-zoo-backup.tar.gz.enc" \
@@ -87,6 +88,17 @@ jobs:
             sleep 1
           done
           test "$ready" = 'true'
+          healthy='false'
+          for attempt in $(seq 1 120); do
+            status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{end}}' "$container")"
+            if test -z "$status" || test "$status" = 'healthy'; then
+              healthy='true'
+              break
+            fi
+            sleep 1
+          done
+          test "$healthy" = 'true'
+          sleep 10
           docker exec "$container" createdb -U supabase_admin -T template0 "$database"
           docker exec -i "$container" psql -v ON_ERROR_STOP=1 -U supabase_admin -d "$database" < "$schema_dump"
           docker exec -i "$container" psql -v ON_ERROR_STOP=1 -U supabase_admin -d "$database" < "$ledger_dump"
