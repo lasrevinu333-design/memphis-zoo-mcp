@@ -11,6 +11,7 @@ const phaseE = readFileSync("supabase/migrations/20260810190000_final_integrated
 const schedulerAuthority = readFileSync("supabase/migrations/20260810220000_static_weekly_scheduler_complete_authority_correction.sql", "utf8");
 const schedulerClosure = readFileSync("supabase/migrations/20260810230000_static_weekly_scheduler_authority_closure_correction.sql", "utf8");
 const dayChangeReconciliation = readFileSync("supabase/migrations/20260814224034_reconcile_static_weekly_day_change_receipts.sql", "utf8");
+const managedSchemaUsage = readFileSync("supabase/migrations/20260815163500_restore_explicit_public_schema_usage.sql", "utf8");
 const index = readFileSync("src/index.js", "utf8");
 const schedulerControlPlane = readFileSync("src/static-weekly-control-plane.js", "utf8");
 const auth = readFileSync("src/auth/device-credential-auth.js", "utf8");
@@ -110,7 +111,9 @@ assert.match(populatedPreflightWorkflow, /release:populated-schema:preflight/);
 assert.match(releaseInput.cutover.phase_order[1], /release:populated-schema:preflight/);
 assert.equal(releaseEvidence.compatibility_window.accepted_engine.scan, "scan.v2");
 assert.equal(releaseEvidence.compatibility_window.required_engine.scan, "scan.v4.snapshot-bound-authority");
-assert.equal(releaseEvidence.migrations.at(-1).name, "20260815160613_normalize_managed_production_schema_security.sql");
+assert.equal(releaseEvidence.migrations.at(-1).name, "20260815163500_restore_explicit_public_schema_usage.sql");
+assert.match(managedSchemaUsage, /grant usage on schema public[\s\S]*anon[\s\S]*authenticated[\s\S]*service_role[\s\S]*static_weekly_control_plane[\s\S]*static_weekly_release_operator/i);
+assert.doesNotMatch(managedSchemaUsage, /grant usage on schema public[\s\S]*\bto public\b/i);
 assert.match(releaseEvidence.compatibility_window.release_phone_transport_and_offline_activation_phase, /native-vault \/scan-api\/rpc/);
 assert.match(releaseEvidence.compatibility_window.u4_ops_closure_phase,
   /wire timestamps.*activation boundaries.*UUID completion.*two-phase employee notification dispatch ledgers.*durable manager dispatch preparation.*outcome-unknown restart recovery.*notification recovery authority.*terminal notification retries.*authority set/);
@@ -132,7 +135,7 @@ assert.ok(releaseEvidence.authority_content_identity.expected_tree_inventory.som
 assert.ok(releaseEvidence.authority_content_identity.expected_tree_inventory.some(({ path }) => path === "scripts/integrated-backend-authority-suite-order-tests.mjs"));
 assert.equal(releaseEvidence.authority_content_identity.expected_tree_inventory.some(({ path }) => path === "release/integrated-backend-authority-evidence.json"), false);
 assert.equal(releaseEvidence.authority_content_identity.authority_path_count, releaseEvidence.authority_content_identity.expected_tree_inventory.length);
-assert.equal(releaseEvidence.authority_content_identity.migration_path_count, 78);
-assert.equal(releaseEvidence.migrations.length, 78);
+assert.equal(releaseEvidence.authority_content_identity.migration_path_count, 79);
+assert.equal(releaseEvidence.migrations.length, 79);
 assert.equal(Object.hasOwn(releaseEvidence.authority_content_identity, "value"), false, "generated evidence must not self-assert a worktree-derived content hash");
 console.log("INTEGRATED_BACKEND_AUTHORITY_CONTRACT_PASS");

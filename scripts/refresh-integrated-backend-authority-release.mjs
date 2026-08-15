@@ -92,7 +92,7 @@ const authorityInventory = trackedInventory.filter(({ path }) => path !== genera
 const migrations = authorityInventory
   .filter(({ path }) => /^supabase\/migrations\/[^/]+\.sql$/.test(path))
   .map(({ path }) => ({ name: path.slice("supabase/migrations/".length) }));
-assert.equal(migrations.length, 78, "release authority inventory must bind every migration at this head");
+assert.equal(migrations.length, 79, "release authority inventory must bind every migration at this head");
 const output = {
   artifact: "integrated-backend-authority-release-evidence.v2",
   release_id: frontendManifest.release_id,
@@ -118,7 +118,7 @@ const output = {
     release_phone_transport_and_offline_activation_phase: "20260813190000 requires a fresh immutable receipt from the designated phone's native-vault /scan-api/rpc path before resume and permits delayed activation only for work begun while snapshot, credential, and assignment authority were valid",
     u4_ops_closure_phase: "20260813210000 canonicalizes native wire timestamps, records immutable activation boundaries, enforces UUID completion identities, installs two-phase employee notification dispatch ledgers, durable manager dispatch preparation with terminal outcome-unknown restart recovery, complete notification recovery authority, and terminal notification retries, and restores the catalog-derived authority set",
     atomic_day_change_reconciliation_phase: "20260814224034 converges both preserved U4 migration histories and recognizes the existing complete child/projection receipt chain before mutable Weekly Schedule authority is reread",
-    managed_schema_authority_normalization_phase: "20260815160613 removes broad future-object defaults and makes managed postgres/supabase_admin deployment authority comparable without hiding application grants or role memberships",
+    managed_schema_authority_normalization_phase: "20260815160613 removes broad future-object defaults; 20260815163500 preserves application and scheduler access through explicit role grants while keeping PUBLIC revoked, and managed postgres/supabase_admin deployment authority remains comparable without hiding application grants or role memberships",
   },
   rollback: input.rollback,
   cutover: input.cutover,
