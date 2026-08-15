@@ -30,8 +30,16 @@ function queryDocker(sql,name){
 }
 
 let mcpClient=null;
+function normalizeObjectComments(rows){
+  return rows.map((row)=>{
+    if(!Object.hasOwn(row,"object_comment"))return row;
+    const normalized={...row,comment:row.object_comment};
+    delete normalized.object_comment;
+    return normalized;
+  });
+}
 async function query(sql,name="schema inventory"){
-  if(!mcpUrl)return queryDocker(sql,name);
+  if(!mcpUrl)return normalizeObjectComments(queryDocker(sql,name));
   if(!mcpClient){
     mcpClient=new Client({name:"schema-fingerprint-refresh",version:"1.0.0"});
     await mcpClient.connect(new StreamableHTTPClientTransport(new URL(mcpUrl)));
@@ -40,12 +48,7 @@ async function query(sql,name="schema inventory"){
   if(result.isError)throw new Error(`${name}: ${String(result.content?.[0]?.text||"Live schema inventory query failed.")}`);
   const payload=JSON.parse(String(result.content?.[0]?.text||"{}"));
   if(!payload.ok||payload.response_truncated||payload.row_limit_truncated||!Array.isArray(payload.rows))throw new Error(`Live schema inventory query was incomplete: ${JSON.stringify({ok:payload.ok,response_truncated:payload.response_truncated,row_limit_truncated:payload.row_limit_truncated})}`);
-  return payload.rows.map((row)=>{
-    if(!Object.hasOwn(row,"object_comment"))return row;
-    const normalized={...row,comment:row.object_comment};
-    delete normalized.object_comment;
-    return normalized;
-  });
+  return normalizeObjectComments(payload.rows);
 }
 
 const inventory=await captureSchemaCatalog({query:async(sql)=>({rows:await query(sql,queryNames.get(sql)||"schema inventory")})});

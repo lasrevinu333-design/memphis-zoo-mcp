@@ -16,6 +16,7 @@ const databaseUrl = String(process.env.SUPABASE_DB_URL || process.env.DATABASE_U
 const databaseCaCertPath = String(process.env.SUPABASE_DB_CA_CERT_PATH || "").trim();
 const secret = String(process.env.SUPABASE_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
 const apply = String(process.env.RESTORE_APPLY || "false").toLowerCase() === "true";
+const databaseOnly = String(process.env.RESTORE_DATABASE_ONLY || "false").toLowerCase() === "true";
 
 if (!sourceDir) throw new Error("RESTORE_SOURCE_DIR is required.");
 const summary = JSON.parse(readFileSync(join(sourceDir, "backup-summary.json"), "utf8"));
@@ -68,10 +69,19 @@ if (!apply) {
   process.exit(0);
 }
 
-if (!/^[a-z0-9]{20}$/.test(projectRef) || confirmedRef !== projectRef) {
+if (!databaseUrl) throw new Error("SUPABASE_DB_URL is required for restore apply.");
+if (databaseOnly) {
+  const target = new URL(databaseUrl);
+  if (!/^(127\.0\.0\.1|localhost)$/.test(target.hostname)
+      || !/^\/mz_schema_rebuild_[a-zA-Z0-9_]+$/.test(target.pathname)) {
+    throw new Error("Database-only restore is restricted to a loopback mz_schema_rebuild_* database.");
+  }
+} else if (!/^[a-z0-9]{20}$/.test(projectRef) || confirmedRef !== projectRef) {
   throw new Error("Destructive restore requires SUPABASE_PROJECT_REF and an exact RESTORE_CONFIRM_PROJECT_REF match.");
 }
-if (!databaseUrl || !secret) throw new Error("SUPABASE_DB_URL and SUPABASE_SERVICE_ROLE_KEY are required for restore apply.");
+if (!databaseOnly && !secret) throw new Error("SUPABASE_SERVICE_ROLE_KEY is required for a production restore apply.");
+
+const databaseTables = catalog.filter((table) => ["public", "auth"].includes(table.schema_name));
 
 const db = new Client({
   connectionString: databaseUrl,
@@ -84,7 +94,6 @@ await db.connect();
 try {
   await db.query("begin");
   await db.query("set local session_replication_role = replica");
-  const databaseTables = catalog.filter((table) => ["public", "auth"].includes(table.schema_name));
   if (databaseTables.length) {
     await db.query(`truncate ${databaseTables.map((table) => qualified(table.schema_name, table.table_name)).join(",")} restart identity cascade`);
   }
@@ -108,6 +117,18 @@ try {
   throw error;
 } finally {
   await db.end();
+}
+
+if (databaseOnly) {
+  console.log(JSON.stringify({
+    ok: true,
+    database_only: true,
+    restored_database: new URL(databaseUrl).pathname.slice(1),
+    tables: catalog.filter((table) => ["public", "auth"].includes(table.schema_name)).length,
+    rows: databaseTables.reduce((total, table) => total + Number(table.row_count), 0),
+    storage_objects_skipped: objects.length,
+  }, null, 2));
+  process.exit(0);
 }
 
 const supabase = createClient(`https://${projectRef}.supabase.co`, secret, { auth: { persistSession: false, autoRefreshToken: false } });

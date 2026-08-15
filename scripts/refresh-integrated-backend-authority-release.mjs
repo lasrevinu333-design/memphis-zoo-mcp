@@ -136,7 +136,7 @@ const output = {
     authority: "active named manager; disposition write additionally requires DIRECTOR or SECURITY_ADMIN",
   },
   migrations,
-  release_boundary: "Configure a minimum-32-character CUSTODIAL_BACKEND_PROOF_SECRET and matching database digest before Phase A, retain the bridge backend artifact through the scan-snapshot phase, and require the executable health/restoration probes before traffic changes.",
+  release_boundary: "Prepare distinct minimum-32-character backend and native-route secrets before cutover; configure their database digests immediately after the migrations that create each configuration function, retain the bridge backend artifact through the scan-snapshot phase, and require the executable health/restoration probes before traffic changes.",
 };
 const rendered = `${JSON.stringify(output, null, 2)}\n`;
 if (checkOnly) assert.equal(readFileSync(outputPath, "utf8"), rendered, "Integrated backend authority release evidence is stale.");
