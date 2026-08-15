@@ -1,7 +1,7 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "0182ff112690d6ab621159b65e7fa59babbe01a9",
+  "frontend_commit_sha": "372132f4cf5bdde837f54ba5221dd851cd5d8d17",
   "schema_fingerprint": "2afd6e6154bd62c8974c72a794e08e621df5c3f04a1e88399227f15bb7a0a41e",
   "schema_transition": {
     "transition_id": "custodial-canary-offline-scan-authority-20260813",
@@ -397,7 +397,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "11d516e0b20bd806168d12180bd0cf07ff8e1f99"
+        "object_id": "5ccf6d4dd8eed324b36836705c97180766884bc2"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -412,7 +412,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "6aa4ea66ff0c8bfaea43f32ca93b34d3326b0e4e"
+        "object_id": "1c957ad9960670a394fd8dd326388ecbb0de36f7"
       },
       {
         "path": "research/european_herbalism_through_paracelsus.md",
@@ -537,12 +537,12 @@
       {
         "path": "scripts/custodial-repair-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "9aecc092c958744d67ae6c2f75b936f05721ac73"
+        "object_id": "d8279766622034d6f3ec2457f7a6683ae143aed7"
       },
       {
         "path": "scripts/custodial-u4-migration-convergence-tests.mjs",
         "mode": "100644",
-        "object_id": "5ad125020700825568fc3337762a22b0ae067978"
+        "object_id": "599ea66539ba601293975bf9246f909429f3968d"
       },
       {
         "path": "scripts/dashboard-recent-activity-contract-tests.mjs",
@@ -677,7 +677,7 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "34b9d405d031fda32b390a642d29159f54b8dc3f"
+        "object_id": "f531a142ed00407cf768e677b03917d8396767bb"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
@@ -832,7 +832,7 @@
       {
         "path": "scripts/operations-leadership-mobile-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "b95eba1e12a3c176ee32c9cbaa4b191bd27499eb"
+        "object_id": "77f8696205a1ae9a0d62b93cab0df7c910185159"
       },
       {
         "path": "scripts/operations-leadership-mobile-database-tests.mjs",
@@ -937,7 +937,7 @@
       {
         "path": "scripts/release-closure-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "78494ccd5d5cc38dc3d00d23799b3573d504a3af"
+        "object_id": "2131b8cf23450d32773f6f1902fcc4df5d3bd2c4"
       },
       {
         "path": "scripts/restroom-rebalance-route-tests.mjs",
@@ -1102,12 +1102,12 @@
       {
         "path": "scripts/static-weekly-control-plane-tests.mjs",
         "mode": "100644",
-        "object_id": "87edeb0688201c6529117d08433586f20aa8492e"
+        "object_id": "d3123414292f58ea84a6f5a32ae9a235d585bb00"
       },
       {
         "path": "scripts/static-weekly-day-changes-database-tests.mjs",
         "mode": "100644",
-        "object_id": "f748a39ec977f9c2a369583683bc1d67f736c6d5"
+        "object_id": "0eeff99f95b31918232b1be93265873340af788e"
       },
       {
         "path": "scripts/static-weekly-employee-day-route-tests.mjs",
@@ -1657,7 +1657,7 @@
       {
         "path": "src/static-weekly-control-plane.js",
         "mode": "100644",
-        "object_id": "a2de75459e0f4eabdaf16c14264a9659bcd3763e"
+        "object_id": "05b1ee7c70ded32b6b828236225dde7e7b16f8ca"
       },
       {
         "path": "src/static-weekly-schedule-compiler.js",
