@@ -1159,6 +1159,8 @@ if (dockerImage) {
       dockerImage,
       "-c",
       "shared_preload_libraries=pg_cron,pg_net,pg_stat_statements",
+      "-c",
+      "cron.launch_active_jobs=off",
     ]);
     let ready = false;
     // Supabase's PostgreSQL image performs substantial first-boot initialization.

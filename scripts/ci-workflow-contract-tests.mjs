@@ -142,8 +142,32 @@ assert.match(populatedSchemaPreflight, /test -n "\$SCHEMA_FINGERPRINT_MCP_URL"/,
 assert.match(populatedSchemaPreflight, /set -euo pipefail[\s\S]*release:populated-schema:preflight \| tee[\s\S]*test -s \/tmp\/custodial-populated-schema-preflight\.json/,
   "the production schema preflight must preserve command failure and require a non-empty receipt");
 const productionBackupRehearsal = readFileSync(resolve(workflowDirectory, "production-backup-migration-rehearsal.yml"), "utf8");
+const productionSourceRoleCatalog = readFileSync(resolve(root, "supabase/canonical/production-source-role-catalog.sql"), "utf8");
+const emptyDatabaseRebuild = readFileSync(resolve(root, "scripts/empty-database-rebuild-check.mjs"), "utf8");
 assert.match(productionBackupRehearsal, /RESTORE_DATABASE_ONLY=true[\s\S]*release:populated-schema:preflight/,
   "the production-backup rehearsal must restore data before checking the exact live source fingerprint");
+assert.doesNotMatch(productionBackupRehearsal, /--schema-only[^\n]*(?:--no-owner|--no-privileges)/,
+  "the production-backup rehearsal must preserve ownership and grants because both are part of the accepted schema fingerprint");
+assert.match(productionBackupRehearsal, /cron\.database_name="\$database"/,
+  "the production-backup rehearsal must bind pg_cron to its isolated restored database");
+assert.match(productionBackupRehearsal, /-p 127\.0\.0\.1::5432[\s\S]*listen_addresses='\*'[\s\S]*SUPABASE_DB_URL="postgresql:\/\/supabase_admin:postgres@127\.0\.0\.1:/,
+  "the production-backup rehearsal must expose Postgres only on runner loopback while making the mapped container interface reachable");
+assert.match(productionBackupRehearsal, /State\.Health[\s\S]*test "\$healthy" = 'true'[\s\S]*sleep 10[\s\S]*createdb/,
+  "the production-backup rehearsal must survive the Supabase image's first-boot restart before creating its database");
+assert.match(productionBackupRehearsal, /production-source-role-catalog\.sql[\s\S]*source_roles_reconciled[\s\S]*createdb/,
+  "the production-backup rehearsal must reproduce production ownership roles before restoring the accepted source schema");
+for (const role of ["memphis_zoo_backup", "supabase_functions_admin", "supabase_privileged_role", "supabase_realtime_admin"]) {
+  assert.match(productionSourceRoleCatalog, new RegExp(`create role ${role}`),
+    `the production source role catalog must include ${role}`);
+}
+assert.match(productionSourceRoleCatalog, /set role postgres;[\s\S]*grant pg_read_all_data to memphis_zoo_backup;[\s\S]*reset role;/,
+  "the rehearsal role catalog must preserve the production backup membership grantor without storing credentials");
+assert.doesNotMatch(productionSourceRoleCatalog, /\b(?:create|alter)\s+role[^;]*\bpassword\b/i,
+  "the rehearsal role catalog must never contain production password material");
+assert.match(emptyDatabaseRebuild, /shared_preload_libraries=pg_cron,pg_net,pg_stat_statements[\s\S]*cron\.launch_active_jobs=off/,
+  "the clean-rebuild test must retain cron catalog evidence without letting wall-clock jobs mutate its disposable fixtures");
+assert.match(productionBackupRehearsal, /oom_killed=\{\{\.State\.OOMKilled\}\}[\s\S]*docker logs --timestamps --tail 2000[\s\S]*production-backup-migration-rehearsal-postgres\.log/,
+  "the production-backup rehearsal must retain bounded Postgres failure evidence instead of retrying blind");
 assert.equal((productionBackupRehearsal.match(/202608\d+_[a-z0-9_]+\.sql/g) || []).filter((name, index, values) => values.indexOf(name) === index).length, 23,
   "the production-backup rehearsal must apply the exact 23 pending migrations");
 assert.match(productionBackupRehearsal, /custodial_configure_backend_execution_key[\s\S]*custodial_configure_native_route_proof_key[\s\S]*custodial_backend_authority_health/,

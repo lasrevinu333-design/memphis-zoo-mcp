@@ -90,14 +90,29 @@ const db = new Client({
     ssl: { ca: readFileSync(resolve(databaseCaCertPath), "utf8"), rejectUnauthorized: true },
   } : {}),
 });
+let restorePhase = "connect";
+let restoreTable = null;
+db.on("error", (error) => {
+  console.error(JSON.stringify({
+    ok: false,
+    restore_phase: restorePhase,
+    restore_table: restoreTable,
+    connection_error: error instanceof Error ? error.message : String(error),
+  }));
+});
 await db.connect();
 try {
+  restorePhase = "begin";
   await db.query("begin");
+  restorePhase = "disable_replication_triggers";
   await db.query("set local session_replication_role = replica");
   if (databaseTables.length) {
+    restorePhase = "truncate_target_tables";
     await db.query(`truncate ${databaseTables.map((table) => qualified(table.schema_name, table.table_name)).join(",")} restart identity cascade`);
   }
   for (const table of databaseTables) {
+    restoreTable = `${table.schema_name}.${table.table_name}`;
+    restorePhase = "restore_table";
     const target = qualified(table.schema_name, table.table_name);
     const columns = table.columns.filter((column) => !column.generated).map((column) => column.name);
     const projection = columns.map((column) => `r.${quoteIdentifier(column)}`).join(",");
@@ -111,11 +126,20 @@ try {
     }
     if (restored !== Number(table.row_count)) throw new Error(`Row-count mismatch while restoring ${table.schema_name}.${table.table_name}.`);
   }
+  restoreTable = null;
+  restorePhase = "commit";
   await db.query("commit");
 } catch (error) {
+  console.error(JSON.stringify({
+    ok: false,
+    restore_phase: restorePhase,
+    restore_table: restoreTable,
+    restore_error: error instanceof Error ? error.message : String(error),
+  }));
   await db.query("rollback").catch(() => {});
   throw error;
 } finally {
+  restorePhase = "disconnect";
   await db.end();
 }
 
