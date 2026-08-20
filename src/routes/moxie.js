@@ -22,16 +22,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // ---------------------------------------------------------------------------
 
 const MOXIE_USER = String(process.env.MOXIE_WEB_USER || "annie").trim();
-const MOXIE_PASSWORD = String(
-  process.env.MOXIE_WEB_PASSWORD || process.env.GEMINI_ADMIN_PASSWORD || ""
-).trim();
-const MOXIE_COOKIE_SECRET = String(
-  process.env.MOXIE_WEB_COOKIE_SECRET
-    || process.env.MOXIE_COOKIE_SECRET
-    || process.env.GEMINI_ADMIN_SESSION_SECRET
-    || process.env.SUPABASE_SERVICE_ROLE_KEY
-    || ""
-).trim();
+const MOXIE_PASSWORD = String(process.env.MOXIE_WEB_PASSWORD || "").trim();
+const MOXIE_COOKIE_SECRET = String(process.env.MOXIE_WEB_COOKIE_SECRET || "").trim();
 const MOXIE_PREFIX = (String(process.env.MOXIE_PREFIX || "/moxie").trim() || "").replace(/\/+$/, "");
 const MOXIE_PUBLIC_URL = String(process.env.MOXIE_PUBLIC_URL || "").trim();
 const MOXIE_MAX_MESSAGE_CHARS = 20_000;

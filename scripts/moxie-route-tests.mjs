@@ -10,6 +10,14 @@ process.env.MOXIE_GEMINI_API_KEY = "test-only-key";
 process.env.MOXIE_PREFIX = "/moxie";
 process.env.MOXIE_AUTH_REQUIRED = "true";
 
+const moxieSource = readFileSync(new URL("../src/routes/moxie.js", import.meta.url), "utf8");
+assert.match(moxieSource, /MOXIE_PASSWORD = String\(process\.env\.MOXIE_WEB_PASSWORD \|\| ""\)/,
+  "Moxie password authority must use its dedicated secret class");
+assert.match(moxieSource, /MOXIE_COOKIE_SECRET = String\(process\.env\.MOXIE_WEB_COOKIE_SECRET \|\| ""\)/,
+  "Moxie session authority must use its dedicated secret class");
+assert.doesNotMatch(moxieSource, /GEMINI_ADMIN_PASSWORD|GEMINI_ADMIN_SESSION_SECRET|process\.env\.MOXIE_COOKIE_SECRET|SUPABASE_SERVICE_ROLE_KEY/,
+  "Moxie authentication must not fall back to Gemini, legacy aliases, or Supabase authority");
+
 const {
   buildLogContext,
   createMoxieRouter,
