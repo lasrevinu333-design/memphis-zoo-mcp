@@ -37,6 +37,7 @@ export function getRuntimeEnv() {
     supabase: {
       url_present: present("SUPABASE_URL"),
       service_role_key_present: present("SUPABASE_SERVICE_ROLE_KEY"),
+      readonly_database_url_present: present("CUSTODIAL_READONLY_DATABASE_URL"),
       configured: present("SUPABASE_URL") && present("SUPABASE_SERVICE_ROLE_KEY"),
     },
     custodial_authority: {
@@ -66,6 +67,7 @@ export function validateRuntimeEnv({ strict = false } = {}) {
   if (env.app.node_env === "production") {
     if (!env.custodial_authority.backend_proof_secret_present) errors.push("CUSTODIAL_BACKEND_PROOF_SECRET is missing.");
     if (!env.custodial_authority.native_route_proof_secret_present) errors.push("CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET is missing.");
+    if (!env.supabase.readonly_database_url_present) errors.push("CUSTODIAL_READONLY_DATABASE_URL is missing.");
   }
 
   if (!env.ai.gemini_configured) {

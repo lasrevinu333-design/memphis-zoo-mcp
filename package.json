@@ -24,6 +24,7 @@
     "test:auth": "node scripts/mcp-connector-auth-tests.mjs && node scripts/mcp-transport-tool-surface-tests.mjs && node scripts/operations-leadership-mobile-contract-tests.mjs",
     "test:mcp-auth": "node scripts/mcp-connector-auth-tests.mjs && node scripts/mcp-transport-tool-surface-tests.mjs",
     "test:foundation-containment": "node scripts/foundation-security-containment-contract-tests.mjs",
+    "test:readonly-database-authority": "node scripts/read-only-database-authority-tests.mjs",
     "test:device-popups": "node scripts/device-popup-fully-kiosk-test.mjs",
     "test:thursday-demo": "node scripts/thursday-notification-presentation-tests.mjs",
     "test:leadership-demo": "node scripts/demo-leadership-blank-schedule-tests.mjs",

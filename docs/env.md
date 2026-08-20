@@ -39,6 +39,7 @@ The production `/mcp` URL is public. Connected clients must therefore carry the 
 |---|---:|---|
 | `SUPABASE_URL` | Yes | Supabase project URL. |
 | `SUPABASE_SERVICE_ROLE_KEY` | Yes | Service role key for trusted server-side RPC calls. |
+| `CUSTODIAL_READONLY_DATABASE_URL` | Yes in production | Dedicated PostgreSQL login for application and MCP reads. It must inherit only `custodial_application_reader`, have no `BYPASSRLS`, and must not be an admin, `postgres`, service-role, or migration credential. Every query runs inside an explicit `READ ONLY` transaction. |
 
 ## Static weekly scheduler control plane
 

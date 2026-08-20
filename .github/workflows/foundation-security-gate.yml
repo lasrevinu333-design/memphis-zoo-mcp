@@ -49,6 +49,7 @@ jobs:
           set -euo pipefail
           npm run --silent test:auth
           npm run --silent test:foundation-containment
+          npm run --silent test:readonly-database-authority
           npm run --silent test:operations-leadership-mobile
           npm run --silent test:manager-notifications
           npm run --silent test:custodial-employee-phones
