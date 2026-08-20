@@ -4592,6 +4592,266 @@
     },
     {
       "collation_name": null,
+      "column_name": "correction_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": "gen_random_uuid()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 1,
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections"
+    },
+    {
+      "collation_name": null,
+      "column_name": "operation_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 2,
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections"
+    },
+    {
+      "collation_name": null,
+      "column_name": "request_fingerprint",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 3,
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections"
+    },
+    {
+      "collation_name": null,
+      "column_name": "session_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 4,
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections"
+    },
+    {
+      "collation_name": null,
+      "column_name": "corrected_by_manager_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 5,
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections"
+    },
+    {
+      "collation_name": null,
+      "column_name": "corrected_by_manager_name_snapshot",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 6,
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections"
+    },
+    {
+      "collation_name": null,
+      "column_name": "reason",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 7,
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections"
+    },
+    {
+      "collation_name": null,
+      "column_name": "changed_fields",
+      "comment": null,
+      "data_type": "text[]",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 8,
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections"
+    },
+    {
+      "collation_name": null,
+      "column_name": "effective_employee_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 9,
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections"
+    },
+    {
+      "collation_name": null,
+      "column_name": "effective_employee_name_snapshot",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 10,
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections"
+    },
+    {
+      "collation_name": null,
+      "column_name": "effective_location_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 11,
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections"
+    },
+    {
+      "collation_name": null,
+      "column_name": "effective_location_code_snapshot",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 12,
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections"
+    },
+    {
+      "collation_name": null,
+      "column_name": "effective_location_name_snapshot",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 13,
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections"
+    },
+    {
+      "collation_name": null,
+      "column_name": "effective_device_id",
+      "comment": null,
+      "data_type": "uuid",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 14,
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections"
+    },
+    {
+      "collation_name": null,
+      "column_name": "effective_device_identifier_snapshot",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 15,
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections"
+    },
+    {
+      "collation_name": null,
+      "column_name": "effective_device_name_snapshot",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 16,
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections"
+    },
+    {
+      "collation_name": null,
+      "column_name": "effective_assignment_epoch_snapshot",
+      "comment": null,
+      "data_type": "bigint",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 17,
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections"
+    },
+    {
+      "collation_name": null,
+      "column_name": "effective_started_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 18,
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections"
+    },
+    {
+      "collation_name": null,
+      "column_name": "effective_ended_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": false,
+      "ordinal_position": 19,
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections"
+    },
+    {
+      "collation_name": null,
+      "column_name": "created_at",
+      "comment": null,
+      "data_type": "timestamp with time zone",
+      "default_expression": "clock_timestamp()",
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 20,
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections"
+    },
+    {
+      "collation_name": null,
       "column_name": "id",
       "comment": null,
       "data_type": "uuid",
@@ -22402,6 +22662,97 @@
     },
     {
       "collation_name": null,
+      "column_name": "employee_name_snapshot",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 16,
+      "schema_name": "public",
+      "table_name": "sessions"
+    },
+    {
+      "collation_name": null,
+      "column_name": "location_code_snapshot",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 17,
+      "schema_name": "public",
+      "table_name": "sessions"
+    },
+    {
+      "collation_name": null,
+      "column_name": "location_name_snapshot",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 18,
+      "schema_name": "public",
+      "table_name": "sessions"
+    },
+    {
+      "collation_name": null,
+      "column_name": "device_identifier_snapshot",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 19,
+      "schema_name": "public",
+      "table_name": "sessions"
+    },
+    {
+      "collation_name": null,
+      "column_name": "device_name_snapshot",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 20,
+      "schema_name": "public",
+      "table_name": "sessions"
+    },
+    {
+      "collation_name": null,
+      "column_name": "assignment_epoch_snapshot",
+      "comment": null,
+      "data_type": "bigint",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 21,
+      "schema_name": "public",
+      "table_name": "sessions"
+    },
+    {
+      "collation_name": null,
+      "column_name": "identity_snapshot_provenance",
+      "comment": null,
+      "data_type": "text",
+      "default_expression": null,
+      "generated_kind": "",
+      "identity_kind": "",
+      "not_null": true,
+      "ordinal_position": 22,
+      "schema_name": "public",
+      "table_name": "sessions"
+    },
+    {
+      "collation_name": null,
       "column_name": "singleton",
       "comment": null,
       "data_type": "boolean",
@@ -28157,6 +28508,102 @@
       "validated": true
     },
     {
+      "constraint_name": "custodial_session_correction_effective_assignment_epoch_s_check",
+      "constraint_type": "c",
+      "definition": "CHECK (effective_assignment_epoch_snapshot >= 1)",
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_session_correction_time_order",
+      "constraint_type": "c",
+      "definition": "CHECK (effective_ended_at IS NULL OR effective_ended_at >= effective_started_at)",
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_session_corrections_changed_fields_check",
+      "constraint_type": "c",
+      "definition": "CHECK (cardinality(changed_fields) >= 1 AND changed_fields <@ ARRAY['employee'::text, 'location'::text, 'device'::text, 'started_at'::text, 'ended_at'::text])",
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_session_corrections_corrected_by_manager_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (corrected_by_manager_id) REFERENCES ops_manager_managers(manager_id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_session_corrections_effective_device_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (effective_device_id) REFERENCES devices(id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_session_corrections_effective_employee_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (effective_employee_id) REFERENCES employees(id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_session_corrections_effective_location_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (effective_location_id) REFERENCES locations(id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_session_corrections_operation_id_key",
+      "constraint_type": "u",
+      "definition": "UNIQUE (operation_id)",
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_session_corrections_pkey",
+      "constraint_type": "p",
+      "definition": "PRIMARY KEY (correction_id)",
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_session_corrections_reason_check",
+      "constraint_type": "c",
+      "definition": "CHECK (length(btrim(reason)) >= 1 AND length(btrim(reason)) <= 1000)",
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_session_corrections_request_fingerprint_check",
+      "constraint_type": "c",
+      "definition": "CHECK (request_fingerprint ~ '^[0-9a-f]{64}$'::text)",
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections",
+      "validated": true
+    },
+    {
+      "constraint_name": "custodial_session_corrections_session_id_fkey",
+      "constraint_type": "f",
+      "definition": "FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections",
+      "validated": true
+    },
+    {
       "constraint_name": "daily_absence_overrides_employee_id_fkey",
       "constraint_type": "f",
       "definition": "FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE",
@@ -33189,6 +33636,14 @@
       "validated": true
     },
     {
+      "constraint_name": "sessions_assignment_epoch_snapshot_positive",
+      "constraint_type": "c",
+      "definition": "CHECK (assignment_epoch_snapshot >= 1)",
+      "schema_name": "public",
+      "table_name": "sessions",
+      "validated": true
+    },
+    {
       "constraint_name": "sessions_completion_source_check",
       "constraint_type": "c",
       "definition": "CHECK (completion_source IS NULL OR (completion_source = ANY (ARRAY['kiosk_form'::text, 'admin'::text, 'repair'::text, 'system'::text, 'incident_recovery'::text, 'system_timeout_cancelled'::text])))",
@@ -33208,6 +33663,14 @@
       "constraint_name": "sessions_employee_id_fkey",
       "constraint_type": "f",
       "definition": "FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE RESTRICT",
+      "schema_name": "public",
+      "table_name": "sessions",
+      "validated": true
+    },
+    {
+      "constraint_name": "sessions_identity_snapshot_provenance_check",
+      "constraint_type": "c",
+      "definition": "CHECK (identity_snapshot_provenance = ANY (ARRAY['session_create'::text, 'legacy_directory_backfill'::text]))",
       "schema_name": "public",
       "table_name": "sessions",
       "validated": true
@@ -35050,7 +35513,7 @@
     },
     {
       "comment": "Assigns immutable server timestamps, binds inspections to completed session facts, and rejects evidence recorded more than 24 elapsed hours after completion.",
-      "definition": "CREATE OR REPLACE FUNCTION public.cleaning_inspections_set_snapshot()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_session record;\n  v_completion_at timestamptz;\n  v_inspector_name text;\nbegin\n  if tg_op='INSERT' then\n    new.inspected_at:=statement_timestamp();\n    new.created_at:=new.inspected_at;\n  else\n    if new.operation_id is distinct from old.operation_id then\n      raise exception using errcode='23514',message='Inspection operation_id is immutable';\n    end if;\n    if new.session_id is distinct from old.session_id then\n      raise exception using errcode='23514',message='Inspection session_id is immutable';\n    end if;\n    if new.inspected_at is distinct from old.inspected_at or new.created_at is distinct from old.created_at then\n      raise exception using errcode='23514',message='Inspection authoritative timestamps are immutable';\n    end if;\n  end if;\n\n  select\n    s.location_id,s.employee_id,s.started_at,s.ended_at,s.duration_minutes,s.status,\n    (select max(cr.submitted_at) from public.completion_responses cr where cr.session_id=s.id) completion_submitted_at,\n    l.location_code,l.location_name,e.display_name employee_name\n  into v_session\n  from public.sessions s\n  join public.locations l on l.id=s.location_id\n  join public.employees e on e.id=s.employee_id\n  where s.id=new.session_id;\n\n  if not found then\n    raise exception using errcode='P0002',message='Cleaning session was not found';\n  end if;\n  if v_session.status not in ('pending_submit','closed') then\n    raise exception using errcode='23514',message='Only a finished cleaning session can be inspected';\n  end if;\n  v_completion_at:=coalesce(v_session.ended_at,v_session.completion_submitted_at);\n  if v_completion_at is null then\n    raise exception using errcode='23514',message='Finished cleaning session has no completion timestamp';\n  end if;\n  if new.inspected_at<v_completion_at then\n    raise exception using errcode='23514',message='Inspection time cannot be before the cleaning session finished';\n  end if;\n  if new.inspected_at>v_completion_at+interval '24 hours' then\n    raise exception using errcode='23514',message='Inspection cannot be recorded more than 24 hours after cleaning session completion';\n  end if;\n  if new.inspected_at>clock_timestamp()+interval '5 minutes' then\n    raise exception using errcode='23514',message='Inspection time cannot be in the future';\n  end if;\n\n  new.location_id:=v_session.location_id;\n  new.employee_id:=v_session.employee_id;\n  new.employee_name_snapshot:=v_session.employee_name;\n  new.location_code_snapshot:=v_session.location_code;\n  new.location_name_snapshot:=v_session.location_name;\n  new.session_started_at:=v_session.started_at;\n  new.session_ended_at:=v_completion_at;\n  new.session_duration_minutes:=coalesce(\n    v_session.duration_minutes,\n    case when v_session.ended_at is not null\n      then greatest(0,ceil(extract(epoch from (v_session.ended_at-v_session.started_at))/60.0)::integer)\n      else null end\n  );\n\n  if new.inspector_manager_id is not null then\n    select m.display_name into v_inspector_name\n    from public.ops_manager_managers m\n    where m.manager_id=new.inspector_manager_id\n      and m.active=true and m.revoked_at is null and m.is_system_principal=false;\n    if not found then\n      raise exception using errcode='23503',message='Active inspector manager was not found';\n    end if;\n    new.inspector_name_snapshot:=v_inspector_name;\n  else\n    new.inspector_name_snapshot:=coalesce(nullif(btrim(new.inspector_name_snapshot),''),'Custodial Manager');\n  end if;\n\n  new.updated_at:=clock_timestamp();\n  return new;\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.cleaning_inspections_set_snapshot()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_session record;\n  v_completion_at timestamptz;\n  v_inspector_name text;\nbegin\n  if tg_op = 'UPDATE' then\n    if row(new.operation_id,new.session_id,new.request_fingerprint,new.inspector_manager_id,\n           new.inspected_at,new.created_at,new.location_id,new.employee_id,new.inspector_name_snapshot,\n           new.employee_name_snapshot,new.location_code_snapshot,new.location_name_snapshot,\n           new.session_started_at,new.session_ended_at,new.session_duration_minutes)\n       is distinct from\n       row(old.operation_id,old.session_id,old.request_fingerprint,old.inspector_manager_id,\n           old.inspected_at,old.created_at,old.location_id,old.employee_id,old.inspector_name_snapshot,\n           old.employee_name_snapshot,old.location_code_snapshot,old.location_name_snapshot,\n           old.session_started_at,old.session_ended_at,old.session_duration_minutes) then\n      raise exception using errcode='23514', message='Inspection actor, cleaning identity, and snapshots are immutable';\n    end if;\n    new.updated_at := clock_timestamp();\n    return new;\n  end if;\n\n  new.inspected_at := statement_timestamp();\n  new.created_at := new.inspected_at;\n  select\n    s.location_id,s.employee_id,s.started_at,s.ended_at,s.duration_minutes,s.status,\n    (select max(cr.submitted_at) from public.completion_responses cr where cr.session_id=s.id) completion_submitted_at,\n    s.location_code_snapshot,s.location_name_snapshot,s.employee_name_snapshot\n  into v_session\n  from public.sessions s\n  where s.id = new.session_id;\n  if not found then\n    raise exception using errcode='P0002', message='Cleaning session was not found';\n  end if;\n  if v_session.status not in ('pending_submit','closed') then\n    raise exception using errcode='23514', message='Only a finished cleaning session can be inspected';\n  end if;\n  v_completion_at := coalesce(v_session.ended_at,v_session.completion_submitted_at);\n  if v_completion_at is null then\n    raise exception using errcode='23514', message='Finished cleaning session has no completion timestamp';\n  end if;\n  if new.inspected_at < v_completion_at or new.inspected_at > v_completion_at + interval '24 hours' then\n    raise exception using errcode='23514', message='Inspection must be recorded within 24 hours after cleaning completion';\n  end if;\n\n  new.location_id := v_session.location_id;\n  new.employee_id := v_session.employee_id;\n  new.employee_name_snapshot := v_session.employee_name_snapshot;\n  new.location_code_snapshot := v_session.location_code_snapshot;\n  new.location_name_snapshot := v_session.location_name_snapshot;\n  new.session_started_at := v_session.started_at;\n  new.session_ended_at := v_completion_at;\n  new.session_duration_minutes := coalesce(v_session.duration_minutes,\n    greatest(0,ceil(extract(epoch from (v_completion_at-v_session.started_at))/60.0)::integer));\n\n  if new.inspector_manager_id is not null then\n    select m.display_name into v_inspector_name\n    from public.ops_manager_managers m\n    where m.manager_id=new.inspector_manager_id\n      and m.active=true and m.revoked_at is null and m.is_system_principal=false;\n    if not found then\n      raise exception using errcode='23503', message='Active inspector manager was not found';\n    end if;\n    new.inspector_name_snapshot := v_inspector_name;\n  else\n    new.inspector_name_snapshot := coalesce(nullif(btrim(new.inspector_name_snapshot),''),'Custodial Manager');\n  end if;\n  new.updated_at := clock_timestamp();\n  return new;\nend\n$function$\n",
       "function_name": "cleaning_inspections_set_snapshot",
       "identity_arguments": "",
       "owner_name": "migration_owner",
@@ -35085,6 +35548,14 @@
       "definition": "CREATE OR REPLACE FUNCTION public.create_maintenance_tickets_from_response(p_completion_response_id uuid, p_session_id uuid, p_location_id uuid, p_reported_by_employee_id uuid, p_device_id uuid, p_reported_at timestamp with time zone, p_response_json jsonb)\n RETURNS integer\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_issue_array jsonb;\n  v_item jsonb;\n  v_issue_summary text;\n  v_issue_category text;\n  v_fixture_type text;\n  v_fixture_identifier text;\n  v_out_of_order boolean;\n  v_location_code text;\n  v_location_name text;\n  v_reporter_name text;\n  v_count integer := 0;\n  v_top_level_out_of_order boolean := (\n    lower(coalesce(\n      p_response_json->>'out_of_order',\n      p_response_json->>'outOfOrder',\n      p_response_json->>'place_out_of_order',\n      p_response_json->>'placeOutOfOrder',\n      p_response_json->>'out_of_order_signed',\n      p_response_json->>'outOfOrderSigned',\n      'false'\n    )) in ('true','t','1','yes','y','on')\n  );\n  v_top_level_fixture_identifier text := coalesce(\n    p_response_json->>'fixture_identifier',\n    p_response_json->>'fixtureIdentifier',\n    p_response_json->>'out_of_order_details',\n    p_response_json->>'outOfOrderDetails',\n    p_response_json->>'stall',\n    p_response_json->>'stall_number',\n    p_response_json->>'stallNumber',\n    p_response_json->>'urinal',\n    p_response_json->>'urinal_number',\n    p_response_json->>'urinalNumber'\n  );\n  v_explicit_issue_notes text := coalesce(\n    p_response_json->>'maintenance_notes',\n    p_response_json->>'maintenanceNotes',\n    p_response_json->>'issue_notes',\n    p_response_json->>'issueNotes'\n  );\n  v_top_level_notes text := coalesce(\n    v_explicit_issue_notes,\n    p_response_json->>'notes',\n    p_response_json->>'note'\n  );\n  v_has_explicit_issue boolean := (\n    lower(coalesce(\n      p_response_json->>'has_maintenance_issue',\n      p_response_json->>'hasMaintenanceIssue',\n      p_response_json->>'maintenance_issue',\n      p_response_json->>'maintenanceIssue',\n      'false'\n    )) in ('true','t','1','yes','y','on')\n  );\nbegin\n  select l.location_code, l.location_name\n    into v_location_code, v_location_name\n  from public.locations l\n  where l.id = p_location_id\n  limit 1;\n\n  select e.display_name\n    into v_reporter_name\n  from public.employees e\n  where e.id = p_reported_by_employee_id\n  limit 1;\n\n  delete from public.maintenance_tickets mt\n  where mt.completion_response_id = p_completion_response_id\n    and mt.issue_source = 'completion_form'\n    and mt.status = 'open';\n\n  v_issue_array := case\n    when jsonb_typeof(p_response_json->'maintenance_issues') = 'array' then p_response_json->'maintenance_issues'\n    when jsonb_typeof(p_response_json->'maintenanceIssues') = 'array' then p_response_json->'maintenanceIssues'\n    when jsonb_typeof(p_response_json->'maintenance_issue_checks') = 'array' then p_response_json->'maintenance_issue_checks'\n    when jsonb_typeof(p_response_json->'maintenanceIssueChecks') = 'array' then p_response_json->'maintenanceIssueChecks'\n    when jsonb_typeof(p_response_json->'checked_maintenance_issues') = 'array' then p_response_json->'checked_maintenance_issues'\n    when jsonb_typeof(p_response_json->'checkedMaintenanceIssues') = 'array' then p_response_json->'checkedMaintenanceIssues'\n    when jsonb_typeof(p_response_json->'maintenance_issues_found') = 'array' then p_response_json->'maintenance_issues_found'\n    when jsonb_typeof(p_response_json->'maintenanceIssuesFound') = 'array' then p_response_json->'maintenanceIssuesFound'\n    when jsonb_typeof(p_response_json->'maintenance_issue_found') = 'array' then p_response_json->'maintenance_issue_found'\n    when jsonb_typeof(p_response_json->'issues') = 'array' then p_response_json->'issues'\n    when jsonb_typeof(p_response_json->'maintenance') = 'array' then p_response_json->'maintenance'\n    else null\n  end;\n\n  if v_issue_array is null\n     and (v_has_explicit_issue or v_explicit_issue_notes is not null or v_top_level_out_of_order) then\n    v_issue_array := jsonb_build_array(\n      jsonb_build_object(\n        'label', coalesce(v_explicit_issue_notes, v_top_level_notes, 'Maintenance issue reported'),\n        'fixture_identifier', v_top_level_fixture_identifier,\n        'out_of_order', v_top_level_out_of_order,\n        'raw_response', p_response_json\n      )\n    );\n  end if;\n\n  if v_issue_array is null or jsonb_array_length(v_issue_array) = 0 then\n    return 0;\n  end if;\n\n  for v_item in select value from jsonb_array_elements(v_issue_array)\n  loop\n    if jsonb_typeof(v_item) = 'string' then\n      v_issue_summary := trim(both '\"' from v_item::text);\n      if lower(v_issue_summary) in ('other maintenance issue found', 'other') and v_top_level_notes is not null then\n        v_issue_summary := 'Other maintenance issue: ' || v_top_level_notes;\n      end if;\n      v_issue_category := trim(both '\"' from v_item::text);\n      v_fixture_type := case\n        when lower(v_issue_summary) like '%toilet%' then 'toilet'\n        when lower(v_issue_summary) like '%urinal%' then 'urinal'\n        else null\n      end;\n      v_fixture_identifier := v_top_level_fixture_identifier;\n      v_out_of_order := v_top_level_out_of_order;\n    else\n      v_issue_summary := coalesce(\n        v_item->>'label', v_item->>'issue', v_item->>'issue_label',\n        v_item->>'issueLabel', v_item->>'name', v_item->>'value',\n        v_item->>'description', v_item->>'maintenance_issue',\n        v_item->>'maintenanceIssue', 'Maintenance issue reported'\n      );\n      if lower(v_issue_summary) in ('other maintenance issue found', 'other') and v_top_level_notes is not null then\n        v_issue_summary := 'Other maintenance issue: ' || v_top_level_notes;\n      end if;\n      v_issue_category := coalesce(\n        v_item->>'category', v_item->>'issue_category',\n        v_item->>'issueCategory', v_issue_summary\n      );\n      v_fixture_type := coalesce(\n        v_item->>'fixture_type', v_item->>'fixtureType',\n        case\n          when lower(v_issue_summary) like '%toilet%' then 'toilet'\n          when lower(v_issue_summary) like '%urinal%' then 'urinal'\n          else null\n        end\n      );\n      v_fixture_identifier := coalesce(\n        v_item->>'fixture_identifier', v_item->>'fixtureIdentifier',\n        v_item->>'stall', v_item->>'stall_number', v_item->>'stallNumber',\n        v_item->>'urinal', v_item->>'urinal_number', v_item->>'urinalNumber',\n        v_top_level_fixture_identifier\n      );\n      v_out_of_order := (\n        lower(coalesce(\n          v_item->>'out_of_order', v_item->>'outOfOrder',\n          v_item->>'place_out_of_order', v_item->>'placeOutOfOrder',\n          v_item->>'out_of_order_signed', v_item->>'outOfOrderSigned',\n          case when v_top_level_out_of_order then 'true' else 'false' end\n        )) in ('true','t','1','yes','y','on')\n      );\n    end if;\n\n    insert into public.maintenance_tickets (\n      completion_response_id, session_id, location_id,\n      reported_by_employee_id, device_id, issue_source, status,\n      issue_summary, issue_category, fixture_type, fixture_identifier,\n      out_of_order, issue_payload, location_code_snapshot,\n      location_name_snapshot, reporter_name_snapshot, reported_at\n    ) values (\n      p_completion_response_id, p_session_id, p_location_id,\n      p_reported_by_employee_id, p_device_id, 'completion_form', 'open',\n      left(coalesce(v_issue_summary, 'Maintenance issue reported'), 500),\n      left(v_issue_category, 200), left(v_fixture_type, 100),\n      left(v_fixture_identifier, 100), coalesce(v_out_of_order, false),\n      jsonb_build_object(\n        'raw_item', v_item,\n        'top_level_note', v_top_level_notes,\n        'top_level_fixture_identifier', v_top_level_fixture_identifier,\n        'top_level_out_of_order', v_top_level_out_of_order\n      ),\n      v_location_code, v_location_name, v_reporter_name,\n      coalesce(p_reported_at, now())\n    );\n\n    v_count := v_count + 1;\n  end loop;\n\n  return v_count;\nend;\n$function$\n",
       "function_name": "create_maintenance_tickets_from_response",
       "identity_arguments": "p_completion_response_id uuid, p_session_id uuid, p_location_id uuid, p_reported_by_employee_id uuid, p_device_id uuid, p_reported_at timestamp with time zone, p_response_json jsonb",
+      "owner_name": "migration_owner",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_append_session_correction(p_operation_id uuid, p_session_id uuid, p_manager_id uuid, p_reason text, p_backend_execution_secret text, p_corrected_employee_id uuid DEFAULT NULL::uuid, p_corrected_location_id uuid DEFAULT NULL::uuid, p_corrected_device_id uuid DEFAULT NULL::uuid, p_corrected_started_at timestamp with time zone DEFAULT NULL::timestamp with time zone, p_corrected_ended_at timestamp with time zone DEFAULT NULL::timestamp with time zone)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_fingerprint text;\n  v_existing public.custodial_session_corrections%rowtype;\n  v_current record;\n  v_manager_name text;\n  v_employee record;\n  v_location record;\n  v_device record;\n  v_employee_id uuid;\n  v_location_id uuid;\n  v_device_id uuid;\n  v_started_at timestamptz;\n  v_ended_at timestamptz;\n  v_changed_fields text[];\n  v_inserted public.custodial_session_corrections%rowtype;\nbegin\n  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  if p_operation_id is null or p_session_id is null or p_manager_id is null\n     or length(btrim(coalesce(p_reason,''))) not between 1 and 1000 then\n    raise exception using errcode='22023', message='Correction operation, session, named manager, and reason are required';\n  end if;\n\n  v_fingerprint := encode(extensions.digest(convert_to(jsonb_build_object(\n    'operation_id',p_operation_id,'session_id',p_session_id,'manager_id',p_manager_id,\n    'reason',btrim(p_reason),'employee_id',p_corrected_employee_id,'location_id',p_corrected_location_id,\n    'device_id',p_corrected_device_id,'started_at',p_corrected_started_at,'ended_at',p_corrected_ended_at\n  )::text,'UTF8'),'sha256'),'hex');\n\n  select * into v_existing\n  from public.custodial_session_corrections c\n  where c.operation_id = p_operation_id;\n  if found then\n    if v_existing.request_fingerprint is distinct from v_fingerprint then\n      raise exception using errcode='23505', message='Correction operation was already used for a different request';\n    end if;\n    return jsonb_build_object('correction_id',v_existing.correction_id,'session_id',v_existing.session_id,\n      'operation_id',v_existing.operation_id,'replayed',true,'changed_fields',v_existing.changed_fields,\n      'created_at',v_existing.created_at);\n  end if;\n\n  select m.display_name into v_manager_name\n  from public.ops_manager_managers m\n  where m.manager_id = p_manager_id\n    and m.active = true and m.revoked_at is null and m.is_system_principal = false\n    and m.roles && array['OPS_MANAGER','CUSTODIAL_MANAGER','DIRECTOR','SECURITY_ADMIN']::text[];\n  if not found then\n    raise exception using errcode='42501', message='An active named manager is required to correct a cleaning record';\n  end if;\n\n  select\n    coalesce(c.effective_employee_id,s.employee_id) employee_id,\n    coalesce(c.effective_location_id,s.location_id) location_id,\n    coalesce(c.effective_device_id,s.device_id) device_id,\n    coalesce(c.effective_started_at,s.started_at) started_at,\n    coalesce(c.effective_ended_at,s.ended_at) ended_at\n  into v_current\n  from public.sessions s\n  left join lateral (\n    select c.* from public.custodial_session_corrections c\n    where c.session_id = s.id\n    order by c.created_at desc,c.correction_id desc\n    limit 1\n  ) c on true\n  where s.id = p_session_id\n  for update of s;\n  if not found then\n    raise exception using errcode='P0002', message='Cleaning session was not found';\n  end if;\n\n  v_employee_id := coalesce(p_corrected_employee_id,v_current.employee_id);\n  v_location_id := coalesce(p_corrected_location_id,v_current.location_id);\n  v_device_id := coalesce(p_corrected_device_id,v_current.device_id);\n  v_started_at := coalesce(p_corrected_started_at,v_current.started_at);\n  v_ended_at := coalesce(p_corrected_ended_at,v_current.ended_at);\n\n  v_changed_fields := array_remove(array[\n    case when v_employee_id is distinct from v_current.employee_id then 'employee' end,\n    case when v_location_id is distinct from v_current.location_id then 'location' end,\n    case when v_device_id is distinct from v_current.device_id then 'device' end,\n    case when v_started_at is distinct from v_current.started_at then 'started_at' end,\n    case when v_ended_at is distinct from v_current.ended_at then 'ended_at' end\n  ],null);\n  if cardinality(v_changed_fields) = 0 then\n    raise exception using errcode='22023', message='Correction must change at least one manager-visible fact';\n  end if;\n  if v_ended_at is not null and v_ended_at < v_started_at then\n    raise exception using errcode='22023', message='Corrected cleaning end time cannot precede its start time';\n  end if;\n\n  select e.id,e.display_name into v_employee from public.employees e where e.id = v_employee_id;\n  select l.id,l.location_code,l.location_name into v_location from public.locations l where l.id = v_location_id;\n  select d.id,d.device_id,d.device_name,d.assignment_epoch into v_device from public.devices d where d.id = v_device_id;\n  if v_employee.id is null or v_location.id is null or v_device.id is null then\n    raise exception using errcode='23503', message='Corrected employee, location, and phone must exist';\n  end if;\n\n  insert into public.custodial_session_corrections(\n    operation_id,request_fingerprint,session_id,corrected_by_manager_id,corrected_by_manager_name_snapshot,\n    reason,changed_fields,effective_employee_id,effective_employee_name_snapshot,effective_location_id,\n    effective_location_code_snapshot,effective_location_name_snapshot,effective_device_id,\n    effective_device_identifier_snapshot,effective_device_name_snapshot,effective_assignment_epoch_snapshot,\n    effective_started_at,effective_ended_at\n  ) values (\n    p_operation_id,v_fingerprint,p_session_id,p_manager_id,v_manager_name,btrim(p_reason),v_changed_fields,\n    v_employee.id,v_employee.display_name,v_location.id,v_location.location_code,v_location.location_name,\n    v_device.id,v_device.device_id,v_device.device_name,v_device.assignment_epoch,v_started_at,v_ended_at\n  ) returning * into v_inserted;\n\n  return jsonb_build_object('correction_id',v_inserted.correction_id,'session_id',v_inserted.session_id,\n    'operation_id',v_inserted.operation_id,'replayed',false,'changed_fields',v_inserted.changed_fields,\n    'created_at',v_inserted.created_at);\nend\n$function$\n",
+      "function_name": "custodial_append_session_correction",
+      "identity_arguments": "p_operation_id uuid, p_session_id uuid, p_manager_id uuid, p_reason text, p_backend_execution_secret text, p_corrected_employee_id uuid, p_corrected_location_id uuid, p_corrected_device_id uuid, p_corrected_started_at timestamp with time zone, p_corrected_ended_at timestamp with time zone",
       "owner_name": "migration_owner",
       "schema_name": "public"
     },
@@ -35226,6 +35697,22 @@
     },
     {
       "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_evaluate_location_proximity_measurement(p_location_code text, p_device_identifier text, p_latitude numeric, p_longitude numeric, p_accuracy_m numeric DEFAULT NULL::numeric, p_session_uuid text DEFAULT NULL::text, p_client_event_id text DEFAULT NULL::text, p_correlation_id text DEFAULT NULL::text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_presented_device text := nullif(btrim(coalesce(p_device_identifier, '')), '');\n  v_resolved_location_code text := public.resolve_scan_location_code(p_location_code);\n  v_device_pk uuid;\n  v_device_id text;\n  v_location_id uuid;\n  v_location_name text;\n  v_session_id uuid;\n  v_target_lat numeric;\n  v_target_lon numeric;\n  v_coordinate_source text;\n  v_radius numeric := greatest(25, public.get_setting_int('gps_proximity_radius_m', 175));\n  v_max_accuracy numeric := greatest(25, public.get_setting_int('gps_max_accuracy_m', 100));\n  v_distance numeric;\n  v_effective_radius numeric;\n  v_result text;\n  v_badge_color text;\n  v_event_id uuid;\n  v_session_key text := coalesce(nullif(btrim(p_session_uuid), ''), '');\nbegin\n  if v_presented_device is null then raise exception 'device identifier is required'; end if;\n  if v_resolved_location_code is null then raise exception 'Active location not found for code: %', p_location_code; end if;\n  if p_latitude is null or p_latitude < -90 or p_latitude > 90 then raise exception 'latitude is invalid'; end if;\n  if p_longitude is null or p_longitude < -180 or p_longitude > 180 then raise exception 'longitude is invalid'; end if;\n  if p_accuracy_m is not null and p_accuracy_m < 0 then raise exception 'accuracy_m cannot be negative'; end if;\n\n  select d.id, d.device_id\n    into v_device_pk, v_device_id\n  from public.devices d\n  where d.active = true and upper(btrim(d.device_id)) = upper(v_presented_device)\n  union all\n  select d.id, d.device_id\n  from public.device_aliases da\n  join public.devices d on d.id = da.canonical_device_id and d.active = true\n  where da.active = true and upper(btrim(da.alias_identifier)) = upper(v_presented_device)\n  limit 1;\n  if v_device_pk is null then raise exception 'Active device not found: %', v_presented_device; end if;\n\n  select l.id, l.location_name\n    into v_location_id, v_location_name\n  from public.locations l\n  where l.active = true and l.location_code = v_resolved_location_code\n  limit 1;\n\n  if v_session_key <> '' then\n    select s.id into v_session_id\n    from public.sessions s\n    where s.session_uuid = v_session_key\n      and s.device_id = v_device_pk\n      and s.location_id = v_location_id\n    limit 1;\n    if v_session_id is null then\n      raise exception 'Session does not belong to this device and location';\n    end if;\n  end if;\n\n  select lp.latitude, lp.longitude,\n         coalesce(nullif(lp.coordinate_source, ''), 'location_proximity_settings')\n    into v_target_lat, v_target_lon, v_coordinate_source\n  from public.location_proximity_settings lp\n  where lp.location_id = v_location_id\n    and lp.active = true\n    and lp.latitude is not null\n    and lp.longitude is not null\n  order by lp.updated_at desc\n  limit 1;\n\n  if v_target_lat is null or v_target_lon is null then\n    select gp.latitude, gp.longitude,\n           coalesce(nullif(gp.coordinate_source, ''), 'location_group_proximity_settings')\n      into v_target_lat, v_target_lon, v_coordinate_source\n    from public.location_group_memberships gm\n    join public.location_groups lg on lg.id = gm.location_group_id and lg.active = true\n    join public.location_group_proximity_settings gp\n      on gp.location_group_id = lg.id\n     and gp.active = true\n     and gp.latitude is not null\n     and gp.longitude is not null\n    where gm.location_id = v_location_id and gm.active = true\n    order by gp.updated_at desc, lg.group_name\n    limit 1;\n  end if;\n\n  if v_target_lat is null or v_target_lon is null then\n    v_result := 'not_configured';\n    v_badge_color := 'amber';\n    v_effective_radius := v_radius;\n  else\n    v_distance := 6371000 * 2 * asin(sqrt(\n      power(sin(radians((p_latitude - v_target_lat)::double precision) / 2), 2)\n      + cos(radians(v_target_lat::double precision))\n      * cos(radians(p_latitude::double precision))\n      * power(sin(radians((p_longitude - v_target_lon)::double precision) / 2), 2)\n    ));\n    v_effective_radius := v_radius + least(greatest(coalesce(p_accuracy_m, 0), 0), 25);\n    if p_accuracy_m is not null and p_accuracy_m > v_max_accuracy then\n      v_result := 'low_accuracy';\n      v_badge_color := 'amber';\n    elsif v_distance <= v_effective_radius then\n      v_result := 'near';\n      v_badge_color := 'green';\n    else\n      v_result := 'away';\n      v_badge_color := 'red';\n    end if;\n  end if;\n\n  insert into public.device_location_proximity_status(\n    device_id, location_id, session_uuid, presented_identifier, result, badge_color,\n    distance_m, allowed_radius_m, accuracy_m, client_latitude, client_longitude,\n    target_latitude, target_longitude, coordinate_source, evaluated_at,\n    correlation_id, metadata_json\n  ) values (\n    v_device_pk, v_location_id, v_session_key, v_presented_device, v_result, v_badge_color,\n    v_distance, v_effective_radius, p_accuracy_m, p_latitude, p_longitude,\n    v_target_lat, v_target_lon, v_coordinate_source, now(),\n    nullif(btrim(coalesce(p_correlation_id, '')), ''),\n    jsonb_build_object('location_code', v_resolved_location_code, 'location_name', v_location_name)\n  )\n  on conflict (device_id, location_id, session_uuid) do update set\n    presented_identifier = excluded.presented_identifier,\n    result = excluded.result,\n    badge_color = excluded.badge_color,\n    distance_m = excluded.distance_m,\n    allowed_radius_m = excluded.allowed_radius_m,\n    accuracy_m = excluded.accuracy_m,\n    client_latitude = excluded.client_latitude,\n    client_longitude = excluded.client_longitude,\n    target_latitude = excluded.target_latitude,\n    target_longitude = excluded.target_longitude,\n    coordinate_source = excluded.coordinate_source,\n    evaluated_at = now(),\n    correlation_id = excluded.correlation_id,\n    metadata_json = excluded.metadata_json;\n\n  if p_client_event_id is not null then\n    select se.id into v_event_id\n    from public.scan_events se\n    where se.client_event_id = p_client_event_id\n    limit 1;\n  end if;\n\n  if v_event_id is null then\n    insert into public.scan_events(\n      scanned_at, location_id, location_code, device_id, device_identifier,\n      session_id, event_type, result, notes, payload_json, client_event_id\n    ) values (\n      now(), v_location_id, v_resolved_location_code, v_device_pk, v_device_id,\n      v_session_id, 'work_position_check', v_result,\n      case\n        when v_result = 'away' then format('Phone is %s meters from the authoritative location coordinate.', round(v_distance))\n        when v_result = 'near' then 'Phone is within the authoritative location radius.'\n        when v_result = 'low_accuracy' then 'GPS accuracy is too low for a green proximity result.'\n        else 'No authoritative GPS coordinate is configured for this location.'\n      end,\n      jsonb_build_object(\n        'distance_m', v_distance,\n        'allowed_radius_m', v_effective_radius,\n        'accuracy_m', p_accuracy_m,\n        'client_latitude', p_latitude,\n        'client_longitude', p_longitude,\n        'target_latitude', v_target_lat,\n        'target_longitude', v_target_lon,\n        'coordinate_source', v_coordinate_source,\n        'badge_color', v_badge_color,\n        'correlation_id', p_correlation_id\n      ),\n      nullif(btrim(coalesce(p_client_event_id, '')), '')\n    ) returning id into v_event_id;\n  end if;\n\n  return jsonb_build_object(\n    'ok', true,\n    'result', v_result,\n    'badge_color', v_badge_color,\n    'device_id', v_device_id,\n    'presented_device_id', v_presented_device,\n    'location_code', v_resolved_location_code,\n    'location_name', v_location_name,\n    'session_uuid', nullif(v_session_key, ''),\n    'distance_m', case when v_distance is null then null else round(v_distance, 1) end,\n    'allowed_radius_m', round(v_effective_radius, 1),\n    'accuracy_m', p_accuracy_m,\n    'target_latitude', v_target_lat,\n    'target_longitude', v_target_lon,\n    'coordinate_source', v_coordinate_source,\n    'evaluated_at', now(),\n    'scan_event_id', v_event_id\n  );\nend\n$function$\n",
+      "function_name": "custodial_evaluate_location_proximity_measurement",
+      "identity_arguments": "p_location_code text, p_device_identifier text, p_latitude numeric, p_longitude numeric, p_accuracy_m numeric, p_session_uuid text, p_client_event_id text, p_correlation_id text",
+      "owner_name": "migration_owner",
+      "schema_name": "public"
+    },
+    {
+      "comment": "Server-authoritative GPS evidence with observation age, boundary uncertainty, and implausible-motion checks; never changes cleaning session authority.",
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_evaluate_location_proximity_v2_measurement(p_location_code text, p_device_identifier text, p_latitude numeric, p_longitude numeric, p_accuracy_m numeric DEFAULT NULL::numeric, p_session_uuid text DEFAULT NULL::text, p_client_event_id text DEFAULT NULL::text, p_correlation_id text DEFAULT NULL::text, p_observed_at timestamp with time zone DEFAULT NULL::timestamp with time zone)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_now timestamptz := clock_timestamp();\n  v_observed_at timestamptz := coalesce(p_observed_at, clock_timestamp());\n  v_presented_device text := nullif(btrim(coalesce(p_device_identifier, '')), '');\n  v_resolved_location_code text := public.resolve_scan_location_code(p_location_code);\n  v_device_pk uuid;\n  v_device_id text;\n  v_location_id uuid;\n  v_location_name text;\n  v_session_id uuid;\n  v_target_lat numeric;\n  v_target_lon numeric;\n  v_coordinate_source text;\n  v_radius numeric := greatest(25, public.get_setting_int('gps_proximity_radius_m', 175));\n  v_max_accuracy numeric := greatest(25, public.get_setting_int('gps_max_accuracy_m', 100));\n  v_max_age_seconds numeric := greatest(30, public.get_setting_int('gps_max_observation_age_seconds', 120));\n  v_future_tolerance_seconds numeric := greatest(0, public.get_setting_int('gps_future_tolerance_seconds', 30));\n  v_boundary_hysteresis numeric := greatest(5, public.get_setting_int('gps_boundary_hysteresis_m', 15));\n  v_max_human_speed numeric := greatest(2, public.get_setting_int('gps_max_human_speed_mps', 12));\n  v_distance numeric;\n  v_uncertainty numeric;\n  v_observation_age_seconds numeric;\n  v_previous_lat numeric;\n  v_previous_lon numeric;\n  v_previous_accuracy_m numeric;\n  v_previous_observed_at timestamptz;\n  v_motion_distance_m numeric;\n  v_motion_effective_distance_m numeric;\n  v_motion_elapsed_seconds numeric;\n  v_motion_speed_mps numeric;\n  v_status_observed_at timestamptz;\n  v_result text;\n  v_badge_color text;\n  v_event_id uuid;\n  v_session_key text := coalesce(nullif(btrim(p_session_uuid), ''), '');\n  v_authoritative boolean := false;\nbegin\n  if v_presented_device is null then raise exception 'device identifier is required'; end if;\n  if v_resolved_location_code is null then raise exception 'Active location not found for code: %', p_location_code; end if;\n  if p_latitude is null or p_latitude < -90 or p_latitude > 90 then raise exception 'latitude is invalid'; end if;\n  if p_longitude is null or p_longitude < -180 or p_longitude > 180 then raise exception 'longitude is invalid'; end if;\n  if p_accuracy_m is not null and p_accuracy_m < 0 then raise exception 'accuracy_m cannot be negative'; end if;\n\n  select d.id, d.device_id into v_device_pk, v_device_id\n  from public.devices d\n  where d.active = true and upper(btrim(d.device_id)) = upper(v_presented_device)\n  union all\n  select d.id, d.device_id\n  from public.device_aliases da\n  join public.devices d on d.id = da.canonical_device_id and d.active = true\n  where da.active = true and upper(btrim(da.alias_identifier)) = upper(v_presented_device)\n  limit 1;\n  if v_device_pk is null then raise exception 'Active device not found: %', v_presented_device; end if;\n\n  select l.id, l.location_name into v_location_id, v_location_name\n  from public.locations l\n  where l.active = true and l.location_code = v_resolved_location_code\n  limit 1;\n\n  if v_session_key <> '' then\n    select s.id into v_session_id\n    from public.sessions s\n    where s.session_uuid = v_session_key\n      and s.device_id = v_device_pk\n      and s.location_id = v_location_id\n    limit 1;\n    if v_session_id is null then raise exception 'Session does not belong to this device and location'; end if;\n  end if;\n\n  select lp.latitude, lp.longitude, coalesce(nullif(lp.coordinate_source, ''), 'location_proximity_settings')\n  into v_target_lat, v_target_lon, v_coordinate_source\n  from public.location_proximity_settings lp\n  where lp.location_id = v_location_id\n    and lp.active = true\n    and lp.latitude is not null\n    and lp.longitude is not null\n  order by lp.updated_at desc\n  limit 1;\n\n  if v_target_lat is null or v_target_lon is null then\n    select gp.latitude, gp.longitude, coalesce(nullif(gp.coordinate_source, ''), 'location_group_proximity_settings')\n    into v_target_lat, v_target_lon, v_coordinate_source\n    from public.location_group_memberships gm\n    join public.location_groups lg on lg.id = gm.location_group_id and lg.active = true\n    join public.location_group_proximity_settings gp\n      on gp.location_group_id = lg.id\n     and gp.active = true\n     and gp.latitude is not null\n     and gp.longitude is not null\n    where gm.location_id = v_location_id and gm.active = true\n    order by gp.updated_at desc, lg.group_name\n    limit 1;\n  end if;\n\n  select s.client_latitude, s.client_longitude, s.accuracy_m, coalesce(s.observed_at, s.evaluated_at)\n  into v_previous_lat, v_previous_lon, v_previous_accuracy_m, v_previous_observed_at\n  from public.device_location_proximity_status s\n  where s.device_id = v_device_pk\n    and s.location_id = v_location_id\n    and s.session_uuid = v_session_key\n    and s.result in ('near', 'away', 'boundary_uncertain')\n  limit 1;\n\n  v_observation_age_seconds := extract(epoch from (v_now - v_observed_at));\n  -- A client clock that is ahead must not pin the current-status row into the\n  -- future and suppress later legitimate observations. The unmodified client\n  -- timestamp remains in the scan event and metadata for audit evidence.\n  v_status_observed_at := least(v_observed_at, v_now);\n  v_uncertainty := greatest(v_boundary_hysteresis, least(greatest(coalesce(p_accuracy_m, 0), 0), v_max_accuracy));\n\n  if v_target_lat is not null and v_target_lon is not null then\n    v_distance := 6371000 * 2 * asin(sqrt(\n      power(sin(radians((p_latitude - v_target_lat)::double precision) / 2), 2)\n      + cos(radians(v_target_lat::double precision)) * cos(radians(p_latitude::double precision))\n      * power(sin(radians((p_longitude - v_target_lon)::double precision) / 2), 2)\n    ));\n  end if;\n\n  if v_previous_lat is not null\n     and v_previous_lon is not null\n     and v_previous_observed_at is not null\n     and v_observed_at > v_previous_observed_at then\n    v_motion_elapsed_seconds := extract(epoch from (v_observed_at - v_previous_observed_at));\n    v_motion_distance_m := 6371000 * 2 * asin(sqrt(\n      power(sin(radians((p_latitude - v_previous_lat)::double precision) / 2), 2)\n      + cos(radians(v_previous_lat::double precision)) * cos(radians(p_latitude::double precision))\n      * power(sin(radians((p_longitude - v_previous_lon)::double precision) / 2), 2)\n    ));\n    v_motion_effective_distance_m := greatest(\n      0,\n      v_motion_distance_m - greatest(coalesce(p_accuracy_m, 0), 0) - greatest(coalesce(v_previous_accuracy_m, 0), 0)\n    );\n    v_motion_speed_mps := v_motion_effective_distance_m / greatest(v_motion_elapsed_seconds, 0.001);\n  end if;\n\n  if v_observation_age_seconds < -v_future_tolerance_seconds then\n    v_result := 'future_clock'; v_badge_color := 'amber';\n  elsif v_observation_age_seconds > v_max_age_seconds then\n    v_result := 'stale'; v_badge_color := 'amber';\n  elsif p_accuracy_m is null or p_accuracy_m > v_max_accuracy then\n    v_result := 'low_accuracy'; v_badge_color := 'amber';\n  elsif v_target_lat is null or v_target_lon is null then\n    v_result := 'not_configured'; v_badge_color := 'amber';\n  elsif v_motion_speed_mps is not null and v_motion_speed_mps > v_max_human_speed then\n    v_result := 'implausible_jump'; v_badge_color := 'amber';\n  elsif abs(v_distance - v_radius) <= v_uncertainty then\n    v_result := 'boundary_uncertain'; v_badge_color := 'amber';\n  elsif v_distance < v_radius then\n    v_result := 'near'; v_badge_color := 'green'; v_authoritative := true;\n  else\n    v_result := 'away'; v_badge_color := 'red'; v_authoritative := true;\n  end if;\n\n  insert into public.device_location_proximity_status(\n    device_id, location_id, session_uuid, presented_identifier, result, badge_color,\n    distance_m, allowed_radius_m, accuracy_m, client_latitude, client_longitude,\n    target_latitude, target_longitude, coordinate_source, observed_at,\n    observation_age_seconds, motion_speed_mps, evaluated_at, correlation_id, metadata_json\n  ) values (\n    v_device_pk, v_location_id, v_session_key, v_presented_device, v_result, v_badge_color,\n    v_distance, v_radius, p_accuracy_m, p_latitude, p_longitude,\n    v_target_lat, v_target_lon, v_coordinate_source, v_status_observed_at,\n    v_observation_age_seconds, v_motion_speed_mps, v_now,\n    nullif(btrim(coalesce(p_correlation_id, '')), ''),\n    jsonb_build_object(\n      'location_code', v_resolved_location_code,\n      'location_name', v_location_name,\n      'authoritative', v_authoritative,\n      'reported_observed_at', v_observed_at,\n      'boundary_uncertainty_m', v_uncertainty,\n      'motion_distance_m', v_motion_distance_m,\n      'motion_effective_distance_m', v_motion_effective_distance_m\n    )\n  )\n  on conflict(device_id, location_id, session_uuid) do update set\n    presented_identifier = excluded.presented_identifier,\n    result = excluded.result,\n    badge_color = excluded.badge_color,\n    distance_m = excluded.distance_m,\n    allowed_radius_m = excluded.allowed_radius_m,\n    accuracy_m = excluded.accuracy_m,\n    client_latitude = excluded.client_latitude,\n    client_longitude = excluded.client_longitude,\n    target_latitude = excluded.target_latitude,\n    target_longitude = excluded.target_longitude,\n    coordinate_source = excluded.coordinate_source,\n    observed_at = excluded.observed_at,\n    observation_age_seconds = excluded.observation_age_seconds,\n    motion_speed_mps = excluded.motion_speed_mps,\n    evaluated_at = excluded.evaluated_at,\n    correlation_id = excluded.correlation_id,\n    metadata_json = excluded.metadata_json\n  where excluded.observed_at >= coalesce(device_location_proximity_status.observed_at, device_location_proximity_status.evaluated_at);\n\n  insert into public.scan_events(\n      scanned_at, location_id, location_code, device_id, device_identifier,\n      session_id, event_type, result, notes, payload_json, client_event_id\n    ) values (\n      v_now, v_location_id, v_resolved_location_code, v_device_pk, v_device_id,\n      v_session_id, 'work_position_check', v_result,\n      case\n        when v_result = 'away' then format('Phone is %s meters from the authoritative location coordinate.', round(v_distance))\n        when v_result = 'near' then 'Phone is within the authoritative location radius.'\n        when v_result = 'boundary_uncertain' then 'Phone is near the GPS boundary; location remains advisory until a clearer reading arrives.'\n        when v_result = 'low_accuracy' then 'GPS accuracy is too low for an authoritative proximity result.'\n        when v_result = 'stale' then 'GPS observation is stale and was not accepted as current position.'\n        when v_result = 'future_clock' then 'GPS observation timestamp is ahead of server time.'\n        when v_result = 'implausible_jump' then 'GPS movement is implausibly fast and requires a fresh reading.'\n        else 'No authoritative GPS coordinate is configured for this location.'\n      end,\n      jsonb_build_object(\n        'distance_m', v_distance,\n        'allowed_radius_m', v_radius,\n        'accuracy_m', p_accuracy_m,\n        'client_latitude', p_latitude,\n        'client_longitude', p_longitude,\n        'target_latitude', v_target_lat,\n        'target_longitude', v_target_lon,\n        'coordinate_source', v_coordinate_source,\n        'badge_color', v_badge_color,\n        'authoritative', v_authoritative,\n        'observed_at', v_observed_at,\n        'observation_age_seconds', v_observation_age_seconds,\n        'motion_speed_mps', v_motion_speed_mps,\n        'motion_distance_m', v_motion_distance_m,\n        'motion_effective_distance_m', v_motion_effective_distance_m,\n        'correlation_id', p_correlation_id\n      ),\n      nullif(btrim(coalesce(p_client_event_id, '')), '')\n    )\n    on conflict(client_event_id) where client_event_id is not null do nothing\n    returning id into v_event_id;\n\n  if v_event_id is null and nullif(btrim(coalesce(p_client_event_id, '')), '') is not null then\n    select se.id into v_event_id\n    from public.scan_events se\n    where se.client_event_id = nullif(btrim(p_client_event_id), '')\n    limit 1;\n  end if;\n\n  return jsonb_build_object(\n    'ok', true,\n    'result', v_result,\n    'authoritative', v_authoritative,\n    'badge_color', v_badge_color,\n    'device_id', v_device_id,\n    'presented_device_id', v_presented_device,\n    'location_code', v_resolved_location_code,\n    'location_name', v_location_name,\n    'session_uuid', nullif(v_session_key, ''),\n    'distance_m', case when v_distance is null then null else round(v_distance, 1) end,\n    'allowed_radius_m', round(v_radius, 1),\n    'accuracy_m', p_accuracy_m,\n    'target_latitude', v_target_lat,\n    'target_longitude', v_target_lon,\n    'coordinate_source', v_coordinate_source,\n    'observed_at', v_observed_at,\n    'observation_age_seconds', round(v_observation_age_seconds, 1),\n    'motion_speed_mps', case when v_motion_speed_mps is null then null else round(v_motion_speed_mps, 2) end,\n    'evaluated_at', v_now,\n    'scan_event_id', v_event_id\n  );\nend\n$function$\n",
+      "function_name": "custodial_evaluate_location_proximity_v2_measurement",
+      "identity_arguments": "p_location_code text, p_device_identifier text, p_latitude numeric, p_longitude numeric, p_accuracy_m numeric, p_session_uuid text, p_client_event_id text, p_correlation_id text, p_observed_at timestamp with time zone",
+      "owner_name": "migration_owner",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
       "definition": "CREATE OR REPLACE FUNCTION public.custodial_finish_historical_session_authoritative(p_session_identifier text, p_device_id text, p_finish_operation_id uuid, p_client_ended_at timestamp with time zone, p_backend_execution_secret text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\nbegin\n  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  return public.tool_finish_session_exact(\n    p_session_identifier,p_device_id,p_finish_operation_id,p_client_ended_at\n  );\nend\n$function$\n",
       "function_name": "custodial_finish_historical_session_authoritative",
       "identity_arguments": "p_session_identifier text, p_device_id text, p_finish_operation_id uuid, p_client_ended_at timestamp with time zone, p_backend_execution_secret text",
@@ -35266,6 +35753,14 @@
     },
     {
       "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_gps_session_state(p_location_code text, p_device_identifier text, p_session_uuid text)\n RETURNS text\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\n  select s.status\n  from public.sessions s\n  join public.devices d on d.id=s.device_id and d.active=true\n  join public.locations l on l.id=s.location_id and l.active=true\n  where s.session_uuid=nullif(btrim(coalesce(p_session_uuid,'')),'')\n    and l.location_code=public.resolve_scan_location_code(p_location_code)\n    and (\n      upper(btrim(d.device_id))=upper(btrim(coalesce(p_device_identifier,'')))\n      or exists(\n        select 1 from public.device_aliases da\n        where da.canonical_device_id=d.id and da.active=true\n          and upper(btrim(da.alias_identifier))=upper(btrim(coalesce(p_device_identifier,'')))\n      )\n    )\n  limit 1\n$function$\n",
+      "function_name": "custodial_gps_session_state",
+      "identity_arguments": "p_location_code text, p_device_identifier text, p_session_uuid text",
+      "owner_name": "migration_owner",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
       "definition": "CREATE OR REPLACE FUNCTION public.custodial_lock_offline_reconciliation_keys(p_client_session_id text, p_client_completion_id text)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_first text := 'custodial-offline-key:session:' || coalesce(p_client_session_id,'');\n  v_second text := 'custodial-offline-key:completion:' || coalesce(p_client_completion_id,'');\nbegin\n  if v_first <= v_second then\n    perform pg_advisory_xact_lock(hashtextextended(v_first, 0));\n    perform pg_advisory_xact_lock(hashtextextended(v_second, 0));\n  else\n    perform pg_advisory_xact_lock(hashtextextended(v_second, 0));\n    perform pg_advisory_xact_lock(hashtextextended(v_first, 0));\n  end if;\nend\n$function$\n",
       "function_name": "custodial_lock_offline_reconciliation_keys",
       "identity_arguments": "p_client_session_id text, p_client_completion_id text",
@@ -35298,9 +35793,25 @@
     },
     {
       "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_manager_get_session_truth(p_manager_id uuid, p_session_id uuid, p_backend_execution_secret text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_result jsonb;\nbegin\n  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  if not exists(\n    select 1 from public.ops_manager_managers m\n    where m.manager_id=p_manager_id and m.active=true and m.revoked_at is null\n      and m.is_system_principal=false\n      and m.roles && array['OPS_MANAGER','CUSTODIAL_MANAGER','DIRECTOR','SECURITY_ADMIN']::text[]\n  ) then\n    raise exception using errcode='42501', message='An active named manager is required to view cleaning truth';\n  end if;\n  select to_jsonb(v) into v_result\n  from public.v_custodial_cleaning_session_truth v\n  where v.session_id=p_session_id;\n  if v_result is null then\n    raise exception using errcode='P0002', message='Cleaning session was not found';\n  end if;\n  return v_result;\nend\n$function$\n",
+      "function_name": "custodial_manager_get_session_truth",
+      "identity_arguments": "p_manager_id uuid, p_session_id uuid, p_backend_execution_secret text",
+      "owner_name": "migration_owner",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
       "definition": "CREATE OR REPLACE FUNCTION public.custodial_manager_list_offline_reconciliations(p_manager_id uuid, p_limit integer, p_before timestamp with time zone, p_backend_execution_secret text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\nbegin\n  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  if not exists(select 1 from public.ops_manager_managers m where m.manager_id=p_manager_id and m.active=true and m.revoked_at is null and m.roles && array['OPS_MANAGER','DIRECTOR','SECURITY_ADMIN']::text[]) then raise exception using errcode='42501',message='active named manager authority is required'; end if;\n  return coalesce((select jsonb_agg(jsonb_build_object(\n    'reconciliation_id',r.reconciliation_id,'state',r.state,'reason',r.quarantine_reason,'original_employee_id',r.original_employee_id,'occurrence_id',r.occurrence_id,'created_at',r.created_at,\n    'notifications',coalesce((select jsonb_agg(jsonb_build_object('outbox_id',o.outbox_id,'notification_kind',o.notification_kind,'disposition_id',o.disposition_id,'state',o.state,\n      'status_label',case o.state when 'pending' then 'Pending delivery' when 'claimed' then 'Delivery in progress' when 'retry' then 'Retry scheduled' when 'delivered' then 'Delivered' else 'Delivery unavailable' end,\n      'attempts',o.attempts,'claimed_at',o.claimed_at,'lease_expires_at',o.lease_expires_at,'next_attempt_at',o.next_attempt_at,'delivered_at',o.delivered_at,'failed_at',o.failed_at,'last_error',nullif(left(coalesce(o.last_error,''),500),''),\n      'recipient_count',(select count(*) from public.custodial_offline_reconciliation_delivery_recipients dr where dr.outbox_id=o.outbox_id)) order by o.created_at,o.outbox_id) from public.custodial_offline_reconciliation_outbox o where o.reconciliation_id=r.reconciliation_id),'[]'::jsonb)\n  ) order by r.created_at desc) from (select * from public.custodial_offline_reconciliation_records where p_before is null or created_at<p_before order by created_at desc limit greatest(1,least(coalesce(p_limit,50),100))) r),'[]'::jsonb);\nend\n$function$\n",
       "function_name": "custodial_manager_list_offline_reconciliations",
       "identity_arguments": "p_manager_id uuid, p_limit integer, p_before timestamp with time zone, p_backend_execution_secret text",
+      "owner_name": "migration_owner",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_mark_post_session_gps(p_result jsonb, p_session_state text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_scan_event_id uuid;\nbegin\n  v_scan_event_id := nullif(p_result->>'scan_event_id','')::uuid;\n  update public.device_location_proximity_status gps\n  set result='post_session',\n      badge_color='amber',\n      metadata_json=coalesce(gps.metadata_json,'{}'::jsonb) || jsonb_build_object(\n        'authoritative',false,\n        'evidence_scope','post_session_advisory',\n        'session_state',p_session_state\n      )\n  where gps.session_uuid=coalesce(p_result->>'session_uuid','')\n    and gps.device_id=(select d.id from public.devices d where d.device_id=p_result->>'device_id' limit 1)\n    and gps.location_id=(select l.id from public.locations l where l.location_code=p_result->>'location_code' limit 1);\n\n  if v_scan_event_id is not null then\n    update public.scan_events se\n    set result='post_session',\n        notes='GPS arrived after the cleaning was no longer active. It is retained as advisory evidence only.',\n        payload_json=coalesce(se.payload_json,'{}'::jsonb) || jsonb_build_object(\n          'authoritative',false,\n          'evidence_scope','post_session_advisory',\n          'session_state',p_session_state\n        )\n    where se.id=v_scan_event_id;\n  end if;\n\n  return coalesce(p_result,'{}'::jsonb) || jsonb_build_object(\n    'result','post_session',\n    'badge_color','amber',\n    'authoritative',false,\n    'evidence_scope','post_session_advisory',\n    'session_state',p_session_state\n  );\nend\n$function$\n",
+      "function_name": "custodial_mark_post_session_gps",
+      "identity_arguments": "p_result jsonb, p_session_state text",
       "owner_name": "migration_owner",
       "schema_name": "public"
     },
@@ -35436,6 +35947,14 @@
       "comment": null,
       "definition": "CREATE OR REPLACE FUNCTION public.custodial_reject_release_authority_inventory_mutation()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\nbegin\n  raise exception using errcode='55000',message='release authority restore inventory is immutable';\nend\n$function$\n",
       "function_name": "custodial_reject_release_authority_inventory_mutation",
+      "identity_arguments": "",
+      "owner_name": "migration_owner",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_reject_session_correction_mutation()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\nbegin\n  raise exception using errcode='23514', message='Cleaning corrections are append-only';\nend\n$function$\n",
+      "function_name": "custodial_reject_session_correction_mutation",
       "identity_arguments": "",
       "owner_name": "migration_owner",
       "schema_name": "public"
@@ -35605,6 +36124,14 @@
       "definition": "CREATE OR REPLACE FUNCTION public.custodial_scan_evidence_is_canonical(p_event jsonb)\n RETURNS boolean\n LANGUAGE sql\n IMMUTABLE\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\n  select jsonb_typeof(p_event)='object'\n    and p_event ?& array['client_event_id','event_type','result','notes','scanned_at','payload_json']\n    and not exists(\n      select 1 from jsonb_object_keys(p_event) key\n      where key not in ('client_event_id','event_type','result','notes','scanned_at','payload_json')\n    )\n    and jsonb_typeof(p_event->'client_event_id')='string'\n    and jsonb_typeof(p_event->'event_type')='string'\n    and coalesce(jsonb_typeof(p_event->'result'),'null') in ('string','null')\n    and coalesce(jsonb_typeof(p_event->'notes'),'null') in ('string','null')\n    and jsonb_typeof(p_event->'scanned_at')='string'\n    and jsonb_typeof(p_event->'payload_json')='object'\n    and (p_event->'payload_json') ? 'entry_source'\n    and not exists(select 1 from jsonb_object_keys(p_event->'payload_json') key where key<>'entry_source')\n    and (p_event->'payload_json'->>'entry_source') in ('native-nfc','manual-qr-fallback');\n$function$\n",
       "function_name": "custodial_scan_evidence_is_canonical",
       "identity_arguments": "p_event jsonb",
+      "owner_name": "migration_owner",
+      "schema_name": "public"
+    },
+    {
+      "comment": null,
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_sessions_preserve_original_identity()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_employee_name text;\n  v_location_code text;\n  v_location_name text;\n  v_device_identifier text;\n  v_device_name text;\n  v_assignment_epoch bigint;\nbegin\n  if tg_op = 'INSERT' then\n    select e.display_name into v_employee_name\n    from public.employees e where e.id = new.employee_id;\n    select l.location_code, l.location_name into v_location_code, v_location_name\n    from public.locations l where l.id = new.location_id;\n    select d.device_id, d.device_name, d.assignment_epoch\n      into v_device_identifier, v_device_name, v_assignment_epoch\n    from public.devices d where d.id = new.device_id;\n    if v_employee_name is null or v_location_code is null or v_location_name is null\n       or v_device_identifier is null or v_device_name is null or v_assignment_epoch is null then\n      raise exception using errcode='23503', message='Cleaning identity must resolve before a session is created';\n    end if;\n    new.employee_name_snapshot := v_employee_name;\n    new.location_code_snapshot := v_location_code;\n    new.location_name_snapshot := v_location_name;\n    new.device_identifier_snapshot := v_device_identifier;\n    new.device_name_snapshot := v_device_name;\n    new.assignment_epoch_snapshot := v_assignment_epoch;\n    new.identity_snapshot_provenance := 'session_create';\n    return new;\n  end if;\n\n  if row(new.id,new.session_uuid,new.client_session_id,new.employee_id,new.location_id,new.device_id,new.started_at,new.created_at)\n     is distinct from\n     row(old.id,old.session_uuid,old.client_session_id,old.employee_id,old.location_id,old.device_id,old.started_at,old.created_at) then\n    raise exception using errcode='23514', message='Original cleaning identity is immutable; append a named-manager correction instead';\n  end if;\n  if row(new.employee_name_snapshot,new.location_code_snapshot,new.location_name_snapshot,\n         new.device_identifier_snapshot,new.device_name_snapshot,new.assignment_epoch_snapshot,new.identity_snapshot_provenance)\n     is distinct from\n     row(old.employee_name_snapshot,old.location_code_snapshot,old.location_name_snapshot,\n         old.device_identifier_snapshot,old.device_name_snapshot,old.assignment_epoch_snapshot,old.identity_snapshot_provenance) then\n    raise exception using errcode='23514', message='At-event cleaning identity snapshots are immutable';\n  end if;\n  if old.finish_operation_id is not null and new.finish_operation_id is distinct from old.finish_operation_id then\n    raise exception using errcode='23514', message='Cleaning finish operation identity is immutable once assigned';\n  end if;\n  if old.ended_at is not null and new.ended_at is distinct from old.ended_at then\n    raise exception using errcode='23514', message='Cleaning end time is immutable once assigned';\n  end if;\n  if old.duration_minutes is not null and new.duration_minutes is distinct from old.duration_minutes then\n    raise exception using errcode='23514', message='Cleaning duration is immutable once assigned';\n  end if;\n  if old.duration_display is not null and new.duration_display is distinct from old.duration_display then\n    raise exception using errcode='23514', message='Cleaning duration display is immutable once assigned';\n  end if;\n  if old.completion_source is not null and new.completion_source is distinct from old.completion_source then\n    raise exception using errcode='23514', message='Cleaning completion source is immutable once assigned';\n  end if;\n  return new;\nend\n$function$\n",
+      "function_name": "custodial_sessions_preserve_original_identity",
+      "identity_arguments": "",
       "owner_name": "migration_owner",
       "schema_name": "public"
     },
@@ -35866,15 +36393,15 @@
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.evaluate_location_proximity(p_location_code text, p_device_identifier text, p_latitude numeric, p_longitude numeric, p_accuracy_m numeric DEFAULT NULL::numeric, p_session_uuid text DEFAULT NULL::text, p_client_event_id text DEFAULT NULL::text, p_correlation_id text DEFAULT NULL::text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_presented_device text := nullif(btrim(coalesce(p_device_identifier, '')), '');\n  v_resolved_location_code text := public.resolve_scan_location_code(p_location_code);\n  v_device_pk uuid;\n  v_device_id text;\n  v_location_id uuid;\n  v_location_name text;\n  v_session_id uuid;\n  v_target_lat numeric;\n  v_target_lon numeric;\n  v_coordinate_source text;\n  v_radius numeric := greatest(25, public.get_setting_int('gps_proximity_radius_m', 175));\n  v_max_accuracy numeric := greatest(25, public.get_setting_int('gps_max_accuracy_m', 100));\n  v_distance numeric;\n  v_effective_radius numeric;\n  v_result text;\n  v_badge_color text;\n  v_event_id uuid;\n  v_session_key text := coalesce(nullif(btrim(p_session_uuid), ''), '');\nbegin\n  if v_presented_device is null then raise exception 'device identifier is required'; end if;\n  if v_resolved_location_code is null then raise exception 'Active location not found for code: %', p_location_code; end if;\n  if p_latitude is null or p_latitude < -90 or p_latitude > 90 then raise exception 'latitude is invalid'; end if;\n  if p_longitude is null or p_longitude < -180 or p_longitude > 180 then raise exception 'longitude is invalid'; end if;\n  if p_accuracy_m is not null and p_accuracy_m < 0 then raise exception 'accuracy_m cannot be negative'; end if;\n\n  select d.id, d.device_id\n    into v_device_pk, v_device_id\n  from public.devices d\n  where d.active = true and upper(btrim(d.device_id)) = upper(v_presented_device)\n  union all\n  select d.id, d.device_id\n  from public.device_aliases da\n  join public.devices d on d.id = da.canonical_device_id and d.active = true\n  where da.active = true and upper(btrim(da.alias_identifier)) = upper(v_presented_device)\n  limit 1;\n  if v_device_pk is null then raise exception 'Active device not found: %', v_presented_device; end if;\n\n  select l.id, l.location_name\n    into v_location_id, v_location_name\n  from public.locations l\n  where l.active = true and l.location_code = v_resolved_location_code\n  limit 1;\n\n  if v_session_key <> '' then\n    select s.id into v_session_id\n    from public.sessions s\n    where s.session_uuid = v_session_key\n      and s.device_id = v_device_pk\n      and s.location_id = v_location_id\n    limit 1;\n    if v_session_id is null then\n      raise exception 'Session does not belong to this device and location';\n    end if;\n  end if;\n\n  select lp.latitude, lp.longitude,\n         coalesce(nullif(lp.coordinate_source, ''), 'location_proximity_settings')\n    into v_target_lat, v_target_lon, v_coordinate_source\n  from public.location_proximity_settings lp\n  where lp.location_id = v_location_id\n    and lp.active = true\n    and lp.latitude is not null\n    and lp.longitude is not null\n  order by lp.updated_at desc\n  limit 1;\n\n  if v_target_lat is null or v_target_lon is null then\n    select gp.latitude, gp.longitude,\n           coalesce(nullif(gp.coordinate_source, ''), 'location_group_proximity_settings')\n      into v_target_lat, v_target_lon, v_coordinate_source\n    from public.location_group_memberships gm\n    join public.location_groups lg on lg.id = gm.location_group_id and lg.active = true\n    join public.location_group_proximity_settings gp\n      on gp.location_group_id = lg.id\n     and gp.active = true\n     and gp.latitude is not null\n     and gp.longitude is not null\n    where gm.location_id = v_location_id and gm.active = true\n    order by gp.updated_at desc, lg.group_name\n    limit 1;\n  end if;\n\n  if v_target_lat is null or v_target_lon is null then\n    v_result := 'not_configured';\n    v_badge_color := 'amber';\n    v_effective_radius := v_radius;\n  else\n    v_distance := 6371000 * 2 * asin(sqrt(\n      power(sin(radians((p_latitude - v_target_lat)::double precision) / 2), 2)\n      + cos(radians(v_target_lat::double precision))\n      * cos(radians(p_latitude::double precision))\n      * power(sin(radians((p_longitude - v_target_lon)::double precision) / 2), 2)\n    ));\n    v_effective_radius := v_radius + least(greatest(coalesce(p_accuracy_m, 0), 0), 25);\n    if p_accuracy_m is not null and p_accuracy_m > v_max_accuracy then\n      v_result := 'low_accuracy';\n      v_badge_color := 'amber';\n    elsif v_distance <= v_effective_radius then\n      v_result := 'near';\n      v_badge_color := 'green';\n    else\n      v_result := 'away';\n      v_badge_color := 'red';\n    end if;\n  end if;\n\n  insert into public.device_location_proximity_status(\n    device_id, location_id, session_uuid, presented_identifier, result, badge_color,\n    distance_m, allowed_radius_m, accuracy_m, client_latitude, client_longitude,\n    target_latitude, target_longitude, coordinate_source, evaluated_at,\n    correlation_id, metadata_json\n  ) values (\n    v_device_pk, v_location_id, v_session_key, v_presented_device, v_result, v_badge_color,\n    v_distance, v_effective_radius, p_accuracy_m, p_latitude, p_longitude,\n    v_target_lat, v_target_lon, v_coordinate_source, now(),\n    nullif(btrim(coalesce(p_correlation_id, '')), ''),\n    jsonb_build_object('location_code', v_resolved_location_code, 'location_name', v_location_name)\n  )\n  on conflict (device_id, location_id, session_uuid) do update set\n    presented_identifier = excluded.presented_identifier,\n    result = excluded.result,\n    badge_color = excluded.badge_color,\n    distance_m = excluded.distance_m,\n    allowed_radius_m = excluded.allowed_radius_m,\n    accuracy_m = excluded.accuracy_m,\n    client_latitude = excluded.client_latitude,\n    client_longitude = excluded.client_longitude,\n    target_latitude = excluded.target_latitude,\n    target_longitude = excluded.target_longitude,\n    coordinate_source = excluded.coordinate_source,\n    evaluated_at = now(),\n    correlation_id = excluded.correlation_id,\n    metadata_json = excluded.metadata_json;\n\n  if p_client_event_id is not null then\n    select se.id into v_event_id\n    from public.scan_events se\n    where se.client_event_id = p_client_event_id\n    limit 1;\n  end if;\n\n  if v_event_id is null then\n    insert into public.scan_events(\n      scanned_at, location_id, location_code, device_id, device_identifier,\n      session_id, event_type, result, notes, payload_json, client_event_id\n    ) values (\n      now(), v_location_id, v_resolved_location_code, v_device_pk, v_device_id,\n      v_session_id, 'work_position_check', v_result,\n      case\n        when v_result = 'away' then format('Phone is %s meters from the authoritative location coordinate.', round(v_distance))\n        when v_result = 'near' then 'Phone is within the authoritative location radius.'\n        when v_result = 'low_accuracy' then 'GPS accuracy is too low for a green proximity result.'\n        else 'No authoritative GPS coordinate is configured for this location.'\n      end,\n      jsonb_build_object(\n        'distance_m', v_distance,\n        'allowed_radius_m', v_effective_radius,\n        'accuracy_m', p_accuracy_m,\n        'client_latitude', p_latitude,\n        'client_longitude', p_longitude,\n        'target_latitude', v_target_lat,\n        'target_longitude', v_target_lon,\n        'coordinate_source', v_coordinate_source,\n        'badge_color', v_badge_color,\n        'correlation_id', p_correlation_id\n      ),\n      nullif(btrim(coalesce(p_client_event_id, '')), '')\n    ) returning id into v_event_id;\n  end if;\n\n  return jsonb_build_object(\n    'ok', true,\n    'result', v_result,\n    'badge_color', v_badge_color,\n    'device_id', v_device_id,\n    'presented_device_id', v_presented_device,\n    'location_code', v_resolved_location_code,\n    'location_name', v_location_name,\n    'session_uuid', nullif(v_session_key, ''),\n    'distance_m', case when v_distance is null then null else round(v_distance, 1) end,\n    'allowed_radius_m', round(v_effective_radius, 1),\n    'accuracy_m', p_accuracy_m,\n    'target_latitude', v_target_lat,\n    'target_longitude', v_target_lon,\n    'coordinate_source', v_coordinate_source,\n    'evaluated_at', now(),\n    'scan_event_id', v_event_id\n  );\nend\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.evaluate_location_proximity(p_location_code text, p_device_identifier text, p_latitude numeric, p_longitude numeric, p_accuracy_m numeric DEFAULT NULL::numeric, p_session_uuid text DEFAULT NULL::text, p_client_event_id text DEFAULT NULL::text, p_correlation_id text DEFAULT NULL::text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_session_key text:=nullif(btrim(coalesce(p_session_uuid,'')),'');\n  v_session_state text;\n  v_result jsonb;\nbegin\n  if v_session_key is not null then\n    v_session_state:=public.custodial_gps_session_state(p_location_code,p_device_identifier,v_session_key);\n    if v_session_state is null then\n      raise exception using errcode='23503', message='Session does not belong to this device and location';\n    end if;\n  end if;\n  v_result:=public.custodial_evaluate_location_proximity_measurement(\n    p_location_code,p_device_identifier,p_latitude,p_longitude,p_accuracy_m,\n    p_session_uuid,p_client_event_id,p_correlation_id\n  );\n  if v_session_state is not null and v_session_state not in ('active','pending_submit') then\n    return public.custodial_mark_post_session_gps(v_result,v_session_state);\n  end if;\n  return v_result || jsonb_build_object('authoritative',false,'evidence_scope','active_work_advisory');\nend\n$function$\n",
       "function_name": "evaluate_location_proximity",
       "identity_arguments": "p_location_code text, p_device_identifier text, p_latitude numeric, p_longitude numeric, p_accuracy_m numeric, p_session_uuid text, p_client_event_id text, p_correlation_id text",
       "owner_name": "migration_owner",
       "schema_name": "public"
     },
     {
-      "comment": "Server-authoritative GPS evidence with observation age, boundary uncertainty, and implausible-motion checks; never changes cleaning session authority.",
-      "definition": "CREATE OR REPLACE FUNCTION public.evaluate_location_proximity_v2(p_location_code text, p_device_identifier text, p_latitude numeric, p_longitude numeric, p_accuracy_m numeric DEFAULT NULL::numeric, p_session_uuid text DEFAULT NULL::text, p_client_event_id text DEFAULT NULL::text, p_correlation_id text DEFAULT NULL::text, p_observed_at timestamp with time zone DEFAULT NULL::timestamp with time zone)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_now timestamptz := clock_timestamp();\n  v_observed_at timestamptz := coalesce(p_observed_at, clock_timestamp());\n  v_presented_device text := nullif(btrim(coalesce(p_device_identifier, '')), '');\n  v_resolved_location_code text := public.resolve_scan_location_code(p_location_code);\n  v_device_pk uuid;\n  v_device_id text;\n  v_location_id uuid;\n  v_location_name text;\n  v_session_id uuid;\n  v_target_lat numeric;\n  v_target_lon numeric;\n  v_coordinate_source text;\n  v_radius numeric := greatest(25, public.get_setting_int('gps_proximity_radius_m', 175));\n  v_max_accuracy numeric := greatest(25, public.get_setting_int('gps_max_accuracy_m', 100));\n  v_max_age_seconds numeric := greatest(30, public.get_setting_int('gps_max_observation_age_seconds', 120));\n  v_future_tolerance_seconds numeric := greatest(0, public.get_setting_int('gps_future_tolerance_seconds', 30));\n  v_boundary_hysteresis numeric := greatest(5, public.get_setting_int('gps_boundary_hysteresis_m', 15));\n  v_max_human_speed numeric := greatest(2, public.get_setting_int('gps_max_human_speed_mps', 12));\n  v_distance numeric;\n  v_uncertainty numeric;\n  v_observation_age_seconds numeric;\n  v_previous_lat numeric;\n  v_previous_lon numeric;\n  v_previous_accuracy_m numeric;\n  v_previous_observed_at timestamptz;\n  v_motion_distance_m numeric;\n  v_motion_effective_distance_m numeric;\n  v_motion_elapsed_seconds numeric;\n  v_motion_speed_mps numeric;\n  v_status_observed_at timestamptz;\n  v_result text;\n  v_badge_color text;\n  v_event_id uuid;\n  v_session_key text := coalesce(nullif(btrim(p_session_uuid), ''), '');\n  v_authoritative boolean := false;\nbegin\n  if v_presented_device is null then raise exception 'device identifier is required'; end if;\n  if v_resolved_location_code is null then raise exception 'Active location not found for code: %', p_location_code; end if;\n  if p_latitude is null or p_latitude < -90 or p_latitude > 90 then raise exception 'latitude is invalid'; end if;\n  if p_longitude is null or p_longitude < -180 or p_longitude > 180 then raise exception 'longitude is invalid'; end if;\n  if p_accuracy_m is not null and p_accuracy_m < 0 then raise exception 'accuracy_m cannot be negative'; end if;\n\n  select d.id, d.device_id into v_device_pk, v_device_id\n  from public.devices d\n  where d.active = true and upper(btrim(d.device_id)) = upper(v_presented_device)\n  union all\n  select d.id, d.device_id\n  from public.device_aliases da\n  join public.devices d on d.id = da.canonical_device_id and d.active = true\n  where da.active = true and upper(btrim(da.alias_identifier)) = upper(v_presented_device)\n  limit 1;\n  if v_device_pk is null then raise exception 'Active device not found: %', v_presented_device; end if;\n\n  select l.id, l.location_name into v_location_id, v_location_name\n  from public.locations l\n  where l.active = true and l.location_code = v_resolved_location_code\n  limit 1;\n\n  if v_session_key <> '' then\n    select s.id into v_session_id\n    from public.sessions s\n    where s.session_uuid = v_session_key\n      and s.device_id = v_device_pk\n      and s.location_id = v_location_id\n    limit 1;\n    if v_session_id is null then raise exception 'Session does not belong to this device and location'; end if;\n  end if;\n\n  select lp.latitude, lp.longitude, coalesce(nullif(lp.coordinate_source, ''), 'location_proximity_settings')\n  into v_target_lat, v_target_lon, v_coordinate_source\n  from public.location_proximity_settings lp\n  where lp.location_id = v_location_id\n    and lp.active = true\n    and lp.latitude is not null\n    and lp.longitude is not null\n  order by lp.updated_at desc\n  limit 1;\n\n  if v_target_lat is null or v_target_lon is null then\n    select gp.latitude, gp.longitude, coalesce(nullif(gp.coordinate_source, ''), 'location_group_proximity_settings')\n    into v_target_lat, v_target_lon, v_coordinate_source\n    from public.location_group_memberships gm\n    join public.location_groups lg on lg.id = gm.location_group_id and lg.active = true\n    join public.location_group_proximity_settings gp\n      on gp.location_group_id = lg.id\n     and gp.active = true\n     and gp.latitude is not null\n     and gp.longitude is not null\n    where gm.location_id = v_location_id and gm.active = true\n    order by gp.updated_at desc, lg.group_name\n    limit 1;\n  end if;\n\n  select s.client_latitude, s.client_longitude, s.accuracy_m, coalesce(s.observed_at, s.evaluated_at)\n  into v_previous_lat, v_previous_lon, v_previous_accuracy_m, v_previous_observed_at\n  from public.device_location_proximity_status s\n  where s.device_id = v_device_pk\n    and s.location_id = v_location_id\n    and s.session_uuid = v_session_key\n    and s.result in ('near', 'away', 'boundary_uncertain')\n  limit 1;\n\n  v_observation_age_seconds := extract(epoch from (v_now - v_observed_at));\n  -- A client clock that is ahead must not pin the current-status row into the\n  -- future and suppress later legitimate observations. The unmodified client\n  -- timestamp remains in the scan event and metadata for audit evidence.\n  v_status_observed_at := least(v_observed_at, v_now);\n  v_uncertainty := greatest(v_boundary_hysteresis, least(greatest(coalesce(p_accuracy_m, 0), 0), v_max_accuracy));\n\n  if v_target_lat is not null and v_target_lon is not null then\n    v_distance := 6371000 * 2 * asin(sqrt(\n      power(sin(radians((p_latitude - v_target_lat)::double precision) / 2), 2)\n      + cos(radians(v_target_lat::double precision)) * cos(radians(p_latitude::double precision))\n      * power(sin(radians((p_longitude - v_target_lon)::double precision) / 2), 2)\n    ));\n  end if;\n\n  if v_previous_lat is not null\n     and v_previous_lon is not null\n     and v_previous_observed_at is not null\n     and v_observed_at > v_previous_observed_at then\n    v_motion_elapsed_seconds := extract(epoch from (v_observed_at - v_previous_observed_at));\n    v_motion_distance_m := 6371000 * 2 * asin(sqrt(\n      power(sin(radians((p_latitude - v_previous_lat)::double precision) / 2), 2)\n      + cos(radians(v_previous_lat::double precision)) * cos(radians(p_latitude::double precision))\n      * power(sin(radians((p_longitude - v_previous_lon)::double precision) / 2), 2)\n    ));\n    v_motion_effective_distance_m := greatest(\n      0,\n      v_motion_distance_m - greatest(coalesce(p_accuracy_m, 0), 0) - greatest(coalesce(v_previous_accuracy_m, 0), 0)\n    );\n    v_motion_speed_mps := v_motion_effective_distance_m / greatest(v_motion_elapsed_seconds, 0.001);\n  end if;\n\n  if v_observation_age_seconds < -v_future_tolerance_seconds then\n    v_result := 'future_clock'; v_badge_color := 'amber';\n  elsif v_observation_age_seconds > v_max_age_seconds then\n    v_result := 'stale'; v_badge_color := 'amber';\n  elsif p_accuracy_m is null or p_accuracy_m > v_max_accuracy then\n    v_result := 'low_accuracy'; v_badge_color := 'amber';\n  elsif v_target_lat is null or v_target_lon is null then\n    v_result := 'not_configured'; v_badge_color := 'amber';\n  elsif v_motion_speed_mps is not null and v_motion_speed_mps > v_max_human_speed then\n    v_result := 'implausible_jump'; v_badge_color := 'amber';\n  elsif abs(v_distance - v_radius) <= v_uncertainty then\n    v_result := 'boundary_uncertain'; v_badge_color := 'amber';\n  elsif v_distance < v_radius then\n    v_result := 'near'; v_badge_color := 'green'; v_authoritative := true;\n  else\n    v_result := 'away'; v_badge_color := 'red'; v_authoritative := true;\n  end if;\n\n  insert into public.device_location_proximity_status(\n    device_id, location_id, session_uuid, presented_identifier, result, badge_color,\n    distance_m, allowed_radius_m, accuracy_m, client_latitude, client_longitude,\n    target_latitude, target_longitude, coordinate_source, observed_at,\n    observation_age_seconds, motion_speed_mps, evaluated_at, correlation_id, metadata_json\n  ) values (\n    v_device_pk, v_location_id, v_session_key, v_presented_device, v_result, v_badge_color,\n    v_distance, v_radius, p_accuracy_m, p_latitude, p_longitude,\n    v_target_lat, v_target_lon, v_coordinate_source, v_status_observed_at,\n    v_observation_age_seconds, v_motion_speed_mps, v_now,\n    nullif(btrim(coalesce(p_correlation_id, '')), ''),\n    jsonb_build_object(\n      'location_code', v_resolved_location_code,\n      'location_name', v_location_name,\n      'authoritative', v_authoritative,\n      'reported_observed_at', v_observed_at,\n      'boundary_uncertainty_m', v_uncertainty,\n      'motion_distance_m', v_motion_distance_m,\n      'motion_effective_distance_m', v_motion_effective_distance_m\n    )\n  )\n  on conflict(device_id, location_id, session_uuid) do update set\n    presented_identifier = excluded.presented_identifier,\n    result = excluded.result,\n    badge_color = excluded.badge_color,\n    distance_m = excluded.distance_m,\n    allowed_radius_m = excluded.allowed_radius_m,\n    accuracy_m = excluded.accuracy_m,\n    client_latitude = excluded.client_latitude,\n    client_longitude = excluded.client_longitude,\n    target_latitude = excluded.target_latitude,\n    target_longitude = excluded.target_longitude,\n    coordinate_source = excluded.coordinate_source,\n    observed_at = excluded.observed_at,\n    observation_age_seconds = excluded.observation_age_seconds,\n    motion_speed_mps = excluded.motion_speed_mps,\n    evaluated_at = excluded.evaluated_at,\n    correlation_id = excluded.correlation_id,\n    metadata_json = excluded.metadata_json\n  where excluded.observed_at >= coalesce(device_location_proximity_status.observed_at, device_location_proximity_status.evaluated_at);\n\n  insert into public.scan_events(\n      scanned_at, location_id, location_code, device_id, device_identifier,\n      session_id, event_type, result, notes, payload_json, client_event_id\n    ) values (\n      v_now, v_location_id, v_resolved_location_code, v_device_pk, v_device_id,\n      v_session_id, 'work_position_check', v_result,\n      case\n        when v_result = 'away' then format('Phone is %s meters from the authoritative location coordinate.', round(v_distance))\n        when v_result = 'near' then 'Phone is within the authoritative location radius.'\n        when v_result = 'boundary_uncertain' then 'Phone is near the GPS boundary; location remains advisory until a clearer reading arrives.'\n        when v_result = 'low_accuracy' then 'GPS accuracy is too low for an authoritative proximity result.'\n        when v_result = 'stale' then 'GPS observation is stale and was not accepted as current position.'\n        when v_result = 'future_clock' then 'GPS observation timestamp is ahead of server time.'\n        when v_result = 'implausible_jump' then 'GPS movement is implausibly fast and requires a fresh reading.'\n        else 'No authoritative GPS coordinate is configured for this location.'\n      end,\n      jsonb_build_object(\n        'distance_m', v_distance,\n        'allowed_radius_m', v_radius,\n        'accuracy_m', p_accuracy_m,\n        'client_latitude', p_latitude,\n        'client_longitude', p_longitude,\n        'target_latitude', v_target_lat,\n        'target_longitude', v_target_lon,\n        'coordinate_source', v_coordinate_source,\n        'badge_color', v_badge_color,\n        'authoritative', v_authoritative,\n        'observed_at', v_observed_at,\n        'observation_age_seconds', v_observation_age_seconds,\n        'motion_speed_mps', v_motion_speed_mps,\n        'motion_distance_m', v_motion_distance_m,\n        'motion_effective_distance_m', v_motion_effective_distance_m,\n        'correlation_id', p_correlation_id\n      ),\n      nullif(btrim(coalesce(p_client_event_id, '')), '')\n    )\n    on conflict(client_event_id) where client_event_id is not null do nothing\n    returning id into v_event_id;\n\n  if v_event_id is null and nullif(btrim(coalesce(p_client_event_id, '')), '') is not null then\n    select se.id into v_event_id\n    from public.scan_events se\n    where se.client_event_id = nullif(btrim(p_client_event_id), '')\n    limit 1;\n  end if;\n\n  return jsonb_build_object(\n    'ok', true,\n    'result', v_result,\n    'authoritative', v_authoritative,\n    'badge_color', v_badge_color,\n    'device_id', v_device_id,\n    'presented_device_id', v_presented_device,\n    'location_code', v_resolved_location_code,\n    'location_name', v_location_name,\n    'session_uuid', nullif(v_session_key, ''),\n    'distance_m', case when v_distance is null then null else round(v_distance, 1) end,\n    'allowed_radius_m', round(v_radius, 1),\n    'accuracy_m', p_accuracy_m,\n    'target_latitude', v_target_lat,\n    'target_longitude', v_target_lon,\n    'coordinate_source', v_coordinate_source,\n    'observed_at', v_observed_at,\n    'observation_age_seconds', round(v_observation_age_seconds, 1),\n    'motion_speed_mps', case when v_motion_speed_mps is null then null else round(v_motion_speed_mps, 2) end,\n    'evaluated_at', v_now,\n    'scan_event_id', v_event_id\n  );\nend\n$function$\n",
+      "comment": "Advisory GPS evidence. Session-bound observations are active-work evidence only while the session is active or pending_submit; terminal-session observations are retained as post-session advisory telemetry.",
+      "definition": "CREATE OR REPLACE FUNCTION public.evaluate_location_proximity_v2(p_location_code text, p_device_identifier text, p_latitude numeric, p_longitude numeric, p_accuracy_m numeric DEFAULT NULL::numeric, p_session_uuid text DEFAULT NULL::text, p_client_event_id text DEFAULT NULL::text, p_correlation_id text DEFAULT NULL::text, p_observed_at timestamp with time zone DEFAULT NULL::timestamp with time zone)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_session_key text:=nullif(btrim(coalesce(p_session_uuid,'')),'');\n  v_session_state text;\n  v_result jsonb;\nbegin\n  if v_session_key is not null then\n    v_session_state:=public.custodial_gps_session_state(p_location_code,p_device_identifier,v_session_key);\n    if v_session_state is null then\n      raise exception using errcode='23503', message='Session does not belong to this device and location';\n    end if;\n  end if;\n  v_result:=public.custodial_evaluate_location_proximity_v2_measurement(\n    p_location_code,p_device_identifier,p_latitude,p_longitude,p_accuracy_m,\n    p_session_uuid,p_client_event_id,p_correlation_id,p_observed_at\n  );\n  if v_session_state is not null and v_session_state not in ('active','pending_submit') then\n    return public.custodial_mark_post_session_gps(v_result,v_session_state);\n  end if;\n  return v_result;\nend\n$function$\n",
       "function_name": "evaluate_location_proximity_v2",
       "identity_arguments": "p_location_code text, p_device_identifier text, p_latitude numeric, p_longitude numeric, p_accuracy_m numeric, p_session_uuid text, p_client_event_id text, p_correlation_id text, p_observed_at timestamp with time zone",
       "owner_name": "migration_owner",
@@ -38522,7 +39049,7 @@
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.tool_evaluate_location_proximity(p_location_code text, p_device_identifier text, p_latitude numeric, p_longitude numeric, p_accuracy_m numeric DEFAULT NULL::numeric, p_session_uuid text DEFAULT NULL::text, p_client_event_id text DEFAULT NULL::text, p_correlation_id text DEFAULT NULL::text)\n RETURNS jsonb\n LANGUAGE sql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\n  select public.evaluate_location_proximity(\n    p_location_code,\n    p_device_identifier,\n    p_latitude,\n    p_longitude,\n    p_accuracy_m,\n    p_session_uuid,\n    p_client_event_id,\n    p_correlation_id\n  );\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.tool_evaluate_location_proximity(p_location_code text, p_device_identifier text, p_latitude numeric, p_longitude numeric, p_accuracy_m numeric DEFAULT NULL::numeric, p_session_uuid text DEFAULT NULL::text, p_client_event_id text DEFAULT NULL::text, p_correlation_id text DEFAULT NULL::text)\n RETURNS jsonb\n LANGUAGE sql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\n  select public.evaluate_location_proximity(\n    p_location_code,p_device_identifier,p_latitude,p_longitude,p_accuracy_m,\n    p_session_uuid,p_client_event_id,p_correlation_id\n  )\n$function$\n",
       "function_name": "tool_evaluate_location_proximity",
       "identity_arguments": "p_location_code text, p_device_identifier text, p_latitude numeric, p_longitude numeric, p_accuracy_m numeric, p_session_uuid text, p_client_event_id text, p_correlation_id text",
       "owner_name": "migration_owner",
@@ -38530,7 +39057,7 @@
     },
     {
       "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.tool_evaluate_location_proximity_v2(p_location_code text, p_device_identifier text, p_latitude numeric, p_longitude numeric, p_accuracy_m numeric DEFAULT NULL::numeric, p_session_uuid text DEFAULT NULL::text, p_client_event_id text DEFAULT NULL::text, p_correlation_id text DEFAULT NULL::text, p_observed_at timestamp with time zone DEFAULT NULL::timestamp with time zone)\n RETURNS jsonb\n LANGUAGE sql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\n  select public.evaluate_location_proximity_v2(\n    p_location_code, p_device_identifier, p_latitude, p_longitude,\n    p_accuracy_m, p_session_uuid, p_client_event_id, p_correlation_id, p_observed_at\n  );\n$function$\n",
+      "definition": "CREATE OR REPLACE FUNCTION public.tool_evaluate_location_proximity_v2(p_location_code text, p_device_identifier text, p_latitude numeric, p_longitude numeric, p_accuracy_m numeric DEFAULT NULL::numeric, p_session_uuid text DEFAULT NULL::text, p_client_event_id text DEFAULT NULL::text, p_correlation_id text DEFAULT NULL::text, p_observed_at timestamp with time zone DEFAULT NULL::timestamp with time zone)\n RETURNS jsonb\n LANGUAGE sql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\n  select public.evaluate_location_proximity_v2(\n    p_location_code,p_device_identifier,p_latitude,p_longitude,p_accuracy_m,\n    p_session_uuid,p_client_event_id,p_correlation_id,p_observed_at\n  )\n$function$\n",
       "function_name": "tool_evaluate_location_proximity_v2",
       "identity_arguments": "p_location_code text, p_device_identifier text, p_latitude numeric, p_longitude numeric, p_accuracy_m numeric, p_session_uuid text, p_client_event_id text, p_correlation_id text, p_observed_at timestamp with time zone",
       "owner_name": "migration_owner",
@@ -39596,6 +40123,33 @@
       "is_unique": true,
       "schema_name": "public",
       "table_name": "custodial_release_canary_transport_probes"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX custodial_session_corrections_operation_id_key ON public.custodial_session_corrections USING btree (operation_id)",
+      "index_name": "custodial_session_corrections_operation_id_key",
+      "is_primary": false,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections"
+    },
+    {
+      "backs_constraint": true,
+      "definition": "CREATE UNIQUE INDEX custodial_session_corrections_pkey ON public.custodial_session_corrections USING btree (correction_id)",
+      "index_name": "custodial_session_corrections_pkey",
+      "is_primary": true,
+      "is_unique": true,
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections"
+    },
+    {
+      "backs_constraint": false,
+      "definition": "CREATE INDEX idx_custodial_session_corrections_session ON public.custodial_session_corrections USING btree (session_id, created_at DESC, correction_id DESC)",
+      "index_name": "idx_custodial_session_corrections_session",
+      "is_primary": false,
+      "is_unique": false,
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections"
     },
     {
       "backs_constraint": true,
@@ -44652,6 +45206,18 @@
       "using_expression": "true"
     },
     {
+      "check_expression": null,
+      "command_code": "r",
+      "permissive": true,
+      "policy_name": "custodial_session_corrections_service_select",
+      "roles": [
+        "service_role"
+      ],
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections",
+      "using_expression": "true"
+    },
+    {
       "check_expression": "true",
       "command_code": "*",
       "permissive": true,
@@ -45186,6 +45752,15 @@
       "schema_name": "public"
     },
     {
+      "function_name": "custodial_append_session_correction",
+      "grantee": "service_role",
+      "grantor": "migration_owner",
+      "identity_arguments": "p_operation_id uuid, p_session_id uuid, p_manager_id uuid, p_reason text, p_backend_execution_secret text, p_corrected_employee_id uuid, p_corrected_location_id uuid, p_corrected_device_id uuid, p_corrected_started_at timestamp with time zone, p_corrected_ended_at timestamp with time zone",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
       "function_name": "custodial_assert_manager",
       "grantee": "service_role",
       "grantor": "migration_owner",
@@ -45361,6 +45936,15 @@
       "grantee": "service_role",
       "grantor": "migration_owner",
       "identity_arguments": "p_manager_id uuid, p_reconciliation_id uuid, p_backend_execution_secret text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "custodial_manager_get_session_truth",
+      "grantee": "service_role",
+      "grantor": "migration_owner",
+      "identity_arguments": "p_manager_id uuid, p_session_id uuid, p_backend_execution_secret text",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -45766,6 +46350,24 @@
       "grantee": "service_role",
       "grantor": "migration_owner",
       "identity_arguments": "p_instance_key text, p_device_id text, p_reminder_kind text, p_source_id text, p_metadata_json jsonb",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "evaluate_location_proximity",
+      "grantee": "service_role",
+      "grantor": "migration_owner",
+      "identity_arguments": "p_location_code text, p_device_identifier text, p_latitude numeric, p_longitude numeric, p_accuracy_m numeric, p_session_uuid text, p_client_event_id text, p_correlation_id text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "evaluate_location_proximity_v2",
+      "grantee": "service_role",
+      "grantor": "migration_owner",
+      "identity_arguments": "p_location_code text, p_device_identifier text, p_latitude numeric, p_longitude numeric, p_accuracy_m numeric, p_session_uuid text, p_client_event_id text, p_correlation_id text, p_observed_at timestamp with time zone",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -49311,6 +49913,70 @@
       "table_name": "custodial_release_canary_transport_probes"
     },
     {
+      "grantee": "service_role",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "DELETE",
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections"
+    },
+    {
+      "grantee": "service_role",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "INSERT",
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections"
+    },
+    {
+      "grantee": "service_role",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "MAINTAIN",
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections"
+    },
+    {
+      "grantee": "service_role",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "REFERENCES",
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections"
+    },
+    {
+      "grantee": "service_role",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections"
+    },
+    {
+      "grantee": "service_role",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "TRIGGER",
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections"
+    },
+    {
+      "grantee": "service_role",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "TRUNCATE",
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections"
+    },
+    {
+      "grantee": "service_role",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "UPDATE",
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections"
+    },
+    {
       "grantee": "custodial_application_reader",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -58053,6 +58719,70 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "v_cleaning_session_facts"
+    },
+    {
+      "grantee": "service_role",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "DELETE",
+      "schema_name": "public",
+      "table_name": "v_custodial_cleaning_session_truth"
+    },
+    {
+      "grantee": "service_role",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "INSERT",
+      "schema_name": "public",
+      "table_name": "v_custodial_cleaning_session_truth"
+    },
+    {
+      "grantee": "service_role",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "MAINTAIN",
+      "schema_name": "public",
+      "table_name": "v_custodial_cleaning_session_truth"
+    },
+    {
+      "grantee": "service_role",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "REFERENCES",
+      "schema_name": "public",
+      "table_name": "v_custodial_cleaning_session_truth"
+    },
+    {
+      "grantee": "service_role",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "v_custodial_cleaning_session_truth"
+    },
+    {
+      "grantee": "service_role",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "TRIGGER",
+      "schema_name": "public",
+      "table_name": "v_custodial_cleaning_session_truth"
+    },
+    {
+      "grantee": "service_role",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "TRUNCATE",
+      "schema_name": "public",
+      "table_name": "v_custodial_cleaning_session_truth"
+    },
+    {
+      "grantee": "service_role",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "UPDATE",
+      "schema_name": "public",
+      "table_name": "v_custodial_cleaning_session_truth"
     },
     {
       "grantee": "custodial_application_reader",
@@ -60551,6 +61281,16 @@
       "table_name": "custodial_release_canary_transport_probes"
     },
     {
+      "comment": "Append-only named-manager corrections. Original sessions and at-event snapshots remain unchanged.",
+      "owner_name": "migration_owner",
+      "partition_key": null,
+      "relation_kind": "r",
+      "rls_enabled": true,
+      "rls_forced": true,
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections"
+    },
+    {
       "comment": null,
       "owner_name": "migration_owner",
       "partition_key": null,
@@ -62196,6 +62936,13 @@
       "trigger_name": "trg_custodial_release_canary_transport_probes_immutable"
     },
     {
+      "definition": "CREATE TRIGGER trg_custodial_session_corrections_append_only BEFORE DELETE OR UPDATE ON custodial_session_corrections FOR EACH ROW EXECUTE FUNCTION custodial_reject_session_correction_mutation()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "custodial_session_corrections",
+      "trigger_name": "trg_custodial_session_corrections_append_only"
+    },
+    {
       "definition": "CREATE TRIGGER daily_absence_overrides_regenerate_schedule AFTER INSERT OR DELETE OR UPDATE ON daily_absence_overrides FOR EACH ROW EXECUTE FUNCTION sch_daily_absence_override_regenerate_trigger()",
       "enabled": "O",
       "schema_name": "public",
@@ -62707,6 +63454,13 @@
       "trigger_name": "trg_schedule_operational_notes_updated_at"
     },
     {
+      "definition": "CREATE TRIGGER trg_custodial_sessions_original_identity BEFORE INSERT OR UPDATE ON sessions FOR EACH ROW EXECUTE FUNCTION custodial_sessions_preserve_original_identity()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "sessions",
+      "trigger_name": "trg_custodial_sessions_original_identity"
+    },
+    {
       "definition": "CREATE TRIGGER trg_sessions_status_transition BEFORE UPDATE ON sessions FOR EACH ROW EXECUTE FUNCTION enforce_session_status_transition()",
       "enabled": "O",
       "schema_name": "public",
@@ -62890,6 +63644,14 @@
       "relation_kind": "v",
       "schema_name": "public",
       "view_name": "v_cleaning_session_facts"
+    },
+    {
+      "comment": "Shows original immutable cleaning evidence beside the latest append-only corrected manager truth.",
+      "definition": " SELECT s.id AS session_id,\n    s.session_uuid,\n    s.client_session_id,\n    s.status,\n    s.employee_id AS original_employee_id,\n    s.employee_name_snapshot AS original_employee_name,\n    s.location_id AS original_location_id,\n    s.location_code_snapshot AS original_location_code,\n    s.location_name_snapshot AS original_location_name,\n    s.device_id AS original_device_id,\n    s.device_identifier_snapshot AS original_device_identifier,\n    s.device_name_snapshot AS original_device_name,\n    s.assignment_epoch_snapshot AS original_assignment_epoch,\n    s.started_at AS original_started_at,\n    s.ended_at AS original_ended_at,\n    COALESCE(c.effective_employee_id, s.employee_id) AS current_employee_id,\n    COALESCE(c.effective_employee_name_snapshot, s.employee_name_snapshot) AS current_employee_name,\n    COALESCE(c.effective_location_id, s.location_id) AS current_location_id,\n    COALESCE(c.effective_location_code_snapshot, s.location_code_snapshot) AS current_location_code,\n    COALESCE(c.effective_location_name_snapshot, s.location_name_snapshot) AS current_location_name,\n    COALESCE(c.effective_device_id, s.device_id) AS current_device_id,\n    COALESCE(c.effective_device_identifier_snapshot, s.device_identifier_snapshot) AS current_device_identifier,\n    COALESCE(c.effective_device_name_snapshot, s.device_name_snapshot) AS current_device_name,\n    COALESCE(c.effective_assignment_epoch_snapshot, s.assignment_epoch_snapshot) AS current_assignment_epoch,\n    COALESCE(c.effective_started_at, s.started_at) AS current_started_at,\n    COALESCE(c.effective_ended_at, s.ended_at) AS current_ended_at,\n    c.correction_id,\n    c.corrected_by_manager_id,\n    c.corrected_by_manager_name_snapshot,\n    c.reason AS correction_reason,\n    c.changed_fields,\n    c.created_at AS corrected_at\n   FROM sessions s\n     LEFT JOIN LATERAL ( SELECT c_1.correction_id,\n            c_1.operation_id,\n            c_1.request_fingerprint,\n            c_1.session_id,\n            c_1.corrected_by_manager_id,\n            c_1.corrected_by_manager_name_snapshot,\n            c_1.reason,\n            c_1.changed_fields,\n            c_1.effective_employee_id,\n            c_1.effective_employee_name_snapshot,\n            c_1.effective_location_id,\n            c_1.effective_location_code_snapshot,\n            c_1.effective_location_name_snapshot,\n            c_1.effective_device_id,\n            c_1.effective_device_identifier_snapshot,\n            c_1.effective_device_name_snapshot,\n            c_1.effective_assignment_epoch_snapshot,\n            c_1.effective_started_at,\n            c_1.effective_ended_at,\n            c_1.created_at\n           FROM custodial_session_corrections c_1\n          WHERE c_1.session_id = s.id\n          ORDER BY c_1.created_at DESC, c_1.correction_id DESC\n         LIMIT 1) c ON true;",
+      "owner_name": "migration_owner",
+      "relation_kind": "v",
+      "schema_name": "public",
+      "view_name": "v_custodial_cleaning_session_truth"
     },
     {
       "comment": null,

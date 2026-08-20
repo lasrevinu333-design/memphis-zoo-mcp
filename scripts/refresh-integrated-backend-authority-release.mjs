@@ -75,7 +75,7 @@ assert.equal(input.release_contract_version, "offline-authority.v5");
 assert.equal(input.accepted_engine_contract.scan, "scan.v2");
 assert.equal(input.required_engine_contract.scan, "scan.v4.snapshot-bound-authority");
 assert.equal(input.backend_contract.execution_boundary, "CUSTODIAL_BACKEND_PROOF_SECRET");
-assert.equal(input.backend_contract.bridge_backend_source, "src/index.js:runPreparedScanRpc");
+assert.equal(input.backend_contract.bridge_backend_source, "src/scan-authority-cutover.js:runCanonicalScanRpc");
 assert.ok(Array.isArray(input.cutover?.phase_order) && input.cutover.phase_order.length >= 6);
 assert.ok(Array.isArray(input.cutover?.rollback?.restoration_checks) && input.cutover.rollback.restoration_checks.length >= 4);
 assert.equal(input.cutover?.source_identity?.kind, "external_signed_release_attestation");
@@ -92,7 +92,7 @@ const authorityInventory = trackedInventory.filter(({ path }) => path !== genera
 const migrations = authorityInventory
   .filter(({ path }) => /^supabase\/migrations\/[^/]+\.sql$/.test(path))
   .map(({ path }) => ({ name: path.slice("supabase/migrations/".length) }));
-assert.equal(migrations.length, 79, "release authority inventory must bind every migration at this head");
+assert.equal(migrations.length, 88, "release authority inventory must bind every migration at this head");
 const output = {
   artifact: "integrated-backend-authority-release-evidence.v2",
   release_id: frontendManifest.release_id,

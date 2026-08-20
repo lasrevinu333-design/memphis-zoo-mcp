@@ -32,10 +32,12 @@ const phaseK = "20260813173000_device_sync_actor_groups.sql";
 const phaseL = "20260813190000_release_phone_transport_and_offline_activation_closure.sql";
 const phaseM = "20260813210000_custodial_u4_ops_closure.sql";
 const phaseN = "20260814224034_reconcile_static_weekly_day_change_receipts.sql";
+const phaseO = "20260820153000_append_only_cleaning_identity_corrections.sql";
+const phaseP = "20260820154000_late_gps_is_advisory_only.sql";
 const pendingProductionMigrations = [
   retirementA, retirementB, retirementC, phaseA, phaseB, phaseC, phaseD, phaseE,
   schedulerA, schedulerB, schedulerC, schedulerD, schedulerE, schedulerF,
-  phaseF, phaseG, phaseH, phaseI, phaseJ, phaseK, phaseL, phaseM, phaseN,
+  phaseF, phaseG, phaseH, phaseI, phaseJ, phaseK, phaseL, phaseM, phaseN, phaseO, phaseP,
 ];
 const releaseInputPath = "release/integrated-backend-authority-input.json";
 const releaseEvidencePath = "release/integrated-backend-authority-evidence.json";
@@ -293,6 +295,8 @@ const phaseKText = blobByPath.get(`supabase/migrations/${phaseK}`).bytes.toStrin
 const phaseLText = blobByPath.get(`supabase/migrations/${phaseL}`).bytes.toString("utf8");
 const phaseMText = blobByPath.get(`supabase/migrations/${phaseM}`).bytes.toString("utf8");
 const phaseNText = blobByPath.get(`supabase/migrations/${phaseN}`).bytes.toString("utf8");
+const phaseOText = blobByPath.get(`supabase/migrations/${phaseO}`).bytes.toString("utf8");
+const phasePText = blobByPath.get(`supabase/migrations/${phaseP}`).bytes.toString("utf8");
 const schemaFingerprint = blobByPath.get("supabase/canonical/schema-fingerprint.txt")?.bytes.toString("utf8").trim();
 const frontendManifest = parseJsonBlob(blobByPath.get("release/frontend-release-manifest.json"), "frontend release manifest");
 
@@ -305,7 +309,6 @@ assert.deepEqual(input.cutover.phase_order, [
   `apply ${retirementC}`,
   `apply ${phaseA}`,
   "configure the database SHA-256 digest for CUSTODIAL_BACKEND_PROOF_SECRET through custodial_configure_backend_execution_key before deploying the bridge backend",
-  "deploy the bridge backend; it falls back only on absent authoritative procedures",
   `apply ${phaseB}`,
   `apply ${phaseC}`,
   `apply ${phaseD}`,
@@ -326,6 +329,9 @@ assert.deepEqual(input.cutover.phase_order, [
   "configure the database SHA-256 digest for CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET through custodial_configure_native_route_proof_key before native canary traffic",
   `apply ${phaseM}`,
   `apply ${phaseN}`,
+  `apply ${phaseO}`,
+  `apply ${phaseP}`,
+  "deploy the canonical-only backend only after all authoritative procedures above are present and verified; missing canonical writers fail closed",
   "require a green authority health gate and direct-DML denial probes before routing traffic",
 ]);
 assert.equal(input.cutover.source_identity.kind, "external_signed_release_attestation");
@@ -334,10 +340,9 @@ assert.equal(input.cutover.source_identity.generated_evidence_excluded_from_cont
 assert.equal(Object.hasOwn(input.cutover.source_identity, "authority_content_paths"), false, "manual authority inventory is forbidden");
 assert.equal(input.cutover.source_identity.authority_inventory?.source, "all-tracked-paths-in-external-expected-tree");
 assert.deepEqual(input.cutover.source_identity.authority_inventory?.exclude, [releaseEvidencePath]);
-assert.match(index, /runPreparedScanRpc/);
-assert.match(index, /\["42883", "PGRST202"\]/);
+assert.match(index, /runCanonicalScanRpc/);
+assert.doesNotMatch(index, /runPreparedScanRpc|prepared\?\.fallback|accepted legacy writer/);
 assert.match(index, /tool_complete_session_authoritative/);
-assert.match(index, /fallback:/);
 assert.match(phaseCText, /custodial_backend_authority_health/);
 assert.match(phaseCText, /length\(coalesce\(p_execution_secret,''\)\)<32/);
 assert.match(phaseDText, /issued_submission_proof/);
@@ -370,6 +375,11 @@ assert.match(phaseMText, /custodial_release_authority_restore_inventory/);
 assert.match(phaseMText, /custodial_release_authority_current_grant_definition/);
 assert.match(phaseNText, /static_weekly_v4_begin_day_changes/);
 assert.match(phaseNText, /deterministic_child_projection_chain\.v1/);
+assert.match(phaseOText, /custodial_append_session_correction/);
+assert.match(phaseOText, /Original cleaning identity is immutable/);
+assert.match(phaseOText, /Inspection actor, cleaning identity, and snapshots are immutable/);
+assert.match(phasePText, /post_session_advisory/);
+assert.match(phasePText, /v_session_state not in \('active','pending_submit'\)/);
 assert.match(schemaFingerprint, /^[a-f0-9]{64}$/);
 assert.equal(frontendManifest.frontend_commit_sha, acceptance.frontend_commit_sha, "signed release attestation names the wrong frontend commit");
 assert.equal(frontendManifest.release_id, acceptance.release_id, "signed release attestation names the wrong semantic release");
@@ -396,7 +406,7 @@ const result = {
   source_identity: sourceIdentity,
   authority_content: authorityContent,
   phase_order: pendingProductionMigrations,
-  bridge_fallback: "only absent authoritative procedure SQLSTATE 42883/PGRST202",
+  canonical_writer_policy: "missing authoritative procedures fail closed without invoking legacy writers",
   database_gate: "not-requested",
 };
 

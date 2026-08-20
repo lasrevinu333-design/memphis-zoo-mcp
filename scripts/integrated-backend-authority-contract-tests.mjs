@@ -13,6 +13,7 @@ const schedulerClosure = readFileSync("supabase/migrations/20260810230000_static
 const dayChangeReconciliation = readFileSync("supabase/migrations/20260814224034_reconcile_static_weekly_day_change_receipts.sql", "utf8");
 const managedSchemaUsage = readFileSync("supabase/migrations/20260815163346_restore_explicit_public_schema_usage.sql", "utf8");
 const index = readFileSync("src/index.js", "utf8");
+const scanAuthorityCutover = readFileSync("src/scan-authority-cutover.js", "utf8");
 const schedulerControlPlane = readFileSync("src/static-weekly-control-plane.js", "utf8");
 const auth = readFileSync("src/auth/device-credential-auth.js", "utf8");
 const nativePhoneTransport = readFileSync("src/native-phone-transport.js", "utf8");
@@ -75,7 +76,9 @@ assert.match(index, /tool_start_offline_occurrence/);
 assert.match(index, /tool_commit_cleaning_workflow_authoritative/);
 assert.match(index, /tool_complete_session_authoritative/);
 assert.match(index, /CUSTODIAL_BACKEND_PROOF_SECRET/);
-assert.match(index, /runPreparedScanRpc/);
+assert.match(index, /runCanonicalScanRpc/);
+assert.match(scanAuthorityCutover, /return runRpc\(fn, prepared\.args\)/);
+assert.doesNotMatch(index, /runPreparedScanRpc|prepared\?\.fallback|accepted legacy writer/);
 assert.match(index, /tool_finish_session/);
 assert.match(index, /custodial_finish_historical_session_authoritative/);
 assert.match(index, /Exact UUID session and finish operation identities are required/);

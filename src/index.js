@@ -42,6 +42,7 @@ import { normalizeAttendanceRecord, toNullableNonNegativeInteger } from "./atten
 import { normalizeCanonicalScanEvidence } from "./scan-evidence.js";
 import { buildReleaseCanaryTransportProbeCall } from "./native-phone-transport.js";
 import { makeRestoreMutationGate } from "./restore-mutation-gate.js";
+import { runCanonicalScanRpc } from "./scan-authority-cutover.js";
 import {
   guestFeatureState,
   normalizeFeedbackInput,
@@ -492,19 +493,6 @@ function bindOfflineActorProof(fn, args, credential) {
     return {
       fn: "tool_complete_session_authoritative",
       args: authoritativeArgs,
-      // The bridge release is safe to deploy before Phase B: while the new
-      // command does not exist it calls the accepted legacy writer; the first
-      // Phase B transaction atomically makes the canonical command available.
-      fallback: {
-        fn: "tool_complete_session",
-        args: {
-          p_session_uuid: nextArgs.p_session_uuid,
-          p_response_json: nextArgs.p_response_json,
-          p_submitted_by_employee_name: nextArgs.p_submitted_by_employee_name || null,
-          p_device_id: nextArgs.p_device_id || null,
-          p_client_completion_id: nextArgs.p_client_completion_id,
-        },
-      },
     };
   }
   if (!nextArgs.p_response_json || typeof nextArgs.p_response_json !== "object" || Array.isArray(nextArgs.p_response_json)) {
@@ -540,32 +528,7 @@ function bindOfflineActorProof(fn, args, credential) {
   return {
     fn: "tool_commit_cleaning_workflow_authoritative",
     args: authoritativeArgs,
-    fallback: {
-      fn: "tool_commit_cleaning_workflow",
-      args: {
-        p_client_session_id: nextArgs.p_client_session_id,
-        p_client_completion_id: nextArgs.p_client_completion_id,
-        p_device_id: nextArgs.p_device_id,
-        p_location_code: nextArgs.p_location_code,
-        p_client_started_at: nextArgs.p_client_started_at,
-        p_client_ended_at: nextArgs.p_client_ended_at,
-        p_response_json: response,
-        p_scan_evidence: nextArgs.p_scan_evidence,
-        p_correlation_id: nextArgs.p_correlation_id || null,
-      },
-    },
   };
-}
-
-async function runPreparedScanRpc(prepared) {
-  try {
-    return await runRpc(prepared.fn, prepared.args);
-  } catch (error) {
-    if (["42883", "PGRST202"].includes(error?.code) && prepared?.fallback?.fn) {
-      return runRpc(prepared.fallback.fn, prepared.fallback.args);
-    }
-    throw error;
-  }
 }
 
 async function executeScanRpcTransport(fn, args, device, credential, req) {
@@ -593,7 +556,7 @@ async function executeScanRpcTransport(fn, args, device, credential, req) {
   }
   const proofBound = bindOfflineActorProof(preparedBase.fn, preparedBase.args, credential);
   const prepared = { ...preparedBase, ...proofBound };
-  const data = await runPreparedScanRpc(prepared);
+  const data = await runCanonicalScanRpc(runRpc, prepared);
   return scanRpcHttpOutcome(normalizedFn, data);
 }
 
@@ -2820,6 +2783,62 @@ function offlineAuthorityManagerId(req) {
   }
   return managerId;
 }
+
+function optionalCorrectionUuid(value, label) {
+  const normalized = String(value || "").trim();
+  if (!normalized) return null;
+  if (!isUuid(normalized)) throw Object.assign(new Error(`${label} must be a UUID.`), { status: 422, code: "22023" });
+  return normalized;
+}
+
+function optionalCorrectionTimestamp(value, label) {
+  const normalized = String(value || "").trim();
+  if (!normalized) return null;
+  if (Number.isNaN(Date.parse(normalized))) throw Object.assign(new Error(`${label} must be an ISO timestamp.`), { status: 422, code: "22023" });
+  return normalized;
+}
+
+app.get("/admin-api/custodial/cleaning-sessions/:sessionId/truth", requireOpsManagerAuth, async (req, res) => {
+  try {
+    const sessionId = String(req.params?.sessionId || "").trim();
+    if (!isUuid(sessionId)) throw Object.assign(new Error("sessionId must be a UUID."), { status: 422, code: "22023" });
+    const data = await runRpc("custodial_manager_get_session_truth", {
+      p_manager_id: offlineAuthorityManagerId(req),
+      p_session_id: sessionId,
+      p_backend_execution_secret: offlineAuthoritySecret(),
+    });
+    res.status(200).json({ ok: true, contract_version: "cleaning-truth.v1", data });
+  } catch (error) {
+    const failure = authorityHttpFailure(error, "Cleaning record truth is unavailable.");
+    res.status(failure.status).json(failure.body);
+  }
+});
+
+app.post("/admin-api/custodial/cleaning-sessions/:sessionId/corrections", requireOpsManagerWrite, async (req, res) => {
+  try {
+    const sessionId = String(req.params?.sessionId || "").trim();
+    const reason = String(req.body?.reason || "").trim();
+    if (!isUuid(sessionId) || !reason || reason.length > 1000) {
+      throw Object.assign(new Error("A cleaning session UUID and correction reason are required."), { status: 422, code: "22023" });
+    }
+    const data = await runRpc("custodial_append_session_correction", {
+      p_operation_id: requiredRequestOperationId(req),
+      p_session_id: sessionId,
+      p_manager_id: offlineAuthorityManagerId(req),
+      p_reason: reason,
+      p_backend_execution_secret: offlineAuthoritySecret(),
+      p_corrected_employee_id: optionalCorrectionUuid(req.body?.corrected_employee_id, "corrected_employee_id"),
+      p_corrected_location_id: optionalCorrectionUuid(req.body?.corrected_location_id, "corrected_location_id"),
+      p_corrected_device_id: optionalCorrectionUuid(req.body?.corrected_device_id, "corrected_device_id"),
+      p_corrected_started_at: optionalCorrectionTimestamp(req.body?.corrected_started_at, "corrected_started_at"),
+      p_corrected_ended_at: optionalCorrectionTimestamp(req.body?.corrected_ended_at, "corrected_ended_at"),
+    });
+    res.status(data?.replayed === true ? 200 : 201).json({ ok: true, contract_version: "cleaning-truth.v1", data });
+  } catch (error) {
+    const failure = authorityHttpFailure(error, "Cleaning record correction is unavailable.");
+    res.status(failure.status).json(failure.body);
+  }
+});
 
 // Original occurrence evidence is append-only. These bounded, named-manager
 // endpoints can inspect it and append a disposition, never rewrite it.

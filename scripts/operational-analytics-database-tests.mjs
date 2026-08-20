@@ -140,8 +140,6 @@ await sql(`
     id,session_uuid,client_session_id,location_id,employee_id,device_id,status,
     started_at,ended_at,duration_minutes,duration_display,completion_source
   ) values
-    ('${ids.boundarySession}','analytics-boundary-session','analytics-boundary-session','${ids.boundaryLocation}','${ids.fastEmployee}','${ids.fastDevice}','closed',
-      now()-interval '1 hour',now(),60,'60 min','kiosk_form'),
     ('${ids.fallbackSession}','analytics-fallback-session','analytics-fallback-session','${ids.boundaryLocation}','${ids.fastEmployee}','${ids.fastDevice}','pending_submit',
       now()-interval '25 hours',null,60,'60 min','kiosk_form'),
     ('${ids.missingCompletionSession}','analytics-missing-completion-session','analytics-missing-completion-session','${ids.boundaryLocation}','${ids.fastEmployee}','${ids.fastDevice}','closed',
@@ -168,11 +166,14 @@ await sql(`
     ('${ids.slowInspection}','10000000-0000-4000-8000-00000000a111','${"b".repeat(64)}','${ids.slowSession}','Database Inspector',
       'manager_spot_check','custodial-v1',72,75,70,78,65,74,85,false,true,'[{"category":"detail","note":"Edges and fixtures need work"}]','Needs improvement.');
   with boundary as (
-    update public.sessions
-    set started_at=statement_timestamp()-interval '25 hours',
-        ended_at=statement_timestamp()-interval '24 hours'
-    where id='${ids.boundarySession}'
-    returning id
+    insert into public.sessions(
+      id,session_uuid,client_session_id,location_id,employee_id,device_id,status,
+      started_at,ended_at,duration_minutes,duration_display,completion_source
+    ) values (
+      '${ids.boundarySession}','analytics-boundary-session','analytics-boundary-session','${ids.boundaryLocation}',
+      '${ids.fastEmployee}','${ids.fastDevice}','closed',statement_timestamp()-interval '25 hours',
+      statement_timestamp()-interval '24 hours',60,'60 min','kiosk_form'
+    ) returning id
   )
   insert into public.cleaning_inspections(
     id,operation_id,request_fingerprint,session_id,inspector_name_snapshot,

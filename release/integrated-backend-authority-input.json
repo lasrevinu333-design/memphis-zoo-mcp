@@ -15,7 +15,7 @@
     "scan": "scan.v4.snapshot-bound-authority",
     "authority": "offline-authority.v5",
     "execution_boundary": "CUSTODIAL_BACKEND_PROOF_SECRET",
-    "bridge_backend_source": "src/index.js:runPreparedScanRpc",
+    "bridge_backend_source": "src/scan-authority-cutover.js:runCanonicalScanRpc",
     "health_gate": "GET /scan-api/authority-health reads custodial_backend_authority_health plus the durable receipt produced only after the designated phone traverses the authenticated native-vault /scan-api/rpc route; canary resume binds that exact receipt"
   },
   "cutover": {
@@ -42,7 +42,6 @@
       "apply 20260810140000_finalize_named_manager_messenger_retirement_integrity.sql",
       "apply 20260810143000_offline_actor_occurrence_reconciliation.sql",
       "configure the database SHA-256 digest for CUSTODIAL_BACKEND_PROOF_SECRET through custodial_configure_backend_execution_key before deploying the bridge backend",
-      "deploy the bridge backend; it falls back only on absent authoritative procedures",
       "apply 20260810150000_enforce_integrated_backend_authority.sql",
       "apply 20260810160000_close_offline_authority_integrity_gaps.sql",
       "apply 20260810170000_finish_offline_authority_operational_closure.sql",
@@ -63,6 +62,9 @@
       "configure the database SHA-256 digest for CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET through custodial_configure_native_route_proof_key before native canary traffic",
       "apply 20260813210000_custodial_u4_ops_closure.sql",
       "apply 20260814224034_reconcile_static_weekly_day_change_receipts.sql",
+      "apply 20260820153000_append_only_cleaning_identity_corrections.sql",
+      "apply 20260820154000_late_gps_is_advisory_only.sql",
+      "deploy the canonical-only backend only after all authoritative procedures above are present and verified; missing canonical writers fail closed",
       "require a green authority health gate and direct-DML denial probes before routing traffic"
     ],
     "rollback": {
