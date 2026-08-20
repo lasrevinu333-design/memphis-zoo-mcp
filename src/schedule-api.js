@@ -871,7 +871,7 @@ export function createScheduleRouter({
           select
             r.id as run_id,
             r.service_date,
-            public.sch2_audit_solution(r.id) as audit,
+            r.audit_summary as audit,
             public.sch2_compare_current_vs_preview(r.id) as diff
           from public.schedule_generation_runs r
           where r.id = '${esc(runId)}'::uuid
@@ -900,7 +900,7 @@ export function createScheduleRouter({
           r.published_by,
           spa.id as publish_audit_id,
           jsonb_array_length(coalesce(spa.published_rows, '[]'::jsonb)) as inserted_rows,
-          public.sch2_audit_solution(r.id) as audit,
+          r.audit_summary as audit,
           spa.diff_summary as diff
         from public.schedule_generation_runs r
         left join public.schedule_publish_audit spa
