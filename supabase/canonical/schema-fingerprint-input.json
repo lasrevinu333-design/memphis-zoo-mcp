@@ -32613,6 +32613,14 @@
       "validated": true
     },
     {
+      "constraint_name": "ops_manager_trusted_devices_bounded_lifetime",
+      "constraint_type": "c",
+      "definition": "CHECK (expires_at <= (created_at + '365 days'::interval))",
+      "schema_name": "public",
+      "table_name": "ops_manager_trusted_devices",
+      "validated": true
+    },
+    {
       "constraint_name": "ops_manager_trusted_devices_device_id_length",
       "constraint_type": "c",
       "definition": "CHECK (length(device_id) >= 1 AND length(device_id) <= 96)",
@@ -35577,6 +35585,14 @@
       "schema_name": "public"
     },
     {
+      "comment": "Service-only read of the non-restored disaster-recovery mutation gate; never a public RPC.",
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_restore_runtime_state()\n RETURNS jsonb\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'custodial_dr'\nAS $function$\n  select jsonb_build_object(\n    'authority_generation', authority_generation,\n    'mutations_paused', mutations_paused,\n    'state', state,\n    'restore_id', restore_id,\n    'updated_at', updated_at\n  )\n  from custodial_dr.restore_control\n  where singleton = true\n$function$\n",
+      "function_name": "custodial_restore_runtime_state",
+      "identity_arguments": "",
+      "owner_name": "migration_owner",
+      "schema_name": "public"
+    },
+    {
       "comment": null,
       "definition": "CREATE OR REPLACE FUNCTION public.custodial_run_release_canary_recovery_probe(p_device_identifier text, p_backend_execution_secret text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_device text:=upper(btrim(coalesce(p_device_identifier,'')));\n  v_health jsonb;\n  v_probe public.custodial_release_canary_recovery_probes%rowtype;\nbegin\n  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  if v_device !~ '^KIOSK_(0[2-9]|10)$' then\n    raise exception using errcode='22023',message='an exact employee-phone canary identifier is required';\n  end if;\n  if not exists(select 1 from public.custodial_release_canary_controls where device_identifier=v_device and paused=true) then\n    raise exception using errcode='55000',message='the exact release canary must exist and remain paused during its recovery probe';\n  end if;\n  v_health:=public.custodial_backend_authority_health(p_backend_execution_secret);\n  insert into public.custodial_release_canary_recovery_probes(\n    device_identifier,expires_at,passed,authority_health,authority_health_sha256\n  ) values(\n    v_device,statement_timestamp()+interval '5 minutes',coalesce((v_health->>'ok')::boolean,false),v_health,\n    encode(extensions.digest(convert_to(v_health::text,'UTF8'),'sha256'),'hex')\n  ) returning * into v_probe;\n  return jsonb_build_object(\n    'probe_id',v_probe.probe_id,'device_identifier',v_device,'checked_at',v_probe.checked_at,\n    'expires_at',v_probe.expires_at,'passed',v_probe.passed,'authority_health_sha256',v_probe.authority_health_sha256,\n    'authority_health',v_health\n  );\nend\n$function$\n",
       "function_name": "custodial_run_release_canary_recovery_probe",
@@ -36985,7 +37001,7 @@
       "schema_name": "public"
     },
     {
-      "comment": null,
+      "comment": "Retired owner-authority SQL proxy. No application/API role may execute it.",
       "definition": "CREATE OR REPLACE FUNCTION public.run_sql_readonly(p_sql text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\n SET statement_timeout TO '30s'\nAS $function$\r\ndeclare\r\n  result jsonb;\r\nbegin\r\n  if p_sql is null or btrim(p_sql) = '' then\r\n    raise exception 'SQL cannot be empty';\r\n  end if;\r\n\r\n  if lower(ltrim(p_sql)) not like 'select%' then\r\n    raise exception 'Only SELECT statements are allowed';\r\n  end if;\r\n\r\n  execute format(\r\n    'select coalesce(jsonb_agg(t), ''[]''::jsonb) from (%s) t',\r\n    p_sql\r\n  ) into result;\r\n\r\n  return coalesce(result, '[]'::jsonb);\r\nend;\r\n$function$\n",
       "function_name": "run_sql_readonly",
       "identity_arguments": "p_sql text",
@@ -45638,6 +45654,15 @@
       "schema_name": "public"
     },
     {
+      "function_name": "custodial_restore_runtime_state",
+      "grantee": "service_role",
+      "grantor": "migration_owner",
+      "identity_arguments": "",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
       "function_name": "custodial_run_release_canary_recovery_probe",
       "grantee": "service_role",
       "grantor": "migration_owner",
@@ -46071,9 +46096,27 @@
     },
     {
       "function_name": "msg_get_memphis_thread_context",
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "identity_arguments": "p_thread_id uuid",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "msg_get_memphis_thread_context",
       "grantee": "service_role",
       "grantor": "migration_owner",
       "identity_arguments": "p_thread_id uuid",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "msg_get_memphis_user_id",
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "identity_arguments": "",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -46110,6 +46153,15 @@
       "grantee": "service_role",
       "grantor": "migration_owner",
       "identity_arguments": "p_user_id uuid",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "msg_get_user_by_device",
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "identity_arguments": "p_device_identifier text",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -46173,6 +46225,15 @@
       "grantee": "service_role",
       "grantor": "migration_owner",
       "identity_arguments": "p_user_id uuid, p_device_identifier text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "msg_list_users",
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "identity_arguments": "p_current_user_id uuid",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -46637,15 +46698,6 @@
       "schema_name": "public"
     },
     {
-      "function_name": "run_sql_readonly",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "p_sql text",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
       "function_name": "scan_history_storage_summary",
       "grantee": "service_role",
       "grantor": "migration_owner",
@@ -46674,9 +46726,27 @@
     },
     {
       "function_name": "sch2_compare_current_vs_preview",
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "identity_arguments": "p_run_id uuid",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "sch2_compare_current_vs_preview",
       "grantee": "service_role",
       "grantor": "migration_owner",
       "identity_arguments": "p_run_id uuid",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "sch2_explain_assignment",
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "identity_arguments": "p_run_id uuid, p_work_item_id uuid",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -46722,6 +46792,15 @@
       "grantee": "service_role",
       "grantor": "migration_owner",
       "identity_arguments": "p_publish_audit_id uuid",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "sch_absence_preview",
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "identity_arguments": "p_service_date date, p_absent_employee_ids uuid[]",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -46809,6 +46888,15 @@
     },
     {
       "function_name": "sch_audit_schedule_day",
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "identity_arguments": "p_service_date date",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "sch_audit_schedule_day",
       "grantee": "service_role",
       "grantor": "migration_owner",
       "identity_arguments": "p_service_date date",
@@ -46839,6 +46927,15 @@
       "grantee": "service_role",
       "grantor": "migration_owner",
       "identity_arguments": "p_service_date date",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "sch_employee_my_schedule_page",
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "identity_arguments": "p_service_date date, p_employee_id uuid, p_now timestamp with time zone",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -46926,7 +47023,25 @@
     },
     {
       "function_name": "sch_extract_lunch_end",
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "identity_arguments": "p_notes text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "sch_extract_lunch_end",
       "grantee": "service_role",
+      "grantor": "migration_owner",
+      "identity_arguments": "p_notes text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "sch_extract_lunch_start",
+      "grantee": "custodial_application_reader",
       "grantor": "migration_owner",
       "identity_arguments": "p_notes text",
       "is_grantable": false,
@@ -46980,9 +47095,27 @@
     },
     {
       "function_name": "sch_get_coverage_candidates",
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "identity_arguments": "p_service_date date, p_location_group_id uuid, p_coverage_start time without time zone, p_coverage_end time without time zone",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "sch_get_coverage_candidates",
       "grantee": "service_role",
       "grantor": "migration_owner",
       "identity_arguments": "p_service_date date, p_location_group_id uuid, p_coverage_start time without time zone, p_coverage_end time without time zone",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "sch_get_current_owner",
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "identity_arguments": "p_location_code text, p_at timestamp with time zone",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -47007,9 +47140,27 @@
     },
     {
       "function_name": "sch_get_daily_schedule_with_purpose",
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "identity_arguments": "p_service_date date",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "sch_get_daily_schedule_with_purpose",
       "grantee": "service_role",
       "grantor": "migration_owner",
       "identity_arguments": "p_service_date date",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "sch_get_employee_work_status",
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "identity_arguments": "p_service_date date, p_employee_id uuid",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -47046,6 +47197,15 @@
       "grantee": "service_role",
       "grantor": "migration_owner",
       "identity_arguments": "p_location_code text, p_at timestamp with time zone",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "sch_get_schedule_close_time",
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "identity_arguments": "p_service_date date",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -47115,6 +47275,15 @@
     },
     {
       "function_name": "sch_is_employee_location_group_restricted",
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "identity_arguments": "p_employee_id uuid, p_location_group_id uuid, p_day_of_week integer",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "sch_is_employee_location_group_restricted",
       "grantee": "service_role",
       "grantor": "migration_owner",
       "identity_arguments": "p_employee_id uuid, p_location_group_id uuid, p_day_of_week integer",
@@ -47124,9 +47293,27 @@
     },
     {
       "function_name": "sch_is_public_restroom_group",
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "identity_arguments": "p_location_group_id uuid",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "sch_is_public_restroom_group",
       "grantee": "service_role",
       "grantor": "migration_owner",
       "identity_arguments": "p_location_group_id uuid",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "sch_list_location_workload_settings",
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "identity_arguments": "",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -47223,6 +47410,15 @@
     },
     {
       "function_name": "sch_resolve_employee_ref",
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "identity_arguments": "p_text text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "sch_resolve_employee_ref",
       "grantee": "service_role",
       "grantor": "migration_owner",
       "identity_arguments": "p_text text",
@@ -47244,6 +47440,15 @@
       "grantee": "service_role",
       "grantor": "migration_owner",
       "identity_arguments": "p_day_of_week integer",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "sch_service_date",
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "identity_arguments": "p_at timestamp with time zone",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -47368,6 +47573,15 @@
     {
       "function_name": "sch_validate_kathy_east_boundary",
       "grantee": "service_role",
+      "grantor": "migration_owner",
+      "identity_arguments": "p_start_date date, p_end_date date",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "sch_validate_operational_schedule_rules",
+      "grantee": "custodial_application_reader",
       "grantor": "migration_owner",
       "identity_arguments": "p_start_date date, p_end_date date",
       "is_grantable": false,
@@ -47565,9 +47779,27 @@
     },
     {
       "function_name": "static_weekly_v5_read_employee_day",
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "identity_arguments": "p_service_date date, p_employee_id uuid, p_now timestamp with time zone",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "static_weekly_v5_read_employee_day",
       "grantee": "service_role",
       "grantor": "migration_owner",
       "identity_arguments": "p_service_date date, p_employee_id uuid, p_now timestamp with time zone",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "tool_admin_bundle",
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "identity_arguments": "p_location_limit integer, p_activity_limit integer, p_ticket_limit integer, p_exception_limit integer, p_device_limit integer",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -47778,6 +48010,13 @@
       "schema_name": "public"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "pg_database_owner",
+      "is_grantable": false,
+      "privilege_type": "USAGE",
+      "schema_name": "public"
+    },
+    {
       "grantee": "migration_owner",
       "grantor": "pg_database_owner",
       "is_grantable": false,
@@ -47824,6 +48063,14 @@
   "sequences": [],
   "table_grants": [
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "ai_provider_access_audit"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -47886,6 +48133,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "ai_provider_access_audit"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "annie_chat_state"
     },
     {
       "grantee": "service_role",
@@ -47952,6 +48207,14 @@
       "table_name": "annie_chat_state"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "annie_contacts"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -48016,6 +48279,14 @@
       "table_name": "annie_contacts"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "annie_deliverables"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -48080,6 +48351,14 @@
       "table_name": "annie_deliverables"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "annie_log_notes"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -48144,6 +48423,14 @@
       "table_name": "annie_log_notes"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "annie_log_reminders"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -48208,6 +48495,14 @@
       "table_name": "annie_log_reminders"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "annie_log_suggested_reminders"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -48272,6 +48567,14 @@
       "table_name": "annie_log_suggested_reminders"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "annie_suggested_contacts"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -48336,6 +48639,14 @@
       "table_name": "annie_suggested_contacts"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "cleaning_inspections"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -48400,7 +48711,7 @@
       "table_name": "cleaning_inspections"
     },
     {
-      "grantee": "service_role",
+      "grantee": "custodial_application_reader",
       "grantor": "migration_owner",
       "is_grantable": false,
       "privilege_type": "SELECT",
@@ -48411,6 +48722,22 @@
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "completion_responses"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "coverage_templates"
+    },
+    {
+      "grantee": "service_role",
+      "grantor": "migration_owner",
+      "is_grantable": false,
       "privilege_type": "DELETE",
       "schema_name": "public",
       "table_name": "coverage_templates"
@@ -48470,6 +48797,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "coverage_templates"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "coverall_assignment_links"
     },
     {
       "grantee": "service_role",
@@ -48536,6 +48871,14 @@
       "table_name": "coverall_assignment_links"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "current_attendance_state"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -48598,6 +48941,22 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "current_attendance_state"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "custodial_backend_execution_config"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "custodial_employee_device_assignment_history"
     },
     {
       "grantee": "service_role",
@@ -48664,6 +49023,14 @@
       "table_name": "custodial_employee_device_assignment_history"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "custodial_employee_status_history"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -48726,6 +49093,78 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "custodial_employee_status_history"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_actor_contexts"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_authority_activation_events"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_audits"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_events"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_delivery_recipients"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_dispositions"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_outbox"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_reconciliation_records"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_authority_snapshots"
     },
     {
       "grantee": "service_role",
@@ -48792,6 +49231,94 @@
       "table_name": "custodial_offline_scan_authority_snapshots"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_scan_event_evidence"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_submission_proofs"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "custodial_offline_time_reservations"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "custodial_release_authority_bootstrap_definitions"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "custodial_release_authority_restore_definitions"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "custodial_release_authority_restore_inventory"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "custodial_release_canary_controls"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "custodial_release_canary_recovery_probes"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "custodial_release_canary_rollback_audits"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "custodial_release_canary_transport_probes"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "custodial_terminal_writer_inventory"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -48854,6 +49381,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "custodial_terminal_writer_inventory"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "daily_absence_overrides"
     },
     {
       "grantee": "service_role",
@@ -48920,6 +49455,14 @@
       "table_name": "daily_absence_overrides"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "daily_group_assignments"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -48982,6 +49525,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "daily_group_assignments"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "daily_schedule_assignments"
     },
     {
       "grantee": "service_role",
@@ -49048,6 +49599,14 @@
       "table_name": "daily_schedule_assignments"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "daily_work_roster"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -49110,6 +49669,22 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "daily_work_roster"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "demo_scan_mock_runs"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "device_aliases"
     },
     {
       "grantee": "service_role",
@@ -49176,6 +49751,14 @@
       "table_name": "device_aliases"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "device_auth_credentials"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -49238,6 +49821,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "device_auth_credentials"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_codes"
     },
     {
       "grantee": "service_role",
@@ -49304,6 +49895,14 @@
       "table_name": "device_auth_enrollment_codes"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "device_auth_enrollment_operations"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -49366,6 +49965,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "device_auth_enrollment_operations"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "device_auth_events"
     },
     {
       "grantee": "service_role",
@@ -49432,6 +50039,14 @@
       "table_name": "device_auth_events"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "device_auth_policy"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -49494,6 +50109,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "device_auth_policy"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "device_auth_removal_operations"
     },
     {
       "grantee": "service_role",
@@ -49560,6 +50183,14 @@
       "table_name": "device_auth_removal_operations"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "device_location_proximity_status"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -49622,6 +50253,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "device_location_proximity_status"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "device_notification_acknowledgements"
     },
     {
       "grantee": "service_role",
@@ -49688,6 +50327,14 @@
       "table_name": "device_notification_acknowledgements"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "device_sync_status"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -49750,6 +50397,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "device_sync_status"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "devices"
     },
     {
       "grantee": "service_role",
@@ -49816,6 +50471,14 @@
       "table_name": "devices"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "employee_aliases"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -49878,6 +50541,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "employee_aliases"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "employee_area_familiarity"
     },
     {
       "grantee": "service_role",
@@ -49944,6 +50615,14 @@
       "table_name": "employee_area_familiarity"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "employee_area_preferences"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -50006,6 +50685,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "employee_area_preferences"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "employee_backup_group_assignments"
     },
     {
       "grantee": "service_role",
@@ -50072,6 +50759,14 @@
       "table_name": "employee_backup_group_assignments"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "employee_group_proximity"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -50134,6 +50829,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "employee_group_proximity"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "employee_location_group_assignments"
     },
     {
       "grantee": "service_role",
@@ -50200,6 +50903,22 @@
       "table_name": "employee_location_group_assignments"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "employee_native_push_delivery_receipts"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "employee_planned_time_off"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -50262,6 +50981,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "employee_planned_time_off"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "employee_primary_group_assignments"
     },
     {
       "grantee": "service_role",
@@ -50328,6 +51055,14 @@
       "table_name": "employee_primary_group_assignments"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "employee_pto"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -50390,6 +51125,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "employee_pto"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "employee_push_registrations"
     },
     {
       "grantee": "service_role",
@@ -50456,6 +51199,14 @@
       "table_name": "employee_push_registrations"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "employee_shift_overrides"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -50518,6 +51269,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "employee_shift_overrides"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "employee_shift_templates"
     },
     {
       "grantee": "service_role",
@@ -50584,6 +51343,14 @@
       "table_name": "employee_shift_templates"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "employee_zone_assignments"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -50646,6 +51413,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "employee_zone_assignments"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "employees"
     },
     {
       "grantee": "service_role",
@@ -50712,6 +51487,14 @@
       "table_name": "employees"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "event_area_aliases"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -50774,6 +51557,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "event_area_aliases"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "event_default_rules"
     },
     {
       "grantee": "service_role",
@@ -50840,6 +51631,14 @@
       "table_name": "event_default_rules"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "event_push_instances"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -50902,6 +51701,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "event_push_instances"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "event_venues"
     },
     {
       "grantee": "service_role",
@@ -50968,6 +51775,14 @@
       "table_name": "event_venues"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "events_app_event_history"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -51030,6 +51845,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "events_app_event_history"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "events_app_events"
     },
     {
       "grantee": "service_role",
@@ -51096,6 +51919,14 @@
       "table_name": "events_app_events"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "events_app_notification_log"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -51158,6 +51989,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "events_app_notification_log"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "foundation_removal_archive"
     },
     {
       "grantee": "service_role",
@@ -51224,6 +52063,14 @@
       "table_name": "foundation_removal_archive"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "gemini_console_attachments"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -51286,6 +52133,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "gemini_console_attachments"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "gemini_console_conversations"
     },
     {
       "grantee": "service_role",
@@ -51352,6 +52207,14 @@
       "table_name": "gemini_console_conversations"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "gemini_console_messages"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -51414,6 +52277,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "gemini_console_messages"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_job_events"
     },
     {
       "grantee": "service_role",
@@ -51480,6 +52351,14 @@
       "table_name": "gemini_console_repair_job_events"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_jobs"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -51542,6 +52421,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "gemini_console_repair_jobs"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "gemini_console_repair_proposals"
     },
     {
       "grantee": "service_role",
@@ -51608,6 +52495,14 @@
       "table_name": "gemini_console_repair_proposals"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "gemini_console_worker_heartbeats"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -51670,6 +52565,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "gemini_console_worker_heartbeats"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "guest_cleanliness_reports"
     },
     {
       "grantee": "service_role",
@@ -51736,6 +52639,14 @@
       "table_name": "guest_cleanliness_reports"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "internal_ops_contacts"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -51798,6 +52709,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "internal_ops_contacts"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "legacy_application_write_rollups"
     },
     {
       "grantee": "service_role",
@@ -51864,6 +52783,14 @@
       "table_name": "legacy_application_write_rollups"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "location_coverage_templates"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -51926,6 +52853,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "location_coverage_templates"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "location_group_adjacency"
     },
     {
       "grantee": "service_role",
@@ -51992,6 +52927,14 @@
       "table_name": "location_group_adjacency"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "location_group_aliases"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -52054,6 +52997,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "location_group_aliases"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "location_group_memberships"
     },
     {
       "grantee": "service_role",
@@ -52120,6 +53071,14 @@
       "table_name": "location_group_memberships"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "location_group_proximity_settings"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -52182,6 +53141,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "location_group_proximity_settings"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "location_group_scoring"
     },
     {
       "grantee": "service_role",
@@ -52248,6 +53215,14 @@
       "table_name": "location_group_scoring"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "location_group_workload_settings"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -52312,6 +53287,14 @@
       "table_name": "location_group_workload_settings"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "location_group_zone_assignments"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -52376,6 +53359,14 @@
       "table_name": "location_group_zone_assignments"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "location_groups"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -52440,6 +53431,14 @@
       "table_name": "location_groups"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "location_proximity_settings"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -52504,6 +53503,14 @@
       "table_name": "location_proximity_settings"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "location_zone_assignments"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -52568,6 +53575,14 @@
       "table_name": "location_zone_assignments"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "locations"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -52632,7 +53647,7 @@
       "table_name": "locations"
     },
     {
-      "grantee": "service_role",
+      "grantee": "custodial_application_reader",
       "grantor": "migration_owner",
       "is_grantable": false,
       "privilege_type": "SELECT",
@@ -52643,6 +53658,22 @@
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "maintenance_tickets"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "migration_log"
+    },
+    {
+      "grantee": "service_role",
+      "grantor": "migration_owner",
+      "is_grantable": false,
       "privilege_type": "DELETE",
       "schema_name": "public",
       "table_name": "migration_log"
@@ -52704,6 +53735,14 @@
       "table_name": "migration_log"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "migration_log_summary"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -52768,6 +53807,14 @@
       "table_name": "migration_log_summary"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "moxie_access_audit"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -52832,6 +53879,14 @@
       "table_name": "moxie_access_audit"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "moxie_auth_credentials"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -52896,6 +53951,14 @@
       "table_name": "moxie_auth_credentials"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "msg_broadcast_recipients"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -52960,6 +54023,14 @@
       "table_name": "msg_broadcast_recipients"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "msg_broadcasts"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -53024,6 +54095,22 @@
       "table_name": "msg_broadcasts"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "msg_canonical_thread_pairs"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "msg_device_assignments"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -53086,6 +54173,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "msg_device_assignments"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "msg_hidden_threads_by_device"
     },
     {
       "grantee": "service_role",
@@ -53144,6 +54239,14 @@
       "table_name": "msg_hidden_threads_by_device"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "msg_memphis_thread_context"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -53198,6 +54301,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "msg_memphis_thread_context"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "msg_message_audit"
     },
     {
       "grantee": "service_role",
@@ -53256,6 +54367,14 @@
       "table_name": "msg_message_audit"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "msg_message_deletions"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -53310,6 +54429,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "msg_message_deletions"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "msg_messages"
     },
     {
       "grantee": "service_role",
@@ -53368,6 +54495,22 @@
       "table_name": "msg_messages"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "msg_ops_manager_legacy_identity_links"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "msg_receipts"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -53422,6 +54565,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "msg_receipts"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "msg_thread_deletion_operations"
     },
     {
       "grantee": "service_role",
@@ -53480,6 +54631,14 @@
       "table_name": "msg_thread_deletion_operations"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "msg_thread_participants"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -53534,6 +54693,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "msg_thread_participants"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "msg_thread_visibility"
     },
     {
       "grantee": "service_role",
@@ -53592,6 +54759,14 @@
       "table_name": "msg_thread_visibility"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "msg_threads"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -53648,6 +54823,14 @@
       "table_name": "msg_threads"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "msg_users"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -53710,6 +54893,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "msg_users"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "operating_hours"
     },
     {
       "grantee": "service_role",
@@ -53776,6 +54967,14 @@
       "table_name": "operating_hours"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "operational_notification_jobs"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -53838,6 +55037,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "operational_notification_jobs"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "ops_manager_auth_events"
     },
     {
       "grantee": "service_role",
@@ -53904,6 +55111,14 @@
       "table_name": "ops_manager_auth_events"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "ops_manager_device_security_config"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -53966,6 +55181,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "ops_manager_device_security_config"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "ops_manager_device_security_rate_limits"
     },
     {
       "grantee": "service_role",
@@ -54032,6 +55255,14 @@
       "table_name": "ops_manager_device_security_rate_limits"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "ops_manager_device_security_sessions"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -54094,6 +55325,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "ops_manager_device_security_sessions"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "ops_manager_enrollment_code_rate_limits"
     },
     {
       "grantee": "service_role",
@@ -54160,6 +55399,14 @@
       "table_name": "ops_manager_enrollment_code_rate_limits"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "ops_manager_enrollment_codes"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -54222,6 +55469,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "ops_manager_enrollment_codes"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "ops_manager_managers"
     },
     {
       "grantee": "service_role",
@@ -54288,6 +55543,14 @@
       "table_name": "ops_manager_managers"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "ops_manager_notification_preferences"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -54350,6 +55613,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "ops_manager_notification_preferences"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "ops_manager_notification_queue"
     },
     {
       "grantee": "service_role",
@@ -54416,6 +55687,14 @@
       "table_name": "ops_manager_notification_queue"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "ops_manager_notification_state"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -54478,6 +55757,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "ops_manager_notification_state"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "ops_manager_pairing_tokens"
     },
     {
       "grantee": "service_role",
@@ -54544,6 +55831,14 @@
       "table_name": "ops_manager_pairing_tokens"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "ops_manager_push_devices"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -54606,6 +55901,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "ops_manager_push_devices"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "ops_manager_security_code_events"
     },
     {
       "grantee": "service_role",
@@ -54672,6 +55975,14 @@
       "table_name": "ops_manager_security_code_events"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_rate_limits"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -54734,6 +56045,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "ops_manager_shared_enrollment_rate_limits"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "ops_manager_shared_enrollment_windows"
     },
     {
       "grantee": "service_role",
@@ -54800,6 +56119,14 @@
       "table_name": "ops_manager_shared_enrollment_windows"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "ops_manager_trusted_devices"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -54864,6 +56191,14 @@
       "table_name": "ops_manager_trusted_devices"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "ops_manager_weekly_schedules"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -54928,6 +56263,14 @@
       "table_name": "ops_manager_weekly_schedules"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "public_submission_rate_limits"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -54992,6 +56335,14 @@
       "table_name": "public_submission_rate_limits"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "release_deployment_manifest"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -55056,6 +56407,14 @@
       "table_name": "release_deployment_manifest"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "release_validation_runs"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -55120,6 +56479,14 @@
       "table_name": "release_validation_runs"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "scan_alert_notification_log"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -55184,7 +56551,7 @@
       "table_name": "scan_alert_notification_log"
     },
     {
-      "grantee": "service_role",
+      "grantee": "custodial_application_reader",
       "grantor": "migration_owner",
       "is_grantable": false,
       "privilege_type": "SELECT",
@@ -55195,6 +56562,22 @@
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "scan_events"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "schedule_assignment_archive"
+    },
+    {
+      "grantee": "service_role",
+      "grantor": "migration_owner",
+      "is_grantable": false,
       "privilege_type": "DELETE",
       "schema_name": "public",
       "table_name": "schedule_assignment_archive"
@@ -55254,6 +56637,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "schedule_assignment_archive"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "schedule_automation_runs"
     },
     {
       "grantee": "service_role",
@@ -55320,6 +56711,14 @@
       "table_name": "schedule_automation_runs"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "schedule_candidate_scores"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -55382,6 +56781,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "schedule_candidate_scores"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "schedule_generation_runs"
     },
     {
       "grantee": "service_role",
@@ -55448,6 +56855,14 @@
       "table_name": "schedule_generation_runs"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "schedule_manual_locks"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -55512,6 +56927,14 @@
       "table_name": "schedule_manual_locks"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "schedule_operational_notes"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -55576,6 +56999,14 @@
       "table_name": "schedule_operational_notes"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "schedule_publish_audit"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -55640,6 +57071,14 @@
       "table_name": "schedule_publish_audit"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "schedule_solution_assignments"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -55704,6 +57143,14 @@
       "table_name": "schedule_solution_assignments"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "schedule_work_items"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -55768,6 +57215,14 @@
       "table_name": "schedule_work_items"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "scheduler_scoring_settings"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -55832,6 +57287,14 @@
       "table_name": "scheduler_scoring_settings"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "session_events"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -55896,7 +57359,7 @@
       "table_name": "session_events"
     },
     {
-      "grantee": "service_role",
+      "grantee": "custodial_application_reader",
       "grantor": "migration_owner",
       "is_grantable": false,
       "privilege_type": "SELECT",
@@ -55907,6 +57370,54 @@
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "sessions"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "static_weekly_authority_attestation_config"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "static_weekly_authority_attestation_keys"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "static_weekly_authority_source_documents"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "static_weekly_schedule_control"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "system_feedback_items"
+    },
+    {
+      "grantee": "service_role",
+      "grantor": "migration_owner",
+      "is_grantable": false,
       "privilege_type": "DELETE",
       "schema_name": "public",
       "table_name": "system_feedback_items"
@@ -55966,6 +57477,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "system_feedback_items"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "system_feedback_legacy_image_backups"
     },
     {
       "grantee": "service_role",
@@ -56032,6 +57551,14 @@
       "table_name": "system_feedback_legacy_image_backups"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "system_logs"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -56094,6 +57621,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "system_logs"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "system_settings"
     },
     {
       "grantee": "service_role",
@@ -56160,6 +57695,14 @@
       "table_name": "system_settings"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "v_admin_health_snapshot"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -56222,6 +57765,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "v_admin_health_snapshot"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "v_approved_devices"
     },
     {
       "grantee": "service_role",
@@ -56288,6 +57839,14 @@
       "table_name": "v_approved_devices"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "v_cleaning_inspection_coverage"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -56350,6 +57909,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "v_cleaning_inspection_coverage"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "v_cleaning_performance_comparison"
     },
     {
       "grantee": "service_role",
@@ -56416,6 +57983,14 @@
       "table_name": "v_cleaning_performance_comparison"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "v_cleaning_session_facts"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -56478,6 +58053,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "v_cleaning_session_facts"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "v_demo_scan_mock_today_assigned_locations"
     },
     {
       "grantee": "service_role",
@@ -56544,6 +58127,14 @@
       "table_name": "v_demo_scan_mock_today_assigned_locations"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "v_device_health"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -56606,6 +58197,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "v_device_health"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "v_exception_queue"
     },
     {
       "grantee": "service_role",
@@ -56672,6 +58271,14 @@
       "table_name": "v_exception_queue"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "v_last_cleaned_by_location"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -56734,6 +58341,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "v_last_cleaned_by_location"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "v_location_dashboard_status"
     },
     {
       "grantee": "service_role",
@@ -56800,6 +58415,14 @@
       "table_name": "v_location_dashboard_status"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "v_location_status"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -56862,6 +58485,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "v_location_status"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "v_maintenance_ticket_trends"
     },
     {
       "grantee": "service_role",
@@ -56928,6 +58559,14 @@
       "table_name": "v_maintenance_ticket_trends"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "v_memphis_absence_coverage"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -56990,6 +58629,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "v_memphis_absence_coverage"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "v_memphis_area_schedule"
     },
     {
       "grantee": "service_role",
@@ -57056,6 +58703,14 @@
       "table_name": "v_memphis_area_schedule"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "v_memphis_employee_load_summary"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -57118,6 +58773,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "v_memphis_employee_load_summary"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "v_memphis_employee_schedule"
     },
     {
       "grantee": "service_role",
@@ -57184,6 +58847,14 @@
       "table_name": "v_memphis_employee_schedule"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "v_memphis_open_segments"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -57246,6 +58917,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "v_memphis_open_segments"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "v_open_maintenance_tickets"
     },
     {
       "grantee": "service_role",
@@ -57312,6 +58991,14 @@
       "table_name": "v_open_maintenance_tickets"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "v_recent_scan_activity"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -57374,6 +59061,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "v_recent_scan_activity"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "v_restroom_check_timers"
     },
     {
       "grantee": "service_role",
@@ -57440,6 +59135,14 @@
       "table_name": "v_restroom_check_timers"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "v_restroom_package_status"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -57502,6 +59205,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "v_restroom_package_status"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "v_sch2_constraint_violations"
     },
     {
       "grantee": "service_role",
@@ -57568,6 +59279,14 @@
       "table_name": "v_sch2_constraint_violations"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "v_sch2_publish_diff"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -57630,6 +59349,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "v_sch2_publish_diff"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "v_sch2_route_audit"
     },
     {
       "grantee": "service_role",
@@ -57696,6 +59423,14 @@
       "table_name": "v_sch2_route_audit"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "v_sch2_workload_audit"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -57758,6 +59493,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "v_sch2_workload_audit"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "v_schedule_adjusted_load_summary"
     },
     {
       "grantee": "service_role",
@@ -57824,6 +59567,14 @@
       "table_name": "v_schedule_adjusted_load_summary"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "v_schedule_display_duplicates"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -57888,6 +59639,14 @@
       "table_name": "v_schedule_display_duplicates"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "v_schedule_location_group_zones"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -57952,6 +59711,14 @@
       "table_name": "v_schedule_location_group_zones"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "v_scheduler_group_score_components"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -58016,6 +59783,14 @@
       "table_name": "v_scheduler_group_score_components"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "v_weekly_roster_slot_incumbency_ranges"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -58080,6 +59855,14 @@
       "table_name": "v_weekly_roster_slot_incumbency_ranges"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "v_weekly_schedule_effective_ranges"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -58144,6 +59927,142 @@
       "table_name": "v_weekly_schedule_effective_ranges"
     },
     {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "weekly_roster_slot_incumbencies"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "weekly_roster_slot_incumbency_closures"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "weekly_roster_slot_staffing_states"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "weekly_roster_slots"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "weekly_schedule_authority_revisions"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "weekly_schedule_command_receipts"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "weekly_schedule_compiled_projections"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "weekly_schedule_effective_range_closures"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "weekly_schedule_exception_commands"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "weekly_schedule_objective_inputs"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "weekly_schedule_occurrences"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "weekly_schedule_projection_assignments"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "weekly_schedule_publications"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "weekly_schedule_slot_assignments"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "weekly_schedule_slot_availability"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "weekly_schedule_versions"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "working_cluster_adjacency"
+    },
+    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -58206,6 +60125,14 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "working_cluster_adjacency"
+    },
+    {
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "is_grantable": false,
+      "privilege_type": "SELECT",
+      "schema_name": "public",
+      "table_name": "zones"
     },
     {
       "grantee": "service_role",
