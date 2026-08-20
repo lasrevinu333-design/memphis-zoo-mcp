@@ -14,13 +14,13 @@ This document lists the environment variables used by the Memphis Zoo MCP backen
 
 | Name | Required | Purpose |
 |---|---:|---|
-| `MCP_CONNECTOR_TOKEN` | Recommended | Dedicated bearer/custom-header token for service clients and strict legacy SSE access. |
-| `MCP_ALLOW_FULL_NOAUTH` | No | Tokenless Streamable HTTP access to the complete GitHub and Supabase MCP tool set. Defaults to `true` for the connected ChatGPT app. Set `false` to fall back to read-only access. |
-| `MCP_ALLOW_READONLY_NOAUTH` | No | Tokenless diagnostic/read-only fallback when full no-auth access is disabled. Defaults to `true`. |
+| `MCP_CONNECTOR_TOKEN` | **Required for mutation** | Dedicated bearer/custom-header token for authenticated service clients and legacy SSE access. |
+| `MCP_ALLOW_FULL_NOAUTH` | Retired | Ignored and always fail-closed. Tokenless clients never receive GitHub or Supabase mutation tools. |
+| `MCP_ALLOW_READONLY_NOAUTH` | No | Optional tokenless diagnostic-only surface. Defaults to `false`; when enabled it exposes no GitHub or Supabase adapter. |
 
-MCP access precedence is: a valid presented connector token receives full access; a presented invalid token is rejected; a tokenless request receives full access when `MCP_ALLOW_FULL_NOAUTH` is enabled, otherwise read-only access when `MCP_ALLOW_READONLY_NOAUTH` is enabled, otherwise it is rejected. Legacy SSE explicitly disables both tokenless modes.
+MCP access precedence is: a valid presented connector token receives the scoped authenticated tool set; a presented invalid token is rejected; a tokenless request receives only the diagnostic-only server when `MCP_ALLOW_READONLY_NOAUTH=true`, otherwise it is rejected. Legacy SSE is token-only.
 
-The production `/mcp` URL is public. Enabling full tokenless access therefore authorizes any client that reaches that endpoint, not only the ChatGPT UI. Repository allowlists, dry-run defaults, expected-SHA checks, and migration-size limits still apply.
+The production `/mcp` URL is public. Connected clients must therefore carry the dedicated connector credential; UI provenance is not an authorization boundary.
 
 ## GitHub
 
