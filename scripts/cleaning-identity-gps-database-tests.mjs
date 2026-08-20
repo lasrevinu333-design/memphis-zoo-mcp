@@ -70,6 +70,17 @@ assert.equal(await sql(`
   select employee_name_snapshot||'|'||location_code_snapshot||'|'||device_identifier_snapshot||'|'||assignment_epoch_snapshot||'|'||identity_snapshot_provenance
   from public.sessions where id='${ids.session}';
 `), "Original Employee|IDENTITY_ONE|IDENTITY_DEVICE_ONE|1|session_create");
+assert.equal(await sql(`
+  select mutates_terminal_truth::text||'|'||application_callable::text
+  from public.custodial_terminal_writer_inventory
+  where routine_identity like 'custodial_append_session_correction(%';
+`), "false|true", "append-only corrections must remain callable without being misclassified as session rewrites");
+assert.equal(await sql(`
+  select (count(*)>0)::text
+  from public.custodial_terminal_writer_inventory
+  where mutates_terminal_truth
+    and definition ~ 'update[[:space:]]+public[.]sessions';
+`), "true", "the precise detector must still identify actual session mutation");
 
 await expectSqlFailure(
   `update public.sessions set employee_id='${ids.employee2}' where id='${ids.session}';`,

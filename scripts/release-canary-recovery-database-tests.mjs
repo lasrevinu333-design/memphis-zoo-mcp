@@ -90,6 +90,8 @@ assert.equal(sql("select to_regprocedure('public.custodial_run_release_canary_re
 assert.equal(sql("select to_regprocedure('public.custodial_release_canary_is_paused(text,text)') is not null;"), "t");
 assert.equal(sql("select count(*) from pg_trigger where tgrelid='public.custodial_release_canary_transport_probes'::regclass and tgname='trg_custodial_release_canary_transport_probes_immutable' and tgenabled<>'D';"), "1",
   "forward restoration must recover immutable phone-transport evidence enforcement");
+assert.equal(sql("select count(*) from pg_trigger where tgrelid='public.custodial_release_authority_restore_inventory'::regclass and tgname='trg_custodial_release_authority_restore_inventory_immutable' and tgenabled<>'D';"), "1",
+  "forward restoration must leave its own authority inventory tamper guard enabled");
 assert.equal(sql("select encode(extensions.digest(convert_to(pg_get_functiondef('public.custodial_backend_authority_health(text)'::regprocedure),'UTF8'),'sha256'),'hex');"), expectedHealthDigest,
   "restored function must equal the captured known-good definition");
 assert.equal(sql("select encode(extensions.digest(convert_to(pg_get_functiondef('public.custodial_require_backend_execution_secret(text)'::regprocedure),'UTF8'),'sha256'),'hex');"), expectedSecretVerifierDigest,
