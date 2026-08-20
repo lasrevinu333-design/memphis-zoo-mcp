@@ -367,6 +367,12 @@ assert.match(routeSource, /p_expected_owner_provided: expectedOwnerProvided/,
   "assignment CAS presence must reach the serialized database RPC");
 assert.doesNotMatch(routeSource, /if \(expected && String\(current\?\.assigned_employee_id/,
   "assignment CAS must not use the old truthy JavaScript pre-read check");
+assert.match(routeSource, /function serviceSecret\(env\) \{\s*const value = envText\(env, "DEVICE_CREDENTIAL_SECRET"\);/,
+  "employee enrollment signing must use the dedicated device credential secret");
+assert.doesNotMatch(routeSource, /function serviceSecret\(env\)[\s\S]{0,400}OPS_MANAGER_SESSION_SECRET/,
+  "employee enrollment signing must not fall back to the manager session secret");
+assert.doesNotMatch(routeSource, /function serviceSecret\(env\)[\s\S]{0,400}SUPABASE_SERVICE_ROLE_KEY/,
+  "employee enrollment signing must not fall back to the Supabase service role key");
 
 // Native lifecycle routes act as the employee phone, not as an Ops Manager.
 // Their enrollment-code or device-credential proofs remain purpose-specific;

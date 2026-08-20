@@ -60,8 +60,8 @@ function normalizeDeviceId(value) {
 function validKioskId(value) { return /^KIOSK_(0[2-9]|10)$/.test(normalizeDeviceId(value)); }
 function validUuid(value) { return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || "").trim()); }
 function serviceSecret(env) {
-  const value = envText(env, "DEVICE_CREDENTIAL_SECRET") || envText(env, "OPS_MANAGER_SESSION_SECRET") || envText(env, "SUPABASE_SERVICE_ROLE_KEY");
-  if (!value) throw Object.assign(new Error("Device credential signing is not configured."), { status: 503 });
+  const value = envText(env, "DEVICE_CREDENTIAL_SECRET");
+  if (!value) throw Object.assign(new Error("The dedicated device credential secret is not configured."), { status: 503 });
   return value;
 }
 function hmacHex(env, purpose, value) {

@@ -21,6 +21,16 @@ const env = {
   DEVICE_CREDENTIAL_SECRET: "device-credential-foundation-test-secret",
   DEVICE_CREDENTIAL_TTL_DAYS: "3650",
 };
+for (const wrongSecretClass of [
+  { NODE_ENV: "production", OPS_MANAGER_SESSION_SECRET: "manager-secret-is-not-a-device-secret" },
+  { NODE_ENV: "production", SUPABASE_SERVICE_ROLE_KEY: "service-role-is-not-a-device-secret" },
+]) {
+  assert.throws(
+    () => deviceCredentialInternals.tokenHash("presented-device-token", wrongSecretClass),
+    /dedicated device credential secret is not configured/i,
+    "another secret class must never substitute for DEVICE_CREDENTIAL_SECRET",
+  );
+}
 const deviceA = {
   requested_device_id: "KIOSK_06",
   matched_by: "canonical",
@@ -299,6 +309,8 @@ assert.match(moduleSource, /An active canonical employee kiosk assignment is req
 assert.match(moduleSource, /device_credential_confirmed/);
 assert.match(moduleSource, /X-Device-Id is required/);
 assert.doesNotMatch(moduleSource, /res\.status\(200\).*rawToken/s);
+assert.doesNotMatch(moduleSource, /env\.OPS_MANAGER_SESSION_SECRET|env\.SUPABASE_SERVICE_ROLE_KEY/,
+  "device credential HMAC authority must not fall back to another secret class");
 
 const indexSource = read("src/index.js");
 assert.match(indexSource, /installDeviceCredentialRoutes/);

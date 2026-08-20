@@ -30,14 +30,9 @@ function safeEqual(left, right) {
 }
 
 function secretForDeviceCredentials(env = process.env) {
-  const value = String(
-    env.DEVICE_CREDENTIAL_SECRET
-      || env.OPS_MANAGER_SESSION_SECRET
-      || env.SUPABASE_SERVICE_ROLE_KEY
-      || ""
-  ).trim();
+  const value = String(env.DEVICE_CREDENTIAL_SECRET || "").trim();
   if (!value) {
-    const error = new Error("Device credential secret is not configured.");
+    const error = new Error("The dedicated device credential secret is not configured.");
     error.status = 503;
     throw error;
   }
