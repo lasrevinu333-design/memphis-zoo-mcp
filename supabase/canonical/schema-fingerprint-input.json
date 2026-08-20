@@ -35497,7 +35497,7 @@
       "schema_name": "public"
     },
     {
-      "comment": null,
+      "comment": "Internal release-recovery DDL helper. Direct API-role execution is prohibited.",
       "definition": "CREATE OR REPLACE FUNCTION public.custodial_release_authority_reset_grants(p_object_identity text)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_relation oid:=to_regclass(p_object_identity); v_function oid:=to_regprocedure(p_object_identity); v_role record; v_column record;\nbegin\n  if v_relation is not null then\n    execute format('revoke all privileges on table %s from public',v_relation::regclass);\n    for v_role in\n      select distinct r.rolname from pg_class c cross join lateral aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a join pg_roles r on r.oid=a.grantee\n      where c.oid=v_relation and a.grantee<>c.relowner\n    loop execute format('revoke all privileges on table %s from %I',v_relation::regclass,v_role.rolname); end loop;\n    for v_column in\n      select a.attname,x.grantee,r.rolname from pg_attribute a join pg_class c on c.oid=a.attrelid\n      cross join lateral aclexplode(a.attacl) x left join pg_roles r on r.oid=x.grantee\n      where c.oid=v_relation and a.attnum>0 and not a.attisdropped and a.attacl is not null and x.grantee<>c.relowner\n    loop\n      execute format('revoke all privileges (%I) on table %s from %s',v_column.attname,v_relation::regclass,case when v_column.grantee=0 then 'public' else quote_ident(v_column.rolname) end);\n    end loop;\n    return;\n  end if;\n  if v_function is not null then\n    execute format('revoke all privileges on function %s from public',v_function::regprocedure);\n    for v_role in\n      select distinct r.rolname from pg_proc p cross join lateral aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a join pg_roles r on r.oid=a.grantee\n      where p.oid=v_function and a.grantee<>p.proowner\n    loop execute format('revoke all privileges on function %s from %I',v_function::regprocedure,v_role.rolname); end loop;\n    return;\n  end if;\n  raise exception using errcode='42704',message='release authority grant target is missing';\nend\n$function$\n",
       "function_name": "custodial_release_authority_reset_grants",
       "identity_arguments": "p_object_identity text",
@@ -35505,7 +35505,7 @@
       "schema_name": "public"
     },
     {
-      "comment": null,
+      "comment": "Internal release-recovery DDL helper. Direct API-role execution is prohibited.",
       "definition": "CREATE OR REPLACE FUNCTION public.custodial_release_authority_restore_column(p_relation_identity text, p_column_name text, p_data_type text, p_collation_identity text, p_identity_kind text, p_generated_kind text, p_expression text, p_not_null boolean)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_relation oid:=to_regclass(p_relation_identity); v_current record; v_target_type text;\n  v_declaration text; v_expected_identity text:=coalesce(p_identity_kind,'');\n  v_expected_generated text:=coalesce(p_generated_kind,'');\nbegin\n  if v_relation is null then raise exception using errcode='42704',message='release authority column relation is missing'; end if;\n  if p_column_name is null or p_column_name='' or p_data_type is null or p_data_type='' then\n    raise exception using errcode='22023',message='release authority column definition is incomplete';\n  end if;\n  v_target_type:=p_data_type||case when p_collation_identity is null then '' else ' collate '||p_collation_identity end;\n  v_declaration:=quote_ident(p_column_name)||' '||v_target_type\n    ||case\n      when v_expected_generated<>'' then ' generated always as ('||p_expression||') stored'\n      when v_expected_identity<>'' then ' generated '||case v_expected_identity when 'a' then 'always' else 'by default' end||' as identity'\n      when p_expression is not null then ' default '||p_expression\n      else ''\n    end\n    ||case when p_not_null then ' not null' else '' end;\n  select format_type(a.atttypid,a.atttypmod) data_type,a.attidentity identity_kind,a.attgenerated generated_kind,\n    pg_get_expr(d.adbin,d.adrelid) expression,a.attnotnull not_null,\n    case when a.attcollation<>t.typcollation then quote_ident(cn.nspname)||'.'||quote_ident(co.collname) end collation_identity\n  into v_current\n  from pg_attribute a join pg_type t on t.oid=a.atttypid\n  left join pg_attrdef d on d.adrelid=a.attrelid and d.adnum=a.attnum\n  left join pg_collation co on co.oid=a.attcollation left join pg_namespace cn on cn.oid=co.collnamespace\n  where a.attrelid=v_relation and a.attname=p_column_name and a.attnum>0 and not a.attisdropped;\n  if not found then\n    execute format('alter table %s add column %s',v_relation::regclass,v_declaration);\n    return;\n  end if;\n  if v_expected_generated<>'' or coalesce(v_current.generated_kind,'')<>'' then\n    if v_current.data_type=p_data_type and v_current.collation_identity is not distinct from p_collation_identity\n       and coalesce(v_current.generated_kind,'')=v_expected_generated\n       and v_current.expression is not distinct from p_expression and v_current.not_null=p_not_null then return; end if;\n    execute format('alter table %s drop column %I cascade',v_relation::regclass,p_column_name);\n    execute format('alter table %s add column %s',v_relation::regclass,v_declaration);\n    return;\n  end if;\n  if v_current.data_type<>p_data_type or v_current.collation_identity is distinct from p_collation_identity then\n    execute format('alter table %s alter column %I type %s using %I::%s',v_relation::regclass,p_column_name,v_target_type,p_column_name,p_data_type);\n  end if;\n  if coalesce(v_current.identity_kind,'')<>v_expected_identity then\n    if coalesce(v_current.identity_kind,'')<>'' then execute format('alter table %s alter column %I drop identity if exists',v_relation::regclass,p_column_name); end if;\n    if v_expected_identity<>'' then execute format('alter table %s alter column %I add generated %s as identity',v_relation::regclass,p_column_name,case v_expected_identity when 'a' then 'always' else 'by default' end); end if;\n  end if;\n  if v_expected_identity='' then\n    execute format('alter table %s alter column %I drop default',v_relation::regclass,p_column_name);\n    if p_expression is not null then execute format('alter table %s alter column %I set default %s',v_relation::regclass,p_column_name,p_expression); end if;\n  end if;\n  execute format('alter table %s alter column %I %s not null',v_relation::regclass,p_column_name,case when p_not_null then 'set' else 'drop' end);\nend\n$function$\n",
       "function_name": "custodial_release_authority_restore_column",
       "identity_arguments": "p_relation_identity text, p_column_name text, p_data_type text, p_collation_identity text, p_identity_kind text, p_generated_kind text, p_expression text, p_not_null boolean",
@@ -35513,7 +35513,7 @@
       "schema_name": "public"
     },
     {
-      "comment": null,
+      "comment": "Internal release-recovery DDL helper. Direct API-role execution is prohibited.",
       "definition": "CREATE OR REPLACE FUNCTION public.custodial_release_authority_restore_column_set(p_relation_identity text, p_expected_columns text[])\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_relation oid:=to_regclass(p_relation_identity); v_column record;\nbegin\n  if v_relation is null then raise exception using errcode='42704',message='release authority column-set relation is missing'; end if;\n  for v_column in select a.attname from pg_attribute a\n    where a.attrelid=v_relation and a.attnum>0 and not a.attisdropped and not (a.attname=any(p_expected_columns))\n    order by a.attname\n  loop execute format('alter table %s drop column %I cascade',v_relation::regclass,v_column.attname); end loop;\nend\n$function$\n",
       "function_name": "custodial_release_authority_restore_column_set",
       "identity_arguments": "p_relation_identity text, p_expected_columns text[]",
@@ -35521,7 +35521,7 @@
       "schema_name": "public"
     },
     {
-      "comment": null,
+      "comment": "Internal release-recovery DDL helper. Direct API-role execution is prohibited.",
       "definition": "CREATE OR REPLACE FUNCTION public.custodial_release_authority_restore_constraint(p_relation_identity text, p_constraint_name text, p_constraint_definition text)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare v_relation oid:=to_regclass(p_relation_identity); v_current text;\nbegin\n  if v_relation is null then raise exception using errcode='42704',message='release authority constraint relation is missing'; end if;\n  select pg_get_constraintdef(c.oid,true) into v_current from pg_constraint c where c.conrelid=v_relation and c.conname=p_constraint_name;\n  if v_current is null then\n    execute format('alter table %s add constraint %I %s',v_relation::regclass,p_constraint_name,p_constraint_definition);\n  elsif v_current<>p_constraint_definition then\n    execute format('alter table %s drop constraint %I cascade',v_relation::regclass,p_constraint_name);\n    execute format('alter table %s add constraint %I %s',v_relation::regclass,p_constraint_name,p_constraint_definition);\n  end if;\nend\n$function$\n",
       "function_name": "custodial_release_authority_restore_constraint",
       "identity_arguments": "p_relation_identity text, p_constraint_name text, p_constraint_definition text",
@@ -45170,15 +45170,6 @@
       "schema_name": "public"
     },
     {
-      "function_name": "cleaning_inspections_set_snapshot",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
       "function_name": "custodial_assert_manager",
       "grantee": "service_role",
       "grantor": "migration_owner",
@@ -45252,15 +45243,6 @@
     },
     {
       "function_name": "custodial_claim_offline_reconciliation_notification_recipients",
-      "grantee": "PUBLIC",
-      "grantor": "migration_owner",
-      "identity_arguments": "p_outbox_id uuid, p_worker_id text, p_outbox_lease_token uuid, p_recipients jsonb, p_backend_execution_secret text",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "custodial_claim_offline_reconciliation_notification_recipients",
       "grantee": "service_role",
       "grantor": "migration_owner",
       "identity_arguments": "p_outbox_id uuid, p_worker_id text, p_outbox_lease_token uuid, p_recipients jsonb, p_backend_execution_secret text",
@@ -45273,15 +45255,6 @@
       "grantee": "service_role",
       "grantor": "migration_owner",
       "identity_arguments": "p_worker_id text, p_limit integer, p_lease_seconds integer, p_backend_execution_secret text",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "custodial_close_maintenance_ticket_authoritative",
-      "grantee": "PUBLIC",
-      "grantor": "migration_owner",
-      "identity_arguments": "p_ticket_id uuid, p_closed_by text, p_close_notes text, p_backend_execution_secret text",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -45342,15 +45315,6 @@
     },
     {
       "function_name": "custodial_finish_offline_reconciliation_notification_recipient",
-      "grantee": "PUBLIC",
-      "grantor": "migration_owner",
-      "identity_arguments": "p_delivery_recipient_id uuid, p_worker_id text, p_lease_token uuid, p_succeeded boolean, p_message_id uuid, p_error text, p_retry_seconds integer, p_terminal boolean, p_delivery_evidence jsonb, p_backend_execution_secret text",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "custodial_finish_offline_reconciliation_notification_recipient",
       "grantee": "service_role",
       "grantor": "migration_owner",
       "identity_arguments": "p_delivery_recipient_id uuid, p_worker_id text, p_lease_token uuid, p_succeeded boolean, p_message_id uuid, p_error text, p_retry_seconds integer, p_terminal boolean, p_delivery_evidence jsonb, p_backend_execution_secret text",
@@ -45363,15 +45327,6 @@
       "grantee": "service_role",
       "grantor": "migration_owner",
       "identity_arguments": "p_device_identifier text, p_backend_commit_sha text, p_release_id text, p_backend_execution_secret text",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "custodial_manager_dispose_offline_reconciliation",
-      "grantee": "PUBLIC",
-      "grantor": "migration_owner",
-      "identity_arguments": "p_manager_id uuid, p_reconciliation_id uuid, p_disposition text, p_reason text, p_request_id uuid, p_backend_execution_secret text",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -45494,24 +45449,6 @@
       "schema_name": "public"
     },
     {
-      "function_name": "custodial_record_offline_authority_activation_boundary",
-      "grantee": "PUBLIC",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "custodial_record_offline_authority_activation_boundary",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
       "function_name": "custodial_record_release_canary_transport_probe",
       "grantee": "service_role",
       "grantor": "migration_owner",
@@ -45521,132 +45458,6 @@
       "schema_name": "public"
     },
     {
-      "function_name": "custodial_reject_offline_authority_activation_mutation",
-      "grantee": "PUBLIC",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "custodial_reject_offline_authority_activation_mutation",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "custodial_reject_offline_delivery_event_mutation",
-      "grantee": "PUBLIC",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "custodial_reject_offline_delivery_event_mutation",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "custodial_reject_offline_delivery_recipient_mutation",
-      "grantee": "PUBLIC",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "custodial_reject_offline_delivery_recipient_mutation",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "custodial_reject_offline_evidence_mutation",
-      "grantee": "PUBLIC",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "custodial_reject_offline_evidence_mutation",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "custodial_reject_offline_evidence_truncate",
-      "grantee": "PUBLIC",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "custodial_reject_offline_evidence_truncate",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "custodial_reject_offline_outbox_mutation",
-      "grantee": "PUBLIC",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "custodial_reject_offline_outbox_mutation",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "custodial_reject_release_authority_inventory_mutation",
-      "grantee": "PUBLIC",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "custodial_reject_release_authority_inventory_mutation",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
       "function_name": "custodial_release_authority_current_column_definition",
       "grantee": "PUBLIC",
       "grantor": "migration_owner",
@@ -45786,78 +45597,6 @@
       "grantee": "service_role",
       "grantor": "migration_owner",
       "identity_arguments": "p_object_identity text",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "custodial_release_authority_reset_grants",
-      "grantee": "PUBLIC",
-      "grantor": "migration_owner",
-      "identity_arguments": "p_object_identity text",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "custodial_release_authority_reset_grants",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "p_object_identity text",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "custodial_release_authority_restore_column",
-      "grantee": "PUBLIC",
-      "grantor": "migration_owner",
-      "identity_arguments": "p_relation_identity text, p_column_name text, p_data_type text, p_collation_identity text, p_identity_kind text, p_generated_kind text, p_expression text, p_not_null boolean",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "custodial_release_authority_restore_column",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "p_relation_identity text, p_column_name text, p_data_type text, p_collation_identity text, p_identity_kind text, p_generated_kind text, p_expression text, p_not_null boolean",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "custodial_release_authority_restore_column_set",
-      "grantee": "PUBLIC",
-      "grantor": "migration_owner",
-      "identity_arguments": "p_relation_identity text, p_expected_columns text[]",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "custodial_release_authority_restore_column_set",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "p_relation_identity text, p_expected_columns text[]",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "custodial_release_authority_restore_constraint",
-      "grantee": "PUBLIC",
-      "grantor": "migration_owner",
-      "identity_arguments": "p_relation_identity text, p_constraint_name text, p_constraint_definition text",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "custodial_release_authority_restore_constraint",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "p_relation_identity text, p_constraint_name text, p_constraint_definition text",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -45912,15 +45651,6 @@
       "grantee": "service_role",
       "grantor": "migration_owner",
       "identity_arguments": "p_employee_id uuid, p_active boolean, p_changed_by_manager_id uuid, p_reason text, p_release_devices boolean",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "device_auth_auto_enforce_when_ready",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -46016,55 +45746,10 @@
       "schema_name": "public"
     },
     {
-      "function_name": "enforce_session_status_transition",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "events_app_delete_retention_guard",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "events_app_events_set_end_date",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
       "function_name": "events_app_purge_expired",
       "grantee": "service_role",
       "grantor": "migration_owner",
       "identity_arguments": "p_now timestamp with time zone, p_batch_limit integer",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "events_app_set_updated_at",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "events_app_validate_scope_venue",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -46164,15 +45849,6 @@
       "grantee": "service_role",
       "grantor": "migration_owner",
       "identity_arguments": "p_repair_job_id uuid, p_lease_token uuid, p_backup_reference text, p_backup_evidence jsonb",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "gemini_console_require_live_worker",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -46322,15 +45998,6 @@
       "schema_name": "public"
     },
     {
-      "function_name": "msg_audit_persisted_message",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
       "function_name": "msg_cleanup_deleted_messages",
       "grantee": "service_role",
       "grantor": "migration_owner",
@@ -46380,15 +46047,6 @@
       "grantee": "service_role",
       "grantor": "migration_owner",
       "identity_arguments": "p_thread_id uuid",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "msg_enqueue_background_work",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -46583,15 +46241,6 @@
       "schema_name": "public"
     },
     {
-      "function_name": "msg_memphis_pre_generate_schedule",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
       "function_name": "msg_purge_deleted_content",
       "grantee": "service_role",
       "grantor": "migration_owner",
@@ -46673,15 +46322,6 @@
       "schema_name": "public"
     },
     {
-      "function_name": "msg_set_updated_at",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
       "function_name": "msg_unhide_thread_for_device",
       "grantee": "service_role",
       "grantor": "migration_owner",
@@ -46727,15 +46367,6 @@
       "schema_name": "public"
     },
     {
-      "function_name": "mz_enqueue_employee_message_push",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
       "function_name": "mz_free_tier_retention_report",
       "grantee": "service_role",
       "grantor": "migration_owner",
@@ -46767,15 +46398,6 @@
       "grantee": "service_role",
       "grantor": "migration_owner",
       "identity_arguments": "p_job_id uuid, p_lease_token uuid, p_credential_id uuid, p_assignment_epoch bigint, p_registration_id uuid, p_token_hash text, p_now timestamp with time zone",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "mz_reconcile_employee_push_credential_state",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -46817,15 +46439,6 @@
       "schema_name": "public"
     },
     {
-      "function_name": "mz_reject_event_messenger_message",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
       "function_name": "mz_release_employee_event_push_delivery",
       "grantee": "service_role",
       "grantor": "migration_owner",
@@ -46857,15 +46470,6 @@
       "grantee": "service_role",
       "grantor": "migration_owner",
       "identity_arguments": "p_key text, p_default integer, p_min integer, p_max integer",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "mz_revoke_stale_employee_push_registrations",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -46952,15 +46556,6 @@
       "schema_name": "public"
     },
     {
-      "function_name": "ops_manager_enqueue_message_push",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
       "function_name": "ops_manager_enqueue_scheduled_notifications",
       "grantee": "service_role",
       "grantor": "migration_owner",
@@ -46988,28 +46583,10 @@
       "schema_name": "public"
     },
     {
-      "function_name": "ops_manager_notification_validate_owner",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
       "function_name": "ops_manager_prepare_notification_dispatch",
       "grantee": "service_role",
       "grantor": "migration_owner",
       "identity_arguments": "p_queue_id uuid, p_lease_token uuid, p_push_device_id uuid, p_fcm_token_sha256 text",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "prevent_duplicate_daily_schedule_assignment",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -47028,15 +46605,6 @@
       "grantee": "service_role",
       "grantor": "migration_owner",
       "identity_arguments": "p_now timestamp with time zone",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "redact_guest_report_contact_on_terminal",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -47186,15 +46754,6 @@
       "schema_name": "public"
     },
     {
-      "function_name": "sch_apply_default_coverage_purpose",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
       "function_name": "sch_apply_lunch_coverage",
       "grantee": "service_role",
       "grantor": "migration_owner",
@@ -47267,15 +46826,6 @@
       "schema_name": "public"
     },
     {
-      "function_name": "sch_clear_scan_alerts_after_scan_event",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
       "function_name": "sch_clear_scan_alerts_for_location",
       "grantee": "service_role",
       "grantor": "migration_owner",
@@ -47289,15 +46839,6 @@
       "grantee": "service_role",
       "grantor": "migration_owner",
       "identity_arguments": "p_service_date date",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "sch_daily_absence_override_regenerate_trigger",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -47573,51 +47114,6 @@
       "schema_name": "public"
     },
     {
-      "function_name": "sch_guard_operational_coverage_template",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "sch_guard_operational_daily_assignment",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "sch_guard_restricted_coverage_template",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "sch_guard_restricted_daily_assignment",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "sch_guard_restricted_location_coverage_template",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
       "function_name": "sch_is_employee_location_group_restricted",
       "grantee": "service_role",
       "grantor": "migration_owner",
@@ -47676,15 +47172,6 @@
       "grantee": "service_role",
       "grantor": "migration_owner",
       "identity_arguments": "p_text text",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "sch_pto_absence_sync_trigger",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
@@ -47906,33 +47393,6 @@
       "schema_name": "public"
     },
     {
-      "function_name": "set_updated_at",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "set_updated_at_schedule_automation_runs",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "set_updated_at_schedule_operational_notes",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
       "function_name": "static_weekly_v3_apply_exception",
       "grantee": "static_weekly_control_plane",
       "grantor": "migration_owner",
@@ -48108,15 +47568,6 @@
       "grantee": "service_role",
       "grantor": "migration_owner",
       "identity_arguments": "p_service_date date, p_employee_id uuid, p_now timestamp with time zone",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "sync_migration_log_summary",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"
