@@ -37528,14 +37528,6 @@
       "schema_name": "public"
     },
     {
-      "comment": "Retired owner-authority SQL proxy. No application/API role may execute it.",
-      "definition": "CREATE OR REPLACE FUNCTION public.run_sql_readonly(p_sql text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\n SET statement_timeout TO '30s'\nAS $function$\r\ndeclare\r\n  result jsonb;\r\nbegin\r\n  if p_sql is null or btrim(p_sql) = '' then\r\n    raise exception 'SQL cannot be empty';\r\n  end if;\r\n\r\n  if lower(ltrim(p_sql)) not like 'select%' then\r\n    raise exception 'Only SELECT statements are allowed';\r\n  end if;\r\n\r\n  execute format(\r\n    'select coalesce(jsonb_agg(t), ''[]''::jsonb) from (%s) t',\r\n    p_sql\r\n  ) into result;\r\n\r\n  return coalesce(result, '[]'::jsonb);\r\nend;\r\n$function$\n",
-      "function_name": "run_sql_readonly",
-      "identity_arguments": "p_sql text",
-      "owner_name": "migration_owner",
-      "schema_name": "public"
-    },
-    {
       "comment": null,
       "definition": "CREATE OR REPLACE FUNCTION public.run_sql_write(p_sql text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_sql text:=btrim(coalesce(p_sql,''));\n  v_lower text;\n  v_result jsonb;\n  v_count bigint:=0;\nbegin\n  if v_sql='' then raise exception 'SQL cannot be empty'; end if;\n  v_sql:=regexp_replace(v_sql,';\\s*$','');\n  if position(';' in v_sql)>0 then raise exception 'Only one application data statement is allowed'; end if;\n  v_lower:=lower(ltrim(v_sql));\n  if v_lower !~ '^(insert|update|delete|with|select)\\s' then raise exception 'Application write executor does not accept DDL'; end if;\n  if v_lower ~ '(^|\\s)(create|alter|drop|truncate|grant|revoke|comment|vacuum|reindex|cluster)\\s' then raise exception 'Application write executor does not accept DDL'; end if;\n  if v_lower ~ '^(insert|update|delete|with)\\s' and v_lower like '% returning %' then\n    execute format('with _rows as (%s) select coalesce(jsonb_agg(to_jsonb(_rows)), ''[]''::jsonb) from _rows',v_sql) into v_result;\n    return coalesce(v_result,'[]'::jsonb);\n  end if;\n  execute v_sql;\n  get diagnostics v_count = row_count;\n  return jsonb_build_object('ok',true,'row_count',v_count);\nend;\n$function$\n",
       "function_name": "run_sql_write",
