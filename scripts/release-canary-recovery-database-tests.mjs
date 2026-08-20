@@ -94,6 +94,39 @@ assert.equal(sql("select encode(extensions.digest(convert_to(pg_get_functiondef(
   "restored function must equal the captured known-good definition");
 assert.equal(sql("select encode(extensions.digest(convert_to(pg_get_functiondef('public.custodial_require_backend_execution_secret(text)'::regprocedure),'UTF8'),'sha256'),'hex');"), expectedSecretVerifierDigest,
   "the inline-authenticated controller must recover a broken secret verifier before dependent functions");
+assert.equal(sql(`select count(*)
+  from pg_proc p
+  join pg_namespace n on n.oid=p.pronamespace
+  where n.nspname='public'
+    and p.prorettype='pg_catalog.trigger'::regtype
+    and (
+      has_function_privilege('public',p.oid,'EXECUTE')
+      or has_function_privilege('anon',p.oid,'EXECUTE')
+      or has_function_privilege('authenticated',p.oid,'EXECUTE')
+      or has_function_privilege('service_role',p.oid,'EXECUTE')
+    );`), "0",
+  "forward recovery must not resurrect trigger-only helpers as RPC surfaces");
+assert.equal(sql(`select count(*)
+  from pg_proc p
+  join pg_namespace n on n.oid=p.pronamespace
+  where n.nspname='public'
+    and p.prosecdef
+    and (
+      has_function_privilege('public',p.oid,'EXECUTE')
+      or has_function_privilege('anon',p.oid,'EXECUTE')
+      or has_function_privilege('authenticated',p.oid,'EXECUTE')
+    );`), "0",
+  "forward recovery must not resurrect public SECURITY DEFINER execution");
+assert.equal(sql("select to_regprocedure('public.run_sql_readonly(text)') is null;"), "t",
+  "forward recovery must not recreate the retired owner-authority arbitrary SQL proxy");
+assert.equal(sql(`select count(*) from unnest(array[
+    'public.custodial_release_authority_reset_grants(text)'::regprocedure,
+    'public.custodial_release_authority_restore_column(text,text,text,text,text,text,text,boolean)'::regprocedure,
+    'public.custodial_release_authority_restore_column_set(text,text[])'::regprocedure,
+    'public.custodial_release_authority_restore_constraint(text,text,text)'::regprocedure
+  ]) helper(identity)
+  where has_function_privilege('service_role',helper.identity,'EXECUTE');`), "0",
+  "forward recovery must not restore ordinary service-role access to release DDL helpers");
 assert.equal(sql("select has_function_privilege('service_role','public.tool_commit_cleaning_workflow(text,text,text,text,timestamptz,timestamptz,jsonb,jsonb,text)'::regprocedure,'EXECUTE')::text;"), "false",
   "recovery must not revive the legacy completion writer");
 assert.equal(sql(`select count(*) from public.custodial_terminal_writer_inventory where application_callable
