@@ -832,7 +832,7 @@
       {
         "path": "scripts/moxie-route-tests.mjs",
         "mode": "100644",
-        "object_id": "6a99c9a0971919c58761054a70c4c743b66be39e"
+        "object_id": "10ce097a9b51f2f95dfc25bc5352be6bb17c47c6"
       },
       {
         "path": "scripts/named-manager-messenger-admin-route-database-tests.mjs",
@@ -1712,7 +1712,7 @@
       {
         "path": "src/routes/moxie.js",
         "mode": "100644",
-        "object_id": "42f42c2b979458d289b4f74bc0bf3c12846c8c00"
+        "object_id": "fd7db2a9a4539ad396a23e0aa81cb37e68e162f0"
       },
       {
         "path": "src/scan-authority-cutover.js",
