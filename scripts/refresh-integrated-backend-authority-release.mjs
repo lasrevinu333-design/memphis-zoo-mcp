@@ -97,6 +97,7 @@ const output = {
   artifact: "integrated-backend-authority-release-evidence.v2",
   release_id: frontendManifest.release_id,
   frontend_commit_sha: frontendManifest.frontend_commit_sha,
+  frontend_commit_state: frontendManifest.frontend_commit_state,
   schema_fingerprint: schemaFingerprint,
   schema_transition: frontendManifest.schema_transition,
   frontend_source_fingerprint: frontendManifest.schema_fingerprint,
