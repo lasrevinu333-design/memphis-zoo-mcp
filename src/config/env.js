@@ -45,6 +45,9 @@ export function getRuntimeEnv() {
       native_route_proof_secret_present: present("CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET"),
       release_canary_device_present: present("CUSTODIAL_RELEASE_CANARY_DEVICE_ID"),
     },
+    manager_authority: {
+      session_secret_present: present("OPS_MANAGER_SESSION_SECRET"),
+    },
     ai: {
       gemini_configured: gemini.gemini_configured,
       gemini_key_source: gemini.gemini_key_source,
@@ -68,6 +71,7 @@ export function validateRuntimeEnv({ strict = false } = {}) {
     if (!env.custodial_authority.backend_proof_secret_present) errors.push("CUSTODIAL_BACKEND_PROOF_SECRET is missing.");
     if (!env.custodial_authority.native_route_proof_secret_present) errors.push("CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET is missing.");
     if (!env.supabase.readonly_database_url_present) errors.push("CUSTODIAL_READONLY_DATABASE_URL is missing.");
+    if (!env.manager_authority.session_secret_present) errors.push("OPS_MANAGER_SESSION_SECRET is missing.");
   }
 
   if (!env.ai.gemini_configured) {

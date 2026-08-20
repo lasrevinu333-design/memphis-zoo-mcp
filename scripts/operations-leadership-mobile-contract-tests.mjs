@@ -29,8 +29,9 @@ assert.match(migration, /Legacy Shared Ops Manager/);
 assert.match(migration, /shared_identity_quarantined_20260721/);
 assert.match(migration, /public_viewer_dashboard_snapshot/);
 assert.doesNotMatch(migration, /update\s+public\.msg_messages\s+set\s+sender_user_id/i, "historical senders must not be rewritten");
-assert.match(bootstrap, /\/mobile-auth-api\/enroll/);
-assert.match(bootstrap, /\/mobile-auth-api\/session/);
+assert.match(bootstrap, /app\.use\("\/mobile-auth-api", retiredJavaScriptCredentialRoute\)/);
+assert.doesNotMatch(bootstrap, /app\.post\("\/mobile-auth-api\/(?:enroll|session|logout)"/);
+assert.doesNotMatch(bootstrap, /device_credential|X-Memphis-Device-Credential/);
 assert.match(bootstrap, /\/leadership-api\/managers\/:managerId\/enrollment-code/);
 assert.match(bootstrap, /\/viewer-api\/dashboard/);
 assert.match(bootstrap, /capacitor:\/\/localhost/);
@@ -45,7 +46,7 @@ assert.match(authSource, /app\.use\("\/auth-api\/ops\/shared-enrollment", retire
 assert.doesNotMatch(authSource, /app\.use\("\/auth-api\/ops\/manager-codes"/);
 assert.match(authSource, /named_manager_enrollment:\s*!config\.passwordlessManagerAccess/);
 assert.match(authSource, /shared_48_hour_enrollment:\s*false/);
-assert.match(indexSource, /ops-manager-auth\.v5\.named-leadership/);
+assert.match(indexSource, /ops-manager-auth\.v6\.http-only-boundary/);
 assert.doesNotMatch(indexSource, /ops-manager-auth\.v4\.shared-48h/);
 assert.equal(releaseManifest.frontend_commit_sha, "257de53680eb305191d42b396098e42b69be5e91",
   "backend source must pin the exact audited frontend candidate");
@@ -99,6 +100,10 @@ try {
   assert.equal(dashboard.ok, true);
   assert.equal(dashboard.data.locations_total, 47);
   assert.equal(JSON.stringify(dashboard).includes("employee"), false);
+  for (const path of ["enroll", "session", "logout"]) {
+    const retired = await fetch(`${base}/mobile-auth-api/${path}`, { method: "POST" });
+    assert.equal(retired.status, 410, `JavaScript credential route ${path} must remain retired`);
+  }
 } finally {
   await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
 }

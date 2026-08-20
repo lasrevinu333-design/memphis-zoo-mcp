@@ -17,7 +17,7 @@ import {
 import { APP_VERSION, RELEASE_ID } from "./app-version.js";
 import { assertConfiguredReleaseIdentity, buildReleaseManifest } from "./release-manifest.js";
 import { observeProductionSchemaIdentity } from "./production-schema-identity.js";
-import { authenticateOpsAccessRequest, createSupabaseTrustedDeviceStore, installSharedAuthRoutes, makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
+import { assertOpsManagerSessionSecret, authenticateOpsAccessRequest, createSupabaseTrustedDeviceStore, installSharedAuthRoutes, makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
 import { makeMcpConnectorMiddleware } from "./auth/mcp-connector-auth.js";
 import {
   installDeviceCredentialRoutes,
@@ -49,6 +49,7 @@ import {
   verifyExpiringFeedbackToken,
 } from "./public-submission-controls.js";
 
+assertOpsManagerSessionSecret(process.env);
 const app = express();
 app.set("trust proxy", 1);
 app.disable("x-powered-by");
@@ -127,7 +128,7 @@ const COVERALL_ASSIGNMENTS_CONTRACT_VERSION = "coverall-assignments.v2.secure-li
 const OPERATIONAL_ANALYTICS_CONTRACT_VERSION = "operational-analytics.v1";
 const GUEST_REPORTS_CONTRACT_VERSION = "guest-reports.v2.approval-gated";
 const FEEDBACK_CONTRACT_VERSION = "feedback.v2.json-triage";
-const OPS_MANAGER_AUTH_CONTRACT_VERSION = "ops-manager-auth.v5.named-leadership";
+const OPS_MANAGER_AUTH_CONTRACT_VERSION = "ops-manager-auth.v6.http-only-boundary";
 const GEMINI_CONSOLE_CONTRACT_VERSION = "gemini-console.v2";
 const CANARY_RESTROOM_CODE = "TETM";
 const CANARY_EXHIBIT_CODE = "TETX";

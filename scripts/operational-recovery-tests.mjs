@@ -84,7 +84,7 @@ assert.equal(result.payload.data.session.access_level, "full_access");
 
 result = await invoke(
   captureRoutes(lockedEnv).get("GET /auth-api/session"),
-  request({ query: { access_level: "full_access" }, headers: { "X-Device-Id": "manager-browser-test" } }),
+  request({ query: { access_level: "full_access" }, headers: { Origin: "https://localhost", "X-Device-Id": "manager-browser-test" } }),
 );
 assert.equal(result.statusCode, 401);
 assert.equal(result.payload.enrollment_required, true);
