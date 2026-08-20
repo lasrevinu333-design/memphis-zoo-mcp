@@ -747,7 +747,7 @@
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
         "mode": "100644",
-        "object_id": "0c9d784913815044c4358de013298cec15e7f664"
+        "object_id": "7371e7df192536a356e7713eae3e3dcc984d7f49"
       },
       {
         "path": "scripts/integrated-backend-authority-suite-order-isolated-tests.mjs",
