@@ -33,7 +33,7 @@ function buildApp({ readCalls, writeCalls, rpcCalls }) {
             },
           ];
         }
-        if (query.includes("public.sch2_audit_solution")) {
+        if (query.includes("from public.schedule_generation_runs") && query.includes("r.audit_summary as audit")) {
           return [
             {
               run_id: RUN_ID,

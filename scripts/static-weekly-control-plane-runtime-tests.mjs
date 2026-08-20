@@ -17,6 +17,17 @@ const credentialId = "runtime-credential";
 const deviceId = "runtime-device";
 const session = createOpsManagerSession({ credentialId, deviceId, manager, authMode: "trusted_device", accessLevel: "full_access", maximumAccessLevel: "full_access", env });
 const future = () => new Date(Date.now() + 60_000).toISOString();
+const recentPast = () => new Date(Date.now() - 60_000).toISOString();
+const currentTrustedDevice = (overrides = {}) => ({
+  credential_id: credentialId,
+  device_id: deviceId,
+  max_access_level: "full_access",
+  created_at: recentPast(),
+  expires_at: future(),
+  manager_id: manager.manager_id,
+  manager: { ...manager },
+  ...overrides,
+});
 
 assert.throws(() => createStaticWeeklyControlPlaneRuntime({
   env: { ...env, SUPABASE_URL: "" }, trustedDeviceStore: { async find() { return null; } }, database: {}, controlPlane: {},
@@ -25,11 +36,7 @@ assert.throws(() => createStaticWeeklyControlPlaneRuntime({
   env, trustedDeviceStore: {}, database: {}, controlPlane: {},
 }), /trusted-device revocation and association store/i, "the scheduler runtime must not start with a store that cannot look up revocation state");
 
-let lookup = async () => ({
-  credential_id: credentialId, device_id: deviceId, max_access_level: "full_access", expires_at: future(),
-  manager_id: manager.manager_id,
-  manager: { ...manager },
-});
+let lookup = async () => currentTrustedDevice();
 const store = { async find(id) { return lookup(id); } };
 let mutations = 0;
 let snapshots = 0;
@@ -147,17 +154,17 @@ try {
   assert.equal(retiredIncumbency.status, 404, "the arbitrary person/date incumbency endpoint is retired");
   assert.equal(mutations, 2, "the retired endpoint cannot reach any scheduler mutation");
 
-  lookup = async () => ({ credential_id: credentialId, device_id: deviceId, max_access_level: "full_access", expires_at: future(), revoked_at: new Date().toISOString(), manager_id: manager.manager_id, manager: { ...manager } });
+  lookup = async () => currentTrustedDevice({ revoked_at: new Date().toISOString() });
   response = await mutation();
   assert.equal(response.status, 401, "a revoked trusted-device credential must be rejected before scheduler mutation");
   assert.equal(mutations, 2);
 
-  lookup = async () => ({ credential_id: credentialId, device_id: deviceId, max_access_level: "full_access", expires_at: future(), manager_id: manager.manager_id, manager: { ...manager, active: false, revoked_at: new Date().toISOString() } });
+  lookup = async () => currentTrustedDevice({ manager: { ...manager, active: false, revoked_at: new Date().toISOString() } });
   response = await mutation();
   assert.equal(response.status, 403, "a revoked manager/device association must be rejected before scheduler mutation");
   assert.equal(mutations, 2);
 
-  lookup = async () => ({ credential_id: credentialId, device_id: deviceId, max_access_level: "full_access", expires_at: future(), manager_id: null, manager: null });
+  lookup = async () => currentTrustedDevice({ manager_id: null, manager: null });
   snapshot = await managerSnapshot();
   assert.equal(snapshot.status, 403, "a removed manager/device association must be rejected before scheduler reads");
   assert.equal(snapshots, 1);
@@ -166,12 +173,12 @@ try {
   assert.equal(mutations, 2);
 
   const otherManager = { ...manager, manager_id: "10000000-0000-4000-8000-000000000092", display_name: "Other Runtime Manager" };
-  lookup = async () => ({ credential_id: credentialId, device_id: deviceId, max_access_level: "full_access", expires_at: future(), manager_id: otherManager.manager_id, manager: otherManager });
+  lookup = async () => currentTrustedDevice({ manager_id: otherManager.manager_id, manager: otherManager });
   response = await mutation();
   assert.equal(response.status, 403, "a changed manager/device association must be rejected before scheduler mutation");
   assert.equal(mutations, 2);
 
-  lookup = async () => ({ credential_id: credentialId, device_id: deviceId, max_access_level: "full_access", expires_at: future(), manager_id: manager.manager_id, manager: { ...manager } });
+  lookup = async () => currentTrustedDevice();
   response = await mutation();
   assert.equal(response.status, 200, "the current matching manager/device association may reach the scheduler mutation boundary");
   assert.equal(mutations, 3);
