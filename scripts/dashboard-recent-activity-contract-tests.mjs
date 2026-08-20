@@ -23,7 +23,7 @@ assert.match(
 
 assert.match(
   source,
-  /async function runReadOnlySql\(sql\)\s*\{[\s\S]{0,240}runSupabaseReadOnlySql\(\{\s*client,\s*sql\s*\}\)[\s\S]{0,120}return result\.rows;/,
+  /async function runReadOnlySql\(sql\)\s*\{[\s\S]{0,240}runSupabaseReadOnlySql\(\{\s*sql\s*\}\)[\s\S]{0,120}return result\.rows;/,
   'local runReadOnlySql helper must delegate to the shared wrapper and return rows so dashboard canary WITH queries do not fail with SELECT-only RPC guards'
 );
 

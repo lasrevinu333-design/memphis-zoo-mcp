@@ -1,9 +1,13 @@
-import { resolveSupabaseClient } from "./client.js";
+import { Pool } from "pg";
 
 const DEFAULT_SQL_READ_MAX_ROWS = 50_000;
 const DEFAULT_SQL_READ_MAX_RESPONSE_BYTES = 25_000_000;
 const HARD_SQL_READ_MAX_ROWS = 250_000;
 const HARD_SQL_READ_MAX_RESPONSE_BYTES = 100_000_000;
+const DEFAULT_SQL_READ_STATEMENT_TIMEOUT_MS = 30_000;
+const DEFAULT_SQL_READ_LOCK_TIMEOUT_MS = 5_000;
+
+let sharedReadOnlyPool = null;
 
 function toSafeInt(value, fallback, { min = 1, max = Number.MAX_SAFE_INTEGER } = {}) {
   const parsed = Number.parseInt(String(value ?? fallback), 10);
@@ -112,6 +116,58 @@ function compactRowsToByteLimit(rows, maxBytes) {
   };
 }
 
+function readOnlyDatabaseUrl(env = process.env) {
+  return String(env.CUSTODIAL_READONLY_DATABASE_URL || "").trim();
+}
+
+export function createReadOnlyPool({ connectionString = readOnlyDatabaseUrl(), PoolClass = Pool } = {}) {
+  if (!connectionString) {
+    throw new Error("CUSTODIAL_READONLY_DATABASE_URL is required for database reads.");
+  }
+  return new PoolClass({
+    connectionString,
+    max: 6,
+    idleTimeoutMillis: 10_000,
+    connectionTimeoutMillis: 10_000,
+    application_name: "memphis-custodial-readonly",
+  });
+}
+
+function resolveReadOnlyPool(pool) {
+  if (pool) return pool;
+  if (!sharedReadOnlyPool) sharedReadOnlyPool = createReadOnlyPool();
+  return sharedReadOnlyPool;
+}
+
+async function rollbackQuietly(client) {
+  try {
+    await client.query("rollback");
+  } catch {
+    // Preserve the owning query failure. The pooled connection is released as
+    // unusable below so pg cannot reuse an uncertain transaction.
+  }
+}
+
+async function executeInReadOnlyTransaction(pool, sql) {
+  const client = await resolveReadOnlyPool(pool).connect();
+  let reusable = true;
+  try {
+    await client.query("begin isolation level repeatable read read only");
+    await client.query(`set local statement_timeout = '${DEFAULT_SQL_READ_STATEMENT_TIMEOUT_MS}ms'`);
+    await client.query(`set local lock_timeout = '${DEFAULT_SQL_READ_LOCK_TIMEOUT_MS}ms'`);
+    await client.query("set local row_security = on");
+    const result = await client.query(sql);
+    await client.query("commit");
+    return result.rows;
+  } catch (error) {
+    reusable = false;
+    await rollbackQuietly(client);
+    throw error;
+  } finally {
+    client.release(reusable ? undefined : new Error("read-only database transaction failed"));
+  }
+}
+
 export function sanitizeReadOnlySql(sql) {
   const trimmed = String(sql || "").trim();
 
@@ -143,8 +199,7 @@ export function sanitizeReadOnlySql(sql) {
   };
 }
 
-export async function runReadOnlySql({ client, sql, maxRows, max_rows, maxResponseBytes, max_response_bytes } = {}) {
-  const supabase = resolveSupabaseClient(client);
+export async function runReadOnlySql({ pool, sql, maxRows, max_rows, maxResponseBytes, max_response_bytes } = {}) {
   const sanitized = sanitizeReadOnlySql(sql);
   const limits = getReadLimits({
     maxRows: maxRows ?? max_rows,
@@ -152,13 +207,7 @@ export async function runReadOnlySql({ client, sql, maxRows, max_rows, maxRespon
   });
   const wrappedSql = canWrapReadQuery(sanitized.normalized) ? wrapReadQuery(sanitized.sql, limits) : sanitized.sql;
 
-  const { data, error } = await supabase.rpc("run_sql_readonly", {
-    p_sql: wrappedSql,
-  });
-
-  if (error) {
-    throw new Error(error.message || "run_sql_readonly failed");
-  }
+  const data = await executeInReadOnlyTransaction(pool, wrappedSql);
 
   const originalRowCount = Array.isArray(data) ? data.length : null;
   const rowLimitTruncated = Array.isArray(data) && data.length > limits.max_rows;

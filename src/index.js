@@ -1167,14 +1167,12 @@ async function fetchCurrentAttendance(options = {}) {
 }
 
 async function runReadOnlySql(sql) {
-  const client = getSupabaseConfig();
-  const result = await runSupabaseReadOnlySql({ client, sql });
+  const result = await runSupabaseReadOnlySql({ sql });
   return result.rows;
 }
 
 async function runSchemaCatalogSql(sql) {
   return runSupabaseReadOnlySql({
-    client: getSupabaseConfig(),
     sql,
     maxRows: 250_000,
     maxResponseBytes: 100_000_000,
@@ -2329,6 +2327,16 @@ app.get(["/health", "/health/dependencies"], async (req, res) => {
     const rows = await runReadOnlySql(`
       select
         true as database_reachable,
+        current_setting('transaction_read_only')::boolean as transaction_read_only,
+        pg_has_role(current_user, 'custodial_application_reader', 'member') as dedicated_reader_member,
+        exists(
+          select 1 from pg_roles
+          where rolname = current_user
+            and not rolsuper
+            and not rolbypassrls
+            and not rolcreaterole
+            and not rolcreatedb
+        ) as reader_role_restricted,
         to_regclass('public.sessions') is not null as sessions_table,
         to_regclass('public.msg_messages') is not null as messages_table,
         to_regclass('public.operational_notification_jobs') is not null as notification_outbox_table,
@@ -2359,13 +2367,17 @@ app.get(["/health", "/health/dependencies"], async (req, res) => {
       "manager_messaging_rpc",
       "worker_claim_rpc",
     ].every((key) => dependencies[key] === true);
+    const readAuthorityReady = dependencies.transaction_read_only === true
+      && dependencies.dedicated_reader_member === true
+      && dependencies.reader_role_restricted === true;
     const canaryReady = !releaseCanaryConfigurationRequired()
       || (Boolean(canaryDeviceId) && canaryControlInitialized && canaryPaused === false);
-    const ok = dependencies.database_reachable === true && requiredSchemaPresent && canaryReady;
+    const ok = dependencies.database_reachable === true && readAuthorityReady && requiredSchemaPresent && canaryReady;
     res.status(ok ? 200 : 503).json(buildHealthPayload("dependencies", {
       ok,
       process_alive: true,
       database_reachable: dependencies.database_reachable === true,
+      read_authority_ready: readAuthorityReady,
       required_schema_present: requiredSchemaPresent,
       release_canary: {
         configured: Boolean(canaryDeviceId),
