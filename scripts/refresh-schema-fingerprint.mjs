@@ -56,13 +56,27 @@ if(mcpClient)await mcpClient.close();
 const {normalized,fingerprint}=fingerprintSchemaCatalog(inventory);
 const inputText=`${JSON.stringify(normalized,null,2)}\n`;
 const hashText=`${fingerprint}\n`;
+function firstTextDifference(expected,actual){
+  const expectedLines=expected.split("\n");
+  const actualLines=actual.split("\n");
+  const limit=Math.max(expectedLines.length,actualLines.length);
+  for(let index=0;index<limit;index+=1){
+    if(expectedLines[index]!==actualLines[index])return {
+      line:index+1,
+      expected:String(expectedLines[index]??"<missing>").slice(0,1000),
+      actual:String(actualLines[index]??"<missing>").slice(0,1000),
+    };
+  }
+  return null;
+}
 if(preflightOnly){
   const releaseInput=JSON.parse(readFileSync(resolve(root,"release/schema-alignment-input.json"),"utf8"));
   const expected=String(releaseInput.schema_from_fingerprint||"");
   if(!/^[0-9a-f]{64}$/.test(expected))throw new Error("Release source schema fingerprint is invalid.");
   if(fingerprint!==expected)throw new Error(`Populated database preflight rejected schema fingerprint ${fingerprint}; expected ${expected}.`);
 }else if(checkOnly){
-  if(readFileSync(inputPath,"utf8")!==inputText)throw new Error("Committed canonical schema-fingerprint-input.json does not equal the clean rebuild inventory.");
+  const committedInput=readFileSync(inputPath,"utf8");
+  if(committedInput!==inputText)throw new Error(`Committed canonical schema-fingerprint-input.json does not equal the clean rebuild inventory: ${JSON.stringify(firstTextDifference(committedInput,inputText))}`);
   if(readFileSync(hashPath,"utf8")!==hashText)throw new Error("Committed canonical schema-fingerprint.txt does not equal the clean rebuild inventory.");
 }else{
   writeFileSync(inputPath,inputText);
