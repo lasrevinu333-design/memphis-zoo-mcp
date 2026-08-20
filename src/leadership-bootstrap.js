@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import express from "express";
 import { createClient } from "@supabase/supabase-js";
-import { createOpsManagerSession, makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
+import { makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
 import { callGemini } from "./routes/moxie.js";
 
 // iPhone smart punctuation previously made “Who’s working?” miss the roster
@@ -34,16 +34,8 @@ if (typeof originalJson === "function" && !express.__memphisSmartPunctuationJson
 function envText(env, key) { return String(env?.[key] || "").trim(); }
 function clip(value, max = 5000) { return String(value ?? "").trim().slice(0, max); }
 function hmacHex(secret, value) { return crypto.createHmac("sha256", secret).update(String(value || "")).digest("hex"); }
-function safeEqual(a, b) {
-  const left = Buffer.from(String(a || ""));
-  const right = Buffer.from(String(b || ""));
-  return left.length === right.length && crypto.timingSafeEqual(left, right);
-}
 function sessionSecret(env = process.env) {
-  return envText(env, "OPS_MANAGER_SESSION_SECRET")
-    || envText(env, "GEMINI_ADMIN_SESSION_SECRET")
-    || envText(env, "MOXIE_WEB_COOKIE_SECRET")
-    || envText(env, "SUPABASE_SERVICE_ROLE_KEY");
+  return envText(env, "OPS_MANAGER_SESSION_SECRET");
 }
 function createSupabase(env) {
   const url = envText(env, "SUPABASE_URL");
@@ -64,37 +56,8 @@ function setCors(req, res, env) {
   if (origin && allowedOrigins(env).has(origin)) res.setHeader("Access-Control-Allow-Origin", origin);
   res.setHeader("Access-Control-Allow-Credentials", "true");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Device-Id, X-Device-Label, X-Memphis-Device-Credential, Idempotency-Key");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Device-Id, X-Device-Label, Idempotency-Key");
   res.setHeader("Vary", "Origin");
-}
-function normalizeCode(value) {
-  const code = String(value || "").replace(/[\s-]+/g, "");
-  return /^\d{8}$/.test(code) ? code : "";
-}
-function normalizeDeviceId(value) {
-  return String(value || "").trim().replace(/[^a-zA-Z0-9_.:-]/g, "").slice(0, 96);
-}
-function platform(req) {
-  const ua = String(req.get?.("User-Agent") || "");
-  if (/iphone|ipad|ios/i.test(ua)) return "iPhone/iPad app";
-  if (/android/i.test(ua)) return "Android app";
-  return "Mobile app";
-}
-function nativeCredential(req) {
-  const header = String(req.get?.("X-Memphis-Device-Credential") || "").trim();
-  const authorization = String(req.get?.("Authorization") || "").trim();
-  const raw = header || (/^Device\s+/i.test(authorization) ? authorization.replace(/^Device\s+/i, "").trim() : "");
-  const dot = raw.indexOf(".");
-  if (dot <= 0) return null;
-  const credentialId = raw.slice(0, dot);
-  const secret = raw.slice(dot + 1);
-  return /^[0-9a-f-]{36}$/i.test(credentialId) && /^[A-Za-z0-9_-]{32,}$/.test(secret)
-    ? { credentialId, secret }
-    : null;
-}
-function trustTtlMs(env) {
-  const configured = Number(env?.OPS_MANAGER_TRUST_TTL_MS);
-  return Number.isFinite(configured) && configured >= 86400000 ? configured : 10 * 365 * 86400000;
 }
 function hasRole(session, role) {
   const wanted = String(role || "").trim().toUpperCase();
@@ -166,88 +129,11 @@ export function installLeadershipHttpRoutes(app, { env = process.env, supabase =
     } catch (error) { fail(res, error, "Moxie authorization failed."); }
   });
 
-  async function authenticateNative(req) {
-    const parts = nativeCredential(req);
-    if (!parts) return { ok: false, status: 401, error: "This app installation is not enrolled." };
-    const deviceResult = await db.from("ops_manager_trusted_devices")
-      .select("credential_id,device_id,device_label,token_hash,max_access_level,manager_id,expires_at,revoked_at")
-      .eq("credential_id", parts.credentialId).maybeSingle();
-    if (deviceResult.error) throw deviceResult.error;
-    const device = deviceResult.data;
-    if (!device || device.revoked_at || Date.parse(String(device.expires_at || "")) <= Date.now()) return { ok: false, status: 401, error: "This app installation is no longer enrolled." };
-    const secret = sessionSecret(env);
-    if (!secret || !safeEqual(device.token_hash, hmacHex(secret, `trusted-device:${parts.secret}`))) return { ok: false, status: 401, error: "This app installation is not enrolled." };
-    const managerResult = await db.from("ops_manager_managers")
-      .select("manager_id,display_name,contact_label,job_title,department_key,roles,active,revoked_at,is_system_principal,last_access_at,system_key,metadata_json")
-      .eq("manager_id", device.manager_id).maybeSingle();
-    if (managerResult.error) throw managerResult.error;
-    const manager = managerResult.data;
-    if (!manager || manager.active !== true || manager.revoked_at || manager.is_system_principal) return { ok: false, status: 403, error: "This leadership identity is inactive." };
-    await db.from("ops_manager_trusted_devices").update({ last_used_at: new Date().toISOString() }).eq("credential_id", device.credential_id);
-    const session = createOpsManagerSession({
-      credentialId: device.credential_id,
-      deviceId: device.device_id,
-      manager,
-      authMode: "trusted_device",
-      accessLevel: "full_access",
-      maximumAccessLevel: device.max_access_level || "full_access",
-      env,
-    });
-    return { ok: true, manager, device, session };
-  }
-
-  app.post("/mobile-auth-api/enroll", configured, async (req, res) => {
-    try {
-      const origin = String(req.headers?.origin || "").trim();
-      if (origin && !allowedOrigins(env).has(origin)) return res.status(403).json({ ok: false, error: "Enrollment is not allowed from this app origin." });
-      const code = normalizeCode(req.body?.code || req.body?.manager_code);
-      const deviceId = normalizeDeviceId(req.body?.device_id || req.get?.("X-Device-Id"));
-      const deviceLabel = clip(req.body?.device_label || req.get?.("X-Device-Label") || platform(req), 160);
-      const secret = sessionSecret(env);
-      if (!code || !deviceId) return res.status(400).json({ ok: false, error: "A valid eight-digit code and app installation ID are required." });
-      if (!secret) return res.status(503).json({ ok: false, error: "Manager session signing is not configured." });
-      const credentialId = crypto.randomUUID();
-      const refreshSecret = crypto.randomBytes(32).toString("base64url");
-      const expiresAt = new Date(Date.now() + trustTtlMs(env)).toISOString();
-      const result = await db.rpc("ops_manager_consume_enrollment_code", {
-        p_code_hash: hmacHex(secret, `ops-manager-enrollment-code:v1:${code}`),
-        p_credential_id: credentialId,
-        p_device_id: deviceId,
-        p_device_label: deviceLabel,
-        p_trust_token_hash: hmacHex(secret, `trusted-device:${refreshSecret}`),
-        p_user_agent_hash: hmacHex(secret, `mobile-ua:${String(req.get?.("User-Agent") || "")}`),
-        p_created_ip_hash: null,
-        p_platform_summary: platform(req),
-        p_expires_at: expiresAt,
-        p_metadata_json: { enrolled_by: "native_manager_app", platform_summary: platform(req) },
-      });
-      if (result.error) throw result.error;
-      const data = Array.isArray(result.data) ? result.data[0] : result.data;
-      if (!data?.ok) return res.status(Number(data?.status) || 401).json({ ok: false, error: "That manager code is invalid, expired, or already used." });
-      const session = createOpsManagerSession({ credentialId, deviceId, manager: data.manager || {}, authMode: "trusted_device", accessLevel: "full_access", maximumAccessLevel: "full_access", env });
-      res.json({ ok: true, data: { device_credential: `${credentialId}.${refreshSecret}`, credential_expires_at: expiresAt, session, manager: data.manager || {} } });
-    } catch (error) { fail(res, error, "App enrollment failed."); }
+  const retiredJavaScriptCredentialRoute = (_req, res) => res.status(410).json({
+    ok: false,
+    error: "This manager credential route is retired. Update the Memphis Zoo Ops app.",
   });
-
-  app.post("/mobile-auth-api/session", configured, async (req, res) => {
-    try {
-      const auth = await authenticateNative(req);
-      if (!auth.ok) return res.status(auth.status).json({ ok: false, error: auth.error });
-      res.json({ ok: true, data: {
-        session: auth.session,
-        manager: auth.manager,
-        trusted_device: { credential_id: auth.device.credential_id, device_id: auth.device.device_id, device_label: auth.device.device_label, expires_at: auth.device.expires_at },
-      } });
-    } catch (error) { fail(res, error, "App session could not be refreshed."); }
-  });
-
-  app.post("/mobile-auth-api/logout", configured, async (req, res) => {
-    try {
-      const parts = nativeCredential(req);
-      if (parts) await db.from("ops_manager_trusted_devices").update({ revoked_at: new Date().toISOString(), revoked_reason: "native_app_logout" }).eq("credential_id", parts.credentialId).is("revoked_at", null);
-      res.json({ ok: true, data: { logged_out: true } });
-    } catch (error) { fail(res, error, "App logout failed."); }
-  });
+  app.use("/mobile-auth-api", retiredJavaScriptCredentialRoute);
 
   app.get("/leadership-api/health", (_req, res) => res.status(db ? 200 : 503).json({
     ok: Boolean(db),

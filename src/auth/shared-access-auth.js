@@ -3,7 +3,8 @@ import { createHash, createHmac, randomBytes, randomInt, randomUUID, timingSafeE
 const MEMPHIS_TIME_ZONE = "America/Chicago";
 const OPS_ACCESS_TOKEN_VERSION = 2;
 const DEFAULT_ACCESS_TTL_MS = 15 * 60 * 1000;
-const DEFAULT_TRUST_TTL_MS = 10 * 365 * 24 * 60 * 60 * 1000;
+const DEFAULT_TRUST_TTL_MS = 90 * 24 * 60 * 60 * 1000;
+const MAX_TRUST_TTL_MS = 365 * 24 * 60 * 60 * 1000;
 const MIN_ACCESS_TTL_MS = 60_000;
 const MAX_ACCESS_TTL_MS = 60 * 60 * 1000;
 const MIN_TRUST_TTL_MS = 24 * 60 * 60 * 1000;
@@ -256,13 +257,15 @@ function adminApiKey(req) {
 }
 
 function getSessionSecret(env = process.env) {
-  return String(
-    env.OPS_MANAGER_SESSION_SECRET
-      || env.GEMINI_ADMIN_SESSION_SECRET
-      || env.MOXIE_WEB_COOKIE_SECRET
-      || env.SUPABASE_SERVICE_ROLE_KEY
-      || ""
-  ).trim();
+  return String(env.OPS_MANAGER_SESSION_SECRET || "").trim();
+}
+
+export function assertOpsManagerSessionSecret(env = process.env) {
+  const secret = getSessionSecret(env);
+  if (isProductionLike(env) && !secret) {
+    throw new Error("OPS_MANAGER_SESSION_SECRET is required in production and must not share another secret class.");
+  }
+  return secret;
 }
 
 function getPairingTtlSeconds(value) {
@@ -305,7 +308,7 @@ function getAccessTtlMs(env = process.env) {
 }
 
 function getTrustTtlMs(env = process.env) {
-  return boundedNumber(env.OPS_MANAGER_TRUST_TTL_MS, DEFAULT_TRUST_TTL_MS, MIN_TRUST_TTL_MS, DEFAULT_TRUST_TTL_MS);
+  return boundedNumber(env.OPS_MANAGER_TRUST_TTL_MS, DEFAULT_TRUST_TTL_MS, MIN_TRUST_TTL_MS, MAX_TRUST_TTL_MS);
 }
 
 function hmacHex(secret, value) {
@@ -617,14 +620,18 @@ function requestOrigin(req) {
   return String(req?.headers?.origin || req?.header?.("origin") || "").trim();
 }
 
-function isAllowedManagerInviteOrigin(req, env = process.env) {
+function isAllowedManagerInviteOrigin(req, env = process.env, { requireOrigin = false } = {}) {
   const origin = requestOrigin(req);
-  if (!origin) return true;
+  if (!origin) return !requireOrigin;
   const configured = String(env.OPS_MANAGER_INVITE_ALLOWED_ORIGINS || env.ALLOWED_CORS_ORIGINS || "")
     .split(",").map((value) => value.trim()).filter(Boolean);
   const allowed = new Set([
     "https://lasrevinu333-design.github.io",
     "https://memphis-zoo-mcp.onrender.com",
+    "https://localhost",
+    "http://localhost",
+    "capacitor://localhost",
+    "ionic://localhost",
     ...configured,
   ]);
   return allowed.has(origin);
@@ -811,8 +818,16 @@ function trustedDevicePublicView(row) {
     expires_at: normalized.expires_at,
     revoked_at: normalized.revoked_at,
     revoked_reason: normalized.revoked_reason,
-    active: !normalized.revoked_at && (!normalized.expires_at || Date.parse(normalized.expires_at) > Date.now()),
+    active: !normalized.revoked_at && trustedDeviceTimeIsValid(normalized, new Date()),
   };
+}
+
+function trustedDeviceTimeIsValid(row, now = new Date()) {
+  const expiresAt = Date.parse(String(row?.expires_at || ""));
+  const createdAt = Date.parse(String(row?.created_at || ""));
+  if (!Number.isFinite(expiresAt) || expiresAt <= now.getTime()) return false;
+  if (!Number.isFinite(createdAt)) return false;
+  return createdAt + MAX_TRUST_TTL_MS > now.getTime();
 }
 
 async function verifySessionAgainstTrustedDeviceStore(session, {
@@ -831,8 +846,7 @@ async function verifySessionAgainstTrustedDeviceStore(session, {
   if (!credentialId) return { ok: false, status: 401, error: "This manager device session is no longer trusted." };
   const row = await store.find(credentialId);
   if (!row || row.revoked_at) return { ok: false, status: 401, error: "This manager device session is no longer trusted." };
-  const expiresAt = Date.parse(String(row.expires_at || ""));
-  if (!Number.isFinite(expiresAt) || expiresAt <= now.getTime()) {
+  if (!trustedDeviceTimeIsValid(row, now)) {
     return { ok: false, status: 401, error: "This manager device enrollment expired." };
   }
   if (session.device_id && normalizeDeviceId(session.device_id) !== normalizeDeviceId(row.device_id)) {
@@ -1397,8 +1411,7 @@ async function verifyTrustedDevice(req, { store, env = process.env, now = new Da
   const activeStore = trustedDeviceStoreOrThrow(store);
   const row = await activeStore.find(parts.credentialId);
   if (!row || row.revoked_at) return { ok: false, status: 401, error: "This device is not enrolled for Ops Manager access." };
-  const expiresAt = Date.parse(String(row.expires_at || ""));
-  if (!Number.isFinite(expiresAt) || expiresAt <= now.getTime()) {
+  if (!trustedDeviceTimeIsValid(row, now)) {
     return { ok: false, status: 401, error: "This device enrollment expired." };
   }
   const expectedHash = trustTokenHash(parts.secret, env);
@@ -2066,7 +2079,7 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
     try {
       const activeStore = trustedDeviceStoreOrThrow(store);
       const rateKey = managerCodeRateKey(req, env);
-      if (!isAllowedManagerInviteOrigin(req, env)) throw Object.assign(new Error("Ops Manager codes cannot be consumed from this origin."), { status: 403 });
+      if (!isAllowedManagerInviteOrigin(req, env, { requireOrigin: true })) throw Object.assign(new Error("Ops Manager codes cannot be consumed from this origin."), { status: 403 });
       const rate = await managerCodeRateAllowed(activeStore, rateKey);
       if (!rate.allowed) {
         res.setHeader?.("Retry-After", String(rate.retryAfterSeconds || MANAGER_CODE_LOCKOUT_SECONDS));
@@ -2176,7 +2189,7 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
       const activeStore = trustedDeviceStoreOrThrow(store);
       const pairingToken = requestPairingToken(req);
       if (!pairingToken) throw Object.assign(new Error("A valid one-time Ops Manager pairing token is required."), { status: 400 });
-      if (!isAllowedManagerInviteOrigin(req, env)) throw Object.assign(new Error("Ops Manager invitations cannot be consumed from this origin."), { status: 403 });
+      if (!isAllowedManagerInviteOrigin(req, env, { requireOrigin: true })) throw Object.assign(new Error("Ops Manager invitations cannot be consumed from this origin."), { status: 403 });
       const deviceId = requestDeviceId(req);
       if (!deviceId) throw Object.assign(new Error("A stable manager device ID is required."), { status: 400 });
       const deviceLabel = requestDeviceLabel(req) || deviceId;
@@ -2477,6 +2490,11 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
         return;
       }
 
+      if (!isAllowedManagerInviteOrigin(req, env, { requireOrigin: true })) {
+        res.status(403).json({ ok: false, error: "Manager access is not allowed from this app origin." });
+        return;
+      }
+
       const trusted = await verifyTrustedDevice(req, { store, env });
       if (!trusted.ok) {
         clearTrustCookie(res, env);
@@ -2509,6 +2527,7 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
         ok: true,
         data: {
           session,
+          manager: trusted.row.manager || null,
           operational_day: getCSTDate(),
           trusted_device: {
             credential_id: trusted.credentialId,
@@ -2525,21 +2544,30 @@ export function installSharedAuthRoutes(app, { setCors, env = process.env, supab
 
   app.post("/auth-api/ops/logout", async (req, res) => {
     try {
-      const parts = trustTokenParts(trustCookieValue(req));
-      if (parts && store) {
-        await store.revoke?.(parts.credentialId, "user_logout");
-        await auditTrustedDevice(store, authEvent(req, {
-          credentialId: parts.credentialId,
-          eventType: "device_revoked",
-          success: true,
-          detail: { reason: "user_logout" },
-          env,
-        }));
+      if (!isAllowedManagerInviteOrigin(req, env, { requireOrigin: true })) {
+        res.status(403).json({ ok: false, error: "Manager access is not allowed from this app origin." });
+        return;
       }
+      const parts = trustTokenParts(trustCookieValue(req));
+      if (!parts) {
+        res.status(401).json({ ok: false, error: "This manager phone is not enrolled." });
+        return;
+      }
+      const activeStore = trustedDeviceStoreOrThrow(store);
+      if (typeof activeStore.revoke !== "function") {
+        throw Object.assign(new Error("Manager phone revocation is unavailable."), { status: 503 });
+      }
+      await activeStore.revoke(parts.credentialId, "user_logout");
+      await auditTrustedDevice(activeStore, authEvent(req, {
+        credentialId: parts.credentialId,
+        eventType: "device_revoked",
+        success: true,
+        detail: { reason: "user_logout" },
+        env,
+      }));
       clearTrustCookie(res, env);
       res.status(200).json({ ok: true, data: { logged_out: true } });
     } catch (error) {
-      clearTrustCookie(res, env);
       sendAuthError(res, error, "Logout failed.");
     }
   });
