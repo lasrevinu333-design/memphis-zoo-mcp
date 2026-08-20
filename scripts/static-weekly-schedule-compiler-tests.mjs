@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { compileStaticWeeklySchedule, postgresJsonbCanonicalText, postgresJsonbContentDigest, STATIC_WEEKLY_SERVER_LIMITS, verifyStaticWeeklyReplay } from "../src/static-weekly-schedule-compiler.js";
 import { verifyStaticWeeklyScheduleResult } from "../src/static-weekly-schedule-verifier.js";
 import { initializeStaticWeeklySolver, setStaticWeeklySolverTestOverride, solveStaticWeeklyMip } from "../src/static-weekly-schedule-solver.js";
-import { admitStaticWeeklyRawInput, canonicalSolverAuthorityCertificate, canonicalSolverAuthorityTierProjection, createStaticWeeklyDeadline, monotonicNowMilliseconds, prepareStaticWeeklySchedulingProblem, remainingStaticWeeklyMilliseconds } from "../src/static-weekly-schedule-program.js";
+import { admitStaticWeeklyRawInput, canonicalSolverAuthorityCertificate, canonicalSolverAuthorityTierProjection, createStaticWeeklyDeadline, generateStaticWeeklySchedulingProgram, monotonicNowMilliseconds, prepareStaticWeeklySchedulingProblem, remainingStaticWeeklyMilliseconds } from "../src/static-weekly-schedule-program.js";
 import { validateStaticWeeklyPacket } from "./static-weekly-schedule-candidate-importer.mjs";
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -222,6 +222,24 @@ const authorityInput = smallInput();
 const authoritative = await compile(authorityInput);
 assert.equal(authoritative.status, "FEASIBLE");
 assert.equal(authoritative.verifier.ok, true);
+// Expiry after canonical program generation but during witness-model
+// regeneration must remain a structured fail-closed result.  It must never
+// escape the verifier as an uncaught exception under host load.
+const realPerformance = globalThis.performance;
+let monotonicCalls = 0;
+try {
+  globalThis.performance = { now: () => { monotonicCalls += 1; return 0; } };
+  const canonicalProgram = generateStaticWeeklySchedulingProgram(authorityInput, null, 100);
+  assert.equal(canonicalProgram.error, undefined);
+  const canonicalProgramCallCount = monotonicCalls;
+  monotonicCalls = 0;
+  globalThis.performance = { now: () => { monotonicCalls += 1; return monotonicCalls <= canonicalProgramCallCount ? 0 : 101; } };
+  const witnessTimeout = generateStaticWeeklySchedulingProgram(authorityInput, new Map(), 100);
+  assert.equal(witnessTimeout.error.code, "solver_timeout");
+  assert.equal(witnessTimeout.error.stage, "witness_model");
+} finally {
+  globalThis.performance = realPerformance;
+}
 assert.equal(authoritative.solver.tiers.every((tier) => tier.attestation?.evidenceSource === "terminal_solver_report" && tier.attestation?.objectStatus === "Optimal" && tier.attestation?.reportStatus === "Optimal" && tier.attestation?.normalized?.gap?.canonical === "0e0" && tier.attestation?.terminalReport?.records?.[0]?.text === "Solving report" && tier.attestation?.terminalReport?.records?.at(-1)?.text === "Writing the solution to solution.txt"), true);
 assert.equal(authoritative.solver.tiers.every((tier) => tier.attestation.terminalReport.records.some((record) => /^\s*P-D integral\s+/i.test(record.text))), true, "returned solver receipts retain the worker's measured terminal report rows");
 assert.equal(authoritative.solver.tiers.every((tier) => Number.isFinite(tier.options?.time_limit) && tier.options.time_limit > 0 && tier.options.time_limit <= 30), true, "returned solver receipts retain each actual bounded worker deadline");

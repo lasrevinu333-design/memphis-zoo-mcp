@@ -1263,7 +1263,12 @@ export function generateStaticWeeklySchedulingProgram(input = {}, witnessValues 
   let problem;
   try { problem = prepareStaticWeeklySchedulingProblem(input, activeDeadline); } catch (error) { return { error: programReason(error.code || "invalid_program_input", { message: error.message }), failureServiceDate }; }
   if (problem.error) return { error: problem.error, failureServiceDate };
-  const seed = buildStaticWeeklySchedulingModel(problem, [], { name: "seed", family: "seed", terms: [] }, activeDeadline);
+  let seed;
+  try {
+    seed = buildStaticWeeklySchedulingModel(problem, [], { name: "seed", family: "seed", terms: [] }, activeDeadline);
+  } catch (error) {
+    return { error: programReason(error.code || "canonical_program_generation_failed", { stage: "seed_model", message: error.message }), failureServiceDate: problem.serviceDate };
+  }
   if (seed.error) return { error: seed.error, failureServiceDate: problem.serviceDate };
   const objectives = [...seed.expressions.coverage, ...seed.expressions.bestEffort, ...seed.expressions.daily, seed.expressions.dailyTie, ...seed.expressions.weekly, seed.expressions.weeklyTie, seed.expressions.travel, seed.expressions.disruption, ...seed.expressions.identity];
   const descriptor = canonicalProgramDescriptor({ inputDigest: problem.inputDigest, modelBasis: seed.modelBasis, objectives });
@@ -1272,7 +1277,12 @@ export function generateStaticWeeklySchedulingProgram(input = {}, witnessValues 
   const values = witnessValues instanceof Map ? witnessValues : new Map(witnessValues);
   const tiers = []; const bindings = [];
   for (const objective of objectives) {
-    const model = buildStaticWeeklySchedulingModel(problem, bindings, objective, activeDeadline);
+    let model;
+    try {
+      model = buildStaticWeeklySchedulingModel(problem, bindings, objective, activeDeadline);
+    } catch (error) {
+      return { error: programReason(error.code || "canonical_program_generation_failed", { stage: "witness_model", tier: objective.name, message: error.message }), failureServiceDate: problem.serviceDate };
+    }
     if (model.error) return { error: model.error, failureServiceDate: problem.serviceDate };
     const value = recomputeStaticWeeklyObjective(objective, model, values, problem);
     if (!Number.isSafeInteger(value)) return { error: programReason("canonical_program_objective_overflow", { tier: objective.name }), failureServiceDate: problem.serviceDate };

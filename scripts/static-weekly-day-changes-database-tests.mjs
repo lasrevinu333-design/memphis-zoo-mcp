@@ -174,7 +174,7 @@ try {
 
   await containerSql(`insert into public.ops_manager_managers(manager_id,display_name,roles,active,metadata_json,is_system_principal) values(${quote(actor.manager_id)},${quote(actor.manager_display_name)},array['OPS_MANAGER']::text[],true,'{}'::jsonb,false)`);
   await containerSql("set role static_weekly_release_operator; select public.static_weekly_v3_configure_initial_authority_key('static-weekly-authority-hmac-v2','static-weekly-day-change-test-secret-012345678901234567890','day-change-suite')");
-  const source = sourceInput(); const compiled = await compileStaticWeeklySchedule(source); assert.equal(compiled.status, "FEASIBLE");
+  const source = sourceInput(); const compiled = await compileStaticWeeklySchedule(source); assert.equal(compiled.status, "FEASIBLE", `initial static-weekly compile failed: ${JSON.stringify(compiled.fatal || null)}`);
   await containerSql(`set role static_weekly_release_operator; select public.static_weekly_v3_register_authority_source(${quote(sourceId)},${json(compiled.canonicalAuthority.compilerInput)},'day-change-source')`);
   for (const [index, slot] of source.slots.entries()) {
     const incumbent = slot.incumbencies[0];
