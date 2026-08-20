@@ -41,6 +41,7 @@ import { installOperationalAnalyticsRoutes } from "./operational-analytics-api.j
 import { normalizeAttendanceRecord, toNullableNonNegativeInteger } from "./attendance-state.js";
 import { normalizeCanonicalScanEvidence } from "./scan-evidence.js";
 import { buildReleaseCanaryTransportProbeCall } from "./native-phone-transport.js";
+import { makeRestoreMutationGate } from "./restore-mutation-gate.js";
 import {
   guestFeatureState,
   normalizeFeedbackInput,
@@ -81,6 +82,9 @@ const supabaseAdmin =
         auth: { persistSession: false, autoRefreshToken: false },
       })
     : null;
+const restoreGateRequired = process.env.NODE_ENV === "production"
+  || /^(1|true|yes)$/i.test(String(process.env.CUSTODIAL_RESTORE_GATE_REQUIRED || ""));
+app.use(makeRestoreMutationGate({ supabase: supabaseAdmin, required: restoreGateRequired }));
 const BACKEND_COMMIT_SHA = String(
   process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || process.env.SOURCE_VERSION || "unknown"
 ).trim() || "unknown";
