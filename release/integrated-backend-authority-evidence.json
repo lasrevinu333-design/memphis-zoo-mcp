@@ -2,6 +2,7 @@
   "artifact": "integrated-backend-authority-release-evidence.v2",
   "release_id": "release-2026.07.19.custodial-v3.12",
   "frontend_commit_sha": null,
+  "frontend_commit_state": "final_rebind_required",
   "schema_fingerprint": "6a5ed2cb582ef6d77400ebe2eec5738066b1073b1ed8187ad6615c139e171eaf",
   "schema_transition": {
     "transition_id": "custodial-foundation-authority-closure-20260820",
@@ -736,7 +737,7 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "da2d59c1517579aca536a22c36a305e9a556aff9"
+        "object_id": "db1d92d954a3a6cc68bdf46b81d8fd21dd93ae91"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
@@ -986,7 +987,7 @@
       {
         "path": "scripts/refresh-integrated-backend-authority-release.mjs",
         "mode": "100644",
-        "object_id": "52e01ea953ade6852b7bac62f2871b4f343bce75"
+        "object_id": "a3294126e3fbc39c523af2b34b7a404f92f92c59"
       },
       {
         "path": "scripts/refresh-release-schema-alignment.mjs",
