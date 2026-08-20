@@ -11,13 +11,15 @@ export function getMcpConnectorToken(env = process.env) {
   return String(env?.MCP_CONNECTOR_TOKEN || "").trim();
 }
 
-export function isMcpFullNoAuthEnabled(env = process.env) {
-  const value = String(env?.MCP_ALLOW_FULL_NOAUTH ?? "true").trim().toLowerCase();
-  return !["0", "false", "no", "off"].includes(value);
+export function isMcpFullNoAuthEnabled(_env = process.env) {
+  // Full mutation authority always requires an authenticated connector token.
+  // Keep this compatibility helper fail-closed so a stale deployment setting
+  // cannot silently restore the retired tokenless mutation surface.
+  return false;
 }
 
 export function isMcpReadOnlyNoAuthEnabled(env = process.env) {
-  const value = String(env?.MCP_ALLOW_READONLY_NOAUTH ?? "true").trim().toLowerCase();
+  const value = String(env?.MCP_ALLOW_READONLY_NOAUTH ?? "false").trim().toLowerCase();
   return !["0", "false", "no", "off"].includes(value);
 }
 
@@ -56,26 +58,15 @@ export function authenticateMcpConnectorRequest(
   {
     env = process.env,
     now = new Date(),
-    allowFullNoAuth = isMcpFullNoAuthEnabled(env),
     allowReadOnlyNoAuth = isMcpReadOnlyNoAuthEnabled(env),
   } = {}
 ) {
   const configuredConnectorToken = getMcpConnectorToken(env);
   const providedConnectorToken = requestMcpConnectorToken(req);
 
-  // ChatGPT custom apps do not consistently send customer-defined API-key
-  // headers. Streamable HTTP therefore defaults to the full connector tool set.
-  // Operators can disable full tokenless access with MCP_ALLOW_FULL_NOAUTH=false,
-  // which falls back to the existing read-only mode. A presented but incorrect
-  // token is never downgraded to tokenless access.
-  if (!providedConnectorToken && allowFullNoAuth) {
-    return {
-      ok: true,
-      session: createConnectorSession({ now, authMode: "noauth_full" }),
-      auth_source: "noauth_full",
-    };
-  }
-
+  // Tokenless access is restricted to the separately enabled diagnostic-only
+  // server. It never reaches GitHub or Supabase mutators. A presented but
+  // incorrect token is never downgraded to tokenless access.
   if (!providedConnectorToken && allowReadOnlyNoAuth) {
     return {
       ok: true,
@@ -102,12 +93,11 @@ export function authenticateMcpConnectorRequest(
 export function makeMcpConnectorMiddleware(
   {
     env = process.env,
-    allowFullNoAuth = isMcpFullNoAuthEnabled(env),
     allowReadOnlyNoAuth = isMcpReadOnlyNoAuthEnabled(env),
   } = {}
 ) {
   return function requireMcpConnectorAuth(req, res, next) {
-    const result = authenticateMcpConnectorRequest(req, { env, allowFullNoAuth, allowReadOnlyNoAuth });
+    const result = authenticateMcpConnectorRequest(req, { env, allowReadOnlyNoAuth });
     if (!result.ok) {
       res.status(result.status || 401).json({ ok: false, error: result.error || "Unauthorized" });
       return;
