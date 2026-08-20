@@ -94,7 +94,10 @@ function createFixture({ beforeCommit = null, skipEvidenceRefresh = false } = {}
           backend_tree_sha: expectedTree,
           backend_evidence_blob_sha: evidenceBlob,
           backend_evidence_sha256: createHash("sha256").update(evidenceBytes).digest("hex"),
-          frontend_commit_sha: schemaInput.frontend_commit_sha,
+          // The branch can intentionally remain unpaired while Engine work is still
+          // open. This fixture supplies a valid synthetic Engine identity so the
+          // signed-attestation provenance boundary is tested independently.
+          frontend_commit_sha: schemaInput.frontend_commit_sha ?? "f".repeat(40),
           schema_fingerprint: schemaFingerprint,
           signature: { algorithm: "ed25519", key_id: "test-release-key", value_base64: "" },
         };
