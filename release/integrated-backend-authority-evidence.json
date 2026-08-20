@@ -2,14 +2,14 @@
   "artifact": "integrated-backend-authority-release-evidence.v2",
   "release_id": "release-2026.07.19.custodial-v3.12",
   "frontend_commit_sha": "257de53680eb305191d42b396098e42b69be5e91",
-  "schema_fingerprint": "c8b6c811c52a3275290c6b8944f3692121c40e92c9efd84c5eb92baff91bc5ac",
+  "schema_fingerprint": "551d9135a7d923e766bddddfadffa363213f853bda9e04995e7d171d492e6e68",
   "schema_transition": {
-    "transition_id": "custodial-managed-schema-authority-normalization-20260815",
-    "from_fingerprint": "2afd6e6154bd62c8974c72a794e08e621df5c3f04a1e88399227f15bb7a0a41e",
-    "to_fingerprint": "c8b6c811c52a3275290c6b8944f3692121c40e92c9efd84c5eb92baff91bc5ac",
+    "transition_id": "custodial-foundation-authority-closure-20260820",
+    "from_fingerprint": "380fcaad7090c704392729bd5811b657db81ff9514fbfe73dd0e130a4bbe8426",
+    "to_fingerprint": "551d9135a7d923e766bddddfadffa363213f853bda9e04995e7d171d492e6e68",
     "expires_at": "2026-08-23T23:59:59Z"
   },
-  "frontend_source_fingerprint": "c8b6c811c52a3275290c6b8944f3692121c40e92c9efd84c5eb92baff91bc5ac",
+  "frontend_source_fingerprint": "551d9135a7d923e766bddddfadffa363213f853bda9e04995e7d171d492e6e68",
   "backend_contract": {
     "scan": "scan.v4.snapshot-bound-authority",
     "authority": "offline-authority.v5",
@@ -149,7 +149,7 @@
       {
         "path": ".github/workflows/foundation-security-gate.yml",
         "mode": "100644",
-        "object_id": "3087493361b2c67c52914fcb56eaab67c65b764c"
+        "object_id": "c1c18c2f218d898f49976bc1833530c8fb9bb4e6"
       },
       {
         "path": ".github/workflows/integrated-release-attestation.yml",
@@ -199,7 +199,7 @@
       {
         "path": ".github/workflows/production-disaster-recovery-backup.yml",
         "mode": "100644",
-        "object_id": "b3718e8e3e756057b5a9d29aefac264510709f33"
+        "object_id": "f8a6c7893a270c1ab0fcfaf05d7d28cf607b394b"
       },
       {
         "path": ".github/workflows/production-schema-c674-bootstrap.yml",
@@ -262,9 +262,14 @@
         "object_id": "936586f668d82a5e63a386cf4726e7db10bb9f03"
       },
       {
+        "path": "docs/custodial-readonly-database-authority.md",
+        "mode": "100644",
+        "object_id": "b709f79e9df08445a764edbd9c3969919b1e579e"
+      },
+      {
         "path": "docs/env.md",
         "mode": "100644",
-        "object_id": "ca423487704771fe86d2dd76d2df047cc949a470"
+        "object_id": "6ebb6ec3a4c7f1bdd682c242fa1fc10e4a0dbe1e"
       },
       {
         "path": "docs/github-json-commands.md",
@@ -299,7 +304,7 @@
       {
         "path": "docs/ops-manager-trusted-device-auth.md",
         "mode": "100644",
-        "object_id": "330af443d5888e059cc5a318bd7437c07b4be799"
+        "object_id": "53b4152923833ca6b89938d5c6058e6acd5afc8c"
       },
       {
         "path": "docs/plans/2026-06-09-scheduler-open-owner-repair.md",
@@ -364,7 +369,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "57b4baf39900e3811bdc6c3247e5d7aad03ad7f5"
+        "object_id": "cd8e6595c01530208a7c3c8242fd030a69f1c70e"
       },
       {
         "path": "public/moxie-assets/contacts-creekside-animal.png",
@@ -414,7 +419,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "966c87e003a8b487bfddde148d360af764c4436c"
+        "object_id": "902f844c041aa6c10f916a458b26146b2ec10ce5"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -429,7 +434,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "0e1e4c931e810f9b328e3009040e44154b4bd20d"
+        "object_id": "eac85ceaa6ec09dc17844aafb050f956a84f0ffa"
       },
       {
         "path": "research/european_herbalism_through_paracelsus.md",
@@ -449,7 +454,7 @@
       {
         "path": "scripts/audit3-repair-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "df802dacffe69cf4c3a78d9a25411898b6c322fd"
+        "object_id": "aa8b8853833be331c15ac1edee8c407276594956"
       },
       {
         "path": "scripts/audit4-repair-contract-tests.mjs",
@@ -495,6 +500,11 @@
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
         "object_id": "b0a8d005ea391e37769adf10c560767afa38a5dd"
+      },
+      {
+        "path": "scripts/create-production-restore-intent.mjs",
+        "mode": "100644",
+        "object_id": "0d9151a310df52d124954a7142d16d1fc2d66544"
       },
       {
         "path": "scripts/create-release-attestation.mjs",
@@ -564,7 +574,7 @@
       {
         "path": "scripts/dashboard-recent-activity-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "04c1b236e6ad2d855be1390500703b77140064cd"
+        "object_id": "fd7d7f999dbd30fe40c09bc9dd9373fd38ab588d"
       },
       {
         "path": "scripts/demo-leadership-blank-schedule-tests.mjs",
@@ -590,6 +600,21 @@
         "path": "scripts/device-security-password-admin.mjs",
         "mode": "100644",
         "object_id": "bcd18be23f24c5ee4cd7238ce295d64e1283a160"
+      },
+      {
+        "path": "scripts/disaster-recovery-crypto-tests.mjs",
+        "mode": "100644",
+        "object_id": "d0b823094d76f13525ef6f083e56232e45bbf39f"
+      },
+      {
+        "path": "scripts/disaster-recovery-crypto.mjs",
+        "mode": "100644",
+        "object_id": "1393c237dedcd41042911dda78b446063878cd02"
+      },
+      {
+        "path": "scripts/disaster-recovery-state.mjs",
+        "mode": "100644",
+        "object_id": "de1668aaaa0e98265b9ea1ff1b1a80618280d9ba"
       },
       {
         "path": "scripts/employee-notification-contract-tests.mjs",
@@ -667,6 +692,11 @@
         "object_id": "12ab77c2f57cbfde14c6b77088fc2c1eb157636b"
       },
       {
+        "path": "scripts/foundation-security-containment-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "a611e16029856c38043f9549d5a662039731338a"
+      },
+      {
         "path": "scripts/full-window-absence-coverage-tests.mjs",
         "mode": "100644",
         "object_id": "092bfaf0ff724dd9ef0c2db6bd73d96a18baa92f"
@@ -694,17 +724,17 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "bef8a337129818c06aa32d4f99acce1137a942b4"
+        "object_id": "43a1698a24b584526d7f8f3779a3d0a2be17d562"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "c81147c71e3438b7178df458703226789cca2309"
+        "object_id": "6a38fc7a709842c11a6e1f3cb6b3f622b0768b92"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
         "mode": "100644",
-        "object_id": "ab92a0a6a4d4c211606c2b87c1db64dce4ac772f"
+        "object_id": "3298511b0325a66ad26c10e8b63922b070f70b51"
       },
       {
         "path": "scripts/integrated-backend-authority-suite-order-isolated-tests.mjs",
@@ -725,6 +755,11 @@
         "path": "scripts/location-group-audit-reminder-aware.mjs",
         "mode": "100755",
         "object_id": "f776fcfe08bdb363769dbc910d657c35b761b640"
+      },
+      {
+        "path": "scripts/manager-credential-boundary-tests.mjs",
+        "mode": "100644",
+        "object_id": "a41541e59f6f2f11be64ee3073694219745e4c92"
       },
       {
         "path": "scripts/manager-inspection-readiness-tests.mjs",
@@ -749,12 +784,12 @@
       {
         "path": "scripts/mcp-connector-auth-tests.mjs",
         "mode": "100644",
-        "object_id": "a1d44cda5a1a121ac9dfbf005e4f32efc452e0e4"
+        "object_id": "d72536e731407b39accbfa4716eed91304ab0c6c"
       },
       {
         "path": "scripts/mcp-transport-tool-surface-tests.mjs",
         "mode": "100644",
-        "object_id": "2d4ab7df9fdf624fab85d026ac39516655a400d6"
+        "object_id": "c8c55d1f8dfd4c2cbf1a809cf128da8f7c2ca426"
       },
       {
         "path": "scripts/memphis-messaging-regression-tests.mjs",
@@ -839,17 +874,17 @@
       {
         "path": "scripts/operational-analytics-database-tests.mjs",
         "mode": "100644",
-        "object_id": "01cda7e50adc101d12d7dada4baaae30772007e6"
+        "object_id": "e84834f32f3c1a1183f65be11a739056ad3b95ca"
       },
       {
         "path": "scripts/operational-recovery-tests.mjs",
         "mode": "100644",
-        "object_id": "a6dc1232b830403e73ecc24a1dd9834cd5ef15c9"
+        "object_id": "cd611feb63f9e412d9386de3bc9cccc5d1de7007"
       },
       {
         "path": "scripts/operations-leadership-mobile-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "c3dd56569029e1d44d5ac948cc316295962cf3ef"
+        "object_id": "790b17f1338975d456353d2e52db5305a82eeb23"
       },
       {
         "path": "scripts/operations-leadership-mobile-database-tests.mjs",
@@ -874,7 +909,7 @@
       {
         "path": "scripts/production-backup.mjs",
         "mode": "100644",
-        "object_id": "af80293635695a105920a84e1a07e0a09035e92f"
+        "object_id": "59b384163cabf6d07b4cbb265a33eb84ba05f979"
       },
       {
         "path": "scripts/production-database-credential-bridge.mjs",
@@ -894,12 +929,12 @@
       {
         "path": "scripts/production-restore-drill.mjs",
         "mode": "100644",
-        "object_id": "9d8e3c640618a24835159e4faf16c4679771ea5c"
+        "object_id": "67d1d29c28cb04df7144c92bdc91e91f2d8d2e2b"
       },
       {
         "path": "scripts/production-restore.mjs",
         "mode": "100644",
-        "object_id": "44742be6a05ebffbfe293cb59963627e52dedf58"
+        "object_id": "b5debd5cc5379fba8f60a9be73acefb7093fc54c"
       },
       {
         "path": "scripts/production-runtime-contract-tests.mjs",
@@ -932,9 +967,14 @@
         "object_id": "cf51272ffa46e264e7c22948f570dd7add968fd8"
       },
       {
+        "path": "scripts/read-only-database-authority-tests.mjs",
+        "mode": "100644",
+        "object_id": "30e821c27614605b6b21bd5751a4c7a8f57a8885"
+      },
+      {
         "path": "scripts/refresh-integrated-backend-authority-release.mjs",
         "mode": "100644",
-        "object_id": "1667e656c1ab75e159cee58a95dad5f9a3ccf61a"
+        "object_id": "40ab0dc2981f3de94c0f33f58d8bed08f236511a"
       },
       {
         "path": "scripts/refresh-release-schema-alignment.mjs",
@@ -944,17 +984,22 @@
       {
         "path": "scripts/refresh-schema-fingerprint.mjs",
         "mode": "100644",
-        "object_id": "90d397a8d0cc5cb6ab0c6e9c5577f4fc9a66a3f8"
+        "object_id": "6a81c41b3d9e9c1af6b0413e268fcd7fa1391791"
       },
       {
         "path": "scripts/release-canary-recovery-database-tests.mjs",
         "mode": "100644",
-        "object_id": "a5a3a1bea78937a3d79f8a051355e541f63b420c"
+        "object_id": "802aa0a9fe78eb09c7b9316ae9bb593bc1237ae6"
       },
       {
         "path": "scripts/release-closure-contract-tests.mjs",
         "mode": "100644",
         "object_id": "994b3c8bc2edfb7bed10f716ecdf8588a077200a"
+      },
+      {
+        "path": "scripts/restore-mutation-gate-tests.mjs",
+        "mode": "100644",
+        "object_id": "5c0f683d98c975a8ea63e1a9f48025af5147f54b"
       },
       {
         "path": "scripts/restroom-rebalance-route-tests.mjs",
@@ -969,7 +1014,7 @@
       {
         "path": "scripts/sch2-publish-route-tests.mjs",
         "mode": "100644",
-        "object_id": "66e9631ee09e7d9d697c487f35f441d20e47881f"
+        "object_id": "0592afb81ab3203639df4b2ce12da782136fbbc4"
       },
       {
         "path": "scripts/schedule-ai-tests.mjs",
@@ -1114,7 +1159,7 @@
       {
         "path": "scripts/static-weekly-control-plane-runtime-tests.mjs",
         "mode": "100644",
-        "object_id": "e11f84c58f45eb443869cfdb461419fd0aefbf62"
+        "object_id": "d7fe986095bfadb4c71dda80f7112fb7196c6436"
       },
       {
         "path": "scripts/static-weekly-control-plane-tests.mjs",
@@ -1180,6 +1225,11 @@
         "path": "scripts/static-weekly-schedule-solver-lifecycle-tests.mjs",
         "mode": "100644",
         "object_id": "163d3cd019a17d4e3ce8d73f912047ec6b43411b"
+      },
+      {
+        "path": "scripts/temporary-repair-payload-retirement-tests.mjs",
+        "mode": "100644",
+        "object_id": "45c70b2fef9aedd041db4b87ef209845ca8e5e10"
       },
       {
         "path": "scripts/thursday-notification-presentation-tests.mjs",
@@ -1449,17 +1499,17 @@
       {
         "path": "src/auth/mcp-connector-auth.js",
         "mode": "100644",
-        "object_id": "9b4942fd5be8eba70b1832673e786c2907a003b2"
+        "object_id": "00a92b50bcf07df5ab3f59660c9f46670920500c"
       },
       {
         "path": "src/auth/shared-access-auth.js",
         "mode": "100644",
-        "object_id": "e6fa6b64e97fcafda82ec5d080bd1c914c315846"
+        "object_id": "38acd94f546450cf775b4a137785a39a03ae097d"
       },
       {
         "path": "src/config/env.js",
         "mode": "100644",
-        "object_id": "8f483581eb106b07bf331c245db6693eea47066f"
+        "object_id": "4dd794bffe5e798e82e5d277a33450abd67f6c8d"
       },
       {
         "path": "src/custodial-employee-admin.js",
@@ -1529,12 +1579,12 @@
       {
         "path": "src/index.js",
         "mode": "100644",
-        "object_id": "bdd100ee4d6cc284df4a2388b43288da7fe5764b"
+        "object_id": "a075db9d7ad9ec39899056513126ae4f922e646e"
       },
       {
         "path": "src/leadership-bootstrap.js",
         "mode": "100644",
-        "object_id": "90c4345944ce79089bf6300fb8aedcb8d2d29bba"
+        "object_id": "0e4351db3f9cdcdb67eca643557714c863ed8fab"
       },
       {
         "path": "src/manager-notifications.js",
@@ -1627,6 +1677,11 @@
         "object_id": "7978ce065ac1bcd1c55ad49e455c40fb677d1384"
       },
       {
+        "path": "src/restore-mutation-gate.js",
+        "mode": "100644",
+        "object_id": "7023d2aa08904fe775e424407a8792b87e4261c4"
+      },
+      {
         "path": "src/routes/index.js",
         "mode": "100644",
         "object_id": "96831f6e2b924706e9ad386c88c49bb6758c6123"
@@ -1649,7 +1704,7 @@
       {
         "path": "src/schedule-api.js",
         "mode": "100644",
-        "object_id": "6082a593205c9866a3c5d05281fcfae0b3f9b2ac"
+        "object_id": "5ac695c8bc2e5a30603e0937af7d289d0dd6d376"
       },
       {
         "path": "src/schedule-display.js",
@@ -1724,7 +1779,7 @@
       {
         "path": "src/supabase/read.js",
         "mode": "100644",
-        "object_id": "0b76aa7d702a892d48563f03f3b2dfc0d31c7ceb"
+        "object_id": "b48539487d2affefe5e214b28c44bfcd73dad1c7"
       },
       {
         "path": "src/utils/diff.js",
@@ -1739,7 +1794,7 @@
       {
         "path": "src/utils/redact-secrets.js",
         "mode": "100644",
-        "object_id": "f4ee6bc640173624028024841ea0a317370782ab"
+        "object_id": "19a82492ab89d071060732d09d4b7aedee479936"
       },
       {
         "path": "supabase/.gitignore",
@@ -1764,17 +1819,17 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "e76b59872fb055abe1c12c8aea600c1ca5eeff95"
+        "object_id": "89d876dd2313767fcb0634c4cefa4e572ab84e59"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "015e01ee4a5746c1ef1ed76044991527e5f84269"
+        "object_id": "d0e97bcb610c85de84b915986895ad627a60cd62"
       },
       {
         "path": "supabase/config.toml",
         "mode": "100644",
-        "object_id": "4c4a84a2c61340dd6da519755150da9f39dcec08"
+        "object_id": "94fd772f7e5eab7b2d273a36d99845f63e721a5d"
       },
       {
         "path": "supabase/deployed_history/20260514224806_install_demo_scan_mock_engine_v2.sql",
@@ -2260,6 +2315,11 @@
         "path": "supabase/deployed_history/20260716194539_foundation_repair_legacy_ledger_rollup.sql",
         "mode": "100644",
         "object_id": "bf2588eaae97ce5936addf6a9550933045367483"
+      },
+      {
+        "path": "supabase/functions/temporary-repair-payload/index.ts",
+        "mode": "100644",
+        "object_id": "652cc7a52fee97b4bae9d51f2b872a184e8ba969"
       },
       {
         "path": "supabase/legacy_migrations/005_annie_log.sql",
@@ -2752,13 +2812,53 @@
         "object_id": "ca78fe0bf1871bf943e38536d066296a372fbcb6"
       },
       {
+        "path": "supabase/migrations/20260820120831_contain_release_recovery_ddl_authority.sql",
+        "mode": "100644",
+        "object_id": "fa1a2840aecd6fe76cfaed1de59dbbd90c383f30"
+      },
+      {
+        "path": "supabase/migrations/20260820121025_revoke_residual_public_security_definer_execute.sql",
+        "mode": "100644",
+        "object_id": "baa4101b4fbf9aacb3ba90a4af384ee8bf29962b"
+      },
+      {
+        "path": "supabase/migrations/20260820121117_revoke_public_trigger_function_rpc_execute.sql",
+        "mode": "100644",
+        "object_id": "22b3b64df6c82eac9c313148911c4a50c9da680e"
+      },
+      {
+        "path": "supabase/migrations/20260820125325_custodial_disaster_restore_generation_authority.sql",
+        "mode": "100644",
+        "object_id": "67230ed197f5eac08d66a9657fcf221aada8e543"
+      },
+      {
+        "path": "supabase/migrations/20260820133000_create_application_read_authority.sql",
+        "mode": "100644",
+        "object_id": "c51f586bc5f5ba630c3c700b72624380c582de37"
+      },
+      {
+        "path": "supabase/migrations/20260820133100_retire_owner_sql_proxy.sql",
+        "mode": "100644",
+        "object_id": "31f44aa54561ece1d40c78c3eac0671a92058d10"
+      },
+      {
+        "path": "supabase/migrations/20260820143000_bound_ops_manager_device_trust.sql",
+        "mode": "100644",
+        "object_id": "e231770fbeabbdabb823e83c4b3ab2813b1db386"
+      },
+      {
+        "path": "supabase/migrations/20260820143200_finalize_function_authority_recovery.sql",
+        "mode": "100644",
+        "object_id": "508a2b540a9706a059384ff1cedd0553895e2e42"
+      },
+      {
         "path": "tmp/write_probe.txt",
         "mode": "100644",
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 527,
-    "migration_path_count": 79,
+    "authority_path_count": 547,
+    "migration_path_count": 87,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
   },
@@ -3005,6 +3105,30 @@
     },
     {
       "name": "20260815163346_restore_explicit_public_schema_usage.sql"
+    },
+    {
+      "name": "20260820120831_contain_release_recovery_ddl_authority.sql"
+    },
+    {
+      "name": "20260820121025_revoke_residual_public_security_definer_execute.sql"
+    },
+    {
+      "name": "20260820121117_revoke_public_trigger_function_rpc_execute.sql"
+    },
+    {
+      "name": "20260820125325_custodial_disaster_restore_generation_authority.sql"
+    },
+    {
+      "name": "20260820133000_create_application_read_authority.sql"
+    },
+    {
+      "name": "20260820133100_retire_owner_sql_proxy.sql"
+    },
+    {
+      "name": "20260820143000_bound_ops_manager_device_trust.sql"
+    },
+    {
+      "name": "20260820143200_finalize_function_authority_recovery.sql"
     }
   ],
   "release_boundary": "Prepare distinct minimum-32-character backend and native-route secrets before cutover; configure their database digests immediately after the migrations that create each configuration function, retain the bridge backend artifact through the scan-snapshot phase, and require the executable health/restoration probes before traffic changes."
