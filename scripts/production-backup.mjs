@@ -15,6 +15,12 @@ import { basename, join, relative, resolve } from "node:path";
 import { Readable } from "node:stream";
 import { finished, pipeline } from "node:stream/promises";
 import pg from "pg";
+import {
+  archiveSignatureBinding,
+  requireSigningKey,
+  signBinding,
+  stable,
+} from "./disaster-recovery-crypto.mjs";
 
 const { Client } = pg;
 const projectRef = String(process.env.SUPABASE_PROJECT_REF || "").trim();
@@ -26,24 +32,23 @@ const backupDir = backupDirInput ? resolve(backupDirInput) : "";
 const pageSize = Math.max(100, Math.min(5000, Number(process.env.BACKUP_PAGE_SIZE || 1000)));
 const startedAt = new Date().toISOString();
 const schemas = ["public", "auth", "storage"];
+const manifestSigningKey = requireSigningKey(process.env.BACKUP_MANIFEST_SIGNING_KEY, "BACKUP_MANIFEST_SIGNING_KEY");
+const manifestSigningKeyId = String(process.env.BACKUP_MANIFEST_SIGNING_KEY_ID || "").trim();
+const backupToolCommit = String(process.env.BACKUP_TOOL_COMMIT || "").trim().toLowerCase();
+const backupToolTree = String(process.env.BACKUP_TOOL_TREE || "").trim().toLowerCase();
 
 if (!/^[a-z0-9]{20}$/.test(projectRef)) throw new Error("SUPABASE_PROJECT_REF must be the 20-character project reference.");
 if (!secret) throw new Error("SUPABASE_SECRET or SUPABASE_SERVICE_ROLE_KEY is required for Storage object backup.");
 if (!databaseUrl) throw new Error("SUPABASE_DB_URL or DATABASE_URL is required for a transactionally consistent snapshot.");
 if (!backupDir) throw new Error("BACKUP_DIR is required.");
+if (!/^[a-zA-Z0-9._:-]{1,120}$/.test(manifestSigningKeyId)) throw new Error("BACKUP_MANIFEST_SIGNING_KEY_ID is required.");
+if (!/^[0-9a-f]{40}$/.test(backupToolCommit) || !/^[0-9a-f]{40}$/.test(backupToolTree)) {
+  throw new Error("BACKUP_TOOL_COMMIT and BACKUP_TOOL_TREE must be exact Git identities.");
+}
 
 for (const path of [backupDir, join(backupDir, "database"), join(backupDir, "inventory"), join(backupDir, "storage", "objects")]) {
   mkdirSync(path, { recursive: true, mode: 0o700 });
   chmodSync(path, 0o700);
-}
-
-function stable(value) {
-  if (Array.isArray(value)) return value.map(stable);
-  if (value instanceof Date) return value.toISOString();
-  if (value && typeof value === "object" && !Buffer.isBuffer(value)) {
-    return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stable(value[key])]));
-  }
-  return value;
 }
 
 function writeJson(path, value) {
@@ -94,6 +99,8 @@ const tableCatalog = [];
 const storageObjects = [];
 const storageBuckets = [];
 let snapshot = null;
+let migrationHead = null;
+let releaseIdentity = null;
 
 await client.connect();
 try {
@@ -104,6 +111,26 @@ try {
            txid_current_snapshot() snapshot_id
   `);
   snapshot = snapshotResult.rows[0];
+
+  const migrationResult = await client.query("select max(version)::text migration_head from supabase_migrations.schema_migrations");
+  migrationHead = String(migrationResult.rows[0]?.migration_head || "").trim();
+  if (!/^\d{14}$/.test(migrationHead)) throw new Error("The production migration head is unavailable or malformed.");
+  const releaseResult = await client.query(`
+    select release_id,backend_commit,frontend_commit,migration_head,migration_manifest_sha256,
+           environment_contract_version,status,details_json,created_at,deployed_at
+    from public.release_deployment_manifest
+    where status in ('deployed','validated','candidate')
+    order by (status='deployed') desc,deployed_at desc nulls last,created_at desc
+    limit 1
+  `);
+  if (releaseResult.rowCount !== 1) throw new Error("The production release identity is unavailable.");
+  releaseIdentity = releaseResult.rows[0];
+  if (!/^[0-9a-f]{40}$/.test(String(releaseIdentity.backend_commit || ""))
+      || !/^[0-9a-f]{40}$/.test(String(releaseIdentity.frontend_commit || ""))
+      || !/^\d{14}$/.test(String(releaseIdentity.migration_head || ""))
+      || !/^[0-9a-f]{64}$/.test(String(releaseIdentity.migration_manifest_sha256 || ""))) {
+    throw new Error("The production release identity is incomplete or malformed.");
+  }
 
   const catalogResult = await client.query(`
     select n.nspname schema_name, c.relname table_name,
@@ -168,6 +195,7 @@ try {
 writeJson(join(backupDir, "inventory", "database-snapshot.json"), snapshot);
 writeJson(join(backupDir, "inventory", "table-catalog.json"), tableCatalog);
 writeJson(join(backupDir, "inventory", "storage-buckets.json"), storageBuckets);
+const databaseCatalogSha256 = await sha256File(join(backupDir, "inventory", "table-catalog.json"));
 
 const objectManifest = [];
 for (const object of storageObjects) {
@@ -208,7 +236,7 @@ writeJson(join(backupDir, "inventory", "storage-objects.json"), objectManifest);
 
 const summary = {
   ok: true,
-  format: "memphis-zoo-disaster-recovery.v2",
+  format: "memphis-zoo-disaster-recovery.v3",
   started_at: startedAt,
   completed_at: new Date().toISOString(),
   project_ref: projectRef,
@@ -220,6 +248,13 @@ const summary = {
   storage_bucket_count: storageBuckets.length,
   storage_object_count: objectManifest.length,
   storage_bytes: objectManifest.reduce((total, item) => total + item.size_bytes, 0),
+  source_identity: {
+    backup_tool_commit: backupToolCommit,
+    backup_tool_tree: backupToolTree,
+    migration_head: migrationHead,
+    database_catalog_sha256: databaseCatalogSha256,
+    release: releaseIdentity,
+  },
   schema_restore_source: "repository migrations followed by production-restore.mjs",
 };
 writeJson(join(backupDir, "backup-summary.json"), summary);
@@ -229,5 +264,17 @@ const manifestLines = [];
 for (const path of hashFiles) manifestLines.push(`${await sha256File(path)}  ${relative(backupDir, path)}`);
 writeFileSync(join(backupDir, "SHA256SUMS"), `${manifestLines.join("\n")}\n`, { mode: 0o600 });
 chmodSync(join(backupDir, "SHA256SUMS"), 0o600);
+const archiveDigest = await sha256File(join(backupDir, "SHA256SUMS"));
+writeJson(join(backupDir, "archive-signature.json"), {
+  format: "memphis-zoo-disaster-recovery-signature.v1",
+  algorithm: "hmac-sha256",
+  key_id: manifestSigningKeyId,
+  archive_digest: archiveDigest,
+  signature: signBinding(archiveSignatureBinding({
+    archiveDigest,
+    projectRef,
+    sourceIdentity: summary.source_identity,
+  }), manifestSigningKey),
+});
 
-console.log(JSON.stringify({ ...summary, backup_directory: basename(backupDir) }, null, 2));
+console.log(JSON.stringify({ ...summary, archive_digest: archiveDigest, backup_directory: basename(backupDir) }, null, 2));

@@ -29,11 +29,19 @@ jobs:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
+          BACKUP_MANIFEST_SIGNING_KEY: ${{ secrets.BACKUP_MANIFEST_SIGNING_KEY }}
+          BACKUP_MANIFEST_SIGNING_KEY_ID: ${{ vars.BACKUP_MANIFEST_SIGNING_KEY_ID }}
         run: |
           test -n "$SUPABASE_PROJECT_REF"
           test -n "$SUPABASE_DB_URL"
           test -n "$SUPABASE_SERVICE_ROLE_KEY"
           test -n "$BACKUP_ENCRYPTION_PASSPHRASE"
+          test -n "$BACKUP_MANIFEST_SIGNING_KEY"
+          test -n "$BACKUP_MANIFEST_SIGNING_KEY_ID"
+      - name: Bind backup tooling to the exact source tree
+        run: |
+          echo "BACKUP_TOOL_COMMIT=${GITHUB_SHA}" >> "$GITHUB_ENV"
+          echo "BACKUP_TOOL_TREE=$(git rev-parse HEAD^{tree})" >> "$GITHUB_ENV"
       - name: Capture coherent database and Storage archive
         env:
           BACKUP_DIR: ${{ runner.temp }}/memphis-zoo-backup
@@ -41,10 +49,14 @@ jobs:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SUPABASE_DB_CA_CERT_PATH: ${{ github.workspace }}/.github/certs/prod-ca-2021.crt
+          BACKUP_MANIFEST_SIGNING_KEY: ${{ secrets.BACKUP_MANIFEST_SIGNING_KEY }}
+          BACKUP_MANIFEST_SIGNING_KEY_ID: ${{ vars.BACKUP_MANIFEST_SIGNING_KEY_ID }}
         run: npm run backup:production
       - name: Verify restore archive without applying writes
         env:
           RESTORE_SOURCE_DIR: ${{ runner.temp }}/memphis-zoo-backup
+          RESTORE_ARCHIVE_VERIFY_KEY: ${{ secrets.BACKUP_MANIFEST_SIGNING_KEY }}
+          RESTORE_ARCHIVE_VERIFY_KEY_ID: ${{ vars.BACKUP_MANIFEST_SIGNING_KEY_ID }}
         run: npm run restore:verify
       - name: Encrypt archive
         env:
