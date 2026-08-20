@@ -47,6 +47,7 @@ async function withTimeout(promise, milliseconds, label) {
 }
 
 const port = await reservePort();
+const connectorToken = "mcp-transport-authenticated-connector-token";
 let stdout = "";
 let stderr = "";
 const child = spawn(process.execPath, ["src/index.js"], {
@@ -55,8 +56,9 @@ const child = spawn(process.execPath, ["src/index.js"], {
     ...process.env,
     NODE_ENV: "test",
     PORT: String(port),
-    MCP_ALLOW_FULL_NOAUTH: "true",
-    MCP_ALLOW_READONLY_NOAUTH: "true",
+    MCP_CONNECTOR_TOKEN: connectorToken,
+    MCP_ALLOW_FULL_NOAUTH: "false",
+    MCP_ALLOW_READONLY_NOAUTH: "false",
     SUPABASE_URL: "http://127.0.0.1:9",
     SUPABASE_SERVICE_ROLE_KEY: "mcp-transport-test-service-role",
     EVENT_MAINTENANCE_SWEEP_MS: "0",
@@ -77,7 +79,9 @@ try {
   await waitForServer(`${baseUrl}/`, child, logs);
 
   client = new Client({ name: "mcp-tool-surface-regression", version: "1.0.0" });
-  const transport = new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`));
+  const transport = new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`), {
+    requestInit: { headers: { authorization: `Bearer ${connectorToken}` } },
+  });
   await withTimeout(client.connect(transport), 15_000, "MCP initialize");
 
   const listed = await withTimeout(client.listTools(), 15_000, "MCP tools/list");

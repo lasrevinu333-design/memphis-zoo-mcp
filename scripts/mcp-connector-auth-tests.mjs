@@ -29,27 +29,26 @@ function authenticate(headers, options = {}) {
   });
 }
 
-assert.equal(isMcpFullNoAuthEnabled({}), true);
+assert.equal(isMcpFullNoAuthEnabled({}), false);
+assert.equal(isMcpFullNoAuthEnabled({ MCP_ALLOW_FULL_NOAUTH: "true" }), false);
 assert.equal(isMcpFullNoAuthEnabled({ MCP_ALLOW_FULL_NOAUTH: "false" }), false);
 assert.equal(isMcpFullNoAuthEnabled({ MCP_ALLOW_FULL_NOAUTH: "0" }), false);
-assert.equal(isMcpReadOnlyNoAuthEnabled({}), true);
+assert.equal(isMcpReadOnlyNoAuthEnabled({}), false);
+assert.equal(isMcpReadOnlyNoAuthEnabled({ MCP_ALLOW_READONLY_NOAUTH: "true" }), true);
 assert.equal(isMcpReadOnlyNoAuthEnabled({ MCP_ALLOW_READONLY_NOAUTH: "false" }), false);
 assert.equal(isMcpReadOnlyNoAuthEnabled({ MCP_ALLOW_READONLY_NOAUTH: "0" }), false);
 
-const anonymousFull = authenticate({});
-assert.equal(anonymousFull.ok, true);
-assert.equal(anonymousFull.auth_source, "noauth_full");
-assert.equal(anonymousFull.session.role, "connector_service");
-assert.equal(anonymousFull.session.read_only, false);
+const anonymousDefault = authenticate({});
+assert.equal(anonymousDefault.ok, false);
+assert.equal(anonymousDefault.status, 401);
 
-const anonymousReadOnly = authenticate({}, { allowFullNoAuth: false });
+const anonymousReadOnly = authenticate({}, { allowReadOnlyNoAuth: true });
 assert.equal(anonymousReadOnly.ok, true);
 assert.equal(anonymousReadOnly.auth_source, "noauth_readonly");
 assert.equal(anonymousReadOnly.session.role, "connector_readonly");
 assert.equal(anonymousReadOnly.session.read_only, true);
 
 const anonymousDisabled = authenticate({}, {
-  allowFullNoAuth: false,
   allowReadOnlyNoAuth: false,
 });
 assert.equal(anonymousDisabled.ok, false);
@@ -72,14 +71,12 @@ const unconfiguredAnonymous = authenticateMcpConnectorRequest(request(), {
   env: {},
   now: NOW,
 });
-assert.equal(unconfiguredAnonymous.ok, true);
-assert.equal(unconfiguredAnonymous.auth_source, "noauth_full");
-assert.equal(unconfiguredAnonymous.session.read_only, false);
+assert.equal(unconfiguredAnonymous.ok, false);
+assert.equal(unconfiguredAnonymous.status, 503);
 
 const unconfiguredReadOnly = authenticateMcpConnectorRequest(request(), {
   env: {},
   now: NOW,
-  allowFullNoAuth: false,
   allowReadOnlyNoAuth: true,
 });
 assert.equal(unconfiguredReadOnly.ok, true);
@@ -88,7 +85,6 @@ assert.equal(unconfiguredReadOnly.session.read_only, true);
 const unconfiguredStrict = authenticateMcpConnectorRequest(request(), {
   env: {},
   now: NOW,
-  allowFullNoAuth: false,
   allowReadOnlyNoAuth: false,
 });
 assert.equal(unconfiguredStrict.ok, false);
@@ -96,33 +92,48 @@ assert.equal(unconfiguredStrict.status, 503);
 
 const middlewareRequest = request();
 let nextCalled = false;
+let middlewareStatus = 0;
+let middlewareBody = null;
 const middleware = makeMcpConnectorMiddleware({
   env: { MCP_CONNECTOR_TOKEN: TOKEN },
 });
 middleware(
   middlewareRequest,
   {
-    status() {
-      throw new Error("Default full-access middleware should not reject the request.");
+    status(value) {
+      middlewareStatus = value;
+      return this;
     },
-    json() {
-      throw new Error("Default full-access middleware should not write an error response.");
+    json(value) {
+      middlewareBody = value;
     },
   },
   () => {
     nextCalled = true;
   }
 );
-assert.equal(nextCalled, true);
-assert.equal(middlewareRequest.memphisMcpAuth.read_only, false);
-assert.equal(middlewareRequest.memphisAuth.read_only, false);
-assert.equal(middlewareRequest.memphisMcpAuth.source, "noauth_full");
+assert.equal(nextCalled, false);
+assert.equal(middlewareStatus, 401);
+assert.equal(middlewareBody?.error, "Unauthorized");
+
+const authenticatedMiddlewareRequest = request({ authorization: `Bearer ${TOKEN}` });
+let authenticatedNextCalled = false;
+middleware(
+  authenticatedMiddlewareRequest,
+  {
+    status() { throw new Error("A valid connector token must not be rejected."); },
+    json() { throw new Error("A valid connector token must not receive an error body."); },
+  },
+  () => { authenticatedNextCalled = true; },
+);
+assert.equal(authenticatedNextCalled, true);
+assert.equal(authenticatedMiddlewareRequest.memphisMcpAuth.read_only, false);
+assert.equal(authenticatedMiddlewareRequest.memphisMcpAuth.source, "connector_token");
 
 const readOnlyMiddlewareRequest = request();
 let readOnlyNextCalled = false;
 const readOnlyMiddleware = makeMcpConnectorMiddleware({
   env: { MCP_CONNECTOR_TOKEN: TOKEN },
-  allowFullNoAuth: false,
   allowReadOnlyNoAuth: true,
 });
 readOnlyMiddleware(
