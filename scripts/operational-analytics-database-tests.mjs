@@ -99,8 +99,8 @@ assert.equal(
       and p.proname in ('cleaning_inspections_set_snapshot','events_app_delete_retention_guard')
       and has_function_privilege('service_role',p.oid,'EXECUTE');
   `),
-  "2",
-  "service_role must retain trigger helper execution",
+  "0",
+  "service_role must not retain direct RPC execution of trigger-only helpers; table-trigger behavior is tested below",
 );
 assert.equal(
   await sql(`
