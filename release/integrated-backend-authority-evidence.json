@@ -272,7 +272,7 @@
       {
         "path": "docs/env.md",
         "mode": "100644",
-        "object_id": "6ebb6ec3a4c7f1bdd682c242fa1fc10e4a0dbe1e"
+        "object_id": "71fdb7c9ddeaebcf3e85272e702087063d13b7bf"
       },
       {
         "path": "docs/github-json-commands.md",
@@ -547,7 +547,7 @@
       {
         "path": "scripts/custodial-employee-admin-authorization-tests.mjs",
         "mode": "100644",
-        "object_id": "a85938e1e7327af96c37c83efb9d2c316e61bb80"
+        "object_id": "a2dd11b883372049f056aee012ca9e0a85af4871"
       },
       {
         "path": "scripts/custodial-employee-phone-contract-tests.mjs",
@@ -597,7 +597,7 @@
       {
         "path": "scripts/device-credential-foundation-tests.mjs",
         "mode": "100644",
-        "object_id": "1463705879b88ebb0aeb8038bf42a7cb0d77f2a1"
+        "object_id": "73231666776b260dd4deeae681969b84e6feacb2"
       },
       {
         "path": "scripts/device-popup-fully-kiosk-test.mjs",
@@ -1512,7 +1512,7 @@
       {
         "path": "src/auth/device-credential-auth.js",
         "mode": "100644",
-        "object_id": "5686494257af5276d4dd5a143af4f2e96ffb1ddb"
+        "object_id": "1b8fc81f7f84a6f96e5d1c2e708f76f8fbbe3fc7"
       },
       {
         "path": "src/auth/mcp-connector-auth.js",
@@ -1527,12 +1527,12 @@
       {
         "path": "src/config/env.js",
         "mode": "100644",
-        "object_id": "4dd794bffe5e798e82e5d277a33450abd67f6c8d"
+        "object_id": "2faff0c3527d6d8bd742048ee47fb477cb641508"
       },
       {
         "path": "src/custodial-employee-admin.js",
         "mode": "100644",
-        "object_id": "45279599f885b326221f5c9f0d9211ffbce6cac7"
+        "object_id": "4d4ce89ab74554a81ba71e49d5c0ccee84c63361"
       },
       {
         "path": "src/device-identity.js",
