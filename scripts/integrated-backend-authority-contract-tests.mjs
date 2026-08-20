@@ -111,7 +111,7 @@ assert.match(populatedPreflightWorkflow, /release:populated-schema:preflight/);
 assert.match(releaseInput.cutover.phase_order[1], /release:populated-schema:preflight/);
 assert.equal(releaseEvidence.compatibility_window.accepted_engine.scan, "scan.v2");
 assert.equal(releaseEvidence.compatibility_window.required_engine.scan, "scan.v4.snapshot-bound-authority");
-assert.equal(releaseEvidence.migrations.at(-1).name, "20260815163346_restore_explicit_public_schema_usage.sql");
+assert.equal(releaseEvidence.migrations.at(-1).name, "20260820143200_finalize_function_authority_recovery.sql");
 assert.match(managedSchemaUsage, /grant usage on schema public[\s\S]*anon[\s\S]*authenticated[\s\S]*service_role[\s\S]*static_weekly_control_plane[\s\S]*static_weekly_release_operator/i);
 assert.doesNotMatch(managedSchemaUsage, /grant usage on schema public[\s\S]*\bto public\b/i);
 assert.match(releaseEvidence.compatibility_window.release_phone_transport_and_offline_activation_phase, /native-vault \/scan-api\/rpc/);
