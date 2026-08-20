@@ -125,8 +125,8 @@ assert.match(releaseEvidence.compatibility_window.managed_schema_authority_norma
 assert.match(dayChangeReconciliation, /static_weekly_v4_begin_day_changes/);
 assert.equal(releaseEvidence.artifact, "integrated-backend-authority-release-evidence.v2");
 assert.equal(releaseEvidence.release_id, "release-2026.07.19.custodial-v3.12");
-assert.equal(releaseEvidence.frontend_commit_sha, null);
-assert.equal(releaseEvidence.frontend_commit_state, "final_rebind_required");
+assert.equal(releaseEvidence.frontend_commit_sha, "0a5dfb4bbb3f7abd3ad25394035d019d4b147f0e");
+assert.equal(releaseEvidence.frontend_commit_state, "final_pair_bound");
 assert.equal(releaseEvidence.cutover.source_identity.kind, "external_signed_release_attestation");
 assert.equal(releaseEvidence.cutover.source_identity.generated_evidence_excluded_from_content_identity, true);
 assert.equal(Object.hasOwn(releaseInput.cutover.source_identity, "authority_content_paths"), false, "manual authority inventory is forbidden");
