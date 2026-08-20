@@ -56,6 +56,19 @@ function createFixture({ beforeCommit = null, skipEvidenceRefresh = false } = {}
   const acceptanceDirectory = mkdtempSync(join(tmpdir(), "integrated-backend-release-acceptance-"));
   try {
     const trackedPaths = copyCompleteTrackedWorktree(fixture);
+    const fixtureSchemaPath = join(fixture, "release/schema-alignment-input.json");
+    const fixtureFrontendPath = join(fixture, "release/frontend-release-manifest.json");
+    const fixtureSchema = JSON.parse(readFileSync(fixtureSchemaPath, "utf8"));
+    if (fixtureSchema.frontend_commit_sha === null) {
+      const syntheticFrontendCommit = "f".repeat(40);
+      fixtureSchema.frontend_commit_sha = syntheticFrontendCommit;
+      fixtureSchema.frontend_commit_state = "final_pair_bound";
+      writeFileSync(fixtureSchemaPath, `${JSON.stringify(fixtureSchema, null, 2)}\n`);
+      const fixtureFrontend = JSON.parse(readFileSync(fixtureFrontendPath, "utf8"));
+      fixtureFrontend.frontend_commit_sha = syntheticFrontendCommit;
+      fixtureFrontend.frontend_commit_state = "final_pair_bound";
+      writeFileSync(fixtureFrontendPath, `${JSON.stringify(fixtureFrontend, null, 2)}\n`);
+    }
     if (beforeCommit) beforeCommit(fixture);
     git(fixture, ["init", "-q"]);
     git(fixture, ["add", "."]);
