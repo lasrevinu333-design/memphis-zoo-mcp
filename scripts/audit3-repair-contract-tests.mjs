@@ -7,6 +7,7 @@ import { createGeminiControlledRepairWorker } from "../src/gemini-controlled-wor
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const backup = read("scripts/production-backup.mjs");
 const restore = read("scripts/production-restore.mjs");
+const recoveryCrypto = read("scripts/disaster-recovery-crypto.mjs");
 const migration = read("supabase/migrations/20260729203938_third_audit_recovery_gemini_gps.sql");
 const gemini = read("src/gemini-console-api.js");
 const index = read("src/index.js");
@@ -14,18 +15,24 @@ const workflow = read(".github/workflows/production-disaster-recovery-backup.yml
 
 assert.match(backup, /repeatable read read only deferrable/i);
 assert.match(backup, /txid_current_snapshot/);
-assert.match(backup, /value instanceof Date/);
+assert.match(recoveryCrypto, /value instanceof Date/);
 assert.match(backup, /schemas = \["public", "auth", "storage"\]/);
 assert.match(backup, /storage\/v1\/object\/authenticated/);
 assert.match(backup, /changed during backup; retry for a coherent archive/);
 assert.doesNotMatch(backup, /offset: String\(offset\)/);
 assert.match(restore, /archive_verified/);
+assert.match(backup, /memphis-zoo-disaster-recovery\.v3/);
+assert.match(backup, /BACKUP_MANIFEST_SIGNING_KEY/);
+assert.match(restore, /archive_signature_verified/);
+assert.match(restore, /RESTORE_INTENT_VERIFY_KEY/);
+assert.match(restore, /PAUSED_RECONCILIATION/);
+assert.match(restore, /invalidateRestoredAuthority/);
 assert.match(restore, /RESTORE_CONFIRM_PROJECT_REF/);
 assert.match(restore, /RESTORE_DATABASE_ONLY/);
 assert.match(restore, /loopback mz_schema_rebuild_\* database/);
 assert.match(restore, /restore_phase/);
 assert.match(restore, /truncate_target_tables/);
-assert.match(restore, /storage_objects_skipped/);
+assert.match(restore, /skipped_for_isolated_database_drill/);
 assert.match(restore, /json_populate_record/);
 assert.match(restore, /storage\.createBucket/);
 assert.match(restore, /storage\.from\(object\.bucket_id\)\.upload/);
