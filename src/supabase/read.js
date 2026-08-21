@@ -139,6 +139,35 @@ function resolveReadOnlyPool(pool) {
   return sharedReadOnlyPool;
 }
 
+export async function assertDedicatedReadAuthority(client) {
+  const result = await client.query(`
+    select
+      current_user as current_user,
+      current_setting('transaction_read_only') = 'on' as transaction_read_only,
+      pg_has_role(current_user, 'custodial_application_reader', 'member') as dedicated_reader_member,
+      not (
+        r.rolsuper
+        or r.rolbypassrls
+        or r.rolcreaterole
+        or r.rolcreatedb
+        or r.rolreplication
+      ) as reader_role_restricted
+    from pg_catalog.pg_roles r
+    where r.rolname = current_user
+  `);
+  const authority = result.rows?.[0] || {};
+  if (
+    authority.transaction_read_only !== true
+    || authority.dedicated_reader_member !== true
+    || authority.reader_role_restricted !== true
+  ) {
+    const error = new Error("Database read authority is not the dedicated restricted application reader.");
+    error.code = "read_authority_not_dedicated";
+    throw error;
+  }
+  return authority;
+}
+
 async function rollbackQuietly(client) {
   try {
     await client.query("rollback");
@@ -156,6 +185,7 @@ async function executeInReadOnlyTransaction(pool, sql) {
     await client.query(`set local statement_timeout = '${DEFAULT_SQL_READ_STATEMENT_TIMEOUT_MS}ms'`);
     await client.query(`set local lock_timeout = '${DEFAULT_SQL_READ_LOCK_TIMEOUT_MS}ms'`);
     await client.query("set local row_security = on");
+    await assertDedicatedReadAuthority(client);
     const result = await client.query(sql);
     await client.query("commit");
     return result.rows;

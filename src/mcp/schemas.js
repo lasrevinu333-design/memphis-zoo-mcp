@@ -74,6 +74,7 @@ export const githubWriteFileInputSchema = {
   commit_message: z.string().min(1),
   branch: optionalString,
   overwrite: z.boolean().optional(),
+  expected_sha: optionalString,
   dry_run: dryRun,
 };
 
@@ -85,7 +86,7 @@ export const githubUpdateFileInputSchema = {
   replace: z.string().optional(),
   commit_message: z.string().min(1),
   branch: optionalString,
-  expected_sha: optionalString,
+  expected_sha: z.string().trim().min(1),
   occurrence: z.enum(["first", "all"]).optional(),
   expected_matches: positiveInt.optional(),
   dry_run: dryRun,
@@ -98,7 +99,7 @@ export const githubReplaceTextInputSchema = {
   replace: z.string(),
   commit_message: z.string().min(1),
   branch: optionalString,
-  expected_sha: optionalString,
+  expected_sha: z.string().trim().min(1),
   occurrence: z.enum(["first", "all"]).optional(),
   expected_matches: positiveInt.optional(),
   dry_run: dryRun,
@@ -110,7 +111,7 @@ export const githubRestoreFileFromRefInputSchema = {
   source_ref: z.string().min(1),
   commit_message: z.string().min(1),
   branch: optionalString,
-  expected_sha: optionalString,
+  expected_sha: z.string().trim().min(1),
   dry_run: dryRun,
 };
 
@@ -119,7 +120,7 @@ export const githubDeleteFileInputSchema = {
   path: z.string().min(1),
   commit_message: z.string().min(1),
   branch: optionalString,
-  expected_sha: optionalString,
+  expected_sha: z.string().trim().min(1),
   dry_run: dryRun,
 };
 

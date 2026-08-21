@@ -9,7 +9,7 @@ import {
 const env = {
   NODE_ENV: "production",
   RENDER: "1",
-  OPS_MANAGER_SESSION_SECRET: "manager-boundary-test-secret",
+  OPS_MANAGER_SESSION_SECRET: "manager-boundary-test-secret-at-least-32-characters",
 };
 const allowedOrigin = "https://localhost";
 const manager = {
@@ -26,6 +26,26 @@ assert.throws(
   "a Supabase or unrelated secret must not satisfy manager session signing",
 );
 assert.equal(assertOpsManagerSessionSecret(env), env.OPS_MANAGER_SESSION_SECRET);
+assert.throws(
+  () => assertOpsManagerSessionSecret({ NODE_ENV: "production", OPS_MANAGER_SESSION_SECRET: "too-short" }),
+  /at least 32 characters/i,
+);
+for (const reusedName of [
+  "DEVICE_CREDENTIAL_SECRET",
+  "CUSTODIAL_BACKEND_PROOF_SECRET",
+  "CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET",
+  "SUPABASE_SERVICE_ROLE_KEY",
+  "MOXIE_WEB_COOKIE_SECRET",
+]) {
+  assert.throws(
+    () => assertOpsManagerSessionSecret({
+      ...env,
+      [reusedName]: env.OPS_MANAGER_SESSION_SECRET,
+    }),
+    new RegExp(reusedName),
+    `manager session authority must remain independent from ${reusedName}`,
+  );
+}
 
 const migration = await readFile(new URL("../supabase/migrations/20260820143000_bound_ops_manager_device_trust.sql", import.meta.url), "utf8");
 assert.match(migration, /expires_at = created_at \+ interval '365 days'/i);

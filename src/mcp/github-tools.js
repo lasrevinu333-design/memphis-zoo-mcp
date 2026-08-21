@@ -110,12 +110,17 @@ async function deleteFile({ repo, path, commit_message, branch, expected_sha, dr
   const targetBranch = target.branch;
   const existing = await getContentOrNull({ github: client, repo: target.repo, path: resolvedPath, ref: targetBranch });
   assertFileContent(existing, resolvedPath);
+  const expectedSha = String(expected_sha || "").trim();
 
-  if (expected_sha && existing.sha !== expected_sha) {
+  if (!expectedSha) {
+    throw new Error("expected_sha is required for every GitHub file deletion.");
+  }
+
+  if (existing.sha !== expectedSha) {
     throw new Error([
       "Refusing to delete because expected_sha does not match current file SHA.",
       `Path: ${resolvedPath}`,
-      `Expected: ${expected_sha}`,
+      `Expected: ${expectedSha}`,
       `Current:  ${existing.sha}`,
     ].join("\n"));
   }
@@ -323,7 +328,7 @@ export function registerGithubTools(server) {
       description: "Create a file, or overwrite only when explicitly allowed. Dry-run defaults to true in the modular layer.",
       inputSchema: githubWriteFileInputSchema,
     },
-    async ({ repo, path, content, commit_message, branch, overwrite = false, dry_run = true }) => {
+    async ({ repo, path, content, commit_message, branch, overwrite = false, expected_sha, dry_run = true }) => {
       const command = parseJsonCommand(content);
       if (command?.op === "create_branch") {
         const result = await createBranch({ github: github(), repo, newBranch: command.new_branch || command.newBranch || path, fromBranch: command.from_branch || command.fromBranch || branch, fromSha: command.from_sha || command.fromSha, dryRun: command.dry_run ?? command.dryRun ?? dry_run });
@@ -333,7 +338,7 @@ export function registerGithubTools(server) {
         const result = await openPullRequest({ github: github(), repo, title: command.title || commit_message, head: command.head || path, base: command.base || branch, body: command.body || "", draft: Boolean(command.draft), dryRun: command.dry_run ?? command.dryRun ?? dry_run });
         return jsonResponse(result);
       }
-      const result = await writeFile({ github: github(), repo, path, content, commitMessage: commitMessage(commit_message, "Create file via MCP"), branch, overwrite, dryRun: dry_run });
+      const result = await writeFile({ github: github(), repo, path, content, commitMessage: commitMessage(commit_message, "Create file via MCP"), branch, overwrite, expectedSha: expected_sha, dryRun: dry_run });
       return jsonResponse(result);
     }
   );
@@ -378,7 +383,7 @@ export function registerGithubTools(server) {
     server,
     "github_replace_text",
     {
-      description: "Replace exact text in an existing file with optional SHA protection and diff preview.",
+      description: "Replace exact text in an existing file with mandatory caller-pinned SHA protection and diff preview.",
       inputSchema: githubReplaceTextInputSchema,
     },
     async ({ repo, path, find, replace, commit_message, branch, expected_sha, occurrence = "first", expected_matches, dry_run = true }) => {
@@ -404,7 +409,7 @@ export function registerGithubTools(server) {
     server,
     "github_delete_file",
     {
-      description: "Delete a file with optional SHA protection and dry-run preview.",
+      description: "Delete a file with mandatory caller-pinned SHA protection and dry-run preview.",
       inputSchema: githubDeleteFileInputSchema,
     },
     async ({ repo, path, commit_message, branch, expected_sha, dry_run = true }) => {

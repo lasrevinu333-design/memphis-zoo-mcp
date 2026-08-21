@@ -26,6 +26,8 @@ assert.doesNotMatch(readSource, /\.rpc\(["']run_sql_readonly["']/,
   "application reads must not use the owner-authority RPC proxy");
 assert.match(readSource, /begin isolation level repeatable read read only/i);
 assert.match(readSource, /set local row_security = on/i);
+assert.match(readSource, /assertDedicatedReadAuthority\(client\)/,
+  "every application read transaction must prove the dedicated restricted login before caller SQL");
 assert.match(indexSource, /read_authority_ready:\s*readAuthorityReady/,
   "production health must expose the dedicated reader boundary");
 assert.match(retirementMigration, /revoke all privileges on function public\.run_sql_readonly\(text\)[\s\S]*service_role/i);
@@ -92,6 +94,7 @@ create or replace function public.tool_admin_bundle(integer,integer,integer,inte
 `;
 
 let pool;
+let privilegedPool;
 try {
   await docker(["image", "inspect", image]);
   await docker(["run", "--rm", "-d", "--name", container, "-p", "127.0.0.1::5432", "--tmpfs", "/var/lib/postgresql/data:rw,size=512m", "-e", "POSTGRES_PASSWORD=postgres", image, "-c", "listen_addresses=*"]);
@@ -116,6 +119,7 @@ try {
   await psql(String.raw`
     create role custodial_readonly_test login password 'read-test-only' inherit;
     grant custodial_application_reader to custodial_readonly_test;
+    create role custodial_overprivileged_test login password 'overprivileged-test' superuser;
   `);
   await psql(retirementMigration);
 
@@ -125,6 +129,18 @@ try {
     max: 2,
     connectionTimeoutMillis: 10_000,
   });
+
+  privilegedPool = new Pool({
+    connectionString: `postgres://custodial_overprivileged_test:overprivileged-test@127.0.0.1:${port}/postgres`,
+    max: 1,
+    connectionTimeoutMillis: 10_000,
+  });
+
+  await assert.rejects(
+    () => runReadOnlySql({ pool: privilegedPool, sql: "select 1 as should_never_be_served" }),
+    (error) => error?.code === "read_authority_not_dedicated",
+    "an overprivileged DSN must be rejected before application read SQL is served",
+  );
 
   const legitimate = await runReadOnlySql({ pool, sql: "select id,label from public.read_fixture order by id" });
   assert.deepEqual(legitimate.rows, [{ id: 1, label: "visible" }]);
@@ -166,5 +182,6 @@ try {
   console.log("Read-only database authority tests passed.");
 } finally {
   await pool?.end().catch(() => {});
+  await privilegedPool?.end().catch(() => {});
   await docker(["rm", "-f", container]).catch(() => {});
 }

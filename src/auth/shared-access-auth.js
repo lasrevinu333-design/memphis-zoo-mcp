@@ -262,8 +262,29 @@ function getSessionSecret(env = process.env) {
 
 export function assertOpsManagerSessionSecret(env = process.env) {
   const secret = getSessionSecret(env);
-  if (isProductionLike(env) && !secret) {
-    throw new Error("OPS_MANAGER_SESSION_SECRET is required in production and must not share another secret class.");
+  if (!isProductionLike(env)) return secret;
+  if (secret.length < 32) {
+    throw new Error("OPS_MANAGER_SESSION_SECRET must contain at least 32 characters in production.");
+  }
+  const independentSecretNames = [
+    "DEVICE_CREDENTIAL_SECRET",
+    "CUSTODIAL_BACKEND_PROOF_SECRET",
+    "CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "ADMIN_API_KEY",
+    "MOXIE_WEB_COOKIE_SECRET",
+    "FEEDBACK_LINK_SECRET",
+    "FEEDBACK_REMINDER_SECRET",
+    "GUEST_MARKETING_REVIEW_SECRET",
+    "MEMPHIS_RELEASE_SCHEMA_IDENTITY_TOKEN",
+    "GEMINI_CONTROLLED_REPAIR_WORKER_TOKEN",
+  ];
+  const reusedName = independentSecretNames.find((name) => {
+    const candidate = String(env[name] || "").trim();
+    return candidate && safeEqual(secret, candidate);
+  });
+  if (reusedName) {
+    throw new Error(`OPS_MANAGER_SESSION_SECRET must be independent from ${reusedName}.`);
   }
   return secret;
 }

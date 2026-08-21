@@ -17,14 +17,6 @@ const DEFAULT_WRITE_MAX_BYTES = GITHUB_STABLE_WRITE_MAX_BYTES;
 const DEFAULT_PREVIEW_MAX_BYTES = 250_000;
 const DEFAULT_DIFF_MAX_CHARS = 20_000;
 const DEFAULT_REPLACE_MANY_MAX_PATCHES = 500;
-const DEFAULT_REQUIRE_EXPECTED_SHA = false;
-
-function envFlag(name, fallback = false) {
-  const raw = String(process.env[name] ?? "").trim().toLowerCase();
-  if (!raw) return fallback;
-  return ["1", "true", "yes", "on"].includes(raw);
-}
-
 function coalesceBoolean(primary, alias, fallback = true) {
   if (primary != null) return Boolean(primary);
   if (alias != null) return Boolean(alias);
@@ -67,10 +59,6 @@ function replaceManyMaxPatches() {
   );
 }
 
-function requireExpectedSha() {
-  return envFlag("MCP_GITHUB_REQUIRE_EXPECTED_SHA", DEFAULT_REQUIRE_EXPECTED_SHA);
-}
-
 function assertWriteSize(content, path) {
   const bytes = Buffer.byteLength(String(content ?? ""), "utf8");
   const limit = writeMaxBytes();
@@ -106,13 +94,9 @@ function resolveExpectedSha(expectedSha, existing, path) {
     return expected;
   }
 
-  if (requireExpectedSha()) {
-    throw new Error(
-      "expectedSha is required because MCP_GITHUB_REQUIRE_EXPECTED_SHA is enabled."
-    );
-  }
-
-  return existing.sha;
+  throw new Error(
+    "expectedSha is required for every mutation of an existing GitHub file."
+  );
 }
 
 function trimDiff(diff) {
@@ -185,6 +169,8 @@ export async function writeFile({
   commit_message,
   branch,
   overwrite = false,
+  expectedSha,
+  expected_sha,
   dryRun,
   dry_run,
 } = {}) {
@@ -214,6 +200,10 @@ export async function writeFile({
   if (existing && !overwrite) {
     throw new Error(`File already exists: ${resolvedPath}. Use updateFile or set overwrite: true.`);
   }
+
+  const shaForOverwrite = existing
+    ? resolveExpectedSha(coalesceText(expectedSha, expected_sha), existing, resolvedPath)
+    : null;
 
   const oldContent = existing
     ? await existingTextForWrite({
@@ -256,8 +246,8 @@ export async function writeFile({
     branch: targetBranch,
   };
 
-  if (existing?.sha) {
-    request.sha = existing.sha;
+  if (shaForOverwrite) {
+    request.sha = shaForOverwrite;
   }
 
   const response = await github.octokit.rest.repos.createOrUpdateFileContents(request);
