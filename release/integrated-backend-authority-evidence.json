@@ -1,7 +1,7 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "bc1293727e451a5aff6d240f967c0454d5286783",
+  "frontend_commit_sha": "77d74bd9001c8ef0b8761cbb564832064a9bcaed",
   "frontend_commit_state": "final_pair_bound",
   "schema_fingerprint": "6a5ed2cb582ef6d77400ebe2eec5738066b1073b1ed8187ad6615c139e171eaf",
   "schema_transition": {
@@ -348,7 +348,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "6cab80b40d8782b25aab8305e23bd805d021966c"
+        "object_id": "4a6d72aea4932374da2690de7c498a3ec5ce227c"
       },
       {
         "path": "public/moxie-assets/contacts-creekside-animal.png",
@@ -398,7 +398,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "f0119829908a5bf44ebd21fe15b6018a008bc8f3"
+        "object_id": "a93f7580d89b75bc3d2d4d8f390320c4e674fef3"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -418,7 +418,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "42656d4809459be40386dfce251905398268f1c3"
+        "object_id": "2a3f8f460777d3fd1f660b92f649c2ebf0c5480d"
       },
       {
         "path": "research/european_herbalism_through_paracelsus.md",
@@ -558,7 +558,7 @@
       {
         "path": "scripts/custodial-repair-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "8a527e11f3dbd983b4e8688cde8bbecd6f30c778"
+        "object_id": "e234a4bd56d170590d8fff67b140baed6c8aa7c4"
       },
       {
         "path": "scripts/custodial-u4-migration-convergence-tests.mjs",
@@ -608,7 +608,7 @@
       {
         "path": "scripts/disaster-recovery-state.mjs",
         "mode": "100644",
-        "object_id": "de1668aaaa0e98265b9ea1ff1b1a80618280d9ba"
+        "object_id": "0af393dce719506ea552ecd9af9fcee34a1724a0"
       },
       {
         "path": "scripts/employee-notification-contract-tests.mjs",
@@ -639,6 +639,11 @@
         "path": "scripts/events-parser-tests.mjs",
         "mode": "100644",
         "object_id": "4fb026c3bfa386f8c6235e7f8721fa4f5499e16c"
+      },
+      {
+        "path": "scripts/feedback-authority-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "3df5b31e384eb0c51f5475aa06f7f051746f38b3"
       },
       {
         "path": "scripts/feedback-contract-tests.mjs",
@@ -688,7 +693,7 @@
       {
         "path": "scripts/foundation-security-containment-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "a611e16029856c38043f9549d5a662039731338a"
+        "object_id": "cd3b939d4150f2b556ec2a038be6514e2d312562"
       },
       {
         "path": "scripts/full-window-absence-coverage-tests.mjs",
@@ -718,7 +723,7 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "3c9402b73f2f9525b3be8d3193700baf4911164b"
+        "object_id": "afd55daa8e9e6096566e3112d02fe265253f7972"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
@@ -753,7 +758,7 @@
       {
         "path": "scripts/manager-credential-boundary-tests.mjs",
         "mode": "100644",
-        "object_id": "a41541e59f6f2f11be64ee3073694219745e4c92"
+        "object_id": "feeb88f2bebf3492f7d613ed7b9c7525b32b7bc7"
       },
       {
         "path": "scripts/manager-inspection-readiness-tests.mjs",
@@ -883,7 +888,7 @@
       {
         "path": "scripts/operations-leadership-mobile-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "841418488e8bbf5014d2a79020e64d7069212aa7"
+        "object_id": "dfa0e65a362968fbff0cad5a82a648bd071050ed"
       },
       {
         "path": "scripts/operations-leadership-mobile-database-tests.mjs",
@@ -928,7 +933,7 @@
       {
         "path": "scripts/production-restore-drill.mjs",
         "mode": "100644",
-        "object_id": "67d1d29c28cb04df7144c92bdc91e91f2d8d2e2b"
+        "object_id": "03b035b266bc0e3ba32b3982af3385b62efcf7d6"
       },
       {
         "path": "scripts/production-restore.mjs",
@@ -968,7 +973,7 @@
       {
         "path": "scripts/read-only-database-authority-tests.mjs",
         "mode": "100644",
-        "object_id": "30e821c27614605b6b21bd5751a4c7a8f57a8885"
+        "object_id": "dccdfcb56961b0237e60e7ddd0cbf91d88822daa"
       },
       {
         "path": "scripts/refresh-integrated-backend-authority-release.mjs",
@@ -993,7 +998,7 @@
       {
         "path": "scripts/release-closure-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "e48a1a513eb855eac31a6462145b7d9ada32e5e4"
+        "object_id": "d345e726f6c989f5472e200928748a6873488f7b"
       },
       {
         "path": "scripts/restore-mutation-gate-tests.mjs",
@@ -1508,7 +1513,7 @@
       {
         "path": "src/auth/shared-access-auth.js",
         "mode": "100644",
-        "object_id": "26c35455be1553fb91ba1d67d3ade833c42e2992"
+        "object_id": "908516fc9279b2d2c88a7e691afdfc51664630cc"
       },
       {
         "path": "src/config/env.js",
@@ -1539,6 +1544,11 @@
         "path": "src/events-api.js",
         "mode": "100644",
         "object_id": "219ecf74ce8ff5585fc512602d7f5128102f7173"
+      },
+      {
+        "path": "src/feedback-authority.js",
+        "mode": "100644",
+        "object_id": "10954bfd89b7765ddc97c35509ab0ca9c5df9803"
       },
       {
         "path": "src/gemini-console-api.js",
@@ -1578,12 +1588,12 @@
       {
         "path": "src/github/write.js",
         "mode": "100644",
-        "object_id": "ab67275d662d301e36970928bdcb1731cd603442"
+        "object_id": "a9bf05b14ec65357f493a7e9c0b7440e4b597ff4"
       },
       {
         "path": "src/index.js",
         "mode": "100644",
-        "object_id": "9a4038aa99fd554ba4856210f9ad82eb2c235dd7"
+        "object_id": "c62b17b74311b5cd71c93df323c31dbbda9b7525"
       },
       {
         "path": "src/leadership-bootstrap.js",
@@ -1608,7 +1618,7 @@
       {
         "path": "src/mcp/github-tools.js",
         "mode": "100644",
-        "object_id": "83cf8c00b9f71b81bca48766e9737cc8643a73f6"
+        "object_id": "b76a30289a72022140ebbba31b71564f0d0c6b5c"
       },
       {
         "path": "src/mcp/register.js",
@@ -1623,7 +1633,7 @@
       {
         "path": "src/mcp/schemas.js",
         "mode": "100644",
-        "object_id": "8dfeb1991f848e1f8df073d8bfbd3c80e0bee2dd"
+        "object_id": "3864ec2a0bd90f7d3389e1eaf4d096404b5a39e2"
       },
       {
         "path": "src/mcp/server-tools.js",
@@ -1638,7 +1648,7 @@
       {
         "path": "src/mcp/tool-manifest.js",
         "mode": "100644",
-        "object_id": "9be8c7df35bfa48c26336fba9e3d761aec5168a0"
+        "object_id": "5e0ddaab4ac2ba514003d66e47adfe330ab2672a"
       },
       {
         "path": "src/memphis-ai.js",
@@ -1793,7 +1803,7 @@
       {
         "path": "src/supabase/read.js",
         "mode": "100644",
-        "object_id": "b48539487d2affefe5e214b28c44bfcd73dad1c7"
+        "object_id": "0d34127495946344d6f168526ba54079aed4565f"
       },
       {
         "path": "src/utils/diff.js",
@@ -2891,7 +2901,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 558,
+    "authority_path_count": 560,
     "migration_path_count": 91,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
