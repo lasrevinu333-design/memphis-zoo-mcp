@@ -141,24 +141,85 @@ function resolveReadOnlyPool(pool) {
 
 export async function assertDedicatedReadAuthority(client) {
   const result = await client.query(`
+    with login_role as (
+      select r.*
+      from pg_catalog.pg_roles r
+      where r.rolname = session_user
+    ), direct_object_grants as (
+      select acl.grantee
+      from pg_catalog.pg_namespace o
+      cross join lateral pg_catalog.aclexplode(o.nspacl) acl
+      union all
+      select acl.grantee
+      from pg_catalog.pg_class o
+      cross join lateral pg_catalog.aclexplode(o.relacl) acl
+      union all
+      select acl.grantee
+      from pg_catalog.pg_proc o
+      cross join lateral pg_catalog.aclexplode(o.proacl) acl
+      union all
+      select acl.grantee
+      from pg_catalog.pg_type o
+      cross join lateral pg_catalog.aclexplode(o.typacl) acl
+      union all
+      select acl.grantee
+      from pg_catalog.pg_database o
+      cross join lateral pg_catalog.aclexplode(o.datacl) acl
+      union all
+      select acl.grantee
+      from pg_catalog.pg_default_acl o
+      cross join lateral pg_catalog.aclexplode(o.defaclacl) acl
+    )
     select
+      session_user as session_user,
       current_user as current_user,
+      current_user = session_user as same_session_identity,
       current_setting('transaction_read_only') = 'on' as transaction_read_only,
       pg_has_role(current_user, 'custodial_application_reader', 'member') as dedicated_reader_member,
+      not exists (
+        select 1
+        from pg_catalog.pg_roles inherited
+        cross join login_role login
+        where inherited.oid <> login.oid
+          and inherited.rolname <> 'custodial_application_reader'
+          and pg_has_role(login.oid, inherited.oid, 'member')
+      ) as exclusive_reader_membership,
+      not exists (
+        select 1
+        from direct_object_grants direct_grant
+        cross join login_role login
+        where direct_grant.grantee = login.oid
+      ) as direct_object_grants_absent,
+      not exists (
+        select 1 from pg_catalog.pg_namespace o cross join login_role login where o.nspowner = login.oid
+        union all
+        select 1 from pg_catalog.pg_class o cross join login_role login where o.relowner = login.oid
+        union all
+        select 1 from pg_catalog.pg_proc o cross join login_role login where o.proowner = login.oid
+        union all
+        select 1 from pg_catalog.pg_type o cross join login_role login where o.typowner = login.oid
+        union all
+        select 1 from pg_catalog.pg_database o cross join login_role login where o.datdba = login.oid
+      ) as owned_objects_absent,
       not (
         r.rolsuper
         or r.rolbypassrls
         or r.rolcreaterole
         or r.rolcreatedb
         or r.rolreplication
+        or not r.rolinherit
+        or not r.rolcanlogin
       ) as reader_role_restricted
-    from pg_catalog.pg_roles r
-    where r.rolname = current_user
+    from login_role r
   `);
   const authority = result.rows?.[0] || {};
   if (
-    authority.transaction_read_only !== true
+    authority.same_session_identity !== true
+    || authority.transaction_read_only !== true
     || authority.dedicated_reader_member !== true
+    || authority.exclusive_reader_membership !== true
+    || authority.direct_object_grants_absent !== true
+    || authority.owned_objects_absent !== true
     || authority.reader_role_restricted !== true
   ) {
     const error = new Error("Database read authority is not the dedicated restricted application reader.");

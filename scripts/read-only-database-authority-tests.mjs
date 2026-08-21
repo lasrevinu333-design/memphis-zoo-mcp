@@ -95,6 +95,8 @@ create or replace function public.tool_admin_bundle(integer,integer,integer,inte
 
 let pool;
 let privilegedPool;
+let extraMembershipPool;
+let directGrantPool;
 try {
   await docker(["image", "inspect", image]);
   await docker(["run", "--rm", "-d", "--name", container, "-p", "127.0.0.1::5432", "--tmpfs", "/var/lib/postgresql/data:rw,size=512m", "-e", "POSTGRES_PASSWORD=postgres", image, "-c", "listen_addresses=*"]);
@@ -120,6 +122,12 @@ try {
     create role custodial_readonly_test login password 'read-test-only' inherit;
     grant custodial_application_reader to custodial_readonly_test;
     create role custodial_overprivileged_test login password 'overprivileged-test' superuser;
+    create role custodial_extra_read_role nologin;
+    create role custodial_extra_membership_test login password 'extra-membership-test' inherit;
+    grant custodial_application_reader, custodial_extra_read_role to custodial_extra_membership_test;
+    create role custodial_direct_grant_test login password 'direct-grant-test' inherit;
+    grant custodial_application_reader to custodial_direct_grant_test;
+    grant select on public.mutation_fixture to custodial_direct_grant_test;
   `);
   await psql(retirementMigration);
 
@@ -136,10 +144,34 @@ try {
     connectionTimeoutMillis: 10_000,
   });
 
+  extraMembershipPool = new Pool({
+    connectionString: `postgres://custodial_extra_membership_test:extra-membership-test@127.0.0.1:${port}/postgres`,
+    max: 1,
+    connectionTimeoutMillis: 10_000,
+  });
+
+  directGrantPool = new Pool({
+    connectionString: `postgres://custodial_direct_grant_test:direct-grant-test@127.0.0.1:${port}/postgres`,
+    max: 1,
+    connectionTimeoutMillis: 10_000,
+  });
+
   await assert.rejects(
     () => runReadOnlySql({ pool: privilegedPool, sql: "select 1 as should_never_be_served" }),
     (error) => error?.code === "read_authority_not_dedicated",
     "an overprivileged DSN must be rejected before application read SQL is served",
+  );
+
+  await assert.rejects(
+    () => runReadOnlySql({ pool: extraMembershipPool, sql: "select 1 as should_never_be_served" }),
+    (error) => error?.code === "read_authority_not_dedicated",
+    "a reader login with any additional inherited role must be rejected",
+  );
+
+  await assert.rejects(
+    () => runReadOnlySql({ pool: directGrantPool, sql: "select 1 as should_never_be_served" }),
+    (error) => error?.code === "read_authority_not_dedicated",
+    "a reader login with direct object grants must be rejected",
   );
 
   const legitimate = await runReadOnlySql({ pool, sql: "select id,label from public.read_fixture order by id" });
@@ -183,5 +215,7 @@ try {
 } finally {
   await pool?.end().catch(() => {});
   await privilegedPool?.end().catch(() => {});
+  await extraMembershipPool?.end().catch(() => {});
+  await directGrantPool?.end().catch(() => {});
   await docker(["rm", "-f", container]).catch(() => {});
 }
