@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 
 const phaseA = readFileSync("supabase/migrations/20260810143000_offline_actor_occurrence_reconciliation.sql", "utf8");
@@ -22,6 +23,18 @@ const schemaFingerprintRefresh = readFileSync("scripts/refresh-schema-fingerprin
 const packageManifest = JSON.parse(readFileSync("package.json", "utf8"));
 const releaseInput = JSON.parse(readFileSync("release/integrated-backend-authority-input.json", "utf8"));
 const releaseEvidence = JSON.parse(readFileSync("release/integrated-backend-authority-evidence.json", "utf8"));
+const pendingMigrationPlan = JSON.parse(readFileSync("release/pending-production-migration-plan.json", "utf8"));
+const exactPendingProductionMigrations = [
+  "20260820125325_custodial_disaster_restore_generation_authority.sql",
+  "20260820133000_create_application_read_authority.sql",
+  "20260820133100_retire_owner_sql_proxy.sql",
+  "20260820143000_bound_ops_manager_device_trust.sql",
+  "20260820143200_finalize_function_authority_recovery.sql",
+  "20260820153000_append_only_cleaning_identity_corrections.sql",
+  "20260820154000_late_gps_is_advisory_only.sql",
+  "20260820154500_precise_terminal_writer_detection.sql",
+  "20260820155000_rebind_release_recovery_inventory_to_current_authority.sql",
+];
 
 assert.match(phaseA, /Phase A is deliberately additive/i);
 assert.match(phaseA, /custodial_start_offline_occurrence/i);
@@ -112,6 +125,20 @@ assert.equal(packageManifest.scripts["release:populated-schema:preflight"], "nod
 assert.match(schemaFingerprintRefresh, /schema_from_fingerprint/);
 assert.match(populatedPreflightWorkflow, /release:populated-schema:preflight/);
 assert.match(releaseInput.cutover.phase_order[1], /release:populated-schema:preflight/);
+assert.equal(releaseInput.cutover.production_migration_plan, "release/pending-production-migration-plan.json");
+assert.equal(pendingMigrationPlan.artifact, "pending-production-migration-plan.v1");
+assert.equal(pendingMigrationPlan.project_ref, "rqquvtjdmugpigbndmne");
+assert.equal(pendingMigrationPlan.observed_production.migration_head, "20260820121117");
+assert.equal(pendingMigrationPlan.observed_production.catalog_privilege_fingerprint, "27427ec8232b9871507f5954236c2f1a95613860fee180c818dce685a9c9bede");
+assert.equal(pendingMigrationPlan.target.migration_head, "20260820155000");
+assert.equal(pendingMigrationPlan.target.canonical_schema_fingerprint, "6a5ed2cb582ef6d77400ebe2eec5738066b1073b1ed8187ad6615c139e171eaf");
+assert.equal(pendingMigrationPlan.authorization.production_apply_authorized, false);
+assert.deepEqual(pendingMigrationPlan.migrations.map(({ file }) => file), exactPendingProductionMigrations);
+for (const [index, migration] of pendingMigrationPlan.migrations.entries()) {
+  assert.equal(migration.order, index + 1);
+  const bytes = readFileSync(`supabase/migrations/${migration.file}`);
+  assert.equal(createHash("sha256").update(bytes).digest("hex"), migration.sha256, `stale pending migration digest: ${migration.file}`);
+}
 assert.equal(releaseEvidence.compatibility_window.accepted_engine.scan, "scan.v2");
 assert.equal(releaseEvidence.compatibility_window.required_engine.scan, "scan.v4.snapshot-bound-authority");
 assert.equal(releaseEvidence.migrations.at(-1).name, "20260820155000_rebind_release_recovery_inventory_to_current_authority.sql");
@@ -125,7 +152,7 @@ assert.match(releaseEvidence.compatibility_window.managed_schema_authority_norma
 assert.match(dayChangeReconciliation, /static_weekly_v4_begin_day_changes/);
 assert.equal(releaseEvidence.artifact, "integrated-backend-authority-release-evidence.v2");
 assert.equal(releaseEvidence.release_id, "release-2026.07.19.custodial-v3.12");
-assert.equal(releaseEvidence.frontend_commit_sha, "4bbcfad6676f70aa5cb4c4cbee40caec05db4705");
+assert.equal(releaseEvidence.frontend_commit_sha, "adcdd00aec9b01aaf9159e808e492e7d3a8bc2e3");
 assert.equal(releaseEvidence.frontend_commit_state, "final_pair_bound");
 assert.equal(releaseEvidence.cutover.source_identity.kind, "external_signed_release_attestation");
 assert.equal(releaseEvidence.cutover.source_identity.generated_evidence_excluded_from_content_identity, true);

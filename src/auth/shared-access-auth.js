@@ -506,7 +506,7 @@ export function authenticateOpsAccessRequest(req, { env = process.env, now = new
   return { ok: false, status: 401, error: "Ops Manager authentication required." };
 }
 
-export function makeOpsAccessMiddleware({ env = process.env, requireWrite = false, trustedDeviceStore = null, supabase = null, requireTrustedDeviceStore = false, requireCurrentManagerAssociation = false } = {}) {
+export function makeOpsAccessMiddleware({ env = process.env, requireWrite = false, trustedDeviceStore = null, supabase = null, requireTrustedDeviceStore = true, requireCurrentManagerAssociation = true } = {}) {
   const store = trustedDeviceStore || createSupabaseTrustedDeviceStore(supabase);
   return async function requireOpsAccess(req, res, next) {
     const result = authenticateOpsAccessRequest(req, { env });
@@ -837,7 +837,12 @@ async function verifySessionAgainstTrustedDeviceStore(session, {
   requireTrustedDeviceStore = false,
   requireCurrentManagerAssociation = false,
 } = {}) {
-  if (!session?.trusted_device) return { ok: true, session };
+  if (!session?.trusted_device) {
+    if (requireTrustedDeviceStore || requireCurrentManagerAssociation) {
+      return { ok: false, status: 403, error: "A current named manager device session is required." };
+    }
+    return { ok: true, session };
+  }
   if (!store?.find) {
     if (requireTrustedDeviceStore) return { ok: false, status: 503, error: "Trusted-device revocation verification is unavailable." };
     return { ok: true, session };

@@ -18,6 +18,7 @@ import { APP_VERSION, RELEASE_ID } from "./app-version.js";
 import { assertConfiguredReleaseIdentity, buildReleaseManifest } from "./release-manifest.js";
 import { observeProductionSchemaIdentity } from "./production-schema-identity.js";
 import { assertOpsManagerSessionSecret, authenticateOpsAccessRequest, createSupabaseTrustedDeviceStore, installSharedAuthRoutes, makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
+import { assertServerAssignedActor, authenticatedManagerActor } from "./manager-authority.js";
 import { makeMcpConnectorMiddleware } from "./auth/mcp-connector-auth.js";
 import {
   installDeviceCredentialRoutes,
@@ -722,11 +723,6 @@ function getSupabaseConfig() {
     throw new Error("Supabase is not configured. Check SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env.");
   }
   return supabaseAdmin;
-}
-
-function normalizeDashboardCloser(value) {
-  const normalized = String(value || "").trim();
-  return normalized || "Dashboard";
 }
 
 const ALLOWED_CORS_ORIGINS = String(process.env.ALLOWED_CORS_ORIGINS || "")
@@ -2712,8 +2708,23 @@ app.post("/admin-api/bundle", requireOpsManagerWrite, async (req, res) => {
   catch (error) { console.error("admin bundle failed:", error); res.status(500).json({ ok: false, error: error.message || "Admin bundle failed" }); }
 });
 app.post("/admin-api/close-ticket", requireOpsManagerWrite, async (req, res) => {
-  try { const ticketId = String(req.body?.ticket_id || "").trim(); const closedBy = String(req.body?.closed_by || "").trim(); const closeNotes = req.body?.close_notes == null ? null : String(req.body.close_notes); if (!ticketId || !closedBy) { res.status(400).json({ ok: false, error: "ticket_id and closed_by are required." }); return; } await runRpc("custodial_close_maintenance_ticket_authoritative", { p_ticket_id: ticketId, p_closed_by: closedBy, p_close_notes: closeNotes, p_backend_execution_secret: offlineAuthoritySecret() }); res.status(200).json({ ok: true, ticket_id: ticketId, status: "closed" }); }
-  catch (error) { console.error("close ticket failed:", error); res.status(500).json({ ok: false, error: error.message || "Close ticket failed" }); }
+  try {
+    assertServerAssignedActor(req.body);
+    const ticketId = String(req.body?.ticket_id || "").trim();
+    const closeNotes = req.body?.close_notes == null ? null : String(req.body.close_notes);
+    if (!ticketId) {
+      res.status(400).json({ ok: false, error: "ticket_id is required." });
+      return;
+    }
+    await runRpc("custodial_close_maintenance_ticket_authoritative", {
+      p_ticket_id: ticketId,
+      p_closed_by: authenticatedManagerActor(req.memphisAuth),
+      p_close_notes: closeNotes,
+      p_backend_execution_secret: offlineAuthoritySecret(),
+    });
+    res.status(200).json({ ok: true, ticket_id: ticketId, status: "closed" });
+  }
+  catch (error) { console.error("close ticket failed:", error); res.status(error?.status || 500).json({ ok: false, error: error.message || "Close ticket failed" }); }
 });
 app.get("/dashboard-api/summary", requireOpsManagerAuth, async (_req, res) => {
   try { const data = await runPublicDashboardSummary(); res.status(200).json({ ok: true, data }); }
@@ -2763,16 +2774,16 @@ app.get("/dashboard-api/work-session-alerts", requireOpsManagerAuth, async (_req
 });
 app.post("/dashboard-api/close-ticket", requireOpsManagerWrite, async (req, res) => {
   try {
+    assertServerAssignedActor(req.body);
     const ticketId = String(req.body?.ticket_id || "").trim();
-    const closedBy = normalizeDashboardCloser(req.body?.closed_by);
     if (!ticketId) {
       res.status(400).json({ ok: false, error: "ticket_id is required." });
       return;
     }
-    await runRpc("custodial_close_maintenance_ticket_authoritative", { p_ticket_id: ticketId, p_closed_by: closedBy, p_close_notes: null, p_backend_execution_secret: offlineAuthoritySecret() });
+    await runRpc("custodial_close_maintenance_ticket_authoritative", { p_ticket_id: ticketId, p_closed_by: authenticatedManagerActor(req.memphisAuth), p_close_notes: null, p_backend_execution_secret: offlineAuthoritySecret() });
     res.status(200).json({ ok: true, ticket_id: ticketId, status: "closed" });
   }
-  catch (error) { console.error("dashboard close ticket failed:", error); res.status(500).json({ ok: false, error: error.message || "Dashboard close ticket failed" }); }
+  catch (error) { console.error("dashboard close ticket failed:", error); res.status(error?.status || 500).json({ ok: false, error: error.message || "Dashboard close ticket failed" }); }
 });
 function offlineAuthorityManagerId(req) {
   const managerId = String(req?.memphisAuth?.manager_id || "").trim();

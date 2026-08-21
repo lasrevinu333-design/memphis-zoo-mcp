@@ -13,6 +13,9 @@ const env = {
   DEVICE_CREDENTIAL_SECRET: "custodial-admin-authorization-contract-device-secret",
 };
 const managerId = "51000000-0000-4000-8000-000000000001";
+const reassignedManagerId = "51000000-0000-4000-8000-000000000007";
+const managerCredentialId = "51000000-0000-4000-8000-000000000008";
+const managerDeviceId = "AUTHORIZATION_MANAGER_PHONE";
 const employeeId = "51000000-0000-4000-8000-000000000002";
 const priorEmployeeId = "51000000-0000-4000-8000-000000000006";
 const devicePk = "51000000-0000-4000-8000-000000000003";
@@ -46,6 +49,27 @@ const device = {
   employees: employee,
 };
 const databaseCalls = [];
+const trustedManager = {
+  manager_id: managerId,
+  display_name: "Authorization Contract Manager",
+  roles: ["CUSTODIAL_MANAGER"],
+  active: true,
+  revoked_at: null,
+};
+const trustedDevice = {
+  credential_id: managerCredentialId,
+  device_id: managerDeviceId,
+  device_label: "Authorization Contract Manager Phone",
+  token_hash: "test-only-hash",
+  max_access_level: "full_access",
+  manager_id: managerId,
+  manager: trustedManager,
+  created_at: new Date().toISOString(),
+  last_used_at: null,
+  expires_at: new Date(Date.now() + 90 * 86_400_000).toISOString(),
+  revoked_at: null,
+  revoked_reason: null,
+};
 
 class Query {
   constructor(table) {
@@ -93,6 +117,8 @@ class Query {
   }
 
   async maybeSingle() {
+    if (this.table === "ops_manager_trusted_devices") return { data: structuredClone(trustedDevice), error: null };
+    if (this.table === "ops_manager_managers") return { data: structuredClone(trustedManager), error: null };
     databaseCalls.push({ kind: "query", table: this.table, terminal: "maybeSingle", filters: structuredClone(this.filters) });
     if (this.table === "devices") return { data: structuredClone(device), error: null };
     if (this.table === "employees") return { data: structuredClone(employee), error: null };
@@ -133,10 +159,12 @@ const db = {
 };
 
 function managerToken(accessLevel, roles = ["CUSTODIAL_MANAGER"]) {
+  trustedManager.roles = [...roles];
   return createOpsManagerSession({
-    deviceId: `authorization-contract-${accessLevel}`,
+    credentialId: managerCredentialId,
+    deviceId: managerDeviceId,
     manager: { manager_id: managerId, display_name: "Authorization Contract Manager", roles },
-    authMode: "operations_first",
+    authMode: "trusted_device",
     accessLevel,
     maximumAccessLevel: "full_access",
     env,
@@ -209,6 +237,18 @@ const rosterOnlyMutations = [
 ];
 
 try {
+  const untrustedManagerToken = createOpsManagerSession({
+    deviceId: "untrusted-operations-first-session",
+    manager: { manager_id: managerId, display_name: "Untrusted Manager", roles: ["CUSTODIAL_MANAGER"] },
+    authMode: "operations_first",
+    accessLevel: "full_access",
+    maximumAccessLevel: "full_access",
+    env,
+  }).token;
+  const untrusted = await request(managerReads[0].path, { token: untrustedManagerToken });
+  assert.equal(untrusted.status, 403, "a non-device session must not enter a human manager route");
+  assert.match(untrusted.body.error, /named manager device session is required/i);
+
   const readOnlyToken = managerToken("read_only");
   for (const route of managerReads) {
     const result = await request(route.path, { method: route.method, token: readOnlyToken });
@@ -246,6 +286,15 @@ try {
   }
 
   const fullAccessToken = managerToken("full_access");
+
+  trustedDevice.manager_id = reassignedManagerId;
+  trustedDevice.manager = { ...trustedManager, manager_id: reassignedManagerId };
+  const reassigned = await request(managerReads[0].path, { token: fullAccessToken });
+  assert.equal(reassigned.status, 403, "a manager-device reassignment must invalidate an already issued session");
+  assert.match(reassigned.body.error, /assignment changed/i);
+  trustedDevice.manager_id = managerId;
+  trustedDevice.manager = trustedManager;
+
   for (const route of managerMutations) {
     const callsBefore = databaseCalls.length;
     const result = await request(route.path, {

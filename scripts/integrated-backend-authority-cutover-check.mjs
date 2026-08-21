@@ -32,15 +32,29 @@ const phaseK = "20260813173000_device_sync_actor_groups.sql";
 const phaseL = "20260813190000_release_phone_transport_and_offline_activation_closure.sql";
 const phaseM = "20260813210000_custodial_u4_ops_closure.sql";
 const phaseN = "20260814224034_reconcile_static_weekly_day_change_receipts.sql";
+const restoreGeneration = "20260820125325_custodial_disaster_restore_generation_authority.sql";
+const applicationReadAuthority = "20260820133000_create_application_read_authority.sql";
+const ownerSqlProxyRetirement = "20260820133100_retire_owner_sql_proxy.sql";
+const managerTrustBoundary = "20260820143000_bound_ops_manager_device_trust.sql";
+const functionAuthorityRecovery = "20260820143200_finalize_function_authority_recovery.sql";
 const phaseO = "20260820153000_append_only_cleaning_identity_corrections.sql";
 const phaseP = "20260820154000_late_gps_is_advisory_only.sql";
+const terminalWriterDetection = "20260820154500_precise_terminal_writer_detection.sql";
+const releaseRecoveryRebind = "20260820155000_rebind_release_recovery_inventory_to_current_authority.sql";
 const pendingProductionMigrations = [
-  retirementA, retirementB, retirementC, phaseA, phaseB, phaseC, phaseD, phaseE,
-  schedulerA, schedulerB, schedulerC, schedulerD, schedulerE, schedulerF,
-  phaseF, phaseG, phaseH, phaseI, phaseJ, phaseK, phaseL, phaseM, phaseN, phaseO, phaseP,
+  restoreGeneration,
+  applicationReadAuthority,
+  ownerSqlProxyRetirement,
+  managerTrustBoundary,
+  functionAuthorityRecovery,
+  phaseO,
+  phaseP,
+  terminalWriterDetection,
+  releaseRecoveryRebind,
 ];
 const releaseInputPath = "release/integrated-backend-authority-input.json";
 const releaseEvidencePath = "release/integrated-backend-authority-evidence.json";
+const pendingMigrationPlanPath = "release/pending-production-migration-plan.json";
 const forbiddenGitEnvironment = [
   "GIT_DIR",
   "GIT_WORK_TREE",
@@ -278,10 +292,11 @@ assert.equal(evidenceBlob.object_id, acceptance.backend_evidence_blob_sha, "sign
 assert.equal(hash(evidenceBlob.bytes), acceptance.backend_evidence_sha256, "signed release attestation names the wrong evidence digest");
 
 const blobByPath = new Map(expectedBlobs.map((blob) => [blob.path, blob]));
-for (const required of [releaseInputPath, "scripts/refresh-integrated-backend-authority-release.mjs", "scripts/integrated-backend-authority-cutover-check.mjs", "scripts/integrated-backend-authority-release-provenance-tests.mjs", "scripts/integrated-backend-authority-suite-order-tests.mjs", "scripts/final-operational-correction-database-tests.mjs", "scripts/named-manager-messenger-retirement-correction-database-tests.mjs", "scripts/empty-database-rebuild-check.mjs", "scripts/refresh-schema-fingerprint.mjs", "src/index.js", "src/offline-authority-http.js", "src/scan-evidence.js", ...pendingProductionMigrations.map((name) => `supabase/migrations/${name}`)]) {
+for (const required of [releaseInputPath, pendingMigrationPlanPath, "scripts/refresh-integrated-backend-authority-release.mjs", "scripts/integrated-backend-authority-cutover-check.mjs", "scripts/integrated-backend-authority-release-provenance-tests.mjs", "scripts/integrated-backend-authority-suite-order-tests.mjs", "scripts/final-operational-correction-database-tests.mjs", "scripts/named-manager-messenger-retirement-correction-database-tests.mjs", "scripts/empty-database-rebuild-check.mjs", "scripts/refresh-schema-fingerprint.mjs", "src/index.js", "src/offline-authority-http.js", "src/scan-evidence.js", ...pendingProductionMigrations.map((name) => `supabase/migrations/${name}`)]) {
   assert.ok(blobByPath.has(required), `immutable acceptance input omitted authority path ${required}`);
 }
 const input = parseJsonBlob(blobByPath.get(releaseInputPath), "release authority input");
+const pendingMigrationPlan = parseJsonBlob(blobByPath.get(pendingMigrationPlanPath), "pending production migration plan");
 const releaseEvidence = parseJsonBlob(evidenceBlob, "release evidence");
 const index = blobByPath.get("src/index.js").bytes.toString("utf8");
 const phaseCText = blobByPath.get(`supabase/migrations/${phaseC}`).bytes.toString("utf8");
@@ -305,36 +320,31 @@ assert.equal(input.release_contract_version, "offline-authority.v5");
 assert.deepEqual(input.cutover.phase_order, [
   "prepare distinct CUSTODIAL_BACKEND_PROOF_SECRET and CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET values (minimum 32 characters each) without exposing either value",
   "run npm run release:populated-schema:preflight through the read-only production MCP and preserve its exact source-fingerprint receipt before any migration",
-  `apply ${retirementA}`,
-  `apply ${retirementB}`,
-  `apply ${retirementC}`,
-  `apply ${phaseA}`,
-  "configure the database SHA-256 digest for CUSTODIAL_BACKEND_PROOF_SECRET through custodial_configure_backend_execution_key before deploying the bridge backend",
-  `apply ${phaseB}`,
-  `apply ${phaseC}`,
-  `apply ${phaseD}`,
-  `apply ${phaseE}`,
-  `apply ${schedulerA}`,
-  `apply ${schedulerB}`,
-  `apply ${schedulerC}`,
-  `apply ${schedulerD}`,
-  `apply ${schedulerE}`,
-  `apply ${schedulerF}`,
-  `apply ${phaseF}`,
-  `apply ${phaseG}`,
-  `apply ${phaseH}`,
-  `apply ${phaseI}`,
-  `apply ${phaseJ}`,
-  `apply ${phaseK}`,
-  `apply ${phaseL}`,
-  "configure the database SHA-256 digest for CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET through custodial_configure_native_route_proof_key before native canary traffic",
-  `apply ${phaseM}`,
-  `apply ${phaseN}`,
-  `apply ${phaseO}`,
-  `apply ${phaseP}`,
+  `verify production project, migration head, catalog/privilege fingerprint, backup receipt, and exact source attestation against ${pendingMigrationPlanPath}`,
+  `apply only the nine hash-bound migrations in ${pendingMigrationPlanPath}, in exact order, stopping after any failed phase postcheck`,
   "deploy the canonical-only backend only after all authoritative procedures above are present and verified; missing canonical writers fail closed",
   "require a green authority health gate and direct-DML denial probes before routing traffic",
 ]);
+assert.equal(input.cutover.production_migration_plan, pendingMigrationPlanPath);
+assert.equal(pendingMigrationPlan.artifact, "pending-production-migration-plan.v1");
+assert.equal(pendingMigrationPlan.project_ref, "rqquvtjdmugpigbndmne");
+assert.equal(pendingMigrationPlan.observed_production?.migration_head, "20260820121117");
+assert.equal(pendingMigrationPlan.observed_production?.catalog_privilege_fingerprint, "27427ec8232b9871507f5954236c2f1a95613860fee180c818dce685a9c9bede");
+assert.equal(pendingMigrationPlan.target?.migration_head, "20260820155000");
+assert.equal(pendingMigrationPlan.target?.canonical_schema_fingerprint, schemaFingerprint);
+assert.equal(pendingMigrationPlan.source_binding?.kind, "external_exact_head_release_attestation");
+assert.equal(pendingMigrationPlan.authorization?.production_apply_authorized, false);
+assert.equal(pendingMigrationPlan.authorization?.sequence_policy, "strict_order_stop_on_first_failure");
+assert.equal(pendingMigrationPlan.migrations?.length, pendingProductionMigrations.length);
+assert.deepEqual(pendingMigrationPlan.migrations.map(({ file }) => file), pendingProductionMigrations);
+for (const [index, migration] of pendingMigrationPlan.migrations.entries()) {
+  assert.equal(migration.order, index + 1, `pending migration order is not contiguous at ${migration.file}`);
+  assert.match(String(migration.phase || ""), /^[a-z][a-z0-9_]+$/, `pending migration phase is invalid at ${migration.file}`);
+  assert.match(String(migration.sha256 || ""), /^[a-f0-9]{64}$/, `pending migration digest is invalid at ${migration.file}`);
+  const blob = blobByPath.get(`supabase/migrations/${migration.file}`);
+  assert.ok(blob, `pending migration is absent from the exact backend tree: ${migration.file}`);
+  assert.equal(hash(blob.bytes), migration.sha256, `pending migration digest mismatch: ${migration.file}`);
+}
 assert.equal(input.cutover.source_identity.kind, "external_signed_release_attestation");
 assert.equal(input.cutover.source_identity.generated_evidence_path, releaseEvidencePath);
 assert.equal(input.cutover.source_identity.generated_evidence_excluded_from_content_identity, true);

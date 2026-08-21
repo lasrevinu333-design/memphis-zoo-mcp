@@ -187,12 +187,43 @@ const authorizationEnv = {
   OPS_MANAGER_SESSION_SECRET: "operational-analytics-write-authorization-contract-secret",
 };
 let unauthorizedDatabaseCall = false;
+const analyticsCredentialId = "30000000-0000-4000-8000-000000000002";
+const analyticsDeviceId = "ANALYTICS_MANAGER_PHONE";
+const trustedDeviceRow = {
+  credential_id: analyticsCredentialId,
+  device_id: analyticsDeviceId,
+  device_label: "Analytics Manager Phone",
+  token_hash: "test-only-hash",
+  max_access_level: "full_access",
+  manager_id: managerId,
+  created_at: new Date().toISOString(),
+  last_used_at: null,
+  expires_at: new Date(Date.now() + 90 * 86_400_000).toISOString(),
+  revoked_at: null,
+  revoked_reason: null,
+};
+const trustedManagerRow = {
+  manager_id: managerId,
+  display_name: "Read Only Custodial Manager",
+  roles: ["CUSTODIAL_MANAGER"],
+  active: true,
+  revoked_at: null,
+};
+function trustedLookup(row) {
+  return {
+    select() { return this; },
+    eq() { return this; },
+    async maybeSingle() { return { data: structuredClone(row), error: null }; },
+  };
+}
 const authorizationApp = express();
 authorizationApp.use(express.json());
 installOperationalAnalyticsRoutes(authorizationApp, {
   env: authorizationEnv,
   supabase: {
-    from() {
+    from(table) {
+      if (table === "ops_manager_trusted_devices") return trustedLookup(trustedDeviceRow);
+      if (table === "ops_manager_managers") return trustedLookup(trustedManagerRow);
       unauthorizedDatabaseCall = true;
       throw new Error("read-only inspection request reached the database");
     },
@@ -204,21 +235,39 @@ await new Promise((resolve, reject) => {
   authorizationServer.once("error", reject);
 });
 try {
-  const readOnlyToken = createOpsManagerSession({
-    deviceId: "operational-analytics-read-only-contract",
-    manager: { manager_id: managerId, display_name: "Read Only Custodial Manager", roles: ["CUSTODIAL_MANAGER"] },
+  const operationsFirstToken = createOpsManagerSession({
+    deviceId: "operational-analytics-untrusted-contract",
+    manager: { manager_id: managerId, display_name: "Untrusted Manager", roles: ["CUSTODIAL_MANAGER"] },
     authMode: "operations_first",
-    accessLevel: "read_only",
+    accessLevel: "full_access",
     maximumAccessLevel: "full_access",
     env: authorizationEnv,
   }).token;
   const address = authorizationServer.address();
-  const denied = await fetch(`http://127.0.0.1:${address.port}/analytics-api/inspections`, {
+  let denied = await fetch(`http://127.0.0.1:${address.port}/analytics-api/inspections`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${operationsFirstToken}`, "content-type": "application/json", "idempotency-key": operationId },
+    body: JSON.stringify(input),
+  });
+  let deniedBody = await denied.json();
+  assert.equal(denied.status, 403, "operations-first sessions cannot enter human manager routes");
+  assert.match(deniedBody.error, /named manager device session is required/i);
+
+  const readOnlyToken = createOpsManagerSession({
+    credentialId: analyticsCredentialId,
+    deviceId: analyticsDeviceId,
+    manager: { manager_id: managerId, display_name: "Read Only Custodial Manager", roles: ["CUSTODIAL_MANAGER"] },
+    authMode: "trusted_device",
+    accessLevel: "read_only",
+    maximumAccessLevel: "full_access",
+    env: authorizationEnv,
+  }).token;
+  denied = await fetch(`http://127.0.0.1:${address.port}/analytics-api/inspections`, {
     method: "POST",
     headers: { authorization: `Bearer ${readOnlyToken}`, "content-type": "application/json", "idempotency-key": operationId },
     body: JSON.stringify(input),
   });
-  const deniedBody = await denied.json();
+  deniedBody = await denied.json();
   assert.equal(denied.status, 403, "read-only manager sessions cannot create authoritative inspection evidence");
   assert.match(deniedBody.error, /read-only/i);
   assert.equal(unauthorizedDatabaseCall, false);

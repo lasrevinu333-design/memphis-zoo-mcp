@@ -1,0 +1,98 @@
+{
+  "artifact": "pending-production-migration-plan.v1",
+  "project_ref": "rqquvtjdmugpigbndmne",
+  "observed_production": {
+    "migration_head": "20260820121117",
+    "catalog_privilege_fingerprint": "27427ec8232b9871507f5954236c2f1a95613860fee180c818dce685a9c9bede"
+  },
+  "target": {
+    "migration_head": "20260820155000",
+    "canonical_schema_fingerprint": "6a5ed2cb582ef6d77400ebe2eec5738066b1073b1ed8187ad6615c139e171eaf"
+  },
+  "source_binding": {
+    "kind": "external_exact_head_release_attestation",
+    "rule": "The production approval package must bind the exact backend commit and tree containing this plan, all migration blobs, the generated release evidence, and the observed production identity. This repository file does not self-assert its future commit identity."
+  },
+  "authorization": {
+    "production_apply_authorized": false,
+    "required_boundary": "Eric approval of the final exact-head production mutation package",
+    "sequence_policy": "strict_order_stop_on_first_failure",
+    "rollback_policy": "forward_recovery_only; do not down-migrate authority or operational evidence"
+  },
+  "preconditions": [
+    "production project_ref equals rqquvtjdmugpigbndmne",
+    "production migration head equals 20260820121117",
+    "production catalog and privilege fingerprint equals 27427ec8232b9871507f5954236c2f1a95613860fee180c818dce685a9c9bede",
+    "a current backup and restore-readiness receipt is accepted",
+    "the exact backend commit/tree and every migration digest below are externally attested",
+    "the application is placed in the bounded release state required by the affected migration phase",
+    "each phase postcheck passes before the next phase begins"
+  ],
+  "migrations": [
+    {
+      "order": 1,
+      "phase": "restore_generation_authority",
+      "file": "20260820125325_custodial_disaster_restore_generation_authority.sql",
+      "sha256": "315853219694bc7c05e26fd83b10f673acd561a4507bafb4229fa861cf004715"
+    },
+    {
+      "order": 2,
+      "phase": "read_authority",
+      "file": "20260820133000_create_application_read_authority.sql",
+      "sha256": "cfc83cc5baab0a79a2d8d2cc432f34509aef3f04558072d81d825b2f07f3ebe9"
+    },
+    {
+      "order": 3,
+      "phase": "read_authority",
+      "file": "20260820133100_retire_owner_sql_proxy.sql",
+      "sha256": "064a882c50bce17a2451ad223c306eaea9d36e1cca527449ce4f4afc3220a7b3"
+    },
+    {
+      "order": 4,
+      "phase": "manager_and_function_authority",
+      "file": "20260820143000_bound_ops_manager_device_trust.sql",
+      "sha256": "0eeee019d724b4bba79170ebe223ec6cee5d3e5dec921f436447e310a1d3530f"
+    },
+    {
+      "order": 5,
+      "phase": "manager_and_function_authority",
+      "file": "20260820143200_finalize_function_authority_recovery.sql",
+      "sha256": "d202ce1aca1d933130dc5a506ad4997be186218f7ce47e5b73aafa9fe2dfdb8e"
+    },
+    {
+      "order": 6,
+      "phase": "immutable_operational_truth",
+      "file": "20260820153000_append_only_cleaning_identity_corrections.sql",
+      "sha256": "37638e894bcd36a2b3d31b4f54a243d833d33fad923ca923e7d5821c46a8e3fe"
+    },
+    {
+      "order": 7,
+      "phase": "immutable_operational_truth",
+      "file": "20260820154000_late_gps_is_advisory_only.sql",
+      "sha256": "b6708def2b7a24178fbbc944d4ccba18fa82a54c1e24b2530d78c1738d75db0c"
+    },
+    {
+      "order": 8,
+      "phase": "terminal_inventory_rebind",
+      "file": "20260820154500_precise_terminal_writer_detection.sql",
+      "sha256": "b0b58afbda38eef898c16473c28135a621b9bb18baad31024d4dd86d234c4a12"
+    },
+    {
+      "order": 9,
+      "phase": "terminal_inventory_rebind",
+      "file": "20260820155000_rebind_release_recovery_inventory_to_current_authority.sql",
+      "sha256": "9e79fca19dc8a6b65578b3b9c7a8698be970ded9bbd760eaef3424db8b0136e6"
+    }
+  ],
+  "postconditions": [
+    "production migration head equals 20260820155000",
+    "production catalog and privilege fingerprint equals the exact externally attested target identity",
+    "canonical schema fingerprint equals 6a5ed2cb582ef6d77400ebe2eec5738066b1073b1ed8187ad6615c139e171eaf",
+    "arbitrary owner-authority read SQL is unavailable to application and service roles",
+    "manager device trust is bounded and current-association enforced",
+    "original cleaning identity is immutable and corrections are append-only",
+    "late GPS is advisory rather than active-work evidence",
+    "terminal-writer and release-recovery inventories match current authority",
+    "no unexpected catalog, privilege, configuration, or row diff exists"
+  ]
+}

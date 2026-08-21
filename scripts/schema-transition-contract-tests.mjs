@@ -15,7 +15,7 @@ import { sanitizeReadOnlySql } from "../src/supabase/read.js";
 const input = JSON.parse(readFileSync(new URL("../release/schema-alignment-input.json", import.meta.url), "utf8"));
 const frontend = JSON.parse(readFileSync(new URL("../release/frontend-release-manifest.json", import.meta.url), "utf8"));
 const target = readFileSync(new URL("../supabase/canonical/schema-fingerprint.txt", import.meta.url), "utf8").trim();
-const now = Date.parse("2026-08-13T00:00:00Z");
+const now = Date.parse("2026-08-21T00:00:00Z");
 
 assert.equal(frontend.frontend_commit_sha, input.frontend_commit_sha, "the backend manifest must pin the exact audited frontend");
 assert.equal(frontend.frontend_commit_state, "final_pair_bound");
