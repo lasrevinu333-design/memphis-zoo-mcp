@@ -422,7 +422,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "1f9d6250a66c219ee3a6e829afc791f3147b9ca2"
+        "object_id": "05be374521cfabc5bf7a1508dba5d532152a4908"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -437,7 +437,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "855f469e1a0dd933b7c97c022c3905faf9e75699"
+        "object_id": "caa0114b08359aff24cd4924dad954f6969ccc76"
       },
       {
         "path": "research/european_herbalism_through_paracelsus.md",
@@ -577,7 +577,7 @@
       {
         "path": "scripts/custodial-repair-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "6b35b0c6aa6080212127676155032f9b7ee73942"
+        "object_id": "12e9f9a0afab2ba8398ef1ac35aef0fb930913f6"
       },
       {
         "path": "scripts/custodial-u4-migration-convergence-tests.mjs",
@@ -737,7 +737,7 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "c0ddceae06f9a52d2a59a8ba0b85c9e006d27f0f"
+        "object_id": "6d4facbdcfab4787047585ec7f43e7ffb4235e33"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
@@ -897,7 +897,7 @@
       {
         "path": "scripts/operations-leadership-mobile-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "ded66dfefc41e9a9ab2ccf54c955a4f0bca9e0c4"
+        "object_id": "8526875b06a6016a0cef4f3fc5433bcc9fe98eb9"
       },
       {
         "path": "scripts/operations-leadership-mobile-database-tests.mjs",
@@ -1007,7 +1007,7 @@
       {
         "path": "scripts/release-closure-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "df88c044b356d805455e916766b6d72f2a439b9d"
+        "object_id": "8b3d9c44f81e8453b9722eda098640ed8d7d7357"
       },
       {
         "path": "scripts/restore-mutation-gate-tests.mjs",
@@ -1187,7 +1187,7 @@
       {
         "path": "scripts/static-weekly-day-changes-database-tests.mjs",
         "mode": "100644",
-        "object_id": "0eeff99f95b31918232b1be93265873340af788e"
+        "object_id": "cdfd094f1d64846b094b41ca6bf2791261654230"
       },
       {
         "path": "scripts/static-weekly-employee-day-route-tests.mjs",
@@ -1212,7 +1212,7 @@
       {
         "path": "scripts/static-weekly-schedule-compiler-tests.mjs",
         "mode": "100644",
-        "object_id": "cdc29a9766de7ba9809807393ffc4ee5743f39e0"
+        "object_id": "471ac2d80d0cf377ac4ed79299e483a063debb38"
       },
       {
         "path": "scripts/static-weekly-schedule-concurrency-tests.mjs",
@@ -1772,7 +1772,7 @@
       {
         "path": "src/static-weekly-schedule-program.js",
         "mode": "100644",
-        "object_id": "5142d5037ffb56cdcefb27366d6cb4df78910a7e"
+        "object_id": "090a3c534ef46d9f66c7afb97c2a7235915161d2"
       },
       {
         "path": "src/static-weekly-schedule-solver-worker.js",
@@ -1787,7 +1787,7 @@
       {
         "path": "src/static-weekly-schedule-verifier.js",
         "mode": "100644",
-        "object_id": "bc264b8571ffbb1c76e14d2679a27b6fecee62c3"
+        "object_id": "d9090791b372f8f2f80ab2b21fac7919a05816d5"
       },
       {
         "path": "src/supabase/client.js",
