@@ -32,6 +32,7 @@ const deviceUuid = "00000000-0000-4000-8000-000000000301";
 const managerCredential = "00000000-0000-4000-8000-000000000401";
 const archivedSession = "00000000-0000-4000-8000-000000000501";
 const currentSession = "00000000-0000-4000-8000-000000000502";
+const currentCorrection = "00000000-0000-4000-8000-000000000503";
 const work = mkdtempSync(join(tmpdir(), "memphis-zoo-restore-drill-"));
 const databaseDir = join(work, "database");
 const inventoryDir = join(work, "inventory");
@@ -49,7 +50,8 @@ const archiveRows = {
   "public.devices": [{ id: deviceUuid, device_id: "KIOSK_08", active: true, assigned_employee_id: oldEmployee, assignment_epoch: 1, last_seen_at: null, updated_at: "2026-08-01T12:00:00Z" }],
   "public.employees": [{ id: oldEmployee, employee_code: "OLD", display_name: "Archived Employee", active: true, role: "staff", updated_at: "2026-08-01T12:00:00Z" }],
   "public.ops_manager_trusted_devices": [{ credential_id: managerCredential, device_id: "MANAGER_01", device_label: "Archived Manager", max_access_level: "full_access", created_at: "2026-08-01T12:00:00Z", last_used_at: null, expires_at: "2030-01-01T00:00:00Z", revoked_at: null, revoked_reason: null }],
-  "public.sessions": [{ id: archivedSession, session_uuid: "archived-session", client_session_id: "archived-client-session", location_id: deviceUuid, employee_id: oldEmployee, device_id: deviceUuid, status: "completed", started_at: "2026-08-01T12:00:00Z", ended_at: "2026-08-01T13:00:00Z", created_at: "2026-08-01T12:00:00Z", updated_at: "2026-08-01T13:00:00Z" }],
+  "public.sessions": [{ id: archivedSession, session_uuid: "archived-session", client_session_id: "archived-client-session", location_id: deviceUuid, employee_id: oldEmployee, device_id: deviceUuid, employee_name_snapshot: "Archived Employee", location_code_snapshot: "ARCHIVE", location_name_snapshot: "Archived Location", device_identifier_snapshot: "KIOSK_08", device_name_snapshot: "Archived Employee", assignment_epoch_snapshot: 1, identity_snapshot_provenance: "session_create", status: "completed", started_at: "2026-08-01T12:00:00Z", ended_at: "2026-08-01T13:00:00Z", created_at: "2026-08-01T12:00:00Z", updated_at: "2026-08-01T13:00:00Z" }],
+  "public.custodial_session_corrections": [],
   "public.completion_responses": [],
   "public.release_deployment_manifest": [{ release_id: "release-archived", backend_commit: "a".repeat(40), frontend_commit: "b".repeat(40), migration_head: "20260801000000", migration_manifest_sha256: "c".repeat(64), environment_contract_version: "fixture-v1", status: "deployed", details_json: {}, created_at: "2026-08-01T00:00:00Z", deployed_at: "2026-08-01T00:00:00Z" }],
   "auth.sessions": [{ id: "00000000-0000-4000-8000-000000000601" }],
@@ -61,7 +63,8 @@ const catalog = [
   ["public", "devices", ["id", "device_id", "active", "assigned_employee_id", "assignment_epoch", "last_seen_at", "updated_at"]],
   ["public", "employees", ["id", "employee_code", "display_name", "active", "role", "updated_at"]],
   ["public", "ops_manager_trusted_devices", ["credential_id", "device_id", "device_label", "max_access_level", "created_at", "last_used_at", "expires_at", "revoked_at", "revoked_reason"]],
-  ["public", "sessions", ["id", "session_uuid", "client_session_id", "location_id", "employee_id", "device_id", "status", "started_at", "ended_at", "created_at", "updated_at"]],
+  ["public", "sessions", ["id", "session_uuid", "client_session_id", "location_id", "employee_id", "device_id", "employee_name_snapshot", "location_code_snapshot", "location_name_snapshot", "device_identifier_snapshot", "device_name_snapshot", "assignment_epoch_snapshot", "identity_snapshot_provenance", "status", "started_at", "ended_at", "created_at", "updated_at"]],
+  ["public", "custodial_session_corrections", ["correction_id", "operation_id", "request_fingerprint", "session_id", "corrected_by_manager_id", "corrected_by_manager_name_snapshot", "reason", "changed_fields", "effective_employee_id", "effective_employee_name_snapshot", "effective_location_id", "effective_location_code_snapshot", "effective_location_name_snapshot", "effective_device_id", "effective_device_identifier_snapshot", "effective_device_name_snapshot", "effective_assignment_epoch_snapshot", "effective_started_at", "effective_ended_at", "created_at"]],
   ["public", "completion_responses", ["id", "session_id", "client_completion_id", "location_id", "submitted_by_employee_id", "device_id", "submitted_at", "created_at"]],
   ["public", "release_deployment_manifest", ["release_id", "backend_commit", "frontend_commit", "migration_head", "migration_manifest_sha256", "environment_contract_version", "status", "details_json", "created_at", "deployed_at"]],
   ["auth", "sessions", ["id"]],
@@ -133,7 +136,8 @@ async function setupTarget(databaseName, { divergent }) {
     await target.query("create table public.devices(id uuid primary key,device_id text,active boolean,assigned_employee_id uuid,assignment_epoch integer,last_seen_at timestamptz,updated_at timestamptz)");
     await target.query("create table public.employees(id uuid primary key,employee_code text,display_name text,active boolean,role text,updated_at timestamptz)");
     await target.query("create table public.ops_manager_trusted_devices(credential_id uuid primary key,device_id text,device_label text,max_access_level text,created_at timestamptz,last_used_at timestamptz,expires_at timestamptz,revoked_at timestamptz,revoked_reason text)");
-    await target.query("create table public.sessions(id uuid primary key,session_uuid text,client_session_id text,location_id uuid,employee_id uuid,device_id uuid,status text,started_at timestamptz,ended_at timestamptz,created_at timestamptz,updated_at timestamptz)");
+    await target.query("create table public.sessions(id uuid primary key,session_uuid text,client_session_id text,location_id uuid,employee_id uuid,device_id uuid,employee_name_snapshot text,location_code_snapshot text,location_name_snapshot text,device_identifier_snapshot text,device_name_snapshot text,assignment_epoch_snapshot bigint,identity_snapshot_provenance text,status text,started_at timestamptz,ended_at timestamptz,created_at timestamptz,updated_at timestamptz)");
+    await target.query("create table public.custodial_session_corrections(correction_id uuid primary key,operation_id uuid,request_fingerprint text,session_id uuid,corrected_by_manager_id uuid,corrected_by_manager_name_snapshot text,reason text,changed_fields text[],effective_employee_id uuid,effective_employee_name_snapshot text,effective_location_id uuid,effective_location_code_snapshot text,effective_location_name_snapshot text,effective_device_id uuid,effective_device_identifier_snapshot text,effective_device_name_snapshot text,effective_assignment_epoch_snapshot bigint,effective_started_at timestamptz,effective_ended_at timestamptz,created_at timestamptz)");
     await target.query("create table public.completion_responses(id uuid primary key,session_id uuid,client_completion_id text,location_id uuid,submitted_by_employee_id uuid,device_id uuid,submitted_at timestamptz,created_at timestamptz)");
     await target.query("create table public.release_deployment_manifest(release_id text primary key,backend_commit text,frontend_commit text,migration_head text,migration_manifest_sha256 text,environment_contract_version text,status text,details_json jsonb,created_at timestamptz,deployed_at timestamptz)");
     await target.query("create table auth.sessions(id uuid primary key)");
@@ -150,7 +154,10 @@ async function setupTarget(databaseName, { divergent }) {
         await target.query(`insert into ${pg.escapeIdentifier(schemaName)}.${pg.escapeIdentifier(tableName)}(${names.map(pg.escapeIdentifier).join(",")}) values (${names.map((_, index) => `$${index + 1}`).join(",")})`, Object.values(current));
       }
     }
-    if (divergent) await target.query("insert into public.sessions values ($1,'post-backup','post-backup-client',$2,$3,$2,'completed','2026-08-19T12:00:00Z','2026-08-19T13:00:00Z','2026-08-19T12:00:00Z','2026-08-19T13:00:00Z')", [currentSession, deviceUuid, currentEmployee]);
+    if (divergent) {
+      await target.query("insert into public.sessions values ($1,'post-backup','post-backup-client',$2,$3,$2,'Current Employee','CURRENT','Current Location','KIOSK_08','Current Employee',2,'session_create','completed','2026-08-19T12:00:00Z','2026-08-19T13:00:00Z','2026-08-19T12:00:00Z','2026-08-19T13:00:00Z')", [currentSession, deviceUuid, currentEmployee]);
+      await target.query("insert into public.custodial_session_corrections values ($1,$1,$2,$3,$4,'Current Manager','Corrected after backup',array['employee'],$5,'Current Employee',$6,'CURRENT','Current Location',$6,'KIOSK_08','Current Employee',2,'2026-08-19T12:00:00Z','2026-08-19T13:00:00Z','2026-08-19T14:00:00Z')", [currentCorrection, "3".repeat(64), archivedSession, managerCredential, currentEmployee, deviceUuid]);
+    }
     await target.query("insert into public.audit3_restore_fixture values (1,'stale target row')");
     await target.query(migrationSql);
   } finally { await target.end(); }
@@ -218,6 +225,8 @@ try {
     assert.equal(credential.rows[0].revoked_reason, "disaster_restore_generation_1");
     assert.equal((await divergent.query("select count(*)::int count from auth.sessions")).rows[0].count, 0, "restored auth sessions must be invalidated");
     assert.equal((await divergent.query("select count(*)::int count from custodial_dr.restore_discrepancies where status='OPEN'")).rows[0].count > 0, true, "assignment/status/post-backup differences must hold the application paused");
+    assert.equal((await divergent.query("select count(*)::int count from custodial_dr.restore_discrepancies where status='OPEN' and category='cleaning_session_corrections'")).rows[0].count, 1, "post-backup append-only cleaning corrections must hold the application paused");
+    assert.equal((await divergent.query("select count(*)::int count from custodial_dr.restore_discrepancies where status='OPEN' and category='cleaning_sessions'")).rows[0].count, 1, "post-backup immutable cleaning identity must hold the application paused");
     assert.equal((await divergent.query("select count(*)::int count from public.release_deployment_manifest where release_id='release-current'")).rows[0].count, 1, "the current release identity must survive an old data restore");
   } finally { await divergent.end(); }
 

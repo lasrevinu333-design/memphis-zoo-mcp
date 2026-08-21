@@ -1,6 +1,6 @@
 {
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "bc1293727e451a5aff6d240f967c0454d5286783",
+  "frontend_commit_sha": "77d74bd9001c8ef0b8761cbb564832064a9bcaed",
   "frontend_commit_state": "final_pair_bound",
   "backend_minimum_version": "release-2026.07.19.custodial-v3.12",
   "schema_fingerprint": "6a5ed2cb582ef6d77400ebe2eec5738066b1073b1ed8187ad6615c139e171eaf",
@@ -21,7 +21,7 @@
     "ops_manager_auth": "ops-manager-auth.v5.named-leadership",
     "gemini_console": "gemini-console.v2",
     "guest_reports": "guest-reports.v2.approval-gated",
-    "feedback": "feedback.v2.json-triage"
+    "feedback": "feedback.v3.enrolled-authority"
   },
   "queue_compatibility_versions": {
     "scan": [

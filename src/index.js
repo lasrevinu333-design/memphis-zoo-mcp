@@ -19,6 +19,7 @@ import { assertConfiguredReleaseIdentity, buildReleaseManifest } from "./release
 import { observeProductionSchemaIdentity } from "./production-schema-identity.js";
 import { assertOpsManagerSessionSecret, authenticateOpsAccessRequest, createSupabaseTrustedDeviceStore, installSharedAuthRoutes, makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
 import { assertServerAssignedActor, authenticatedManagerActor } from "./manager-authority.js";
+import { authoritativeFeedbackPayload, makeFeedbackSubmitAuthority } from "./feedback-authority.js";
 import { makeMcpConnectorMiddleware } from "./auth/mcp-connector-auth.js";
 import {
   installDeviceCredentialRoutes,
@@ -133,7 +134,7 @@ const SCHEDULE_CONTRACT_VERSION = "schedule.v2";
 const COVERALL_ASSIGNMENTS_CONTRACT_VERSION = "coverall-assignments.v2.secure-links";
 const OPERATIONAL_ANALYTICS_CONTRACT_VERSION = "operational-analytics.v1";
 const GUEST_REPORTS_CONTRACT_VERSION = "guest-reports.v2.approval-gated";
-const FEEDBACK_CONTRACT_VERSION = "feedback.v2.json-triage";
+const FEEDBACK_CONTRACT_VERSION = "feedback.v3.enrolled-authority";
 const OPS_MANAGER_AUTH_CONTRACT_VERSION = "ops-manager-auth.v6.http-only-boundary";
 const GEMINI_CONSOLE_CONTRACT_VERSION = "gemini-console.v2";
 const CANARY_RESTROOM_CODE = "TETM";
@@ -207,6 +208,10 @@ const requireLegacyMcpAuth = makeMcpConnectorMiddleware({
 const requireEmployeeDeviceCredential = makeDeviceCredentialMiddleware({
   supabase: supabaseAdmin,
   runReadOnlySql,
+});
+const requireFeedbackSubmitAuthority = makeFeedbackSubmitAuthority({
+  requireEmployeeDeviceCredential,
+  requireOpsManagerAuth,
 });
 
 function requireDeviceOrOpsAccess(req, res, next) {
@@ -1841,6 +1846,10 @@ function summarizeSystemFeedback({ category, priority, message, hubContext, subm
 async function createSystemFeedbackItem(payload = {}) {
   const normalized = normalizeFeedbackInput(payload);
   const { category, priority, message, submittedBy, hubContext, deviceId, pageUrl } = normalized;
+  const identityVerification = payload.identity_verification && typeof payload.identity_verification === "object"
+    && !Array.isArray(payload.identity_verification)
+    ? payload.identity_verification
+    : { status: "unverified", kind: "public_anonymous" };
   const feedbackId = randomUUID();
   const operationId = String(payload.operation_id || payload.operationId || "").trim();
   if (!isUuid(operationId)) throw Object.assign(new Error("operation_id must be a UUID."), { status: 422 });
@@ -1853,6 +1862,7 @@ async function createSystemFeedbackItem(payload = {}) {
     hubContext,
     deviceId,
     pageUrl,
+    identityVerification,
     imageSha256: validatedImage?.sha256 || null,
   });
   const existingRows = await runReadOnlySql(`
@@ -1879,6 +1889,7 @@ async function createSystemFeedbackItem(payload = {}) {
     submitted_via: "system_feedback",
     user_agent: String(payload.user_agent || "").slice(0, 500) || null,
     page_title: String(payload.page_title || "").slice(0, 200) || null,
+    identity_verification: identityVerification,
     image_attachment: persistedSystemFeedbackImageMetadata(imageAttachment),
   };
   const summary = summarizeSystemFeedback({ category, priority, message, hubContext, submittedBy });
@@ -2491,12 +2502,12 @@ app.post("/feedback-api/reminders/run", async (req, res) => {
     res.status(500).json({ ok: false, error: error?.message || "Feedback reminder sweep failed" });
   }
 });
-app.post("/feedback-api/submit", publicSubmissionRateLimit("feedback"), async (req, res) => {
+app.post("/feedback-api/submit", publicSubmissionRateLimit("feedback"), requireFeedbackSubmitAuthority, async (req, res) => {
   try {
     await ensureSystemFeedbackSchema();
     const operationId = requestOperationId(req);
     const item = await createSystemFeedbackItem({
-      ...(req.body && typeof req.body === "object" ? req.body : {}),
+      ...authoritativeFeedbackPayload(req),
       operation_id: operationId,
       user_agent: String(req.get("user-agent") || "").slice(0, 500),
     });
