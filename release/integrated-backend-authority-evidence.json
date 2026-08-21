@@ -1,14 +1,14 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "4bbcfad6676f70aa5cb4c4cbee40caec05db4705",
+  "frontend_commit_sha": "adcdd00aec9b01aaf9159e808e492e7d3a8bc2e3",
   "frontend_commit_state": "final_pair_bound",
   "schema_fingerprint": "6a5ed2cb582ef6d77400ebe2eec5738066b1073b1ed8187ad6615c139e171eaf",
   "schema_transition": {
-    "transition_id": "custodial-foundation-authority-closure-20260820",
-    "from_fingerprint": "380fcaad7090c704392729bd5811b657db81ff9514fbfe73dd0e130a4bbe8426",
+    "transition_id": "custodial-foundation-authority-cutover-20260821",
+    "from_fingerprint": "c8b6c811c52a3275290c6b8944f3692121c40e92c9efd84c5eb92baff91bc5ac",
     "to_fingerprint": "6a5ed2cb582ef6d77400ebe2eec5738066b1073b1ed8187ad6615c139e171eaf",
-    "expires_at": "2026-08-23T23:59:59Z"
+    "expires_at": "2026-09-03T23:59:59Z"
   },
   "frontend_source_fingerprint": "6a5ed2cb582ef6d77400ebe2eec5738066b1073b1ed8187ad6615c139e171eaf",
   "backend_contract": {
@@ -70,36 +70,12 @@
     "phase_order": [
       "prepare distinct CUSTODIAL_BACKEND_PROOF_SECRET and CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET values (minimum 32 characters each) without exposing either value",
       "run npm run release:populated-schema:preflight through the read-only production MCP and preserve its exact source-fingerprint receipt before any migration",
-      "apply 20260810120000_retire_named_manager_shared_room_authority.sql",
-      "apply 20260810130000_harden_named_manager_retired_archive_and_concurrency.sql",
-      "apply 20260810140000_finalize_named_manager_messenger_retirement_integrity.sql",
-      "apply 20260810143000_offline_actor_occurrence_reconciliation.sql",
-      "configure the database SHA-256 digest for CUSTODIAL_BACKEND_PROOF_SECRET through custodial_configure_backend_execution_key before deploying the bridge backend",
-      "apply 20260810150000_enforce_integrated_backend_authority.sql",
-      "apply 20260810160000_close_offline_authority_integrity_gaps.sql",
-      "apply 20260810170000_finish_offline_authority_operational_closure.sql",
-      "apply 20260810190000_final_integrated_backend_operational_correction.sql",
-      "apply 20260810200000_static_weekly_scheduler_authority_integrated.sql",
-      "apply 20260810210000_static_weekly_scheduler_three_high_foundation_correction.sql",
-      "apply 20260810220000_static_weekly_scheduler_complete_authority_correction.sql",
-      "apply 20260810230000_static_weekly_scheduler_authority_closure_correction.sql",
-      "apply 20260812032055_static_weekly_manager_snapshot.sql",
-      "apply 20260812130000_static_weekly_employee_turnover.sql",
-      "apply 20260813035530_offline_scan_authority_snapshot.sql",
-      "apply 20260813050000_offline_snapshot_operational_truth_closure.sql",
-      "apply 20260813060000_release_canary_operational_recovery.sql",
-      "apply 20260813070000_operational_service_date_foundation.sql",
-      "apply 20260813141806_custodial_operational_boundary_closure.sql",
-      "apply 20260813173000_device_sync_actor_groups.sql",
-      "apply 20260813190000_release_phone_transport_and_offline_activation_closure.sql",
-      "configure the database SHA-256 digest for CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET through custodial_configure_native_route_proof_key before native canary traffic",
-      "apply 20260813210000_custodial_u4_ops_closure.sql",
-      "apply 20260814224034_reconcile_static_weekly_day_change_receipts.sql",
-      "apply 20260820153000_append_only_cleaning_identity_corrections.sql",
-      "apply 20260820154000_late_gps_is_advisory_only.sql",
+      "verify production project, migration head, catalog/privilege fingerprint, backup receipt, and exact source attestation against release/pending-production-migration-plan.json",
+      "apply only the nine hash-bound migrations in release/pending-production-migration-plan.json, in exact order, stopping after any failed phase postcheck",
       "deploy the canonical-only backend only after all authoritative procedures above are present and verified; missing canonical writers fail closed",
       "require a green authority health gate and direct-DML denial probes before routing traffic"
     ],
+    "production_migration_plan": "release/pending-production-migration-plan.json",
     "rollback": {
       "precondition": "retain the exact bridge backend artifact and both release secrets until all authority health and restoration probes are green",
       "action": "pause the exact physical canary through the durable control; if canonical authority is missing or broken, restore the captured known-good function set forward, verify health, then explicitly resume",
@@ -372,7 +348,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "6c79d5b4d3b7d70db3c5d642b5e14c5604aa7e19"
+        "object_id": "6cab80b40d8782b25aab8305e23bd805d021966c"
       },
       {
         "path": "public/moxie-assets/contacts-creekside-animal.png",
@@ -422,12 +398,17 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "05be374521cfabc5bf7a1508dba5d532152a4908"
+        "object_id": "d8a49f8c093c066cfcc32223020c390f0de9ce86"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
         "mode": "100644",
-        "object_id": "5cdc73069cf48c762e7cbac5e8c0f3e33f5a4778"
+        "object_id": "ccaa9194e8a3c171e1016ee97b30bb0398423be0"
+      },
+      {
+        "path": "release/pending-production-migration-plan.json",
+        "mode": "100644",
+        "object_id": "c066548040664cba8f7f493c4e38fd127ec998c7"
       },
       {
         "path": "release/reviewed-migrations/20260809125735_cleaning_inspection_24_hour_freshness.sql",
@@ -437,7 +418,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "caa0114b08359aff24cd4924dad954f6969ccc76"
+        "object_id": "1bbb744b5bbb53c59b2fb7ce15c95b1873caac76"
       },
       {
         "path": "research/european_herbalism_through_paracelsus.md",
@@ -547,7 +528,7 @@
       {
         "path": "scripts/custodial-employee-admin-authorization-tests.mjs",
         "mode": "100644",
-        "object_id": "a2dd11b883372049f056aee012ca9e0a85af4871"
+        "object_id": "06a2c2e8997d50ab684ceb176ccf854cb9039d3c"
       },
       {
         "path": "scripts/custodial-employee-phone-contract-tests.mjs",
@@ -577,7 +558,7 @@
       {
         "path": "scripts/custodial-repair-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "12e9f9a0afab2ba8398ef1ac35aef0fb930913f6"
+        "object_id": "b866ba579d1e01a408ef5422dee9705af82b8548"
       },
       {
         "path": "scripts/custodial-u4-migration-convergence-tests.mjs",
@@ -737,12 +718,12 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "6d4facbdcfab4787047585ec7f43e7ffb4235e33"
+        "object_id": "904d773f476565100d280abcacb346b61389427f"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "def5e92214cd3acd90c65f43e6fb73e167862b35"
+        "object_id": "07a9c1287ce043a6c0338f4855e7262537fe5512"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
@@ -793,6 +774,11 @@
         "path": "scripts/manager-notification-contract-tests.mjs",
         "mode": "100644",
         "object_id": "e5b65f7727260e8fab0d8c550d84ba11a4c445f8"
+      },
+      {
+        "path": "scripts/manager-route-authority-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "e7486739be3fa7772e7e549eb5b2ffe76568f91e"
       },
       {
         "path": "scripts/mcp-connector-auth-tests.mjs",
@@ -882,7 +868,7 @@
       {
         "path": "scripts/operational-analytics-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "7be66ed3ef4150e027f05dd2f0f18d7a31040431"
+        "object_id": "2b92d3774ae36e3c0b96be39e1a38f7fe6df0f44"
       },
       {
         "path": "scripts/operational-analytics-database-tests.mjs",
@@ -897,7 +883,7 @@
       {
         "path": "scripts/operations-leadership-mobile-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "8526875b06a6016a0cef4f3fc5433bcc9fe98eb9"
+        "object_id": "ef21c2eca083ee60242f43634b6aca0c026786bc"
       },
       {
         "path": "scripts/operations-leadership-mobile-database-tests.mjs",
@@ -1007,7 +993,7 @@
       {
         "path": "scripts/release-closure-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "8b3d9c44f81e8453b9722eda098640ed8d7d7357"
+        "object_id": "6384be19a35ad3e4aa2ce6a7bd22ef2012838f0d"
       },
       {
         "path": "scripts/restore-mutation-gate-tests.mjs",
@@ -1072,7 +1058,7 @@
       {
         "path": "scripts/schema-transition-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "c3dc7f00518d50e989e261e6a5abe5a224553852"
+        "object_id": "1cdfb098b30a407f5deaeba4fed75b8feca8db02"
       },
       {
         "path": "scripts/smoke-ai-intent.mjs",
@@ -1522,7 +1508,7 @@
       {
         "path": "src/auth/shared-access-auth.js",
         "mode": "100644",
-        "object_id": "38acd94f546450cf775b4a137785a39a03ae097d"
+        "object_id": "26c35455be1553fb91ba1d67d3ade833c42e2992"
       },
       {
         "path": "src/config/env.js",
@@ -1597,12 +1583,17 @@
       {
         "path": "src/index.js",
         "mode": "100644",
-        "object_id": "03fe300aa05f8c7265357d39ceaae701eab44541"
+        "object_id": "9a4038aa99fd554ba4856210f9ad82eb2c235dd7"
       },
       {
         "path": "src/leadership-bootstrap.js",
         "mode": "100644",
         "object_id": "0e4351db3f9cdcdb67eca643557714c863ed8fab"
+      },
+      {
+        "path": "src/manager-authority.js",
+        "mode": "100644",
+        "object_id": "5311d65d5bdec5046c9896cf31e7b2f61b7ede48"
       },
       {
         "path": "src/manager-notifications.js",
@@ -2900,7 +2891,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 555,
+    "authority_path_count": 558,
     "migration_path_count": 91,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
