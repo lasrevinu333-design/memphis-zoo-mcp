@@ -266,7 +266,11 @@ export function assertOpsManagerSessionSecret(env = process.env) {
   if (secret.length < 32) {
     throw new Error("OPS_MANAGER_SESSION_SECRET must contain at least 32 characters in production.");
   }
-  const independentSecretNames = [
+  const configuredCredentialNames = Object.keys(env).filter((name) => (
+    name !== "OPS_MANAGER_SESSION_SECRET"
+    && /(?:SECRET|TOKEN|PASSWORD|PRIVATE_KEY|PUBLIC_KEY|API_KEY|ACCESS_KEY|SERVICE_ROLE_KEY|DATABASE_URL|DB_URL)$/.test(name)
+  ));
+  const independentSecretNames = Array.from(new Set([
     "DEVICE_CREDENTIAL_SECRET",
     "CUSTODIAL_BACKEND_PROOF_SECRET",
     "CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET",
@@ -297,7 +301,8 @@ export function assertOpsManagerSessionSecret(env = process.env) {
     "GUEST_MARKETING_REVIEW_SECRET",
     "MEMPHIS_RELEASE_SCHEMA_IDENTITY_TOKEN",
     "GEMINI_CONTROLLED_REPAIR_WORKER_TOKEN",
-  ];
+    ...configuredCredentialNames,
+  ]));
   const reusedName = independentSecretNames.find((name) => {
     const candidate = String(env[name] || "").trim();
     return candidate && safeEqual(secret, candidate);

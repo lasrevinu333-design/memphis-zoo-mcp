@@ -89,6 +89,22 @@ function parseJsonCommand(content) {
   }
 }
 
+export function resolveCompatibilityExpectedSha(expectedSha, command = {}) {
+  const authoritativeSha = String(expectedSha || "").trim();
+  if (!authoritativeSha) {
+    throw new Error("The top-level expected_sha is required for every existing-file compatibility command.");
+  }
+
+  const embeddedShas = [command?.expected_sha, command?.expectedSha]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+  if (embeddedShas.some((embeddedSha) => embeddedSha !== authoritativeSha)) {
+    throw new Error("Embedded expected_sha conflicts with the authoritative top-level expected_sha.");
+  }
+
+  return authoritativeSha;
+}
+
 function pathSummary(path, result) {
   if (!result) return { path, exists: false };
   if (Array.isArray(result)) return { path, exists: true, type: "directory", entries: result.length };
@@ -353,17 +369,17 @@ export function registerGithubTools(server) {
     async ({ repo, path, content, find, replace, commit_message, branch, expected_sha, occurrence = "first", expected_matches, dry_run = true }) => {
       const command = parseJsonCommand(content);
       if (command?.op === "restore_file_from_ref" || command?.op === "restore_from_ref") {
-        const result = await restoreFileFromRef({ github: github(), repo, path, sourceRef: command.source_ref || command.sourceRef, commitMessage: commitMessage(commit_message, "Restore file from ref via MCP"), branch, expectedSha: command.expected_sha || command.expectedSha || expected_sha, dryRun: command.dry_run ?? command.dryRun ?? dry_run });
+        const result = await restoreFileFromRef({ github: github(), repo, path, sourceRef: command.source_ref || command.sourceRef, commitMessage: commitMessage(commit_message, "Restore file from ref via MCP"), branch, expectedSha: resolveCompatibilityExpectedSha(expected_sha, command), dryRun: command.dry_run ?? command.dryRun ?? dry_run });
         return jsonResponse(result);
       }
       if (command?.op === "replace_many") {
-        const result = await replaceManyInFile({ github: github(), repo, path, replacements: command.replacements, commitMessage: commitMessage(commit_message, "Replace multiple text blocks via MCP"), branch, expectedSha: command.expected_sha || command.expectedSha || expected_sha, dryRun: command.dry_run ?? command.dryRun ?? dry_run });
+        const result = await replaceManyInFile({ github: github(), repo, path, replacements: command.replacements, commitMessage: commitMessage(commit_message, "Replace multiple text blocks via MCP"), branch, expectedSha: resolveCompatibilityExpectedSha(expected_sha, command), dryRun: command.dry_run ?? command.dryRun ?? dry_run });
         return jsonResponse(result);
       }
       if (command?.op === "replace_text") {
         find = command.find;
         replace = command.replace;
-        expected_sha = command.expected_sha || command.expectedSha || expected_sha;
+        expected_sha = resolveCompatibilityExpectedSha(expected_sha, command);
         occurrence = command.occurrence || occurrence;
         expected_matches = command.expected_matches || command.expectedMatches || expected_matches;
         dry_run = command.dry_run ?? command.dryRun ?? dry_run;

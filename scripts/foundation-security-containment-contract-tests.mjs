@@ -8,6 +8,7 @@ import {
   githubUpdateFileInputSchema,
   githubWriteFileInputSchema,
 } from "../src/mcp/schemas.js";
+import { resolveCompatibilityExpectedSha } from "../src/mcp/github-tools.js";
 
 const migration = await readFile(new URL(
   "../supabase/migrations/20260820120831_contain_release_recovery_ddl_authority.sql",
@@ -36,6 +37,31 @@ for (const schema of [
 assert.equal(githubWriteFileInputSchema.expected_sha.safeParse(undefined).success, true,
   "new-file creation does not have an existing SHA to pin");
 assert.match(githubTools, /expected_sha is required for every GitHub file deletion/i);
+assert.equal(
+  (githubTools.match(/resolveCompatibilityExpectedSha\(expected_sha, command\)/g) || []).length,
+  3,
+  "replace_text, replace_many, and restore compatibility commands must all use the top-level SHA guard",
+);
+
+for (const op of ["replace_text", "replace_many", "restore_file_from_ref"]) {
+  assert.throws(
+    () => resolveCompatibilityExpectedSha("stale-top-level-sha", {
+      op,
+      expected_sha: "current-embedded-sha",
+    }),
+    /conflicts with the authoritative top-level expected_sha/i,
+    `${op} must reject conflicting embedded SHA authority`,
+  );
+  assert.equal(
+    resolveCompatibilityExpectedSha("authoritative-sha", {
+      op,
+      expected_sha: "authoritative-sha",
+      expectedSha: "authoritative-sha",
+    }),
+    "authoritative-sha",
+    `${op} must preserve the top-level expected_sha when aliases agree`,
+  );
+}
 
 const existing = {
   type: "file",
