@@ -19,6 +19,10 @@ const retirementMigration = await readFile(new URL(
   "../supabase/migrations/20260820133100_retire_owner_sql_proxy.sql",
   import.meta.url,
 ), "utf8");
+const cronCatalogMigration = await readFile(new URL(
+  "../supabase/migrations/20260822142500_grant_readonly_cron_catalog_observation.sql",
+  import.meta.url,
+), "utf8");
 const readSource = await readFile(new URL("../src/supabase/read.js", import.meta.url), "utf8");
 const indexSource = await readFile(new URL("../src/index.js", import.meta.url), "utf8");
 const supabaseRootCa = await readFile(new URL("../certs/supabase-root-2021-ca.pem", import.meta.url), "utf8");
@@ -72,6 +76,16 @@ do $$ begin create role service_role; exception when duplicate_object then null;
 create table public.read_fixture(id integer primary key, label text not null);
 create table public.mutation_fixture(id integer primary key);
 create table public.rls_fixture(id integer primary key);
+create schema cron;
+create table cron.job(
+  jobname text not null,
+  schedule text not null,
+  command text not null,
+  database text not null,
+  username text not null,
+  active boolean not null
+);
+insert into cron.job values ('fixture-job','0 * * * *','select 1','postgres','postgres',true);
 alter table public.rls_fixture enable row level security;
 insert into public.read_fixture values (1,'visible');
 insert into public.rls_fixture values (1);
@@ -135,6 +149,7 @@ try {
 
   await psql(fixtureSql);
   await psql(migration);
+  await psql(cronCatalogMigration);
   await psql(String.raw`
     create role custodial_readonly_test login password 'read-test-only' inherit;
     grant custodial_application_reader to custodial_readonly_test;
@@ -194,6 +209,19 @@ try {
   const legitimate = await runReadOnlySql({ pool, sql: "select id,label from public.read_fixture order by id" });
   assert.deepEqual(legitimate.rows, [{ id: 1, label: "visible" }]);
 
+  const cronCatalog = await runReadOnlySql({
+    pool,
+    sql: "select jobname,schedule,command,database,username,active from cron.job order by jobname",
+  });
+  assert.deepEqual(cronCatalog.rows, [{
+    jobname: "fixture-job",
+    schedule: "0 * * * *",
+    command: "select 1",
+    database: "postgres",
+    username: "postgres",
+    active: true,
+  }], "the dedicated reader must observe exactly the admitted pg_cron catalog columns");
+
   const withQuery = await runReadOnlySql({ pool, sql: "with item as (select 7::integer as value) select value from item" });
   assert.deepEqual(withQuery.rows, [{ value: 7 }]);
 
@@ -217,6 +245,9 @@ try {
       'superuser',r.rolsuper,
       'bypassrls',r.rolbypassrls,
       'can_insert',has_table_privilege('custodial_application_reader','public.mutation_fixture','insert'),
+      'cron_usage',has_schema_privilege('custodial_application_reader','cron','usage'),
+      'cron_create',has_schema_privilege('custodial_application_reader','cron','create'),
+      'cron_insert',has_table_privilege('custodial_application_reader','cron.job','insert'),
       'service_proxy',has_function_privilege('service_role','public.run_sql_readonly(text)','execute')
     )::text
     from pg_roles r where r.rolname='custodial_application_reader';
@@ -225,6 +256,9 @@ try {
     superuser: false,
     bypassrls: false,
     can_insert: false,
+    cron_usage: true,
+    cron_create: false,
+    cron_insert: false,
     service_proxy: false,
   });
 
