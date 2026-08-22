@@ -129,7 +129,7 @@
       {
         "path": ".github/workflows/foundation-security-gate.yml",
         "mode": "100644",
-        "object_id": "5d88e27597c0a0ecfed433e302a31fd2b93e34eb"
+        "object_id": "fc1865c83894d7c9b8f6d68217eb48396297f30d"
       },
       {
         "path": ".github/workflows/integrated-release-attestation.yml",
