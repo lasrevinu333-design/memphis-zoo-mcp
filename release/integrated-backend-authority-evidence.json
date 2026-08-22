@@ -978,12 +978,12 @@
       {
         "path": "scripts/read-only-database-authority-tests.mjs",
         "mode": "100644",
-        "object_id": "6929c91e9e86613607043811cec34b925a89e589"
+        "object_id": "4789e79ca8186ddb3d4abd9c72428cbe17ab7051"
       },
       {
         "path": "scripts/refresh-integrated-backend-authority-release.mjs",
         "mode": "100644",
-        "object_id": "a3294126e3fbc39c523af2b34b7a404f92f92c59"
+        "object_id": "52b9ad831540ac48d4a990813f116e5ae944d120"
       },
       {
         "path": "scripts/refresh-release-schema-alignment.mjs",
@@ -2901,13 +2901,18 @@
         "object_id": "a270a08555df05aeba17d41bf94dd956d0fccd62"
       },
       {
+        "path": "supabase/migrations/20260822142500_grant_readonly_cron_catalog_observation.sql",
+        "mode": "100644",
+        "object_id": "abec0b5cab7e0160aa5da61edfb60f3f624304ac"
+      },
+      {
         "path": "tmp/write_probe.txt",
         "mode": "100644",
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 561,
-    "migration_path_count": 91,
+    "authority_path_count": 562,
+    "migration_path_count": 92,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
   },
@@ -3190,6 +3195,9 @@
     },
     {
       "name": "20260820155000_rebind_release_recovery_inventory_to_current_authority.sql"
+    },
+    {
+      "name": "20260822142500_grant_readonly_cron_catalog_observation.sql"
     }
   ],
   "release_boundary": "Prepare distinct minimum-32-character backend and native-route secrets before cutover; configure their database digests immediately after the migrations that create each configuration function, retain the bridge backend artifact through the scan-snapshot phase, and require the executable health/restoration probes before traffic changes."
