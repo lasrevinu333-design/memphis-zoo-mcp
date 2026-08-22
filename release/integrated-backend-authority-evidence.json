@@ -221,6 +221,11 @@
         "object_id": "a23587904a1303eefd75f14d64aa3d49972d27d7"
       },
       {
+        "path": "certs/supabase-root-2021-ca.pem",
+        "mode": "100644",
+        "object_id": "3d693669b23c340c57a3457bdc8b6fefe1806cc5"
+      },
+      {
         "path": "config/fully-kiosk-devices.example.json",
         "mode": "100644",
         "object_id": "7a680bc3f6800ddaf5c5d6e81f813aceae2f765b"
@@ -243,7 +248,7 @@
       {
         "path": "docs/custodial-readonly-database-authority.md",
         "mode": "100644",
-        "object_id": "b709f79e9df08445a764edbd9c3969919b1e579e"
+        "object_id": "a587a42b232cf786988030a6ebb0fc6ae7a8b7bc"
       },
       {
         "path": "docs/env.md",
@@ -408,7 +413,7 @@
       {
         "path": "release/pending-production-migration-plan.json",
         "mode": "100644",
-        "object_id": "c066548040664cba8f7f493c4e38fd127ec998c7"
+        "object_id": "d5b6393f53de6927808207d8f8090d8249d7cdd4"
       },
       {
         "path": "release/reviewed-migrations/20260809125735_cleaning_inspection_24_hour_freshness.sql",
@@ -973,7 +978,7 @@
       {
         "path": "scripts/read-only-database-authority-tests.mjs",
         "mode": "100644",
-        "object_id": "dccdfcb56961b0237e60e7ddd0cbf91d88822daa"
+        "object_id": "6929c91e9e86613607043811cec34b925a89e589"
       },
       {
         "path": "scripts/refresh-integrated-backend-authority-release.mjs",
@@ -2858,7 +2863,7 @@
       {
         "path": "supabase/migrations/20260820133000_create_application_read_authority.sql",
         "mode": "100644",
-        "object_id": "c51f586bc5f5ba630c3c700b72624380c582de37"
+        "object_id": "43dcc136f3c57563454ebea757cf736588dabc93"
       },
       {
         "path": "supabase/migrations/20260820133100_retire_owner_sql_proxy.sql",
@@ -2901,7 +2906,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 560,
+    "authority_path_count": 561,
     "migration_path_count": 91,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
