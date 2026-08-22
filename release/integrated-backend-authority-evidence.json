@@ -1058,7 +1058,7 @@
       {
         "path": "scripts/schema-fingerprint-catalog.mjs",
         "mode": "100644",
-        "object_id": "62d693ddf2bd1084960e83e4a2aa12b4e07fdd66"
+        "object_id": "91cf0a487d4809911ac8ca504e4b9be099f76e86"
       },
       {
         "path": "scripts/schema-fingerprint-check.mjs",
@@ -1068,7 +1068,7 @@
       {
         "path": "scripts/schema-transition-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "1cdfb098b30a407f5deaeba4fed75b8feca8db02"
+        "object_id": "6dfb0e27bd776e4033ffed05d2f61364960f1310"
       },
       {
         "path": "scripts/smoke-ai-intent.mjs",
