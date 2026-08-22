@@ -728,17 +728,17 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "28513f49b6e5004afca17e899c94d8d506c2ae97"
+        "object_id": "ec1cfa9621c8f3e98ac39561605a3d75d5a93f87"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "c1266ec57dc7b8e0e0f6ad45eda668698b5a196f"
+        "object_id": "a7584a18c3667aca623eee9f0817d8bbc58b435c"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
         "mode": "100644",
-        "object_id": "bd9f8952c5e73cc159f17af673e4ace5e6880c83"
+        "object_id": "98a4d13e6336fb0ec54e5728f972cf8f7c5755fa"
       },
       {
         "path": "scripts/integrated-backend-authority-suite-order-isolated-tests.mjs",
@@ -978,12 +978,12 @@
       {
         "path": "scripts/read-only-database-authority-tests.mjs",
         "mode": "100644",
-        "object_id": "71ebe8eec992360287f876bb5182cb396b040fd8"
+        "object_id": "1ecc97e2ae8eb3eb581e7ec4343f7fb11fd3332b"
       },
       {
         "path": "scripts/refresh-integrated-backend-authority-release.mjs",
         "mode": "100644",
-        "object_id": "e2310f5babb7987aaca4e73b8b9e29120fa6010e"
+        "object_id": "6ef981c86bdbf3356e8df4fc49447c2a5f5fe35d"
       },
       {
         "path": "scripts/refresh-release-schema-alignment.mjs",
@@ -1058,7 +1058,7 @@
       {
         "path": "scripts/schema-fingerprint-catalog.mjs",
         "mode": "100644",
-        "object_id": "f489e60f846775f2e569c1bf9fc826249c0540fd"
+        "object_id": "cca38d3bd63d14f14a44611b892189fa2c6c1f09"
       },
       {
         "path": "scripts/schema-fingerprint-check.mjs",
@@ -1068,7 +1068,7 @@
       {
         "path": "scripts/schema-transition-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "46305309162d4301839a02c464c8b322be8791d4"
+        "object_id": "b54b67b86fa4df4cf9cbbd6659a14d0535c2b9cc"
       },
       {
         "path": "scripts/smoke-ai-intent.mjs",
@@ -2911,13 +2911,18 @@
         "object_id": "4bf4a07d7a80c4d92c53e78db6df8497b651016f"
       },
       {
+        "path": "supabase/migrations/20260822153000_bridge_cron_identity_and_rebind_recovery_acl.sql",
+        "mode": "100644",
+        "object_id": "90d68ac4cd3bf419579388fb0e10d69a86d8f4f6"
+      },
+      {
         "path": "tmp/write_probe.txt",
         "mode": "100644",
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 563,
-    "migration_path_count": 93,
+    "authority_path_count": 564,
+    "migration_path_count": 94,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
   },
@@ -3206,6 +3211,9 @@
     },
     {
       "name": "20260822150000_fence_application_reader_relation_authority.sql"
+    },
+    {
+      "name": "20260822153000_bridge_cron_identity_and_rebind_recovery_acl.sql"
     }
   ],
   "release_boundary": "Prepare distinct minimum-32-character backend and native-route secrets before cutover; configure their database digests immediately after the migrations that create each configuration function, retain the bridge backend artifact through the scan-snapshot phase, and require the executable health/restoration probes before traffic changes."
