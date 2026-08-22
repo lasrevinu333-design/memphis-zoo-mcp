@@ -1178,7 +1178,7 @@
       {
         "path": "scripts/static-weekly-day-changes-database-tests.mjs",
         "mode": "100644",
-        "object_id": "cdfd094f1d64846b094b41ca6bf2791261654230"
+        "object_id": "ce4c52273578b31823ddfc9144a282a207843940"
       },
       {
         "path": "scripts/static-weekly-employee-day-route-tests.mjs",
@@ -1203,7 +1203,7 @@
       {
         "path": "scripts/static-weekly-schedule-compiler-tests.mjs",
         "mode": "100644",
-        "object_id": "471ac2d80d0cf377ac4ed79299e483a063debb38"
+        "object_id": "340352717988faa78d8ca44417cf802605aa44b6"
       },
       {
         "path": "scripts/static-weekly-schedule-concurrency-tests.mjs",
@@ -1758,7 +1758,7 @@
       {
         "path": "src/static-weekly-schedule-compiler.js",
         "mode": "100644",
-        "object_id": "7b08dff175d89901867d72cec3f8fd90fc55c12a"
+        "object_id": "258da3d2cd7737ad264398c1db05dcaaae3542c1"
       },
       {
         "path": "src/static-weekly-schedule-database-adapter.js",
@@ -1773,7 +1773,7 @@
       {
         "path": "src/static-weekly-schedule-program.js",
         "mode": "100644",
-        "object_id": "090a3c534ef46d9f66c7afb97c2a7235915161d2"
+        "object_id": "132e0652d00d45943b9ddf245c459851df7630de"
       },
       {
         "path": "src/static-weekly-schedule-solver-worker.js",
