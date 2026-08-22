@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { generateKeyPairSync } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import express from "express";
-import { createPushRuntime, installManagerNotificationRoutes } from "../src/manager-notifications.js";
+import { createPushRuntime, installManagerNotificationRoutes, managerDeliveryAttention } from "../src/manager-notifications.js";
 
 const root = new URL("../", import.meta.url);
 const [moduleSource, migration, closureMigration, boundaryMigration, u4Migration, indexSource] = await Promise.all([
@@ -58,6 +58,42 @@ assert.match(u4Migration, /q\.dispatch_started_at is null and q\.attempts<q\.max
 assert.match(moduleSource, /p_push_device_id:\s*pushDeviceId/);
 assert.match(moduleSource, /p_fcm_token_sha256:\s*fcmTokenSha256/);
 assert.match(moduleSource, /ops_manager_push_devices"\)\.update\(\{ last_seen_at:[\s\S]*\.eq\("push_device_id", pushDeviceId\)\.eq\("fcm_token", fcmToken\)/);
+assert.match(moduleSource, /ops_manager_notification_queue"\)[\s\S]*\.eq\("manager_id", identity\.managerId\)\.eq\("status", "failed"\)/,
+  "manager delivery failures must be read through the authenticated named-manager identity");
+assert.doesNotMatch(moduleSource, /delivery_attention:[\s\S]{0,300}last_error/,
+  "manager delivery attention must not expose raw provider errors as human guidance");
+
+assert.deepEqual(managerDeliveryAttention([], 0), {
+  attention_required: false,
+  failed_count: 0,
+  latest_failed_at: null,
+  notification_types: [],
+  message: null,
+  action: null,
+});
+const deliveryAttention = managerDeliveryAttention([
+  { notification_type: "message", created_at: "2026-08-02T23:55:25Z", updated_at: "2026-08-03T00:11:18Z" },
+  { notification_type: "event_digest", created_at: "2026-07-22T13:00:03Z", updated_at: "2026-07-22T13:15:49Z" },
+], 6);
+assert.equal(deliveryAttention.attention_required, true);
+assert.equal(deliveryAttention.failed_count, 6);
+assert.equal(deliveryAttention.latest_failed_at, "2026-08-03T00:11:18Z");
+assert.deepEqual(deliveryAttention.notification_types, ["event_digest", "message"]);
+assert.match(deliveryAttention.message, /6 manager notifications could not be delivered/i);
+assert.match(deliveryAttention.message, /messages and events are still available/i);
+assert.match(deliveryAttention.action, /Refresh this phone's notification connection.*send a test/i);
+const resolvedDeliveryAttention = managerDeliveryAttention([
+  { notification_type: "message", updated_at: "2026-08-03T00:11:18Z" },
+], 1, {
+  enabled: true,
+  revoked_at: null,
+  last_registered_at: "2026-08-04T00:00:00Z",
+});
+assert.equal(resolvedDeliveryAttention.attention_required, false,
+  "a newer active registration resolves the banner without erasing terminal delivery evidence");
+assert.equal(resolvedDeliveryAttention.failed_count, 1);
+assert.equal(resolvedDeliveryAttention.message, null);
+assert.equal(resolvedDeliveryAttention.action, null);
 
 const app = express();
 installManagerNotificationRoutes(app, { env: {} });

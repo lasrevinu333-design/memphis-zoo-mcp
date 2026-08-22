@@ -104,6 +104,41 @@ function preferenceView(row = {}) {
     timezone: String(row.timezone || DEFAULT_TIME_ZONE),
   };
 }
+export function managerDeliveryAttention(rows = [], exactCount = null, pushDevice = null) {
+  const failures = Array.isArray(rows) ? rows : [];
+  const failedCount = Number.isSafeInteger(Number(exactCount)) && Number(exactCount) >= failures.length
+    ? Number(exactCount)
+    : failures.length;
+  if (!failedCount) return {
+    attention_required: false,
+    failed_count: 0,
+    latest_failed_at: null,
+    notification_types: [],
+    message: null,
+    action: null,
+  };
+  const latestFailedAt = failures
+    .map((row) => String(row?.updated_at || row?.created_at || "").trim())
+    .filter(Boolean)
+    .sort()
+    .at(-1) || null;
+  const notificationTypes = [...new Set(failures
+    .map((row) => String(row?.notification_type || "").trim())
+    .filter(Boolean))].sort();
+  const latestFailureTime = Date.parse(latestFailedAt || "");
+  const currentRegistrationTime = Date.parse(String(pushDevice?.last_registered_at || ""));
+  const resolvedByCurrentRegistration = pushDevice?.enabled === true && !pushDevice?.revoked_at
+    && Number.isFinite(currentRegistrationTime)
+    && (!Number.isFinite(latestFailureTime) || currentRegistrationTime > latestFailureTime);
+  return {
+    attention_required: !resolvedByCurrentRegistration,
+    failed_count: failedCount,
+    latest_failed_at: latestFailedAt,
+    notification_types: notificationTypes,
+    message: resolvedByCurrentRegistration ? null : `${failedCount} manager notification${failedCount === 1 ? "" : "s"} could not be delivered. The related messages and events are still available in the app.`,
+    action: resolvedByCurrentRegistration ? null : "Refresh this phone's notification connection, then send a test notification.",
+  };
+}
 function normalizePreferencePatch(body = {}, current = {}) {
   const weekdays = Array.isArray(body.event_reminder_weekdays)
     ? [...new Set(body.event_reminder_weekdays.map(Number).filter((day) => Number.isInteger(day) && day >= 0 && day <= 6))].sort((a, b) => a - b)
@@ -426,13 +461,23 @@ export function installManagerNotificationRoutes(app, { env = process.env, supab
   app.get("/manager-notifications-api/preferences", configured, requireManager, async (req, res) => {
     try {
       const identity = currentIdentity(req);
-      const [preferences, deviceResult] = await Promise.all([
+      const [preferences, deviceResult, failuresResult] = await Promise.all([
         loadPreferences(identity),
         db.from("ops_manager_push_devices").select("push_device_id,platform,enabled,last_registered_at,last_seen_at,revoked_at,last_error")
           .eq("credential_id", identity.credentialId).maybeSingle(),
+        db.from("ops_manager_notification_queue")
+          .select("notification_type,created_at,updated_at", { count: "exact" })
+          .eq("manager_id", identity.managerId).eq("status", "failed")
+          .order("updated_at", { ascending: false }).limit(20),
       ]);
       if (deviceResult.error) throw deviceResult.error;
-      res.json({ ok: true, data: { preferences: preferenceView(preferences), push_device: deviceResult.data || null, provider_configured: runtime.configured } });
+      if (failuresResult.error) throw failuresResult.error;
+      res.json({ ok: true, data: {
+        preferences: preferenceView(preferences),
+        push_device: deviceResult.data || null,
+        delivery_attention: managerDeliveryAttention(failuresResult.data, failuresResult.count, deviceResult.data),
+        provider_configured: runtime.configured,
+      } });
     } catch (error) { fail(res, error); }
   });
 
