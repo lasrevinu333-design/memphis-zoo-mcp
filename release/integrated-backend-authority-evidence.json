@@ -129,7 +129,7 @@
       {
         "path": ".github/workflows/foundation-security-gate.yml",
         "mode": "100644",
-        "object_id": "c1c18c2f218d898f49976bc1833530c8fb9bb4e6"
+        "object_id": "5d88e27597c0a0ecfed433e302a31fd2b93e34eb"
       },
       {
         "path": ".github/workflows/integrated-release-attestation.yml",
@@ -784,7 +784,7 @@
       {
         "path": "scripts/manager-notification-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "e5b65f7727260e8fab0d8c550d84ba11a4c445f8"
+        "object_id": "61fb7e8ce359513c218aef01d54aad6c94196a83"
       },
       {
         "path": "scripts/manager-route-authority-contract-tests.mjs",
@@ -1614,7 +1614,7 @@
       {
         "path": "src/manager-notifications.js",
         "mode": "100644",
-        "object_id": "1447634d66a6833a29cedc0a5cb920ae2ccb62f3"
+        "object_id": "d8e24074a7d32b183f6cec1c4e2f65af7d6e2ecc"
       },
       {
         "path": "src/mcp/create-mcp-server.js",
