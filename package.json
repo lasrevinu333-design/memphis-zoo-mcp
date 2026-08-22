@@ -19,6 +19,8 @@
     "test:feedback": "node scripts/feedback-contract-tests.mjs && node scripts/feedback-authority-contract-tests.mjs",
     "test:feedback-authority": "node scripts/feedback-authority-contract-tests.mjs",
     "test:schedule-ai": "node scripts/schedule-ai-tests.mjs",
+    "test:custodial-coverage-policy": "node scripts/custodial-coverage-policy-tests.mjs",
+    "test:custodial-coverage-policy-db": "node scripts/custodial-coverage-policy-database-tests.mjs",
     "test:restroom-rebalance-route": "node scripts/restroom-rebalance-route-tests.mjs",
     "test:ai-intent": "node scripts/smoke-ai-intent.mjs",
     "test:messaging": "node scripts/memphis-messaging-regression-tests.mjs",

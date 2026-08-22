@@ -30,7 +30,12 @@ export function validateStaticWeeklyPacket(packet) {
     if (packet.publicationAuthority !== "REVIEW_REQUIRED" || packet.admission?.canaryReady !== false || packet.admission?.requiresVerifiedSchedulePacket !== true) errors.push("candidate_must_fail_closed");
     if (packet.source?.sha256 !== WORKBOOK_SHA256) errors.push("candidate_workbook_hash_mismatch");
     if (!Array.isArray(packet.candidateRoster) || !packet.candidateRoster.length || packet.candidateRoster.some((row) => !UUID.test(row.slotId || "") || !UUID.test(row.personId || "") || !String(row.displayName || "").trim())) errors.push("candidate_roster_requires_uuid_source_facts");
-    if (!Array.isArray(packet.unresolved?.absentUntilReplacedStableSlots) || packet.unresolved.absentUntilReplacedStableSlots.length !== 2) errors.push("two_departed_slot_identities_must_remain_unresolved");
+    const unavailableRosterSlots = packet.candidateRoster.filter((row) => row.staffingState && row.staffingState !== "LAST_KNOWN_ACTIVE").map((row) => row.slotId).sort();
+    const unresolvedSlots = Array.isArray(packet.unresolved?.absentUntilReplacedStableSlots) ? [...new Set(packet.unresolved.absentUntilReplacedStableSlots)].sort() : [];
+    if (!unavailableRosterSlots.length || JSON.stringify(unavailableRosterSlots) !== JSON.stringify(unresolvedSlots)) errors.push("unavailable_roster_slots_must_remain_unresolved");
+    const dutyWindow = /^([01]\d|2[0-3]):[0-5]\d-(([01]\d|2[0-3]):[0-5]\d|24:00)$/;
+    if (packet.candidateRoster.some((row) => !dutyWindow.test(row.shift || "") || !dutyWindow.test(row.lunch || ""))) errors.push("candidate_roster_shift_and_lunch_required");
+    if (packet.operationalCorrections?.coverAllPolicy?.firstAbsence !== "EVENLY_REDISTRIBUTE_AMONG_REMAINING_ZOO_EMPLOYEES" || packet.operationalCorrections?.coverAllPolicy?.secondAndLaterAbsences !== "CALL_COVERALL_ONE_PERSON_PER_ABSENCE") errors.push("current_coverall_policy_required");
     return { ok: errors.length === 0, classification: "CANDIDATE_ONLY", admissibleForRegistration: false, errors, contentDigest: hash(JSON.stringify(packet)) };
   }
   if (packet.packetSchema !== "memphis-zoo.static-weekly.verified-schedule-packet.v1") errors.push("unknown_packet_schema");

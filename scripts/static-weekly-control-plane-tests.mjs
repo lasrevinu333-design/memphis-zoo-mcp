@@ -230,14 +230,15 @@ const dayChangesRequest = {
   idempotencyKey: "day-changes-atomic-replay",
   operations: [
     { operation: "exception", exceptionType: "pto", reason: "approved call-out", payload: { slotId: "20000000-0000-4000-8000-000000000001" } },
+    { operation: "exception", exceptionType: "daily_absence", reason: "second approved call-out", payload: { slotId: "20000000-0000-4000-8000-000000000002" } },
     { operation: "cover_all", slotId: contractorSlot, shift: { start: "08:00", end: "17:00" }, reason: "approved CoverAll help" },
   ],
 };
 const dayChanges = await dayChangesControlPlane.applyDayChanges(dayChangesRequest);
 assert.equal(dayChanges.operation, "apply_day_changes");
-assert.equal(dayChanges.revision, 3, "one daily batch advances authority for each accepted change and one final projection");
-assert.equal(dayChanges.data.mutations.length, 2, "the batch returns every applied daily mutation");
-assert.equal(dayChanges.data.current_projection.projection_id, "projection-3");
+assert.equal(dayChanges.revision, 4, "one daily batch advances two absences, one CoverAll call, and one final projection");
+assert.equal(dayChanges.data.mutations.length, 3, "the batch returns every applied daily mutation");
+assert.equal(dayChanges.data.current_projection.projection_id, "projection-4");
 assert.equal(dayChangesCompilerCalls, 1, "the complete daily operation set compiles exactly once");
 const dayChangesLockIndex = dayChangesAuthority.queries.findIndex((entry) => entry.statement.includes("pg_advisory_xact_lock"));
 const dayChangesGateIndex = dayChangesAuthority.queries.findIndex((entry) => entry.statement.includes("static_weekly_v4_begin_day_changes"));
@@ -245,13 +246,13 @@ assert.equal(dayChangesLockIndex > 1 && dayChangesLockIndex < dayChangesGateInde
 assert.equal(dayChangesAuthority.queries.filter((entry) => entry.statement.includes("static_weekly_v4_begin_day_changes")).length, 1, "a batch reaches the database-authoritative recognition gate before source reads");
 assert.equal(dayChangesAuthority.queries.filter((entry) => entry.statement.includes("static_weekly_v3_materialize_projection")).length, 1, "the complete daily operation set materializes exactly once");
 const dayChangeCommands = dayChangesAuthority.queries.filter((entry) => entry.statement.includes("static_weekly_v3_apply_exception"));
-assert.deepEqual(dayChangeCommands.map((entry) => entry.values[8]), [0, 1], "batch child mutations advance from one shared expected revision");
+assert.deepEqual(dayChangeCommands.map((entry) => entry.values[8]), [0, 1, 2], "batch child mutations advance from one shared expected revision");
 assert.equal(dayChangeCommands.every((entry) => entry.values[4] === versionId && entry.values[5] === publicationId), true, "every batch child mutation is bound to the requested published version");
 assert.match(dayChangeCommands[0].values[10], /^day-change-[0-9a-f]{64}$/, "batch child mutations receive deterministic derived idempotency keys");
 const dayChangesReplay = await dayChangesControlPlane.applyDayChanges(dayChangesRequest);
 assert.deepEqual(dayChangesReplay, dayChanges, "replaying an accepted daily batch returns the same result");
-assert.equal(dayChangesAuthority.mutationAttempts(), 2, "replaying a daily batch does not apply any child mutation again");
-assert.equal(dayChangesAuthority.revision(), 3, "replaying a daily batch does not advance authority revision");
+assert.equal(dayChangesAuthority.mutationAttempts(), 3, "replaying a daily batch does not apply any child mutation again");
+assert.equal(dayChangesAuthority.revision(), 4, "replaying a daily batch does not advance authority revision");
 const replayQueries = dayChangesAuthority.queries.slice(dayChangesAuthority.queries.findLastIndex((entry) => entry.statement === "begin"));
 assert.deepEqual(replayQueries.map((entry) => entry.statement), ["begin", "set local role static_weekly_control_plane", "select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended($1,0))", "select public.static_weekly_v4_begin_day_changes($1,$2,$3,$4,$5,$6,$7,$8) as result", "commit"], "accepted whole-action replay locks and stops before mutable publication authority is reread");
 

@@ -107,7 +107,7 @@ if (process.env.STATIC_WEEKLY_PHYSICAL_SCALE === "1") { await runPhysicalScaleFi
 assert.equal(validateStaticWeeklyPacket(candidateWorkbook).ok, true);
 assert.equal(validateStaticWeeklyPacket(candidateWorkbook).admissibleForRegistration, false, "candidate evidence can never become a release source merely by passing evidence validation");
 assert.equal(validateStaticWeeklyPacket({ ...candidateWorkbook, admission: { ...candidateWorkbook.admission, canaryReady: true } }).ok, false);
-assert.equal(candidateWorkbook.unresolved.absentUntilReplacedStableSlots.length, 2);
+assert.equal(candidateWorkbook.unresolved.absentUntilReplacedStableSlots.length, 5, "the candidate preserves two confirmed departures and three fail-closed pending departure confirmations without inventing replacements");
 
 const forgedVerifiedPacket = {
   packetSchema: "memphis-zoo.static-weekly.verified-schedule-packet.v1",
@@ -798,19 +798,59 @@ for (const input of [
   const result = await compile(input); const changed = result.weeklyAssignments.find((item) => item.workId === "one");
   assert.equal(changed.slotId, "b"); assert.equal(changed.originSlotId, "a");
 }
-const coverAll = smallInput({ slots: ["a", "b"], availabilities: [availability("a", "A", { status: "departed_named_absent" })], assignments: [work("one", "A", "08:00", "09:00", "a")] });
-const coverallAvailability = availability("b", "B");
-coverAll.exceptions = [overlay("coverall-owner", "cover_all", { availability: {
-  slotId: coverallAvailability.slotId, shift: coverallAvailability.shift,
-  productiveCapacityProvenance: coverallAvailability.productiveCapacityProvenance,
-  maxServiceEffortMinutes: coverallAvailability.maxServiceEffortMinutes,
-  maxServiceEffortProvenance: coverallAvailability.maxServiceEffortProvenance,
-  qualifications: coverallAvailability.qualifications, qualificationProvenance: coverallAvailability.qualificationProvenance,
-  restrictions: coverallAvailability.restrictions, restrictionProvenance: coverallAvailability.restrictionProvenance,
-  acceptedRouteAnchorLocationId: coverallAvailability.acceptedRouteAnchorLocationId,
-  acceptedRouteProvenance: coverallAvailability.acceptedRouteProvenance,
-} })];
-const coverAllResult = await compile(coverAll); assert.equal(coverAllResult.weeklyAssignments.find((item) => item.workId === "one").slotId, "b");
+const coverageAvailability = (slotId, anchor) => {
+  const value = availability(slotId, anchor);
+  return {
+    slotId: value.slotId, shift: value.shift,
+    productiveCapacityProvenance: value.productiveCapacityProvenance,
+    maxServiceEffortMinutes: value.maxServiceEffortMinutes,
+    maxServiceEffortProvenance: value.maxServiceEffortProvenance,
+    qualifications: value.qualifications, qualificationProvenance: value.qualificationProvenance,
+    restrictions: value.restrictions, restrictionProvenance: value.restrictionProvenance,
+    acceptedRouteAnchorLocationId: value.acceptedRouteAnchorLocationId,
+    acceptedRouteProvenance: value.acceptedRouteProvenance,
+  };
+};
+const coverAll = smallInput({
+  slots: ["a", "b", "c", "cover-1"],
+  availabilities: [availability("a", "A"), availability("b", "B"), availability("c", "C")],
+  assignments: [work("first-absence", "A", "08:00", "09:00", "a"), work("second-absence", "B", "09:10", "10:00", "b"), work("ordinary", "C", "10:10", "11:00", "c")],
+});
+coverAll.slots.find((slot) => slot.id === "cover-1").contractorCapacity = true;
+coverAll.exceptions = [
+  overlay("absence-one", "pto", { slotId: "a" }),
+  overlay("absence-two", "daily_absence", { slotId: "b" }),
+  overlay("coverall-two", "cover_all", { availability: coverageAvailability("cover-1", "B") }),
+].map((exception, index) => ({ ...exception, sequence: index + 1 }));
+const coverAllResult = await compile(coverAll);
+assert.equal(coverAllResult.status, "FEASIBLE");
+assert.equal(coverAllResult.weeklyAssignments.find((item) => item.workId === "first-absence").slotId, "c", "the first absence is redistributed only to a remaining zoo employee");
+assert.equal(coverAllResult.weeklyAssignments.find((item) => item.workId === "second-absence").slotId, "cover-1", "the second absence is assigned to its exact CoverAll capacity");
+assert.equal(coverAllResult.weeklyAssignments.find((item) => item.workId === "ordinary").slotId, "c", "CoverAll cannot take ordinary active-employee work");
+for (const [label, exceptions] of [
+  ["missing second-absence CoverAll", coverAll.exceptions.slice(0, 2)],
+  ["CoverAll on only the first absence", [coverAll.exceptions[0], coverAll.exceptions[2]]],
+]) {
+  const rejected = await compile({ ...coverAll, exceptions });
+  assert.equal(rejected.status, "REVIEW", label);
+  assert.match(JSON.stringify(rejected.fatal), /custodial_absence_coverage_mismatch/, label);
+}
+const threeAbsences = smallInput({
+  slots: ["a", "b", "c", "d", "cover-1", "cover-2"],
+  availabilities: [availability("a", "A"), availability("b", "B"), availability("c", "C"), availability("d", "A")],
+  assignments: [work("absence-1", "A", "08:00", "09:00", "a"), work("absence-2", "B", "09:10", "10:00", "b"), work("absence-3", "C", "10:10", "11:00", "c")],
+});
+for (const id of ["cover-1", "cover-2"]) threeAbsences.slots.find((slot) => slot.id === id).contractorCapacity = true;
+threeAbsences.exceptions = [
+  overlay("three-absence-one", "pto", { slotId: "a" }),
+  overlay("three-absence-two", "daily_absence", { slotId: "b" }),
+  overlay("three-absence-three", "pto", { slotId: "c" }),
+  overlay("three-cover-one", "cover_all", { availability: coverageAvailability("cover-1", "B") }),
+  overlay("three-cover-two", "cover_all", { availability: coverageAvailability("cover-2", "C") }),
+].map((exception, index) => ({ ...exception, sequence: index + 1 }));
+const threeAbsenceResult = await compile(threeAbsences);
+assert.equal(threeAbsenceResult.status, "FEASIBLE");
+assert.deepEqual(threeAbsenceResult.weeklyAssignments.filter((item) => item.workId.startsWith("absence-")).map((item) => item.slotId), ["d", "cover-1", "cover-2"], "each absence after the first receives a separate CoverAll capacity slot");
 
 // The dated roster identity is resolved for each occurrence, never once at
 // Monday.  Wednesday's replacement is a new immutable person snapshot.
