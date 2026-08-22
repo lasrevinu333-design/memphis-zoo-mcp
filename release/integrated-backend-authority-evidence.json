@@ -979,7 +979,7 @@
       {
         "path": "scripts/read-only-database-authority-tests.mjs",
         "mode": "100644",
-        "object_id": "5302e64509290e7f7c9a6656d5f3f82a7183bbe1"
+        "object_id": "e3c407330d821f4490d9da4e826574bd4c3848a5"
       },
       {
         "path": "scripts/refresh-integrated-backend-authority-release.mjs",
@@ -1014,7 +1014,7 @@
       {
         "path": "scripts/restroom-rebalance-route-tests.mjs",
         "mode": "100644",
-        "object_id": "c4a1a63881d5b3b7464b9a277776afe617122d97"
+        "object_id": "edec26d821dc7a1903ccdd4bbbc54c6e47aea508"
       },
       {
         "path": "scripts/scan-authority-cutover-tests.mjs",
@@ -1734,7 +1734,7 @@
       {
         "path": "src/schedule-api.js",
         "mode": "100644",
-        "object_id": "5ac695c8bc2e5a30603e0937af7d289d0dd6d376"
+        "object_id": "16fa35952954c7173213888e8202657d9003473e"
       },
       {
         "path": "src/schedule-display.js",
@@ -1809,7 +1809,7 @@
       {
         "path": "src/supabase/read.js",
         "mode": "100644",
-        "object_id": "0d34127495946344d6f168526ba54079aed4565f"
+        "object_id": "ff5cf204288485a1ed217c58a8538093ec57b4df"
       },
       {
         "path": "src/utils/diff.js",
