@@ -728,17 +728,17 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "d508154f930e64df5194220ebe6496508428d019"
+        "object_id": "abe85898207d876b543bfab43d19b6d5c3e22f70"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "07a9c1287ce043a6c0338f4855e7262537fe5512"
+        "object_id": "cf79bbb4ab3ac81ff763107d2917a6ce1a8c7120"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
         "mode": "100644",
-        "object_id": "e7243d153b44f57a2bd79182058e7c05eeb8b209"
+        "object_id": "99c01d6f9e5147001e9190cc81c909fd3d1f5373"
       },
       {
         "path": "scripts/integrated-backend-authority-suite-order-isolated-tests.mjs",
