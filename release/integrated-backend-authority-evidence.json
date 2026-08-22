@@ -2908,7 +2908,7 @@
       {
         "path": "supabase/migrations/20260822150000_fence_application_reader_relation_authority.sql",
         "mode": "100644",
-        "object_id": "0de724bb75bddf2e4fd3a572eee81dd06f097e25"
+        "object_id": "4bf4a07d7a80c4d92c53e78db6df8497b651016f"
       },
       {
         "path": "tmp/write_probe.txt",
