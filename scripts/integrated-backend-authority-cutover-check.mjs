@@ -243,6 +243,7 @@ function expectedReleaseEvidence(input, schemaFingerprint, frontendManifest, aut
       u4_ops_closure_phase: "20260813210000 canonicalizes native wire timestamps, records immutable activation boundaries, enforces UUID completion identities, installs two-phase employee notification dispatch ledgers, durable manager dispatch preparation with terminal outcome-unknown restart recovery, complete notification recovery authority, and terminal notification retries, and restores the catalog-derived authority set",
       atomic_day_change_reconciliation_phase: "20260814224034 converges both preserved U4 migration histories and recognizes the existing complete child/projection receipt chain before mutable Weekly Schedule authority is reread",
       managed_schema_authority_normalization_phase: "20260815160613 removes broad future-object defaults; 20260815163346 preserves application and scheduler access through explicit role grants while keeping PUBLIC revoked, and managed postgres/supabase_admin deployment authority remains comparable without hiding application grants or role memberships",
+      runtime_read_and_scan_alert_authority_phase: "20260822170000 restores the pure service-date helper only to the restricted reader and routes scan-alert delivery through the one canonical Memphis conversation without rewriting existing evidence",
     },
     rollback: input.rollback,
     cutover: input.cutover,
