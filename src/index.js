@@ -708,6 +708,7 @@ function buildHealthPayload(area, extra = {}) {
     area,
     version: APP_VERSION,
     release_id: RELEASE_ID,
+    backend_commit_sha: BACKEND_COMMIT_SHA,
     contracts,
     release_manifest: area === "version" ? buildReleaseManifest({ appVersion: APP_VERSION, releaseId: RELEASE_ID, contracts }) : undefined,
     ...extra,

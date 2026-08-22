@@ -21,10 +21,10 @@ jobs:
         run: |
           set -euo pipefail
           root='https://memphis-zoo-mcp.onrender.com'
-          # Render exposes the immutable deployed Git SHA as release_id. The
-          # semantic app version intentionally changes between coordinated
-          # releases, so a stale hard-coded version would make a successful
-          # deployment poll until timeout and then report a false failure.
+          # The version manifest and every operational health response expose
+          # the immutable deployed Git SHA separately from the semantic
+          # release ID. This lets the gate prove that rolling Render traffic
+          # has converged without conflating source identity and app version.
           expected_sha="${GITHUB_SHA}"
           version=''
           moxie_health=''
@@ -58,7 +58,7 @@ jobs:
             for endpoint in "${operational_endpoints[@]}"; do
               body="$(curl -fsSL --max-time 40 "$root$endpoint?rollout_attempt=$rollout_attempt" || true)"
               printf 'rollout_attempt=%s %s %s\n' "$rollout_attempt" "$endpoint" "$body"
-              if ! grep -Fq '"ok":true' <<<"$body" || ! grep -Fq "$expected_sha" <<<"$body"; then
+              if ! grep -Fq '"ok":true' <<<"$body" || ! grep -Fq "\"backend_commit_sha\":\"$expected_sha\"" <<<"$body"; then
                 all_endpoints_current=false
               fi
             done

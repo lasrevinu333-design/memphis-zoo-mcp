@@ -12,6 +12,8 @@ const packageManifest = JSON.parse(readFileSync(new URL("../package.json", impor
 
 assert.match(source, /app\.get\(\["\/health", "\/health\/dependencies"\]/,
   "canonical /health must execute the dependency-aware readiness check");
+assert.match(source, /backend_commit_sha:\s*BACKEND_COMMIT_SHA/,
+  "every operational health response must expose the immutable deployed backend commit");
 assert.match(source, /const httpServer = app\.listen/,
   "the HTTP server handle must be retained for graceful draining");
 assert.match(source, /process\.once\("SIGTERM"/,
@@ -51,6 +53,8 @@ assert.match(operationalLiveMonitor, /all_endpoints_current=false[\s\S]*for roll
   "live operational acceptance must tolerate rolling-deployment routing");
 assert.match(operationalLiveMonitor, /test "\$all_endpoints_current" = true/,
   "live operational acceptance must still reject endpoints that never reach the expected commit");
+assert.match(operationalLiveMonitor, /backend_commit_sha/,
+  "live operational acceptance must compare the explicit deployed backend commit field");
 assert.match(operationalLiveMonitor, /Origin: https:\/\/memphis-zoo-mcp\.onrender\.com/,
   "live manager-auth acceptance must probe from the approved production app origin");
 assert.match(operationalLiveMonitor, /test "\$auth_status" = '401'/,
