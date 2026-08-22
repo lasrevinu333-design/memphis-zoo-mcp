@@ -57,6 +57,11 @@ assert.match(SCHEMA_CATALOG_QUERIES.default_privileges, /grantee\.rolname='servi
   "schema identity must bind application mutation defaults without provider-managed or ephemeral provisioning defaults");
 assert.match(SCHEMA_CATALOG_QUERIES.privilege_bearing_roles, /memphis_zoo_backup.*static_weekly_control_plane.*static_weekly_release_operator/);
 assert.match(SCHEMA_CATALOG_QUERIES.role_memberships, /from pg_auth_members/);
+assert.match(
+  SCHEMA_CATALOG_QUERIES.cron_jobs,
+  /from cron\.custodial_schema_identity_cron_jobs\(\)/,
+  "schema identity must use the fixed owner-authority cron bridge rather than caller-filtered cron.job",
+);
 assert.match(SCHEMA_CATALOG_QUERIES.role_memberships, /parent\.rolname<>'custodial_application_reader'/,
   "ephemeral dedicated reader login provisioning must remain outside schema identity");
 assert.match(
@@ -65,6 +70,11 @@ assert.match(
   "the safe managed-owner membership created for a dedicated runtime login must not make schema identity caller-dependent",
 );
 const authorityBaseline = { privilege_bearing_roles: [], role_memberships: [], table_grants: [] };
+assert.equal(
+  fingerprintSchemaCatalog({ tables: [{ table_name: "commented", object_comment: "release truth" }] }).fingerprint,
+  fingerprintSchemaCatalog({ tables: [{ table_name: "commented", comment: "release truth" }] }).fingerprint,
+  "database-driver object_comment fields and canonical comment fields must share one identity",
+);
 const unexpectedRole = structuredClone(authorityBaseline);
 unexpectedRole.privilege_bearing_roles.push({ role_name: "unexpected_login", can_login: true, bypasses_rls: true });
 assert.notEqual(fingerprintSchemaCatalog(authorityBaseline).fingerprint, fingerprintSchemaCatalog(unexpectedRole).fingerprint,

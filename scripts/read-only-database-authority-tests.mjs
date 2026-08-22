@@ -28,6 +28,10 @@ const relationAuthorityFenceMigration = await readFile(new URL(
   "../supabase/migrations/20260822150000_fence_application_reader_relation_authority.sql",
   import.meta.url,
 ), "utf8");
+const cronIdentityBridgeMigration = await readFile(new URL(
+  "../supabase/migrations/20260822153000_bridge_cron_identity_and_rebind_recovery_acl.sql",
+  import.meta.url,
+), "utf8");
 const readSource = await readFile(new URL("../src/supabase/read.js", import.meta.url), "utf8");
 const indexSource = await readFile(new URL("../src/index.js", import.meta.url), "utf8");
 const supabaseRootCa = await readFile(new URL("../certs/supabase-root-2021-ca.pem", import.meta.url), "utf8");
@@ -93,6 +97,9 @@ create table cron.job(
   active boolean not null
 );
 insert into cron.job values ('fixture-job','0 * * * *','select 1','postgres','postgres',true);
+grant select on table cron.job to public;
+alter table cron.job enable row level security;
+create policy cron_job_policy on cron.job using (username=current_user);
 alter table public.rls_fixture enable row level security;
 insert into public.read_fixture values (1,'visible');
 insert into public.rls_fixture values (1);
@@ -104,6 +111,31 @@ grant execute on function public.run_sql_readonly(text) to service_role;
 create or replace function public.dangerous_mutation() returns integer
 language plpgsql security definer as $$ begin insert into public.mutation_fixture values (1); return 1; end $$;
 grant execute on function public.dangerous_mutation() to public;
+
+create schema if not exists extensions;
+create extension if not exists pgcrypto with schema extensions;
+create table public.custodial_release_authority_restore_inventory(
+  object_kind text not null,
+  object_identity text not null,
+  definition_sql text not null,
+  definition_sha256 text not null,
+  captured_at timestamptz not null default statement_timestamp(),
+  primary key(object_kind,object_identity)
+);
+create or replace function public.custodial_release_authority_current_grant_definition(text)
+returns text language sql stable as $$
+  select $1||':'||has_table_privilege('custodial_application_reader',$1,'select')::text
+$$;
+create or replace function public.custodial_release_inventory_immutable()
+returns trigger language plpgsql as $$
+begin
+  if tg_op <> 'INSERT' then raise exception 'immutable'; end if;
+  return new;
+end
+$$;
+create trigger trg_custodial_release_authority_restore_inventory_immutable
+before update or delete on public.custodial_release_authority_restore_inventory
+for each row execute function public.custodial_release_inventory_immutable();
 
 create or replace function public.msg_get_memphis_thread_context(uuid) returns jsonb language sql stable as $$ select '{}'::jsonb $$;
 create or replace function public.msg_get_memphis_user_id() returns uuid language sql stable as $$ select null::uuid $$;
@@ -157,7 +189,20 @@ try {
   await psql(fixtureSql);
   await psql(migration);
   await psql(cronCatalogMigration);
+  await psql(String.raw`
+    insert into public.custodial_release_authority_restore_inventory(
+      object_kind,object_identity,definition_sql,definition_sha256
+    )
+    select 'grant','public.custodial_session_corrections',definition,
+      encode(extensions.digest(convert_to(definition,'UTF8'),'sha256'),'hex')
+    from (
+      select public.custodial_release_authority_current_grant_definition(
+        'public.custodial_session_corrections'
+      ) definition
+    ) captured;
+  `);
   await psql(relationAuthorityFenceMigration);
+  await psql(cronIdentityBridgeMigration);
   await psql("create table public.reader_future_fixture(id integer primary key);");
   await psql(String.raw`
     create role custodial_readonly_test login password 'read-test-only' inherit;
@@ -229,16 +274,23 @@ try {
 
   const cronCatalog = await runReadOnlySql({
     pool,
-    sql: "select jobname,schedule,command,database,username,active from cron.job order by jobname",
+    sql: SCHEMA_CATALOG_QUERIES.cron_jobs,
   });
   assert.deepEqual(cronCatalog.rows, [{
     jobname: "fixture-job",
     schedule: "0 * * * *",
     command: "select 1",
     database: "postgres",
-    username: "postgres",
+    username: "migration_owner",
     active: true,
   }], "the dedicated reader must observe exactly the admitted pg_cron catalog columns");
+
+  const directCronCatalog = await runReadOnlySql({ pool, sql: "select jobname from cron.job" });
+  assert.deepEqual(
+    directCronCatalog.rows,
+    [],
+    "the provider-managed cron policy must hide every job from a direct reader query",
+  );
 
   const withQuery = await runReadOnlySql({ pool, sql: "with item as (select 7::integer as value) select value from item" });
   assert.deepEqual(withQuery.rows, [{ value: 7 }]);
@@ -266,6 +318,15 @@ try {
       'cron_usage',has_schema_privilege('custodial_application_reader','cron','usage'),
       'cron_create',has_schema_privilege('custodial_application_reader','cron','create'),
       'cron_insert',has_table_privilege('custodial_application_reader','cron.job','insert'),
+      'cron_public_select',has_table_privilege('custodial_application_reader','cron.job','select'),
+      'cron_explicit_column_grants',exists(
+        select 1 from pg_attribute a cross join lateral aclexplode(a.attacl) acl
+        join pg_roles grantee on grantee.oid=acl.grantee
+        where a.attrelid='cron.job'::regclass and grantee.rolname='custodial_application_reader'
+          and acl.privilege_type='SELECT'
+      ),
+      'cron_bridge',has_function_privilege('custodial_application_reader','cron.custodial_schema_identity_cron_jobs()','execute'),
+      'anon_cron_bridge',has_function_privilege('anon','cron.custodial_schema_identity_cron_jobs()','execute'),
       'correction_table_select',has_table_privilege('custodial_application_reader','public.custodial_session_corrections','select'),
       'correction_view_select',has_table_privilege('custodial_application_reader','public.v_custodial_cleaning_session_truth','select'),
       'future_table_select',has_table_privilege('custodial_application_reader','public.reader_future_fixture','select'),
@@ -280,6 +341,10 @@ try {
     cron_usage: true,
     cron_create: false,
     cron_insert: false,
+    cron_public_select: true,
+    cron_explicit_column_grants: false,
+    cron_bridge: true,
+    anon_cron_bridge: false,
     correction_table_select: false,
     correction_view_select: false,
     future_table_select: false,
