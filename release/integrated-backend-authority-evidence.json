@@ -978,7 +978,7 @@
       {
         "path": "scripts/read-only-database-authority-tests.mjs",
         "mode": "100644",
-        "object_id": "1ecc97e2ae8eb3eb581e7ec4343f7fb11fd3332b"
+        "object_id": "5302e64509290e7f7c9a6656d5f3f82a7183bbe1"
       },
       {
         "path": "scripts/refresh-integrated-backend-authority-release.mjs",
@@ -1058,7 +1058,7 @@
       {
         "path": "scripts/schema-fingerprint-catalog.mjs",
         "mode": "100644",
-        "object_id": "cca38d3bd63d14f14a44611b892189fa2c6c1f09"
+        "object_id": "bc42ba2ee456fa2be1728ccacbb54d13d02aa14a"
       },
       {
         "path": "scripts/schema-fingerprint-check.mjs",
@@ -1068,7 +1068,7 @@
       {
         "path": "scripts/schema-transition-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "b54b67b86fa4df4cf9cbbd6659a14d0535c2b9cc"
+        "object_id": "385d57f1cbf68568e75c22405db5eaab1528daa6"
       },
       {
         "path": "scripts/smoke-ai-intent.mjs",
@@ -2913,7 +2913,7 @@
       {
         "path": "supabase/migrations/20260822153000_bridge_cron_identity_and_rebind_recovery_acl.sql",
         "mode": "100644",
-        "object_id": "90d68ac4cd3bf419579388fb0e10d69a86d8f4f6"
+        "object_id": "b22bbea0ecc789bec9a8ecc9b4c173d83842d61a"
       },
       {
         "path": "tmp/write_probe.txt",
