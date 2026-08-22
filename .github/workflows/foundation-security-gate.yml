@@ -67,6 +67,7 @@ jobs:
           npm run --silent test:static-weekly-scheduler:database
           npm run --silent test:integrated-backend-authority-suite-order
           npm run --silent test:integrated-backend-authority-release-provenance
+          npm run --silent release:integrated-backend-authority:check
           npm run --silent test:release-closure
           npm run --silent test:final-closure-database-isolated
           npm run --silent test:ci-workflows
