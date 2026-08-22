@@ -38,7 +38,13 @@ jobs:
           grep -Fq "$expected_sha" <<<"$version"
           python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["ok"] is True and d["configured"] is True and d["auth_required"] is True' <<<"$moxie_health"
 
-          auth_status="$(curl -sS --max-time 40 -o /tmp/passwordless-manager-auth.json -w '%{http_code}' -H 'X-Device-Id: live-manager-access-verifier' "$root/auth-api/session?access_level=full_access")"
+          # The browser/app origin boundary is checked before trusted-device
+          # authority. Exercise the intended unauthenticated state from the
+          # approved production origin; a missing origin must remain 403.
+          auth_status="$(curl -sS --max-time 40 -o /tmp/passwordless-manager-auth.json -w '%{http_code}' \
+            -H 'Origin: https://memphis-zoo-mcp.onrender.com' \
+            -H 'X-Device-Id: live-manager-access-verifier' \
+            "$root/auth-api/session?access_level=full_access")"
           test "$auth_status" = '401'
           grep -Eiq 'manager|auth|denied|unauthorized|password' /tmp/passwordless-manager-auth.json
 

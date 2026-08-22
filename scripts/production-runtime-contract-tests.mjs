@@ -51,6 +51,10 @@ assert.match(operationalLiveMonitor, /all_endpoints_current=false[\s\S]*for roll
   "live operational acceptance must tolerate rolling-deployment routing");
 assert.match(operationalLiveMonitor, /test "\$all_endpoints_current" = true/,
   "live operational acceptance must still reject endpoints that never reach the expected commit");
+assert.match(operationalLiveMonitor, /Origin: https:\/\/memphis-zoo-mcp\.onrender\.com/,
+  "live manager-auth acceptance must probe from the approved production app origin");
+assert.match(operationalLiveMonitor, /test "\$auth_status" = '401'/,
+  "live manager-auth acceptance must require no trusted-device authority from the approved origin");
 assert.match(warmBridgeCreateMigration, /mz-render-availability-warm-bridge/,
   "the historical Render warm bridge must retain a stable cron identity");
 assert.match(warmBridgeCreateMigration, /'\*\/10 \* \* \* \*'/,
