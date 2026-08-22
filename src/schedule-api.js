@@ -2291,7 +2291,10 @@ export function createScheduleRouter({
   }
 
   async function getServiceDate() {
-    const rows = await runReadOnlySql("select public.sch_service_date(now()) as service_date");
+    // PostgreSQL DATE values can arrive as JavaScript Date objects depending on
+    // the driver's type parser.  The schedule contract requires an ISO service
+    // date, so make that wire representation explicit at the database boundary.
+    const rows = await runReadOnlySql("select public.sch_service_date(now())::text as service_date");
     return Array.isArray(rows) && rows.length ? rows[0].service_date : null;
   }
 

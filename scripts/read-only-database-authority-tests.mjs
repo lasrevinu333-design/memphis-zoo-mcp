@@ -5,7 +5,7 @@ import { X509Certificate } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import { Pool } from "pg";
-import { runReadOnlySql } from "../src/supabase/read.js";
+import { createReadOnlyPool, runReadOnlySql } from "../src/supabase/read.js";
 import { SCHEMA_CATALOG_QUERIES } from "./schema-fingerprint-catalog.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -60,6 +60,22 @@ assert.equal(
   new X509Certificate(supabaseRootCa).fingerprint256.replaceAll(":", "").toLowerCase(),
   "807025ad50d4ed219d2c9c7d299c004f824eb00cf7f65afef607d07b72e6cafa",
   "the checked-in Supabase root CA must match the admitted production trust anchor",
+);
+
+class CapturingPool {
+  constructor(options) {
+    this.options = options;
+  }
+}
+
+const typedPool = createReadOnlyPool({
+  connectionString: "postgres://reader:example@127.0.0.1:5432/postgres",
+  PoolClass: CapturingPool,
+});
+assert.equal(
+  typedPool.options.types.getTypeParser(1082, "text")("2026-08-22"),
+  "2026-08-22",
+  "the dedicated reader must preserve PostgreSQL DATE as timezone-free YYYY-MM-DD text",
 );
 
 async function psql(statement) {

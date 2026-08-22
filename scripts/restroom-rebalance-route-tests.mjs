@@ -46,7 +46,7 @@ function buildApp({ readCalls, writeCalls, rpcCalls }) {
     runReadOnlySql: async (sql) => {
       const query = String(sql || "");
       readCalls.push(query);
-      if (query.includes("select public.sch_service_date(now()) as service_date")) {
+      if (query.includes("select public.sch_service_date(now())::text as service_date")) {
         return [{ service_date: SERVICE_DATE }];
       }
       if (query.includes("as roster_count") && query.includes("as assignment_count")) {
@@ -142,6 +142,10 @@ assert.ok(readCalls.some((sql) => sql.includes("coalesce(route.zone_codes")), "t
 assert.ok(readCalls.some((sql) => sql.includes("with target(location_group_id)")), "the route must load configured proximity data");
 assert.equal(rpcCalls.filter((call) => call.functionName === "sch_apply_lunch_coverage").length, 1);
 assert.equal(rpcCalls.some((call) => call.functionName === "sch_generate_daily_schedule"), false, "a ready schedule must not be regenerated");
+assert.ok(
+  readCalls.some((sql) => sql.includes("public.sch_service_date(now())::text as service_date")),
+  "the scheduler must request an ISO text service date instead of relying on driver DATE parsing",
+);
 
 console.log(JSON.stringify({
   ok: true,

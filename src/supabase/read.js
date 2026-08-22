@@ -1,4 +1,4 @@
-import { Pool } from "pg";
+import { Pool, types as pgTypes } from "pg";
 
 const DEFAULT_SQL_READ_MAX_ROWS = 50_000;
 const DEFAULT_SQL_READ_MAX_RESPONSE_BYTES = 25_000_000;
@@ -8,6 +8,20 @@ const DEFAULT_SQL_READ_STATEMENT_TIMEOUT_MS = 30_000;
 const DEFAULT_SQL_READ_LOCK_TIMEOUT_MS = 5_000;
 
 let sharedReadOnlyPool = null;
+
+// Supabase's previous JSON read boundary represented PostgreSQL DATE values as
+// YYYY-MM-DD strings. node-postgres parses DATE into a JavaScript Date by
+// default, which changes the contract for every caller and can shift the date
+// again when it is stringified in a non-UTC timezone. Keep the dedicated
+// reader's DATE representation stable and timezone-free at the adapter layer.
+const readOnlyPgTypes = {
+  getTypeParser(oid, format) {
+    if (Number(oid) === 1082 && (!format || format === "text")) {
+      return (value) => String(value || "");
+    }
+    return pgTypes.getTypeParser(oid, format);
+  },
+};
 
 function toSafeInt(value, fallback, { min = 1, max = Number.MAX_SAFE_INTEGER } = {}) {
   const parsed = Number.parseInt(String(value ?? fallback), 10);
@@ -130,6 +144,7 @@ export function createReadOnlyPool({ connectionString = readOnlyDatabaseUrl(), P
     idleTimeoutMillis: 10_000,
     connectionTimeoutMillis: 10_000,
     application_name: "memphis-custodial-readonly",
+    types: readOnlyPgTypes,
   });
 }
 
