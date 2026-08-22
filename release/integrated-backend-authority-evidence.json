@@ -3,14 +3,14 @@
   "release_id": "release-2026.07.19.custodial-v3.12",
   "frontend_commit_sha": "c43836a2b94067333797fb01f53796971aca8892",
   "frontend_commit_state": "final_pair_bound",
-  "schema_fingerprint": "6a5ed2cb582ef6d77400ebe2eec5738066b1073b1ed8187ad6615c139e171eaf",
+  "schema_fingerprint": "b890754824a2e86d4df1b75c134fd233fcf2e42928c9f5a74c1233e4012202f7",
   "schema_transition": {
     "transition_id": "custodial-foundation-authority-cutover-20260821",
     "from_fingerprint": "c8b6c811c52a3275290c6b8944f3692121c40e92c9efd84c5eb92baff91bc5ac",
-    "to_fingerprint": "6a5ed2cb582ef6d77400ebe2eec5738066b1073b1ed8187ad6615c139e171eaf",
+    "to_fingerprint": "b890754824a2e86d4df1b75c134fd233fcf2e42928c9f5a74c1233e4012202f7",
     "expires_at": "2026-09-03T23:59:59Z"
   },
-  "frontend_source_fingerprint": "6a5ed2cb582ef6d77400ebe2eec5738066b1073b1ed8187ad6615c139e171eaf",
+  "frontend_source_fingerprint": "b890754824a2e86d4df1b75c134fd233fcf2e42928c9f5a74c1233e4012202f7",
   "backend_contract": {
     "scan": "scan.v4.snapshot-bound-authority",
     "authority": "offline-authority.v5",
@@ -44,7 +44,8 @@
     "release_phone_transport_and_offline_activation_phase": "20260813190000 requires a fresh immutable receipt from the designated phone's native-vault /scan-api/rpc path before resume and permits delayed activation only for work begun while snapshot, credential, and assignment authority were valid",
     "u4_ops_closure_phase": "20260813210000 canonicalizes native wire timestamps, records immutable activation boundaries, enforces UUID completion identities, installs two-phase employee notification dispatch ledgers, durable manager dispatch preparation with terminal outcome-unknown restart recovery, complete notification recovery authority, and terminal notification retries, and restores the catalog-derived authority set",
     "atomic_day_change_reconciliation_phase": "20260814224034 converges both preserved U4 migration histories and recognizes the existing complete child/projection receipt chain before mutable Weekly Schedule authority is reread",
-    "managed_schema_authority_normalization_phase": "20260815160613 removes broad future-object defaults; 20260815163346 preserves application and scheduler access through explicit role grants while keeping PUBLIC revoked, and managed postgres/supabase_admin deployment authority remains comparable without hiding application grants or role memberships"
+    "managed_schema_authority_normalization_phase": "20260815160613 removes broad future-object defaults; 20260815163346 preserves application and scheduler access through explicit role grants while keeping PUBLIC revoked, and managed postgres/supabase_admin deployment authority remains comparable without hiding application grants or role memberships",
+    "runtime_read_and_scan_alert_authority_phase": "20260822170000 restores the pure service-date helper only to the restricted reader and routes scan-alert delivery through the one canonical Memphis conversation without rewriting existing evidence"
   },
   "rollback": {
     "before_enforcement": "legacy Engine and current backend completion remain available",
@@ -71,7 +72,7 @@
       "prepare distinct CUSTODIAL_BACKEND_PROOF_SECRET and CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET values (minimum 32 characters each) without exposing either value",
       "run npm run release:populated-schema:preflight through the read-only production MCP and preserve its exact source-fingerprint receipt before any migration",
       "verify production project, migration head, catalog/privilege fingerprint, backup receipt, and exact source attestation against release/pending-production-migration-plan.json",
-      "apply only the nine hash-bound migrations in release/pending-production-migration-plan.json, in exact order, stopping after any failed phase postcheck",
+      "apply only the one hash-bound migration in release/pending-production-migration-plan.json, stopping after any failed preflight or postcheck",
       "deploy the canonical-only backend only after all authoritative procedures above are present and verified; missing canonical writers fail closed",
       "require a green authority health gate and direct-DML denial probes before routing traffic"
     ],
@@ -403,17 +404,17 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "63eec52439194944cb6bcb2fe7c3469fb51fb417"
+        "object_id": "3e667eb42a9f3ed1764a1133f6128c79a816b2b6"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
         "mode": "100644",
-        "object_id": "ccaa9194e8a3c171e1016ee97b30bb0398423be0"
+        "object_id": "eb19b2dd79f8e28dd66952c60d338adb139330a1"
       },
       {
         "path": "release/pending-production-migration-plan.json",
         "mode": "100644",
-        "object_id": "d5b6393f53de6927808207d8f8090d8249d7cdd4"
+        "object_id": "624a05d845ffaf48b13046dee5e1526d8ba70ce4"
       },
       {
         "path": "release/reviewed-migrations/20260809125735_cleaning_inspection_24_hour_freshness.sql",
@@ -623,7 +624,7 @@
       {
         "path": "scripts/empty-database-rebuild-check.mjs",
         "mode": "100644",
-        "object_id": "26ddb3b09cea8291c32841432a72506c9fda49e2"
+        "object_id": "de854e24880304430e5cef616170de7101660ed3"
       },
       {
         "path": "scripts/event-notification-retention-contract-tests.mjs",
@@ -728,17 +729,17 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "ec1cfa9621c8f3e98ac39561605a3d75d5a93f87"
+        "object_id": "7185ae340e54f8921205e2d0608df5d9a5414794"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "a7584a18c3667aca623eee9f0817d8bbc58b435c"
+        "object_id": "b32fc680ac7fa97899319b84ad2bc0dca06ad643"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
         "mode": "100644",
-        "object_id": "98a4d13e6336fb0ec54e5728f972cf8f7c5755fa"
+        "object_id": "8b9f3d7190984ec3c46addd6a18d5606998d91e5"
       },
       {
         "path": "scripts/integrated-backend-authority-suite-order-isolated-tests.mjs",
@@ -983,7 +984,7 @@
       {
         "path": "scripts/refresh-integrated-backend-authority-release.mjs",
         "mode": "100644",
-        "object_id": "6ef981c86bdbf3356e8df4fc49447c2a5f5fe35d"
+        "object_id": "a4f913a927a8e707f84a381b6031ab22ad85711c"
       },
       {
         "path": "scripts/refresh-release-schema-alignment.mjs",
@@ -1033,7 +1034,7 @@
       {
         "path": "scripts/schedule-ai-tests.mjs",
         "mode": "100644",
-        "object_id": "c49f0b6fbadaa21f403a06529aeca67f223aef6f"
+        "object_id": "7043587689c4aa20d9679872a9b32fc623a5e9d1"
       },
       {
         "path": "scripts/schedule-display-tests.mjs",
@@ -1848,12 +1849,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "ea51fdfec329b881120840b7c8ed920565232f3f"
+        "object_id": "792fa65eaed27d71c23288d9ff49adb94042701c"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "74745b9a1a7fc0b97bb8a2d77d3e58c8803dc44f"
+        "object_id": "6a5435ed95b53ef6289746c8e1e06cde0dadd34a"
       },
       {
         "path": "supabase/config.toml",
@@ -2916,13 +2917,18 @@
         "object_id": "b22bbea0ecc789bec9a8ecc9b4c173d83842d61a"
       },
       {
+        "path": "supabase/migrations/20260822170000_repair_runtime_read_and_scan_alert_authority.sql",
+        "mode": "100644",
+        "object_id": "b835e913277d8c095494c0bc521b5b722bd4426c"
+      },
+      {
         "path": "tmp/write_probe.txt",
         "mode": "100644",
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 564,
-    "migration_path_count": 94,
+    "authority_path_count": 565,
+    "migration_path_count": 95,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
   },
@@ -3214,6 +3220,9 @@
     },
     {
       "name": "20260822153000_bridge_cron_identity_and_rebind_recovery_acl.sql"
+    },
+    {
+      "name": "20260822170000_repair_runtime_read_and_scan_alert_authority.sql"
     }
   ],
   "release_boundary": "Prepare distinct minimum-32-character backend and native-route secrets before cutover; configure their database digests immediately after the migrations that create each configuration function, retain the bridge backend artifact through the scan-snapshot phase, and require the executable health/restoration probes before traffic changes."
