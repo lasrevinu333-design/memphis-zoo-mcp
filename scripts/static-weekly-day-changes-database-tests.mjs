@@ -11,6 +11,7 @@ import { Pool } from "pg";
 import { compileStaticWeeklySchedule } from "../src/static-weekly-schedule-compiler.js";
 import { createStaticWeeklyDraftRpcInput } from "../src/static-weekly-schedule-database-adapter.js";
 import { createStaticWeeklyControlPlane } from "../src/static-weekly-control-plane.js";
+import { REQUEST_DEADLINE_MILLISECONDS } from "../src/static-weekly-schedule-program.js";
 
 const execFileAsync = promisify(execFile);
 const container = `mz_static_weekly_day_changes_${process.pid}`;
@@ -174,7 +175,13 @@ try {
 
   await containerSql(`insert into public.ops_manager_managers(manager_id,display_name,roles,active,metadata_json,is_system_principal) values(${quote(actor.manager_id)},${quote(actor.manager_display_name)},array['OPS_MANAGER']::text[],true,'{}'::jsonb,false)`);
   await containerSql("set role static_weekly_release_operator; select public.static_weekly_v3_configure_initial_authority_key('static-weekly-authority-hmac-v2','static-weekly-day-change-test-secret-012345678901234567890','day-change-suite')");
-  const source = sourceInput(); const compiled = await compileStaticWeeklySchedule(source); assert.equal(compiled.status, "FEASIBLE", `initial static-weekly compile failed: ${JSON.stringify(compiled.fatal || null)}`);
+  const source = sourceInput();
+  const initialCompileStartedAt = performance.now();
+  const compiled = await compileStaticWeeklySchedule(source);
+  const initialCompileElapsedMilliseconds = performance.now() - initialCompileStartedAt;
+  assert.equal(compiled.status, "FEASIBLE", `initial static-weekly compile failed: ${JSON.stringify(compiled.fatal || null)}`);
+  assert.equal(compiled.certificate.execution.solveCount, 29, "the production-shaped day-change source exercises all 29 ordered solver tiers");
+  assert.equal(initialCompileElapsedMilliseconds <= REQUEST_DEADLINE_MILLISECONDS, true, "the complete 29-tier compile and double-verification pass remains inside its finite parent deadline");
   await containerSql(`set role static_weekly_release_operator; select public.static_weekly_v3_register_authority_source(${quote(sourceId)},${json(compiled.canonicalAuthority.compilerInput)},'day-change-source')`);
   for (const [index, slot] of source.slots.entries()) {
     const incumbent = slot.incumbencies[0];

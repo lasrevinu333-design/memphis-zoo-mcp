@@ -285,8 +285,10 @@ function replayProjection(result) {
 }
 
 export async function compileStaticWeeklySchedule(input = {}) {
-  // The one request deadline begins before raw admission and is propagated to
-  // generation, queueing, every tier solve, verification and encoding.
+  // The one finite request deadline begins before raw admission and is
+  // propagated to generation, queueing, every tier solve, verification and
+  // encoding.  The solver independently applies its stricter per-tier wall
+  // clock ceiling; these are intentionally different bounds.
   const deadline = createStaticWeeklyDeadline(REQUEST_DEADLINE_MILLISECONDS);
   const authorityProgram = generateStaticWeeklySchedulingProgram(input, null, deadline);
   // Raw-admission failures carry no caller facts. Later failures may use only

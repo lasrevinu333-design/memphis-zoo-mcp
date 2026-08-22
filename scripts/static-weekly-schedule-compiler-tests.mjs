@@ -4,10 +4,12 @@ import { createHash } from "node:crypto";
 import { compileStaticWeeklySchedule, postgresJsonbCanonicalText, postgresJsonbContentDigest, STATIC_WEEKLY_SERVER_LIMITS, verifyStaticWeeklyReplay } from "../src/static-weekly-schedule-compiler.js";
 import { verifyStaticWeeklyScheduleResult } from "../src/static-weekly-schedule-verifier.js";
 import { initializeStaticWeeklySolver, setStaticWeeklySolverTestOverride, solveStaticWeeklyMip } from "../src/static-weekly-schedule-solver.js";
-import { admitStaticWeeklyRawInput, canonicalSolverAuthorityCertificate, canonicalSolverAuthorityTierProjection, createStaticWeeklyDeadline, generateStaticWeeklySchedulingProgram, monotonicNowMilliseconds, prepareStaticWeeklySchedulingProblem, remainingStaticWeeklyMilliseconds } from "../src/static-weekly-schedule-program.js";
+import { REQUEST_DEADLINE_MILLISECONDS, admitStaticWeeklyRawInput, canonicalSolverAuthorityCertificate, canonicalSolverAuthorityTierProjection, createStaticWeeklyDeadline, generateStaticWeeklySchedulingProgram, monotonicNowMilliseconds, prepareStaticWeeklySchedulingProblem, remainingStaticWeeklyMilliseconds } from "../src/static-weekly-schedule-program.js";
 import { validateStaticWeeklyPacket } from "./static-weekly-schedule-candidate-importer.mjs";
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
+assert.equal(REQUEST_DEADLINE_MILLISECONDS, 120_000, "the complete multi-tier compiler and verification sequence has one finite two-minute parent bound");
+assert.equal(REQUEST_DEADLINE_MILLISECONDS > STATIC_WEEKLY_SERVER_LIMITS.maxSolveSeconds * 1000, true, "the whole-request bound is distinct from the stricter per-tier solver bound");
 const rawReceiptDigest = (tier) => createHash("sha256").update(JSON.stringify({ schema: "memphis-zoo.static-weekly-raw-solver-receipt.v1", options: tier.options, terminalReport: tier.attestation.terminalReport })).digest("hex");
 const candidateWorkbook = JSON.parse(fs.readFileSync(new URL("./fixtures/static-weekly-scheduler/candidate-workbook-authority.json", import.meta.url), "utf8"));
 const compile = async (value) => compileStaticWeeklySchedule(clone(value));

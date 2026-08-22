@@ -88,7 +88,14 @@ const EPSILON = 1e-9;
 // HiGHS' integer-as-double coefficients fail closed before a model is built.
 export const STATIC_WEEKLY_EQUITY_SCALE = "exact-lossless-common-denominator";
 export const MAX_SAFE_EXACT_INTEGER = BigInt(Number.MAX_SAFE_INTEGER);
-export const REQUEST_DEADLINE_MILLISECONDS = 30_000;
+// One compiler request performs a bounded sequence of independently bounded
+// solver tiers and then regenerates/verifies the complete witness twice.  Do
+// not reuse the 30-second *per-tier* worker limit as the deadline for that
+// whole sequence: a valid 29-tier operational schedule can otherwise exhaust
+// the parent deadline after every solve has succeeded.  Two minutes remains a
+// finite fail-closed request boundary while preserving each worker's stricter
+// 30-second ceiling.
+export const REQUEST_DEADLINE_MILLISECONDS = 120_000;
 // HiGHS terminal reports use bounded scientific formatting.  Keep every
 // staged objective below this exact-print envelope so report attestation can
 // equal the independently recomputed integer without relying on rounded text.
@@ -486,8 +493,8 @@ export function recomputeStaticWeeklyObjective(objective, model, values, problem
 
 // This gate deliberately counts the complete staged program before a route
 // graph, constraint objects, or LP UTF-8 are materialized.  It is conservative
-// by design: a REVIEW result is preferable to making the shared 30 second
-// request budget depend on an unbounded allocation.
+// by design: a REVIEW result is preferable to making the bounded whole-request
+// budget depend on an unbounded allocation.
 function preflightProblem(problem) {
   const byDaySlot = new Map();
   for (const candidate of problem.candidates) {
