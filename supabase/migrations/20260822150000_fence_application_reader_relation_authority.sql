@@ -14,11 +14,24 @@ begin
     raise exception 'The restricted custodial_application_reader role is required.';
   end if;
 
+  if exists (
+    select 1
+    from pg_default_acl d
+    join pg_roles owner on owner.oid = d.defaclrole
+    left join pg_namespace n on n.oid = d.defaclnamespace
+    cross join lateral aclexplode(d.defaclacl) x
+    join pg_roles grantee on grantee.oid = x.grantee
+    where owner.rolname = 'supabase_admin'
+      and n.nspname = 'public'
+      and d.defaclobjtype = 'r'
+      and grantee.rolname = 'custodial_application_reader'
+      and x.privilege_type = 'SELECT'
+  ) then
+    raise exception 'supabase_admin has a reader default that requires an owner-authorized correction.';
+  end if;
+
   if exists (select 1 from pg_roles where rolname = 'postgres') then
     execute 'alter default privileges for role postgres in schema public revoke select on tables from custodial_application_reader';
-  end if;
-  if exists (select 1 from pg_roles where rolname = 'supabase_admin') then
-    execute 'alter default privileges for role supabase_admin in schema public revoke select on tables from custodial_application_reader';
   end if;
 
   if to_regclass('public.custodial_session_corrections') is not null then
