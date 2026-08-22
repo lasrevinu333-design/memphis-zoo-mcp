@@ -11,6 +11,10 @@ The release operator performs the cutover in this order:
    must be `NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS`,
    inherit only `custodial_application_reader`, and have no direct grants.
 3. Store its URL only in the Render secret `CUSTODIAL_READONLY_DATABASE_URL`.
+   Use the direct project endpoint with `sslmode=verify-full` and
+   `sslrootcert=certs/supabase-root-2021-ca.pem`; the pinned CA certificate is
+   the Supabase Root 2021 CA (SHA-256 fingerprint
+   `807025ad50d4ed219d2c9c7d299c004f824eb00cf7f65afef607d07b72e6cafa`).
 4. Deploy the corrected backend and require `/health/dependencies` to report
    `read_authority_ready: true`.
 5. Verify legitimate dashboard, schedule, Messages, Events, and schema identity

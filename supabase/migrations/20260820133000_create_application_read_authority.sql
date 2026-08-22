@@ -21,12 +21,33 @@ $role$;
 
 alter role custodial_application_reader
   nologin
-  nosuperuser
   nocreatedb
   nocreaterole
-  noinherit
-  noreplication
-  nobypassrls;
+  noinherit;
+
+-- Supabase's managed `postgres` migration role is deliberately not a true
+-- superuser. PostgreSQL therefore rejects ALTER ROLE clauses for the
+-- SUPERUSER, REPLICATION, and BYPASSRLS attributes even when they merely
+-- restate the safe false value. CREATE ROLE above sets those attributes
+-- safely for a new role; an existing role must already satisfy them or the
+-- migration fails closed without attempting a privileged repair.
+do $role_guard$
+declare
+  reader pg_roles%rowtype;
+begin
+  select * into strict reader
+  from pg_roles
+  where rolname = 'custodial_application_reader';
+
+  if reader.rolsuper or reader.rolreplication or reader.rolbypassrls then
+    raise exception
+      'custodial_application_reader has forbidden authority (superuser=%, replication=%, bypassrls=%)',
+      reader.rolsuper,
+      reader.rolreplication,
+      reader.rolbypassrls;
+  end if;
+end
+$role_guard$;
 
 revoke all privileges on schema public from custodial_application_reader;
 grant usage on schema public to custodial_application_reader;

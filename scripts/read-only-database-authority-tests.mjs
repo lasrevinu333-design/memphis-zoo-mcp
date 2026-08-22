@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
+import { X509Certificate } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import { Pool } from "pg";
@@ -20,6 +21,7 @@ const retirementMigration = await readFile(new URL(
 ), "utf8");
 const readSource = await readFile(new URL("../src/supabase/read.js", import.meta.url), "utf8");
 const indexSource = await readFile(new URL("../src/index.js", import.meta.url), "utf8");
+const supabaseRootCa = await readFile(new URL("../certs/supabase-root-2021-ca.pem", import.meta.url), "utf8");
 const docker = (args, options = {}) => execFileAsync("docker", args, { maxBuffer: 16 * 1024 * 1024, ...options });
 
 assert.doesNotMatch(readSource, /\.rpc\(["']run_sql_readonly["']/,
@@ -31,6 +33,21 @@ assert.match(readSource, /assertDedicatedReadAuthority\(client\)/,
 assert.match(indexSource, /read_authority_ready:\s*readAuthorityReady/,
   "production health must expose the dedicated reader boundary");
 assert.match(retirementMigration, /revoke all privileges on function public\.run_sql_readonly\(text\)[\s\S]*service_role/i);
+assert.doesNotMatch(
+  migration,
+  /alter\s+role\s+custodial_application_reader[\s\S]{0,200}\b(?:nosuperuser|noreplication|nobypassrls)\b/i,
+  "managed Supabase migrations must not attempt superuser-only ALTER ROLE attributes",
+);
+assert.match(
+  migration,
+  /reader\.rolsuper\s+or\s+reader\.rolreplication\s+or\s+reader\.rolbypassrls[\s\S]*raise exception/i,
+  "an existing reader role with forbidden authority must fail closed",
+);
+assert.equal(
+  new X509Certificate(supabaseRootCa).fingerprint256.replaceAll(":", "").toLowerCase(),
+  "807025ad50d4ed219d2c9c7d299c004f824eb00cf7f65afef607d07b72e6cafa",
+  "the checked-in Supabase root CA must match the admitted production trust anchor",
+);
 
 async function psql(statement) {
   return new Promise((resolve, reject) => {

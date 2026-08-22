@@ -39,7 +39,7 @@
       "order": 2,
       "phase": "read_authority",
       "file": "20260820133000_create_application_read_authority.sql",
-      "sha256": "cfc83cc5baab0a79a2d8d2cc432f34509aef3f04558072d81d825b2f07f3ebe9"
+      "sha256": "46635ef8ad01fce1b8540545961c60e75be0f8a524fc7213ed08aca60a0dc5e0"
     },
     {
       "order": 3,
