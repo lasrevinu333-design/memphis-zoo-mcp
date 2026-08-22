@@ -37912,8 +37912,8 @@
       "schema_name": "public"
     },
     {
-      "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.sch_get_or_create_scan_alert_thread(p_msg_user_id uuid)\n RETURNS uuid\n LANGUAGE plpgsql\nAS $function$\ndeclare\n  v_thread_id uuid;\n  v_system_user_id uuid;\n  v_user_name text;\nbegin\n  if p_msg_user_id is null then\n    raise exception 'p_msg_user_id is required';\n  end if;\n\n  select id into v_system_user_id\n  from public.msg_users\n  where display_name = 'Memphis'\n    and is_active = true\n  limit 1;\n\n  if v_system_user_id is null then\n    select id into v_system_user_id\n    from public.msg_users\n    where role = 'manager'\n      and is_active = true\n    order by created_at\n    limit 1;\n  end if;\n\n  select display_name into v_user_name\n  from public.msg_users\n  where id = p_msg_user_id;\n\n  select t.id into v_thread_id\n  from public.msg_threads t\n  join public.msg_thread_participants tp_user on tp_user.thread_id = t.id and tp_user.user_id = p_msg_user_id and tp_user.left_at is null\n  join public.msg_thread_participants tp_system on tp_system.thread_id = t.id and tp_system.user_id = v_system_user_id and tp_system.left_at is null\n  where t.thread_type = 'direct'\n    and t.title = 'Scan Alerts'\n    and t.is_active = true\n  order by t.updated_at desc\n  limit 1;\n\n  if v_thread_id is null then\n    v_thread_id := gen_random_uuid();\n\n    insert into public.msg_threads (id, thread_type, title, created_by_user_id, is_active, created_at, updated_at, last_message_at)\n    values (v_thread_id, 'direct', 'Scan Alerts', v_system_user_id, true, now(), now(), now());\n\n    insert into public.msg_thread_participants (id, thread_id, user_id, joined_at, left_at)\n    values\n      (gen_random_uuid(), v_thread_id, v_system_user_id, now(), null),\n      (gen_random_uuid(), v_thread_id, p_msg_user_id, now(), null)\n    on conflict (thread_id, user_id) do update set left_at = null;\n  end if;\n\n  return v_thread_id;\nend;\n$function$\n",
+      "comment": "Compatibility wrapper for scan-alert delivery. Reuses the canonical Memphis conversation and never creates a second active principal pair.",
+      "definition": "CREATE OR REPLACE FUNCTION public.sch_get_or_create_scan_alert_thread(p_msg_user_id uuid)\n RETURNS uuid\n LANGUAGE plpgsql\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_thread public.msg_threads%rowtype;\nbegin\n  if p_msg_user_id is null then\n    raise exception 'p_msg_user_id is required';\n  end if;\n\n  -- Reuse or normalize the one canonical employee-to-Memphis conversation.\n  -- Existing Scan Alerts threads remain preserved and become the canonical\n  -- Memphis thread on first use; no message or receipt is rewritten.\n  select * into v_thread\n  from public.msg_get_or_create_memphis_thread(p_msg_user_id);\n\n  if v_thread.id is null then\n    raise exception 'Canonical Memphis conversation is unavailable.';\n  end if;\n  return v_thread.id;\nend\n$function$\n",
       "function_name": "sch_get_or_create_scan_alert_thread",
       "identity_arguments": "p_msg_user_id uuid",
       "owner_name": "migration_owner",
@@ -46513,6 +46513,15 @@
       "grantee": "service_role",
       "grantor": "migration_owner",
       "identity_arguments": "p_setting_key text, p_default boolean",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "get_setting_int",
+      "grantee": "custodial_application_reader",
+      "grantor": "migration_owner",
+      "identity_arguments": "p_setting_key text, p_default integer",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"

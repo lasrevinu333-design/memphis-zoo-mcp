@@ -17,6 +17,8 @@ const restoreOpenOwnerRowsPath = path.resolve("sql/2026-06-10_restore_scheduler_
 const productionBaselinePath = path.resolve("supabase/migrations/00000000000000_production_baseline.sql");
 const boundedScheduleMigrationPath = path.resolve("supabase/migrations/20260810170000_finish_offline_authority_operational_closure.sql");
 const boundedScheduleMigration = fs.readFileSync(boundedScheduleMigrationPath, "utf8");
+const runtimeAuthorityCorrectionPath = path.resolve("supabase/migrations/20260822170000_repair_runtime_read_and_scan_alert_authority.sql");
+const runtimeAuthorityCorrection = fs.readFileSync(runtimeAuthorityCorrectionPath, "utf8");
 
 function extractFunction(name) {
   const startToken = `function ${name}(`;
@@ -151,6 +153,13 @@ assert.deepEqual(
 );
 assert.match(source, /scheduler:\s*restroomRebalanceScheduler/, "the protected status route must expose scheduler ownership");
 assert.doesNotMatch(source, /explicit_runtime/, "automatic scheduler ownership must have no non-Render runtime mode");
+assert.match(runtimeAuthorityCorrection, /grant execute on function public\.get_setting_int\(text, integer\)[\s\S]*to custodial_application_reader/i,
+  "the restricted reader must receive the pure helper required by service-date reads");
+assert.match(runtimeAuthorityCorrection, /from public\.msg_get_or_create_memphis_thread\(p_msg_user_id\)/i,
+  "scan alerts must reuse canonical Memphis conversation authority");
+const scanAlertReplacement = runtimeAuthorityCorrection.match(/create or replace function public\.sch_get_or_create_scan_alert_thread[\s\S]*?\$function\$;/i)?.[0] || "";
+assert.doesNotMatch(scanAlertReplacement, /insert into public\.msg_threads/i,
+  "the scan-alert repair must not assemble a competing direct thread");
 
 const amyPto = context.parsePtoReportText("July 30, 2026 Thursday Smith, Amy Approved");
 assert.equal(amyPto.detected_rows.length, 1, "PTO parser must retain first names beginning with uppercase A");

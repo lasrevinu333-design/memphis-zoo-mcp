@@ -732,6 +732,7 @@ declare
   v_manager_user_b public.msg_users%rowtype;
   v_direct_thread public.msg_threads%rowtype;
   v_memphis_thread public.msg_threads%rowtype;
+  v_scan_alert_thread_id uuid;
   v_group_thread_a public.msg_threads%rowtype;
   v_group_thread_b public.msg_threads%rowtype;
   v_delete jsonb;
@@ -932,6 +933,15 @@ begin
      or v_memphis_thread.title <> 'Memphis'
      or (select count(*) from public.msg_thread_participants where thread_id=v_memphis_thread.id and left_at is null) <> 2 then
     raise exception 'Named manager Memphis conversation was not created correctly';
+  end if;
+  v_scan_alert_thread_id := public.sch_get_or_create_scan_alert_thread(v_manager_user.id);
+  if v_scan_alert_thread_id <> v_memphis_thread.id
+     or (select count(*) from public.msg_threads t
+         join public.msg_thread_participants a on a.thread_id=t.id and a.user_id=v_manager_user.id and a.left_at is null
+         join public.msg_thread_participants b on b.thread_id=t.id and b.user_id='00000000-0000-4000-8000-00000000f125'::uuid and b.left_at is null
+         where t.is_active is true and t.thread_type in ('direct','bot')
+           and 2=(select count(*) from public.msg_thread_participants p where p.thread_id=t.id and p.left_at is null)) <> 1 then
+    raise exception 'Scan alerts did not reuse exactly one canonical Memphis conversation';
   end if;
   insert into public.msg_threads(id, thread_type, title, created_by_user_id, is_active)
   values ('00000000-0000-4000-8000-00000000f108', 'group', 'Rebuild messaging authority', v_manager_user.id, true);
