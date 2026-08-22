@@ -51,9 +51,14 @@ for (const section of ["table_grants", "routine_grants"]) {
     `${section} must exclude only the two equivalent managed migration-owner identities`);
 }
 assert.match(SCHEMA_CATALOG_QUERIES.tables, /then 'migration_owner'/);
-assert.match(SCHEMA_CATALOG_QUERIES.default_privileges, /owner\.rolname=current_user/);
+assert.match(SCHEMA_CATALOG_QUERIES.default_privileges, /select distinct[\s\S]*owner\.rolname in \('postgres','supabase_admin'\)/,
+  "default privileges must normalize equivalent managed migration owners independently of caller identity");
+assert.match(SCHEMA_CATALOG_QUERIES.default_privileges, /grantee\.rolname='service_role'/,
+  "schema identity must bind application mutation defaults without provider-managed or ephemeral provisioning defaults");
 assert.match(SCHEMA_CATALOG_QUERIES.privilege_bearing_roles, /memphis_zoo_backup.*static_weekly_control_plane.*static_weekly_release_operator/);
 assert.match(SCHEMA_CATALOG_QUERIES.role_memberships, /from pg_auth_members/);
+assert.match(SCHEMA_CATALOG_QUERIES.role_memberships, /parent\.rolname<>'custodial_application_reader'/,
+  "ephemeral dedicated reader login provisioning must remain outside schema identity");
 const authorityBaseline = { privilege_bearing_roles: [], role_memberships: [], table_grants: [] };
 const unexpectedRole = structuredClone(authorityBaseline);
 unexpectedRole.privilege_bearing_roles.push({ role_name: "unexpected_login", can_login: true, bypasses_rls: true });
