@@ -225,7 +225,7 @@ try {
   assert.equal(payload.source_identity.tree, positive.tree);
   assert.equal(payload.source_identity.tracked_path_count, positive.trackedPaths.length);
   assert.equal(payload.source_identity.authority_path_count, positive.trackedPaths.length - 1);
-  assert.equal(payload.source_identity.migration_path_count, 92);
+  assert.equal(payload.source_identity.migration_path_count, 93);
   assert.equal(payload.source_identity.generated_evidence_excluded_from_content_identity, evidencePath);
 } finally {
   disposeFixture(positive);

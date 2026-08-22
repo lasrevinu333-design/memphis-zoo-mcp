@@ -59,6 +59,11 @@ assert.match(SCHEMA_CATALOG_QUERIES.privilege_bearing_roles, /memphis_zoo_backup
 assert.match(SCHEMA_CATALOG_QUERIES.role_memberships, /from pg_auth_members/);
 assert.match(SCHEMA_CATALOG_QUERIES.role_memberships, /parent\.rolname<>'custodial_application_reader'/,
   "ephemeral dedicated reader login provisioning must remain outside schema identity");
+assert.match(
+  SCHEMA_CATALOG_QUERIES.role_memberships,
+  /parent\.rolname~'\^custodial_readonly_runtime_\[0-9\]\{8\}\$'[\s\S]*member\.rolname in \('postgres','supabase_admin'\)[\s\S]*reader_parent\.rolname='custodial_application_reader'/,
+  "the safe managed-owner membership created for a dedicated runtime login must not make schema identity caller-dependent",
+);
 const authorityBaseline = { privilege_bearing_roles: [], role_memberships: [], table_grants: [] };
 const unexpectedRole = structuredClone(authorityBaseline);
 unexpectedRole.privilege_bearing_roles.push({ role_name: "unexpected_login", can_login: true, bypasses_rls: true });

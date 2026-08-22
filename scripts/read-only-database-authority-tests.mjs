@@ -6,6 +6,7 @@ import { readFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import { Pool } from "pg";
 import { runReadOnlySql } from "../src/supabase/read.js";
+import { SCHEMA_CATALOG_QUERIES } from "./schema-fingerprint-catalog.mjs";
 
 const execFileAsync = promisify(execFile);
 const image = process.env.SCHEMA_REBUILD_DOCKER_IMAGE
@@ -21,6 +22,10 @@ const retirementMigration = await readFile(new URL(
 ), "utf8");
 const cronCatalogMigration = await readFile(new URL(
   "../supabase/migrations/20260822142500_grant_readonly_cron_catalog_observation.sql",
+  import.meta.url,
+), "utf8");
+const relationAuthorityFenceMigration = await readFile(new URL(
+  "../supabase/migrations/20260822150000_fence_application_reader_relation_authority.sql",
   import.meta.url,
 ), "utf8");
 const readSource = await readFile(new URL("../src/supabase/read.js", import.meta.url), "utf8");
@@ -76,6 +81,8 @@ do $$ begin create role service_role; exception when duplicate_object then null;
 create table public.read_fixture(id integer primary key, label text not null);
 create table public.mutation_fixture(id integer primary key);
 create table public.rls_fixture(id integer primary key);
+create table public.custodial_session_corrections(id uuid primary key);
+create view public.v_custodial_cleaning_session_truth as select id from public.custodial_session_corrections;
 create schema cron;
 create table cron.job(
   jobname text not null,
@@ -150,6 +157,8 @@ try {
   await psql(fixtureSql);
   await psql(migration);
   await psql(cronCatalogMigration);
+  await psql(relationAuthorityFenceMigration);
+  await psql("create table public.reader_future_fixture(id integer primary key);");
   await psql(String.raw`
     create role custodial_readonly_test login password 'read-test-only' inherit;
     grant custodial_application_reader to custodial_readonly_test;
@@ -160,6 +169,15 @@ try {
     create role custodial_direct_grant_test login password 'direct-grant-test' inherit;
     grant custodial_application_reader to custodial_direct_grant_test;
     grant select on public.mutation_fixture to custodial_direct_grant_test;
+    create role custodial_readonly_runtime_20991231 login password 'runtime-test-only' inherit;
+    alter role custodial_readonly_runtime_20991231 set default_transaction_read_only = on;
+    alter role custodial_readonly_runtime_20991231 set statement_timeout = '15s';
+    alter role custodial_readonly_runtime_20991231 set idle_in_transaction_session_timeout = '15s';
+    grant custodial_application_reader to custodial_readonly_runtime_20991231;
+    grant custodial_readonly_runtime_20991231 to supabase_admin with admin option;
+    create role custodial_readonly_runtime_20991230 login password 'runtime-extra-test-only' inherit;
+    grant custodial_application_reader, custodial_extra_read_role to custodial_readonly_runtime_20991230;
+    grant custodial_readonly_runtime_20991230 to supabase_admin with admin option;
   `);
   await psql(retirementMigration);
 
@@ -248,6 +266,9 @@ try {
       'cron_usage',has_schema_privilege('custodial_application_reader','cron','usage'),
       'cron_create',has_schema_privilege('custodial_application_reader','cron','create'),
       'cron_insert',has_table_privilege('custodial_application_reader','cron.job','insert'),
+      'correction_table_select',has_table_privilege('custodial_application_reader','public.custodial_session_corrections','select'),
+      'correction_view_select',has_table_privilege('custodial_application_reader','public.v_custodial_cleaning_session_truth','select'),
+      'future_table_select',has_table_privilege('custodial_application_reader','public.reader_future_fixture','select'),
       'service_proxy',has_function_privilege('service_role','public.run_sql_readonly(text)','execute')
     )::text
     from pg_roles r where r.rolname='custodial_application_reader';
@@ -259,8 +280,31 @@ try {
     cron_usage: true,
     cron_create: false,
     cron_insert: false,
+    correction_table_select: false,
+    correction_view_select: false,
+    future_table_select: false,
     service_proxy: false,
   });
+
+  const normalizedMemberships = JSON.parse(await psql(`
+    select coalesce(json_agg(row_to_json(memberships)), '[]'::json)::text
+    from (${SCHEMA_CATALOG_QUERIES.role_memberships}) memberships;
+  `));
+  assert.equal(
+    normalizedMemberships.some((row) => row.granted_role === "custodial_readonly_runtime_20991231"),
+    false,
+    "the safe managed-owner membership for a dedicated runtime login must not alter schema identity",
+  );
+  assert.equal(
+    normalizedMemberships.some((row) => row.granted_role === "custodial_readonly_runtime_20991230"),
+    false,
+    "the safe managed-owner membership remains provisioning state even when another inherited role must be reported",
+  );
+  assert.equal(
+    normalizedMemberships.some((row) => row.granted_role === "custodial_extra_read_role" && row.member_role === "custodial_readonly_runtime_20991230"),
+    true,
+    "an extra role inherited by a dedicated runtime login must remain fingerprinted",
+  );
 
   console.log("Read-only database authority tests passed.");
 } finally {
