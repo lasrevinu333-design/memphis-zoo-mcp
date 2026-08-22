@@ -59,7 +59,7 @@ assert.match(SCHEMA_CATALOG_QUERIES.privilege_bearing_roles, /memphis_zoo_backup
 assert.match(SCHEMA_CATALOG_QUERIES.role_memberships, /from pg_auth_members/);
 assert.match(
   SCHEMA_CATALOG_QUERIES.cron_jobs,
-  /from cron\.custodial_schema_identity_cron_jobs\(\)/,
+  /from custodial_release_identity\.custodial_schema_identity_cron_jobs\(\)/,
   "schema identity must use the fixed owner-authority cron bridge rather than caller-filtered cron.job",
 );
 assert.match(SCHEMA_CATALOG_QUERIES.role_memberships, /parent\.rolname<>'custodial_application_reader'/,

@@ -325,8 +325,8 @@ try {
         where a.attrelid='cron.job'::regclass and grantee.rolname='custodial_application_reader'
           and acl.privilege_type='SELECT'
       ),
-      'cron_bridge',has_function_privilege('custodial_application_reader','cron.custodial_schema_identity_cron_jobs()','execute'),
-      'anon_cron_bridge',has_function_privilege('anon','cron.custodial_schema_identity_cron_jobs()','execute'),
+      'cron_bridge',has_function_privilege('custodial_application_reader','custodial_release_identity.custodial_schema_identity_cron_jobs()','execute'),
+      'anon_cron_bridge',has_function_privilege('anon','custodial_release_identity.custodial_schema_identity_cron_jobs()','execute'),
       'correction_table_select',has_table_privilege('custodial_application_reader','public.custodial_session_corrections','select'),
       'correction_view_select',has_table_privilege('custodial_application_reader','public.v_custodial_cleaning_session_truth','select'),
       'future_table_select',has_table_privilege('custodial_application_reader','public.reader_future_fixture','select'),
