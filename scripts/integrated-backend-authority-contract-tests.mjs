@@ -141,7 +141,7 @@ for (const [index, migration] of pendingMigrationPlan.migrations.entries()) {
 }
 assert.equal(releaseEvidence.compatibility_window.accepted_engine.scan, "scan.v2");
 assert.equal(releaseEvidence.compatibility_window.required_engine.scan, "scan.v4.snapshot-bound-authority");
-assert.equal(releaseEvidence.migrations.at(-1).name, "20260822142500_grant_readonly_cron_catalog_observation.sql");
+assert.equal(releaseEvidence.migrations.at(-1).name, "20260822150000_fence_application_reader_relation_authority.sql");
 assert.match(managedSchemaUsage, /grant usage on schema public[\s\S]*anon[\s\S]*authenticated[\s\S]*service_role[\s\S]*static_weekly_control_plane[\s\S]*static_weekly_release_operator/i);
 assert.doesNotMatch(managedSchemaUsage, /grant usage on schema public[\s\S]*\bto public\b/i);
 assert.match(releaseEvidence.compatibility_window.release_phone_transport_and_offline_activation_phase, /native-vault \/scan-api\/rpc/);
