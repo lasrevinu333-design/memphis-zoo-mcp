@@ -1,7 +1,7 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "f05ed1447b715ba5036662b515f0813aa3ddf20f",
+  "frontend_commit_sha": "c43836a2b94067333797fb01f53796971aca8892",
   "frontend_commit_state": "final_pair_bound",
   "schema_fingerprint": "6a5ed2cb582ef6d77400ebe2eec5738066b1073b1ed8187ad6615c139e171eaf",
   "schema_transition": {
@@ -148,7 +148,7 @@
       {
         "path": ".github/workflows/operational-recovery-live.yml",
         "mode": "100644",
-        "object_id": "5647792e6340454c856e613aa44063c3832d0dda"
+        "object_id": "9fa4047145b631adaf80c44387b1814dd4484b8f"
       },
       {
         "path": ".github/workflows/operations-leadership-mobile-foundation.yml",
@@ -403,7 +403,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "211c1e1c0c1e1292b1645cdf6f6fe1da2b865e1b"
+        "object_id": "63eec52439194944cb6bcb2fe7c3469fb51fb417"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -423,7 +423,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "e033a228232afa15a707c1058baefcc6dfec05ef"
+        "object_id": "f2d905f0248bb800874d4533b99affb69fe6953e"
       },
       {
         "path": "research/european_herbalism_through_paracelsus.md",
@@ -563,7 +563,7 @@
       {
         "path": "scripts/custodial-repair-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "ef75a8538f623dc9a8c86d7a398607814dd7bda0"
+        "object_id": "ec0f7feddc934adf92ee07f290abd50b0a468843"
       },
       {
         "path": "scripts/custodial-u4-migration-convergence-tests.mjs",
@@ -728,7 +728,7 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "c409cb669271225bfff83959fcc8b6030aa5c4ef"
+        "object_id": "d508154f930e64df5194220ebe6496508428d019"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
@@ -893,7 +893,7 @@
       {
         "path": "scripts/operations-leadership-mobile-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "e26bd45de79ec99ca71d3e860917216b5406fce5"
+        "object_id": "a74e5bda668d4862a6d778ef3ebbe74774d76b5e"
       },
       {
         "path": "scripts/operations-leadership-mobile-database-tests.mjs",
@@ -948,7 +948,7 @@
       {
         "path": "scripts/production-runtime-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "ec65586005653e935f76499481210dbabaa99cd2"
+        "object_id": "6fde4bf920a5b94e7a648ca544c28b0593df84a4"
       },
       {
         "path": "scripts/production-schema-c674-bootstrap-contract-tests.mjs",
@@ -1003,7 +1003,7 @@
       {
         "path": "scripts/release-closure-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "fc6e1e0b940f6b3ae77b5b929762cd92d11039f2"
+        "object_id": "fda0c006586080cddbdd9c412f7255a5fcd344b4"
       },
       {
         "path": "scripts/restore-mutation-gate-tests.mjs",
