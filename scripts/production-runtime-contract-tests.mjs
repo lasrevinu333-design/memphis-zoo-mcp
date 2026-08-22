@@ -59,6 +59,12 @@ assert.match(operationalLiveMonitor, /Origin: https:\/\/memphis-zoo-mcp\.onrende
   "live manager-auth acceptance must probe from the approved production app origin");
 assert.match(operationalLiveMonitor, /test "\$auth_status" = '401'/,
   "live manager-auth acceptance must require no trusted-device authority from the approved origin");
+assert.match(operationalLiveMonitor, /Identifier-only device status was not denied/,
+  "live device acceptance must prove a caller-supplied kiosk label has no employee authority");
+assert.match(operationalLiveMonitor, /Identifier-only schedule access was not denied/,
+  "live schedule acceptance must reject identifier-only employee reads for every kiosk");
+assert.doesNotMatch(operationalLiveMonitor, /policy_mode\"]==\"observe\"/,
+  "live acceptance must not preserve the retired observe-mode expectation");
 assert.match(warmBridgeCreateMigration, /mz-render-availability-warm-bridge/,
   "the historical Render warm bridge must retain a stable cron identity");
 assert.match(warmBridgeCreateMigration, /'\*\/10 \* \* \* \*'/,
