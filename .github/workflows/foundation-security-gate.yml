@@ -34,6 +34,8 @@ jobs:
           node --check src/manager-notifications.js
           node --check src/annie-moxie-bootstrap.js
           npm audit --omit=dev --audit-level=high
+      - name: Verify exact release evidence freshness
+        run: npm run --silent release:integrated-backend-authority:check
       - name: Pull exact disposable PostgreSQL test image
         run: docker pull supabase/postgres@sha256:80d7b27c3e8d77cfa7226eee9508671796da214781ff15a35b3670d7ad5ee453
       - name: Record closure toolchain provenance
@@ -67,7 +69,6 @@ jobs:
           npm run --silent test:static-weekly-scheduler:database
           npm run --silent test:integrated-backend-authority-suite-order
           npm run --silent test:integrated-backend-authority-release-provenance
-          npm run --silent release:integrated-backend-authority:check
           npm run --silent test:release-closure
           npm run --silent test:final-closure-database-isolated
           npm run --silent test:ci-workflows
