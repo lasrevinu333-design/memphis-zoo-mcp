@@ -92,7 +92,7 @@ const trackedInventory = inventoryFromExactTree(sourceTree);
 const authorityInventory = trackedInventory.filter(({ path }) => path !== generatedEvidencePath);
 const migrations = authorityInventory
   .filter(({ path }) => /^supabase\/migrations\/[^/]+\.sql$/.test(path));
-assert.equal(migrations.length, 98, "release authority inventory must bind every migration at this head");
+assert.equal(migrations.length, 101, "release authority inventory must bind every migration at this head");
 const output = buildIntegratedBackendAuthorityReleaseEvidence({
   input,
   schemaFingerprint,

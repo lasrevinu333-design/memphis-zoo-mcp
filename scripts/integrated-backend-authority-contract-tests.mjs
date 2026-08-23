@@ -183,7 +183,7 @@ assert.ok(releaseEvidence.authority_content_identity.expected_tree_inventory.som
 assert.ok(releaseEvidence.authority_content_identity.expected_tree_inventory.some(({ path }) => path === "scripts/integrated-backend-authority-suite-order-tests.mjs"));
 assert.equal(releaseEvidence.authority_content_identity.expected_tree_inventory.some(({ path }) => path === "release/integrated-backend-authority-evidence.json"), false);
 assert.equal(releaseEvidence.authority_content_identity.authority_path_count, releaseEvidence.authority_content_identity.expected_tree_inventory.length);
-assert.equal(releaseEvidence.authority_content_identity.migration_path_count, 98);
-assert.equal(releaseEvidence.migrations.length, 98);
+assert.equal(releaseEvidence.authority_content_identity.migration_path_count, 101);
+assert.equal(releaseEvidence.migrations.length, 101);
 assert.equal(Object.hasOwn(releaseEvidence.authority_content_identity, "value"), false, "generated evidence must not self-assert a worktree-derived content hash");
 console.log("INTEGRATED_BACKEND_AUTHORITY_CONTRACT_PASS");
