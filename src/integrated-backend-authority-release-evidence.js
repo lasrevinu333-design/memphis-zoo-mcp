@@ -40,6 +40,7 @@ export function buildIntegratedBackendAuthorityReleaseEvidence({
       coverall_second_absence_policy_phase: "20260822222500 keeps the first absence internal and assigns each second or later absence to one distinct registered CoverAll capacity without rewriting manager overrides",
       static_weekly_runtime_identity_phase: "20260823024500 provisions one passwordless-by-source NOINHERIT login shell with only static_weekly_control_plane membership; release operations install its generated SCRAM verifier out of band before the dedicated service can become ready",
       static_weekly_family_location_truth_phase: "20260823060000 preserves the exact physical-location family behind each routing anchor across compilation, event overlays, projections, and the employee-day read surface while retaining legacy singleton reads",
+      static_weekly_registered_roster_bootstrap_phase: "20260823143000 permits only the protected release operator to hydrate the complete immutable roster from one active registered authority source, rejects partial or mismatched state, and makes exact replay non-mutating",
     },
     rollback: input.rollback,
     cutover: input.cutover,

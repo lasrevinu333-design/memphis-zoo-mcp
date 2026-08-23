@@ -228,7 +228,18 @@ try {
   assert.equal(registrationArtifact.registration.sourceDigest, verifiedPacket.sourceDigest, "release hydration must recompile to the exact registered canonical source digest");
   assert.equal(registrationArtifact.registration.verifierOk, true);
   await scalar(release("static_weekly_v3_register_authority_source", `${quote(sourceId)},${json(compiled.canonicalAuthority.compilerInput)},'v3-test-source-registration'`));
-  for (const [index, slot] of source.slots.entries()) { await sql(`insert into public.weekly_roster_slots(slot_id,slot_code,slot_label,created_by_manager_id,created_by_manager_name_snapshot,content_digest) values(${quote(slot.id)},${quote(`SLOT_${index}`)},${quote(slot.label)},${quote(manager.managerId)},${quote(manager.managerName)},repeat('${String.fromCharCode(97 + index)}',64))`); for (const incumbent of slot.incumbencies) await sql(`insert into public.weekly_roster_slot_incumbencies(slot_id,person_id,person_name_snapshot,effective_start,effective_end,created_by_manager_id,created_by_manager_name_snapshot,content_digest) values(${quote(slot.id)},${quote(incumbent.personId)},${quote(incumbent.displayName)},${quote(incumbent.effectiveStart)},${incumbent.effectiveEnd ? quote(incumbent.effectiveEnd) : "null"},${quote(manager.managerId)},${quote(manager.managerName)},repeat('f',64))`); }
+  await expectReject(
+    `set role service_role; select public.static_weekly_v6_initialize_registered_roster(${quote(sourceId)},${quote(manager.managerId)},'forged-service-role-bootstrap')`,
+    /permission denied/i,
+  );
+  const rosterBootstrap = JSON.parse(await scalar(release("static_weekly_v6_initialize_registered_roster", `${quote(sourceId)},${quote(manager.managerId)},'v3-test-roster-bootstrap'`)));
+  assert.equal(rosterBootstrap.already_initialized, false, "the protected release path hydrates the initial immutable roster once");
+  assert.equal(Number(rosterBootstrap.slot_count), source.slots.length);
+  assert.equal(Number(rosterBootstrap.incumbency_count), source.slots.reduce((count, slot) => count + slot.incumbencies.length, 0));
+  const rosterReplay = JSON.parse(await scalar(release("static_weekly_v6_initialize_registered_roster", `${quote(sourceId)},${quote(manager.managerId)},'v3-test-roster-bootstrap-replay'`)));
+  assert.equal(rosterReplay.already_initialized, true, "an exact protected replay is non-mutating and deterministic");
+  assert.equal(Number(await scalar("select count(*) from public.weekly_roster_slots")), source.slots.length);
+  assert.equal(Number(await scalar("select count(*) from public.weekly_roster_slot_incumbencies")), source.slots.reduce((count, slot) => count + slot.incumbencies.length, 0));
   const draft = createStaticWeeklyDraftRpcInput({ result: compiled, expectedRevision: 0, actor: { ...manager, idempotencyKey: "v3-create" } });
   await expectReject(`set role service_role; select public.static_weekly_v2_create_draft(${quote(draft.effectiveStart)},${quote(draft.objectiveVersion)},${json(draft.objective)},${json(draft.inputProvenance)},${json(draft.document)},0,${quote(manager.managerId)},${quote(manager.managerName)},'forged-v2')`, /permission denied/i);
   for (const [label, idempotencyKey, mutate] of [
