@@ -358,7 +358,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "bcca0e1f11eb780bb834ccd4e556409c57e340c2"
+        "object_id": "1bc57e58809ba860afadc54cd59bf21fb5a70c00"
       },
       {
         "path": "public/moxie-assets/contacts-creekside-animal.png",
@@ -684,6 +684,11 @@
         "path": "scripts/final-uncertainty-closure-database-tests.mjs",
         "mode": "100644",
         "object_id": "98134076e1171162ecef7a5f89a1390694a1d197"
+      },
+      {
+        "path": "scripts/fixtures/static-weekly-compiler-runtime-test-worker.mjs",
+        "mode": "100644",
+        "object_id": "55a0b0916131065aadb76d1eff6dc33e963d5b21"
       },
       {
         "path": "scripts/fixtures/static-weekly-scheduler/canary-authority.json",
@@ -1181,6 +1186,11 @@
         "object_id": "d1fc2839a3061df922e8ef891089dbde26d3a8c2"
       },
       {
+        "path": "scripts/static-weekly-compiler-runtime-tests.mjs",
+        "mode": "100644",
+        "object_id": "d3aea16f9175e210b54cfa8d62d9fbe25fe5022f"
+      },
+      {
         "path": "scripts/static-weekly-control-plane-deployment-contract-tests.mjs",
         "mode": "100644",
         "object_id": "7925f9a89fd8c6cf05a25dc0a01c57ba9f7b28fd"
@@ -1193,7 +1203,7 @@
       {
         "path": "scripts/static-weekly-control-plane-tests.mjs",
         "mode": "100644",
-        "object_id": "ba22be4ac61cbc29a1c050d46f47f72126bd21bc"
+        "object_id": "bbda50d8b0827e3de10833c9b6ed7abc26438329"
       },
       {
         "path": "scripts/static-weekly-day-changes-database-tests.mjs",
@@ -1778,12 +1788,22 @@
       {
         "path": "src/static-weekly-control-plane-runtime.js",
         "mode": "100644",
-        "object_id": "be50ae55ea99d03efb6dbcd1c24c68f6fda9ab02"
+        "object_id": "1f75abf166858e0908ce52499cdd91172c6a58d8"
       },
       {
         "path": "src/static-weekly-control-plane.js",
         "mode": "100644",
-        "object_id": "62457db99e0920a2ff629ccb6116d1ca0de1865c"
+        "object_id": "0a817151fe1c3ecc9cb7998b4c383d9850d38d0d"
+      },
+      {
+        "path": "src/static-weekly-schedule-compiler-runtime.js",
+        "mode": "100644",
+        "object_id": "36f0856e1c73c340ee7ad1e0857350c895d36058"
+      },
+      {
+        "path": "src/static-weekly-schedule-compiler-worker.js",
+        "mode": "100644",
+        "object_id": "679ddc638bf66ac149c7ad12c4c33ec6b5ecc3b3"
       },
       {
         "path": "src/static-weekly-schedule-compiler.js",
@@ -2986,7 +3006,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 576,
+    "authority_path_count": 580,
     "migration_path_count": 102,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
