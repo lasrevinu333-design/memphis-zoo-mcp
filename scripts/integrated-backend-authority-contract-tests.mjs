@@ -15,6 +15,7 @@ const dayChangeReconciliation = readFileSync("supabase/migrations/20260814224034
 const managedSchemaUsage = readFileSync("supabase/migrations/20260815163346_restore_explicit_public_schema_usage.sql", "utf8");
 const runtimeReadAndScanAlertAuthority = readFileSync("supabase/migrations/20260822170000_repair_runtime_read_and_scan_alert_authority.sql", "utf8");
 const coverAllSecondAbsencePolicy = readFileSync("supabase/migrations/20260822222500_correct_coverall_second_absence_policy.sql", "utf8");
+const staticWeeklyRuntimeIdentity = readFileSync("supabase/migrations/20260823024500_provision_static_weekly_runtime_identity.sql", "utf8");
 const index = readFileSync("src/index.js", "utf8");
 const scanAuthorityCutover = readFileSync("src/scan-authority-cutover.js", "utf8");
 const schedulerControlPlane = readFileSync("src/static-weekly-control-plane.js", "utf8");
@@ -68,6 +69,9 @@ assert.match(phaseE, /custodial_terminal_writer_inventory/i);
 assert.match(phaseE, /custodial_claim_offline_reconciliation_notification_recipients/i);
 assert.match(phaseE, /recipient_idempotent_delivery/i);
 assert.match(schedulerAuthority, /static_weekly_control_plane noinherit nologin/i);
+assert.match(staticWeeklyRuntimeIdentity, /create role static_weekly_runtime_20260823[\s\S]*login[\s\S]*password null[\s\S]*noinherit/i);
+assert.match(staticWeeklyRuntimeIdentity, /grant static_weekly_control_plane to static_weekly_runtime_20260823/i);
+assert.match(staticWeeklyRuntimeIdentity, /revoke static_weekly_release_operator from static_weekly_runtime_20260823/i);
 assert.match(schedulerAuthority, /static_weekly_authority_source_documents/i);
 assert.match(schedulerAuthority, /static_weekly_v3_register_authority_source/i);
 assert.match(schedulerAuthority, /static_weekly_v3_constant_time_equal/i);

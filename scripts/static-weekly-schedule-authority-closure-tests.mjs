@@ -221,7 +221,8 @@ try {
   const catalog = await catalogClient();
   {
     const baseline = fingerprintSchemaCatalog(await captureSchemaCatalog(catalog));
-    assert.deepEqual(baseline.normalized.owned_scheduler_roles.map((row) => row.role_name), ["static_weekly_control_plane", "static_weekly_release_operator"]);
+    assert.deepEqual(baseline.normalized.owned_scheduler_roles.map((row) => row.role_name), ["static_weekly_control_plane", "static_weekly_release_operator", "static_weekly_runtime_20260823"]);
+    assert.ok(baseline.normalized.owned_scheduler_role_memberships.some((row) => row.granted_role === "static_weekly_control_plane" && row.member_role === "static_weekly_runtime_20260823"));
     assert.ok(baseline.normalized.owned_scheduler_role_memberships.some((row) => row.granted_role === "static_weekly_control_plane"));
     assert.ok(baseline.normalized.routine_grants.some((row) => row.grantee === "static_weekly_control_plane" && row.function_name === "static_weekly_v3_materialize_projection"));
     for (const statement of [

@@ -2,8 +2,8 @@ services:
   - type: web
     name: memphis-zoo-static-weekly-control-plane
     runtime: node
-    plan: free
-    region: ohio
+    plan: starter
+    region: virginia
     repo: https://github.com/lasrevinu333-design/memphis-zoo-mcp
     branch: main
     buildCommand: npm ci --ignore-scripts

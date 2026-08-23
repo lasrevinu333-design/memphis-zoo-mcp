@@ -55,7 +55,7 @@ assert.match(SCHEMA_CATALOG_QUERIES.default_privileges, /select distinct[\s\S]*o
   "default privileges must normalize equivalent managed migration owners independently of caller identity");
 assert.match(SCHEMA_CATALOG_QUERIES.default_privileges, /grantee\.rolname='service_role'/,
   "schema identity must bind application mutation defaults without provider-managed or ephemeral provisioning defaults");
-assert.match(SCHEMA_CATALOG_QUERIES.privilege_bearing_roles, /memphis_zoo_backup.*static_weekly_control_plane.*static_weekly_release_operator/);
+assert.match(SCHEMA_CATALOG_QUERIES.privilege_bearing_roles, /memphis_zoo_backup.*static_weekly_control_plane.*static_weekly_release_operator.*static_weekly_runtime_20260823/);
 assert.match(SCHEMA_CATALOG_QUERIES.role_memberships, /from pg_auth_members/);
 assert.match(
   SCHEMA_CATALOG_QUERIES.cron_jobs,
