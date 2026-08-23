@@ -69,6 +69,16 @@ assert.match(
   /parent\.rolname~'\^custodial_readonly_runtime_\[0-9\]\{8\}\$'[\s\S]*member\.rolname in \('postgres','supabase_admin'\)[\s\S]*reader_parent\.rolname='custodial_application_reader'/,
   "the safe managed-owner membership created for a dedicated runtime login must not make schema identity caller-dependent",
 );
+assert.match(
+  SCHEMA_CATALOG_QUERIES.owned_scheduler_role_memberships,
+  /parent\.rolname='static_weekly_runtime_20260823'[\s\S]*member\.rolname in \('postgres','supabase_admin'\)[\s\S]*grantor\.rolname in \('postgres','supabase_admin'\)[\s\S]*m\.admin_option[\s\S]*not parent\.rolinherit/,
+  "PostgreSQL 17 managed creator-admin control over the bounded scheduler login must not create a false schema drift",
+);
+assert.match(
+  SCHEMA_CATALOG_QUERIES.role_memberships,
+  /parent\.rolname='static_weekly_runtime_20260823'[\s\S]*member\.rolname in \('postgres','supabase_admin'\)[\s\S]*grantor\.rolname in \('postgres','supabase_admin'\)[\s\S]*m\.admin_option[\s\S]*not parent\.rolinherit/,
+  "the general role inventory must apply the same exact managed creator-admin normalization",
+);
 const authorityBaseline = { privilege_bearing_roles: [], role_memberships: [], table_grants: [] };
 assert.equal(
   fingerprintSchemaCatalog({ tables: [{ table_name: "commented", object_comment: "release truth" }] }).fingerprint,

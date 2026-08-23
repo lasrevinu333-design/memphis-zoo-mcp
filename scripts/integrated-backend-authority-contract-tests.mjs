@@ -28,7 +28,6 @@ const releaseInput = JSON.parse(readFileSync("release/integrated-backend-authori
 const releaseEvidence = JSON.parse(readFileSync("release/integrated-backend-authority-evidence.json", "utf8"));
 const pendingMigrationPlan = JSON.parse(readFileSync("release/pending-production-migration-plan.json", "utf8"));
 const exactPendingProductionMigrations = [
-  "20260823024500_provision_static_weekly_runtime_identity.sql",
   "20260823060000_static_weekly_family_location_truth.sql",
 ];
 
@@ -127,13 +126,20 @@ assert.match(releaseInput.cutover.phase_order[1], /release:populated-schema:pref
 assert.equal(releaseInput.cutover.production_migration_plan, "release/pending-production-migration-plan.json");
 assert.equal(pendingMigrationPlan.artifact, "pending-production-migration-plan.v2");
 assert.equal(pendingMigrationPlan.project_ref, "rqquvtjdmugpigbndmne");
-assert.equal(pendingMigrationPlan.observed_production.ledger_head, "20260823012608");
-assert.equal(pendingMigrationPlan.observed_production.source_migration_name, "correct_coverall_second_absence_policy");
-assert.equal(pendingMigrationPlan.observed_production.catalog_privilege_fingerprint, "5bcb02001e4096f5ad5d0d457202d90ca3fbe9cfe4c60793d11af384378f33d2");
+assert.equal(pendingMigrationPlan.observed_production.ledger_head, "20260823033203");
+assert.equal(pendingMigrationPlan.observed_production.source_migration_name, "configure_static_weekly_runtime_password_20260823");
+assert.equal(pendingMigrationPlan.observed_production.catalog_privilege_fingerprint, "d8bbe5ddaa2a5886d27c80edf96098a83d4bf64e5ffd8b824d5d342a2767afe8");
+assert.equal(pendingMigrationPlan.observed_production.public_function_count, 474);
+assert.deepEqual(pendingMigrationPlan.observed_production.target_only_family_helpers, [
+  "static_weekly_v3_assert_work_payload_single_location_base(jsonb,boolean)",
+  "static_weekly_v4_assert_projection_envelope_single_location_bas(jsonb,uuid,date,jsonb)",
+  "static_weekly_v5_read_employee_day_single_location_base(date,uuid,timestamptz)",
+]);
 assert.equal(pendingMigrationPlan.target.source_migration_file, "20260823060000_static_weekly_family_location_truth.sql");
 assert.equal(pendingMigrationPlan.target.source_migration_name, "static_weekly_family_location_truth");
 assert.equal(pendingMigrationPlan.target.ledger_version_policy, "runner_assigned_and_postverified");
 assert.equal(pendingMigrationPlan.target.canonical_schema_fingerprint, "670cfa8c21e8ca852832a0f77aaedb59be5db0b86f59016bd9133cda2e4173b3");
+assert.equal(pendingMigrationPlan.target.public_function_count, 477);
 assert.equal(pendingMigrationPlan.authorization.production_apply_authorized, true);
 assert.deepEqual(pendingMigrationPlan.migrations.map(({ file }) => file), exactPendingProductionMigrations);
 for (const [index, migration] of pendingMigrationPlan.migrations.entries()) {
