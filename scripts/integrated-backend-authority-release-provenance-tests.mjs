@@ -15,6 +15,7 @@ const refresher = "scripts/refresh-integrated-backend-authority-release.mjs";
 const evidencePath = "release/integrated-backend-authority-evidence.json";
 const omittedMigration = "supabase/migrations/20260810120000_retire_named_manager_shared_room_authority.sql";
 const omittedGate = "scripts/integrated-backend-authority-suite-order-tests.mjs";
+const fixtureRemovalOptions = { recursive: true, force: true, maxRetries: 8, retryDelay: 50 };
 
 function git(cwd, args) {
   return execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
@@ -126,15 +127,19 @@ function createFixture({ beforeCommit = null, skipEvidenceRefresh = false } = {}
     };
     return { fixture, acceptanceDirectory, acceptancePath, trackedPaths, commit, tree, publicKeyPem, writeAcceptance };
   } catch (error) {
-    rmSync(fixture, { recursive: true, force: true });
-    rmSync(acceptanceDirectory, { recursive: true, force: true });
+    rmSync(fixture, fixtureRemovalOptions);
+    rmSync(acceptanceDirectory, fixtureRemovalOptions);
     throw error;
   }
 }
 
 function disposeFixture(fixture) {
-  rmSync(fixture.fixture, { recursive: true, force: true });
-  rmSync(fixture.acceptanceDirectory, { recursive: true, force: true });
+  // Git updates several directory entries in rapid succession while each
+  // provenance fixture is created. Some CI filesystems can briefly report an
+  // already-drained directory as non-empty after the child process exits.
+  // Node's recursive rm does not retry ENOTEMPTY unless maxRetries is set.
+  rmSync(fixture.fixture, fixtureRemovalOptions);
+  rmSync(fixture.acceptanceDirectory, fixtureRemovalOptions);
 }
 
 function runGate(fixture, { cwd = fixture.fixture, env = {}, database = false, acceptancePath = fixture.acceptancePath } = {}) {
