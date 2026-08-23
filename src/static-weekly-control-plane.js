@@ -212,10 +212,55 @@ function replacementDraftInput(source, effectiveStart) {
   return input;
 }
 
-export function createStaticWeeklyControlPlaneDatabase({ connectionString = process.env.STATIC_WEEKLY_CONTROL_PLANE_DATABASE_URL, pool = null } = {}) {
+export function staticWeeklyDatabaseConnectionOptions({
+  connectionString = process.env.STATIC_WEEKLY_CONTROL_PLANE_DATABASE_URL,
+  caPem = process.env.STATIC_WEEKLY_CONTROL_PLANE_DATABASE_CA_PEM,
+} = {}) {
+  const rawConnectionString = text(connectionString);
+  if (!rawConnectionString) throw fail("static_weekly_control_plane_database_url_required");
+  const ca = String(caPem || "").replaceAll("\\n", "\n").trim();
+  if (!/^-----BEGIN CERTIFICATE-----[\s\S]+-----END CERTIFICATE-----$/.test(ca)) {
+    throw fail(
+      "static_weekly_control_plane_database_ca_required",
+      "A PEM database certificate authority is required for the static weekly control plane.",
+    );
+  }
+
+  let url;
+  try {
+    url = new URL(rawConnectionString);
+  } catch {
+    throw fail("static_weekly_control_plane_database_url_invalid");
+  }
+  if (!new Set(["postgres:", "postgresql:"]).has(url.protocol)) {
+    throw fail("static_weekly_control_plane_database_url_invalid");
+  }
+
+  // pg-connection-string lets URL TLS options replace an explicitly supplied
+  // `ssl` object. Remove every URL-level TLS override so the reviewed CA,
+  // certificate validation, and hostname validation below remain authoritative.
+  for (const key of ["ssl", "sslcert", "sslkey", "sslmode", "sslnegotiation", "sslrootcert", "uselibpqcompat"]) {
+    url.searchParams.delete(key);
+  }
+  return {
+    connectionString: url.toString(),
+    ssl: { ca: `${ca}\n`, rejectUnauthorized: true },
+  };
+}
+
+export function createStaticWeeklyControlPlaneDatabase({
+  connectionString = process.env.STATIC_WEEKLY_CONTROL_PLANE_DATABASE_URL,
+  caPem = process.env.STATIC_WEEKLY_CONTROL_PLANE_DATABASE_CA_PEM,
+  pool = null,
+} = {}) {
   if (pool) return pool;
-  if (!text(connectionString)) throw fail("static_weekly_control_plane_database_url_required");
-  return new Pool({ connectionString, max: 4, idleTimeoutMillis: 10_000, connectionTimeoutMillis: 10_000, application_name: "memphis-static-weekly-control-plane" });
+  return new Pool({
+    ...staticWeeklyDatabaseConnectionOptions({ connectionString, caPem }),
+    max: 4,
+    idleTimeoutMillis: 10_000,
+    connectionTimeoutMillis: 10_000,
+    application_name: "memphis-static-weekly-control-plane",
+  });
 }
 
 export function createStaticWeeklyControlPlane({

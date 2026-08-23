@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { createServer } from "node:http";
 import { createOpsManagerSession } from "../src/auth/shared-access-auth.js";
+import { staticWeeklyDatabaseConnectionOptions } from "../src/static-weekly-control-plane.js";
 import { createStaticWeeklyControlPlaneRuntime, startStaticWeeklyControlPlaneRuntime } from "../src/static-weekly-control-plane-runtime.js";
 
 const env = {
@@ -28,6 +29,25 @@ const currentTrustedDevice = (overrides = {}) => ({
   manager: { ...manager },
   ...overrides,
 });
+
+const tlsOptions = staticWeeklyDatabaseConnectionOptions({
+  connectionString: "postgresql://runtime:secret@db.example.invalid:5432/postgres?sslmode=require&sslrootcert=%2Ftmp%2Funtrusted.crt&uselibpqcompat=true",
+  caPem: "-----BEGIN CERTIFICATE-----\\ntest-ca-body\\n-----END CERTIFICATE-----",
+});
+const tlsUrl = new URL(tlsOptions.connectionString);
+assert.equal(tlsUrl.searchParams.has("sslmode"), false, "URL TLS settings must not replace the reviewed runtime CA policy");
+assert.equal(tlsUrl.searchParams.has("sslrootcert"), false);
+assert.equal(tlsUrl.searchParams.has("uselibpqcompat"), false);
+assert.equal(tlsOptions.ssl.rejectUnauthorized, true, "the scheduler database must verify the CA and hostname");
+assert.match(tlsOptions.ssl.ca, /BEGIN CERTIFICATE[\s\S]+END CERTIFICATE/);
+assert.throws(() => staticWeeklyDatabaseConnectionOptions({
+  connectionString: "postgresql://runtime:secret@db.example.invalid:5432/postgres?sslmode=require",
+  caPem: "",
+}), /certificate authority is required/i, "the production database path must fail closed without its CA");
+assert.throws(() => staticWeeklyDatabaseConnectionOptions({
+  connectionString: "https://db.example.invalid/postgres",
+  caPem: "-----BEGIN CERTIFICATE-----\\ntest-ca-body\\n-----END CERTIFICATE-----",
+}), /database_url_invalid/, "non-PostgreSQL URLs must be rejected before pool creation");
 
 assert.throws(() => createStaticWeeklyControlPlaneRuntime({
   env: { ...env, SUPABASE_URL: "" }, trustedDeviceStore: { async find() { return null; } }, database: {}, controlPlane: {},

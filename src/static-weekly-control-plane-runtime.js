@@ -50,7 +50,10 @@ export function createStaticWeeklyControlPlaneRuntime({
   if (!trustedStore || typeof trustedStore.find !== "function") {
     throw fail("static_weekly_control_plane_trusted_device_store_required", "The scheduler control plane requires a trusted-device revocation and association store.");
   }
-  const authorityDatabase = database || createDatabase({ connectionString: env?.STATIC_WEEKLY_CONTROL_PLANE_DATABASE_URL });
+  const authorityDatabase = database || createDatabase({
+    connectionString: env?.STATIC_WEEKLY_CONTROL_PLANE_DATABASE_URL,
+    caPem: env?.STATIC_WEEKLY_CONTROL_PLANE_DATABASE_CA_PEM,
+  });
   const authorityControlPlane = controlPlane || createControlPlane({ database: authorityDatabase });
   const app = express();
   app.disable("x-powered-by");

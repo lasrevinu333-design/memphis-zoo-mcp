@@ -22,6 +22,8 @@ services:
         sync: false
       - key: STATIC_WEEKLY_CONTROL_PLANE_DATABASE_URL
         sync: false
+      - key: STATIC_WEEKLY_CONTROL_PLANE_DATABASE_CA_PEM
+        sync: false
       - key: STATIC_WEEKLY_CONTROL_PLANE_ALLOWED_ORIGINS
         value: https://lasrevinu333-design.github.io
       - key: MEMPHIS_RELEASE_ATTESTATION_JSON
