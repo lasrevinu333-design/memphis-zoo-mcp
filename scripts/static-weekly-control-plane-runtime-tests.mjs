@@ -98,6 +98,11 @@ async function dayChanges() {
 }
 
 try {
+  let liveness = await fetch(`${origin}/healthz`);
+  assert.equal(liveness.status, 200, "liveness must pass after release/config validation and a reachable authority database");
+  assert.equal(liveness.headers.get("cache-control"), "no-store");
+  assert.equal((await liveness.json()).data.database_reachable, true);
+
   let health = await fetch(`${origin}/health`);
   assert.equal(health.status, 200, "health must pass only when the database authority reports ready");
   assert.equal(health.headers.get("cache-control"), "no-store");
@@ -198,7 +203,7 @@ try {
   await new Promise((resolve) => server.close(resolve));
 }
 
-async function fetchHealth(controlPlaneHealth) {
+async function fetchHealth(controlPlaneHealth, path = "/ready") {
   const healthRuntime = createStaticWeeklyControlPlaneRuntime({
     env,
     trustedDeviceStore: store,
@@ -208,7 +213,7 @@ async function fetchHealth(controlPlaneHealth) {
   const healthServer = createServer(healthRuntime.app);
   await new Promise((resolve) => healthServer.listen(0, "127.0.0.1", resolve));
   try {
-    const response = await fetch(`http://127.0.0.1:${healthServer.address().port}/ready`);
+    const response = await fetch(`http://127.0.0.1:${healthServer.address().port}${path}`);
     return { status: response.status, body: await response.json() };
   } finally {
     await new Promise((resolve) => healthServer.close(resolve));
@@ -224,6 +229,17 @@ unavailableHealth = await fetchHealth(() => { throw new Error("database unavaila
 assert.equal(unavailableHealth.status, 503, "an authority health failure must fail closed without exposing database errors");
 assert.equal(unavailableHealth.body.code, "static_weekly_control_plane_unavailable");
 assert.doesNotMatch(JSON.stringify(unavailableHealth.body), /database unavailable/);
+
+let livenessHealth = await fetchHealth(() => ({ ready: false, active_key_count: 0 }), "/healthz");
+assert.equal(livenessHealth.status, 200, "Render liveness must not deadlock on the schedule publication gate");
+assert.equal(livenessHealth.body.ok, true);
+assert.equal(livenessHealth.body.data.database_reachable, true);
+assert.equal(livenessHealth.body.data.authority_ready, false);
+
+livenessHealth = await fetchHealth(() => { throw new Error("database unavailable"); }, "/healthz");
+assert.equal(livenessHealth.status, 503, "liveness must still fail closed when the authority database is unreachable");
+assert.equal(livenessHealth.body.code, "static_weekly_control_plane_liveness_unavailable");
+assert.doesNotMatch(JSON.stringify(livenessHealth.body), /database unavailable/);
 
 const processTarget = new EventEmitter();
 let closeCount = 0;

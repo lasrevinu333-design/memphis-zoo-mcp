@@ -81,6 +81,15 @@ export function createStaticWeeklyControlPlaneRuntime({
   }
 
   function manager(req) { return req.memphisAuth; }
+  function releaseIdentityPayload() {
+    return releaseIdentity ? {
+      release_id: releaseIdentity.release_id,
+      backend_commit_sha: releaseIdentity.backend_commit_sha,
+      backend_tree_sha: releaseIdentity.backend_tree_sha,
+      frontend_commit_sha: releaseIdentity.frontend_commit_sha,
+      schema_fingerprint: releaseIdentity.schema_fingerprint,
+    } : null;
+  }
   function respond(operation) {
     return async (req, res) => {
       try { res.status(200).json({ ok: true, data: await operation(req) }); }
@@ -95,13 +104,7 @@ export function createStaticWeeklyControlPlaneRuntime({
       res.status(ready ? 200 : 503).json({
         ok: ready,
         data,
-        release_identity: releaseIdentity ? {
-          release_id: releaseIdentity.release_id,
-          backend_commit_sha: releaseIdentity.backend_commit_sha,
-          backend_tree_sha: releaseIdentity.backend_tree_sha,
-          frontend_commit_sha: releaseIdentity.frontend_commit_sha,
-          schema_fingerprint: releaseIdentity.schema_fingerprint,
-        } : null,
+        release_identity: releaseIdentityPayload(),
         ...(ready ? {} : { error: "The static weekly scheduler authority is not ready.", code: "static_weekly_control_plane_not_ready" }),
       });
     } catch (_error) {
@@ -114,6 +117,29 @@ export function createStaticWeeklyControlPlaneRuntime({
     }
   }
 
+  async function liveness(_req, res) {
+    try {
+      const data = await authorityControlPlane.health();
+      res.status(200).json({
+        ok: true,
+        data: {
+          process_ready: true,
+          database_reachable: true,
+          authority_ready: data?.ready === true,
+        },
+        release_identity: releaseIdentityPayload(),
+      });
+    } catch (_error) {
+      res.status(503).json({
+        ok: false,
+        data: { process_ready: true, database_reachable: false, authority_ready: false },
+        error: "The static weekly scheduler database is unavailable.",
+        code: "static_weekly_control_plane_liveness_unavailable",
+      });
+    }
+  }
+
+  app.get("/healthz", liveness);
   app.get(["/health", "/ready"], readiness);
   app.get("/static-weekly/manager-snapshot", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.getManagerSnapshot({ manager: manager(req), weekStart: req.query?.week_start })));
   app.post("/static-weekly/drafts/initial", requireManagerWrite, namedManager, respond((req) => authorityControlPlane.createInitialDraft({ manager: manager(req), sourceId: req.body?.source_id, effectiveStart: req.body?.effective_start, expectedRevision: req.body?.expected_revision, idempotencyKey: req.body?.idempotency_key })));

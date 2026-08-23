@@ -8,7 +8,7 @@ services:
     branch: main
     buildCommand: npm ci --ignore-scripts
     startCommand: npm run start:static-weekly-control-plane
-    healthCheckPath: /ready
+    healthCheckPath: /healthz
     autoDeployTrigger: off
     maxShutdownDelaySeconds: 30
     envVars:
