@@ -243,7 +243,7 @@
       {
         "path": "deploy/static-weekly-control-plane.render.yaml",
         "mode": "100644",
-        "object_id": "dc8fba741e5d1208678df97825c1e482681b375c"
+        "object_id": "f2103b1f6ced8c6ae5dabc3f9b3388bc5d01e1d0"
       },
       {
         "path": "docs/AI_INTEGRATION_ARCHITECTURE.md",
@@ -1183,12 +1183,12 @@
       {
         "path": "scripts/static-weekly-control-plane-deployment-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "0bede415b70d56aa24e67ed9396490aafacdf25b"
+        "object_id": "7925f9a89fd8c6cf05a25dc0a01c57ba9f7b28fd"
       },
       {
         "path": "scripts/static-weekly-control-plane-runtime-tests.mjs",
         "mode": "100644",
-        "object_id": "20fcb63d2692edc923dbc17118794b91d42297d4"
+        "object_id": "eadf6f7de0ea035774a3792d2c2a1c4066b7a714"
       },
       {
         "path": "scripts/static-weekly-control-plane-tests.mjs",
@@ -1778,7 +1778,7 @@
       {
         "path": "src/static-weekly-control-plane-runtime.js",
         "mode": "100644",
-        "object_id": "b8f45dc50d58f3bd81d707c8031495a02b098c80"
+        "object_id": "be50ae55ea99d03efb6dbcd1c24c68f6fda9ab02"
       },
       {
         "path": "src/static-weekly-control-plane.js",
