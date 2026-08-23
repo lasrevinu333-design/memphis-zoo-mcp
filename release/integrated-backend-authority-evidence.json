@@ -747,7 +747,7 @@
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "9c1722b770fc4e8191a4143f3fb2ba24e1b13005"
+        "object_id": "10f51b7b19be81e78fe3f9a2c4ee2a7e9f026d1e"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
