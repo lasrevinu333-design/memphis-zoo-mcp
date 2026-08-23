@@ -28,7 +28,7 @@ const releaseInput = JSON.parse(readFileSync("release/integrated-backend-authori
 const releaseEvidence = JSON.parse(readFileSync("release/integrated-backend-authority-evidence.json", "utf8"));
 const pendingMigrationPlan = JSON.parse(readFileSync("release/pending-production-migration-plan.json", "utf8"));
 const exactPendingProductionMigrations = [
-  "20260822222500_correct_coverall_second_absence_policy.sql",
+  "20260823024500_provision_static_weekly_runtime_identity.sql",
 ];
 
 assert.match(phaseA, /Phase A is deliberately additive/i);
@@ -126,14 +126,14 @@ assert.match(releaseInput.cutover.phase_order[1], /release:populated-schema:pref
 assert.equal(releaseInput.cutover.production_migration_plan, "release/pending-production-migration-plan.json");
 assert.equal(pendingMigrationPlan.artifact, "pending-production-migration-plan.v2");
 assert.equal(pendingMigrationPlan.project_ref, "rqquvtjdmugpigbndmne");
-assert.equal(pendingMigrationPlan.observed_production.ledger_head, "20260822175243");
-assert.equal(pendingMigrationPlan.observed_production.source_migration_name, "repair_runtime_read_and_scan_alert_authority");
-assert.equal(pendingMigrationPlan.observed_production.catalog_privilege_fingerprint, "b890754824a2e86d4df1b75c134fd233fcf2e42928c9f5a74c1233e4012202f7");
-assert.equal(pendingMigrationPlan.target.source_migration_file, "20260822222500_correct_coverall_second_absence_policy.sql");
-assert.equal(pendingMigrationPlan.target.source_migration_name, "correct_coverall_second_absence_policy");
+assert.equal(pendingMigrationPlan.observed_production.ledger_head, "20260823012608");
+assert.equal(pendingMigrationPlan.observed_production.source_migration_name, "correct_coverall_second_absence_policy");
+assert.equal(pendingMigrationPlan.observed_production.catalog_privilege_fingerprint, "5bcb02001e4096f5ad5d0d457202d90ca3fbe9cfe4c60793d11af384378f33d2");
+assert.equal(pendingMigrationPlan.target.source_migration_file, "20260823024500_provision_static_weekly_runtime_identity.sql");
+assert.equal(pendingMigrationPlan.target.source_migration_name, "provision_static_weekly_runtime_identity");
 assert.equal(pendingMigrationPlan.target.ledger_version_policy, "runner_assigned_and_postverified");
-assert.equal(pendingMigrationPlan.target.canonical_schema_fingerprint, "5bcb02001e4096f5ad5d0d457202d90ca3fbe9cfe4c60793d11af384378f33d2");
-assert.equal(pendingMigrationPlan.authorization.production_apply_authorized, false);
+assert.equal(pendingMigrationPlan.target.canonical_schema_fingerprint, "d8bbe5ddaa2a5886d27c80edf96098a83d4bf64e5ffd8b824d5d342a2767afe8");
+assert.equal(pendingMigrationPlan.authorization.production_apply_authorized, true);
 assert.deepEqual(pendingMigrationPlan.migrations.map(({ file }) => file), exactPendingProductionMigrations);
 for (const [index, migration] of pendingMigrationPlan.migrations.entries()) {
   assert.equal(migration.order, index + 1);

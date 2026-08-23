@@ -41,9 +41,9 @@ const phaseO = "20260820153000_append_only_cleaning_identity_corrections.sql";
 const phaseP = "20260820154000_late_gps_is_advisory_only.sql";
 const terminalWriterDetection = "20260820154500_precise_terminal_writer_detection.sql";
 const releaseRecoveryRebind = "20260820155000_rebind_release_recovery_inventory_to_current_authority.sql";
-const coverAllSecondAbsencePolicy = "20260822222500_correct_coverall_second_absence_policy.sql";
+const staticWeeklyRuntimeIdentity = "20260823024500_provision_static_weekly_runtime_identity.sql";
 const pendingProductionMigrations = [
-  coverAllSecondAbsencePolicy,
+  staticWeeklyRuntimeIdentity,
 ];
 const releaseInputPath = "release/integrated-backend-authority-input.json";
 const releaseEvidencePath = "release/integrated-backend-authority-evidence.json";
@@ -323,15 +323,15 @@ assert.deepEqual(input.cutover.phase_order, [
 assert.equal(input.cutover.production_migration_plan, pendingMigrationPlanPath);
 assert.equal(pendingMigrationPlan.artifact, "pending-production-migration-plan.v2");
 assert.equal(pendingMigrationPlan.project_ref, "rqquvtjdmugpigbndmne");
-assert.equal(pendingMigrationPlan.observed_production?.ledger_head, "20260822175243");
-assert.equal(pendingMigrationPlan.observed_production?.source_migration_name, "repair_runtime_read_and_scan_alert_authority");
-assert.equal(pendingMigrationPlan.observed_production?.catalog_privilege_fingerprint, "b890754824a2e86d4df1b75c134fd233fcf2e42928c9f5a74c1233e4012202f7");
-assert.equal(pendingMigrationPlan.target?.source_migration_file, coverAllSecondAbsencePolicy);
-assert.equal(pendingMigrationPlan.target?.source_migration_name, "correct_coverall_second_absence_policy");
+assert.equal(pendingMigrationPlan.observed_production?.ledger_head, "20260823012608");
+assert.equal(pendingMigrationPlan.observed_production?.source_migration_name, "correct_coverall_second_absence_policy");
+assert.equal(pendingMigrationPlan.observed_production?.catalog_privilege_fingerprint, "5bcb02001e4096f5ad5d0d457202d90ca3fbe9cfe4c60793d11af384378f33d2");
+assert.equal(pendingMigrationPlan.target?.source_migration_file, staticWeeklyRuntimeIdentity);
+assert.equal(pendingMigrationPlan.target?.source_migration_name, "provision_static_weekly_runtime_identity");
 assert.equal(pendingMigrationPlan.target?.ledger_version_policy, "runner_assigned_and_postverified");
 assert.equal(pendingMigrationPlan.target?.canonical_schema_fingerprint, schemaFingerprint);
 assert.equal(pendingMigrationPlan.source_binding?.kind, "external_exact_head_release_attestation");
-assert.equal(pendingMigrationPlan.authorization?.production_apply_authorized, false);
+assert.equal(pendingMigrationPlan.authorization?.production_apply_authorized, true);
 assert.equal(pendingMigrationPlan.authorization?.sequence_policy, "single_migration_stop_on_failed_preflight_or_postcheck");
 assert.equal(pendingMigrationPlan.migrations?.length, pendingProductionMigrations.length);
 assert.deepEqual(pendingMigrationPlan.migrations.map(({ file }) => file), pendingProductionMigrations);
