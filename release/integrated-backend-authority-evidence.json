@@ -3,14 +3,14 @@
   "release_id": "release-2026.07.19.custodial-v3.12",
   "frontend_commit_sha": "c43836a2b94067333797fb01f53796971aca8892",
   "frontend_commit_state": "final_pair_bound",
-  "schema_fingerprint": "d8bbe5ddaa2a5886d27c80edf96098a83d4bf64e5ffd8b824d5d342a2767afe8",
+  "schema_fingerprint": "670cfa8c21e8ca852832a0f77aaedb59be5db0b86f59016bd9133cda2e4173b3",
   "schema_transition": {
     "transition_id": "custodial-foundation-authority-cutover-20260821",
     "from_fingerprint": "b890754824a2e86d4df1b75c134fd233fcf2e42928c9f5a74c1233e4012202f7",
-    "to_fingerprint": "d8bbe5ddaa2a5886d27c80edf96098a83d4bf64e5ffd8b824d5d342a2767afe8",
+    "to_fingerprint": "670cfa8c21e8ca852832a0f77aaedb59be5db0b86f59016bd9133cda2e4173b3",
     "expires_at": "2026-09-03T23:59:59Z"
   },
-  "frontend_source_fingerprint": "d8bbe5ddaa2a5886d27c80edf96098a83d4bf64e5ffd8b824d5d342a2767afe8",
+  "frontend_source_fingerprint": "670cfa8c21e8ca852832a0f77aaedb59be5db0b86f59016bd9133cda2e4173b3",
   "backend_contract": {
     "scan": "scan.v4.snapshot-bound-authority",
     "authority": "offline-authority.v5",
@@ -47,7 +47,8 @@
     "managed_schema_authority_normalization_phase": "20260815160613 removes broad future-object defaults; 20260815163346 preserves application and scheduler access through explicit role grants while keeping PUBLIC revoked, and managed postgres/supabase_admin deployment authority remains comparable without hiding application grants or role memberships",
     "runtime_read_and_scan_alert_authority_phase": "20260822170000 restores the pure service-date helper only to the restricted reader and routes scan-alert delivery through the one canonical Memphis conversation without rewriting existing evidence",
     "coverall_second_absence_policy_phase": "20260822222500 keeps the first absence internal and assigns each second or later absence to one distinct registered CoverAll capacity without rewriting manager overrides",
-    "static_weekly_runtime_identity_phase": "20260823024500 provisions one passwordless-by-source NOINHERIT login shell with only static_weekly_control_plane membership; release operations install its generated SCRAM verifier out of band before the dedicated service can become ready"
+    "static_weekly_runtime_identity_phase": "20260823024500 provisions one passwordless-by-source NOINHERIT login shell with only static_weekly_control_plane membership; release operations install its generated SCRAM verifier out of band before the dedicated service can become ready",
+    "static_weekly_family_location_truth_phase": "20260823060000 preserves the exact physical-location family behind each routing anchor across compilation, event overlays, projections, and the employee-day read surface while retaining legacy singleton reads"
   },
   "rollback": {
     "before_enforcement": "legacy Engine and current backend completion remain available",
@@ -406,7 +407,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "720e77c0582ab0077e3dc1545af3fe3eec1e2c69"
+        "object_id": "f3582df2a14d73a8d4f8b0ae441acde899a04e43"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -416,7 +417,7 @@
       {
         "path": "release/pending-production-migration-plan.json",
         "mode": "100644",
-        "object_id": "040c2ffb75f23f8233639b8744bc579c810a16f0"
+        "object_id": "414105b4a1ec0c7568f549d0e715e0102f5bf193"
       },
       {
         "path": "release/reviewed-migrations/20260809125735_cleaning_inspection_24_hour_freshness.sql",
@@ -741,17 +742,17 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "65fbf4f3e05fc55e06f6133bd800c084f7a18ca5"
+        "object_id": "b4b12fcc1b6bf593fc28c0511e0d430d65c7573d"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "983483163cadcdf6997964ffcf22f6d6a3154afd"
+        "object_id": "beb0988cb5d77f544fabd853ad450dd90293af4d"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
         "mode": "100644",
-        "object_id": "0d27ed2829eca30518561eadf2ca4001e2e3dae3"
+        "object_id": "7b4b30b37af875849d786d3d00d0b10f56ed7d61"
       },
       {
         "path": "scripts/integrated-backend-authority-suite-order-isolated-tests.mjs",
@@ -996,7 +997,7 @@
       {
         "path": "scripts/refresh-integrated-backend-authority-release.mjs",
         "mode": "100644",
-        "object_id": "753e44b52468d97d9d3f5cc3b33b829801391d2a"
+        "object_id": "974256fd112306fe124709e5537670295154b7ea"
       },
       {
         "path": "scripts/refresh-release-schema-alignment.mjs",
@@ -1211,7 +1212,7 @@
       {
         "path": "scripts/static-weekly-schedule-authority-v3-tests.mjs",
         "mode": "100644",
-        "object_id": "bfc1ed8eb618f6b42ae5065bd3c4c165c2f03210"
+        "object_id": "ff395ee33297a93e59ad2b0c402977470b630ae2"
       },
       {
         "path": "scripts/static-weekly-schedule-candidate-importer.mjs",
@@ -1231,7 +1232,7 @@
       {
         "path": "scripts/static-weekly-schedule-database-adapter-tests.mjs",
         "mode": "100644",
-        "object_id": "4b75443bb1d4d2c0d7d62a227f98867f244d71bd"
+        "object_id": "ad0b119124323847a8ab67896aa7fe0c2d161d7e"
       },
       {
         "path": "scripts/static-weekly-schedule-database-tests.mjs",
@@ -1241,7 +1242,7 @@
       {
         "path": "scripts/static-weekly-schedule-exception-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "518f647724729832762edb42918b5be9653c7b4f"
+        "object_id": "300e1e3f088bd3793de7648680b0d34ba8c9420c"
       },
       {
         "path": "scripts/static-weekly-schedule-model-tests.mjs",
@@ -1781,22 +1782,22 @@
       {
         "path": "src/static-weekly-schedule-compiler.js",
         "mode": "100644",
-        "object_id": "258da3d2cd7737ad264398c1db05dcaaae3542c1"
+        "object_id": "036f597c5e89e53ea981aafc42d0150f9ffa0679"
       },
       {
         "path": "src/static-weekly-schedule-database-adapter.js",
         "mode": "100644",
-        "object_id": "46c85e5cce4f03608a23a300b47b43796f1cae4f"
+        "object_id": "46e844e92f2c86889e17ccdcb9a077801d416733"
       },
       {
         "path": "src/static-weekly-schedule-model.js",
         "mode": "100644",
-        "object_id": "afcef45dede961fab08ec9217e3678122175a7c9"
+        "object_id": "fca8ecf285e02817c03b711ccbb4cb5b9c81d0c3"
       },
       {
         "path": "src/static-weekly-schedule-program.js",
         "mode": "100644",
-        "object_id": "f290c4fedc9d06cbe772c6923e078423a351cf85"
+        "object_id": "bf97bbfb0a78b6c25ca4006a24015c4a88a2454a"
       },
       {
         "path": "src/static-weekly-schedule-solver-worker.js",
@@ -1811,7 +1812,7 @@
       {
         "path": "src/static-weekly-schedule-verifier.js",
         "mode": "100644",
-        "object_id": "2e2e0f5395386b15d29eefadfb20eb3628f3142d"
+        "object_id": "5ed9cc9ea675fcbd1cd766a65a8f145f79eeefd5"
       },
       {
         "path": "src/supabase/client.js",
@@ -1866,12 +1867,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "b4c8102fdb81bddc5a313e8ed2a88836749c778b"
+        "object_id": "7a87c03df1d4ba9136e461b8105aebaef19fdeef"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "612bbf9aec5c93d3ce6866420418e6198b1bdc52"
+        "object_id": "8c756c81e5c0316edf3c7ec6477cd9a51ff80406"
       },
       {
         "path": "supabase/config.toml",
@@ -2949,13 +2950,18 @@
         "object_id": "c5992a5a7cae058cd9b49e9387d74cbce8c204fe"
       },
       {
+        "path": "supabase/migrations/20260823060000_static_weekly_family_location_truth.sql",
+        "mode": "100644",
+        "object_id": "31b320a726c0dd36daa7a80dd66085bb9029c7f7"
+      },
+      {
         "path": "tmp/write_probe.txt",
         "mode": "100644",
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 570,
-    "migration_path_count": 97,
+    "authority_path_count": 571,
+    "migration_path_count": 98,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
   },
@@ -3256,6 +3262,9 @@
     },
     {
       "name": "20260823024500_provision_static_weekly_runtime_identity.sql"
+    },
+    {
+      "name": "20260823060000_static_weekly_family_location_truth.sql"
     }
   ],
   "release_boundary": "Prepare distinct minimum-32-character backend and native-route secrets before cutover; configure their database digests immediately after the migrations that create each configuration function, retain the bridge backend artifact through the scan-snapshot phase, and require the executable health/restoration probes before traffic changes."
