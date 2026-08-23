@@ -3,11 +3,11 @@
   "frontend_commit_sha": "c43836a2b94067333797fb01f53796971aca8892",
   "frontend_commit_state": "final_pair_bound",
   "backend_minimum_version": "release-2026.07.19.custodial-v3.12",
-  "schema_fingerprint": "d8bbe5ddaa2a5886d27c80edf96098a83d4bf64e5ffd8b824d5d342a2767afe8",
+  "schema_fingerprint": "670cfa8c21e8ca852832a0f77aaedb59be5db0b86f59016bd9133cda2e4173b3",
   "schema_transition": {
     "transition_id": "custodial-foundation-authority-cutover-20260821",
     "from_fingerprint": "b890754824a2e86d4df1b75c134fd233fcf2e42928c9f5a74c1233e4012202f7",
-    "to_fingerprint": "d8bbe5ddaa2a5886d27c80edf96098a83d4bf64e5ffd8b824d5d342a2767afe8",
+    "to_fingerprint": "670cfa8c21e8ca852832a0f77aaedb59be5db0b86f59016bd9133cda2e4173b3",
     "expires_at": "2026-09-03T23:59:59Z"
   },
   "api_contract_versions": {

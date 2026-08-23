@@ -6,9 +6,26 @@ import {
   createStaticWeeklyDraftRpcInput,
   createStaticWeeklyProjectionRpcInput,
 } from "../src/static-weekly-schedule-database-adapter.js";
+import { normalizeStaticWeeklyIncludedLocations } from "../src/static-weekly-schedule-program.js";
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const manager = { managerId: "10000000-0000-4000-8000-000000000001", managerName: "Named Manager", idempotencyKey: "adapter-unit-draft" };
+
+assert.deepEqual(
+  normalizeStaticWeeklyIncludedLocations({ locationId: "location-a", locationNameSnapshot: "Area A" }),
+  [{ locationId: "location-a", locationNameSnapshot: "Area A" }],
+  "historical single-location source receives one exact canonical family member",
+);
+for (const [label, work] of [
+  ["routing anchor outside family", { locationId: "location-a", locationNameSnapshot: "Area A", includedLocations: [{ locationId: "location-b", locationNameSnapshot: "Area B" }] }],
+  ["duplicate location identity", { locationId: "location-a", locationNameSnapshot: "Area A", includedLocations: [{ locationId: "location-a", locationNameSnapshot: "Area A" }, { locationId: "location-a", locationNameSnapshot: "Area A duplicate" }] }],
+  ["malformed location object", { locationId: "location-a", locationNameSnapshot: "Area A", includedLocations: [{ locationId: "location-a", locationNameSnapshot: "Area A", routeOrder: 1 }] }],
+  ["empty family", { locationId: "location-a", locationNameSnapshot: "Area A", includedLocations: [] }],
+]) assert.throws(
+  () => normalizeStaticWeeklyIncludedLocations(work),
+  (error) => error?.code === "invalid_included_location_facts",
+  label,
+);
 
 function sevenDayInput({ review = false, eventOverlay = false } = {}) {
   const slotA = "20000000-0000-4000-8000-000000000001";
@@ -35,10 +52,25 @@ function sevenDayInput({ review = false, eventOverlay = false } = {}) {
     dayOfWeek === 0 || dayOfWeek === 6 ? "repeated-work-id" : `work-${dayOfWeek}`,
     dayOfWeek, dayOfWeek % 2 ? placeB : placeA, dayOfWeek % 2 ? slotB : slotA,
   ));
+  assignments[0].includedLocations = [
+    { locationId: placeA, locationNameSnapshot: "Aquarium" },
+    { locationId: placeB, locationNameSnapshot: "Aquarium Restroom" },
+  ];
   assignments.push(work("optional-open", 4, placeB, slotB, { required: false, coveragePolicy: "permitted_open", requiredQualifications: ["unavailable-optional"] }));
-  if (eventOverlay) assignments.push(work("event-patch-target", 1, placeA, slotA, {
-    locationCodeSnapshot: "PATCH_BASE", locationNameSnapshot: "Patch Base", window: { start: "10:00", end: "11:00" }, serviceEffortMinutes: 20,
-  }));
+  if (eventOverlay) {
+    const family = () => [
+      { locationId: placeA, locationNameSnapshot: "Patch Base" },
+      { locationId: placeB, locationNameSnapshot: "Patch Restroom" },
+    ];
+    assignments.push(work("event-patch-target", 1, placeA, slotA, {
+      locationCodeSnapshot: "PATCH_BASE", locationNameSnapshot: "Patch Base", includedLocations: family(),
+      window: { start: "10:00", end: "11:00" }, serviceEffortMinutes: 20,
+    }));
+    assignments.push(work("event-relocated-target", 1, placeA, slotA, {
+      locationCodeSnapshot: "RELOCATE_BASE", locationNameSnapshot: "Relocate Base", includedLocations: family(),
+      window: { start: "11:00", end: "12:00" }, serviceEffortMinutes: 20,
+    }));
+  }
   const exceptions = eventOverlay ? [{
     id: "adapter-event-impact-accepted", type: "event_impact", status: "accepted", serviceDate: "2026-10-05",
     baseVersionId: "adapter-real-seven-day", publicationId: "adapter-real-publication", actorId: "adapter-test-event-manager",
@@ -46,15 +78,25 @@ function sevenDayInput({ review = false, eventOverlay = false } = {}) {
     payload: {
       removeWorkIds: ["work-1"],
       patchWork: [{
-        workId: "event-patch-target", locationId: placeB, locationCodeSnapshot: "EVENT_PATCH", locationNameSnapshot: "Event Patch Exhibit",
+        workId: "event-patch-target", locationId: placeA, locationCodeSnapshot: "EVENT_PATCH", locationNameSnapshot: "Event Patch Exhibit",
         window: { start: "10:00", end: "11:30" }, serviceEffortMinutes: 45, serviceEffortProvenance: "adapter-test-event-patch-effort-v1",
         priority: 2, priorityProvenance: "adapter-test-event-patch-priority-v1", requiredQualifications: ["general"],
         qualificationProvenance: "adapter-test-event-patch-qualification-v1", restrictions: ["event-patch-restriction"],
         restrictionProvenance: "adapter-test-event-patch-restriction-v1",
+      }, {
+        workId: "event-relocated-target", locationId: placeB, locationCodeSnapshot: "EVENT_RELOCATED", locationNameSnapshot: "Relocated Event Exhibit",
+        window: { start: "11:00", end: "12:30" }, serviceEffortMinutes: 35, serviceEffortProvenance: "adapter-test-event-relocated-effort-v1",
+        priority: 3, priorityProvenance: "adapter-test-event-relocated-priority-v1", requiredQualifications: ["general"],
+        qualificationProvenance: "adapter-test-event-relocated-qualification-v1", restrictions: ["event-relocated-restriction"],
+        restrictionProvenance: "adapter-test-event-relocated-restriction-v1",
       }],
       addWork: [{
         workId: "event-added-work", dayOfWeek: 1, originSlotId: slotA, locationId: placeA, locationCodeSnapshot: "EVENT_ADD",
         locationNameSnapshot: "Event Added Exhibit", window: { start: "12:00", end: "13:00" }, serviceEffortMinutes: 30,
+        includedLocations: [
+          { locationId: placeA, locationNameSnapshot: "Event Added Exhibit" },
+          { locationId: placeB, locationNameSnapshot: "Event Added Restroom" },
+        ],
         serviceEffortProvenance: "adapter-test-event-add-effort-v1", priority: 1, priorityProvenance: "adapter-test-event-add-priority-v1",
         requiredQualifications: ["general"], qualificationProvenance: "adapter-test-event-add-qualification-v1", restrictions: ["event-add-restriction"],
         restrictionProvenance: "adapter-test-event-add-restriction-v1",
@@ -106,6 +148,14 @@ assert.equal(draft.inputProvenance.authority_digest, real.authorityDigest);
 const projection = createStaticWeeklyProjectionRpcInput({ result: real, publicationId: "50000000-0000-4000-8000-000000000001", expectedRevision: 5, actor: { ...manager, idempotencyKey: "adapter-unit-projection" } });
 assert.equal(projection.envelope.assignments.length, real.weeklyAssignments.length, "projection is the complete seven-day optimizer projection, never a same-day subset");
 assert.equal(projection.envelope.assignments.filter((row) => row.status === "open").every((row) => row.owner_slot_id === null && row.owner_person_id === null), true);
+assert.deepEqual(
+  projection.envelope.assignments.find((row) => row.plan_work_id === "0:repeated-work-id")?.work_snapshot?.includedLocations,
+  [
+    { locationId: "40000000-0000-4000-8000-000000000011", locationNameSnapshot: "Aquarium" },
+    { locationId: "40000000-0000-4000-8000-000000000012", locationNameSnapshot: "Aquarium Restroom" },
+  ],
+  "a schedule family preserves every exact included area through the attested projection envelope",
+);
 assert.equal("attestation" in projection.envelope, false, "the pure adapter never emits a dated signing primitive");
 
 const alteredOwner = clone(real);
@@ -116,7 +166,7 @@ assert.throws(() => adaptCompiledStaticWeeklySchedule(missingCertificate), /data
 assert.throws(() => adaptCompiledStaticWeeklySchedule({ status: "FEASIBLE", canonicalAuthority: {} }), /database_adapter_authority_schema_invalid/);
 
 const eventOverlay = await compileStaticWeeklySchedule(sevenDayInput({ eventOverlay: true }));
-assert.equal(eventOverlay.status, "FEASIBLE", "the accepted event overlay compiles through the real frozen compiler");
+assert.equal(eventOverlay.status, "FEASIBLE", `the accepted event overlay compiles through the real frozen compiler: ${JSON.stringify(eventOverlay.fatal || eventOverlay.verifier)}`);
 assert.equal(eventOverlay.verifier.ok, true, "the accepted event overlay compiles through the real frozen verifier");
 assert.deepEqual(eventOverlay.canonicalAuthority.appliedExceptions.map((item) => item.id), ["adapter-event-impact-accepted"]);
 assert.equal(eventOverlay.weeklyAssignments.some((row) => row.planWorkId === "1:work-1"), false, "event removeWorkIds removes baseline work from the active optimizer result");
@@ -130,14 +180,32 @@ assert.throws(
 const eventProjection = createStaticWeeklyProjectionRpcInput({ result: eventOverlay, publicationId: "50000000-0000-4000-8000-000000000002", expectedRevision: 7, actor: { ...manager, idempotencyKey: "adapter-event-projection" } });
 const expectedEventWork = {
   "event-patch-target": {
-    locationId: "40000000-0000-4000-8000-000000000012", locationCodeSnapshot: "EVENT_PATCH", locationNameSnapshot: "Event Patch Exhibit",
+    locationId: "40000000-0000-4000-8000-000000000011", locationCodeSnapshot: "EVENT_PATCH", locationNameSnapshot: "Event Patch Exhibit",
+    includedLocations: [
+      { locationId: "40000000-0000-4000-8000-000000000011", locationNameSnapshot: "Patch Base" },
+      { locationId: "40000000-0000-4000-8000-000000000012", locationNameSnapshot: "Patch Restroom" },
+    ],
     window: { start: "10:00", end: "11:30" }, serviceEffortMinutes: 45, serviceEffortProvenance: "adapter-test-event-patch-effort-v1",
     priority: 2, priorityProvenance: "adapter-test-event-patch-priority-v1", requiredQualifications: ["general"],
     qualificationProvenance: "adapter-test-event-patch-qualification-v1", restrictions: ["event-patch-restriction"], restrictionProvenance: "adapter-test-event-patch-restriction-v1",
     manualLock: false, overlayWork: false,
   },
+  "event-relocated-target": {
+    locationId: "40000000-0000-4000-8000-000000000012", locationCodeSnapshot: "EVENT_RELOCATED", locationNameSnapshot: "Relocated Event Exhibit",
+    includedLocations: [
+      { locationId: "40000000-0000-4000-8000-000000000012", locationNameSnapshot: "Relocated Event Exhibit" },
+    ],
+    window: { start: "11:00", end: "12:30" }, serviceEffortMinutes: 35, serviceEffortProvenance: "adapter-test-event-relocated-effort-v1",
+    priority: 3, priorityProvenance: "adapter-test-event-relocated-priority-v1", requiredQualifications: ["general"],
+    qualificationProvenance: "adapter-test-event-relocated-qualification-v1", restrictions: ["event-relocated-restriction"], restrictionProvenance: "adapter-test-event-relocated-restriction-v1",
+    manualLock: false, overlayWork: false,
+  },
   "event-added-work": {
     locationId: "40000000-0000-4000-8000-000000000011", locationCodeSnapshot: "EVENT_ADD", locationNameSnapshot: "Event Added Exhibit",
+    includedLocations: [
+      { locationId: "40000000-0000-4000-8000-000000000011", locationNameSnapshot: "Event Added Exhibit" },
+      { locationId: "40000000-0000-4000-8000-000000000012", locationNameSnapshot: "Event Added Restroom" },
+    ],
     window: { start: "12:00", end: "13:00" }, serviceEffortMinutes: 30, serviceEffortProvenance: "adapter-test-event-add-effort-v1",
     priority: 1, priorityProvenance: "adapter-test-event-add-priority-v1", requiredQualifications: ["general"],
     qualificationProvenance: "adapter-test-event-add-qualification-v1", restrictions: ["event-add-restriction"], restrictionProvenance: "adapter-test-event-add-restriction-v1",
@@ -149,6 +217,7 @@ for (const [workId, expected] of Object.entries(expectedEventWork)) {
   assert.deepEqual({
     workId: projectionRow?.work_snapshot?.workId, dayOfWeek: projectionRow?.work_snapshot?.dayOfWeek, locationId: projectionRow?.work_snapshot?.locationId,
     locationCodeSnapshot: projectionRow?.work_snapshot?.locationCodeSnapshot, locationNameSnapshot: projectionRow?.work_snapshot?.locationNameSnapshot,
+    includedLocations: projectionRow?.work_snapshot?.includedLocations,
     window: { start: projectionRow?.work_snapshot?.window?.start, end: projectionRow?.work_snapshot?.window?.end },
     serviceEffortMinutes: projectionRow?.work_snapshot?.serviceEffortMinutes,
     serviceEffortProvenance: projectionRow?.work_snapshot?.serviceEffortProvenance, priority: projectionRow?.work_snapshot?.priority,
@@ -157,7 +226,7 @@ for (const [workId, expected] of Object.entries(expectedEventWork)) {
     restrictionProvenance: projectionRow?.work_snapshot?.restrictionProvenance, manualLock: projectionRow?.work_snapshot?.manualLock, overlayWork: projectionRow?.work_snapshot?.overlayWork,
   }, {
     workId, dayOfWeek: 1, locationId: expected.locationId, locationCodeSnapshot: expected.locationCodeSnapshot,
-    locationNameSnapshot: expected.locationNameSnapshot, window: expected.window, serviceEffortMinutes: expected.serviceEffortMinutes,
+    locationNameSnapshot: expected.locationNameSnapshot, includedLocations: expected.includedLocations, window: expected.window, serviceEffortMinutes: expected.serviceEffortMinutes,
     serviceEffortProvenance: expected.serviceEffortProvenance, priority: expected.priority, priorityProvenance: expected.priorityProvenance,
     requiredQualifications: expected.requiredQualifications, qualificationProvenance: expected.qualificationProvenance,
     restrictions: expected.restrictions, restrictionProvenance: expected.restrictionProvenance, manualLock: expected.manualLock, overlayWork: expected.overlayWork,

@@ -60,6 +60,29 @@ attack("event_impact", (command) => { command.payload.removeWorkIds = ["work-a",
 attack("event_impact", (command) => { command.payload.patchWork = [work(false), work(false)]; command.payload.removeWorkIds = []; });
 attack("event_impact", (command) => { command.payload.addWork = [work(true)]; command.payload.removeWorkIds = []; command.payload.addWork[0].dayOfWeek = 7; });
 attack("event_impact", (command) => { command.payload.addWork = [work(true)]; command.payload.removeWorkIds = []; command.payload.addWork[0].serviceEffortMinutes = -1; });
+for (const added of [false, true]) {
+  const withFamily = work(added);
+  withFamily.includedLocations = [
+    { locationId: "location-a", locationNameSnapshot: "Event area" },
+    { locationId: "location-b", locationNameSnapshot: "Event restroom" },
+  ];
+  assert.doesNotThrow(
+    () => assertExceptionCommand(base("event_impact", { removeWorkIds: [], patchWork: added ? [] : [withFamily], addWork: added ? [withFamily] : [] })),
+    `event ${added ? "addition" : "patch"} accepts one exact multi-location family`,
+  );
+  for (const mutate of [
+    (item) => { item.includedLocations[1] = clone(item.includedLocations[0]); },
+    (item) => { item.includedLocations = [{ locationId: "location-b", locationNameSnapshot: "Event restroom" }]; },
+    (item) => { item.includedLocations[0].unexpected = true; },
+  ]) {
+    const invalid = clone(withFamily); mutate(invalid);
+    assert.throws(
+      () => assertExceptionCommand(base("event_impact", { removeWorkIds: [], patchWork: added ? [] : [invalid], addWork: added ? [invalid] : [] })),
+      /included|unknown|canonical|repeat|routing/i,
+      `event ${added ? "addition" : "patch"} rejects malformed family authority`,
+    );
+  }
+}
 attack("reverse", (command) => { command.reversesExceptionId = "different-target"; });
 attack("reverse", (command) => { command.payload.reversesExceptionId = 42; });
 

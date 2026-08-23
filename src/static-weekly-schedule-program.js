@@ -50,7 +50,7 @@ export function canonicalProgramMatches(received, regenerated) {
 
 // prior spread-based receipt.  It is an immutable compiler identity, rather
 // than a label which callers may override.
-export const STATIC_WEEKLY_SCHEDULER_VERSION = "static-weekly-highs-mip-v4-monotonic-leximax";
+export const STATIC_WEEKLY_SCHEDULER_VERSION = "static-weekly-highs-mip-v5-family-location-truth";
 export const STATIC_WEEKLY_SERVER_LIMITS = Object.freeze({
   maxVersions: 64,
   maxSlots: 256,
@@ -148,12 +148,44 @@ function planWorkCompare(left, right) {
     || identityCompare(left.workId, right.workId)
     || bytewiseCompare(canonicalJson(left), canonicalJson(right));
 }
+
+export function normalizeStaticWeeklyIncludedLocations(raw) {
+  const primaryLocationId = text(raw?.locationId);
+  const primaryLocationName = text(raw?.locationNameSnapshot || raw?.locationName || primaryLocationId);
+  const supplied = raw?.includedLocations;
+  const source = supplied == null
+    ? [{ locationId: primaryLocationId, locationNameSnapshot: primaryLocationName }]
+    : supplied;
+  if (!Array.isArray(source) || source.length < 1 || source.length > 256) {
+    throw Object.assign(new Error("Work includedLocations must contain one through 256 exact location snapshots."), { code: "invalid_included_location_facts" });
+  }
+  const seen = new Set();
+  const normalized = source.map((entry) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)
+      || Object.keys(entry).sort(identityCompare).join("\u0000") !== ["locationId", "locationNameSnapshot"].sort(identityCompare).join("\u0000")) {
+      throw Object.assign(new Error("Each included location must contain only locationId and locationNameSnapshot."), { code: "invalid_included_location_facts" });
+    }
+    const locationId = text(entry.locationId);
+    const locationNameSnapshot = text(entry.locationNameSnapshot);
+    if (!locationId || !locationNameSnapshot || seen.has(locationId)) {
+      throw Object.assign(new Error("Included location identities and names must be nonblank and location identities must be unique."), { code: "invalid_included_location_facts" });
+    }
+    seen.add(locationId);
+    return { locationId, locationNameSnapshot };
+  });
+  if (!primaryLocationId || !primaryLocationName || !seen.has(primaryLocationId)) {
+    throw Object.assign(new Error("The work routing location must be one of its included location snapshots."), { code: "invalid_included_location_facts" });
+  }
+  return normalized;
+}
+
 function normalizeAssignment(raw) {
   const assignment = normalizeSemanticCollections(clone(raw));
   assignment.dayOfWeek = canonicalWeekday(assignment.dayOfWeek, "assignment dayOfWeek");
   assignment.workId = text(assignment.workId || assignment.id);
   if (Object.hasOwn(assignment, "id")) assignment.id = text(assignment.id);
   for (const field of ["originSlotId", "ownerSlotId", "baselineSlotId"]) if (Object.hasOwn(assignment, field)) assignment[field] = text(assignment[field]);
+  assignment.includedLocations = normalizeStaticWeeklyIncludedLocations(assignment);
   return assignment;
 }
 function normalizeAvailability(raw) {
@@ -806,8 +838,20 @@ function applyException(state, exception) {
   } else if (exception.type === "event_impact") {
     const removed = new Set(array(payload.removeWorkIds).map(text));
     state.work.forEach((work) => { if (removed.has(work.workId)) work.cancelled = true; });
-    for (const patch of array(payload.patchWork)) { const match = state.work.find((work) => work.workId === text(patch.workId)); if (match) Object.assign(match, clone(patch)); }
-    for (const addition of array(payload.addWork)) state.work.push({ ...clone(addition), workId: text(addition.workId || addition.id), originSlotId: text(addition.originSlotId || addition.ownerSlotId), overlayWork: true, cancelled: false });
+    for (const patch of array(payload.patchWork)) {
+      const match = state.work.find((work) => work.workId === text(patch.workId));
+      if (match) {
+        const priorLocationId = text(match.locationId);
+        const priorIncludedLocations = clone(match.includedLocations);
+        Object.assign(match, clone(patch));
+        if (!Object.hasOwn(patch, "includedLocations")) {
+          if (text(match.locationId) === priorLocationId) match.includedLocations = priorIncludedLocations;
+          else delete match.includedLocations;
+        }
+        match.includedLocations = normalizeStaticWeeklyIncludedLocations(match);
+      }
+    }
+    for (const addition of array(payload.addWork)) state.work.push({ ...normalizeAssignment(addition), originSlotId: text(addition.originSlotId || addition.ownerSlotId), overlayWork: true, cancelled: false });
   }
   state.applied.push({ id: exception.id, type: exception.type, serviceDate: exception.serviceDate, payloadDigest: exception.payloadDigest || contentDigest(payload) });
 }

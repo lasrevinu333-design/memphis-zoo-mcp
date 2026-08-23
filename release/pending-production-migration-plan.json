@@ -7,10 +7,10 @@
     "catalog_privilege_fingerprint": "5bcb02001e4096f5ad5d0d457202d90ca3fbe9cfe4c60793d11af384378f33d2"
   },
   "target": {
-    "source_migration_file": "20260823024500_provision_static_weekly_runtime_identity.sql",
-    "source_migration_name": "provision_static_weekly_runtime_identity",
+    "source_migration_file": "20260823060000_static_weekly_family_location_truth.sql",
+    "source_migration_name": "static_weekly_family_location_truth",
     "ledger_version_policy": "runner_assigned_and_postverified",
-    "canonical_schema_fingerprint": "d8bbe5ddaa2a5886d27c80edf96098a83d4bf64e5ffd8b824d5d342a2767afe8"
+    "canonical_schema_fingerprint": "670cfa8c21e8ca852832a0f77aaedb59be5db0b86f59016bd9133cda2e4173b3"
   },
   "source_binding": {
     "kind": "external_exact_head_release_attestation",
@@ -19,8 +19,8 @@
   "authorization": {
     "production_apply_authorized": true,
     "required_boundary": "Eric approved continuation and the exact additional static-weekly Starter service boundary",
-    "sequence_policy": "single_migration_stop_on_failed_preflight_or_postcheck",
-    "rollback_policy": "forward_recovery_only; revoke static_weekly_control_plane, set the runtime identity NOLOGIN, and preserve the ledger if post-verification fails"
+    "sequence_policy": "ordered_migrations_stop_on_failed_preflight_or_postcheck",
+    "rollback_policy": "forward_recovery_only; keep the scheduler stopped, revoke static_weekly_control_plane and set the runtime identity NOLOGIN if provisioning cannot be admitted; if family-location post-verification fails, restore the captured prior function definitions and ACLs through one reviewed forward-recovery migration while preserving both the ledger and schedule data"
   },
   "preconditions": [
     "production project_ref equals rqquvtjdmugpigbndmne",
@@ -28,8 +28,9 @@
     "production catalog and privilege fingerprint equals 5bcb02001e4096f5ad5d0d457202d90ca3fbe9cfe4c60793d11af384378f33d2",
     "static_weekly_runtime_20260823 is absent before provisioning",
     "static_weekly_control_plane is NOLOGIN, NOINHERIT, and is not granted to memphis_zoo_backup",
+    "the current event-work validator, projection validator, employee-day reader definitions, owners, comments, and ACLs match the read-only preflight capture",
     "the exact backend commit/tree and migration digest below are externally attested",
-    "the single migration preflight passes before mutation"
+    "the ordered two-migration preflight passes before mutation"
   ],
   "migrations": [
     {
@@ -37,14 +38,23 @@
       "phase": "static_weekly_runtime_identity",
       "file": "20260823024500_provision_static_weekly_runtime_identity.sql",
       "sha256": "8b94b9a65bb58fb8739d171e19082398e7368cb8dc39684c7efec741649a5602"
+    },
+    {
+      "order": 2,
+      "phase": "static_weekly_family_location_truth",
+      "file": "20260823060000_static_weekly_family_location_truth.sql",
+      "sha256": "ba48a19ad89c695b85dcc514f6130fa771773162808b8950906cc08aeeb5cd3b"
     }
   ],
   "postconditions": [
-    "the production ledger contains exactly one successful provision_static_weekly_runtime_identity migration after the observed head",
-    "production catalog and privilege fingerprint equals d8bbe5ddaa2a5886d27c80edf96098a83d4bf64e5ffd8b824d5d342a2767afe8",
+    "the production ledger contains exactly two successful migrations after the observed head, ordered provision_static_weekly_runtime_identity then static_weekly_family_location_truth",
+    "production catalog and privilege fingerprint equals 670cfa8c21e8ca852832a0f77aaedb59be5db0b86f59016bd9133cda2e4173b3",
     "static_weekly_runtime_20260823 is LOGIN, NOINHERIT, non-superuser, non-replication, non-BYPASSRLS, and connection-limited to four",
     "static_weekly_runtime_20260823 has exactly one authority membership: static_weekly_control_plane",
     "static_weekly_runtime_20260823 has no source-embedded password and cannot enter static_weekly_release_operator",
+    "event overlays and current projections preserve an exact ordered physical-location family with the routing anchor included",
+    "the employee-day read surface exposes the exact location identifiers, names, snapshots, and public-restroom marker while historical singleton projections remain readable",
+    "custodial_application_reader can execute only the reviewed employee-day wrapper and cannot execute its renamed internal base helper",
     "no schedule, roster, publication, projection, occurrence, employee, or cleaning rows change",
     "no unexpected catalog, privilege, configuration, or row diff exists"
   ]

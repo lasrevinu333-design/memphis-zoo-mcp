@@ -112,6 +112,7 @@ function publicCompilerWorkSnapshot(work) {
     window: clone(work.window),
     locationCodeSnapshot: text(work.locationCodeSnapshot || work.locationCode || work.locationId),
     locationNameSnapshot: text(work.locationNameSnapshot || work.locationName || work.locationId),
+    includedLocations: clone(work.includedLocations),
     requiredQualifications: clone(work.requiredQualifications),
     restrictions: clone(work.restrictions),
     serviceEffortMinutes: work.effort.minutes,
@@ -132,6 +133,7 @@ function semanticWorkSnapshot(work) {
     locationId: work.locationId,
     locationCodeSnapshot: text(work.locationCodeSnapshot || work.locationCode || work.locationId),
     locationNameSnapshot: text(work.locationNameSnapshot || work.locationName || work.locationId),
+    includedLocations: clone(work.includedLocations),
     window: { start: work.window.start, end: work.window.end },
     serviceEffortMinutes: work.effort.minutes,
     serviceEffortProvenance: work.effort.provenance,
@@ -320,7 +322,7 @@ function validateCompiledResult(result, { allowReview = true } = {}) {
   const authorityWithoutIdentity = clone(authority);
   delete authorityWithoutIdentity.databaseContentIdentity;
   if (authority.databaseContentIdentity !== postgresJsonbContentDigest(authorityWithoutIdentity)) fail("database_adapter_authority_content_identity_mismatch");
-  if (!result.certificate || !result.solver || !result.verifier?.ok || result.verifier?.verifierVersion !== "static-weekly-js-verifier-v4-monotonic-leximax") fail("database_adapter_compiler_verifier_receipt_missing");
+  if (!result.certificate || !result.solver || !result.verifier?.ok || result.verifier?.verifierVersion !== "static-weekly-js-verifier-v5-family-location-truth") fail("database_adapter_compiler_verifier_receipt_missing");
   if (result.certificate.schema !== "memphis-zoo.static-weekly-solver-certificate.v4"
     || !result.certificate.modelBasis || !Array.isArray(result.certificate.tiers)
     || !Array.isArray(result.solver.tiers) || !Array.isArray(authority.optimizerResult?.tiers)
@@ -426,6 +428,7 @@ function draftAssignmentRows(authority, activeWork) {
           original_actor_name: assignment.originalActorName,
           optimized_owner_slot_id: assignment.optimizedOwnerSlotId,
           optimized_owner_person_id: assignment.optimizedOwnerPersonId,
+          included_locations: clone(work.includedLocations),
         },
       },
     };

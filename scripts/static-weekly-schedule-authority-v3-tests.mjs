@@ -41,7 +41,17 @@ function sourceInput({ serviceDate = initialWeek, versionId = "60000000-0000-400
   const contractor = "20000000-0000-4000-8000-000000000005";
   const locationA = "40000000-0000-4000-8000-000000000011"; const locationB = "40000000-0000-4000-8000-000000000012";
   const availability = (slotId, dayOfWeek, anchor) => ({ slotId, dayOfWeek, status: "working", shift: { start: "07:00", end: "16:00" }, productiveCapacityProvenance: "v3-test-shift", maxServiceEffortMinutes: 300, maxServiceEffortProvenance: "v3-test-capacity", qualifications: ["general"], qualificationProvenance: "v3-test-qualifications", restrictions: [], restrictionProvenance: "v3-test-restrictions", acceptedRouteAnchorLocationId: anchor, acceptedRouteProvenance: "v3-test-route" });
-  const work = (workId, dayOfWeek, locationId, ownerSlotId) => ({ workId, dayOfWeek, locationId, locationCodeSnapshot: `DAY_${dayOfWeek}`, locationNameSnapshot: `Area ${dayOfWeek}`, window: { start: "08:00", end: "09:00" }, ownerSlotId, serviceEffortMinutes: 20, serviceEffortProvenance: "v3-test-effort", priority: 1, priorityProvenance: "v3-test-priority", requiredQualifications: ["general"], qualificationProvenance: "v3-test-work-qualifications", restrictions: [], restrictionProvenance: "v3-test-work-restrictions" });
+  const work = (workId, dayOfWeek, locationId, ownerSlotId) => ({
+    workId, dayOfWeek, locationId, locationCodeSnapshot: `DAY_${dayOfWeek}`, locationNameSnapshot: `Area ${dayOfWeek}`,
+    includedLocations: [
+      { locationId: locationA, locationNameSnapshot: "Area A" },
+      { locationId: locationB, locationNameSnapshot: "Area B Restroom" },
+    ],
+    window: { start: "08:00", end: "09:00" }, ownerSlotId, serviceEffortMinutes: 20,
+    serviceEffortProvenance: "v3-test-effort", priority: 1, priorityProvenance: "v3-test-priority",
+    requiredQualifications: ["general"], qualificationProvenance: "v3-test-work-qualifications", restrictions: [],
+    restrictionProvenance: "v3-test-work-restrictions",
+  });
   return {
     serviceDate, timezone: "America/Chicago", exceptions,
     proximity: [{ from: "START_A", to: locationA, minutes: 1, verified: true, provenance: "v3-test-route" }, { from: "START_A", to: locationB, minutes: 4, verified: true, provenance: "v3-test-route" }, { from: "START_B", to: locationA, minutes: 4, verified: true, provenance: "v3-test-route" }, { from: "START_B", to: locationB, minutes: 1, verified: true, provenance: "v3-test-route" }],
@@ -110,6 +120,36 @@ try {
   await expectReject(verifyAttestation({ ...issuedAttestation, signature: `${issuedAttestation.signature.slice(0, -1)}${issuedAttestation.signature.endsWith("0") ? "1" : "0"}` }), /does not bind/i);
   const sourceId = "80000000-0000-4000-8000-000000000001";
   const source = sourceInput();
+  const validEventFamilyWork = {
+    workId: "event-family-validator", locationId: "40000000-0000-4000-8000-000000000011",
+    locationCodeSnapshot: "EVENT_FAMILY", locationNameSnapshot: "Area A",
+    includedLocations: [
+      { locationId: "40000000-0000-4000-8000-000000000011", locationNameSnapshot: "Area A" },
+      { locationId: "40000000-0000-4000-8000-000000000012", locationNameSnapshot: "Area B Restroom" },
+    ],
+    window: { start: "08:00", end: "09:00" }, serviceEffortMinutes: 20,
+    serviceEffortProvenance: "v3-event-family-validator", priority: 1,
+    priorityProvenance: "v3-event-family-validator", requiredQualifications: ["general"],
+    qualificationProvenance: "v3-event-family-validator", restrictions: [],
+    restrictionProvenance: "v3-event-family-validator",
+  };
+  assert.equal(
+    await scalar(`select public.static_weekly_v3_assert_work_payload(${json(validEventFamilyWork)},false); select 'valid'`),
+    "valid",
+    "database event validation accepts one exact multi-location family containing its routing anchor",
+  );
+  for (const [label, mutate] of [
+    ["duplicate event family location", (payload) => { payload.includedLocations[1] = clone(payload.includedLocations[0]); }],
+    ["event routing anchor outside family", (payload) => { payload.includedLocations = [payload.includedLocations[1]]; }],
+    ["malformed event family object", (payload) => { payload.includedLocations[0].unexpected = true; }],
+  ]) {
+    const invalid = clone(validEventFamilyWork);
+    mutate(invalid);
+    await expectReject(
+      `select public.static_weekly_v3_assert_work_payload(${json(invalid)},false)`,
+      /included location|routing location|unexpected|exact/i,
+    );
+  }
   const compiled = await compileStaticWeeklySchedule(source); assert.equal(compiled.status, "FEASIBLE"); assert.equal(compiled.verifier.ok, true);
   const verifiedPacket = {
     packetSchema: "memphis-zoo.static-weekly.verified-schedule-packet.v1", publicationAuthority: "VERIFIED_SERVER_PACKET",
@@ -154,6 +194,22 @@ try {
   await expectReject(cp("static_weekly_v3_read_manager_snapshot", `${quote(initialTuesday)}`), /Monday/i);
   await expectReject(`set role service_role; select public.static_weekly_v3_read_manager_snapshot(${quote(initialWeek)})`, /permission denied/i);
   const firstProjection = createStaticWeeklyProjectionRpcInput({ result: compiled, publicationId, expectedRevision: 2, actor: { ...manager, idempotencyKey: "v3-projection-first" } });
+  for (const [label, idempotencyKey, mutate] of [
+    ["missing family locations", "v3-projection-missing-family-locations", (row) => { delete row.work_snapshot.includedLocations; }],
+    ["duplicate family location", "v3-projection-duplicate-family-location", (row) => { row.work_snapshot.includedLocations[1] = clone(row.work_snapshot.includedLocations[0]); }],
+    ["routing anchor outside family", "v3-projection-anchor-outside-family", (row) => { row.work_snapshot.includedLocations = [row.work_snapshot.includedLocations[1]]; }],
+  ]) {
+    const forged = clone(firstProjection);
+    mutate(forged.envelope.assignments[0]);
+    forged.envelope.semantic_snapshot.active_assignments = clone(forged.envelope.assignments);
+    const identity = clone(forged.envelope); delete identity.database_projection_identity;
+    forged.envelope.database_projection_identity = postgresJsonbContentDigest(identity);
+    await expectNoMutation(
+      cp("static_weekly_v3_materialize_projection", `${quote(publicationId)},${quote(forged.serviceDate)},${quote(forged.exceptionSetDigest)},${quote(forged.compilerVersion)},${json(forged.objective)},${json(forged.metrics)},${quote(forged.replayDigest)},${json(forged.envelope)},2,${quote(manager.managerId)},${quote(idempotencyKey)}`),
+      /included location|routing location|work snapshot/i,
+      label,
+    );
+  }
   await scalar(cp("static_weekly_v3_materialize_projection", `${quote(publicationId)},${quote(firstProjection.serviceDate)},${quote(firstProjection.exceptionSetDigest)},${quote(firstProjection.compilerVersion)},${json(firstProjection.objective)},${json(firstProjection.metrics)},${quote(firstProjection.replayDigest)},${json(firstProjection.envelope)},2,${quote(manager.managerId)},'v3-projection-first'`));
   const projectedSnapshot = JSON.parse(await scalar(cp("static_weekly_v3_read_manager_snapshot", `${quote(initialWeek)}`)));
   assert.equal(projectedSnapshot.authority_revision, 3);
@@ -233,6 +289,24 @@ try {
   assert.equal(beforeEmployeeDay.source, "static_weekly_projection");
   assert.equal(beforeEmployeeDay.all_items.length > 0, true);
   assert.equal(beforeEmployeeDay.all_items.every((item) => item.source_type === "static_weekly_projection"), true);
+  assert.equal(beforeEmployeeDay.contract_version, "static-weekly-employee-day.v2");
+  assert.equal(beforeEmployeeDay.all_items.every((item) => JSON.stringify(item.included_locations) === JSON.stringify(["Area A", "Area B Restroom"])), true, "employee schedules preserve every physical area in the assigned family");
+  assert.equal(beforeEmployeeDay.all_items.every((item) => JSON.stringify(item.included_location_ids) === JSON.stringify([
+    "40000000-0000-4000-8000-000000000011",
+    "40000000-0000-4000-8000-000000000012",
+  ]) && item.is_public_restroom === true), true, "employee family rows retain exact location identities and restroom display priority facts");
+  assert.equal(beforeEmployeeDay.all_items.every((item) => JSON.stringify(item.included_location_snapshots) === JSON.stringify([
+    { locationId: "40000000-0000-4000-8000-000000000011", locationNameSnapshot: "Area A" },
+    { locationId: "40000000-0000-4000-8000-000000000012", locationNameSnapshot: "Area B Restroom" },
+  ])), true, "employee family rows expose exact ordered identifier/name pairs rather than count-only evidence");
+  assert.equal(await scalar("select has_function_privilege('custodial_application_reader','public.static_weekly_v5_read_employee_day(date,uuid,timestamptz)','execute')::text"), "true", "the restricted application read role retains the employee schedule surface after function replacement");
+  assert.equal(await scalar("select has_function_privilege('custodial_application_reader','public.static_weekly_v5_read_employee_day_single_location_base(date,uuid,timestamptz)','execute')::text"), "false", "the restricted reader cannot bypass family-aware schedule truth through the renamed internal helper");
+  assert.deepEqual(
+    JSON.parse(await scalar(`set role custodial_application_reader; select public.static_weekly_v5_read_employee_day(${quote(turnoverDate)},'30000000-0000-4000-8000-000000000001',statement_timestamp())::text`)),
+    beforeEmployeeDay,
+    "the restricted read-only application path sees the same exact employee schedule contract",
+  );
+  await expectReject(`set role custodial_application_reader; select public.static_weekly_v5_read_employee_day_single_location_base(${quote(turnoverDate)},'30000000-0000-4000-8000-000000000001',statement_timestamp())`, /permission denied/i);
   await expectReject(`set role authenticated; select public.static_weekly_v5_read_employee_day(${quote(turnoverDate)},'30000000-0000-4000-8000-000000000001',statement_timestamp())`, /permission denied/i);
   await sql(`insert into public.sessions(session_uuid,location_id,employee_id,device_id,status) values('turnover-active','92000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001','91000000-0000-4000-8000-000000000001','active')`);
   await expectNoMutation(cp("static_weekly_v4_mark_employee_departed", `${quote(source.slots[0].id)},'employee departed',13,${quote(manager.managerId)},'v4-depart-active-block'`), /active|submission/i, "turnover with active cleaning work");

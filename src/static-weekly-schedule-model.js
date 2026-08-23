@@ -267,9 +267,22 @@ function payloadFiniteInteger(value, label, minimum, maximum) {
   return value;
 }
 
+function assertExceptionIncludedLocations(value, routingLocationId, label) {
+  assert(Array.isArray(value) && value.length >= 1 && value.length <= 256, `${label} must contain one through 256 exact location snapshots.`, "invalid_exception_payload");
+  const ids = value.map((entry) => {
+    exactPayloadObject(entry, ["locationId", "locationNameSnapshot"], `${label} entry`);
+    const locationId = payloadIdentity(entry.locationId, `${label} locationId`);
+    nonblankPayloadText(entry.locationNameSnapshot, `${label} location name`);
+    return locationId;
+  });
+  assert(new Set(ids).size === ids.length, `${label} may not repeat a location identity.`, "invalid_exception_payload");
+  assert(ids.includes(routingLocationId), `${label} must contain the routing location.`, "invalid_exception_payload");
+}
+
 function assertExceptionWorkShape(value, { added = false } = {}) {
   const workKeys = ["locationCodeSnapshot", "locationId", "locationNameSnapshot", "priority", "priorityProvenance", "qualificationProvenance", "requiredQualifications", "restrictionProvenance", "restrictions", "serviceEffortMinutes", "serviceEffortProvenance", "window", "workId"];
-  exactPayloadObject(value, added ? [...workKeys, "dayOfWeek", "originSlotId"] : workKeys, added ? "event added work" : "event patch work");
+  const requiredKeys = added ? [...workKeys, "dayOfWeek", "originSlotId"] : workKeys;
+  exactPayloadObject(value, Object.hasOwn(value || {}, "includedLocations") ? [...requiredKeys, "includedLocations"] : requiredKeys, added ? "event added work" : "event patch work");
   nonblankPayloadText(value.workId, "event workId", EXCEPTION_WORK_ID_MAX);
   payloadIdentity(value.locationId, "event locationId");
   nonblankPayloadText(value.locationCodeSnapshot, "event location code");
@@ -283,6 +296,7 @@ function assertExceptionWorkShape(value, { added = false } = {}) {
   nonblankPayloadText(value.restrictionProvenance, "event restriction provenance");
   exactStringArray(value.requiredQualifications, "event qualifications");
   exactStringArray(value.restrictions, "event restrictions");
+  if (Object.hasOwn(value, "includedLocations")) assertExceptionIncludedLocations(value.includedLocations, value.locationId, "event included locations");
   if (added) {
     payloadFiniteInteger(value.dayOfWeek, "event weekday", 0, 6);
     payloadIdentity(value.originSlotId, "event origin slotId");

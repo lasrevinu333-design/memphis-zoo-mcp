@@ -42,8 +42,10 @@ const phaseP = "20260820154000_late_gps_is_advisory_only.sql";
 const terminalWriterDetection = "20260820154500_precise_terminal_writer_detection.sql";
 const releaseRecoveryRebind = "20260820155000_rebind_release_recovery_inventory_to_current_authority.sql";
 const staticWeeklyRuntimeIdentity = "20260823024500_provision_static_weekly_runtime_identity.sql";
+const staticWeeklyFamilyLocationTruth = "20260823060000_static_weekly_family_location_truth.sql";
 const pendingProductionMigrations = [
   staticWeeklyRuntimeIdentity,
+  staticWeeklyFamilyLocationTruth,
 ];
 const releaseInputPath = "release/integrated-backend-authority-input.json";
 const releaseEvidencePath = "release/integrated-backend-authority-evidence.json";
@@ -282,7 +284,7 @@ const evidenceBlob = expectedEntries.find(({ path }) => path === releaseEvidence
 assert.ok(evidenceBlob, "expected tree omits generated release evidence");
 const expectedBlobs = expectedEntries.filter(({ path }) => path !== releaseEvidencePath);
 assert.ok(expectedBlobs.length > 0, "release authority inventory is empty");
-assert.equal(expectedBlobs.filter(({ path }) => /^supabase\/migrations\/[^/]+\.sql$/.test(path)).length, 97, "release authority inventory must bind all 97 migrations");
+assert.equal(expectedBlobs.filter(({ path }) => /^supabase\/migrations\/[^/]+\.sql$/.test(path)).length, 98, "release authority inventory must bind all 98 migrations");
 for (const blob of [...expectedBlobs, evidenceBlob]) assertWorktreeMatchesExpectedBlob(blob);
 assert.equal(evidenceBlob.object_id, acceptance.backend_evidence_blob_sha, "signed release attestation names the wrong evidence blob");
 assert.equal(hash(evidenceBlob.bytes), acceptance.backend_evidence_sha256, "signed release attestation names the wrong evidence digest");
@@ -327,13 +329,13 @@ assert.equal(pendingMigrationPlan.project_ref, "rqquvtjdmugpigbndmne");
 assert.equal(pendingMigrationPlan.observed_production?.ledger_head, "20260823012608");
 assert.equal(pendingMigrationPlan.observed_production?.source_migration_name, "correct_coverall_second_absence_policy");
 assert.equal(pendingMigrationPlan.observed_production?.catalog_privilege_fingerprint, "5bcb02001e4096f5ad5d0d457202d90ca3fbe9cfe4c60793d11af384378f33d2");
-assert.equal(pendingMigrationPlan.target?.source_migration_file, staticWeeklyRuntimeIdentity);
-assert.equal(pendingMigrationPlan.target?.source_migration_name, "provision_static_weekly_runtime_identity");
+assert.equal(pendingMigrationPlan.target?.source_migration_file, staticWeeklyFamilyLocationTruth);
+assert.equal(pendingMigrationPlan.target?.source_migration_name, "static_weekly_family_location_truth");
 assert.equal(pendingMigrationPlan.target?.ledger_version_policy, "runner_assigned_and_postverified");
 assert.equal(pendingMigrationPlan.target?.canonical_schema_fingerprint, schemaFingerprint);
 assert.equal(pendingMigrationPlan.source_binding?.kind, "external_exact_head_release_attestation");
 assert.equal(pendingMigrationPlan.authorization?.production_apply_authorized, true);
-assert.equal(pendingMigrationPlan.authorization?.sequence_policy, "single_migration_stop_on_failed_preflight_or_postcheck");
+assert.equal(pendingMigrationPlan.authorization?.sequence_policy, "ordered_migrations_stop_on_failed_preflight_or_postcheck");
 assert.equal(pendingMigrationPlan.migrations?.length, pendingProductionMigrations.length);
 assert.deepEqual(pendingMigrationPlan.migrations.map(({ file }) => file), pendingProductionMigrations);
 for (const [index, migration] of pendingMigrationPlan.migrations.entries()) {

@@ -18,14 +18,14 @@ import {
   windowContains,
   windowsOverlap,
 } from "./static-weekly-schedule-model.js";
-import { STATIC_WEEKLY_ROUTE_CANONICALITY_SCHEMA, canonicalOptimizerAssignmentProjection, canonicalProgramMatches, canonicalSolverAuthorityCertificate, canonicalSolverAuthorityTierProjection, generateStaticWeeklySchedulingProgram, postgresJsonbContentDigest, remainingStaticWeeklyMilliseconds } from "./static-weekly-schedule-program.js";
+import { STATIC_WEEKLY_ROUTE_CANONICALITY_SCHEMA, canonicalOptimizerAssignmentProjection, canonicalProgramMatches, canonicalSolverAuthorityCertificate, canonicalSolverAuthorityTierProjection, generateStaticWeeklySchedulingProgram, normalizeStaticWeeklyIncludedLocations, postgresJsonbContentDigest, remainingStaticWeeklyMilliseconds } from "./static-weekly-schedule-program.js";
 
 const array = (value) => Array.isArray(value) ? value : [];
 const text = (value) => String(value ?? "").trim();
 const positiveInteger = (value) => Number.isInteger(Number(value)) && Number(value) > 0;
 const push = (list, code, detail = {}) => list.push({ code, ...detail });
 const MAX_SAFE_EXACT_INTEGER = BigInt(Number.MAX_SAFE_INTEGER);
-const VERIFIER_VERSION = "static-weekly-js-verifier-v4-monotonic-leximax";
+const VERIFIER_VERSION = "static-weekly-js-verifier-v5-family-location-truth";
 const MIP_FEASIBILITY_TOLERANCE = 1e-9;
 const exactRatio = (numerator, denominator, scale) => {
   if (!Number.isInteger(Number(scale)) || Number(scale) <= 0 || BigInt(scale) % BigInt(denominator)) return null;
@@ -253,8 +253,24 @@ function apply(state, item) {
   else if (["nine_forty_five_rebalance", "manager_correction"].includes(item.type)) for (const lock of array(payload.locks || payload.assignments || (payload.workId ? [payload] : []))) state.locks.set(text(lock.workId || lock.id), text(lock.slotId || lock.ownerSlotId));
   else if (item.type === "event_impact") {
     const remove = new Set(array(payload.removeWorkIds).map(text)); state.work.forEach((work) => { if (remove.has(work.workId)) work.cancelled = true; });
-    for (const patch of array(payload.patchWork)) { const work = state.work.find((entry) => entry.workId === text(patch.workId)); if (work) Object.assign(work, structuredClone(patch)); }
-    for (const addition of array(payload.addWork)) state.work.push({ ...structuredClone(addition), workId: text(addition.workId || addition.id), originSlotId: text(addition.originSlotId || addition.ownerSlotId), cancelled: false });
+    for (const patch of array(payload.patchWork)) {
+      const work = state.work.find((entry) => entry.workId === text(patch.workId));
+      if (work) {
+        const priorLocationId = text(work.locationId);
+        const priorIncludedLocations = structuredClone(work.includedLocations);
+        Object.assign(work, structuredClone(patch));
+        if (!Object.hasOwn(patch, "includedLocations")) {
+          if (text(work.locationId) === priorLocationId) work.includedLocations = priorIncludedLocations;
+          else delete work.includedLocations;
+        }
+        work.includedLocations = normalizeStaticWeeklyIncludedLocations(work);
+      }
+    }
+    for (const addition of array(payload.addWork)) {
+      const normalized = { ...structuredClone(addition), workId: text(addition.workId || addition.id), originSlotId: text(addition.originSlotId || addition.ownerSlotId), cancelled: false };
+      normalized.includedLocations = normalizeStaticWeeklyIncludedLocations(normalized);
+      state.work.push(normalized);
+    }
   }
 }
 function applyCustodialAbsenceCoveragePolicy(state, slotById, violations, serviceDate) {
