@@ -6,22 +6,48 @@
     "path": "/home/eric/custodial-codex/inputs/Memphis_Zoo_Static_Custodial_Schedule_COMPLETE_v2_OPEN.xlsx",
     "sha256": "f9eba54e274cd1b792545770de6fb17e9e25fee989aca18f65250d433f599e40",
     "sheets": ["Employee Roster", "Static Weekly Schedule"],
-    "provenance": "direct OOXML candidate workbook extraction; no current-roster, route, capacity, or publication claim"
+    "provenance": "direct OOXML candidate workbook extraction plus Eric's 2026-08-22 staffing and CoverAll corrections; no publication claim"
+  },
+  "operationalCorrections": {
+    "recordedOn": "2026-08-22",
+    "authority": "Eric",
+    "locationAssignments": "PRESERVE_FROM_WORKBOOK",
+    "routePolicy": "EMPLOYEE_CHOOSES_PRACTICAL_ROUTE_RESTROOMS_DISPLAYED_FIRST",
+    "replacementPolicy": "NO_REPLACEMENT_IDENTITY_UNTIL_OFFICIALLY_HIRED",
+    "scheduleSlotPolicy": {
+      "currentSchedule": "PRESERVE_ALL_ORIGINAL_NAMES_LOCATIONS_DAYS_SHIFTS_AND_LUNCHES",
+      "uncertainStaffing": "RETAIN_ORIGINAL_SCHEDULE_UNTIL_A_CONFIRMED_CHANGE",
+      "replacementIdentity": "APPEND_NEW_INCUMBENT_WITH_NEW_PERSON_ID_AND_PRESERVE_HISTORY",
+      "stableAcrossReplacement": ["SLOT_ID", "LOCATION_ASSIGNMENTS"],
+      "replacementMayChange": ["DISPLAY_NAME", "WORK_DAYS", "SHIFT_START", "LUNCH_START", "LUNCH_END", "SHIFT_END"]
+    },
+    "coverAllPolicy": {
+      "firstAbsence": "EVENLY_REDISTRIBUTE_AMONG_REMAINING_ZOO_EMPLOYEES",
+      "secondAndLaterAbsences": "CALL_COVERALL_ONE_PERSON_PER_ABSENCE"
+    }
   },
   "candidateRoster": [
-    {"slotId":"4b99b100-0000-4000-8000-000000000001","personId":"5b99b100-0000-4000-8000-000000000001","displayName":"Karen Robinson","shift":"05:00-14:00","days":[1,2,3,5,6]},
-    {"slotId":"4b99b100-0000-4000-8000-000000000002","personId":"5b99b100-0000-4000-8000-000000000002","displayName":"Tammy Miller","shift":"05:00-14:00","days":[2,3,4,5,6]},
-    {"slotId":"4b99b100-0000-4000-8000-000000000003","personId":"5b99b100-0000-4000-8000-000000000003","displayName":"Markiesha Warren","shift":"08:30-17:30","days":[1,2,3,4,6]},
-    {"slotId":"4b99b100-0000-4000-8000-000000000004","personId":"5b99b100-0000-4000-8000-000000000004","displayName":"Kinnaye Peete","shift":"06:00-15:00","days":[1,2,3,4,5]},
-    {"slotId":"4b99b100-0000-4000-8000-000000000005","personId":"5b99b100-0000-4000-8000-000000000005","displayName":"Kathy Phelps","shift":"06:00-15:00","days":[2,3,4,5,6]},
-    {"slotId":"4b99b100-0000-4000-8000-000000000006","personId":"5b99b100-0000-4000-8000-000000000006","displayName":"Sherita Wilbon","shift":"08:00-17:00","days":[0,1,3,4,6]},
-    {"slotId":"4b99b100-0000-4000-8000-000000000007","personId":"5b99b100-0000-4000-8000-000000000007","displayName":"Michael McWright","shift":"15:00-24:00","days":[0,1,2,5,6]},
-    {"slotId":"4b99b100-0000-4000-8000-000000000008","personId":"5b99b100-0000-4000-8000-000000000008","displayName":"Daniel Morgan","shift":"07:00-16:00","days":[0,3,4,5,6]},
-    {"slotId":"4b99b100-0000-4000-8000-000000000009","personId":"5b99b100-0000-4000-8000-000000000009","displayName":"Alijah Collins","shift":"07:00-16:00","days":[0,1,4,5,6]}
+    {"slotId":"4b99b100-0000-4000-8000-000000000001","personId":"5b99b100-0000-4000-8000-000000000001","displayName":"Karen Robinson","shift":"05:00-14:00","lunch":"09:00-10:00","days":[1,2,3,5,6],"staffingState":"LAST_KNOWN_ACTIVE"},
+    {"slotId":"4b99b100-0000-4000-8000-000000000002","personId":"5b99b100-0000-4000-8000-000000000002","displayName":"Tammy Miller","shift":"05:00-14:00","lunch":"09:00-10:00","days":[2,3,4,5,6],"staffingState":"LAST_KNOWN_ACTIVE"},
+    {"slotId":"4b99b100-0000-4000-8000-000000000003","personId":"5b99b100-0000-4000-8000-000000000003","displayName":"Markiesha Warren","shift":"08:30-17:30","lunch":"12:00-13:00","days":[1,2,3,4,6],"staffingState":"ORIGINAL_SCHEDULE_RETAINED_STATUS_UNCONFIRMED"},
+    {"slotId":"4b99b100-0000-4000-8000-000000000004","personId":"5b99b100-0000-4000-8000-000000000004","displayName":"Kinnaye Peete","shift":"06:00-15:00","lunch":"10:00-11:00","days":[1,2,3,4,5],"staffingState":"ORIGINAL_SCHEDULE_RETAINED_STATUS_UNCONFIRMED"},
+    {"slotId":"4b99b100-0000-4000-8000-000000000005","personId":"5b99b100-0000-4000-8000-000000000005","displayName":"Kathy Phelps","shift":"06:00-15:00","lunch":"10:00-11:00","days":[2,3,4,5,6],"staffingState":"LAST_KNOWN_ACTIVE"},
+    {"slotId":"4b99b100-0000-4000-8000-000000000006","personId":"5b99b100-0000-4000-8000-000000000006","displayName":"Sherita Wilbon","shift":"08:00-17:00","lunch":"12:00-13:00","days":[0,1,3,4,6],"staffingState":"ORIGINAL_SCHEDULE_RETAINED_STATUS_UNCONFIRMED"},
+    {"slotId":"4b99b100-0000-4000-8000-000000000007","personId":"5b99b100-0000-4000-8000-000000000007","displayName":"Michael McWright","shift":"15:00-24:00","lunch":"19:00-20:00","days":[0,1,2,5,6],"staffingState":"CONFIRMED_DEPARTED_NAMED_PLACEHOLDER","effectiveOn":"2026-08-22"},
+    {"slotId":"4b99b100-0000-4000-8000-000000000008","personId":"5b99b100-0000-4000-8000-000000000008","displayName":"Daniel Morgan","shift":"07:00-16:00","lunch":"11:00-12:00","days":[0,3,4,5,6],"staffingState":"CONFIRMED_DEPARTED_NAMED_PLACEHOLDER","effectiveOn":"2026-08-22"},
+    {"slotId":"4b99b100-0000-4000-8000-000000000009","personId":"5b99b100-0000-4000-8000-000000000009","displayName":"Alijah Collins","shift":"07:00-16:00","lunch":"11:00-12:00","days":[0,1,4,5,6],"staffingState":"LAST_KNOWN_ACTIVE"}
   ],
   "unresolved": {
-    "absentUntilReplacedStableSlots": ["UNRESOLVED_DEPARTED_SLOT_IDENTITY_1", "UNRESOLVED_DEPARTED_SLOT_IDENTITY_2"],
-    "assumptions": ["current employment status", "directed accepted routes", "service effort and capacity evidence", "lunch routing policy", "operating-hours authority"]
+    "absentUntilReplacedStableSlots": [
+      "4b99b100-0000-4000-8000-000000000007",
+      "4b99b100-0000-4000-8000-000000000008"
+    ],
+    "statusUnconfirmedRetainOriginalScheduleSlots": [
+      "4b99b100-0000-4000-8000-000000000003",
+      "4b99b100-0000-4000-8000-000000000004",
+      "4b99b100-0000-4000-8000-000000000006"
+    ],
+    "assumptions": ["production UUID mapping", "service effort and capacity evidence", "operating-hours authority"]
   },
   "admission": {"canaryReady": false, "requiresVerifiedSchedulePacket": true, "failClosedReason": "candidate workbook is not an accepted current weekly schedule"}
 }

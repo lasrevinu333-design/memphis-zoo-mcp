@@ -790,12 +790,14 @@ function applyException(state, exception) {
   if (["pto", "daily_absence", "partial_absence"].includes(exception.type)) {
     const prior = state.availability.get(slotId) || { slotId };
     state.availability.set(slotId, !window ? { ...prior, status: "absent", blockedWindows: [{ start: "00:00", end: "23:59" }] } : { ...prior, blockedWindows: [...array(prior.blockedWindows), normalizeWindow(window, "absence window")] });
+    if (!window) state.fullDayAbsenceSlotIds.push(slotId);
   } else if (exception.type === "shift_override") {
     const prior = state.availability.get(slotId) || { slotId };
     state.availability.set(slotId, { ...prior, status: payload.status || prior.status || "working", shift: normalizeWindow(payload.shift || window, "shift override") });
   } else if (exception.type === "cover_all") {
     const supplied = clone(payload.availability || payload); const coverSlotId = text(supplied.slotId || slotId);
     state.availability.set(coverSlotId, { ...(state.availability.get(coverSlotId) || {}), ...supplied, slotId: coverSlotId, status: "working" });
+    state.contractorCoverageSlotIds.push(coverSlotId);
   } else if (exception.type === "lunch") {
     const prior = state.availability.get(slotId) || { slotId };
     state.availability.set(slotId, { ...prior, lunch: normalizeWindow(payload.lunch || window, "lunch") });
@@ -808,6 +810,30 @@ function applyException(state, exception) {
     for (const addition of array(payload.addWork)) state.work.push({ ...clone(addition), workId: text(addition.workId || addition.id), originSlotId: text(addition.originSlotId || addition.ownerSlotId), overlayWork: true, cancelled: false });
   }
   state.applied.push({ id: exception.id, type: exception.type, serviceDate: exception.serviceDate, payloadDigest: exception.payloadDigest || contentDigest(payload) });
+}
+
+function applyCustodialAbsenceCoveragePolicy(state, slotById) {
+  const absent = state.fullDayAbsenceSlotIds;
+  const contractors = state.contractorCoverageSlotIds;
+  const expectedContractors = Math.max(0, absent.length - 1);
+  if (new Set(absent).size !== absent.length) throw Object.assign(new Error("A daily employee absence may appear only once."), { code: "duplicate_daily_absence" });
+  if (new Set(contractors).size !== contractors.length) throw Object.assign(new Error("Each CoverAll call must use a separate contractor-capacity slot."), { code: "duplicate_coverall_capacity" });
+  if (contractors.length !== expectedContractors) throw Object.assign(new Error("The first absence must be shared by zoo employees and each second-or-later absence requires one CoverAll capacity slot."), { code: "custodial_absence_coverage_mismatch" });
+  if (absent.some((slotId) => slotById.get(slotId)?.contractorCapacity === true)) throw Object.assign(new Error("Contractor capacity cannot be recorded as an absent zoo employee."), { code: "custodial_absence_identity_mismatch" });
+  if (contractors.some((slotId) => slotById.get(slotId)?.contractorCapacity !== true || absent.includes(slotId))) throw Object.assign(new Error("CoverAll coverage must use distinct registered contractor-capacity slots."), { code: "custodial_contractor_capacity_required" });
+  for (const work of state.work) {
+    const absenceIndex = absent.indexOf(work.originSlotId);
+    if (absenceIndex === 0) {
+      work.custodialCoverageMode = "internal_even";
+      work.custodialCoverageSlotId = null;
+    } else if (absenceIndex > 0) {
+      work.custodialCoverageMode = "contractor_exact";
+      work.custodialCoverageSlotId = contractors[absenceIndex - 1];
+    } else {
+      work.custodialCoverageMode = "zoo_employee_baseline";
+      work.custodialCoverageSlotId = null;
+    }
+  }
 }
 
 function proximityIndex(rows) {
@@ -836,6 +862,9 @@ function candidateReasons(work, slot, availability, capacity, lockOwner) {
   if (capacity.error) return [programReason(capacity.error)];
   if (lockOwner && lockOwner !== slot.id) return [programReason("manual_lock", { lockedSlotId: lockOwner })];
   const failures = [];
+  if (work.custodialCoverageMode === "contractor_exact") {
+    if (slot.contractorCapacity !== true || slot.id !== work.custodialCoverageSlotId) failures.push(programReason("coverall_capacity_mismatch", { requiredSlotId: work.custodialCoverageSlotId }));
+  } else if (slot.contractorCapacity === true) failures.push(programReason("coverall_capacity_reserved_for_second_or_later_absence"));
   const window = normalizeWindow(work.window, "work window");
   if (!windowContains(capacity.shift, window)) failures.push(programReason("not_full_window_qualified"));
   if (availability.lunch && windowsOverlap(availability.lunch, window)) failures.push(programReason("lunch_overlap"));
@@ -884,7 +913,7 @@ export function prepareStaticWeeklySchedulingProblem(input, deadline = null) {
   const states = new Map(); const applied = [];
   for (let day = 0; day < 7; day += 1) {
     if (deadline != null) remainingStaticWeeklyMilliseconds(deadline);
-    const state = { availability: new Map(), work: [], manualLocks: new Map(), applied: [] };
+    const state = { availability: new Map(), work: [], manualLocks: new Map(), applied: [], fullDayAbsenceSlotIds: [], contractorCoverageSlotIds: [] };
     for (const entry of array(version.slotAvailability)) if (entry.dayOfWeek === day) {
       const inheritedRoute = version.acceptedRoutesBySlot?.[text(entry.slotId)] || null;
       state.availability.set(text(entry.slotId), { ...clone(entry), ...(entry.acceptedRoute ? {} : (inheritedRoute ? { acceptedRoute: clone(inheritedRoute) } : {})) });
@@ -893,7 +922,11 @@ export function prepareStaticWeeklySchedulingProblem(input, deadline = null) {
     for (const entry of array(version.assignments).filter((item) => item.dayOfWeek === day)) state.work.push({ ...clone(entry), workId: text(entry.workId || entry.id), originSlotId: text(entry.originSlotId || version.originSlotOverrides?.[text(entry.workId || entry.id)] || entry.ownerSlotId || entry.baselineSlotId), cancelled: entry.cancelled === true });
     const date = weekdayDate(serviceDate, day);
     let overlays = [];
-    try { overlays = activeExceptions(exceptions, date, version); overlays.forEach((item) => applyException(state, item)); } catch (error) { return { error: programReason(error.code || "invalid_exception_overlay", { message: error.message }) }; }
+    try {
+      overlays = activeExceptions(exceptions, date, version);
+      overlays.forEach((item) => applyException(state, item));
+      applyCustodialAbsenceCoveragePolicy(state, new Map(slots.map((slot) => [slot.id, slot])));
+    } catch (error) { return { error: programReason(error.code || "invalid_exception_overlay", { message: error.message }) }; }
     applied.push(...state.applied); states.set(day, state);
   }
   // This includes accepted overlays as well as the immutable version source.

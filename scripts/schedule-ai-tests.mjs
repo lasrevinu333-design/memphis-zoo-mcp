@@ -350,7 +350,7 @@ const boundedManualAbsencePublish = boundedScheduleMigration.match(/elsif v_comm
 assert.match(boundedManualAbsencePublish, /set active=dao\.employee_id=any\(coalesce\(array\(select jsonb_array_elements_text/, "manual absence publish must reactivate existing selected rows instead of inserting duplicates");
 assert.doesNotMatch(boundedManualAbsencePublish, /and y\.active = true/, "manual absence insert existence check must include inactive rows to avoid unique-key retries");
 assert.match(manualAbsencePublishSource, /publishCoverAllSlotsForDate\(serviceDate, requestedCoverAllSlots, \{ regenerate: false, restoreStatic: false, rebalance: false \}\)/, "manual absence publish must add CoverAll roster slots without a second full regeneration before final absence application");
-assert.match(manualAbsencePublishSource, /coverallPlan = await applyCoverAllPlan\(serviceDate, coverallPlan\);[\s\S]*coverallBalanceResult[\s\S]*await rebalanceCoverAllAssignments\(serviceDate\)/, "manual absence publish must run final CoverAll rebalance after applying 3+ absence CoverAll workload");
+assert.match(manualAbsencePublishSource, /coverallPlan = await applyCoverAllPlan\(serviceDate, coverallPlan\);[\s\S]*coverallBalanceResult[\s\S]*await rebalanceCoverAllAssignments\(serviceDate\)/, "manual absence publish must run final CoverAll rebalance after applying second-and-later absence CoverAll workload");
 assert.match(manualAbsencePublishSource, /coverall_balance_result: coverallBalanceResult/, "manual absence publish response must expose the final CoverAll rebalance proof");
 
 const activeRoster = [

@@ -12,6 +12,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const WORKBOOK_SHA256 = "f9eba54e274cd1b792545770de6fb17e9e25fee989aca18f65250d433f599e40";
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 const KNOWN_CANDIDATE_UUID_PREFIXES = ["4b99b100-", "5b99b100-"];
+const CANDIDATE_SCHEDULE_RETAINED_STATES = new Set(["LAST_KNOWN_ACTIVE", "ORIGINAL_SCHEDULE_RETAINED_STATUS_UNCONFIRMED"]);
 const isCandidatePlaceholder = (value) => KNOWN_CANDIDATE_UUID_PREFIXES.some((prefix) => String(value || "").toLowerCase().startsWith(prefix));
 const text = (value) => typeof value === "string" ? value.trim() : "";
 
@@ -30,7 +31,21 @@ export function validateStaticWeeklyPacket(packet) {
     if (packet.publicationAuthority !== "REVIEW_REQUIRED" || packet.admission?.canaryReady !== false || packet.admission?.requiresVerifiedSchedulePacket !== true) errors.push("candidate_must_fail_closed");
     if (packet.source?.sha256 !== WORKBOOK_SHA256) errors.push("candidate_workbook_hash_mismatch");
     if (!Array.isArray(packet.candidateRoster) || !packet.candidateRoster.length || packet.candidateRoster.some((row) => !UUID.test(row.slotId || "") || !UUID.test(row.personId || "") || !String(row.displayName || "").trim())) errors.push("candidate_roster_requires_uuid_source_facts");
-    if (!Array.isArray(packet.unresolved?.absentUntilReplacedStableSlots) || packet.unresolved.absentUntilReplacedStableSlots.length !== 2) errors.push("two_departed_slot_identities_must_remain_unresolved");
+    const unavailableRosterSlots = packet.candidateRoster.filter((row) => !CANDIDATE_SCHEDULE_RETAINED_STATES.has(row.staffingState)).map((row) => row.slotId).sort();
+    const unresolvedSlots = Array.isArray(packet.unresolved?.absentUntilReplacedStableSlots) ? [...new Set(packet.unresolved.absentUntilReplacedStableSlots)].sort() : [];
+    if (!unavailableRosterSlots.length || JSON.stringify(unavailableRosterSlots) !== JSON.stringify(unresolvedSlots)) errors.push("unavailable_roster_slots_must_remain_unresolved");
+    const statusUnconfirmedSlots = Array.isArray(packet.unresolved?.statusUnconfirmedRetainOriginalScheduleSlots) ? [...new Set(packet.unresolved.statusUnconfirmedRetainOriginalScheduleSlots)].sort() : [];
+    const retainedUnconfirmedSlots = packet.candidateRoster.filter((row) => row.staffingState === "ORIGINAL_SCHEDULE_RETAINED_STATUS_UNCONFIRMED").map((row) => row.slotId).sort();
+    if (JSON.stringify(statusUnconfirmedSlots) !== JSON.stringify(retainedUnconfirmedSlots)) errors.push("unconfirmed_status_slots_must_retain_original_schedule");
+    const dutyWindow = /^([01]\d|2[0-3]):[0-5]\d-(([01]\d|2[0-3]):[0-5]\d|24:00)$/;
+    if (packet.candidateRoster.some((row) => !dutyWindow.test(row.shift || "") || !dutyWindow.test(row.lunch || ""))) errors.push("candidate_roster_shift_and_lunch_required");
+    const slotPolicy = packet.operationalCorrections?.scheduleSlotPolicy;
+    if (slotPolicy?.currentSchedule !== "PRESERVE_ALL_ORIGINAL_NAMES_LOCATIONS_DAYS_SHIFTS_AND_LUNCHES"
+      || slotPolicy?.uncertainStaffing !== "RETAIN_ORIGINAL_SCHEDULE_UNTIL_A_CONFIRMED_CHANGE"
+      || slotPolicy?.replacementIdentity !== "APPEND_NEW_INCUMBENT_WITH_NEW_PERSON_ID_AND_PRESERVE_HISTORY"
+      || JSON.stringify(slotPolicy?.stableAcrossReplacement) !== JSON.stringify(["SLOT_ID", "LOCATION_ASSIGNMENTS"])
+      || JSON.stringify(slotPolicy?.replacementMayChange) !== JSON.stringify(["DISPLAY_NAME", "WORK_DAYS", "SHIFT_START", "LUNCH_START", "LUNCH_END", "SHIFT_END"])) errors.push("current_schedule_slot_replacement_policy_required");
+    if (packet.operationalCorrections?.coverAllPolicy?.firstAbsence !== "EVENLY_REDISTRIBUTE_AMONG_REMAINING_ZOO_EMPLOYEES" || packet.operationalCorrections?.coverAllPolicy?.secondAndLaterAbsences !== "CALL_COVERALL_ONE_PERSON_PER_ABSENCE") errors.push("current_coverall_policy_required");
     return { ok: errors.length === 0, classification: "CANDIDATE_ONLY", admissibleForRegistration: false, errors, contentDigest: hash(JSON.stringify(packet)) };
   }
   if (packet.packetSchema !== "memphis-zoo.static-weekly.verified-schedule-packet.v1") errors.push("unknown_packet_schema");

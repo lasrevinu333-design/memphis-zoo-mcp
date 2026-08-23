@@ -41,9 +41,9 @@ const phaseO = "20260820153000_append_only_cleaning_identity_corrections.sql";
 const phaseP = "20260820154000_late_gps_is_advisory_only.sql";
 const terminalWriterDetection = "20260820154500_precise_terminal_writer_detection.sql";
 const releaseRecoveryRebind = "20260820155000_rebind_release_recovery_inventory_to_current_authority.sql";
-const runtimeReadAndScanAlertAuthority = "20260822170000_repair_runtime_read_and_scan_alert_authority.sql";
+const coverAllSecondAbsencePolicy = "20260822222500_correct_coverall_second_absence_policy.sql";
 const pendingProductionMigrations = [
-  runtimeReadAndScanAlertAuthority,
+  coverAllSecondAbsencePolicy,
 ];
 const releaseInputPath = "release/integrated-backend-authority-input.json";
 const releaseEvidencePath = "release/integrated-backend-authority-evidence.json";
@@ -244,6 +244,7 @@ function expectedReleaseEvidence(input, schemaFingerprint, frontendManifest, aut
       atomic_day_change_reconciliation_phase: "20260814224034 converges both preserved U4 migration histories and recognizes the existing complete child/projection receipt chain before mutable Weekly Schedule authority is reread",
       managed_schema_authority_normalization_phase: "20260815160613 removes broad future-object defaults; 20260815163346 preserves application and scheduler access through explicit role grants while keeping PUBLIC revoked, and managed postgres/supabase_admin deployment authority remains comparable without hiding application grants or role memberships",
       runtime_read_and_scan_alert_authority_phase: "20260822170000 restores the pure service-date helper only to the restricted reader and routes scan-alert delivery through the one canonical Memphis conversation without rewriting existing evidence",
+      coverall_second_absence_policy_phase: "20260822222500 keeps the first absence internal and assigns each second or later absence to one distinct registered CoverAll capacity without rewriting manager overrides",
     },
     rollback: input.rollback,
     cutover: input.cutover,
@@ -280,7 +281,7 @@ const evidenceBlob = expectedEntries.find(({ path }) => path === releaseEvidence
 assert.ok(evidenceBlob, "expected tree omits generated release evidence");
 const expectedBlobs = expectedEntries.filter(({ path }) => path !== releaseEvidencePath);
 assert.ok(expectedBlobs.length > 0, "release authority inventory is empty");
-assert.equal(expectedBlobs.filter(({ path }) => /^supabase\/migrations\/[^/]+\.sql$/.test(path)).length, 95, "release authority inventory must bind all 95 migrations");
+assert.equal(expectedBlobs.filter(({ path }) => /^supabase\/migrations\/[^/]+\.sql$/.test(path)).length, 96, "release authority inventory must bind all 96 migrations");
 for (const blob of [...expectedBlobs, evidenceBlob]) assertWorktreeMatchesExpectedBlob(blob);
 assert.equal(evidenceBlob.object_id, acceptance.backend_evidence_blob_sha, "signed release attestation names the wrong evidence blob");
 assert.equal(hash(evidenceBlob.bytes), acceptance.backend_evidence_sha256, "signed release attestation names the wrong evidence digest");
@@ -322,11 +323,11 @@ assert.deepEqual(input.cutover.phase_order, [
 assert.equal(input.cutover.production_migration_plan, pendingMigrationPlanPath);
 assert.equal(pendingMigrationPlan.artifact, "pending-production-migration-plan.v2");
 assert.equal(pendingMigrationPlan.project_ref, "rqquvtjdmugpigbndmne");
-assert.equal(pendingMigrationPlan.observed_production?.ledger_head, "20260822153528");
-assert.equal(pendingMigrationPlan.observed_production?.source_migration_name, "bridge_cron_identity_and_rebind_recovery_acl");
-assert.equal(pendingMigrationPlan.observed_production?.catalog_privilege_fingerprint, "6a5ed2cb582ef6d77400ebe2eec5738066b1073b1ed8187ad6615c139e171eaf");
-assert.equal(pendingMigrationPlan.target?.source_migration_file, runtimeReadAndScanAlertAuthority);
-assert.equal(pendingMigrationPlan.target?.source_migration_name, "repair_runtime_read_and_scan_alert_authority");
+assert.equal(pendingMigrationPlan.observed_production?.ledger_head, "20260822175243");
+assert.equal(pendingMigrationPlan.observed_production?.source_migration_name, "repair_runtime_read_and_scan_alert_authority");
+assert.equal(pendingMigrationPlan.observed_production?.catalog_privilege_fingerprint, "b890754824a2e86d4df1b75c134fd233fcf2e42928c9f5a74c1233e4012202f7");
+assert.equal(pendingMigrationPlan.target?.source_migration_file, coverAllSecondAbsencePolicy);
+assert.equal(pendingMigrationPlan.target?.source_migration_name, "correct_coverall_second_absence_policy");
 assert.equal(pendingMigrationPlan.target?.ledger_version_policy, "runner_assigned_and_postverified");
 assert.equal(pendingMigrationPlan.target?.canonical_schema_fingerprint, schemaFingerprint);
 assert.equal(pendingMigrationPlan.source_binding?.kind, "external_exact_head_release_attestation");

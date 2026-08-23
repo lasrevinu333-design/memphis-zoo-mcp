@@ -3,6 +3,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { getGeminiApiKey } from "./utils/gemini-config.js";
 import { resolveCanonicalDevice } from "./device-identity.js";
 import { consolidateScheduleItems } from "./schedule-display.js";
+import { partitionCustodialAbsences } from "./custodial-coverage-policy.js";
 
 const MONTH_LOOKUP = {
   january: 1, jan: 1,
@@ -1094,17 +1095,13 @@ export function createScheduleRouter({
       select id as employee_id, display_name, employee_code
       from public.employees
       where employee_code in (${COVERALL_SLOT_CODES.map((slotCode) => `'${esc(slotCode)}'`).join(",")})
+        and active = true
       order by employee_code
     `);
     if (!Array.isArray(rows) || rows.length < COVERALL_SLOT_CODES.length) {
       throw Object.assign(new Error("CoverAll employee slots are not provisioned. Apply the source-controlled migration."), { status: 503 });
     }
     return rows;
-  }
-
-  async function getCoverAllEmployee() {
-    const slots = await getCoverAllSlots();
-    return slots[0];
   }
 
   async function getCoverAllSlotByCode(slotCode) {
@@ -1848,8 +1845,11 @@ export function createScheduleRouter({
     const start = String(row.original_coverage_start || row.coverage_start || "").slice(0, 8);
     const end = String(row.original_coverage_end || row.coverage_end || "").slice(0, 8);
     if (!locationGroupId || !start || !end) return null;
+    const segmentNumber = Number.parseInt(String(row.segment_number || ""), 10);
+    if (!Number.isInteger(segmentNumber) || segmentNumber < 1) return null;
     return {
       location_group_id: locationGroupId,
+      segment_number: segmentNumber,
       coverage_start: start,
       coverage_end: end,
       group_name: String(row.group_name || row.location_name || row.group_code || "Area").trim(),
@@ -1871,81 +1871,112 @@ export function createScheduleRouter({
       nonManualActiveIds.push(id);
     }
     const eligibleNonManualActiveIds = await filterAbsenceEligibleEmployeeIds(nonManualActiveIds);
-    const orderedAbsentIds = Array.from(new Set([...eligibleNonManualActiveIds, ...explicit]));
-    if (orderedAbsentIds.length < 3) {
-      return { triggered: false, absent_count: orderedAbsentIds.length, ordered_absent_employee_ids: orderedAbsentIds, coverall_employee_ids: [], assignments: [] };
+    const policy = partitionCustodialAbsences([...eligibleNonManualActiveIds, ...explicit]);
+    if (!policy.triggered) {
+      return {
+        triggered: false,
+        absent_count: policy.absentCount,
+        ordered_absent_employee_ids: policy.orderedAbsentEmployeeIds,
+        internally_redistributed_employee_ids: policy.internallyRedistributedEmployeeIds,
+        coverall_employee_ids: [],
+        assignments: [],
+      };
     }
 
-    const coverallAbsentIds = orderedAbsentIds.slice(2);
-    const coverallSet = new Set(coverallAbsentIds);
+    const coverallAbsentIds = policy.coverAllEmployeeIds;
     const captured = new Map();
     const addCapture = (row, source) => {
       const item = normalizeAssignmentCapture(row, source);
       if (!item) return;
-      captured.set(`${item.location_group_id}|${item.coverage_start}|${item.coverage_end}`, item);
+      captured.set(`${item.location_group_id}|${item.segment_number}`, item);
     };
 
     const baselineRows = await runReadOnlySql(`
-      select *
-      from public.sch_get_daily_schedule_with_purpose('${esc(serviceDate)}'::date)
-      where assigned_employee_id = any(${uuidArrayLiteral(coverallAbsentIds)})
-      order by group_name, coverage_start, coverage_end
+      select ct.location_group_id, ct.segment_number, ct.assigned_employee_id,
+             e.display_name as assigned_employee_name, lg.group_code, lg.group_name,
+             to_char(ct.coverage_start, 'HH24:MI:SS') as coverage_start,
+             to_char(least(ct.coverage_end, public.sch_get_schedule_close_time('${esc(serviceDate)}'::date)), 'HH24:MI:SS') as coverage_end
+      from public.coverage_templates ct
+      join public.location_groups lg on lg.id = ct.location_group_id and lg.active = true
+      join public.employees e on e.id = ct.assigned_employee_id
+      where ct.active = true
+        and ct.day_of_week = extract(dow from '${esc(serviceDate)}'::date)::integer
+        and ct.assigned_employee_id = any(${uuidArrayLiteral(coverallAbsentIds)})
+        and ct.coverage_start < public.sch_get_schedule_close_time('${esc(serviceDate)}'::date)
+      order by lg.group_name, ct.segment_number
     `);
-    for (const row of Array.isArray(baselineRows) ? baselineRows : []) addCapture(row, "current_assignment");
-
-    const firstTwoIds = orderedAbsentIds.slice(0, 2);
-    if (firstTwoIds.length) {
-      try {
-        const previewRows = await runReadOnlySql(`select public.sch_absence_preview('${esc(serviceDate)}'::date, ${uuidArrayLiteral(firstTwoIds)}) as data`);
-        const preview = Array.isArray(previewRows) && previewRows.length ? previewRows[0].data : null;
-        const reassigned = Array.isArray(preview?.reassigned_assignments) ? preview.reassigned_assignments : [];
-        for (const row of reassigned) {
-          const assignedId = String(row.assigned_employee_id || "").trim();
-          if (coverallSet.has(assignedId)) addCapture(row, "would_have_inherited_from_first_two_absences");
-        }
-      } catch (error) {
-        console.warn("CoverAll preview capture failed:", error?.message || error);
-      }
-    }
+    for (const row of Array.isArray(baselineRows) ? baselineRows : []) addCapture(row, "immutable_coverage_template_owner");
 
     return {
       triggered: true,
-      absent_count: orderedAbsentIds.length,
-      ordered_absent_employee_ids: orderedAbsentIds,
+      absent_count: policy.absentCount,
+      ordered_absent_employee_ids: policy.orderedAbsentEmployeeIds,
+      internally_redistributed_employee_ids: policy.internallyRedistributedEmployeeIds,
       coverall_employee_ids: coverallAbsentIds,
-      first_two_employee_ids: firstTwoIds,
       assignments: Array.from(captured.values()),
-      manager_notification: `Call CoverAll: ${orderedAbsentIds.length} custodial absences for ${serviceDate}. CoverAll should cover the 3rd absence and any later absences.`,
+      manager_notification: `Call CoverAll: ${policy.absentCount} custodial absences for ${serviceDate}. Zoo staff share the first absence. CoverAll covers the 2nd absence and every later absence.`,
     };
   }
 
   async function applyCoverAllPlan(serviceDate, plan = {}) {
-    if (!plan?.triggered || !Array.isArray(plan.assignments) || !plan.assignments.length) {
+    if (!plan?.triggered) {
       return { ...(plan || {}), applied: false, assigned_count: 0, assigned_assignments: [] };
     }
-    if (typeof runCommand !== "function") throw new Error("CoverAll write path is not configured.");
-    const coverAll = await getCoverAllEmployee();
-    await runCommand("coverall_assignment_apply", {
-      service_date: serviceDate, employee_id: coverAll.employee_id, assignments: plan.assignments,
+    if (!Array.isArray(plan.assignments)) throw new Error("CoverAll assignment evidence must be an array.");
+    if (typeof runRpc !== "function") throw new Error("CoverAll write path is not configured.");
+    const coverAllSlots = await getCoverAllSlots();
+    const absentIds = Array.isArray(plan.coverall_employee_ids) ? plan.coverall_employee_ids : [];
+    if (absentIds.length > coverAllSlots.length) {
+      throw Object.assign(new Error(`Call CoverAll for ${absentIds.length} people. Only ${coverAllSlots.length} bounded contractor-capacity slots are currently registered; no partial assignment was made.`), { status: 503, code: "coverall_capacity_insufficient" });
+    }
+    const coverage = absentIds.map((absentEmployeeId, index) => {
+      const slot = coverAllSlots[index];
+      return {
+        absent_employee_id: absentEmployeeId,
+        coverall_capacity_employee_id: slot.employee_id,
+        employee_code: slot.employee_code,
+        display_name: slot.display_name || `CoverAll ${index + 1}`,
+        assignments: plan.assignments.filter((assignment) => String(assignment?.original_employee_id || "").trim() === absentEmployeeId),
+      };
+    });
+    await runRpc("app_apply_coverall_assignment_policy_v2", {
+      p_payload: {
+        service_date: serviceDate,
+        internally_redistributed_employee_ids: plan.internally_redistributed_employee_ids,
+        coverall_absent_employee_ids: plan.coverall_employee_ids,
+        coverage: coverage.map(({ absent_employee_id, coverall_capacity_employee_id, assignments }) => ({
+          absent_employee_id,
+          coverall_capacity_employee_id,
+          assignments: assignments.map((assignment) => ({
+            location_group_id: assignment.location_group_id,
+            segment_number: assignment.segment_number,
+            coverage_start: assignment.coverage_start,
+            coverage_end: assignment.coverage_end,
+            original_employee_id: assignment.original_employee_id,
+          })),
+        })),
+      },
     });
 
+    const assignedCapacityIds = coverage.map((item) => item.coverall_capacity_employee_id);
     const assignedRows = await runReadOnlySql(`
-      select dsa.location_group_id, lg.group_code, lg.group_name,
+      select dsa.assigned_employee_id, e.employee_code, e.display_name as coverall_name,
+             dsa.location_group_id, lg.group_code, lg.group_name,
              to_char(dsa.coverage_start, 'HH24:MI:SS') as coverage_start,
              to_char(dsa.coverage_end, 'HH24:MI:SS') as coverage_end,
              dsa.notes
       from public.daily_schedule_assignments dsa
+      join public.employees e on e.id = dsa.assigned_employee_id
       join public.location_groups lg on lg.id = dsa.location_group_id
       where dsa.service_date = '${esc(serviceDate)}'::date
-        and dsa.assigned_employee_id = '${esc(coverAll.employee_id)}'::uuid
-      order by dsa.coverage_start, lg.group_name
+        and dsa.assigned_employee_id = any(${uuidArrayLiteral(assignedCapacityIds)})
+      order by e.employee_code, dsa.coverage_start, lg.group_name
     `);
 
     return {
       ...plan,
       applied: true,
-      coverall_employee_id: coverAll.employee_id,
-      coverall_employee_name: coverAll.display_name || "CoverAll",
+      coverall_capacity: coverage.map(({ assignments: _assignments, ...item }) => item),
       assigned_count: Array.isArray(assignedRows) ? assignedRows.length : 0,
       assigned_assignments: Array.isArray(assignedRows) ? assignedRows : [],
     };

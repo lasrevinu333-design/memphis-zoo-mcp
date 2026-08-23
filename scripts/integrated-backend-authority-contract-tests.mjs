@@ -14,6 +14,7 @@ const schedulerClosure = readFileSync("supabase/migrations/20260810230000_static
 const dayChangeReconciliation = readFileSync("supabase/migrations/20260814224034_reconcile_static_weekly_day_change_receipts.sql", "utf8");
 const managedSchemaUsage = readFileSync("supabase/migrations/20260815163346_restore_explicit_public_schema_usage.sql", "utf8");
 const runtimeReadAndScanAlertAuthority = readFileSync("supabase/migrations/20260822170000_repair_runtime_read_and_scan_alert_authority.sql", "utf8");
+const coverAllSecondAbsencePolicy = readFileSync("supabase/migrations/20260822222500_correct_coverall_second_absence_policy.sql", "utf8");
 const index = readFileSync("src/index.js", "utf8");
 const scanAuthorityCutover = readFileSync("src/scan-authority-cutover.js", "utf8");
 const schedulerControlPlane = readFileSync("src/static-weekly-control-plane.js", "utf8");
@@ -26,7 +27,7 @@ const releaseInput = JSON.parse(readFileSync("release/integrated-backend-authori
 const releaseEvidence = JSON.parse(readFileSync("release/integrated-backend-authority-evidence.json", "utf8"));
 const pendingMigrationPlan = JSON.parse(readFileSync("release/pending-production-migration-plan.json", "utf8"));
 const exactPendingProductionMigrations = [
-  "20260822170000_repair_runtime_read_and_scan_alert_authority.sql",
+  "20260822222500_correct_coverall_second_absence_policy.sql",
 ];
 
 assert.match(phaseA, /Phase A is deliberately additive/i);
@@ -121,13 +122,13 @@ assert.match(releaseInput.cutover.phase_order[1], /release:populated-schema:pref
 assert.equal(releaseInput.cutover.production_migration_plan, "release/pending-production-migration-plan.json");
 assert.equal(pendingMigrationPlan.artifact, "pending-production-migration-plan.v2");
 assert.equal(pendingMigrationPlan.project_ref, "rqquvtjdmugpigbndmne");
-assert.equal(pendingMigrationPlan.observed_production.ledger_head, "20260822153528");
-assert.equal(pendingMigrationPlan.observed_production.source_migration_name, "bridge_cron_identity_and_rebind_recovery_acl");
-assert.equal(pendingMigrationPlan.observed_production.catalog_privilege_fingerprint, "6a5ed2cb582ef6d77400ebe2eec5738066b1073b1ed8187ad6615c139e171eaf");
-assert.equal(pendingMigrationPlan.target.source_migration_file, "20260822170000_repair_runtime_read_and_scan_alert_authority.sql");
-assert.equal(pendingMigrationPlan.target.source_migration_name, "repair_runtime_read_and_scan_alert_authority");
+assert.equal(pendingMigrationPlan.observed_production.ledger_head, "20260822175243");
+assert.equal(pendingMigrationPlan.observed_production.source_migration_name, "repair_runtime_read_and_scan_alert_authority");
+assert.equal(pendingMigrationPlan.observed_production.catalog_privilege_fingerprint, "b890754824a2e86d4df1b75c134fd233fcf2e42928c9f5a74c1233e4012202f7");
+assert.equal(pendingMigrationPlan.target.source_migration_file, "20260822222500_correct_coverall_second_absence_policy.sql");
+assert.equal(pendingMigrationPlan.target.source_migration_name, "correct_coverall_second_absence_policy");
 assert.equal(pendingMigrationPlan.target.ledger_version_policy, "runner_assigned_and_postverified");
-assert.equal(pendingMigrationPlan.target.canonical_schema_fingerprint, "b890754824a2e86d4df1b75c134fd233fcf2e42928c9f5a74c1233e4012202f7");
+assert.equal(pendingMigrationPlan.target.canonical_schema_fingerprint, "5bcb02001e4096f5ad5d0d457202d90ca3fbe9cfe4c60793d11af384378f33d2");
 assert.equal(pendingMigrationPlan.authorization.production_apply_authorized, false);
 assert.deepEqual(pendingMigrationPlan.migrations.map(({ file }) => file), exactPendingProductionMigrations);
 for (const [index, migration] of pendingMigrationPlan.migrations.entries()) {
@@ -137,10 +138,14 @@ for (const [index, migration] of pendingMigrationPlan.migrations.entries()) {
 }
 assert.equal(releaseEvidence.compatibility_window.accepted_engine.scan, "scan.v2");
 assert.equal(releaseEvidence.compatibility_window.required_engine.scan, "scan.v4.snapshot-bound-authority");
-assert.equal(releaseEvidence.migrations.at(-1).name, "20260822170000_repair_runtime_read_and_scan_alert_authority.sql");
+assert.equal(releaseEvidence.migrations.at(-1).name, "20260822222500_correct_coverall_second_absence_policy.sql");
 assert.match(runtimeReadAndScanAlertAuthority, /grant execute on function public\.get_setting_int\(text, integer\)[\s\S]*to custodial_application_reader/i);
 assert.match(runtimeReadAndScanAlertAuthority, /msg_get_or_create_memphis_thread\(p_msg_user_id\)/i);
 assert.doesNotMatch(runtimeReadAndScanAlertAuthority.match(/create or replace function public\.sch_get_or_create_scan_alert_thread[\s\S]*?\$function\$;/i)?.[0] || "", /insert into public\.msg_threads/i);
+assert.match(coverAllSecondAbsencePolicy, /app_apply_coverall_assignment_policy_v2/i);
+assert.match(coverAllSecondAbsencePolicy, /preserves the first recorded absence for internal redistribution/i);
+assert.match(coverAllSecondAbsencePolicy, /coverall_capacity_employee_id/i);
+assert.match(coverAllSecondAbsencePolicy, /revoke all on function public\.app_apply_coverall_assignment_policy_v2\(jsonb\) from public\s*,\s*anon\s*,\s*authenticated/i);
 assert.match(managedSchemaUsage, /grant usage on schema public[\s\S]*anon[\s\S]*authenticated[\s\S]*service_role[\s\S]*static_weekly_control_plane[\s\S]*static_weekly_release_operator/i);
 assert.doesNotMatch(managedSchemaUsage, /grant usage on schema public[\s\S]*\bto public\b/i);
 assert.match(releaseEvidence.compatibility_window.release_phone_transport_and_offline_activation_phase, /native-vault \/scan-api\/rpc/);
@@ -149,6 +154,7 @@ assert.match(releaseEvidence.compatibility_window.u4_ops_closure_phase,
 assert.match(releaseEvidence.compatibility_window.atomic_day_change_reconciliation_phase, /existing complete child\/projection receipt chain.*before mutable Weekly Schedule authority/i);
 assert.match(releaseEvidence.compatibility_window.managed_schema_authority_normalization_phase, /broad future-object defaults.*managed postgres\/supabase_admin deployment authority/i);
 assert.match(releaseEvidence.compatibility_window.runtime_read_and_scan_alert_authority_phase, /restricted reader.*canonical Memphis conversation/i);
+assert.match(releaseEvidence.compatibility_window.coverall_second_absence_policy_phase, /first absence.*internal.*second.*later absence.*distinct registered CoverAll capacity/i);
 assert.match(dayChangeReconciliation, /static_weekly_v4_begin_day_changes/);
 assert.equal(releaseEvidence.artifact, "integrated-backend-authority-release-evidence.v2");
 assert.equal(releaseEvidence.release_id, "release-2026.07.19.custodial-v3.12");
@@ -166,7 +172,7 @@ assert.ok(releaseEvidence.authority_content_identity.expected_tree_inventory.som
 assert.ok(releaseEvidence.authority_content_identity.expected_tree_inventory.some(({ path }) => path === "scripts/integrated-backend-authority-suite-order-tests.mjs"));
 assert.equal(releaseEvidence.authority_content_identity.expected_tree_inventory.some(({ path }) => path === "release/integrated-backend-authority-evidence.json"), false);
 assert.equal(releaseEvidence.authority_content_identity.authority_path_count, releaseEvidence.authority_content_identity.expected_tree_inventory.length);
-assert.equal(releaseEvidence.authority_content_identity.migration_path_count, 95);
-assert.equal(releaseEvidence.migrations.length, 95);
+assert.equal(releaseEvidence.authority_content_identity.migration_path_count, 96);
+assert.equal(releaseEvidence.migrations.length, 96);
 assert.equal(Object.hasOwn(releaseEvidence.authority_content_identity, "value"), false, "generated evidence must not self-assert a worktree-derived content hash");
 console.log("INTEGRATED_BACKEND_AUTHORITY_CONTRACT_PASS");
