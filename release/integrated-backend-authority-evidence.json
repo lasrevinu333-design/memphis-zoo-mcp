@@ -1803,7 +1803,7 @@
       {
         "path": "src/static-weekly-schedule-program.js",
         "mode": "100644",
-        "object_id": "b454f7c6627295c6dec3a4810779db44c78e8873"
+        "object_id": "151472bfe2cfd34d32fcbc9ddbc9ddb828464eef"
       },
       {
         "path": "src/static-weekly-schedule-solver-worker.js",
@@ -1818,7 +1818,7 @@
       {
         "path": "src/static-weekly-schedule-verifier.js",
         "mode": "100644",
-        "object_id": "63469362a206f515a9999c00a9a651fed28027ba"
+        "object_id": "d88ece1a768852a0cf326c00523ade93d204722a"
       },
       {
         "path": "src/supabase/client.js",
