@@ -3,14 +3,14 @@
   "release_id": "release-2026.07.19.custodial-v3.12",
   "frontend_commit_sha": "c43836a2b94067333797fb01f53796971aca8892",
   "frontend_commit_state": "final_pair_bound",
-  "schema_fingerprint": "670cfa8c21e8ca852832a0f77aaedb59be5db0b86f59016bd9133cda2e4173b3",
+  "schema_fingerprint": "3df9551ba5f5fe0c5222cd5e0a0b5cfc6895d2fa60d653ba2fd70ba52085db1b",
   "schema_transition": {
-    "transition_id": "custodial-foundation-authority-cutover-20260821",
-    "from_fingerprint": "b890754824a2e86d4df1b75c134fd233fcf2e42928c9f5a74c1233e4012202f7",
-    "to_fingerprint": "670cfa8c21e8ca852832a0f77aaedb59be5db0b86f59016bd9133cda2e4173b3",
+    "transition_id": "static-weekly-authority-parity-20260823",
+    "from_fingerprint": "670cfa8c21e8ca852832a0f77aaedb59be5db0b86f59016bd9133cda2e4173b3",
+    "to_fingerprint": "3df9551ba5f5fe0c5222cd5e0a0b5cfc6895d2fa60d653ba2fd70ba52085db1b",
     "expires_at": "2026-09-03T23:59:59Z"
   },
-  "frontend_source_fingerprint": "670cfa8c21e8ca852832a0f77aaedb59be5db0b86f59016bd9133cda2e4173b3",
+  "frontend_source_fingerprint": "3df9551ba5f5fe0c5222cd5e0a0b5cfc6895d2fa60d653ba2fd70ba52085db1b",
   "backend_contract": {
     "scan": "scan.v4.snapshot-bound-authority",
     "authority": "offline-authority.v5",
@@ -75,7 +75,7 @@
       "prepare distinct CUSTODIAL_BACKEND_PROOF_SECRET and CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET values (minimum 32 characters each) without exposing either value",
       "run npm run release:populated-schema:preflight through the read-only production MCP and preserve its exact source-fingerprint receipt before any migration",
       "verify production project, migration head, catalog/privilege fingerprint, backup receipt, and exact source attestation against release/pending-production-migration-plan.json",
-      "apply only the single hash-bound migration in release/pending-production-migration-plan.json, stopping after any failed preflight or postcheck",
+      "apply only the ordered hash-bound migrations in release/pending-production-migration-plan.json, stopping after any failed preflight or postcheck",
       "deploy the canonical-only backend only after all authoritative procedures above are present and verified; missing canonical writers fail closed",
       "require a green authority health gate and direct-DML denial probes before routing traffic"
     ],
@@ -407,17 +407,17 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "f3582df2a14d73a8d4f8b0ae441acde899a04e43"
+        "object_id": "39231bc0ed1a8b738eab8d91df09a90e3bb3548d"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
         "mode": "100644",
-        "object_id": "9a40a108a63d0d1dff4acf9c317e7943d3ce02ab"
+        "object_id": "b03c55d69a00faa09879340f778248fb85c1c8fb"
       },
       {
         "path": "release/pending-production-migration-plan.json",
         "mode": "100644",
-        "object_id": "99418a679137b268b40fef3dcf6b01503ac95501"
+        "object_id": "112d3ae86f04f25570fb937dcf7a4523e01910ef"
       },
       {
         "path": "release/reviewed-migrations/20260809125735_cleaning_inspection_24_hour_freshness.sql",
@@ -427,7 +427,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "3e6a07b16dacf601325edeb8710caf586d2d21e1"
+        "object_id": "4f6f626cff067759068babbf744e5e20a48205b4"
       },
       {
         "path": "research/european_herbalism_through_paracelsus.md",
@@ -742,12 +742,12 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "47db397185dc4971d29a7061e342b5136c5d4a79"
+        "object_id": "63b9b009fdd590406293bab78d6ccde82519b0c5"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "b0aa26a162c880cb29ab72a42a176bcc329588f8"
+        "object_id": "a22e3f08b4c5fd3e11c0b1a34531b505e33f3f21"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
@@ -1872,12 +1872,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "7a87c03df1d4ba9136e461b8105aebaef19fdeef"
+        "object_id": "ae001ae3b1eb346d87fff8cf2d0c4912f7a54ffd"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "8c756c81e5c0316edf3c7ec6477cd9a51ff80406"
+        "object_id": "b61efb7712bbe3af852cf484c0761daa1ec0a941"
       },
       {
         "path": "supabase/config.toml",
