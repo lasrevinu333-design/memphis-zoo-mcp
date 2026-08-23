@@ -75,7 +75,7 @@
       "prepare distinct CUSTODIAL_BACKEND_PROOF_SECRET and CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET values (minimum 32 characters each) without exposing either value",
       "run npm run release:populated-schema:preflight through the read-only production MCP and preserve its exact source-fingerprint receipt before any migration",
       "verify production project, migration head, catalog/privilege fingerprint, backup receipt, and exact source attestation against release/pending-production-migration-plan.json",
-      "apply only the ordered hash-bound migrations in release/pending-production-migration-plan.json, stopping after any failed preflight or postcheck",
+      "apply only the single hash-bound migration in release/pending-production-migration-plan.json, stopping after any failed preflight or postcheck",
       "deploy the canonical-only backend only after all authoritative procedures above are present and verified; missing canonical writers fail closed",
       "require a green authority health gate and direct-DML denial probes before routing traffic"
     ],
@@ -412,12 +412,12 @@
       {
         "path": "release/integrated-backend-authority-input.json",
         "mode": "100644",
-        "object_id": "b03c55d69a00faa09879340f778248fb85c1c8fb"
+        "object_id": "9a40a108a63d0d1dff4acf9c317e7943d3ce02ab"
       },
       {
         "path": "release/pending-production-migration-plan.json",
         "mode": "100644",
-        "object_id": "414105b4a1ec0c7568f549d0e715e0102f5bf193"
+        "object_id": "99418a679137b268b40fef3dcf6b01503ac95501"
       },
       {
         "path": "release/reviewed-migrations/20260809125735_cleaning_inspection_24_hour_freshness.sql",
@@ -742,7 +742,7 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "c4a640e325ecc3799461256ce9739b4be14de24c"
+        "object_id": "f8ebe6dfc2be872b8c556a0cec57019deb70da91"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
@@ -1072,7 +1072,7 @@
       {
         "path": "scripts/schema-fingerprint-catalog.mjs",
         "mode": "100644",
-        "object_id": "6fb0feb9531d7231d810abd1542ec6a47cd9f57a"
+        "object_id": "c42386aee13511b50bb76366bd7a9b11e246beac"
       },
       {
         "path": "scripts/schema-fingerprint-check.mjs",
@@ -1082,7 +1082,7 @@
       {
         "path": "scripts/schema-transition-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "0eb87c638883f70296b9cbe2f170673092b327bc"
+        "object_id": "9e72662c075d7c223334e3e663a9ecbc3388b47c"
       },
       {
         "path": "scripts/smoke-ai-intent.mjs",
