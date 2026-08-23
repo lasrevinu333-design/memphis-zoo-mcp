@@ -20,6 +20,8 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
+      - key: OPS_MANAGER_SESSION_SECRET
+        sync: false
       - key: STATIC_WEEKLY_CONTROL_PLANE_DATABASE_URL
         sync: false
       - key: STATIC_WEEKLY_CONTROL_PLANE_DATABASE_CA_PEM

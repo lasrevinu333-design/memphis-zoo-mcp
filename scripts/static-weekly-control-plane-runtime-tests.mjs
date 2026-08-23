@@ -53,6 +53,9 @@ assert.throws(() => createStaticWeeklyControlPlaneRuntime({
   env: { ...env, SUPABASE_URL: "" }, trustedDeviceStore: { async find() { return null; } }, database: {}, controlPlane: {},
 }), /SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY/i, "the scheduler runtime must not start without its required trusted-device Supabase configuration");
 assert.throws(() => createStaticWeeklyControlPlaneRuntime({
+  env: { ...env, NODE_ENV: "production", OPS_MANAGER_SESSION_SECRET: "" }, trustedDeviceStore: { async find() { return null; } }, database: {}, controlPlane: {},
+}), /OPS_MANAGER_SESSION_SECRET must contain at least 32 characters/i, "the production scheduler runtime must fail closed before serving when its dedicated manager-session secret is absent");
+assert.throws(() => createStaticWeeklyControlPlaneRuntime({
   env, trustedDeviceStore: {}, database: {}, controlPlane: {},
 }), /trusted-device revocation and association store/i, "the scheduler runtime must not start with a store that cannot look up revocation state");
 

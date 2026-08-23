@@ -2,7 +2,7 @@ import "dotenv/config";
 import { pathToFileURL } from "node:url";
 import express from "express";
 import { createClient } from "@supabase/supabase-js";
-import { createSupabaseTrustedDeviceStore, makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
+import { assertOpsManagerSessionSecret, createSupabaseTrustedDeviceStore, makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
 import { createStaticWeeklyControlPlane, createStaticWeeklyControlPlaneDatabase } from "./static-weekly-control-plane.js";
 import { assertConfiguredReleaseIdentity } from "./release-manifest.js";
 
@@ -13,6 +13,7 @@ function requireTrustedDeviceConfiguration(env) {
   const url = text(env?.SUPABASE_URL);
   const key = text(env?.SUPABASE_SERVICE_ROLE_KEY);
   if (!url || !key) throw fail("static_weekly_control_plane_trusted_device_configuration_required", "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for trusted-device scheduler authentication.");
+  assertOpsManagerSessionSecret(env);
   return { url, key };
 }
 
