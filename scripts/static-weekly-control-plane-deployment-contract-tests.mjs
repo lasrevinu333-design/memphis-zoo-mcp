@@ -2,6 +2,8 @@
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { STATIC_WEEKLY_COMPILER_RUNTIME_LIMITS } from "../src/static-weekly-schedule-compiler-runtime.js";
+import { STATIC_WEEKLY_WORKER_LIMITS } from "../src/static-weekly-schedule-solver.js";
 
 const deployment = readFileSync(new URL("../deploy/static-weekly-control-plane.render.yaml", import.meta.url), "utf8");
 const runtime = readFileSync(new URL("../src/static-weekly-control-plane-runtime.js", import.meta.url), "utf8");
@@ -37,5 +39,24 @@ assert.match(runtimeIdentity, /grant static_weekly_control_plane to static_weekl
 assert.match(runtimeIdentity, /revoke static_weekly_release_operator from static_weekly_runtime_20260823/i);
 assert.match(runtimeIdentity, /unexpected authority membership/i);
 assert.doesNotMatch(runtimeIdentity, /password\s+'[^']+'/i, "source must not contain a reusable runtime password");
+
+// V8 can reserve roughly three semi-spaces. Keep the configured JavaScript,
+// WebAssembly, and stack ceilings bounded below the 512 MiB service limit,
+// with explicit allowances for the resident HTTP process and native runtime
+// overhead. The exact accepted production packet is separately exercised by
+// the release memory probe; this contract prevents a later limit-only
+// regression from silently recreating the Render OOM.
+const configuredEnvelopeMb =
+  96 // resident HTTP/database runtime
+  + STATIC_WEEKLY_COMPILER_RUNTIME_LIMITS.maxOldGenerationSizeMb
+  + (3 * STATIC_WEEKLY_COMPILER_RUNTIME_LIMITS.maxSemiSpaceSizeMb)
+  + (STATIC_WEEKLY_COMPILER_RUNTIME_LIMITS.stackSizeKb / 1024)
+  + 32 // compiler native/IPC overhead
+  + STATIC_WEEKLY_WORKER_LIMITS.maxOldGenerationSizeMb
+  + (3 * STATIC_WEEKLY_WORKER_LIMITS.maxSemiSpaceSizeMb)
+  + STATIC_WEEKLY_WORKER_LIMITS.maxWasmMemoryMb
+  + 32; // solver native/IPC overhead
+assert.equal(configuredEnvelopeMb, 500, "the Starter service retains a 12 MiB hard-cap margin after conservative process allowances");
+assert.equal(STATIC_WEEKLY_WORKER_LIMITS.maxWasmMemoryMb * 1024 * 1024 / 65_536, 1536, "the parent and solver worker enforce one exact WebAssembly ceiling");
 
 console.log("static weekly control-plane deployment contract tests: PASS");

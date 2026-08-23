@@ -15,9 +15,15 @@ export const STATIC_WEEKLY_COMPILER_RUNTIME_LIMITS = Object.freeze({
   initializationMilliseconds: 30_000,
   requestMilliseconds: REQUEST_DEADLINE_MILLISECONDS + 15_000,
   maxOutstandingRequests: 8,
-  maxOldGenerationSizeMb: 256,
-  maxSemiSpaceSizeMb: 32,
-  stackSizeKb: 8 * 1024,
+  // The production service is a 512 MiB Render Starter instance. The prior
+  // 256/32/8192 envelope let the HTTP process, compiler, and nested HiGHS
+  // worker reach 555,320 KiB on the exact accepted V10 source packet. These
+  // limits complete that same packet with identical feasible authority and
+  // canonical source. The replay digest intentionally changes because the
+  // attested worker memory identity changes with these enforced limits.
+  maxOldGenerationSizeMb: 128,
+  maxSemiSpaceSizeMb: 8,
+  stackSizeKb: 4 * 1024,
 });
 
 function runtimeError(code, message) {

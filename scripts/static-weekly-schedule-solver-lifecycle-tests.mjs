@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import fs from "node:fs";
 import { promisify } from "node:util";
-import { getStaticWeeklySolverReadiness, initializeStaticWeeklySolver, setStaticWeeklySolverTestOverride, solveStaticWeeklyMip } from "../src/static-weekly-schedule-solver.js";
+import { STATIC_WEEKLY_WORKER_LIMITS, getStaticWeeklySolverReadiness, initializeStaticWeeklySolver, setStaticWeeklySolverTestOverride, solveStaticWeeklyMip } from "../src/static-weekly-schedule-solver.js";
 
 const execFileAsync = promisify(execFile);
 const lp = "Minimize\n objective: + 1 x\nSubject To\n c: + 1 x >= 1\nBounds\n 0 <= x <= 1\nBinary\n x\nEnd\n";
@@ -21,6 +21,9 @@ assert.match(ready.identity.packageJsonSha256, /^[0-9a-f]{64}$/);
 assert.match(ready.identity.wrapperJavaScriptSha256, /^[0-9a-f]{64}$/);
 assert.match(ready.identity.wasmSha256, /^[0-9a-f]{64}$/);
 assert.equal(ready.identity.embeddedRuntimeBanner, "HiGHS 1.15.1 (git hash: 04024d7)");
+assert.equal(ready.identity.v8OldGenerationLimitMb, STATIC_WEEKLY_WORKER_LIMITS.maxOldGenerationSizeMb, "the worker proves the exact parent-enforced old-generation ceiling");
+assert.equal(ready.identity.v8SemiSpaceLimitMb, STATIC_WEEKLY_WORKER_LIMITS.maxSemiSpaceSizeMb, "the worker proves the exact parent-enforced semi-space ceiling");
+assert.equal(ready.identity.wasmMemoryLimitBytes, STATIC_WEEKLY_WORKER_LIMITS.maxWasmMemoryMb * 1024 * 1024, "the worker proves the exact parent-enforced WebAssembly ceiling");
 assert.equal(ready.identity.initializationRecord.channel, "print", "readiness requires a completed measured solver preflight");
 assert.match(ready.identity.initializationRecord.text, /^Running HiGHS 1\.15\.1 \(git hash: 04024d7\): Copyright/);
 assert.equal(ready.identity.initializationRecord.utf8Sha256, ready.identity.initializationBannerUtf8Sha256);

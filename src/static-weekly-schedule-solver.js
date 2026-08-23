@@ -20,11 +20,11 @@ const HIGHS_OPTIONS = Object.freeze({
   output_flag: true,
 });
 export const STATIC_WEEKLY_WORKER_LIMITS = Object.freeze({
-  maxOldGenerationSizeMb: 96,
+  maxOldGenerationSizeMb: 64,
   // V8 exposes this bound as a semi-space size, not a fictional aggregate
   // "young generation" switch.  The child verifies the exact flag at boot.
-  maxSemiSpaceSizeMb: 24,
-  maxWasmMemoryMb: 128,
+  maxSemiSpaceSizeMb: 8,
+  maxWasmMemoryMb: 96,
   maxWallClockMilliseconds: 30_000,
 });
 

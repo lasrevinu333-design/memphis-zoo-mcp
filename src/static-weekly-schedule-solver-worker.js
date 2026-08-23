@@ -7,8 +7,9 @@ const require = createRequire(import.meta.url);
 // output_flag is part of the solver evidence contract: the final report is the
 // only pinned-boundary source for bounds, gap, and solution violations.
 const OPTIONS = Object.freeze({ threads: 1, random_seed: 0, mip_rel_gap: 0, mip_abs_gap: 0, mip_feasibility_tolerance: 1e-9, presolve: "on", parallel: "off", output_flag: true });
-const MAX_WASM_MEMORY_PAGES = 2048;
-const MAX_SEMI_SPACE_MB = 24;
+const MAX_OLD_SPACE_MB = 64;
+const MAX_WASM_MEMORY_PAGES = 1536;
+const MAX_SEMI_SPACE_MB = 8;
 const TERMINAL_REPORT_PARSER_VERSION = "highs-terminal-report-v1";
 const TERMINAL_REPORT_REPRESENTATION = "highs-terminal-report-records-json-utf8-v1";
 const RAW_SOLVER_RECEIPT_SCHEMA = "memphis-zoo.static-weekly-raw-solver-receipt.v1";
@@ -220,6 +221,7 @@ const send = (message) => {
 };
 
 async function initialize() {
+  if (!process.execArgv.includes(`--max-old-space-size=${MAX_OLD_SPACE_MB}`)) throw new Error("Static weekly solver requires an enforced V8 old-generation limit.");
   if (!process.execArgv.includes(`--wasm-max-mem-pages=${MAX_WASM_MEMORY_PAGES}`)) throw new Error("Static weekly solver requires an enforced V8 WebAssembly memory-page limit.");
   if (!process.execArgv.includes(`--max-semi-space-size=${MAX_SEMI_SPACE_MB}`)) throw new Error("Static weekly solver requires an enforced V8 semi-space limit.");
   const packagePath = resolve(dirname(require.resolve("highs")), "../package.json");
@@ -238,7 +240,7 @@ async function initialize() {
   // become a later tier's evidence.
   const solver = await loader({ locateFile: () => wasmPath, print: (value) => captureOutput("print", value), printErr: (value) => captureOutput("printErr", value) });
   if (!solver || typeof solver.solve !== "function") throw new Error("HiGHS WebAssembly module did not expose solve().");
-  let identity = { package: "highs@1.15.2", packageVersion: packageJson.version, wasmSha256: observedIdentity.wasmSha256, packageJsonSha256: observedIdentity.packageJsonSha256, wrapperJavaScriptSha256: observedIdentity.wrapperJavaScriptSha256, runtime: "local WebAssembly", embeddedRuntimeBanner: PINNED_IDENTITY.embeddedRuntimeBanner, initializationRecord: null, initializationBannerUtf8Sha256: null, wasmMemoryLimitPages: MAX_WASM_MEMORY_PAGES, wasmMemoryLimitBytes: MAX_WASM_MEMORY_PAGES * 65_536, v8SemiSpaceLimitMb: MAX_SEMI_SPACE_MB, resultEvidenceCapabilities: { bestBound: true, mipGap: true, distinctTermination: true, source: "terminal_solver_report" } };
+  let identity = { package: "highs@1.15.2", packageVersion: packageJson.version, wasmSha256: observedIdentity.wasmSha256, packageJsonSha256: observedIdentity.packageJsonSha256, wrapperJavaScriptSha256: observedIdentity.wrapperJavaScriptSha256, runtime: "local WebAssembly", embeddedRuntimeBanner: PINNED_IDENTITY.embeddedRuntimeBanner, initializationRecord: null, initializationBannerUtf8Sha256: null, wasmMemoryLimitPages: MAX_WASM_MEMORY_PAGES, wasmMemoryLimitBytes: MAX_WASM_MEMORY_PAGES * 65_536, v8OldGenerationLimitMb: MAX_OLD_SPACE_MB, v8SemiSpaceLimitMb: MAX_SEMI_SPACE_MB, resultEvidenceCapabilities: { bestBound: true, mipGap: true, distinctTermination: true, source: "terminal_solver_report" } };
   // Module construction alone is not readiness. Execute one exact bounded MIP
   // and verify its measured terminal report before the parent can admit work.
   const collector = beginCollector();
