@@ -45128,6 +45128,11 @@
     },
     {
       "admin_option": false,
+      "granted_role": "static_weekly_control_plane",
+      "member_role": "static_weekly_runtime_20260823"
+    },
+    {
+      "admin_option": false,
       "granted_role": "static_weekly_release_operator",
       "member_role": "migration_owner"
     }
@@ -45154,6 +45159,17 @@
       "inherits_role": false,
       "is_superuser": false,
       "role_name": "static_weekly_release_operator"
+    },
+    {
+      "bypasses_rls": false,
+      "can_create_database": false,
+      "can_create_role": false,
+      "can_login": true,
+      "can_replicate": false,
+      "connection_limit": 4,
+      "inherits_role": false,
+      "is_superuser": false,
+      "role_name": "static_weekly_runtime_20260823"
     }
   ],
   "policies": [
@@ -45521,6 +45537,24 @@
       "role_config": null,
       "role_name": "static_weekly_release_operator",
       "valid_until": null
+    },
+    {
+      "bypasses_rls": false,
+      "can_create_database": false,
+      "can_create_role": false,
+      "can_login": true,
+      "can_replicate": false,
+      "connection_limit": 4,
+      "inherits_role": false,
+      "is_superuser": false,
+      "role_config": [
+        "statement_timeout=30s",
+        "lock_timeout=5s",
+        "idle_in_transaction_session_timeout=15s",
+        "idle_session_timeout=5min"
+      ],
+      "role_name": "static_weekly_runtime_20260823",
+      "valid_until": null
     }
   ],
   "role_memberships": [
@@ -45649,6 +45683,12 @@
       "granted_role": "static_weekly_control_plane",
       "grantor_role": "migration_owner",
       "member_role": "migration_owner"
+    },
+    {
+      "admin_option": false,
+      "granted_role": "static_weekly_control_plane",
+      "grantor_role": "migration_owner",
+      "member_role": "static_weekly_runtime_20260823"
     },
     {
       "admin_option": false,
