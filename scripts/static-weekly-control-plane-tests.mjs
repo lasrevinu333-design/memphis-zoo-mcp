@@ -167,6 +167,115 @@ function controlPlaneFor(authority, compiler = async () => acceptedProjection, o
   });
 }
 
+let admittedConnections = 0;
+let maximumAdmittedConnections = 0;
+let startedSnapshotReads = 0;
+let releaseSnapshotReads;
+const snapshotReadGate = new Promise((resolve) => { releaseSnapshotReads = resolve; });
+const healthReserveDatabase = {
+  async connect() {
+    admittedConnections += 1;
+    maximumAdmittedConnections = Math.max(maximumAdmittedConnections, admittedConnections);
+    let released = false;
+    return {
+      async query(statement, values = []) {
+        if (statement.includes("static_weekly_v3_authority_health")) return { rows: [{ result: { ready: true } }] };
+        if (statement.includes("static_weekly_v4_day_changes_health")) return { rows: [{ result: { ready: true } }] };
+        if (statement.includes("static_weekly_v3_read_manager_snapshot")) {
+          startedSnapshotReads += 1;
+          await snapshotReadGate;
+          return { rows: [{ result: { week_start: values[0], authority_revision: 0 } }] };
+        }
+        return { rows: [] };
+      },
+      release() {
+        if (released) return;
+        released = true;
+        admittedConnections -= 1;
+      },
+    };
+  },
+};
+const healthReserveControlPlane = createStaticWeeklyControlPlane({
+  database: healthReserveDatabase,
+  compiler: async () => acceptedProjection,
+  initializeSolver: async () => solverIdentity,
+  getSolverReadiness: () => ({ state: "ready", available: true, identity: solverIdentity }),
+});
+const blockedSnapshots = Array.from({ length: 4 }, (_, index) => healthReserveControlPlane.getManagerSnapshot({
+  manager,
+  weekStart: "2026-10-05",
+  idempotencyKey: `health-reserve-${index}`,
+}));
+for (let attempt = 0; attempt < 1_000 && startedSnapshotReads < 3; attempt += 1) await new Promise((resolve) => setTimeout(resolve, 1));
+assert.equal(startedSnapshotReads, 3, "ordinary operations admit at most three concurrent database transactions");
+const healthDuringContention = await Promise.race([
+  healthReserveControlPlane.health(),
+  new Promise((_, reject) => setTimeout(() => reject(new Error("reserved health transaction timed out")), 1_000)),
+]);
+assert.equal(healthDuringContention.ready, true, "liveness retains a database connection while ordinary operations are queued");
+assert.equal(startedSnapshotReads, 3, "the fourth ordinary operation waits outside the database pool");
+assert.equal(maximumAdmittedConnections, 4, "three ordinary operations plus one health check use the four-connection pool");
+releaseSnapshotReads();
+await Promise.all(blockedSnapshots);
+assert.equal(startedSnapshotReads, 4, "the queued operation enters only after an admitted transaction releases its connection");
+
+let healthConnections = 0;
+let maximumHealthConnections = 0;
+let healthPoolWaiters = 0;
+const boundedHealthQueries = [];
+let releaseHeldHealth;
+let heldHealthStarted;
+const heldHealthGate = new Promise((resolve) => { releaseHeldHealth = resolve; });
+const heldHealthStartedGate = new Promise((resolve) => { heldHealthStarted = resolve; });
+const boundedHealthDatabase = {
+  async connect() {
+    healthConnections += 1;
+    maximumHealthConnections = Math.max(maximumHealthConnections, healthConnections);
+    if (healthConnections > 4) healthPoolWaiters += 1;
+    let released = false;
+    return {
+      async query(statement) {
+        boundedHealthQueries.push(statement);
+        if (statement.includes("static_weekly_v3_authority_health")) {
+          heldHealthStarted();
+          await heldHealthGate;
+          return { rows: [{ result: { ready: true } }] };
+        }
+        if (statement.includes("static_weekly_v4_day_changes_health")) return { rows: [{ result: { ready: true } }] };
+        return { rows: [] };
+      },
+      release() {
+        if (released) return;
+        released = true;
+        healthConnections -= 1;
+      },
+    };
+  },
+  async end() {},
+};
+const boundedHealthControlPlane = createStaticWeeklyControlPlane({
+  database: boundedHealthDatabase,
+  compiler: async () => acceptedProjection,
+  initializeSolver: async () => solverIdentity,
+  getSolverReadiness: () => ({ state: "ready", available: true, identity: solverIdentity }),
+});
+const concurrentHealthChecks = Array.from({ length: 21 }, () => boundedHealthControlPlane.health());
+await heldHealthStartedGate;
+await new Promise((resolve) => setTimeout(resolve, 10));
+assert.equal(maximumHealthConnections, 1, "concurrent health probes coalesce onto one reserved database transaction");
+assert.equal(healthPoolWaiters, 0, "concurrent health probes cannot create a database-pool FIFO");
+assert.equal(boundedHealthQueries.includes("set local statement_timeout = '5000ms'"), true, "the admitted health transaction has its own bounded database deadline");
+let boundedHealthCloseSettled = false;
+const boundedHealthClose = boundedHealthControlPlane.close().then(() => { boundedHealthCloseSettled = true; });
+await new Promise((resolve) => setTimeout(resolve, 10));
+assert.equal(boundedHealthCloseSettled, false, "shutdown tracks the one admitted health transaction before closing the pool");
+await assert.rejects(() => boundedHealthControlPlane.health(), /closing/i, "shutdown rejects new health admission");
+releaseHeldHealth();
+await Promise.all(concurrentHealthChecks);
+await boundedHealthClose;
+assert.equal(healthConnections, 0, "the tracked health transaction releases its connection before shutdown completes");
+
 const keepaliveAuthority = createAuthorityDatabase();
 const keepaliveControlPlane = controlPlaneFor(keepaliveAuthority, async () => {
   await new Promise((resolveDelay) => setTimeout(resolveDelay, 30));

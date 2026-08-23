@@ -177,18 +177,16 @@ export function startStaticWeeklyControlPlaneRuntime(options = {}) {
   };
   const shutdown = () => {
     if (shutdownPromise) return shutdownPromise;
-    shutdownPromise = new Promise((resolve, reject) => {
-      const finish = async (serverError = null) => {
-        try {
-          await runtime.controlPlane.close();
-          if (serverError) reject(serverError);
-          else resolve();
-        } catch (error) {
-          reject(error);
-        }
-      };
-      if (!server.listening) void finish();
-      else server.close((error) => void finish(error || null));
+    // Stop admission immediately, then close the control plane concurrently
+    // with HTTP draining. Closing the compiler rejects an active compile so
+    // its transaction can roll back inside Render's 30-second shutdown window.
+    const serverDrain = !server.listening ? Promise.resolve() : new Promise((resolve, reject) => {
+      server.close((error) => error ? reject(error) : resolve());
+    });
+    const controlPlaneClose = Promise.resolve().then(() => runtime.controlPlane.close());
+    shutdownPromise = Promise.allSettled([serverDrain, controlPlaneClose]).then((results) => {
+      const failed = results.find((result) => result.status === "rejected");
+      if (failed) throw failed.reason;
     }).finally(removeSignalHandlers);
     return shutdownPromise;
   };

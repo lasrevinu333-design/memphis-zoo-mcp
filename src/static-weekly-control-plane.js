@@ -10,9 +10,14 @@
  */
 import { createHash, randomUUID } from "node:crypto";
 import { Pool } from "pg";
-import { compileStaticWeeklySchedule } from "./static-weekly-schedule-compiler.js";
 import { createStaticWeeklyDraftRpcInput, createStaticWeeklyProjectionRpcInput } from "./static-weekly-schedule-database-adapter.js";
-import { getStaticWeeklySolverReadiness, initializeStaticWeeklySolver } from "./static-weekly-schedule-solver.js";
+import {
+  compileStaticWeeklyScheduleIsolated,
+  getStaticWeeklyCompilerReadiness,
+  initializeStaticWeeklyCompiler,
+  shutdownStaticWeeklyCompiler,
+  STATIC_WEEKLY_COMPILER_RUNTIME_LIMITS,
+} from "./static-weekly-schedule-compiler-runtime.js";
 
 export const STATIC_WEEKLY_CONTROL_PLANE_SCHEMA = "memphis-zoo.static-weekly-control-plane.v1";
 const STATIC_WEEKLY_AUTHORITY_LOCK_IDENTITY = "memphis-static-weekly-authority";
@@ -268,32 +273,119 @@ export function createStaticWeeklyControlPlaneDatabase({
 
 export function createStaticWeeklyControlPlane({
   database,
-  compiler = compileStaticWeeklySchedule,
-  initializeSolver = initializeStaticWeeklySolver,
-  getSolverReadiness = getStaticWeeklySolverReadiness,
+  compiler = compileStaticWeeklyScheduleIsolated,
+  initializeSolver = initializeStaticWeeklyCompiler,
+  getSolverReadiness = getStaticWeeklyCompilerReadiness,
+  shutdownCompiler = compiler === compileStaticWeeklyScheduleIsolated ? shutdownStaticWeeklyCompiler : async () => {},
   transactionKeepaliveMs = 4_000,
+  transactionConcurrency = 3,
+  maxQueuedTransactions = 16,
+  transactionAdmissionMilliseconds = STATIC_WEEKLY_COMPILER_RUNTIME_LIMITS.requestMilliseconds,
+  healthTransactionMilliseconds = 5_000,
 } = {}) {
   if (!database?.connect) throw fail("static_weekly_control_plane_database_required");
   if (!Number.isSafeInteger(transactionKeepaliveMs) || transactionKeepaliveMs < 1 || transactionKeepaliveMs > 10_000) {
     throw fail("static_weekly_control_plane_keepalive_invalid");
   }
+  if (!Number.isSafeInteger(transactionConcurrency) || transactionConcurrency < 1 || transactionConcurrency > 3) {
+    throw fail("static_weekly_control_plane_transaction_concurrency_invalid");
+  }
+  if (!Number.isSafeInteger(maxQueuedTransactions) || maxQueuedTransactions < 1 || maxQueuedTransactions > 64) {
+    throw fail("static_weekly_control_plane_transaction_queue_invalid");
+  }
+  if (!Number.isSafeInteger(transactionAdmissionMilliseconds) || transactionAdmissionMilliseconds < 1) {
+    throw fail("static_weekly_control_plane_transaction_deadline_invalid");
+  }
+  if (!Number.isSafeInteger(healthTransactionMilliseconds) || healthTransactionMilliseconds < 1 || healthTransactionMilliseconds > 10_000) {
+    throw fail("static_weekly_control_plane_health_deadline_invalid");
+  }
 
-  async function transaction(work) {
-    const client = await database.connect();
-    try {
-      await client.query("begin");
-      // The login identity is provisioned separately and granted this NOLOGIN
-      // capability group. Ordinary service-role credentials lack membership.
-      await client.query("set local role static_weekly_control_plane");
-      const result = await work(client);
-      await client.query("commit");
-      return result;
-    } catch (error) {
-      await client.query("rollback").catch(() => {});
-      throw error;
-    } finally {
-      client.release();
+  let closing = false;
+  let closePromise = null;
+  let activeTransactions = 0;
+  let activeHealthCheck = null;
+  const activeTransactionPromises = new Set();
+  const transactionQueue = [];
+
+  function drainTransactionQueue() {
+    while (!closing && activeTransactions < transactionConcurrency && transactionQueue.length) {
+      const record = transactionQueue.shift();
+      clearTimeout(record.timer);
+      beginAdmittedTransaction(record);
     }
+  }
+
+  function beginAdmittedTransaction(record) {
+    activeTransactions += 1;
+    const execution = Promise.resolve().then(record.work);
+    activeTransactionPromises.add(execution);
+    execution.then(record.resolve, record.reject).finally(() => {
+      activeTransactionPromises.delete(execution);
+      activeTransactions -= 1;
+      drainTransactionQueue();
+    });
+  }
+
+  function admitTransaction(work) {
+    if (closing) return Promise.reject(fail("static_weekly_control_plane_closing", "The scheduler is closing and cannot admit another operation."));
+    if (transactionQueue.length >= maxQueuedTransactions) {
+      return Promise.reject(fail("static_weekly_control_plane_busy", "The scheduler already has its maximum bounded operation queue."));
+    }
+    return new Promise((resolve, reject) => {
+      const record = { work, resolve, reject, timer: null };
+      if (activeTransactions < transactionConcurrency) {
+        beginAdmittedTransaction(record);
+        return;
+      }
+      record.timer = setTimeout(() => {
+        const index = transactionQueue.indexOf(record);
+        if (index >= 0) transactionQueue.splice(index, 1);
+        reject(fail("static_weekly_control_plane_queue_timeout", "The scheduler operation expired before a database transaction was opened."));
+      }, transactionAdmissionMilliseconds);
+      record.timer.unref?.();
+      transactionQueue.push(record);
+    });
+  }
+
+  function admitHealthCheck(work) {
+    if (closing) return Promise.reject(fail("static_weekly_control_plane_closing", "The scheduler is closing and cannot admit another health check."));
+    // Render may overlap /healthz and /ready probes. Coalesce them onto one
+    // reserved fourth-pool-slot transaction instead of creating an unbounded
+    // pg-pool FIFO that can starve ordinary work during a slow database check.
+    if (activeHealthCheck) return activeHealthCheck;
+    const execution = Promise.resolve().then(work);
+    activeHealthCheck = execution;
+    execution.then(
+      () => { if (activeHealthCheck === execution) activeHealthCheck = null; },
+      () => { if (activeHealthCheck === execution) activeHealthCheck = null; },
+    );
+    return execution;
+  }
+
+  function transaction(work, { health = false } = {}) {
+    const execute = async () => {
+      if (closing) throw fail("static_weekly_control_plane_closing", "The scheduler is closing and cannot open another database transaction.");
+      const client = await database.connect();
+      try {
+        await client.query("begin");
+        // The login identity is provisioned separately and granted this NOLOGIN
+        // capability group. Ordinary service-role credentials lack membership.
+        await client.query("set local role static_weekly_control_plane");
+        if (health) await client.query(`set local statement_timeout = '${healthTransactionMilliseconds}ms'`);
+        const result = await work(client);
+        await client.query("commit");
+        return result;
+      } catch (error) {
+        await client.query("rollback").catch(() => {});
+        throw error;
+      } finally {
+        client.release();
+      }
+    };
+    // The pool has four connections. Ordinary operations may occupy at most
+    // three; one coalesced and separately bounded health transaction retains
+    // the fourth slot while compiles or idempotent replays are queued.
+    return health ? execute() : admitTransaction(execute);
   }
 
   async function call(client, functionName, args) {
@@ -406,33 +498,35 @@ export function createStaticWeeklyControlPlane({
 
   return {
     schema: STATIC_WEEKLY_CONTROL_PLANE_SCHEMA,
-    async health() {
-      const authority = await transaction(async (client) => {
-        const base = await call(client, "static_weekly_v3_authority_health", []);
-        const dayChanges = await call(client, "static_weekly_v4_day_changes_health", []);
-        return {
-          ...base,
-          day_changes: dayChanges,
-          ready: base?.ready === true && dayChanges?.ready === true,
-        };
-      });
-      try {
-        await initializeSolver();
-      } catch (error) {
+    health() {
+      return admitHealthCheck(async () => {
+        const authority = await transaction(async (client) => {
+          const base = await call(client, "static_weekly_v3_authority_health", []);
+          const dayChanges = await call(client, "static_weekly_v4_day_changes_health", []);
+          return {
+            ...base,
+            day_changes: dayChanges,
+            ready: base?.ready === true && dayChanges?.ready === true,
+          };
+        }, { health: true });
+        try {
+          await initializeSolver();
+        } catch (error) {
+          return {
+            ...authority,
+            ready: false,
+            authority_ready: authority?.ready === true,
+            solver: { ...getSolverReadiness(), error: error?.message || "Static weekly solver initialization failed." },
+          };
+        }
+        const solver = getSolverReadiness();
         return {
           ...authority,
-          ready: false,
           authority_ready: authority?.ready === true,
-          solver: { ...getSolverReadiness(), error: error?.message || "Static weekly solver initialization failed." },
+          solver,
+          ready: authority?.ready === true && solver?.available === true,
         };
-      }
-      const solver = getSolverReadiness();
-      return {
-        ...authority,
-        authority_ready: authority?.ready === true,
-        solver,
-        ready: authority?.ready === true && solver?.available === true,
-      };
+      });
     },
     async getManagerSnapshot({ manager, weekStart }) {
       requireManager(manager);
@@ -596,7 +690,23 @@ export function createStaticWeeklyControlPlane({
       });
     },
     async close() {
-      if (typeof database.end === "function") await database.end();
+      if (closePromise) return closePromise;
+      closing = true;
+      const cause = fail("static_weekly_control_plane_closing", "The scheduler closed before this queued operation opened a database transaction.");
+      while (transactionQueue.length) {
+        const record = transactionQueue.shift();
+        clearTimeout(record.timer);
+        record.reject(cause);
+      }
+      closePromise = (async () => {
+        await shutdownCompiler();
+        await Promise.allSettled([
+          ...activeTransactionPromises,
+          ...(activeHealthCheck ? [activeHealthCheck] : []),
+        ]);
+        if (typeof database.end === "function") await database.end();
+      })();
+      return closePromise;
     },
   };
 }
