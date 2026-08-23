@@ -690,7 +690,7 @@
       {
         "path": "scripts/fixtures/static-weekly-scheduler/candidate-workbook-authority.json",
         "mode": "100644",
-        "object_id": "0988d9d5083f44278c897d5d34b2d97aa5a01ada"
+        "object_id": "ac5784fd3fc30c0e5b47213e94a1bf4d20943ee8"
       },
       {
         "path": "scripts/fixtures/static-weekly-scheduler/highs-1.15.2-result-shape.json",
@@ -1215,12 +1215,12 @@
       {
         "path": "scripts/static-weekly-schedule-candidate-importer.mjs",
         "mode": "100644",
-        "object_id": "b291a871fc3f8090c6b392d9fbd3c6ddbbafa56b"
+        "object_id": "4720764cb35951b48d05429322171acd4cd910f7"
       },
       {
         "path": "scripts/static-weekly-schedule-compiler-tests.mjs",
         "mode": "100644",
-        "object_id": "5e71cd22ad0848c59eb70798d22c8e668cd2291b"
+        "object_id": "c5d401955609201370652f61d119ee7de0a706f3"
       },
       {
         "path": "scripts/static-weekly-schedule-concurrency-tests.mjs",
