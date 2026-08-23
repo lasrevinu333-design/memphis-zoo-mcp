@@ -416,7 +416,7 @@
       {
         "path": "release/pending-production-migration-plan.json",
         "mode": "100644",
-        "object_id": "8bb6f4ffc6f692df616f679293152d6ba92137a3"
+        "object_id": "040c2ffb75f23f8233639b8744bc579c810a16f0"
       },
       {
         "path": "release/reviewed-migrations/20260809125735_cleaning_inspection_24_hour_freshness.sql",
@@ -741,12 +741,12 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "e95ce0df7a66ad9a22a40b4710ce5f5af4235f1c"
+        "object_id": "ec30716d6e8b3a2ef403b4a8eca279814c1d7eff"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "df69acd387991fd3860a38dfa45e58cb4a02d12c"
+        "object_id": "8b78e9687a421ed32abd2acf0a77cce3b8f9757a"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
