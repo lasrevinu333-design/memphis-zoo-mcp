@@ -56,7 +56,7 @@ const configuredEnvelopeMb =
   + (3 * STATIC_WEEKLY_WORKER_LIMITS.maxSemiSpaceSizeMb)
   + STATIC_WEEKLY_WORKER_LIMITS.maxWasmMemoryMb
   + 32; // solver native/IPC overhead
-assert.equal(configuredEnvelopeMb, 500, "the Starter service retains a 12 MiB hard-cap margin after conservative process allowances");
+assert.equal(configuredEnvelopeMb, 428, "the Starter service retains an 84 MiB hard-cap margin after conservative process allowances");
 assert.equal(STATIC_WEEKLY_WORKER_LIMITS.maxWasmMemoryMb * 1024 * 1024 / 65_536, 1536, "the parent and solver worker enforce one exact WebAssembly ceiling");
 
 console.log("static weekly control-plane deployment contract tests: PASS");
