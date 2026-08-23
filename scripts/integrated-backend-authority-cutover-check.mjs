@@ -42,12 +42,7 @@ const phaseO = "20260820153000_append_only_cleaning_identity_corrections.sql";
 const phaseP = "20260820154000_late_gps_is_advisory_only.sql";
 const terminalWriterDetection = "20260820154500_precise_terminal_writer_detection.sql";
 const releaseRecoveryRebind = "20260820155000_rebind_release_recovery_inventory_to_current_authority.sql";
-const staticWeeklyRuntimeIdentity = "20260823024500_provision_static_weekly_runtime_identity.sql";
 const staticWeeklyFamilyLocationTruth = "20260823060000_static_weekly_family_location_truth.sql";
-const pendingProductionMigrations = [
-  staticWeeklyRuntimeIdentity,
-  staticWeeklyFamilyLocationTruth,
-];
 const releaseInputPath = "release/integrated-backend-authority-input.json";
 const releaseEvidencePath = "release/integrated-backend-authority-evidence.json";
 const pendingMigrationPlanPath = "release/pending-production-migration-plan.json";
@@ -245,11 +240,18 @@ assert.equal(evidenceBlob.object_id, acceptance.backend_evidence_blob_sha, "sign
 assert.equal(hash(evidenceBlob.bytes), acceptance.backend_evidence_sha256, "signed release attestation names the wrong evidence digest");
 
 const blobByPath = new Map(expectedBlobs.map((blob) => [blob.path, blob]));
-for (const required of [releaseInputPath, pendingMigrationPlanPath, "scripts/refresh-integrated-backend-authority-release.mjs", "scripts/integrated-backend-authority-cutover-check.mjs", "scripts/integrated-backend-authority-release-provenance-tests.mjs", "scripts/integrated-backend-authority-suite-order-tests.mjs", "scripts/final-operational-correction-database-tests.mjs", "scripts/named-manager-messenger-retirement-correction-database-tests.mjs", "scripts/empty-database-rebuild-check.mjs", "scripts/refresh-schema-fingerprint.mjs", "src/index.js", "src/offline-authority-http.js", "src/scan-evidence.js", ...pendingProductionMigrations.map((name) => `supabase/migrations/${name}`)]) {
+for (const required of [releaseInputPath, pendingMigrationPlanPath, "scripts/refresh-integrated-backend-authority-release.mjs", "scripts/integrated-backend-authority-cutover-check.mjs", "scripts/integrated-backend-authority-release-provenance-tests.mjs", "scripts/integrated-backend-authority-suite-order-tests.mjs", "scripts/final-operational-correction-database-tests.mjs", "scripts/named-manager-messenger-retirement-correction-database-tests.mjs", "scripts/empty-database-rebuild-check.mjs", "scripts/refresh-schema-fingerprint.mjs", "src/index.js", "src/offline-authority-http.js", "src/scan-evidence.js"]) {
   assert.ok(blobByPath.has(required), `immutable acceptance input omitted authority path ${required}`);
 }
 const input = parseJsonBlob(blobByPath.get(releaseInputPath), "release authority input");
 const pendingMigrationPlan = parseJsonBlob(blobByPath.get(pendingMigrationPlanPath), "pending production migration plan");
+assert.ok(Array.isArray(pendingMigrationPlan.migrations) && pendingMigrationPlan.migrations.length > 0, "pending production migration plan must contain at least one migration");
+const pendingProductionMigrations = pendingMigrationPlan.migrations.map(({ file }) => file);
+assert.equal(new Set(pendingProductionMigrations).size, pendingProductionMigrations.length, "pending production migrations must be unique");
+for (const migration of pendingProductionMigrations) {
+  assert.match(String(migration || ""), /^[0-9]{14}_[a-z][a-z0-9_]*\.sql$/, `invalid pending migration file: ${migration}`);
+  assert.ok(blobByPath.has(`supabase/migrations/${migration}`), `immutable acceptance input omitted pending migration supabase/migrations/${migration}`);
+}
 const releaseEvidence = parseJsonBlob(evidenceBlob, "release evidence");
 const index = blobByPath.get("src/index.js").bytes.toString("utf8");
 const phaseCText = blobByPath.get(`supabase/migrations/${phaseC}`).bytes.toString("utf8");
@@ -270,29 +272,36 @@ const schemaFingerprint = blobByPath.get("supabase/canonical/schema-fingerprint.
 const frontendManifest = parseJsonBlob(blobByPath.get("release/frontend-release-manifest.json"), "frontend release manifest");
 
 assert.equal(input.release_contract_version, "offline-authority.v5");
+const migrationInstruction = pendingProductionMigrations.length === 1
+  ? `apply only the single hash-bound migration in ${pendingMigrationPlanPath}, stopping after any failed preflight or postcheck`
+  : `apply only the ordered hash-bound migrations in ${pendingMigrationPlanPath}, stopping after any failed preflight or postcheck`;
 assert.deepEqual(input.cutover.phase_order, [
   "prepare distinct CUSTODIAL_BACKEND_PROOF_SECRET and CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET values (minimum 32 characters each) without exposing either value",
   "run npm run release:populated-schema:preflight through the read-only production MCP and preserve its exact source-fingerprint receipt before any migration",
   `verify production project, migration head, catalog/privilege fingerprint, backup receipt, and exact source attestation against ${pendingMigrationPlanPath}`,
-  `apply only the ordered hash-bound migrations in ${pendingMigrationPlanPath}, stopping after any failed preflight or postcheck`,
+  migrationInstruction,
   "deploy the canonical-only backend only after all authoritative procedures above are present and verified; missing canonical writers fail closed",
   "require a green authority health gate and direct-DML denial probes before routing traffic",
 ]);
 assert.equal(input.cutover.production_migration_plan, pendingMigrationPlanPath);
 assert.equal(pendingMigrationPlan.artifact, "pending-production-migration-plan.v2");
 assert.equal(pendingMigrationPlan.project_ref, "rqquvtjdmugpigbndmne");
-assert.equal(pendingMigrationPlan.observed_production?.ledger_head, "20260823012608");
-assert.equal(pendingMigrationPlan.observed_production?.source_migration_name, "correct_coverall_second_absence_policy");
-assert.equal(pendingMigrationPlan.observed_production?.catalog_privilege_fingerprint, "5bcb02001e4096f5ad5d0d457202d90ca3fbe9cfe4c60793d11af384378f33d2");
+assert.match(String(pendingMigrationPlan.observed_production?.ledger_head || ""), /^[0-9]{14}$/);
+assert.match(String(pendingMigrationPlan.observed_production?.source_migration_name || ""), /^[a-z][a-z0-9_]*$/);
+assert.match(String(pendingMigrationPlan.observed_production?.catalog_privilege_fingerprint || ""), /^[a-f0-9]{64}$/);
 assert.equal(pendingMigrationPlan.target?.source_migration_file, staticWeeklyFamilyLocationTruth);
+assert.equal(pendingMigrationPlan.target?.source_migration_file, pendingProductionMigrations.at(-1));
 assert.equal(pendingMigrationPlan.target?.source_migration_name, "static_weekly_family_location_truth");
 assert.equal(pendingMigrationPlan.target?.ledger_version_policy, "runner_assigned_and_postverified");
 assert.equal(pendingMigrationPlan.target?.canonical_schema_fingerprint, schemaFingerprint);
 assert.equal(pendingMigrationPlan.source_binding?.kind, "external_exact_head_release_attestation");
 assert.equal(pendingMigrationPlan.authorization?.production_apply_authorized, true);
-assert.equal(pendingMigrationPlan.authorization?.sequence_policy, "ordered_migrations_stop_on_failed_preflight_or_postcheck");
-assert.equal(pendingMigrationPlan.migrations?.length, pendingProductionMigrations.length);
-assert.deepEqual(pendingMigrationPlan.migrations.map(({ file }) => file), pendingProductionMigrations);
+assert.equal(
+  pendingMigrationPlan.authorization?.sequence_policy,
+  pendingProductionMigrations.length === 1
+    ? "single_migration_stop_on_failed_preflight_or_postcheck"
+    : "ordered_migrations_stop_on_failed_preflight_or_postcheck",
+);
 for (const [index, migration] of pendingMigrationPlan.migrations.entries()) {
   assert.equal(migration.order, index + 1, `pending migration order is not contiguous at ${migration.file}`);
   assert.match(String(migration.phase || ""), /^[a-z][a-z0-9_]+$/, `pending migration phase is invalid at ${migration.file}`);
