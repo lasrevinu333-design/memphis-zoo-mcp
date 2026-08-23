@@ -104,11 +104,12 @@ export const MAX_SAFE_EXACT_INTEGER = BigInt(Number.MAX_SAFE_INTEGER);
 // One compiler request performs a bounded sequence of independently bounded
 // solver tiers and then regenerates/verifies the complete witness twice.  Do
 // not reuse the 30-second *per-tier* worker limit as the deadline for that
-// whole sequence: a valid 29-tier operational schedule can otherwise exhaust
-// the parent deadline after every solve has succeeded.  Two minutes remains a
-// finite fail-closed request boundary while preserving each worker's stricter
-// 30-second ceiling.
-export const REQUEST_DEADLINE_MILLISECONDS = 120_000;
+// whole sequence: production authority currently requires 111 exact tiers.
+// The admitted V10 schedule completes locally inside two minutes but exceeds
+// that parent bound on the Render Starter CPU. Five minutes remains a finite,
+// fail-closed request boundary while preserving each worker's stricter
+// 30-second ceiling and the control plane's one-request serialization.
+export const REQUEST_DEADLINE_MILLISECONDS = 300_000;
 // HiGHS terminal reports use bounded scientific formatting.  Keep every
 // staged objective below this exact-print envelope so report attestation can
 // equal the independently recomputed integer without relying on rounded text.
