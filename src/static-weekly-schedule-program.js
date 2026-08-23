@@ -1410,6 +1410,39 @@ export function buildStaticWeeklySchedulingModel(problem, bindings, objective, d
   return { lp, x, uncovered, routeGroups, expressions, binary, general, objective, dailyRank, weeklyRank, dailyLoads, weeklyLoads, preflight: { ...problem.preflight, actualLpBytes: modelBytes, actualBinaryVariables, actualVariableCount, actualConstraintCount, actualConstraintTerms }, modelBasis, modelBasisDigest, priorBindings, priorBindingDigest: sha256Hex(canonicalJson(priorBindings)), modelDigest: sha256Hex(canonicalJson(modelIdentity)), modelBytes };
 }
 
+// Regenerate witness-bound tier models one at a time.  A production schedule
+// can contain more than one hundred lexicographic tiers, while every tier has
+// the same large canonical model basis.  Retaining all regenerated models at
+// once provides no additional proof and can exhaust the bounded parent heap.
+// Streaming keeps the exact model, binding, witness, and digest checks while
+// allowing each completed tier model to be collected before the next exists.
+export function* iterateStaticWeeklySchedulingWitnessTiers(program, witnessValues, deadline = null) {
+  const activeDeadline = deadline ?? createStaticWeeklyDeadline();
+  const { problem, objectives } = program;
+  const values = witnessValues instanceof Map ? witnessValues : new Map(witnessValues);
+  const bindings = [];
+  for (const objective of objectives) {
+    let model;
+    try {
+      model = buildStaticWeeklySchedulingModel(problem, bindings, objective, activeDeadline);
+    } catch (error) {
+      yield { error: programReason(error.code || "canonical_program_generation_failed", { stage: "witness_model", tier: objective.name, message: error.message }), failureServiceDate: problem.serviceDate };
+      return;
+    }
+    if (model.error) {
+      yield { error: model.error, failureServiceDate: problem.serviceDate };
+      return;
+    }
+    const value = recomputeStaticWeeklyObjective(objective, model, values, problem);
+    if (!Number.isSafeInteger(value)) {
+      yield { error: programReason("canonical_program_objective_overflow", { tier: objective.name }), failureServiceDate: problem.serviceDate };
+      return;
+    }
+    yield { model, objective, value };
+    bindings.push({ name: objective.name, terms: objective.terms, value });
+  }
+}
+
 // Pure authority-input program generator.  It has no solver, worker, receipt,
 // or caller-supplied model dependency.  The verifier invokes this again and
 // treats every carried program field as untrusted until it matches.
@@ -1433,19 +1466,11 @@ export function generateStaticWeeklySchedulingProgram(input = {}, witnessValues 
   const descriptor = canonicalProgramDescriptor({ inputDigest: problem.inputDigest, modelBasis: seed.modelBasis, objectives });
   const program = { problem, modelBasis: seed.modelBasis, modelBasisDigest: seed.modelBasisDigest, objectives, descriptor };
   if (!witnessValues) return program;
-  const values = witnessValues instanceof Map ? witnessValues : new Map(witnessValues);
   const tiers = []; const bindings = [];
-  for (const objective of objectives) {
-    let model;
-    try {
-      model = buildStaticWeeklySchedulingModel(problem, bindings, objective, activeDeadline);
-    } catch (error) {
-      return { error: programReason(error.code || "canonical_program_generation_failed", { stage: "witness_model", tier: objective.name, message: error.message }), failureServiceDate: problem.serviceDate };
-    }
-    if (model.error) return { error: model.error, failureServiceDate: problem.serviceDate };
-    const value = recomputeStaticWeeklyObjective(objective, model, values, problem);
-    if (!Number.isSafeInteger(value)) return { error: programReason("canonical_program_objective_overflow", { tier: objective.name }), failureServiceDate: problem.serviceDate };
-    tiers.push({ model, objective, value }); bindings.push({ name: objective.name, terms: objective.terms, value });
+  for (const tier of iterateStaticWeeklySchedulingWitnessTiers(program, witnessValues, activeDeadline)) {
+    if (tier.error) return tier;
+    tiers.push(tier);
+    bindings.push({ name: tier.objective.name, terms: tier.objective.terms, value: tier.value });
   }
   return { ...program, tiers, bindings };
 }

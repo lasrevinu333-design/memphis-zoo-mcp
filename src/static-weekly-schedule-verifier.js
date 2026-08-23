@@ -18,7 +18,7 @@ import {
   windowContains,
   windowsOverlap,
 } from "./static-weekly-schedule-model.js";
-import { STATIC_WEEKLY_FLEXIBLE_COVERAGE_MODE, STATIC_WEEKLY_ROUTE_CANONICALITY_SCHEMA, STATIC_WEEKLY_SERVICE_MODES, canonicalOptimizerAssignmentProjection, canonicalProgramMatches, canonicalSolverAuthorityCertificate, canonicalSolverAuthorityTierProjection, generateStaticWeeklySchedulingProgram, normalizeStaticWeeklyIncludedLocations, postgresJsonbContentDigest, remainingStaticWeeklyMilliseconds } from "./static-weekly-schedule-program.js";
+import { STATIC_WEEKLY_FLEXIBLE_COVERAGE_MODE, STATIC_WEEKLY_ROUTE_CANONICALITY_SCHEMA, STATIC_WEEKLY_SERVICE_MODES, canonicalOptimizerAssignmentProjection, canonicalProgramMatches, canonicalSolverAuthorityCertificate, canonicalSolverAuthorityTierProjection, generateStaticWeeklySchedulingProgram, iterateStaticWeeklySchedulingWitnessTiers, normalizeStaticWeeklyIncludedLocations, postgresJsonbContentDigest, remainingStaticWeeklyMilliseconds } from "./static-weekly-schedule-program.js";
 
 const array = (value) => Array.isArray(value) ? value : [];
 const text = (value) => String(value ?? "").trim();
@@ -634,9 +634,7 @@ export function verifyStaticWeeklyScheduleResult(input = {}, result = {}, deadli
   const diagnostics = array(witness?.integerDiagnostics);
   if (!witness || witness.schema !== "memphis-zoo.static-weekly-final-integer-witness.v2" || witness.digest !== sha256Hex(canonicalJson(witnessValues)) || witness.variableCount !== witnessNames.length || witnessValues.length !== witnessNames.length || diagnostics.length !== witnessNames.length || witnessValues.some((entry, index) => !Array.isArray(entry) || entry.length !== 2 || entry[0] !== witnessNames[index] || !Number.isSafeInteger(entry[1]) || (array(modelBasis?.binaryVariables).includes(entry[0]) && entry[1] !== 0 && entry[1] !== 1) || (array(modelBasis?.generalVariables).includes(entry[0]) && entry[1] < 0)) || diagnostics.some((entry, index) => entry?.variable !== witnessNames[index] || !Number.isFinite(entry.rawValue) || !Number.isSafeInteger(entry.canonicalValue) || entry.canonicalValue !== witnessValues[index][1] || !Number.isFinite(entry.residual) || entry.residual < 0 || entry.residual > MIP_FEASIBILITY_TOLERANCE || Math.abs(entry.rawValue - entry.canonicalValue) !== entry.residual)) push(violations, "final_integer_witness_invalid");
   const witnessByName = new Map(witnessValues);
-  const regeneratedWitnessProgram = generateStaticWeeklySchedulingProgram(input, witnessByName, deadline);
-  if (regeneratedWitnessProgram?.error?.code === "solver_timeout") return deadlineFailure("witness_program_regeneration");
-  if (regeneratedWitnessProgram?.error) push(violations, "canonical_witness_program_generation_failed", { detail: regeneratedWitnessProgram.error.code || regeneratedWitnessProgram.error.message });
+  const regeneratedWitnessTiers = iterateStaticWeeklySchedulingWitnessTiers(regenerated, witnessByName, deadline);
   for (const work of expected.values()) {
     const candidates = assignmentVariables.filter((entry) => entry.planWorkId === work.key);
     const selected = candidates.filter((entry) => witnessByName.get(entry.variable) === 1);
@@ -664,14 +662,24 @@ export function verifyStaticWeeklyScheduleResult(input = {}, result = {}, deadli
   if (result.status === "FEASIBLE" && (!certificate || solverIdentity?.resultEvidenceCapabilities?.bestBound !== true || solverIdentity?.resultEvidenceCapabilities?.mipGap !== true || solverIdentity?.resultEvidenceCapabilities?.distinctTermination !== true || solverIdentity?.resultEvidenceCapabilities?.source !== "terminal_solver_report")) push(violations, "solver_evidence_capability_missing");
   const canonicalTierShape = regenerated.error ? expectedTiers : regenerated.objectives;
   if (tiers.length !== canonicalTierShape.length) push(violations, "tier_count_mismatch", { expected: canonicalTierShape.length, actual: tiers.length });
-  canonicalTierShape.forEach((expectedTier, index) => {
-    if (expired()) { push(violations, "solver_timeout", { stage: "tier_verification" }); return; }
-    const actual = tiers[index]; const regeneratedTier = regeneratedWitnessProgram?.tiers?.[index];
+  let witnessRegenerationFailed = false;
+  for (let index = 0; index < canonicalTierShape.length; index += 1) {
+    const expectedTier = canonicalTierShape[index];
+    if (expired()) return deadlineFailure("tier_verification");
+    const regeneratedStep = regeneratedWitnessTiers.next();
+    const regeneratedTier = regeneratedStep.value;
+    if (regeneratedStep.done || regeneratedTier?.error) {
+      if (regeneratedTier?.error?.code === "solver_timeout") return deadlineFailure("witness_program_regeneration");
+      push(violations, "canonical_witness_program_generation_failed", { detail: regeneratedTier?.error?.code || regeneratedTier?.error?.message || "missing_witness_tier", tier: expectedTier.name });
+      witnessRegenerationFailed = true;
+      break;
+    }
+    const actual = tiers[index];
     const expectedObjective = regeneratedTier?.objective || expectedTier;
-    const expectedBindings = regeneratedWitnessProgram?.bindings?.slice(0, index) || [];
+    const expectedBindings = regeneratedTier.model.priorBindings;
     const expectedModel = { schema: "memphis-zoo.static-weekly-tier-model.v1", basisDigest: regeneratedTier?.model?.modelBasisDigest || certificate?.modelBasisDigest, objective: { name: expectedObjective.name, family: expectedObjective.family || null, rank: expectedObjective.rank ?? null, terms: expectedObjective.terms }, priorBindings: expectedBindings };
     const allowedTierFields = new Set(["index", "name", "family", "rank", "objectiveExpression", "objectiveExpressionDigest", "objectiveValue", "modelBasisDigest", "modelDigest", "priorBindingCount", "priorBindingDigest", "preflight", "options", "attestation"]);
-    if (!actual || !regeneratedTier || Object.keys(actual).some((key) => !allowedTierFields.has(key)) || actual.index !== index || actual.name !== expectedObjective.name || actual.family !== (expectedObjective.family ?? null) || (expectedObjective.rank ?? null) !== (actual.rank ?? null) || actual.modelBasisDigest !== regeneratedTier.model.modelBasisDigest || canonicalJson(actual.objectiveExpression?.terms) !== canonicalJson(expectedObjective.terms) || actual.objectiveExpressionDigest !== sha256Hex(canonicalJson({ terms: expectedObjective.terms })) || actual.priorBindingCount !== expectedBindings.length || actual.priorBindingDigest !== sha256Hex(canonicalJson(expectedBindings)) || actual.modelDigest !== sha256Hex(canonicalJson(expectedModel))) { push(violations, "solver_tier_receipt_invalid", { tier: expectedObjective.name }); return; }
+    if (!actual || Object.keys(actual).some((key) => !allowedTierFields.has(key)) || actual.index !== index || actual.name !== expectedObjective.name || actual.family !== (expectedObjective.family ?? null) || (expectedObjective.rank ?? null) !== (actual.rank ?? null) || actual.modelBasisDigest !== regeneratedTier.model.modelBasisDigest || canonicalJson(actual.objectiveExpression?.terms) !== canonicalJson(expectedObjective.terms) || actual.objectiveExpressionDigest !== sha256Hex(canonicalJson({ terms: expectedObjective.terms })) || actual.priorBindingCount !== expectedBindings.length || actual.priorBindingDigest !== sha256Hex(canonicalJson(expectedBindings)) || actual.modelDigest !== sha256Hex(canonicalJson(expectedModel))) { push(violations, "solver_tier_receipt_invalid", { tier: expectedObjective.name }); continue; }
     const witnessObjective = exactTerms(expectedObjective.terms, witnessByName);
     if (witnessObjective == null || witnessObjective !== BigInt(actual.objectiveValue) || witnessObjective !== BigInt(regeneratedTier.value) || expectedBindings.some((binding) => exactTerms(binding.terms, witnessByName) !== BigInt(binding.value))) push(violations, "witness_tier_expression_or_prior_binding_invalid", { tier: expectedObjective.name });
     if (actual.options?.output_flag !== true || actual.options?.threads !== 1 || actual.options?.random_seed !== 0 || actual.options?.mip_rel_gap !== 0 || actual.options?.mip_abs_gap !== 0 || actual.options?.mip_feasibility_tolerance !== 1e-9 || actual.options?.presolve !== "on" || actual.options?.parallel !== "off" || !Number.isFinite(actual.options?.time_limit) || actual.options.time_limit <= 0 || actual.options.time_limit > 30) push(violations, "solver_options_invalid", { tier: expectedTier.name });
@@ -679,7 +687,11 @@ export function verifyStaticWeeklyScheduleResult(input = {}, result = {}, deadli
     const terminalErrors = verifyTerminalAttestation(actual.attestation, regeneratedTier.value, solverIdentity, actual.options);
     if (terminalErrors.length) push(violations, "solver_attestation_invalid", { tier: expectedTier.name, terminalErrors });
     if (!Number.isSafeInteger(Number(actual.objectiveValue)) || Number(actual.objectiveValue) !== regeneratedTier.value) push(violations, "objective_value_mismatch", { tier: expectedObjective.name, expected: regeneratedTier.value, actual: actual.objectiveValue });
-  });
+  }
+  if (!witnessRegenerationFailed) {
+    const extraRegeneratedTier = regeneratedWitnessTiers.next();
+    if (!extraRegeneratedTier.done) push(violations, "canonical_witness_program_generation_failed", { detail: extraRegeneratedTier.value?.error?.code || "unexpected_extra_witness_tier" });
+  }
   const derivedReviewWork = assignments.filter((assignment) => assignment.status !== "ASSIGNED" && expected.get(text(assignment.planWorkId || `${assignment.dayOfWeek}:${assignment.workId}`))?.required !== false);
   const derivedOpenWork = assignments.filter((assignment) => assignment.status !== "ASSIGNED" && expected.get(text(assignment.planWorkId || `${assignment.dayOfWeek}:${assignment.workId}`))?.required === false).map((assignment) => {
     const work = expected.get(text(assignment.planWorkId || `${assignment.dayOfWeek}:${assignment.workId}`));
