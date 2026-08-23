@@ -143,7 +143,7 @@ for (const [index, migration] of pendingMigrationPlan.migrations.entries()) {
 }
 assert.equal(releaseEvidence.compatibility_window.accepted_engine.scan, "scan.v2");
 assert.equal(releaseEvidence.compatibility_window.required_engine.scan, "scan.v4.snapshot-bound-authority");
-assert.equal(releaseEvidence.migrations.at(-1).name, "20260823024500_provision_static_weekly_runtime_identity.sql");
+assert.equal(releaseEvidence.migrations.at(-1).name, "20260823060000_static_weekly_family_location_truth.sql");
 assert.match(runtimeReadAndScanAlertAuthority, /grant execute on function public\.get_setting_int\(text, integer\)[\s\S]*to custodial_application_reader/i);
 assert.match(runtimeReadAndScanAlertAuthority, /msg_get_or_create_memphis_thread\(p_msg_user_id\)/i);
 assert.doesNotMatch(runtimeReadAndScanAlertAuthority.match(/create or replace function public\.sch_get_or_create_scan_alert_thread[\s\S]*?\$function\$;/i)?.[0] || "", /insert into public\.msg_threads/i);

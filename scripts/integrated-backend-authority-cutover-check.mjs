@@ -319,7 +319,7 @@ assert.deepEqual(input.cutover.phase_order, [
   "prepare distinct CUSTODIAL_BACKEND_PROOF_SECRET and CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET values (minimum 32 characters each) without exposing either value",
   "run npm run release:populated-schema:preflight through the read-only production MCP and preserve its exact source-fingerprint receipt before any migration",
   `verify production project, migration head, catalog/privilege fingerprint, backup receipt, and exact source attestation against ${pendingMigrationPlanPath}`,
-  `apply only the one hash-bound migration in ${pendingMigrationPlanPath}, stopping after any failed preflight or postcheck`,
+  `apply only the ordered hash-bound migrations in ${pendingMigrationPlanPath}, stopping after any failed preflight or postcheck`,
   "deploy the canonical-only backend only after all authoritative procedures above are present and verified; missing canonical writers fail closed",
   "require a green authority health gate and direct-DML denial probes before routing traffic",
 ]);
