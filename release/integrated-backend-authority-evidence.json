@@ -1193,7 +1193,7 @@
       {
         "path": "scripts/static-weekly-control-plane-deployment-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "51c1702ee08157ac544c75350fba351c73e7315f"
+        "object_id": "b297f9d656d5d2422e38593cb30ff7f41d3205d9"
       },
       {
         "path": "scripts/static-weekly-control-plane-runtime-tests.mjs",
@@ -1798,7 +1798,7 @@
       {
         "path": "src/static-weekly-schedule-compiler-runtime.js",
         "mode": "100644",
-        "object_id": "514fc4553530c403d7ad30ef6a05875044d5f69a"
+        "object_id": "83e72fe0a65175e664d0773d50e4a976323a2d86"
       },
       {
         "path": "src/static-weekly-schedule-compiler-worker.js",
@@ -1828,12 +1828,12 @@
       {
         "path": "src/static-weekly-schedule-solver-worker.js",
         "mode": "100644",
-        "object_id": "686c5991077715cc9accf0e0d3850798759c3540"
+        "object_id": "a2931f06e120248a2a3ccf2c989d483bf26a0f4b"
       },
       {
         "path": "src/static-weekly-schedule-solver.js",
         "mode": "100644",
-        "object_id": "06c7b5ce8328fd8fbdcbbee89a81c76abdf711ed"
+        "object_id": "86c40bf6b944b880a6621270e30b606f2c40376c"
       },
       {
         "path": "src/static-weekly-schedule-verifier.js",
