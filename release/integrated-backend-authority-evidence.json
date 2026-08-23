@@ -1193,7 +1193,7 @@
       {
         "path": "scripts/static-weekly-control-plane-deployment-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "7925f9a89fd8c6cf05a25dc0a01c57ba9f7b28fd"
+        "object_id": "51c1702ee08157ac544c75350fba351c73e7315f"
       },
       {
         "path": "scripts/static-weekly-control-plane-runtime-tests.mjs",
@@ -1263,7 +1263,7 @@
       {
         "path": "scripts/static-weekly-schedule-solver-lifecycle-tests.mjs",
         "mode": "100644",
-        "object_id": "163d3cd019a17d4e3ce8d73f912047ec6b43411b"
+        "object_id": "933edd639a647d0daa9e6d2e4ca8f645b769ad43"
       },
       {
         "path": "scripts/temporary-repair-payload-retirement-tests.mjs",
@@ -1798,7 +1798,7 @@
       {
         "path": "src/static-weekly-schedule-compiler-runtime.js",
         "mode": "100644",
-        "object_id": "36f0856e1c73c340ee7ad1e0857350c895d36058"
+        "object_id": "514fc4553530c403d7ad30ef6a05875044d5f69a"
       },
       {
         "path": "src/static-weekly-schedule-compiler-worker.js",
@@ -1828,12 +1828,12 @@
       {
         "path": "src/static-weekly-schedule-solver-worker.js",
         "mode": "100644",
-        "object_id": "4eca20855492df396d07c86a99a426e98fd16ef3"
+        "object_id": "686c5991077715cc9accf0e0d3850798759c3540"
       },
       {
         "path": "src/static-weekly-schedule-solver.js",
         "mode": "100644",
-        "object_id": "3d6eea13ec4b29ca5cd168c9777f9e519c263dd2"
+        "object_id": "06c7b5ce8328fd8fbdcbbee89a81c76abdf711ed"
       },
       {
         "path": "src/static-weekly-schedule-verifier.js",
