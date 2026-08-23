@@ -107,7 +107,23 @@ if (process.env.STATIC_WEEKLY_PHYSICAL_SCALE === "1") { await runPhysicalScaleFi
 assert.equal(validateStaticWeeklyPacket(candidateWorkbook).ok, true);
 assert.equal(validateStaticWeeklyPacket(candidateWorkbook).admissibleForRegistration, false, "candidate evidence can never become a release source merely by passing evidence validation");
 assert.equal(validateStaticWeeklyPacket({ ...candidateWorkbook, admission: { ...candidateWorkbook.admission, canaryReady: true } }).ok, false);
-assert.equal(candidateWorkbook.unresolved.absentUntilReplacedStableSlots.length, 5, "the candidate preserves two confirmed departures and three fail-closed pending departure confirmations without inventing replacements");
+assert.equal(candidateWorkbook.unresolved.absentUntilReplacedStableSlots.length, 2, "Daniel and Michael remain named vacant schedule slots without invented replacements");
+assert.equal(candidateWorkbook.unresolved.statusUnconfirmedRetainOriginalScheduleSlots.length, 3, "uncertain staffing does not rewrite Markiesha, Kinnaye, or Sherita out of the original schedule");
+const candidateByName = new Map(candidateWorkbook.candidateRoster.map((row) => [row.displayName, row]));
+for (const name of ["Markiesha Warren", "Kinnaye Peete", "Sherita Wilbon"]) assert.equal(candidateByName.get(name)?.staffingState, "ORIGINAL_SCHEDULE_RETAINED_STATUS_UNCONFIRMED");
+for (const name of ["Michael McWright", "Daniel Morgan"]) assert.equal(candidateByName.get(name)?.staffingState, "CONFIRMED_DEPARTED_NAMED_PLACEHOLDER");
+assert.deepEqual(candidateWorkbook.candidateRoster.map(({ displayName, shift, lunch, days }) => [displayName, shift, lunch, days]), [
+  ["Karen Robinson", "05:00-14:00", "09:00-10:00", [1, 2, 3, 5, 6]],
+  ["Tammy Miller", "05:00-14:00", "09:00-10:00", [2, 3, 4, 5, 6]],
+  ["Markiesha Warren", "08:30-17:30", "12:00-13:00", [1, 2, 3, 4, 6]],
+  ["Kinnaye Peete", "06:00-15:00", "10:00-11:00", [1, 2, 3, 4, 5]],
+  ["Kathy Phelps", "06:00-15:00", "10:00-11:00", [2, 3, 4, 5, 6]],
+  ["Sherita Wilbon", "08:00-17:00", "12:00-13:00", [0, 1, 3, 4, 6]],
+  ["Michael McWright", "15:00-24:00", "19:00-20:00", [0, 1, 2, 5, 6]],
+  ["Daniel Morgan", "07:00-16:00", "11:00-12:00", [0, 3, 4, 5, 6]],
+  ["Alijah Collins", "07:00-16:00", "11:00-12:00", [0, 1, 4, 5, 6]],
+], "the candidate preserves every original roster row, workday, start, lunch, and clock-out value");
+assert.deepEqual(candidateWorkbook.operationalCorrections.scheduleSlotPolicy.stableAcrossReplacement, ["SLOT_ID", "LOCATION_ASSIGNMENTS"]);
 
 const forgedVerifiedPacket = {
   packetSchema: "memphis-zoo.static-weekly.verified-schedule-packet.v1",
@@ -860,9 +876,19 @@ replacement.slots[0].incumbencies = [
   { personId: "new-person", displayName: "New Person", effectiveStart: "2026-08-12", effectiveEnd: null },
 ];
 replacement.versions[0].slotAvailability = []; replacement.versions[0].assignments = [];
-for (const day of [1, 2, 3]) { replacement.versions[0].slotAvailability.push({ ...availability("a", "A"), dayOfWeek: day }); replacement.versions[0].assignments.push({ ...work(`replace-${day}`, "A", "08:00", "09:00", "a"), dayOfWeek: day }); }
+for (const day of [1, 2, 3]) {
+  replacement.versions[0].slotAvailability.push({
+    ...availability("a", "A", day === 3 ? { shift: { start: "09:00", end: "18:00" }, lunch: { start: "13:00", end: "14:00" } } : {}),
+    dayOfWeek: day,
+  });
+  replacement.versions[0].assignments.push({ ...work(`replace-${day}`, "A", day === 3 ? "14:00" : "08:00", day === 3 ? "15:00" : "09:00", "a"), dayOfWeek: day });
+}
 const replacementResult = await compile(replacement);
 assert.deepEqual(replacementResult.weeklyAssignments.filter((item) => item.workId.startsWith("replace-")).map((item) => [item.serviceDate, item.personId, item.displayName]), [["2026-08-10", "old-person", "Old Person"], ["2026-08-11", "old-person", "Old Person"], ["2026-08-12", "new-person", "New Person"]]);
+assert.deepEqual(replacementResult.weeklyAssignments.filter((item) => item.workId.startsWith("replace-")).map((item) => item.locationId), ["A", "A", "A"], "a replacement keeps the stable slot's location assignments");
+const replacementWednesday = replacementResult.canonicalAuthority.compilerInput.version.slotAvailability.find((item) => item.slotId === "a" && item.dayOfWeek === 3);
+assert.deepEqual(replacementWednesday.shift, { start: "09:00", end: "18:00" }, "a new hire may receive new start and clock-out times");
+assert.deepEqual(replacementWednesday.lunch, { start: "13:00", end: "14:00" }, "a new hire may receive a new lunch while the slot and locations stay stable");
 
 // Weekly utilization uses aggregate provenanced effort / aggregate verified
 // capacity.  Summing daily ratios would incorrectly report 0.5555… here.
