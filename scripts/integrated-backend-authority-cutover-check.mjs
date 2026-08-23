@@ -245,6 +245,7 @@ function expectedReleaseEvidence(input, schemaFingerprint, frontendManifest, aut
       managed_schema_authority_normalization_phase: "20260815160613 removes broad future-object defaults; 20260815163346 preserves application and scheduler access through explicit role grants while keeping PUBLIC revoked, and managed postgres/supabase_admin deployment authority remains comparable without hiding application grants or role memberships",
       runtime_read_and_scan_alert_authority_phase: "20260822170000 restores the pure service-date helper only to the restricted reader and routes scan-alert delivery through the one canonical Memphis conversation without rewriting existing evidence",
       coverall_second_absence_policy_phase: "20260822222500 keeps the first absence internal and assigns each second or later absence to one distinct registered CoverAll capacity without rewriting manager overrides",
+      static_weekly_runtime_identity_phase: "20260823024500 provisions one passwordless-by-source NOINHERIT login shell with only static_weekly_control_plane membership; release operations install its generated SCRAM verifier out of band before the dedicated service can become ready",
     },
     rollback: input.rollback,
     cutover: input.cutover,
