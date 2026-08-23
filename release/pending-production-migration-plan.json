@@ -2,22 +2,22 @@
   "artifact": "pending-production-migration-plan.v2",
   "project_ref": "rqquvtjdmugpigbndmne",
   "observed_production": {
-    "ledger_head": "20260823033203",
-    "source_migration_name": "configure_static_weekly_runtime_password_20260823",
-    "catalog_privilege_fingerprint": "d8bbe5ddaa2a5886d27c80edf96098a83d4bf64e5ffd8b824d5d342a2767afe8",
-    "public_function_count": 474,
-    "target_only_family_helpers": [
+    "ledger_head": "20260823081444",
+    "source_migration_name": "static_weekly_family_location_truth",
+    "catalog_privilege_fingerprint": "670cfa8c21e8ca852832a0f77aaedb59be5db0b86f59016bd9133cda2e4173b3",
+    "public_function_count": 477,
+    "present_family_helpers": [
       "static_weekly_v3_assert_work_payload_single_location_base(jsonb,boolean)",
       "static_weekly_v4_assert_projection_envelope_single_location_bas(jsonb,uuid,date,jsonb)",
       "static_weekly_v5_read_employee_day_single_location_base(date,uuid,timestamptz)"
     ]
   },
   "target": {
-    "source_migration_file": "20260823060000_static_weekly_family_location_truth.sql",
-    "source_migration_name": "static_weekly_family_location_truth",
+    "source_migration_file": "20260823113624_static_weekly_end_of_day_window_parity.sql",
+    "source_migration_name": "static_weekly_end_of_day_window_parity",
     "ledger_version_policy": "runner_assigned_and_postverified",
-    "canonical_schema_fingerprint": "670cfa8c21e8ca852832a0f77aaedb59be5db0b86f59016bd9133cda2e4173b3",
-    "public_function_count": 477
+    "canonical_schema_fingerprint": "3df9551ba5f5fe0c5222cd5e0a0b5cfc6895d2fa60d653ba2fd70ba52085db1b",
+    "public_function_count": 478
   },
   "source_binding": {
     "kind": "external_exact_head_release_attestation",
@@ -26,36 +26,50 @@
   "authorization": {
     "production_apply_authorized": true,
     "required_boundary": "Eric approved continuation and the exact additional static-weekly Starter service boundary",
-    "sequence_policy": "single_migration_stop_on_failed_preflight_or_postcheck",
-    "rollback_policy": "forward_recovery_only; keep the scheduler stopped; if family-location post-verification fails, restore the captured prior function definitions and ACLs through one reviewed forward-recovery migration while preserving both the ledger and schedule data"
+    "sequence_policy": "ordered_migrations_stop_on_failed_preflight_or_postcheck",
+    "rollback_policy": "forward_recovery_only; keep the scheduler stopped; if any parity post-verification fails, restore the captured prior function definitions and ACLs through one reviewed forward-recovery migration while preserving both the ledger and schedule data"
   },
   "preconditions": [
     "production project_ref equals rqquvtjdmugpigbndmne",
-    "production migration ledger head equals 20260823033203 and names configure_static_weekly_runtime_password_20260823",
-    "production catalog and privilege fingerprint equals d8bbe5ddaa2a5886d27c80edf96098a83d4bf64e5ffd8b824d5d342a2767afe8 after exact PostgreSQL 17 managed creator-admin normalization",
+    "production migration ledger head equals 20260823081444 and names static_weekly_family_location_truth",
+    "production catalog and privilege fingerprint equals 670cfa8c21e8ca852832a0f77aaedb59be5db0b86f59016bd9133cda2e4173b3 after the postverified family-location migration",
     "static_weekly_runtime_20260823 is LOGIN, NOINHERIT, non-superuser, non-replication, non-BYPASSRLS, connection-limited to four, and has a configured credential",
     "static_weekly_runtime_20260823 holds static_weekly_control_plane only and cannot enter static_weekly_release_operator",
     "static_weekly_control_plane is NOLOGIN, NOINHERIT, and is not granted to memphis_zoo_backup",
     "static weekly authority key, source, roster, version, publication, projection, and occurrence tables remain empty before first publication",
-    "the current event-work validator, projection validator, employee-day reader definitions, owners, comments, and ACLs match the read-only preflight capture",
-    "the exact backend commit/tree and migration digest below are externally attested",
-    "the single family-location migration preflight passes before mutation"
+    "the current event-work validator, projection validator, solver-certificate validator, end-of-day window validator, owners, comments, and ACLs match the read-only preflight capture",
+    "the exact backend commit/tree and all three migration digests below are externally attested",
+    "each ordered parity migration preflight passes before its mutation"
   ],
   "migrations": [
     {
       "order": 1,
-      "phase": "static_weekly_family_location_truth",
-      "file": "20260823060000_static_weekly_family_location_truth.sql",
-      "sha256": "ba48a19ad89c695b85dcc514f6130fa771773162808b8950906cc08aeeb5cd3b"
+      "phase": "static_weekly_service_mode_truth",
+      "file": "20260823070000_static_weekly_service_mode_truth.sql",
+      "sha256": "42f6936a8ae372c3fb35c0a266171a50cbaaa6d9dedce1889a088c865d131009"
+    },
+    {
+      "order": 2,
+      "phase": "static_weekly_solver_certificate_v5_authority",
+      "file": "20260823071000_static_weekly_solver_certificate_v5_authority.sql",
+      "sha256": "3ecd564f96f90df360788b75226cac7ba5016cc688e1c41aa9c723189bb938b2"
+    },
+    {
+      "order": 3,
+      "phase": "static_weekly_end_of_day_window_parity",
+      "file": "20260823113624_static_weekly_end_of_day_window_parity.sql",
+      "sha256": "85e03f3801ca78de5096039276291c6c3e23137dd32cea36d5058fe00754fd26"
     }
   ],
   "postconditions": [
-    "the production ledger contains exactly one successful static_weekly_family_location_truth migration after the observed head",
-    "production catalog and privilege fingerprint equals 670cfa8c21e8ca852832a0f77aaedb59be5db0b86f59016bd9133cda2e4173b3",
+    "the production ledger contains exactly the three ordered successful parity migrations after the observed head",
+    "production catalog and privilege fingerprint equals 3df9551ba5f5fe0c5222cd5e0a0b5cfc6895d2fa60d653ba2fd70ba52085db1b",
     "static_weekly_runtime_20260823 is LOGIN, NOINHERIT, non-superuser, non-replication, non-BYPASSRLS, and connection-limited to four",
     "static_weekly_runtime_20260823 has exactly one authority membership: static_weekly_control_plane",
     "static_weekly_runtime_20260823 retains its configured out-of-band credential and cannot enter static_weekly_release_operator",
-    "event overlays and current projections preserve an exact ordered physical-location family with the routing anchor included",
+    "event overlays and current projections preserve exact scan-tracked, reminder-only, and response-only service-mode location truth",
+    "solver certificate authority exact-checks the complete deterministic v5 execution receipt and rejects truncated or mistyped telemetry",
+    "the exact terminal end time 24:00 is accepted while starts at 24:00 and every other 24:* value remain rejected",
     "the employee-day read surface exposes the exact location identifiers, names, snapshots, and public-restroom marker while historical singleton projections remain readable",
     "custodial_application_reader can execute only the reviewed employee-day wrapper and cannot execute its renamed internal base helper",
     "no schedule, roster, publication, projection, occurrence, employee, or cleaning rows change",
