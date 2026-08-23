@@ -271,8 +271,12 @@ export function createStaticWeeklyControlPlane({
   compiler = compileStaticWeeklySchedule,
   initializeSolver = initializeStaticWeeklySolver,
   getSolverReadiness = getStaticWeeklySolverReadiness,
+  transactionKeepaliveMs = 4_000,
 } = {}) {
   if (!database?.connect) throw fail("static_weekly_control_plane_database_required");
+  if (!Number.isSafeInteger(transactionKeepaliveMs) || transactionKeepaliveMs < 1 || transactionKeepaliveMs > 10_000) {
+    throw fail("static_weekly_control_plane_keepalive_invalid");
+  }
 
   async function transaction(work) {
     const client = await database.connect();
@@ -326,9 +330,40 @@ export function createStaticWeeklyControlPlane({
     return result;
   }
 
+  async function compileInsideTransaction(client, input) {
+    // Production deliberately gives the runtime login a short
+    // idle-in-transaction timeout. The solver is a bounded local operation,
+    // but it performs no SQL while it runs, so an otherwise healthy atomic
+    // schedule command can be terminated before the verified result is ready.
+    // Keep the existing transaction active with a read-only statement; never
+    // relax the database timeout or split mutation and projection authority.
+    let heartbeatFailure = null;
+    let pendingHeartbeat = Promise.resolve();
+    const timer = setInterval(() => {
+      if (heartbeatFailure) return;
+      pendingHeartbeat = pendingHeartbeat
+        .then(() => client.query("select 1"))
+        .catch((error) => { heartbeatFailure ||= error; });
+    }, transactionKeepaliveMs);
+    timer.unref?.();
+    try {
+      const result = await compileOrFail(input);
+      // Stop scheduling before awaiting the last queued heartbeat. Otherwise a
+      // timer tick can extend the chain after this await has captured it and a
+      // late failure could be missed immediately before the authority write.
+      clearInterval(timer);
+      await pendingHeartbeat;
+      if (heartbeatFailure) throw heartbeatFailure;
+      return result;
+    } finally {
+      clearInterval(timer);
+      await pendingHeartbeat.catch(() => {});
+    }
+  }
+
   async function materializeCurrentProjection(client, { actor, publicationId, weekStart, expectedRevision, idempotencyKey }) {
     const source = await sourceFor(client, requirePublicationId(publicationId), weekStart);
-    const result = await compileOrFail(compilerInputFromPublishedSource(source, weekStart));
+    const result = await compileInsideTransaction(client, compilerInputFromPublishedSource(source, weekStart));
     const projection = createStaticWeeklyProjectionRpcInput({
       result,
       publicationId: requirePublicationId(publicationId),
@@ -407,7 +442,7 @@ export function createStaticWeeklyControlPlane({
       const actor = requireManager(manager); const date = requireDate(effectiveStart, "effective start");
       return transaction(async (client) => {
         const source = await sourceFor(client, sourcePublicationId, date);
-        const result = await compileOrFail(replacementDraftInput(source, date));
+        const result = await compileInsideTransaction(client, replacementDraftInput(source, date));
         const draft = createStaticWeeklyDraftRpcInput({ result, expectedRevision: requireRevision(expectedRevision), actor: { ...actor, idempotencyKey: requireIdempotencyKey(idempotencyKey) } });
         return call(client, "static_weekly_v3_create_draft", [draft.effectiveStart, draft.objectiveVersion, draft.objective, draft.inputProvenance, draft.document, draft.expectedRevision, actor.managerId, draft.idempotencyKey, requireSourceId(source.source_id)]);
       });
@@ -416,7 +451,7 @@ export function createStaticWeeklyControlPlane({
       const actor = requireManager(manager); const date = requireDate(effectiveStart, "effective start");
       return transaction(async (client) => {
         const source = await registeredSourceFor(client, sourceId);
-        const result = await compileOrFail(replacementDraftInput(source, date));
+        const result = await compileInsideTransaction(client, replacementDraftInput(source, date));
         const draft = createStaticWeeklyDraftRpcInput({ result, expectedRevision: requireRevision(expectedRevision), actor: { ...actor, idempotencyKey: requireIdempotencyKey(idempotencyKey) } });
         return call(client, "static_weekly_v3_create_draft", [draft.effectiveStart, draft.objectiveVersion, draft.objective, draft.inputProvenance, draft.document, draft.expectedRevision, actor.managerId, draft.idempotencyKey, requireSourceId(source.source_id)]);
       });

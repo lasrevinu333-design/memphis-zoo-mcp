@@ -39,6 +39,7 @@ assert.match(ordinaryApiSource, /STATIC_WEEKLY_CONTROL_PLANE_PUBLIC_URL/, "the s
 
 const solverIdentity = { package: "highs@1.15.2" };
 const manager = { manager_id: "10000000-0000-4000-8000-000000000001", manager_display_name: "Named Manager", auth_mode: "trusted_device", trusted_device: true, read_only: false };
+const authoritySourceId = "50000000-0000-4000-8000-000000000001";
 const publicationId = "70000000-0000-4000-8000-000000000001";
 const versionId = "60000000-0000-4000-8000-000000000001";
 const contractorSlot = "20000000-0000-4000-8000-000000000099";
@@ -65,7 +66,7 @@ const acceptedProjection = await compileStaticWeeklySchedule(compilerInput());
 assert.equal(acceptedProjection.status, "FEASIBLE", "the control-plane transaction test needs one independently accepted projection");
 assert.equal(acceptedProjection.verifier.ok, true);
 
-function createAuthorityDatabase({ revision: initialRevision = 0, failMutationAt = null } = {}) {
+function createAuthorityDatabase({ revision: initialRevision = 0, failMutationAt = null, failHeartbeatAt = null, heartbeatDelayMs = 0 } = {}) {
   const queries = [];
   const materializations = new Map();
   const projectionSnapshots = new Map();
@@ -75,7 +76,9 @@ function createAuthorityDatabase({ revision: initialRevision = 0, failMutationAt
   let transactionState = null;
   let commits = 0;
   let mutationAttempts = 0;
+  let heartbeatAttempts = 0;
   const source = {
+    source_id: authoritySourceId,
     compiler_input: {
       slots: [{ id: contractorSlot, contractorCapacity: true, contractorAvailability: [{ dayOfWeek: 2, shift: { start: "07:00", end: "16:00" }, productiveCapacityProvenance: "approved contractor shift", maxServiceEffortMinutes: 300, maxServiceEffortProvenance: "approved contractor limit", qualifications: ["general"], qualificationProvenance: "approved contractor role", restrictions: [], restrictionProvenance: "approved contractor restrictions", acceptedRouteAnchorLocationId: "40000000-0000-4000-8000-000000000099", acceptedRouteProvenance: "approved contractor staging" }] }],
       version: { slotAvailability: [] }, proximity: [],
@@ -87,6 +90,12 @@ function createAuthorityDatabase({ revision: initialRevision = 0, failMutationAt
   const client = {
     async query(statement, values = []) {
       queries.push({ statement, values });
+      if (statement === "select 1") {
+        heartbeatAttempts += 1;
+        if (heartbeatDelayMs > 0) await new Promise((resolveDelay) => setTimeout(resolveDelay, heartbeatDelayMs));
+        if (heartbeatAttempts === failHeartbeatAt) throw new Error("transaction keepalive failed");
+        return { rows: [{ "?column?": 1 }] };
+      }
       if (statement === "begin") {
         transactionState = { revision, projection, materializations: new Map(materializations), projectionSnapshots: new Map(projectionSnapshots), mutations: new Map(mutations) };
         return { rows: [] };
@@ -112,9 +121,11 @@ function createAuthorityDatabase({ revision: initialRevision = 0, failMutationAt
         if (!materialized || children.some((item) => item == null)) throw Object.assign(new Error("idempotency key is bound to a different complete day-change batch"), { code: "23505" });
         return { rows: [{ result: { replayed: true, response: { ...materialized, operation: "apply_day_changes", data: { ...materialized.data, current_projection: projectionSnapshots.get(projectionKey(parent)), mutations: children.map((item) => item.data) } } } }] };
       }
+      if (statement.includes("static_weekly_v3_read_authority_source")) return { rows: [{ result: source }] };
       if (statement.includes("static_weekly_v3_read_publication_source")) return { rows: [{ result: source }] };
       if (statement.includes("static_weekly_v3_read_manager_snapshot")) return { rows: [{ result: { schema: "memphis-zoo.static-weekly-manager-snapshot.v1", week_start: values[0], authority_revision: revision, current_publication: { publication_id: publicationId, version_id: versionId }, projection_status: projection ? "current" : "missing", latest_projection: projection } }] };
       if (statement.includes("static_weekly_v3_publish_draft")) { revision = values[2] + 1; return { rows: [{ result: { revision, data: { publication_id: publicationId, version_id: versionId, effective_start: "2026-10-05" } } }] }; }
+      if (statement.includes("static_weekly_v3_create_draft")) { revision = values[5] + 1; return { rows: [{ result: { revision, data: { version_id: versionId, draft_revision: 1, effective_start: values[0] } } }] }; }
       if (statement.includes("static_weekly_v3_apply_exception")) {
         const key = values[10];
         if (mutations.has(key)) return { rows: [{ result: mutations.get(key) }] };
@@ -143,17 +154,70 @@ function createAuthorityDatabase({ revision: initialRevision = 0, failMutationAt
     },
     release() {},
   };
-  return { database: { async connect() { return client; } }, queries, revision: () => revision, commits: () => commits, mutationAttempts: () => mutationAttempts };
+  return { database: { async connect() { return client; } }, queries, revision: () => revision, commits: () => commits, mutationAttempts: () => mutationAttempts, heartbeatAttempts: () => heartbeatAttempts };
 }
 
-function controlPlaneFor(authority, compiler = async () => acceptedProjection) {
+function controlPlaneFor(authority, compiler = async () => acceptedProjection, options = {}) {
   return createStaticWeeklyControlPlane({
     database: authority.database,
     compiler,
     initializeSolver: async () => solverIdentity,
     getSolverReadiness: () => ({ state: "ready", available: true, identity: solverIdentity }),
+    ...options,
   });
 }
+
+const keepaliveAuthority = createAuthorityDatabase();
+const keepaliveControlPlane = controlPlaneFor(keepaliveAuthority, async () => {
+  await new Promise((resolveDelay) => setTimeout(resolveDelay, 30));
+  return acceptedProjection;
+}, { transactionKeepaliveMs: 5 });
+const slowInitialDraft = await keepaliveControlPlane.createInitialDraft({
+  manager,
+  sourceId: authoritySourceId,
+  effectiveStart: "2026-10-05",
+  expectedRevision: 0,
+  idempotencyKey: "slow-initial-draft",
+});
+assert.equal(slowInitialDraft.revision, 1, "a bounded slow compiler still creates one initial draft");
+assert.equal(keepaliveAuthority.heartbeatAttempts() >= 2, true, "a bounded slow compiler keeps its atomic database transaction active");
+const keepaliveSourceIndex = keepaliveAuthority.queries.findIndex((entry) => entry.statement.includes("static_weekly_v3_read_authority_source"));
+const keepaliveWriteIndex = keepaliveAuthority.queries.findIndex((entry) => entry.statement.includes("static_weekly_v3_create_draft"));
+const keepaliveIndexes = keepaliveAuthority.queries.map((entry, index) => entry.statement === "select 1" ? index : -1).filter((index) => index >= 0);
+assert.equal(keepaliveIndexes.every((index) => index > keepaliveSourceIndex && index < keepaliveWriteIndex), true, "only the bounded solver interval receives read-only transaction keepalives");
+assert.equal(keepaliveAuthority.commits(), 1, "a slow initial draft still commits exactly once");
+
+const failedKeepaliveAuthority = createAuthorityDatabase({ failHeartbeatAt: 1 });
+const failedKeepaliveControlPlane = controlPlaneFor(failedKeepaliveAuthority, async () => {
+  await new Promise((resolveDelay) => setTimeout(resolveDelay, 20));
+  return acceptedProjection;
+}, { transactionKeepaliveMs: 5 });
+await assert.rejects(() => failedKeepaliveControlPlane.createInitialDraft({
+  manager,
+  sourceId: authoritySourceId,
+  effectiveStart: "2026-10-05",
+  expectedRevision: 0,
+  idempotencyKey: "failed-initial-draft-keepalive",
+}), /transaction keepalive failed/);
+assert.equal(failedKeepaliveAuthority.commits(), 0, "a failed transaction keepalive cannot commit a draft");
+assert.equal(failedKeepaliveAuthority.revision(), 0, "a failed transaction keepalive leaves authority unchanged");
+assert.equal(failedKeepaliveAuthority.queries.at(-1).statement, "rollback", "a failed transaction keepalive rolls back the same transaction");
+
+const lateFailedKeepaliveAuthority = createAuthorityDatabase({ failHeartbeatAt: 1, heartbeatDelayMs: 20 });
+const lateFailedKeepaliveControlPlane = controlPlaneFor(lateFailedKeepaliveAuthority, async () => {
+  await new Promise((resolveDelay) => setTimeout(resolveDelay, 8));
+  return acceptedProjection;
+}, { transactionKeepaliveMs: 5 });
+await assert.rejects(() => lateFailedKeepaliveControlPlane.createInitialDraft({
+  manager,
+  sourceId: authoritySourceId,
+  effectiveStart: "2026-10-05",
+  expectedRevision: 0,
+  idempotencyKey: "late-failed-initial-draft-keepalive",
+}), /transaction keepalive failed/);
+assert.equal(lateFailedKeepaliveAuthority.commits(), 0, "a heartbeat that fails after compilation cannot commit a draft");
+assert.equal(lateFailedKeepaliveAuthority.revision(), 0, "a late keepalive failure leaves authority unchanged");
+assert.equal(lateFailedKeepaliveAuthority.queries.at(-1).statement, "rollback", "a late keepalive failure rolls back the same transaction");
 
 const authority = createAuthorityDatabase();
 const controlPlane = controlPlaneFor(authority);
