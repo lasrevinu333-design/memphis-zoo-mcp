@@ -3,14 +3,14 @@
   "release_id": "release-2026.07.19.custodial-v3.12",
   "frontend_commit_sha": "c43836a2b94067333797fb01f53796971aca8892",
   "frontend_commit_state": "final_pair_bound",
-  "schema_fingerprint": "5bcb02001e4096f5ad5d0d457202d90ca3fbe9cfe4c60793d11af384378f33d2",
+  "schema_fingerprint": "d8bbe5ddaa2a5886d27c80edf96098a83d4bf64e5ffd8b824d5d342a2767afe8",
   "schema_transition": {
     "transition_id": "custodial-foundation-authority-cutover-20260821",
     "from_fingerprint": "b890754824a2e86d4df1b75c134fd233fcf2e42928c9f5a74c1233e4012202f7",
-    "to_fingerprint": "5bcb02001e4096f5ad5d0d457202d90ca3fbe9cfe4c60793d11af384378f33d2",
+    "to_fingerprint": "d8bbe5ddaa2a5886d27c80edf96098a83d4bf64e5ffd8b824d5d342a2767afe8",
     "expires_at": "2026-09-03T23:59:59Z"
   },
-  "frontend_source_fingerprint": "5bcb02001e4096f5ad5d0d457202d90ca3fbe9cfe4c60793d11af384378f33d2",
+  "frontend_source_fingerprint": "d8bbe5ddaa2a5886d27c80edf96098a83d4bf64e5ffd8b824d5d342a2767afe8",
   "backend_contract": {
     "scan": "scan.v4.snapshot-bound-authority",
     "authority": "offline-authority.v5",
@@ -406,7 +406,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "34bff43aedbcdbebaa508332f11b402be9f79446"
+        "object_id": "720e77c0582ab0077e3dc1545af3fe3eec1e2c69"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -1866,12 +1866,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "c1118568dd9ca139405f6c4fc6bf0cff6111c01b"
+        "object_id": "b4c8102fdb81bddc5a313e8ed2a88836749c778b"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "510f14e0b6b0f34a0043dd7d8f9a87423c86db37"
+        "object_id": "612bbf9aec5c93d3ce6866420418e6198b1bdc52"
       },
       {
         "path": "supabase/config.toml",
