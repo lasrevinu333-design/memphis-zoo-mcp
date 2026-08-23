@@ -742,17 +742,17 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "f8ebe6dfc2be872b8c556a0cec57019deb70da91"
+        "object_id": "47db397185dc4971d29a7061e342b5136c5d4a79"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "10f51b7b19be81e78fe3f9a2c4ee2a7e9f026d1e"
+        "object_id": "b0aa26a162c880cb29ab72a42a176bcc329588f8"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
         "mode": "100644",
-        "object_id": "212968a19a1d43f0a72a7d0889367dbd523cd66d"
+        "object_id": "fc89eb0d809fced3cba596e49160a165d0b0a2ee"
       },
       {
         "path": "scripts/integrated-backend-authority-suite-order-isolated-tests.mjs",
@@ -997,7 +997,7 @@
       {
         "path": "scripts/refresh-integrated-backend-authority-release.mjs",
         "mode": "100644",
-        "object_id": "e1b210976e59a555cec4890e537850a629e332b7"
+        "object_id": "7adf97530fd6dd001f610d5171f2fe611db3a0b6"
       },
       {
         "path": "scripts/refresh-release-schema-alignment.mjs",
@@ -1192,12 +1192,12 @@
       {
         "path": "scripts/static-weekly-control-plane-tests.mjs",
         "mode": "100644",
-        "object_id": "583325fa849e27e2e25f0a6c5d7fbf3a5c2b8adb"
+        "object_id": "2ba42a2980295045528add988c45b7b6cdfffbf0"
       },
       {
         "path": "scripts/static-weekly-day-changes-database-tests.mjs",
         "mode": "100644",
-        "object_id": "7bcf8b2d6a53a011fa39df71863170643e4e0350"
+        "object_id": "9c0429e6680f293e82c68870d12ba3ec845fe34e"
       },
       {
         "path": "scripts/static-weekly-employee-day-route-tests.mjs",
@@ -1212,7 +1212,7 @@
       {
         "path": "scripts/static-weekly-schedule-authority-v3-tests.mjs",
         "mode": "100644",
-        "object_id": "ff395ee33297a93e59ad2b0c402977470b630ae2"
+        "object_id": "6061e7e529aacfa03b8fc0f4b8b4c6f25da982a2"
       },
       {
         "path": "scripts/static-weekly-schedule-candidate-importer.mjs",
@@ -1222,7 +1222,7 @@
       {
         "path": "scripts/static-weekly-schedule-compiler-tests.mjs",
         "mode": "100644",
-        "object_id": "c5d401955609201370652f61d119ee7de0a706f3"
+        "object_id": "7cc3e6dd638acfd358af54aaf5da2c3be7ede437"
       },
       {
         "path": "scripts/static-weekly-schedule-concurrency-tests.mjs",
@@ -1232,7 +1232,7 @@
       {
         "path": "scripts/static-weekly-schedule-database-adapter-tests.mjs",
         "mode": "100644",
-        "object_id": "ad0b119124323847a8ab67896aa7fe0c2d161d7e"
+        "object_id": "05723ac22e07da8776342bd0b905b2d866aa68ad"
       },
       {
         "path": "scripts/static-weekly-schedule-database-tests.mjs",
@@ -1242,7 +1242,7 @@
       {
         "path": "scripts/static-weekly-schedule-exception-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "300e1e3f088bd3793de7648680b0d34ba8c9420c"
+        "object_id": "7d2a1da178b7238689506bce79885ae4edb59f35"
       },
       {
         "path": "scripts/static-weekly-schedule-model-tests.mjs",
@@ -1782,27 +1782,27 @@
       {
         "path": "src/static-weekly-control-plane.js",
         "mode": "100644",
-        "object_id": "e579ecacc67fbb4b85d5b065b8e3bc1d8605cb8b"
+        "object_id": "b1361df3ea5bcf52b7a3f8e9c02da5fabe03eec5"
       },
       {
         "path": "src/static-weekly-schedule-compiler.js",
         "mode": "100644",
-        "object_id": "036f597c5e89e53ea981aafc42d0150f9ffa0679"
+        "object_id": "b64781ee7e2fcef8e89decad8e65e8dbcd81b7fe"
       },
       {
         "path": "src/static-weekly-schedule-database-adapter.js",
         "mode": "100644",
-        "object_id": "46e844e92f2c86889e17ccdcb9a077801d416733"
+        "object_id": "3f7e56abdfb98b39e4ed9d975b9449738633f731"
       },
       {
         "path": "src/static-weekly-schedule-model.js",
         "mode": "100644",
-        "object_id": "fca8ecf285e02817c03b711ccbb4cb5b9c81d0c3"
+        "object_id": "a0e084aa81c1ee7d77fbd630ed4aa49e3ef06b56"
       },
       {
         "path": "src/static-weekly-schedule-program.js",
         "mode": "100644",
-        "object_id": "bf97bbfb0a78b6c25ca4006a24015c4a88a2454a"
+        "object_id": "a9d3b25707005c354a3c9f3d8326005e4b97f94a"
       },
       {
         "path": "src/static-weekly-schedule-solver-worker.js",
@@ -1817,7 +1817,7 @@
       {
         "path": "src/static-weekly-schedule-verifier.js",
         "mode": "100644",
-        "object_id": "5ed9cc9ea675fcbd1cd766a65a8f145f79eeefd5"
+        "object_id": "63469362a206f515a9999c00a9a651fed28027ba"
       },
       {
         "path": "src/supabase/client.js",
@@ -2960,13 +2960,28 @@
         "object_id": "31b320a726c0dd36daa7a80dd66085bb9029c7f7"
       },
       {
+        "path": "supabase/migrations/20260823070000_static_weekly_service_mode_truth.sql",
+        "mode": "100644",
+        "object_id": "b690936e200d38cbbe5e1d0f44d8a86e261ed765"
+      },
+      {
+        "path": "supabase/migrations/20260823071000_static_weekly_solver_certificate_v5_authority.sql",
+        "mode": "100644",
+        "object_id": "61c289b48133b62ddb77927950179405cabd3d84"
+      },
+      {
+        "path": "supabase/migrations/20260823113624_static_weekly_end_of_day_window_parity.sql",
+        "mode": "100644",
+        "object_id": "8a23c1dc052b6b1d3debe086ef6a5061704eab5e"
+      },
+      {
         "path": "tmp/write_probe.txt",
         "mode": "100644",
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 572,
-    "migration_path_count": 98,
+    "authority_path_count": 575,
+    "migration_path_count": 101,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
   },
@@ -3270,6 +3285,15 @@
     },
     {
       "name": "20260823060000_static_weekly_family_location_truth.sql"
+    },
+    {
+      "name": "20260823070000_static_weekly_service_mode_truth.sql"
+    },
+    {
+      "name": "20260823071000_static_weekly_solver_certificate_v5_authority.sql"
+    },
+    {
+      "name": "20260823113624_static_weekly_end_of_day_window_parity.sql"
     }
   ],
   "release_boundary": "Prepare distinct minimum-32-character backend and native-route secrets before cutover; configure their database digests immediately after the migrations that create each configuration function, retain the bridge backend artifact through the scan-snapshot phase, and require the executable health/restoration probes before traffic changes."
