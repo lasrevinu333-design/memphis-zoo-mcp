@@ -1193,7 +1193,7 @@
       {
         "path": "scripts/static-weekly-control-plane-tests.mjs",
         "mode": "100644",
-        "object_id": "2ba42a2980295045528add988c45b7b6cdfffbf0"
+        "object_id": "ba22be4ac61cbc29a1c050d46f47f72126bd21bc"
       },
       {
         "path": "scripts/static-weekly-day-changes-database-tests.mjs",
@@ -1783,7 +1783,7 @@
       {
         "path": "src/static-weekly-control-plane.js",
         "mode": "100644",
-        "object_id": "b1361df3ea5bcf52b7a3f8e9c02da5fabe03eec5"
+        "object_id": "62457db99e0920a2ff629ccb6116d1ca0de1865c"
       },
       {
         "path": "src/static-weekly-schedule-compiler.js",
