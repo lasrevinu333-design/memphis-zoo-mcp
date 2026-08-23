@@ -114,7 +114,10 @@ function requirePublicationId(value) {
 function requireWindow(value, label) {
   const start = text(value?.start);
   const end = text(value?.end);
-  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(start) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(end) || start >= end) {
+  const startValid = /^([01]\d|2[0-3]):[0-5]\d$/.test(start);
+  const endValid = /^([01]\d|2[0-3]):[0-5]\d$/.test(end) || end === "24:00";
+  const toMinute = (time) => time === "24:00" ? 1440 : (Number(time.slice(0, 2)) * 60) + Number(time.slice(3));
+  if (!startValid || !endValid || toMinute(start) >= toMinute(end)) {
     throw fail("static_weekly_control_plane_invalid_window", `${label} must be one ordered HH:MM window.`);
   }
   return { start, end };

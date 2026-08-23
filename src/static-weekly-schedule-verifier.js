@@ -18,14 +18,22 @@ import {
   windowContains,
   windowsOverlap,
 } from "./static-weekly-schedule-model.js";
-import { STATIC_WEEKLY_ROUTE_CANONICALITY_SCHEMA, canonicalOptimizerAssignmentProjection, canonicalProgramMatches, canonicalSolverAuthorityCertificate, canonicalSolverAuthorityTierProjection, generateStaticWeeklySchedulingProgram, normalizeStaticWeeklyIncludedLocations, postgresJsonbContentDigest, remainingStaticWeeklyMilliseconds } from "./static-weekly-schedule-program.js";
+import { STATIC_WEEKLY_FLEXIBLE_COVERAGE_MODE, STATIC_WEEKLY_ROUTE_CANONICALITY_SCHEMA, STATIC_WEEKLY_SERVICE_MODES, canonicalOptimizerAssignmentProjection, canonicalProgramMatches, canonicalSolverAuthorityCertificate, canonicalSolverAuthorityTierProjection, generateStaticWeeklySchedulingProgram, normalizeStaticWeeklyIncludedLocations, postgresJsonbContentDigest, remainingStaticWeeklyMilliseconds } from "./static-weekly-schedule-program.js";
 
 const array = (value) => Array.isArray(value) ? value : [];
 const text = (value) => String(value ?? "").trim();
 const positiveInteger = (value) => Number.isInteger(Number(value)) && Number(value) > 0;
 const push = (list, code, detail = {}) => list.push({ code, ...detail });
+const exactOwnKeys = (value, expected) => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const actual = Object.keys(value).sort(stableCompare);
+  const required = [...expected].sort(stableCompare);
+  return actual.length === required.length && actual.every((key, index) => key === required[index]);
+};
+const nonnegativeSafeInteger = (value) => typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 const MAX_SAFE_EXACT_INTEGER = BigInt(Number.MAX_SAFE_INTEGER);
-const VERIFIER_VERSION = "static-weekly-js-verifier-v5-family-location-truth";
+export const STATIC_WEEKLY_VERIFIER_VERSION = "static-weekly-js-verifier-v8-workload-duty-boundary";
+const VERIFIER_VERSION = STATIC_WEEKLY_VERIFIER_VERSION;
 const MIP_FEASIBILITY_TOLERANCE = 1e-9;
 const exactRatio = (numerator, denominator, scale) => {
   if (!Number.isInteger(Number(scale)) || Number(scale) <= 0 || BigInt(scale) % BigInt(denominator)) return null;
@@ -268,6 +276,7 @@ function apply(state, item) {
     }
     for (const addition of array(payload.addWork)) {
       const normalized = { ...structuredClone(addition), workId: text(addition.workId || addition.id), originSlotId: text(addition.originSlotId || addition.ownerSlotId), cancelled: false };
+      normalized.serviceMode = text(normalized.serviceMode || STATIC_WEEKLY_SERVICE_MODES.SCAN_TRACKED);
       normalized.includedLocations = normalizeStaticWeeklyIncludedLocations(normalized);
       state.work.push(normalized);
     }
@@ -289,7 +298,14 @@ function applyCustodialAbsenceCoveragePolicy(state, slotById, violations, servic
   }
 }
 function validWork(work) {
-  try { const window = normalizeWindow(work.window, "work window"); return positiveInteger(work.serviceEffortMinutes) && Number(work.serviceEffortMinutes) <= window.endMinute - window.startMinute && text(work.serviceEffortProvenance) && Array.isArray(work.requiredQualifications) && text(work.qualificationProvenance) && Array.isArray(work.restrictions) && text(work.restrictionProvenance) && text(work.locationId); } catch { return false; }
+  try {
+    const window = normalizeWindow(work.window, "work window");
+    const schedulingModeValid = !Object.hasOwn(work, "schedulingMode") || work.schedulingMode === STATIC_WEEKLY_FLEXIBLE_COVERAGE_MODE;
+    const serviceModeValid = Object.values(STATIC_WEEKLY_SERVICE_MODES).includes(work.serviceMode);
+    const workloadFitsFixedWindow = work.schedulingMode === STATIC_WEEKLY_FLEXIBLE_COVERAGE_MODE
+      || Number(work.serviceEffortMinutes) <= window.endMinute - window.startMinute;
+    return schedulingModeValid && serviceModeValid && positiveInteger(work.serviceEffortMinutes) && workloadFitsFixedWindow && text(work.serviceEffortProvenance) && Array.isArray(work.requiredQualifications) && text(work.qualificationProvenance) && Array.isArray(work.restrictions) && text(work.restrictionProvenance) && text(work.locationId);
+  } catch { return false; }
 }
 function validEligibilityAuthority(availability) {
   return Array.isArray(availability?.qualifications) && text(availability.qualificationProvenance) && Array.isArray(availability?.restrictions) && text(availability.restrictionProvenance);
@@ -298,7 +314,7 @@ function exactTerms(terms, values) {
   try { return array(terms).reduce((total, term) => total + (BigInt(term[0]) * BigInt(values.get(term[1]) ?? 0)), 0n); } catch { return null; }
 }
 
-export function verifyStaticWeeklyScheduleResult(input = {}, result = {}, deadline = null) {
+export function verifyStaticWeeklyScheduleResult(input = {}, result = {}, deadline = null, { allowProvisionalExecutionReceipt = false } = {}) {
   const violations = [];
   const deadlineFailure = (stage) => ({ ok: false, violations: [{ code: "solver_timeout", stage }], metrics: null, digest: contentDigest({ input, result, timeout: stage }), verifierVersion: VERIFIER_VERSION });
   const expired = () => {
@@ -374,8 +390,12 @@ export function verifyStaticWeeklyScheduleResult(input = {}, result = {}, deadli
     if (seen.has(key)) { push(violations, "duplicate_assignment", { planWorkId: key }); continue; } seen.add(key);
     const occurrenceDate = dateForDay(serviceDate, work.day);
     const baselineSlotId = text(work.originSlotId);
-    let baseline; let optimized = null;
-    try { baseline = snapshotIncumbency(slotById.get(baselineSlotId), occurrenceDate); } catch (error) { push(violations, "baseline_identity_not_canonical", { planWorkId: key, detail: error.code || error.message }); }
+    let baseline = null; let optimized = null;
+    if (baselineSlotId) {
+      try { baseline = snapshotIncumbency(slotById.get(baselineSlotId), occurrenceDate); } catch (error) { push(violations, "baseline_identity_not_canonical", { planWorkId: key, detail: error.code || error.message }); }
+    } else if (work.required !== false) {
+      push(violations, "required_work_missing_baseline_identity", { planWorkId: key });
+    }
     if (assignment.planWorkId !== key || assignment.workId !== work.workId || Number(assignment.dayOfWeek) !== work.day || assignment.serviceDate !== occurrenceDate || assignment.locationId !== work.locationId || assignment.window?.start !== work.window?.start || assignment.window?.end !== work.window?.end || Number(assignment.serviceEffortMinutes) !== Number(work.serviceEffortMinutes)) push(violations, "immutable_work_fact_mismatch", { planWorkId: key });
     if (assignment.status === "ASSIGNED") {
       try { optimized = snapshotIncumbency(slotById.get(text(assignment.slotId)), occurrenceDate); } catch (error) { push(violations, "optimized_identity_not_canonical", { planWorkId: key, detail: error.code || error.message }); }
@@ -401,9 +421,10 @@ export function verifyStaticWeeklyScheduleResult(input = {}, result = {}, deadli
     const slotId = text(assignment.slotId); const candidate = availability.get(`${work.day}\u0000${slotId}`); const cap = candidate && candidate.status === "working" && validEligibilityAuthority(candidate) ? capacity(candidate, edges) : null;
     if (!cap) { push(violations, "ineligible_owner", { planWorkId: key, slotId }); continue; }
     const workWindow = normalizeWindow(work.window, "work window");
-    if (!windowContains(cap.shift, workWindow)) push(violations, "shift_violation", { planWorkId: key, slotId });
-    if (candidate.lunch && windowsOverlap(candidate.lunch, workWindow)) push(violations, "lunch_violation", { planWorkId: key, slotId });
-    if (array(candidate.blockedWindows).some((window) => windowsOverlap(window, workWindow))) push(violations, "absence_violation", { planWorkId: key, slotId });
+    const flexibleCoverage = work.schedulingMode === STATIC_WEEKLY_FLEXIBLE_COVERAGE_MODE;
+    if (!flexibleCoverage && !windowContains(cap.shift, workWindow)) push(violations, "shift_violation", { planWorkId: key, slotId });
+    if (!flexibleCoverage && candidate.lunch && windowsOverlap(candidate.lunch, workWindow)) push(violations, "lunch_violation", { planWorkId: key, slotId });
+    if (!flexibleCoverage && array(candidate.blockedWindows).some((window) => windowsOverlap(window, workWindow))) push(violations, "absence_violation", { planWorkId: key, slotId });
     if (array(work.restrictedSlotIds).map(text).includes(slotId) || array(candidate.restrictions).map(text).includes(text(work.locationId))) push(violations, "restriction_violation", { planWorkId: key, slotId });
     const ownerSlot = slotById.get(slotId);
     if (work.custodialCoverageMode === "contractor_exact") {
@@ -411,6 +432,8 @@ export function verifyStaticWeeklyScheduleResult(input = {}, result = {}, deadli
     } else if (ownerSlot?.contractorCapacity === true) push(violations, "coverall_capacity_reserved_for_second_or_later_absence", { planWorkId: key, slotId });
     const qualifications = new Set(array(candidate.qualifications).map(text)); if (array(work.requiredQualifications).map(text).some((qualification) => !qualifications.has(qualification))) push(violations, "qualification_violation", { planWorkId: key, slotId });
     if (locks.get(key) && locks.get(key) !== slotId) push(violations, "manual_lock_violation", { planWorkId: key, slotId });
+    if (flexibleCoverage && !locks.get(key) && work.custodialCoverageMode === "zoo_employee_baseline" && (!work.originSlotId || slotId !== work.originSlotId)) push(violations, "baseline_owner_violation", { planWorkId: key, slotId, requiredSlotId: work.originSlotId || null });
+    if (flexibleCoverage && edge(edges, cap.route.startLocationId, work.locationId) === undefined) push(violations, "missing_flexible_coverage_directed_route", { planWorkId: key, slotId, from: cap.route.startLocationId, to: work.locationId });
     const groupKey = `${work.day}\u0000${slotId}`; if (!byDaySlot.has(groupKey)) byDaySlot.set(groupKey, []); byDaySlot.get(groupKey).push({ assignment, work, cap });
     if (slotId !== work.originSlotId) disruption += 1;
   }
@@ -434,9 +457,13 @@ export function verifyStaticWeeklyScheduleResult(input = {}, result = {}, deadli
         dayOfWeek: day, slotId,
         acceptedStopServiceMinutes: cap.baselineServiceMinutes,
         serviceEffortMinutes: cap.baselineServiceMinutes,
+        fixedServiceEffortMinutes: cap.baselineServiceMinutes,
+        flexibleWorkloadPoints: 0,
         serviceDutyMinutes: acceptedServiceDutyMinutes,
         acceptedRouteTravelMinutes: cap.route.baselineTravelMinutes,
         travelDutyMinutes: cap.route.baselineTravelMinutes,
+        fixedRouteTravelMinutes: cap.route.baselineTravelMinutes,
+        flexibleCoverageTravelMinutes: 0,
         waitingMinutes: 0,
         protectedBreakUnavailableMinutes: 0,
         routeSpanMinutes: 0,
@@ -451,19 +478,25 @@ export function verifyStaticWeeklyScheduleResult(input = {}, result = {}, deadli
   }
   for (const [key, load] of dailyLoads) {
     const entries = (byDaySlot.get(key) || []).slice();
+    const fixedEntries = entries.filter((entry) => entry.work.schedulingMode !== STATIC_WEEKLY_FLEXIBLE_COVERAGE_MODE);
+    const flexibleEntries = entries.filter((entry) => entry.work.schedulingMode === STATIC_WEEKLY_FLEXIBLE_COVERAGE_MODE);
     const record = availability.get(key); const cap = record ? capacity(record, edges) : null;
     if (!cap) continue;
     for (const entry of entries) {
       const window = normalizeWindow(entry.work.window, "work window");
       load.serviceEffortMinutes += Number(entry.work.serviceEffortMinutes);
-      load.serviceDutyMinutes += window.endMinute - window.startMinute;
+      if (entry.work.schedulingMode === STATIC_WEEKLY_FLEXIBLE_COVERAGE_MODE) load.flexibleWorkloadPoints += Number(entry.work.serviceEffortMinutes);
+      else {
+        load.fixedServiceEffortMinutes += Number(entry.work.serviceEffortMinutes);
+        load.serviceDutyMinutes += window.endMinute - window.startMinute;
+      }
       load.workIds.push(entry.work.workId);
     }
     if (load.serviceEffortMinutes > load.maxServiceEffortMinutes) push(violations, "maximum_service_capacity_violation", { daySlot: key });
     const routeNodes = [
       { kind: "shift_start", id: "shift-start", locationId: cap.route.startLocationId, startMinute: cap.shift.startMinute, endMinute: cap.shift.startMinute },
       ...cap.route.stops.map((stop) => ({ kind: "accepted", id: stop.stopId, locationId: stop.locationId, startMinute: stop.window.startMinute, endMinute: stop.window.endMinute })),
-      ...entries.map((entry) => {
+      ...fixedEntries.map((entry) => {
         const window = normalizeWindow(entry.work.window, "work window");
         return { kind: "work", id: entry.work.workId, locationId: entry.work.locationId, startMinute: window.startMinute, endMinute: window.endMinute };
       }),
@@ -491,8 +524,22 @@ export function verifyStaticWeeklyScheduleResult(input = {}, result = {}, deadli
     // A fixed service window can contain less provenanced service effort.  Its
     // remainder is committed waiting, not hidden productive capacity.  This
     // makes service + travel + waiting equal the non-protected route span.
-    const fixedWindowWaitingMinutes = load.serviceDutyMinutes - load.serviceEffortMinutes;
+    const fixedWindowWaitingMinutes = load.serviceDutyMinutes - load.fixedServiceEffortMinutes;
     const waitingMinutes = fixedWindowWaitingMinutes + transitWaitingMinutes;
+    let flexibleCoverageTravelMinutes = 0;
+    for (const entry of flexibleEntries) {
+      const minutes = edge(edges, cap.route.startLocationId, entry.work.locationId);
+      if (minutes === undefined) {
+        push(violations, "missing_flexible_coverage_directed_route", { daySlot: key, planWorkId: entry.work.key, from: cap.route.startLocationId, to: entry.work.locationId });
+        continue;
+      }
+      flexibleCoverageTravelMinutes += minutes;
+    }
+    load.fixedRouteTravelMinutes = totalTravel;
+    // Flexible coverage proximity is an optimization score, not proof of the
+    // employee's chosen physical route.  Preserve it for deterministic
+    // tie-breaking and diagnostics, but never charge it as clock duty.
+    load.flexibleCoverageTravelMinutes = flexibleCoverageTravelMinutes;
     load.travelDutyMinutes = totalTravel;
     load.waitingMinutes = waitingMinutes;
     load.fixedWindowWaitingMinutes = fixedWindowWaitingMinutes;
@@ -500,12 +547,14 @@ export function verifyStaticWeeklyScheduleResult(input = {}, result = {}, deadli
     load.protectedBreakUnavailableMinutes = protectedBreakUnavailableMinutes;
     load.routeSpanMinutes = routeSpanMinutes;
     load.routeNodeCount = routeNodes.length + 1;
-    load.totalDutyMinutes = load.serviceEffortMinutes + totalTravel + waitingMinutes;
-    if (protectedArcMinutes !== protectedBreakUnavailableMinutes || load.totalDutyMinutes !== routeSpanMinutes - protectedBreakUnavailableMinutes) {
-      push(violations, "route_duty_accounting_mismatch", { daySlot: key, serviceDutyMinutes: load.serviceDutyMinutes, serviceEffortMinutes: load.serviceEffortMinutes, travelMinutes: totalTravel, waitingMinutes, protectedArcMinutes, protectedBreakUnavailableMinutes, routeSpanMinutes, totalDutyMinutes: load.totalDutyMinutes });
+    const fixedRouteDutyMinutes = load.fixedServiceEffortMinutes + totalTravel + waitingMinutes;
+    load.fixedRouteDutyMinutes = fixedRouteDutyMinutes;
+    load.totalDutyMinutes = fixedRouteDutyMinutes;
+    if (protectedArcMinutes !== protectedBreakUnavailableMinutes || fixedRouteDutyMinutes !== routeSpanMinutes - protectedBreakUnavailableMinutes) {
+      push(violations, "route_duty_accounting_mismatch", { daySlot: key, serviceDutyMinutes: load.serviceDutyMinutes, fixedServiceEffortMinutes: load.fixedServiceEffortMinutes, flexibleWorkloadPoints: load.flexibleWorkloadPoints, fixedRouteTravelMinutes: totalTravel, flexibleCoverageTravelMinutes, waitingMinutes, protectedArcMinutes, protectedBreakUnavailableMinutes, routeSpanMinutes, fixedRouteDutyMinutes, totalDutyMinutes: load.totalDutyMinutes });
     }
-    travelCost += totalTravel - load.acceptedRouteTravelMinutes;
-    if (load.totalDutyMinutes > load.dutyCapacityMinutes) push(violations, "productive_duty_capacity_violation", { daySlot: key, serviceDutyMinutes: load.serviceDutyMinutes, serviceEffortMinutes: load.serviceEffortMinutes, travelMinutes: totalTravel, waitingMinutes, dutyCapacityMinutes: load.dutyCapacityMinutes, productiveCapacityMinutes: load.productiveCapacityMinutes });
+    travelCost += totalTravel - load.acceptedRouteTravelMinutes + flexibleCoverageTravelMinutes;
+    if (load.totalDutyMinutes > load.dutyCapacityMinutes) push(violations, "productive_duty_capacity_violation", { daySlot: key, serviceDutyMinutes: load.serviceDutyMinutes, fixedServiceEffortMinutes: load.fixedServiceEffortMinutes, flexibleWorkloadPoints: load.flexibleWorkloadPoints, fixedRouteTravelMinutes: totalTravel, flexibleCoverageTravelMinutes, waitingMinutes, dutyCapacityMinutes: load.dutyCapacityMinutes, productiveCapacityMinutes: load.productiveCapacityMinutes, totalDutyMinutes: load.totalDutyMinutes });
   }
   const exactEquityScale = Number(result.objective?.exactEquityCommonDenominator);
   if (!Number.isInteger(exactEquityScale) || exactEquityScale <= 0) push(violations, "exact_equity_scale_missing");
@@ -552,10 +601,20 @@ export function verifyStaticWeeklyScheduleResult(input = {}, result = {}, deadli
   const certificate = result.certificate;
   const modelBasis = certificate?.modelBasis;
   const solverIdentity = certificate?.solverIdentity;
-  if (!certificate || certificate.schema !== "memphis-zoo.static-weekly-solver-certificate.v4" || certificate.compilerVersion !== result.compilerVersion || certificate.verifierVersion !== VERIFIER_VERSION || certificate.objectivePolicyVersion !== "monotonic-leximax-v1") push(violations, "certificate_schema_or_identity_invalid");
+  if (!certificate || certificate.schema !== "memphis-zoo.static-weekly-solver-certificate.v5" || certificate.compilerVersion !== result.compilerVersion || certificate.verifierVersion !== VERIFIER_VERSION || certificate.objectivePolicyVersion !== "monotonic-leximax-v1") push(violations, "certificate_schema_or_identity_invalid");
   if (certificate && certificate.assignmentDigest !== sha256Hex(canonicalJson(assignments.map((assignment) => ({ planWorkId: assignment.planWorkId, status: assignment.status, slotId: assignment.slotId, serviceDate: assignment.serviceDate }))))) push(violations, "certificate_assignment_digest_mismatch");
   if (certificate && (certificate.canonicalInputDigest !== result.inputDigest || certificate.weeklyVersionDigest !== result.weeklyVersionDigest)) push(violations, "certificate_input_identity_mismatch");
-  if (certificate && canonicalJson(certificate.solverIdentity) !== canonicalJson(result.solver?.identity) || certificate && canonicalJson(certificate.tiers) !== canonicalJson(tiers) || certificate && canonicalJson(certificate.options) !== canonicalJson(tiers.map((tier) => tier.options))) push(violations, "certificate_solver_receipt_binding_mismatch");
+  if (certificate && (canonicalJson(certificate.solverIdentity) !== canonicalJson(result.solver?.identity)
+    || certificate.tierReceiptDigest !== postgresJsonbContentDigest(tiers)
+    || certificate.tierOptionsDigest !== postgresJsonbContentDigest(tiers.map((tier) => tier.options)))) push(violations, "certificate_solver_receipt_binding_mismatch");
+  const execution = certificate?.execution;
+  const executionNumberKeys = ["durationMilliseconds", "solveCount", "modelBytes", "modelBasisBytes", "modelVariables", "modelRows", "modelTerms", "workerOutputBytes", "boundedWorkingMemoryBytes", "receiptBytes", ...(allowProvisionalExecutionReceipt ? [] : ["resultBytes"])];
+  const executionKeys = [...executionNumberKeys, "preflight"];
+  if (!exactOwnKeys(execution, executionKeys)
+    || executionNumberKeys.some((key) => !nonnegativeSafeInteger(execution?.[key]))
+    || !execution?.preflight || typeof execution.preflight !== "object" || Array.isArray(execution.preflight)
+    || canonicalJson(execution.preflight) !== canonicalJson(regenerated.problem.preflight)
+    || execution.solveCount !== tiers.length) push(violations, "certificate_execution_receipt_invalid");
   if (!modelBasis || modelBasis.schema !== "memphis-zoo.static-weekly-model-basis.v1" || modelBasis.inputDigest !== result.inputDigest || certificate?.modelBasisDigest !== sha256Hex(canonicalJson(modelBasis))) push(violations, "model_basis_identity_invalid");
   if (modelBasis?.routeCanonicality?.schema !== STATIC_WEEKLY_ROUTE_CANONICALITY_SCHEMA
     || modelBasis?.routeCanonicality?.invariant !== "positive-fixed-windows-forward-only-dag-unique-path-v1"
@@ -611,8 +670,8 @@ export function verifyStaticWeeklyScheduleResult(input = {}, result = {}, deadli
     const expectedObjective = regeneratedTier?.objective || expectedTier;
     const expectedBindings = regeneratedWitnessProgram?.bindings?.slice(0, index) || [];
     const expectedModel = { schema: "memphis-zoo.static-weekly-tier-model.v1", basisDigest: regeneratedTier?.model?.modelBasisDigest || certificate?.modelBasisDigest, objective: { name: expectedObjective.name, family: expectedObjective.family || null, rank: expectedObjective.rank ?? null, terms: expectedObjective.terms }, priorBindings: expectedBindings };
-    const allowedTierFields = new Set(["index", "name", "family", "rank", "objectiveExpression", "objectiveExpressionDigest", "objectiveValue", "modelBasisDigest", "modelDigest", "priorBindings", "priorBindingDigest", "preflight", "options", "attestation"]);
-    if (!actual || !regeneratedTier || Object.keys(actual).some((key) => !allowedTierFields.has(key)) || actual.index !== index || actual.name !== expectedObjective.name || actual.family !== (expectedObjective.family ?? null) || (expectedObjective.rank ?? null) !== (actual.rank ?? null) || actual.modelBasisDigest !== regeneratedTier.model.modelBasisDigest || canonicalJson(actual.objectiveExpression?.terms) !== canonicalJson(expectedObjective.terms) || actual.objectiveExpressionDigest !== sha256Hex(canonicalJson({ terms: expectedObjective.terms })) || actual.priorBindingDigest !== sha256Hex(canonicalJson(actual.priorBindings)) || canonicalJson(actual.priorBindings) !== canonicalJson(expectedBindings) || actual.modelDigest !== sha256Hex(canonicalJson(expectedModel))) { push(violations, "solver_tier_receipt_invalid", { tier: expectedObjective.name }); return; }
+    const allowedTierFields = new Set(["index", "name", "family", "rank", "objectiveExpression", "objectiveExpressionDigest", "objectiveValue", "modelBasisDigest", "modelDigest", "priorBindingCount", "priorBindingDigest", "preflight", "options", "attestation"]);
+    if (!actual || !regeneratedTier || Object.keys(actual).some((key) => !allowedTierFields.has(key)) || actual.index !== index || actual.name !== expectedObjective.name || actual.family !== (expectedObjective.family ?? null) || (expectedObjective.rank ?? null) !== (actual.rank ?? null) || actual.modelBasisDigest !== regeneratedTier.model.modelBasisDigest || canonicalJson(actual.objectiveExpression?.terms) !== canonicalJson(expectedObjective.terms) || actual.objectiveExpressionDigest !== sha256Hex(canonicalJson({ terms: expectedObjective.terms })) || actual.priorBindingCount !== expectedBindings.length || actual.priorBindingDigest !== sha256Hex(canonicalJson(expectedBindings)) || actual.modelDigest !== sha256Hex(canonicalJson(expectedModel))) { push(violations, "solver_tier_receipt_invalid", { tier: expectedObjective.name }); return; }
     const witnessObjective = exactTerms(expectedObjective.terms, witnessByName);
     if (witnessObjective == null || witnessObjective !== BigInt(actual.objectiveValue) || witnessObjective !== BigInt(regeneratedTier.value) || expectedBindings.some((binding) => exactTerms(binding.terms, witnessByName) !== BigInt(binding.value))) push(violations, "witness_tier_expression_or_prior_binding_invalid", { tier: expectedObjective.name });
     if (actual.options?.output_flag !== true || actual.options?.threads !== 1 || actual.options?.random_seed !== 0 || actual.options?.mip_rel_gap !== 0 || actual.options?.mip_abs_gap !== 0 || actual.options?.mip_feasibility_tolerance !== 1e-9 || actual.options?.presolve !== "on" || actual.options?.parallel !== "off" || !Number.isFinite(actual.options?.time_limit) || actual.options.time_limit <= 0 || actual.options.time_limit > 30) push(violations, "solver_options_invalid", { tier: expectedTier.name });
@@ -633,14 +692,15 @@ export function verifyStaticWeeklyScheduleResult(input = {}, result = {}, deadli
   if (result.status === "FEASIBLE" && violations.length) push(violations, "publishable_result_is_not_verified");
   const metrics = {
     dutySemantics: {
-      service: "fixed accepted-stop and work coverage windows; provenanced service effort remains the equity resource",
-      travel: "every directed arc in the one chronological route",
-      waiting: "fixed-window non-effort commitment plus non-protected inter-stop slack",
+      workload: "the legacy serviceEffortMinutes wire field is fixed-work minutes or dimensionless flexible-ownership workload points according to schedulingMode",
+      service: "fixed appointments consume their full windows; flexible recurring ownership workload points are an equity resource, not clock duty",
+      travel: "fixed-route directed arcs are clock duty; flexible anchor-to-area values are deterministic proximity scores only",
+      waiting: "fixed-window non-effort commitment plus non-protected inter-stop slack; flexible ownership windows add no artificial waiting",
       protected: "lunch and unavailable intervals; excluded from productive capacity and total duty",
-      totalDuty: "service effort + directed travel + committed waiting = route span - protected time",
+      totalDuty: "fixed route span minus protected time; flexible workload points and proximity scores are excluded from clock duty",
     },
     daily,
-    weekly: { resource: "total provenanced accepted-stop and inserted service effort / total verified productive capacity", normalizedInequity: weeklyInequity, normalizedLoads: Object.fromEntries([...weeklyUtilization.entries()].sort(([a], [b]) => stableCompare(a, b))), provenancedEffortMinutes: Object.fromEntries([...weeklyLoads.entries()].sort(([a], [b]) => stableCompare(a, b)).map(([slotId, value]) => [slotId, value.effort])), productiveCapacityMinutes: Object.fromEntries([...weeklyLoads.entries()].sort(([a], [b]) => stableCompare(a, b)).map(([slotId, value]) => [slotId, value.capacity])), incrementalDirectedRouteCost: travelCost, disruption, uncoveredByPriority: Object.fromEntries([...priorityUncovered.entries()].sort(([a], [b]) => b - a)) },
+    weekly: { resource: "provenanced workload units / verified productive minutes; a relative equity index, not literal time utilization", normalizedInequity: weeklyInequity, normalizedLoads: Object.fromEntries([...weeklyUtilization.entries()].sort(([a], [b]) => stableCompare(a, b))), provenancedWorkloadUnits: Object.fromEntries([...weeklyLoads.entries()].sort(([a], [b]) => stableCompare(a, b)).map(([slotId, value]) => [slotId, value.effort])), productiveCapacityMinutes: Object.fromEntries([...weeklyLoads.entries()].sort(([a], [b]) => stableCompare(a, b)).map(([slotId, value]) => [slotId, value.capacity])), incrementalDirectedRouteCost: travelCost, disruption, uncoveredByPriority: Object.fromEntries([...priorityUncovered.entries()].sort(([a], [b]) => b - a)) },
   };
   if (authority && postgresJsonbContentDigest(authority.optimizerResult?.metrics) !== postgresJsonbContentDigest(metrics)) push(violations, "canonical_duty_metrics_mismatch");
   const digest = contentDigest({ verifierVersion: VERIFIER_VERSION, assignments: assignments.map((item) => ({ planWorkId: item.planWorkId, status: item.status, slotId: item.slotId })), metrics, violations });

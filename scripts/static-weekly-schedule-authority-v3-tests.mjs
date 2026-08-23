@@ -18,6 +18,18 @@ const manager = { managerId: "10000000-0000-4000-8000-000000000001", managerName
 const quote = (value) => `'${String(value).replaceAll("'", "''")}'`;
 const json = (value) => `$$${JSON.stringify(value)}$$::jsonb`;
 const clone = (value) => JSON.parse(JSON.stringify(value));
+const rebindDocumentValidation = (document) => {
+  document.validation.receipt_digest = postgresJsonbContentDigest(document.receipt);
+  document.validation.database_document_identity = postgresJsonbContentDigest({
+    adapter: document.adapter,
+    authority: document.authority,
+    receipt: document.receipt,
+    slot_availability: document.slot_availability,
+    assignments: document.assignments,
+    objective_inputs: document.objective_inputs,
+    semantic_snapshot: document.semantic_snapshot,
+  });
+};
 const docker = (args, options = {}) => execFileAsync("docker", args, { maxBuffer: 32 * 1024 * 1024, ...options });
 const shiftDays = (date, days) => { const value = new Date(`${date}T12:00:00Z`); value.setUTCDate(value.getUTCDate() + days); return value.toISOString().slice(0, 10); };
 const dateTimeInMemphis = () => Object.fromEntries(new Intl.DateTimeFormat("en-US", {
@@ -40,6 +52,7 @@ function sourceInput({ serviceDate = initialWeek, versionId = "60000000-0000-400
   const departedA = "20000000-0000-4000-8000-000000000003"; const departedB = "20000000-0000-4000-8000-000000000004";
   const contractor = "20000000-0000-4000-8000-000000000005";
   const locationA = "40000000-0000-4000-8000-000000000011"; const locationB = "40000000-0000-4000-8000-000000000012";
+  const reminderFamily = "40000000-0000-4000-8000-000000000013";
   const availability = (slotId, dayOfWeek, anchor) => ({ slotId, dayOfWeek, status: "working", shift: { start: "07:00", end: "16:00" }, productiveCapacityProvenance: "v3-test-shift", maxServiceEffortMinutes: 300, maxServiceEffortProvenance: "v3-test-capacity", qualifications: ["general"], qualificationProvenance: "v3-test-qualifications", restrictions: [], restrictionProvenance: "v3-test-restrictions", acceptedRouteAnchorLocationId: anchor, acceptedRouteProvenance: "v3-test-route" });
   const work = (workId, dayOfWeek, locationId, ownerSlotId) => ({
     workId, dayOfWeek, locationId, locationCodeSnapshot: `DAY_${dayOfWeek}`, locationNameSnapshot: `Area ${dayOfWeek}`,
@@ -52,9 +65,27 @@ function sourceInput({ serviceDate = initialWeek, versionId = "60000000-0000-400
     requiredQualifications: ["general"], qualificationProvenance: "v3-test-work-qualifications", restrictions: [],
     restrictionProvenance: "v3-test-work-restrictions",
   });
+  const reminderWork = (dayOfWeek) => ({
+    workId: `reminder-${dayOfWeek}`, dayOfWeek, locationId: reminderFamily,
+    locationCodeSnapshot: "REMINDER_FAMILY", locationNameSnapshot: "Reminder Family",
+    serviceMode: "reminder_only", includedLocations: [], window: { start: "09:15", end: "09:30" }, ownerSlotId: a,
+    serviceEffortMinutes: 10, serviceEffortProvenance: "v3-test-reminder-effort", priority: 1,
+    priorityProvenance: "v3-test-reminder-priority", requiredQualifications: ["reminder"],
+    qualificationProvenance: "v3-test-reminder-qualification", restrictions: [],
+    restrictionProvenance: "v3-test-reminder-restrictions",
+  });
   return {
     serviceDate, timezone: "America/Chicago", exceptions,
-    proximity: [{ from: "START_A", to: locationA, minutes: 1, verified: true, provenance: "v3-test-route" }, { from: "START_A", to: locationB, minutes: 4, verified: true, provenance: "v3-test-route" }, { from: "START_B", to: locationA, minutes: 4, verified: true, provenance: "v3-test-route" }, { from: "START_B", to: locationB, minutes: 1, verified: true, provenance: "v3-test-route" }],
+    proximity: [
+      { from: "START_A", to: locationA, minutes: 1, verified: true, provenance: "v3-test-route" },
+      { from: "START_A", to: locationB, minutes: 4, verified: true, provenance: "v3-test-route" },
+      { from: "START_A", to: reminderFamily, minutes: 2, verified: true, provenance: "v3-test-route" },
+      { from: "START_B", to: locationA, minutes: 4, verified: true, provenance: "v3-test-route" },
+      { from: "START_B", to: locationB, minutes: 1, verified: true, provenance: "v3-test-route" },
+      { from: "START_B", to: reminderFamily, minutes: 2, verified: true, provenance: "v3-test-route" },
+      { from: locationA, to: reminderFamily, minutes: 2, verified: true, provenance: "v3-test-route" },
+      { from: locationB, to: reminderFamily, minutes: 3, verified: true, provenance: "v3-test-route" },
+    ],
     slots: [
       { id: a, label: "Working A", incumbencies: [{ personId: "30000000-0000-4000-8000-000000000001", displayName: "Morgan", effectiveStart: "2020-01-01", effectiveEnd: null }] },
       { id: b, label: "Working B", incumbencies: [{ personId: "30000000-0000-4000-8000-000000000002", displayName: "Jordan Old", effectiveStart: "2020-01-01", effectiveEnd: initialWednesday }, { personId: "30000000-0000-4000-8000-000000000003", displayName: "Jordan New", effectiveStart: initialWednesday, effectiveEnd: null }] },
@@ -63,10 +94,14 @@ function sourceInput({ serviceDate = initialWeek, versionId = "60000000-0000-400
       { id: contractor, label: "CoverAll capacity 1", contractorCapacity: true, incumbencies: [{ personId: "30000000-0000-4000-8000-000000000006", displayName: "CoverAll capacity 1", effectiveStart: "2020-01-01", effectiveEnd: null }], contractorAvailability: Array.from({ length: 7 }, (_, dayOfWeek) => { const { slotId: _slotId, ...template } = availability(contractor, dayOfWeek, "START_A"); return template; }) },
     ],
     versions: [{ id: versionId, publicationId, status: "published", effectiveStart: serviceDate, effectiveEnd: null, objective: { requireVerifiedProximity: true }, namedAbsentSlotIds: [departedA, departedB], slotAvailability: Array.from({ length: 7 }, (_, day) => [
-      availability(a, day, "START_A"), availability(b, day, "START_B"),
+      { ...availability(a, day, "START_A"), qualifications: ["general", "reminder"] },
+      { ...availability(b, day, "START_B"), qualifications: ["general", "reminder"] },
       { ...availability(departedA, day, "START_A"), status: "departed_named_absent" },
       { ...availability(departedB, day, "START_B"), status: "departed_named_absent" },
-    ]).flat(), assignments: Array.from({ length: 7 }, (_, day) => work(`work-${day}`, day, day % 2 ? locationB : locationA, day % 2 ? departedB : departedA)) }],
+    ]).flat(), assignments: Array.from({ length: 7 }, (_, day) => [
+      work(`work-${day}`, day, day % 2 ? locationB : locationA, day % 2 ? departedB : departedA),
+      reminderWork(day),
+    ]).flat() }],
   };
 }
 
@@ -98,8 +133,12 @@ try {
   for (const file of fs.readdirSync(migrationsDir).filter((name) => name.endsWith(".sql")).sort()) await sql(fs.readFileSync(path.join(migrationsDir, file), "utf8"));
   await sql(`insert into public.ops_manager_managers(manager_id,display_name,roles,active,metadata_json,is_system_principal) values(${quote(manager.managerId)},${quote(manager.managerName)},array['OPS_MANAGER','CUSTODIAL_MANAGER']::text[],true,'{}'::jsonb,false)`);
   await sql(`
-    insert into public.employees(id,employee_code,display_name,active,role) values('30000000-0000-4000-8000-000000000001','EMP900','Morgan',true,'staff');
-    insert into public.msg_users(employee_id,display_name,role,is_active) values('30000000-0000-4000-8000-000000000001','Morgan','employee',true);
+    insert into public.employees(id,employee_code,display_name,active,role) values
+      ('30000000-0000-4000-8000-000000000001','EMP900','Morgan',true,'staff'),
+      ('30000000-0000-4000-8000-000000000003','EMP901','Jordan New',true,'staff');
+    insert into public.msg_users(employee_id,display_name,role,is_active) values
+      ('30000000-0000-4000-8000-000000000001','Morgan','employee',true),
+      ('30000000-0000-4000-8000-000000000003','Jordan New','employee',true);
     insert into public.devices(id,device_id,device_name,active,assigned_employee_id) values('91000000-0000-4000-8000-000000000001','KIOSK_02','Morgan',true,'30000000-0000-4000-8000-000000000001');
     insert into public.locations(id,location_code,location_name,location_type,active) values('92000000-0000-4000-8000-000000000001','TURNOVER_TEST','Turnover test location','exhibit',true);
     insert into public.sessions(session_uuid,location_id,employee_id,device_id,status,started_at,ended_at,duration_minutes) values('turnover-history','92000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001','91000000-0000-4000-8000-000000000001','closed',statement_timestamp()-interval '2 hours',statement_timestamp()-interval '1 hour',60);
@@ -138,6 +177,25 @@ try {
     "valid",
     "database event validation accepts one exact multi-location family containing its routing anchor",
   );
+  const validReminderWork = {
+    ...validEventFamilyWork,
+    workId: "event-reminder-validator", locationId: "40000000-0000-4000-8000-000000000013",
+    locationCodeSnapshot: "REMINDER_FAMILY", locationNameSnapshot: "Reminder Family",
+    serviceMode: "reminder_only", includedLocations: [],
+  };
+  assert.equal(
+    await scalar(`select public.static_weekly_v3_assert_work_payload(${json(validReminderWork)},false); select 'valid'`),
+    "valid",
+    "database event validation accepts explicit non-scan reminder work without fake physical locations",
+  );
+  for (const invalid of [
+    { ...validReminderWork, serviceMode: "unknown" },
+    { ...validReminderWork, includedLocations: validEventFamilyWork.includedLocations },
+    { ...validReminderWork, serviceMode: "scan_tracked" },
+  ]) await expectReject(
+    `select public.static_weekly_v3_assert_work_payload(${json(invalid)},false)`,
+    /serviceMode|non-scan|scan-tracked|physical-location/i,
+  );
   for (const [label, mutate] of [
     ["duplicate event family location", (payload) => { payload.includedLocations[1] = clone(payload.includedLocations[0]); }],
     ["event routing anchor outside family", (payload) => { payload.includedLocations = [payload.includedLocations[1]]; }],
@@ -173,6 +231,24 @@ try {
   for (const [index, slot] of source.slots.entries()) { await sql(`insert into public.weekly_roster_slots(slot_id,slot_code,slot_label,created_by_manager_id,created_by_manager_name_snapshot,content_digest) values(${quote(slot.id)},${quote(`SLOT_${index}`)},${quote(slot.label)},${quote(manager.managerId)},${quote(manager.managerName)},repeat('${String.fromCharCode(97 + index)}',64))`); for (const incumbent of slot.incumbencies) await sql(`insert into public.weekly_roster_slot_incumbencies(slot_id,person_id,person_name_snapshot,effective_start,effective_end,created_by_manager_id,created_by_manager_name_snapshot,content_digest) values(${quote(slot.id)},${quote(incumbent.personId)},${quote(incumbent.displayName)},${quote(incumbent.effectiveStart)},${incumbent.effectiveEnd ? quote(incumbent.effectiveEnd) : "null"},${quote(manager.managerId)},${quote(manager.managerName)},repeat('f',64))`); }
   const draft = createStaticWeeklyDraftRpcInput({ result: compiled, expectedRevision: 0, actor: { ...manager, idempotencyKey: "v3-create" } });
   await expectReject(`set role service_role; select public.static_weekly_v2_create_draft(${quote(draft.effectiveStart)},${quote(draft.objectiveVersion)},${json(draft.objective)},${json(draft.inputProvenance)},${json(draft.document)},0,${quote(manager.managerId)},${quote(manager.managerName)},'forged-v2')`, /permission denied/i);
+  for (const [label, idempotencyKey, mutate] of [
+    ["forged v5 tier receipt digest", "forged-v5-tier-receipt", (document) => { document.receipt.compiler.certificate.tierReceiptDigest = "0".repeat(64); }],
+    ["forged deterministic authority certificate", "forged-v5-authority-certificate", (document) => { document.receipt.compiler.authorityCertificate.assignmentDigest = "0".repeat(64); }],
+    ["forged deterministic authority tiers", "forged-v5-authority-tiers", (document) => { document.receipt.compiler.authorityTiers[0].objectiveValue += 1; }],
+    ["missing execution duration", "missing-v5-execution-duration", (document) => { delete document.receipt.compiler.certificate.execution.durationMilliseconds; }],
+    ["missing execution result bytes", "missing-v5-execution-result-bytes", (document) => { delete document.receipt.compiler.certificate.execution.resultBytes; }],
+    ["unexpected execution field", "unexpected-v5-execution-field", (document) => { document.receipt.compiler.certificate.execution.unexpected = 1; }],
+    ["wrong execution field type", "wrong-v5-execution-type", (document) => { document.receipt.compiler.certificate.execution.workerOutputBytes = "0"; }],
+  ]) {
+    const forgedReceiptDocument = clone(draft.document);
+    mutate(forgedReceiptDocument);
+    rebindDocumentValidation(forgedReceiptDocument);
+    await expectNoMutation(
+      cp("static_weekly_v3_create_draft", `${quote(draft.effectiveStart)},${quote(draft.objectiveVersion)},${json(draft.objective)},${json(draft.inputProvenance)},${json(forgedReceiptDocument)},0,${quote(manager.managerId)},${quote(idempotencyKey)},${quote(sourceId)}`),
+      /v5 solver|tier receipt|deterministic authority|certificate|execution/i,
+      label,
+    );
+  }
   const forgedDocument = clone(draft.document); forgedDocument.semantic_snapshot.recurring_source.slots[0].label = "forged caller source";
   await expectNoMutation(cp("static_weekly_v3_create_draft", `${quote(draft.effectiveStart)},${quote(draft.objectiveVersion)},${json(draft.objective)},${json(draft.inputProvenance)},${json(forgedDocument)},0,${quote(manager.managerId)},'forged-v3-source',${quote(sourceId)}`), /registered recurring source|compiler input/i, "forged control-plane compiler source");
   const created = JSON.parse(await scalar(cp("static_weekly_v3_create_draft", `${quote(draft.effectiveStart)},${quote(draft.objectiveVersion)},${json(draft.objective)},${json(draft.inputProvenance)},${json(draft.document)},0,${quote(manager.managerId)},'v3-create',${quote(sourceId)}`)));
@@ -188,7 +264,7 @@ try {
   assert.equal(publishedSnapshot.roster.length, 5);
   assert.equal(publishedSnapshot.roster.find((row) => row.slot_id === source.slots[4].id).contractor_capacity, true, "registered dedicated CoverAll capacity is exposed without inventing an employee identity");
   assert.equal(publishedSnapshot.availability.length, 28, "inactive contractor capacity is not part of the baseline workforce");
-  assert.equal(publishedSnapshot.assignments.length, 7);
+  assert.equal(publishedSnapshot.assignments.length, 14);
   assert.equal(publishedSnapshot.availability.filter((row) => row.availability_state === "departed_named_absent").length, 14);
   assert.equal(publishedSnapshot.sources.some((entry) => entry.source_id === sourceId), true);
   await expectReject(cp("static_weekly_v3_read_manager_snapshot", `${quote(initialTuesday)}`), /Monday/i);
@@ -200,7 +276,9 @@ try {
     ["routing anchor outside family", "v3-projection-anchor-outside-family", (row) => { row.work_snapshot.includedLocations = [row.work_snapshot.includedLocations[1]]; }],
   ]) {
     const forged = clone(firstProjection);
-    mutate(forged.envelope.assignments[0]);
+    const scanTrackedFamily = forged.envelope.assignments.find((row) => row.work_snapshot.serviceMode === "scan_tracked" && row.work_snapshot.includedLocations.length > 1);
+    assert.ok(scanTrackedFamily, "projection tamper fixture requires one scan-tracked multi-location family");
+    mutate(scanTrackedFamily);
     forged.envelope.semantic_snapshot.active_assignments = clone(forged.envelope.assignments);
     const identity = clone(forged.envelope); delete identity.database_projection_identity;
     forged.envelope.database_projection_identity = postgresJsonbContentDigest(identity);
@@ -214,7 +292,7 @@ try {
   const projectedSnapshot = JSON.parse(await scalar(cp("static_weekly_v3_read_manager_snapshot", `${quote(initialWeek)}`)));
   assert.equal(projectedSnapshot.authority_revision, 3);
   assert.equal(projectedSnapshot.latest_projection.publication_id, publicationId);
-  assert.equal(projectedSnapshot.latest_projection.assignments.length, 7);
+  assert.equal(projectedSnapshot.latest_projection.assignments.length, 14);
   const secondInput = sourceInput({ serviceDate: secondWeek, versionId, publicationId }); const secondCompiled = await compileStaticWeeklySchedule(secondInput); assert.equal(secondCompiled.status, "FEASIBLE", "same recurring publication compiles a second aligned week without republish");
   const secondProjection = createStaticWeeklyProjectionRpcInput({ result: secondCompiled, publicationId, expectedRevision: 3, actor: { ...manager, idempotencyKey: "v3-projection-second" } });
   await scalar(cp("static_weekly_v3_materialize_projection", `${quote(publicationId)},${quote(secondProjection.serviceDate)},${quote(secondProjection.exceptionSetDigest)},${quote(secondProjection.compilerVersion)},${json(secondProjection.objective)},${json(secondProjection.metrics)},${quote(secondProjection.replayDigest)},${json(secondProjection.envelope)},3,${quote(manager.managerId)},'v3-projection-second'`));
@@ -285,20 +363,31 @@ try {
   await scalar(cp("static_weekly_v3_materialize_projection", `${quote(turnoverPublicationId)},${quote(turnoverWeek)},${quote(beforeTurnoverProjection.exceptionSetDigest)},${quote(beforeTurnoverProjection.compilerVersion)},${json(beforeTurnoverProjection.objective)},${json(beforeTurnoverProjection.metrics)},${quote(beforeTurnoverProjection.replayDigest)},${json(beforeTurnoverProjection.envelope)},12,${quote(manager.managerId)},'v4-before-turnover-projection'`));
   const employeeDay = (employeeId) => `set role service_role; select public.static_weekly_v5_read_employee_day(${quote(turnoverDate)},${quote(employeeId)},statement_timestamp())::text`;
   const beforeEmployeeDay = JSON.parse(await scalar(employeeDay("30000000-0000-4000-8000-000000000001")));
+  const beforeSecondaryEmployeeDay = JSON.parse(await scalar(employeeDay("30000000-0000-4000-8000-000000000003")));
   assert.equal(beforeEmployeeDay.projection_status, "current", "the employee phone reads the exact current weekly projection before turnover");
   assert.equal(beforeEmployeeDay.source, "static_weekly_projection");
+  assert.equal(beforeSecondaryEmployeeDay.projection_status, "current", "every current employee reads the same exact weekly projection");
   assert.equal(beforeEmployeeDay.all_items.length > 0, true);
   assert.equal(beforeEmployeeDay.all_items.every((item) => item.source_type === "static_weekly_projection"), true);
-  assert.equal(beforeEmployeeDay.contract_version, "static-weekly-employee-day.v2");
-  assert.equal(beforeEmployeeDay.all_items.every((item) => JSON.stringify(item.included_locations) === JSON.stringify(["Area A", "Area B Restroom"])), true, "employee schedules preserve every physical area in the assigned family");
-  assert.equal(beforeEmployeeDay.all_items.every((item) => JSON.stringify(item.included_location_ids) === JSON.stringify([
+  assert.equal(beforeSecondaryEmployeeDay.all_items.every((item) => item.source_type === "static_weekly_projection"), true);
+  assert.equal(beforeEmployeeDay.contract_version, "static-weekly-employee-day.v3");
+  const scanItems = [...beforeEmployeeDay.all_items, ...beforeSecondaryEmployeeDay.all_items].filter((item) => item.service_mode === "scan_tracked");
+  const reminderItems = [...beforeEmployeeDay.all_items, ...beforeSecondaryEmployeeDay.all_items].filter((item) => item.service_mode === "reminder_only");
+  assert.equal(scanItems.length > 0, true);
+  assert.equal(reminderItems.length, 1, "the exact service day carries one reminder-only ownership item");
+  assert.equal(scanItems.every((item) => JSON.stringify(item.included_locations) === JSON.stringify(["Area A", "Area B Restroom"])), true, "employee schedules preserve every physical area in scan-tracked families");
+  assert.equal(scanItems.every((item) => JSON.stringify(item.included_location_ids) === JSON.stringify([
     "40000000-0000-4000-8000-000000000011",
     "40000000-0000-4000-8000-000000000012",
   ]) && item.is_public_restroom === true), true, "employee family rows retain exact location identities and restroom display priority facts");
-  assert.equal(beforeEmployeeDay.all_items.every((item) => JSON.stringify(item.included_location_snapshots) === JSON.stringify([
+  assert.equal(scanItems.every((item) => JSON.stringify(item.included_location_snapshots) === JSON.stringify([
     { locationId: "40000000-0000-4000-8000-000000000011", locationNameSnapshot: "Area A" },
     { locationId: "40000000-0000-4000-8000-000000000012", locationNameSnapshot: "Area B Restroom" },
   ])), true, "employee family rows expose exact ordered identifier/name pairs rather than count-only evidence");
+  assert.equal(reminderItems.every((item) => item.is_public_restroom === false
+    && JSON.stringify(item.included_locations) === "[]"
+    && JSON.stringify(item.included_location_ids) === "[]"
+    && JSON.stringify(item.included_location_snapshots) === "[]"), true, "reminder-only ownership remains visible without creating scan or restroom authority");
   assert.equal(await scalar("select has_function_privilege('custodial_application_reader','public.static_weekly_v5_read_employee_day(date,uuid,timestamptz)','execute')::text"), "true", "the restricted application read role retains the employee schedule surface after function replacement");
   assert.equal(await scalar("select has_function_privilege('custodial_application_reader','public.static_weekly_v5_read_employee_day_single_location_base(date,uuid,timestamptz)','execute')::text"), "false", "the restricted reader cannot bypass family-aware schedule truth through the renamed internal helper");
   assert.deepEqual(
@@ -328,7 +417,11 @@ try {
   assert.equal(departedEmployeeDay.projection_status, "stale_staffing_change", "employee phones suppress the pre-departure projection immediately");
   assert.deepEqual(departedEmployeeDay.all_items, []);
   const departedCompiled = await compilePublicationSource();
-  assert.equal(departedCompiled.status, "FEASIBLE", "one departed slot must rebalance onto the remaining verified workforce");
+  assert.equal(
+    departedCompiled.status,
+    "FEASIBLE",
+    `one departed slot must rebalance onto the remaining verified workforce: ${JSON.stringify({ reviewWork: departedCompiled.reviewWork, candidateRejections: departedCompiled.candidateRejections })}`,
+  );
   const departedProjection = createStaticWeeklyProjectionRpcInput({ result: departedCompiled, publicationId: turnoverPublicationId, expectedRevision: 14, actor: { ...manager, idempotencyKey: "v4-departed-projection" } });
   await scalar(cp("static_weekly_v3_materialize_projection", `${quote(turnoverPublicationId)},${quote(turnoverWeek)},${quote(departedProjection.exceptionSetDigest)},${quote(departedProjection.compilerVersion)},${json(departedProjection.objective)},${json(departedProjection.metrics)},${quote(departedProjection.replayDigest)},${json(departedProjection.envelope)},14,${quote(manager.managerId)},'v4-departed-projection'`));
   const replacement = JSON.parse(await scalar(cp("static_weekly_v4_replace_employee", `${quote(source.slots[0].id)},'Morgan','new employee hired',15,${quote(manager.managerId)},'v4-replacement'`)));

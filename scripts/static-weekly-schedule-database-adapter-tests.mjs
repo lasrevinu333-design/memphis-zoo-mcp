@@ -16,14 +16,27 @@ assert.deepEqual(
   [{ locationId: "location-a", locationNameSnapshot: "Area A" }],
   "historical single-location source receives one exact canonical family member",
 );
-for (const [label, work] of [
+assert.deepEqual(
+  normalizeStaticWeeklyIncludedLocations({ locationId: "reminder-family", locationNameSnapshot: "Reminder Family", serviceMode: "reminder_only", includedLocations: [] }),
+  [],
+  "reminder-only work preserves an explicit empty physical-location set",
+);
+assert.deepEqual(
+  normalizeStaticWeeklyIncludedLocations({ locationId: "response-family", locationNameSnapshot: "Response Family", serviceMode: "response_only_no_clean", includedLocations: [] }),
+  [],
+  "response-only work preserves an explicit empty physical-location set",
+);
+for (const [label, work, errorCode = "invalid_included_location_facts"] of [
   ["routing anchor outside family", { locationId: "location-a", locationNameSnapshot: "Area A", includedLocations: [{ locationId: "location-b", locationNameSnapshot: "Area B" }] }],
   ["duplicate location identity", { locationId: "location-a", locationNameSnapshot: "Area A", includedLocations: [{ locationId: "location-a", locationNameSnapshot: "Area A" }, { locationId: "location-a", locationNameSnapshot: "Area A duplicate" }] }],
   ["malformed location object", { locationId: "location-a", locationNameSnapshot: "Area A", includedLocations: [{ locationId: "location-a", locationNameSnapshot: "Area A", routeOrder: 1 }] }],
   ["empty family", { locationId: "location-a", locationNameSnapshot: "Area A", includedLocations: [] }],
+  ["reminder with physical members", { locationId: "location-a", locationNameSnapshot: "Area A", serviceMode: "reminder_only", includedLocations: [{ locationId: "location-a", locationNameSnapshot: "Area A" }] }],
+  ["implicit reminder membership", { locationId: "location-a", locationNameSnapshot: "Area A", serviceMode: "reminder_only" }],
+  ["unknown service mode", { locationId: "location-a", locationNameSnapshot: "Area A", serviceMode: "unknown", includedLocations: [] }, "invalid_service_mode"],
 ]) assert.throws(
   () => normalizeStaticWeeklyIncludedLocations(work),
-  (error) => error?.code === "invalid_included_location_facts",
+  (error) => error?.code === errorCode,
   label,
 );
 
@@ -137,7 +150,7 @@ assert.equal(document.assignments.some((row) => row.work_id === "repeated-work-i
 assert.equal(document.slot_availability.find((row) => row.slot_id === "20000000-0000-4000-8000-000000000002" && row.day_of_week === 1).incumbent_name_snapshot, "Jordan Old");
 assert.equal(document.slot_availability.find((row) => row.slot_id === "20000000-0000-4000-8000-000000000002" && row.day_of_week === 3).incumbent_name_snapshot, "Jordan New", "effective-dated incumbent change is adapter-derived");
 assert.equal(document.assignments.some((row) => row.status === "open" && row.owner_slot_id === null && row.owner_person_id_snapshot === null && row.owner_name_snapshot === null), true, "OPEN rows retain no owner facts");
-assert.equal(document.receipt.compiler.certificate.schema, "memphis-zoo.static-weekly-solver-certificate.v4");
+assert.equal(document.receipt.compiler.certificate.schema, "memphis-zoo.static-weekly-solver-certificate.v5");
 assert.equal(document.receipt.compiler.independentVerification.ok, true);
 assert.equal("attestation" in document, false, "the pure adapter never receives or emits a scheduler signing key; PostgreSQL v3 attests inside the control plane");
 

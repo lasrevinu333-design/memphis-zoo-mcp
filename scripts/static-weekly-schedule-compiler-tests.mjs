@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { compileStaticWeeklySchedule, postgresJsonbCanonicalText, postgresJsonbContentDigest, STATIC_WEEKLY_SERVER_LIMITS, verifyStaticWeeklyReplay } from "../src/static-weekly-schedule-compiler.js";
 import { verifyStaticWeeklyScheduleResult } from "../src/static-weekly-schedule-verifier.js";
 import { initializeStaticWeeklySolver, setStaticWeeklySolverTestOverride, solveStaticWeeklyMip } from "../src/static-weekly-schedule-solver.js";
-import { REQUEST_DEADLINE_MILLISECONDS, admitStaticWeeklyRawInput, canonicalSolverAuthorityCertificate, canonicalSolverAuthorityTierProjection, createStaticWeeklyDeadline, generateStaticWeeklySchedulingProgram, monotonicNowMilliseconds, prepareStaticWeeklySchedulingProblem, remainingStaticWeeklyMilliseconds } from "../src/static-weekly-schedule-program.js";
+import { REQUEST_DEADLINE_MILLISECONDS, STATIC_WEEKLY_FLEXIBLE_COVERAGE_MODE, admitStaticWeeklyRawInput, canonicalSolverAuthorityCertificate, canonicalSolverAuthorityTierProjection, createStaticWeeklyDeadline, generateStaticWeeklySchedulingProgram, monotonicNowMilliseconds, prepareStaticWeeklySchedulingProblem, remainingStaticWeeklyMilliseconds } from "../src/static-weekly-schedule-program.js";
 import { validateStaticWeeklyPacket } from "./static-weekly-schedule-candidate-importer.mjs";
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -92,7 +92,7 @@ async function runPhysicalScaleFixture() {
   const secondRequestElapsedMilliseconds = performance.now() - secondRequestStartedAt;
   const permutedResult = replay.result;
   assert.equal(replay.ok, true, "the physical input-order permutation has the same canonical replay digest");
-  assert.equal(permutedResult.canonicalReplay, result.canonicalReplay, "the physical input-order permutation has the same canonical replay payload");
+  assert.equal(Object.hasOwn(permutedResult, "canonicalReplay"), false, "the full canonical replay payload is not duplicated in the returned result");
   assert.equal(verifyStaticWeeklyScheduleResult(permutedPhysical, permutedResult).ok, true, "permuted physical-scale receipt verifies from canonical authority input");
   assert.equal(permutedResult.certificate.execution.durationMilliseconds <= 30_000, true);
   assert.equal(secondRequestElapsedMilliseconds <= 30_000, true, "the permuted physical compile request remains within its 30-second contract");
@@ -186,6 +186,8 @@ assert.equal(rawCode(atEstimatedBytes(STATIC_WEEKLY_SERVER_LIMITS.maxInputBytes)
 assert.equal(rawCode(atEstimatedBytes(STATIC_WEEKLY_SERVER_LIMITS.maxInputBytes + 1)), "input_estimated_byte_limit", "raw estimated-byte limit plus one fails");
 const cyclicRaw = { nested: {} }; cyclicRaw.nested.self = cyclicRaw;
 assert.equal(admitStaticWeeklyRawInput(cyclicRaw).code, "input_cycle", "cyclic raw input fails closed");
+const sharedRawBranch = { exact: "shared-json-value" };
+assert.equal(rawCode({ first: sharedRawBranch, second: sharedRawBranch }), null, "a repeated acyclic JSON value is not misclassified as an object cycle");
 assert.equal(admitStaticWeeklyRawInput({ exotic: new Date() }).code, "non_plain_input_structure", "non-plain raw input fails closed");
 const sparseRaw = []; sparseRaw[1] = null;
   assert.equal(rawCode(sparseRaw), "unsupported_input_array_hole", "sparse arrays fail closed");
@@ -240,6 +242,24 @@ const authorityInput = smallInput();
 const authoritative = await compile(authorityInput);
 assert.equal(authoritative.status, "FEASIBLE");
 assert.equal(authoritative.verifier.ok, true);
+const structuralOpenInput = smallInput({ assignments: [work("structural-open", "A", "17:30", "18:00", undefined, { required: false })] });
+const structuralOpenResult = await compile(structuralOpenInput);
+const structuralOpenAssignment = structuralOpenResult.weeklyAssignments.find((item) => item.workId === "structural-open");
+assert.equal(structuralOpenResult.status, "FEASIBLE", "an explicitly optional unowned structural window is valid authority");
+assert.equal(structuralOpenResult.verifier.ok, true, "the independent verifier preserves an unowned structural OPEN window");
+assert.deepEqual(
+  {
+    status: structuralOpenAssignment.status,
+    baselineSlotId: structuralOpenAssignment.baselineSlotId,
+    baselineOwnerPersonId: structuralOpenAssignment.baselineOwnerPersonId,
+    originalActorSlotId: structuralOpenAssignment.originalActorSlotId,
+    originalActorPersonId: structuralOpenAssignment.originalActorPersonId,
+  },
+  { status: "OPEN", baselineSlotId: null, baselineOwnerPersonId: null, originalActorSlotId: null, originalActorPersonId: null },
+  "structural OPEN authority carries explicit null original/baseline identity rather than inventing an incumbent",
+);
+const unownedRequiredInput = smallInput({ assignments: [work("unowned-required", "A", "17:30", "18:00", undefined)] });
+assert.equal((await compile(unownedRequiredInput)).status, "REVIEW", "required work without a baseline identity still fails closed");
 // Expiry after canonical program generation but during witness-model
 // regeneration must remain a structured fail-closed result.  It must never
 // escape the verifier as an uncaught exception under host load.
@@ -262,13 +282,29 @@ assert.equal(authoritative.solver.tiers.every((tier) => tier.attestation?.eviden
 assert.equal(authoritative.solver.tiers.every((tier) => tier.attestation.terminalReport.records.some((record) => /^\s*P-D integral\s+/i.test(record.text))), true, "returned solver receipts retain the worker's measured terminal report rows");
 assert.equal(authoritative.solver.tiers.every((tier) => Number.isFinite(tier.options?.time_limit) && tier.options.time_limit > 0 && tier.options.time_limit <= 30), true, "returned solver receipts retain each actual bounded worker deadline");
 assert.equal(authoritative.solver.tiers.every((tier) => tier.attestation.rawReceiptDigest === rawReceiptDigest(tier)), true, "worker-origin receipt fingerprints bind every returned option and terminal-report byte");
-assert.deepEqual(authoritative.certificate.tiers, authoritative.solver.tiers, "certificate receipts retain the complete returned worker reports without a second projection");
-assert.deepEqual(authoritative.certificate.options, authoritative.solver.tiers.map((tier) => tier.options), "certificate receipts retain the complete returned worker options without a second projection");
+assert.equal(authoritative.solver.tiers.every((tier, index) => !Object.hasOwn(tier, "priorBindings") && tier.priorBindingCount === index && /^[a-f0-9]{64}$/.test(tier.priorBindingDigest)), true, "tier receipts retain regenerated prior-binding count/digest without quadratic array duplication");
+assert.match(authoritative.certificate.tierReceiptDigest, /^[a-f0-9]{64}$/, "the certificate digest-binds the one retained complete tier receipt set");
+assert.match(authoritative.certificate.tierOptionsDigest, /^[a-f0-9]{64}$/, "the certificate digest-binds the one retained complete solver option set");
+assert.equal(Object.hasOwn(authoritative.certificate, "tiers"), false, "the certificate does not duplicate complete terminal receipts");
+assert.equal(Object.hasOwn(authoritative.certificate, "options"), false, "the certificate does not duplicate complete solver options");
 assert.equal(authoritative.canonicalAuthority.optimizerResult.tiers.every((tier) => !tier.attestation?.terminalReport && !tier.attestation?.rawReceiptDigest && tier.options?.time_limit == null), true, "immutable authority tiers exclude per-execution timing telemetry");
-assert.equal(authoritative.canonicalAuthority.optimizerResult.certificate.tiers.every((tier) => !tier.attestation?.terminalReport && !tier.attestation?.rawReceiptDigest && tier.options?.time_limit == null), true, "immutable certificate tiers exclude per-execution timing telemetry");
-assert.equal(authoritative.canonicalAuthority.optimizerResult.certificate.options.every((options) => options.time_limit == null), true, "immutable certificate options exclude remaining request deadlines");
+assert.equal(Object.hasOwn(authoritative.canonicalAuthority.optimizerResult.certificate, "tiers"), false, "immutable certificate authority uses the same digest binding rather than a second tier projection");
+assert.equal(Object.hasOwn(authoritative.canonicalAuthority.optimizerResult.certificate, "options"), false, "immutable certificate authority does not duplicate solver options");
+assert.equal(Object.hasOwn(authoritative.canonicalAuthority.optimizerResult.certificate, "tierReceiptDigest"), false, "per-execution terminal-receipt identity does not become immutable publication identity");
+assert.equal(Object.hasOwn(authoritative.canonicalAuthority.optimizerResult.certificate, "tierOptionsDigest"), false, "per-execution deadline-option identity does not become immutable publication identity");
 const missingReceiptCertificate = clone(authoritative); delete missingReceiptCertificate.certificate;
 assert.equal(verifyStaticWeeklyScheduleResult(authorityInput, missingReceiptCertificate).ok, false, "a missing diagnostic certificate fails closed without crashing authority projection verification");
+for (const [label, mutate] of [
+  ["missing duration", (execution) => { delete execution.durationMilliseconds; }],
+  ["missing receipt bytes", (execution) => { delete execution.receiptBytes; }],
+  ["missing worker output bytes", (execution) => { delete execution.workerOutputBytes; }],
+  ["missing result bytes", (execution) => { delete execution.resultBytes; }],
+  ["wrong result byte type", (execution) => { execution.resultBytes = String(execution.resultBytes); }],
+]) {
+  const malformedExecution = clone(authoritative);
+  mutate(malformedExecution.certificate.execution);
+  assert.equal(verifyStaticWeeklyScheduleResult(authorityInput, malformedExecution).ok, false, `full execution receipt rejects ${label}`);
+}
 
 // Weekday admission happens before every fixed seven-day projection.  The
 // exact endpoints remain valid while strings, fractions, and out-of-domain
@@ -337,9 +373,8 @@ assert.equal(exceptionCode([reversalTarget, { ...exception("reverse-cross-author
 assert.equal(exceptionCode([exception("lock-a", "2026-08-10T08:00:00Z", { locks: [{ workId: "one", slotId: "a" }] }), exception("lock-b", "2026-08-10T08:01:00Z", { locks: [{ workId: "one", slotId: "b" }] })]), "conflicting_manager_correction_lock");
 const shuffled = clone(authorityInput); shuffled.slots.reverse(); shuffled.versions[0].assignments.reverse(); shuffled.versions[0].slotAvailability.reverse();
 const replay = await compile(shuffled);
-const replayByteDifference = [...authoritative.canonicalReplay].findIndex((character, index) => character !== replay.canonicalReplay[index]);
-assert.equal(replayByteDifference, -1, `canonical replay differs at byte ${replayByteDifference}`);
 assert.equal(replay.replayDigest, authoritative.replayDigest, "canonical immutable IDs make shuffled input replay exactly");
+assert.equal(Object.hasOwn(authoritative, "canonicalReplay"), false, "the replay digest binds canonical bytes without returning a second complete result copy");
 assert.equal((await verifyStaticWeeklyReplay(authorityInput, authoritative.replayDigest)).ok, true);
 const routeCanonicalityEvidence = boundedRouteCanonicalitySearch(authoritative.certificate.modelBasis);
 assert.equal(authoritative.certificate.modelBasis.routeCanonicality.invariant, "positive-fixed-windows-forward-only-dag-unique-path-v1", "shared generated authority carries the route-canonicality invariant");
@@ -597,6 +632,62 @@ const weeklyResult = await compile(weeklyEquity);
 assert.equal(weeklyResult.status, "FEASIBLE", "a sub-unit rank permutation residual is canonicalized only at the exact solver boundary and then rechecked against the regenerated integer model");
 assert.equal(weeklyResult.publicationAuthority, "ACCEPTABLE");
 assert.equal(weeklyResult.weeklyAssignments.filter((item) => item.status === "ASSIGNED").length, 7);
+
+// Recurring area ownership is not a fixed appointment. Multiple assigned
+// areas may share the employee's whole coverage window and cross the preserved
+// lunch window. Provenanced workload points remain an equity resource and
+// directed anchor edges remain a proximity objective; neither is clock duty.
+const flexibleCoverage = smallInput({
+  slots: ["a"],
+  availabilities: [availability("a", "A", { lunch: { start: "12:00", end: "13:00" }, maxServiceEffortMinutes: 1_000 })],
+  assignments: [
+    work("flex-a", "B", "07:00", "16:00", "a", { schedulingMode: STATIC_WEEKLY_FLEXIBLE_COVERAGE_MODE, serviceEffortMinutes: 600 }),
+    work("flex-b", "C", "07:00", "16:00", "a", { schedulingMode: STATIC_WEEKLY_FLEXIBLE_COVERAGE_MODE, serviceEffortMinutes: 35 }),
+  ],
+});
+const flexibleCoverageResult = await compile(flexibleCoverage);
+assert.equal(
+  flexibleCoverageResult.status,
+  "FEASIBLE",
+  `overlapping recurring coverage windows do not become conflicting fixed appointments: ${JSON.stringify({ fatal: flexibleCoverageResult.fatal, reviewWork: flexibleCoverageResult.reviewWork, candidateRejections: flexibleCoverageResult.candidateRejections })}`,
+);
+assert.deepEqual(flexibleCoverageResult.weeklyAssignments.map((item) => item.slotId), ["a", "a"], "both recurring areas retain the published owner");
+assert.equal(verifyStaticWeeklyScheduleResult(flexibleCoverage, flexibleCoverageResult).ok, true, "the independent verifier applies the same flexible coverage semantics");
+const flexibleLoad = flexibleCoverageResult.metrics.daily.find((day) => day.dayOfWeek === 1).loads[0];
+assert.equal(flexibleLoad.flexibleWorkloadPoints, 635, "a relative workload score may exceed its non-operative display-window length");
+assert.equal(flexibleLoad.serviceDutyMinutes, 0, "display coverage windows do not consume fixed-window duty");
+assert.equal(flexibleLoad.flexibleCoverageTravelMinutes, 2, "each recurring area carries conservative directed anchor travel");
+assert.equal(flexibleLoad.travelDutyMinutes, 0, "anchor proximity does not invent an employee route or consume clock duty");
+assert.equal(flexibleLoad.totalDutyMinutes, 0, "relative workload points are not literal clock minutes");
+
+const flexibleWorkloadNotMinutes = clone(flexibleCoverage);
+flexibleWorkloadNotMinutes.versions[0].slotAvailability[0].maxDutyMinutes = 1;
+flexibleWorkloadNotMinutes.versions[0].slotAvailability[0].maxDutyProvenance = "one-minute fixed-duty test boundary";
+const flexibleWorkloadNotMinutesResult = await compile(flexibleWorkloadNotMinutes);
+assert.equal(flexibleWorkloadNotMinutesResult.status, "FEASIBLE", "dimensionless flexible workload cannot be rejected by treating its score or anchor proximity as minutes");
+assert.equal(verifyStaticWeeklyScheduleResult(flexibleWorkloadNotMinutes, flexibleWorkloadNotMinutesResult).ok, true, "the independent verifier preserves the workload/time dimensional boundary");
+
+const flexibleStableOwner = smallInput({
+  slots: ["a", "z"],
+  availabilities: [availability("a", "A"), availability("z", "B")],
+  assignments: [work("stable-owner", "C", "07:00", "16:00", "z", { schedulingMode: STATIC_WEEKLY_FLEXIBLE_COVERAGE_MODE })],
+});
+const flexibleStableOwnerResult = await compile(flexibleStableOwner);
+assert.equal(flexibleStableOwnerResult.status, "FEASIBLE");
+assert.equal(flexibleStableOwnerResult.weeklyAssignments[0].slotId, "z", "equity and stable-ID objectives cannot silently rewrite active published ownership");
+
+const flexibleAbsentOwner = clone(flexibleStableOwner);
+flexibleAbsentOwner.exceptions = [{ id: "flex-owner-absent", type: "pto", serviceDate: "2026-08-10", baseVersionId: "test-week", publicationId: "test-publication", actorId: "manager", reason: "approved absence", idempotencyKey: "flex-owner-absent", expectedRevision: 1, payload: { slotId: "z" } }];
+const flexibleAbsentOwnerResult = await compile(flexibleAbsentOwner);
+assert.equal(flexibleAbsentOwnerResult.status, "FEASIBLE");
+assert.equal(flexibleAbsentOwnerResult.weeklyAssignments[0].slotId, "a", "a real dated absence unlocks internal redistribution without rewriting the published owner");
+assert.equal(flexibleAbsentOwnerResult.weeklyAssignments[0].originSlotId, "z");
+
+const unsupportedSchedulingMode = clone(flexibleCoverage);
+unsupportedSchedulingMode.versions[0].assignments[0].schedulingMode = "route_directed_employee_system";
+const unsupportedSchedulingModeResult = await compile(unsupportedSchedulingMode);
+assert.equal(unsupportedSchedulingModeResult.status, "REVIEW", "an unknown scheduling mode fails closed");
+assert.match(JSON.stringify(unsupportedSchedulingModeResult.fatal), /unsupported_scheduling_mode/);
 
 // Complete bounded independent oracle.  It deliberately owns its own time,
 // eligibility, protected-time, route, duty, leximax and identity calculations;
@@ -983,10 +1074,8 @@ for (const mutate of [
 const certificateCopies = (value) => [value.certificate, value.canonicalAuthority?.optimizerResult?.certificate].filter(Boolean);
 for (const mutate of [
   (certificate) => { certificate.modelBasis.constraints.rows.splice(0, 1); certificate.modelBasis.constraints.count -= 1; },
-  (certificate) => { certificate.tiers[0].objectiveExpression.terms = []; },
   (certificate) => { certificate.modelBasis.binaryVariables.pop(); },
   (certificate) => { certificate.modelBasis.routeCanonicality.invariant = "forged-route-claim"; },
-  (certificate) => { if (certificate.tiers[1]) certificate.tiers[1].priorBindings = []; },
 ]) {
   const value = clone(authoritative); for (const certificate of certificateCopies(value)) mutate(certificate); rehashAuthority(value);
   assert.equal(verifyStaticWeeklyScheduleResult(authorityInput, value).ok, false, "regenerated authority program rejects forged receipt components");

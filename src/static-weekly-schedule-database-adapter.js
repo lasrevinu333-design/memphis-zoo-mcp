@@ -10,7 +10,7 @@
  * independently reverified the compiler result.
  */
 import { postgresJsonbContentDigest } from "./static-weekly-schedule-compiler.js";
-import { verifyStaticWeeklyScheduleResult } from "./static-weekly-schedule-verifier.js";
+import { STATIC_WEEKLY_VERIFIER_VERSION, verifyStaticWeeklyScheduleResult } from "./static-weekly-schedule-verifier.js";
 import { generateStaticWeeklySchedulingProgram, programReason } from "./static-weekly-schedule-program.js";
 
 export const STATIC_WEEKLY_DATABASE_ADAPTER_SCHEMA = "memphis-zoo.static-weekly-database-adapter.v1";
@@ -112,6 +112,7 @@ function publicCompilerWorkSnapshot(work) {
     window: clone(work.window),
     locationCodeSnapshot: text(work.locationCodeSnapshot || work.locationCode || work.locationId),
     locationNameSnapshot: text(work.locationNameSnapshot || work.locationName || work.locationId),
+    serviceMode: work.serviceMode,
     includedLocations: clone(work.includedLocations),
     requiredQualifications: clone(work.requiredQualifications),
     restrictions: clone(work.restrictions),
@@ -133,6 +134,7 @@ function semanticWorkSnapshot(work) {
     locationId: work.locationId,
     locationCodeSnapshot: text(work.locationCodeSnapshot || work.locationCode || work.locationId),
     locationNameSnapshot: text(work.locationNameSnapshot || work.locationName || work.locationId),
+    serviceMode: work.serviceMode,
     includedLocations: clone(work.includedLocations),
     window: { start: work.window.start, end: work.window.end },
     serviceEffortMinutes: work.effort.minutes,
@@ -322,9 +324,9 @@ function validateCompiledResult(result, { allowReview = true } = {}) {
   const authorityWithoutIdentity = clone(authority);
   delete authorityWithoutIdentity.databaseContentIdentity;
   if (authority.databaseContentIdentity !== postgresJsonbContentDigest(authorityWithoutIdentity)) fail("database_adapter_authority_content_identity_mismatch");
-  if (!result.certificate || !result.solver || !result.verifier?.ok || result.verifier?.verifierVersion !== "static-weekly-js-verifier-v5-family-location-truth") fail("database_adapter_compiler_verifier_receipt_missing");
-  if (result.certificate.schema !== "memphis-zoo.static-weekly-solver-certificate.v4"
-    || !result.certificate.modelBasis || !Array.isArray(result.certificate.tiers)
+  if (!result.certificate || !result.solver || !result.verifier?.ok || result.verifier?.verifierVersion !== STATIC_WEEKLY_VERIFIER_VERSION) fail("database_adapter_compiler_verifier_receipt_missing");
+  if (result.certificate.schema !== "memphis-zoo.static-weekly-solver-certificate.v5"
+    || !result.certificate.modelBasis || !text(result.certificate.tierReceiptDigest) || !text(result.certificate.tierOptionsDigest)
     || !Array.isArray(result.solver.tiers) || !Array.isArray(authority.optimizerResult?.tiers)
     || !authority.optimizerResult?.certificate) fail("database_adapter_solver_receipt_incomplete");
   const independentlyVerified = verifyStaticWeeklyScheduleResult(verifierInputFromCanonicalAuthority(authority, result), result);
@@ -428,6 +430,7 @@ function draftAssignmentRows(authority, activeWork) {
           original_actor_name: assignment.originalActorName,
           optimized_owner_slot_id: assignment.optimizedOwnerSlotId,
           optimized_owner_person_id: assignment.optimizedOwnerPersonId,
+          service_mode: work.serviceMode,
           included_locations: clone(work.includedLocations),
         },
       },

@@ -179,13 +179,13 @@ assert.match(authority.queries[4].values[10], /^projection-[0-9a-f]{64}$/, "the 
 
 const contractor = await controlPlane.applyContractorCapacity({
   manager, serviceDate: "2026-10-06", baseVersionId: versionId, publicationId, slotId: contractorSlot,
-  shift: { start: "08:00", end: "17:00" }, reason: "Approved CoverAll help", expectedRevision: applied.revision,
+  shift: { start: "15:00", end: "24:00" }, reason: "Approved CoverAll help", expectedRevision: applied.revision,
   idempotencyKey: "contractor-capacity-test", projectionWeekStart: "2026-10-05",
 });
 assert.equal(contractor.revision, 4, "a second daily mutation starts from the returned final projection revision");
 const materializeCalls = authority.queries.filter((entry) => entry.statement.includes("static_weekly_v3_materialize_projection"));
 assert.deepEqual(materializeCalls.map((entry) => entry.values[8]), [1, 3], "multi-call daily changes materialize from each mutation's returned revision");
-assert.deepEqual(authority.queries.find((entry) => entry.statement.includes("static_weekly_v3_apply_exception") && entry.values[0] === "cover_all").values[7].availability.shift, { start: "08:00", end: "17:00" }, "the server derives contractor capacity facts from the registered source");
+assert.deepEqual(authority.queries.find((entry) => entry.statement.includes("static_weekly_v3_apply_exception") && entry.values[0] === "cover_all").values[7].availability.shift, { start: "15:00", end: "24:00" }, "the server preserves an exact midnight-ended employee shift for contractor coverage");
 
 const departed = await controlPlane.markEmployeeDeparted({ manager, slotId: "20000000-0000-4000-8000-000000000001", reason: "Employment turnover", expectedRevision: contractor.revision, idempotencyKey: "departed-employee", projectionWeekStart: "2026-10-05" });
 assert.equal(departed.revision, 6, "departure materializes before its transaction commits");

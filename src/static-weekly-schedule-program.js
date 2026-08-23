@@ -50,7 +50,13 @@ export function canonicalProgramMatches(received, regenerated) {
 
 // prior spread-based receipt.  It is an immutable compiler identity, rather
 // than a label which callers may override.
-export const STATIC_WEEKLY_SCHEDULER_VERSION = "static-weekly-highs-mip-v5-family-location-truth";
+export const STATIC_WEEKLY_SCHEDULER_VERSION = "static-weekly-highs-mip-v8-workload-duty-boundary";
+export const STATIC_WEEKLY_FLEXIBLE_COVERAGE_MODE = "flexible_coverage_ownership";
+export const STATIC_WEEKLY_SERVICE_MODES = Object.freeze({
+  SCAN_TRACKED: "scan_tracked",
+  REMINDER_ONLY: "reminder_only",
+  RESPONSE_ONLY_NO_CLEAN: "response_only_no_clean",
+});
 export const STATIC_WEEKLY_SERVER_LIMITS = Object.freeze({
   maxVersions: 64,
   maxSlots: 256,
@@ -69,6 +75,13 @@ export const STATIC_WEEKLY_SERVER_LIMITS = Object.freeze({
   maxStagedSolves: 192,
   maxProjectedWorkingMemoryBytes: 64 * 1024 * 1024,
   maxCompactReceiptBytes: 6 * 1024 * 1024,
+  // The complete result also carries the source, full weekly assignment
+  // projection, immutable database authority, and the compact receipt.  It is
+  // intentionally bounded separately from the receipt itself.  Production
+  // evidence is currently about 9.8 MiB after eliminating quadratic binding
+  // history, leaving a narrow deterministic margin without permitting an
+  // unbounded response.
+  maxEncodedResultBytes: 12 * 1024 * 1024,
   maxInputBytes: 6 * 1024 * 1024,
   // Raw admission is intentionally tighter than any later materialization.
   // These are shape limits, not scheduler-domain limits.
@@ -152,7 +165,17 @@ function planWorkCompare(left, right) {
 export function normalizeStaticWeeklyIncludedLocations(raw) {
   const primaryLocationId = text(raw?.locationId);
   const primaryLocationName = text(raw?.locationNameSnapshot || raw?.locationName || primaryLocationId);
+  const serviceMode = text(raw?.serviceMode || STATIC_WEEKLY_SERVICE_MODES.SCAN_TRACKED);
+  if (!Object.values(STATIC_WEEKLY_SERVICE_MODES).includes(serviceMode)) {
+    throw Object.assign(new Error("Work serviceMode must be scan_tracked, reminder_only, or response_only_no_clean."), { code: "invalid_service_mode" });
+  }
   const supplied = raw?.includedLocations;
+  if (serviceMode !== STATIC_WEEKLY_SERVICE_MODES.SCAN_TRACKED) {
+    if (!Array.isArray(supplied) || supplied.length !== 0 || !primaryLocationId || !primaryLocationName) {
+      throw Object.assign(new Error("Reminder-only and response-only work require one routing identity and an explicit empty physical-location set."), { code: "invalid_included_location_facts" });
+    }
+    return [];
+  }
   const source = supplied == null
     ? [{ locationId: primaryLocationId, locationNameSnapshot: primaryLocationName }]
     : supplied;
@@ -183,6 +206,7 @@ function normalizeAssignment(raw) {
   const assignment = normalizeSemanticCollections(clone(raw));
   assignment.dayOfWeek = canonicalWeekday(assignment.dayOfWeek, "assignment dayOfWeek");
   assignment.workId = text(assignment.workId || assignment.id);
+  assignment.serviceMode = text(assignment.serviceMode || STATIC_WEEKLY_SERVICE_MODES.SCAN_TRACKED);
   if (Object.hasOwn(assignment, "id")) assignment.id = text(assignment.id);
   for (const field of ["originSlotId", "ownerSlotId", "baselineSlotId"]) if (Object.hasOwn(assignment, field)) assignment[field] = text(assignment[field]);
   assignment.includedLocations = normalizeStaticWeeklyIncludedLocations(assignment);
@@ -316,8 +340,15 @@ export function canonicalSolverAuthorityTierProjection(tiers) {
 
 export function canonicalSolverAuthorityCertificate(certificate) {
   const projection = certificate && typeof certificate === "object" ? clone(certificate) : {};
-  projection.tiers = canonicalSolverAuthorityTierProjection(projection.tiers);
-  for (const options of array(projection.options)) delete options.time_limit;
+  // These bind the complete per-execution terminal receipts returned to the
+  // caller.  The retained receipts contain measured deadlines and timing, so
+  // their digests are diagnostic evidence rather than immutable publication
+  // identity.  The authority keeps the independently reproducible model,
+  // witness, assignments, and canonical tier projection below.
+  delete projection.tierReceiptDigest;
+  delete projection.tierOptionsDigest;
+  if (Object.hasOwn(projection, "tiers")) projection.tiers = canonicalSolverAuthorityTierProjection(projection.tiers);
+  if (Object.hasOwn(projection, "options")) for (const options of array(projection.options)) delete options.time_limit;
   if (projection.execution) {
     delete projection.execution.durationMilliseconds;
     delete projection.execution.receiptBytes;
@@ -345,7 +376,7 @@ export function remainingStaticWeeklyMilliseconds(deadline) {
 // every oversized nested branch before any expensive scheduler work begins.
 export function admitStaticWeeklyRawInput(input, deadline = createStaticWeeklyDeadline()) {
   try { remainingStaticWeeklyMilliseconds(deadline); } catch (error) { return programReason(error.code || "solver_timeout"); }
-  const seen = new WeakSet();
+  const activeAncestors = new WeakSet();
   let nodes = 0; let estimatedBytes = 0;
   const addBytes = (bytes) => {
     estimatedBytes += bytes;
@@ -367,8 +398,8 @@ export function admitStaticWeeklyRawInput(input, deadline = createStaticWeeklyDe
     if (typeof value === "boolean") { addBytes(value ? 4 : 5); return; }
     if (typeof value === "number") { if (!Number.isFinite(value)) throw Object.assign(new Error("unsupported_input_value"), { code: "unsupported_input_value" }); addBytes(Buffer.byteLength(JSON.stringify(value), "utf8")); return; }
     if (typeof value !== "object") throw Object.assign(new Error("unsupported_input_value"), { code: "unsupported_input_value" });
-    if (seen.has(value)) throw Object.assign(new Error("input_cycle"), { code: "input_cycle" });
-    seen.add(value);
+    if (activeAncestors.has(value)) throw Object.assign(new Error("input_cycle"), { code: "input_cycle" });
+    activeAncestors.add(value);
     if (Array.isArray(value)) {
       if (value.length > STATIC_WEEKLY_SERVER_LIMITS.maxArrayEntriesPerNode) throw Object.assign(new Error("input_array_entry_limit"), { code: "input_array_entry_limit" });
       addBytes(2);
@@ -379,6 +410,7 @@ export function admitStaticWeeklyRawInput(input, deadline = createStaticWeeklyDe
         walk(descriptor.value, depth + 1);
         if (index) addBytes(1);
       }
+      activeAncestors.delete(value);
       return;
     }
     if (Object.getPrototypeOf(value) !== Object.prototype) throw Object.assign(new Error("non_plain_input_structure"), { code: "non_plain_input_structure" });
@@ -392,6 +424,7 @@ export function admitStaticWeeklyRawInput(input, deadline = createStaticWeeklyDe
       addBytes(stringBytes(key, "key") + 1);
       walk(descriptor.value, depth + 1);
     }
+    activeAncestors.delete(value);
   };
   try { walk(input, 0); } catch (error) { return programReason(error.code || "invalid_input_encoding", { nodes, estimatedBytes }); }
   const versions = array(input?.versions); const slots = array(input?.slots); const proximity = array(input?.proximity); const exceptions = array(input?.exceptions);
@@ -530,6 +563,7 @@ export function recomputeStaticWeeklyObjective(objective, model, values, problem
 function preflightProblem(problem) {
   const byDaySlot = new Map();
   for (const candidate of problem.candidates) {
+    if (candidate.item.schedulingMode === STATIC_WEEKLY_FLEXIBLE_COVERAGE_MODE) continue;
     const key = `${candidate.item.dayOfWeek}\u0000${candidate.slot.id}`;
     byDaySlot.set(key, (byDaySlot.get(key) || 0) + 1);
   }
@@ -763,6 +797,28 @@ function routeInsertion(work, capacity, edges, availability) {
   return { insertion: insertions[0], baselineTravelMinutes };
 }
 
+// A recurring ownership window says which employee is responsible for an
+// area; it is not a fixed cleaning appointment and must not dictate walking
+// order or consume the whole display window as duty.  The directed anchor
+// edge is therefore a deterministic proximity objective only.  It is not a
+// physical route, and neither it nor the relative workload score is charged
+// against clock-duty capacity.  The employee remains free to choose the
+// practical order of their assigned areas.
+function flexibleCoverageInsertion(work, capacity, edges) {
+  const routeEdge = edgeFor(edges, capacity.route.startLocationId, work.locationId);
+  if (!routeEdge) return { error: "missing_flexible_coverage_directed_route" };
+  return {
+    insertion: {
+      beforeStopId: "route-start",
+      afterStopId: null,
+      incrementalCost: routeEdge.minutes,
+      dutyIncrement: routeEdge.minutes,
+      provenance: routeEdge.provenance,
+    },
+    baselineTravelMinutes: capacity.route.baselineTravelMinutes,
+  };
+}
+
 // Travel is a contiguous activity.  A wall-clock gap that crosses lunch or a
 // blocked interval is not transit capacity.  Waiting is permitted around an
 // arc, but every directed arc must fit wholly inside one available segment.
@@ -793,13 +849,14 @@ function workReasons(work) {
   try { normalizeWindow(work.window, `work ${work.workId} window`); } catch { reasons.push(programReason("missing_or_invalid_work_window")); }
   if (!text(work.locationId)) reasons.push(programReason("missing_location_identity"));
   const effort = serviceEffort(work);
-  if (!effort) reasons.push(programReason("missing_time_equivalent_service_effort_provenance"));
-  else {
+  if (!effort) reasons.push(programReason("missing_provenanced_workload_units"));
+  else if (work.schedulingMode !== STATIC_WEEKLY_FLEXIBLE_COVERAGE_MODE) {
     try { if (effort.minutes > normalizeWindow(work.window, `work ${work.workId} window`).endMinute - normalizeWindow(work.window, `work ${work.workId} window`).startMinute) reasons.push(programReason("service_effort_exceeds_fixed_window")); } catch { /* window is already reported above */ }
   }
   if (!Array.isArray(work.requiredQualifications) || !text(work.qualificationProvenance)) reasons.push(programReason("missing_qualification_provenance"));
   if (!Array.isArray(work.restrictions) || !text(work.restrictionProvenance)) reasons.push(programReason("missing_restriction_provenance"));
   if (work.required !== false && (!finiteInteger(work.priority) || !text(work.priorityProvenance))) reasons.push(programReason("missing_priority_provenance"));
+  if (Object.hasOwn(work, "schedulingMode") && work.schedulingMode !== STATIC_WEEKLY_FLEXIBLE_COVERAGE_MODE) reasons.push(programReason("unsupported_scheduling_mode"));
   return reasons;
 }
 
@@ -909,10 +966,14 @@ function candidateReasons(work, slot, availability, capacity, lockOwner) {
   if (work.custodialCoverageMode === "contractor_exact") {
     if (slot.contractorCapacity !== true || slot.id !== work.custodialCoverageSlotId) failures.push(programReason("coverall_capacity_mismatch", { requiredSlotId: work.custodialCoverageSlotId }));
   } else if (slot.contractorCapacity === true) failures.push(programReason("coverall_capacity_reserved_for_second_or_later_absence"));
+  if (work.schedulingMode === STATIC_WEEKLY_FLEXIBLE_COVERAGE_MODE
+    && !lockOwner && work.custodialCoverageMode === "zoo_employee_baseline"
+    && (!work.originSlotId || slot.id !== work.originSlotId)) failures.push(programReason("baseline_owner_required", { requiredSlotId: work.originSlotId || null }));
+  const flexibleCoverage = work.schedulingMode === STATIC_WEEKLY_FLEXIBLE_COVERAGE_MODE;
   const window = normalizeWindow(work.window, "work window");
-  if (!windowContains(capacity.shift, window)) failures.push(programReason("not_full_window_qualified"));
-  if (availability.lunch && windowsOverlap(availability.lunch, window)) failures.push(programReason("lunch_overlap"));
-  if (array(availability.blockedWindows).some((blocked) => windowsOverlap(blocked, window))) failures.push(programReason("absence_window_overlap"));
+  if (!flexibleCoverage && !windowContains(capacity.shift, window)) failures.push(programReason("not_full_window_qualified"));
+  if (!flexibleCoverage && availability.lunch && windowsOverlap(availability.lunch, window)) failures.push(programReason("lunch_overlap"));
+  if (!flexibleCoverage && array(availability.blockedWindows).some((blocked) => windowsOverlap(blocked, window))) failures.push(programReason("absence_window_overlap"));
   if (array(work.restrictedSlotIds).map(text).includes(slot.id) || array(availability.restrictions).map(text).includes(text(work.locationId))) failures.push(programReason("restriction"));
   const qualifications = new Set(array(availability.qualifications).map(text));
   const missing = array(work.requiredQualifications).map(text).filter((item) => !qualifications.has(item));
@@ -1019,7 +1080,9 @@ export function prepareStaticWeeklySchedulingProblem(input, deadline = null) {
         const context = availabilityByDaySlot.get(`${day}\u0000${slot.id}`);
         const failures = candidateReasons(item, slot, context?.availability, context?.capacity || { error: "missing_slot_availability" }, item.manualLock);
         if (!failures.length) {
-          const route = routeInsertion(item, context.capacity, edges, context.availability);
+          const route = item.schedulingMode === STATIC_WEEKLY_FLEXIBLE_COVERAGE_MODE
+            ? flexibleCoverageInsertion(item, context.capacity, edges)
+            : routeInsertion(item, context.capacity, edges, context.availability);
           if (route.error) failures.push(programReason(route.error));
           else candidates.push({ item, slot, availability: context.availability, capacity: context.capacity, routeInsertion: route.insertion, baselineTravelMinutes: route.baselineTravelMinutes });
         }
@@ -1154,14 +1217,15 @@ export function buildStaticWeeklySchedulingModel(problem, bindings, objective, d
     .sort(([left], [right]) => stableCompare(left, right))
     .map(([daySlot, context], groupIndex) => {
       const list = (candidatesByDaySlot.get(daySlot) || []).slice().sort((left, right) => stableCompare(left.item.key, right.item.key));
+      const routeList = list.filter((candidate) => candidate.item.schedulingMode !== STATIC_WEEKLY_FLEXIBLE_COVERAGE_MODE);
       const base = `r_${groupIndex}`;
       const nodes = [
         { id: `start_${groupIndex}`, kind: "start", active: base, locationId: context.capacity.route.startLocationId, startMinute: context.capacity.shift.startMinute, endMinute: context.capacity.shift.startMinute },
         ...context.capacity.route.stops.map((stop, index) => ({ id: `accepted_${groupIndex}_${index}`, kind: "accepted", active: base, locationId: stop.locationId, startMinute: stop.window.startMinute, endMinute: stop.window.endMinute })),
-        ...list.map((candidate, index) => ({ id: `work_${groupIndex}_${index}`, kind: "work", active: x.get(`${candidate.item.key}\u0000${candidate.slot.id}`), locationId: candidate.item.locationId, startMinute: candidate.item.window.startMinute, endMinute: candidate.item.window.endMinute })),
+        ...routeList.map((candidate, index) => ({ id: `work_${groupIndex}_${index}`, kind: "work", active: x.get(`${candidate.item.key}\u0000${candidate.slot.id}`), locationId: candidate.item.locationId, startMinute: candidate.item.window.startMinute, endMinute: candidate.item.window.endMinute })),
         { id: `end_${groupIndex}`, kind: "end", active: base, locationId: null, startMinute: context.capacity.shift.endMinute, endMinute: context.capacity.shift.endMinute },
       ];
-      return { daySlot, context, list, base, nodes, arcs: [] };
+      return { daySlot, context, list, routeList, base, nodes, arcs: [] };
     });
   const potentialArcs = routeGroups.reduce((total, group) => total + (group.nodes.length * (group.nodes.length - 1)), 0);
   if (potentialArcs > STATIC_WEEKLY_SERVER_LIMITS.maxRouteArcCandidates) return { error: programReason("route_arc_candidate_limit", { routeArcCandidates: potentialArcs, limit: STATIC_WEEKLY_SERVER_LIMITS.maxRouteArcCandidates }) };
@@ -1212,12 +1276,20 @@ export function buildStaticWeeklySchedulingModel(problem, bindings, objective, d
       constraints.push({ name: `route_out_${node.id}`, terms: [...outgoing(node), [-1, node.active]], relation: "=", value: 0 });
     }
     constraints.push({ name: staticWeeklySafeName(`service_capacity_${daySlot}`), terms: list.map((candidate) => [candidate.item.effort.minutes, x.get(`${candidate.item.key}\u0000${candidate.slot.id}`)]), relation: "<=", value: context.capacity.maxServiceMinutes - context.capacity.baselineServiceMinutes });
-    // Service effort remains the equity resource above.  Duty instead uses
-    // fixed service-window commitment plus every selected arc's directed
-    // travel and non-protected waiting, matching the independent verifier.
+    // The legacy service-effort wire field is the equity resource.  For
+    // flexible recurring ownership it carries relative workload points, not
+    // elapsed minutes.  Hard duty therefore uses only fixed service-window
+    // commitment plus the selected fixed-route arcs and waiting.  Charging a
+    // flexible area's workload or anchor-proximity score as literal minutes
+    // would invent a route and reject the accepted published schedule.
     const baselineServiceDutyMinutes = context.capacity.route.stops.reduce((total, stop) => total + (stop.window.endMinute - stop.window.startMinute), 0);
     constraints.push({ name: staticWeeklySafeName(`duty_capacity_${daySlot}`), terms: [
-      ...list.map((candidate) => [candidate.item.window.endMinute - candidate.item.window.startMinute, x.get(`${candidate.item.key}\u0000${candidate.slot.id}`)]),
+      ...list.map((candidate) => [
+        candidate.item.schedulingMode === STATIC_WEEKLY_FLEXIBLE_COVERAGE_MODE
+          ? 0
+          : candidate.item.window.endMinute - candidate.item.window.startMinute,
+        x.get(`${candidate.item.key}\u0000${candidate.slot.id}`),
+      ]),
       ...arcs.map((arc) => [arc.minutes + arc.waitingMinutes, arc.name]),
     ], relation: "<=", value: context.capacity.dutyCapacityMinutes - baselineServiceDutyMinutes });
   }
@@ -1266,6 +1338,8 @@ export function buildStaticWeeklySchedulingModel(problem, bindings, objective, d
     travel: { name: "incremental_directed_route_cost", terms: routeGroups.flatMap((group) => [
       ...group.arcs.map((arc) => [arc.minutes, arc.name]),
       [-group.context.capacity.route.baselineTravelMinutes, group.base],
+      ...group.list.filter((candidate) => candidate.item.schedulingMode === STATIC_WEEKLY_FLEXIBLE_COVERAGE_MODE)
+        .map((candidate) => [candidate.routeInsertion.incrementalCost, x.get(`${candidate.item.key}\u0000${candidate.slot.id}`)]),
     ]) },
     disruption: { name: "accepted_baseline_disruption", terms: problem.work.flatMap((item) => [[1, uncovered.get(item.key)], ...(candidatesByWork.get(item.key) || []).filter((candidate) => candidate.slot.id !== item.originSlotId).map((candidate) => [1, x.get(`${item.key}\u0000${candidate.slot.id}`)])]) },
     // Bind every assignment/open decision after material objectives.  Large

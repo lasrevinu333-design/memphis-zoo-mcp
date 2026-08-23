@@ -42,7 +42,7 @@ function sourceInput({ exceptions = [] } = {}) {
     proximity: locationIds.flatMap((from, fromIndex) => locationIds.filter((to) => to !== from).map((to, toIndex) => ({ from, to, minutes: 2 + fromIndex + toIndex, verified: true, provenance: "batch-route-v1" }))),
     slots: [
       ...slotIds.map((id, index) => ({ id, label: `Batch slot ${index + 1}`, incumbencies: [{ personId: personIds[index], displayName: `Batch Worker ${index + 1}`, effectiveStart: "2020-01-01", effectiveEnd: null }] })),
-      { id: contractorSlotId, label: "Batch CoverAll capacity", contractorCapacity: true, incumbencies: [{ personId: contractorPersonId, displayName: "Batch CoverAll", effectiveStart: "2020-01-01", effectiveEnd: null }], contractorAvailability: Array.from({ length: 7 }, (_, dayOfWeek) => { const { slotId: _slotId, ...template } = availability(contractorSlotId, dayOfWeek, locationIds[1]); return template; }) },
+      { id: contractorSlotId, label: "Batch CoverAll capacity", contractorCapacity: true, incumbencies: [{ personId: contractorPersonId, displayName: "Batch CoverAll", effectiveStart: "2020-01-01", effectiveEnd: null }], contractorAvailability: Array.from({ length: 7 }, (_, dayOfWeek) => { const { slotId: _slotId, ...template } = availability(contractorSlotId, dayOfWeek, locationIds[1]); return { ...template, shift: { start: "07:00", end: "24:00" } }; }) },
     ],
     versions: [{
       id: versionId,
@@ -53,7 +53,7 @@ function sourceInput({ exceptions = [] } = {}) {
       objective: { requireVerifiedProximity: true },
       slotAvailability: Array.from({ length: 7 }, (_, dayOfWeek) => [
         ...slotIds.map((slotId, index) => availability(slotId, dayOfWeek, locationIds[index])),
-        availability(contractorSlotId, dayOfWeek, locationIds[1]),
+        { ...availability(contractorSlotId, dayOfWeek, locationIds[1]), shift: { start: "07:00", end: "24:00" } },
       ]).flat(),
       assignments: Array.from({ length: 7 }, (_, dayOfWeek) => slotIds.map((slotId, index) => ({ workId: `batch-work-${dayOfWeek}-${index}`, dayOfWeek, locationId: locationIds[index], locationCodeSnapshot: `BATCH_${dayOfWeek}_${index}`, locationNameSnapshot: `Batch ${dayOfWeek} ${index}`, window: [{ start: "08:00", end: "09:00" }, { start: "09:10", end: "10:00" }, { start: "10:10", end: "11:00" }][index], ownerSlotId: slotId, serviceEffortMinutes: 20, serviceEffortProvenance: "batch-service-v1", priority: 1, priorityProvenance: "batch-priority-v1", requiredQualifications: ["general"], qualificationProvenance: "batch-work-qualification-v1", restrictions: [], restrictionProvenance: "batch-work-restriction-v1" }))).flat(),
     }],

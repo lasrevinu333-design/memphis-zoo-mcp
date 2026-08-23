@@ -52,6 +52,18 @@ attack("shift_override", (command) => { command.payload.shift.end = 12; });
 attack("cover_all", (command) => { command.payload.availability.maxServiceEffortMinutes = 1.5; });
 attack("cover_all", (command) => { command.payload.availability.qualifications = ["general", "general"]; });
 attack("cover_all", (command) => { command.payload.availability.acceptedRouteAnchorLocationId = null; });
+for (const type of ["cover_all", "shift_override"]) {
+  const endOfDay = clone(commands.get(type));
+  const shift = type === "cover_all" ? endOfDay.payload.availability.shift : endOfDay.payload.shift;
+  shift.end = "24:00";
+  assert.doesNotThrow(() => assertExceptionCommand(endOfDay), `${type} accepts exact end-of-service-day 24:00`);
+  for (const [label, start, end] of [["start at end of day", "24:00", "24:00"], ["past end of day", "23:00", "24:01"], ["noncanonical end", "23:00", "24:30"]]) {
+    const invalid = clone(endOfDay);
+    const invalidShift = type === "cover_all" ? invalid.payload.availability.shift : invalid.payload.shift;
+    invalidShift.start = start; invalidShift.end = end;
+    assert.throws(() => assertExceptionCommand(invalid), /time|window|local day/i, `${type} rejects ${label}`);
+  }
+}
 for (const type of ["nine_forty_five_rebalance", "manager_correction"]) {
   attack(type, (command) => { command.payload.locks = []; });
   attack(type, (command) => { command.payload.locks = [{ workId: "work-a", slotId: "slot-a" }, { workId: "work-a", slotId: "slot-b" }]; });
@@ -81,6 +93,27 @@ for (const added of [false, true]) {
       /included|unknown|canonical|repeat|routing/i,
       `event ${added ? "addition" : "patch"} rejects malformed family authority`,
     );
+  }
+  for (const serviceMode of ["reminder_only", "response_only_no_clean"]) {
+    const nonScan = work(added);
+    nonScan.serviceMode = serviceMode;
+    nonScan.includedLocations = [];
+    assert.doesNotThrow(
+      () => assertExceptionCommand(base("event_impact", { removeWorkIds: [], patchWork: added ? [] : [nonScan], addWork: added ? [nonScan] : [] })),
+      `event ${added ? "addition" : "patch"} accepts ${serviceMode} with an explicit empty physical set`,
+    );
+    for (const mutate of [
+      (item) => { delete item.includedLocations; },
+      (item) => { item.includedLocations = [{ locationId: "location-a", locationNameSnapshot: "Fake physical authority" }]; },
+      (item) => { item.serviceMode = "unknown"; },
+    ]) {
+      const invalid = clone(nonScan); mutate(invalid);
+      assert.throws(
+        () => assertExceptionCommand(base("event_impact", { removeWorkIds: [], patchWork: added ? [] : [invalid], addWork: added ? [invalid] : [] })),
+        /serviceMode|non-scan|physical-location|unknown|canonical/i,
+        `event ${added ? "addition" : "patch"} rejects malformed ${serviceMode} authority`,
+      );
+    }
   }
 }
 attack("reverse", (command) => { command.reversesExceptionId = "different-target"; });

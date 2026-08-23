@@ -7,7 +7,7 @@
 // v2 is append-only at the compiler/receipt layer. Existing v1 publications
 // remain readable by their original validator; no caller may reinterpret them
 // as monotonic-leximax v3 proof.
-export const STATIC_WEEKLY_SCHEDULE_CONTRACT = "memphis-zoo.static-weekly-schedule.v4-monotonic-leximax";
+export const STATIC_WEEKLY_SCHEDULE_CONTRACT = "memphis-zoo.static-weekly-schedule.v5-workload-duty-boundary";
 export const MEMPHIS_TIME_ZONE = "America/Chicago";
 
 export const AVAILABILITY_STATES = new Set([
@@ -28,6 +28,12 @@ export const EXCEPTION_TYPES = new Set([
   "event_impact",
   "manager_correction",
   "reverse",
+]);
+
+const EXCEPTION_SERVICE_MODES = new Set([
+  "scan_tracked",
+  "reminder_only",
+  "response_only_no_clean",
 ]);
 
 function assert(condition, message, code = "invalid_input") {
@@ -77,7 +83,9 @@ export function normalizeWindow(window, label = "window") {
   const start = String(window.start || "");
   const end = String(window.end || "");
   const startMinute = timeToMinutes(start, `${label} start`);
-  const endMinute = timeToMinutes(end, `${label} end`);
+  // 24:00 is the one ISO-style endpoint that denotes the end of this local
+  // service day. It is valid only as an end; ordinary times remain 00:00-23:59.
+  const endMinute = end === "24:00" ? 24 * 60 : timeToMinutes(end, `${label} end`);
   assert(startMinute < endMinute, `${label} may not be zero length or span midnight.`, "invalid_window");
   return { start, end, startMinute, endMinute };
 }
@@ -282,7 +290,8 @@ function assertExceptionIncludedLocations(value, routingLocationId, label) {
 function assertExceptionWorkShape(value, { added = false } = {}) {
   const workKeys = ["locationCodeSnapshot", "locationId", "locationNameSnapshot", "priority", "priorityProvenance", "qualificationProvenance", "requiredQualifications", "restrictionProvenance", "restrictions", "serviceEffortMinutes", "serviceEffortProvenance", "window", "workId"];
   const requiredKeys = added ? [...workKeys, "dayOfWeek", "originSlotId"] : workKeys;
-  exactPayloadObject(value, Object.hasOwn(value || {}, "includedLocations") ? [...requiredKeys, "includedLocations"] : requiredKeys, added ? "event added work" : "event patch work");
+  const optionalKeys = ["includedLocations", "serviceMode"].filter((key) => Object.hasOwn(value || {}, key));
+  exactPayloadObject(value, [...requiredKeys, ...optionalKeys], added ? "event added work" : "event patch work");
   nonblankPayloadText(value.workId, "event workId", EXCEPTION_WORK_ID_MAX);
   payloadIdentity(value.locationId, "event locationId");
   nonblankPayloadText(value.locationCodeSnapshot, "event location code");
@@ -296,7 +305,13 @@ function assertExceptionWorkShape(value, { added = false } = {}) {
   nonblankPayloadText(value.restrictionProvenance, "event restriction provenance");
   exactStringArray(value.requiredQualifications, "event qualifications");
   exactStringArray(value.restrictions, "event restrictions");
-  if (Object.hasOwn(value, "includedLocations")) assertExceptionIncludedLocations(value.includedLocations, value.locationId, "event included locations");
+  const serviceMode = Object.hasOwn(value, "serviceMode") ? value.serviceMode : "scan_tracked";
+  assert(typeof serviceMode === "string" && EXCEPTION_SERVICE_MODES.has(serviceMode), "event serviceMode is not an approved operational mode.", "invalid_exception_payload");
+  if (serviceMode === "scan_tracked") {
+    if (Object.hasOwn(value, "includedLocations")) assertExceptionIncludedLocations(value.includedLocations, value.locationId, "event included locations");
+  } else {
+    assert(Object.hasOwn(value, "includedLocations") && Array.isArray(value.includedLocations) && value.includedLocations.length === 0, "non-scan event work requires an explicit empty physical-location set.", "invalid_exception_payload");
+  }
   if (added) {
     payloadFiniteInteger(value.dayOfWeek, "event weekday", 0, 6);
     payloadIdentity(value.originSlotId, "event origin slotId");

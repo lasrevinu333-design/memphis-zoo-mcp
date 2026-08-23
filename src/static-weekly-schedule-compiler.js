@@ -17,7 +17,7 @@ import {
   sha256Hex,
 } from "./static-weekly-schedule-model.js";
 import { getStaticWeeklySolverReadiness, solveStaticWeeklyMip } from "./static-weekly-schedule-solver.js";
-import { verifyStaticWeeklyScheduleResult } from "./static-weekly-schedule-verifier.js";
+import { STATIC_WEEKLY_VERIFIER_VERSION, verifyStaticWeeklyScheduleResult } from "./static-weekly-schedule-verifier.js";
 import {
   MAX_SAFE_EXACT_INTEGER,
   REQUEST_DEADLINE_MILLISECONDS,
@@ -68,7 +68,7 @@ function fail(serviceDate, code, detail = {}) {
     fatal: reason(code, detail),
     solver: { readiness: getStaticWeeklySolverReadiness(), tiers: [] },
   };
-  return { ...core, replayDigest: contentDigest(core), canonicalReplay: canonicalJson(core) };
+  return { ...core, replayDigest: contentDigest(core) };
 }
 
 
@@ -190,7 +190,12 @@ async function solveLexicographic(problem, deadline, authorityProgram) {
     // Preserve the worker's complete per-execution report and actual remaining
     // deadline in the returned receipt.  The shared authority projection is the
     // only layer allowed to remove nondeterministic execution telemetry.
-    tiers.push({ index: tiers.length, name: objective.name, family: objective.family || null, rank: objective.rank ?? null, objectiveExpression: { terms: objective.terms }, objectiveExpressionDigest: sha256Hex(canonicalJson({ terms: objective.terms })), objectiveValue: value, modelBasisDigest: model.modelBasisDigest, modelDigest: model.modelDigest, priorBindings: model.priorBindings, priorBindingDigest: model.priorBindingDigest, preflight: model.preflight, options: clone(solved.options), attestation: { evidenceSource: evidence.evidenceSource, parserVersion: evidence.parserVersion, rawReceiptDigest: evidence.rawReceiptDigest, ownProperties: evidence.ownProperties, objectStatus: evidence.objectStatus, objectPrimalObjective: evidence.objectPrimalObjective, reportStatus: evidence.reportStatus, reportPrimalBound: evidence.reportPrimalBound, reportDualBound: evidence.reportDualBound, reportGap: evidence.reportGap, reportSolutionStatus: evidence.reportSolutionStatus, parsedRaw: evidence.parsedRaw, normalized: evidence.normalized, embeddedRuntimeBanner: evidence.embeddedRuntimeBanner, terminalReport: clone(evidence.terminalReport), workerModelAttestation: solved.modelAttestation } });
+    // Every tier's complete prior-binding history is independently regenerated
+    // by the verifier and is already bound into both modelDigest and
+    // priorBindingDigest.  Retaining the growing array on every receipt makes
+    // a 111-tier proof quadratic without adding evidence.  Keep its exact
+    // count and digest; never trust those fields without regeneration.
+    tiers.push({ index: tiers.length, name: objective.name, family: objective.family || null, rank: objective.rank ?? null, objectiveExpression: { terms: objective.terms }, objectiveExpressionDigest: sha256Hex(canonicalJson({ terms: objective.terms })), objectiveValue: value, modelBasisDigest: model.modelBasisDigest, modelDigest: model.modelDigest, priorBindingCount: model.priorBindings.length, priorBindingDigest: model.priorBindingDigest, preflight: model.preflight, options: clone(solved.options), attestation: { evidenceSource: evidence.evidenceSource, parserVersion: evidence.parserVersion, rawReceiptDigest: evidence.rawReceiptDigest, ownProperties: evidence.ownProperties, objectStatus: evidence.objectStatus, objectPrimalObjective: evidence.objectPrimalObjective, reportStatus: evidence.reportStatus, reportPrimalBound: evidence.reportPrimalBound, reportDualBound: evidence.reportDualBound, reportGap: evidence.reportGap, reportSolutionStatus: evidence.reportSolutionStatus, parsedRaw: evidence.parsedRaw, normalized: evidence.normalized, embeddedRuntimeBanner: evidence.embeddedRuntimeBanner, terminalReport: clone(evidence.terminalReport), workerModelAttestation: solved.modelAttestation } });
     bindings.push({ name: objective.name, terms: objective.terms, value }); final = { model, values: primal.values, diagnostics: primal.diagnostics, identity: { ...solved.identity, embeddedRuntimeBanner: runtimeBanner } };
   }
   const canonicalPrimal = [...final.values.entries()].sort(([left], [right]) => stableCompare(left, right));
@@ -220,6 +225,7 @@ function buildAssignments(problem, final) {
         workId: item.workId, dayOfWeek: item.dayOfWeek, locationId: item.locationId, window: item.window,
         locationCodeSnapshot: item.locationCodeSnapshot || item.locationCode || item.locationId,
         locationNameSnapshot: item.locationNameSnapshot || item.locationName || item.locationId,
+        serviceMode: item.serviceMode,
         includedLocations: structuredClone(item.includedLocations),
         requiredQualifications: item.requiredQualifications, restrictions: item.restrictions,
         serviceEffortMinutes: item.effort.minutes, serviceEffortProvenance: item.effort.provenance,
@@ -250,9 +256,9 @@ function publicCore(problem, solved) {
     // the accepted append-only command set for one publication/date.
     appliedExceptionDigest: postgresJsonbContentDigest(problem.applied.filter((item) => item.serviceDate === problem.serviceDate)), appliedExceptions: problem.applied, roster: problem.roster,
     status: reviewWork.length ? "REVIEW" : "FEASIBLE", publicationAuthority: reviewWork.length ? "REVIEW" : "ACCEPTABLE",
-    objective: { mode: "exact_staged_monotonic_leximax_joint_seven_day", policyVersion: "monotonic-leximax-v1", tiers: solved.tiers.map((tier) => tier.name), rankingOrder: ["required coverage", "explicit best-effort coverage", "daily service-effort utilization ranks worst-first", "daily stable-ID tie", "weekly service-effort utilization ranks worst-first", "weekly stable-ID tie", "directed travel", "baseline disruption", "stable-ID identity over mutable choices"], integerServiceEffort: true, directedTravelDuty: true, acceptedRouteInsertions: true, weeklyEquityResource: "total provenanced accepted-stop and inserted service effort / total verified productive capacity across every working day of the slot", equityIntegerScale: STATIC_WEEKLY_EQUITY_SCALE, exactEquityCommonDenominator: problem.exactEquityScale, serverLimits: STATIC_WEEKLY_SERVER_LIMITS, preflight: problem.preflight },
+    objective: { mode: "exact_staged_monotonic_leximax_joint_seven_day", policyVersion: "monotonic-leximax-v1", tiers: solved.tiers.map((tier) => tier.name), rankingOrder: ["required coverage", "explicit best-effort coverage", "daily workload utilization ranks worst-first", "daily stable-ID tie", "weekly workload utilization ranks worst-first", "weekly stable-ID tie", "directed travel proximity", "baseline disruption", "stable-ID identity over mutable choices"], integerServiceEffort: true, serviceEffortWireSemantics: "fixed work uses provenanced minutes; flexible_coverage_ownership uses dimensionless production workload points", directedTravelDuty: true, flexibleCoverageTravelRole: "advisory_proximity_objective_not_clock_duty", acceptedRouteInsertions: true, weeklyEquityResource: "total provenanced workload / total verified productive minutes across every working day of the slot", equityIntegerScale: STATIC_WEEKLY_EQUITY_SCALE, exactEquityCommonDenominator: problem.exactEquityScale, serverLimits: STATIC_WEEKLY_SERVER_LIMITS, preflight: problem.preflight },
     solver: { readiness: getStaticWeeklySolverReadiness(), identity: solved.final.identity, tiers: solved.tiers },
-    certificate: { schema: "memphis-zoo.static-weekly-solver-certificate.v4", compilerVersion: STATIC_WEEKLY_SCHEDULER_VERSION, verifierVersion: "static-weekly-js-verifier-v5-family-location-truth", objectivePolicyVersion: "monotonic-leximax-v1", canonicalInputDigest: problem.inputDigest, baselineInputDigest: problem.baselineInputDigest, weeklyVersionDigest: problem.weeklyVersionDigest, solverIdentity: solved.final.identity, options: solved.tiers.map((tier) => tier.options), assignmentDigest: sha256Hex(canonicalJson(weeklyAssignments.map((assignment) => ({ planWorkId: assignment.planWorkId, status: assignment.status, slotId: assignment.slotId, serviceDate: assignment.serviceDate })))), canonicalProgram: solved.canonicalProgram, modelBasis: solved.modelBasis, modelBasisDigest: sha256Hex(canonicalJson(solved.modelBasis)), finalWitness: solved.finalWitness, execution: solved.execution, tiers: solved.tiers },
+    certificate: { schema: "memphis-zoo.static-weekly-solver-certificate.v5", compilerVersion: STATIC_WEEKLY_SCHEDULER_VERSION, verifierVersion: STATIC_WEEKLY_VERIFIER_VERSION, objectivePolicyVersion: "monotonic-leximax-v1", canonicalInputDigest: problem.inputDigest, baselineInputDigest: problem.baselineInputDigest, weeklyVersionDigest: problem.weeklyVersionDigest, solverIdentity: solved.final.identity, tierReceiptDigest: postgresJsonbContentDigest(solved.tiers), tierOptionsDigest: postgresJsonbContentDigest(solved.tiers.map((tier) => tier.options)), assignmentDigest: sha256Hex(canonicalJson(weeklyAssignments.map((assignment) => ({ planWorkId: assignment.planWorkId, status: assignment.status, slotId: assignment.slotId, serviceDate: assignment.serviceDate })))), canonicalProgram: solved.canonicalProgram, modelBasis: solved.modelBasis, modelBasisDigest: sha256Hex(canonicalJson(solved.modelBasis)), finalWitness: solved.finalWitness, execution: solved.execution },
     assignments, weeklyAssignments, openWork, reviewWork,
     candidateRejections: Object.fromEntries([...problem.staticRejections.entries()].sort(([a], [b]) => stableCompare(a, b))),
   };
@@ -278,6 +284,10 @@ function replayProjection(result) {
     if (tier.options) delete tier.options.time_limit;
   }
   for (const execution of [projection.certificate?.execution, projection.canonicalAuthority?.optimizerResult?.certificate?.execution]) if (execution) { delete execution.durationMilliseconds; delete execution.receiptBytes; delete execution.workerOutputBytes; delete execution.resultBytes; }
+  if (projection.certificate) {
+    delete projection.certificate.tierReceiptDigest;
+    delete projection.certificate.tierOptionsDigest;
+  }
   for (const options of [...array(projection.certificate?.options), ...array(projection.canonicalAuthority?.optimizerResult?.certificate?.options)]) delete options.time_limit;
   delete projection.authorityDigest;
   delete projection.solutionDigest;
@@ -305,7 +315,7 @@ export async function compileStaticWeeklySchedule(input = {}) {
   if (receiptBytes > STATIC_WEEKLY_SERVER_LIMITS.maxCompactReceiptBytes) return fail(serviceDate, "compact_receipt_size_limit", { receiptBytes, limit: STATIC_WEEKLY_SERVER_LIMITS.maxCompactReceiptBytes, preflight: problem.preflight });
   core.certificate.execution = { ...core.certificate.execution, receiptBytes, preflight: problem.preflight };
   try { remainingStaticWeeklyMilliseconds(deadline); } catch (error) { return fail(serviceDate, error.code, { stage: "before_verification" }); }
-  const provisionalVerification = verifyStaticWeeklyScheduleResult(input, core, deadline);
+  const provisionalVerification = verifyStaticWeeklyScheduleResult(input, core, deadline, { allowProvisionalExecutionReceipt: true });
   if (!provisionalVerification.ok) return provisionalVerification.violations?.some((violation) => violation.code === "solver_timeout") ? fail(serviceDate, "solver_timeout", { stage: "provisional_verification" }) : fail(serviceDate, "verifier_disagreement", { violations: provisionalVerification.violations, verificationDigest: provisionalVerification.digest });
   const authorityCertificate = canonicalSolverAuthorityCertificate(core.certificate);
   const authorityTiers = canonicalSolverAuthorityTierProjection(core.solver.tiers);
@@ -344,13 +354,37 @@ export async function compileStaticWeeklySchedule(input = {}) {
   const canonicalAuthority = { ...authorityBase, databaseContentIdentity: postgresJsonbContentDigest(authorityBase) };
   const authorityDigest = postgresJsonbContentDigest(canonicalAuthority);
   const preliminary = { ...core, canonicalAuthority, authorityDigest, metrics: provisionalVerification.metrics, solutionDigest: postgresJsonbContentDigest(canonicalAuthority.optimizerResult) };
-  try { remainingStaticWeeklyMilliseconds(deadline); } catch (error) { return fail(serviceDate, error.code, { stage: "before_final_verification" }); }
-  const verification = verifyStaticWeeklyScheduleResult(input, preliminary, deadline);
-  if (!verification.ok) return verification.violations?.some((violation) => violation.code === "solver_timeout") ? fail(serviceDate, "solver_timeout", { stage: "final_verification" }) : fail(serviceDate, "verifier_disagreement", { violations: verification.violations, verificationDigest: verification.digest });
-  const result = { ...preliminary, metrics: verification.metrics, verifier: verification };
+  // The complete independent verifier has already regenerated the canonical
+  // program, dated identities, witness, constraints, terminal receipts, and
+  // metrics from input.  Authority assembly above is a pure projection of
+  // that accepted core plus those independently derived metrics.  Running the
+  // same complete verifier a second time solely because the projection now
+  // exists duplicated the 111-tier production proof and could consume the
+  // shared request deadline without adding independent evidence.  The I1-to-I2
+  // database adapter still performs its own full verification of the complete
+  // assembled authority before persistence.
+  const result = { ...preliminary, metrics: provisionalVerification.metrics, verifier: provisionalVerification };
   try { remainingStaticWeeklyMilliseconds(deadline); } catch (error) { return fail(serviceDate, error.code, { stage: "before_encoding" }); }
   const encodedResultBytes = Buffer.byteLength(canonicalJson(result), "utf8");
-  if (encodedResultBytes > STATIC_WEEKLY_SERVER_LIMITS.maxCompactReceiptBytes) return fail(serviceDate, "encoded_result_size_limit", { encodedResultBytes, limit: STATIC_WEEKLY_SERVER_LIMITS.maxCompactReceiptBytes, receiptBytes, preflight: problem.preflight });
+  if (encodedResultBytes > STATIC_WEEKLY_SERVER_LIMITS.maxEncodedResultBytes) {
+    const bytes = (value) => Buffer.byteLength(canonicalJson(value), "utf8");
+    return fail(serviceDate, "encoded_result_size_limit", {
+      encodedResultBytes,
+      limit: STATIC_WEEKLY_SERVER_LIMITS.maxEncodedResultBytes,
+      receiptBytes,
+      componentBytes: {
+        solver: bytes(result.solver),
+        certificate: bytes(result.certificate),
+        canonicalAuthority: bytes(result.canonicalAuthority),
+        authorityCertificate: bytes(result.canonicalAuthority?.optimizerResult?.certificate),
+        authorityTiers: bytes(result.canonicalAuthority?.optimizerResult?.tiers),
+        weeklyAssignments: bytes(result.weeklyAssignments),
+        verifier: bytes(result.verifier),
+        metrics: bytes(result.metrics),
+      },
+      preflight: problem.preflight,
+    });
+  }
   // The encoded result size is diagnostic receipt evidence, not static plan
   // authority.  Keep it on the returned receipt only; the authority copy has
   // already retained its reproducible execution facts.
@@ -361,7 +395,9 @@ export async function compileStaticWeeklySchedule(input = {}) {
   result.authorityDigest = postgresJsonbContentDigest(result.canonicalAuthority);
   const replay = replayProjection(result);
   const canonicalReplay = canonicalJson(replay);
-  return { ...result, replayDigest: sha256Hex(canonicalReplay), canonicalReplay };
+  // Keep only the digest. Returning canonicalReplay duplicated the complete
+  // result byte-for-byte after its size check and defeated the envelope cap.
+  return { ...result, replayDigest: sha256Hex(canonicalReplay) };
 }
 
 export async function verifyStaticWeeklyReplay(input, expectedDigest) {
