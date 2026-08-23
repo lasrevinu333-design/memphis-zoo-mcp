@@ -1223,7 +1223,7 @@
       {
         "path": "scripts/static-weekly-schedule-compiler-tests.mjs",
         "mode": "100644",
-        "object_id": "7cc3e6dd638acfd358af54aaf5da2c3be7ede437"
+        "object_id": "0d7dd9bd0b597bacaea0cc979c0bc4b63a25c666"
       },
       {
         "path": "scripts/static-weekly-schedule-concurrency-tests.mjs",
@@ -1803,7 +1803,7 @@
       {
         "path": "src/static-weekly-schedule-program.js",
         "mode": "100644",
-        "object_id": "a9d3b25707005c354a3c9f3d8326005e4b97f94a"
+        "object_id": "b454f7c6627295c6dec3a4810779db44c78e8873"
       },
       {
         "path": "src/static-weekly-schedule-solver-worker.js",
