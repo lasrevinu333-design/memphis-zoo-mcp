@@ -75,7 +75,7 @@
       "prepare distinct CUSTODIAL_BACKEND_PROOF_SECRET and CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET values (minimum 32 characters each) without exposing either value",
       "run npm run release:populated-schema:preflight through the read-only production MCP and preserve its exact source-fingerprint receipt before any migration",
       "verify production project, migration head, catalog/privilege fingerprint, backup receipt, and exact source attestation against release/pending-production-migration-plan.json",
-      "apply only the one hash-bound migration in release/pending-production-migration-plan.json, stopping after any failed preflight or postcheck",
+      "apply only the ordered hash-bound migrations in release/pending-production-migration-plan.json, stopping after any failed preflight or postcheck",
       "deploy the canonical-only backend only after all authoritative procedures above are present and verified; missing canonical writers fail closed",
       "require a green authority health gate and direct-DML denial probes before routing traffic"
     ],
@@ -412,7 +412,7 @@
       {
         "path": "release/integrated-backend-authority-input.json",
         "mode": "100644",
-        "object_id": "eb19b2dd79f8e28dd66952c60d338adb139330a1"
+        "object_id": "b03c55d69a00faa09879340f778248fb85c1c8fb"
       },
       {
         "path": "release/pending-production-migration-plan.json",
@@ -742,12 +742,12 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "b4b12fcc1b6bf593fc28c0511e0d430d65c7573d"
+        "object_id": "c4a640e325ecc3799461256ce9739b4be14de24c"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "beb0988cb5d77f544fabd853ad450dd90293af4d"
+        "object_id": "97003e978f970d0861261144da04213b52d301d3"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
