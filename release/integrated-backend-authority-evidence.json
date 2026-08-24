@@ -419,7 +419,7 @@
       {
         "path": "release/pending-production-migration-plan.json",
         "mode": "100644",
-        "object_id": "f2c876f82d7953807b7b64b9043eca4e5be61f46"
+        "object_id": "c9178a0d4c58c3541690dfde5bd4cb1863a41703"
       },
       {
         "path": "release/reviewed-migrations/20260809125735_cleaning_inspection_24_hour_freshness.sql",
@@ -3064,7 +3064,7 @@
       {
         "path": "supabase/migrations/20260824213000_static_weekly_operational_truth_cutover.sql",
         "mode": "100644",
-        "object_id": "a5f43709cf64ec27c68b20e7b82e041e388a40e1"
+        "object_id": "0154d3bcec65e277b41365e22bc4b542a70c10d1"
       },
       {
         "path": "tmp/write_probe.txt",
