@@ -1803,7 +1803,7 @@
       {
         "path": "src/static-weekly-schedule-compiler-runtime.js",
         "mode": "100644",
-        "object_id": "346b1d1c02f3c274b0f7ff69f15bd2c11621945d"
+        "object_id": "4bbc0e6134d1a893b348df15e6963f18bb44266a"
       },
       {
         "path": "src/static-weekly-schedule-compiler-worker.js",
