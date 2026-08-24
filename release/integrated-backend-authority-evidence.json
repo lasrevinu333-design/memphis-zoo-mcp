@@ -1193,12 +1193,12 @@
       {
         "path": "scripts/static-weekly-control-plane-deployment-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "6f23be05a45d14cf8a6de58c3bdd90e1d4102b85"
+        "object_id": "7c691694a4e07a83af5fe879c88f8494ba6007b0"
       },
       {
         "path": "scripts/static-weekly-control-plane-runtime-tests.mjs",
         "mode": "100644",
-        "object_id": "85dd5bf042d79b6427f6ddd5800b0ed7a9383f4f"
+        "object_id": "cd6c4fcde2e6a2f0b29eefa4aa17aa851dc0f614"
       },
       {
         "path": "scripts/static-weekly-control-plane-tests.mjs",
@@ -1803,7 +1803,7 @@
       {
         "path": "src/static-weekly-control-plane-runtime.js",
         "mode": "100644",
-        "object_id": "ccf1ff773f1616b8824c20070d0dc21fc965040e"
+        "object_id": "0ed744bca32a99e3d15b21bcc868e264a823e22d"
       },
       {
         "path": "src/static-weekly-control-plane.js",
