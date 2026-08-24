@@ -150,7 +150,7 @@ for (const [index, migration] of pendingMigrationPlan.migrations.entries()) {
 }
 assert.equal(releaseEvidence.compatibility_window.accepted_engine.scan, "scan.v2");
 assert.equal(releaseEvidence.compatibility_window.required_engine.scan, "scan.v4.snapshot-bound-authority");
-assert.equal(releaseEvidence.migrations.at(-1).name, "20260823143000_static_weekly_registered_roster_bootstrap.sql");
+assert.equal(releaseEvidence.migrations.at(-1).name, "20260824131500_static_weekly_compact_document_consumers.sql");
 assert.match(staticWeeklyRegisteredRosterBootstrap, /static_weekly_v6_initialize_registered_roster/i);
 assert.match(staticWeeklyRegisteredRosterBootstrap, /static_weekly_v3_assert_release_operator/i);
 assert.match(staticWeeklyRegisteredRosterBootstrap, /grant execute on function public\.static_weekly_v6_initialize_registered_roster\(uuid,uuid,text\)\s+to static_weekly_release_operator/i);
