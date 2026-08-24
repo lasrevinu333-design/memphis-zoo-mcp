@@ -28,6 +28,8 @@ assert.doesNotMatch(deployment, /(?:postgres(?:ql)?:\/\/|eyJ[A-Za-z0-9_-]+\.|ser
 assert.equal(packageManifest.scripts["start:static-weekly-control-plane"], "node src/static-weekly-control-plane-runtime.js");
 assert.match(runtime, /app\.get\("\/healthz", liveness\)/);
 assert.match(runtime, /app\.get\(\["\/health", "\/ready"\], readiness\)/);
+assert.match(runtime, /probe_scope:\s*"process_liveness"/, "Render health checks must use a non-blocking process-liveness contract");
+assert.doesNotMatch(runtime, /async function liveness/, "process liveness must never await database, solver, or publication readiness");
 assert.match(runtime, /assertConfiguredReleaseIdentity/);
 assert.match(runtime, /assertOpsManagerSessionSecret/);
 assert.match(runtime, /backend_tree_sha: releaseIdentity\.backend_tree_sha/);

@@ -123,9 +123,13 @@ async function dayChanges() {
 
 try {
   let liveness = await fetch(`${origin}/healthz`);
-  assert.equal(liveness.status, 200, "liveness must pass after release/config validation and a reachable authority database");
+  assert.equal(liveness.status, 200, "liveness must prove the configured scheduler process can answer");
   assert.equal(liveness.headers.get("cache-control"), "no-store");
-  assert.equal((await liveness.json()).data.database_reachable, true);
+  const livenessBody = await liveness.json();
+  assert.equal(livenessBody.data.process_ready, true);
+  assert.equal(livenessBody.data.probe_scope, "process_liveness");
+  assert.equal(livenessBody.data.database_reachable, null, "liveness must not claim database readiness it did not check");
+  assert.equal(livenessBody.data.authority_ready, null, "liveness must not claim publication authority readiness it did not check");
 
   let health = await fetch(`${origin}/health`);
   assert.equal(health.status, 200, "health must pass only when the database authority reports ready");
@@ -261,16 +265,25 @@ assert.equal(unavailableHealth.status, 503, "an authority health failure must fa
 assert.equal(unavailableHealth.body.code, "static_weekly_control_plane_unavailable");
 assert.doesNotMatch(JSON.stringify(unavailableHealth.body), /database unavailable/);
 
-let livenessHealth = await fetchHealth(() => ({ ready: false, active_key_count: 0 }), "/healthz");
-assert.equal(livenessHealth.status, 200, "Render liveness must not deadlock on the schedule publication gate");
+let livenessHealthCalls = 0;
+let livenessHealth = await fetchHealth(() => { livenessHealthCalls += 1; return { ready: false, active_key_count: 0 }; }, "/healthz");
+assert.equal(livenessHealth.status, 200, "Render liveness must not depend on the schedule publication gate");
 assert.equal(livenessHealth.body.ok, true);
-assert.equal(livenessHealth.body.data.database_reachable, true);
-assert.equal(livenessHealth.body.data.authority_ready, false);
+assert.equal(livenessHealth.body.data.process_ready, true);
+assert.equal(livenessHealth.body.data.probe_scope, "process_liveness");
+assert.equal(livenessHealth.body.data.database_reachable, null);
+assert.equal(livenessHealth.body.data.authority_ready, null);
+assert.equal(livenessHealthCalls, 0, "liveness must not enter the database/solver readiness path");
 
-livenessHealth = await fetchHealth(() => { throw new Error("database unavailable"); }, "/healthz");
-assert.equal(livenessHealth.status, 503, "liveness must still fail closed when the authority database is unreachable");
-assert.equal(livenessHealth.body.code, "static_weekly_control_plane_liveness_unavailable");
-assert.doesNotMatch(JSON.stringify(livenessHealth.body), /database unavailable/);
+let releaseBlockedReadiness;
+const blockedReadiness = new Promise((resolve) => { releaseBlockedReadiness = resolve; });
+livenessHealth = await Promise.race([
+  fetchHealth(async () => { await blockedReadiness; return { ready: true }; }, "/healthz"),
+  new Promise((_, reject) => setTimeout(() => reject(new Error("process liveness waited for blocked readiness")), 250)),
+]);
+releaseBlockedReadiness();
+assert.equal(livenessHealth.status, 200, "process liveness must answer while strict readiness is indefinitely blocked");
+assert.equal(livenessHealth.body.data.process_ready, true);
 
 const processTarget = new EventEmitter();
 let closeCount = 0;

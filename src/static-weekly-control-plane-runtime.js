@@ -129,26 +129,22 @@ export function createStaticWeeklyControlPlaneRuntime({
     }
   }
 
-  async function liveness(_req, res) {
-    try {
-      const data = await authorityControlPlane.health();
-      res.status(200).json({
-        ok: true,
-        data: {
-          process_ready: true,
-          database_reachable: true,
-          authority_ready: data?.ready === true,
-        },
-        release_identity: releaseIdentityPayload(),
-      });
-    } catch (_error) {
-      res.status(503).json({
-        ok: false,
-        data: { process_ready: true, database_reachable: false, authority_ready: false },
-        error: "The static weekly scheduler database is unavailable.",
-        code: "static_weekly_control_plane_liveness_unavailable",
-      });
-    }
+  function liveness(_req, res) {
+    // Render uses this path to decide whether to terminate the process. It must
+    // prove only that the HTTP process can answer; database, solver, and
+    // publication authority belong to /health and /ready. Awaiting the full
+    // authority check here can make a healthy, atomic long-running compile
+    // look dead and force Render to kill it before the transaction commits.
+    res.status(200).json({
+      ok: true,
+      data: {
+        process_ready: true,
+        probe_scope: "process_liveness",
+        database_reachable: null,
+        authority_ready: null,
+      },
+      release_identity: releaseIdentityPayload(),
+    });
   }
 
   app.get("/healthz", liveness);
