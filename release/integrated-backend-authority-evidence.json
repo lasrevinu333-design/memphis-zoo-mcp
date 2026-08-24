@@ -3,14 +3,14 @@
   "release_id": "release-2026.07.19.custodial-v3.12",
   "frontend_commit_sha": "4fb8d9517ed6d4cd941d40162f434327fb6073c2",
   "frontend_commit_state": "final_pair_bound",
-  "schema_fingerprint": "d1b06f3375b9542659302096e68883fb765dd24589b16c4f02e344f4a669c44c",
+  "schema_fingerprint": "462f77fa7f045c80deaf7ef59e765c6aa2ee2aeb82525362558fcf2c54ef0cbd",
   "schema_transition": {
     "transition_id": "static-weekly-memory-bounded-draft-20260824",
     "from_fingerprint": "65ba7435cba29a9ab1ad98d29e4c095fa648083ff31bb7df4815d2c534e49e54",
-    "to_fingerprint": "d1b06f3375b9542659302096e68883fb765dd24589b16c4f02e344f4a669c44c",
+    "to_fingerprint": "462f77fa7f045c80deaf7ef59e765c6aa2ee2aeb82525362558fcf2c54ef0cbd",
     "expires_at": "2026-09-03T23:59:59Z"
   },
-  "frontend_source_fingerprint": "d1b06f3375b9542659302096e68883fb765dd24589b16c4f02e344f4a669c44c",
+  "frontend_source_fingerprint": "462f77fa7f045c80deaf7ef59e765c6aa2ee2aeb82525362558fcf2c54ef0cbd",
   "backend_contract": {
     "scan": "scan.v4.snapshot-bound-authority",
     "authority": "offline-authority.v5",
@@ -408,7 +408,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "77e8b6c622a825beda29a0e86a392524701fafd8"
+        "object_id": "f0ab9e609ad39738cb4ac715a9ff9660b74bc47b"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -418,7 +418,7 @@
       {
         "path": "release/pending-production-migration-plan.json",
         "mode": "100644",
-        "object_id": "6c6544b44aa80cc41aa80318e87d2258009b4d93"
+        "object_id": "9d7eb4969526a491b3419b831e625317b555a634"
       },
       {
         "path": "release/reviewed-migrations/20260809125735_cleaning_inspection_24_hour_freshness.sql",
@@ -748,17 +748,17 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "ebabaa821ed0e0bbd0ea51f9e4b5229978144b77"
+        "object_id": "697c415d9349e2eb864f36a4c5012fe6d33da6d7"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "ed2bb6d62b06258dc51e4c32b10b2a4c4d43e816"
+        "object_id": "5605e67bca7902fd2d94ce990b7f69268319e662"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
         "mode": "100644",
-        "object_id": "010ea632b343cdc6f4c2df4ba68eac68624a8686"
+        "object_id": "10a5834624ca3f5972b28d3f227011de083b2d45"
       },
       {
         "path": "scripts/integrated-backend-authority-suite-order-isolated-tests.mjs",
@@ -1003,7 +1003,7 @@
       {
         "path": "scripts/refresh-integrated-backend-authority-release.mjs",
         "mode": "100644",
-        "object_id": "e9814c5084804ee71206e6569061b0eac0ab9aad"
+        "object_id": "60b2d053bb9afbb6bc5c1b4ff134ec1a66627109"
       },
       {
         "path": "scripts/refresh-release-schema-alignment.mjs",
@@ -1233,7 +1233,7 @@
       {
         "path": "scripts/static-weekly-schedule-authority-v3-tests.mjs",
         "mode": "100644",
-        "object_id": "61645c21635b7b58b747d7809a30e2c1b7f9bc85"
+        "object_id": "55f25149cee9a413002f330720b4c7305f696ab5"
       },
       {
         "path": "scripts/static-weekly-schedule-candidate-importer.mjs",
@@ -1913,12 +1913,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "210f1e331c875f06657131a0fec0128c5a9a1aaf"
+        "object_id": "32ba9fc403cf9a3a29f802c9ce5db137fa3227b3"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "16ebb1240bf213a07624f15c90524262d2a2b1da"
+        "object_id": "69a63d958c9397e283955b2fb43c55d442b0f914"
       },
       {
         "path": "supabase/config.toml",
@@ -3041,13 +3041,18 @@
         "object_id": "30663753862ebec53d8cccb8820e3a393d0af3f5"
       },
       {
+        "path": "supabase/migrations/20260824132000_static_weekly_initial_contractor_snapshot.sql",
+        "mode": "100644",
+        "object_id": "ee9871dae0517d7f9f45bfd74760e8d2847bc4d0"
+      },
+      {
         "path": "tmp/write_probe.txt",
         "mode": "100644",
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 588,
-    "migration_path_count": 106,
+    "authority_path_count": 589,
+    "migration_path_count": 107,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
   },
@@ -3375,6 +3380,9 @@
     },
     {
       "name": "20260824131500_static_weekly_compact_document_consumers.sql"
+    },
+    {
+      "name": "20260824132000_static_weekly_initial_contractor_snapshot.sql"
     }
   ],
   "release_boundary": "Prepare distinct minimum-32-character backend and native-route secrets before cutover; configure their database digests immediately after the migrations that create each configuration function, retain the bridge backend artifact through the scan-snapshot phase, and require the executable health/restoration probes before traffic changes."
