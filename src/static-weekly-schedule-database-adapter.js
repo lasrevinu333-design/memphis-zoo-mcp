@@ -17,6 +17,19 @@ export const STATIC_WEEKLY_DATABASE_ADAPTER_SCHEMA = "memphis-zoo.static-weekly-
 export const STATIC_WEEKLY_DATABASE_ADAPTER_VERSION = "static-weekly-database-adapter-v1";
 export const STATIC_WEEKLY_AUTHORITY_ATTESTATION_SCHEMA = "memphis-zoo.static-weekly-authority-attestation.v1";
 
+export function staticWeeklyDatabaseDocumentIdentity(document) {
+  return postgresJsonbContentDigest({
+    schema: "memphis-zoo.static-weekly-document-merkle-identity.v1",
+    adapter_digest: postgresJsonbContentDigest(document.adapter),
+    authority_digest: postgresJsonbContentDigest(document.authority),
+    receipt_digest: postgresJsonbContentDigest(document.receipt),
+    slot_availability_digest: postgresJsonbContentDigest(document.slot_availability),
+    assignments_digest: postgresJsonbContentDigest(document.assignments),
+    objective_inputs_digest: postgresJsonbContentDigest(document.objective_inputs),
+    semantic_snapshot_digest: postgresJsonbContentDigest(document.semantic_snapshot),
+  });
+}
+
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const array = (value) => Array.isArray(value) ? value : [];
 const text = (value) => typeof value === "string" ? value : "";
@@ -288,9 +301,6 @@ function canonicalReceipt(result, authority, verification) {
       solutionDigest: result.solutionDigest,
       authorityDigest: result.authorityDigest,
       replayDigest: result.replayDigest,
-      canonicalAuthority: clone(authority),
-      authorityCertificate: clone(authority.optimizerResult?.certificate),
-      authorityTiers: clone(authority.optimizerResult?.tiers),
       certificate: clone(result.certificate),
       solver: clone(result.solver),
       verifier: clone(result.verifier),
@@ -491,10 +501,10 @@ function buildAdaptedStaticWeeklySchedule(result, { requirePublishable = false, 
   // independent verifier has accepted the compiler result; no app-held HMAC
   // can bless caller-provided truth.
   document.semantic_snapshot = {
-    schema: "memphis-zoo.static-weekly-recurring-semantic-snapshot.v1",
-    recurring_source: clone(authority.compilerInput),
-    relational_slot_availability: clone(availability),
-    relational_assignments: clone(assignments),
+    schema: "memphis-zoo.static-weekly-recurring-semantic-snapshot.v2",
+    recurring_source_digest: postgresJsonbContentDigest(authority.compilerInput),
+    relational_slot_availability_digest: postgresJsonbContentDigest(availability),
+    relational_assignments_digest: postgresJsonbContentDigest(assignments),
   };
   document.validation = {
     status: result.status,
@@ -506,8 +516,7 @@ function buildAdaptedStaticWeeklySchedule(result, { requirePublishable = false, 
     replay_digest: result.replayDigest,
     receipt_digest: postgresJsonbContentDigest(document.receipt),
   };
-  const identity = { adapter: document.adapter, authority: document.authority, receipt: document.receipt, slot_availability: document.slot_availability, assignments: document.assignments, objective_inputs: document.objective_inputs, semantic_snapshot: document.semantic_snapshot };
-  document.validation.database_document_identity = postgresJsonbContentDigest(identity);
+  document.validation.database_document_identity = staticWeeklyDatabaseDocumentIdentity(document);
   return { document, activeWork };
 }
 
