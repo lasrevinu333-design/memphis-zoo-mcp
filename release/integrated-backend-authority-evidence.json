@@ -1188,7 +1188,7 @@
       {
         "path": "scripts/static-weekly-compiler-runtime-tests.mjs",
         "mode": "100644",
-        "object_id": "d3aea16f9175e210b54cfa8d62d9fbe25fe5022f"
+        "object_id": "002ba870a2505105f193d5ba55b37680394c74a4"
       },
       {
         "path": "scripts/static-weekly-control-plane-deployment-contract-tests.mjs",
@@ -1203,7 +1203,7 @@
       {
         "path": "scripts/static-weekly-control-plane-tests.mjs",
         "mode": "100644",
-        "object_id": "8b959f548fc307e693be1b799ac8aa10a6b52444"
+        "object_id": "1c1f229637a039ef078b25a6e7b3a0d742ba90a2"
       },
       {
         "path": "scripts/static-weekly-day-changes-database-tests.mjs",
@@ -1793,17 +1793,17 @@
       {
         "path": "src/static-weekly-control-plane.js",
         "mode": "100644",
-        "object_id": "df0df5f63a014fee68d750633df1e8e3171c46d4"
+        "object_id": "673b8d2ffb7610a411fede9a83fba891202e41ac"
       },
       {
         "path": "src/static-weekly-schedule-compiler-runtime.js",
         "mode": "100644",
-        "object_id": "24250342fa57ad91620b8b927843594c7e594a7f"
+        "object_id": "2fe4b53074ffd86688702f110245b40f158ae516"
       },
       {
         "path": "src/static-weekly-schedule-compiler-worker.js",
         "mode": "100644",
-        "object_id": "679ddc638bf66ac149c7ad12c4c33ec6b5ecc3b3"
+        "object_id": "bdc9426b8ffcc34ae3f3ca04e137ab79fa14cac6"
       },
       {
         "path": "src/static-weekly-schedule-compiler.js",
