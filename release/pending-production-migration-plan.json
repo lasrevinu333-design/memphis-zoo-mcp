@@ -26,7 +26,7 @@
   "authorization": {
     "production_apply_authorized": true,
     "required_boundary": "Eric approved autonomous program continuation and production changes required for the exact candidate",
-    "sequence_policy": "ordered_migrations_stop_on_failed_preflight_or_postcheck",
+    "sequence_policy": "single_migration_stop_on_failed_preflight_or_postcheck",
     "rollback_policy": "forward_recovery_only; keep the scheduler unpublished; if post-verification fails, retire the new function and restore its exact ACL state through one reviewed forward-recovery migration while preserving the ledger and all registered source/key evidence"
   },
   "preconditions": [
