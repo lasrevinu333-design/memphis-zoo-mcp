@@ -21,6 +21,7 @@ import {
 } from "./static-weekly-schedule-compiler-runtime.js";
 
 export const STATIC_WEEKLY_CONTROL_PLANE_SCHEMA = "memphis-zoo.static-weekly-control-plane.v1";
+export const STATIC_WEEKLY_DATABASE_OPERATION_STATEMENT_TIMEOUT_MS = 120_000;
 const STATIC_WEEKLY_AUTHORITY_LOCK_IDENTITY = "memphis-static-weekly-authority";
 
 const text = (value) => typeof value === "string" ? value.trim() : "";
@@ -311,6 +312,7 @@ export function createStaticWeeklyControlPlane({
   transactionConcurrency = 3,
   maxQueuedTransactions = 16,
   transactionAdmissionMilliseconds = STATIC_WEEKLY_COMPILER_RUNTIME_LIMITS.requestMilliseconds,
+  operationStatementMilliseconds = STATIC_WEEKLY_DATABASE_OPERATION_STATEMENT_TIMEOUT_MS,
   healthTransactionMilliseconds = 5_000,
 } = {}) {
   if (!database?.connect) throw fail("static_weekly_control_plane_database_required");
@@ -325,6 +327,9 @@ export function createStaticWeeklyControlPlane({
   }
   if (!Number.isSafeInteger(transactionAdmissionMilliseconds) || transactionAdmissionMilliseconds < 1) {
     throw fail("static_weekly_control_plane_transaction_deadline_invalid");
+  }
+  if (!Number.isSafeInteger(operationStatementMilliseconds) || operationStatementMilliseconds < 30_000 || operationStatementMilliseconds > 180_000) {
+    throw fail("static_weekly_control_plane_statement_deadline_invalid");
   }
   if (!Number.isSafeInteger(healthTransactionMilliseconds) || healthTransactionMilliseconds < 1 || healthTransactionMilliseconds > 10_000) {
     throw fail("static_weekly_control_plane_health_deadline_invalid");
@@ -415,7 +420,7 @@ export function createStaticWeeklyControlPlane({
         // The login identity is provisioned separately and granted this NOLOGIN
         // capability group. Ordinary service-role credentials lack membership.
         await client.query("set local role static_weekly_control_plane");
-        if (health) await client.query(`set local statement_timeout = '${healthTransactionMilliseconds}ms'`);
+        await client.query(`set local statement_timeout = '${health ? healthTransactionMilliseconds : operationStatementMilliseconds}ms'`);
         const result = await work(client);
         if (asynchronousConnectionError) throw asynchronousConnectionError;
         await client.query("commit");
