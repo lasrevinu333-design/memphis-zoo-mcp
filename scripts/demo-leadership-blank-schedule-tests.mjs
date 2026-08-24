@@ -10,6 +10,13 @@ function buildApp(readCalls = []) {
       const query = String(sql || "");
       readCalls.push(query);
       if (query.includes("sch_service_date(now())")) return [{ service_date: "2026-06-10" }];
+      if (query.includes("static_weekly_v6_schedule_authority_state")) {
+        return [{
+          governed: false,
+          authority_source: "legacy_daily_schedule",
+          projection_status: "not_governed",
+        }];
+      }
       if (query.includes("static_weekly_v5_read_employee_day")) {
         return [{ data: { governed: false, source: "legacy_daily_schedule" } }];
       }
