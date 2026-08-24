@@ -232,6 +232,11 @@ try {
   assert.equal(rosterReplay.already_initialized, true, "an exact protected replay is non-mutating and deterministic");
   assert.equal(Number(await scalar("select count(*) from public.weekly_roster_slots")), source.slots.length);
   assert.equal(Number(await scalar("select count(*) from public.weekly_roster_slot_incumbencies")), source.slots.reduce((count, slot) => count + slot.incumbencies.length, 0));
+  const preDraftSnapshot = JSON.parse(await scalar(cp("static_weekly_v3_read_manager_snapshot", `${quote(initialWeek)}`)));
+  assert.equal(preDraftSnapshot.current_publication, null, "the initial snapshot is verified before any publication exists");
+  assert.deepEqual(preDraftSnapshot.drafts, [], "the initial snapshot is verified before any draft exists");
+  assert.equal(preDraftSnapshot.roster.find((row) => row.slot_id === source.slots[4].id).contractor_capacity, true, "pre-draft manager truth classifies registered CoverAll capacity from the active immutable source");
+  assert.equal(preDraftSnapshot.roster.find((row) => row.slot_id === source.slots[0].id).contractor_capacity, false, "pre-draft manager truth does not convert zoo employees into contractor capacity");
   const draft = createStaticWeeklyDraftRpcInput({ result: compiled, expectedRevision: 0, actor: { ...manager, idempotencyKey: "v3-create" } });
   await expectReject(`set role service_role; select public.static_weekly_v2_create_draft(${quote(draft.effectiveStart)},${quote(draft.objectiveVersion)},${json(draft.objective)},${json(draft.inputProvenance)},${json(draft.document)},0,${quote(manager.managerId)},${quote(manager.managerName)},'forged-v2')`, /permission denied/i);
   for (const [label, idempotencyKey, mutate] of [
