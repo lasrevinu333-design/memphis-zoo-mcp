@@ -3,14 +3,14 @@
   "release_id": "release-2026.07.19.custodial-v3.12",
   "frontend_commit_sha": "6aac2c23fad636477fce57d0a34eac4bb9ce1bf8",
   "frontend_commit_state": "final_pair_bound",
-  "schema_fingerprint": "ae05ae6baf4ca7f8a7bc4d6a9981242b1e462a1eee9ca9178aa0d550e44cec52",
+  "schema_fingerprint": "687d757ef4a39184a003931362f679e7c012edbf4c57f9849512978364899e0f",
   "schema_transition": {
     "transition_id": "static-weekly-compact-projection-20260824",
     "from_fingerprint": "462f77fa7f045c80deaf7ef59e765c6aa2ee2aeb82525362558fcf2c54ef0cbd",
-    "to_fingerprint": "ae05ae6baf4ca7f8a7bc4d6a9981242b1e462a1eee9ca9178aa0d550e44cec52",
+    "to_fingerprint": "687d757ef4a39184a003931362f679e7c012edbf4c57f9849512978364899e0f",
     "expires_at": "2026-09-03T23:59:59Z"
   },
-  "frontend_source_fingerprint": "ae05ae6baf4ca7f8a7bc4d6a9981242b1e462a1eee9ca9178aa0d550e44cec52",
+  "frontend_source_fingerprint": "687d757ef4a39184a003931362f679e7c012edbf4c57f9849512978364899e0f",
   "backend_contract": {
     "scan": "scan.v4.snapshot-bound-authority",
     "authority": "offline-authority.v5",
@@ -49,7 +49,8 @@
     "coverall_second_absence_policy_phase": "20260822222500 keeps the first absence internal and assigns each second or later absence to one distinct registered CoverAll capacity without rewriting manager overrides",
     "static_weekly_runtime_identity_phase": "20260823024500 provisions one passwordless-by-source NOINHERIT login shell with only static_weekly_control_plane membership; release operations install its generated SCRAM verifier out of band before the dedicated service can become ready",
     "static_weekly_family_location_truth_phase": "20260823060000 preserves the exact physical-location family behind each routing anchor across compilation, event overlays, projections, and the employee-day read surface while retaining legacy singleton reads",
-    "static_weekly_registered_roster_bootstrap_phase": "20260823143000 permits only the protected release operator to hydrate the complete immutable roster from one active registered authority source, rejects partial or mismatched state, and makes exact replay non-mutating"
+    "static_weekly_registered_roster_bootstrap_phase": "20260823143000 permits only the protected release operator to hydrate the complete immutable roster from one active registered authority source, rejects partial or mismatched state, and makes exact replay non-mutating",
+    "static_weekly_operational_truth_cutover_phase": "20260824213000 makes employee, manager, dashboard, analytics and notification schedule truth consume one exact static-weekly projection, fails closed on stale governed authority, and excludes reminder-only or response-only work from physical cleaning obligations"
   },
   "rollback": {
     "before_enforcement": "legacy Engine and current backend completion remain available",
@@ -118,7 +119,7 @@
       {
         "path": ".github/workflows/custodial-production-repair.yml",
         "mode": "100644",
-        "object_id": "caa1038ed23001478b6ca4675a3ff5cbee8885d1"
+        "object_id": "1d72fada8d908600126a21814d5e1a607bc91e9e"
       },
       {
         "path": ".github/workflows/device-credential-foundation.yml",
@@ -358,7 +359,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "749fa6dd95f507c57f4cdd475ceaf93506550b11"
+        "object_id": "f9c1f8b3351c008838f43ea312c6991dce87d4e8"
       },
       {
         "path": "public/moxie-assets/contacts-creekside-animal.png",
@@ -408,7 +409,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "e2aa5dedc57852d27c5c62c2c42d0f9059c1a45f"
+        "object_id": "93c49c0f45c130bcd502ccaa4b9a8999a7a9014a"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -418,7 +419,7 @@
       {
         "path": "release/pending-production-migration-plan.json",
         "mode": "100644",
-        "object_id": "a422427b95e070f6c78bcf4d2e9d979f491ea3eb"
+        "object_id": "f2c876f82d7953807b7b64b9043eca4e5be61f46"
       },
       {
         "path": "release/reviewed-migrations/20260809125735_cleaning_inspection_24_hour_freshness.sql",
@@ -493,7 +494,7 @@
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "b0a8d005ea391e37769adf10c560767afa38a5dd"
+        "object_id": "7d7c0d2ca860ee2c698c4e34a5ee97cdb3ebc3ac"
       },
       {
         "path": "scripts/cleaning-identity-gps-database-tests.mjs",
@@ -748,17 +749,17 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "6f447f9a771061fa4b2310ef1770bdb981ea6725"
+        "object_id": "fba24d63f0638d83672dd18fd1e25b42bb0ace52"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "8b87b9a39d64d4580962ea3d721121e657fb3d50"
+        "object_id": "7a589ccade03c79d4380dc55ecae4f4ce823217f"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
         "mode": "100644",
-        "object_id": "9f7badc57d49cfcd4d66e65f8a059de48d166298"
+        "object_id": "c19ed12fab1651bd735927958ffa8b3639f99b38"
       },
       {
         "path": "scripts/integrated-backend-authority-suite-order-isolated-tests.mjs",
@@ -823,7 +824,7 @@
       {
         "path": "scripts/memphis-messaging-regression-tests.mjs",
         "mode": "100644",
-        "object_id": "35c592af630c1a8c5ff7db41debf1087019954d9"
+        "object_id": "519bdb0b0cf56c0bbe6a38b00c0e837c8c945baf"
       },
       {
         "path": "scripts/memphis-messaging-route-recovery-tests.mjs",
@@ -1003,7 +1004,7 @@
       {
         "path": "scripts/refresh-integrated-backend-authority-release.mjs",
         "mode": "100644",
-        "object_id": "801ab19b66b610dd8d8f2864296af80c4fede8c5"
+        "object_id": "c167115ae9d4895a67b9d6aadbb9afd3f638ac08"
       },
       {
         "path": "scripts/refresh-release-schema-alignment.mjs",
@@ -1213,7 +1214,17 @@
       {
         "path": "scripts/static-weekly-employee-day-route-tests.mjs",
         "mode": "100644",
-        "object_id": "25b36ee73ccdddfc929a707c1cc1993c32ef1cba"
+        "object_id": "0a45d2cdf9d18f16fc38e6aac209b72f6d5ad217"
+      },
+      {
+        "path": "scripts/static-weekly-operational-truth-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "16912862ea9a9795c253427614b66a00b17de389"
+      },
+      {
+        "path": "scripts/static-weekly-operational-truth-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "7a2056363a87bda5fdfbc612d76339490b753c0c"
       },
       {
         "path": "scripts/static-weekly-production-database-runtime-probe.mjs",
@@ -1648,7 +1659,7 @@
       {
         "path": "src/integrated-backend-authority-release-evidence.js",
         "mode": "100644",
-        "object_id": "12f61f7d704c01a86cafe3d0c6390b5a4d4c3b1d"
+        "object_id": "bbcba014eb0f9f96f1b90e369cb1992a215bb0e2"
       },
       {
         "path": "src/leadership-bootstrap.js",
@@ -1713,7 +1724,7 @@
       {
         "path": "src/messaging-api.js",
         "mode": "100644",
-        "object_id": "b1b0f37b353e6a95a520269f11196f4df779b720"
+        "object_id": "397361b8340e157e015342768619afa6d694d665"
       },
       {
         "path": "src/native-phone-transport.js",
@@ -1783,7 +1794,7 @@
       {
         "path": "src/schedule-api.js",
         "mode": "100644",
-        "object_id": "5179a10906458c796f34307e9d1fd2e926d38797"
+        "object_id": "a1af094e5141c04112fdc0d7d450ffa670e38ff3"
       },
       {
         "path": "src/schedule-display.js",
@@ -1913,12 +1924,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "e78d57a72d58f5dc1ecebd7b014c56c92d91ba3d"
+        "object_id": "277d5338f4c4bd0c0a9bf5f2ca2b9185d902b6e2"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "c38b51134e260a0e700722be479b16ab4fd3b66b"
+        "object_id": "d62af237972017b881cc93d1f571b7df9b3f4c35"
       },
       {
         "path": "supabase/config.toml",
@@ -3051,13 +3062,18 @@
         "object_id": "a5da7715f741f81826a8fd1b7c35dc9ed4274de2"
       },
       {
+        "path": "supabase/migrations/20260824213000_static_weekly_operational_truth_cutover.sql",
+        "mode": "100644",
+        "object_id": "a5f43709cf64ec27c68b20e7b82e041e388a40e1"
+      },
+      {
         "path": "tmp/write_probe.txt",
         "mode": "100644",
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 590,
-    "migration_path_count": 108,
+    "authority_path_count": 593,
+    "migration_path_count": 109,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
   },
@@ -3391,6 +3407,9 @@
     },
     {
       "name": "20260824170000_static_weekly_projection_compact_snapshot.sql"
+    },
+    {
+      "name": "20260824213000_static_weekly_operational_truth_cutover.sql"
     }
   ],
   "release_boundary": "Prepare distinct minimum-32-character backend and native-route secrets before cutover; configure their database digests immediately after the migrations that create each configuration function, retain the bridge backend artifact through the scan-snapshot phase, and require the executable health/restoration probes before traffic changes."
