@@ -688,7 +688,7 @@
       {
         "path": "scripts/fixtures/static-weekly-compiler-runtime-test-worker.mjs",
         "mode": "100644",
-        "object_id": "55a0b0916131065aadb76d1eff6dc33e963d5b21"
+        "object_id": "ede0fc76cb2cb39e8e54bbf8974686bbaf19049b"
       },
       {
         "path": "scripts/fixtures/static-weekly-scheduler/canary-authority.json",
@@ -1188,12 +1188,12 @@
       {
         "path": "scripts/static-weekly-compiler-runtime-tests.mjs",
         "mode": "100644",
-        "object_id": "002ba870a2505105f193d5ba55b37680394c74a4"
+        "object_id": "65399376acbf49bf1ba3e89b50a71e1f612c0a77"
       },
       {
         "path": "scripts/static-weekly-control-plane-deployment-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "be5816a8b91c7709f17abd85ba6fecc9e887d9e7"
+        "object_id": "6f23be05a45d14cf8a6de58c3bdd90e1d4102b85"
       },
       {
         "path": "scripts/static-weekly-control-plane-runtime-tests.mjs",
@@ -1214,6 +1214,11 @@
         "path": "scripts/static-weekly-employee-day-route-tests.mjs",
         "mode": "100644",
         "object_id": "25b36ee73ccdddfc929a707c1cc1993c32ef1cba"
+      },
+      {
+        "path": "scripts/static-weekly-production-packet-runtime-probe.mjs",
+        "mode": "100644",
+        "object_id": "798af265e73b56455aca2bbae143b24251833630"
       },
       {
         "path": "scripts/static-weekly-schedule-authority-closure-tests.mjs",
@@ -1263,7 +1268,7 @@
       {
         "path": "scripts/static-weekly-schedule-solver-lifecycle-tests.mjs",
         "mode": "100644",
-        "object_id": "933edd639a647d0daa9e6d2e4ca8f645b769ad43"
+        "object_id": "34d37e5b20674ed8ecb99607af4dd3af32a5d739"
       },
       {
         "path": "scripts/temporary-repair-payload-retirement-tests.mjs",
@@ -1798,12 +1803,12 @@
       {
         "path": "src/static-weekly-schedule-compiler-runtime.js",
         "mode": "100644",
-        "object_id": "2fe4b53074ffd86688702f110245b40f158ae516"
+        "object_id": "346b1d1c02f3c274b0f7ff69f15bd2c11621945d"
       },
       {
         "path": "src/static-weekly-schedule-compiler-worker.js",
         "mode": "100644",
-        "object_id": "bdc9426b8ffcc34ae3f3ca04e137ab79fa14cac6"
+        "object_id": "bb29c6a5f32f5ce65200dd355f9fb43607fa0961"
       },
       {
         "path": "src/static-weekly-schedule-compiler.js",
@@ -1826,14 +1831,19 @@
         "object_id": "151472bfe2cfd34d32fcbc9ddbc9ddb828464eef"
       },
       {
+        "path": "src/static-weekly-schedule-runtime-policy.js",
+        "mode": "100644",
+        "object_id": "e6ec132dff02b84f2b8939e49eedd7e86856a686"
+      },
+      {
         "path": "src/static-weekly-schedule-solver-worker.js",
         "mode": "100644",
-        "object_id": "e2f87ee072efd784400045df1d1f6c59ecc75599"
+        "object_id": "60db6df2e48a918cff6b4d129019304bb1401605"
       },
       {
         "path": "src/static-weekly-schedule-solver.js",
         "mode": "100644",
-        "object_id": "03306a49c5ead437526f31e8875654afd59bc8fc"
+        "object_id": "a22fa83b758bffd387ea36d04de3ab7d5a716a57"
       },
       {
         "path": "src/static-weekly-schedule-verifier.js",
@@ -3006,7 +3016,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 580,
+    "authority_path_count": 582,
     "migration_path_count": 102,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
