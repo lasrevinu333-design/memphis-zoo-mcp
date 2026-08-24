@@ -149,7 +149,9 @@ function refreshProjectionIdentity(envelope, { attest = true } = {}) {
   // A trusted fixture that deliberately exercises lower projection validation
   // must keep the signed semantic snapshot coherent.  The untrusted caller
   // probes below pass attest:false and therefore cannot forge this boundary.
-  if (attest && envelope.semantic_snapshot) envelope.semantic_snapshot.active_assignments = clone(envelope.assignments);
+  if (attest && envelope.semantic_snapshot) {
+    envelope.semantic_snapshot.active_assignments_digest = postgresJsonbContentDigest(envelope.assignments);
+  }
   const identity = clone(envelope); delete identity.database_projection_identity; delete identity.attestation;
   envelope.database_projection_identity = postgresJsonbContentDigest(identity);
   if (attest) envelope.attestation = signAttestation("dated_projection", (() => { const payload = clone(envelope); delete payload.attestation; return payload; })());
@@ -353,6 +355,10 @@ try {
   ]) await expectMalformedProjection(proof);
   const missingProjectionStatus = clone(projectionInput); delete missingProjectionStatus.envelope.assignments[0].status; refreshProjectionIdentity(missingProjectionStatus.envelope);
   await expectNoMutation(`set role service_role; select public.static_weekly_v2_materialize_projection(${quote(missingProjectionStatus.publicationId)},${quote(missingProjectionStatus.serviceDate)},${quote(missingProjectionStatus.exceptionSetDigest)},${quote(missingProjectionStatus.compilerVersion)},${json(missingProjectionStatus.objective)},${json(missingProjectionStatus.metrics)},${quote(missingProjectionStatus.replayDigest)},${json(missingProjectionStatus.envelope)},8,${quote(manager.managerId)},${quote(manager.managerName)},'missing-projection-status')`, /projection assignments|status-bearing|complete typed/i, "missing projection assignment status");
+  const forgedProjectionSnapshot = clone(projectionInput);
+  forgedProjectionSnapshot.envelope.semantic_snapshot.recurring_source_digest = "0".repeat(64);
+  refreshProjectionIdentity(forgedProjectionSnapshot.envelope);
+  await expectNoMutation(projectionStatement(forgedProjectionSnapshot, "forged-projection-snapshot"), /bind stable recurring source/i, "a validly signed envelope cannot substitute a forged recurring-source identity");
   const nullProjectionStatus = clone(projectionInput); nullProjectionStatus.envelope.assignments[0].status = null; refreshProjectionIdentity(nullProjectionStatus.envelope);
   await expectNoMutation(`set role service_role; select public.static_weekly_v2_materialize_projection(${quote(nullProjectionStatus.publicationId)},${quote(nullProjectionStatus.serviceDate)},${quote(nullProjectionStatus.exceptionSetDigest)},${quote(nullProjectionStatus.compilerVersion)},${json(nullProjectionStatus.objective)},${json(nullProjectionStatus.metrics)},${quote(nullProjectionStatus.replayDigest)},${json(nullProjectionStatus.envelope)},8,${quote(manager.managerId)},${quote(manager.managerName)},'null-projection-status')`, /projection assignments|status-bearing|complete typed/i, "JSON-null projection assignment status");
   const missingWorkSnapshotField = clone(projectionInput); delete missingWorkSnapshotField.envelope.assignments.find((row) => row.plan_work_id === "1:event-patch-target").work_snapshot.serviceEffortProvenance; refreshProjectionIdentity(missingWorkSnapshotField.envelope);

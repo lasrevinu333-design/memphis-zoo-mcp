@@ -287,7 +287,7 @@ try {
     const scanTrackedFamily = forged.envelope.assignments.find((row) => row.work_snapshot.serviceMode === "scan_tracked" && row.work_snapshot.includedLocations.length > 1);
     assert.ok(scanTrackedFamily, "projection tamper fixture requires one scan-tracked multi-location family");
     mutate(scanTrackedFamily);
-    forged.envelope.semantic_snapshot.active_assignments = clone(forged.envelope.assignments);
+    forged.envelope.semantic_snapshot.active_assignments_digest = postgresJsonbContentDigest(forged.envelope.assignments);
     const identity = clone(forged.envelope); delete identity.database_projection_identity;
     forged.envelope.database_projection_identity = postgresJsonbContentDigest(identity);
     await expectNoMutation(

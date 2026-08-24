@@ -7,6 +7,7 @@ import { resolve } from "node:path";
 import { promisify } from "node:util";
 import { createStaticWeeklyCompilerRuntime } from "../src/static-weekly-schedule-compiler-runtime.js";
 import { STATIC_WEEKLY_DATABASE_OPERATION_STATEMENT_TIMEOUT_MS } from "../src/static-weekly-control-plane.js";
+import { createStaticWeeklyDraftRpcInput, createStaticWeeklyProjectionRpcInput } from "../src/static-weekly-schedule-database-adapter.js";
 
 const execFileAsync = promisify(execFile);
 const packetPath = process.argv[2];
@@ -19,7 +20,7 @@ if (!Number.isSafeInteger(databaseMemoryMb) || databaseMemoryMb < 0) throw new E
 const skipLegacyTimeout = process.env.STATIC_WEEKLY_DATABASE_PROBE_SKIP_LEGACY_TIMEOUT === "1";
 const draftCachePath = process.env.STATIC_WEEKLY_DATABASE_PROBE_DRAFT_CACHE || "";
 const probeStage = process.env.STATIC_WEEKLY_DATABASE_PROBE_STAGE || "full";
-if (!["full", "attestation", "compiler", "document", "attested"].includes(probeStage)) throw new Error("STATIC_WEEKLY_DATABASE_PROBE_STAGE is invalid");
+if (!["full", "attestation", "compiler", "document", "attested", "publication"].includes(probeStage)) throw new Error("STATIC_WEEKLY_DATABASE_PROBE_STAGE is invalid");
 const migrationsDir = resolve(process.cwd(), "supabase/migrations");
 const managerId = "10000000-0000-4000-8000-000000000001";
 const quote = (value) => `'${String(value).replaceAll("'", "''")}'`;
@@ -64,18 +65,28 @@ const runtime = createStaticWeeklyCompilerRuntime();
 let removed = false;
 try {
   let draft;
+  let compiled;
   let compileMilliseconds = 0;
-  if (draftCachePath) {
+  if (draftCachePath && probeStage !== "publication") {
     draft = await readFile(draftCachePath, "utf8").then(JSON.parse).catch(() => null);
   }
   if (!draft) {
     await runtime.initialize();
     const compileStarted = performance.now();
-    draft = await runtime.compileAndPrepare(compilerInput, {
-      kind: "draft",
-      expectedRevision: 0,
-      actor: { managerId, managerName: "Eric", idempotencyKey: "production-database-runtime-probe" },
-    });
+    if (probeStage === "publication") {
+      compiled = await runtime.compile(compilerInput);
+      draft = createStaticWeeklyDraftRpcInput({
+        result: compiled,
+        expectedRevision: 0,
+        actor: { managerId, managerName: "Eric", idempotencyKey: "production-database-runtime-probe" },
+      });
+    } else {
+      draft = await runtime.compileAndPrepare(compilerInput, {
+        kind: "draft",
+        expectedRevision: 0,
+        actor: { managerId, managerName: "Eric", idempotencyKey: "production-database-runtime-probe" },
+      });
+    }
     compileMilliseconds = Math.round(performance.now() - compileStarted);
     if (draftCachePath) await writeFile(draftCachePath, `${JSON.stringify(draft)}\n`, { mode: 0o600, flag: "wx" });
   }
@@ -119,6 +130,68 @@ commit;`);
   await docker(runtimeLimits);
 
   probe: {
+    if (probeStage === "publication") {
+      assert.ok(compiled, "the publication gate must retain the exact verified compiler result");
+      const initial = await state();
+      assert.deepEqual(initial, { revision: 0, versions: 0, publications: 0, receipts: 0 });
+      const createStarted = performance.now();
+      const created = JSON.parse((await sql(`begin;
+set local role static_weekly_control_plane;
+set local statement_timeout='${STATIC_WEEKLY_DATABASE_OPERATION_STATEMENT_TIMEOUT_MS}ms';
+select public.static_weekly_v3_create_draft(${quote(draft.effectiveStart)},${quote(draft.objectiveVersion)},${json(draft.objective, "publication_objective")},${json(draft.inputProvenance, "publication_provenance")},${json(draft.document, "publication_document")},0,${quote(managerId)},'production-publication-draft',${quote(packet.sourceId)})::text;
+commit;`)).split("\n").find((line) => line.startsWith("{")));
+      const createMilliseconds = Math.round(performance.now() - createStarted);
+      assert.equal(created.revision, 1);
+
+      const published = JSON.parse((await sql(`begin;
+set local role static_weekly_control_plane;
+set local statement_timeout='${STATIC_WEEKLY_DATABASE_OPERATION_STATEMENT_TIMEOUT_MS}ms';
+select public.static_weekly_v3_publish_draft(${quote(created.data.version_id)},1,1,${quote(managerId)},'production-publication-publish','publish',null)::text;
+commit;`)).split("\n").find((line) => line.startsWith("{")));
+      assert.equal(published.revision, 2);
+
+      const projectionInput = createStaticWeeklyProjectionRpcInput({
+        result: compiled,
+        publicationId: published.data.publication_id,
+        expectedRevision: 2,
+        actor: { managerId, managerName: "Eric", idempotencyKey: "production-publication-projection" },
+      });
+      const compactEnvelopeBytes = Buffer.byteLength(JSON.stringify(projectionInput.envelope));
+      const projectionStarted = performance.now();
+      const projection = JSON.parse((await sql(`begin;
+set local role static_weekly_control_plane;
+set local statement_timeout='${STATIC_WEEKLY_DATABASE_OPERATION_STATEMENT_TIMEOUT_MS}ms';
+select public.static_weekly_v3_materialize_projection(${quote(projectionInput.publicationId)},${quote(projectionInput.serviceDate)},${quote(projectionInput.exceptionSetDigest)},${quote(projectionInput.compilerVersion)},${json(projectionInput.objective, "publication_projection_objective")},${json(projectionInput.metrics, "publication_projection_metrics")},${quote(projectionInput.replayDigest)},${json(projectionInput.envelope, "publication_projection_envelope")},2,${quote(managerId)},'production-publication-projection')::text;
+commit;`)).split("\n").find((line) => line.startsWith("{")));
+      const projectionMilliseconds = Math.round(performance.now() - projectionStarted);
+      assert.equal(projection.revision, 3);
+      const final = JSON.parse(await sql(`select jsonb_build_object(
+        'revision',(select current_revision from public.static_weekly_schedule_control where singleton),
+        'versions',(select count(*) from public.weekly_schedule_versions),
+        'publications',(select count(*) from public.weekly_schedule_publications),
+        'projections',(select count(*) from public.weekly_schedule_compiled_projections),
+        'occurrences',(select count(*) from public.weekly_schedule_occurrences),
+        'receipts',(select count(*) from public.weekly_schedule_command_receipts)
+      )::text`));
+      assert.deepEqual(final, { revision: 3, versions: 1, publications: 1, projections: 1, occurrences: compiled.weeklyAssignments.length, receipts: 3 });
+      assert.equal(projectionMilliseconds < STATIC_WEEKLY_DATABASE_OPERATION_STATEMENT_TIMEOUT_MS, true);
+      process.stdout.write(`${JSON.stringify({
+        schema: "memphis-zoo.static-weekly-production-publication-database-probe.v1",
+        packetPath: resolve(packetPath),
+        sourceId: packet.sourceId,
+        sourceDigest: packet.sourceDigest,
+        assignments: compiled.weeklyAssignments.length,
+        compactEnvelopeBytes,
+        compileMilliseconds,
+        createMilliseconds,
+        projectionMilliseconds,
+        admittedStatementTimeoutMilliseconds: STATIC_WEEKLY_DATABASE_OPERATION_STATEMENT_TIMEOUT_MS,
+        exactFinalState: final,
+        status: "PASS",
+      }, null, 2)}\n`);
+      break probe;
+    }
+
     if (probeStage !== "full") {
       const document = json(draft.document, "stage_document");
       const stageStatement = {

@@ -574,11 +574,11 @@ export function createStaticWeeklyProjectionRpcInput({ result, publicationId, ex
   const start = new Date(`${authority.effectiveDate}T00:00:00Z`);
   envelope.week_end = new Date(start.getTime() + (6 * 86_400_000)).toISOString().slice(0, 10);
   envelope.semantic_snapshot = {
-    schema: "memphis-zoo.static-weekly-projection-semantic-snapshot.v1",
-    recurring_source: recurringSemanticIdentity(authority.compilerInput),
-    overlay_source: recurringSemanticIdentity(authority.overlayCompilerInput),
-    applied_exceptions: clone(authority.appliedExceptions),
-    active_assignments: clone(assignments),
+    schema: "memphis-zoo.static-weekly-projection-semantic-snapshot.v2",
+    recurring_source_digest: postgresJsonbContentDigest(recurringSemanticIdentity(authority.compilerInput)),
+    overlay_source_digest: postgresJsonbContentDigest(recurringSemanticIdentity(authority.overlayCompilerInput)),
+    applied_exceptions_digest: postgresJsonbContentDigest(authority.appliedExceptions),
+    active_assignments_digest: postgresJsonbContentDigest(assignments),
   };
   envelope.database_projection_identity = postgresJsonbContentDigest({ ...envelope });
   return {

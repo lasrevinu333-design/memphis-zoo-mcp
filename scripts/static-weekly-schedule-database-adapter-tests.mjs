@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import { compileStaticWeeklySchedule } from "../src/static-weekly-schedule-compiler.js";
+import { compileStaticWeeklySchedule, postgresJsonbContentDigest } from "../src/static-weekly-schedule-compiler.js";
 import {
   adaptCompiledStaticWeeklySchedule,
   createStaticWeeklyDraftRpcInput,
@@ -161,6 +161,15 @@ assert.equal(draft.inputProvenance.authority_digest, real.authorityDigest);
 const projection = createStaticWeeklyProjectionRpcInput({ result: real, publicationId: "50000000-0000-4000-8000-000000000001", expectedRevision: 5, actor: { ...manager, idempotencyKey: "adapter-unit-projection" } });
 assert.equal(projection.envelope.assignments.length, real.weeklyAssignments.length, "projection is the complete seven-day optimizer projection, never a same-day subset");
 assert.equal(projection.envelope.assignments.filter((row) => row.status === "open").every((row) => row.owner_slot_id === null && row.owner_person_id === null), true);
+assert.deepEqual(
+  Object.keys(projection.envelope.semantic_snapshot).sort(),
+  ["active_assignments_digest", "applied_exceptions_digest", "overlay_source_digest", "recurring_source_digest", "schema"],
+  "the projection snapshot is one compact set of identities and never repeats production-sized source or assignment JSON",
+);
+assert.equal(projection.envelope.semantic_snapshot.schema, "memphis-zoo.static-weekly-projection-semantic-snapshot.v2");
+assert.equal(projection.envelope.semantic_snapshot.active_assignments_digest, postgresJsonbContentDigest(projection.envelope.assignments));
+assert.equal(projection.envelope.semantic_snapshot.applied_exceptions_digest, postgresJsonbContentDigest(projection.envelope.applied_exceptions));
+assert.equal(Object.values(projection.envelope.semantic_snapshot).some(Array.isArray), false, "the compact snapshot carries no repeated arrays");
 assert.deepEqual(
   projection.envelope.assignments.find((row) => row.plan_work_id === "0:repeated-work-id")?.work_snapshot?.includedLocations,
   [

@@ -2,21 +2,24 @@
   "artifact": "pending-production-migration-plan.v2",
   "project_ref": "rqquvtjdmugpigbndmne",
   "observed_production": {
-    "ledger_head": "20260824135539",
-    "source_migration_name": "static_weekly_compact_document_consumers",
-    "catalog_privilege_fingerprint": "d1b06f3375b9542659302096e68883fb765dd24589b16c4f02e344f4a669c44c",
-    "public_function_count": 482,
+    "ledger_head": "20260824160745",
+    "source_migration_name": "static_weekly_initial_contractor_snapshot",
+    "catalog_privilege_fingerprint": "462f77fa7f045c80deaf7ef59e765c6aa2ee2aeb82525362558fcf2c54ef0cbd",
+    "public_function_count": 483,
     "registered_source_count": 1,
     "active_authority_key_count": 1,
     "roster_slot_count": 17,
     "roster_incumbency_count": 17,
-    "published_version_count": 0
+    "draft_version_count": 1,
+    "published_version_count": 0,
+    "command_receipt_count": 1,
+    "authority_revision": 1
   },
   "target": {
-    "source_migration_file": "20260824132000_static_weekly_initial_contractor_snapshot.sql",
-    "source_migration_name": "static_weekly_initial_contractor_snapshot",
+    "source_migration_file": "20260824170000_static_weekly_projection_compact_snapshot.sql",
+    "source_migration_name": "static_weekly_projection_compact_snapshot",
     "ledger_version_policy": "runner_assigned_and_postverified",
-    "canonical_schema_fingerprint": "462f77fa7f045c80deaf7ef59e765c6aa2ee2aeb82525362558fcf2c54ef0cbd",
+    "canonical_schema_fingerprint": "ae05ae6baf4ca7f8a7bc4d6a9981242b1e462a1eee9ca9178aa0d550e44cec52",
     "public_function_count": 483
   },
   "source_binding": {
@@ -31,30 +34,30 @@
   },
   "preconditions": [
     "production project_ref equals rqquvtjdmugpigbndmne",
-    "production migration ledger head equals 20260824135539 and names static_weekly_compact_document_consumers",
-    "production catalog and privilege fingerprint equals d1b06f3375b9542659302096e68883fb765dd24589b16c4f02e344f4a669c44c",
-    "production exposes exactly 482 public functions",
+    "production migration ledger head equals 20260824160745 and names static_weekly_initial_contractor_snapshot",
+    "production catalog and privilege fingerprint equals 462f77fa7f045c80deaf7ef59e765c6aa2ee2aeb82525362558fcf2c54ef0cbd",
+    "production exposes exactly 483 public functions",
     "one active authority key and one immutable registered source exist",
-    "weekly roster slots and roster incumbencies each contain exactly 17 accepted bootstrap rows while versions, publications, projections, and occurrences remain empty",
+    "weekly roster slots and roster incumbencies each contain exactly 17 accepted bootstrap rows; exactly one accepted draft and receipt exist at revision 1 while publications, projections, and occurrences remain empty",
     "the exact backend commit/tree, exact Engine commit, and migration digest are externally attested",
     "the registered source remains immutable and its digest equals the accepted V10 registration receipt"
   ],
   "migrations": [
     {
       "order": 1,
-      "phase": "static_weekly_initial_contractor_snapshot",
-      "file": "20260824132000_static_weekly_initial_contractor_snapshot.sql",
-      "sha256": "40da636d025b0a5f5a4f8e23b6824e5a2f6a018e95b3121e9703314ecbb4a30c"
+      "phase": "static_weekly_projection_compact_snapshot",
+      "file": "20260824170000_static_weekly_projection_compact_snapshot.sql",
+      "sha256": "03bb41c732c73f8ac2b82f406d36b03df025e1ad72bf0f05ab1853d1d324d3fd"
     }
   ],
   "postconditions": [
     "production ledger contains exactly one new successful migration after the observed head",
-    "production catalog and privilege fingerprint equals 462f77fa7f045c80deaf7ef59e765c6aa2ee2aeb82525362558fcf2c54ef0cbd",
+    "production catalog and privilege fingerprint equals ae05ae6baf4ca7f8a7bc4d6a9981242b1e462a1eee9ca9178aa0d550e44cec52",
     "production exposes exactly 483 public functions",
-    "the pre-draft manager snapshot classifies contractor capacity from the one active immutable registered source while draft and publication snapshots remain exact-version bound",
+    "the projection validator accepts only the compact v2 digest snapshot, recomputes every source, exception and assignment identity, and retains the complete structural optimizer validator",
     "PUBLIC, anon, authenticated and service_role cannot execute static-weekly control-plane or release-operator mutation functions",
     "one active authority key and one immutable registered source remain unchanged",
-    "weekly roster slots and incumbencies remain exactly 17 while versions, publications, projections, and occurrences remain zero until the separately verified draft command",
+    "weekly roster slots and incumbencies remain exactly 17; the accepted draft, receipt and revision remain exactly one while publications, projections, and occurrences remain zero until the separately verified publication command",
     "no unexpected catalog, privilege, configuration, or row diff exists"
   ]
 }

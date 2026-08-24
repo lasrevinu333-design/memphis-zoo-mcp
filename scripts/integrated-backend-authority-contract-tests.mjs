@@ -29,7 +29,7 @@ const releaseInput = JSON.parse(readFileSync("release/integrated-backend-authori
 const releaseEvidence = JSON.parse(readFileSync("release/integrated-backend-authority-evidence.json", "utf8"));
 const pendingMigrationPlan = JSON.parse(readFileSync("release/pending-production-migration-plan.json", "utf8"));
 const exactPendingProductionMigrations = [
-  "20260824132000_static_weekly_initial_contractor_snapshot.sql",
+  "20260824170000_static_weekly_projection_compact_snapshot.sql",
 ];
 
 assert.match(phaseA, /Phase A is deliberately additive/i);
@@ -127,19 +127,22 @@ assert.match(releaseInput.cutover.phase_order[1], /release:populated-schema:pref
 assert.equal(releaseInput.cutover.production_migration_plan, "release/pending-production-migration-plan.json");
 assert.equal(pendingMigrationPlan.artifact, "pending-production-migration-plan.v2");
 assert.equal(pendingMigrationPlan.project_ref, "rqquvtjdmugpigbndmne");
-assert.equal(pendingMigrationPlan.observed_production.ledger_head, "20260824135539");
-assert.equal(pendingMigrationPlan.observed_production.source_migration_name, "static_weekly_compact_document_consumers");
-assert.equal(pendingMigrationPlan.observed_production.catalog_privilege_fingerprint, "d1b06f3375b9542659302096e68883fb765dd24589b16c4f02e344f4a669c44c");
-assert.equal(pendingMigrationPlan.observed_production.public_function_count, 482);
+assert.equal(pendingMigrationPlan.observed_production.ledger_head, "20260824160745");
+assert.equal(pendingMigrationPlan.observed_production.source_migration_name, "static_weekly_initial_contractor_snapshot");
+assert.equal(pendingMigrationPlan.observed_production.catalog_privilege_fingerprint, "462f77fa7f045c80deaf7ef59e765c6aa2ee2aeb82525362558fcf2c54ef0cbd");
+assert.equal(pendingMigrationPlan.observed_production.public_function_count, 483);
 assert.equal(pendingMigrationPlan.observed_production.registered_source_count, 1);
 assert.equal(pendingMigrationPlan.observed_production.active_authority_key_count, 1);
 assert.equal(pendingMigrationPlan.observed_production.roster_slot_count, 17);
 assert.equal(pendingMigrationPlan.observed_production.roster_incumbency_count, 17);
 assert.equal(pendingMigrationPlan.observed_production.published_version_count, 0);
-assert.equal(pendingMigrationPlan.target.source_migration_file, "20260824132000_static_weekly_initial_contractor_snapshot.sql");
-assert.equal(pendingMigrationPlan.target.source_migration_name, "static_weekly_initial_contractor_snapshot");
+assert.equal(pendingMigrationPlan.observed_production.draft_version_count, 1);
+assert.equal(pendingMigrationPlan.observed_production.command_receipt_count, 1);
+assert.equal(pendingMigrationPlan.observed_production.authority_revision, 1);
+assert.equal(pendingMigrationPlan.target.source_migration_file, "20260824170000_static_weekly_projection_compact_snapshot.sql");
+assert.equal(pendingMigrationPlan.target.source_migration_name, "static_weekly_projection_compact_snapshot");
 assert.equal(pendingMigrationPlan.target.ledger_version_policy, "runner_assigned_and_postverified");
-assert.equal(pendingMigrationPlan.target.canonical_schema_fingerprint, "462f77fa7f045c80deaf7ef59e765c6aa2ee2aeb82525362558fcf2c54ef0cbd");
+assert.equal(pendingMigrationPlan.target.canonical_schema_fingerprint, "ae05ae6baf4ca7f8a7bc4d6a9981242b1e462a1eee9ca9178aa0d550e44cec52");
 assert.equal(pendingMigrationPlan.target.public_function_count, 483);
 assert.equal(pendingMigrationPlan.authorization.production_apply_authorized, true);
 assert.deepEqual(pendingMigrationPlan.migrations.map(({ file }) => file), exactPendingProductionMigrations);
@@ -150,7 +153,7 @@ for (const [index, migration] of pendingMigrationPlan.migrations.entries()) {
 }
 assert.equal(releaseEvidence.compatibility_window.accepted_engine.scan, "scan.v2");
 assert.equal(releaseEvidence.compatibility_window.required_engine.scan, "scan.v4.snapshot-bound-authority");
-assert.equal(releaseEvidence.migrations.at(-1).name, "20260824132000_static_weekly_initial_contractor_snapshot.sql");
+assert.equal(releaseEvidence.migrations.at(-1).name, "20260824170000_static_weekly_projection_compact_snapshot.sql");
 assert.match(staticWeeklyRegisteredRosterBootstrap, /static_weekly_v6_initialize_registered_roster/i);
 assert.match(staticWeeklyRegisteredRosterBootstrap, /static_weekly_v3_assert_release_operator/i);
 assert.match(staticWeeklyRegisteredRosterBootstrap, /grant execute on function public\.static_weekly_v6_initialize_registered_roster\(uuid,uuid,text\)\s+to static_weekly_release_operator/i);
@@ -188,7 +191,7 @@ assert.ok(releaseEvidence.authority_content_identity.expected_tree_inventory.som
 assert.ok(releaseEvidence.authority_content_identity.expected_tree_inventory.some(({ path }) => path === "scripts/integrated-backend-authority-suite-order-tests.mjs"));
 assert.equal(releaseEvidence.authority_content_identity.expected_tree_inventory.some(({ path }) => path === "release/integrated-backend-authority-evidence.json"), false);
 assert.equal(releaseEvidence.authority_content_identity.authority_path_count, releaseEvidence.authority_content_identity.expected_tree_inventory.length);
-assert.equal(releaseEvidence.authority_content_identity.migration_path_count, 107);
-assert.equal(releaseEvidence.migrations.length, 107);
+assert.equal(releaseEvidence.authority_content_identity.migration_path_count, 108);
+assert.equal(releaseEvidence.migrations.length, 108);
 assert.equal(Object.hasOwn(releaseEvidence.authority_content_identity, "value"), false, "generated evidence must not self-assert a worktree-derived content hash");
 console.log("INTEGRATED_BACKEND_AUTHORITY_CONTRACT_PASS");
