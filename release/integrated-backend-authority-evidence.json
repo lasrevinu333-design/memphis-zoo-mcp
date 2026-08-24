@@ -1258,7 +1258,7 @@
       {
         "path": "scripts/static-weekly-schedule-model-tests.mjs",
         "mode": "100644",
-        "object_id": "434fc569e834d846b7e9e9d961fa8a5cea675899"
+        "object_id": "ee90ed4469588602e88f1a226ae1adc5813c941f"
       },
       {
         "path": "scripts/static-weekly-schedule-solver-lifecycle-tests.mjs",
@@ -1818,7 +1818,7 @@
       {
         "path": "src/static-weekly-schedule-model.js",
         "mode": "100644",
-        "object_id": "a0e084aa81c1ee7d77fbd630ed4aa49e3ef06b56"
+        "object_id": "c5a76c479546ccbe6f1092decec14671ec0cbc19"
       },
       {
         "path": "src/static-weekly-schedule-program.js",
