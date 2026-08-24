@@ -104,12 +104,22 @@ const productionInput = {
 };
 let productionTicks = 0;
 const productionPulse = setInterval(() => { productionTicks += 1; }, 10);
-const productionResult = await productionRuntime.compile(productionInput);
+const productionResult = await productionRuntime.compileAndPrepare(productionInput, {
+  kind: "draft",
+  expectedRevision: 0,
+  actor: {
+    managerId: "10000000-0000-4000-8000-000000000001",
+    managerName: "Runtime Test Manager",
+    idempotencyKey: "runtime-prepared-draft",
+  },
+});
 clearInterval(productionPulse);
-assert.equal(productionResult.status, "FEASIBLE");
-assert.equal(productionResult.publicationAuthority, "ACCEPTABLE");
-assert.equal(productionResult.verifier?.ok, true, "the real complete compiler, nested solver, and advanced IPC result transport pass together");
-assert.equal(productionTicks > 0, true, "the real production process path leaves the HTTP event loop responsive");
+assert.equal(productionResult.effectiveStart, "2026-08-10");
+assert.equal(productionResult.expectedRevision, 0);
+assert.equal(productionResult.actorManagerId, "10000000-0000-4000-8000-000000000001");
+assert.equal(productionResult.idempotencyKey, "runtime-prepared-draft");
+assert.equal(productionResult.document?.validation?.status, "FEASIBLE", "the real complete compiler, nested solver, database adapter, and advanced IPC result transport pass together");
+assert.equal(productionTicks > 0, true, "the real production compiler and database-adapter process path leaves the HTTP event loop responsive");
 await productionRuntime.shutdown();
 
 console.log("static weekly complete-compiler worker isolation and recovery tests: PASS");

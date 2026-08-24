@@ -237,7 +237,7 @@ export function createStaticWeeklyCompilerRuntime({
     return record.promise;
   }
 
-  async function send(input, deadline) {
+  async function send(input, preparation, deadline) {
     await start();
     const remainingMilliseconds = Math.floor(deadline - monotonicNowMilliseconds());
     if (remainingMilliseconds <= 0) throw runtimeError("static_weekly_compiler_queue_timeout", "The isolated compiler request expired while waiting for its serialized execution slot.");
@@ -255,7 +255,7 @@ export function createStaticWeeklyCompilerRuntime({
       }, remainingMilliseconds);
       record.timer.unref?.();
       try {
-        candidate.send({ type: "compile", id, input }, (error) => {
+        candidate.send({ type: "compile", id, input, preparation }, (error) => {
           if (!error || record.settled) return;
           const cause = runtimeError("static_weekly_compiler_worker_unavailable", error.message || "The compiler request could not be sent to its process.");
           clearPending(record, reject, cause);
@@ -269,15 +269,27 @@ export function createStaticWeeklyCompilerRuntime({
     });
   }
 
-  function compile(input = {}) {
+  function enqueue(input = {}, preparation = null) {
     if (closed) return Promise.reject(runtimeError("static_weekly_compiler_closed", "The isolated compiler is closed."));
     if (outstanding >= maxOutstandingRequests) return Promise.reject(runtimeError("static_weekly_compiler_busy", "The isolated compiler already has its maximum bounded request queue."));
     outstanding += 1;
     const deadline = monotonicNowMilliseconds() + requestMilliseconds;
-    const run = () => send(input, deadline);
+    const run = () => send(input, preparation, deadline);
     const queued = tail.then(run, run);
     tail = queued.then(() => undefined, () => undefined);
     return queued.finally(() => { outstanding -= 1; });
+  }
+
+  function compile(input = {}) {
+    return enqueue(input, null);
+  }
+
+  function compileAndPrepare(input = {}, preparation = {}) {
+    const kind = String(preparation?.kind || "");
+    if (!new Set(["draft", "projection"]).has(kind)) {
+      return Promise.reject(runtimeError("static_weekly_compiler_preparation_invalid", "The isolated compiler preparation kind is invalid."));
+    }
+    return enqueue(input, preparation);
   }
 
   function shutdown() {
@@ -302,12 +314,13 @@ export function createStaticWeeklyCompilerRuntime({
     return shutdownPromise;
   }
 
-  return { compile, initialize: start, getReadiness: readiness, shutdown, terminateForTest: shutdown };
+  return { compile, compileAndPrepare, initialize: start, getReadiness: readiness, shutdown, terminateForTest: shutdown };
 }
 
 const productionRuntime = createStaticWeeklyCompilerRuntime();
 
 export const compileStaticWeeklyScheduleIsolated = productionRuntime.compile;
+export const compileAndPrepareStaticWeeklyScheduleIsolated = productionRuntime.compileAndPrepare;
 export const initializeStaticWeeklyCompiler = productionRuntime.initialize;
 export const getStaticWeeklyCompilerReadiness = productionRuntime.getReadiness;
 export const shutdownStaticWeeklyCompiler = productionRuntime.shutdown;

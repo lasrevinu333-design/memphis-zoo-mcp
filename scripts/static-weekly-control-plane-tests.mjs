@@ -9,6 +9,7 @@ import { EventEmitter } from "node:events";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createStaticWeeklyControlPlane } from "../src/static-weekly-control-plane.js";
+import { createStaticWeeklyDraftRpcInput } from "../src/static-weekly-schedule-database-adapter.js";
 import { compileStaticWeeklySchedule } from "../src/static-weekly-schedule-compiler.js";
 
 const root = resolve(new URL("..", import.meta.url).pathname);
@@ -21,6 +22,7 @@ assert.match(controlPlaneSource, /set local role static_weekly_control_plane/, "
 assert.doesNotMatch(controlPlaneSource, /static_weekly_v2_/, "the control plane may invoke only the v3 authority boundary");
 assert.match(controlPlaneSource, /static_weekly_v3_read_authority_source/, "first-publication drafts must load a release-registered source of record server-side");
 assert.match(controlPlaneSource, /source\.source_id/, "draft creation must bind the immutable server-side source identity to PostgreSQL");
+assert.match(controlPlaneSource, /compileAndPrepareStaticWeeklyScheduleIsolated/, "production must isolate both compilation and database-adapter preparation so the transaction owner can keep its database lease alive");
 assert.match(runtimeSource, /requireManagerWrite, namedManager/, "every scheduler mutation route must require a trusted named manager writer");
 assert.match(runtimeSource, /\/static-weekly\/manager-snapshot[^\n]+requireManagerWrite, namedManager/, "the scheduler snapshot must use the same current named-manager association gate as mutations");
 assert.match(runtimeSource, /\/static-weekly\/drafts\/initial/, "the separately deployed control plane must expose a deployable first-draft path without accepting source facts");
@@ -296,6 +298,37 @@ const keepaliveWriteIndex = keepaliveAuthority.queries.findIndex((entry) => entr
 const keepaliveIndexes = keepaliveAuthority.queries.map((entry, index) => entry.statement === "select 1" ? index : -1).filter((index) => index >= 0);
 assert.equal(keepaliveIndexes.every((index) => index > keepaliveSourceIndex && index < keepaliveWriteIndex), true, "only the bounded solver interval receives read-only transaction keepalives");
 assert.equal(keepaliveAuthority.commits(), 1, "a slow initial draft still commits exactly once");
+
+const preparedKeepaliveAuthority = createAuthorityDatabase();
+let preparedCompilerCalls = 0;
+let rawCompilerCalls = 0;
+const preparedKeepaliveControlPlane = controlPlaneFor(preparedKeepaliveAuthority, async () => {
+  rawCompilerCalls += 1;
+  return acceptedProjection;
+}, {
+  compilerPreparer: async (_input, preparation) => {
+    preparedCompilerCalls += 1;
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 30));
+    return createStaticWeeklyDraftRpcInput({
+      result: acceptedProjection,
+      expectedRevision: preparation.expectedRevision,
+      actor: preparation.actor,
+    });
+  },
+  transactionKeepaliveMs: 5,
+});
+const preparedSlowInitialDraft = await preparedKeepaliveControlPlane.createInitialDraft({
+  manager,
+  sourceId: authoritySourceId,
+  effectiveStart: "2026-10-05",
+  expectedRevision: 0,
+  idempotencyKey: "slow-prepared-initial-draft",
+});
+assert.equal(preparedSlowInitialDraft.revision, 1, "a bounded slow isolated adapter creates one initial draft");
+assert.equal(preparedCompilerCalls, 1, "the production-shaped initial draft performs compiler and adapter preparation in one isolated request");
+assert.equal(rawCompilerCalls, 0, "the production-shaped initial draft cannot fall back to event-loop-blocking local adapter preparation");
+assert.equal(preparedKeepaliveAuthority.heartbeatAttempts() >= 2, true, "the transaction keepalive continues through isolated database-adapter preparation");
+assert.equal(preparedKeepaliveAuthority.commits(), 1, "the prepared initial draft commits exactly once");
 
 const failedKeepaliveAuthority = createAuthorityDatabase({ failHeartbeatAt: 1 });
 const failedKeepaliveControlPlane = controlPlaneFor(failedKeepaliveAuthority, async () => {
