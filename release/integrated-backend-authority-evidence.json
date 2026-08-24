@@ -1203,7 +1203,7 @@
       {
         "path": "scripts/static-weekly-control-plane-tests.mjs",
         "mode": "100644",
-        "object_id": "1c1f229637a039ef078b25a6e7b3a0d742ba90a2"
+        "object_id": "5d5acf4e3cc0e0794189ec30375de2181c959558"
       },
       {
         "path": "scripts/static-weekly-day-changes-database-tests.mjs",
@@ -1214,6 +1214,11 @@
         "path": "scripts/static-weekly-employee-day-route-tests.mjs",
         "mode": "100644",
         "object_id": "25b36ee73ccdddfc929a707c1cc1993c32ef1cba"
+      },
+      {
+        "path": "scripts/static-weekly-production-database-runtime-probe.mjs",
+        "mode": "100644",
+        "object_id": "92e26b6f952f348072b114f756eaf1820931c3b7"
       },
       {
         "path": "scripts/static-weekly-production-packet-runtime-probe.mjs",
@@ -1803,7 +1808,7 @@
       {
         "path": "src/static-weekly-control-plane.js",
         "mode": "100644",
-        "object_id": "673b8d2ffb7610a411fede9a83fba891202e41ac"
+        "object_id": "af0848622808190b061f94573942c6237063fd83"
       },
       {
         "path": "src/static-weekly-schedule-compiler-runtime.js",
@@ -3021,7 +3026,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 583,
+    "authority_path_count": 584,
     "migration_path_count": 102,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
