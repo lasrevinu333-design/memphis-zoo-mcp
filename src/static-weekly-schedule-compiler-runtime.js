@@ -153,6 +153,7 @@ export function createStaticWeeklyCompilerRuntime({
     candidate?.removeAllListeners?.("message");
     candidate?.removeAllListeners?.("error");
     candidate?.removeAllListeners?.("exit");
+    candidate?.removeAllListeners?.("close");
   }
 
   function discard(candidate, cause) {
@@ -244,7 +245,11 @@ export function createStaticWeeklyCompilerRuntime({
       else clearPending(active, active.resolve, message.result);
     });
     candidate.on("error", (error) => failActive(candidate, runtimeError("static_weekly_compiler_worker_crashed", error?.message || "The isolated compiler process crashed.")));
-    candidate.on("exit", (code, signal) => {
+    // `exit` can precede delivery of the final bytes from a piped stderr
+    // stream. `close` is emitted only after the process has exited and its
+    // stdio streams have closed, so the bounded diagnostic tail is complete
+    // before it is attached to the failed operation.
+    candidate.on("close", (code, signal) => {
       if (candidateGeneration !== generation || worker !== candidate) return;
       const cause = runtimeError(
         "static_weekly_compiler_worker_exited",
