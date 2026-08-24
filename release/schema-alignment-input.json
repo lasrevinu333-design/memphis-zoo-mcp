@@ -3,9 +3,9 @@
   "frontend_commit_sha": "4fb8d9517ed6d4cd941d40162f434327fb6073c2",
   "frontend_commit_state": "final_pair_bound",
   "backend_minimum_version": "release-2026.07.19.custodial-v3.12",
-  "schema_from_fingerprint": "3df9551ba5f5fe0c5222cd5e0a0b5cfc6895d2fa60d653ba2fd70ba52085db1b",
+  "schema_from_fingerprint": "65ba7435cba29a9ab1ad98d29e4c095fa648083ff31bb7df4815d2c534e49e54",
   "schema_transition": {
-    "transition_id": "static-weekly-roster-bootstrap-20260823",
+    "transition_id": "static-weekly-memory-bounded-draft-20260824",
     "expires_at": "2026-09-03T23:59:59Z"
   },
   "api_contract_versions": {

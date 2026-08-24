@@ -8,7 +8,7 @@ import { promisify } from "node:util";
 import fs from "node:fs";
 import path from "node:path";
 import { compileStaticWeeklySchedule, postgresJsonbContentDigest } from "../src/static-weekly-schedule-compiler.js";
-import { createStaticWeeklyDraftRpcInput, createStaticWeeklyProjectionRpcInput } from "../src/static-weekly-schedule-database-adapter.js";
+import { createStaticWeeklyDraftRpcInput, createStaticWeeklyProjectionRpcInput, staticWeeklyDatabaseDocumentIdentity } from "../src/static-weekly-schedule-database-adapter.js";
 import { prepareStaticWeeklyRegistrationArtifact, validateStaticWeeklyPacket } from "./static-weekly-schedule-candidate-importer.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -20,15 +20,7 @@ const json = (value) => `$$${JSON.stringify(value)}$$::jsonb`;
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const rebindDocumentValidation = (document) => {
   document.validation.receipt_digest = postgresJsonbContentDigest(document.receipt);
-  document.validation.database_document_identity = postgresJsonbContentDigest({
-    adapter: document.adapter,
-    authority: document.authority,
-    receipt: document.receipt,
-    slot_availability: document.slot_availability,
-    assignments: document.assignments,
-    objective_inputs: document.objective_inputs,
-    semantic_snapshot: document.semantic_snapshot,
-  });
+  document.validation.database_document_identity = staticWeeklyDatabaseDocumentIdentity(document);
 };
 const docker = (args, options = {}) => execFileAsync("docker", args, { maxBuffer: 32 * 1024 * 1024, ...options });
 const shiftDays = (date, days) => { const value = new Date(`${date}T12:00:00Z`); value.setUTCDate(value.getUTCDate() + days); return value.toISOString().slice(0, 10); };
@@ -244,8 +236,8 @@ try {
   await expectReject(`set role service_role; select public.static_weekly_v2_create_draft(${quote(draft.effectiveStart)},${quote(draft.objectiveVersion)},${json(draft.objective)},${json(draft.inputProvenance)},${json(draft.document)},0,${quote(manager.managerId)},${quote(manager.managerName)},'forged-v2')`, /permission denied/i);
   for (const [label, idempotencyKey, mutate] of [
     ["forged v5 tier receipt digest", "forged-v5-tier-receipt", (document) => { document.receipt.compiler.certificate.tierReceiptDigest = "0".repeat(64); }],
-    ["forged deterministic authority certificate", "forged-v5-authority-certificate", (document) => { document.receipt.compiler.authorityCertificate.assignmentDigest = "0".repeat(64); }],
-    ["forged deterministic authority tiers", "forged-v5-authority-tiers", (document) => { document.receipt.compiler.authorityTiers[0].objectiveValue += 1; }],
+    ["forged deterministic authority certificate", "forged-v5-authority-certificate", (document) => { document.authority.optimizerResult.certificate.assignmentDigest = "0".repeat(64); }],
+    ["forged deterministic authority tiers", "forged-v5-authority-tiers", (document) => { document.authority.optimizerResult.tiers[0].objectiveValue += 1; }],
     ["missing execution duration", "missing-v5-execution-duration", (document) => { delete document.receipt.compiler.certificate.execution.durationMilliseconds; }],
     ["missing execution result bytes", "missing-v5-execution-result-bytes", (document) => { delete document.receipt.compiler.certificate.execution.resultBytes; }],
     ["unexpected execution field", "unexpected-v5-execution-field", (document) => { document.receipt.compiler.certificate.execution.unexpected = 1; }],
@@ -256,11 +248,11 @@ try {
     rebindDocumentValidation(forgedReceiptDocument);
     await expectNoMutation(
       cp("static_weekly_v3_create_draft", `${quote(draft.effectiveStart)},${quote(draft.objectiveVersion)},${json(draft.objective)},${json(draft.inputProvenance)},${json(forgedReceiptDocument)},0,${quote(manager.managerId)},${quote(idempotencyKey)},${quote(sourceId)}`),
-      /v5 solver|tier receipt|deterministic authority|certificate|execution/i,
+      /v5 solver|tier receipt|deterministic authority|certificate|execution|compiler input, baseline, solution, authority, and replay identities/i,
       label,
     );
   }
-  const forgedDocument = clone(draft.document); forgedDocument.semantic_snapshot.recurring_source.slots[0].label = "forged caller source";
+  const forgedDocument = clone(draft.document); forgedDocument.authority.compilerInput.slots[0].label = "forged caller source";
   await expectNoMutation(cp("static_weekly_v3_create_draft", `${quote(draft.effectiveStart)},${quote(draft.objectiveVersion)},${json(draft.objective)},${json(draft.inputProvenance)},${json(forgedDocument)},0,${quote(manager.managerId)},'forged-v3-source',${quote(sourceId)}`), /registered recurring source|compiler input/i, "forged control-plane compiler source");
   const created = JSON.parse(await scalar(cp("static_weekly_v3_create_draft", `${quote(draft.effectiveStart)},${quote(draft.objectiveVersion)},${json(draft.objective)},${json(draft.inputProvenance)},${json(draft.document)},0,${quote(manager.managerId)},'v3-create',${quote(sourceId)}`)));
   const versionId = created.data.version_id;

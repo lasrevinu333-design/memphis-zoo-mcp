@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
-import { readFile, readdir } from "node:fs/promises";
+import { readFile, readdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { promisify } from "node:util";
 import { createStaticWeeklyCompilerRuntime } from "../src/static-weekly-schedule-compiler-runtime.js";
@@ -13,6 +13,13 @@ const packetPath = process.argv[2];
 if (!packetPath) throw new Error("Usage: static-weekly-production-database-runtime-probe.mjs <verified-packet.json>");
 
 const container = `mz_static_weekly_production_db_probe_${process.pid}`;
+const dataVolume = `${container}_data`;
+const databaseMemoryMb = Number.parseInt(process.env.STATIC_WEEKLY_DATABASE_PROBE_MEMORY_MB || "0", 10);
+if (!Number.isSafeInteger(databaseMemoryMb) || databaseMemoryMb < 0) throw new Error("STATIC_WEEKLY_DATABASE_PROBE_MEMORY_MB must be a non-negative integer");
+const skipLegacyTimeout = process.env.STATIC_WEEKLY_DATABASE_PROBE_SKIP_LEGACY_TIMEOUT === "1";
+const draftCachePath = process.env.STATIC_WEEKLY_DATABASE_PROBE_DRAFT_CACHE || "";
+const probeStage = process.env.STATIC_WEEKLY_DATABASE_PROBE_STAGE || "full";
+if (!["full", "attestation", "compiler", "document", "attested"].includes(probeStage)) throw new Error("STATIC_WEEKLY_DATABASE_PROBE_STAGE is invalid");
 const migrationsDir = resolve(process.cwd(), "supabase/migrations");
 const managerId = "10000000-0000-4000-8000-000000000001";
 const quote = (value) => `'${String(value).replaceAll("'", "''")}'`;
@@ -30,6 +37,10 @@ async function sql(statement) {
     let stderr = "";
     child.stdout.on("data", (chunk) => { stdout += chunk; });
     child.stderr.on("data", (chunk) => { stderr += chunk; });
+    // psql may close stdin before Node finishes writing a multi-megabyte
+    // statement. The child close event carries the authoritative SQL error;
+    // consume EPIPE here so it cannot replace that diagnostic.
+    child.stdin.on("error", () => {});
     child.once("error", reject);
     child.once("close", (code) => code === 0
       ? resolvePromise(stdout.trim())
@@ -52,21 +63,34 @@ compilerInput.exceptions = [];
 const runtime = createStaticWeeklyCompilerRuntime();
 let removed = false;
 try {
-  await runtime.initialize();
-  const compileStarted = performance.now();
-  const draft = await runtime.compileAndPrepare(compilerInput, {
-    kind: "draft",
-    expectedRevision: 0,
-    actor: { managerId, managerName: "Eric", idempotencyKey: "production-database-runtime-probe" },
-  });
-  const compileMilliseconds = Math.round(performance.now() - compileStarted);
+  let draft;
+  let compileMilliseconds = 0;
+  if (draftCachePath) {
+    draft = await readFile(draftCachePath, "utf8").then(JSON.parse).catch(() => null);
+  }
+  if (!draft) {
+    await runtime.initialize();
+    const compileStarted = performance.now();
+    draft = await runtime.compileAndPrepare(compilerInput, {
+      kind: "draft",
+      expectedRevision: 0,
+      actor: { managerId, managerName: "Eric", idempotencyKey: "production-database-runtime-probe" },
+    });
+    compileMilliseconds = Math.round(performance.now() - compileStarted);
+    if (draftCachePath) await writeFile(draftCachePath, `${JSON.stringify(draft)}\n`, { mode: 0o600, flag: "wx" });
+  }
   assert.equal(draft.document?.validation?.status, "FEASIBLE");
   assert.equal(draft.document?.receipt?.compiler?.verifier?.ok, true);
   assert.equal(draft.document?.receipt?.compiler?.independentVerification?.ok, true);
+  assert.equal(draft.effectiveStart, packet.effectiveDate, "a cached draft must target the packet effective date");
+  assert.equal(draft.document?.authority?.baselineInputDigest, packet.sourceDigest, "a cached draft must bind the exact verified source packet");
 
   const postgresImage = process.env.SCHEMA_REBUILD_DOCKER_IMAGE || "supabase/postgres@sha256:80d7b27c3e8d77cfa7226eee9508671796da214781ff15a35b3670d7ad5ee453";
   await docker(["image", "inspect", postgresImage]);
-  await docker(["run", "--rm", "-d", "--name", container, "--tmpfs", "/var/lib/postgresql/data:rw,size=1g", "-e", "POSTGRES_PASSWORD=postgres", postgresImage]);
+  const databaseStorage = databaseMemoryMb > 0
+    ? ["--mount", `type=volume,source=${dataVolume},target=/var/lib/postgresql/data`]
+    : ["--tmpfs", "/var/lib/postgresql/data:rw,size=1g"];
+  await docker(["run", "--rm", "-d", "--name", container, ...databaseStorage, "-e", "POSTGRES_PASSWORD=postgres", postgresImage]);
   for (let attempt = 0; attempt < 120; attempt += 1) {
     try {
       await sql("select 1");
@@ -89,45 +113,70 @@ select public.static_weekly_v3_configure_initial_authority_key('static-weekly-au
 select public.static_weekly_v3_register_authority_source(${quote(packet.sourceId)},${json(packet.compilerInput, "source")},'production-database-probe');
 select public.static_weekly_v6_initialize_registered_roster(${quote(packet.sourceId)},${quote(managerId)},'production-database-probe');
 commit;`);
-  await docker(["update", "--cpus", "0.10", container]);
+  const runtimeLimits = ["update", "--cpus", "0.10"];
+  if (databaseMemoryMb > 0) runtimeLimits.push("--memory", `${databaseMemoryMb}m`, "--memory-swap", `${databaseMemoryMb}m`);
+  runtimeLimits.push(container);
+  await docker(runtimeLimits);
 
-  const call = (timeoutMs, key) => `begin;
+  probe: {
+    if (probeStage !== "full") {
+      const document = json(draft.document, "stage_document");
+      const stageStatement = {
+        attestation: `select public.static_weekly_v6_issue_document_attestation(${document})::text`,
+        compiler: `select public.static_weekly_assert_compiler_authority(${document}->'authority',${document}->'receipt',${quote(draft.effectiveStart)},true)`,
+        document: `select public.static_weekly_assert_document(jsonb_set(${document}-'semantic_snapshot','{validation,database_document_identity}',to_jsonb(public.static_weekly_document_identity(${document}-'semantic_snapshot')),true),${quote(draft.effectiveStart)},true)`,
+        attested: `do $stage$ declare v_document jsonb:=${document}; begin v_document:=jsonb_set(v_document,'{attestation}',public.static_weekly_v6_issue_document_attestation(v_document),true); perform public.static_weekly_assert_document_attested(v_document,${quote(draft.effectiveStart)},true); end $stage$`,
+      }[probeStage];
+      const stageStarted = performance.now();
+      await sql(`begin; set local statement_timeout='${STATIC_WEEKLY_DATABASE_OPERATION_STATEMENT_TIMEOUT_MS}ms'; ${stageStatement}; rollback;`);
+      process.stdout.write(`${JSON.stringify({ schema: "memphis-zoo.static-weekly-production-database-stage-probe.v1", probeStage, databaseMemoryMb, stageMilliseconds: Math.round(performance.now() - stageStarted), status: "PASS" }, null, 2)}\n`);
+      break probe;
+    }
+
+    const call = (timeoutMs, key) => `begin;
 set local role static_weekly_control_plane;
 set local statement_timeout='${timeoutMs}ms';
 select public.static_weekly_v3_create_draft(${quote(draft.effectiveStart)},${quote(draft.objectiveVersion)},${json(draft.objective, "objective")},${json(draft.inputProvenance, "provenance")},${json(draft.document, "document")},0,${quote(managerId)},${quote(key)},${quote(packet.sourceId)})::text;
 rollback;`;
 
-  const before = await state();
-  const legacyStarted = performance.now();
-  await assert.rejects(() => sql(call(30_000, "production-database-probe-legacy")), (error) => /statement timeout/i.test(`${error.stderr}\n${error.stdout}\n${error.message}`));
-  const legacyTimeoutMilliseconds = Math.round(performance.now() - legacyStarted);
-  assert.deepEqual(await state(), before, "the legacy 30-second cancellation must roll back every authority effect");
+    const before = await state();
+    let legacyTimeoutMilliseconds = null;
+    if (!skipLegacyTimeout) {
+      const legacyStarted = performance.now();
+      await assert.rejects(() => sql(call(30_000, "production-database-probe-legacy")), (error) => /statement timeout/i.test(`${error.stderr}\n${error.stdout}\n${error.message}`));
+      legacyTimeoutMilliseconds = Math.round(performance.now() - legacyStarted);
+      assert.deepEqual(await state(), before, "the legacy 30-second cancellation must roll back every authority effect");
+    }
 
-  const admittedStarted = performance.now();
-  const admitted = await sql(call(STATIC_WEEKLY_DATABASE_OPERATION_STATEMENT_TIMEOUT_MS, "production-database-probe-admitted"));
-  const admittedDatabaseMilliseconds = Math.round(performance.now() - admittedStarted);
-  assert.match(admitted, /"revision"\s*:\s*1/);
-  assert.deepEqual(await state(), before, "the admitted success probe also rolls back every disposable authority effect");
-  assert.equal(compileMilliseconds + admittedDatabaseMilliseconds < 315_000, true, "compile plus database admission must fit the production request deadline");
+    const admittedStarted = performance.now();
+    const admitted = await sql(call(STATIC_WEEKLY_DATABASE_OPERATION_STATEMENT_TIMEOUT_MS, "production-database-probe-admitted"));
+    const admittedDatabaseMilliseconds = Math.round(performance.now() - admittedStarted);
+    assert.match(admitted, /"revision"\s*:\s*1/);
+    assert.deepEqual(await state(), before, "the admitted success probe also rolls back every disposable authority effect");
+    assert.equal(compileMilliseconds + admittedDatabaseMilliseconds < 315_000, true, "compile plus database admission must fit the production request deadline");
 
-  process.stdout.write(`${JSON.stringify({
-    schema: "memphis-zoo.static-weekly-production-database-runtime-probe.v1",
-    packetPath: resolve(packetPath),
-    sourceId: packet.sourceId,
-    sourceDigest: packet.sourceDigest,
-    disposableDatabaseCpuLimit: 0.10,
-    legacyStatementTimeoutMilliseconds: 30_000,
-    legacyTimeoutObservedMilliseconds: legacyTimeoutMilliseconds,
-    admittedStatementTimeoutMilliseconds: STATIC_WEEKLY_DATABASE_OPERATION_STATEMENT_TIMEOUT_MS,
-    compileMilliseconds,
-    admittedDatabaseMilliseconds,
-    combinedMilliseconds: compileMilliseconds + admittedDatabaseMilliseconds,
-    requestDeadlineMilliseconds: 315_000,
-    exactRollbackState: before,
-    status: "PASS",
-  }, null, 2)}\n`);
+    process.stdout.write(`${JSON.stringify({
+      schema: "memphis-zoo.static-weekly-production-database-runtime-probe.v1",
+      packetPath: resolve(packetPath),
+      sourceId: packet.sourceId,
+      sourceDigest: packet.sourceDigest,
+      disposableDatabaseCpuLimit: 0.10,
+      disposableDatabaseMemoryLimitMb: databaseMemoryMb || null,
+      legacyStatementTimeoutMilliseconds: 30_000,
+      legacyTimeoutProbeSkipped: skipLegacyTimeout,
+      legacyTimeoutObservedMilliseconds: legacyTimeoutMilliseconds,
+      admittedStatementTimeoutMilliseconds: STATIC_WEEKLY_DATABASE_OPERATION_STATEMENT_TIMEOUT_MS,
+      compileMilliseconds,
+      admittedDatabaseMilliseconds,
+      combinedMilliseconds: compileMilliseconds + admittedDatabaseMilliseconds,
+      requestDeadlineMilliseconds: 315_000,
+      exactRollbackState: before,
+      status: "PASS",
+    }, null, 2)}\n`);
+  }
 } finally {
   await runtime.shutdown().catch(() => {});
   await docker(["rm", "-f", container]).then(() => { removed = true; }).catch(() => {});
+  if (databaseMemoryMb > 0) await docker(["volume", "rm", "-f", dataVolume]).catch(() => {});
   if (!removed) process.stderr.write(`warning: disposable container ${container} may require cleanup\n`);
 }
