@@ -2,25 +2,27 @@
   "artifact": "pending-production-migration-plan.v2",
   "project_ref": "rqquvtjdmugpigbndmne",
   "observed_production": {
-    "ledger_head": "20260824160745",
-    "source_migration_name": "static_weekly_initial_contractor_snapshot",
-    "catalog_privilege_fingerprint": "462f77fa7f045c80deaf7ef59e765c6aa2ee2aeb82525362558fcf2c54ef0cbd",
+    "ledger_head": "20260824170816",
+    "source_migration_name": "static_weekly_projection_compact_snapshot",
+    "catalog_privilege_fingerprint": "ae05ae6baf4ca7f8a7bc4d6a9981242b1e462a1eee9ca9178aa0d550e44cec52",
     "public_function_count": 483,
     "registered_source_count": 1,
     "active_authority_key_count": 1,
     "roster_slot_count": 17,
     "roster_incumbency_count": 17,
-    "draft_version_count": 1,
-    "published_version_count": 0,
-    "command_receipt_count": 1,
-    "authority_revision": 1
+    "draft_version_count": 0,
+    "published_version_count": 1,
+    "command_receipt_count": 3,
+    "authority_revision": 3,
+    "projection_count": 1,
+    "occurrence_count": 452
   },
   "target": {
-    "source_migration_file": "20260824170000_static_weekly_projection_compact_snapshot.sql",
-    "source_migration_name": "static_weekly_projection_compact_snapshot",
+    "source_migration_file": "20260824213000_static_weekly_operational_truth_cutover.sql",
+    "source_migration_name": "static_weekly_operational_truth_cutover",
     "ledger_version_policy": "runner_assigned_and_postverified",
-    "canonical_schema_fingerprint": "ae05ae6baf4ca7f8a7bc4d6a9981242b1e462a1eee9ca9178aa0d550e44cec52",
-    "public_function_count": 483
+    "canonical_schema_fingerprint": "687d757ef4a39184a003931362f679e7c012edbf4c57f9849512978364899e0f",
+    "public_function_count": 487
   },
   "source_binding": {
     "kind": "external_exact_head_release_attestation",
@@ -30,34 +32,35 @@
     "production_apply_authorized": true,
     "required_boundary": "Eric approved autonomous program continuation and production changes required for the exact candidate",
     "sequence_policy": "single_migration_stop_on_failed_preflight_or_postcheck",
-    "rollback_policy": "forward_recovery_only; keep the scheduler unpublished; if post-verification fails, retire the new function and restore its exact ACL state through one reviewed forward-recovery migration while preserving the ledger and all registered source/key evidence"
+    "rollback_policy": "forward_recovery_only; keep the accepted publication and occurrences immutable; if post-verification fails, restore the prior compatibility views/functions and exact ACL state through one reviewed forward-recovery migration while preserving the ledger and all schedule evidence"
   },
   "preconditions": [
     "production project_ref equals rqquvtjdmugpigbndmne",
-    "production migration ledger head equals 20260824160745 and names static_weekly_initial_contractor_snapshot",
-    "production catalog and privilege fingerprint equals 462f77fa7f045c80deaf7ef59e765c6aa2ee2aeb82525362558fcf2c54ef0cbd",
+    "production migration ledger head equals 20260824170816 and names static_weekly_projection_compact_snapshot",
+    "production catalog and privilege fingerprint equals ae05ae6baf4ca7f8a7bc4d6a9981242b1e462a1eee9ca9178aa0d550e44cec52",
     "production exposes exactly 483 public functions",
     "one active authority key and one immutable registered source exist",
-    "weekly roster slots and roster incumbencies each contain exactly 17 accepted bootstrap rows; exactly one accepted draft and receipt exist at revision 1 while publications, projections, and occurrences remain empty",
+    "weekly roster slots and roster incumbencies each contain exactly 17 accepted rows; exactly one publication, one projection, 452 occurrences and three command receipts exist at authority revision 3 while drafts remain empty",
     "the exact backend commit/tree, exact Engine commit, and migration digest are externally attested",
     "the registered source remains immutable and its digest equals the accepted V10 registration receipt"
   ],
   "migrations": [
     {
       "order": 1,
-      "phase": "static_weekly_projection_compact_snapshot",
-      "file": "20260824170000_static_weekly_projection_compact_snapshot.sql",
-      "sha256": "03bb41c732c73f8ac2b82f406d36b03df025e1ad72bf0f05ab1853d1d324d3fd"
+      "phase": "static_weekly_operational_truth_cutover",
+      "file": "20260824213000_static_weekly_operational_truth_cutover.sql",
+      "sha256": "09bcf7f5ac1e8b4f6d04657df1c62c24e174058b5472652187aed6785df31f3d"
     }
   ],
   "postconditions": [
     "production ledger contains exactly one new successful migration after the observed head",
-    "production catalog and privilege fingerprint equals ae05ae6baf4ca7f8a7bc4d6a9981242b1e462a1eee9ca9178aa0d550e44cec52",
-    "production exposes exactly 483 public functions",
-    "the projection validator accepts only the compact v2 digest snapshot, recomputes every source, exception and assignment identity, and retains the complete structural optimizer validator",
+    "production catalog and privilege fingerprint equals 687d757ef4a39184a003931362f679e7c012edbf4c57f9849512978364899e0f",
+    "production exposes exactly 487 public functions",
+    "employee, manager, dashboard, analytics and notification schedule truth all resolve the exact effective static-weekly projection and fail closed when its projection is missing or stale",
+    "response-only and reminder-only work never becomes a physical cleaning obligation, due alert or employee location notification",
     "PUBLIC, anon, authenticated and service_role cannot execute static-weekly control-plane or release-operator mutation functions",
     "one active authority key and one immutable registered source remain unchanged",
-    "weekly roster slots and incumbencies remain exactly 17; the accepted draft, receipt and revision remain exactly one while publications, projections, and occurrences remain zero until the separately verified publication command",
+    "weekly roster slots and incumbencies remain exactly 17; the accepted publication, projection, 452 occurrences, three receipts and authority revision 3 remain unchanged",
     "no unexpected catalog, privilege, configuration, or row diff exists"
   ]
 }

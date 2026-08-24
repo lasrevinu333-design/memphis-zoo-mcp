@@ -1492,34 +1492,21 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
 
       const rows = await runReadOnlySql(`
         select * from (
-          with assigned_groups as (
-            select distinct
-              s.location_group_id,
-              s.group_code,
-              s.group_name,
-              coalesce(s.coverage_purpose, 'area_owner') as coverage_purpose
-            from public.sch_get_daily_schedule_with_purpose('${esc(serviceDate)}'::date) s
-            where s.assigned_employee_id = '${esc(assignment.assigned_employee_id)}'::uuid
-              and coalesce(s.coverage_purpose, 'area_owner') <> 'reminder'
-          ),
           assigned_locations as (
-            select distinct on (l.id)
-              ag.location_group_id,
-              ag.group_code,
-              ag.group_name,
-              ag.coverage_purpose,
-              l.id as location_id,
-              l.location_code,
-              l.location_name,
-              l.form_type
-            from assigned_groups ag
-            join public.location_group_memberships lgm
-              on lgm.location_group_id = ag.location_group_id
-             and lgm.active = true
-            join public.locations l
-              on l.id = lgm.location_id
-             and l.active = true
-            order by l.id, ag.group_name, ag.group_code
+            select distinct on (assignment.location_id)
+              assignment.location_group_id,
+              assignment.group_code,
+              assignment.group_name,
+              'area_owner'::text as coverage_purpose,
+              assignment.location_id,
+              assignment.location_code,
+              assignment.location_name,
+              assignment.form_type
+            from public.custodial_operational_location_assignments('${esc(serviceDate)}'::date) assignment
+            where assignment.assigned_employee_id = '${esc(assignment.assigned_employee_id)}'::uuid
+              and assignment.assignment_status = 'ASSIGNED'
+            order by assignment.location_id, assignment.coverage_start,
+              assignment.group_name, assignment.group_code
           )
           select
             '${esc(serviceDate)}'::date as service_date,

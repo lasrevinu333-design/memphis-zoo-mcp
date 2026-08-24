@@ -136,6 +136,10 @@ assert.ok(
 );
 assert.match(parsedPackageManifest.scripts["test:integrated-backend-authority-cutover:database"], / --database$/,
   "the signed release database command must not silently degrade to source-only acceptance");
+const productionRepairGate = readFileSync(resolve(workflowDirectory, "custodial-production-repair.yml"), "utf8");
+assert.match(productionRepairGate,
+  /CUSTODIAL_STATIC_TRUTH_TEST_DOCKER_CONTAINER="\$container"[\s\S]*npm run --silent test:static-weekly-operational-truth-db/,
+  "the complete repair gate must prove canonical operational truth against its exact rebuilt schema");
 const populatedSchemaPreflight = readFileSync(resolve(workflowDirectory, "custodial-populated-schema-preflight.yml"), "utf8");
 assert.match(populatedSchemaPreflight, /test -n "\$SCHEMA_FINGERPRINT_MCP_URL"/,
   "the production schema preflight must reject a missing read-only MCP endpoint");

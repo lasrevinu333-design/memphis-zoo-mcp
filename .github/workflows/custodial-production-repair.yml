@@ -117,6 +117,9 @@ jobs:
           OPERATIONAL_ANALYTICS_TEST_DOCKER_CONTAINER="$container" \
             OPERATIONAL_ANALYTICS_TEST_DATABASE=postgres \
             npm run --silent test:operational-analytics-db
+          CUSTODIAL_STATIC_TRUTH_TEST_DOCKER_CONTAINER="$container" \
+            CUSTODIAL_STATIC_TRUTH_TEST_DATABASE=postgres \
+            npm run --silent test:static-weekly-operational-truth-db
           CLEANING_IDENTITY_TEST_DOCKER_CONTAINER="$container" \
             CLEANING_IDENTITY_TEST_DATABASE=postgres \
             npm run --silent test:cleaning-identity-gps-db

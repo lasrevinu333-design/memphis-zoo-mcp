@@ -172,6 +172,7 @@ const fallbackCalls = [];
 await withServer(buildApp(async (sql) => {
   fallbackCalls.push(sql);
   if (sql.includes("static_weekly_v5_read_employee_day")) return [{ data: { governed: false, source: "legacy_daily_schedule" } }];
+  if (sql.includes("static_weekly_v6_schedule_authority_state")) return [{ governed: false, authority_source: "legacy_daily_schedule", projection_status: "legacy_ungoverned" }];
   if (sql.includes("as roster_count") && sql.includes("as assignment_count")) return [{ current_service_date: serviceDate, roster_count: 1, assignment_count: 1 }];
   if (sql.includes("sch_employee_my_schedule_page")) return [{ data: { ok: true, employee_name: "Legacy Employee", employee: { display_name: "Legacy Employee" }, shift: { start: "07:00 AM", end: "04:00 PM", active: true }, current_items: [] } }];
   if (sql.includes("sch_get_daily_schedule_with_purpose")) return [{ group_code: "LEGACY", group_name: "Legacy Area", included_locations: ["Legacy Area"], coverage_start: "08:00 AM", coverage_end: "09:00 AM", status: "ASSIGNED" }];
@@ -189,14 +190,14 @@ const missingFunctionCalls = [];
 await withServer(buildApp(async (sql) => {
   missingFunctionCalls.push(sql);
   if (sql.includes("static_weekly_v5_read_employee_day")) throw new Error("function public.static_weekly_v5_read_employee_day(date, uuid, timestamp with time zone) does not exist");
-  if (sql.includes("as roster_count") && sql.includes("as assignment_count")) return [{ current_service_date: serviceDate, roster_count: 1, assignment_count: 1 }];
-  if (sql.includes("sch_employee_my_schedule_page")) return [{ data: { ok: true, employee_name: "Rollout Employee", employee: { display_name: "Rollout Employee" }, shift: { start: "07:00 AM", end: "04:00 PM", active: true }, current_items: [] } }];
-  if (sql.includes("sch_get_daily_schedule_with_purpose")) return [];
+  if (sql.includes("static_weekly_v6_schedule_authority_state")) throw new Error("function public.static_weekly_v6_schedule_authority_state(date) does not exist");
   throw new Error(`unexpected rollout query: ${sql}`);
 }), async (origin) => {
   const response = await fetch(`${origin}/schedule-api/my-day-summary?employee_id=${employeeId}&service_date=${serviceDate}`);
-  assert.equal(response.status, 200);
+  assert.equal(response.status, 503);
+  const payload = await response.json();
+  assert.equal(payload.code, "schedule_authority_unavailable");
 });
-assert.ok(missingFunctionCalls.some((sql) => sql.includes("sch_employee_my_schedule_page")), "rolling backend deploy retains compatibility until the migration is installed");
+assert.ok(!missingFunctionCalls.some((sql) => sql.includes("sch_employee_my_schedule_page")), "missing canonical authority fails closed instead of reaching a legacy writer or reader");
 
 console.log("STATIC_WEEKLY_EMPLOYEE_DAY_ROUTE_PASS");

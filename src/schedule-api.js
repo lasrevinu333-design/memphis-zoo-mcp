@@ -608,9 +608,69 @@ export function createScheduleRouter({
   const restroomRebalanceScheduler = resolveRestroomRebalanceScheduler(process.env);
   const RESTROOM_REBALANCE_SWEEP_MS = restroomRebalanceScheduler.sweep_ms;
 
+  async function loadScheduleAuthorityState(serviceDate) {
+    const requested = String(serviceDate || "").trim();
+    if (!requested) throw new Error("service_date is required.");
+    let rows;
+    try {
+      rows = await runReadOnlySql(`
+        select *
+        from public.static_weekly_v6_schedule_authority_state('${esc(requested)}'::date)
+      `);
+    } catch (error) {
+      if (/function\s+public\.static_weekly_v6_schedule_authority_state[^\n]*does not exist/i.test(String(error?.message || ""))) {
+        const unavailable = new Error("The schedule authority cutover is not installed on this backend.");
+        unavailable.status = 503;
+        unavailable.code = "schedule_authority_unavailable";
+        unavailable.readiness = { service_date: requested, source: null, projection_status: "authority_adapter_missing" };
+        throw unavailable;
+      }
+      throw error;
+    }
+    const state = Array.isArray(rows) && rows.length === 1 ? rows[0] : null;
+    if (!state || typeof state.governed === "undefined" || !state.authority_source || !state.projection_status) {
+      const invalid = new Error("The schedule authority returned an invalid readiness result.");
+      invalid.status = 503;
+      invalid.code = "schedule_authority_invalid";
+      invalid.readiness = { service_date: requested };
+      throw invalid;
+    }
+    return state;
+  }
+
   async function assertScheduleReadyForRead(serviceDate) {
     const requested = String(serviceDate || "").trim();
     if (!requested) throw new Error("service_date is required.");
+    const authority = await loadScheduleAuthorityState(requested);
+    if (authority.governed === true || String(authority.governed).toLowerCase() === "true") {
+      if (authority.projection_status === "current") {
+        return {
+          ready: true,
+          source: authority.authority_source,
+          projection_status: authority.projection_status,
+          version_id: authority.version_id || null,
+          publication_id: authority.publication_id || null,
+          projection_id: authority.projection_id || null,
+        };
+      }
+      const error = new Error(authority.projection_status === "stale_staffing_change"
+        ? "The weekly schedule changed and must be rebuilt before it can be used."
+        : "The published weekly schedule must be generated before it can be used.");
+      error.status = 503;
+      error.code = "weekly_schedule_rebuild_required";
+      error.readiness = {
+        service_date: requested,
+        source: authority.authority_source,
+        projection_status: authority.projection_status,
+        version_id: authority.version_id || null,
+        publication_id: authority.publication_id || null,
+        projection_id: authority.projection_id || null,
+      };
+      throw error;
+    }
+
+    // Compatibility remains explicit and bounded to dates with no effective
+    // static-weekly publication. It is never used to rescue governed dates.
     const readinessRows = await runReadOnlySql(`
       select
         public.sch_service_date(now())::text as current_service_date,
@@ -638,6 +698,26 @@ export function createScheduleRouter({
     error.code = requested < currentServiceDate ? "schedule_not_found" : "schedule_not_ready";
     error.readiness = { service_date: requested, roster_count: rosterCount, assignment_count: assignmentCount };
     throw error;
+  }
+
+  async function loadCanonicalScheduleSegments(serviceDate, employeeId = "") {
+    const employeeClause = employeeId
+      ? `where assigned_employee_id = '${esc(employeeId)}'::uuid`
+      : "";
+    return runReadOnlySql(`
+      select *
+      from public.static_weekly_v6_read_schedule_segments('${esc(serviceDate)}'::date)
+      ${employeeClause}
+      order by group_name, coverage_start::time, coverage_end::time, segment_number
+    `);
+  }
+
+  async function loadCanonicalRoster(serviceDate) {
+    return runReadOnlySql(`
+      select *
+      from public.static_weekly_v6_read_roster('${esc(serviceDate)}'::date)
+      order by shift_start::time nulls last, employee_name, slot_label
+    `);
   }
   async function loadStaticWeeklyEmployeeDay(serviceDate, employeeId, atSql) {
     let rows;
@@ -3264,13 +3344,21 @@ export function createScheduleRouter({
 
       if (!resolvedEmployeeId) throw new Error("employee_id, employee_code, or employee_name is required and must resolve to an active employee.");
 
-      const rows = await runReadOnlySql(`
-        select public.sch_get_employee_work_status(
-          '${esc(serviceDate)}'::date,
-          '${esc(resolvedEmployeeId)}'::uuid
-        ) as data
-      `);
-      const data = Array.isArray(rows) && rows.length ? rows[0].data : null;
+      let data = await loadStaticWeeklyEmployeeDay(
+        serviceDate,
+        resolvedEmployeeId,
+        optionalTimestampLiteral(req.query.as_of || req.query.at),
+      );
+      if (!data) {
+        await assertScheduleReadyForRead(serviceDate);
+        const rows = await runReadOnlySql(`
+          select public.sch_get_employee_work_status(
+            '${esc(serviceDate)}'::date,
+            '${esc(resolvedEmployeeId)}'::uuid
+          ) as data
+        `);
+        data = Array.isArray(rows) && rows.length ? rows[0].data : null;
+      }
       res.status(200).json({
         ok: true,
         data,
@@ -3286,18 +3374,10 @@ export function createScheduleRouter({
       const serviceDate = await getServiceDate();
       if (!serviceDate) throw new Error("Could not resolve service date.");
       await assertScheduleReadyForRead(serviceDate);
-      const rows = await runReadOnlySql(`select * from public.sch_get_daily_schedule_with_purpose('${esc(serviceDate)}'::date)`);
-      const rosterRows = await runReadOnlySql(`
-        select r.employee_id, e.display_name as employee_name, e.employee_code,
-               to_char(r.shift_start, 'HH24:MI:SS') as shift_start,
-               to_char(r.shift_end, 'HH24:MI:SS') as shift_end,
-               r.active, r.source_type, r.notes
-        from public.daily_work_roster r
-        join public.employees e on e.id = r.employee_id
-        where r.service_date = '${esc(serviceDate)}'::date
-          and r.active = true
-        order by r.shift_start asc, e.display_name asc
-      `);
+      const [rows, rosterRows] = await Promise.all([
+        loadCanonicalScheduleSegments(serviceDate),
+        loadCanonicalRoster(serviceDate),
+      ]);
       res.status(200).json({
         ok: true,
         data: { service_date: serviceDate, roster: rosterRows || [], groups: groupScheduleRows(rows) },
@@ -3312,18 +3392,10 @@ export function createScheduleRouter({
     try {
       const serviceDate = requireDate(req.query.service_date || req.query.date);
       await assertScheduleReadyForRead(serviceDate);
-      const rows = await runReadOnlySql(`select * from public.sch_get_daily_schedule_with_purpose('${esc(serviceDate)}'::date)`);
-      const rosterRows = await runReadOnlySql(`
-        select r.employee_id, e.display_name as employee_name, e.employee_code,
-               to_char(r.shift_start, 'HH24:MI:SS') as shift_start,
-               to_char(r.shift_end, 'HH24:MI:SS') as shift_end,
-               r.active, r.source_type, r.notes
-        from public.daily_work_roster r
-        join public.employees e on e.id = r.employee_id
-        where r.service_date = '${esc(serviceDate)}'::date
-          and r.active = true
-        order by r.shift_start asc, e.display_name asc
-      `);
+      const [rows, rosterRows] = await Promise.all([
+        loadCanonicalScheduleSegments(serviceDate),
+        loadCanonicalRoster(serviceDate),
+      ]);
       res.status(200).json({
         ok: true,
         data: { service_date: serviceDate, roster: rosterRows || [], groups: groupScheduleRows(rows) },
@@ -3349,12 +3421,7 @@ export function createScheduleRouter({
         res.status(404).json({ ok: false, error: "This device is not assigned to an active employee." });
         return;
       }
-      const rows = await runReadOnlySql(`
-        select *
-        from public.sch_get_daily_schedule_with_purpose('${esc(serviceDate)}'::date)
-        where assigned_employee_id = '${esc(assignment.assigned_employee_id)}'::uuid
-        order by group_name, segment_number
-      `);
+      const rows = await loadCanonicalScheduleSegments(serviceDate, assignment.assigned_employee_id);
       res.status(200).json({
         ok: true,
         data: {

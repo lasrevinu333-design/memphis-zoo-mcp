@@ -41,6 +41,7 @@ export function buildIntegratedBackendAuthorityReleaseEvidence({
       static_weekly_runtime_identity_phase: "20260823024500 provisions one passwordless-by-source NOINHERIT login shell with only static_weekly_control_plane membership; release operations install its generated SCRAM verifier out of band before the dedicated service can become ready",
       static_weekly_family_location_truth_phase: "20260823060000 preserves the exact physical-location family behind each routing anchor across compilation, event overlays, projections, and the employee-day read surface while retaining legacy singleton reads",
       static_weekly_registered_roster_bootstrap_phase: "20260823143000 permits only the protected release operator to hydrate the complete immutable roster from one active registered authority source, rejects partial or mismatched state, and makes exact replay non-mutating",
+      static_weekly_operational_truth_cutover_phase: "20260824213000 makes employee, manager, dashboard, analytics and notification schedule truth consume one exact static-weekly projection, fails closed on stale governed authority, and excludes reminder-only or response-only work from physical cleaning obligations",
     },
     rollback: input.rollback,
     cutover: input.cutover,

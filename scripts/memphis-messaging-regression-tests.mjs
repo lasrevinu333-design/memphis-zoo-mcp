@@ -354,7 +354,7 @@ locationStatusApp.use('/messaging-api', createTestMessagingRouter({
         employee_active: true,
       }];
     }
-    if (/with assigned_groups as/i.test(query) && /v_location_dashboard_status/i.test(query)) {
+    if (/custodial_operational_location_assignments/i.test(query) && /v_location_dashboard_status/i.test(query)) {
       return [{
         service_date: SERVICE_DATE,
         device_id: 'KIOSK_02',
@@ -402,12 +402,12 @@ await withServer(locationStatusApp, async (baseUrl) => {
   assert.equal(Object.prototype.hasOwnProperty.call(payload.meta.notification_state, 'employee_name'), false, 'Location reminder metadata must not expose employee identity');
   assert.equal(Object.prototype.hasOwnProperty.call(payload.meta.notification_state, 'shift_start'), false, 'Location reminder metadata must not expose shift times');
 });
-const locationStatusSql = locationStatusReadCalls.find((sql) => /with assigned_groups as/i.test(sql));
-assert.ok(locationStatusSql, 'device location status reminder route should query assigned group location statuses');
+const locationStatusSql = locationStatusReadCalls.find((sql) => /custodial_operational_location_assignments/i.test(sql));
+assert.ok(locationStatusSql, 'device location status reminder route should query canonical operational location authority');
 assert.match(locationStatusSql.trimStart(), /^select\s+\*/i, 'device location status reminder SQL must begin with SELECT because the live read-only RPC rejects top-level WITH queries');
-assert.match(locationStatusSql, /sch_get_daily_schedule_with_purpose\('2026-04-25'::date\)/, 'location status reminder route should resolve the active service date');
-assert.match(locationStatusSql, /coalesce\(s\.coverage_purpose, 'area_owner'\) <> 'reminder'/, 'location status reminder route should exclude reminder-only schedule groups');
-assert.match(locationStatusSql, /location_group_memberships/, 'device location status reminder route should resolve real locations from group memberships');
+assert.match(locationStatusSql, /custodial_operational_location_assignments\('2026-04-25'::date\)/, 'location status reminder route should resolve the active service date through canonical authority');
+assert.match(locationStatusSql, /assignment_status = 'ASSIGNED'/, 'location status reminder route should notify only the current employee owner');
+assert.doesNotMatch(locationStatusSql, /sch_get_daily_schedule_with_purpose|location_group_memberships/, 'governed location reminders must not reconstruct authority from legacy schedule groups');
 assert.match(locationStatusSql, /status_code in \('overdue', 'due_soon'\)/, 'device location status reminder route should only return due soon or overdue locations');
 const locationNotificationStateSql = locationStatusReadCalls.find((sql) => /notification_state/i.test(sql));
 assert.ok(locationNotificationStateSql, 'location status reminder route should query notification state before payload rows');
