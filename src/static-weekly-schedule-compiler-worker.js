@@ -1,6 +1,12 @@
 import { compileStaticWeeklySchedule } from "./static-weekly-schedule-compiler.js";
 import { createStaticWeeklyDraftRpcInput, createStaticWeeklyProjectionRpcInput } from "./static-weekly-schedule-database-adapter.js";
-import { getStaticWeeklySolverReadiness, initializeStaticWeeklySolver } from "./static-weekly-schedule-solver.js";
+import {
+  getStaticWeeklySolverReadiness,
+  initializeStaticWeeklySolver,
+  installStaticWeeklySolverRuntimeForIsolatedCompiler,
+} from "./static-weekly-schedule-solver.js";
+import { initializeStaticWeeklySolverEngine } from "./static-weekly-schedule-solver-worker.js";
+import { STATIC_WEEKLY_FUSED_COMPILER_RESOURCE_LIMITS } from "./static-weekly-schedule-runtime-policy.js";
 
 function serializedError(error) {
   return {
@@ -42,12 +48,25 @@ function prepareResult(result, preparation) {
 }
 
 try {
+  if (process.env.MEMPHIS_STATIC_WEEKLY_COMPILER_WORKER !== "1") throw new Error("The complete compiler requires its isolated compiler-worker role.");
+  const solverEngine = await initializeStaticWeeklySolverEngine({
+    maxOldGenerationSizeMb: STATIC_WEEKLY_FUSED_COMPILER_RESOURCE_LIMITS.maxOldGenerationSizeMb,
+    maxSemiSpaceSizeMb: STATIC_WEEKLY_FUSED_COMPILER_RESOURCE_LIMITS.maxSemiSpaceSizeMb,
+    maxWasmMemoryPages: (STATIC_WEEKLY_FUSED_COMPILER_RESOURCE_LIMITS.maxWasmMemoryMb * 1024 * 1024) / 65_536,
+  });
+  installStaticWeeklySolverRuntimeForIsolatedCompiler({
+    get identity() { return solverEngine.identity; },
+    resourceLimits: STATIC_WEEKLY_FUSED_COMPILER_RESOURCE_LIMITS,
+    solve: (lp, options) => solverEngine.solve(lp, options),
+  });
   await initializeStaticWeeklySolver();
   send({
     type: "ready",
     evidence: {
       compiler: "complete canonical compiler",
-      isolation: "node child-process group",
+      isolation: "one node child-process group",
+      processTopology: "HTTP parent -> one child process containing fused compiler plus pinned HiGHS",
+      nestedSolverProcess: false,
       solver: getStaticWeeklySolverReadiness(),
     },
   });

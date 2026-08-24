@@ -5,6 +5,11 @@ process.send({ type: "ready", evidence: { fixture: true, nestedPid: nested.pid }
 process.on("message", (message) => {
   if (message?.type !== "compile") return;
   if (message.input?.behavior === "crash") process.exit(91);
+  if (message.input?.behavior === "signal") {
+    process.stderr.write("bounded compiler diagnostic marker\n");
+    process.kill(process.pid, "SIGABRT");
+    return;
+  }
   if (message.input?.behavior === "hang") return;
   const delay = Number(message.input?.delay || 0);
   const started = performance.now();

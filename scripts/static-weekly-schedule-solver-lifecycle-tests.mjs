@@ -2,10 +2,15 @@ import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import fs from "node:fs";
 import { promisify } from "node:util";
-import { STATIC_WEEKLY_WORKER_LIMITS, getStaticWeeklySolverReadiness, initializeStaticWeeklySolver, setStaticWeeklySolverTestOverride, solveStaticWeeklyMip } from "../src/static-weekly-schedule-solver.js";
+import { STATIC_WEEKLY_WORKER_LIMITS, getStaticWeeklySolverReadiness, initializeStaticWeeklySolver, installStaticWeeklySolverRuntimeForIsolatedCompiler, setStaticWeeklySolverTestOverride, solveStaticWeeklyMip } from "../src/static-weekly-schedule-solver.js";
 
 const execFileAsync = promisify(execFile);
 const lp = "Minimize\n objective: + 1 x\nSubject To\n c: + 1 x >= 1\nBounds\n 0 <= x <= 1\nBinary\n x\nEnd\n";
+assert.throws(
+  () => installStaticWeeklySolverRuntimeForIsolatedCompiler({ identity: {}, resourceLimits: {}, solve() {} }),
+  /restricted to the isolated compiler worker/,
+  "ordinary application processes cannot replace the solver execution boundary",
+);
 async function waitForSolverRecovery(timeoutMilliseconds = 5_000) {
   const deadline = performance.now() + timeoutMilliseconds;
   while (!getStaticWeeklySolverReadiness().available && performance.now() < deadline) {

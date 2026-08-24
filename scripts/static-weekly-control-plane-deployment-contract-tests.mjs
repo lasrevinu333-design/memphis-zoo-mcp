@@ -50,10 +50,11 @@ assert.deepEqual(STATIC_WEEKLY_COMPILER_RUNTIME_LIMITS, {
   initializationMilliseconds: 30_000,
   requestMilliseconds: 315_000,
   maxOutstandingRequests: 8,
-  maxOldGenerationSizeMb: 80,
-  maxSemiSpaceSizeMb: 4,
+  maxOldGenerationSizeMb: 128,
+  maxSemiSpaceSizeMb: 8,
+  maxWasmMemoryMb: 96,
   stackSizeKb: 4 * 1024,
-}, "the compiler retains the exact empirically admitted process envelope");
+}, "the fused compiler-plus-HiGHS isolate retains the exact admitted process envelope");
 assert.equal(STATIC_WEEKLY_WORKER_LIMITS.maxOldGenerationSizeMb, 32, "the solver retains the exact empirically admitted V8 envelope");
 assert.equal(STATIC_WEEKLY_WORKER_LIMITS.maxSemiSpaceSizeMb, 4, "the solver retains the exact empirically admitted semi-space envelope");
 assert.equal(STATIC_WEEKLY_WORKER_LIMITS.maxWasmMemoryMb, 96, "the production packet requires the separately enforced 96 MiB WebAssembly ceiling");
@@ -62,11 +63,8 @@ const configuredEnvelopeMb =
   + STATIC_WEEKLY_COMPILER_RUNTIME_LIMITS.maxOldGenerationSizeMb
   + (3 * STATIC_WEEKLY_COMPILER_RUNTIME_LIMITS.maxSemiSpaceSizeMb)
   + (STATIC_WEEKLY_COMPILER_RUNTIME_LIMITS.stackSizeKb / 1024)
-  + 32 // compiler native/IPC overhead
-  + STATIC_WEEKLY_WORKER_LIMITS.maxOldGenerationSizeMb
-  + (3 * STATIC_WEEKLY_WORKER_LIMITS.maxSemiSpaceSizeMb)
-  + STATIC_WEEKLY_WORKER_LIMITS.maxWasmMemoryMb
-  + 32; // solver native/IPC overhead
+  + STATIC_WEEKLY_COMPILER_RUNTIME_LIMITS.maxWasmMemoryMb
+  + 48; // one fused compiler/solver native and IPC allowance
 assert.equal(configuredEnvelopeMb, 396, "the Starter service retains a 116 MiB hard-cap margin after conservative process allowances");
 assert.equal(STATIC_WEEKLY_WORKER_LIMITS.maxWasmMemoryMb * 1024 * 1024 / 65_536, 1536, "the parent and solver worker enforce one exact WebAssembly ceiling");
 

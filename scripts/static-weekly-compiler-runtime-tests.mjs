@@ -18,7 +18,8 @@ async function assertReaped(pid, message) {
 }
 
 const fixture = new URL("./fixtures/static-weekly-compiler-runtime-test-worker.mjs", import.meta.url);
-const resourceLimits = { maxOldGenerationSizeMb: 32, maxSemiSpaceSizeMb: 8, stackSizeKb: 2 * 1024 };
+const resourceLimits = { maxOldGenerationSizeMb: 32, maxSemiSpaceSizeMb: 8, maxWasmMemoryMb: 32, stackSizeKb: 2 * 1024 };
+assert.throws(() => createStaticWeeklyCompilerRuntime({ workerUrl: fixture, resourceLimits: { ...resourceLimits, maxWasmMemoryMb: 0 } }), /maxWasmMemoryMb must be a positive integer/, "invalid resource envelopes fail closed before process creation");
 const runtime = createStaticWeeklyCompilerRuntime({ workerUrl: fixture, initializationMilliseconds: 1_000, requestMilliseconds: 1_000, resourceLimits });
 
 await runtime.initialize();
@@ -55,6 +56,15 @@ const recovered = await runtime.compile({ value: "recovered" });
 assert.deepEqual(recovered, { ok: true, value: "recovered" }, "a crashed compiler lineage is replaced exactly once before the next request");
 const recoveredNestedPid = runtime.getReadiness().worker.nestedPid;
 assert.notEqual(recoveredNestedPid, firstNestedPid);
+
+await assert.rejects(runtime.compile({ behavior: "signal" }), (error) => {
+  assert.equal(error?.code, "static_weekly_compiler_worker_exited");
+  assert.equal(error?.diagnostic?.signal, "SIGABRT", "the parent preserves the exact child exit signal");
+  assert.match(error?.diagnostic?.stderrTail || "", /bounded compiler diagnostic marker/, "the parent retains only the bounded stderr tail for operations evidence");
+  return true;
+});
+const afterSignal = await runtime.compile({ value: "after-signal" });
+assert.deepEqual(afterSignal, { ok: true, value: "after-signal" }, "a signaled compiler lineage is replaced exactly once before the next request");
 
 const timeoutRuntime = createStaticWeeklyCompilerRuntime({ workerUrl: fixture, initializationMilliseconds: 1_000, requestMilliseconds: 250, resourceLimits });
 await timeoutRuntime.initialize();
@@ -118,8 +128,10 @@ assert.equal(productionResult.effectiveStart, "2026-08-10");
 assert.equal(productionResult.expectedRevision, 0);
 assert.equal(productionResult.actorManagerId, "10000000-0000-4000-8000-000000000001");
 assert.equal(productionResult.idempotencyKey, "runtime-prepared-draft");
-assert.equal(productionResult.document?.validation?.status, "FEASIBLE", "the real complete compiler, nested solver, database adapter, and advanced IPC result transport pass together");
+assert.equal(productionResult.document?.validation?.status, "FEASIBLE", "the real fused compiler/solver, database adapter, and advanced IPC result transport pass together");
 assert.equal(productionTicks > 0, true, "the real production compiler and database-adapter process path leaves the HTTP event loop responsive");
+assert.equal(productionRuntime.getReadiness().worker.nestedSolverProcess, false, "production uses one fused compiler-plus-HiGHS isolate without a redundant solver process");
+assert.equal(productionRuntime.getReadiness().worker.solver.worker.runtime, "in-process within isolated compiler child");
 await productionRuntime.shutdown();
 
 console.log("static weekly complete-compiler worker isolation and recovery tests: PASS");

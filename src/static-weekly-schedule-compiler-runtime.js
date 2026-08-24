@@ -3,32 +3,27 @@
  * around the already-isolated HiGHS child process. Running that work on the
  * HTTP thread can starve health checks even though the compiler is healthy.
  *
- * The complete compiler therefore runs in one serialized child-process group.
- * HiGHS remains its bounded child, and group ownership lets the HTTP process
- * reap both generations atomically after a timeout, crash, or shutdown.
+ * The complete compiler and pinned HiGHS engine therefore run together in one
+ * serialized child-process group. Group ownership lets the HTTP process reap
+ * the complete compute boundary atomically after a timeout, crash, or shutdown
+ * without paying for a redundant nested V8 runtime.
  */
 import { fork } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { REQUEST_DEADLINE_MILLISECONDS } from "./static-weekly-schedule-program.js";
+import { STATIC_WEEKLY_FUSED_COMPILER_RESOURCE_LIMITS } from "./static-weekly-schedule-runtime-policy.js";
 
 export const STATIC_WEEKLY_COMPILER_RUNTIME_LIMITS = Object.freeze({
   initializationMilliseconds: 30_000,
   requestMilliseconds: REQUEST_DEADLINE_MILLISECONDS + 15_000,
   maxOutstandingRequests: 8,
   // The production service is a 512 MiB Render Starter instance. The original
-  // 256/32/8192 envelope exceeded the 512 MiB Starter limit, and
-  // the first 128/8 correction still left too little platform headroom during
-  // the exact production compile. The subsequent 96/4 compiler plus 48/4
-  // solver envelope also restarted the live Starter instance after 285
-  // seconds even though the same packet passed locally. Keep the complete
-  // compiler below that empirically disproven envelope; its attested memory
-  // identity remains part of replay. The exact V10 production packet proves
-  // 64 MiB is below the compiler's
-  // deterministic lower bound. Keep the compiler at the bounded midpoint
-  // between that failed limit and the previously sufficient 96 MiB limit.
-  maxOldGenerationSizeMb: 80,
-  maxSemiSpaceSizeMb: 4,
-  stackSizeKb: 4 * 1024,
+  // Earlier three-process envelopes either exceeded the Starter instance or
+  // forced the compiler below its deterministic production-packet lower bound.
+  // Fusing compiler and HiGHS removes one V8/IPC process and permits the
+  // previously proven 128 MiB compiler heap while retaining a conservative
+  // hard-cap margin under the approved 512 MiB service.
+  ...STATIC_WEEKLY_FUSED_COMPILER_RESOURCE_LIMITS,
 });
 
 function runtimeError(code, message) {
@@ -56,8 +51,15 @@ function compilerExecArgv(resourceLimits) {
   return [
     `--max-old-space-size=${resourceLimits.maxOldGenerationSizeMb}`,
     `--max-semi-space-size=${resourceLimits.maxSemiSpaceSizeMb}`,
+    `--wasm-max-mem-pages=${(resourceLimits.maxWasmMemoryMb * 1024 * 1024) / 65_536}`,
     `--stack-size=${resourceLimits.stackSizeKb}`,
   ];
+}
+
+const MAX_DIAGNOSTIC_STDERR_BYTES = 8 * 1024;
+function appendDiagnosticStderr(current, chunk) {
+  const combined = Buffer.concat([Buffer.from(current || "", "utf8"), Buffer.from(chunk)]);
+  return combined.subarray(Math.max(0, combined.length - MAX_DIAGNOSTIC_STDERR_BYTES)).toString("utf8");
 }
 
 function terminateProcessGroup(candidate) {
@@ -79,8 +81,8 @@ function terminateProcessGroup(candidate) {
     timer.unref?.();
     candidate.once("exit", finish);
     try {
-      // The compiler is a detached group leader. Its nested HiGHS child
-      // inherits this group, so one exact kill cannot leave a solver orphan.
+      // The compiler is a detached group leader, so one exact kill owns the
+      // complete fused compiler/solver boundary and any unexpected descendant.
       process.kill(-pid, "SIGKILL");
     } catch {
       try { candidate.kill("SIGKILL"); } catch { finish(); }
@@ -94,15 +96,21 @@ export function createStaticWeeklyCompilerRuntime({
   initializationMilliseconds = STATIC_WEEKLY_COMPILER_RUNTIME_LIMITS.initializationMilliseconds,
   requestMilliseconds = STATIC_WEEKLY_COMPILER_RUNTIME_LIMITS.requestMilliseconds,
   maxOutstandingRequests = STATIC_WEEKLY_COMPILER_RUNTIME_LIMITS.maxOutstandingRequests,
+  exposeProcessIdentityForTest = false,
   resourceLimits = {
     maxOldGenerationSizeMb: STATIC_WEEKLY_COMPILER_RUNTIME_LIMITS.maxOldGenerationSizeMb,
     maxSemiSpaceSizeMb: STATIC_WEEKLY_COMPILER_RUNTIME_LIMITS.maxSemiSpaceSizeMb,
+    maxWasmMemoryMb: STATIC_WEEKLY_COMPILER_RUNTIME_LIMITS.maxWasmMemoryMb,
     stackSizeKb: STATIC_WEEKLY_COMPILER_RUNTIME_LIMITS.stackSizeKb,
   },
 } = {}) {
   if (!Number.isSafeInteger(initializationMilliseconds) || initializationMilliseconds < 1) throw new Error("Compiler process initialization timeout must be a positive integer.");
   if (!Number.isSafeInteger(requestMilliseconds) || requestMilliseconds < 1) throw new Error("Compiler process request timeout must be a positive integer.");
   if (!Number.isSafeInteger(maxOutstandingRequests) || maxOutstandingRequests < 1) throw new Error("Compiler process outstanding-request limit must be a positive integer.");
+  for (const [name, value] of Object.entries(resourceLimits)) {
+    if (!Number.isSafeInteger(value) || value < 1) throw new Error(`Compiler process ${name} must be a positive integer.`);
+  }
+  if (typeof exposeProcessIdentityForTest !== "boolean") throw new Error("Compiler process identity exposure must be a boolean test option.");
 
   let state = "uninitialized";
   let worker = null;
@@ -187,9 +195,12 @@ export function createStaticWeeklyCompilerRuntime({
     const candidate = fork(fileURLToPath(workerUrl), [], {
       detached: true,
       execArgv: compilerExecArgv(resourceLimits),
+      env: { ...process.env, MEMPHIS_STATIC_WEEKLY_COMPILER_WORKER: "1" },
       serialization: "advanced",
-      stdio: ["ignore", "ignore", "ignore", "ipc"],
+      stdio: ["ignore", "ignore", "pipe", "ipc"],
     });
+    let diagnosticStderr = "";
+    candidate.stderr?.on("data", (chunk) => { diagnosticStderr = appendDiagnosticStderr(diagnosticStderr, chunk); });
     refWorkerProcess(candidate);
     let resolveInitialization; let rejectInitialization;
     const record = {
@@ -215,7 +226,10 @@ export function createStaticWeeklyCompilerRuntime({
         clearTimeout(record.timer);
         initialization = null;
         state = "ready";
-        workerEvidence = message.evidence || { compiler: "canonical" };
+        workerEvidence = {
+          ...(message.evidence || { compiler: "canonical" }),
+          ...(exposeProcessIdentityForTest ? { processId: candidate.pid } : {}),
+        };
         unrefWorkerProcess(candidate);
         record.resolve(readiness());
         return;
@@ -230,9 +244,14 @@ export function createStaticWeeklyCompilerRuntime({
       else clearPending(active, active.resolve, message.result);
     });
     candidate.on("error", (error) => failActive(candidate, runtimeError("static_weekly_compiler_worker_crashed", error?.message || "The isolated compiler process crashed.")));
-    candidate.on("exit", (code) => {
+    candidate.on("exit", (code, signal) => {
       if (candidateGeneration !== generation || worker !== candidate) return;
-      failActive(candidate, runtimeError("static_weekly_compiler_worker_exited", `The isolated compiler process exited (${code}).`));
+      const cause = runtimeError(
+        "static_weekly_compiler_worker_exited",
+        `The isolated compiler process exited unexpectedly (${signal || code || "unknown"}).`,
+      );
+      cause.diagnostic = Object.freeze({ exitCode: code ?? null, signal: signal || null, stderrTail: diagnosticStderr });
+      failActive(candidate, cause);
     });
     return record.promise;
   }

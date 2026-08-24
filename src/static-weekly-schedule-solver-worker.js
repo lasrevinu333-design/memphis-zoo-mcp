@@ -220,10 +220,14 @@ const send = (message) => {
   process.send(message);
 };
 
-async function initialize() {
-  if (!process.execArgv.includes(`--max-old-space-size=${MAX_OLD_SPACE_MB}`)) throw new Error("Static weekly solver requires an enforced V8 old-generation limit.");
-  if (!process.execArgv.includes(`--wasm-max-mem-pages=${MAX_WASM_MEMORY_PAGES}`)) throw new Error("Static weekly solver requires an enforced V8 WebAssembly memory-page limit.");
-  if (!process.execArgv.includes(`--max-semi-space-size=${MAX_SEMI_SPACE_MB}`)) throw new Error("Static weekly solver requires an enforced V8 semi-space limit.");
+async function initialize({
+  maxOldGenerationSizeMb = MAX_OLD_SPACE_MB,
+  maxWasmMemoryPages = MAX_WASM_MEMORY_PAGES,
+  maxSemiSpaceSizeMb = MAX_SEMI_SPACE_MB,
+} = {}) {
+  if (!process.execArgv.includes(`--max-old-space-size=${maxOldGenerationSizeMb}`)) throw new Error("Static weekly solver requires an enforced V8 old-generation limit.");
+  if (!process.execArgv.includes(`--wasm-max-mem-pages=${maxWasmMemoryPages}`)) throw new Error("Static weekly solver requires an enforced V8 WebAssembly memory-page limit.");
+  if (!process.execArgv.includes(`--max-semi-space-size=${maxSemiSpaceSizeMb}`)) throw new Error("Static weekly solver requires an enforced V8 semi-space limit.");
   const packagePath = resolve(dirname(require.resolve("highs")), "../package.json");
   const wrapperPath = require.resolve("highs");
   const wasmPath = require.resolve("highs/runtime");
@@ -240,7 +244,7 @@ async function initialize() {
   // become a later tier's evidence.
   const solver = await loader({ locateFile: () => wasmPath, print: (value) => captureOutput("print", value), printErr: (value) => captureOutput("printErr", value) });
   if (!solver || typeof solver.solve !== "function") throw new Error("HiGHS WebAssembly module did not expose solve().");
-  let identity = { package: "highs@1.15.2", packageVersion: packageJson.version, wasmSha256: observedIdentity.wasmSha256, packageJsonSha256: observedIdentity.packageJsonSha256, wrapperJavaScriptSha256: observedIdentity.wrapperJavaScriptSha256, runtime: "local WebAssembly", embeddedRuntimeBanner: PINNED_IDENTITY.embeddedRuntimeBanner, initializationRecord: null, initializationBannerUtf8Sha256: null, wasmMemoryLimitPages: MAX_WASM_MEMORY_PAGES, wasmMemoryLimitBytes: MAX_WASM_MEMORY_PAGES * 65_536, v8OldGenerationLimitMb: MAX_OLD_SPACE_MB, v8SemiSpaceLimitMb: MAX_SEMI_SPACE_MB, resultEvidenceCapabilities: { bestBound: true, mipGap: true, distinctTermination: true, source: "terminal_solver_report" } };
+  let identity = { package: "highs@1.15.2", packageVersion: packageJson.version, wasmSha256: observedIdentity.wasmSha256, packageJsonSha256: observedIdentity.packageJsonSha256, wrapperJavaScriptSha256: observedIdentity.wrapperJavaScriptSha256, runtime: "local WebAssembly", embeddedRuntimeBanner: PINNED_IDENTITY.embeddedRuntimeBanner, initializationRecord: null, initializationBannerUtf8Sha256: null, wasmMemoryLimitPages: maxWasmMemoryPages, wasmMemoryLimitBytes: maxWasmMemoryPages * 65_536, v8OldGenerationLimitMb: maxOldGenerationSizeMb, v8SemiSpaceLimitMb: maxSemiSpaceSizeMb, resultEvidenceCapabilities: { bestBound: true, mipGap: true, distinctTermination: true, source: "terminal_solver_report" } };
   // Module construction alone is not readiness. Execute one exact bounded MIP
   // and verify its measured terminal report before the parent can admit work.
   const collector = beginCollector();
@@ -255,41 +259,75 @@ async function initialize() {
   return { solver, identity };
 }
 
-try {
-  runtime = await initialize();
-  send({ type: "ready", identity: runtime.identity });
-} catch (cause) {
-  send({ type: "init_error", error: { code: "solver_unavailable", message: cause.message } });
-  throw cause;
-}
-
-process.on("disconnect", () => process.exit(0));
-process.on("message", (message) => {
-  if (!message || message.type !== "solve") return;
-  if (message.behavior === "hang") {
+function solveWithRuntime(activeRuntime, {
+  id = null,
+  lp,
+  timeLimitSeconds,
+  modelAttestation = null,
+  behavior = null,
+} = {}) {
+  if (behavior === "hang") {
     const wait = new Int32Array(new SharedArrayBuffer(4));
     Atomics.wait(wait, 0, 0, 60_000);
-    return;
+    return null;
   }
-  if (message.behavior === "crash") process.exit(91);
+  if (behavior === "crash") process.exit(91);
   const collector = beginCollector();
   try {
-    const result = runtime.solver.solve(message.lp, { ...OPTIONS, time_limit: message.timeLimitSeconds });
-    if (message.behavior === "non_optimal") result.Status = "Feasible";
-    if (message.behavior === "malformed") delete result.Columns;
+    const result = activeRuntime.solver.solve(lp, { ...OPTIONS, time_limit: timeLimitSeconds });
+    if (behavior === "non_optimal") result.Status = "Feasible";
+    if (behavior === "malformed") delete result.Columns;
     // Test-only adversary: safely above the pinned 1e-9 integer tolerance.
-    if (message.behavior === "tolerance_edge") { const first = Object.keys(result.Columns || {})[0]; if (first) result.Columns[first].Primal = 0.999999998; }
+    if (behavior === "tolerance_edge") { const first = Object.keys(result.Columns || {})[0]; if (first) result.Columns[first].Primal = 0.999999998; }
     const evidence = normalizeResultEvidence(result, collector);
-    if (!runtime.identity.initializationRecord) runtime.identity = bindInitializationIdentity(runtime.identity, evidence);
+    if (!activeRuntime.identity.initializationRecord) activeRuntime.identity = bindInitializationIdentity(activeRuntime.identity, evidence);
     // Evidence has copied the report representation before the private
     // collector is cleared in finally.  Nothing from one solve remains live.
     if (evidence.outputTruncated) throw new Error("HiGHS terminal output exceeded the pinned collector bound.");
-    const options = { ...OPTIONS, time_limit: message.timeLimitSeconds };
+    const options = { ...OPTIONS, time_limit: timeLimitSeconds };
     const rawReceiptDigest = sha256(Buffer.from(rawReceiptRepresentation(options, evidence.terminalReport), "utf8"));
-    send({ type: "result", id: message.id, result, evidence: { ...evidence, rawReceiptDigest }, identity: runtime.identity, modelAttestation: message.modelAttestation || null, options });
-  } catch (cause) {
-    send({ type: "result", id: message.id, error: { code: "solver_unavailable", message: cause.message } });
+    return { type: "result", id, result, evidence: { ...evidence, rawReceiptDigest }, identity: activeRuntime.identity, modelAttestation, options };
   } finally {
     finalizeCollector(collector);
   }
-});
+}
+
+export async function initializeStaticWeeklySolverEngine(resourceLimits = {}) {
+  if (runtime) throw new Error("The static weekly solver engine is already initialized in this process.");
+  runtime = await initialize(resourceLimits);
+  return Object.freeze({
+    get identity() { return runtime.identity; },
+    solve(lp, options = {}) {
+      return solveWithRuntime(runtime, { lp, ...options });
+    },
+  });
+}
+
+async function runIpcWorker() {
+  let engine;
+  try {
+    engine = await initializeStaticWeeklySolverEngine();
+    send({ type: "ready", identity: engine.identity });
+  } catch (cause) {
+    send({ type: "init_error", error: { code: "solver_unavailable", message: cause.message } });
+    throw cause;
+  }
+
+  process.on("disconnect", () => process.exit(0));
+  process.on("message", (message) => {
+    if (!message || message.type !== "solve") return;
+    try {
+      const result = engine.solve(message.lp, {
+        id: message.id,
+        timeLimitSeconds: message.timeLimitSeconds,
+        modelAttestation: message.modelAttestation || null,
+        behavior: message.behavior || null,
+      });
+      if (result) send(result);
+    } catch (cause) {
+      send({ type: "result", id: message.id, error: { code: "solver_unavailable", message: cause.message } });
+    }
+  });
+}
+
+if (process.env.MEMPHIS_STATIC_WEEKLY_SOLVER_WORKER === "1") await runIpcWorker();

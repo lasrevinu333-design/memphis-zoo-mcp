@@ -20,9 +20,8 @@ const HIGHS_OPTIONS = Object.freeze({
   output_flag: true,
 });
 export const STATIC_WEEKLY_WORKER_LIMITS = Object.freeze({
-  // HiGHS requires the separately enforced 96 MiB WebAssembly ceiling for the
-  // accepted production packet. Reduce only V8's old-generation allowance so
-  // the three-process group retains empirical Render Starter headroom.
+  // The standalone solver path retains its independently bounded worker.
+  // Production complete-compiler requests use the fused isolate policy below.
   maxOldGenerationSizeMb: 32,
   // V8 exposes this bound as a semi-space size, not a fictional aggregate
   // "young generation" switch.  The child verifies the exact flag at boot.
@@ -42,6 +41,7 @@ let pending = null;
 let testOverride = null;
 let replacement = null;
 let testChildInterceptor = null;
+let isolatedCompilerRuntime = null;
 
 function error(code, message) {
   const value = new Error(message);
@@ -162,6 +162,7 @@ function startWorker() {
         `--max-semi-space-size=${STATIC_WEEKLY_WORKER_LIMITS.maxSemiSpaceSizeMb}`,
         `--wasm-max-mem-pages=${(STATIC_WEEKLY_WORKER_LIMITS.maxWasmMemoryMb * 1024 * 1024) / 65_536}`,
       ],
+      env: { ...process.env, MEMPHIS_STATIC_WEEKLY_SOLVER_WORKER: "1" },
       stdio: ["ignore", "ignore", "ignore", "ipc"],
     });
   } catch (cause) {
@@ -236,6 +237,20 @@ async function replaceWorker(cause) {
 }
 
 export function getStaticWeeklySolverReadiness() {
+  if (isolatedCompilerRuntime) {
+    return {
+      state: "ready",
+      available: true,
+      package: HIGHS_PACKAGE,
+      identity: publicIdentity(isolatedCompilerRuntime.identity),
+      worker: {
+        runtime: "in-process within isolated compiler child",
+        serialized: true,
+        resourceLimits: isolatedCompilerRuntime.resourceLimits,
+      },
+      error: null,
+    };
+  }
   return {
     state,
     available: state === "ready" && Boolean(worker && identity),
@@ -278,6 +293,7 @@ function awaitInitialization(record, deadline, signal) {
 export async function initializeStaticWeeklySolver({ deadline: suppliedDeadline = null, signal } = {}) {
   const deadline = Number.isFinite(suppliedDeadline) ? suppliedDeadline : monotonicNowMilliseconds() + STATIC_WEEKLY_WORKER_LIMITS.maxWallClockMilliseconds;
   assertDeadline(deadline, signal);
+  if (isolatedCompilerRuntime) return isolatedCompilerRuntime.identity;
   if (state === "ready" && worker && identity) return identity;
   const started = startWorker();
   const record = initialization;
@@ -345,11 +361,37 @@ export async function solveStaticWeeklyMip(lp, { deadline: suppliedDeadline = nu
     assertDeadline(deadline, signal);
     if (testOverride === "unavailable") throw error("solver_unavailable", "Test-only simulated unavailable static weekly solver.");
     if (testOverride === "timeout") throw error("solver_timeout", "Test-only simulated static weekly solver timeout.");
+    if (isolatedCompilerRuntime) {
+      const remainingMilliseconds = assertDeadline(deadline, signal);
+      const result = isolatedCompilerRuntime.solve(lp, {
+        timeLimitSeconds: Math.min(remainingMilliseconds, STATIC_WEEKLY_WORKER_LIMITS.maxWallClockMilliseconds) / 1000,
+        modelAttestation: attestation,
+        behavior: testOverride === "hang" || testOverride === "crash" || testOverride === "non_optimal" || testOverride === "malformed" || testOverride === "tolerance_edge" ? testOverride : null,
+      });
+      assertDeadline(deadline, signal);
+      if (!result || result.error) throw error(result?.error?.code || "solver_unavailable", result?.error?.message || "Static weekly solver engine failed.");
+      return { result: result.result, evidence: result.evidence || null, modelAttestation: result.modelAttestation || null, identity: publicIdentity(result.identity), options: result.options || { ...HIGHS_OPTIONS } };
+    }
     return sendToWorker(lp, deadline, signal, attestation);
   };
   const queued = tail.then(run, run);
   tail = queued.then(() => undefined, () => undefined);
   return queued;
+}
+
+// The complete compiler already runs in a dedicated, process-group-owned
+// isolate. Installing the pinned HiGHS engine into that isolate avoids a
+// second V8 runtime while preserving the outer process deadline and crash
+// boundary. This is accepted only from the authenticated compiler-worker role
+// and before the standalone worker lineage has been initialized.
+export function installStaticWeeklySolverRuntimeForIsolatedCompiler(value) {
+  if (process.env.MEMPHIS_STATIC_WEEKLY_COMPILER_WORKER !== "1") throw new Error("The in-process solver runtime is restricted to the isolated compiler worker.");
+  if (!value || typeof value.solve !== "function" || !value.identity || !value.resourceLimits) throw new Error("The isolated compiler solver runtime is incomplete.");
+  if (isolatedCompilerRuntime || state !== "uninitialized" || worker || initialization) throw new Error("The static weekly solver runtime has already been initialized.");
+  isolatedCompilerRuntime = Object.freeze(value);
+  identity = Object.freeze({ ...value.identity, options: HIGHS_OPTIONS, runtime: "local WebAssembly within isolated compiler child" });
+  state = "ready";
+  return identity;
 }
 
 // Not reachable from HTTP/API inputs.  It lets local tests prove fail-closed
