@@ -785,4 +785,79 @@ from public, anon, authenticated;
 grant execute on function public.mz_enqueue_employee_location_pushes(timestamptz)
 to postgres, service_role;
 
+-- This function is part of the exact release-recovery inventory. Replacing its
+-- live body without rebinding the captured definition would make a later
+-- release-authority recovery silently restore the pre-cutover implementation.
+-- Update only this migration-owned inventory entry (and its grant entry); the
+-- broader inventory remains immutable and unchanged.
+do $release_recovery_rebind_preflight$
+declare
+  v_identity text := 'public.mz_enqueue_employee_location_pushes(timestamptz)'::regprocedure::text;
+begin
+  if to_regclass('public.custodial_release_authority_restore_inventory') is null
+     or to_regprocedure('public.custodial_release_authority_current_grant_definition(text)') is null then
+    raise exception 'release authority inventory helpers are unavailable';
+  end if;
+  if (select count(*) from public.custodial_release_authority_restore_inventory
+      where object_kind='function' and object_identity=v_identity) <> 1
+     or (select count(*) from public.custodial_release_authority_restore_inventory
+      where object_kind='grant' and object_identity=v_identity) <> 1 then
+    raise exception 'the location-push recovery inventory is incomplete';
+  end if;
+end
+$release_recovery_rebind_preflight$;
+
+alter table public.custodial_release_authority_restore_inventory
+  disable trigger trg_custodial_release_authority_restore_inventory_immutable;
+
+update public.custodial_release_authority_restore_inventory i
+set definition_sql=pg_get_functiondef(p.oid),
+    definition_sha256=encode(
+      extensions.digest(convert_to(pg_get_functiondef(p.oid),'UTF8'),'sha256'),'hex'
+    ),
+    captured_at=statement_timestamp()
+from pg_proc p
+where p.oid='public.mz_enqueue_employee_location_pushes(timestamptz)'::regprocedure
+  and i.object_kind='function'
+  and i.object_identity=p.oid::regprocedure::text;
+
+update public.custodial_release_authority_restore_inventory i
+set definition_sql=public.custodial_release_authority_current_grant_definition(p.oid::regprocedure::text),
+    definition_sha256=encode(
+      extensions.digest(
+        convert_to(
+          public.custodial_release_authority_current_grant_definition(p.oid::regprocedure::text),
+          'UTF8'
+        ),
+        'sha256'
+      ),
+      'hex'
+    ),
+    captured_at=statement_timestamp()
+from pg_proc p
+where p.oid='public.mz_enqueue_employee_location_pushes(timestamptz)'::regprocedure
+  and i.object_kind='grant'
+  and i.object_identity=p.oid::regprocedure::text;
+
+alter table public.custodial_release_authority_restore_inventory
+  enable trigger trg_custodial_release_authority_restore_inventory_immutable;
+
+do $release_recovery_rebind_postflight$
+declare
+  v_identity text := 'public.mz_enqueue_employee_location_pushes(timestamptz)'::regprocedure::text;
+begin
+  if exists (
+    select 1
+    from public.custodial_release_authority_restore_inventory
+    where object_identity=v_identity
+      and object_kind in ('function','grant')
+      and definition_sha256 <> encode(
+        extensions.digest(convert_to(definition_sql,'UTF8'),'sha256'),'hex'
+      )
+  ) then
+    raise exception 'location-push recovery inventory digest mismatch';
+  end if;
+end
+$release_recovery_rebind_postflight$;
+
 commit;

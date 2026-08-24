@@ -49,7 +49,7 @@
       "order": 1,
       "phase": "static_weekly_operational_truth_cutover",
       "file": "20260824213000_static_weekly_operational_truth_cutover.sql",
-      "sha256": "09bcf7f5ac1e8b4f6d04657df1c62c24e174058b5472652187aed6785df31f3d"
+      "sha256": "ba2385840aa68073b0df771994ac97eceac9257323e81542861393613d2695e9"
     }
   ],
   "postconditions": [
