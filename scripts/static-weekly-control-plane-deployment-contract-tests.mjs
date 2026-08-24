@@ -46,6 +46,17 @@ assert.doesNotMatch(runtimeIdentity, /password\s+'[^']+'/i, "source must not con
 // overhead. The exact accepted production packet is separately exercised by
 // the release memory probe; this contract prevents a later limit-only
 // regression from silently recreating the Render OOM.
+assert.deepEqual(STATIC_WEEKLY_COMPILER_RUNTIME_LIMITS, {
+  initializationMilliseconds: 30_000,
+  requestMilliseconds: 315_000,
+  maxOutstandingRequests: 8,
+  maxOldGenerationSizeMb: 80,
+  maxSemiSpaceSizeMb: 4,
+  stackSizeKb: 4 * 1024,
+}, "the compiler retains the exact empirically admitted process envelope");
+assert.equal(STATIC_WEEKLY_WORKER_LIMITS.maxOldGenerationSizeMb, 32, "the solver retains the exact empirically admitted V8 envelope");
+assert.equal(STATIC_WEEKLY_WORKER_LIMITS.maxSemiSpaceSizeMb, 4, "the solver retains the exact empirically admitted semi-space envelope");
+assert.equal(STATIC_WEEKLY_WORKER_LIMITS.maxWasmMemoryMb, 96, "the production packet requires the separately enforced 96 MiB WebAssembly ceiling");
 const configuredEnvelopeMb =
   96 // resident HTTP/database runtime
   + STATIC_WEEKLY_COMPILER_RUNTIME_LIMITS.maxOldGenerationSizeMb
@@ -56,7 +67,7 @@ const configuredEnvelopeMb =
   + (3 * STATIC_WEEKLY_WORKER_LIMITS.maxSemiSpaceSizeMb)
   + STATIC_WEEKLY_WORKER_LIMITS.maxWasmMemoryMb
   + 32; // solver native/IPC overhead
-assert.equal(configuredEnvelopeMb, 428, "the Starter service retains an 84 MiB hard-cap margin after conservative process allowances");
+assert.equal(configuredEnvelopeMb, 396, "the Starter service retains a 116 MiB hard-cap margin after conservative process allowances");
 assert.equal(STATIC_WEEKLY_WORKER_LIMITS.maxWasmMemoryMb * 1024 * 1024 / 65_536, 1536, "the parent and solver worker enforce one exact WebAssembly ceiling");
 
 console.log("static weekly control-plane deployment contract tests: PASS");

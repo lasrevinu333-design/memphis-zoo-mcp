@@ -20,7 +20,10 @@ const HIGHS_OPTIONS = Object.freeze({
   output_flag: true,
 });
 export const STATIC_WEEKLY_WORKER_LIMITS = Object.freeze({
-  maxOldGenerationSizeMb: 48,
+  // HiGHS requires the separately enforced 96 MiB WebAssembly ceiling for the
+  // accepted production packet. Reduce only V8's old-generation allowance so
+  // the three-process group retains empirical Render Starter headroom.
+  maxOldGenerationSizeMb: 32,
   // V8 exposes this bound as a semi-space size, not a fictional aggregate
   // "young generation" switch.  The child verifies the exact flag at boot.
   maxSemiSpaceSizeMb: 4,

@@ -15,12 +15,18 @@ export const STATIC_WEEKLY_COMPILER_RUNTIME_LIMITS = Object.freeze({
   initializationMilliseconds: 30_000,
   requestMilliseconds: REQUEST_DEADLINE_MILLISECONDS + 15_000,
   maxOutstandingRequests: 8,
-  // The production service is a 512 MiB Render Starter instance. The prior
-  // The original 256/32/8192 envelope exceeded the 512 MiB Starter limit, and
+  // The production service is a 512 MiB Render Starter instance. The original
+  // 256/32/8192 envelope exceeded the 512 MiB Starter limit, and
   // the first 128/8 correction still left too little platform headroom during
-  // the exact production compile. Keep the complete compiler bounded beneath
-  // the service envelope; its attested memory identity remains part of replay.
-  maxOldGenerationSizeMb: 96,
+  // the exact production compile. The subsequent 96/4 compiler plus 48/4
+  // solver envelope also restarted the live Starter instance after 285
+  // seconds even though the same packet passed locally. Keep the complete
+  // compiler below that empirically disproven envelope; its attested memory
+  // identity remains part of replay. The exact V10 production packet proves
+  // 64 MiB is below the compiler's
+  // deterministic lower bound. Keep the compiler at the bounded midpoint
+  // between that failed limit and the previously sufficient 96 MiB limit.
+  maxOldGenerationSizeMb: 80,
   maxSemiSpaceSizeMb: 4,
   stackSizeKb: 4 * 1024,
 });

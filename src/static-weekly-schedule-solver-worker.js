@@ -7,7 +7,7 @@ const require = createRequire(import.meta.url);
 // output_flag is part of the solver evidence contract: the final report is the
 // only pinned-boundary source for bounds, gap, and solution violations.
 const OPTIONS = Object.freeze({ threads: 1, random_seed: 0, mip_rel_gap: 0, mip_abs_gap: 0, mip_feasibility_tolerance: 1e-9, presolve: "on", parallel: "off", output_flag: true });
-const MAX_OLD_SPACE_MB = 48;
+const MAX_OLD_SPACE_MB = 32;
 const MAX_WASM_MEMORY_PAGES = 1536;
 const MAX_SEMI_SPACE_MB = 4;
 const TERMINAL_REPORT_PARSER_VERSION = "highs-terminal-report-v1";
