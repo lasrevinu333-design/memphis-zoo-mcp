@@ -67,11 +67,12 @@ let rebuilds = 0;
 let exceptionRequest = null;
 let rebuildRequest = null;
 let dayChangesRequest = null;
+let mutationFailure = null;
 const controlPlane = {
   async health() { return { ready: true }; },
   async getManagerSnapshot({ weekStart }) { snapshots += 1; return { schema: "memphis-zoo.static-weekly-manager-snapshot.v1", week_start: weekStart, authority_revision: 0 }; },
   async applyContractorCapacity() { mutations += 1; return { revision: mutations, data: { exception_id: `contractor-${mutations}` } }; },
-  async applyException(request) { exceptionRequest = request; mutations += 1; return { revision: mutations, data: { exception_id: `runtime-${mutations}` } }; },
+  async applyException(request) { if (mutationFailure) throw mutationFailure; exceptionRequest = request; mutations += 1; return { revision: mutations, data: { exception_id: `runtime-${mutations}` } }; },
   async applyDayChanges(request) { dayChangesRequest = request; mutations += 1; return { operation: "apply_day_changes", revision: mutations, data: { mutation_count: request.operations.length } }; },
   async rebuildCurrentProjection(request) { rebuildRequest = request; rebuilds += 1; return { revision: request.expectedRevision + 1, data: { projection_id: `rebuild-${request.weekStart}-${request.idempotencyKey}` } }; },
 };
@@ -210,6 +211,13 @@ try {
   response = await mutation();
   assert.equal(response.status, 200, "the current matching manager/device association may reach the scheduler mutation boundary");
   assert.equal(mutations, 3);
+
+  mutationFailure = Object.assign(new Error("The scheduler database connection was interrupted. No schedule change was accepted."), { code: "static_weekly_control_plane_database_unavailable" });
+  response = await mutation();
+  assert.equal(response.status, 503, "an interrupted authority connection is a retryable unavailable response, not a revision conflict");
+  assert.equal(response.body.code, "static_weekly_control_plane_database_unavailable");
+  assert.equal(mutations, 3, "an interrupted authority connection cannot report or count a mutation");
+  mutationFailure = null;
 
   lookup = async () => { throw new Error("trusted store unavailable"); };
   response = await mutation();

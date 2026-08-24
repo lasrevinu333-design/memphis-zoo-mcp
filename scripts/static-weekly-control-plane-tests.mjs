@@ -5,6 +5,7 @@
 // caller or signer again.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { EventEmitter } from "node:events";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createStaticWeeklyControlPlane } from "../src/static-weekly-control-plane.js";
@@ -327,6 +328,70 @@ await assert.rejects(() => lateFailedKeepaliveControlPlane.createInitialDraft({
 assert.equal(lateFailedKeepaliveAuthority.commits(), 0, "a heartbeat that fails after compilation cannot commit a draft");
 assert.equal(lateFailedKeepaliveAuthority.revision(), 0, "a late keepalive failure leaves authority unchanged");
 assert.equal(lateFailedKeepaliveAuthority.queries.at(-1).statement, "rollback", "a late keepalive failure rolls back the same transaction");
+
+const interruptedClient = new EventEmitter();
+const interruptedQueries = [];
+let interruptedReleaseError = null;
+const interruptedConnectionError = new Error("Connection terminated unexpectedly");
+interruptedClient.query = async (statement) => {
+  interruptedQueries.push(statement);
+  const registeredInput = compilerInput();
+  return { rows: statement.includes("static_weekly_v3_read_authority_source")
+    ? [{ result: { source_id: authoritySourceId, compiler_input: { timezone: registeredInput.timezone, slots: registeredInput.slots, proximity: registeredInput.proximity, version: registeredInput.versions[0] }, exceptions: [] } }]
+    : [] };
+};
+interruptedClient.release = (error) => { interruptedReleaseError = error || null; };
+const interruptedControlPlane = createStaticWeeklyControlPlane({
+  database: { async connect() { return interruptedClient; } },
+  compiler: async () => {
+    assert.equal(interruptedClient.listenerCount("error") > 0, true, "a checked-out authority client owns an asynchronous connection-error boundary");
+    interruptedClient.emit("error", interruptedConnectionError);
+    return acceptedProjection;
+  },
+  initializeSolver: async () => solverIdentity,
+  getSolverReadiness: () => ({ state: "ready", available: true, identity: solverIdentity }),
+});
+await assert.rejects(() => interruptedControlPlane.createInitialDraft({
+  manager,
+  sourceId: authoritySourceId,
+  effectiveStart: "2026-10-05",
+  expectedRevision: 0,
+  idempotencyKey: "interrupted-initial-draft",
+}), (error) => error?.code === "static_weekly_control_plane_database_unavailable" && /No schedule change was accepted/.test(error.message));
+assert.equal(interruptedQueries.includes("commit"), false, "an interrupted authority connection cannot commit");
+assert.equal(interruptedQueries.at(-1), "rollback", "an interrupted authority transaction attempts rollback before failing closed");
+assert.equal(interruptedReleaseError, interruptedConnectionError, "the broken authority client is destroyed instead of returned to the pool");
+assert.equal(interruptedClient.listenerCount("error"), 0, "the checked-out client listener is removed at the release boundary");
+
+let rejectedQueryReleaseError = null;
+const rejectedQueryError = Object.assign(new Error("read ECONNRESET"), { code: "ECONNRESET" });
+const rejectedQueryClient = {
+  async query(statement) {
+    if (statement === "begin") throw rejectedQueryError;
+    throw rejectedQueryError;
+  },
+  release(error) { rejectedQueryReleaseError = error || null; },
+};
+const rejectedQueryControlPlane = createStaticWeeklyControlPlane({
+  database: { async connect() { return rejectedQueryClient; } },
+  compiler: async () => acceptedProjection,
+  initializeSolver: async () => solverIdentity,
+  getSolverReadiness: () => ({ state: "ready", available: true, identity: solverIdentity }),
+});
+await assert.rejects(() => rejectedQueryControlPlane.getManagerSnapshot({ manager, weekStart: "2026-10-05" }),
+  (error) => error?.code === "static_weekly_control_plane_database_unavailable");
+assert.equal(rejectedQueryReleaseError, rejectedQueryError, "a rejected connection query also destroys the broken client when no separate error event was emitted");
+
+const rejectedConnectError = Object.assign(new Error("timeout exceeded when trying to connect"), { code: "ETIMEDOUT" });
+const rejectedConnectControlPlane = createStaticWeeklyControlPlane({
+  database: { async connect() { throw rejectedConnectError; } },
+  compiler: async () => acceptedProjection,
+  initializeSolver: async () => solverIdentity,
+  getSolverReadiness: () => ({ state: "ready", available: true, identity: solverIdentity }),
+});
+await assert.rejects(() => rejectedConnectControlPlane.getManagerSnapshot({ manager, weekStart: "2026-10-05" }),
+  (error) => error?.code === "static_weekly_control_plane_database_unavailable" && error?.cause === rejectedConnectError,
+  "connection admission failure is normalized before it reaches the HTTP authority boundary");
 
 const authority = createAuthorityDatabase();
 const controlPlane = controlPlaneFor(authority);

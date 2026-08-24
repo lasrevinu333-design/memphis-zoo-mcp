@@ -97,7 +97,15 @@ export function createStaticWeeklyControlPlaneRuntime({
   function respond(operation) {
     return async (req, res) => {
       try { res.status(200).json({ ok: true, data: await operation(req) }); }
-      catch (error) { res.status(error?.code === "static_weekly_control_plane_compiler_rejected" ? 422 : 409).json({ ok: false, error: error?.message || "Static weekly control-plane request failed.", code: error?.code || "static_weekly_control_plane_failed" }); }
+      catch (error) {
+        const unavailable = new Set([
+          "static_weekly_control_plane_database_unavailable",
+          "static_weekly_control_plane_closing",
+          "static_weekly_control_plane_busy",
+          "static_weekly_control_plane_queue_timeout",
+        ]).has(error?.code);
+        res.status(error?.code === "static_weekly_control_plane_compiler_rejected" ? 422 : unavailable ? 503 : 409).json({ ok: false, error: error?.message || "Static weekly control-plane request failed.", code: error?.code || "static_weekly_control_plane_failed" });
+      }
     };
   }
 

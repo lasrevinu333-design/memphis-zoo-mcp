@@ -26,6 +26,24 @@ const text = (value) => typeof value === "string" ? value.trim() : "";
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const fail = (code, message = code) => Object.assign(new Error(message), { code });
 
+function databaseConnectionFailure(error) {
+  return Object.assign(new Error("The scheduler database connection was interrupted. No schedule change was accepted."), {
+    code: "static_weekly_control_plane_database_unavailable",
+    cause: error instanceof Error ? error : undefined,
+  });
+}
+
+function isDatabaseConnectionFailure(error) {
+  const code = text(error?.code).toUpperCase();
+  const message = text(error?.message).toLowerCase();
+  return code.startsWith("08")
+    || new Set(["ECONNRESET", "ECONNREFUSED", "EPIPE", "ETIMEDOUT", "53300", "53400", "57P01", "57P02", "57P03"]).has(code)
+    || message.includes("connection terminated")
+    || message.includes("connection error")
+    || message.includes("not queryable")
+    || message.includes("timeout exceeded when trying to connect");
+}
+
 function requireManager(manager) {
   const managerId = text(manager?.manager_id || manager?.managerId);
   if (!managerId || !text(manager?.manager_display_name || manager?.managerName) || manager?.read_only || manager?.auth_mode === "operations_first" || manager?.auth_mode === "admin_api_key") {
@@ -262,13 +280,23 @@ export function createStaticWeeklyControlPlaneDatabase({
   pool = null,
 } = {}) {
   if (pool) return pool;
-  return new Pool({
+  const database = new Pool({
     ...staticWeeklyDatabaseConnectionOptions({ connectionString, caPem }),
     max: 4,
     idleTimeoutMillis: 10_000,
     connectionTimeoutMillis: 10_000,
     application_name: "memphis-static-weekly-control-plane",
   });
+  // pg-pool removes a failed idle connection before emitting this event. A
+  // listener is still mandatory: EventEmitter otherwise converts a transient
+  // idle connection loss into an uncaught process exception.
+  database.on("error", (error) => {
+    console.error("Static weekly control plane discarded an unavailable idle database connection.", {
+      code: text(error?.code) || null,
+      message: text(error?.message) || "Database connection unavailable.",
+    });
+  });
+  return database;
 }
 
 export function createStaticWeeklyControlPlane({
@@ -365,7 +393,21 @@ export function createStaticWeeklyControlPlane({
   function transaction(work, { health = false } = {}) {
     const execute = async () => {
       if (closing) throw fail("static_weekly_control_plane_closing", "The scheduler is closing and cannot open another database transaction.");
-      const client = await database.connect();
+      let client;
+      try {
+        client = await database.connect();
+      } catch (error) {
+        if (isDatabaseConnectionFailure(error)) throw databaseConnectionFailure(error);
+        throw error;
+      }
+      let asynchronousConnectionError = null;
+      let discardClientError = null;
+      const onConnectionError = (error) => { asynchronousConnectionError ||= error instanceof Error ? error : new Error("Database connection unavailable."); };
+      // pg-pool intentionally removes its idle error listener while a client
+      // is checked out. The transaction owner must therefore catch the
+      // client's asynchronous error event itself or Node terminates the whole
+      // control-plane process before rollback/fail-closed handling can run.
+      client.on?.("error", onConnectionError);
       try {
         await client.query("begin");
         // The login identity is provisioned separately and granted this NOLOGIN
@@ -373,13 +415,25 @@ export function createStaticWeeklyControlPlane({
         await client.query("set local role static_weekly_control_plane");
         if (health) await client.query(`set local statement_timeout = '${healthTransactionMilliseconds}ms'`);
         const result = await work(client);
+        if (asynchronousConnectionError) throw asynchronousConnectionError;
         await client.query("commit");
         return result;
       } catch (error) {
-        await client.query("rollback").catch(() => {});
+        let rollbackError = null;
+        await client.query("rollback").catch((candidate) => { rollbackError = candidate; });
+        const connectionError = asynchronousConnectionError
+          || (isDatabaseConnectionFailure(error) ? error : null)
+          || (isDatabaseConnectionFailure(rollbackError) ? rollbackError : null);
+        if (connectionError) {
+          discardClientError = connectionError;
+          throw databaseConnectionFailure(connectionError);
+        }
         throw error;
       } finally {
-        client.release();
+        client.removeListener?.("error", onConnectionError);
+        // Passing an error tells pg-pool to destroy a broken client rather than
+        // return it to the pool for another authority transaction.
+        client.release(discardClientError || asynchronousConnectionError || undefined);
       }
     };
     // The pool has four connections. Ordinary operations may occupy at most
