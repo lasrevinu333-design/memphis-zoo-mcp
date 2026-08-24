@@ -29,7 +29,10 @@ const releaseInput = JSON.parse(readFileSync("release/integrated-backend-authori
 const releaseEvidence = JSON.parse(readFileSync("release/integrated-backend-authority-evidence.json", "utf8"));
 const pendingMigrationPlan = JSON.parse(readFileSync("release/pending-production-migration-plan.json", "utf8"));
 const exactPendingProductionMigrations = [
-  "20260823143000_static_weekly_registered_roster_bootstrap.sql",
+  "20260824130000_static_weekly_memory_bounded_document_authority.sql",
+  "20260824130500_static_weekly_memory_bounded_validator_and_receipt.sql",
+  "20260824131000_static_weekly_manager_snapshot_authority_source.sql",
+  "20260824131500_static_weekly_compact_document_consumers.sql",
 ];
 
 assert.match(phaseA, /Phase A is deliberately additive/i);
@@ -127,20 +130,20 @@ assert.match(releaseInput.cutover.phase_order[1], /release:populated-schema:pref
 assert.equal(releaseInput.cutover.production_migration_plan, "release/pending-production-migration-plan.json");
 assert.equal(pendingMigrationPlan.artifact, "pending-production-migration-plan.v2");
 assert.equal(pendingMigrationPlan.project_ref, "rqquvtjdmugpigbndmne");
-assert.equal(pendingMigrationPlan.observed_production.ledger_head, "20260823125258");
-assert.equal(pendingMigrationPlan.observed_production.source_migration_name, "static_weekly_end_of_day_window_parity");
-assert.equal(pendingMigrationPlan.observed_production.catalog_privilege_fingerprint, "3df9551ba5f5fe0c5222cd5e0a0b5cfc6895d2fa60d653ba2fd70ba52085db1b");
-assert.equal(pendingMigrationPlan.observed_production.public_function_count, 478);
+assert.equal(pendingMigrationPlan.observed_production.ledger_head, "20260823145052");
+assert.equal(pendingMigrationPlan.observed_production.source_migration_name, "static_weekly_registered_roster_bootstrap");
+assert.equal(pendingMigrationPlan.observed_production.catalog_privilege_fingerprint, "65ba7435cba29a9ab1ad98d29e4c095fa648083ff31bb7df4815d2c534e49e54");
+assert.equal(pendingMigrationPlan.observed_production.public_function_count, 479);
 assert.equal(pendingMigrationPlan.observed_production.registered_source_count, 1);
 assert.equal(pendingMigrationPlan.observed_production.active_authority_key_count, 1);
-assert.equal(pendingMigrationPlan.observed_production.roster_slot_count, 0);
-assert.equal(pendingMigrationPlan.observed_production.roster_incumbency_count, 0);
+assert.equal(pendingMigrationPlan.observed_production.roster_slot_count, 17);
+assert.equal(pendingMigrationPlan.observed_production.roster_incumbency_count, 17);
 assert.equal(pendingMigrationPlan.observed_production.published_version_count, 0);
-assert.equal(pendingMigrationPlan.target.source_migration_file, "20260823143000_static_weekly_registered_roster_bootstrap.sql");
-assert.equal(pendingMigrationPlan.target.source_migration_name, "static_weekly_registered_roster_bootstrap");
+assert.equal(pendingMigrationPlan.target.source_migration_file, "20260824131500_static_weekly_compact_document_consumers.sql");
+assert.equal(pendingMigrationPlan.target.source_migration_name, "static_weekly_compact_document_consumers");
 assert.equal(pendingMigrationPlan.target.ledger_version_policy, "runner_assigned_and_postverified");
-assert.equal(pendingMigrationPlan.target.canonical_schema_fingerprint, "65ba7435cba29a9ab1ad98d29e4c095fa648083ff31bb7df4815d2c534e49e54");
-assert.equal(pendingMigrationPlan.target.public_function_count, 479);
+assert.equal(pendingMigrationPlan.target.canonical_schema_fingerprint, "d1b06f3375b9542659302096e68883fb765dd24589b16c4f02e344f4a669c44c");
+assert.equal(pendingMigrationPlan.target.public_function_count, 482);
 assert.equal(pendingMigrationPlan.authorization.production_apply_authorized, true);
 assert.deepEqual(pendingMigrationPlan.migrations.map(({ file }) => file), exactPendingProductionMigrations);
 for (const [index, migration] of pendingMigrationPlan.migrations.entries()) {
