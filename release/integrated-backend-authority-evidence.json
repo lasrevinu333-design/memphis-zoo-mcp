@@ -748,12 +748,12 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "cfeeeca11f9e8a8d4a23d20bf74394f4d15ff732"
+        "object_id": "934e257d3e31558d22e4c532a24b6b9629554ab5"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "f7a4df339139dc76ac8dd542868258b0e6f0358c"
+        "object_id": "1fd6cb08824a6b898f5bd1fee66d346d9a45b064"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
