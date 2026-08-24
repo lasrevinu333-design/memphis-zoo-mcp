@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import {
   assertExceptionCommand,
+  bytewiseCompare,
   canonicalJson,
   contentDigest,
   serviceDateWeekday,
   sha256Hex,
   snapshotIncumbency,
+  stableCompare,
   selectEffectiveWeeklyVersion,
   normalizeWindow,
   validateEffectiveRanges,
@@ -17,6 +19,9 @@ import { MAX_TERMINAL_EXACT_OBJECTIVE, generateStaticWeeklySchedulingProgram, id
 assert.equal(sha256Hex("abc"), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
 assert.equal(canonicalJson({ z: [true, null], a: { b: 2, a: 1 } }), '{"a":{"a":1,"b":2},"z":[true,null]}');
 assert.equal(contentDigest({ b: 2, a: 1 }), contentDigest({ a: 1, b: 2 }), "content digest must ignore object input order");
+const stableOrderingCorpus = ["item10", "item2", "item02", "Item2", "item2a", "item2A", "a-b", "a_b", "é", "e\u0301"];
+const stableOrderingOracle = (left, right) => String(left).localeCompare(String(right), "en", { numeric: true, sensitivity: "variant" }) || bytewiseCompare(left, right);
+assert.deepEqual(stableOrderingCorpus.slice().sort(stableCompare), stableOrderingCorpus.slice().sort(stableOrderingOracle), "cached collation must preserve the exact locale-aware and UTF-8 tie-break ordering contract");
 assert.equal(serviceDateWeekday("2026-08-10"), 1, "fixture Monday must remain Memphis weekday one");
 assert.equal(serviceDateWeekday("2026-03-08"), 0, "spring DST Sunday stays its local service weekday");
 assert.equal(serviceDateWeekday("2026-11-01"), 0, "fall DST Sunday stays its local service weekday");

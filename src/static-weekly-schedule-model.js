@@ -102,8 +102,16 @@ export function windowContains(container, contained) {
   return outer.startMinute <= inner.startMinute && outer.endMinute >= inner.endMinute;
 }
 
+// Constructing an ICU collator for every comparison dominates large exact
+// schedule compiles because canonical JSON recursively sorts every object key
+// for every lexicographic tier.  One immutable collator has the same ordering
+// contract as localeCompare with these fixed arguments and avoids rebuilding
+// identical ICU state hundreds of thousands of times.
+const STABLE_COLLATOR = new Intl.Collator("en", { numeric: true, sensitivity: "variant" });
+const UTF8_ENCODER = new TextEncoder();
+
 export function stableCompare(left, right) {
-  const ordered = String(left).localeCompare(String(right), "en", { numeric: true, sensitivity: "variant" });
+  const ordered = STABLE_COLLATOR.compare(String(left), String(right));
   return ordered || bytewiseCompare(left, right);
 }
 
@@ -112,8 +120,8 @@ export function stableCompare(left, right) {
 // Scheduler identities therefore use this UTF-8 byte order as their final
 // tie-breaker.  TextEncoder is available in every supported compiler runtime.
 export function bytewiseCompare(left, right) {
-  const a = new TextEncoder().encode(String(left));
-  const b = new TextEncoder().encode(String(right));
+  const a = UTF8_ENCODER.encode(String(left));
+  const b = UTF8_ENCODER.encode(String(right));
   const length = Math.min(a.length, b.length);
   for (let index = 0; index < length; index += 1) {
     if (a[index] !== b[index]) return a[index] < b[index] ? -1 : 1;
@@ -139,7 +147,7 @@ export function canonicalJson(value) {
 // is intentionally exported so fixtures can independently recompute digests
 // without depending on Node's crypto implementation.
 export function sha256Hex(text) {
-  const bytes = new TextEncoder().encode(String(text));
+  const bytes = UTF8_ENCODER.encode(String(text));
   const bitLength = bytes.length * 8;
   const paddedLength = (((bytes.length + 9 + 63) >> 6) << 6);
   const padded = new Uint8Array(paddedLength);
