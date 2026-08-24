@@ -1,5 +1,7 @@
+import { createHash } from "node:crypto";
 import { compileStaticWeeklySchedule } from "./static-weekly-schedule-compiler.js";
 import { createStaticWeeklyDraftRpcInput, createStaticWeeklyProjectionRpcInput } from "./static-weekly-schedule-database-adapter.js";
+import { installStaticWeeklySha256HexAccelerator } from "./static-weekly-schedule-model.js";
 import {
   getStaticWeeklySolverReadiness,
   initializeStaticWeeklySolver,
@@ -7,6 +9,8 @@ import {
 } from "./static-weekly-schedule-solver.js";
 import { initializeStaticWeeklySolverEngine } from "./static-weekly-schedule-solver-worker.js";
 import { STATIC_WEEKLY_FUSED_COMPILER_RESOURCE_LIMITS } from "./static-weekly-schedule-runtime-policy.js";
+
+installStaticWeeklySha256HexAccelerator((text) => createHash("sha256").update(text, "utf8").digest("hex"));
 
 function serializedError(error) {
   return {
