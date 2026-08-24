@@ -758,7 +758,7 @@
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
         "mode": "100644",
-        "object_id": "346fc96b90591aaf3441c3202be53ae47c527d36"
+        "object_id": "010ea632b343cdc6f4c2df4ba68eac68624a8686"
       },
       {
         "path": "scripts/integrated-backend-authority-suite-order-isolated-tests.mjs",
@@ -1003,7 +1003,7 @@
       {
         "path": "scripts/refresh-integrated-backend-authority-release.mjs",
         "mode": "100644",
-        "object_id": "5a57ff13a417cb7c18a93bbd04a45b9baabb6b7e"
+        "object_id": "e9814c5084804ee71206e6569061b0eac0ab9aad"
       },
       {
         "path": "scripts/refresh-release-schema-alignment.mjs",
@@ -1218,7 +1218,7 @@
       {
         "path": "scripts/static-weekly-production-database-runtime-probe.mjs",
         "mode": "100644",
-        "object_id": "92e26b6f952f348072b114f756eaf1820931c3b7"
+        "object_id": "338ed00cf30ba06589ca2b2b2a05639c08ee65b2"
       },
       {
         "path": "scripts/static-weekly-production-packet-runtime-probe.mjs",
@@ -1233,7 +1233,7 @@
       {
         "path": "scripts/static-weekly-schedule-authority-v3-tests.mjs",
         "mode": "100644",
-        "object_id": "5759c410e37892f123b47ccea6a3d35ba9b4ba01"
+        "object_id": "61645c21635b7b58b747d7809a30e2c1b7f9bc85"
       },
       {
         "path": "scripts/static-weekly-schedule-candidate-importer.mjs",
@@ -1828,7 +1828,7 @@
       {
         "path": "src/static-weekly-schedule-database-adapter.js",
         "mode": "100644",
-        "object_id": "3f7e56abdfb98b39e4ed9d975b9449738633f731"
+        "object_id": "c63003645a1326e01174119ab66557c4c8300b95"
       },
       {
         "path": "src/static-weekly-schedule-model.js",
@@ -3021,13 +3021,33 @@
         "object_id": "ae0b9cd5baa3b77bbaaa6e6425babc06f79a9d7e"
       },
       {
+        "path": "supabase/migrations/20260824130000_static_weekly_memory_bounded_document_authority.sql",
+        "mode": "100644",
+        "object_id": "d90259ddec0a6cae1fb045274036681a6b82639f"
+      },
+      {
+        "path": "supabase/migrations/20260824130500_static_weekly_memory_bounded_validator_and_receipt.sql",
+        "mode": "100644",
+        "object_id": "5bceecc3c0cb3a416afa71181fa5b9b3efe29940"
+      },
+      {
+        "path": "supabase/migrations/20260824131000_static_weekly_manager_snapshot_authority_source.sql",
+        "mode": "100644",
+        "object_id": "048bfa5e4d63b25bfa34a197f2e8101b064cdeb6"
+      },
+      {
+        "path": "supabase/migrations/20260824131500_static_weekly_compact_document_consumers.sql",
+        "mode": "100644",
+        "object_id": "30663753862ebec53d8cccb8820e3a393d0af3f5"
+      },
+      {
         "path": "tmp/write_probe.txt",
         "mode": "100644",
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 584,
-    "migration_path_count": 102,
+    "authority_path_count": 588,
+    "migration_path_count": 106,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
   },
@@ -3343,6 +3363,18 @@
     },
     {
       "name": "20260823143000_static_weekly_registered_roster_bootstrap.sql"
+    },
+    {
+      "name": "20260824130000_static_weekly_memory_bounded_document_authority.sql"
+    },
+    {
+      "name": "20260824130500_static_weekly_memory_bounded_validator_and_receipt.sql"
+    },
+    {
+      "name": "20260824131000_static_weekly_manager_snapshot_authority_source.sql"
+    },
+    {
+      "name": "20260824131500_static_weekly_compact_document_consumers.sql"
     }
   ],
   "release_boundary": "Prepare distinct minimum-32-character backend and native-route secrets before cutover; configure their database digests immediately after the migrations that create each configuration function, retain the bridge backend artifact through the scan-snapshot phase, and require the executable health/restoration probes before traffic changes."
