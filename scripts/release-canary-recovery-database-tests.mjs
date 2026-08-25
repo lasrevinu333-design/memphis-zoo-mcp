@@ -182,6 +182,40 @@ assert.equal(sql(`select public.custodial_release_authority_current_grant_defini
 assert.equal(sql("select has_function_privilege('service_role','public.tool_get_offline_scan_authority_snapshot(text,text,text)'::regprocedure,'EXECUTE')::text;"), "true");
 assert.equal(sql("select has_table_privilege('service_role','public.sessions','SELECT')::text;"), "true");
 
+const identityGrantDefinition = sql(`select definition_sql from public.custodial_release_authority_restore_inventory
+  where object_kind='grant' and object_identity='public.devices';`);
+assert.match(identityGrantDefinition, /grant SELECT \(device_id\) on table public\.devices to custodial_application_reader;/,
+  "release recovery must capture the restricted reader's non-secret identity-column projection");
+assert.equal(sql(`select count(*) from public.custodial_release_authority_restore_inventory
+  where object_kind='policy' and object_identity in (
+    'public.devices:custodial_application_reader_device_identity',
+    'public.employees:custodial_application_reader_employee_identity',
+    'public.device_aliases:custodial_application_reader_device_alias_identity'
+  );`), "3", "release recovery must capture all three reader identity policies");
+
+sql("revoke select (device_id) on table public.devices from custodial_application_reader;");
+const revokedIdentityGrantHealth = JSON.parse(sql(`select public.custodial_backend_authority_health(${q(secret)})::text;`));
+assert.equal(revokedIdentityGrantHealth.ok, false, "a missing admitted identity-column grant must fail health");
+assert.ok(revokedIdentityGrantHealth.mismatched_objects.includes("public.devices"));
+const identityGrantRestore = JSON.parse(sql(`select public.custodial_control_release_canary(
+  '${managerId}'::uuid,'${randomUUID()}'::uuid,${q(deviceId)},'restore_authority','restore reader identity column authority',
+  '{"ok":false,"probe":"reader-column-grant"}'::jsonb,${q(secret)})::text;`));
+assert.ok(identityGrantRestore.restored_objects > 40);
+assert.equal(sql("select has_column_privilege('custodial_application_reader','public.devices','device_id','SELECT')::text;"), "true");
+
+sql("drop policy custodial_application_reader_device_identity on public.devices;");
+const missingIdentityPolicyHealth = JSON.parse(sql(`select public.custodial_backend_authority_health(${q(secret)})::text;`));
+assert.equal(missingIdentityPolicyHealth.ok, false, "a missing reader identity policy must fail health");
+assert.ok(missingIdentityPolicyHealth.missing_objects.includes("public.devices:custodial_application_reader_device_identity"));
+const identityPolicyRestore = JSON.parse(sql(`select public.custodial_control_release_canary(
+  '${managerId}'::uuid,'${randomUUID()}'::uuid,${q(deviceId)},'restore_authority','restore reader identity policy',
+  '{"ok":false,"probe":"reader-policy"}'::jsonb,${q(secret)})::text;`));
+assert.ok(identityPolicyRestore.restored_objects > 40);
+assert.equal(sql(`select count(*) from pg_policy where polrelid='public.devices'::regclass
+  and polname='custodial_application_reader_device_identity' and polcmd='r';`), "1");
+assert.equal(JSON.parse(sql(`select public.custodial_backend_authority_health(${q(secret)})::text;`)).ok, true,
+  "restoring the bounded reader projection must return exact authority health");
+
 const driftRole = `custodial_inventory_drift_${Date.now().toString(36)}`;
 const triggerIdentity = "public.custodial_release_canary_transport_probes.trg_custodial_release_canary_transport_probes_immutable";
 const indexIdentity = sql("select object_identity from public.custodial_release_authority_restore_inventory where object_kind='index' order by object_identity limit 1;");
