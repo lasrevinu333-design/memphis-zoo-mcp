@@ -29,7 +29,7 @@ const releaseInput = JSON.parse(readFileSync("release/integrated-backend-authori
 const releaseEvidence = JSON.parse(readFileSync("release/integrated-backend-authority-evidence.json", "utf8"));
 const pendingMigrationPlan = JSON.parse(readFileSync("release/pending-production-migration-plan.json", "utf8"));
 const exactPendingProductionMigrations = [
-  "20260824213000_static_weekly_operational_truth_cutover.sql",
+  "20260825134500_scan_alert_runtime_authority_closure.sql",
 ];
 
 assert.match(phaseA, /Phase A is deliberately additive/i);
@@ -127,10 +127,10 @@ assert.match(releaseInput.cutover.phase_order[1], /release:populated-schema:pref
 assert.equal(releaseInput.cutover.production_migration_plan, "release/pending-production-migration-plan.json");
 assert.equal(pendingMigrationPlan.artifact, "pending-production-migration-plan.v2");
 assert.equal(pendingMigrationPlan.project_ref, "rqquvtjdmugpigbndmne");
-assert.equal(pendingMigrationPlan.observed_production.ledger_head, "20260824170816");
-assert.equal(pendingMigrationPlan.observed_production.source_migration_name, "static_weekly_projection_compact_snapshot");
-assert.equal(pendingMigrationPlan.observed_production.catalog_privilege_fingerprint, "ae05ae6baf4ca7f8a7bc4d6a9981242b1e462a1eee9ca9178aa0d550e44cec52");
-assert.equal(pendingMigrationPlan.observed_production.public_function_count, 483);
+assert.equal(pendingMigrationPlan.observed_production.ledger_head, "20260824193225");
+assert.equal(pendingMigrationPlan.observed_production.source_migration_name, "static_weekly_operational_truth_cutover");
+assert.equal(pendingMigrationPlan.observed_production.catalog_privilege_fingerprint, "687d757ef4a39184a003931362f679e7c012edbf4c57f9849512978364899e0f");
+assert.equal(pendingMigrationPlan.observed_production.public_function_count, 487);
 assert.equal(pendingMigrationPlan.observed_production.registered_source_count, 1);
 assert.equal(pendingMigrationPlan.observed_production.active_authority_key_count, 1);
 assert.equal(pendingMigrationPlan.observed_production.roster_slot_count, 17);
@@ -141,11 +141,11 @@ assert.equal(pendingMigrationPlan.observed_production.command_receipt_count, 3);
 assert.equal(pendingMigrationPlan.observed_production.authority_revision, 3);
 assert.equal(pendingMigrationPlan.observed_production.projection_count, 1);
 assert.equal(pendingMigrationPlan.observed_production.occurrence_count, 452);
-assert.equal(pendingMigrationPlan.target.source_migration_file, "20260824213000_static_weekly_operational_truth_cutover.sql");
-assert.equal(pendingMigrationPlan.target.source_migration_name, "static_weekly_operational_truth_cutover");
+assert.equal(pendingMigrationPlan.target.source_migration_file, "20260825134500_scan_alert_runtime_authority_closure.sql");
+assert.equal(pendingMigrationPlan.target.source_migration_name, "scan_alert_runtime_authority_closure");
 assert.equal(pendingMigrationPlan.target.ledger_version_policy, "runner_assigned_and_postverified");
-assert.equal(pendingMigrationPlan.target.canonical_schema_fingerprint, "687d757ef4a39184a003931362f679e7c012edbf4c57f9849512978364899e0f");
-assert.equal(pendingMigrationPlan.target.public_function_count, 487);
+assert.equal(pendingMigrationPlan.target.canonical_schema_fingerprint, "901a264e09d6e5eb29956cecd64e6a4d6e11988919de3679e088cd3580bafd7c");
+assert.equal(pendingMigrationPlan.target.public_function_count, 488);
 assert.equal(pendingMigrationPlan.authorization.production_apply_authorized, true);
 assert.deepEqual(pendingMigrationPlan.migrations.map(({ file }) => file), exactPendingProductionMigrations);
 for (const [index, migration] of pendingMigrationPlan.migrations.entries()) {
@@ -155,7 +155,7 @@ for (const [index, migration] of pendingMigrationPlan.migrations.entries()) {
 }
 assert.equal(releaseEvidence.compatibility_window.accepted_engine.scan, "scan.v2");
 assert.equal(releaseEvidence.compatibility_window.required_engine.scan, "scan.v4.snapshot-bound-authority");
-assert.equal(releaseEvidence.migrations.at(-1).name, "20260824213000_static_weekly_operational_truth_cutover.sql");
+assert.equal(releaseEvidence.migrations.at(-1).name, "20260825134500_scan_alert_runtime_authority_closure.sql");
 assert.match(staticWeeklyRegisteredRosterBootstrap, /static_weekly_v6_initialize_registered_roster/i);
 assert.match(staticWeeklyRegisteredRosterBootstrap, /static_weekly_v3_assert_release_operator/i);
 assert.match(staticWeeklyRegisteredRosterBootstrap, /grant execute on function public\.static_weekly_v6_initialize_registered_roster\(uuid,uuid,text\)\s+to static_weekly_release_operator/i);
