@@ -45,6 +45,7 @@ const releaseRecoveryRebind = "20260820155000_rebind_release_recovery_inventory_
 const scanAlertRuntimeAuthorityClosure = "20260825134500_scan_alert_runtime_authority_closure.sql";
 const applicationReaderDeviceIdentity = "20260825173000_restore_application_reader_device_identity.sql";
 const applicationReaderCredentialFence = "20260825173500_fence_application_reader_device_credentials.sql";
+const applicationReaderReleaseRecovery = "20260825174500_rebind_application_reader_release_recovery.sql";
 const releaseInputPath = "release/integrated-backend-authority-input.json";
 const releaseEvidencePath = "release/integrated-backend-authority-evidence.json";
 const productionMigrationStatePath = "release/production-migration-state.json";
@@ -236,7 +237,7 @@ const evidenceBlob = expectedEntries.find(({ path }) => path === releaseEvidence
 assert.ok(evidenceBlob, "expected tree omits generated release evidence");
 const expectedBlobs = expectedEntries.filter(({ path }) => path !== releaseEvidencePath);
 assert.ok(expectedBlobs.length > 0, "release authority inventory is empty");
-assert.equal(expectedBlobs.filter(({ path }) => /^supabase\/migrations\/[^/]+\.sql$/.test(path)).length, 112, "release authority inventory must bind all 112 migrations");
+assert.equal(expectedBlobs.filter(({ path }) => /^supabase\/migrations\/[^/]+\.sql$/.test(path)).length, 113, "release authority inventory must bind all 113 migrations");
 for (const blob of [...expectedBlobs, evidenceBlob]) assertWorktreeMatchesExpectedBlob(blob);
 assert.equal(evidenceBlob.object_id, acceptance.backend_evidence_blob_sha, "signed release attestation names the wrong evidence blob");
 assert.equal(hash(evidenceBlob.bytes), acceptance.backend_evidence_sha256, "signed release attestation names the wrong evidence digest");
@@ -252,7 +253,7 @@ assert.ok(Array.isArray(productionMigrationState.pending_migrations));
 assert.equal(productionMigrationState.pending_migrations.length, 0, "an already-converged release must not replay a migration");
 assert.ok(Array.isArray(productionMigrationState.applied_release_migrations));
 const appliedReleaseMigrations = productionMigrationState.applied_release_migrations.map(({ file }) => file);
-assert.deepEqual(appliedReleaseMigrations, [scanAlertRuntimeAuthorityClosure, applicationReaderDeviceIdentity, applicationReaderCredentialFence]);
+assert.deepEqual(appliedReleaseMigrations, [scanAlertRuntimeAuthorityClosure, applicationReaderDeviceIdentity, applicationReaderCredentialFence, applicationReaderReleaseRecovery]);
 assert.equal(new Set(appliedReleaseMigrations).size, appliedReleaseMigrations.length, "applied release migrations must be unique");
 for (const migration of appliedReleaseMigrations) {
   assert.match(String(migration || ""), /^[0-9]{14}_[a-z][a-z0-9_]*\.sql$/, `invalid applied release migration file: ${migration}`);
@@ -280,9 +281,9 @@ const frontendManifest = parseJsonBlob(blobByPath.get("release/frontend-release-
 assert.equal(input.release_contract_version, "offline-authority.v5");
 assert.deepEqual(input.cutover.phase_order, [
   "prepare distinct CUSTODIAL_BACKEND_PROOF_SECRET and CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET values (minimum 32 characters each) without exposing either value",
-  "capture the production catalog through the read-only Supabase boundary and require it to equal the clean 112-migration rebuild fingerprint",
+  "capture the production catalog through the read-only Supabase boundary and require it to equal the clean 113-migration rebuild fingerprint",
   `verify production project, converged migration head, catalog/privilege fingerprint, backup receipt, and exact source attestation against ${productionMigrationStatePath}`,
-  "require zero pending migrations and never replay the three already-applied release migrations",
+  "require zero pending migrations and never replay the four already-applied release migrations",
   "deploy the canonical-only backend only after all authoritative procedures above are present and verified; missing canonical writers fail closed",
   "require a green authority health gate and direct-DML denial probes before routing traffic",
 ]);
@@ -293,12 +294,15 @@ assert.match(String(productionMigrationState.observed_production?.ledger_head ||
 assert.match(String(productionMigrationState.observed_production?.source_migration_name || ""), /^[a-z][a-z0-9_]*$/);
 assert.match(String(productionMigrationState.observed_production?.catalog_privilege_fingerprint || ""), /^[a-f0-9]{64}$/);
 assert.equal(productionMigrationState.observed_production?.catalog_privilege_fingerprint, schemaFingerprint);
-assert.equal(productionMigrationState.target?.source_migration_file, applicationReaderCredentialFence);
-assert.equal(productionMigrationState.target?.source_migration_name, "fence_application_reader_device_credentials");
+assert.equal(productionMigrationState.target?.source_migration_file, applicationReaderReleaseRecovery);
+assert.equal(productionMigrationState.target?.source_migration_name, "rebind_application_reader_release_recovery");
 assert.equal(productionMigrationState.target?.canonical_schema_fingerprint, schemaFingerprint);
 assert.equal(productionMigrationState.source_binding?.kind, "external_exact_head_release_attestation");
 assert.equal(productionMigrationState.authorization?.production_mutation_required, false);
 assert.equal(productionMigrationState.authorization?.sequence_policy, "no_migration_replay_already_converged");
+assert.match(String(productionMigrationState.backup_evidence?.source_commit || ""), /^[a-f0-9]{40}$/);
+assert.match(String(productionMigrationState.backup_evidence?.artifact_sha256 || ""), /^[a-f0-9]{64}$/);
+assert.equal(productionMigrationState.backup_evidence?.restore_verification, "passed");
 for (const [index, migration] of productionMigrationState.applied_release_migrations.entries()) {
   assert.equal(migration.order, index + 1, `applied migration order is not contiguous at ${migration.file}`);
   assert.match(String(migration.phase || ""), /^[a-z][a-z0-9_]+$/, `applied migration phase is invalid at ${migration.file}`);

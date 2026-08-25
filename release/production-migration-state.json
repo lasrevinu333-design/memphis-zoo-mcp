@@ -3,11 +3,11 @@
   "mode": "already_converged",
   "project_ref": "rqquvtjdmugpigbndmne",
   "observed_production": {
-    "captured_at": "2026-08-25T19:12:45.497Z",
-    "ledger_head": "20260825173029",
-    "source_migration_name": "fence_application_reader_device_credentials",
-    "catalog_privilege_fingerprint": "0c3cd0cb822f147842d5c09a2bc15ffae41401956b7664f2ccfaedd13b79d527",
-    "catalog_capture_sha256": "aea2df4adaa34c7063c58b66fc732fd8fbb323b2c39bd121eb5e396cc2a5ceff",
+    "captured_at": "2026-08-25T19:57:03.985359Z",
+    "ledger_head": "20260825195150",
+    "source_migration_name": "rebind_application_reader_release_recovery",
+    "catalog_privilege_fingerprint": "4c79925d31759d7bb51e010f8ed47933e4ab9985df32df8a1592888e2134818e",
+    "catalog_capture_sha256": "c8cd3266652991757061bc9a96da5f4cde00e8344eb01a48778164c56243bd6a",
     "public_function_count": 488,
     "registered_source_count": 1,
     "active_authority_key_count": 1,
@@ -23,26 +23,36 @@
     "application_reader_credential_select": false
   },
   "target": {
-    "source_migration_file": "20260825173500_fence_application_reader_device_credentials.sql",
-    "source_migration_name": "fence_application_reader_device_credentials",
-    "production_ledger_version": "20260825173029",
-    "canonical_schema_fingerprint": "0c3cd0cb822f147842d5c09a2bc15ffae41401956b7664f2ccfaedd13b79d527",
+    "source_migration_file": "20260825174500_rebind_application_reader_release_recovery.sql",
+    "source_migration_name": "rebind_application_reader_release_recovery",
+    "production_ledger_version": "20260825195150",
+    "canonical_schema_fingerprint": "4c79925d31759d7bb51e010f8ed47933e4ab9985df32df8a1592888e2134818e",
     "public_function_count": 488
   },
   "source_binding": {
     "kind": "external_exact_head_release_attestation",
     "rule": "The production approval package binds the exact backend commit and tree containing this state, every release migration blob, generated release evidence, the exact Engine commit, and the independently captured production catalog identity."
   },
+  "backup_evidence": {
+    "workflow_run_id": 32891851878,
+    "source_commit": "f2d3437792338aed93aa9eec5e2fd97457d130da",
+    "artifact_name": "memphis-zoo-disaster-recovery-32891851878",
+    "artifact_sha256": "95cd96e12c0e57f8cc47afdb0166c47cd28e5fd23773195a0bb392c3c5f51260",
+    "artifact_size_bytes": 7736025,
+    "restore_verification": "passed",
+    "completed_at": "2026-08-25T19:51:13Z"
+  },
   "authorization": {
     "production_mutation_required": false,
     "sequence_policy": "no_migration_replay_already_converged",
-    "rollback_policy": "no migration replay or down-migration; preserve the converged ledger, catalog, static-weekly publication, projections and occurrences, and restore application traffic only through an exact attested backend deployment"
+    "rollback_policy": "no migration replay or down-migration; preserve the converged ledger, catalog, static-weekly publication, projections and occurrences, and use the reviewed forward recovery inventory while restoring application traffic only through an exact attested backend deployment"
   },
   "preconditions": [
     "production project_ref equals rqquvtjdmugpigbndmne",
-    "production migration ledger head equals 20260825173029 and names fence_application_reader_device_credentials",
-    "production catalog and privilege fingerprint equals 0c3cd0cb822f147842d5c09a2bc15ffae41401956b7664f2ccfaedd13b79d527",
-    "the read-only production capture and a clean 112-migration rebuild independently produce the same fingerprint",
+    "production migration ledger head equals 20260825195150 and names rebind_application_reader_release_recovery",
+    "production catalog and privilege fingerprint equals 4c79925d31759d7bb51e010f8ed47933e4ab9985df32df8a1592888e2134818e",
+    "the read-only production capture and a clean 113-migration rebuild independently produce the same fingerprint",
+    "fresh encrypted backup run 32891851878 passed restore verification and retained artifact sha256:95cd96e12c0e57f8cc47afdb0166c47cd28e5fd23773195a0bb392c3c5f51260",
     "production exposes exactly 488 public functions",
     "one active authority key and one immutable registered source exist",
     "weekly roster slots and roster incumbencies each contain exactly 17 accepted rows; exactly one publication, one projection, 452 occurrences and three command receipts exist at authority revision 3 while drafts remain empty",
@@ -70,15 +80,22 @@
       "file": "20260825173500_fence_application_reader_device_credentials.sql",
       "production_ledger_version": "20260825173029",
       "sha256": "c47e59dd68b836c68227a1c18be069621aa454f770d3c6d7c04a96ba085f2fa3"
+    },
+    {
+      "order": 4,
+      "phase": "rebind_application_reader_release_recovery",
+      "file": "20260825174500_rebind_application_reader_release_recovery.sql",
+      "production_ledger_version": "20260825195150",
+      "sha256": "68f082382e9d9f05664e034716851121485d95d586b36c6b0714111b314be736"
     }
   ],
   "pending_migrations": [],
   "postconditions": [
-    "production ledger remains at the converged device-credential fence head until a separately reviewed migration exists",
-    "production catalog and privilege fingerprint remains 0c3cd0cb822f147842d5c09a2bc15ffae41401956b7664f2ccfaedd13b79d527",
+    "production ledger remains at the converged application-reader release-recovery head until a separately reviewed migration exists",
+    "production catalog and privilege fingerprint remains 4c79925d31759d7bb51e010f8ed47933e4ab9985df32df8a1592888e2134818e",
     "production exposes exactly 488 public functions",
     "the backend can queue due scan alerts only through the secret-bound custodial_backend_queue_due_scan_alerts wrapper",
-    "the restricted application reader can resolve enrolled phone identity but cannot read device credentials",
+    "the restricted application reader can resolve enrolled phone identity but cannot read device credentials, and release recovery preserves its exact 22-column projection plus three FORCE-RLS policies",
     "service_role cannot execute either direct sch_queue_due_scan_alerts overload or the canonical application-reader schedule function",
     "PUBLIC, anon and authenticated cannot execute the backend scan-alert wrapper",
     "one active authority key and one immutable registered source remain unchanged",
