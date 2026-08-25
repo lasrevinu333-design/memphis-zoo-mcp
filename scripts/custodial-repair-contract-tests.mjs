@@ -80,7 +80,7 @@ assert.match(releaseManifestSource, /schema-fingerprint\.txt/);
 assert.match(releaseManifestSource, /supabase\/migrations/);
 assert.match(releaseManifestSource, /queue_compatibility_versions/);
 assert.match(releaseManifestSource, /minimum_supported/);
-assert.equal(frontendReleaseManifest.frontend_commit_sha, "9f764d381dea1304bc45ec55ce00b67e7212c27e");
+assert.equal(frontendReleaseManifest.frontend_commit_sha, "198589a47781e02a814d20177ebe708653c384d7");
 assert.equal(frontendReleaseManifest.frontend_commit_state, "final_pair_bound");
 assert.equal(frontendReleaseManifest.api_contract_versions.operational_analytics, "operational-analytics.v1");
 assert.equal(packageJson.scripts["test:schema-fingerprint"], "node scripts/schema-fingerprint-check.mjs");
