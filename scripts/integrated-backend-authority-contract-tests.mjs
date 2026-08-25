@@ -172,7 +172,11 @@ assert.match(applicationReaderReleaseRecovery, /application_reader_identity_proj
 assert.match(applicationReaderReleaseRecovery, /custodial_application_reader_device_identity/i);
 assert.match(applicationReaderReleaseRecovery, /' grant '\|\|g\.privilege_type\|\|' \('\|\|quote_ident\(a\.attname\)/i);
 assert.match(applicationReaderReleaseRecovery, /\('devices','device_id'\)/i);
-assert.doesNotMatch(applicationReaderReleaseRecovery, /authority_column_grants_absent/i);
+const correctedAuthorityHealth = applicationReaderReleaseRecovery.match(
+  /create or replace function public\.custodial_backend_authority_health\(p_backend_execution_secret text\)[\s\S]*?\$function\$;/i,
+)?.[0] || "";
+assert.match(correctedAuthorityHealth, /application_reader_identity_projection_bounded/i);
+assert.doesNotMatch(correctedAuthorityHealth, /authority_column_grants_absent/i);
 assert.match(staticWeeklyRegisteredRosterBootstrap, /static_weekly_v6_initialize_registered_roster/i);
 assert.match(staticWeeklyRegisteredRosterBootstrap, /static_weekly_v3_assert_release_operator/i);
 assert.match(staticWeeklyRegisteredRosterBootstrap, /grant execute on function public\.static_weekly_v6_initialize_registered_roster\(uuid,uuid,text\)\s+to static_weekly_release_operator/i);
