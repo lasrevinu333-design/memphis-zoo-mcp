@@ -1,16 +1,16 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "198589a47781e02a814d20177ebe708653c384d7",
+  "frontend_commit_sha": "c3b64b4a37360f5c2a8e66893a592eeea65e7f95",
   "frontend_commit_state": "final_pair_bound",
-  "schema_fingerprint": "901a264e09d6e5eb29956cecd64e6a4d6e11988919de3679e088cd3580bafd7c",
+  "schema_fingerprint": "0c3cd0cb822f147842d5c09a2bc15ffae41401956b7664f2ccfaedd13b79d527",
   "schema_transition": {
-    "transition_id": "scan-alert-runtime-authority-20260825",
-    "from_fingerprint": "687d757ef4a39184a003931362f679e7c012edbf4c57f9849512978364899e0f",
-    "to_fingerprint": "901a264e09d6e5eb29956cecd64e6a4d6e11988919de3679e088cd3580bafd7c",
+    "transition_id": "device-reader-authority-20260825",
+    "from_fingerprint": "901a264e09d6e5eb29956cecd64e6a4d6e11988919de3679e088cd3580bafd7c",
+    "to_fingerprint": "0c3cd0cb822f147842d5c09a2bc15ffae41401956b7664f2ccfaedd13b79d527",
     "expires_at": "2026-09-03T23:59:59Z"
   },
-  "frontend_source_fingerprint": "901a264e09d6e5eb29956cecd64e6a4d6e11988919de3679e088cd3580bafd7c",
+  "frontend_source_fingerprint": "0c3cd0cb822f147842d5c09a2bc15ffae41401956b7664f2ccfaedd13b79d527",
   "backend_contract": {
     "scan": "scan.v4.snapshot-bound-authority",
     "authority": "offline-authority.v5",
@@ -75,13 +75,13 @@
     },
     "phase_order": [
       "prepare distinct CUSTODIAL_BACKEND_PROOF_SECRET and CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET values (minimum 32 characters each) without exposing either value",
-      "run npm run release:populated-schema:preflight through the read-only production MCP and preserve its exact source-fingerprint receipt before any migration",
-      "verify production project, migration head, catalog/privilege fingerprint, backup receipt, and exact source attestation against release/pending-production-migration-plan.json",
-      "apply only the single hash-bound migration in release/pending-production-migration-plan.json, stopping after any failed preflight or postcheck",
+      "capture the production catalog through the read-only Supabase boundary and require it to equal the clean 112-migration rebuild fingerprint",
+      "verify production project, converged migration head, catalog/privilege fingerprint, backup receipt, and exact source attestation against release/production-migration-state.json",
+      "require zero pending migrations and never replay the three already-applied release migrations",
       "deploy the canonical-only backend only after all authoritative procedures above are present and verified; missing canonical writers fail closed",
       "require a green authority health gate and direct-DML denial probes before routing traffic"
     ],
-    "production_migration_plan": "release/pending-production-migration-plan.json",
+    "production_migration_state": "release/production-migration-state.json",
     "rollback": {
       "precondition": "retain the exact bridge backend artifact and both release secrets until all authority health and restoration probes are green",
       "action": "pause the exact physical canary through the durable control; if canonical authority is missing or broken, restore the captured known-good function set forward, verify health, then explicitly resume",
@@ -409,17 +409,17 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "c9bf55aef6ff8acee871e6c4cacbcc8d48810067"
+        "object_id": "7a8c19495de32b371de6e566ce2347e67fd307e0"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
         "mode": "100644",
-        "object_id": "9a40a108a63d0d1dff4acf9c317e7943d3ce02ab"
+        "object_id": "f0b7fbb037f8e5ea4ebac33424cc092d74866b8d"
       },
       {
-        "path": "release/pending-production-migration-plan.json",
+        "path": "release/production-migration-state.json",
         "mode": "100644",
-        "object_id": "6d06d4c706b3d0ceb4f9c3c22db3fd4e2826171f"
+        "object_id": "a5793067b06c04671d173a369f2325d1ae24da8b"
       },
       {
         "path": "release/reviewed-migrations/20260809125735_cleaning_inspection_24_hour_freshness.sql",
@@ -429,7 +429,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "50d3ce85bff783f923d4e6ce8bf74c7645fe65a0"
+        "object_id": "8927f6d20d78be37d54505045351993a7c46ad16"
       },
       {
         "path": "research/european_herbalism_through_paracelsus.md",
@@ -579,7 +579,7 @@
       {
         "path": "scripts/custodial-repair-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "b449f3738cab6b162647a62c1193feaa9c31d3e9"
+        "object_id": "9f00513ee7265e1217bf92b2554a21e4f4ad0c91"
       },
       {
         "path": "scripts/custodial-u4-migration-convergence-tests.mjs",
@@ -749,12 +749,12 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "5576e338817276265d8d1b9847c9d7d96e5e2fae"
+        "object_id": "3d589dff30f044fe51e349c35ea523dca4bd3991"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "1ac14915b6a7d5214d3a0fb548c979cc5c27fcdc"
+        "object_id": "f7a24a13fefe86e7c5eace60a2cff8a9613c1ca1"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
@@ -914,7 +914,7 @@
       {
         "path": "scripts/operations-leadership-mobile-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "cb28bc3eba1d04c0d1e32b02a2dc224cf019dfc3"
+        "object_id": "466e7a746442ef152716dbfc406257ea424f1a3f"
       },
       {
         "path": "scripts/operations-leadership-mobile-database-tests.mjs",
@@ -1024,7 +1024,7 @@
       {
         "path": "scripts/release-closure-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "d4e13e9c971bad3a975d5412ce14c8ca29269a86"
+        "object_id": "fcb3140f8dcaf53f3d1e53a10fe90e6bb8adb858"
       },
       {
         "path": "scripts/restore-mutation-gate-tests.mjs",
@@ -1924,12 +1924,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "5d3eb050bcc72eca056e1b98c4467b2696a71954"
+        "object_id": "2f9e63db192cbafeb78f9adf18709a14257744c4"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "407f6895bf133efd0a6d5e074e883f6cf7e14f2f"
+        "object_id": "9d49a55f2251659b34c697e72cc51e76922f9e76"
       },
       {
         "path": "supabase/config.toml",
