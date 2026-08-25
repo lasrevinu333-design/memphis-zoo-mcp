@@ -36,6 +36,10 @@ const deviceIdentityReadMigration = await readFile(new URL(
   "../supabase/migrations/20260825173000_restore_application_reader_device_identity.sql",
   import.meta.url,
 ), "utf8");
+const deviceCredentialFenceMigration = await readFile(new URL(
+  "../supabase/migrations/20260825173500_fence_application_reader_device_credentials.sql",
+  import.meta.url,
+), "utf8");
 const readSource = await readFile(new URL("../src/supabase/read.js", import.meta.url), "utf8");
 const indexSource = await readFile(new URL("../src/index.js", import.meta.url), "utf8");
 const supabaseRootCa = await readFile(new URL("../certs/supabase-root-2021-ca.pem", import.meta.url), "utf8");
@@ -275,6 +279,7 @@ try {
   await psql(relationAuthorityFenceMigration);
   await psql(cronIdentityBridgeMigration);
   await psql(deviceIdentityReadMigration);
+  await psql(deviceCredentialFenceMigration);
   await psql("create table public.reader_future_fixture(id integer primary key);");
   await psql(String.raw`
     create role custodial_readonly_test login password 'read-test-only' inherit;
@@ -413,8 +418,11 @@ try {
     (error) => error?.code === "42501",
     "the employee identity policy must not expose employee notes",
   );
-  const credentials = await runReadOnlySql({ pool, sql: "select token_hash from public.device_auth_credentials" });
-  assert.deepEqual(credentials.rows, [], "the identity policy must not expose credential material through forced RLS");
+  await assert.rejects(
+    () => runReadOnlySql({ pool, sql: "select token_hash from public.device_auth_credentials" }),
+    (error) => error?.code === "42501",
+    "the identity policy must not leave credential material in the reader privilege graph",
+  );
 
   await assert.rejects(
     () => runReadOnlySql({ pool, sql: "select public.dangerous_mutation()" }),
