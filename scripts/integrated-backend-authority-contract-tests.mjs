@@ -125,7 +125,7 @@ assert.equal(releaseEvidence.backend_contract.authority, "offline-authority.v5")
 assert.equal(packageManifest.scripts["release:populated-schema:preflight"], "node scripts/refresh-schema-fingerprint.mjs --preflight");
 assert.match(schemaFingerprintRefresh, /schema_from_fingerprint/);
 assert.match(populatedPreflightWorkflow, /release:populated-schema:preflight/);
-assert.match(releaseInput.cutover.phase_order[1], /release:populated-schema:preflight/);
+assert.match(releaseInput.cutover.phase_order[1], /read-only Supabase boundary.*clean 112-migration rebuild fingerprint/);
 assert.equal(releaseInput.cutover.production_migration_state, "release/production-migration-state.json");
 assert.equal(productionMigrationState.artifact, "production-migration-state.v1");
 assert.equal(productionMigrationState.mode, "already_converged");
