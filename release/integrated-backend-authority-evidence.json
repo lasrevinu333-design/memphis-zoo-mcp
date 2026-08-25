@@ -5,8 +5,8 @@
   "frontend_commit_state": "final_pair_bound",
   "schema_fingerprint": "901a264e09d6e5eb29956cecd64e6a4d6e11988919de3679e088cd3580bafd7c",
   "schema_transition": {
-    "transition_id": "static-weekly-compact-projection-20260824",
-    "from_fingerprint": "462f77fa7f045c80deaf7ef59e765c6aa2ee2aeb82525362558fcf2c54ef0cbd",
+    "transition_id": "scan-alert-runtime-authority-20260825",
+    "from_fingerprint": "687d757ef4a39184a003931362f679e7c012edbf4c57f9849512978364899e0f",
     "to_fingerprint": "901a264e09d6e5eb29956cecd64e6a4d6e11988919de3679e088cd3580bafd7c",
     "expires_at": "2026-09-03T23:59:59Z"
   },
@@ -409,7 +409,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "61585a758e824d4547dbf9df676349e21ec1bf27"
+        "object_id": "8e020e172a804ce4cb6a469fc9f84df2a0ed32b7"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -419,7 +419,7 @@
       {
         "path": "release/pending-production-migration-plan.json",
         "mode": "100644",
-        "object_id": "c9178a0d4c58c3541690dfde5bd4cb1863a41703"
+        "object_id": "6d06d4c706b3d0ceb4f9c3c22db3fd4e2826171f"
       },
       {
         "path": "release/reviewed-migrations/20260809125735_cleaning_inspection_24_hour_freshness.sql",
@@ -429,7 +429,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "83511062bfc34dab2b41a018c33dd7884a287233"
+        "object_id": "21c58d02aa951b420642fc987c0177faf348aeef"
       },
       {
         "path": "research/european_herbalism_through_paracelsus.md",
@@ -749,12 +749,12 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "c872057c06a355c8b5a6baa8a1b95782124a2d05"
+        "object_id": "f52d5dc2774b4abfc2917603115c747630ce14f5"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "23eab6981e3aee7d51d056e091b86e57b0911f7d"
+        "object_id": "9198e3b7b42761bdfbc1977b15e8933cf4e261c5"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
