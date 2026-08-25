@@ -1,7 +1,7 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "b7e3f87540d25606eb2a6032480a2758e96e4839",
+  "frontend_commit_sha": "e9aaebe00ff6118e2797ee49914f784027815acf",
   "frontend_commit_state": "final_pair_bound",
   "schema_fingerprint": "4c79925d31759d7bb51e010f8ed47933e4ab9985df32df8a1592888e2134818e",
   "schema_transition": {
@@ -410,7 +410,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "fc01dd59f5eef386ffcb6c7e1704a13dd7826675"
+        "object_id": "1f925236d4135392b7039a21f1eb5bc59d172123"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -430,7 +430,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "a129ba10ec2824978ba25538aaa09b271ab9fa8f"
+        "object_id": "29fde46bafed452cba3289769589bb8ea02c7ce0"
       },
       {
         "path": "research/european_herbalism_through_paracelsus.md",
@@ -580,7 +580,7 @@
       {
         "path": "scripts/custodial-repair-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "ad6b6ad64e700191218a003f67805bc65779f44b"
+        "object_id": "e070549c312753a5b9430e4ea5527af39fc87776"
       },
       {
         "path": "scripts/custodial-u4-migration-convergence-tests.mjs",
@@ -750,7 +750,7 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "0b746f0a9c55fddd79ed3931f0ff3cda0d87dd66"
+        "object_id": "ed1f06a31d2f0e31a81ad50fccff3e054f523add"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
@@ -915,7 +915,7 @@
       {
         "path": "scripts/operations-leadership-mobile-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "04a64db43e9d98230dd444fe475897b9f92420e0"
+        "object_id": "5061176c513eba691ac6ec8f884baa8c1dd267d1"
       },
       {
         "path": "scripts/operations-leadership-mobile-database-tests.mjs",
@@ -1025,7 +1025,7 @@
       {
         "path": "scripts/release-closure-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "632ea6dada7e1da69f1b3db1baca238d61795f6f"
+        "object_id": "ed73a7a98f5ec5cfd9b5a3614fd805c6965648ec"
       },
       {
         "path": "scripts/restore-mutation-gate-tests.mjs",
