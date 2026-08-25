@@ -36,13 +36,13 @@
     },
     "phase_order": [
       "prepare distinct CUSTODIAL_BACKEND_PROOF_SECRET and CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET values (minimum 32 characters each) without exposing either value",
-      "run npm run release:populated-schema:preflight through the read-only production MCP and preserve its exact source-fingerprint receipt before any migration",
-      "verify production project, migration head, catalog/privilege fingerprint, backup receipt, and exact source attestation against release/pending-production-migration-plan.json",
-      "apply only the single hash-bound migration in release/pending-production-migration-plan.json, stopping after any failed preflight or postcheck",
+      "capture the production catalog through the read-only Supabase boundary and require it to equal the clean 112-migration rebuild fingerprint",
+      "verify production project, converged migration head, catalog/privilege fingerprint, backup receipt, and exact source attestation against release/production-migration-state.json",
+      "require zero pending migrations and never replay the three already-applied release migrations",
       "deploy the canonical-only backend only after all authoritative procedures above are present and verified; missing canonical writers fail closed",
       "require a green authority health gate and direct-DML denial probes before routing traffic"
     ],
-    "production_migration_plan": "release/pending-production-migration-plan.json",
+    "production_migration_state": "release/production-migration-state.json",
     "rollback": {
       "precondition": "retain the exact bridge backend artifact and both release secrets until all authority health and restoration probes are green",
       "action": "pause the exact physical canary through the durable control; if canonical authority is missing or broken, restore the captured known-good function set forward, verify health, then explicitly resume",

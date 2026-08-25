@@ -1,0 +1,88 @@
+{
+  "artifact": "production-migration-state.v1",
+  "mode": "already_converged",
+  "project_ref": "rqquvtjdmugpigbndmne",
+  "observed_production": {
+    "captured_at": "2026-08-25T19:12:45.497Z",
+    "ledger_head": "20260825173029",
+    "source_migration_name": "fence_application_reader_device_credentials",
+    "catalog_privilege_fingerprint": "0c3cd0cb822f147842d5c09a2bc15ffae41401956b7664f2ccfaedd13b79d527",
+    "catalog_capture_sha256": "aea2df4adaa34c7063c58b66fc732fd8fbb323b2c39bd121eb5e396cc2a5ceff",
+    "public_function_count": 488,
+    "registered_source_count": 1,
+    "active_authority_key_count": 1,
+    "roster_slot_count": 17,
+    "roster_incumbency_count": 17,
+    "draft_version_count": 0,
+    "published_version_count": 1,
+    "command_receipt_count": 3,
+    "authority_revision": 3,
+    "projection_count": 1,
+    "occurrence_count": 452,
+    "application_reader_identity_policy_count": 3,
+    "application_reader_credential_select": false
+  },
+  "target": {
+    "source_migration_file": "20260825173500_fence_application_reader_device_credentials.sql",
+    "source_migration_name": "fence_application_reader_device_credentials",
+    "production_ledger_version": "20260825173029",
+    "canonical_schema_fingerprint": "0c3cd0cb822f147842d5c09a2bc15ffae41401956b7664f2ccfaedd13b79d527",
+    "public_function_count": 488
+  },
+  "source_binding": {
+    "kind": "external_exact_head_release_attestation",
+    "rule": "The production approval package binds the exact backend commit and tree containing this state, every release migration blob, generated release evidence, the exact Engine commit, and the independently captured production catalog identity."
+  },
+  "authorization": {
+    "production_mutation_required": false,
+    "sequence_policy": "no_migration_replay_already_converged",
+    "rollback_policy": "no migration replay or down-migration; preserve the converged ledger, catalog, static-weekly publication, projections and occurrences, and restore application traffic only through an exact attested backend deployment"
+  },
+  "preconditions": [
+    "production project_ref equals rqquvtjdmugpigbndmne",
+    "production migration ledger head equals 20260825173029 and names fence_application_reader_device_credentials",
+    "production catalog and privilege fingerprint equals 0c3cd0cb822f147842d5c09a2bc15ffae41401956b7664f2ccfaedd13b79d527",
+    "the read-only production capture and a clean 112-migration rebuild independently produce the same fingerprint",
+    "production exposes exactly 488 public functions",
+    "one active authority key and one immutable registered source exist",
+    "weekly roster slots and roster incumbencies each contain exactly 17 accepted rows; exactly one publication, one projection, 452 occurrences and three command receipts exist at authority revision 3 while drafts remain empty",
+    "the application reader has exactly three bounded identity policies and no credential-table SELECT authority",
+    "the exact backend commit/tree and exact Engine commit are externally attested"
+  ],
+  "applied_release_migrations": [
+    {
+      "order": 1,
+      "phase": "scan_alert_runtime_authority_closure",
+      "file": "20260825134500_scan_alert_runtime_authority_closure.sql",
+      "production_ledger_version": "20260825142157",
+      "sha256": "5d3b2bef6d70a501528494fe040c81654ea8aee74513d0f9c90cabce5c47a1ca"
+    },
+    {
+      "order": 2,
+      "phase": "restore_application_reader_device_identity",
+      "file": "20260825173000_restore_application_reader_device_identity.sql",
+      "production_ledger_version": "20260825172858",
+      "sha256": "d5cbc80464a802d6abc201bc9dcc22ad8c024c4c19906bc7e4bd836e27c1b62d"
+    },
+    {
+      "order": 3,
+      "phase": "fence_application_reader_device_credentials",
+      "file": "20260825173500_fence_application_reader_device_credentials.sql",
+      "production_ledger_version": "20260825173029",
+      "sha256": "c47e59dd68b836c68227a1c18be069621aa454f770d3c6d7c04a96ba085f2fa3"
+    }
+  ],
+  "pending_migrations": [],
+  "postconditions": [
+    "production ledger remains at the converged device-credential fence head until a separately reviewed migration exists",
+    "production catalog and privilege fingerprint remains 0c3cd0cb822f147842d5c09a2bc15ffae41401956b7664f2ccfaedd13b79d527",
+    "production exposes exactly 488 public functions",
+    "the backend can queue due scan alerts only through the secret-bound custodial_backend_queue_due_scan_alerts wrapper",
+    "the restricted application reader can resolve enrolled phone identity but cannot read device credentials",
+    "service_role cannot execute either direct sch_queue_due_scan_alerts overload or the canonical application-reader schedule function",
+    "PUBLIC, anon and authenticated cannot execute the backend scan-alert wrapper",
+    "one active authority key and one immutable registered source remain unchanged",
+    "weekly roster slots and incumbencies remain exactly 17; the accepted publication, projection, 452 occurrences, three receipts and authority revision 3 remain unchanged",
+    "no unexpected catalog, privilege, configuration or row diff exists"
+  ]
+}
