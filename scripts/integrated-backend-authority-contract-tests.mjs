@@ -170,7 +170,8 @@ assert.equal(releaseEvidence.compatibility_window.required_engine.scan, "scan.v4
 assert.equal(releaseEvidence.migrations.at(-1).name, "20260825174500_rebind_application_reader_release_recovery.sql");
 assert.match(applicationReaderReleaseRecovery, /application_reader_identity_projection_bounded/i);
 assert.match(applicationReaderReleaseRecovery, /custodial_application_reader_device_identity/i);
-assert.match(applicationReaderReleaseRecovery, /grant SELECT \(device_id\).*custodial_application_reader/is);
+assert.match(applicationReaderReleaseRecovery, /' grant '\|\|g\.privilege_type\|\|' \('\|\|quote_ident\(a\.attname\)/i);
+assert.match(applicationReaderReleaseRecovery, /\('devices','device_id'\)/i);
 assert.doesNotMatch(applicationReaderReleaseRecovery, /authority_column_grants_absent/i);
 assert.match(staticWeeklyRegisteredRosterBootstrap, /static_weekly_v6_initialize_registered_roster/i);
 assert.match(staticWeeklyRegisteredRosterBootstrap, /static_weekly_v3_assert_release_operator/i);
