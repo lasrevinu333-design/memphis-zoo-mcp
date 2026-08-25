@@ -3,14 +3,14 @@
   "release_id": "release-2026.07.19.custodial-v3.12",
   "frontend_commit_sha": "47e4711dc7cc7f2a652d6b9f144d0c633c26aafd",
   "frontend_commit_state": "final_pair_bound",
-  "schema_fingerprint": "687d757ef4a39184a003931362f679e7c012edbf4c57f9849512978364899e0f",
+  "schema_fingerprint": "901a264e09d6e5eb29956cecd64e6a4d6e11988919de3679e088cd3580bafd7c",
   "schema_transition": {
     "transition_id": "static-weekly-compact-projection-20260824",
     "from_fingerprint": "462f77fa7f045c80deaf7ef59e765c6aa2ee2aeb82525362558fcf2c54ef0cbd",
-    "to_fingerprint": "687d757ef4a39184a003931362f679e7c012edbf4c57f9849512978364899e0f",
+    "to_fingerprint": "901a264e09d6e5eb29956cecd64e6a4d6e11988919de3679e088cd3580bafd7c",
     "expires_at": "2026-09-03T23:59:59Z"
   },
-  "frontend_source_fingerprint": "687d757ef4a39184a003931362f679e7c012edbf4c57f9849512978364899e0f",
+  "frontend_source_fingerprint": "901a264e09d6e5eb29956cecd64e6a4d6e11988919de3679e088cd3580bafd7c",
   "backend_contract": {
     "scan": "scan.v4.snapshot-bound-authority",
     "authority": "offline-authority.v5",
@@ -409,7 +409,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "792daf35b6856f2c6fb7d97f889c5fe044d0154e"
+        "object_id": "61585a758e824d4547dbf9df676349e21ec1bf27"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -654,7 +654,7 @@
       {
         "path": "scripts/events-api-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "afad898ea110cc26117234305cd14132cff97c29"
+        "object_id": "f2c698a9e9def1832b75ea3b0cbe2e9fedd1934b"
       },
       {
         "path": "scripts/events-parser-tests.mjs",
@@ -749,17 +749,17 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "ee1e731a860734c9a32a468a03304957c88a3f86"
+        "object_id": "c872057c06a355c8b5a6baa8a1b95782124a2d05"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "7a589ccade03c79d4380dc55ecae4f4ce823217f"
+        "object_id": "23eab6981e3aee7d51d056e091b86e57b0911f7d"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
         "mode": "100644",
-        "object_id": "c19ed12fab1651bd735927958ffa8b3639f99b38"
+        "object_id": "fdb967252cda269df1c665a91a2ccc2217c573b3"
       },
       {
         "path": "scripts/integrated-backend-authority-suite-order-isolated-tests.mjs",
@@ -1004,7 +1004,7 @@
       {
         "path": "scripts/refresh-integrated-backend-authority-release.mjs",
         "mode": "100644",
-        "object_id": "c167115ae9d4895a67b9d6aadbb9afd3f638ac08"
+        "object_id": "2e9cd6af4a3b01a5dc22c1c13eb30f0f62d9fe61"
       },
       {
         "path": "scripts/refresh-release-schema-alignment.mjs",
@@ -1219,12 +1219,12 @@
       {
         "path": "scripts/static-weekly-operational-truth-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "16912862ea9a9795c253427614b66a00b17de389"
+        "object_id": "a34015677f5ee55eee67e00fde074c11befa98ba"
       },
       {
         "path": "scripts/static-weekly-operational-truth-database-tests.mjs",
         "mode": "100644",
-        "object_id": "7a2056363a87bda5fdfbc612d76339490b753c0c"
+        "object_id": "41b792a54ad661d672c49f515f96c84578d33091"
       },
       {
         "path": "scripts/static-weekly-production-database-runtime-probe.mjs",
@@ -1604,7 +1604,7 @@
       {
         "path": "src/events-api.js",
         "mode": "100644",
-        "object_id": "219ecf74ce8ff5585fc512602d7f5128102f7173"
+        "object_id": "2a72cdfc4399c1f760734ae86d6d31607d383b1e"
       },
       {
         "path": "src/feedback-authority.js",
@@ -1654,7 +1654,7 @@
       {
         "path": "src/index.js",
         "mode": "100644",
-        "object_id": "28697f6c02b8f788a7d0268b9bc879d0b59f2294"
+        "object_id": "f3bf19a5d9b064043dc136c735c1b425687ba9ec"
       },
       {
         "path": "src/integrated-backend-authority-release-evidence.js",
@@ -1924,12 +1924,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "277d5338f4c4bd0c0a9bf5f2ca2b9185d902b6e2"
+        "object_id": "5d3eb050bcc72eca056e1b98c4467b2696a71954"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "d62af237972017b881cc93d1f571b7df9b3f4c35"
+        "object_id": "407f6895bf133efd0a6d5e074e883f6cf7e14f2f"
       },
       {
         "path": "supabase/config.toml",
@@ -3067,13 +3067,18 @@
         "object_id": "0154d3bcec65e277b41365e22bc4b542a70c10d1"
       },
       {
+        "path": "supabase/migrations/20260825134500_scan_alert_runtime_authority_closure.sql",
+        "mode": "100644",
+        "object_id": "75d9c3bf9d64558bc6e4fefcb36595b3179c36ba"
+      },
+      {
         "path": "tmp/write_probe.txt",
         "mode": "100644",
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 593,
-    "migration_path_count": 109,
+    "authority_path_count": 594,
+    "migration_path_count": 110,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
   },
@@ -3410,6 +3415,9 @@
     },
     {
       "name": "20260824213000_static_weekly_operational_truth_cutover.sql"
+    },
+    {
+      "name": "20260825134500_scan_alert_runtime_authority_closure.sql"
     }
   ],
   "release_boundary": "Prepare distinct minimum-32-character backend and native-route secrets before cutover; configure their database digests immediately after the migrations that create each configuration function, retain the bridge backend artifact through the scan-snapshot phase, and require the executable health/restoration probes before traffic changes."
