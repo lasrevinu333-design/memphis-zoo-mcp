@@ -1181,7 +1181,22 @@ async function runScheduleCommand(command, payload = {}) {
   });
 }
 
-const eventMaintenanceController = createEventMaintenanceController({ runReadOnlySql, runCommand: runEventCommand, runRpc });
+async function runScanAlertQueue({ limit, dryRun, cooldownMinutes, managerEscalationGraceMinutes }) {
+  return runRpc("custodial_backend_queue_due_scan_alerts", {
+    p_limit: limit,
+    p_dry_run: dryRun === true,
+    p_cooldown_minutes: cooldownMinutes,
+    p_manager_escalation_grace_minutes: managerEscalationGraceMinutes,
+    p_backend_execution_secret: offlineAuthoritySecret(),
+  });
+}
+
+const eventMaintenanceController = createEventMaintenanceController({
+  runReadOnlySql,
+  runCommand: runEventCommand,
+  runRpc,
+  runScanAlertQueue,
+});
 
 async function runAdminBundleViaSqlRead(limits = {}) {
   const pLocationLimit = toSafeInt(limits.p_location_limit, 60);

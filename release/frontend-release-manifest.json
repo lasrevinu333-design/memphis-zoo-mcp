@@ -3,11 +3,11 @@
   "frontend_commit_sha": "47e4711dc7cc7f2a652d6b9f144d0c633c26aafd",
   "frontend_commit_state": "final_pair_bound",
   "backend_minimum_version": "release-2026.07.19.custodial-v3.12",
-  "schema_fingerprint": "687d757ef4a39184a003931362f679e7c012edbf4c57f9849512978364899e0f",
+  "schema_fingerprint": "901a264e09d6e5eb29956cecd64e6a4d6e11988919de3679e088cd3580bafd7c",
   "schema_transition": {
     "transition_id": "static-weekly-compact-projection-20260824",
     "from_fingerprint": "462f77fa7f045c80deaf7ef59e765c6aa2ee2aeb82525362558fcf2c54ef0cbd",
-    "to_fingerprint": "687d757ef4a39184a003931362f679e7c012edbf4c57f9849512978364899e0f",
+    "to_fingerprint": "901a264e09d6e5eb29956cecd64e6a4d6e11988919de3679e088cd3580bafd7c",
     "expires_at": "2026-09-03T23:59:59Z"
   },
   "api_contract_versions": {

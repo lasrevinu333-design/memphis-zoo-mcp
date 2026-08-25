@@ -602,6 +602,7 @@ assert.doesNotMatch(JSON.stringify(cancelCall.payload), /Forged|000000000099/,
 const notificationReadCalls = [];
 const notificationWriteCalls = [];
 const rpcCalls = [];
+const scanAlertCalls = [];
 const maintenance = createEventMaintenanceController({
   runReadOnlySql: async (sql) => {
     notificationReadCalls.push(String(sql || ""));
@@ -618,6 +619,10 @@ const maintenance = createEventMaintenanceController({
     }
     return null;
   },
+  runScanAlertQueue: async (params) => {
+    scanAlertCalls.push(params);
+    return { ok: true, result_count: 0 };
+  },
 });
 const maintenanceResult = await maintenance.runMaintenance("contract_test");
 const nativePushRpc = rpcCalls.find((call) => call.name === "mz_enqueue_employee_event_pushes");
@@ -630,13 +635,14 @@ assert.equal(notificationReadCalls.some((sql) => /candidate_notifications/i.test
   "event maintenance must not query the legacy Messenger reminder candidate path");
 assert.equal(rpcCalls.some((call) => call.name.startsWith("msg_")), false,
   "event maintenance must not call Messenger RPCs");
-const scanAlertRpc = rpcCalls.find((call) => call.name === "sch_queue_due_scan_alerts");
-assert.ok(scanAlertRpc, "event maintenance should queue due scan alerts");
-assert.deepEqual(scanAlertRpc.params, {
-  p_limit: 50,
-  p_dry_run: false,
-  p_cooldown_minutes: 30,
-  p_manager_escalation_grace_minutes: 30,
-}, "scan alert RPC should pass the manager escalation argument to avoid overloaded Supabase RPC ambiguity");
+assert.equal(scanAlertCalls.length, 1, "event maintenance should use the bounded backend scan-alert authority");
+assert.deepEqual(scanAlertCalls[0], {
+  limit: 50,
+  dryRun: false,
+  cooldownMinutes: 30,
+  managerEscalationGraceMinutes: 30,
+}, "scan alert authority should receive the complete bounded alert policy");
+assert.equal(rpcCalls.some((call) => call.name === "sch_queue_due_scan_alerts"), false,
+  "the generic service-role RPC path must not call the legacy invoker alert function directly");
 
 console.log("events api contract tests passed");

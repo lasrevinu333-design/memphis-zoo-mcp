@@ -138,6 +138,26 @@ for (const role of ["public", "anon", "authenticated", "service_role"]) {
 }
 assert.equal(await sql(`select has_function_privilege('custodial_application_reader','public.static_weekly_v6_read_schedule_segments(date)','EXECUTE')::text;`),
   "true", "the dedicated read-only application role can invoke canonical schedule authority");
+assert.equal(await sql(`select has_function_privilege('service_role','public.custodial_backend_queue_due_scan_alerts(integer,boolean,integer,integer,text)','EXECUTE')::text;`),
+  "true", "the backend may invoke only the fixed secret-bound scan-alert operation");
+assert.equal(await sql(`select has_function_privilege('service_role','public.sch_queue_due_scan_alerts(integer,boolean,integer,integer)','EXECUTE')::text;`),
+  "false", "the generic service role cannot invoke the weaker alert writer directly");
+for (const role of ["public", "anon", "authenticated"]) {
+  assert.equal(await sql(`select has_function_privilege(${q(role)},'public.custodial_backend_queue_due_scan_alerts(integer,boolean,integer,integer,text)','EXECUTE')::text;`),
+    "false", `${role} cannot invoke the backend scan-alert operation`);
+}
+assert.match(await sql(`set role service_role; select public.custodial_backend_queue_due_scan_alerts(1,true,30,30,'wrong-secret');`, { expectFailure: true }),
+  /custodial backend execution boundary is not authorized/i,
+  "the fixed alert operation rejects an invalid backend secret");
+assert.equal(await sql(`
+  begin;
+  update public.custodial_backend_execution_config
+  set execution_secret_digest=encode(extensions.digest(convert_to('scan-alert-disposable-secret-20260825','UTF8'),'sha256'),'hex'), enabled=true
+  where config_key=true;
+  set local role service_role;
+  select (public.custodial_backend_queue_due_scan_alerts(1,true,30,30,'scan-alert-disposable-secret-20260825')->>'ok')::text;
+  rollback;
+`), "true", "the fixed alert operation executes a dry run with the current backend secret");
 
 await sql(`
 begin;

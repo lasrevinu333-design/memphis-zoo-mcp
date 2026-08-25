@@ -35600,6 +35600,14 @@
       "schema_name": "public"
     },
     {
+      "comment": "Secret-bound fixed backend authority for canonical due-scan alert queueing; generic canonical readers remain unavailable to service_role.",
+      "definition": "CREATE OR REPLACE FUNCTION public.custodial_backend_queue_due_scan_alerts(p_limit integer DEFAULT 50, p_dry_run boolean DEFAULT true, p_cooldown_minutes integer DEFAULT 30, p_manager_escalation_grace_minutes integer DEFAULT 30, p_backend_execution_secret text DEFAULT NULL::text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\nbegin\n  perform public.custodial_require_backend_execution_secret(p_backend_execution_secret);\n  if p_limit is null or p_limit not between 1 and 200\n     or p_cooldown_minutes is null or p_cooldown_minutes not between 1 and 1440\n     or p_manager_escalation_grace_minutes is null\n     or p_manager_escalation_grace_minutes not between 0 and 1440 then\n    raise exception using errcode = '22023', message = 'bounded scan-alert queue policy is required';\n  end if;\n  return public.sch_queue_due_scan_alerts(\n    p_limit,\n    coalesce(p_dry_run, true),\n    p_cooldown_minutes,\n    p_manager_escalation_grace_minutes\n  );\nend\n$function$\n",
+      "function_name": "custodial_backend_queue_due_scan_alerts",
+      "identity_arguments": "p_limit integer, p_dry_run boolean, p_cooldown_minutes integer, p_manager_escalation_grace_minutes integer, p_backend_execution_secret text",
+      "owner_name": "migration_owner",
+      "schema_name": "public"
+    },
+    {
       "comment": null,
       "definition": "CREATE OR REPLACE FUNCTION public.custodial_backend_transition_allowed()\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_expected text;\nbegin\n  select execution_secret_digest into v_expected from public.custodial_backend_execution_config where config_key=true and enabled=true;\n  return coalesce(v_expected is not null\n    and encode(extensions.digest(convert_to(current_setting('custodial.backend_execution_secret', true), 'UTF8'), 'sha256'), 'hex') = v_expected, false);\nend\n$function$\n",
       "function_name": "custodial_backend_transition_allowed",
@@ -45950,6 +45958,15 @@
       "schema_name": "public"
     },
     {
+      "function_name": "custodial_backend_queue_due_scan_alerts",
+      "grantee": "service_role",
+      "grantor": "migration_owner",
+      "identity_arguments": "p_limit integer, p_dry_run boolean, p_cooldown_minutes integer, p_manager_escalation_grace_minutes integer, p_backend_execution_secret text",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
       "function_name": "custodial_backend_transition_allowed",
       "grantee": "service_role",
       "grantor": "migration_owner",
@@ -48132,24 +48149,6 @@
       "grantee": "service_role",
       "grantor": "migration_owner",
       "identity_arguments": "p_text text",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "sch_queue_due_scan_alerts",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "p_limit integer, p_dry_run boolean, p_cooldown_minutes integer",
-      "is_grantable": false,
-      "privilege_type": "EXECUTE",
-      "schema_name": "public"
-    },
-    {
-      "function_name": "sch_queue_due_scan_alerts",
-      "grantee": "service_role",
-      "grantor": "migration_owner",
-      "identity_arguments": "p_limit integer, p_dry_run boolean, p_cooldown_minutes integer, p_manager_escalation_grace_minutes integer",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"

@@ -6,6 +6,8 @@ import { resolve } from "node:path";
 
 const root = process.cwd();
 const migration = readFileSync(resolve(root, "supabase/migrations/20260824213000_static_weekly_operational_truth_cutover.sql"), "utf8");
+const runtimeAuthority = readFileSync(resolve(root, "supabase/migrations/20260825134500_scan_alert_runtime_authority_closure.sql"), "utf8");
+const index = readFileSync(resolve(root, "src/index.js"), "utf8");
 const scheduleApi = readFileSync(resolve(root, "src/schedule-api.js"), "utf8");
 const messagingApi = readFileSync(resolve(root, "src/messaging-api.js"), "utf8");
 
@@ -44,6 +46,12 @@ assert.match(migration, /revoke all on function public\.static_weekly_v6_schedul
   "new authority readers must not become public or generic service-role RPCs");
 assert.match(migration, /grant execute on function public\.static_weekly_v6_schedule_authority_state[\s\S]*to custodial_application_reader/i,
   "only the dedicated application reader receives the canonical read surface");
+assert.match(runtimeAuthority, /custodial_backend_queue_due_scan_alerts[\s\S]*custodial_require_backend_execution_secret/i,
+  "scan-alert maintenance must cross a fixed backend-secret boundary");
+assert.match(runtimeAuthority, /revoke execute on function public\.sch_queue_due_scan_alerts\(integer,boolean,integer,integer\)[\s\S]*from service_role/i,
+  "the weaker direct service-role alert writer must be retired");
+assert.match(index, /runScanAlertQueue[\s\S]*custodial_backend_queue_due_scan_alerts[\s\S]*p_backend_execution_secret:\s*offlineAuthoritySecret\(\)/i,
+  "runtime maintenance must call the secret-bound scan-alert wrapper");
 
 const managerRouteBlock = scheduleApi.slice(
   scheduleApi.indexOf('router.get("/today"'),

@@ -708,17 +708,17 @@ async function enqueueNativeEventNotifications(runRpc) {
   }
 }
 
-async function queueDueScanAlerts(runRpc) {
-  if (typeof runRpc !== "function") {
-    return { ok: true, skipped: true, reason: "runRpc_missing" };
+async function queueDueScanAlerts(runScanAlertQueue) {
+  if (typeof runScanAlertQueue !== "function") {
+    return { ok: true, skipped: true, reason: "runScanAlertQueue_missing" };
   }
 
   try {
-    const result = await runRpc("sch_queue_due_scan_alerts", {
-      p_limit: MAX_SCAN_ALERTS_PER_RUN,
-      p_dry_run: false,
-      p_cooldown_minutes: SCAN_ALERT_COOLDOWN_MINUTES,
-      p_manager_escalation_grace_minutes: SCAN_ALERT_MANAGER_ESCALATION_GRACE_MINUTES,
+    const result = await runScanAlertQueue({
+      limit: MAX_SCAN_ALERTS_PER_RUN,
+      dryRun: false,
+      cooldownMinutes: SCAN_ALERT_COOLDOWN_MINUTES,
+      managerEscalationGraceMinutes: SCAN_ALERT_MANAGER_ESCALATION_GRACE_MINUTES,
     });
     return result || { ok: true, result_count: 0 };
   } catch (error) {
@@ -727,7 +727,7 @@ async function queueDueScanAlerts(runRpc) {
   }
 }
 
-export function createEventMaintenanceController({ runReadOnlySql, runCommand, runRpc }) {
+export function createEventMaintenanceController({ runReadOnlySql, runCommand, runRpc, runScanAlertQueue }) {
   let lastRunAt = 0;
   let running = false;
   let lastStartedAt = null;
@@ -763,7 +763,7 @@ export function createEventMaintenanceController({ runReadOnlySql, runCommand, r
     try {
       const scheduleSync = { ok: true, skipped: true, reason: "events_are_reminders_only" };
       const nativeEventPushes = await enqueueNativeEventNotifications(runRpc);
-      const scanAlerts = await queueDueScanAlerts(runRpc);
+      const scanAlerts = await queueDueScanAlerts(runScanAlertQueue);
       const result = {
         ok: nativeEventPushes?.ok !== false && scanAlerts?.ok !== false,
         reason,
