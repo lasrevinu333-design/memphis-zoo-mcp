@@ -32,6 +32,10 @@ const cronIdentityBridgeMigration = await readFile(new URL(
   "../supabase/migrations/20260822153000_bridge_cron_identity_and_rebind_recovery_acl.sql",
   import.meta.url,
 ), "utf8");
+const deviceIdentityReadMigration = await readFile(new URL(
+  "../supabase/migrations/20260825173000_restore_application_reader_device_identity.sql",
+  import.meta.url,
+), "utf8");
 const readSource = await readFile(new URL("../src/supabase/read.js", import.meta.url), "utf8");
 const indexSource = await readFile(new URL("../src/index.js", import.meta.url), "utf8");
 const supabaseRootCa = await readFile(new URL("../certs/supabase-root-2021-ca.pem", import.meta.url), "utf8");
@@ -101,6 +105,41 @@ do $$ begin create role service_role; exception when duplicate_object then null;
 create table public.read_fixture(id integer primary key, label text not null);
 create table public.mutation_fixture(id integer primary key);
 create table public.rls_fixture(id integer primary key);
+create table public.employees(
+  id uuid primary key,
+  employee_code text not null,
+  display_name text not null,
+  active boolean not null,
+  role text not null,
+  notes text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create table public.devices(
+  id uuid primary key,
+  device_id text not null,
+  device_name text,
+  active boolean not null,
+  assigned_employee_id uuid references public.employees(id),
+  notes text,
+  last_seen_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  assignment_epoch bigint not null default 1
+);
+create table public.device_aliases(
+  alias_identifier text primary key,
+  canonical_device_id uuid not null references public.devices(id),
+  active boolean not null,
+  source text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create table public.device_auth_credentials(
+  credential_id uuid primary key,
+  device_id uuid not null references public.devices(id),
+  token_hash text not null
+);
 create table public.custodial_session_corrections(id uuid primary key);
 create view public.v_custodial_cleaning_session_truth as select id from public.custodial_session_corrections;
 create schema cron;
@@ -117,8 +156,24 @@ grant select on table cron.job to public;
 alter table cron.job enable row level security;
 create policy cron_job_policy on cron.job using (username=current_user);
 alter table public.rls_fixture enable row level security;
+alter table public.employees enable row level security;
+alter table public.employees force row level security;
+alter table public.devices enable row level security;
+alter table public.devices force row level security;
+alter table public.device_aliases enable row level security;
+alter table public.device_aliases force row level security;
+alter table public.device_auth_credentials enable row level security;
+alter table public.device_auth_credentials force row level security;
 insert into public.read_fixture values (1,'visible');
 insert into public.rls_fixture values (1);
+insert into public.employees(id,employee_code,display_name,active,role,notes)
+values ('11111111-1111-4111-8111-111111111111','EMP007','Karen Robinson',true,'staff','private employee note');
+insert into public.devices(id,device_id,device_name,active,assigned_employee_id,notes,assignment_epoch)
+values ('22222222-2222-4222-8222-222222222222','KIOSK_08','Karen Robinson',true,'11111111-1111-4111-8111-111111111111','private device note',1);
+insert into public.device_aliases(alias_identifier,canonical_device_id,active,source)
+values ('a7b69ce3-dc662d3d','22222222-2222-4222-8222-222222222222',true,'fixture');
+insert into public.device_auth_credentials(credential_id,device_id,token_hash)
+values ('33333333-3333-4333-8333-333333333333','22222222-2222-4222-8222-222222222222','must-remain-hidden');
 
 create or replace function public.run_sql_readonly(text) returns jsonb
 language plpgsql security definer as $$ begin return '[]'::jsonb; end $$;
@@ -219,6 +274,7 @@ try {
   `);
   await psql(relationAuthorityFenceMigration);
   await psql(cronIdentityBridgeMigration);
+  await psql(deviceIdentityReadMigration);
   await psql("create table public.reader_future_fixture(id integer primary key);");
   await psql(String.raw`
     create role custodial_readonly_test login password 'read-test-only' inherit;
@@ -316,6 +372,49 @@ try {
 
   const rls = await runReadOnlySql({ pool, sql: "select * from public.rls_fixture" });
   assert.deepEqual(rls.rows, [], "reader must not bypass RLS");
+
+  const canonicalDevice = await runReadOnlySql({ pool, sql: `
+    select d.id, d.device_id, d.device_name, d.active, d.assigned_employee_id,
+           d.assignment_epoch, e.display_name, e.employee_code, e.active as employee_active
+    from public.devices d
+    join public.employees e on e.id = d.assigned_employee_id
+    where d.device_id = 'KIOSK_08'
+  ` });
+  assert.deepEqual(canonicalDevice.rows, [{
+    id: "22222222-2222-4222-8222-222222222222",
+    device_id: "KIOSK_08",
+    device_name: "Karen Robinson",
+    active: true,
+    assigned_employee_id: "11111111-1111-4111-8111-111111111111",
+    assignment_epoch: "1",
+    display_name: "Karen Robinson",
+    employee_code: "EMP007",
+    employee_active: true,
+  }], "the restricted reader must resolve the exact enrolled phone identity through forced RLS");
+
+  const alias = await runReadOnlySql({ pool, sql: `
+    select alias_identifier, canonical_device_id, active
+    from public.device_aliases
+    where alias_identifier = 'a7b69ce3-dc662d3d'
+  ` });
+  assert.deepEqual(alias.rows, [{
+    alias_identifier: "a7b69ce3-dc662d3d",
+    canonical_device_id: "22222222-2222-4222-8222-222222222222",
+    active: true,
+  }], "the restricted reader must resolve an admitted hardware alias through forced RLS");
+
+  await assert.rejects(
+    () => runReadOnlySql({ pool, sql: "select notes from public.devices" }),
+    (error) => error?.code === "42501",
+    "the device identity policy must not expose device notes",
+  );
+  await assert.rejects(
+    () => runReadOnlySql({ pool, sql: "select notes from public.employees" }),
+    (error) => error?.code === "42501",
+    "the employee identity policy must not expose employee notes",
+  );
+  const credentials = await runReadOnlySql({ pool, sql: "select token_hash from public.device_auth_credentials" });
+  assert.deepEqual(credentials.rows, [], "the identity policy must not expose credential material through forced RLS");
 
   await assert.rejects(
     () => runReadOnlySql({ pool, sql: "select public.dangerous_mutation()" }),
