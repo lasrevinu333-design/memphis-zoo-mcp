@@ -22,6 +22,7 @@ import { assertServerAssignedActor, authenticatedManagerActor } from "./manager-
 import { authoritativeFeedbackPayload, makeFeedbackSubmitAuthority } from "./feedback-authority.js";
 import { makeMcpConnectorMiddleware } from "./auth/mcp-connector-auth.js";
 import {
+  getDeviceCredentialSecretReadiness,
   installDeviceCredentialRoutes,
   makeDeviceCredentialMiddleware,
   verifyNativeDeviceRequestAttestation,
@@ -567,9 +568,12 @@ async function executeScanRpcTransport(fn, args, device, credential, req) {
 }
 
 async function collectBackendAuthorityHealth() {
-  const authorityHealth = await runRpc("custodial_backend_authority_health", {
-    p_backend_execution_secret: offlineAuthoritySecret(),
-  });
+  const [authorityHealth, deviceCredentialSecret] = await Promise.all([
+    runRpc("custodial_backend_authority_health", {
+      p_backend_execution_secret: offlineAuthoritySecret(),
+    }),
+    getDeviceCredentialSecretReadiness({ supabase: supabaseAdmin, env: process.env }),
+  ]);
   const canaryDeviceId = configuredReleaseCanaryDeviceId();
   const scanTransportProbe = canaryDeviceId
     ? await runRpc("custodial_get_release_canary_transport_probe_health", {
@@ -582,7 +586,8 @@ async function collectBackendAuthorityHealth() {
   const scanTransportReady = scanTransportProbe?.ready === true;
   return {
     ...authorityHealth,
-    ok: authorityHealth?.ok === true && scanTransportReady,
+    ok: authorityHealth?.ok === true && scanTransportReady && deviceCredentialSecret.ready === true,
+    device_credential_secret: deviceCredentialSecret,
     scan_rpc_transport: {
       ...scanTransportProbe,
       ready: scanTransportReady,
@@ -2363,7 +2368,12 @@ app.get(["/health", "/health/dependencies"], async (req, res) => {
       && dependencies.reader_role_restricted === true;
     const canaryReady = !releaseCanaryConfigurationRequired()
       || (Boolean(canaryDeviceId) && canaryControlInitialized && canaryPaused === false);
-    const ok = dependencies.database_reachable === true && readAuthorityReady && requiredSchemaPresent && canaryReady;
+    const deviceCredentialSecret = await getDeviceCredentialSecretReadiness({ supabase: supabaseAdmin, env: process.env });
+    const ok = dependencies.database_reachable === true
+      && readAuthorityReady
+      && requiredSchemaPresent
+      && canaryReady
+      && deviceCredentialSecret.ready === true;
     res.status(ok ? 200 : 503).json(buildHealthPayload("dependencies", {
       ok,
       process_alive: true,
@@ -2376,6 +2386,7 @@ app.get(["/health", "/health/dependencies"], async (req, res) => {
         control_initialized: canaryControlInitialized,
         paused: canaryPaused,
       },
+      device_credential_secret: deviceCredentialSecret,
       worker: {
         durable_database_leases: dependencies.worker_claim_rpc === true,
         backlog: Number(dependencies.notification_backlog || 0),

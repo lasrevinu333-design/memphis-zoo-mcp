@@ -16,7 +16,8 @@
     "authority": "offline-authority.v5",
     "execution_boundary": "CUSTODIAL_BACKEND_PROOF_SECRET",
     "bridge_backend_source": "src/scan-authority-cutover.js:runCanonicalScanRpc",
-    "health_gate": "GET /scan-api/authority-health reads custodial_backend_authority_health plus the durable receipt produced only after the designated phone traverses the authenticated native-vault /scan-api/rpc route; canary resume binds that exact receipt"
+    "health_gate": "GET /scan-api/authority-health reads custodial_backend_authority_health plus the durable receipt produced only after the designated phone traverses the authenticated native-vault /scan-api/rpc route; canary resume binds that exact receipt and requires every active employee-device credential to be confirmed and match the deployed DEVICE_CREDENTIAL_SECRET generation",
+    "device_credential_secret_gate": "Every active employee-device credential must be confirmed and carry the exact deployed device-credential-hmac.v1 secret-generation identifier before canary resume. A changed generation requires manager-code phone recovery that preserves phone-local work; legacy secret fallback is forbidden."
   },
   "cutover": {
     "source_identity": {
@@ -35,7 +36,7 @@
       }
     },
     "phase_order": [
-      "prepare distinct CUSTODIAL_BACKEND_PROOF_SECRET and CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET values (minimum 32 characters each) without exposing either value",
+      "prepare distinct CUSTODIAL_BACKEND_PROOF_SECRET, CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET, and DEVICE_CREDENTIAL_SECRET values (minimum 32 characters each); preserve all phone-local work and require manager-code recovery for any active credential from a different secret generation without exposing any secret",
       "capture the production catalog through the read-only Supabase boundary and require it to equal the clean 113-migration rebuild fingerprint",
       "verify production project, converged migration head, catalog/privilege fingerprint, backup receipt, and exact source attestation against release/production-migration-state.json",
       "require zero pending migrations and never replay the four already-applied release migrations",
@@ -44,7 +45,7 @@
     ],
     "production_migration_state": "release/production-migration-state.json",
     "rollback": {
-      "precondition": "retain the exact bridge backend artifact and both release secrets until all authority health and restoration probes are green",
+      "precondition": "retain the exact bridge backend artifact, both release-proof secrets, and the exact employee-device credential secret generation until all authority health and restoration probes are green",
       "action": "pause the exact physical canary through the durable control; if canonical authority is missing or broken, restore the captured known-good function set forward, verify health, then explicitly resume",
       "restoration_checks": [
         "custodial_backend_authority_health returns ok=true",
@@ -61,6 +62,8 @@
         ,"offline work begun while snapshot, credential, and assignment authority were valid can activate after reconnect, while work begun after revocation, expiry, or reassignment is rejected"
         ,"native wire timestamps are canonical UTC milliseconds; immutable activation boundaries and catalog-derived authority restoration remain healthy after negative mutations"
         ,"complete Weekly Schedule day-change batches pass the database receipt-chain health gate; exact replay is read-only and prefix, extension, reorder, and content conflicts fail atomically"
+        ,"the retired 09:45 background writer has no scheduled runtime; only an explicit manager-approved schedule or absence publication may rebalance current static-weekly coverage"
+        ,"every active employee-device credential is confirmed and matches the deployed DEVICE_CREDENTIAL_SECRET generation before canary resume; an unconfirmed or mismatched credential requires manager-code recovery that preserves phone-local work and never restores a legacy secret fallback"
       ]
     }
   },

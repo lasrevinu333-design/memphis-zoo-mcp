@@ -74,6 +74,8 @@ assert.match(foundationRepair, /scheduled_rolling_window_readiness/);
 assert.match(scheduleSource, /resolveRestroomRebalanceScheduler\(process\.env\)/);
 assert.match(scheduleSource, /scheduler:\s*restroomRebalanceScheduler/);
 assert.doesNotMatch(scheduleSource, /explicit_runtime/);
+assert.doesNotMatch(scheduleSource, /maybeAutoRestroomRebalance|setInterval\([\s\S]{0,300}restroomRebalance/,
+  "static-weekly authority must not have a competing background rebalance writer");
 
 assert.match(indexSource, /const SCAN_CONTRACT_VERSION = "scan\.v4\.snapshot-bound-authority"/);
 assert.match(indexSource, /SCAN_READ_LIMIT_PER_MINUTE[^\n]*120/);

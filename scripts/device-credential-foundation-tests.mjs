@@ -21,6 +21,17 @@ const env = {
   DEVICE_CREDENTIAL_SECRET: "device-credential-foundation-test-secret",
   DEVICE_CREDENTIAL_TTL_DAYS: "3650",
 };
+const currentSecretKeyId = deviceCredentialInternals.deviceCredentialSecretKeyId(env);
+assert.match(currentSecretKeyId, /^[0-9a-f]{64}$/);
+assert.notEqual(
+  currentSecretKeyId,
+  deviceCredentialInternals.deviceCredentialSecretKeyId({ ...env, DEVICE_CREDENTIAL_SECRET: "rotated-device-credential-foundation-secret" }),
+  "a secret rotation must produce a distinct non-secret key generation identity",
+);
+assert.deepEqual(deviceCredentialInternals.deviceCredentialSecretMetadata(env), {
+  credential_secret_contract: "device-credential-hmac.v1",
+  credential_secret_key_id: currentSecretKeyId,
+});
 for (const wrongSecretClass of [
   { NODE_ENV: "production", OPS_MANAGER_SESSION_SECRET: "manager-secret-is-not-a-device-secret" },
   { NODE_ENV: "production", SUPABASE_SERVICE_ROLE_KEY: "service-role-is-not-a-device-secret" },
@@ -93,14 +104,16 @@ function resolver(sql) {
 function storeFor({ mode = "enroll", credential = null } = {}) {
   const auditEvents = [];
   const touches = [];
+  const consumeCalls = [];
   return {
     auditEvents,
     touches,
+    consumeCalls,
     async getPolicy() { return { mode, updated_at: null, updated_by: null }; },
     async findCredential() { return credential; },
     async touchCredential(credentialId, patch) { touches.push({ credentialId, patch }); },
     async audit(event) { auditEvents.push(event); },
-    async consumeEnrollmentCode(args) { return { ok: true, ...args, expires_at: args.expiresAt }; },
+    async consumeEnrollmentCode(args) { consumeCalls.push(args); return { ok: true, ...args, expires_at: args.expiresAt }; },
     async issueEnrollmentCode(args) { return { enrollment_id: "44444444-4444-4444-8444-444444444444", device_id: args.devicePk, expires_at: args.expiresAt }; },
     async revokeCredential() { return null; },
     async revokeByTokenHash() { return null; },
@@ -147,6 +160,78 @@ result = await authenticateDeviceCredentialRequest(request({ cookie }), {
 assert.equal(result.ok, true);
 assert.equal(result.credentialed, true);
 assert.equal(result.device.canonical_device_id, "KIOSK_06");
+
+const legacyCredentialStore = storeFor({ mode: "enforce", credential });
+result = await authenticateDeviceCredentialRequest(request({ cookie }), {
+  env, store: legacyCredentialStore, runReadOnlySql: resolver,
+  now: new Date("2026-07-15T21:00:00.000Z"),
+});
+assert.equal(result.ok, true);
+assert.equal(
+  legacyCredentialStore.touches.at(-1)?.patch?.metadata_json?.credential_secret_key_id,
+  currentSecretKeyId,
+  "a successfully proven legacy credential must be stamped with the current secret generation",
+);
+
+const rotatedEnv = { ...env, DEVICE_CREDENTIAL_SECRET: "rotated-device-credential-foundation-secret" };
+const previousGenerationCredential = {
+  ...credential,
+  metadata_json: deviceCredentialInternals.deviceCredentialSecretMetadata(env),
+};
+const rotatedStore = storeFor({ mode: "enforce", credential: previousGenerationCredential });
+result = await authenticateDeviceCredentialRequest(request({ cookie }), {
+  env: rotatedEnv, store: rotatedStore, runReadOnlySql: resolver,
+  now: new Date("2026-07-15T21:00:00.000Z"),
+});
+assert.equal(result.ok, false);
+assert.equal(result.code, "device_credential_recovery_required");
+assert.equal(result.recovery_required, true);
+assert.match(result.error, /Saved work remains on this phone/i);
+assert.equal(rotatedStore.auditEvents.at(-1)?.reason, "credential_secret_generation_mismatch");
+
+const readinessRows = [{
+  credential_id: credentialId,
+  device_id: deviceA.canonical_device_pk,
+  confirmed_at: "2026-07-15T20:01:00.000Z",
+  expires_at: "2036-07-15T20:00:00.000Z",
+  revoked_at: null,
+  metadata_json: deviceCredentialInternals.deviceCredentialSecretMetadata(env),
+}];
+assert.deepEqual(
+  deviceCredentialInternals.evaluateDeviceCredentialSecretReadiness(readinessRows, env, new Date("2026-07-15T21:00:00.000Z")),
+  {
+    contract_version: "device-credential-secret-readiness.v1",
+    ready: true,
+    active_credentials: 1,
+    confirmed_credentials: 1,
+    unconfirmed_credentials: 0,
+    matching_credentials: 1,
+    unmarked_credentials: 0,
+    mismatched_credentials: 0,
+    reason: "credential_secret_generation_current",
+  },
+);
+assert.equal(
+  deviceCredentialInternals.evaluateDeviceCredentialSecretReadiness(
+    [{ ...readinessRows[0], confirmed_at: null }], env, new Date("2026-07-15T21:00:00.000Z"),
+  ).ready,
+  false,
+  "an unconfirmed credential must not satisfy canary credential readiness",
+);
+assert.equal(
+  deviceCredentialInternals.evaluateDeviceCredentialSecretReadiness(
+    [{ ...readinessRows[0], metadata_json: {} }], env, new Date("2026-07-15T21:00:00.000Z"),
+  ).ready,
+  false,
+  "an unmarked active credential must block exact secret cutover admission",
+);
+assert.equal(
+  deviceCredentialInternals.evaluateDeviceCredentialSecretReadiness(
+    readinessRows, rotatedEnv, new Date("2026-07-15T21:00:00.000Z"),
+  ).mismatched_credentials,
+  1,
+  "an active credential from another secret generation must be detected before canary admission",
+);
 
 const enrollmentOperationId = "56565656-5656-4565-8565-565656565656";
 const operationCredential = {
@@ -286,6 +371,8 @@ assert.match(String(enrollRes.headers["set-cookie"]), /Secure/);
 assert.match(String(enrollRes.headers["set-cookie"]), /SameSite=None/);
 assert.match(String(enrollRes.headers["set-cookie"]), /Partitioned/);
 assert.match(String(enrollRes.headers["set-cookie"]), /Max-Age=315360000/);
+assert.equal(routeStore.consumeCalls.at(-1)?.metadata?.credential_secret_key_id, currentSecretKeyId,
+  "new credentials must record their exact secret generation");
 
 const migration = read("supabase/migrations/20260715213000_device_credential_foundation.sql");
 for (const table of ["device_auth_policy", "device_auth_credentials", "device_auth_enrollment_codes", "device_auth_events"]) {
@@ -311,9 +398,13 @@ assert.match(moduleSource, /X-Device-Id is required/);
 assert.doesNotMatch(moduleSource, /res\.status\(200\).*rawToken/s);
 assert.doesNotMatch(moduleSource, /env\.OPS_MANAGER_SESSION_SECRET|env\.SUPABASE_SERVICE_ROLE_KEY/,
   "device credential HMAC authority must not fall back to another secret class");
+assert.match(moduleSource, /device_credential_recovery_required/);
+assert.match(moduleSource, /credential_secret_cutover_incomplete/);
 
 const indexSource = read("src/index.js");
 assert.match(indexSource, /installDeviceCredentialRoutes/);
+assert.match(indexSource, /getDeviceCredentialSecretReadiness/);
+assert.match(indexSource, /device_credential_secret:\s*deviceCredentialSecret/);
 assert.match(indexSource, /parseScanAuthorityJsonBeforeAuthentication, requireDeviceOrOpsAccess, rejectInvalidAuthenticatedScanAuthorityJson, requireScanRpcAuthorization, scanRpcRateLimit/);
 assert.match(indexSource, /deferJsonParserErrors/);
 assert.match(indexSource, /X-Device-Credential/);

@@ -57,7 +57,6 @@ function extractFunction(name) {
 }
 
 const needed = [
-  "nonNegativeInt",
   "resolveRestroomRebalanceScheduler",
   "buildDate",
   "normalizeLoose",
@@ -123,34 +122,36 @@ for (const name of needed) {
 
 assert.deepEqual(
   structuredClone(context.resolveRestroomRebalanceScheduler({ RENDER: "true", NODE_ENV: "production", IS_PULL_REQUEST: "false" })),
-  { enabled: true, sweep_ms: 60000, owner: "render_production", source: "render_production_default" },
-  "the deployed Render production service must own the automatic 09:45 sweep by default",
+  { enabled: false, sweep_ms: 0, owner: "static_weekly_authority", source: "static_weekly_authority" },
+  "the deployed Render service must not compete with published static-weekly authority",
 );
 assert.deepEqual(
   structuredClone(context.resolveRestroomRebalanceScheduler({ RENDER: "true", NODE_ENV: "production", IS_PULL_REQUEST: "true" })),
-  { enabled: false, sweep_ms: 0, owner: "disabled", source: "disabled_by_default" },
+  { enabled: false, sweep_ms: 0, owner: "static_weekly_authority", source: "static_weekly_authority" },
   "Render pull-request runtimes must never become production scheduler writers",
 );
 assert.deepEqual(
   structuredClone(context.resolveRestroomRebalanceScheduler({ NODE_ENV: "production" })),
-  { enabled: false, sweep_ms: 0, owner: "disabled", source: "disabled_by_default" },
+  { enabled: false, sweep_ms: 0, owner: "static_weekly_authority", source: "static_weekly_authority" },
   "local runtimes must remain non-owning by default even when NODE_ENV is production",
 );
 assert.deepEqual(
   structuredClone(context.resolveRestroomRebalanceScheduler({ NODE_ENV: "production", RESTROOM_REBALANCE_SWEEP_MS: "60000" })),
-  { enabled: false, sweep_ms: 0, owner: "disabled", source: "non_render_override_rejected" },
-  "a positive non-Render override must not create a second automatic writer",
+  { enabled: false, sweep_ms: 0, owner: "static_weekly_authority", source: "legacy_background_writer_retired" },
+  "a positive override must not resurrect the retired automatic writer",
 );
 assert.deepEqual(
   structuredClone(context.resolveRestroomRebalanceScheduler({ RENDER: "true", NODE_ENV: "production", RESTROOM_REBALANCE_SWEEP_MS: "0" })),
-  { enabled: false, sweep_ms: 0, owner: "disabled", source: "environment" },
-  "an explicit zero must remain an operational kill switch",
+  { enabled: false, sweep_ms: 0, owner: "static_weekly_authority", source: "static_weekly_authority" },
+  "an explicit zero must retain static-weekly ownership",
 );
 assert.deepEqual(
   structuredClone(context.resolveRestroomRebalanceScheduler({ RENDER: "true", NODE_ENV: "production", RESTROOM_REBALANCE_SWEEP_MS: "60000ms" })),
-  { enabled: false, sweep_ms: 0, owner: "disabled", source: "invalid_environment_disabled" },
+  { enabled: false, sweep_ms: 0, owner: "static_weekly_authority", source: "static_weekly_authority" },
   "an invalid override must fail closed instead of silently enabling a writer",
 );
+assert.doesNotMatch(source, /maybeAutoRestroomRebalance|setInterval\([\s\S]{0,300}restroomRebalance/,
+  "the retired 09:45 background writer must not remain in the process runtime");
 assert.match(source, /scheduler:\s*restroomRebalanceScheduler/, "the protected status route must expose scheduler ownership");
 assert.doesNotMatch(source, /explicit_runtime/, "automatic scheduler ownership must have no non-Render runtime mode");
 assert.match(runtimeAuthorityCorrection, /grant execute on function public\.get_setting_int\(text, integer\)[\s\S]*to custodial_application_reader/i,

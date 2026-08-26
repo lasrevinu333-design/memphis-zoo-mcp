@@ -261,6 +261,8 @@ for (const migration of appliedReleaseMigrations) {
 }
 const releaseEvidence = parseJsonBlob(evidenceBlob, "release evidence");
 const index = blobByPath.get("src/index.js").bytes.toString("utf8");
+const deviceCredentialAuth = blobByPath.get("src/auth/device-credential-auth.js").bytes.toString("utf8");
+const scheduleApi = blobByPath.get("src/schedule-api.js").bytes.toString("utf8");
 const phaseCText = blobByPath.get(`supabase/migrations/${phaseC}`).bytes.toString("utf8");
 const phaseDText = blobByPath.get(`supabase/migrations/${phaseD}`).bytes.toString("utf8");
 const phaseEText = blobByPath.get(`supabase/migrations/${phaseE}`).bytes.toString("utf8");
@@ -279,14 +281,17 @@ const schemaFingerprint = blobByPath.get("supabase/canonical/schema-fingerprint.
 const frontendManifest = parseJsonBlob(blobByPath.get("release/frontend-release-manifest.json"), "frontend release manifest");
 
 assert.equal(input.release_contract_version, "offline-authority.v5");
+assert.match(input.backend_contract.device_credential_secret_gate, /Every active employee-device credential.*manager-code phone recovery.*legacy secret fallback is forbidden/i);
 assert.deepEqual(input.cutover.phase_order, [
-  "prepare distinct CUSTODIAL_BACKEND_PROOF_SECRET and CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET values (minimum 32 characters each) without exposing either value",
+  "prepare distinct CUSTODIAL_BACKEND_PROOF_SECRET, CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET, and DEVICE_CREDENTIAL_SECRET values (minimum 32 characters each); preserve all phone-local work and require manager-code recovery for any active credential from a different secret generation without exposing any secret",
   "capture the production catalog through the read-only Supabase boundary and require it to equal the clean 113-migration rebuild fingerprint",
   `verify production project, converged migration head, catalog/privilege fingerprint, backup receipt, and exact source attestation against ${productionMigrationStatePath}`,
   "require zero pending migrations and never replay the four already-applied release migrations",
   "deploy the canonical-only backend only after all authoritative procedures above are present and verified; missing canonical writers fail closed",
   "require a green authority health gate and direct-DML denial probes before routing traffic",
 ]);
+assert.ok(input.cutover.rollback.restoration_checks.some((value) => /retired 09:45 background writer.*manager-approved schedule or absence publication/i.test(value)));
+assert.ok(input.cutover.rollback.restoration_checks.some((value) => /every active employee-device credential.*manager-code recovery.*legacy secret fallback/i.test(value)));
 assert.equal(input.cutover.production_migration_state, productionMigrationStatePath);
 assert.equal(productionMigrationState.artifact, "production-migration-state.v1");
 assert.equal(productionMigrationState.project_ref, "rqquvtjdmugpigbndmne");
@@ -320,6 +325,11 @@ assert.equal(input.cutover.source_identity.authority_inventory?.source, "all-tra
 assert.deepEqual(input.cutover.source_identity.authority_inventory?.exclude, [releaseEvidencePath]);
 assert.match(index, /runCanonicalScanRpc/);
 assert.doesNotMatch(index, /runPreparedScanRpc|prepared\?\.fallback|accepted legacy writer/);
+assert.match(index, /getDeviceCredentialSecretReadiness/);
+assert.match(deviceCredentialAuth, /device-credential-hmac\.v1/);
+assert.match(deviceCredentialAuth, /device_credential_recovery_required/);
+assert.doesNotMatch(scheduleApi, /maybeAutoRestroomRebalance|setInterval\([\s\S]{0,300}restroomRebalance/);
+assert.match(scheduleApi, /owner:\s*"static_weekly_authority"/);
 assert.match(index, /tool_complete_session_authoritative/);
 assert.match(phaseCText, /custodial_backend_authority_health/);
 assert.match(phaseCText, /length\(coalesce\(p_execution_secret,''\)\)<32/);

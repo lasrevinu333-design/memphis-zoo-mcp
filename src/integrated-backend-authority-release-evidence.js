@@ -43,6 +43,7 @@ export function buildIntegratedBackendAuthorityReleaseEvidence({
       static_weekly_registered_roster_bootstrap_phase: "20260823143000 permits only the protected release operator to hydrate the complete immutable roster from one active registered authority source, rejects partial or mismatched state, and makes exact replay non-mutating",
       static_weekly_operational_truth_cutover_phase: "20260824213000 makes employee, manager, dashboard, analytics and notification schedule truth consume one exact static-weekly projection, fails closed on stale governed authority, and excludes reminder-only or response-only work from physical cleaning obligations",
       application_reader_release_recovery_phase: "20260825174500 makes release recovery preserve the restricted application-reader identity projection and its three FORCE-RLS policies, rejects unexpected column authority, and replaces the obsolete no-column-ACL health contract",
+      static_weekly_writer_and_device_secret_closure_phase: "The release runtime removes the retired minute-driven 09:45 schedule writer, confines coverage rebalance to explicit manager-approved schedule or absence publication, identifies the deployed DEVICE_CREDENTIAL_SECRET generation without exposing it, and blocks canary resume until every active employee credential is confirmed and matches that generation or completes manager-code recovery.",
     },
     rollback: input.rollback,
     cutover: input.cutover,
@@ -61,6 +62,6 @@ export function buildIntegratedBackendAuthorityReleaseEvidence({
       authority: "active named manager; disposition write additionally requires DIRECTOR or SECURITY_ADMIN",
     },
     migrations,
-    release_boundary: "Prepare distinct minimum-32-character backend and native-route secrets before cutover; configure their database digests immediately after the migrations that create each configuration function, retain the bridge backend artifact through the scan-snapshot phase, and require the executable health/restoration probes before traffic changes.",
+    release_boundary: "Prepare distinct minimum-32-character backend, native-route, and employee-device credential secrets before cutover; configure database digests immediately after the migrations that create each configuration function, retain the bridge backend artifact through the scan-snapshot phase, require manager-code recovery without phone-local work loss for any device-credential generation mismatch, and require the executable health/restoration probes before traffic changes.",
   };
 }

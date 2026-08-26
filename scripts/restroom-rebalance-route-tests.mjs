@@ -128,8 +128,8 @@ await withServer(buildApp({ readCalls, writeCalls, rpcCalls }), async (baseUrl) 
   assert.deepEqual(statusPayload.data.scheduler, {
     enabled: false,
     sweep_ms: 0,
-    owner: "disabled",
-    source: "disabled_by_default",
+    owner: "static_weekly_authority",
+    source: "static_weekly_authority",
   });
 });
 

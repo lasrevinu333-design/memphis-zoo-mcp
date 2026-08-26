@@ -47,6 +47,8 @@ The production `/mcp` URL is public. Connected clients must therefore carry the 
 |---|---:|---|
 | `DEVICE_CREDENTIAL_SECRET` | **Yes in production** | Dedicated HMAC secret for employee-phone enrollment codes and device credentials. It must not be shared with manager sessions, Supabase, MCP, GitHub, or another secret class. The service fails closed if it is absent. |
 
+Every newly issued employee-phone credential records a non-secret HMAC key-generation identifier in its protected server metadata. A proven legacy credential is stamped on its next successful use. `/health/dependencies` and scan-authority readiness remain closed while any active credential is unmarked or belongs to another generation. Rotate this secret only as an explicit cutover: preserve phone-local work, issue one-time manager recovery codes, re-enroll the affected phones, verify the generation gate, and then resume the physical canary. Never restore an older fallback secret merely to make a phone appear enrolled.
+
 ## Static weekly scheduler control plane
 
 The scheduler authority is a separate process, not part of the ordinary API
@@ -96,7 +98,7 @@ is never registration authority.
 | Name | Required | Purpose |
 |---|---:|---|
 | `ADMIN_API_KEY` | **Yes in production** | Server-to-server/admin automation key accepted via `X-Admin-Key` / `X-API-Key`. |
-| `RESTROOM_REBALANCE_SWEEP_MS` | No | Automatic 09:45 restroom scheduler interval. Defaults to `60000` only on the production Render service. Local and pull-request runtimes are hard-disabled even if given a positive override. Set `0` as an explicit production kill switch. Invalid values disable the scheduler. |
+| `RESTROOM_REBALANCE_SWEEP_MS` | Retired | The independent 09:45 background writer is permanently fenced after static-weekly cutover. Any positive legacy value is ignored and reported as `legacy_background_writer_retired`; only an explicit manager-approved schedule or absence publication may rebalance current coverage. |
 | `OPS_MANAGER_FULL_ACCESS_KEY` | **Yes in production for Ops UI writes** | Full-access Ops Manager public-link key accepted via `X-Ops-Access-Key`; mints signed bearer sessions for protected read/write routes. |
 | `OPS_MANAGER_READ_ONLY_ACCESS_KEY` | Recommended | Read-only Ops Manager public-link key accepted via `X-Ops-Access-Key`; mints signed bearer sessions for protected read routes only. |
 | `OPS_MANAGER_SESSION_SECRET` | **Yes in production** | Dedicated HMAC secret used to sign bounded Ops Manager bearer sessions. It must not be shared with employee-device, Supabase, Gemini, Moxie, MCP, GitHub, or another secret class. Production refuses startup if it is absent. |

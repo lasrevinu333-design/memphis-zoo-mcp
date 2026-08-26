@@ -245,6 +245,79 @@ function tokenHash(secret, env) {
   return hmacHex(env, "device-token", secret);
 }
 
+export function deviceCredentialSecretKeyId(env = process.env) {
+  return hmacHex(env, "device-credential-secret-key-id", "device-credential-hmac.v1");
+}
+
+export function deviceCredentialSecretMetadata(env = process.env) {
+  return {
+    credential_secret_contract: "device-credential-hmac.v1",
+    credential_secret_key_id: deviceCredentialSecretKeyId(env),
+  };
+}
+
+export function evaluateDeviceCredentialSecretReadiness(rows = [], env = process.env, now = new Date()) {
+  const currentKeyId = deviceCredentialSecretKeyId(env);
+  const nowMs = now.getTime();
+  const active = (Array.isArray(rows) ? rows : []).filter((row) => {
+    const expiresAt = Date.parse(String(row?.expires_at || ""));
+    return !row?.revoked_at && Number.isFinite(expiresAt) && expiresAt > nowMs;
+  });
+  let matching = 0;
+  let unmarked = 0;
+  let mismatched = 0;
+  let confirmed = 0;
+  let unconfirmed = 0;
+  for (const row of active) {
+    if (row?.confirmed_at) confirmed += 1;
+    else unconfirmed += 1;
+    const metadata = row?.metadata_json;
+    const keyId = metadata && typeof metadata === "object" && !Array.isArray(metadata)
+      ? String(metadata.credential_secret_key_id || "").trim().toLowerCase()
+      : "";
+    if (!/^[0-9a-f]{64}$/.test(keyId)) unmarked += 1;
+    else if (safeEqual(keyId, currentKeyId)) matching += 1;
+    else mismatched += 1;
+  }
+  const ready = active.length > 0 && unconfirmed === 0 && unmarked === 0 && mismatched === 0;
+  return {
+    contract_version: "device-credential-secret-readiness.v1",
+    ready,
+    active_credentials: active.length,
+    confirmed_credentials: confirmed,
+    unconfirmed_credentials: unconfirmed,
+    matching_credentials: matching,
+    unmarked_credentials: unmarked,
+    mismatched_credentials: mismatched,
+    reason: ready
+      ? "credential_secret_generation_current"
+      : (active.length === 0 ? "no_active_device_credentials" : "credential_secret_cutover_incomplete"),
+  };
+}
+
+export async function getDeviceCredentialSecretReadiness({ supabase, env = process.env, now = new Date() } = {}) {
+  if (!supabase) {
+    return {
+      contract_version: "device-credential-secret-readiness.v1",
+      ready: false,
+      active_credentials: 0,
+      confirmed_credentials: 0,
+      unconfirmed_credentials: 0,
+      matching_credentials: 0,
+      unmarked_credentials: 0,
+      mismatched_credentials: 0,
+      reason: "device_credential_store_unavailable",
+    };
+  }
+  const { data, error } = await supabase
+    .from("device_auth_credentials")
+    .select("credential_id,device_id,metadata_json,confirmed_at,expires_at,revoked_at")
+    .is("revoked_at", null)
+    .gt("expires_at", now.toISOString());
+  if (error) throw error;
+  return evaluateDeviceCredentialSecretReadiness(data || [], env, now);
+}
+
 function enrollmentCodeHash(devicePk, code, env) {
   const normalized = String(code || "").replace(/\D/g, "").slice(0, 8);
   return hmacHex(env, "device-enrollment", `${devicePk}:${normalized}`);
@@ -720,10 +793,20 @@ export async function authenticateDeviceCredentialRequest(req, {
   if (parts) {
     const row = await store.findCredential(parts.credentialId);
     const expiresAt = Date.parse(String(row?.expires_at || ""));
+    const currentSecretKeyId = deviceCredentialSecretKeyId(env);
+    const credentialMetadata = row?.metadata_json && typeof row.metadata_json === "object" && !Array.isArray(row.metadata_json)
+      ? row.metadata_json
+      : {};
+    const recordedSecretKeyId = String(credentialMetadata.credential_secret_key_id || "").trim().toLowerCase();
+    const secretGenerationMatches = !recordedSecretKeyId || (
+      /^[0-9a-f]{64}$/.test(recordedSecretKeyId)
+      && safeEqual(recordedSecretKeyId, currentSecretKeyId)
+    );
     const tokenMatchesDevice = Boolean(
       row
       && String(row.device_id || "") === String(device.canonical_device_pk || "")
       && row.token_hash
+      && secretGenerationMatches
       && safeEqual(row.token_hash, tokenHash(parts.secret, env))
     );
     const valid = Boolean(tokenMatchesDevice && !row.revoked_at && Number.isFinite(expiresAt) && expiresAt > now.getTime());
@@ -762,6 +845,12 @@ export async function authenticateDeviceCredentialRequest(req, {
         last_used_at: nowIso,
         last_user_agent_hash: privacyHash(requestUserAgent(req), env, "ua"),
         last_ip_hash: privacyHash(requestIp(req), env, "ip"),
+        ...(!recordedSecretKeyId ? {
+          metadata_json: {
+            ...credentialMetadata,
+            ...deviceCredentialSecretMetadata(env),
+          },
+        } : {}),
       };
       let credential = row;
       if (!row.confirmed_at) {
@@ -788,6 +877,36 @@ export async function authenticateDeviceCredentialRequest(req, {
         credential,
         policy_mode: policy.mode,
         enrollment_required: false,
+      };
+    }
+    const credentialRecordRequiresRecovery = Boolean(
+      row
+      && String(row.device_id || "") === String(device.canonical_device_pk || "")
+      && !row.revoked_at
+      && Number.isFinite(expiresAt)
+      && expiresAt > now.getTime()
+      && !tokenMatchesDevice
+    );
+    if (credentialRecordRequiresRecovery) {
+      const reason = recordedSecretKeyId && !secretGenerationMatches
+        ? "credential_secret_generation_mismatch"
+        : "credential_secret_generation_unknown";
+      await audit(store, authEvent(req, device, {
+        credentialId: row.credential_id,
+        eventType: "device_auth_failed",
+        success: false,
+        reason,
+        env,
+      }));
+      return {
+        ok: false,
+        status: 401,
+        code: "device_credential_recovery_required",
+        error: "This phone's secure access must be renewed by a manager. Saved work remains on this phone.",
+        device,
+        policy_mode: policy.mode,
+        enrollment_required: true,
+        recovery_required: true,
       };
     }
     // A token that still cryptographically proves this canonical device may
@@ -855,6 +974,7 @@ export function makeDeviceCredentialMiddleware(options = {}) {
           code: result.code || "device_auth_failed",
           error: result.error || "Device authentication failed.",
           enrollment_required: Boolean(result.enrollment_required),
+          recovery_required: Boolean(result.recovery_required),
           policy_mode: result.policy_mode || null,
         });
         return;
@@ -1132,6 +1252,7 @@ export function installDeviceCredentialRoutes(app, {
         data: {
           authenticated,
           enrollment_required: Boolean(result.enrollment_required),
+          recovery_required: Boolean(result.recovery_required),
           policy_mode: result.policy_mode,
           requested_device_id: result.device.requested_device_id,
           canonical_device_id: result.device.canonical_device_id,
@@ -1180,7 +1301,11 @@ export function installDeviceCredentialRoutes(app, {
         expiresAt,
         userAgentHash: fingerprint.userAgentHash,
         ipHash: fingerprint.ipHash,
-        metadata: { requested_device_id: device.requested_device_id, matched_by: device.matched_by },
+        metadata: {
+          requested_device_id: device.requested_device_id,
+          matched_by: device.matched_by,
+          ...deviceCredentialSecretMetadata(env),
+        },
       });
       clearEnrollmentAttempts(req);
       setDeviceCredentialCookie(res, `${credentialId}.${secret}`, req, env);
@@ -1256,7 +1381,13 @@ export function installDeviceCredentialRoutes(app, {
         codeHash: enrollmentCodeHash(device.canonical_device_pk, code, env),
         createdBy: managerIdentity(req),
         expiresAt,
-        metadata: { canonical_device_id: device.canonical_device_id, employee_name: device.assigned_employee_name, purpose: "employee_device_enrollment", max_uses: 1 },
+        metadata: {
+          canonical_device_id: device.canonical_device_id,
+          employee_name: device.assigned_employee_name,
+          purpose: "employee_device_enrollment",
+          max_uses: 1,
+          ...deviceCredentialSecretMetadata(env),
+        },
       });
       await audit(store, authEvent(req, device, { eventType: "enrollment_code_issued", success: true, metadata: { enrollment_id: row?.enrollment_id, manager_id: managerId(req) }, env }));
       await store.auditSecurityCode?.({
@@ -1370,6 +1501,9 @@ export const deviceCredentialInternals = {
   requestHeaderDeviceIdentifier,
   credentialTokenParts,
   tokenHash,
+  deviceCredentialSecretKeyId,
+  deviceCredentialSecretMetadata,
+  evaluateDeviceCredentialSecretReadiness,
   enrollmentCodeHash,
   credentialTtlDays,
   enrollmentTtlMinutes,

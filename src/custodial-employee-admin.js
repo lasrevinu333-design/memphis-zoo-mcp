@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
+import { deviceCredentialSecretMetadata } from "./auth/device-credential-auth.js";
 
 const NATIVE_ENROLL_ATTEMPTS = new Map();
 const NATIVE_ENROLL_WINDOW_MS = 15 * 60 * 1000;
@@ -518,6 +519,7 @@ export function installCustodialEmployeeAdminRoutes(app, { env = process.env, su
           enrolled_by: "native_custodial_app",
           canonical_device_id: device.device_id,
           enrollment_flow: expectedFlow,
+          ...deviceCredentialSecretMetadata(env),
         },
       });
       if (consumed.error) throw consumed.error;

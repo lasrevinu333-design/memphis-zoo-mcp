@@ -34,41 +34,19 @@ const RESTROOM_REBALANCE_MAX_WALK_MINUTES = Math.max(4, Number.parseInt(String(p
 const RESTROOM_REBALANCE_SEVERE_SPREAD = Math.max(2, Number.parseInt(String(process.env.RESTROOM_REBALANCE_SEVERE_SPREAD || "4"), 10) || 4);
 const RESTROOM_REBALANCE_FLEX_HELPER_WALK_MINUTES = Math.max(1, Number.parseInt(String(process.env.RESTROOM_REBALANCE_FLEX_HELPER_WALK_MINUTES || "6"), 10) || 6);
 
-function nonNegativeInt(value, fallback = 0) {
-  const raw = value == null || String(value).trim() === "" ? fallback : value;
-  const parsed = Number.parseInt(String(raw), 10);
-  if (!Number.isFinite(parsed) || parsed < 0) return Math.max(0, Number(fallback) || 0);
-  return parsed;
-}
-
 export function resolveRestroomRebalanceScheduler(env = process.env) {
-  const isRenderProduction = String(env.RENDER || "").trim().toLowerCase() === "true"
-    && String(env.NODE_ENV || "").trim().toLowerCase() === "production"
-    && String(env.IS_PULL_REQUEST || "").trim().toLowerCase() !== "true";
   const configuredValue = String(env.RESTROOM_REBALANCE_SWEEP_MS ?? "").trim();
-  const defaultSweepMs = isRenderProduction ? 60000 : 0;
-  let sweepMs = defaultSweepMs;
-  let source = isRenderProduction ? "render_production_default" : "disabled_by_default";
-
-  if (configuredValue) {
-    const parsed = /^\d+$/.test(configuredValue) ? Number.parseInt(configuredValue, 10) : Number.NaN;
-    if (!Number.isSafeInteger(parsed) || parsed < 0) {
-      sweepMs = 0;
-      source = "invalid_environment_disabled";
-    } else if (parsed > 0 && !isRenderProduction) {
-      sweepMs = 0;
-      source = "non_render_override_rejected";
-    } else {
-      sweepMs = parsed;
-      source = "environment";
-    }
-  }
+  const requestedSweepMs = /^\d+$/.test(configuredValue)
+    ? Number.parseInt(configuredValue, 10)
+    : 0;
 
   return {
-    enabled: sweepMs > 0,
-    sweep_ms: sweepMs,
-    owner: sweepMs > 0 ? "render_production" : "disabled",
-    source,
+    enabled: false,
+    sweep_ms: 0,
+    owner: "static_weekly_authority",
+    source: requestedSweepMs > 0
+      ? "legacy_background_writer_retired"
+      : "static_weekly_authority",
   };
 }
 
@@ -606,7 +584,6 @@ export function createScheduleRouter({
   const AUTO_GENERATE_WINDOW_DAYS = 7;
   const AUTO_GENERATE_COOLDOWN_MS = 6 * 60 * 60 * 1000;
   const restroomRebalanceScheduler = resolveRestroomRebalanceScheduler(process.env);
-  const RESTROOM_REBALANCE_SWEEP_MS = restroomRebalanceScheduler.sweep_ms;
 
   async function loadScheduleAuthorityState(serviceDate) {
     const requested = String(serviceDate || "").trim();
@@ -1871,53 +1848,6 @@ export function createScheduleRouter({
     if (typeof runCommand !== "function") return null;
     await runCommand("restroom_rebalance_completion", { service_date: serviceDate, result, status, automation_key: RESTROOM_REBALANCE_SOURCE });
     return { automation_key: RESTROOM_REBALANCE_SOURCE, service_date: serviceDate, status, completed: status === "completed", result };
-  }
-
-  async function maybeAutoRestroomRebalance({ force = false, reason = "scheduled_interval" } = {}) {
-    if (restroomRebalanceState.running) return { ...restroomRebalanceState, skipped: true, reason: "already_running" };
-    if (!force && !isRestroomRebalanceDue()) return { ...restroomRebalanceState, skipped: true, reason: "before_0945_memphis_time" };
-
-    const serviceDate = requireDate(await getServiceDate());
-    if (!force && restroomRebalanceState.lastServiceDate === serviceDate) {
-      return { ...restroomRebalanceState, skipped: true, reason: "already_checked_today" };
-    }
-
-    if (!force) {
-      const persistentCompletion = await getRestroomRebalanceCompletion(serviceDate);
-      if (persistentCompletion?.completed) {
-        const result = { service_date: serviceDate, reason: "already_completed_persistently", persistent_completion: persistentCompletion };
-        restroomRebalanceState = {
-          ...restroomRebalanceState,
-          running: false,
-          lastServiceDate: serviceDate,
-          lastCompletedAt: restroomRebalanceState.lastCompletedAt || Date.now(),
-          lastResult: result,
-        };
-        return { ...restroomRebalanceState, skipped: true, reason: "already_completed_persistently" };
-      }
-    }
-
-    restroomRebalanceState = { ...restroomRebalanceState, running: true, lastStartedAt: Date.now() };
-    try {
-      const readiness = await ensureScheduleReadyForRestroomRebalance(serviceDate);
-      const balance = await rebalanceRestroomAssignments(serviceDate);
-      const lunch_coverage = await applyLunchCoverageAfterRestroomRebalance(serviceDate);
-      const result = { service_date: serviceDate, reason, readiness, balance, lunch_coverage };
-      const persistent_completion = await markRestroomRebalanceCompletion(serviceDate, result, "completed");
-      restroomRebalanceState = {
-        running: false,
-        lastStartedAt: restroomRebalanceState.lastStartedAt,
-        lastCompletedAt: Date.now(),
-        lastServiceDate: serviceDate,
-        lastResult: { ...result, persistent_completion },
-      };
-      return restroomRebalanceState.lastResult;
-    } catch (error) {
-      const failure = { ok: false, service_date: serviceDate, reason, error: error?.message || String(error || "restroom rebalance failed") };
-      try { await markRestroomRebalanceCompletion(serviceDate, failure, "failed"); } catch {}
-      restroomRebalanceState = { ...restroomRebalanceState, running: false, lastResult: failure };
-      throw error;
-    }
   }
 
   function normalizeAssignmentCapture(row = {}, source = "baseline") {
@@ -4547,13 +4477,6 @@ export function createScheduleRouter({
       fail(res, error, "Restroom rebalance status failed");
     }
   });
-
-  if (RESTROOM_REBALANCE_SWEEP_MS > 0 && typeof runCommand === "function") {
-    setInterval(() => {
-      maybeAutoRestroomRebalance({ reason: "scheduled_interval" })
-        .catch((error) => console.error("9:45 restroom rebalance failed:", error));
-    }, RESTROOM_REBALANCE_SWEEP_MS).unref?.();
-  }
 
   return router;
 }
