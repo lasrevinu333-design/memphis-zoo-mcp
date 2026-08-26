@@ -37,9 +37,9 @@
     },
     "phase_order": [
       "prepare distinct CUSTODIAL_BACKEND_PROOF_SECRET, CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET, and DEVICE_CREDENTIAL_SECRET values (minimum 32 characters each); preserve all phone-local work and require manager-code recovery for any active credential from a different secret generation without exposing any secret",
-      "capture the production catalog through the read-only Supabase boundary and require it to equal the clean 113-migration rebuild fingerprint",
-      "verify production project, converged migration head, catalog/privilege fingerprint, backup receipt, and exact source attestation against release/production-migration-state.json",
-      "require zero pending migrations and never replay the four already-applied release migrations",
+      "capture the production catalog through the read-only Supabase boundary and require it to equal the observed clean 113-migration fingerprint recorded in release/production-migration-state.json",
+      "verify production project, observed migration head, catalog/privilege fingerprint, backup receipt, and exact source attestation against release/production-migration-state.json",
+      "after explicit production-change admission, apply only the one exact pending credential-replacement-lineage migration, then require the clean 114-migration target fingerprint and zero remaining pending migrations without replaying the four already-applied release migrations",
       "deploy the canonical-only backend only after all authoritative procedures above are present and verified; missing canonical writers fail closed",
       "require a green authority health gate and direct-DML denial probes before routing traffic"
     ],

@@ -1,6 +1,6 @@
 {
   "artifact": "production-migration-state.v1",
-  "mode": "already_converged",
+  "mode": "migration_required",
   "project_ref": "rqquvtjdmugpigbndmne",
   "observed_production": {
     "captured_at": "2026-08-25T19:57:03.985359Z",
@@ -20,14 +20,17 @@
     "projection_count": 1,
     "occurrence_count": 452,
     "application_reader_identity_policy_count": 3,
-    "application_reader_credential_select": false
+    "application_reader_credential_select": false,
+    "migration_count": 113
   },
   "target": {
-    "source_migration_file": "20260825174500_rebind_application_reader_release_recovery.sql",
-    "source_migration_name": "rebind_application_reader_release_recovery",
-    "production_ledger_version": "20260825195150",
-    "canonical_schema_fingerprint": "4c79925d31759d7bb51e010f8ed47933e4ab9985df32df8a1592888e2134818e",
-    "public_function_count": 488
+    "source_migration_file": "20260826020000_preserve_offline_work_across_manager_credential_recovery.sql",
+    "source_migration_name": "preserve_offline_work_across_manager_credential_recovery",
+    "source_migration_version": "20260826020000",
+    "production_ledger_version": null,
+    "canonical_schema_fingerprint": "5ecf1ff150759f2316c9f396170276df07ec21fc6ae05847cf0efa696866d246",
+    "public_function_count": 490,
+    "migration_count": 114
   },
   "source_binding": {
     "kind": "external_exact_head_release_attestation",
@@ -43,9 +46,9 @@
     "completed_at": "2026-08-25T19:51:13Z"
   },
   "authorization": {
-    "production_mutation_required": false,
-    "sequence_policy": "no_migration_replay_already_converged",
-    "rollback_policy": "no migration replay or down-migration; preserve the converged ledger, catalog, static-weekly publication, projections and occurrences, and use the reviewed forward recovery inventory while restoring application traffic only through an exact attested backend deployment"
+    "production_mutation_required": true,
+    "sequence_policy": "apply_exact_single_pending_migration_after_release_admission",
+    "rollback_policy": "forward-only migration; preserve the pre-change backup, static-weekly publication, projections, occurrences and all credential evidence; if post-verification fails, keep canary traffic paused and use the reviewed forward recovery inventory rather than down-migrating or deleting replacement lineage"
   },
   "preconditions": [
     "production project_ref equals rqquvtjdmugpigbndmne",
@@ -89,11 +92,21 @@
       "sha256": "68f082382e9d9f05664e034716851121485d95d586b36c6b0714111b314be736"
     }
   ],
-  "pending_migrations": [],
+  "pending_migrations": [
+    {
+      "order": 1,
+      "phase": "preserve_offline_work_across_manager_credential_recovery",
+      "file": "20260826020000_preserve_offline_work_across_manager_credential_recovery.sql",
+      "source_migration_version": "20260826020000",
+      "sha256": "c002a6969cffb359c61250c4b41414fc29a35a3ab1b0ea021aaf7ccbf54fc868"
+    }
+  ],
   "postconditions": [
-    "production ledger remains at the converged application-reader release-recovery head until a separately reviewed migration exists",
-    "production catalog and privilege fingerprint remains 4c79925d31759d7bb51e010f8ed47933e4ab9985df32df8a1592888e2134818e",
-    "production exposes exactly 488 public functions",
+    "production ledger records preserve_offline_work_across_manager_credential_recovery exactly once under the actual applied ledger version",
+    "production catalog and privilege fingerprint equals 5ecf1ff150759f2316c9f396170276df07ec21fc6ae05847cf0efa696866d246",
+    "production exposes exactly 490 public functions across the clean 114-migration authority",
+    "credential replacement lineage is append-only, FORCE-RLS protected and unavailable for direct service-role mutation",
+    "a current confirmed successor credential may transport only frozen predecessor work on the same device while the original employee, device and credential evidence remain immutable",
     "the backend can queue due scan alerts only through the secret-bound custodial_backend_queue_due_scan_alerts wrapper",
     "the restricted application reader can resolve enrolled phone identity but cannot read device credentials, and release recovery preserves its exact 22-column projection plus three FORCE-RLS policies",
     "service_role cannot execute either direct sch_queue_due_scan_alerts overload or the canonical application-reader schedule function",
