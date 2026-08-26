@@ -26,8 +26,8 @@ import {
   getDeviceCredentialSecretReadiness,
   installDeviceCredentialRoutes,
   makeDeviceCredentialMiddleware,
+  prepareVerifiedNativeOfflineWorkArguments,
   verifyNativeDeviceRequestAttestation,
-  verifyNativeOfflineWorkAttestation,
 } from "./auth/device-credential-auth.js";
 import { runReadOnlySql as runSupabaseReadOnlySql } from "./supabase/read.js";
 import { createGeminiConsoleRouter } from "./gemini-console-api.js";
@@ -550,16 +550,10 @@ async function executeScanRpcTransport(fn, args, device, credential, req) {
   const canonicalArgs = canonicalizeScanArguments(normalizedFn, args, device);
   const preparedBase = prepareScanRpcCall(normalizedFn, canonicalArgs);
   if (normalizedFn === "tool_start_offline_occurrence") {
-    const attestation = verifyNativeOfflineWorkAttestation(req, preparedBase.args, "start");
-    preparedBase.args.p_native_start_attestation_version = attestation.version;
-    preparedBase.args.p_native_start_attestation = attestation.signature;
-    preparedBase.args.p_native_scan_entry_id = attestation.native_scan_entry_id;
+    preparedBase.args = prepareVerifiedNativeOfflineWorkArguments(req, preparedBase.args, "start");
     preparedBase.args.p_native_route_proof_secret = nativeRouteProofSecret();
   } else if (normalizedFn === "tool_commit_cleaning_workflow") {
-    const attestation = verifyNativeOfflineWorkAttestation(req, preparedBase.args, "completion");
-    preparedBase.args.p_native_completion_attestation_version = attestation.version;
-    preparedBase.args.p_native_completion_attestation = attestation.signature;
-    preparedBase.args.p_native_finish_scan_entry_id = attestation.native_finish_scan_entry_id;
+    preparedBase.args = prepareVerifiedNativeOfflineWorkArguments(req, preparedBase.args, "completion");
     preparedBase.args.p_native_route_proof_secret = nativeRouteProofSecret();
   }
   const proofBound = bindOfflineActorProof(preparedBase.fn, preparedBase.args, credential);

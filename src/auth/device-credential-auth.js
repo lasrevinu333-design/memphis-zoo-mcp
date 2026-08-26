@@ -14,6 +14,8 @@ const ENROLLMENT_ATTEMPT_LIMIT = 8;
 const enrollmentAttempts = new Map();
 const VALID_POLICY_MODES = new Set(["observe", "enroll", "enforce-ready", "enforce"]);
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const NATIVE_START_TRANSPORT_VERSION = "custodial-native-start-transport.v1";
+const NATIVE_COMPLETION_TRANSPORT_VERSION = "custodial-native-completion-transport.v1";
 
 function truthy(value) {
   return ["1", "true", "yes", "on"].includes(String(value || "").trim().toLowerCase());
@@ -179,11 +181,31 @@ export function verifyNativeOfflineWorkAttestation(req, args, kind) {
     const nativeScanEntryId = String(args.p_native_scan_entry_id || "").trim().toLowerCase();
     if (version !== "custodial-native-start.v1" || !startedAt || !/^[0-9a-f]{64}$/.test(snapshotId)
         || !UUID_PATTERN.test(employeeId) || !Number.isSafeInteger(epoch) || epoch < 1
-        || !UUID_PATTERN.test(snapshotCredentialId) || !UUID_PATTERN.test(nativeScanEntryId)) {
+        || !UUID_PATTERN.test(snapshotCredentialId) || !UUID_PATTERN.test(nativeScanEntryId)
+        || !/^[0-9a-f]{64}$/.test(String(args.p_native_start_attestation || "").trim().toLowerCase())) {
       throw Object.assign(new Error("Complete native start attestation is required."), { status: 403, code: "native_start_attestation_required" });
     }
-    const message = [version, credentialId, deviceId, location, sessionId, snapshotId, employeeId, String(epoch), snapshotCredentialId, nativeScanEntryId, startedAt].join("\n");
-    const signature = verifyNativeHmac(secret, message, args.p_native_start_attestation, "native_start_attestation_invalid");
+    const suppliedSignature = String(args.p_native_start_attestation || "").trim().toLowerCase();
+    const transportVersion = String(args.p_native_start_transport_attestation_version || "").trim();
+    const transportSignature = String(args.p_native_start_transport_attestation || "").trim().toLowerCase();
+    let signature;
+    if (transportVersion || transportSignature) {
+      if (transportVersion !== NATIVE_START_TRANSPORT_VERSION || !/^[0-9a-f]{64}$/.test(transportSignature)) {
+        throw Object.assign(new Error("Complete native recovered-start transport attestation is required."), {
+          status: 403,
+          code: "native_start_transport_attestation_required",
+        });
+      }
+      const transportMessage = [
+        transportVersion, credentialId, deviceId, location, sessionId, snapshotId, employeeId,
+        String(epoch), snapshotCredentialId, nativeScanEntryId, startedAt, version, suppliedSignature,
+      ].join("\n");
+      verifyNativeHmac(secret, transportMessage, transportSignature, "native_start_transport_attestation_invalid");
+      signature = suppliedSignature;
+    } else {
+      const message = [version, credentialId, deviceId, location, sessionId, snapshotId, employeeId, String(epoch), snapshotCredentialId, nativeScanEntryId, startedAt].join("\n");
+      signature = verifyNativeHmac(secret, message, suppliedSignature, "native_start_attestation_invalid");
+    }
     return { version, signature, started_at: startedAt, native_scan_entry_id: nativeScanEntryId };
   }
 
@@ -196,14 +218,55 @@ export function verifyNativeOfflineWorkAttestation(req, args, kind) {
     const startedAt = canonicalNativeTimestamp(args.p_client_started_at);
     const endedAt = canonicalNativeTimestamp(args.p_client_ended_at);
     if (version !== "custodial-native-completion.v2" || !UUID_PATTERN.test(completionId)
-        || !UUID_PATTERN.test(contextId) || !UUID_PATTERN.test(nativeFinishScanEntryId) || !startedAt || !endedAt) {
+        || !UUID_PATTERN.test(contextId) || !UUID_PATTERN.test(nativeFinishScanEntryId) || !startedAt || !endedAt
+        || !/^[0-9a-f]{64}$/.test(String(args.p_native_completion_attestation || "").trim().toLowerCase())) {
       throw Object.assign(new Error("Complete native completion attestation is required."), { status: 403, code: "native_completion_attestation_required" });
     }
-    const message = [version, credentialId, deviceId, location, sessionId, completionId, contextId, nativeFinishScanEntryId, startedAt, endedAt].join("\n");
-    const signature = verifyNativeHmac(secret, message, args.p_native_completion_attestation, "native_completion_attestation_invalid");
+    const suppliedSignature = String(args.p_native_completion_attestation || "").trim().toLowerCase();
+    const transportVersion = String(args.p_native_completion_transport_attestation_version || "").trim();
+    const transportSignature = String(args.p_native_completion_transport_attestation || "").trim().toLowerCase();
+    let signature;
+    if (transportVersion || transportSignature) {
+      if (transportVersion !== NATIVE_COMPLETION_TRANSPORT_VERSION || !/^[0-9a-f]{64}$/.test(transportSignature)) {
+        throw Object.assign(new Error("Complete native recovered-completion transport attestation is required."), {
+          status: 403,
+          code: "native_completion_transport_attestation_required",
+        });
+      }
+      const transportMessage = [
+        transportVersion, credentialId, deviceId, location, sessionId, completionId, contextId,
+        nativeFinishScanEntryId, startedAt, endedAt, version, suppliedSignature,
+      ].join("\n");
+      verifyNativeHmac(secret, transportMessage, transportSignature, "native_completion_transport_attestation_invalid");
+      signature = suppliedSignature;
+    } else {
+      const message = [version, credentialId, deviceId, location, sessionId, completionId, contextId, nativeFinishScanEntryId, startedAt, endedAt].join("\n");
+      signature = verifyNativeHmac(secret, message, suppliedSignature, "native_completion_attestation_invalid");
+    }
     return { version, signature, started_at: startedAt, ended_at: endedAt, context_id: contextId, native_finish_scan_entry_id: nativeFinishScanEntryId };
   }
   throw new Error(`Unsupported native work attestation kind: ${kind}`);
+}
+
+export function prepareVerifiedNativeOfflineWorkArguments(req, args, kind) {
+  const attestation = verifyNativeOfflineWorkAttestation(req, args, kind);
+  const prepared = { ...args };
+  if (kind === "start") {
+    delete prepared.p_native_start_transport_attestation_version;
+    delete prepared.p_native_start_transport_attestation;
+    prepared.p_native_start_attestation_version = attestation.version;
+    prepared.p_native_start_attestation = attestation.signature;
+    prepared.p_native_scan_entry_id = attestation.native_scan_entry_id;
+  } else if (kind === "completion") {
+    delete prepared.p_native_completion_transport_attestation_version;
+    delete prepared.p_native_completion_transport_attestation;
+    prepared.p_native_completion_attestation_version = attestation.version;
+    prepared.p_native_completion_attestation = attestation.signature;
+    prepared.p_native_finish_scan_entry_id = attestation.native_finish_scan_entry_id;
+  } else {
+    throw new Error(`Unsupported native work attestation kind: ${kind}`);
+  }
+  return prepared;
 }
 
 function requestDeviceIdentifier(req) {

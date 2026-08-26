@@ -222,7 +222,7 @@ assert.match(releaseEvidence.compatibility_window.static_weekly_writer_and_devic
 assert.match(dayChangeReconciliation, /static_weekly_v4_begin_day_changes/);
 assert.equal(releaseEvidence.artifact, "integrated-backend-authority-release-evidence.v2");
 assert.equal(releaseEvidence.release_id, "release-2026.07.19.custodial-v3.12");
-assert.equal(releaseEvidence.frontend_commit_sha, "686a6e4d9e40ccae9f95bb66d9755b07ea7235ef");
+assert.equal(releaseEvidence.frontend_commit_sha, "6ac16c58438376f9192853732c1b9b288867436c");
 assert.equal(releaseEvidence.frontend_commit_state, "final_pair_bound");
 assert.equal(releaseEvidence.schema_fingerprint, "5ecf1ff150759f2316c9f396170276df07ec21fc6ae05847cf0efa696866d246");
 assert.equal(releaseEvidence.cutover.source_identity.kind, "external_signed_release_attestation");

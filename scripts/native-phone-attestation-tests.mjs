@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { createHash, createHmac } from "node:crypto";
 import {
+  prepareVerifiedNativeOfflineWorkArguments,
   verifyNativeDeviceRequestAttestation,
   verifyNativeOfflineWorkAttestation,
 } from "../src/auth/device-credential-auth.js";
@@ -20,7 +21,11 @@ const requestPath = "/scan-api/rpc?release_probe=1";
 const requestVersion = "custodial-native-request.v1";
 
 function hmac(message) {
-  return createHmac("sha256", secret).update(message, "utf8").digest("hex");
+  return hmacWith(secret, message);
+}
+
+function hmacWith(key, message) {
+  return createHmac("sha256", key).update(message, "utf8").digest("hex");
 }
 
 function request(overrides = {}) {
@@ -106,17 +111,56 @@ assert.throws(
   "changing the frozen snapshot credential invalidates the native-vault proof",
 );
 const predecessorCredentialId = "523e4567-e89b-42d3-a456-426614174000";
+const predecessorSecret = "native_phone_predecessor_secret_0123456789";
 const recoveredStartArgs = { ...startArgs, p_snapshot_credential_id: predecessorCredentialId };
-recoveredStartArgs.p_native_start_attestation = hmac([
-  recoveredStartArgs.p_native_start_attestation_version, credentialId, "KIOSK_08", "TETM",
+recoveredStartArgs.p_native_start_attestation = hmacWith(predecessorSecret, [
+  recoveredStartArgs.p_native_start_attestation_version, predecessorCredentialId, "KIOSK_08", "TETM",
   recoveredStartArgs.p_client_session_id, recoveredStartArgs.p_snapshot_id, employeeId, "3", predecessorCredentialId,
   recoveredStartArgs.p_native_scan_entry_id,
   recoveredStartArgs.p_client_started_at,
 ].join("\n"));
+recoveredStartArgs.p_native_start_transport_attestation_version = "custodial-native-start-transport.v1";
+recoveredStartArgs.p_native_start_transport_attestation = hmac([
+  recoveredStartArgs.p_native_start_transport_attestation_version, credentialId, "KIOSK_08", "TETM",
+  recoveredStartArgs.p_client_session_id, recoveredStartArgs.p_snapshot_id, employeeId, "3", predecessorCredentialId,
+  recoveredStartArgs.p_native_scan_entry_id, recoveredStartArgs.p_client_started_at,
+  recoveredStartArgs.p_native_start_attestation_version, recoveredStartArgs.p_native_start_attestation,
+].join("\n"));
+const verifiedRecoveredStart = verifyNativeOfflineWorkAttestation(request(), recoveredStartArgs, "start");
+assert.equal(verifiedRecoveredStart.started_at, recoveredStartArgs.p_client_started_at);
 assert.equal(
-  verifyNativeOfflineWorkAttestation(request(), recoveredStartArgs, "start").started_at,
-  recoveredStartArgs.p_client_started_at,
-  "the native boundary preserves a signed predecessor snapshot for SQL lineage verification",
+  verifiedRecoveredStart.signature,
+  recoveredStartArgs.p_native_start_attestation,
+  "a current native transport wrapper must preserve the exact predecessor proof for SQL lineage verification",
+);
+const preparedRecoveredStart = prepareVerifiedNativeOfflineWorkArguments(request(), recoveredStartArgs, "start");
+assert.equal(preparedRecoveredStart.p_native_start_attestation, recoveredStartArgs.p_native_start_attestation);
+assert.equal("p_native_start_transport_attestation" in preparedRecoveredStart, false);
+assert.equal("p_native_start_transport_attestation_version" in preparedRecoveredStart, false);
+assert.throws(
+  () => verifyNativeOfflineWorkAttestation(request(), {
+    ...recoveredStartArgs,
+    p_native_start_transport_attestation: undefined,
+  }, "start"),
+  (error) => error?.code === "native_start_transport_attestation_required",
+  "a partial recovered-start transport wrapper must fail closed",
+);
+assert.throws(
+  () => verifyNativeOfflineWorkAttestation(request(), {
+    ...recoveredStartArgs,
+    p_native_start_transport_attestation_version: undefined,
+    p_native_start_transport_attestation: undefined,
+  }, "start"),
+  (error) => error?.code === "native_start_attestation_invalid",
+  "a predecessor proof cannot be replayed as if the successor had originally signed it",
+);
+assert.throws(
+  () => verifyNativeOfflineWorkAttestation(request(), {
+    ...recoveredStartArgs,
+    p_native_start_attestation: "f".repeat(64),
+  }, "start"),
+  (error) => error?.code === "native_start_transport_attestation_invalid",
+  "the successor wrapper must bind the exact frozen predecessor start proof",
 );
 
 const completionArgs = {
@@ -135,6 +179,55 @@ completionArgs.p_native_completion_attestation = hmac([
   completionArgs.p_client_started_at, completionArgs.p_client_ended_at,
 ].join("\n"));
 assert.equal(verifyNativeOfflineWorkAttestation(request(), completionArgs, "completion").ended_at, completionArgs.p_client_ended_at);
+const recoveredCompletionArgs = { ...completionArgs };
+recoveredCompletionArgs.p_native_completion_attestation = hmacWith(predecessorSecret, [
+  recoveredCompletionArgs.p_native_completion_attestation_version, predecessorCredentialId, "KIOSK_08", "TETM",
+  recoveredCompletionArgs.p_client_session_id, recoveredCompletionArgs.p_client_completion_id, contextId, finishScanEntryId,
+  recoveredCompletionArgs.p_client_started_at, recoveredCompletionArgs.p_client_ended_at,
+].join("\n"));
+recoveredCompletionArgs.p_native_completion_transport_attestation_version = "custodial-native-completion-transport.v1";
+recoveredCompletionArgs.p_native_completion_transport_attestation = hmac([
+  recoveredCompletionArgs.p_native_completion_transport_attestation_version, credentialId, "KIOSK_08", "TETM",
+  recoveredCompletionArgs.p_client_session_id, recoveredCompletionArgs.p_client_completion_id, contextId, finishScanEntryId,
+  recoveredCompletionArgs.p_client_started_at, recoveredCompletionArgs.p_client_ended_at,
+  recoveredCompletionArgs.p_native_completion_attestation_version, recoveredCompletionArgs.p_native_completion_attestation,
+].join("\n"));
+const verifiedRecoveredCompletion = verifyNativeOfflineWorkAttestation(request(), recoveredCompletionArgs, "completion");
+assert.equal(verifiedRecoveredCompletion.ended_at, recoveredCompletionArgs.p_client_ended_at);
+assert.equal(
+  verifiedRecoveredCompletion.signature,
+  recoveredCompletionArgs.p_native_completion_attestation,
+  "a current native transport wrapper must preserve the exact predecessor completion proof",
+);
+const preparedRecoveredCompletion = prepareVerifiedNativeOfflineWorkArguments(request(), recoveredCompletionArgs, "completion");
+assert.equal(preparedRecoveredCompletion.p_native_completion_attestation, recoveredCompletionArgs.p_native_completion_attestation);
+assert.equal("p_native_completion_transport_attestation" in preparedRecoveredCompletion, false);
+assert.equal("p_native_completion_transport_attestation_version" in preparedRecoveredCompletion, false);
+assert.throws(
+  () => verifyNativeOfflineWorkAttestation(request(), {
+    ...recoveredCompletionArgs,
+    p_native_completion_transport_attestation_version: undefined,
+  }, "completion"),
+  (error) => error?.code === "native_completion_transport_attestation_required",
+  "a partial recovered-completion transport wrapper must fail closed",
+);
+assert.throws(
+  () => verifyNativeOfflineWorkAttestation(request(), {
+    ...recoveredCompletionArgs,
+    p_native_completion_transport_attestation_version: undefined,
+    p_native_completion_transport_attestation: undefined,
+  }, "completion"),
+  (error) => error?.code === "native_completion_attestation_invalid",
+  "a predecessor completion proof requires its current-successor transport wrapper",
+);
+assert.throws(
+  () => verifyNativeOfflineWorkAttestation(request(), {
+    ...recoveredCompletionArgs,
+    p_native_completion_attestation: "e".repeat(64),
+  }, "completion"),
+  (error) => error?.code === "native_completion_transport_attestation_invalid",
+  "the successor wrapper must bind the exact frozen predecessor completion proof",
+);
 assert.throws(
   () => verifyNativeOfflineWorkAttestation(request(), { ...completionArgs, p_client_completion_id: "not-a-uuid" }, "completion"),
   (error) => error?.code === "native_completion_attestation_required",
