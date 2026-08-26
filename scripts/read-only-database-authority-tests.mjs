@@ -44,6 +44,10 @@ const messengerRuntimeReadMigration = await readFile(new URL(
   "../supabase/migrations/20260826155000_restore_application_reader_messenger_runtime.sql",
   import.meta.url,
 ), "utf8");
+const employeeEventsRuntimeReadMigration = await readFile(new URL(
+  "../supabase/migrations/20260826160000_restore_application_reader_employee_events_runtime.sql",
+  import.meta.url,
+), "utf8");
 const readSource = await readFile(new URL("../src/supabase/read.js", import.meta.url), "utf8");
 const indexSource = await readFile(new URL("../src/index.js", import.meta.url), "utf8");
 const supabaseRootCa = await readFile(new URL("../certs/supabase-root-2021-ca.pem", import.meta.url), "utf8");
@@ -77,6 +81,16 @@ assert.doesNotMatch(
   messengerRuntimeReadMigration,
   /grant select on table public\.msg_(?:message_audit|message_deletions|broadcasts|broadcast_recipients|hidden_threads_by_device)/i,
   "audit, deletion, broadcast, and device-hidden Messenger tables must remain outside the runtime reader",
+);
+assert.match(
+  employeeEventsRuntimeReadMigration,
+  /grant select on table public\.events_app_events to custodial_application_reader/i,
+  "Employee Events must restore its exact reviewed runtime relation projection",
+);
+assert.doesNotMatch(
+  employeeEventsRuntimeReadMigration,
+  /grant select on table public\.(?:events_app_event_history|event_default_rules|event_area_aliases)/i,
+  "Employee Events must not broaden the reader into audit or parser authority",
 );
 assert.equal(
   new X509Certificate(supabaseRootCa).fingerprint256.replaceAll(":", "").toLowerCase(),
@@ -234,6 +248,18 @@ create table public.msg_message_audit(
   id uuid primary key,
   private_audit_payload jsonb not null
 );
+create table public.events_app_events(
+  id uuid primary key,
+  event_name text not null
+);
+create table public.location_groups(
+  id uuid primary key,
+  group_name text not null
+);
+create table public.event_venues(
+  id uuid primary key,
+  display_name text not null
+);
 create table public.custodial_session_corrections(id uuid primary key);
 create view public.v_custodial_cleaning_session_truth as select id from public.custodial_session_corrections;
 create schema cron;
@@ -276,6 +302,12 @@ alter table public.msg_memphis_thread_context enable row level security;
 alter table public.msg_memphis_thread_context force row level security;
 alter table public.msg_message_audit enable row level security;
 alter table public.msg_message_audit force row level security;
+alter table public.events_app_events enable row level security;
+alter table public.events_app_events force row level security;
+alter table public.location_groups enable row level security;
+alter table public.location_groups force row level security;
+alter table public.event_venues enable row level security;
+alter table public.event_venues force row level security;
 insert into public.read_fixture values (1,'visible');
 insert into public.rls_fixture values (1);
 insert into public.employees(id,employee_code,display_name,active,role,notes)
@@ -300,6 +332,12 @@ insert into public.msg_memphis_thread_context(thread_id,context_json)
 values ('66666666-6666-4666-8666-666666666666','{"fixture":true}'::jsonb);
 insert into public.msg_message_audit(id,private_audit_payload)
 values ('99999999-9999-4999-8999-999999999999','{"must":"remain hidden"}'::jsonb);
+insert into public.events_app_events(id,event_name)
+values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','Zoo Lights');
+insert into public.location_groups(id,group_name)
+values ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','Zoo Footprint');
+insert into public.event_venues(id,display_name)
+values ('cccccccc-cccc-4ccc-8ccc-cccccccccccc','Zoo Footprint');
 
 create or replace function public.run_sql_readonly(text) returns jsonb
 language plpgsql security definer as $$ begin return '[]'::jsonb; end $$;
@@ -438,6 +476,7 @@ try {
   await psql(deviceIdentityReadMigration);
   await psql(deviceCredentialFenceMigration);
   await psql(messengerRuntimeReadMigration);
+  await psql(employeeEventsRuntimeReadMigration);
   await psql("create table public.reader_future_fixture(id integer primary key);");
   await psql(String.raw`
     create role custodial_readonly_test login password 'read-test-only' inherit;
@@ -597,6 +636,18 @@ try {
   assert.deepEqual(memphisContext.rows, [{ context: { fixture: true } }],
     "the Messenger context reader must work through its FORCE-RLS table");
 
+  const employeeEvents = await runReadOnlySql({ pool, sql: `
+    select e.event_name,lg.group_name,ev.display_name
+    from public.events_app_events e
+    cross join public.location_groups lg
+    cross join public.event_venues ev
+  ` });
+  assert.deepEqual(employeeEvents.rows, [{
+    event_name: "Zoo Lights",
+    group_name: "Zoo Footprint",
+    display_name: "Zoo Footprint",
+  }], "the enrolled-phone Events projection must remain readable through FORCE RLS");
+
   await assert.rejects(
     () => runReadOnlySql({ pool, sql: "select notes from public.devices" }),
     (error) => error?.code === "42501",
@@ -663,6 +714,13 @@ try {
           and p.polcmd='r' and p.polpermissive and pg_get_expr(p.polqual,p.polrelid)='true'
       ),
       'messenger_audit_select',has_table_privilege('custodial_application_reader','public.msg_message_audit','select'),
+      'employee_events_policy_count',(
+        select count(*)
+        from pg_policy p
+        where p.polrelid in ('public.events_app_events'::regclass,'public.location_groups'::regclass,'public.event_venues'::regclass)
+          and (select oid from pg_roles where rolname='custodial_application_reader')=any(p.polroles)
+          and p.polcmd='r' and p.polpermissive and pg_get_expr(p.polqual,p.polrelid)='true'
+      ),
       'service_proxy',has_function_privilege('service_role','public.run_sql_readonly(text)','execute')
     )::text
     from pg_roles r where r.rolname='custodial_application_reader';
@@ -684,6 +742,7 @@ try {
     messenger_runtime_select_count: 8,
     messenger_runtime_policy_count: 8,
     messenger_audit_select: false,
+    employee_events_policy_count: 3,
     service_proxy: false,
   });
 

@@ -45855,6 +45855,18 @@
       "using_expression": "true"
     },
     {
+      "check_expression": null,
+      "command_code": "r",
+      "permissive": true,
+      "policy_name": "custodial_application_reader_event_venues_runtime",
+      "roles": [
+        "custodial_application_reader"
+      ],
+      "schema_name": "public",
+      "table_name": "event_venues",
+      "using_expression": "true"
+    },
+    {
       "check_expression": "true",
       "command_code": "*",
       "permissive": true,
@@ -45882,6 +45894,18 @@
       "check_expression": null,
       "command_code": "r",
       "permissive": true,
+      "policy_name": "custodial_application_reader_events_app_events_runtime",
+      "roles": [
+        "custodial_application_reader"
+      ],
+      "schema_name": "public",
+      "table_name": "events_app_events",
+      "using_expression": "true"
+    },
+    {
+      "check_expression": null,
+      "command_code": "r",
+      "permissive": true,
       "policy_name": "events_app_events_authed_read",
       "roles": [
         "authenticated"
@@ -45900,6 +45924,18 @@
       ],
       "schema_name": "public",
       "table_name": "events_app_events",
+      "using_expression": "true"
+    },
+    {
+      "check_expression": null,
+      "command_code": "r",
+      "permissive": true,
+      "policy_name": "custodial_application_reader_location_groups_events_runtime",
+      "roles": [
+        "custodial_application_reader"
+      ],
+      "schema_name": "public",
+      "table_name": "location_groups",
       "using_expression": "true"
     },
     {
