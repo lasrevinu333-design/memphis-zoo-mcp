@@ -102,8 +102,21 @@ assert.throws(
 );
 assert.throws(
   () => verifyNativeOfflineWorkAttestation(request(), { ...startArgs, p_snapshot_credential_id: "523e4567-e89b-42d3-a456-426614174000" }, "start"),
-  (error) => error?.code === "native_start_attestation_required",
-  "snapshot authority must match the authenticated credential before SQL binding",
+  (error) => error?.code === "native_start_attestation_invalid",
+  "changing the frozen snapshot credential invalidates the native-vault proof",
+);
+const predecessorCredentialId = "523e4567-e89b-42d3-a456-426614174000";
+const recoveredStartArgs = { ...startArgs, p_snapshot_credential_id: predecessorCredentialId };
+recoveredStartArgs.p_native_start_attestation = hmac([
+  recoveredStartArgs.p_native_start_attestation_version, credentialId, "KIOSK_08", "TETM",
+  recoveredStartArgs.p_client_session_id, recoveredStartArgs.p_snapshot_id, employeeId, "3", predecessorCredentialId,
+  recoveredStartArgs.p_native_scan_entry_id,
+  recoveredStartArgs.p_client_started_at,
+].join("\n"));
+assert.equal(
+  verifyNativeOfflineWorkAttestation(request(), recoveredStartArgs, "start").started_at,
+  recoveredStartArgs.p_client_started_at,
+  "the native boundary preserves a signed predecessor snapshot for SQL lineage verification",
 );
 
 const completionArgs = {

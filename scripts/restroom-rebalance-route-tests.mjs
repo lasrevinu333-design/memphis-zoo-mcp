@@ -46,6 +46,16 @@ function buildApp({ readCalls, writeCalls, rpcCalls }) {
     runReadOnlySql: async (sql) => {
       const query = String(sql || "");
       readCalls.push(query);
+      if (query.includes("static_weekly_v6_schedule_authority_state")) {
+        return [{
+          governed: true,
+          authority_source: "static_weekly_projection",
+          projection_status: "current",
+          version_id: "10000000-0000-4000-8000-000000000001",
+          publication_id: "10000000-0000-4000-8000-000000000002",
+          projection_id: "10000000-0000-4000-8000-000000000003",
+        }];
+      }
       if (query.includes("select public.sch_service_date(now())::text as service_date")) {
         return [{ service_date: SERVICE_DATE }];
       }
@@ -146,6 +156,48 @@ assert.ok(
   readCalls.some((sql) => sql.includes("public.sch_service_date(now())::text as service_date")),
   "the scheduler must request an ISO text service date instead of relying on driver DATE parsing",
 );
+
+const staleWriteCalls = [];
+const staleRpcCalls = [];
+const staleApp = express();
+staleApp.use(express.json());
+staleApp.use("/schedule-api", createScheduleRouter({
+  runReadOnlySql: async (sql) => {
+    if (String(sql).includes("static_weekly_v6_schedule_authority_state")) {
+      return [{
+        governed: true,
+        authority_source: "static_weekly_projection",
+        projection_status: "stale_staffing_change",
+        version_id: "20000000-0000-4000-8000-000000000001",
+        publication_id: "20000000-0000-4000-8000-000000000002",
+        projection_id: "20000000-0000-4000-8000-000000000003",
+      }];
+    }
+    throw new Error(`stale authority reached a downstream read: ${sql}`);
+  },
+  runRpc: async (functionName, args) => { staleRpcCalls.push({ functionName, args }); return {}; },
+  runCommand: async (namePrefix, payload) => { staleWriteCalls.push({ namePrefix, payload }); return {}; },
+  buildHealthPayload: () => ({ ok: true }),
+  requireAdminApiAuth: (_req, _res, next) => next(),
+  appVersion: "stale-route-test",
+  releaseId: "stale-route-test",
+  contractVersion: "schedule.stale-route-test",
+}));
+await withServer(staleApp, async (baseUrl) => {
+  for (const path of ["restroom-rebalance/run", "manual-absences/publish", "absence-publish"]) {
+    const response = await fetch(`${baseUrl}/schedule-api/${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ service_date: SERVICE_DATE, absent_employee_ids: [EMPLOYEE_A] }),
+    });
+    assert.equal(response.status, 503, `${path} must fail closed on a stale weekly projection`);
+    const payload = await response.json();
+    assert.equal(payload.code, "weekly_schedule_rebuild_required");
+    assert.equal(payload.readiness.projection_status, "stale_staffing_change");
+  }
+});
+assert.equal(staleWriteCalls.length, 0, "stale weekly authority must reach no operational command");
+assert.equal(staleRpcCalls.length, 0, "stale weekly authority must reach no scheduler RPC");
 
 console.log(JSON.stringify({
   ok: true,

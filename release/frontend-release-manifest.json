@@ -3,11 +3,11 @@
   "frontend_commit_sha": "a2e2965ee458d4ce96845672918bd232f39059ca",
   "frontend_commit_state": "final_pair_bound",
   "backend_minimum_version": "release-2026.07.19.custodial-v3.12",
-  "schema_fingerprint": "4c79925d31759d7bb51e010f8ed47933e4ab9985df32df8a1592888e2134818e",
+  "schema_fingerprint": "5ecf1ff150759f2316c9f396170276df07ec21fc6ae05847cf0efa696866d246",
   "schema_transition": {
     "transition_id": "application-reader-release-recovery-20260825",
     "from_fingerprint": "0c3cd0cb822f147842d5c09a2bc15ffae41401956b7664f2ccfaedd13b79d527",
-    "to_fingerprint": "4c79925d31759d7bb51e010f8ed47933e4ab9985df32df8a1592888e2134818e",
+    "to_fingerprint": "5ecf1ff150759f2316c9f396170276df07ec21fc6ae05847cf0efa696866d246",
     "expires_at": "2026-09-03T23:59:59Z"
   },
   "api_contract_versions": {

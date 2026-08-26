@@ -483,9 +483,9 @@ function bindOfflineActorProof(fn, args, credential) {
   }
   if (normalizedFn === "tool_start_offline_occurrence") {
     nextArgs.p_authenticated_credential_id = credential.credential_id;
-    // Credential identity is authenticated server-side; never accept a
-    // client-provided snapshot credential as authority.
-    nextArgs.p_snapshot_credential_id = credential.credential_id;
+    // The native-vault HMAC binds the frozen snapshot credential separately
+    // from the current transport credential. SQL accepts a difference only
+    // through an explicit manager-enrollment successor lineage on this device.
     nextArgs.p_backend_execution_secret = secret;
     return { fn: normalizedFn, args: nextArgs };
   }

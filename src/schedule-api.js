@@ -677,6 +677,22 @@ export function createScheduleRouter({
     throw error;
   }
 
+  async function assertScheduleReadyForMutation(serviceDate) {
+    const readiness = await assertScheduleReadyForRead(serviceDate);
+    if (readiness.source === "static_weekly_projection" && readiness.projection_status === "current") {
+      return readiness;
+    }
+    const error = new Error("Publish the weekly schedule before changing today's operational coverage.");
+    error.status = 409;
+    error.code = "static_weekly_authority_required";
+    error.readiness = {
+      service_date: String(serviceDate || ""),
+      source: readiness.source || "legacy_daily_schedule",
+      projection_status: readiness.projection_status || "legacy_ungoverned",
+    };
+    throw error;
+  }
+
   async function loadCanonicalScheduleSegments(serviceDate, employeeId = "") {
     const employeeClause = employeeId
       ? `where assigned_employee_id = '${esc(employeeId)}'::uuid`
@@ -1826,12 +1842,13 @@ export function createScheduleRouter({
   }
 
   async function ensureScheduleReadyForRestroomRebalance(serviceDate) {
+    const authority = await assertScheduleReadyForMutation(serviceDate);
     const state = await getDailyGenerationState(serviceDate);
-    if (state.assignment_count > 0 && state.roster_count > 0) return { generated: false, state };
+    if (state.assignment_count > 0 && state.roster_count > 0) return { generated: false, state, authority };
     const generate_result = await runRpc("sch_generate_daily_schedule", { p_service_date: serviceDate, p_force: false });
     const static_restore_result = await restoreStaticOwnersForDate(serviceDate);
     const after = await getDailyGenerationState(serviceDate);
-    return { generated: true, state: after, generate_result, static_restore_result };
+    return { generated: true, state: after, authority, generate_result, static_restore_result };
   }
 
   async function getRestroomRebalanceCompletion(serviceDate) {
@@ -4063,6 +4080,7 @@ export function createScheduleRouter({
   router.post("/generate-daily", requireSchedulePin, async (req, res) => {
     try {
       const serviceDate = requireDate(req.body?.service_date || req.body?.date || (await getServiceDate()));
+      await assertScheduleReadyForMutation(serviceDate);
       const force = req.body?.force !== false;
       const data = await runRpc("sch_generate_daily_schedule", { p_service_date: serviceDate, p_force: force });
       const static_restore_result = await restoreStaticOwnersForDate(serviceDate);
@@ -4196,6 +4214,9 @@ export function createScheduleRouter({
     try {
       const serviceDate = requireDate(req.body?.service_date || req.body?.date || (await getServiceDate()));
       const days = Math.max(1, Math.min(14, Number.parseInt(String(req.body?.days || 7), 10) || 7));
+      for (let offset = 0; offset < days; offset += 1) {
+        await assertScheduleReadyForMutation(addDaysToIsoDate(serviceDate, offset));
+      }
       const force = req.body?.force !== false;
       const generated_days = await ensureScheduleRange(serviceDate, days, { force });
       const schedule_audits = [];
@@ -4211,6 +4232,7 @@ export function createScheduleRouter({
   router.post("/manual-absences/publish", requireSchedulePin, async (req, res) => {
     try {
       const serviceDate = requireDate(req.body?.service_date || req.body?.date || (await getServiceDate()));
+      await assertScheduleReadyForMutation(serviceDate);
       const explicit = normalizeUuidList(req.body?.absent_employee_ids || []);
       const requestedCoverAllSlots = Array.isArray(req.body?.coverall_slots) ? req.body.coverall_slots : [];
       let coverallPlan = await buildCoverAllPlan(serviceDate, explicit);
@@ -4263,6 +4285,7 @@ export function createScheduleRouter({
   router.post("/manual-absences/return", requireSchedulePin, async (req, res) => {
     try {
       const serviceDate = requireDate(req.body?.service_date || req.body?.date || (await getServiceDate()));
+      await assertScheduleReadyForMutation(serviceDate);
       const employeeRef = String(
         req.body?.employee_id ||
         req.body?.employee ||
@@ -4354,6 +4377,7 @@ export function createScheduleRouter({
   router.post("/absence-preview", requireSchedulePin, async (req, res) => {
     try {
       const serviceDate = requireDate(req.body?.service_date || req.body?.date || (await getServiceDate()));
+      await assertScheduleReadyForMutation(serviceDate);
       const absenceSet = await mergeExplicitAndPtoAbsences(serviceDate, req.body?.absent_employee_ids || []);
       const absentIdsSql = uuidArrayLiteral(absenceSet.merged);
       const initialState = await getDailyGenerationState(serviceDate);
@@ -4393,6 +4417,7 @@ export function createScheduleRouter({
   router.post("/absence-publish", requireSchedulePin, async (req, res) => {
     try {
       const serviceDate = requireDate(req.body?.service_date || req.body?.date || (await getServiceDate()));
+      await assertScheduleReadyForMutation(serviceDate);
       const explicitIds = normalizeUuidList(req.body?.absent_employee_ids || []);
       let coverallPlan = await buildCoverAllPlan(serviceDate, explicitIds);
       const absenceSet = await mergeExplicitAndPtoAbsences(serviceDate, explicitIds);

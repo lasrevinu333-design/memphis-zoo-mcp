@@ -72,10 +72,19 @@ function jsonSql({ session, completion, context, proof, device, location, creden
 let snapshot;
 const snapshotsByDevice = new Map();
 const nativeScanEntries = new Map();
-async function activate({ device, location, session, start = startedAt, credential = credentialA, authoritySnapshot = snapshotsByDevice.get(device) || snapshot, nativeScanEntry = null }) {
+async function activate({
+  device,
+  location,
+  session,
+  start = startedAt,
+  credential = credentialA,
+  snapshotCredential = credential,
+  authoritySnapshot = snapshotsByDevice.get(device) || snapshot,
+  nativeScanEntry = null,
+}) {
   const entry = nativeScanEntry || nativeScanEntries.get(session) || randomUUID();
   if (!nativeScanEntries.has(session)) nativeScanEntries.set(session, entry);
-  return JSON.parse(await sql(`select public.tool_start_offline_occurrence(${q(device)},${q(location)},${q(session)},${q(start)},${q(authoritySnapshot.snapshot_id)},${q(authoritySnapshot.employee_id)},${authoritySnapshot.assignment_epoch},${q(credential)},${q(credential)},${q(entry)},'custodial-native-start.v1',${q(nativeStartSignature)},${q(nativeRouteSecret)},${q(execSecret)})::text;`));
+  return JSON.parse(await sql(`select public.tool_start_offline_occurrence(${q(device)},${q(location)},${q(session)},${q(start)},${q(authoritySnapshot.snapshot_id)},${q(authoritySnapshot.employee_id)},${authoritySnapshot.assignment_epoch},${q(snapshotCredential)},${q(credential)},${q(entry)},'custodial-native-start.v1',${q(nativeStartSignature)},${q(nativeRouteSecret)},${q(execSecret)})::text;`));
 }
 async function claimNotifications(workerId, limit = 50) {
   return JSON.parse(await sql(`select coalesce(jsonb_agg(to_jsonb(n)),'[]'::jsonb)::text from public.custodial_claim_offline_reconciliation_notifications(${q(workerId)},${limit},15,${q(execSecret)}) n;`));
@@ -314,6 +323,109 @@ const delayedCompletion = JSON.parse(await sql(jsonSql({
 assert.equal(delayedCompletion.status, "closed", "delayed first-sync work remains committable");
 assert.equal(await sql(`select employee_id::text from public.sessions where client_session_id=${q(delayedSession)};`), employeeA,
   "durable session preserves A after the phone is reassigned to B");
+
+// The actual protected-phone recovery route uses the resumable enrollment
+// operation, not the older direct consume function. A manager-authorized
+// successor credential must be able to transmit work frozen under its exact
+// predecessor while the durable actor context continues to name the original
+// credential. Unrelated credentials on the same phone must remain fenced.
+const successorDevice = randomUUID();
+const predecessorCredential = randomUUID();
+const successorCredential = randomUUID();
+const unlineagedCredential = randomUUID();
+const successorLocation = randomUUID();
+const successorLocationCode = `OA${stamp}S`.toUpperCase();
+const successorDeviceCode = `OA-${stamp}-S`;
+const enrollmentOperation = randomUUID();
+const enrollmentCodeHash = createHash("sha256").update(`offline-successor-code:${stamp}`).digest("hex");
+const successorTokenHash = createHash("sha256").update(`offline-successor-token:${stamp}`).digest("hex");
+await sql(`insert into public.locations(id,location_code,location_name,location_type,active,form_type,notes)
+  values('${successorLocation}'::uuid,${q(successorLocationCode)},'Offline Successor Location','restroom',true,'restroom','disposable successor test');
+  insert into public.devices(id,device_id,device_name,active,assigned_employee_id,notes)
+  values('${successorDevice}'::uuid,${q(successorDeviceCode)},'Offline Successor Device',true,'${employeeA}'::uuid,'disposable successor test');
+  insert into public.device_auth_credentials(credential_id,device_id,token_hash,device_label,confirmed_at,expires_at,metadata_json)
+  values('${predecessorCredential}'::uuid,'${successorDevice}'::uuid,
+    ${q(createHash("sha256").update(`offline-predecessor:${stamp}`).digest("hex"))},'predecessor',now(),now()+interval '30 days','{}'::jsonb);
+  insert into public.custodial_employee_device_assignment_history(device_id,device_identifier,new_employee_id,new_employee_name,change_reason,source)
+  values('${successorDevice}'::uuid,${q(successorDeviceCode)},'${employeeA}'::uuid,'Offline Authority Actor A','successor fixture','test');`);
+const predecessorSnapshot = JSON.parse(await sql(`select public.tool_get_offline_scan_authority_snapshot(
+  ${q(successorDeviceCode)},'${predecessorCredential}'::text,${q(execSecret)})::text;`));
+const successorStartedAt = new Date(Date.parse(predecessorSnapshot.generated_at) + 1).toISOString();
+const successorEndedAt = new Date(Date.parse(predecessorSnapshot.generated_at) + 2).toISOString();
+await sql(`insert into public.device_auth_enrollment_codes(device_id,code_hash,created_by,expires_at,metadata_json)
+  values('${successorDevice}'::uuid,${q(enrollmentCodeHash)},'offline successor database test',now()+interval '30 minutes','{}'::jsonb);`);
+const enrollmentCommit = JSON.parse(await sql(`select public.device_auth_consume_enrollment_operation(
+  '${enrollmentOperation}'::uuid,'recovery','${successorDevice}'::uuid,${q(enrollmentCodeHash)},${q("d".repeat(64))},
+  '${successorCredential}'::uuid,${q(successorTokenHash)},'Recovered protected phone',now()+interval '30 days',
+  ${q("x".repeat(96))},${q("i".repeat(24))},${q("t".repeat(24))},now()+interval '30 minutes',
+  'aes-256-gcm.v1',null,null,'{"offline_successor_test":true}'::jsonb
+)::text;`));
+assert.equal(enrollmentCommit.ok, true, "resumable manager recovery commits the successor credential");
+const enrollmentConfirm = JSON.parse(await sql(`select public.device_auth_confirm_enrollment_operation(
+  '${enrollmentOperation}'::uuid,'${successorDevice}'::uuid,'${successorCredential}'::uuid,${q(successorTokenHash)}
+)::text;`));
+assert.equal(enrollmentConfirm.ok, true, "native recovery confirmation activates the successor credential");
+assert.equal(await sql(`select count(*) from public.custodial_device_credential_replacements
+  where device_id='${successorDevice}'::uuid
+    and predecessor_credential_id='${predecessorCredential}'::uuid
+    and successor_credential_id='${successorCredential}'::uuid;`), "1",
+"the primary resumable recovery route atomically records predecessor-to-successor lineage");
+
+const successorSession = `oa-${stamp}-credential-successor`;
+const successorActivation = await activate({
+  device: successorDeviceCode,
+  location: successorLocationCode,
+  session: successorSession,
+  start: successorStartedAt,
+  credential: successorCredential,
+  snapshotCredential: predecessorCredential,
+  authoritySnapshot: predecessorSnapshot,
+});
+assert.equal(successorActivation.employee_id, employeeA,
+  "the successor transports work under the original employee snapshot");
+assert.equal(await sql(`select credential_id::text from public.custodial_offline_actor_contexts
+  where context_id='${successorActivation.context_id}'::uuid;`), predecessorCredential,
+"the frozen actor context preserves the predecessor credential as original evidence");
+const successorCompletion = JSON.parse(await sql(jsonSql({
+  session: successorSession,
+  completion: `${successorSession}-complete`,
+  context: successorActivation.context_id,
+  proof: successorActivation.submission_proof,
+  device: successorDeviceCode,
+  location: successorLocationCode,
+  credential: successorCredential,
+  start: successorStartedAt,
+  end: successorEndedAt,
+  response: {},
+  correlation: `${successorSession}-correlation`,
+})));
+assert.equal(successorCompletion.status, "closed",
+  "the successor submits exactly one completion without losing predecessor evidence");
+assert.equal(await sql(`select credential_id::text from public.custodial_offline_reconciliation_records
+  where client_completion_id='${completionUuid(`${successorSession}-complete`)}';`), predecessorCredential,
+"reconciliation retains the original credential rather than rewriting history to the successor");
+
+await sql(`update public.device_auth_credentials
+    set revoked_at=now(),revoked_reason='unlineaged credential negative test'
+    where credential_id='${successorCredential}'::uuid;
+  insert into public.device_auth_credentials(credential_id,device_id,token_hash,device_label,confirmed_at,expires_at,metadata_json)
+  values('${unlineagedCredential}'::uuid,'${successorDevice}'::uuid,
+    ${q(createHash("sha256").update(`offline-unlineaged:${stamp}`).digest("hex"))},'unlineaged',now(),now()+interval '30 days','{}'::jsonb);`);
+const unlineagedReplay = JSON.parse(await sql(jsonSql({
+  session: successorSession,
+  completion: `${successorSession}-complete`,
+  context: successorActivation.context_id,
+  proof: successorActivation.submission_proof,
+  device: successorDeviceCode,
+  location: successorLocationCode,
+  credential: unlineagedCredential,
+  start: successorStartedAt,
+  end: successorEndedAt,
+  response: {},
+  correlation: `${successorSession}-correlation`,
+})));
+assert.equal(unlineagedReplay.reason, "context_binding_mismatch",
+  "an unlineaged same-device credential is rejected before exact completion replay");
 
 // The phone may remain fully offline through both start and completion. A
 // subsequently revoked credential still proves work that began first, but it

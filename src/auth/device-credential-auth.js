@@ -179,7 +179,7 @@ export function verifyNativeOfflineWorkAttestation(req, args, kind) {
     const nativeScanEntryId = String(args.p_native_scan_entry_id || "").trim().toLowerCase();
     if (version !== "custodial-native-start.v1" || !startedAt || !/^[0-9a-f]{64}$/.test(snapshotId)
         || !UUID_PATTERN.test(employeeId) || !Number.isSafeInteger(epoch) || epoch < 1
-        || snapshotCredentialId !== credentialId || !UUID_PATTERN.test(nativeScanEntryId)) {
+        || !UUID_PATTERN.test(snapshotCredentialId) || !UUID_PATTERN.test(nativeScanEntryId)) {
       throw Object.assign(new Error("Complete native start attestation is required."), { status: 403, code: "native_start_attestation_required" });
     }
     const message = [version, credentialId, deviceId, location, sessionId, snapshotId, employeeId, String(epoch), snapshotCredentialId, nativeScanEntryId, startedAt].join("\n");
@@ -864,7 +864,13 @@ export async function authenticateDeviceCredentialRequest(req, {
         }));
       } else {
         const lastUsedMs = Date.parse(String(row.last_used_at || row.confirmed_at || row.created_at || ""));
-        if (!Number.isFinite(lastUsedMs) || now.getTime() - lastUsedMs > 5 * 60 * 1000) {
+        if (!recordedSecretKeyId) {
+          // Secret-generation metadata is an admission fact, not usage
+          // telemetry. Persist it synchronously on the first successful proof
+          // even inside the ordinary five-minute write-throttle window.
+          await store.touchCredential(row.credential_id, fingerprintPatch);
+          credential = { ...row, ...fingerprintPatch };
+        } else if (!Number.isFinite(lastUsedMs) || now.getTime() - lastUsedMs > 5 * 60 * 1000) {
           void store.touchCredential(row.credential_id, fingerprintPatch)
             .catch((error) => console.warn("device credential touch failed:", error?.message || error));
           credential = { ...row, ...fingerprintPatch };

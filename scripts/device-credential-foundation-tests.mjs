@@ -173,6 +173,23 @@ assert.equal(
   "a successfully proven legacy credential must be stamped with the current secret generation",
 );
 
+const recentlyUsedLegacyCredentialStore = storeFor({
+  mode: "enforce",
+  credential: { ...credential, last_used_at: "2026-07-15T20:59:00.000Z" },
+});
+result = await authenticateDeviceCredentialRequest(request({ cookie }), {
+  env, store: recentlyUsedLegacyCredentialStore, runReadOnlySql: resolver,
+  now: new Date("2026-07-15T21:00:00.000Z"),
+});
+assert.equal(result.ok, true);
+assert.equal(recentlyUsedLegacyCredentialStore.touches.length, 1,
+  "generation stamping must bypass the ordinary last-used write throttle");
+assert.equal(
+  recentlyUsedLegacyCredentialStore.touches[0].patch.metadata_json.credential_secret_key_id,
+  currentSecretKeyId,
+  "a recently used proven credential must become release-ready immediately",
+);
+
 const rotatedEnv = { ...env, DEVICE_CREDENTIAL_SECRET: "rotated-device-credential-foundation-secret" };
 const previousGenerationCredential = {
   ...credential,
