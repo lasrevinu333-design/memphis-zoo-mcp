@@ -904,6 +904,40 @@ export function createEventsPublicRouter({
   return router;
 }
 
+export function createEventsEmployeeRouter({
+  runReadOnlySql,
+  appVersion,
+  releaseId,
+  requireDeviceAccess,
+}) {
+  if (typeof requireDeviceAccess !== "function") {
+    throw new Error("Employee Events requires enrolled-device authentication.");
+  }
+
+  const router = express.Router();
+  router.use(requireDeviceAccess);
+
+  router.get("/", async (_req, res) => {
+    try {
+      const events = (await listUpcomingEvents(runReadOnlySql)).map(toPublicEvent);
+      res.status(200).json({
+        ok: true,
+        data: events,
+        meta: {
+          version: appVersion,
+          release_id: releaseId,
+          contract_version: EVENTS_CONTRACT_VERSION,
+          timezone: EVENTS_TIME_ZONE,
+        },
+      });
+    } catch (error) {
+      fail(res, error, "Employee events failed", 500);
+    }
+  });
+
+  return router;
+}
+
 export function createEventsAdminRouter({
   runReadOnlySql,
   runCommand,

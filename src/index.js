@@ -9,6 +9,7 @@ import {
   EVENTS_CONTRACT_VERSION,
   createEventMaintenanceController,
   createEventsAdminRouter,
+  createEventsEmployeeRouter,
   createEventsPublicRouter,
   createMessagingRouter,
   createMoxieRouter,
@@ -2291,6 +2292,23 @@ app.use(
   }),
 );
 app.use("/dashboard-api/events", createEventsPublicRouter({ runReadOnlySql, runCommand: runEventCommand, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController }));
+app.use(
+  "/employee-events-api",
+  (req, res, next) => {
+    setMessagingApiCors(res, req);
+    if (req.method === "OPTIONS") {
+      res.sendStatus(200);
+      return;
+    }
+    next();
+  },
+  createEventsEmployeeRouter({
+    runReadOnlySql,
+    appVersion: APP_VERSION,
+    releaseId: RELEASE_ID,
+    requireDeviceAccess: requireEmployeeDeviceCredential,
+  }),
+);
 app.use("/admin-api/events", createEventsAdminRouter({ runReadOnlySql, runCommand: runEventCommand, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController, requireAdminApiAuth: requireOpsManagerAuth, requireAdminApiWrite: requireOpsManagerWrite }));
 app.use(["/version", "/release-manifest", "/scheduler-runtime-config", "/health", "/health/dependencies"], (req, res, next) => {
   setPublicDashboardCors(res, req);
@@ -3090,6 +3108,7 @@ const httpServer = app.listen(port, () => {
   console.log("Admin attendance update endpoint: /admin-api/attendance-update");
   console.log("Messaging API endpoint: /messaging-api");
   console.log("Dashboard events endpoint: /dashboard-api/events");
+  console.log("Employee events endpoint: /employee-events-api");
   console.log("Admin events endpoint: /admin-api/events");
   console.log("Schedule API endpoint: /schedule-api");
   console.log("Feedback API endpoint: /feedback-api");

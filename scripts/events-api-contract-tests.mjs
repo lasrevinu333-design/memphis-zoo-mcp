@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import express from "express";
-import { createEventMaintenanceController, createEventsAdminRouter, createEventsPublicRouter } from "../src/events-api.js";
+import { createEventMaintenanceController, createEventsAdminRouter, createEventsEmployeeRouter, createEventsPublicRouter } from "../src/events-api.js";
 
 const TEST_GROUP_ID = "00000000-0000-4000-8000-000000000001";
 const TEST_VENUE_ID = "10000000-0000-4000-8000-000000000001";
@@ -145,6 +145,24 @@ function buildPublicApp(eventRows = []) {
   return app;
 }
 
+function buildEmployeeApp(eventRows = []) {
+  const app = express();
+  app.use("/employee-events-api", createEventsEmployeeRouter({
+    runReadOnlySql: async (sql) => /from public\.events_app_events/i.test(sql) ? eventRows : [],
+    appVersion: "test",
+    releaseId: "test",
+    requireDeviceAccess: (req, res, next) => {
+      if (req.get("x-test-device-credential") !== "valid-enrolled-phone") {
+        res.status(401).json({ ok: false, code: "device_credential_required" });
+        return;
+      }
+      req.memphisDevice = { device_id: "KIOSK_08", employee_id: "employee-karen" };
+      next();
+    },
+  }));
+  return app;
+}
+
 await withServer(buildPublicApp([{
   id: "80000000-0000-4000-8000-000000000001",
   event_name: "Public Event",
@@ -179,6 +197,37 @@ await withServer(buildPublicApp([{
     "notes", "created_by", "overridden_by", "parse_reason", "parser_confidence",
     "coverage_location_ids", "staffing_area_ids", "source_location_text",
   ]) assert.equal(privateField in payload.data[0], false, `public event leaked ${privateField}`);
+});
+
+const employeeEventRows = [{
+  id: "80000000-0000-4000-8000-000000000002",
+  event_name: "Employee Event",
+  event_title: "Employee Event",
+  event_date: "2026-08-02",
+  end_date: "2026-08-02",
+  start_time: "09:00:00",
+  end_time: "11:00:00",
+  spans_overnight: false,
+  attendee_count: 50,
+  display_location: "Zoo Footprint",
+  venue_name: "Zoo Footprint",
+  status: "SCHEDULED",
+  event_timezone: "America/Chicago",
+  notes: "Manager-only note",
+}];
+
+await withServer(buildEmployeeApp(employeeEventRows), async (baseUrl) => {
+  const denied = await fetch(`${baseUrl}/employee-events-api`);
+  assert.equal(denied.status, 401, "Employee Events must reject a request without enrolled-phone authority");
+
+  const allowed = await fetch(`${baseUrl}/employee-events-api`, {
+    headers: { "x-test-device-credential": "valid-enrolled-phone" },
+  });
+  assert.equal(allowed.status, 200);
+  const payload = await allowed.json();
+  assert.equal(payload.ok, true);
+  assert.equal(payload.data[0].event_name, "Employee Event");
+  assert.equal("notes" in payload.data[0], false, "Employee Events must not expose manager-only fields");
 });
 
 await withServer(buildApp(), async (baseUrl) => {

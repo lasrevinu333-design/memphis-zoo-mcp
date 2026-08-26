@@ -5,5 +5,6 @@ export {
   EVENTS_CONTRACT_VERSION,
   createEventMaintenanceController,
   createEventsAdminRouter,
+  createEventsEmployeeRouter,
   createEventsPublicRouter,
 } from "../events-api.js";
