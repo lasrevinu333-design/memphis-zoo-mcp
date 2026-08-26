@@ -1,13 +1,13 @@
 {
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "3de10acd32ba515d72d9c5d3b791ac8229c507ba",
+  "frontend_commit_sha": "89c47c0ef56de7f80e27114577b016aa0a195fd8",
   "frontend_commit_state": "final_pair_bound",
   "backend_minimum_version": "release-2026.07.19.custodial-v3.12",
-  "schema_fingerprint": "5ecf1ff150759f2316c9f396170276df07ec21fc6ae05847cf0efa696866d246",
+  "schema_fingerprint": "47f7739b31a95d55a120895af2aec68518d111d338246b6017d64d02155cc96d",
   "schema_transition": {
     "transition_id": "application-reader-release-recovery-20260825",
     "from_fingerprint": "0c3cd0cb822f147842d5c09a2bc15ffae41401956b7664f2ccfaedd13b79d527",
-    "to_fingerprint": "5ecf1ff150759f2316c9f396170276df07ec21fc6ae05847cf0efa696866d246",
+    "to_fingerprint": "47f7739b31a95d55a120895af2aec68518d111d338246b6017d64d02155cc96d",
     "expires_at": "2026-09-03T23:59:59Z"
   },
   "api_contract_versions": {

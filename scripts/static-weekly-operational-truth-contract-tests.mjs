@@ -7,6 +7,7 @@ import { resolve } from "node:path";
 const root = process.cwd();
 const migration = readFileSync(resolve(root, "supabase/migrations/20260824213000_static_weekly_operational_truth_cutover.sql"), "utf8");
 const runtimeAuthority = readFileSync(resolve(root, "supabase/migrations/20260825134500_scan_alert_runtime_authority_closure.sql"), "utf8");
+const legacyWriterRetirement = readFileSync(resolve(root, "supabase/migrations/20260826114516_retire_legacy_daily_schedule_writers_after_static_weekly_cutover.sql"), "utf8");
 const index = readFileSync(resolve(root, "src/index.js"), "utf8");
 const scheduleApi = readFileSync(resolve(root, "src/schedule-api.js"), "utf8");
 const messagingApi = readFileSync(resolve(root, "src/messaging-api.js"), "utf8");
@@ -52,6 +53,29 @@ assert.match(runtimeAuthority, /revoke execute on function public\.sch_queue_due
   "the weaker direct service-role alert writer must be retired");
 assert.match(index, /runScanAlertQueue[\s\S]*custodial_backend_queue_due_scan_alerts[\s\S]*p_backend_execution_secret:\s*offlineAuthoritySecret\(\)/i,
   "runtime maintenance must call the secret-bound scan-alert wrapper");
+
+assert.match(legacyWriterRetirement,
+  /static_weekly_reject_legacy_daily_schedule_write[\s\S]*static_weekly_v6_schedule_authority_state\(v_date\)[\s\S]*if v_authority\.governed then[\s\S]*legacy daily schedule writes are retired/i,
+  "one database trigger boundary must reject all shadow daily writes for governed dates");
+for (const table of ["daily_schedule_assignments", "daily_work_roster", "daily_group_assignments", "daily_absence_overrides"]) {
+  assert.match(legacyWriterRetirement,
+    new RegExp(`public\\.${table}[^\\n]*trg_static_weekly_fence_${table}`, "i"),
+    `${table} must be fenced at the relation boundary`);
+}
+assert.match(legacyWriterRetirement,
+  /create trigger %I before insert or update or delete on %s for each row execute function public\.static_weekly_reject_legacy_daily_schedule_write\(\)/i,
+  "every listed legacy relation must receive the same insert/update/delete fence");
+assert.match(legacyWriterRetirement,
+  /sch_ensure_schedule_window[\s\S]*if v_authority\.governed then[\s\S]*legacy_mutation_skipped[\s\S]*continue;[\s\S]*sch_ensure_daily_schedule/i,
+  "the retained window helper must skip governed dates before reaching the legacy generator");
+assert.match(legacyWriterRetirement,
+  /cron\.alter_job\(v_job_id,null,null,null,null,false\)/i,
+  "the rolling daily-schedule cron must be disabled through the supported pg_cron API");
+assert.doesNotMatch(legacyWriterRetirement, /update\s+cron\.job/i,
+  "the migration must not write the extension-owned pg_cron catalog directly");
+assert.match(legacyWriterRetirement,
+  /custodial_release_authority_restore_inventory[\s\S]*static_weekly_reject_legacy_daily_schedule_write\(\)[\s\S]*sch_ensure_schedule_window\(date,integer,text\)[\s\S]*capture_legacy_writer_retirement_triggers/i,
+  "release recovery must preserve the writer fence, helper body, grants, and four relation triggers");
 
 const managerRouteBlock = scheduleApi.slice(
   scheduleApi.indexOf('router.get("/today"'),

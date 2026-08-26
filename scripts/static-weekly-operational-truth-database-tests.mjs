@@ -80,6 +80,13 @@ values
   (${q(ids.responsePhysical)}::uuid,${q(ids.responseGroup)}::uuid,true),
   (${q(ids.legacyLocation)}::uuid,${q(ids.legacyGroup)}::uuid,true);
 
+-- Preserve an exact pre-cutover shadow row so the test can prove that current
+-- readers ignore historical legacy evidence without allowing any new write.
+insert into public.daily_work_roster(service_date,employee_id,shift_start,shift_end,source_type,active)
+values(${q(serviceDate)}::date,${q(ids.employee)}::uuid,'04:00','12:00','legacy-shadow',true);
+insert into public.daily_schedule_assignments(service_date,location_group_id,segment_number,assigned_employee_id,owner_type,coverage_start,coverage_end,status,load_points,source_type,coverage_purpose)
+values(${q(serviceDate)}::date,${q(ids.legacyGroup)}::uuid,1,${q(ids.employee)}::uuid,'EMPLOYEE','04:00','05:00','ASSIGNED',99,'legacy-shadow','area_owner');
+
 insert into public.weekly_roster_slots(slot_id,slot_code,slot_label,created_by_manager_id,created_by_manager_name_snapshot,content_digest)
 values(${q(ids.slot)}::uuid,${q(codes.slot)},'Operational Truth Slot',${q(ids.manager)}::uuid,'Truth Manager',${q(hash("1"))});
 insert into public.weekly_roster_slot_incumbencies(incumbency_id,slot_id,person_id,person_name_snapshot,effective_start,created_by_manager_id,created_by_manager_name_snapshot,content_digest)
@@ -104,15 +111,31 @@ values
   (${q(ids.occurrence)}::uuid,${q(ids.projection)}::uuid,${q(ids.publication)}::uuid,${q(ids.version)}::uuid,'${serviceDate}'::date,'truth-scan-${discriminator}',${Number(dayOfWeek)},${q(ids.physical)}::uuid,${q(codes.group)},'Operational Truth Family','08:00','09:00',${q(ids.slot)}::uuid,'Operational Truth Slot',${q(ids.employee)}::uuid,'Operational Truth Employee','created',${q(ids.employee)}::uuid,'Operational Truth Employee',jsonb_build_object('work_snapshot',jsonb_build_object('serviceMode','scan_tracked','serviceEffortMinutes',10,'includedLocations',jsonb_build_array(jsonb_build_object('locationId',${q(ids.physical)},'locationNameSnapshot','Operational Truth Restroom')))),${q(hash("f"))}),
   (${q(ids.responseOccurrence)}::uuid,${q(ids.projection)}::uuid,${q(ids.publication)}::uuid,${q(ids.version)}::uuid,'${serviceDate}'::date,'truth-response-${discriminator}',${Number(dayOfWeek)},${q(ids.responsePhysical)}::uuid,${q(codes.responseGroup)},'Operational Response Family','09:00','10:00',${q(ids.slot)}::uuid,'Operational Truth Slot',${q(ids.employee)}::uuid,'Operational Truth Employee','created',${q(ids.employee)}::uuid,'Operational Truth Employee',jsonb_build_object('work_snapshot',jsonb_build_object('serviceMode','response_only_no_clean','serviceEffortMinutes',5,'includedLocations','[]'::jsonb)),${q(hash("0"))});
 
-insert into public.daily_work_roster(service_date,employee_id,shift_start,shift_end,source_type,active)
-values(${q(serviceDate)}::date,${q(ids.employee)}::uuid,'04:00','12:00','legacy-shadow',true);
-insert into public.daily_schedule_assignments(service_date,location_group_id,segment_number,assigned_employee_id,owner_type,coverage_start,coverage_end,status,load_points,source_type,coverage_purpose)
-values(${q(serviceDate)}::date,${q(ids.legacyGroup)}::uuid,1,${q(ids.employee)}::uuid,'EMPLOYEE','04:00','05:00','ASSIGNED',99,'legacy-shadow','area_owner');
 commit;
 `);
 
 assert.equal(await sql(`select authority_source||'|'||projection_status||'|'||projection_id::text from public.static_weekly_v6_schedule_authority_state(${q(serviceDate)}::date);`),
   `static_weekly_projection|current|${ids.projection}`, "the effective publication selects one current exact projection");
+assert.equal(await sql(`select active::text from cron.job where jobname='mz-rolling-schedule-window-ready';`),
+  "false", "the legacy rolling schedule cron is disabled after static-weekly cutover");
+assert.equal(await sql(`select (public.sch_ensure_schedule_window(${q(serviceDate)}::date,1,'database_test')#>>'{results,0,legacy_mutation_skipped}')::text;`),
+  "true", "the retained window helper reports a governed date without invoking legacy generation");
+
+for (const [label, statement] of [
+  ["daily assignment insert", `insert into public.daily_schedule_assignments(service_date,location_group_id,segment_number,assigned_employee_id,owner_type,coverage_start,coverage_end,status,load_points,source_type,coverage_purpose) values(${q(serviceDate)}::date,${q(ids.legacyGroup)}::uuid,2,${q(ids.employee)}::uuid,'EMPLOYEE','05:00','06:00','ASSIGNED',1,'late-shadow','area_owner')`],
+  ["daily assignment update", `update public.daily_schedule_assignments set load_points=100 where service_date=${q(serviceDate)}::date and location_group_id=${q(ids.legacyGroup)}::uuid`],
+  ["daily assignment delete", `delete from public.daily_schedule_assignments where service_date=${q(serviceDate)}::date and location_group_id=${q(ids.legacyGroup)}::uuid`],
+  ["daily roster update", `update public.daily_work_roster set shift_end='13:00' where service_date=${q(serviceDate)}::date and employee_id=${q(ids.employee)}::uuid`],
+  ["daily group insert", `insert into public.daily_group_assignments(assignment_date,location_group_id,assigned_employee_id,assignment_type,coverage_start,coverage_end) values(${q(serviceDate)}::date,${q(ids.legacyGroup)}::uuid,${q(ids.employee)}::uuid,'manual_override','05:00','06:00')`],
+  ["daily absence insert", `insert into public.daily_absence_overrides(absence_date,employee_id,absence_type,active) values(${q(serviceDate)}::date,${q(ids.employee)}::uuid,'callout',true)`],
+]) {
+  assert.match(await sql(statement, { expectFailure: true }),
+    /legacy daily schedule writes are retired for static-weekly governed dates/i,
+    `${label} must fail at the shared relation boundary`);
+}
+
+assert.equal(await sql(`select count(*) from public.custodial_release_authority_restore_inventory where object_kind='trigger' and object_identity like 'public.daily%.trg_static_weekly_fence_daily_%';`),
+  "4", "release recovery captures all four legacy writer fences");
 assert.equal(await sql(`select count(*)||'|'||min(coverage_start)||'|'||bool_and(source_type='static_weekly_projection') from public.static_weekly_v6_read_schedule_segments(${q(serviceDate)}::date);`),
   "2|08:00:00|true", "governed schedule rows ignore conflicting legacy assignments");
 assert.equal(await sql(`select count(*) from public.static_weekly_v6_read_schedule_segments(${q(serviceDate)}::date) where group_code=${q(codes.legacyGroup)};`),

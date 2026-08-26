@@ -47,6 +47,7 @@ const applicationReaderDeviceIdentity = "20260825173000_restore_application_read
 const applicationReaderCredentialFence = "20260825173500_fence_application_reader_device_credentials.sql";
 const applicationReaderReleaseRecovery = "20260825174500_rebind_application_reader_release_recovery.sql";
 const credentialReplacementLineage = "20260826020000_preserve_offline_work_across_manager_credential_recovery.sql";
+const legacyScheduleWriterRetirement = "20260826114516_retire_legacy_daily_schedule_writers_after_static_weekly_cutover.sql";
 const releaseInputPath = "release/integrated-backend-authority-input.json";
 const releaseEvidencePath = "release/integrated-backend-authority-evidence.json";
 const productionMigrationStatePath = "release/production-migration-state.json";
@@ -238,7 +239,7 @@ const evidenceBlob = expectedEntries.find(({ path }) => path === releaseEvidence
 assert.ok(evidenceBlob, "expected tree omits generated release evidence");
 const expectedBlobs = expectedEntries.filter(({ path }) => path !== releaseEvidencePath);
 assert.ok(expectedBlobs.length > 0, "release authority inventory is empty");
-assert.equal(expectedBlobs.filter(({ path }) => /^supabase\/migrations\/[^/]+\.sql$/.test(path)).length, 114, "release authority inventory must bind all 114 migrations");
+assert.equal(expectedBlobs.filter(({ path }) => /^supabase\/migrations\/[^/]+\.sql$/.test(path)).length, 115, "release authority inventory must bind all 115 migrations");
 for (const blob of [...expectedBlobs, evidenceBlob]) assertWorktreeMatchesExpectedBlob(blob);
 assert.equal(evidenceBlob.object_id, acceptance.backend_evidence_blob_sha, "signed release attestation names the wrong evidence blob");
 assert.equal(hash(evidenceBlob.bytes), acceptance.backend_evidence_sha256, "signed release attestation names the wrong evidence digest");
@@ -251,12 +252,12 @@ const input = parseJsonBlob(blobByPath.get(releaseInputPath), "release authority
 const productionMigrationState = parseJsonBlob(blobByPath.get(productionMigrationStatePath), "production migration state");
 assert.equal(productionMigrationState.mode, "migration_required");
 assert.ok(Array.isArray(productionMigrationState.pending_migrations));
-assert.equal(productionMigrationState.pending_migrations.length, 1, "the candidate must identify exactly one pending migration");
+assert.equal(productionMigrationState.pending_migrations.length, 2, "the candidate must identify exactly two dependency-ordered pending migrations");
 assert.ok(Array.isArray(productionMigrationState.applied_release_migrations));
 const appliedReleaseMigrations = productionMigrationState.applied_release_migrations.map(({ file }) => file);
 assert.deepEqual(appliedReleaseMigrations, [scanAlertRuntimeAuthorityClosure, applicationReaderDeviceIdentity, applicationReaderCredentialFence, applicationReaderReleaseRecovery]);
 const pendingReleaseMigrations = productionMigrationState.pending_migrations.map(({ file }) => file);
-assert.deepEqual(pendingReleaseMigrations, [credentialReplacementLineage]);
+assert.deepEqual(pendingReleaseMigrations, [credentialReplacementLineage, legacyScheduleWriterRetirement]);
 assert.equal(new Set(appliedReleaseMigrations).size, appliedReleaseMigrations.length, "applied release migrations must be unique");
 for (const migration of appliedReleaseMigrations) {
   assert.match(String(migration || ""), /^[0-9]{14}_[a-z][a-z0-9_]*\.sql$/, `invalid applied release migration file: ${migration}`);
@@ -281,6 +282,7 @@ const phaseNText = blobByPath.get(`supabase/migrations/${phaseN}`).bytes.toStrin
 const phaseOText = blobByPath.get(`supabase/migrations/${phaseO}`).bytes.toString("utf8");
 const phasePText = blobByPath.get(`supabase/migrations/${phaseP}`).bytes.toString("utf8");
 const credentialReplacementLineageText = blobByPath.get(`supabase/migrations/${credentialReplacementLineage}`).bytes.toString("utf8");
+const legacyScheduleWriterRetirementText = blobByPath.get(`supabase/migrations/${legacyScheduleWriterRetirement}`).bytes.toString("utf8");
 const schemaFingerprint = blobByPath.get("supabase/canonical/schema-fingerprint.txt")?.bytes.toString("utf8").trim();
 const frontendManifest = parseJsonBlob(blobByPath.get("release/frontend-release-manifest.json"), "frontend release manifest");
 
@@ -290,7 +292,7 @@ assert.deepEqual(input.cutover.phase_order, [
   "prepare distinct CUSTODIAL_BACKEND_PROOF_SECRET, CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET, and DEVICE_CREDENTIAL_SECRET values (minimum 32 characters each); preserve all phone-local work and require manager-code recovery for any active credential from a different secret generation without exposing any secret",
   `capture the production catalog through the read-only Supabase boundary and require it to equal the observed clean 113-migration fingerprint recorded in ${productionMigrationStatePath}`,
   `verify production project, observed migration head, catalog/privilege fingerprint, backup receipt, and exact source attestation against ${productionMigrationStatePath}`,
-  "after explicit production-change admission, apply only the one exact pending credential-replacement-lineage migration, then require the clean 114-migration target fingerprint and zero remaining pending migrations without replaying the four already-applied release migrations",
+  "after explicit production-change admission, apply only the two exact pending migrations in dependency order (credential-replacement lineage, then legacy daily-schedule writer retirement), then require the clean 115-migration target fingerprint and zero remaining pending migrations without replaying the four already-applied release migrations",
   "deploy the canonical-only backend only after all authoritative procedures above are present and verified; missing canonical writers fail closed",
   "require a green authority health gate and direct-DML denial probes before routing traffic",
 ]);
@@ -306,16 +308,16 @@ assert.equal(productionMigrationState.observed_production?.catalog_privilege_fin
 assert.equal(productionMigrationState.observed_production?.migration_count, 113);
 assert.notEqual(productionMigrationState.observed_production?.catalog_privilege_fingerprint, schemaFingerprint,
   "a migration-required candidate must not claim observed production already equals the target schema");
-assert.equal(productionMigrationState.target?.source_migration_file, credentialReplacementLineage);
-assert.equal(productionMigrationState.target?.source_migration_name, "preserve_offline_work_across_manager_credential_recovery");
-assert.equal(productionMigrationState.target?.source_migration_version, "20260826020000");
+assert.equal(productionMigrationState.target?.source_migration_file, legacyScheduleWriterRetirement);
+assert.equal(productionMigrationState.target?.source_migration_name, "retire_legacy_daily_schedule_writers_after_static_weekly_cutover");
+assert.equal(productionMigrationState.target?.source_migration_version, "20260826114516");
 assert.equal(productionMigrationState.target?.production_ledger_version, null);
 assert.equal(productionMigrationState.target?.canonical_schema_fingerprint, schemaFingerprint);
-assert.equal(productionMigrationState.target?.public_function_count, 490);
-assert.equal(productionMigrationState.target?.migration_count, 114);
+assert.equal(productionMigrationState.target?.public_function_count, 491);
+assert.equal(productionMigrationState.target?.migration_count, 115);
 assert.equal(productionMigrationState.source_binding?.kind, "external_exact_head_release_attestation");
 assert.equal(productionMigrationState.authorization?.production_mutation_required, true);
-assert.equal(productionMigrationState.authorization?.sequence_policy, "apply_exact_single_pending_migration_after_release_admission");
+assert.equal(productionMigrationState.authorization?.sequence_policy, "apply_exact_ordered_pending_migrations_after_release_admission");
 assert.match(String(productionMigrationState.backup_evidence?.source_commit || ""), /^[a-f0-9]{40}$/);
 assert.match(String(productionMigrationState.backup_evidence?.artifact_sha256 || ""), /^[a-f0-9]{64}$/);
 assert.equal(productionMigrationState.backup_evidence?.restore_verification, "passed");
@@ -392,6 +394,10 @@ assert.match(credentialReplacementLineageText, /custodial_device_credential_repl
 assert.match(credentialReplacementLineageText, /custodial_credential_may_transmit_frozen_work/);
 assert.match(credentialReplacementLineageText, /force row level security/i);
 assert.match(credentialReplacementLineageText, /revoke all on table public\.custodial_device_credential_replacements from public,anon,authenticated,service_role/i);
+assert.match(legacyScheduleWriterRetirementText, /static_weekly_reject_legacy_daily_schedule_write/i);
+assert.match(legacyScheduleWriterRetirementText, /trg_static_weekly_fence_daily_schedule_assignments/i);
+assert.match(legacyScheduleWriterRetirementText, /cron\.alter_job/i);
+assert.match(legacyScheduleWriterRetirementText, /custodial_release_authority_restore_inventory/i);
 assert.match(schemaFingerprint, /^[a-f0-9]{64}$/);
 assert.equal(frontendManifest.frontend_commit_sha, acceptance.frontend_commit_sha, "signed release attestation names the wrong frontend commit");
 assert.equal(frontendManifest.release_id, acceptance.release_id, "signed release attestation names the wrong semantic release");

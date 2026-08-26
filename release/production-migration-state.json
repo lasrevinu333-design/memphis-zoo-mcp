@@ -24,13 +24,13 @@
     "migration_count": 113
   },
   "target": {
-    "source_migration_file": "20260826020000_preserve_offline_work_across_manager_credential_recovery.sql",
-    "source_migration_name": "preserve_offline_work_across_manager_credential_recovery",
-    "source_migration_version": "20260826020000",
+    "source_migration_file": "20260826114516_retire_legacy_daily_schedule_writers_after_static_weekly_cutover.sql",
+    "source_migration_name": "retire_legacy_daily_schedule_writers_after_static_weekly_cutover",
+    "source_migration_version": "20260826114516",
     "production_ledger_version": null,
-    "canonical_schema_fingerprint": "5ecf1ff150759f2316c9f396170276df07ec21fc6ae05847cf0efa696866d246",
-    "public_function_count": 490,
-    "migration_count": 114
+    "canonical_schema_fingerprint": "47f7739b31a95d55a120895af2aec68518d111d338246b6017d64d02155cc96d",
+    "public_function_count": 491,
+    "migration_count": 115
   },
   "source_binding": {
     "kind": "external_exact_head_release_attestation",
@@ -47,8 +47,8 @@
   },
   "authorization": {
     "production_mutation_required": true,
-    "sequence_policy": "apply_exact_single_pending_migration_after_release_admission",
-    "rollback_policy": "forward-only migration; preserve the pre-change backup, static-weekly publication, projections, occurrences and all credential evidence; if post-verification fails, keep canary traffic paused and use the reviewed forward recovery inventory rather than down-migrating or deleting replacement lineage"
+    "sequence_policy": "apply_exact_ordered_pending_migrations_after_release_admission",
+    "rollback_policy": "forward-only migrations; preserve the pre-change backup, static-weekly publication, projections, occurrences, legacy shadow history and all credential evidence; if post-verification fails, keep canary traffic paused and use the reviewed forward recovery inventory rather than down-migrating, deleting replacement lineage, or re-enabling legacy schedule writers"
   },
   "preconditions": [
     "production project_ref equals rqquvtjdmugpigbndmne",
@@ -99,12 +99,20 @@
       "file": "20260826020000_preserve_offline_work_across_manager_credential_recovery.sql",
       "source_migration_version": "20260826020000",
       "sha256": "c002a6969cffb359c61250c4b41414fc29a35a3ab1b0ea021aaf7ccbf54fc868"
+    },
+    {
+      "order": 2,
+      "phase": "retire_legacy_daily_schedule_writers_after_static_weekly_cutover",
+      "file": "20260826114516_retire_legacy_daily_schedule_writers_after_static_weekly_cutover.sql",
+      "source_migration_version": "20260826114516",
+      "sha256": "62329525c73705bb253fc87cd2c31c9b29ecb89a5cce14b550d4b04dce727cbf"
     }
   ],
   "postconditions": [
     "production ledger records preserve_offline_work_across_manager_credential_recovery exactly once under the actual applied ledger version",
-    "production catalog and privilege fingerprint equals 5ecf1ff150759f2316c9f396170276df07ec21fc6ae05847cf0efa696866d246",
-    "production exposes exactly 490 public functions across the clean 114-migration authority",
+    "production ledger records retire_legacy_daily_schedule_writers_after_static_weekly_cutover exactly once after the credential-replacement migration",
+    "production catalog and privilege fingerprint equals 47f7739b31a95d55a120895af2aec68518d111d338246b6017d64d02155cc96d",
+    "production exposes exactly 491 public functions across the clean 115-migration authority",
     "credential replacement lineage is append-only, FORCE-RLS protected and unavailable for direct service-role mutation",
     "a current confirmed successor credential may transport only frozen predecessor work on the same device while the original employee, device and credential evidence remain immutable",
     "the backend can queue due scan alerts only through the secret-bound custodial_backend_queue_due_scan_alerts wrapper",
@@ -113,6 +121,7 @@
     "PUBLIC, anon and authenticated cannot execute the backend scan-alert wrapper",
     "one active authority key and one immutable registered source remain unchanged",
     "weekly roster slots and incumbencies remain exactly 17; the accepted publication, projection, 452 occurrences, three receipts and authority revision 3 remain unchanged",
+    "the rolling legacy schedule cron is inactive, governed dates cannot be mutated through any of the four legacy daily shadow tables, and historical shadow rows remain preserved",
     "no unexpected catalog, privilege, configuration or row diff exists"
   ]
 }

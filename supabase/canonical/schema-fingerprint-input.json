@@ -35671,7 +35671,7 @@
       "username": "migration_owner"
     },
     {
-      "active": true,
+      "active": false,
       "command": "select public.sch_ensure_schedule_window(public.sch_service_date(now()), 14, 'scheduled_rolling_window_readiness');",
       "database": "postgres",
       "jobname": "mz-rolling-schedule-window-ready",
@@ -38241,8 +38241,8 @@
       "schema_name": "public"
     },
     {
-      "comment": null,
-      "definition": "CREATE OR REPLACE FUNCTION public.sch_ensure_schedule_window(p_start_date date DEFAULT sch_service_date(now()), p_days integer DEFAULT 14, p_reason text DEFAULT 'scheduled_rolling_window_readiness'::text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_start date := coalesce(p_start_date, public.sch_service_date(now()));\n  v_days integer := greatest(1, least(coalesce(p_days, 14), 31));\n  v_offset integer;\n  v_date date;\n  v_result jsonb;\n  v_audit jsonb;\n  v_results jsonb := '[]'::jsonb;\n  v_ready integer := 0;\n  v_failed integer := 0;\nbegin\n  perform pg_advisory_xact_lock(hashtextextended('schedule-window:' || v_start::text || ':' || v_days::text, 0));\n\n  for v_offset in 0..(v_days - 1) loop\n    v_date := v_start + v_offset;\n    begin\n      v_result := public.sch_ensure_daily_schedule(\n        v_date,\n        coalesce(nullif(btrim(p_reason), ''), 'scheduled_rolling_window_readiness')\n      );\n      v_audit := public.sch_audit_schedule_day(v_date);\n      if coalesce((v_audit->>'ok')::boolean, false) then\n        v_ready := v_ready + 1;\n        v_results := v_results || jsonb_build_array(jsonb_build_object(\n          'service_date', v_date,\n          'ok', true,\n          'result', v_result,\n          'audit', v_audit\n        ));\n      else\n        v_failed := v_failed + 1;\n        v_results := v_results || jsonb_build_array(jsonb_build_object(\n          'service_date', v_date,\n          'ok', false,\n          'error', 'schedule_audit_failed',\n          'result', v_result,\n          'audit', v_audit\n        ));\n      end if;\n    exception when others then\n      v_failed := v_failed + 1;\n      v_results := v_results || jsonb_build_array(jsonb_build_object(\n        'service_date', v_date,\n        'ok', false,\n        'error', sqlerrm\n      ));\n    end;\n  end loop;\n\n  insert into public.schedule_automation_runs(\n    automation_key, service_date, status, result_json, created_at, updated_at\n  ) values (\n    'rolling_schedule_window_ready',\n    v_start,\n    case when v_failed = 0 then 'completed' else 'failed' end,\n    jsonb_build_object(\n      'start_date', v_start,\n      'days', v_days,\n      'reason', p_reason,\n      'ready_days', v_ready,\n      'failed_days', v_failed,\n      'results', v_results\n    ),\n    now(), now()\n  )\n  on conflict (automation_key, service_date) do update set\n    status = excluded.status,\n    result_json = excluded.result_json,\n    updated_at = now();\n\n  return jsonb_build_object(\n    'ok', v_failed = 0,\n    'start_date', v_start,\n    'days', v_days,\n    'ready_days', v_ready,\n    'failed_days', v_failed,\n    'results', v_results\n  );\nend\n$function$\n",
+      "comment": "Retired rolling helper: reports static-weekly governed dates without mutation and generates only explicitly ungoverned legacy dates.",
+      "definition": "CREATE OR REPLACE FUNCTION public.sch_ensure_schedule_window(p_start_date date DEFAULT sch_service_date(now()), p_days integer DEFAULT 14, p_reason text DEFAULT 'scheduled_rolling_window_readiness'::text)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public', 'extensions'\nAS $function$\ndeclare\n  v_start date := coalesce(p_start_date,public.sch_service_date(now()));\n  v_days integer := greatest(1,least(coalesce(p_days,14),31));\n  v_offset integer;\n  v_date date;\n  v_result jsonb;\n  v_audit jsonb;\n  v_authority record;\n  v_results jsonb := '[]'::jsonb;\n  v_ready integer := 0;\n  v_failed integer := 0;\nbegin\n  perform pg_advisory_xact_lock(hashtextextended('schedule-window:'||v_start::text||':'||v_days::text,0));\n\n  for v_offset in 0..(v_days-1) loop\n    v_date := v_start+v_offset;\n    begin\n      select * into strict v_authority\n      from public.static_weekly_v6_schedule_authority_state(v_date);\n\n      if v_authority.governed then\n        if v_authority.projection_status='current' then\n          v_ready := v_ready+1;\n          v_results := v_results||jsonb_build_array(jsonb_build_object(\n            'service_date',v_date,\n            'ok',true,\n            'authority_source',v_authority.authority_source,\n            'projection_status',v_authority.projection_status,\n            'publication_id',v_authority.publication_id,\n            'projection_id',v_authority.projection_id,\n            'legacy_mutation_skipped',true\n          ));\n        else\n          v_failed := v_failed+1;\n          v_results := v_results||jsonb_build_array(jsonb_build_object(\n            'service_date',v_date,\n            'ok',false,\n            'authority_source',v_authority.authority_source,\n            'projection_status',v_authority.projection_status,\n            'error','static_weekly_projection_not_current',\n            'legacy_mutation_skipped',true\n          ));\n        end if;\n        continue;\n      end if;\n\n      v_result := public.sch_ensure_daily_schedule(\n        v_date,\n        coalesce(nullif(btrim(p_reason),''),'scheduled_rolling_window_readiness')\n      );\n      v_audit := public.sch_audit_schedule_day(v_date);\n      if coalesce((v_audit->>'ok')::boolean,false) then\n        v_ready := v_ready+1;\n        v_results := v_results||jsonb_build_array(jsonb_build_object(\n          'service_date',v_date,'ok',true,'authority_source','legacy_daily_schedule',\n          'result',v_result,'audit',v_audit\n        ));\n      else\n        v_failed := v_failed+1;\n        v_results := v_results||jsonb_build_array(jsonb_build_object(\n          'service_date',v_date,'ok',false,'authority_source','legacy_daily_schedule',\n          'error','schedule_audit_failed','result',v_result,'audit',v_audit\n        ));\n      end if;\n    exception when others then\n      v_failed := v_failed+1;\n      v_results := v_results||jsonb_build_array(jsonb_build_object(\n        'service_date',v_date,'ok',false,'error',sqlerrm\n      ));\n    end;\n  end loop;\n\n  insert into public.schedule_automation_runs(\n    automation_key,service_date,status,result_json,created_at,updated_at\n  ) values (\n    'rolling_schedule_window_ready',v_start,\n    case when v_failed=0 then 'completed' else 'failed' end,\n    jsonb_build_object(\n      'start_date',v_start,'days',v_days,'reason',p_reason,\n      'ready_days',v_ready,'failed_days',v_failed,'results',v_results\n    ),now(),now()\n  ) on conflict(automation_key,service_date) do update set\n    status=excluded.status,result_json=excluded.result_json,updated_at=now();\n\n  return jsonb_build_object(\n    'ok',v_failed=0,'start_date',v_start,'days',v_days,\n    'ready_days',v_ready,'failed_days',v_failed,'results',v_results\n  );\nend\n$function$\n",
       "function_name": "sch_ensure_schedule_window",
       "identity_arguments": "p_start_date date, p_days integer, p_reason text",
       "owner_name": "migration_owner",
@@ -38933,6 +38933,14 @@
       "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_projection_attestation_payload(p_envelope jsonb)\n RETURNS jsonb\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\n  select p_envelope-'attestation'\n$function$\n",
       "function_name": "static_weekly_projection_attestation_payload",
       "identity_arguments": "p_envelope jsonb",
+      "owner_name": "migration_owner",
+      "schema_name": "public"
+    },
+    {
+      "comment": "Fail-closed trigger boundary preventing every legacy daily schedule writer from mutating a static-weekly governed date.",
+      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_reject_legacy_daily_schedule_write()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_payload jsonb;\n  v_date date;\n  v_dates date[] := array[]::date[];\n  v_authority record;\nbegin\n  if tg_op <> 'INSERT' then\n    v_payload := to_jsonb(old);\n    v_date := case tg_table_name\n      when 'daily_schedule_assignments' then nullif(v_payload->>'service_date','')::date\n      when 'daily_work_roster' then nullif(v_payload->>'service_date','')::date\n      when 'daily_group_assignments' then nullif(v_payload->>'assignment_date','')::date\n      when 'daily_absence_overrides' then nullif(v_payload->>'absence_date','')::date\n      else null\n    end;\n    if v_date is not null then v_dates := array_append(v_dates,v_date); end if;\n  end if;\n\n  if tg_op <> 'DELETE' then\n    v_payload := to_jsonb(new);\n    v_date := case tg_table_name\n      when 'daily_schedule_assignments' then nullif(v_payload->>'service_date','')::date\n      when 'daily_work_roster' then nullif(v_payload->>'service_date','')::date\n      when 'daily_group_assignments' then nullif(v_payload->>'assignment_date','')::date\n      when 'daily_absence_overrides' then nullif(v_payload->>'absence_date','')::date\n      else null\n    end;\n    if v_date is not null and not v_date=any(v_dates) then\n      v_dates := array_append(v_dates,v_date);\n    end if;\n  end if;\n\n  if cardinality(v_dates)=0 then\n    raise exception using errcode='22023',\n      message='legacy schedule write did not identify one service date';\n  end if;\n\n  foreach v_date in array v_dates loop\n    select * into strict v_authority\n    from public.static_weekly_v6_schedule_authority_state(v_date);\n    if v_authority.governed then\n      raise exception using errcode='55000',\n        message='legacy daily schedule writes are retired for static-weekly governed dates',\n        detail='service_date='||v_date::text||'; projection_status='||v_authority.projection_status,\n        hint='Use the static-weekly append-only dated-change control plane.';\n    end if;\n  end loop;\n\n  if tg_op='DELETE' then return old; end if;\n  return new;\nend\n$function$\n",
+      "function_name": "static_weekly_reject_legacy_daily_schedule_write",
+      "identity_arguments": "",
       "owner_name": "migration_owner",
       "schema_name": "public"
     },
@@ -63646,11 +63654,25 @@
       "trigger_name": "trg_daily_absence_overrides_updated_at"
     },
     {
+      "definition": "CREATE TRIGGER trg_static_weekly_fence_daily_absence_overrides BEFORE INSERT OR DELETE OR UPDATE ON daily_absence_overrides FOR EACH ROW EXECUTE FUNCTION static_weekly_reject_legacy_daily_schedule_write()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "daily_absence_overrides",
+      "trigger_name": "trg_static_weekly_fence_daily_absence_overrides"
+    },
+    {
       "definition": "CREATE TRIGGER trg_daily_group_assignments_updated_at BEFORE UPDATE ON daily_group_assignments FOR EACH ROW EXECUTE FUNCTION set_updated_at()",
       "enabled": "O",
       "schema_name": "public",
       "table_name": "daily_group_assignments",
       "trigger_name": "trg_daily_group_assignments_updated_at"
+    },
+    {
+      "definition": "CREATE TRIGGER trg_static_weekly_fence_daily_group_assignments BEFORE INSERT OR DELETE OR UPDATE ON daily_group_assignments FOR EACH ROW EXECUTE FUNCTION static_weekly_reject_legacy_daily_schedule_write()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "daily_group_assignments",
+      "trigger_name": "trg_static_weekly_fence_daily_group_assignments"
     },
     {
       "definition": "CREATE TRIGGER trg_prevent_duplicate_daily_schedule_assignment BEFORE INSERT ON daily_schedule_assignments FOR EACH ROW EXECUTE FUNCTION prevent_duplicate_daily_schedule_assignment()",
@@ -63679,6 +63701,20 @@
       "schema_name": "public",
       "table_name": "daily_schedule_assignments",
       "trigger_name": "trg_sch_guard_restricted_daily_assignment"
+    },
+    {
+      "definition": "CREATE TRIGGER trg_static_weekly_fence_daily_schedule_assignments BEFORE INSERT OR DELETE OR UPDATE ON daily_schedule_assignments FOR EACH ROW EXECUTE FUNCTION static_weekly_reject_legacy_daily_schedule_write()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "daily_schedule_assignments",
+      "trigger_name": "trg_static_weekly_fence_daily_schedule_assignments"
+    },
+    {
+      "definition": "CREATE TRIGGER trg_static_weekly_fence_daily_work_roster BEFORE INSERT OR DELETE OR UPDATE ON daily_work_roster FOR EACH ROW EXECUTE FUNCTION static_weekly_reject_legacy_daily_schedule_write()",
+      "enabled": "O",
+      "schema_name": "public",
+      "table_name": "daily_work_roster",
+      "trigger_name": "trg_static_weekly_fence_daily_work_roster"
     },
     {
       "definition": "CREATE TRIGGER trg_mz_reconcile_employee_push_credential_state AFTER UPDATE OF revoked_at, expires_at ON device_auth_credentials FOR EACH ROW WHEN (old.revoked_at IS DISTINCT FROM new.revoked_at OR old.expires_at IS DISTINCT FROM new.expires_at) EXECUTE FUNCTION mz_reconcile_employee_push_credential_state()",

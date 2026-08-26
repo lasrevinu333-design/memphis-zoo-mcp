@@ -20,6 +20,8 @@ const staticWeeklyRegisteredRosterBootstrap = readFileSync("supabase/migrations/
 const applicationReaderReleaseRecovery = readFileSync("supabase/migrations/20260825174500_rebind_application_reader_release_recovery.sql", "utf8");
 const credentialReplacementLineageFile = "20260826020000_preserve_offline_work_across_manager_credential_recovery.sql";
 const credentialReplacementLineage = readFileSync(`supabase/migrations/${credentialReplacementLineageFile}`, "utf8");
+const legacyScheduleWriterRetirementFile = "20260826114516_retire_legacy_daily_schedule_writers_after_static_weekly_cutover.sql";
+const legacyScheduleWriterRetirement = readFileSync(`supabase/migrations/${legacyScheduleWriterRetirementFile}`, "utf8");
 const index = readFileSync("src/index.js", "utf8");
 const scanAuthorityCutover = readFileSync("src/scan-authority-cutover.js", "utf8");
 const schedulerControlPlane = readFileSync("src/static-weekly-control-plane.js", "utf8");
@@ -137,7 +139,7 @@ assert.equal(packageManifest.scripts["release:populated-schema:preflight"], "nod
 assert.match(schemaFingerprintRefresh, /schema_from_fingerprint/);
 assert.match(populatedPreflightWorkflow, /release:populated-schema:preflight/);
 assert.match(releaseInput.cutover.phase_order[1], /read-only Supabase boundary.*observed clean 113-migration fingerprint/);
-assert.match(releaseInput.cutover.phase_order[3], /one exact pending credential-replacement-lineage migration.*clean 114-migration target fingerprint/i);
+assert.match(releaseInput.cutover.phase_order[3], /two exact pending migrations in dependency order.*credential-replacement lineage.*legacy daily-schedule writer retirement.*clean 115-migration target fingerprint/i);
 assert.equal(releaseInput.cutover.production_migration_state, "release/production-migration-state.json");
 assert.equal(productionMigrationState.artifact, "production-migration-state.v1");
 assert.equal(productionMigrationState.mode, "migration_required");
@@ -159,15 +161,15 @@ assert.equal(productionMigrationState.observed_production.occurrence_count, 452)
 assert.equal(productionMigrationState.observed_production.application_reader_identity_policy_count, 3);
 assert.equal(productionMigrationState.observed_production.application_reader_credential_select, false);
 assert.equal(productionMigrationState.observed_production.migration_count, 113);
-assert.equal(productionMigrationState.target.source_migration_file, credentialReplacementLineageFile);
-assert.equal(productionMigrationState.target.source_migration_name, "preserve_offline_work_across_manager_credential_recovery");
-assert.equal(productionMigrationState.target.source_migration_version, "20260826020000");
+assert.equal(productionMigrationState.target.source_migration_file, legacyScheduleWriterRetirementFile);
+assert.equal(productionMigrationState.target.source_migration_name, "retire_legacy_daily_schedule_writers_after_static_weekly_cutover");
+assert.equal(productionMigrationState.target.source_migration_version, "20260826114516");
 assert.equal(productionMigrationState.target.production_ledger_version, null);
-assert.equal(productionMigrationState.target.canonical_schema_fingerprint, "5ecf1ff150759f2316c9f396170276df07ec21fc6ae05847cf0efa696866d246");
-assert.equal(productionMigrationState.target.public_function_count, 490);
-assert.equal(productionMigrationState.target.migration_count, 114);
+assert.equal(productionMigrationState.target.canonical_schema_fingerprint, "47f7739b31a95d55a120895af2aec68518d111d338246b6017d64d02155cc96d");
+assert.equal(productionMigrationState.target.public_function_count, 491);
+assert.equal(productionMigrationState.target.migration_count, 115);
 assert.equal(productionMigrationState.authorization.production_mutation_required, true);
-assert.equal(productionMigrationState.authorization.sequence_policy, "apply_exact_single_pending_migration_after_release_admission");
+assert.equal(productionMigrationState.authorization.sequence_policy, "apply_exact_ordered_pending_migrations_after_release_admission");
 assert.equal(productionMigrationState.backup_evidence.workflow_run_id, 32891851878);
 assert.equal(productionMigrationState.backup_evidence.source_commit, "f2d3437792338aed93aa9eec5e2fd97457d130da");
 assert.equal(productionMigrationState.backup_evidence.artifact_sha256, "95cd96e12c0e57f8cc47afdb0166c47cd28e5fd23773195a0bb392c3c5f51260");
@@ -178,16 +180,23 @@ for (const [index, migration] of productionMigrationState.applied_release_migrat
   const bytes = readFileSync(`supabase/migrations/${migration.file}`);
   assert.equal(createHash("sha256").update(bytes).digest("hex"), migration.sha256, `stale applied migration digest: ${migration.file}`);
 }
-assert.deepEqual(productionMigrationState.pending_migrations.map(({ file }) => file), [credentialReplacementLineageFile]);
-const [pendingCredentialMigration] = productionMigrationState.pending_migrations;
+assert.deepEqual(productionMigrationState.pending_migrations.map(({ file }) => file), [credentialReplacementLineageFile, legacyScheduleWriterRetirementFile]);
+const [pendingCredentialMigration, pendingLegacyWriterRetirement] = productionMigrationState.pending_migrations;
 assert.equal(pendingCredentialMigration.order, 1);
 assert.equal(pendingCredentialMigration.phase, "preserve_offline_work_across_manager_credential_recovery");
 assert.equal(pendingCredentialMigration.source_migration_version, "20260826020000");
 assert.equal(createHash("sha256").update(Buffer.from(credentialReplacementLineage)).digest("hex"), pendingCredentialMigration.sha256,
   "pending credential-replacement migration digest is stale");
+assert.equal(pendingLegacyWriterRetirement.order, 2);
+assert.equal(pendingLegacyWriterRetirement.phase, "retire_legacy_daily_schedule_writers_after_static_weekly_cutover");
+assert.equal(pendingLegacyWriterRetirement.source_migration_version, "20260826114516");
+assert.equal(createHash("sha256").update(Buffer.from(legacyScheduleWriterRetirement)).digest("hex"), pendingLegacyWriterRetirement.sha256,
+  "pending legacy schedule-writer retirement migration digest is stale");
+assert.match(legacyScheduleWriterRetirement, /static_weekly_reject_legacy_daily_schedule_write/i);
+assert.match(legacyScheduleWriterRetirement, /cron\.alter_job/i);
 assert.equal(releaseEvidence.compatibility_window.accepted_engine.scan, "scan.v2");
 assert.equal(releaseEvidence.compatibility_window.required_engine.scan, "scan.v4.snapshot-bound-authority");
-assert.equal(releaseEvidence.migrations.at(-1).name, credentialReplacementLineageFile);
+assert.equal(releaseEvidence.migrations.at(-1).name, legacyScheduleWriterRetirementFile);
 assert.match(applicationReaderReleaseRecovery, /application_reader_identity_projection_bounded/i);
 assert.match(applicationReaderReleaseRecovery, /custodial_application_reader_device_identity/i);
 assert.match(applicationReaderReleaseRecovery, /' grant '\|\|g\.privilege_type\|\|' \('\|\|quote_ident\(a\.attname\)/i);
@@ -222,9 +231,9 @@ assert.match(releaseEvidence.compatibility_window.static_weekly_writer_and_devic
 assert.match(dayChangeReconciliation, /static_weekly_v4_begin_day_changes/);
 assert.equal(releaseEvidence.artifact, "integrated-backend-authority-release-evidence.v2");
 assert.equal(releaseEvidence.release_id, "release-2026.07.19.custodial-v3.12");
-assert.equal(releaseEvidence.frontend_commit_sha, "3de10acd32ba515d72d9c5d3b791ac8229c507ba");
+assert.equal(releaseEvidence.frontend_commit_sha, "89c47c0ef56de7f80e27114577b016aa0a195fd8");
 assert.equal(releaseEvidence.frontend_commit_state, "final_pair_bound");
-assert.equal(releaseEvidence.schema_fingerprint, "5ecf1ff150759f2316c9f396170276df07ec21fc6ae05847cf0efa696866d246");
+assert.equal(releaseEvidence.schema_fingerprint, "47f7739b31a95d55a120895af2aec68518d111d338246b6017d64d02155cc96d");
 assert.equal(releaseEvidence.cutover.source_identity.kind, "external_signed_release_attestation");
 assert.equal(releaseEvidence.cutover.source_identity.generated_evidence_excluded_from_content_identity, true);
 assert.equal(Object.hasOwn(releaseInput.cutover.source_identity, "authority_content_paths"), false, "manual authority inventory is forbidden");
@@ -237,9 +246,9 @@ assert.ok(releaseEvidence.authority_content_identity.expected_tree_inventory.som
 assert.ok(releaseEvidence.authority_content_identity.expected_tree_inventory.some(({ path }) => path === "scripts/integrated-backend-authority-suite-order-tests.mjs"));
 assert.equal(releaseEvidence.authority_content_identity.expected_tree_inventory.some(({ path }) => path === "release/integrated-backend-authority-evidence.json"), false);
 assert.equal(releaseEvidence.authority_content_identity.authority_path_count, releaseEvidence.authority_content_identity.expected_tree_inventory.length);
-assert.equal(releaseEvidence.authority_content_identity.migration_path_count, 114);
-assert.equal(releaseEvidence.migrations.length, 114);
-assert.equal(releaseEvidence.migrations.at(-1).name, credentialReplacementLineageFile);
+assert.equal(releaseEvidence.authority_content_identity.migration_path_count, 115);
+assert.equal(releaseEvidence.migrations.length, 115);
+assert.equal(releaseEvidence.migrations.at(-1).name, legacyScheduleWriterRetirementFile);
 assert.match(releaseEvidence.compatibility_window.credential_replacement_lineage_phase,
   /append-only same-device predecessor-to-successor transport lineage.*original actor, device, credential, or work evidence/i);
 assert.equal(Object.hasOwn(releaseEvidence.authority_content_identity, "value"), false, "generated evidence must not self-assert a worktree-derived content hash");

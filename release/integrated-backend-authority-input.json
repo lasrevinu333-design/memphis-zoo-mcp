@@ -39,7 +39,7 @@
       "prepare distinct CUSTODIAL_BACKEND_PROOF_SECRET, CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET, and DEVICE_CREDENTIAL_SECRET values (minimum 32 characters each); preserve all phone-local work and require manager-code recovery for any active credential from a different secret generation without exposing any secret",
       "capture the production catalog through the read-only Supabase boundary and require it to equal the observed clean 113-migration fingerprint recorded in release/production-migration-state.json",
       "verify production project, observed migration head, catalog/privilege fingerprint, backup receipt, and exact source attestation against release/production-migration-state.json",
-      "after explicit production-change admission, apply only the one exact pending credential-replacement-lineage migration, then require the clean 114-migration target fingerprint and zero remaining pending migrations without replaying the four already-applied release migrations",
+      "after explicit production-change admission, apply only the two exact pending migrations in dependency order (credential-replacement lineage, then legacy daily-schedule writer retirement), then require the clean 115-migration target fingerprint and zero remaining pending migrations without replaying the four already-applied release migrations",
       "deploy the canonical-only backend only after all authoritative procedures above are present and verified; missing canonical writers fail closed",
       "require a green authority health gate and direct-DML denial probes before routing traffic"
     ],
@@ -64,6 +64,7 @@
         ,"complete Weekly Schedule day-change batches pass the database receipt-chain health gate; exact replay is read-only and prefix, extension, reorder, and content conflicts fail atomically"
         ,"the retired 09:45 background writer has no scheduled runtime; only an explicit manager-approved schedule or absence publication may rebalance current static-weekly coverage"
         ,"every active employee-device credential is confirmed and matches the deployed DEVICE_CREDENTIAL_SECRET generation before canary resume; an unconfirmed or mismatched credential requires manager-code recovery that preserves phone-local work and never restores a legacy secret fallback"
+        ,"static-weekly governed dates reject every insert, update, or delete through the four legacy daily schedule shadow tables; the retained rolling helper is non-mutating for governed dates and its cron is disabled"
       ]
     }
   },
