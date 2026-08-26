@@ -7,7 +7,11 @@ const NATIVE_ENROLL_ATTEMPTS = new Map();
 const NATIVE_ENROLL_WINDOW_MS = 15 * 60 * 1000;
 const NATIVE_ENROLL_LIMIT = 8;
 const EMPLOYEE_ENROLLMENT_TTL_MS = 30 * 60 * 1000;
-const ENROLLMENT_RESULT_TTL_MS = 30 * 60 * 1000;
+// Android caps a locally staged enrollment at 30 minutes. Keep the server's
+// resumable result comfortably inside that boundary so ordinary phone/server
+// clock skew can never turn a valid manager-authorized recovery into a
+// compensating cancellation.
+const ENROLLMENT_RESULT_TTL_MS = 25 * 60 * 1000;
 const ENROLLMENT_RESULT_ENCRYPTION = "aes-256-gcm.v1";
 
 function envText(env, key) { return String(env?.[key] || "").trim(); }

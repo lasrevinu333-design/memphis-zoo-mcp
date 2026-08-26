@@ -134,6 +134,7 @@ try {
     enrollment_code: "12345678",
     device_label: "Contract Build 11",
   };
+  const enrollmentRequestedAfter = Date.now();
   const first = await request("/custodial-device-auth/enroll", {
     body: enrollmentBody,
     headers: { "idempotency-key": operationId },
@@ -147,6 +148,16 @@ try {
   assert.equal(first.body.data.credential_id, first.body.data.device_credential.split(".")[0]);
   assert.equal(first.body.data.device_id, "KIOSK_02");
   assert.equal(first.body.data.employee.display_name, "Contract Employee");
+  const resumeExpiry = Date.parse(first.body.data.resume_expires_at);
+  assert.ok(Number.isFinite(resumeExpiry));
+  assert.ok(
+    resumeExpiry > enrollmentRequestedAfter + 24 * 60 * 1000,
+    "resumable enrollment result must retain the intended operational window",
+  );
+  assert.ok(
+    resumeExpiry <= Date.now() + 25 * 60 * 1000,
+    "server enrollment result must remain inside Android's 30-minute clock boundary",
+  );
 
   const rawCredential = first.body.data.device_credential;
   const persistedOperation = operations.get(operationId);
