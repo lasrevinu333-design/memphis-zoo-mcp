@@ -1,16 +1,16 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "3de10acd32ba515d72d9c5d3b791ac8229c507ba",
+  "frontend_commit_sha": "89c47c0ef56de7f80e27114577b016aa0a195fd8",
   "frontend_commit_state": "final_pair_bound",
-  "schema_fingerprint": "5ecf1ff150759f2316c9f396170276df07ec21fc6ae05847cf0efa696866d246",
+  "schema_fingerprint": "47f7739b31a95d55a120895af2aec68518d111d338246b6017d64d02155cc96d",
   "schema_transition": {
     "transition_id": "application-reader-release-recovery-20260825",
     "from_fingerprint": "0c3cd0cb822f147842d5c09a2bc15ffae41401956b7664f2ccfaedd13b79d527",
-    "to_fingerprint": "5ecf1ff150759f2316c9f396170276df07ec21fc6ae05847cf0efa696866d246",
+    "to_fingerprint": "47f7739b31a95d55a120895af2aec68518d111d338246b6017d64d02155cc96d",
     "expires_at": "2026-09-03T23:59:59Z"
   },
-  "frontend_source_fingerprint": "5ecf1ff150759f2316c9f396170276df07ec21fc6ae05847cf0efa696866d246",
+  "frontend_source_fingerprint": "47f7739b31a95d55a120895af2aec68518d111d338246b6017d64d02155cc96d",
   "backend_contract": {
     "scan": "scan.v4.snapshot-bound-authority",
     "authority": "offline-authority.v5",
@@ -81,7 +81,7 @@
       "prepare distinct CUSTODIAL_BACKEND_PROOF_SECRET, CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET, and DEVICE_CREDENTIAL_SECRET values (minimum 32 characters each); preserve all phone-local work and require manager-code recovery for any active credential from a different secret generation without exposing any secret",
       "capture the production catalog through the read-only Supabase boundary and require it to equal the observed clean 113-migration fingerprint recorded in release/production-migration-state.json",
       "verify production project, observed migration head, catalog/privilege fingerprint, backup receipt, and exact source attestation against release/production-migration-state.json",
-      "after explicit production-change admission, apply only the one exact pending credential-replacement-lineage migration, then require the clean 114-migration target fingerprint and zero remaining pending migrations without replaying the four already-applied release migrations",
+      "after explicit production-change admission, apply only the two exact pending migrations in dependency order (credential-replacement lineage, then legacy daily-schedule writer retirement), then require the clean 115-migration target fingerprint and zero remaining pending migrations without replaying the four already-applied release migrations",
       "deploy the canonical-only backend only after all authoritative procedures above are present and verified; missing canonical writers fail closed",
       "require a green authority health gate and direct-DML denial probes before routing traffic"
     ],
@@ -105,7 +105,8 @@
         "native wire timestamps are canonical UTC milliseconds; immutable activation boundaries and catalog-derived authority restoration remain healthy after negative mutations",
         "complete Weekly Schedule day-change batches pass the database receipt-chain health gate; exact replay is read-only and prefix, extension, reorder, and content conflicts fail atomically",
         "the retired 09:45 background writer has no scheduled runtime; only an explicit manager-approved schedule or absence publication may rebalance current static-weekly coverage",
-        "every active employee-device credential is confirmed and matches the deployed DEVICE_CREDENTIAL_SECRET generation before canary resume; an unconfirmed or mismatched credential requires manager-code recovery that preserves phone-local work and never restores a legacy secret fallback"
+        "every active employee-device credential is confirmed and matches the deployed DEVICE_CREDENTIAL_SECRET generation before canary resume; an unconfirmed or mismatched credential requires manager-code recovery that preserves phone-local work and never restores a legacy secret fallback",
+        "static-weekly governed dates reject every insert, update, or delete through the four legacy daily schedule shadow tables; the retained rolling helper is non-mutating for governed dates and its cron is disabled"
       ]
     }
   },
@@ -415,17 +416,17 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "ff623746119e5bd4c1fac4d85292f841193f67d4"
+        "object_id": "ffcd601f5a02dae0e888fb198cfd4a301c3ad1f5"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
         "mode": "100644",
-        "object_id": "d1a7a43f73598547905e69db6c47150162a933e5"
+        "object_id": "f80fd8573f0bd35d0d9716fa6e4c3ca8a58ca6e8"
       },
       {
         "path": "release/production-migration-state.json",
         "mode": "100644",
-        "object_id": "19330649a8862ef1323d6aa773a7122760249eca"
+        "object_id": "d14c379c7158c419c671790731a356216f5d117a"
       },
       {
         "path": "release/reviewed-migrations/20260809125735_cleaning_inspection_24_hour_freshness.sql",
@@ -435,7 +436,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "2d9ca24aace84fbb50b5db991c61424f7a8071a3"
+        "object_id": "f77b8b2bf1260a8883906f7ad834bc0e866af445"
       },
       {
         "path": "research/european_herbalism_through_paracelsus.md",
@@ -585,7 +586,7 @@
       {
         "path": "scripts/custodial-repair-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "ddd30192bf49626e60c1aaba71b45f324a6b3344"
+        "object_id": "13a09d628d1f06693230aa4698966ae67cdd8641"
       },
       {
         "path": "scripts/custodial-u4-migration-convergence-tests.mjs",
@@ -755,17 +756,17 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "b5722a7cf253b46d372256dae3f6b485303a935a"
+        "object_id": "bd6f59a0720a5b618fbb34f32b85b8d637c34c57"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "4635584f10e86c567365d9bee84a7ce67d91869a"
+        "object_id": "1b85966cf1274dbeaa30cc896305ebe5376a7ccb"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
         "mode": "100644",
-        "object_id": "839709e9db9289ddb216462599b789bbfebc04e4"
+        "object_id": "633b082690ad067a05b555255a942acb8fb556f5"
       },
       {
         "path": "scripts/integrated-backend-authority-suite-order-isolated-tests.mjs",
@@ -920,7 +921,7 @@
       {
         "path": "scripts/operations-leadership-mobile-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "baabc1451e97d711a7baefe448d2f71ea95f1da6"
+        "object_id": "0b1308352c0fe8cc644147981f7f5749d020cdd6"
       },
       {
         "path": "scripts/operations-leadership-mobile-database-tests.mjs",
@@ -1010,7 +1011,7 @@
       {
         "path": "scripts/refresh-integrated-backend-authority-release.mjs",
         "mode": "100644",
-        "object_id": "c1fb62297d2ae3b06097e57803b0f2ef5432b1a6"
+        "object_id": "5c27c6043f72e50f5acff9f9cd6a4b628132d4c9"
       },
       {
         "path": "scripts/refresh-release-schema-alignment.mjs",
@@ -1030,7 +1031,7 @@
       {
         "path": "scripts/release-closure-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "3a5fc4493d2ac0f36f4c5521098770e9bf7e48ad"
+        "object_id": "880323166a5a1721d57cef01c1c542c9410a1e40"
       },
       {
         "path": "scripts/restore-mutation-gate-tests.mjs",
@@ -1225,12 +1226,12 @@
       {
         "path": "scripts/static-weekly-operational-truth-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "a34015677f5ee55eee67e00fde074c11befa98ba"
+        "object_id": "8f1a650dbffb107b2eb25f15803493546eed2874"
       },
       {
         "path": "scripts/static-weekly-operational-truth-database-tests.mjs",
         "mode": "100644",
-        "object_id": "41b792a54ad661d672c49f515f96c84578d33091"
+        "object_id": "b9f74f4f40bc2ee23886b3736441059737cf9f14"
       },
       {
         "path": "scripts/static-weekly-production-database-runtime-probe.mjs",
@@ -1930,12 +1931,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "461064293d9213ad74f8bc0991e1135caa93b33e"
+        "object_id": "2ce4c08c3857a6b143d3e0575375620f40955eff"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "cf4e97b8fc78c808abb754026b422969cd93047f"
+        "object_id": "617bd2e5758778ea55c6917b487b270a469b5091"
       },
       {
         "path": "supabase/config.toml",
@@ -3098,13 +3099,18 @@
         "object_id": "0a711c625bd23afebacb8b09a6863452af0ddfdb"
       },
       {
+        "path": "supabase/migrations/20260826114516_retire_legacy_daily_schedule_writers_after_static_weekly_cutover.sql",
+        "mode": "100644",
+        "object_id": "1521e102aea12d5f6787a581342954722a547e54"
+      },
+      {
         "path": "tmp/write_probe.txt",
         "mode": "100644",
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 598,
-    "migration_path_count": 114,
+    "authority_path_count": 599,
+    "migration_path_count": 115,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
   },
@@ -3456,6 +3462,9 @@
     },
     {
       "name": "20260826020000_preserve_offline_work_across_manager_credential_recovery.sql"
+    },
+    {
+      "name": "20260826114516_retire_legacy_daily_schedule_writers_after_static_weekly_cutover.sql"
     }
   ],
   "release_boundary": "Prepare distinct minimum-32-character backend, native-route, and employee-device credential secrets before cutover; configure database digests immediately after the migrations that create each configuration function, retain the bridge backend artifact through the scan-snapshot phase, require manager-code recovery without phone-local work loss for any device-credential generation mismatch, and require the executable health/restoration probes before traffic changes."
