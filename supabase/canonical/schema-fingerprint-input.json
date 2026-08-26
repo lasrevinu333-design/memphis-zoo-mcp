@@ -45916,6 +45916,102 @@
       "check_expression": null,
       "command_code": "r",
       "permissive": true,
+      "policy_name": "custodial_application_reader_msg_device_assignments_runtime",
+      "roles": [
+        "custodial_application_reader"
+      ],
+      "schema_name": "public",
+      "table_name": "msg_device_assignments",
+      "using_expression": "true"
+    },
+    {
+      "check_expression": null,
+      "command_code": "r",
+      "permissive": true,
+      "policy_name": "custodial_application_reader_msg_memphis_thread_context_runtime",
+      "roles": [
+        "custodial_application_reader"
+      ],
+      "schema_name": "public",
+      "table_name": "msg_memphis_thread_context",
+      "using_expression": "true"
+    },
+    {
+      "check_expression": null,
+      "command_code": "r",
+      "permissive": true,
+      "policy_name": "custodial_application_reader_msg_messages_runtime",
+      "roles": [
+        "custodial_application_reader"
+      ],
+      "schema_name": "public",
+      "table_name": "msg_messages",
+      "using_expression": "true"
+    },
+    {
+      "check_expression": null,
+      "command_code": "r",
+      "permissive": true,
+      "policy_name": "custodial_application_reader_msg_receipts_runtime",
+      "roles": [
+        "custodial_application_reader"
+      ],
+      "schema_name": "public",
+      "table_name": "msg_receipts",
+      "using_expression": "true"
+    },
+    {
+      "check_expression": null,
+      "command_code": "r",
+      "permissive": true,
+      "policy_name": "custodial_application_reader_msg_thread_participants_runtime",
+      "roles": [
+        "custodial_application_reader"
+      ],
+      "schema_name": "public",
+      "table_name": "msg_thread_participants",
+      "using_expression": "true"
+    },
+    {
+      "check_expression": null,
+      "command_code": "r",
+      "permissive": true,
+      "policy_name": "custodial_application_reader_msg_thread_visibility_runtime",
+      "roles": [
+        "custodial_application_reader"
+      ],
+      "schema_name": "public",
+      "table_name": "msg_thread_visibility",
+      "using_expression": "true"
+    },
+    {
+      "check_expression": null,
+      "command_code": "r",
+      "permissive": true,
+      "policy_name": "custodial_application_reader_msg_threads_runtime",
+      "roles": [
+        "custodial_application_reader"
+      ],
+      "schema_name": "public",
+      "table_name": "msg_threads",
+      "using_expression": "true"
+    },
+    {
+      "check_expression": null,
+      "command_code": "r",
+      "permissive": true,
+      "policy_name": "custodial_application_reader_msg_users_runtime",
+      "roles": [
+        "custodial_application_reader"
+      ],
+      "schema_name": "public",
+      "table_name": "msg_users",
+      "using_expression": "true"
+    },
+    {
+      "check_expression": null,
+      "command_code": "r",
+      "permissive": true,
       "policy_name": "schedule_automation_runs_authed_read",
       "roles": [
         "authenticated"
@@ -55297,14 +55393,6 @@
       "table_name": "moxie_auth_credentials"
     },
     {
-      "grantee": "custodial_application_reader",
-      "grantor": "migration_owner",
-      "is_grantable": false,
-      "privilege_type": "SELECT",
-      "schema_name": "public",
-      "table_name": "msg_broadcast_recipients"
-    },
-    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -55369,14 +55457,6 @@
       "table_name": "msg_broadcast_recipients"
     },
     {
-      "grantee": "custodial_application_reader",
-      "grantor": "migration_owner",
-      "is_grantable": false,
-      "privilege_type": "SELECT",
-      "schema_name": "public",
-      "table_name": "msg_broadcasts"
-    },
-    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -55439,14 +55519,6 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "msg_broadcasts"
-    },
-    {
-      "grantee": "custodial_application_reader",
-      "grantor": "migration_owner",
-      "is_grantable": false,
-      "privilege_type": "SELECT",
-      "schema_name": "public",
-      "table_name": "msg_canonical_thread_pairs"
     },
     {
       "grantee": "custodial_application_reader",
@@ -55521,14 +55593,6 @@
       "table_name": "msg_device_assignments"
     },
     {
-      "grantee": "custodial_application_reader",
-      "grantor": "migration_owner",
-      "is_grantable": false,
-      "privilege_type": "SELECT",
-      "schema_name": "public",
-      "table_name": "msg_hidden_threads_by_device"
-    },
-    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -55649,14 +55713,6 @@
       "table_name": "msg_memphis_thread_context"
     },
     {
-      "grantee": "custodial_application_reader",
-      "grantor": "migration_owner",
-      "is_grantable": false,
-      "privilege_type": "SELECT",
-      "schema_name": "public",
-      "table_name": "msg_message_audit"
-    },
-    {
       "grantee": "service_role",
       "grantor": "migration_owner",
       "is_grantable": false,
@@ -55711,14 +55767,6 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "msg_message_audit"
-    },
-    {
-      "grantee": "custodial_application_reader",
-      "grantor": "migration_owner",
-      "is_grantable": false,
-      "privilege_type": "SELECT",
-      "schema_name": "public",
-      "table_name": "msg_message_deletions"
     },
     {
       "grantee": "service_role",
@@ -55846,14 +55894,6 @@
       "is_grantable": false,
       "privilege_type": "SELECT",
       "schema_name": "public",
-      "table_name": "msg_ops_manager_legacy_identity_links"
-    },
-    {
-      "grantee": "custodial_application_reader",
-      "grantor": "migration_owner",
-      "is_grantable": false,
-      "privilege_type": "SELECT",
-      "schema_name": "public",
       "table_name": "msg_receipts"
     },
     {
@@ -55911,14 +55951,6 @@
       "privilege_type": "UPDATE",
       "schema_name": "public",
       "table_name": "msg_receipts"
-    },
-    {
-      "grantee": "custodial_application_reader",
-      "grantor": "migration_owner",
-      "is_grantable": false,
-      "privilege_type": "SELECT",
-      "schema_name": "public",
-      "table_name": "msg_thread_deletion_operations"
     },
     {
       "grantee": "service_role",
