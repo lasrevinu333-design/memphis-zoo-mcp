@@ -571,7 +571,7 @@
       {
         "path": "scripts/custodial-enrollment-security-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "7dffa15d6c97d3002d329b49e59a6bf70a996cd3"
+        "object_id": "3190db299ca22f81367be1b655981cf5593d9f07"
       },
       {
         "path": "scripts/custodial-enrollment-security-database-tests.mjs",
@@ -1591,7 +1591,7 @@
       {
         "path": "src/custodial-employee-admin.js",
         "mode": "100644",
-        "object_id": "6414cb1e19576e697ac42bd6aa02d7c38c8b901a"
+        "object_id": "0366c9c94240a55adb7e8e6e832e787f8afeb45b"
       },
       {
         "path": "src/device-identity.js",
