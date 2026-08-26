@@ -1,16 +1,16 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "a2e2965ee458d4ce96845672918bd232f39059ca",
+  "frontend_commit_sha": "686a6e4d9e40ccae9f95bb66d9755b07ea7235ef",
   "frontend_commit_state": "final_pair_bound",
-  "schema_fingerprint": "4c79925d31759d7bb51e010f8ed47933e4ab9985df32df8a1592888e2134818e",
+  "schema_fingerprint": "5ecf1ff150759f2316c9f396170276df07ec21fc6ae05847cf0efa696866d246",
   "schema_transition": {
     "transition_id": "application-reader-release-recovery-20260825",
     "from_fingerprint": "0c3cd0cb822f147842d5c09a2bc15ffae41401956b7664f2ccfaedd13b79d527",
-    "to_fingerprint": "4c79925d31759d7bb51e010f8ed47933e4ab9985df32df8a1592888e2134818e",
+    "to_fingerprint": "5ecf1ff150759f2316c9f396170276df07ec21fc6ae05847cf0efa696866d246",
     "expires_at": "2026-09-03T23:59:59Z"
   },
-  "frontend_source_fingerprint": "4c79925d31759d7bb51e010f8ed47933e4ab9985df32df8a1592888e2134818e",
+  "frontend_source_fingerprint": "5ecf1ff150759f2316c9f396170276df07ec21fc6ae05847cf0efa696866d246",
   "backend_contract": {
     "scan": "scan.v4.snapshot-bound-authority",
     "authority": "offline-authority.v5",
@@ -53,6 +53,7 @@
     "static_weekly_registered_roster_bootstrap_phase": "20260823143000 permits only the protected release operator to hydrate the complete immutable roster from one active registered authority source, rejects partial or mismatched state, and makes exact replay non-mutating",
     "static_weekly_operational_truth_cutover_phase": "20260824213000 makes employee, manager, dashboard, analytics and notification schedule truth consume one exact static-weekly projection, fails closed on stale governed authority, and excludes reminder-only or response-only work from physical cleaning obligations",
     "application_reader_release_recovery_phase": "20260825174500 makes release recovery preserve the restricted application-reader identity projection and its three FORCE-RLS policies, rejects unexpected column authority, and replaces the obsolete no-column-ACL health contract",
+    "credential_replacement_lineage_phase": "20260826020000 preserves frozen offline work across manager-approved credential recovery through append-only same-device predecessor-to-successor transport lineage without rewriting the original actor, device, credential, or work evidence",
     "static_weekly_writer_and_device_secret_closure_phase": "The release runtime removes the retired minute-driven 09:45 schedule writer, confines coverage rebalance to explicit manager-approved schedule or absence publication, identifies the deployed DEVICE_CREDENTIAL_SECRET generation without exposing it, and blocks canary resume until every active employee credential is confirmed and matches that generation or completes manager-code recovery."
   },
   "rollback": {
@@ -78,9 +79,9 @@
     },
     "phase_order": [
       "prepare distinct CUSTODIAL_BACKEND_PROOF_SECRET, CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET, and DEVICE_CREDENTIAL_SECRET values (minimum 32 characters each); preserve all phone-local work and require manager-code recovery for any active credential from a different secret generation without exposing any secret",
-      "capture the production catalog through the read-only Supabase boundary and require it to equal the clean 113-migration rebuild fingerprint",
-      "verify production project, converged migration head, catalog/privilege fingerprint, backup receipt, and exact source attestation against release/production-migration-state.json",
-      "require zero pending migrations and never replay the four already-applied release migrations",
+      "capture the production catalog through the read-only Supabase boundary and require it to equal the observed clean 113-migration fingerprint recorded in release/production-migration-state.json",
+      "verify production project, observed migration head, catalog/privilege fingerprint, backup receipt, and exact source attestation against release/production-migration-state.json",
+      "after explicit production-change admission, apply only the one exact pending credential-replacement-lineage migration, then require the clean 114-migration target fingerprint and zero remaining pending migrations without replaying the four already-applied release migrations",
       "deploy the canonical-only backend only after all authoritative procedures above are present and verified; missing canonical writers fail closed",
       "require a green authority health gate and direct-DML denial probes before routing traffic"
     ],
@@ -414,17 +415,17 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "1edef09447547bf7aabd0257b55978894d56f3ac"
+        "object_id": "477c6ac8a60b3c7c0b0c2a7e98b035314e94f746"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
         "mode": "100644",
-        "object_id": "c93c3386e5df2151b7656f6f8241bf58addc83d0"
+        "object_id": "d1a7a43f73598547905e69db6c47150162a933e5"
       },
       {
         "path": "release/production-migration-state.json",
         "mode": "100644",
-        "object_id": "8da6dca21227814ac7aeca296b0ad7d4cd004160"
+        "object_id": "19330649a8862ef1323d6aa773a7122760249eca"
       },
       {
         "path": "release/reviewed-migrations/20260809125735_cleaning_inspection_24_hour_freshness.sql",
@@ -434,7 +435,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "b743aff61cf1c5f49c410f784adf37560c4d7fb7"
+        "object_id": "0d9afb2ff87e904b457ee8bfb43e286affc68221"
       },
       {
         "path": "research/european_herbalism_through_paracelsus.md",
@@ -584,7 +585,7 @@
       {
         "path": "scripts/custodial-repair-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "307c781d4aa0ccb7b8318f90e01cdaf60ab5ac57"
+        "object_id": "63f8cb59d8e3e8ad8b06fb4f4e63e5b6617c1f54"
       },
       {
         "path": "scripts/custodial-u4-migration-convergence-tests.mjs",
@@ -604,7 +605,7 @@
       {
         "path": "scripts/device-credential-foundation-tests.mjs",
         "mode": "100644",
-        "object_id": "c43f00b8ae9ba546c0564e15cc3c508939ecf0cd"
+        "object_id": "1cdc207ba1a3864c4a016c6b25055c110db0a8f8"
       },
       {
         "path": "scripts/device-popup-fully-kiosk-test.mjs",
@@ -754,17 +755,17 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "1676c309525ca071f31fa31f36c4481cc3b206ca"
+        "object_id": "a6751ea6662cc37eda71563ad47d5b32a198ec29"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "08a8fee9d73c8d021bac7e2eea55b61ef47ce9b2"
+        "object_id": "4635584f10e86c567365d9bee84a7ce67d91869a"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
         "mode": "100644",
-        "object_id": "6c1e18cd38624b72b389cd0688c4a94d7082aea7"
+        "object_id": "839709e9db9289ddb216462599b789bbfebc04e4"
       },
       {
         "path": "scripts/integrated-backend-authority-suite-order-isolated-tests.mjs",
@@ -884,12 +885,12 @@
       {
         "path": "scripts/native-phone-attestation-tests.mjs",
         "mode": "100644",
-        "object_id": "6d454ac70e51b181b3f0818bd944559854d5ee07"
+        "object_id": "db2b5776185149a5734f2301be0302b201ca419e"
       },
       {
         "path": "scripts/offline-actor-recovery-database-tests.mjs",
         "mode": "100644",
-        "object_id": "6f12a99453c3beec44c4a6c7ad60199e21dd999b"
+        "object_id": "f851d652c26e1dca9ee35a79cab073e3f52ea137"
       },
       {
         "path": "scripts/offline-actor-recovery-route-tests.mjs",
@@ -919,7 +920,7 @@
       {
         "path": "scripts/operations-leadership-mobile-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "7cced74b5d0a9f1457a521e4552c2453232493d1"
+        "object_id": "bf49215e662bf223a8106f3e87d4e6851271932f"
       },
       {
         "path": "scripts/operations-leadership-mobile-database-tests.mjs",
@@ -1009,7 +1010,7 @@
       {
         "path": "scripts/refresh-integrated-backend-authority-release.mjs",
         "mode": "100644",
-        "object_id": "c3966c0db8b261910b46f602ef277b688bc02906"
+        "object_id": "c1fb62297d2ae3b06097e57803b0f2ef5432b1a6"
       },
       {
         "path": "scripts/refresh-release-schema-alignment.mjs",
@@ -1029,7 +1030,7 @@
       {
         "path": "scripts/release-closure-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "4bf6038989c5a16e78bd75ac1e82c94e0855869a"
+        "object_id": "7ba7856e2d5134d378bf6e2f80139cfd7e776d85"
       },
       {
         "path": "scripts/restore-mutation-gate-tests.mjs",
@@ -1039,7 +1040,7 @@
       {
         "path": "scripts/restroom-rebalance-route-tests.mjs",
         "mode": "100644",
-        "object_id": "71ed210450d667327bc82cc28acdf0d55378a2ac"
+        "object_id": "a13221457d2e23a6b1c6984176184eca58027552"
       },
       {
         "path": "scripts/scan-authority-cutover-tests.mjs",
@@ -1564,7 +1565,7 @@
       {
         "path": "src/auth/device-credential-auth.js",
         "mode": "100644",
-        "object_id": "65deafd8c5c247ee54e3bd62ada5b036589b8544"
+        "object_id": "5f7f336108fee428a8b743ea6a62308e5c5c50e6"
       },
       {
         "path": "src/auth/mcp-connector-auth.js",
@@ -1659,12 +1660,12 @@
       {
         "path": "src/index.js",
         "mode": "100644",
-        "object_id": "30ef8352ef43cef4ea8810665f5474a9f8bd3a63"
+        "object_id": "2cb099d84c69552877bc76d49c94ada792d6df01"
       },
       {
         "path": "src/integrated-backend-authority-release-evidence.js",
         "mode": "100644",
-        "object_id": "a9609ab3a63fb0c4b96b7cfa129817533ed14215"
+        "object_id": "802d28277810db73475d18f5656db4265513ac91"
       },
       {
         "path": "src/leadership-bootstrap.js",
@@ -1799,7 +1800,7 @@
       {
         "path": "src/schedule-api.js",
         "mode": "100644",
-        "object_id": "f45ad9b13dc33079b20dcf48d01b4671093e4c6d"
+        "object_id": "cd25ec19d3728dc90d8129a1b3c6f2014ca6ec2d"
       },
       {
         "path": "src/schedule-display.js",
@@ -1929,12 +1930,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "fcc1c50b82c8fe10eabbde82f3d916faa20e0bce"
+        "object_id": "461064293d9213ad74f8bc0991e1135caa93b33e"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "fef5a488f65a14b84f8c4f6118988d6b4cf91820"
+        "object_id": "cf4e97b8fc78c808abb754026b422969cd93047f"
       },
       {
         "path": "supabase/config.toml",
@@ -3092,13 +3093,18 @@
         "object_id": "4381e270f84a791deb0e78824f1ac8cf1f5ce03b"
       },
       {
+        "path": "supabase/migrations/20260826020000_preserve_offline_work_across_manager_credential_recovery.sql",
+        "mode": "100644",
+        "object_id": "0a711c625bd23afebacb8b09a6863452af0ddfdb"
+      },
+      {
         "path": "tmp/write_probe.txt",
         "mode": "100644",
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 597,
-    "migration_path_count": 113,
+    "authority_path_count": 598,
+    "migration_path_count": 114,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
   },
@@ -3447,6 +3453,9 @@
     },
     {
       "name": "20260825174500_rebind_application_reader_release_recovery.sql"
+    },
+    {
+      "name": "20260826020000_preserve_offline_work_across_manager_credential_recovery.sql"
     }
   ],
   "release_boundary": "Prepare distinct minimum-32-character backend, native-route, and employee-device credential secrets before cutover; configure database digests immediately after the migrations that create each configuration function, retain the bridge backend artifact through the scan-snapshot phase, require manager-code recovery without phone-local work loss for any device-credential generation mismatch, and require the executable health/restoration probes before traffic changes."
