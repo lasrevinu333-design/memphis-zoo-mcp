@@ -130,6 +130,17 @@ result = await authenticateDeviceCredentialRequest(request(), { env, store: stor
 assert.equal(result.ok, true);
 assert.equal(result.enrollment_required, false);
 
+result = await authenticateDeviceCredentialRequest(request(), {
+  env,
+  store: storeFor({ mode: "observe" }),
+  runReadOnlySql: resolver,
+  requireEnrolledCredential: true,
+});
+assert.equal(result.ok, false, "personal employee services must not treat observe mode as authorization");
+assert.equal(result.status, 401);
+assert.equal(result.code, "device_credential_required");
+assert.equal(result.enrollment_required, true);
+
 result = await authenticateDeviceCredentialRequest(request({ deviceId: "KIOSK_01" }), { env, store: storeFor({ mode: "enroll" }), runReadOnlySql: resolver });
 assert.equal(result.ok, false);
 assert.equal(result.code, "device_not_eligible");
@@ -304,6 +315,47 @@ await middleware(request(), {
 assert.equal(middlewareNext, true);
 assert.equal(middlewareStatus, 200);
 assert.equal(middlewarePayload, null);
+
+let strictMiddlewareNext = false;
+let strictMiddlewareStatus = 200;
+let strictMiddlewarePayload = null;
+const strictEmployeeMiddleware = makeDeviceCredentialMiddleware({
+  env,
+  store: storeFor({ mode: "observe" }),
+  runReadOnlySql: resolver,
+  requireEnrolledCredential: true,
+});
+await strictEmployeeMiddleware(request(), {
+  setHeader() {},
+  status(code) { strictMiddlewareStatus = code; return this; },
+  json(payload) { strictMiddlewarePayload = payload; return this; },
+}, () => { strictMiddlewareNext = true; });
+assert.equal(strictMiddlewareNext, false, "identifier-only employee access must fail even while rollout policy observes");
+assert.equal(strictMiddlewareStatus, 401);
+assert.equal(strictMiddlewarePayload.code, "device_credential_required");
+assert.equal(strictMiddlewarePayload.enrollment_required, true);
+
+let strictCredentialedNext = false;
+const strictCredentialedMiddleware = makeDeviceCredentialMiddleware({
+  env,
+  store: storeFor({ mode: "observe", credential }),
+  runReadOnlySql: resolver,
+  requireEnrolledCredential: true,
+  now: new Date("2026-07-15T21:00:00.000Z"),
+});
+await strictCredentialedMiddleware(request({ cookie }), {
+  setHeader() {},
+  status() { throw new Error("a valid enrolled credential must not be rejected"); },
+  json() { throw new Error("a valid enrolled credential must not return an error body"); },
+}, () => { strictCredentialedNext = true; });
+assert.equal(strictCredentialedNext, true, "a valid enrolled credential must retain employee access in observe mode");
+
+const strictIndexSource = read("src/index.js");
+assert.match(
+  strictIndexSource,
+  /const requireEmployeeDeviceCredential = makeDeviceCredentialMiddleware\(\{[\s\S]*?requireEnrolledCredential:\s*true,[\s\S]*?\}\);/,
+  "every operational employee route must share the strict enrolled-phone middleware",
+);
 
 let unconfirmedMiddlewareNext = false;
 let unconfirmedMiddlewareStatus = 200;

@@ -837,6 +837,7 @@ export async function authenticateDeviceCredentialRequest(req, {
   store: suppliedStore = null,
   runReadOnlySql,
   now = new Date(),
+  requireEnrolledCredential = false,
 } = {}) {
   if (typeof runReadOnlySql !== "function") throw new Error("runReadOnlySql is required.");
   const store = suppliedStore || createSupabaseDeviceCredentialStore(supabase);
@@ -1010,7 +1011,7 @@ export async function authenticateDeviceCredentialRequest(req, {
     }));
   }
 
-  if (policy.mode !== "enforce") {
+  if (!requireEnrolledCredential && policy.mode !== "enforce") {
     return {
       ok: true,
       device,
@@ -1026,7 +1027,7 @@ export async function authenticateDeviceCredentialRequest(req, {
     ok: false,
     status: 401,
     code: "device_credential_required",
-    error: "This device must be enrolled before it can access employee services.",
+    error: "This phone needs secure access before employee services can be used.",
     device,
     policy_mode: policy.mode,
     enrollment_required: true,

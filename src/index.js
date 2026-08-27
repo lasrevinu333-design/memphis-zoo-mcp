@@ -210,6 +210,7 @@ const requireLegacyMcpAuth = makeMcpConnectorMiddleware({
 const requireEmployeeDeviceCredential = makeDeviceCredentialMiddleware({
   supabase: supabaseAdmin,
   runReadOnlySql,
+  requireEnrolledCredential: true,
 });
 const requireFeedbackSubmitAuthority = makeFeedbackSubmitAuthority({
   requireEmployeeDeviceCredential,
