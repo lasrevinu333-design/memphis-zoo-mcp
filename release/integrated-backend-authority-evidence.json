@@ -3,14 +3,14 @@
   "release_id": "release-2026.07.19.custodial-v3.12",
   "frontend_commit_sha": "5d0d5716e03f6179110708add09f7b2fc3afc2b3",
   "frontend_commit_state": "final_pair_bound",
-  "schema_fingerprint": "38ab9a26caeefe071e0a2784c7cb0ba3b96810396c83ee9b5dc88d580be2cd02",
+  "schema_fingerprint": "71b1638df3d6f3188a9dc5dd9b7185bdae858dcc78a56c359fa6040db5e0cc49",
   "schema_transition": {
     "transition_id": "application-reader-release-recovery-20260825",
     "from_fingerprint": "0c3cd0cb822f147842d5c09a2bc15ffae41401956b7664f2ccfaedd13b79d527",
-    "to_fingerprint": "38ab9a26caeefe071e0a2784c7cb0ba3b96810396c83ee9b5dc88d580be2cd02",
+    "to_fingerprint": "71b1638df3d6f3188a9dc5dd9b7185bdae858dcc78a56c359fa6040db5e0cc49",
     "expires_at": "2026-09-03T23:59:59Z"
   },
-  "frontend_source_fingerprint": "38ab9a26caeefe071e0a2784c7cb0ba3b96810396c83ee9b5dc88d580be2cd02",
+  "frontend_source_fingerprint": "71b1638df3d6f3188a9dc5dd9b7185bdae858dcc78a56c359fa6040db5e0cc49",
   "backend_contract": {
     "scan": "scan.v4.snapshot-bound-authority",
     "authority": "offline-authority.v5",
@@ -83,8 +83,8 @@
       "prepare distinct CUSTODIAL_BACKEND_PROOF_SECRET, CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET, and DEVICE_CREDENTIAL_SECRET values (minimum 32 characters each); preserve all phone-local work and require manager-code recovery for any active credential from a different secret generation without exposing any secret",
       "capture the production catalog through the read-only Supabase boundary and require the exact observed production ledger head, catalog/privilege fingerprint, object counts, static-weekly state, and zero target-position collisions recorded in release/production-migration-state.json",
       "verify production project, fresh post-capture backup receipt, observed production identity, exact pending-migration digest, and exact source attestation against release/production-migration-state.json",
-      "after explicit production-change admission, apply only the one exact pending static-weekly vacancy migration, require the production ledger to advance exactly once and the complete catalog delta to match the reviewed postconditions, and do not replay the eight already-applied release migrations or remove newer production-only event objects",
-      "after schema admission, import and publish the immutable weighted schedule packet through the static-weekly control plane with expected-revision and idempotency guards; preserve the current publication until the replacement publication and projection are complete",
+      "after explicit production-change admission, apply only the one exact pending static-weekly initial-draft roster-hydration migration, require the production ledger to advance exactly once and the complete catalog delta to match the reviewed postconditions, and do not replay the nine already-applied release migrations or remove newer production-only event objects",
+      "after schema admission, refresh and publish the already-preserved immutable weighted-schedule draft through the static-weekly control plane with expected-revision and idempotency guards; do not create a competing draft, and preserve the current publication until the replacement publication and projection are complete",
       "deploy the canonical-only backend only after all authoritative procedures above are present and verified; missing canonical writers fail closed",
       "require a green authority health gate and direct-DML denial probes before routing traffic"
     ],
@@ -419,17 +419,17 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "6e2d65d36dc71a5d5de94dc01d3d91491a59470a"
+        "object_id": "1f8ef82e065d36fd01f6813ea07827c6cb1b3227"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
         "mode": "100644",
-        "object_id": "06c847a2b682e6b50f917279bc648543ee825a7a"
+        "object_id": "b35995e1f66a9a0995c77b4bca75db102df0da39"
       },
       {
         "path": "release/production-migration-state.json",
         "mode": "100644",
-        "object_id": "39a594195b379bb77952892258399b7751cf5f48"
+        "object_id": "5fd81b33c1db700c857758d7b0f4d0f2ae235498"
       },
       {
         "path": "release/reviewed-migrations/20260809125735_cleaning_inspection_24_hour_freshness.sql",
@@ -774,12 +774,12 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "4ccfe642e542ce50a002aad9c7f9f9c4ec6ff142"
+        "object_id": "f371854aead8f53b420b8c731389224936883d2c"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "b18a81531c56abd8b8c3e5e9c08a2a620ea94a25"
+        "object_id": "7845ca70bdb8420e2db14c4f453badecee50f6d9"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
@@ -1229,7 +1229,7 @@
       {
         "path": "scripts/static-weekly-control-plane-tests.mjs",
         "mode": "100644",
-        "object_id": "c6d2c4d668776148a94bcb69514cf4698ff475cb"
+        "object_id": "62c94fbb7a2bee3754465b2ff09e753f8c3d2f92"
       },
       {
         "path": "scripts/static-weekly-day-changes-database-tests.mjs",
@@ -1319,7 +1319,7 @@
       {
         "path": "scripts/static-weekly-vacant-roster-slot-database-tests.mjs",
         "mode": "100644",
-        "object_id": "a96d60d40b8d8fec191a560863601437d84ef240"
+        "object_id": "f29d41a5d51db55c4173cd5abe7f708a21c622e1"
       },
       {
         "path": "scripts/temporary-repair-payload-retirement-tests.mjs",
@@ -1844,12 +1844,12 @@
       {
         "path": "src/static-weekly-control-plane-runtime.js",
         "mode": "100644",
-        "object_id": "2ef1b198697de84a242e54b8bfaf025b2fd1dd9e"
+        "object_id": "7ddc0d93d6875422c215dbe950c9a4d398962cdc"
       },
       {
         "path": "src/static-weekly-control-plane.js",
         "mode": "100644",
-        "object_id": "d52baae84b9c843a34fe911e6adccc46ce0a8bd1"
+        "object_id": "0d8811ee0ff2a00a60bed2925df45d1c35b143fc"
       },
       {
         "path": "src/static-weekly-schedule-compiler-runtime.js",
@@ -1954,12 +1954,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "7a12d61b8f116cc6fb596c0b9a58a869d0a136a6"
+        "object_id": "029ddacebba615ff5696b6c04e2fd72b933aa369"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "7f914146a0e796de1b45e8b64d66de5ca5fa0b33"
+        "object_id": "ffd0445dc73bb0fe3d6684a4a5626b12f7bbdaa3"
       },
       {
         "path": "supabase/config.toml",
@@ -3142,13 +3142,18 @@
         "object_id": "77e8db440901c0e0014aa59b883bc421cd1f3aa2"
       },
       {
+        "path": "supabase/migrations/20260827024500_static_weekly_initial_draft_roster_hydration.sql",
+        "mode": "100644",
+        "object_id": "9925e097b13e34ab16b834a0044df76fe7ba51f7"
+      },
+      {
         "path": "tmp/write_probe.txt",
         "mode": "100644",
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 606,
-    "migration_path_count": 118,
+    "authority_path_count": 607,
+    "migration_path_count": 119,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
   },
@@ -3512,6 +3517,9 @@
     },
     {
       "name": "20260827010500_static_weekly_vacant_roster_slots.sql"
+    },
+    {
+      "name": "20260827024500_static_weekly_initial_draft_roster_hydration.sql"
     }
   ],
   "release_boundary": "Prepare distinct minimum-32-character backend, native-route, and employee-device credential secrets before cutover; configure database digests immediately after the migrations that create each configuration function, retain the bridge backend artifact through the scan-snapshot phase, require manager-code recovery without phone-local work loss for any device-credential generation mismatch, and require the executable health/restoration probes before traffic changes."
