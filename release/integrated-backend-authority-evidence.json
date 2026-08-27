@@ -164,7 +164,7 @@
       {
         "path": ".github/workflows/operational-recovery-live.yml",
         "mode": "100644",
-        "object_id": "9fa4047145b631adaf80c44387b1814dd4484b8f"
+        "object_id": "5d3b48b6fdf39d1540df167839dff5c2b42ae814"
       },
       {
         "path": ".github/workflows/operations-leadership-mobile-foundation.yml",
@@ -994,7 +994,7 @@
       {
         "path": "scripts/production-runtime-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "6fde4bf920a5b94e7a648ca544c28b0593df84a4"
+        "object_id": "322d8688d66daa92aeda0cb53e05da76a87acc3c"
       },
       {
         "path": "scripts/production-schema-c674-bootstrap-contract-tests.mjs",
