@@ -429,7 +429,7 @@
       {
         "path": "release/production-migration-state.json",
         "mode": "100644",
-        "object_id": "d22d7cd1b8460d0879c589ae3239ca557394fa52"
+        "object_id": "39a594195b379bb77952892258399b7751cf5f48"
       },
       {
         "path": "release/reviewed-migrations/20260809125735_cleaning_inspection_24_hour_freshness.sql",
@@ -3139,7 +3139,7 @@
       {
         "path": "supabase/migrations/20260827010500_static_weekly_vacant_roster_slots.sql",
         "mode": "100644",
-        "object_id": "817588ff13df838f3a6bc5c46e909d3b769c33a9"
+        "object_id": "77e8db440901c0e0014aa59b883bc421cd1f3aa2"
       },
       {
         "path": "tmp/write_probe.txt",
