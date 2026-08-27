@@ -471,8 +471,11 @@ export function createStaticWeeklyControlPlane({
     return call(client, "static_weekly_v3_read_manager_snapshot", [weekStart]);
   }
 
-  async function registeredSourceFor(client, sourceId) {
-    return call(client, "static_weekly_v3_read_authority_source", [requireSourceId(sourceId)]);
+  async function registeredSourceFor(client, sourceId, effectiveStart) {
+    return call(client, "static_weekly_v3_read_authority_source", [
+      requireSourceId(sourceId),
+      requireMonday(effectiveStart, "effective start"),
+    ]);
   }
 
   async function compileOrFail(input) {
@@ -622,12 +625,32 @@ export function createStaticWeeklyControlPlane({
     async createInitialDraft({ manager, sourceId, effectiveStart, expectedRevision, idempotencyKey }) {
       const actor = requireManager(manager); const date = requireDate(effectiveStart, "effective start");
       return transaction(async (client) => {
-        const source = await registeredSourceFor(client, sourceId);
+        // The registered document records which stable positions may be
+        // vacant.  The dated read hydrates current incumbencies and derives
+        // which of those positions are still actually vacant before the
+        // compiler creates a draft.  Without this boundary, a position filled
+        // immediately before the first publication is misrepresented as
+        // vacant even though the append-only roster ledger is authoritative.
+        const source = await registeredSourceFor(client, sourceId, date);
         const draft = await prepareInsideTransaction(client, () => prepareDraft(
           replacementDraftInput(source, date),
           { expectedRevision: requireRevision(expectedRevision), actor: { ...actor, idempotencyKey: requireIdempotencyKey(idempotencyKey) } },
         ));
         return call(client, "static_weekly_v3_create_draft", [draft.effectiveStart, draft.objectiveVersion, draft.objective, draft.inputProvenance, draft.document, draft.expectedRevision, actor.managerId, draft.idempotencyKey, requireSourceId(source.source_id)]);
+      });
+    },
+    async refreshInitialDraft({ manager, draftVersionId, sourceId, effectiveStart, expectedDraftRevision, expectedRevision, idempotencyKey }) {
+      const actor = requireManager(manager); const date = requireDate(effectiveStart, "effective start");
+      return transaction(async (client) => {
+        const source = await registeredSourceFor(client, sourceId, date);
+        const draft = await prepareInsideTransaction(client, () => prepareDraft(
+          replacementDraftInput(source, date),
+          { expectedRevision: requireRevision(expectedRevision), actor: { ...actor, idempotencyKey: requireIdempotencyKey(idempotencyKey) } },
+        ));
+        return call(client, "static_weekly_v3_update_draft", [
+          text(draftVersionId), draft.document, draft.objective, draft.inputProvenance,
+          requireRevision(expectedDraftRevision), draft.expectedRevision, actor.managerId, draft.idempotencyKey,
+        ]);
       });
     },
     async publishDraft({ manager, draftVersionId, expectedDraftRevision, expectedRevision, idempotencyKey, projectionWeekStart, publicationKind = "publish", rollbackOfVersionId = null }) {

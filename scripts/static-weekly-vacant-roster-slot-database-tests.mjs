@@ -10,6 +10,7 @@ const execFileAsync = promisify(execFile);
 const container = `mz_static_weekly_vacancy_${process.pid}`;
 const migrationsDir = path.resolve(process.cwd(), "supabase/migrations");
 const managerId = "10000000-0000-4000-8000-000000000091";
+const sourceId = "50000000-0000-4000-8000-000000000091";
 const firstVacantSlot = "20000000-0000-4000-8000-000000000091";
 const secondVacantSlot = "20000000-0000-4000-8000-000000000092";
 const quote = (value) => `'${String(value).replaceAll("'", "''")}'`;
@@ -118,12 +119,20 @@ try {
   assert.deepEqual(hydratedFromTuesday.version.vacantSlotIds, [firstVacantSlot], "daily manager changes hydrate against the containing Monday-Sunday authority week");
   assert.equal(hydratedFromTuesday.slots.find((slot) => slot.id === secondVacantSlot).incumbencies[0].personId, filled.data.new_employee_id);
 
+  await sql(`set role static_weekly_release_operator; select public.static_weekly_v3_register_authority_source(${quote(sourceId)},${json(source)},'vacancy-reader-test')`);
+  const datedRegisteredSource = JSON.parse(await scalar(cp("static_weekly_v3_read_authority_source", `${quote(sourceId)},${quote(effectiveStart)}`)));
+  assert.deepEqual(datedRegisteredSource.compiler_input.version.vacantSlotIds, [firstVacantSlot], "the first-draft reader derives active vacancy from the current append-only roster rather than the immutable capability list");
+  assert.equal(datedRegisteredSource.compiler_input.version.slotAvailability.find((row) => row.slotId === secondVacantSlot).status, "working");
+  assert.equal(datedRegisteredSource.compiler_input.slots.find((slot) => slot.id === secondVacantSlot).incumbencies[0].personId, filled.data.new_employee_id, "a named hire is visible before the initial draft is compiled");
+
   for (const role of ["public", "anon", "authenticated", "service_role", "custodial_application_reader"]) {
     assert.equal(await scalar(`select has_function_privilege(${quote(role)},'public.static_weekly_v7_create_vacant_roster_slot(uuid,text,bigint,uuid,text)','execute')::text`), "false", `${role} cannot create schedule positions`);
     assert.equal(await scalar(`select has_function_privilege(${quote(role)},'public.static_weekly_v7_fill_vacant_roster_slot(uuid,text,date,text,bigint,uuid,text)','execute')::text`), "false", `${role} cannot fill schedule positions`);
+    assert.equal(await scalar(`select has_function_privilege(${quote(role)},'public.static_weekly_v3_read_authority_source(uuid,date)','execute')::text`), "false", `${role} cannot read the release-registered schedule source`);
   }
   assert.equal(await scalar("select has_function_privilege('static_weekly_control_plane','public.static_weekly_v7_create_vacant_roster_slot(uuid,text,bigint,uuid,text)','execute')::text"), "true");
   assert.equal(await scalar("select has_function_privilege('static_weekly_control_plane','public.static_weekly_v7_fill_vacant_roster_slot(uuid,text,date,text,bigint,uuid,text)','execute')::text"), "true");
+  assert.equal(await scalar("select has_function_privilege('static_weekly_control_plane','public.static_weekly_v3_read_authority_source(uuid,date)','execute')::text"), "true");
 
   console.log("static weekly vacant roster-slot database tests: PASS");
 } finally {

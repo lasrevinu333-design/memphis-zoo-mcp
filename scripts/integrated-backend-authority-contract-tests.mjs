@@ -26,6 +26,8 @@ const applicationReaderMessengerRuntimeFile = "20260826155000_restore_applicatio
 const applicationReaderEventsRuntimeFile = "20260826160000_restore_application_reader_employee_events_runtime.sql";
 const vacantRosterSlotsFile = "20260827010500_static_weekly_vacant_roster_slots.sql";
 const vacantRosterSlots = readFileSync(`supabase/migrations/${vacantRosterSlotsFile}`, "utf8");
+const initialDraftRosterHydrationFile = "20260827024500_static_weekly_initial_draft_roster_hydration.sql";
+const initialDraftRosterHydration = readFileSync(`supabase/migrations/${initialDraftRosterHydrationFile}`, "utf8");
 const index = readFileSync("src/index.js", "utf8");
 const scanAuthorityCutover = readFileSync("src/scan-authority-cutover.js", "utf8");
 const schedulerControlPlane = readFileSync("src/static-weekly-control-plane.js", "utf8");
@@ -47,6 +49,7 @@ const exactAppliedReleaseMigrations = [
   legacyScheduleWriterRetirementFile,
   applicationReaderMessengerRuntimeFile,
   applicationReaderEventsRuntimeFile,
+  vacantRosterSlotsFile,
 ];
 const exactMigrationCount = readdirSync("supabase/migrations").filter((name) => /^[0-9]{14}_.+\.sql$/.test(name)).length;
 
@@ -149,49 +152,50 @@ assert.match(schemaFingerprintRefresh, /schema_from_fingerprint/);
 assert.match(populatedPreflightWorkflow, /release:populated-schema:preflight/);
 assert.match(releaseInput.cutover.phase_order[1], /exact observed production ledger head.*catalog\/privilege fingerprint.*zero target-position collisions/i);
 assert.match(releaseInput.cutover.phase_order[2], /fresh post-capture backup receipt.*exact pending-migration digest.*exact source attestation/i);
-assert.match(releaseInput.cutover.phase_order[3], /one exact pending static-weekly vacancy migration.*ledger to advance exactly once.*do not replay the eight already-applied release migrations/i);
-assert.match(releaseInput.cutover.phase_order[4], /immutable weighted schedule packet.*expected-revision and idempotency guards.*preserve the current publication/i);
+assert.match(releaseInput.cutover.phase_order[3], /one exact pending static-weekly initial-draft roster-hydration migration.*ledger to advance exactly once.*do not replay the nine already-applied release migrations/i);
+assert.match(releaseInput.cutover.phase_order[4], /refresh and publish the already-preserved immutable weighted-schedule draft.*expected-revision and idempotency guards.*do not create a competing draft.*preserve the current publication/i);
 assert.equal(releaseInput.cutover.production_migration_state, "release/production-migration-state.json");
 assert.equal(productionMigrationState.artifact, "production-migration-state.v2");
 assert.equal(productionMigrationState.mode, "migration_required");
 assert.equal(productionMigrationState.project_ref, "rqquvtjdmugpigbndmne");
-assert.equal(productionMigrationState.observed_production.ledger_head, "20260826231317");
-assert.equal(productionMigrationState.observed_production.source_migration_name, "add_education_classrooms_and_teton_grove_event_venues");
-assert.equal(productionMigrationState.observed_production.catalog_privilege_fingerprint, "8d84d9d344e250ca14064bedde5370f3eae33585553c3a31939849fce6296dd3");
+assert.equal(productionMigrationState.observed_production.ledger_head, "20260827014405");
+assert.equal(productionMigrationState.observed_production.source_migration_name, "static_weekly_vacant_roster_slots");
+assert.equal(productionMigrationState.observed_production.catalog_privilege_fingerprint, "ce535a8870d79fa801068bd5baf1237fa1cff99ce9161bee6003676e26687316");
 assert.equal(productionMigrationState.observed_production.catalog_capture_format, "connected_database_catalog.v1 stable normalized JSON SHA-256");
-assert.equal(productionMigrationState.observed_production.public_function_count, 491);
-assert.equal(productionMigrationState.observed_production.registered_source_count, 1);
+assert.equal(productionMigrationState.observed_production.public_function_count, 493);
+assert.equal(productionMigrationState.observed_production.registered_source_count, 2);
 assert.equal(productionMigrationState.observed_production.active_authority_key_count, 1);
-assert.equal(productionMigrationState.observed_production.roster_slot_count, 17);
-assert.equal(productionMigrationState.observed_production.roster_incumbency_count, 17);
+assert.equal(productionMigrationState.observed_production.roster_slot_count, 22);
+assert.equal(productionMigrationState.observed_production.roster_incumbency_count, 19);
 assert.equal(productionMigrationState.observed_production.published_version_count, 1);
-assert.equal(productionMigrationState.observed_production.draft_version_count, 0);
-assert.equal(productionMigrationState.observed_production.command_receipt_count, 3);
-assert.equal(productionMigrationState.observed_production.authority_revision, 3);
+assert.equal(productionMigrationState.observed_production.draft_version_count, 1);
+assert.equal(productionMigrationState.observed_production.command_receipt_count, 11);
+assert.equal(productionMigrationState.observed_production.authority_revision, 11);
 assert.equal(productionMigrationState.observed_production.projection_count, 1);
 assert.equal(productionMigrationState.observed_production.occurrence_count, 452);
 assert.equal(productionMigrationState.observed_production.application_reader_identity_policy_count, 3);
 assert.equal(productionMigrationState.observed_production.application_reader_credential_select, false);
-assert.equal(productionMigrationState.observed_production.production_ledger_count, 216);
+assert.equal(productionMigrationState.observed_production.production_ledger_count, 217);
 assert.equal(productionMigrationState.observed_production.source_authority_migration_count, exactMigrationCount - 1);
-assert.equal(productionMigrationState.observed_production.target_schedule_slot_count, 0);
-assert.equal(productionMigrationState.observed_production.vacancy_functions_present, false);
-assert.equal(productionMigrationState.target.source_migration_file, vacantRosterSlotsFile);
-assert.equal(productionMigrationState.target.source_migration_name, "static_weekly_vacant_roster_slots");
-assert.equal(productionMigrationState.target.source_migration_version, "20260827010500");
+assert.equal(productionMigrationState.observed_production.target_schedule_slot_count, 5);
+assert.equal(productionMigrationState.observed_production.vacancy_functions_present, true);
+assert.equal(productionMigrationState.observed_production.hydrated_initial_draft_reader_present, false);
+assert.equal(productionMigrationState.target.source_migration_file, initialDraftRosterHydrationFile);
+assert.equal(productionMigrationState.target.source_migration_name, "static_weekly_initial_draft_roster_hydration");
+assert.equal(productionMigrationState.target.source_migration_version, "20260827024500");
 assert.equal(productionMigrationState.target.production_ledger_version, null);
-assert.equal(productionMigrationState.target.canonical_source_schema_fingerprint, "38ab9a26caeefe071e0a2784c7cb0ba3b96810396c83ee9b5dc88d580be2cd02");
-assert.equal(productionMigrationState.target.public_function_count, 493);
-assert.equal(productionMigrationState.target.production_ledger_count, 217);
+assert.equal(productionMigrationState.target.canonical_source_schema_fingerprint, "71b1638df3d6f3188a9dc5dd9b7185bdae858dcc78a56c359fa6040db5e0cc49");
+assert.equal(productionMigrationState.target.public_function_count, 494);
+assert.equal(productionMigrationState.target.production_ledger_count, 218);
 assert.equal(productionMigrationState.target.source_authority_migration_count, exactMigrationCount);
-assert.equal(productionMigrationState.target.expected_catalog_counts.functions, 493);
-assert.equal(productionMigrationState.target.expected_catalog_counts.routine_grants, 334);
+assert.equal(productionMigrationState.target.expected_catalog_counts.functions, 494);
+assert.equal(productionMigrationState.target.expected_catalog_counts.routine_grants, 335);
 assert.equal(productionMigrationState.authorization.production_mutation_required, true);
 assert.equal(productionMigrationState.authorization.sequence_policy, "apply_exact_ordered_pending_migrations_after_release_admission");
 assert.equal(productionMigrationState.backup_evidence.state, "fresh_verified_backup_required_before_mutation");
-assert.equal(productionMigrationState.backup_evidence.last_verified.workflow_run_id, 32891851878);
-assert.equal(productionMigrationState.backup_evidence.last_verified.source_commit, "f2d3437792338aed93aa9eec5e2fd97457d130da");
-assert.equal(productionMigrationState.backup_evidence.last_verified.artifact_sha256, "95cd96e12c0e57f8cc47afdb0166c47cd28e5fd23773195a0bb392c3c5f51260");
+assert.equal(productionMigrationState.backup_evidence.last_verified.workflow_run_id, 33030860781);
+assert.equal(productionMigrationState.backup_evidence.last_verified.source_commit, "f41277a9d3ebf1c3c01e892b3540f7b28bd75a1e");
+assert.equal(productionMigrationState.backup_evidence.last_verified.artifact_sha256, "a34aa8de414e395bcef8b67aeea54ae394d45dfdf53c147e93af0bda314183b2");
 assert.equal(productionMigrationState.backup_evidence.last_verified.restore_verification, "passed");
 assert.deepEqual(productionMigrationState.applied_release_migrations.map(({ file }) => file), exactAppliedReleaseMigrations);
 for (const [index, migration] of productionMigrationState.applied_release_migrations.entries()) {
@@ -199,21 +203,24 @@ for (const [index, migration] of productionMigrationState.applied_release_migrat
   const bytes = readFileSync(`supabase/migrations/${migration.file}`);
   assert.equal(createHash("sha256").update(bytes).digest("hex"), migration.sha256, `stale applied migration digest: ${migration.file}`);
 }
-assert.deepEqual(productionMigrationState.pending_migrations.map(({ file }) => file), [vacantRosterSlotsFile]);
-const [pendingVacancyMigration] = productionMigrationState.pending_migrations;
-assert.equal(pendingVacancyMigration.order, 1);
-assert.equal(pendingVacancyMigration.phase, "static_weekly_vacant_roster_slots");
-assert.equal(pendingVacancyMigration.source_migration_version, "20260827010500");
-assert.equal(createHash("sha256").update(Buffer.from(vacantRosterSlots)).digest("hex"), pendingVacancyMigration.sha256,
-  "pending vacancy migration digest is stale");
+assert.deepEqual(productionMigrationState.pending_migrations.map(({ file }) => file), [initialDraftRosterHydrationFile]);
+const [pendingHydrationMigration] = productionMigrationState.pending_migrations;
+assert.equal(pendingHydrationMigration.order, 1);
+assert.equal(pendingHydrationMigration.phase, "static_weekly_initial_draft_roster_hydration");
+assert.equal(pendingHydrationMigration.source_migration_version, "20260827024500");
+assert.equal(createHash("sha256").update(Buffer.from(initialDraftRosterHydration)).digest("hex"), pendingHydrationMigration.sha256,
+  "pending initial-draft hydration migration digest is stale");
 assert.match(legacyScheduleWriterRetirement, /static_weekly_reject_legacy_daily_schedule_write/i);
 assert.match(legacyScheduleWriterRetirement, /cron\.alter_job/i);
 assert.match(vacantRosterSlots, /static_weekly_v7_create_vacant_roster_slot/i);
 assert.match(vacantRosterSlots, /static_weekly_v7_fill_vacant_roster_slot/i);
 assert.match(vacantRosterSlots, /shift_start<lunch_start and lunch_end<shift_end/i);
+assert.match(initialDraftRosterHydration, /static_weekly_v3_read_authority_source\(\s*p_source_id uuid,\s*p_service_date date\s*\)/i);
+assert.match(initialDraftRosterHydration, /static_weekly_v4_hydrate_compiler_source/i);
+assert.doesNotMatch(initialDraftRosterHydration, /grant execute on function public\.static_weekly_v3_read_authority_source\(uuid,date\) to (?:public|anon|authenticated|service_role|static_weekly_release_operator|custodial_application_reader)/i);
 assert.equal(releaseEvidence.compatibility_window.accepted_engine.scan, "scan.v2");
 assert.equal(releaseEvidence.compatibility_window.required_engine.scan, "scan.v4.snapshot-bound-authority");
-assert.equal(releaseEvidence.migrations.at(-1).name, vacantRosterSlotsFile);
+assert.equal(releaseEvidence.migrations.at(-1).name, initialDraftRosterHydrationFile);
 assert.match(applicationReaderReleaseRecovery, /application_reader_identity_projection_bounded/i);
 assert.match(applicationReaderReleaseRecovery, /custodial_application_reader_device_identity/i);
 assert.match(applicationReaderReleaseRecovery, /' grant '\|\|g\.privilege_type\|\|' \('\|\|quote_ident\(a\.attname\)/i);
@@ -254,7 +261,7 @@ assert.equal(releaseEvidence.artifact, "integrated-backend-authority-release-evi
 assert.equal(releaseEvidence.release_id, "release-2026.07.19.custodial-v3.12");
 assert.equal(releaseEvidence.frontend_commit_sha, "5d0d5716e03f6179110708add09f7b2fc3afc2b3");
 assert.equal(releaseEvidence.frontend_commit_state, "final_pair_bound");
-assert.equal(releaseEvidence.schema_fingerprint, "38ab9a26caeefe071e0a2784c7cb0ba3b96810396c83ee9b5dc88d580be2cd02");
+assert.equal(releaseEvidence.schema_fingerprint, "71b1638df3d6f3188a9dc5dd9b7185bdae858dcc78a56c359fa6040db5e0cc49");
 assert.equal(releaseEvidence.cutover.source_identity.kind, "external_signed_release_attestation");
 assert.equal(releaseEvidence.cutover.source_identity.generated_evidence_excluded_from_content_identity, true);
 assert.equal(Object.hasOwn(releaseInput.cutover.source_identity, "authority_content_paths"), false, "manual authority inventory is forbidden");
@@ -269,7 +276,7 @@ assert.equal(releaseEvidence.authority_content_identity.expected_tree_inventory.
 assert.equal(releaseEvidence.authority_content_identity.authority_path_count, releaseEvidence.authority_content_identity.expected_tree_inventory.length);
 assert.equal(releaseEvidence.authority_content_identity.migration_path_count, exactMigrationCount);
 assert.equal(releaseEvidence.migrations.length, exactMigrationCount);
-assert.equal(releaseEvidence.migrations.at(-1).name, vacantRosterSlotsFile);
+assert.equal(releaseEvidence.migrations.at(-1).name, initialDraftRosterHydrationFile);
 assert.match(releaseEvidence.compatibility_window.credential_replacement_lineage_phase,
   /append-only same-device predecessor-to-successor transport lineage.*original actor, device, credential, or work evidence/i);
 assert.equal(Object.hasOwn(releaseEvidence.authority_content_identity, "value"), false, "generated evidence must not self-assert a worktree-derived content hash");

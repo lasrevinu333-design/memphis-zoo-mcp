@@ -39209,6 +39209,14 @@
       "schema_name": "public"
     },
     {
+      "comment": "Hydrates an immutable vacancy-capable release source against the dated append-only roster before initial-draft compilation.",
+      "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_v3_read_authority_source(p_source_id uuid, p_service_date date)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_source jsonb;\nbegin\n  perform public.static_weekly_v3_assert_control_plane();\n  if p_source_id is null or p_service_date is null then\n    raise exception using errcode='22023',message='scheduler source read requires one immutable source and service date';\n  end if;\n  select canonical_source into v_source\n  from public.static_weekly_authority_source_documents\n  where source_id=p_source_id and active=true and retired_at is null\n  for share;\n  if not found then\n    raise exception using errcode='23514',message='scheduler source is not an active release-registered source of record';\n  end if;\n  return jsonb_build_object(\n    'source_id',p_source_id::text,\n    'compiler_input',public.static_weekly_v4_hydrate_compiler_source(v_source,p_service_date),\n    'exceptions','[]'::jsonb\n  );\nend\n$function$\n",
+      "function_name": "static_weekly_v3_read_authority_source",
+      "identity_arguments": "p_source_id uuid, p_service_date date",
+      "owner_name": "migration_owner",
+      "schema_name": "public"
+    },
+    {
       "comment": "Coherent manager week snapshot; pre-draft contractor capacity comes from the one active release-registered source, while draft and publication views remain immutable-version bound.",
       "definition": "CREATE OR REPLACE FUNCTION public.static_weekly_v3_read_manager_snapshot(p_week_start date)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'pg_catalog', 'public'\nAS $function$\ndeclare\n  v_snapshot jsonb;\n  v_source jsonb;\n  v_roster jsonb;\nbegin\n  perform public.static_weekly_v3_assert_control_plane();\n  v_snapshot:=public.static_weekly_v3_read_manager_snapshot_staffing_base(p_week_start);\n\n  -- A draft or publication already binds its own immutable compiler input.\n  if jsonb_typeof(v_snapshot->'display_version')='object' then\n    return v_snapshot;\n  end if;\n\n  begin\n    select s.canonical_source into strict v_source\n    from public.static_weekly_authority_source_documents s\n    where s.active=true;\n  exception\n    when no_data_found then\n      raise exception using errcode='23514',message='initial manager snapshot requires one active registered recurring source';\n    when too_many_rows then\n      raise exception using errcode='23514',message='initial manager snapshot requires exactly one active registered recurring source';\n  end;\n\n  if jsonb_typeof(v_source->'slots')<>'array' then\n    raise exception using errcode='23514',message='active registered recurring source has no canonical slot array';\n  end if;\n\n  select coalesce(jsonb_agg(\n    item||jsonb_build_object(\n      'contractor_capacity',coalesce((\n        select lower(slot->>'contractorCapacity')='true'\n        from jsonb_array_elements(v_source->'slots') slot\n        where slot->>'id'=item->>'slot_id'\n        limit 1\n      ),false)\n    ) order by item->>'slot_label',item->>'slot_id'\n  ),'[]'::jsonb) into v_roster\n  from jsonb_array_elements(coalesce(v_snapshot->'roster','[]'::jsonb)) item;\n\n  return jsonb_set(v_snapshot,'{roster}',v_roster,true);\nend\n$function$\n",
       "function_name": "static_weekly_v3_read_manager_snapshot",
@@ -49108,6 +49116,15 @@
       "grantee": "static_weekly_control_plane",
       "grantor": "migration_owner",
       "identity_arguments": "p_source_id uuid",
+      "is_grantable": false,
+      "privilege_type": "EXECUTE",
+      "schema_name": "public"
+    },
+    {
+      "function_name": "static_weekly_v3_read_authority_source",
+      "grantee": "static_weekly_control_plane",
+      "grantor": "migration_owner",
+      "identity_arguments": "p_source_id uuid, p_service_date date",
       "is_grantable": false,
       "privilege_type": "EXECUTE",
       "schema_name": "public"

@@ -27,6 +27,7 @@ assert.match(controlPlaneSource, /compileAndPrepareStaticWeeklyScheduleIsolated/
 assert.match(runtimeSource, /requireManagerWrite, namedManager/, "every scheduler mutation route must require a trusted named manager writer");
 assert.match(runtimeSource, /\/static-weekly\/manager-snapshot[^\n]+requireManagerWrite, namedManager/, "the scheduler snapshot must use the same current named-manager association gate as mutations");
 assert.match(runtimeSource, /\/static-weekly\/drafts\/initial/, "the separately deployed control plane must expose a deployable first-draft path without accepting source facts");
+assert.match(runtimeSource, /\/static-weekly\/drafts\/:versionId\/refresh[^\n]+requireManagerWrite, namedManager/, "a roster change before first publication must refresh the same draft through the trusted named-manager boundary");
 assert.match(runtimeSource, /\/static-weekly\/employees\/departed/, "the control plane must expose one bounded departure transaction");
 assert.match(runtimeSource, /\/static-weekly\/employees\/replacements/, "the control plane must expose one bounded fresh-start replacement transaction");
 assert.match(runtimeSource, /\/static-weekly\/rebuild-current-projection/, "the control plane must expose the named rebuild-only recovery command");
@@ -132,6 +133,7 @@ function createAuthorityDatabase({ revision: initialRevision = 0, failMutationAt
       if (statement.includes("static_weekly_v3_read_manager_snapshot")) return { rows: [{ result: { schema: "memphis-zoo.static-weekly-manager-snapshot.v1", week_start: values[0], authority_revision: revision, current_publication: { publication_id: publicationId, version_id: versionId }, projection_status: projection ? "current" : "missing", latest_projection: projection } }] };
       if (statement.includes("static_weekly_v3_publish_draft")) { revision = values[2] + 1; return { rows: [{ result: { revision, data: { publication_id: publicationId, version_id: versionId, effective_start: "2026-10-05" } } }] }; }
       if (statement.includes("static_weekly_v3_create_draft")) { revision = values[5] + 1; return { rows: [{ result: { revision, data: { version_id: versionId, draft_revision: 1, effective_start: values[0] } } }] }; }
+      if (statement.includes("static_weekly_v3_update_draft")) { revision = values[5] + 1; return { rows: [{ result: { revision, data: { version_id: values[0], draft_revision: values[4] + 1 } } }] }; }
       if (statement.includes("static_weekly_v3_apply_exception")) {
         const key = values[10];
         if (mutations.has(key)) return { rows: [{ result: mutations.get(key) }] };
@@ -299,6 +301,11 @@ const slowInitialDraft = await keepaliveControlPlane.createInitialDraft({
 assert.equal(slowInitialDraft.revision, 1, "a bounded slow compiler still creates one initial draft");
 assert.equal(keepaliveAuthority.heartbeatAttempts() >= 2, true, "a bounded slow compiler keeps its atomic database transaction active");
 const keepaliveSourceIndex = keepaliveAuthority.queries.findIndex((entry) => entry.statement.includes("static_weekly_v3_read_authority_source"));
+assert.deepEqual(
+  keepaliveAuthority.queries[keepaliveSourceIndex].values,
+  [authoritySourceId, "2026-10-05"],
+  "first-draft source reads must hydrate the registered vacancy-capable template for the exact effective week",
+);
 const keepaliveWriteIndex = keepaliveAuthority.queries.findIndex((entry) => entry.statement.includes("static_weekly_v3_create_draft"));
 const keepaliveIndexes = keepaliveAuthority.queries.map((entry, index) => entry.statement === "select 1" ? index : -1).filter((index) => index >= 0);
 assert.equal(keepaliveIndexes.every((index) => index > keepaliveSourceIndex && index < keepaliveWriteIndex), true, "only the bounded solver interval receives read-only transaction keepalives");
@@ -334,6 +341,25 @@ assert.equal(preparedCompilerCalls, 1, "the production-shaped initial draft perf
 assert.equal(rawCompilerCalls, 0, "the production-shaped initial draft cannot fall back to event-loop-blocking local adapter preparation");
 assert.equal(preparedKeepaliveAuthority.heartbeatAttempts() >= 2, true, "the transaction keepalive continues through isolated database-adapter preparation");
 assert.equal(preparedKeepaliveAuthority.commits(), 1, "the prepared initial draft commits exactly once");
+
+const refreshAuthority = createAuthorityDatabase({ revision: 11 });
+const refreshControlPlane = controlPlaneFor(refreshAuthority);
+const refreshedDraft = await refreshControlPlane.refreshInitialDraft({
+  manager,
+  draftVersionId: versionId,
+  sourceId: authoritySourceId,
+  effectiveStart: "2026-10-05",
+  expectedDraftRevision: 1,
+  expectedRevision: 11,
+  idempotencyKey: "refresh-filled-vacancy-draft",
+});
+assert.equal(refreshedDraft.revision, 12, "a filled position refresh advances the same draft exactly once");
+assert.equal(refreshedDraft.data.draft_revision, 2);
+const refreshSourceRead = refreshAuthority.queries.find((entry) => entry.statement.includes("static_weekly_v3_read_authority_source"));
+assert.deepEqual(refreshSourceRead.values, [authoritySourceId, "2026-10-05"], "draft refresh hydrates the exact effective roster before recompilation");
+const refreshWrite = refreshAuthority.queries.find((entry) => entry.statement.includes("static_weekly_v3_update_draft"));
+assert.deepEqual(refreshWrite.values.slice(0, 1), [versionId], "draft refresh updates the existing version instead of creating a competing draft");
+assert.equal(refreshAuthority.commits(), 1, "draft refresh commits as one bounded transaction");
 
 const failedKeepaliveAuthority = createAuthorityDatabase({ failHeartbeatAt: 1 });
 const failedKeepaliveControlPlane = controlPlaneFor(failedKeepaliveAuthority, async () => {
