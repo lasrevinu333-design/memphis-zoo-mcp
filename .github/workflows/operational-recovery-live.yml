@@ -119,15 +119,16 @@ jobs:
             test "$bytes" -lt 400000
           done
 
-          # A caller-supplied kiosk label is not employee authority. The live
-          # gate cannot possess or copy a phone's reusable native credential,
-          # so it proves the external negative boundary and leaves successful
-          # credentialed access to the native/device and physical-canary gates.
+          # The enrollment-status preflight may tell a phone that enrollment or
+          # recovery is required, but a caller-supplied kiosk label must never
+          # disclose employee, device, or reusable credential identity. The
+          # employee Schedule probe below remains the actual authority boundary.
           device_status_code="$(curl -sS --max-time 40 -o /tmp/kiosk-device-status.json -w '%{http_code}' \
             -H 'X-Device-Id: KIOSK_02' \
             "$root/device-auth/status?device_id=KIOSK_02")"
-          case "$device_status_code" in 401|403) ;; *) echo "Identifier-only device status was not denied: $device_status_code"; exit 1 ;; esac
-          python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["ok"] is False and d["code"] in {"device_not_registered","device_not_eligible","device_credential_required"}' </tmp/kiosk-device-status.json
+          test "$device_status_code" = '200'
+          python3 -c 'import json,sys; d=json.load(sys.stdin); x=d["data"]; assert d["ok"] is True and x["authenticated"] is False and x["employee_name"] is None and x["device_name"] is None and x["credential_id"] is None' </tmp/kiosk-device-status.json \
+            || { echo "Identifier-only device status exposed employee authority"; exit 1; }
 
           for device in KIOSK_02 KIOSK_03 KIOSK_04 KIOSK_05 KIOSK_06 KIOSK_07 KIOSK_08 KIOSK_09 KIOSK_10; do
             schedule_status="$(curl -sS --max-time 40 -o "/tmp/$device-schedule.json" -w '%{http_code}' \
