@@ -3,14 +3,14 @@
   "release_id": "release-2026.07.19.custodial-v3.12",
   "frontend_commit_sha": "5d0d5716e03f6179110708add09f7b2fc3afc2b3",
   "frontend_commit_state": "final_pair_bound",
-  "schema_fingerprint": "71b1638df3d6f3188a9dc5dd9b7185bdae858dcc78a56c359fa6040db5e0cc49",
+  "schema_fingerprint": "e0f9aaebe6013f5b912cf261bd7bf7703c7b604a64bc94d98fc2aae9506387cd",
   "schema_transition": {
     "transition_id": "application-reader-release-recovery-20260825",
     "from_fingerprint": "0c3cd0cb822f147842d5c09a2bc15ffae41401956b7664f2ccfaedd13b79d527",
-    "to_fingerprint": "71b1638df3d6f3188a9dc5dd9b7185bdae858dcc78a56c359fa6040db5e0cc49",
+    "to_fingerprint": "e0f9aaebe6013f5b912cf261bd7bf7703c7b604a64bc94d98fc2aae9506387cd",
     "expires_at": "2026-09-03T23:59:59Z"
   },
-  "frontend_source_fingerprint": "71b1638df3d6f3188a9dc5dd9b7185bdae858dcc78a56c359fa6040db5e0cc49",
+  "frontend_source_fingerprint": "e0f9aaebe6013f5b912cf261bd7bf7703c7b604a64bc94d98fc2aae9506387cd",
   "backend_contract": {
     "scan": "scan.v4.snapshot-bound-authority",
     "authority": "offline-authority.v5",
@@ -419,7 +419,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "1f8ef82e065d36fd01f6813ea07827c6cb1b3227"
+        "object_id": "97cf6e462d967adf2976779b7a11271290ca2487"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
@@ -1319,7 +1319,7 @@
       {
         "path": "scripts/static-weekly-vacant-roster-slot-database-tests.mjs",
         "mode": "100644",
-        "object_id": "f29d41a5d51db55c4173cd5abe7f708a21c622e1"
+        "object_id": "f396a1f0204bae8fe2ec2f626ef73cbfb88c14d2"
       },
       {
         "path": "scripts/temporary-repair-payload-retirement-tests.mjs",
@@ -1954,12 +1954,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "029ddacebba615ff5696b6c04e2fd72b933aa369"
+        "object_id": "8f7fc5b2460196263b1c4520f8cff2e129291211"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "ffd0445dc73bb0fe3d6684a4a5626b12f7bbdaa3"
+        "object_id": "bb63ed1742de7ce510084786fc43851a575cb3df"
       },
       {
         "path": "supabase/config.toml",
@@ -3147,13 +3147,18 @@
         "object_id": "9925e097b13e34ab16b834a0044df76fe7ba51f7"
       },
       {
+        "path": "supabase/migrations/20260827033500_static_weekly_registered_source_dated_status.sql",
+        "mode": "100644",
+        "object_id": "17aee6acb3a2616179f7324cdf3256d8b3c9c4c3"
+      },
+      {
         "path": "tmp/write_probe.txt",
         "mode": "100644",
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 607,
-    "migration_path_count": 119,
+    "authority_path_count": 608,
+    "migration_path_count": 120,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
   },
@@ -3520,6 +3525,9 @@
     },
     {
       "name": "20260827024500_static_weekly_initial_draft_roster_hydration.sql"
+    },
+    {
+      "name": "20260827033500_static_weekly_registered_source_dated_status.sql"
     }
   ],
   "release_boundary": "Prepare distinct minimum-32-character backend, native-route, and employee-device credential secrets before cutover; configure database digests immediately after the migrations that create each configuration function, retain the bridge backend artifact through the scan-snapshot phase, require manager-code recovery without phone-local work loss for any device-credential generation mismatch, and require the executable health/restoration probes before traffic changes."
