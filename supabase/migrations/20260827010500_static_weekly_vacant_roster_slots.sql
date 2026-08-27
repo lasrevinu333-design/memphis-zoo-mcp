@@ -341,6 +341,150 @@ revoke all on function public.static_weekly_v7_fill_vacant_roster_slot(uuid,text
 grant execute on function public.static_weekly_v7_create_vacant_roster_slot(uuid,text,bigint,uuid,text) to static_weekly_control_plane;
 grant execute on function public.static_weekly_v7_fill_vacant_roster_slot(uuid,text,date,text,bigint,uuid,text) to static_weekly_control_plane;
 
+-- Release recovery is an exact catalog restoration mechanism.  Refresh every
+-- changed constraint and function that it can touch, and add the new vacancy
+-- surfaces before re-enabling its immutable inventory trigger.  Otherwise a
+-- later canary recovery would silently restore the pre-vacancy constraints
+-- and make a healthy current schema drift backward.
+alter table public.custodial_release_authority_restore_inventory
+  disable trigger trg_custodial_release_authority_restore_inventory_immutable;
+
+do $rebind_release_recovery$
+declare
+  v_identity text;
+  v_definition text;
+  v_restore_order integer;
+begin
+  if to_regprocedure('public.custodial_release_authority_current_constraint_definition(text)') is null
+    or to_regprocedure('public.custodial_release_authority_current_grant_definition(text)') is null then
+    raise exception 'exact release-recovery renderers are unavailable';
+  end if;
+
+  foreach v_identity in array array[
+    'public.weekly_schedule_authority_revisions:weekly_schedule_authority_revisions_operation_check',
+    'public.weekly_schedule_command_receipts:weekly_schedule_command_receipts_command_type_check',
+    'public.weekly_schedule_slot_availability:weekly_schedule_slot_availability_availability_state_check',
+    'public.weekly_schedule_slot_availability:weekly_schedule_slot_availability_vacancy_template_check',
+    'public.weekly_roster_slot_staffing_states:weekly_roster_slot_staffing_states_staffing_state_check'
+  ] loop
+    v_definition:=public.custodial_release_authority_current_constraint_definition(v_identity);
+    if v_definition is null then raise exception 'required current constraint % is unavailable',v_identity; end if;
+    update public.custodial_release_authority_restore_inventory
+    set definition_sql=v_definition,
+        definition_sha256=encode(extensions.digest(convert_to(v_definition,'UTF8'),'sha256'),'hex'),
+        captured_at=statement_timestamp()
+    where object_kind='constraint' and object_identity=v_identity;
+    if not found then
+      select coalesce(max(restore_order),500000)+1 into v_restore_order
+      from public.custodial_release_authority_restore_inventory where object_kind='constraint';
+      insert into public.custodial_release_authority_restore_inventory(
+        restore_order,object_kind,object_identity,definition_sql,definition_sha256
+      ) values(
+        v_restore_order,'constraint',v_identity,v_definition,
+        encode(extensions.digest(convert_to(v_definition,'UTF8'),'sha256'),'hex')
+      );
+    end if;
+  end loop;
+
+  foreach v_identity in array array[
+    'public.static_weekly_v5_projection_source_identity(jsonb)',
+    'public.static_weekly_v5_registered_source_identity(jsonb)',
+    'public.static_weekly_v3_source_identity(jsonb)',
+    'public.static_weekly_v4_recurring_source_identity(jsonb)',
+    'public.static_weekly_v4_hydrate_compiler_source(jsonb,date)',
+    'public.static_weekly_v3_assert_draft_incumbency(uuid)',
+    'public.static_weekly_v7_create_vacant_roster_slot(uuid,text,bigint,uuid,text)',
+    'public.static_weekly_v7_fill_vacant_roster_slot(uuid,text,date,text,bigint,uuid,text)'
+  ] loop
+    if to_regprocedure(v_identity) is null then raise exception 'required current function % is unavailable',v_identity; end if;
+    v_definition:=pg_get_functiondef(to_regprocedure(v_identity));
+    update public.custodial_release_authority_restore_inventory
+    set definition_sql=v_definition,
+        definition_sha256=encode(extensions.digest(convert_to(v_definition,'UTF8'),'sha256'),'hex'),
+        captured_at=statement_timestamp()
+    where object_kind='function' and object_identity=v_identity;
+    if not found then
+      select coalesce(max(restore_order),100000)+1 into v_restore_order
+      from public.custodial_release_authority_restore_inventory where object_kind='function';
+      insert into public.custodial_release_authority_restore_inventory(
+        restore_order,object_kind,object_identity,definition_sql,definition_sha256
+      ) values(
+        v_restore_order,'function',v_identity,v_definition,
+        encode(extensions.digest(convert_to(v_definition,'UTF8'),'sha256'),'hex')
+      );
+    end if;
+
+    v_definition:=public.custodial_release_authority_current_grant_definition(v_identity);
+    if v_definition is null then raise exception 'required current function grant % is unavailable',v_identity; end if;
+    update public.custodial_release_authority_restore_inventory
+    set definition_sql=v_definition,
+        definition_sha256=encode(extensions.digest(convert_to(v_definition,'UTF8'),'sha256'),'hex'),
+        captured_at=statement_timestamp()
+    where object_kind='grant' and object_identity=v_identity;
+    if not found then
+      select coalesce(max(restore_order),1000000)+1 into v_restore_order
+      from public.custodial_release_authority_restore_inventory where object_kind='grant';
+      insert into public.custodial_release_authority_restore_inventory(
+        restore_order,object_kind,object_identity,definition_sql,definition_sha256
+      ) values(
+        v_restore_order,'grant',v_identity,v_definition,
+        encode(extensions.digest(convert_to(v_definition,'UTF8'),'sha256'),'hex')
+      );
+    end if;
+  end loop;
+end
+$rebind_release_recovery$;
+
+alter table public.custodial_release_authority_restore_inventory
+  enable trigger trg_custodial_release_authority_restore_inventory_immutable;
+
+do $release_recovery_postflight$
+declare v_identity text; v_definition text;
+begin
+  foreach v_identity in array array[
+    'public.weekly_schedule_authority_revisions:weekly_schedule_authority_revisions_operation_check',
+    'public.weekly_schedule_command_receipts:weekly_schedule_command_receipts_command_type_check',
+    'public.weekly_schedule_slot_availability:weekly_schedule_slot_availability_availability_state_check',
+    'public.weekly_schedule_slot_availability:weekly_schedule_slot_availability_vacancy_template_check',
+    'public.weekly_roster_slot_staffing_states:weekly_roster_slot_staffing_states_staffing_state_check'
+  ] loop
+    v_definition:=public.custodial_release_authority_current_constraint_definition(v_identity);
+    if not exists(
+      select 1 from public.custodial_release_authority_restore_inventory
+      where object_kind='constraint' and object_identity=v_identity
+        and definition_sql=v_definition
+        and definition_sha256=encode(extensions.digest(convert_to(v_definition,'UTF8'),'sha256'),'hex')
+    ) then raise exception 'release recovery does not preserve current constraint %',v_identity; end if;
+  end loop;
+
+  foreach v_identity in array array[
+    'public.static_weekly_v5_projection_source_identity(jsonb)',
+    'public.static_weekly_v5_registered_source_identity(jsonb)',
+    'public.static_weekly_v3_source_identity(jsonb)',
+    'public.static_weekly_v4_recurring_source_identity(jsonb)',
+    'public.static_weekly_v4_hydrate_compiler_source(jsonb,date)',
+    'public.static_weekly_v3_assert_draft_incumbency(uuid)',
+    'public.static_weekly_v7_create_vacant_roster_slot(uuid,text,bigint,uuid,text)',
+    'public.static_weekly_v7_fill_vacant_roster_slot(uuid,text,date,text,bigint,uuid,text)'
+  ] loop
+    v_definition:=pg_get_functiondef(to_regprocedure(v_identity));
+    if not exists(
+      select 1 from public.custodial_release_authority_restore_inventory
+      where object_kind='function' and object_identity=v_identity
+        and definition_sql=v_definition
+        and definition_sha256=encode(extensions.digest(convert_to(v_definition,'UTF8'),'sha256'),'hex')
+    ) then raise exception 'release recovery does not preserve current function %',v_identity; end if;
+    v_definition:=public.custodial_release_authority_current_grant_definition(v_identity);
+    if not exists(
+      select 1 from public.custodial_release_authority_restore_inventory
+      where object_kind='grant' and object_identity=v_identity
+        and definition_sql=v_definition
+        and definition_sha256=encode(extensions.digest(convert_to(v_definition,'UTF8'),'sha256'),'hex')
+    ) then raise exception 'release recovery does not preserve current function grant %',v_identity; end if;
+  end loop;
+end
+$release_recovery_postflight$;
+
 comment on function public.static_weekly_v7_create_vacant_roster_slot(uuid,text,bigint,uuid,text) is
   'Creates one append-only stable schedule position with no synthetic employee identity.';
 comment on function public.static_weekly_v7_fill_vacant_roster_slot(uuid,text,date,text,bigint,uuid,text) is

@@ -132,7 +132,7 @@
     { "order": 8, "phase": "restore_application_reader_employee_events_runtime", "file": "20260826160000_restore_application_reader_employee_events_runtime.sql", "production_ledger_version": "20260826210524", "sha256": "5058addb210be6f20f96646d0050cf7d928edde9e5f8bfd0f571965089666379" }
   ],
   "pending_migrations": [
-    { "order": 1, "phase": "static_weekly_vacant_roster_slots", "file": "20260827010500_static_weekly_vacant_roster_slots.sql", "source_migration_version": "20260827010500", "sha256": "0c14a8085fcdea60cbc904a11cff5f56b1fbee01c20052e536a83559b8dece37" }
+    { "order": 1, "phase": "static_weekly_vacant_roster_slots", "file": "20260827010500_static_weekly_vacant_roster_slots.sql", "source_migration_version": "20260827010500", "sha256": "0486d6d3d17e505e06ba21bdd1197009cc1305f6b8b1df3114adf60d93e45f1e" }
   ],
   "postconditions": [
     "production ledger records static_weekly_vacant_roster_slots exactly once under the actual applied ledger version",
