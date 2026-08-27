@@ -226,12 +226,14 @@ function compilerInputFromPublishedSource(source, serviceDate) {
   };
 }
 
-function replacementDraftInput(source, effectiveStart) {
+function replacementDraftInput(source, effectiveStart, { versionId = randomUUID() } = {}) {
   const raw = source?.compiler_input;
   const input = compilerInputFromPublishedSource({ compiler_input: raw, exceptions: [] }, effectiveStart);
+  const resolvedVersionId = text(versionId);
+  if (!resolvedVersionId) throw fail("static_weekly_control_plane_draft_version_required");
   input.versions[0] = {
     ...input.versions[0],
-    id: randomUUID(),
+    id: resolvedVersionId,
     publicationId: randomUUID(),
     status: "published",
     effectiveStart,
@@ -644,7 +646,7 @@ export function createStaticWeeklyControlPlane({
       return transaction(async (client) => {
         const source = await registeredSourceFor(client, sourceId, date);
         const draft = await prepareInsideTransaction(client, () => prepareDraft(
-          replacementDraftInput(source, date),
+          replacementDraftInput(source, date, { versionId: draftVersionId }),
           { expectedRevision: requireRevision(expectedRevision), actor: { ...actor, idempotencyKey: requireIdempotencyKey(idempotencyKey) } },
         ));
         return call(client, "static_weekly_v3_update_draft", [

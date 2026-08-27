@@ -343,7 +343,11 @@ assert.equal(preparedKeepaliveAuthority.heartbeatAttempts() >= 2, true, "the tra
 assert.equal(preparedKeepaliveAuthority.commits(), 1, "the prepared initial draft commits exactly once");
 
 const refreshAuthority = createAuthorityDatabase({ revision: 11 });
-const refreshControlPlane = controlPlaneFor(refreshAuthority);
+let refreshCompilerInput = null;
+const refreshControlPlane = controlPlaneFor(refreshAuthority, async (input) => {
+  refreshCompilerInput = structuredClone(input);
+  return acceptedProjection;
+});
 const refreshedDraft = await refreshControlPlane.refreshInitialDraft({
   manager,
   draftVersionId: versionId,
@@ -357,6 +361,7 @@ assert.equal(refreshedDraft.revision, 12, "a filled position refresh advances th
 assert.equal(refreshedDraft.data.draft_revision, 2);
 const refreshSourceRead = refreshAuthority.queries.find((entry) => entry.statement.includes("static_weekly_v3_read_authority_source"));
 assert.deepEqual(refreshSourceRead.values, [authoritySourceId, "2026-10-05"], "draft refresh hydrates the exact effective roster before recompilation");
+assert.equal(refreshCompilerInput.versions[0].id, versionId, "draft refresh recompiles with the existing database version identity");
 const refreshWrite = refreshAuthority.queries.find((entry) => entry.statement.includes("static_weekly_v3_update_draft"));
 assert.deepEqual(refreshWrite.values.slice(0, 1), [versionId], "draft refresh updates the existing version instead of creating a competing draft");
 assert.equal(refreshAuthority.commits(), 1, "draft refresh commits as one bounded transaction");
