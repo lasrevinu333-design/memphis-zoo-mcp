@@ -609,7 +609,7 @@
       {
         "path": "scripts/device-credential-foundation-tests.mjs",
         "mode": "100644",
-        "object_id": "1cdc207ba1a3864c4a016c6b25055c110db0a8f8"
+        "object_id": "b6ea4fd5b65d44c5aa0de856864a553d6b85bc22"
       },
       {
         "path": "scripts/device-popup-fully-kiosk-test.mjs",
@@ -1589,7 +1589,7 @@
       {
         "path": "src/auth/device-credential-auth.js",
         "mode": "100644",
-        "object_id": "a6736cecededbe99d809750a6e419ca95951b100"
+        "object_id": "26978515de9049bc5d59875a5adf3f8c8b3d7b10"
       },
       {
         "path": "src/auth/mcp-connector-auth.js",
@@ -1684,7 +1684,7 @@
       {
         "path": "src/index.js",
         "mode": "100644",
-        "object_id": "826f9f83aa9e584d89ad31bb826153e1fd04ac6a"
+        "object_id": "fd95263e320edf0841c9aec863363691fc01ec63"
       },
       {
         "path": "src/integrated-backend-authority-release-evidence.js",
