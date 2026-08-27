@@ -3,11 +3,11 @@
   "mode": "migration_required",
   "project_ref": "rqquvtjdmugpigbndmne",
   "observed_production": {
-    "captured_at": "2026-08-27T02:52:46.889247Z",
-    "ledger_head": "20260827014405",
-    "source_migration_name": "static_weekly_vacant_roster_slots",
-    "catalog_privilege_fingerprint": "ce535a8870d79fa801068bd5baf1237fa1cff99ce9161bee6003676e26687316",
-    "catalog_capture_sha256": "ce535a8870d79fa801068bd5baf1237fa1cff99ce9161bee6003676e26687316",
+    "captured_at": "2026-08-27T03:48:15Z",
+    "ledger_head": "20260827031305",
+    "source_migration_name": "static_weekly_initial_draft_roster_hydration",
+    "catalog_privilege_fingerprint": "e994f8ad49cb07f2619d6e8d8a37f1408969370e182035017effb9df318559e8",
+    "catalog_capture_sha256": "e994f8ad49cb07f2619d6e8d8a37f1408969370e182035017effb9df318559e8",
     "catalog_capture_format": "connected_database_catalog.v1 stable normalized JSON SHA-256",
     "catalog_counts": {
       "extensions": 8,
@@ -17,7 +17,7 @@
       "columns": 2078,
       "constraints": 1074,
       "indexes": 662,
-      "functions": 493,
+      "functions": 494,
       "views": 33,
       "triggers": 128,
       "policies": 41,
@@ -28,13 +28,13 @@
       "table_grants": 1529,
       "column_grants": 22,
       "sequence_grants": 0,
-      "routine_grants": 334,
+      "routine_grants": 335,
       "type_grants": 0,
       "schema_grants": 9,
       "default_privileges": 12,
       "cron_jobs": 9
     },
-    "public_function_count": 493,
+    "public_function_count": 494,
     "registered_source_count": 2,
     "active_authority_key_count": 1,
     "roster_slot_count": 22,
@@ -47,21 +47,23 @@
     "occurrence_count": 452,
     "application_reader_identity_policy_count": 3,
     "application_reader_credential_select": false,
-    "production_ledger_count": 217,
-    "source_authority_migration_count": 118,
-    "target_schedule_slot_count": 5,
-    "vacancy_functions_present": true,
-    "hydrated_initial_draft_reader_present": false
-  },
-  "target": {
-    "source_migration_file": "20260827024500_static_weekly_initial_draft_roster_hydration.sql",
-    "source_migration_name": "static_weekly_initial_draft_roster_hydration",
-    "source_migration_version": "20260827024500",
-    "production_ledger_version": null,
-    "canonical_source_schema_fingerprint": "71b1638df3d6f3188a9dc5dd9b7185bdae858dcc78a56c359fa6040db5e0cc49",
-    "public_function_count": 494,
     "production_ledger_count": 218,
     "source_authority_migration_count": 119,
+    "target_schedule_slot_count": 5,
+    "vacancy_functions_present": true,
+    "hydrated_initial_draft_reader_present": true,
+    "registered_source_dated_status_excluded": false
+  },
+  "target": {
+    "source_migration_file": "20260827033500_static_weekly_registered_source_dated_status.sql",
+    "source_migration_name": "static_weekly_registered_source_dated_status",
+    "source_migration_version": "20260827033500",
+    "production_ledger_version": null,
+    "canonical_source_schema_fingerprint": "e0f9aaebe6013f5b912cf261bd7bf7703c7b604a64bc94d98fc2aae9506387cd",
+    "public_function_count": 494,
+    "production_ledger_count": 219,
+    "source_authority_migration_count": 120,
+    "registered_source_dated_status_excluded": true,
     "expected_catalog_counts": {
       "extensions": 8,
       "types": 0,
@@ -95,13 +97,13 @@
   "backup_evidence": {
     "state": "fresh_verified_backup_required_before_mutation",
     "last_verified": {
-      "workflow_run_id": 33030860781,
-      "source_commit": "f41277a9d3ebf1c3c01e892b3540f7b28bd75a1e",
-      "artifact_name": "memphis-zoo-disaster-recovery-33030860781",
-      "artifact_sha256": "a34aa8de414e395bcef8b67aeea54ae394d45dfdf53c147e93af0bda314183b2",
-      "artifact_size_bytes": 8204949,
+      "workflow_run_id": 33035652567,
+      "source_commit": "70f79fde909af9896d12f001b4391570a98b21d7",
+      "artifact_name": "memphis-zoo-disaster-recovery-33035652567",
+      "artifact_sha256": "fa573d5520e7acd2b2d6267f1b979a9efcc10a0b36a2e97bd1fea7f874daad5c",
+      "artifact_size_bytes": 8670374,
       "restore_verification": "passed",
-      "completed_at": "2026-08-27T01:41:16Z"
+      "completed_at": "2026-08-27T03:12:47Z"
     }
   },
   "authorization": {
@@ -111,14 +113,14 @@
   },
   "preconditions": [
     "production project_ref equals rqquvtjdmugpigbndmne",
-    "production migration ledger head equals 20260827014405 and names static_weekly_vacant_roster_slots",
-    "production catalog and privilege fingerprint equals ce535a8870d79fa801068bd5baf1237fa1cff99ce9161bee6003676e26687316 under connected_database_catalog.v1 normalization",
+    "production migration ledger head equals 20260827031305 and names static_weekly_initial_draft_roster_hydration",
+    "production catalog and privilege fingerprint equals e994f8ad49cb07f2619d6e8d8a37f1408969370e182035017effb9df318559e8 under connected_database_catalog.v1 normalization",
     "a fresh encrypted backup with restore verification completes after the observed production capture and before mutation",
-    "production exposes exactly 493 public functions before the initial-draft hydration migration",
+    "production exposes exactly 494 public functions and 335 non-owner routine grants before the registered-source dated-status correction",
     "one active authority key and two immutable registered sources exist",
     "the guarded weighted-schedule import has exactly 22 roster slots, 19 incumbencies, five target positions, one preserved draft, one accepted publication, one projection, 452 occurrences and eleven command receipts at authority revision 11",
     "the vacancy create/fill functions are present and narrowly executable only by static_weekly_control_plane",
-    "the dated overloaded source reader is absent before the migration and the existing one-argument reader remains intact",
+    "the dated source reader is present and narrowly granted, but the current registered-source identity still binds dated slotAvailability status and therefore rejects a correctly hydrated source",
     "the exact backend commit/tree and exact Engine commit are externally attested"
   ],
   "applied_release_migrations": [
@@ -130,16 +132,18 @@
     { "order": 6, "phase": "retire_legacy_daily_schedule_writers_after_static_weekly_cutover", "file": "20260826114516_retire_legacy_daily_schedule_writers_after_static_weekly_cutover.sql", "production_ledger_version": "20260826114516", "sha256": "62329525c73705bb253fc87cd2c31c9b29ecb89a5cce14b550d4b04dce727cbf" },
     { "order": 7, "phase": "restore_application_reader_messenger_runtime", "file": "20260826155000_restore_application_reader_messenger_runtime.sql", "production_ledger_version": "20260826205203", "sha256": "eb8188ba7b0bfb8ff7ed310bf0697d7dc7d6af848a350d843c86b5b64e1ddd3a" },
     { "order": 8, "phase": "restore_application_reader_employee_events_runtime", "file": "20260826160000_restore_application_reader_employee_events_runtime.sql", "production_ledger_version": "20260826210524", "sha256": "5058addb210be6f20f96646d0050cf7d928edde9e5f8bfd0f571965089666379" },
-    { "order": 9, "phase": "static_weekly_vacant_roster_slots", "file": "20260827010500_static_weekly_vacant_roster_slots.sql", "production_ledger_version": "20260827014405", "sha256": "0486d6d3d17e505e06ba21bdd1197009cc1305f6b8b1df3114adf60d93e45f1e" }
+    { "order": 9, "phase": "static_weekly_vacant_roster_slots", "file": "20260827010500_static_weekly_vacant_roster_slots.sql", "production_ledger_version": "20260827014405", "sha256": "0486d6d3d17e505e06ba21bdd1197009cc1305f6b8b1df3114adf60d93e45f1e" },
+    { "order": 10, "phase": "static_weekly_initial_draft_roster_hydration", "file": "20260827024500_static_weekly_initial_draft_roster_hydration.sql", "production_ledger_version": "20260827031305", "sha256": "be0ee60af8b1f6d9fad011625098657b2e268d43a5300b25f188bb57c9a18d07" }
   ],
   "pending_migrations": [
-    { "order": 1, "phase": "static_weekly_initial_draft_roster_hydration", "file": "20260827024500_static_weekly_initial_draft_roster_hydration.sql", "source_migration_version": "20260827024500", "sha256": "be0ee60af8b1f6d9fad011625098657b2e268d43a5300b25f188bb57c9a18d07" }
+    { "order": 1, "phase": "static_weekly_registered_source_dated_status", "file": "20260827033500_static_weekly_registered_source_dated_status.sql", "source_migration_version": "20260827033500", "sha256": "886a3aedc334ee3f9fdf681a15cd930eb07ec005f74462cf1a2dbf2040568590" }
   ],
   "postconditions": [
-    "production ledger records static_weekly_initial_draft_roster_hydration exactly once under the actual applied ledger version",
-    "the complete public catalog changes only by the reviewed one-overload hydration migration delta while all production-only Outlook/event venue objects remain preserved",
-    "production exposes exactly 494 public functions and 335 non-owner routine grants after the migration",
-    "the dated source reader is executable only by static_weekly_control_plane and remains denied to PUBLIC, anon, authenticated, service_role, release operator and application reader",
+    "production ledger records static_weekly_registered_source_dated_status exactly once under the actual applied ledger version",
+    "the complete public catalog changes only by the reviewed registered-source identity definition and its exact recovery-inventory rebind while all production-only Outlook/event venue objects remain preserved",
+    "production still exposes exactly 494 public functions and 335 non-owner routine grants after the migration",
+    "the registered-source identity excludes dated slotAvailability status while retaining shift, lunch, capacity, qualifications, restrictions, route anchors, work templates and vacancy-capable slot identity",
+    "the immutable registered source and its correctly hydrated dated source have the same registered-source identity, while a forged lunch or another bound template field remains rejected",
     "refreshing the existing draft hydrates Kaili Michaelson and Gregory Staples from append-only incumbency truth while Employee 1, Employee 2 and Employee 4 remain vacant with their complete shifts and lunches",
     "the existing accepted publication, projection and 452 occurrences remain unchanged until the same preserved draft passes validation and is separately published with expected-revision and idempotency guards",
     "no existing publication, schedule history, employee history, event authority or production-only schema object is deleted or rewritten",
