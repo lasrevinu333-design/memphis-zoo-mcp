@@ -7,10 +7,10 @@
   "schema_transition": {
     "transition_id": "application-reader-release-recovery-20260825",
     "from_fingerprint": "0c3cd0cb822f147842d5c09a2bc15ffae41401956b7664f2ccfaedd13b79d527",
-    "to_fingerprint": "24c5cac98e4c7a4dc32002623cc4536978291855a3614ee33afc7bd6a3f8bdea",
+    "to_fingerprint": "38ab9a26caeefe071e0a2784c7cb0ba3b96810396c83ee9b5dc88d580be2cd02",
     "expires_at": "2026-09-03T23:59:59Z"
   },
-  "frontend_source_fingerprint": "24c5cac98e4c7a4dc32002623cc4536978291855a3614ee33afc7bd6a3f8bdea",
+  "frontend_source_fingerprint": "38ab9a26caeefe071e0a2784c7cb0ba3b96810396c83ee9b5dc88d580be2cd02",
   "backend_contract": {
     "scan": "scan.v4.snapshot-bound-authority",
     "authority": "offline-authority.v5",
@@ -419,7 +419,7 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "9f24ba0a8a3a4725dfa5fa66db83c64510af9821"
+        "object_id": "6e2d65d36dc71a5d5de94dc01d3d91491a59470a"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
