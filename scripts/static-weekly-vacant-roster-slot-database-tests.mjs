@@ -124,6 +124,22 @@ try {
   assert.deepEqual(datedRegisteredSource.compiler_input.version.vacantSlotIds, [firstVacantSlot], "the first-draft reader derives active vacancy from the current append-only roster rather than the immutable capability list");
   assert.equal(datedRegisteredSource.compiler_input.version.slotAvailability.find((row) => row.slotId === secondVacantSlot).status, "working");
   assert.equal(datedRegisteredSource.compiler_input.slots.find((slot) => slot.id === secondVacantSlot).incumbencies[0].personId, filled.data.new_employee_id, "a named hire is visible before the initial draft is compiled");
+  assert.equal(
+    await scalar(`select (public.static_weekly_v3_source_identity(${json(source)})=public.static_weekly_v3_source_identity(${json(datedRegisteredSource.compiler_input)}))::text`),
+    "true",
+    "dated roster status and incumbency hydration must preserve the immutable release-registered source identity",
+  );
+  assert.equal(
+    await scalar(`select public.static_weekly_v3_assert_registered_source(${quote(sourceId)},${json(datedRegisteredSource.compiler_input)}); select 'accepted'`),
+    "accepted",
+    "the exact database draft gate must accept a roster-hydrated source before compilation",
+  );
+  const changedLunch = structuredClone(datedRegisteredSource.compiler_input);
+  changedLunch.version.slotAvailability[0].lunch.start = "13:00";
+  await expectReject(
+    `select public.static_weekly_v3_assert_registered_source(${quote(sourceId)},${json(changedLunch)})`,
+    /exactly bind one active release-registered recurring source/i,
+  );
 
   for (const role of ["public", "anon", "authenticated", "service_role", "custodial_application_reader"]) {
     assert.equal(await scalar(`select has_function_privilege(${quote(role)},'public.static_weekly_v7_create_vacant_roster_slot(uuid,text,bigint,uuid,text)','execute')::text`), "false", `${role} cannot create schedule positions`);
