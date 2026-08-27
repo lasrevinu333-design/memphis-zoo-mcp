@@ -83,7 +83,7 @@
       "prepare distinct CUSTODIAL_BACKEND_PROOF_SECRET, CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET, and DEVICE_CREDENTIAL_SECRET values (minimum 32 characters each); preserve all phone-local work and require manager-code recovery for any active credential from a different secret generation without exposing any secret",
       "capture the production catalog through the read-only Supabase boundary and require the exact observed production ledger head, catalog/privilege fingerprint, object counts, static-weekly state, and zero target-position collisions recorded in release/production-migration-state.json",
       "verify production project, fresh post-capture backup receipt, observed production identity, exact pending-migration digest, and exact source attestation against release/production-migration-state.json",
-      "after explicit production-change admission, apply only the one exact pending static-weekly initial-draft roster-hydration migration, require the production ledger to advance exactly once and the complete catalog delta to match the reviewed postconditions, and do not replay the nine already-applied release migrations or remove newer production-only event objects",
+      "after explicit production-change admission, apply only the one exact pending static-weekly registered-source dated-status identity migration, require the production ledger to advance exactly once and the complete catalog delta to match the reviewed postconditions, and do not replay the ten already-applied release migrations or remove newer production-only event objects",
       "after schema admission, refresh and publish the already-preserved immutable weighted-schedule draft through the static-weekly control plane with expected-revision and idempotency guards; do not create a competing draft, and preserve the current publication until the replacement publication and projection are complete",
       "deploy the canonical-only backend only after all authoritative procedures above are present and verified; missing canonical writers fail closed",
       "require a green authority health gate and direct-DML denial probes before routing traffic"
@@ -424,12 +424,12 @@
       {
         "path": "release/integrated-backend-authority-input.json",
         "mode": "100644",
-        "object_id": "b35995e1f66a9a0995c77b4bca75db102df0da39"
+        "object_id": "3eaf95f52e4c4a36f668c43ceedb3ddebde30024"
       },
       {
         "path": "release/production-migration-state.json",
         "mode": "100644",
-        "object_id": "5fd81b33c1db700c857758d7b0f4d0f2ae235498"
+        "object_id": "15ec65249dceb8680482b346bcf3ada269f2b46c"
       },
       {
         "path": "release/reviewed-migrations/20260809125735_cleaning_inspection_24_hour_freshness.sql",
@@ -774,12 +774,12 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "f371854aead8f53b420b8c731389224936883d2c"
+        "object_id": "a030173c71ff026df380f0f9f2f453e32a5de97b"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "7845ca70bdb8420e2db14c4f453badecee50f6d9"
+        "object_id": "affa3ef622e144d49bdbe94a793a98c74346db91"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
