@@ -417,8 +417,8 @@ assert.match(vacantRosterSlotsText, /static_weekly_v7_create_vacant_roster_slot/
 assert.match(vacantRosterSlotsText, /static_weekly_v7_fill_vacant_roster_slot/i);
 assert.match(vacantRosterSlotsText, /availability_state='vacant_unfilled'/i);
 assert.match(vacantRosterSlotsText, /shift_start<lunch_start and lunch_end<shift_end/i);
-assert.match(vacantRosterSlotsText, /grant execute on function public\.static_weekly_v7_create_vacant_roster_slot[\s\S]*to static_weekly_control_plane/i);
-assert.doesNotMatch(vacantRosterSlotsText, /grant execute on function public\.static_weekly_v7_(?:create|fill)_vacant_roster_slot[\s\S]*to (?:public|anon|authenticated|service_role|static_weekly_release_operator|custodial_application_reader)/i);
+assert.match(vacantRosterSlotsText, /grant\s+execute\s+on\s+function\s+public\.static_weekly_v7_create_vacant_roster_slot\b[^;]*\bto\s+static_weekly_control_plane\b[^;]*;/i);
+assert.doesNotMatch(vacantRosterSlotsText, /grant\s+execute\s+on\s+function\s+public\.static_weekly_v7_(?:create|fill)_vacant_roster_slot\b[^;]*\bto\s+(?:public|anon|authenticated|service_role|static_weekly_release_operator|custodial_application_reader)\b[^;]*;/i);
 assert.match(schemaFingerprint, /^[a-f0-9]{64}$/);
 assert.equal(frontendManifest.frontend_commit_sha, acceptance.frontend_commit_sha, "signed release attestation names the wrong frontend commit");
 assert.equal(frontendManifest.release_id, acceptance.release_id, "signed release attestation names the wrong semantic release");
