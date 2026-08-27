@@ -145,6 +145,8 @@ function createAuthorityDatabase({ revision: initialRevision = 0, failMutationAt
       }
       if (statement.includes("static_weekly_v4_mark_employee_departed")) { revision = values[2] + 1; return { rows: [{ result: { revision, data: { slot_id: values[0] } } }] }; }
       if (statement.includes("static_weekly_v4_replace_employee")) { revision = values[3] + 1; return { rows: [{ result: { revision, data: { new_employee_name: values[1] } } }] }; }
+      if (statement.includes("static_weekly_v7_create_vacant_roster_slot")) { revision = values[2] + 1; return { rows: [{ result: { revision, data: { slot_id: values[0], slot_label: values[1], vacant: true } } }] }; }
+      if (statement.includes("static_weekly_v7_fill_vacant_roster_slot")) { revision = values[4] + 1; return { rows: [{ result: { revision, data: { slot_id: values[0], new_employee_name: values[1], effective_start: values[2] } } }] }; }
       if (statement.includes("static_weekly_v3_materialize_projection")) {
         const key = values[10];
         if (materializations.has(key)) return { rows: [{ result: materializations.get(key) }] };
@@ -569,6 +571,19 @@ const snapshot = await snapshotControlPlane.getManagerSnapshot({ manager, weekSt
 assert.equal(snapshot.authority_revision, 7);
 assert.deepEqual(snapshotAuthority.queries.map((entry) => entry.statement), ["begin", "set local role static_weekly_control_plane", "set local statement_timeout = '120000ms'", "select public.static_weekly_v3_read_manager_snapshot($1) as result", "commit"]);
 await assert.rejects(() => snapshotControlPlane.getManagerSnapshot({ manager, weekStart: "2026-10-06" }), /Monday-aligned/i, "projection workflows reject non-Monday week identity before a transaction starts");
+
+const vacancyAuthority = createAuthorityDatabase();
+const vacancyControlPlane = controlPlaneFor(vacancyAuthority);
+const vacantSlot = await vacancyControlPlane.createVacantRosterSlot({ manager, slotId: "20000000-0000-4000-8000-000000000099", slotLabel: "Employee 1 schedule position", expectedRevision: 0, idempotencyKey: "create-vacant-position" });
+assert.equal(vacantSlot.revision, 1);
+assert.equal(vacantSlot.data.vacant, true);
+const filledSlot = await vacancyControlPlane.fillVacantRosterSlot({ manager, slotId: vacantSlot.data.slot_id, newEmployeeName: "New Custodian", effectiveStart: "2026-10-05", reason: "Approved hire", expectedRevision: vacantSlot.revision, idempotencyKey: "fill-vacant-position" });
+assert.equal(filledSlot.revision, 2);
+assert.equal(filledSlot.data.new_employee_name, "New Custodian");
+assert.deepEqual(vacancyAuthority.queries.map((entry) => entry.statement), [
+  "begin", "set local role static_weekly_control_plane", "set local statement_timeout = '120000ms'", "select public.static_weekly_v7_create_vacant_roster_slot($1,$2,$3,$4,$5) as result", "commit",
+  "begin", "set local role static_weekly_control_plane", "set local statement_timeout = '120000ms'", "select public.static_weekly_v7_fill_vacant_roster_slot($1,$2,$3,$4,$5,$6,$7) as result", "commit",
+], "vacant position creation and later hiring are bounded named-manager operations without an APK or schedule-template rewrite");
 
 const splitCallerAuthority = createAuthorityDatabase();
 const splitCallerControlPlane = controlPlaneFor(splitCallerAuthority);

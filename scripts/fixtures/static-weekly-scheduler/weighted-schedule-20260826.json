@@ -1,0 +1,1368 @@
+{
+  "schema": "memphis-zoo.weighted-static-weekly-pdf.v1",
+  "source": {
+    "path": "/home/eric/Downloads/Memphis_Zoo_Weighted_Schedule_Gregory_Kaili_Monday_Gift_Shops.pdf",
+    "sha256": "e7355f7f7197688a707277e5eb5360695f9e6713ec82acddc0a37126b06a9ad5",
+    "pages": 7
+  },
+  "policy": {
+    "phases": [
+      {
+        "name": "morning",
+        "starts": "employee_shift_start",
+        "ends": "09:45"
+      },
+      {
+        "name": "equalized",
+        "starts": "09:45",
+        "ends": "employee_shift_end"
+      }
+    ],
+    "employeeRoute": "employee_chooses_practical_route",
+    "restroomsFirst": "display_priority_only",
+    "splashPad": "inactive",
+    "mondayGiftShops": "08:00_morning_reminder_only",
+    "lunchAuthority": {
+      "source": "production_manager_staggered_coverage_optimization.v1",
+      "preference": "one_hour_lunch_near_four_hours_into_shift",
+      "constraints": [
+        "protect_current_named_coverage",
+        "bound_future_full_roster_overlap",
+        "minimize_weighted_workload_off_floor"
+      ],
+      "note": "The PDF supplies shifts, workdays, and area ownership. Lunch times are Production Manager authority derived from Eric's coverage request, not text extracted from the PDF."
+    }
+  },
+  "roster": [
+    {
+      "slotKey": "KAREN_ROBINSON",
+      "displayName": "Karen Robinson",
+      "slotLabel": "Karen Robinson schedule position",
+      "vacancy": false,
+      "shift": {
+        "start": "05:00",
+        "end": "14:00"
+      },
+      "lunch": {
+        "start": "09:30",
+        "end": "10:30"
+      },
+      "lunchAuthority": "production_manager_staggered_coverage_optimization.v1",
+      "workDays": [
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    },
+    {
+      "slotKey": "TAMMY_MILLER",
+      "displayName": "Tammy Miller",
+      "slotLabel": "Tammy Miller schedule position",
+      "vacancy": false,
+      "shift": {
+        "start": "05:00",
+        "end": "14:00"
+      },
+      "lunch": {
+        "start": "08:30",
+        "end": "09:30"
+      },
+      "lunchAuthority": "production_manager_staggered_coverage_optimization.v1",
+      "workDays": [
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    },
+    {
+      "slotKey": "KATHY_PHELPS",
+      "displayName": "Kathy Phelps",
+      "slotLabel": "Kathy Phelps schedule position",
+      "vacancy": false,
+      "shift": {
+        "start": "06:00",
+        "end": "15:00"
+      },
+      "lunch": {
+        "start": "10:30",
+        "end": "11:30"
+      },
+      "lunchAuthority": "production_manager_staggered_coverage_optimization.v1",
+      "workDays": [
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    },
+    {
+      "slotKey": "NEW_EMPLOYEE_2",
+      "displayName": null,
+      "slotLabel": "Employee 2",
+      "vacancy": true,
+      "shift": {
+        "start": "06:00",
+        "end": "15:00"
+      },
+      "lunch": {
+        "start": "10:00",
+        "end": "11:00"
+      },
+      "lunchAuthority": "production_manager_staggered_coverage_optimization.v1",
+      "workDays": [
+        0,
+        1,
+        2,
+        5,
+        6
+      ]
+    },
+    {
+      "slotKey": "NEW_EMPLOYEE_4",
+      "displayName": null,
+      "slotLabel": "Employee 4",
+      "vacancy": true,
+      "shift": {
+        "start": "06:00",
+        "end": "15:00"
+      },
+      "lunch": {
+        "start": "10:00",
+        "end": "11:00"
+      },
+      "lunchAuthority": "production_manager_staggered_coverage_optimization.v1",
+      "workDays": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "slotKey": "KAILI_MICHAELSON",
+      "displayName": "Kaili Michaelson",
+      "slotLabel": "Kaili Michaelson schedule position",
+      "vacancy": false,
+      "shift": {
+        "start": "07:00",
+        "end": "16:00"
+      },
+      "lunch": {
+        "start": "11:00",
+        "end": "12:00"
+      },
+      "lunchAuthority": "production_manager_staggered_coverage_optimization.v1",
+      "workDays": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "slotKey": "ALIJAH_COLLINS",
+      "displayName": "Alijah Collins",
+      "slotLabel": "Alijah Collins schedule position",
+      "vacancy": false,
+      "shift": {
+        "start": "07:00",
+        "end": "16:00"
+      },
+      "lunch": {
+        "start": "12:00",
+        "end": "13:00"
+      },
+      "lunchAuthority": "production_manager_staggered_coverage_optimization.v1",
+      "workDays": [
+        0,
+        1,
+        4,
+        5,
+        6
+      ]
+    },
+    {
+      "slotKey": "NEW_EMPLOYEE_1",
+      "displayName": null,
+      "slotLabel": "Employee 1",
+      "vacancy": true,
+      "shift": {
+        "start": "08:00",
+        "end": "17:00"
+      },
+      "lunch": {
+        "start": "12:00",
+        "end": "13:00"
+      },
+      "lunchAuthority": "production_manager_staggered_coverage_optimization.v1",
+      "workDays": [
+        0,
+        1,
+        4,
+        5,
+        6
+      ]
+    },
+    {
+      "slotKey": "GREGORY_STAPLES",
+      "displayName": "Gregory Staples",
+      "slotLabel": "Gregory Staples schedule position",
+      "vacancy": false,
+      "shift": {
+        "start": "08:00",
+        "end": "17:00"
+      },
+      "lunch": {
+        "start": "13:00",
+        "end": "14:00"
+      },
+      "lunchAuthority": "production_manager_staggered_coverage_optimization.v1",
+      "workDays": [
+        0,
+        1,
+        2,
+        3,
+        6
+      ]
+    }
+  ],
+  "days": [
+    {
+      "dayOfWeek": 0,
+      "dayName": "Sunday",
+      "employees": [
+        {
+          "name": "New Employee 2",
+          "shift": [
+            "06:00",
+            "15:00"
+          ],
+          "morning": [
+            "Aquarium",
+            "Komodos",
+            "Expo",
+            "Expo Men's Restroom",
+            "Expo Women's Restroom",
+            "MemMex Men's Restroom",
+            "MemMex Women's Restroom"
+          ],
+          "equalized": [
+            "Aquarium",
+            "Expo",
+            "Expo Men's Restroom",
+            "Expo Women's Restroom",
+            "MemMex Men's Restroom",
+            "MemMex Women's Restroom"
+          ]
+        },
+        {
+          "name": "New Employee 4",
+          "shift": [
+            "06:00",
+            "15:00"
+          ],
+          "morning": [
+            "North West Passage",
+            "East End Men's Restroom",
+            "East End Women's Restroom",
+            "Teton",
+            "Teton Men's Restroom",
+            "Teton Women's Restroom"
+          ],
+          "equalized": [
+            "North West Passage",
+            "East End Men's Restroom",
+            "East End Women's Restroom",
+            "Teton",
+            "Teton Men's Restroom",
+            "Teton Women's Restroom"
+          ]
+        },
+        {
+          "name": "Alijah Collins",
+          "shift": [
+            "07:00",
+            "16:00"
+          ],
+          "morning": [
+            "Tropical Birds",
+            "Bonobos Men's Restroom",
+            "Bonobos Women's Restroom",
+            "Cathouse Cafe Men's Restroom",
+            "Cathouse Cafe Women's Restroom",
+            "Nocturnal"
+          ],
+          "equalized": [
+            "Komodos",
+            "Tropical Birds",
+            "Bonobos Men's Restroom",
+            "Bonobos Women's Restroom",
+            "Cathouse Cafe Men's Restroom",
+            "Cathouse Cafe Women's Restroom",
+            "Nocturnal"
+          ]
+        },
+        {
+          "name": "Kaili Michaelson",
+          "shift": [
+            "07:00",
+            "16:00"
+          ],
+          "morning": [
+            "Education",
+            "Zambezi",
+            "Zambezi Men's Restroom",
+            "Zambezi Women's Restroom",
+            "Primate Canyon"
+          ],
+          "equalized": [
+            "Herpetarium",
+            "Education",
+            "Zambezi Men's Restroom",
+            "Zambezi Women's Restroom",
+            "China",
+            "China Men's Restroom",
+            "China Women's Restroom",
+            "Primate Pavillion"
+          ]
+        },
+        {
+          "name": "New Employee 1",
+          "shift": [
+            "08:00",
+            "17:00"
+          ],
+          "morning": [
+            "Courtyard Men's Restroom",
+            "Courtyard Women's Restroom",
+            "Cat Country",
+            "Event Center",
+            "Event Center Left Restroom",
+            "Event Center Right Restroom"
+          ],
+          "equalized": [
+            "Cat Country",
+            "Event Center",
+            "Event Center Left Restroom",
+            "Event Center Right Restroom",
+            "West Admin and Restrooms",
+            "Primate Canyon"
+          ]
+        },
+        {
+          "name": "Gregory Staples",
+          "shift": [
+            "08:00",
+            "17:00"
+          ],
+          "morning": [
+            "Herpetarium",
+            "Breezeway Men's Restroom",
+            "Breezeway Women's Restroom",
+            "China",
+            "China Men's Restroom",
+            "China Women's Restroom",
+            "Primate Pavillion"
+          ],
+          "equalized": [
+            "Courtyard Men's Restroom",
+            "Courtyard Women's Restroom",
+            "East Admin and Restrooms",
+            "Zambezi",
+            "Breezeway Men's Restroom",
+            "Breezeway Women's Restroom"
+          ]
+        }
+      ],
+      "coverage": {
+        "scheduledPositions": 6,
+        "maximumFutureLunchOverlap": 2,
+        "minimumFuturePositionsWorkingDuringLunches": 4,
+        "scheduledNamedEmployees": 3,
+        "maximumCurrentNamedLunchOverlap": 1,
+        "minimumCurrentNamedEmployeesWorkingDuringLunches": 2
+      }
+    },
+    {
+      "dayOfWeek": 1,
+      "dayName": "Monday",
+      "employees": [
+        {
+          "name": "New Employee 2",
+          "shift": [
+            "06:00",
+            "15:00"
+          ],
+          "morning": [
+            "Aquarium",
+            "Komodos",
+            "Expo",
+            "Expo Men's Restroom",
+            "Expo Women's Restroom",
+            "MemMex Men's Restroom",
+            "MemMex Women's Restroom"
+          ],
+          "equalized": [
+            "Aquarium",
+            "Expo",
+            "Expo Men's Restroom",
+            "Expo Women's Restroom",
+            "MemMex Men's Restroom",
+            "MemMex Women's Restroom"
+          ]
+        },
+        {
+          "name": "New Employee 4",
+          "shift": [
+            "06:00",
+            "15:00"
+          ],
+          "morning": [
+            "North West Passage",
+            "East End Men's Restroom",
+            "East End Women's Restroom",
+            "Teton",
+            "Teton Men's Restroom",
+            "Teton Women's Restroom"
+          ],
+          "equalized": [
+            "North West Passage",
+            "East End Men's Restroom",
+            "East End Women's Restroom",
+            "Teton",
+            "Teton Men's Restroom",
+            "Teton Women's Restroom"
+          ]
+        },
+        {
+          "name": "Alijah Collins",
+          "shift": [
+            "07:00",
+            "16:00"
+          ],
+          "morning": [
+            "Tropical Birds",
+            "Bonobos Men's Restroom",
+            "Bonobos Women's Restroom",
+            "Cathouse Cafe Men's Restroom",
+            "Cathouse Cafe Women's Restroom",
+            "Nocturnal"
+          ],
+          "equalized": [
+            "Komodos",
+            "Tropical Birds",
+            "Bonobos Men's Restroom",
+            "Bonobos Women's Restroom",
+            "Cathouse Cafe Men's Restroom",
+            "Cathouse Cafe Women's Restroom",
+            "Nocturnal"
+          ]
+        },
+        {
+          "name": "Kaili Michaelson",
+          "shift": [
+            "07:00",
+            "16:00"
+          ],
+          "morning": [
+            "Education",
+            "Zambezi",
+            "Zambezi Men's Restroom",
+            "Zambezi Women's Restroom",
+            "Primate Canyon",
+            "8:00 AM - Trading Post Gift Shop"
+          ],
+          "equalized": [
+            "Herpetarium",
+            "Education",
+            "Zambezi Men's Restroom",
+            "Zambezi Women's Restroom",
+            "China",
+            "China Men's Restroom",
+            "China Women's Restroom",
+            "Primate Pavillion"
+          ]
+        },
+        {
+          "name": "New Employee 1",
+          "shift": [
+            "08:00",
+            "17:00"
+          ],
+          "morning": [
+            "Courtyard Men's Restroom",
+            "Courtyard Women's Restroom",
+            "Cat Country",
+            "Event Center",
+            "Event Center Left Restroom",
+            "Event Center Right Restroom",
+            "8:00 AM - Elephant Trunk Gift Shop",
+            "Elephant Trunk Men's Restroom",
+            "Elephant Trunk Women's Restroom"
+          ],
+          "equalized": [
+            "Cat Country",
+            "Event Center",
+            "Event Center Left Restroom",
+            "Event Center Right Restroom",
+            "West Admin and Restrooms",
+            "Primate Canyon"
+          ]
+        },
+        {
+          "name": "Gregory Staples",
+          "shift": [
+            "08:00",
+            "17:00"
+          ],
+          "morning": [
+            "Herpetarium",
+            "Breezeway Men's Restroom",
+            "Breezeway Women's Restroom",
+            "China",
+            "China Men's Restroom",
+            "China Women's Restroom",
+            "8:00 AM - Bamboo Springs Gift Shop",
+            "Primate Pavillion"
+          ],
+          "equalized": [
+            "Courtyard Men's Restroom",
+            "Courtyard Women's Restroom",
+            "East Admin and Restrooms",
+            "Zambezi",
+            "Breezeway Men's Restroom",
+            "Breezeway Women's Restroom"
+          ]
+        }
+      ],
+      "coverage": {
+        "scheduledPositions": 6,
+        "maximumFutureLunchOverlap": 2,
+        "minimumFuturePositionsWorkingDuringLunches": 4,
+        "scheduledNamedEmployees": 3,
+        "maximumCurrentNamedLunchOverlap": 1,
+        "minimumCurrentNamedEmployeesWorkingDuringLunches": 2
+      }
+    },
+    {
+      "dayOfWeek": 2,
+      "dayName": "Tuesday",
+      "employees": [
+        {
+          "name": "Karen Robinson",
+          "shift": [
+            "05:00",
+            "14:00"
+          ],
+          "morning": [
+            "Cathouse Cafe Men's Restroom",
+            "Cathouse Cafe Women's Restroom",
+            "Zambezi",
+            "Zambezi Men's Restroom",
+            "Zambezi Women's Restroom"
+          ],
+          "equalized": [
+            "Cathouse Cafe Men's Restroom",
+            "Cathouse Cafe Women's Restroom",
+            "Zambezi",
+            "Zambezi Men's Restroom",
+            "Zambezi Women's Restroom"
+          ]
+        },
+        {
+          "name": "Tammy Miller",
+          "shift": [
+            "05:00",
+            "14:00"
+          ],
+          "morning": [
+            "North West Passage",
+            "East End Men's Restroom",
+            "East End Women's Restroom",
+            "Teton",
+            "Teton Men's Restroom",
+            "Teton Women's Restroom"
+          ],
+          "equalized": [
+            "East End Men's Restroom",
+            "East End Women's Restroom",
+            "Teton",
+            "Teton Men's Restroom",
+            "Teton Women's Restroom"
+          ]
+        },
+        {
+          "name": "Kathy Phelps",
+          "shift": [
+            "06:00",
+            "15:00"
+          ],
+          "morning": [
+            "Aquarium",
+            "Expo",
+            "Expo Men's Restroom",
+            "Expo Women's Restroom",
+            "MemMex Men's Restroom",
+            "MemMex Women's Restroom"
+          ],
+          "equalized": [
+            "Expo",
+            "Expo Men's Restroom",
+            "Expo Women's Restroom",
+            "MemMex Men's Restroom",
+            "MemMex Women's Restroom"
+          ]
+        },
+        {
+          "name": "New Employee 2",
+          "shift": [
+            "06:00",
+            "15:00"
+          ],
+          "morning": [
+            "Komodos",
+            "Herpetarium",
+            "Tropical Birds",
+            "Bonobos Men's Restroom",
+            "Bonobos Women's Restroom"
+          ],
+          "equalized": [
+            "Aquarium",
+            "Komodos",
+            "Herpetarium",
+            "Tropical Birds",
+            "Bonobos Men's Restroom",
+            "Bonobos Women's Restroom"
+          ]
+        },
+        {
+          "name": "New Employee 4",
+          "shift": [
+            "06:00",
+            "15:00"
+          ],
+          "morning": [
+            "Breezeway Men's Restroom",
+            "Breezeway Women's Restroom",
+            "China",
+            "China Men's Restroom",
+            "China Women's Restroom",
+            "Primate Canyon",
+            "Primate Pavillion"
+          ],
+          "equalized": [
+            "Breezeway Men's Restroom",
+            "Breezeway Women's Restroom",
+            "Nocturnal",
+            "China",
+            "China Men's Restroom",
+            "China Women's Restroom",
+            "Primate Pavillion",
+            "North West Passage"
+          ]
+        },
+        {
+          "name": "Kaili Michaelson",
+          "shift": [
+            "07:00",
+            "16:00"
+          ],
+          "morning": [
+            "Courtyard Men's Restroom",
+            "Courtyard Women's Restroom",
+            "Education",
+            "Nocturnal"
+          ],
+          "equalized": [
+            "Courtyard Men's Restroom",
+            "Courtyard Women's Restroom",
+            "Cat Country",
+            "Education",
+            "East Admin and Restrooms",
+            "Primate Canyon"
+          ]
+        },
+        {
+          "name": "Gregory Staples",
+          "shift": [
+            "08:00",
+            "17:00"
+          ],
+          "morning": [
+            "Cat Country",
+            "Event Center",
+            "Event Center Left Restroom",
+            "Event Center Right Restroom"
+          ],
+          "equalized": [
+            "Event Center",
+            "Event Center Left Restroom",
+            "Event Center Right Restroom",
+            "West Admin and Restrooms"
+          ]
+        }
+      ],
+      "coverage": {
+        "scheduledPositions": 7,
+        "maximumFutureLunchOverlap": 3,
+        "minimumFuturePositionsWorkingDuringLunches": 4,
+        "scheduledNamedEmployees": 5,
+        "maximumCurrentNamedLunchOverlap": 2,
+        "minimumCurrentNamedEmployeesWorkingDuringLunches": 3
+      }
+    },
+    {
+      "dayOfWeek": 3,
+      "dayName": "Wednesday",
+      "employees": [
+        {
+          "name": "Karen Robinson",
+          "shift": [
+            "05:00",
+            "14:00"
+          ],
+          "morning": [
+            "Cathouse Cafe Men's Restroom",
+            "Cathouse Cafe Women's Restroom",
+            "Zambezi",
+            "Zambezi Men's Restroom",
+            "Zambezi Women's Restroom",
+            "Breezeway Men's Restroom",
+            "Breezeway Women's Restroom"
+          ],
+          "equalized": [
+            "Cathouse Cafe Men's Restroom",
+            "Cathouse Cafe Women's Restroom",
+            "Zambezi",
+            "Zambezi Men's Restroom",
+            "Zambezi Women's Restroom",
+            "Primate Pavillion"
+          ]
+        },
+        {
+          "name": "Tammy Miller",
+          "shift": [
+            "05:00",
+            "14:00"
+          ],
+          "morning": [
+            "North West Passage",
+            "East End Men's Restroom",
+            "East End Women's Restroom",
+            "Teton",
+            "Teton Men's Restroom",
+            "Teton Women's Restroom"
+          ],
+          "equalized": [
+            "North West Passage",
+            "East End Men's Restroom",
+            "East End Women's Restroom",
+            "Teton",
+            "Teton Men's Restroom",
+            "Teton Women's Restroom"
+          ]
+        },
+        {
+          "name": "Kathy Phelps",
+          "shift": [
+            "06:00",
+            "15:00"
+          ],
+          "morning": [
+            "Aquarium",
+            "Expo",
+            "Expo Men's Restroom",
+            "Expo Women's Restroom",
+            "MemMex Men's Restroom",
+            "MemMex Women's Restroom"
+          ],
+          "equalized": [
+            "Aquarium",
+            "Expo",
+            "Expo Men's Restroom",
+            "Expo Women's Restroom",
+            "MemMex Men's Restroom",
+            "MemMex Women's Restroom"
+          ]
+        },
+        {
+          "name": "New Employee 4",
+          "shift": [
+            "06:00",
+            "15:00"
+          ],
+          "morning": [
+            "Komodos",
+            "Herpetarium",
+            "Nocturnal",
+            "China",
+            "China Men's Restroom",
+            "China Women's Restroom",
+            "Primate Canyon",
+            "Primate Pavillion"
+          ],
+          "equalized": [
+            "Komodos",
+            "Herpetarium",
+            "Tropical Birds",
+            "Bonobos Men's Restroom",
+            "Bonobos Women's Restroom",
+            "China",
+            "China Men's Restroom",
+            "China Women's Restroom"
+          ]
+        },
+        {
+          "name": "Kaili Michaelson",
+          "shift": [
+            "07:00",
+            "16:00"
+          ],
+          "morning": [
+            "Tropical Birds",
+            "Bonobos Men's Restroom",
+            "Bonobos Women's Restroom",
+            "Courtyard Men's Restroom",
+            "Courtyard Women's Restroom"
+          ],
+          "equalized": [
+            "Courtyard Men's Restroom",
+            "Courtyard Women's Restroom",
+            "Education",
+            "East Admin and Restrooms",
+            "Breezeway Men's Restroom",
+            "Breezeway Women's Restroom",
+            "Nocturnal"
+          ]
+        },
+        {
+          "name": "Gregory Staples",
+          "shift": [
+            "08:00",
+            "17:00"
+          ],
+          "morning": [
+            "Cat Country",
+            "Event Center",
+            "Event Center Left Restroom",
+            "Event Center Right Restroom",
+            "Education"
+          ],
+          "equalized": [
+            "Cat Country",
+            "Event Center",
+            "Event Center Left Restroom",
+            "Event Center Right Restroom",
+            "West Admin and Restrooms",
+            "Primate Canyon"
+          ]
+        }
+      ],
+      "coverage": {
+        "scheduledPositions": 6,
+        "maximumFutureLunchOverlap": 2,
+        "minimumFuturePositionsWorkingDuringLunches": 4,
+        "scheduledNamedEmployees": 5,
+        "maximumCurrentNamedLunchOverlap": 2,
+        "minimumCurrentNamedEmployeesWorkingDuringLunches": 3
+      }
+    },
+    {
+      "dayOfWeek": 4,
+      "dayName": "Thursday",
+      "employees": [
+        {
+          "name": "Karen Robinson",
+          "shift": [
+            "05:00",
+            "14:00"
+          ],
+          "morning": [
+            "Cathouse Cafe Men's Restroom",
+            "Cathouse Cafe Women's Restroom",
+            "Zambezi",
+            "Zambezi Men's Restroom",
+            "Zambezi Women's Restroom"
+          ],
+          "equalized": [
+            "Cathouse Cafe Men's Restroom",
+            "Cathouse Cafe Women's Restroom",
+            "Zambezi",
+            "Zambezi Men's Restroom",
+            "Zambezi Women's Restroom"
+          ]
+        },
+        {
+          "name": "Tammy Miller",
+          "shift": [
+            "05:00",
+            "14:00"
+          ],
+          "morning": [
+            "North West Passage",
+            "East End Men's Restroom",
+            "East End Women's Restroom",
+            "Teton",
+            "Teton Men's Restroom",
+            "Teton Women's Restroom"
+          ],
+          "equalized": [
+            "East End Men's Restroom",
+            "East End Women's Restroom",
+            "Teton",
+            "Teton Men's Restroom",
+            "Teton Women's Restroom"
+          ]
+        },
+        {
+          "name": "Kathy Phelps",
+          "shift": [
+            "06:00",
+            "15:00"
+          ],
+          "morning": [
+            "Aquarium",
+            "Expo",
+            "Expo Men's Restroom",
+            "Expo Women's Restroom",
+            "MemMex Men's Restroom",
+            "MemMex Women's Restroom"
+          ],
+          "equalized": [
+            "Expo",
+            "Expo Men's Restroom",
+            "Expo Women's Restroom",
+            "MemMex Men's Restroom",
+            "MemMex Women's Restroom"
+          ]
+        },
+        {
+          "name": "New Employee 4",
+          "shift": [
+            "06:00",
+            "15:00"
+          ],
+          "morning": [
+            "Breezeway Men's Restroom",
+            "Breezeway Women's Restroom",
+            "Nocturnal",
+            "China",
+            "China Men's Restroom",
+            "China Women's Restroom"
+          ],
+          "equalized": [
+            "Aquarium",
+            "Komodos",
+            "Herpetarium",
+            "Tropical Birds",
+            "Bonobos Men's Restroom",
+            "Bonobos Women's Restroom"
+          ]
+        },
+        {
+          "name": "Alijah Collins",
+          "shift": [
+            "07:00",
+            "16:00"
+          ],
+          "morning": [
+            "Tropical Birds",
+            "Bonobos Men's Restroom",
+            "Bonobos Women's Restroom",
+            "Primate Canyon",
+            "Primate Pavillion"
+          ],
+          "equalized": [
+            "Breezeway Men's Restroom",
+            "Breezeway Women's Restroom",
+            "Nocturnal",
+            "China",
+            "China Men's Restroom",
+            "China Women's Restroom",
+            "Primate Pavillion",
+            "North West Passage"
+          ]
+        },
+        {
+          "name": "Kaili Michaelson",
+          "shift": [
+            "07:00",
+            "16:00"
+          ],
+          "morning": [
+            "Komodos",
+            "Herpetarium",
+            "Courtyard Men's Restroom",
+            "Courtyard Women's Restroom"
+          ],
+          "equalized": [
+            "Courtyard Men's Restroom",
+            "Courtyard Women's Restroom",
+            "Cat Country",
+            "Education",
+            "East Admin and Restrooms",
+            "Primate Canyon"
+          ]
+        },
+        {
+          "name": "New Employee 1",
+          "shift": [
+            "08:00",
+            "17:00"
+          ],
+          "morning": [
+            "Cat Country",
+            "Event Center",
+            "Event Center Left Restroom",
+            "Event Center Right Restroom",
+            "Education"
+          ],
+          "equalized": [
+            "Event Center",
+            "Event Center Left Restroom",
+            "Event Center Right Restroom",
+            "West Admin and Restrooms"
+          ]
+        }
+      ],
+      "coverage": {
+        "scheduledPositions": 7,
+        "maximumFutureLunchOverlap": 2,
+        "minimumFuturePositionsWorkingDuringLunches": 5,
+        "scheduledNamedEmployees": 5,
+        "maximumCurrentNamedLunchOverlap": 2,
+        "minimumCurrentNamedEmployeesWorkingDuringLunches": 3
+      }
+    },
+    {
+      "dayOfWeek": 5,
+      "dayName": "Friday",
+      "employees": [
+        {
+          "name": "Karen Robinson",
+          "shift": [
+            "05:00",
+            "14:00"
+          ],
+          "morning": [
+            "Cathouse Cafe Men's Restroom",
+            "Cathouse Cafe Women's Restroom",
+            "Zambezi",
+            "Zambezi Men's Restroom",
+            "Zambezi Women's Restroom",
+            "Breezeway Men's Restroom",
+            "Breezeway Women's Restroom"
+          ],
+          "equalized": [
+            "Cathouse Cafe Men's Restroom",
+            "Cathouse Cafe Women's Restroom",
+            "Zambezi",
+            "Zambezi Men's Restroom",
+            "Zambezi Women's Restroom",
+            "Primate Pavillion"
+          ]
+        },
+        {
+          "name": "Tammy Miller",
+          "shift": [
+            "05:00",
+            "14:00"
+          ],
+          "morning": [
+            "North West Passage",
+            "East End Men's Restroom",
+            "East End Women's Restroom",
+            "Teton",
+            "Teton Men's Restroom",
+            "Teton Women's Restroom"
+          ],
+          "equalized": [
+            "North West Passage",
+            "East End Men's Restroom",
+            "East End Women's Restroom",
+            "Teton",
+            "Teton Men's Restroom",
+            "Teton Women's Restroom"
+          ]
+        },
+        {
+          "name": "Kathy Phelps",
+          "shift": [
+            "06:00",
+            "15:00"
+          ],
+          "morning": [
+            "Aquarium",
+            "Expo",
+            "Expo Men's Restroom",
+            "Expo Women's Restroom",
+            "MemMex Men's Restroom",
+            "MemMex Women's Restroom"
+          ],
+          "equalized": [
+            "Aquarium",
+            "Expo",
+            "Expo Men's Restroom",
+            "Expo Women's Restroom",
+            "MemMex Men's Restroom",
+            "MemMex Women's Restroom"
+          ]
+        },
+        {
+          "name": "New Employee 2",
+          "shift": [
+            "06:00",
+            "15:00"
+          ],
+          "morning": [
+            "Komodos",
+            "Herpetarium",
+            "Bonobos Men's Restroom",
+            "Bonobos Women's Restroom",
+            "Courtyard Men's Restroom",
+            "Courtyard Women's Restroom"
+          ],
+          "equalized": [
+            "Komodos",
+            "Herpetarium",
+            "Tropical Birds",
+            "Bonobos Men's Restroom",
+            "Bonobos Women's Restroom",
+            "China",
+            "China Men's Restroom",
+            "China Women's Restroom"
+          ]
+        },
+        {
+          "name": "Alijah Collins",
+          "shift": [
+            "07:00",
+            "16:00"
+          ],
+          "morning": [
+            "Tropical Birds",
+            "Nocturnal",
+            "China",
+            "China Men's Restroom",
+            "China Women's Restroom",
+            "Primate Pavillion"
+          ],
+          "equalized": [
+            "Courtyard Men's Restroom",
+            "Courtyard Women's Restroom",
+            "Education",
+            "East Admin and Restrooms",
+            "Breezeway Men's Restroom",
+            "Breezeway Women's Restroom",
+            "Nocturnal"
+          ]
+        },
+        {
+          "name": "New Employee 1",
+          "shift": [
+            "08:00",
+            "17:00"
+          ],
+          "morning": [
+            "Cat Country",
+            "Event Center",
+            "Event Center Left Restroom",
+            "Event Center Right Restroom",
+            "Education",
+            "Primate Canyon"
+          ],
+          "equalized": [
+            "Cat Country",
+            "Event Center",
+            "Event Center Left Restroom",
+            "Event Center Right Restroom",
+            "West Admin and Restrooms",
+            "Primate Canyon"
+          ]
+        }
+      ],
+      "coverage": {
+        "scheduledPositions": 6,
+        "maximumFutureLunchOverlap": 2,
+        "minimumFuturePositionsWorkingDuringLunches": 4,
+        "scheduledNamedEmployees": 4,
+        "maximumCurrentNamedLunchOverlap": 1,
+        "minimumCurrentNamedEmployeesWorkingDuringLunches": 3
+      }
+    },
+    {
+      "dayOfWeek": 6,
+      "dayName": "Saturday",
+      "employees": [
+        {
+          "name": "Karen Robinson",
+          "shift": [
+            "05:00",
+            "14:00"
+          ],
+          "morning": [
+            "Cathouse Cafe Men's Restroom",
+            "Cathouse Cafe Women's Restroom",
+            "Zambezi",
+            "Zambezi Men's Restroom",
+            "Zambezi Women's Restroom"
+          ],
+          "equalized": [
+            "Cathouse Cafe Men's Restroom",
+            "Cathouse Cafe Women's Restroom",
+            "Zambezi",
+            "Zambezi Men's Restroom",
+            "Zambezi Women's Restroom"
+          ]
+        },
+        {
+          "name": "Tammy Miller",
+          "shift": [
+            "05:00",
+            "14:00"
+          ],
+          "morning": [
+            "North West Passage",
+            "East End Men's Restroom",
+            "East End Women's Restroom",
+            "Teton",
+            "Teton Men's Restroom",
+            "Teton Women's Restroom"
+          ],
+          "equalized": [
+            "East End Men's Restroom",
+            "East End Women's Restroom",
+            "Teton",
+            "Teton Men's Restroom",
+            "Teton Women's Restroom"
+          ]
+        },
+        {
+          "name": "Kathy Phelps",
+          "shift": [
+            "06:00",
+            "15:00"
+          ],
+          "morning": [
+            "Aquarium",
+            "Expo",
+            "Expo Men's Restroom",
+            "Expo Women's Restroom",
+            "MemMex Men's Restroom",
+            "MemMex Women's Restroom"
+          ],
+          "equalized": [
+            "Expo",
+            "Expo Men's Restroom",
+            "Expo Women's Restroom",
+            "MemMex Men's Restroom",
+            "MemMex Women's Restroom"
+          ]
+        },
+        {
+          "name": "New Employee 2",
+          "shift": [
+            "06:00",
+            "15:00"
+          ],
+          "morning": [
+            "Komodos",
+            "Bonobos Men's Restroom",
+            "Bonobos Women's Restroom",
+            "Courtyard Men's Restroom",
+            "Courtyard Women's Restroom"
+          ],
+          "equalized": [
+            "Aquarium",
+            "Komodos",
+            "Herpetarium",
+            "Tropical Birds",
+            "Bonobos Men's Restroom",
+            "Bonobos Women's Restroom"
+          ]
+        },
+        {
+          "name": "Alijah Collins",
+          "shift": [
+            "07:00",
+            "16:00"
+          ],
+          "morning": [
+            "Tropical Birds",
+            "Breezeway Men's Restroom",
+            "Breezeway Women's Restroom",
+            "China",
+            "China Men's Restroom",
+            "China Women's Restroom",
+            "Primate Canyon"
+          ],
+          "equalized": [
+            "Breezeway Men's Restroom",
+            "Breezeway Women's Restroom",
+            "Nocturnal",
+            "China",
+            "China Men's Restroom",
+            "China Women's Restroom",
+            "Primate Pavillion",
+            "North West Passage"
+          ]
+        },
+        {
+          "name": "New Employee 1",
+          "shift": [
+            "08:00",
+            "17:00"
+          ],
+          "morning": [
+            "Cat Country",
+            "Event Center",
+            "Event Center Left Restroom",
+            "Event Center Right Restroom",
+            "Education"
+          ],
+          "equalized": [
+            "Event Center",
+            "Event Center Left Restroom",
+            "Event Center Right Restroom",
+            "West Admin and Restrooms"
+          ]
+        },
+        {
+          "name": "Gregory Staples",
+          "shift": [
+            "08:00",
+            "17:00"
+          ],
+          "morning": [
+            "Herpetarium",
+            "Nocturnal",
+            "Primate Pavillion"
+          ],
+          "equalized": [
+            "Courtyard Men's Restroom",
+            "Courtyard Women's Restroom",
+            "Cat Country",
+            "Education",
+            "East Admin and Restrooms",
+            "Primate Canyon"
+          ]
+        }
+      ],
+      "coverage": {
+        "scheduledPositions": 7,
+        "maximumFutureLunchOverlap": 2,
+        "minimumFuturePositionsWorkingDuringLunches": 5,
+        "scheduledNamedEmployees": 5,
+        "maximumCurrentNamedLunchOverlap": 1,
+        "minimumCurrentNamedEmployeesWorkingDuringLunches": 4
+      }
+    }
+  ]
+}

@@ -37,9 +37,10 @@
     },
     "phase_order": [
       "prepare distinct CUSTODIAL_BACKEND_PROOF_SECRET, CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET, and DEVICE_CREDENTIAL_SECRET values (minimum 32 characters each); preserve all phone-local work and require manager-code recovery for any active credential from a different secret generation without exposing any secret",
-      "capture the production catalog through the read-only Supabase boundary and require it to equal the observed clean 113-migration fingerprint recorded in release/production-migration-state.json",
-      "verify production project, observed migration head, catalog/privilege fingerprint, backup receipt, and exact source attestation against release/production-migration-state.json",
-      "after explicit production-change admission, apply only the two exact pending migrations in dependency order (credential-replacement lineage, then legacy daily-schedule writer retirement), then require the clean 115-migration target fingerprint and zero remaining pending migrations without replaying the four already-applied release migrations",
+      "capture the production catalog through the read-only Supabase boundary and require the exact observed production ledger head, catalog/privilege fingerprint, object counts, static-weekly state, and zero target-position collisions recorded in release/production-migration-state.json",
+      "verify production project, fresh post-capture backup receipt, observed production identity, exact pending-migration digest, and exact source attestation against release/production-migration-state.json",
+      "after explicit production-change admission, apply only the one exact pending static-weekly vacancy migration, require the production ledger to advance exactly once and the complete catalog delta to match the reviewed postconditions, and do not replay the eight already-applied release migrations or remove newer production-only event objects",
+      "after schema admission, import and publish the immutable weighted schedule packet through the static-weekly control plane with expected-revision and idempotency guards; preserve the current publication until the replacement publication and projection are complete",
       "deploy the canonical-only backend only after all authoritative procedures above are present and verified; missing canonical writers fail closed",
       "require a green authority health gate and direct-DML denial probes before routing traffic"
     ],

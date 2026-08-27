@@ -1,14 +1,41 @@
 {
-  "artifact": "production-migration-state.v1",
+  "artifact": "production-migration-state.v2",
   "mode": "migration_required",
   "project_ref": "rqquvtjdmugpigbndmne",
   "observed_production": {
-    "captured_at": "2026-08-25T19:57:03.985359Z",
-    "ledger_head": "20260825195150",
-    "source_migration_name": "rebind_application_reader_release_recovery",
-    "catalog_privilege_fingerprint": "4c79925d31759d7bb51e010f8ed47933e4ab9985df32df8a1592888e2134818e",
-    "catalog_capture_sha256": "c8cd3266652991757061bc9a96da5f4cde00e8344eb01a48778164c56243bd6a",
-    "public_function_count": 488,
+    "captured_at": "2026-08-27T00:39:08.659418Z",
+    "ledger_head": "20260826231317",
+    "source_migration_name": "add_education_classrooms_and_teton_grove_event_venues",
+    "catalog_privilege_fingerprint": "8d84d9d344e250ca14064bedde5370f3eae33585553c3a31939849fce6296dd3",
+    "catalog_capture_sha256": "8d84d9d344e250ca14064bedde5370f3eae33585553c3a31939849fce6296dd3",
+    "catalog_capture_format": "connected_database_catalog.v1 stable normalized JSON SHA-256",
+    "catalog_capture_bytes": 2918000,
+    "catalog_counts": {
+      "extensions": 8,
+      "types": 0,
+      "sequences": 0,
+      "tables": 182,
+      "columns": 2078,
+      "constraints": 1073,
+      "indexes": 662,
+      "functions": 491,
+      "views": 33,
+      "triggers": 128,
+      "policies": 41,
+      "owned_scheduler_roles": 3,
+      "owned_scheduler_role_memberships": 3,
+      "privilege_bearing_roles": 4,
+      "role_memberships": 25,
+      "table_grants": 1529,
+      "column_grants": 22,
+      "sequence_grants": 0,
+      "routine_grants": 332,
+      "type_grants": 0,
+      "schema_grants": 9,
+      "default_privileges": 12,
+      "cron_jobs": 9
+    },
+    "public_function_count": 491,
     "registered_source_count": 1,
     "active_authority_key_count": 1,
     "roster_slot_count": 17,
@@ -21,107 +48,100 @@
     "occurrence_count": 452,
     "application_reader_identity_policy_count": 3,
     "application_reader_credential_select": false,
-    "migration_count": 113
+    "production_ledger_count": 216,
+    "source_authority_migration_count": 117,
+    "target_schedule_slot_count": 0,
+    "vacancy_functions_present": false
   },
   "target": {
-    "source_migration_file": "20260826114516_retire_legacy_daily_schedule_writers_after_static_weekly_cutover.sql",
-    "source_migration_name": "retire_legacy_daily_schedule_writers_after_static_weekly_cutover",
-    "source_migration_version": "20260826114516",
+    "source_migration_file": "20260827010500_static_weekly_vacant_roster_slots.sql",
+    "source_migration_name": "static_weekly_vacant_roster_slots",
+    "source_migration_version": "20260827010500",
     "production_ledger_version": null,
-    "canonical_schema_fingerprint": "47f7739b31a95d55a120895af2aec68518d111d338246b6017d64d02155cc96d",
-    "public_function_count": 491,
-    "migration_count": 115
+    "canonical_source_schema_fingerprint": "38ab9a26caeefe071e0a2784c7cb0ba3b96810396c83ee9b5dc88d580be2cd02",
+    "public_function_count": 493,
+    "production_ledger_count": 217,
+    "source_authority_migration_count": 118,
+    "expected_catalog_counts": {
+      "extensions": 8,
+      "types": 0,
+      "sequences": 0,
+      "tables": 182,
+      "columns": 2078,
+      "constraints": 1074,
+      "indexes": 662,
+      "functions": 493,
+      "views": 33,
+      "triggers": 128,
+      "policies": 41,
+      "owned_scheduler_roles": 3,
+      "owned_scheduler_role_memberships": 3,
+      "privilege_bearing_roles": 4,
+      "role_memberships": 25,
+      "table_grants": 1529,
+      "column_grants": 22,
+      "sequence_grants": 0,
+      "routine_grants": 334,
+      "type_grants": 0,
+      "schema_grants": 9,
+      "default_privileges": 12,
+      "cron_jobs": 9
+    }
   },
   "source_binding": {
     "kind": "external_exact_head_release_attestation",
     "rule": "The production approval package binds the exact backend commit and tree containing this state, every release migration blob, generated release evidence, the exact Engine commit, and the independently captured production catalog identity."
   },
   "backup_evidence": {
-    "workflow_run_id": 32891851878,
-    "source_commit": "f2d3437792338aed93aa9eec5e2fd97457d130da",
-    "artifact_name": "memphis-zoo-disaster-recovery-32891851878",
-    "artifact_sha256": "95cd96e12c0e57f8cc47afdb0166c47cd28e5fd23773195a0bb392c3c5f51260",
-    "artifact_size_bytes": 7736025,
-    "restore_verification": "passed",
-    "completed_at": "2026-08-25T19:51:13Z"
+    "state": "fresh_verified_backup_required_before_mutation",
+    "last_verified": {
+      "workflow_run_id": 32891851878,
+      "source_commit": "f2d3437792338aed93aa9eec5e2fd97457d130da",
+      "artifact_name": "memphis-zoo-disaster-recovery-32891851878",
+      "artifact_sha256": "95cd96e12c0e57f8cc47afdb0166c47cd28e5fd23773195a0bb392c3c5f51260",
+      "artifact_size_bytes": 7736025,
+      "restore_verification": "passed",
+      "completed_at": "2026-08-25T19:51:13Z"
+    }
   },
   "authorization": {
     "production_mutation_required": true,
     "sequence_policy": "apply_exact_ordered_pending_migrations_after_release_admission",
-    "rollback_policy": "forward-only migrations; preserve the pre-change backup, static-weekly publication, projections, occurrences, legacy shadow history and all credential evidence; if post-verification fails, keep canary traffic paused and use the reviewed forward recovery inventory rather than down-migrating, deleting replacement lineage, or re-enabling legacy schedule writers"
+    "rollback_policy": "forward-only migration; preserve a fresh pre-change backup, the accepted publication, projections, occurrences, all existing roster/incumbency history, and production-only event objects; if post-verification fails, keep the new publication unpublished and repair forward rather than deleting evidence or re-enabling a retired writer"
   },
   "preconditions": [
     "production project_ref equals rqquvtjdmugpigbndmne",
-    "production migration ledger head equals 20260825195150 and names rebind_application_reader_release_recovery",
-    "production catalog and privilege fingerprint equals 4c79925d31759d7bb51e010f8ed47933e4ab9985df32df8a1592888e2134818e",
-    "the read-only production capture and a clean 113-migration rebuild independently produce the same fingerprint",
-    "fresh encrypted backup run 32891851878 passed restore verification and retained artifact sha256:95cd96e12c0e57f8cc47afdb0166c47cd28e5fd23773195a0bb392c3c5f51260",
-    "production exposes exactly 488 public functions",
+    "production migration ledger head equals 20260826231317 and names add_education_classrooms_and_teton_grove_event_venues",
+    "production catalog and privilege fingerprint equals 8d84d9d344e250ca14064bedde5370f3eae33585553c3a31939849fce6296dd3 under connected_database_catalog.v1 normalization",
+    "a fresh encrypted backup with restore verification completes after the observed production capture and before mutation",
+    "production exposes exactly 491 public functions before the vacancy migration",
     "one active authority key and one immutable registered source exist",
     "weekly roster slots and roster incumbencies each contain exactly 17 accepted rows; exactly one publication, one projection, 452 occurrences and three command receipts exist at authority revision 3 while drafts remain empty",
-    "the application reader has exactly three bounded identity policies and no credential-table SELECT authority",
+    "none of the five stable weighted-schedule position UUIDs exists before the guarded import",
+    "the vacancy create/fill functions are absent before the migration",
     "the exact backend commit/tree and exact Engine commit are externally attested"
   ],
   "applied_release_migrations": [
-    {
-      "order": 1,
-      "phase": "scan_alert_runtime_authority_closure",
-      "file": "20260825134500_scan_alert_runtime_authority_closure.sql",
-      "production_ledger_version": "20260825142157",
-      "sha256": "5d3b2bef6d70a501528494fe040c81654ea8aee74513d0f9c90cabce5c47a1ca"
-    },
-    {
-      "order": 2,
-      "phase": "restore_application_reader_device_identity",
-      "file": "20260825173000_restore_application_reader_device_identity.sql",
-      "production_ledger_version": "20260825172858",
-      "sha256": "d5cbc80464a802d6abc201bc9dcc22ad8c024c4c19906bc7e4bd836e27c1b62d"
-    },
-    {
-      "order": 3,
-      "phase": "fence_application_reader_device_credentials",
-      "file": "20260825173500_fence_application_reader_device_credentials.sql",
-      "production_ledger_version": "20260825173029",
-      "sha256": "c47e59dd68b836c68227a1c18be069621aa454f770d3c6d7c04a96ba085f2fa3"
-    },
-    {
-      "order": 4,
-      "phase": "rebind_application_reader_release_recovery",
-      "file": "20260825174500_rebind_application_reader_release_recovery.sql",
-      "production_ledger_version": "20260825195150",
-      "sha256": "68f082382e9d9f05664e034716851121485d95d586b36c6b0714111b314be736"
-    }
+    { "order": 1, "phase": "scan_alert_runtime_authority_closure", "file": "20260825134500_scan_alert_runtime_authority_closure.sql", "production_ledger_version": "20260825142157", "sha256": "5d3b2bef6d70a501528494fe040c81654ea8aee74513d0f9c90cabce5c47a1ca" },
+    { "order": 2, "phase": "restore_application_reader_device_identity", "file": "20260825173000_restore_application_reader_device_identity.sql", "production_ledger_version": "20260825172858", "sha256": "d5cbc80464a802d6abc201bc9dcc22ad8c024c4c19906bc7e4bd836e27c1b62d" },
+    { "order": 3, "phase": "fence_application_reader_device_credentials", "file": "20260825173500_fence_application_reader_device_credentials.sql", "production_ledger_version": "20260825173029", "sha256": "c47e59dd68b836c68227a1c18be069621aa454f770d3c6d7c04a96ba085f2fa3" },
+    { "order": 4, "phase": "rebind_application_reader_release_recovery", "file": "20260825174500_rebind_application_reader_release_recovery.sql", "production_ledger_version": "20260825195150", "sha256": "68f082382e9d9f05664e034716851121485d95d586b36c6b0714111b314be736" },
+    { "order": 5, "phase": "preserve_offline_work_across_manager_credential_recovery", "file": "20260826020000_preserve_offline_work_across_manager_credential_recovery.sql", "production_ledger_version": "20260826020000", "sha256": "c002a6969cffb359c61250c4b41414fc29a35a3ab1b0ea021aaf7ccbf54fc868" },
+    { "order": 6, "phase": "retire_legacy_daily_schedule_writers_after_static_weekly_cutover", "file": "20260826114516_retire_legacy_daily_schedule_writers_after_static_weekly_cutover.sql", "production_ledger_version": "20260826114516", "sha256": "62329525c73705bb253fc87cd2c31c9b29ecb89a5cce14b550d4b04dce727cbf" },
+    { "order": 7, "phase": "restore_application_reader_messenger_runtime", "file": "20260826155000_restore_application_reader_messenger_runtime.sql", "production_ledger_version": "20260826205203", "sha256": "eb8188ba7b0bfb8ff7ed310bf0697d7dc7d6af848a350d843c86b5b64e1ddd3a" },
+    { "order": 8, "phase": "restore_application_reader_employee_events_runtime", "file": "20260826160000_restore_application_reader_employee_events_runtime.sql", "production_ledger_version": "20260826210524", "sha256": "5058addb210be6f20f96646d0050cf7d928edde9e5f8bfd0f571965089666379" }
   ],
   "pending_migrations": [
-    {
-      "order": 1,
-      "phase": "preserve_offline_work_across_manager_credential_recovery",
-      "file": "20260826020000_preserve_offline_work_across_manager_credential_recovery.sql",
-      "source_migration_version": "20260826020000",
-      "sha256": "c002a6969cffb359c61250c4b41414fc29a35a3ab1b0ea021aaf7ccbf54fc868"
-    },
-    {
-      "order": 2,
-      "phase": "retire_legacy_daily_schedule_writers_after_static_weekly_cutover",
-      "file": "20260826114516_retire_legacy_daily_schedule_writers_after_static_weekly_cutover.sql",
-      "source_migration_version": "20260826114516",
-      "sha256": "62329525c73705bb253fc87cd2c31c9b29ecb89a5cce14b550d4b04dce727cbf"
-    }
+    { "order": 1, "phase": "static_weekly_vacant_roster_slots", "file": "20260827010500_static_weekly_vacant_roster_slots.sql", "source_migration_version": "20260827010500", "sha256": "0c14a8085fcdea60cbc904a11cff5f56b1fbee01c20052e536a83559b8dece37" }
   ],
   "postconditions": [
-    "production ledger records preserve_offline_work_across_manager_credential_recovery exactly once under the actual applied ledger version",
-    "production ledger records retire_legacy_daily_schedule_writers_after_static_weekly_cutover exactly once after the credential-replacement migration",
-    "production catalog and privilege fingerprint equals 47f7739b31a95d55a120895af2aec68518d111d338246b6017d64d02155cc96d",
-    "production exposes exactly 491 public functions across the clean 115-migration authority",
-    "credential replacement lineage is append-only, FORCE-RLS protected and unavailable for direct service-role mutation",
-    "a current confirmed successor credential may transport only frozen predecessor work on the same device while the original employee, device and credential evidence remain immutable",
-    "the backend can queue due scan alerts only through the secret-bound custodial_backend_queue_due_scan_alerts wrapper",
-    "the restricted application reader can resolve enrolled phone identity but cannot read device credentials, and release recovery preserves its exact 22-column projection plus three FORCE-RLS policies",
-    "service_role cannot execute either direct sch_queue_due_scan_alerts overload or the canonical application-reader schedule function",
-    "PUBLIC, anon and authenticated cannot execute the backend scan-alert wrapper",
-    "one active authority key and one immutable registered source remain unchanged",
-    "weekly roster slots and incumbencies remain exactly 17; the accepted publication, projection, 452 occurrences, three receipts and authority revision 3 remain unchanged",
-    "the rolling legacy schedule cron is inactive, governed dates cannot be mutated through any of the four legacy daily shadow tables, and historical shadow rows remain preserved",
+    "production ledger records static_weekly_vacant_roster_slots exactly once under the actual applied ledger version",
+    "the complete public catalog changes only by the reviewed vacancy migration delta while all production-only Outlook/event venue objects remain preserved",
+    "production exposes exactly 493 public functions and 334 non-owner routine grants after the migration",
+    "the new vacancy functions are executable only by static_weekly_control_plane and remain denied to PUBLIC, anon, authenticated, service_role, release operator and application reader",
+    "every vacant published position retains a complete shift and one-hour lunch while carrying no synthetic employee, owner, or original actor",
+    "the existing 17 roster slots, 17 incumbencies, accepted publication, projection, 452 occurrences, three receipts and authority revision 3 remain unchanged until the separate guarded schedule publication",
+    "no existing publication, schedule history, employee history, event authority or production-only schema object is deleted or rewritten",
     "no unexpected catalog, privilege, configuration or row diff exists"
   ]
 }

@@ -245,17 +245,30 @@ export function selectEffectiveWeeklyVersion(versions, serviceDate) {
   return effective[0];
 }
 
-export function snapshotIncumbency(slot, serviceDate) {
+function effectiveIncumbencies(slot, serviceDate) {
   const date = assertServiceDate(serviceDate);
-  const matches = (slot?.incumbencies || []).filter((incumbency) => {
+  return (slot?.incumbencies || []).filter((incumbency) => {
     const start = assertServiceDate(incumbency.effectiveStart, "incumbency effective start");
     const end = incumbency.effectiveEnd == null ? null : assertServiceDate(incumbency.effectiveEnd, "incumbency effective end");
     return start <= date && (!end || date < end);
   });
+}
+
+export function snapshotIncumbency(slot, serviceDate) {
+  const date = assertServiceDate(serviceDate);
+  const matches = effectiveIncumbencies(slot, date);
   assert(matches.length === 1, `Slot ${slot?.id || "unknown"} has ${matches.length} incumbencies for ${date}.`, "invalid_incumbency_history");
   const incumbent = matches[0];
   assert(String(incumbent.personId || "").trim() && String(incumbent.displayName || "").trim(), `Slot ${slot.id} lacks an immutable person/name snapshot.`, "missing_incumbency_snapshot");
   return { slotId: String(slot.id), slotLabel: String(slot.label || slot.id), personId: String(incumbent.personId), displayName: String(incumbent.displayName) };
+}
+
+export function snapshotVacantRosterSlot(slot, serviceDate) {
+  const date = assertServiceDate(serviceDate);
+  const matches = effectiveIncumbencies(slot, date);
+  assert(matches.length === 0, `Vacant slot ${slot?.id || "unknown"} has ${matches.length} effective incumbencies for ${date}.`, "vacant_slot_has_incumbency");
+  assert(String(slot?.id || "").trim(), "Vacant roster slot lacks a stable identity.", "invalid_vacant_slot");
+  return { slotId: String(slot.id), slotLabel: String(slot.label || slot.id), personId: null, displayName: null, vacant: true };
 }
 
 function exactPayloadObject(value, required, label) {

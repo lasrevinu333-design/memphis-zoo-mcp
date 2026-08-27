@@ -51,6 +51,7 @@ const recurringSemanticIdentity = (value) => {
     delete stableVersion.effectiveStart;
     delete stableVersion.effectiveEnd;
     delete stableVersion.namedAbsentSlotIds;
+    delete stableVersion.vacantSlotIds;
     if (Array.isArray(stableVersion.slotAvailability)) {
       stableVersion.slotAvailability = stableVersion.slotAvailability.map((availability) => {
         const recurringTemplate = clone(availability);
@@ -368,7 +369,7 @@ function slotAvailabilityRows(authority) {
     if (!slot || !Number.isInteger(availability.dayOfWeek) || availability.dayOfWeek < 0 || availability.dayOfWeek > 6) fail("database_adapter_projection_availability_invalid");
     const state = text(availability.status);
     const working = state === "working";
-    const recurringTemplate = working || state === "departed_named_absent";
+    const recurringTemplate = working || state === "departed_named_absent" || state === "vacant_unfilled";
     const shift = availability.shift || {};
     const lunch = availability.lunch || {};
     return {

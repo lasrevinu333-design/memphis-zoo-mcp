@@ -23,6 +23,18 @@ function activeIncumbent(slot, effectiveDate) {
   return matches.length === 1 ? matches[0] : null;
 }
 
+function validAvailabilityTemplate(item, status) {
+  return item?.status === status
+    && Number.isInteger(item?.dayOfWeek) && item.dayOfWeek >= 0 && item.dayOfWeek <= 6
+    && text(item?.shift?.start) && text(item?.shift?.end)
+    && text(item?.productiveCapacityProvenance)
+    && Number.isSafeInteger(item?.maxServiceEffortMinutes) && item.maxServiceEffortMinutes >= 1
+    && text(item?.maxServiceEffortProvenance)
+    && Array.isArray(item?.qualifications) && text(item?.qualificationProvenance)
+    && Array.isArray(item?.restrictions) && text(item?.restrictionProvenance)
+    && text(item?.acceptedRouteAnchorLocationId) && text(item?.acceptedRouteProvenance);
+}
+
 export function validateStaticWeeklyPacket(packet) {
   const errors = [];
   if (!packet || typeof packet !== "object") return { ok: false, classification: "INVALID", errors: ["packet_object_required"] };
@@ -53,7 +65,17 @@ export function validateStaticWeeklyPacket(packet) {
   for (const field of ["effectiveDate", "compilerInput", "rosterSlots", "directedProximity", "acceptedRoutes", "serviceEffort", "capacity", "sourceDigest", "verifiedAt", "verifiedBy", "evidence"]) if (packet[field] == null) errors.push(`verified_packet_missing_${field}`);
   if (packet.sourceDigest && !/^[0-9a-f]{64}$/i.test(packet.sourceDigest)) errors.push("verified_packet_source_digest_required");
   if (!UUID.test(packet.sourceId || "") || isCandidatePlaceholder(packet.sourceId)) errors.push("verified_packet_source_id_required");
-  if (Array.isArray(packet.rosterSlots) && packet.rosterSlots.some((row) => !UUID.test(row.slotId || "") || !UUID.test(row.personId || "") || isCandidatePlaceholder(row.slotId) || isCandidatePlaceholder(row.personId))) errors.push("verified_packet_production_uuid_identity_required");
+  if (Array.isArray(packet.rosterSlots)) {
+    const rosterSlotIds = packet.rosterSlots.map((row) => row?.slotId);
+    if (new Set(rosterSlotIds).size !== rosterSlotIds.length) errors.push("verified_packet_roster_slot_identity_unique");
+    if (packet.rosterSlots.some((row) => {
+      const vacant = row?.availabilityState === "vacant_unfilled";
+      return !UUID.test(row?.slotId || "") || isCandidatePlaceholder(row?.slotId)
+        || (vacant
+          ? row?.personId != null || text(row?.displayName)
+          : !UUID.test(row?.personId || "") || isCandidatePlaceholder(row?.personId) || !text(row?.displayName));
+    })) errors.push("verified_packet_production_uuid_identity_required");
+  }
   if (!Array.isArray(packet.evidence) || !packet.evidence.length || packet.evidence.some((item) => !String(item?.kind || "").trim() || !/^[0-9a-f]{64}$/i.test(item?.sha256 || ""))) errors.push("verified_packet_hash_bound_evidence_required");
   if (!packet.compilerInput || typeof packet.compilerInput !== "object" || Array.isArray(packet.compilerInput)) errors.push("verified_packet_compiler_input_required");
   else {
@@ -66,8 +88,17 @@ export function validateStaticWeeklyPacket(packet) {
     if (!version || Boolean(singularVersion) === Boolean(pluralVersion)) errors.push("verified_packet_exactly_one_recurring_version_required");
     if (packet.sourceDigest && postgresJsonbContentDigest(packet.compilerInput) !== packet.sourceDigest) errors.push("verified_packet_source_digest_mismatch");
     if (JSON.stringify(packet.compilerInput).match(/"[45]b99b100-/i)) errors.push("verified_packet_candidate_placeholder_forbidden");
-    const absentSlotIds = Array.isArray(version?.namedAbsentSlotIds) ? [...new Set(version.namedAbsentSlotIds)] : [];
-    if (absentSlotIds.length !== 2 || absentSlotIds.some((id) => !UUID.test(id || "") || isCandidatePlaceholder(id))) errors.push("verified_packet_exactly_two_real_named_absent_slots_required");
+    const rawAbsentSlotIds = Array.isArray(version?.namedAbsentSlotIds) ? version.namedAbsentSlotIds : [];
+    const rawVacancyCapableSlotIds = Array.isArray(version?.vacancyCapableSlotIds) ? version.vacancyCapableSlotIds : [];
+    const rawVacantSlotIds = Array.isArray(version?.vacantSlotIds) ? version.vacantSlotIds : [];
+    const absentSlotIds = [...new Set(rawAbsentSlotIds)];
+    const vacancyCapableSlotIds = [...new Set(rawVacancyCapableSlotIds)];
+    const vacantSlotIds = [...new Set(rawVacantSlotIds)];
+    if (absentSlotIds.length !== rawAbsentSlotIds.length || absentSlotIds.some((id) => !UUID.test(id || "") || isCandidatePlaceholder(id))) errors.push("verified_packet_named_absent_slot_identity_required");
+    if (vacancyCapableSlotIds.length !== rawVacancyCapableSlotIds.length || vacancyCapableSlotIds.some((id) => !UUID.test(id || "") || isCandidatePlaceholder(id))) errors.push("verified_packet_vacancy_capable_slot_identity_required");
+    if (vacantSlotIds.length !== rawVacantSlotIds.length || vacantSlotIds.some((id) => !UUID.test(id || "") || isCandidatePlaceholder(id))) errors.push("verified_packet_vacant_slot_identity_required");
+    if (vacantSlotIds.some((id) => !vacancyCapableSlotIds.includes(id))) errors.push("verified_packet_active_vacancy_not_capable");
+    if (absentSlotIds.some((id) => vacantSlotIds.includes(id))) errors.push("verified_packet_staffing_state_conflict");
     const slots = Array.isArray(packet.compilerInput.slots) ? packet.compilerInput.slots : [];
     const roster = Array.isArray(packet.rosterSlots) ? packet.rosterSlots : [];
     const availability = Array.isArray(version?.slotAvailability) ? version.slotAvailability : [];
@@ -80,16 +111,21 @@ export function validateStaticWeeklyPacket(packet) {
         || rosterRow?.personId !== incumbent.personId || text(rosterRow?.displayName) !== text(incumbent.displayName)
         || rosterRow?.availabilityState !== "departed_named_absent"
         || templates.length === 0
-        || templates.some((item) => item?.status !== "departed_named_absent"
-          || !Number.isInteger(item?.dayOfWeek) || item.dayOfWeek < 0 || item.dayOfWeek > 6
-          || !text(item?.shift?.start) || !text(item?.shift?.end)
-          || !text(item?.productiveCapacityProvenance)
-          || !Number.isSafeInteger(item?.maxServiceEffortMinutes) || item.maxServiceEffortMinutes < 1
-          || !text(item?.maxServiceEffortProvenance)
-          || !Array.isArray(item?.qualifications) || !text(item?.qualificationProvenance)
-          || !Array.isArray(item?.restrictions) || !text(item?.restrictionProvenance)
-          || !text(item?.acceptedRouteAnchorLocationId) || !text(item?.acceptedRouteProvenance))) {
+        || templates.some((item) => !validAvailabilityTemplate(item, "departed_named_absent"))) {
         errors.push("verified_packet_named_absent_roster_identity_mismatch");
+        break;
+      }
+    }
+    for (const slotId of vacantSlotIds) {
+      const slot = slots.find((item) => item?.id === slotId);
+      const rosterRow = roster.find((item) => item?.slotId === slotId);
+      const templates = availability.filter((item) => item?.slotId === slotId);
+      if (!slot || activeIncumbent(slot, text(packet.effectiveDate)) != null
+        || rosterRow?.personId != null || text(rosterRow?.displayName)
+        || rosterRow?.availabilityState !== "vacant_unfilled"
+        || templates.length === 0
+        || templates.some((item) => !validAvailabilityTemplate(item, "vacant_unfilled"))) {
+        errors.push("verified_packet_vacant_roster_identity_mismatch");
         break;
       }
     }

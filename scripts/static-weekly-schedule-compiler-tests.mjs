@@ -332,6 +332,82 @@ const retentionResult = await compile(retention);
 assert.equal(retentionResult.verifier.ok, true);
 assert.deepEqual(retentionResult.weeklyAssignments.map((item) => [item.planWorkId, item.status]), [["0:repeat-work", "ASSIGNED"], ["6:repeat-work", "ASSIGNED"]], "every non-cancelled day:work source identity has exactly one optimizer row");
 
+const vacancy = smallInput({ slots: ["worker", "vacant"], assignments: [], availabilities: [] });
+vacancy.slots.find((slot) => slot.id === "vacant").incumbencies = [];
+vacancy.versions[0].vacancyCapableSlotIds = ["vacant"];
+vacancy.versions[0].vacantSlotIds = ["vacant"];
+vacancy.versions[0].slotAvailability = [
+  availability("worker", "A"),
+  availability("vacant", "B", {
+    status: "vacant_unfilled",
+    shift: { start: "08:00", end: "17:00" },
+    lunch: { start: "12:30", end: "13:30" },
+  }),
+];
+vacancy.versions[0].assignments = [work("vacant-work", "B", "09:45", "17:00", "vacant", {
+  required: true,
+  schedulingMode: STATIC_WEEKLY_FLEXIBLE_COVERAGE_MODE,
+})];
+const vacancyResult = await compile(vacancy);
+assert.equal(vacancyResult.status, "FEASIBLE", `a vacancy is a valid stable schedule slot: ${JSON.stringify(vacancyResult.fatal || vacancyResult.verifier)}`);
+assert.equal(vacancyResult.verifier.ok, true);
+assert.deepEqual(
+  vacancyResult.weeklyAssignments.map((item) => [item.planWorkId, item.status, item.baselineSlotId, item.baselineOwnerPersonId, item.originalActorPersonId]),
+  [["1:vacant-work", "OPEN", "vacant", null, null]],
+  "vacant-slot work remains visibly OPEN without inventing an employee or original actor",
+);
+assert.deepEqual(
+  vacancyResult.canonicalAuthority.projectionAvailability.find((row) => row.slotId === "vacant"),
+  {
+    dayOfWeek: 1,
+    serviceDate: "2026-08-10",
+    slotId: "vacant",
+    status: "vacant_unfilled",
+    shift: { start: "08:00", end: "17:00" },
+    productiveCapacityProvenance: "verified-shift-lunch-v1",
+    maxServiceEffortMinutes: 300,
+    maxServiceEffortProvenance: "verified-maximum-v1",
+    qualifications: ["general", "restroom"],
+    qualificationProvenance: "credential-v1",
+    restrictions: [],
+    restrictionProvenance: "restriction-v1",
+    acceptedRouteAnchorLocationId: "B",
+    acceptedRouteProvenance: "accepted-route-v1",
+    lunch: { start: "12:30", end: "13:30" },
+    incumbentSlotId: "vacant",
+    incumbentSlotLabel: "slot-vacant",
+    incumbentPersonId: null,
+    incumbentName: null,
+  },
+  "vacant availability retains its shift and lunch while incumbent identity remains null",
+);
+const vacancyWithIncumbent = clone(vacancy);
+vacancyWithIncumbent.slots.find((slot) => slot.id === "vacant").incumbencies = [{ personId: "invented-person", displayName: "Invented Person", effectiveStart: "2020-01-01", effectiveEnd: null }];
+assert.equal(prepareStaticWeeklySchedulingProblem(vacancyWithIncumbent).error?.detail, "vacant_slot_has_incumbency", "a declared vacancy cannot hide an effective incumbent");
+const vacancyWithoutCapability = clone(vacancy);
+vacancyWithoutCapability.versions[0].vacancyCapableSlotIds = [];
+assert.equal(prepareStaticWeeklySchedulingProblem(vacancyWithoutCapability).error?.code, "vacant_slot_not_vacancy_capable", "active vacancy state cannot expand immutable source capability");
+const vacancyMarkedWorking = clone(vacancy);
+vacancyMarkedWorking.versions[0].slotAvailability.find((row) => row.slotId === "vacant").status = "working";
+assert.equal(prepareStaticWeeklySchedulingProblem(vacancyMarkedWorking).error?.code, "vacant_slot_availability_mismatch", "a vacant slot cannot silently become working");
+const filledVacancy = clone(vacancy);
+filledVacancy.slots.find((slot) => slot.id === "vacant").incumbencies = [{ personId: "new-person", displayName: "New Employee", effectiveStart: "2026-08-10", effectiveEnd: null }];
+filledVacancy.versions[0].vacantSlotIds = [];
+filledVacancy.versions[0].slotAvailability.find((row) => row.slotId === "vacant").status = "working";
+const filledVacancyResult = await compile(filledVacancy);
+assert.equal(filledVacancyResult.status, "FEASIBLE", `the same recurring work becomes assignable after the vacancy is filled: ${JSON.stringify(filledVacancyResult.fatal || { verifier: filledVacancyResult.verifier, candidateRejections: filledVacancyResult.candidateRejections })}`);
+assert.deepEqual(filledVacancyResult.weeklyAssignments.map((item) => [item.planWorkId, item.status, item.personId]), [["1:vacant-work", "ASSIGNED", "new-person"]], "hiring activates the existing required work without a schedule edit or app rebuild");
+
+const reminder = smallInput({ assignments: [work("monday-gift-shop", "NONPHYSICAL_REMINDER", "08:00", "08:30", "a", {
+  serviceMode: "reminder_only",
+  includedLocations: [],
+  schedulingMode: STATIC_WEEKLY_FLEXIBLE_COVERAGE_MODE,
+})] });
+const reminderResult = await compile(reminder);
+assert.equal(reminderResult.status, "FEASIBLE", `a nonphysical reminder needs no invented walking edge: ${JSON.stringify(reminderResult.fatal || reminderResult.verifier)}`);
+assert.equal(reminderResult.verifier.ok, true);
+assert.equal(reminderResult.metrics.weekly.incrementalDirectedRouteCost, 0, "a nonphysical gift-shop reminder contributes no route or duty cost");
+
 const semanticCanonical = clone(retention);
 semanticCanonical.versions[0].namedAbsentSlotIds = ["b", "a"];
 semanticCanonical.versions[0].slotAvailability[0].qualifications = ["restroom", "general", "restroom"];

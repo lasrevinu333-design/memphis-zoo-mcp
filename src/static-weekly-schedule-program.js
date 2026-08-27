@@ -18,6 +18,7 @@ import {
   selectEffectiveWeeklyVersion,
   serviceDateWeekday,
   snapshotIncumbency,
+  snapshotVacantRosterSlot,
   stableCompare,
   sha256Hex,
   windowContains,
@@ -126,7 +127,7 @@ const positiveInteger = (value) => Number.isInteger(Number(value)) && Number(val
 
 const SEMANTIC_TEXT_SET_KEYS = new Set([
   "qualifications", "requiredQualifications", "restrictions", "restrictedSlotIds",
-  "namedAbsentSlotIds", "establishedRouteLocationIds", "removeWorkIds",
+  "namedAbsentSlotIds", "vacancyCapableSlotIds", "vacantSlotIds", "establishedRouteLocationIds", "removeWorkIds",
 ]);
 const SEMANTIC_OBJECT_SET_KEYS = new Set(["blockedWindows"]);
 
@@ -658,6 +659,8 @@ export function normalizeStaticWeeklyAuthority(version, slots, exceptions, proxi
   normalizedVersion.slotAvailability = array(version.slotAvailability).map(normalizeAvailability)
     .sort((left, right) => left.dayOfWeek - right.dayOfWeek || identityCompare(left.slotId, right.slotId) || bytewiseCompare(canonicalJson(left), canonicalJson(right)));
   normalizedVersion.namedAbsentSlotIds = semanticTextSet(array(version.namedAbsentSlotIds));
+  normalizedVersion.vacancyCapableSlotIds = semanticTextSet(array(version.vacancyCapableSlotIds));
+  normalizedVersion.vacantSlotIds = semanticTextSet(array(version.vacantSlotIds));
   const normalizedSlots = array(slots).map(normalizeSlot).sort(byId);
   const normalizedExceptions = array(exceptions).map(normalizeException).sort(exceptionOrderCompare);
   validateExceptionCollection(normalizedExceptions);
@@ -806,6 +809,18 @@ function routeInsertion(work, capacity, edges, availability) {
 // against clock-duty capacity.  The employee remains free to choose the
 // practical order of their assigned areas.
 function flexibleCoverageInsertion(work, capacity, edges) {
+  if (work.serviceMode === STATIC_WEEKLY_SERVICE_MODES.REMINDER_ONLY) {
+    return {
+      insertion: {
+        beforeStopId: "nonphysical-reminder",
+        afterStopId: null,
+        incrementalCost: 0,
+        dutyIncrement: 0,
+        provenance: "nonphysical_schedule_reminder",
+      },
+      baselineTravelMinutes: capacity.route.baselineTravelMinutes,
+    };
+  }
   const routeEdge = edgeFor(edges, capacity.route.startLocationId, work.locationId);
   if (!routeEdge) return { error: "missing_flexible_coverage_directed_route" };
   return {
@@ -953,8 +968,10 @@ function proximityIndex(rows) {
 function edgeFor(edges, from, to) { return from === to ? { minutes: 0, provenance: "same_location", verified: true } : edges.get(`${from}\u0000${to}`) || null; }
 
 function candidateReasons(work, slot, availability, capacity, lockOwner) {
+  if (work.vacantBaseline === true) return [programReason("vacant_slot_unfilled", { slotId: work.originSlotId || null })];
   if (!availability) return [programReason("missing_slot_availability")];
   if (availability.status === "departed_named_absent") return [programReason("departed_named_absent")];
+  if (availability.status === "vacant_unfilled") return [programReason("vacant_slot_unfilled", { slotId: slot.id })];
   if (availability.status !== "working") return [programReason("slot_not_working", { status: availability.status || "unknown" })];
   // An empty qualification/restriction set is authority only when the input
   // explicitly says who established that empty fact.  Absence is never a
@@ -1003,18 +1020,37 @@ export function prepareStaticWeeklySchedulingProblem(input, deadline = null) {
     if (slotIds.has(slot.id)) return { error: programReason("duplicate_slot_id", { slotId: slot.id }) };
     slotIds.add(slot.id);
   }
+  const namedAbsentSlotIds = new Set(array(version.namedAbsentSlotIds).map(text));
+  const vacancyCapableSlotIds = new Set(array(version.vacancyCapableSlotIds).map(text));
+  const vacantSlotIds = new Set(array(version.vacantSlotIds).map(text));
+  for (const slotId of [...namedAbsentSlotIds, ...vacancyCapableSlotIds, ...vacantSlotIds]) {
+    if (!slotIds.has(slotId)) return { error: programReason("unknown_staffing_slot", { slotId }) };
+  }
+  for (const slotId of vacantSlotIds) if (!vacancyCapableSlotIds.has(slotId)) return { error: programReason("vacant_slot_not_vacancy_capable", { slotId }) };
+  for (const slotId of vacancyCapableSlotIds) if (slots.find((slot) => slot.id === slotId)?.contractorCapacity === true) return { error: programReason("contractor_capacity_cannot_be_vacancy_capable", { slotId }) };
+  for (const slotId of vacantSlotIds) {
+    if (namedAbsentSlotIds.has(slotId)) return { error: programReason("conflicting_staffing_slot_state", { slotId }) };
+    if (slots.find((slot) => slot.id === slotId)?.contractorCapacity === true) return { error: programReason("contractor_capacity_cannot_be_vacant", { slotId }) };
+  }
   slots.sort(byId);
   const availabilityIdentities = new Set();
   for (const entry of array(version.slotAvailability)) {
     const identity = `${entry.dayOfWeek}\u0000${text(entry.slotId)}`;
     if (availabilityIdentities.has(identity)) return { error: programReason("duplicate_slot_availability_identity", { dayOfWeek: entry.dayOfWeek, slotId: text(entry.slotId) }) };
+    if (!slotIds.has(text(entry.slotId))) return { error: programReason("unknown_slot_availability_identity", { dayOfWeek: entry.dayOfWeek, slotId: text(entry.slotId) }) };
+    if (vacantSlotIds.has(text(entry.slotId)) && entry.status !== "vacant_unfilled") return { error: programReason("vacant_slot_availability_mismatch", { dayOfWeek: entry.dayOfWeek, slotId: text(entry.slotId), status: entry.status || null }) };
+    if (!vacantSlotIds.has(text(entry.slotId)) && entry.status === "vacant_unfilled") return { error: programReason("vacant_slot_not_declared", { dayOfWeek: entry.dayOfWeek, slotId: text(entry.slotId) }) };
     availabilityIdentities.add(identity);
   }
   const incumbencyByDaySlot = new Map();
   for (let day = 0; day < 7; day += 1) for (const slot of slots) {
     if (deadline != null) remainingStaticWeeklyMilliseconds(deadline);
     const date = weekdayDate(serviceDate, day);
-    try { incumbencyByDaySlot.set(`${day}\u0000${slot.id}`, snapshotIncumbency(slot, date)); } catch (error) { return { error: programReason("invalid_incumbency_history", { slotId: slot.id, serviceDate: date, detail: error.code || error.message }) }; }
+    try {
+      incumbencyByDaySlot.set(`${day}\u0000${slot.id}`, vacantSlotIds.has(slot.id)
+        ? snapshotVacantRosterSlot(slot, date)
+        : snapshotIncumbency(slot, date));
+    } catch (error) { return { error: programReason("invalid_incumbency_history", { slotId: slot.id, serviceDate: date, detail: error.code || error.message }) }; }
   }
   const states = new Map(); const applied = [];
   for (let day = 0; day < 7; day += 1) {
@@ -1073,9 +1109,16 @@ export function prepareStaticWeeklySchedulingProblem(input, deadline = null) {
       const issues = workReasons(raw);
       const key = `${day}:${raw.workId}`;
       if (issues.length) return { error: programReason("work_missing_or_incompatible_provenance", { workId: raw.workId, dayOfWeek: day, reasons: issues }) };
-      const required = raw.required !== false; const bestEffort = !required && (raw.coveragePolicy === "best_effort" || raw.bestEffortCoverage === true);
+      const vacantBaseline = vacantSlotIds.has(text(raw.originSlotId));
+      // Preserve the recurring work requirement in source authority.  While a
+      // stable position is empty, its work is derived OPEN rather than REVIEW;
+      // once the position is filled, the same immutable requirement becomes
+      // assignable without editing the schedule or rebuilding an app.
+      const sourceRequired = raw.required !== false;
+      const required = sourceRequired && !vacantBaseline;
+      const bestEffort = !vacantBaseline && !required && (raw.coveragePolicy === "best_effort" || raw.bestEffortCoverage === true);
       if (bestEffort && (!positiveInteger(raw.coveragePolicyOrder ?? 1) || !text(raw.coveragePolicyProvenance))) return { error: programReason("best_effort_coverage_missing_policy_provenance", { workId: raw.workId, dayOfWeek: day }) };
-      const item = { ...raw, key, dayOfWeek: day, window: normalizeWindow(raw.window, `work ${raw.workId} window`), effort: serviceEffort(raw), priority: required ? Number(raw.priority) : 0, required, coverageClass: required ? "required" : (bestEffort ? "best_effort" : "permitted_open"), coverageOrder: bestEffort ? Number(raw.coveragePolicyOrder ?? 1) : null, manualLock: state.manualLocks.get(raw.workId) || null };
+      const item = { ...raw, key, dayOfWeek: day, window: normalizeWindow(raw.window, `work ${raw.workId} window`), effort: serviceEffort(raw), priority: required ? Number(raw.priority) : 0, sourceRequired, required, vacantBaseline, coverageClass: required ? "required" : (bestEffort ? "best_effort" : "permitted_open"), coverageOrder: bestEffort ? Number(raw.coveragePolicyOrder ?? 1) : null, manualLock: state.manualLocks.get(raw.workId) || null };
       work.push(item); const rejects = [];
       for (const slot of slots) {
         const context = availabilityByDaySlot.get(`${day}\u0000${slot.id}`);

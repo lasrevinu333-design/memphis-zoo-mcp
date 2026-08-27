@@ -13,6 +13,7 @@ import {
   selectEffectiveWeeklyVersion,
   serviceDateWeekday,
   snapshotIncumbency,
+  snapshotVacantRosterSlot,
   stableCompare,
   sha256Hex,
   windowContains,
@@ -352,6 +353,9 @@ export function verifyStaticWeeklyScheduleResult(input = {}, result = {}, deadli
     }
   }
   const slotById = new Map(array(normalizedInput.slots).map((slot) => [text(slot.id), slot])); const edges = edgeIndex(normalizedInput.proximity);
+  const vacancyCapableSlotIds = new Set(array(version.vacancyCapableSlotIds).map(text));
+  const vacantSlotIds = new Set(array(version.vacantSlotIds).map(text));
+  for (const slotId of vacantSlotIds) if (!vacancyCapableSlotIds.has(slotId)) push(violations, "vacant_slot_not_vacancy_capable", { slotId });
   const expected = new Map(); const availability = new Map(); const locks = new Map();
   for (let day = 0; day < 7; day += 1) {
     if (expired()) return deadlineFailure("authority_reconstruction");
@@ -369,12 +373,15 @@ export function verifyStaticWeeklyScheduleResult(input = {}, result = {}, deadli
       const key = `${day}:${item.workId}`; if (!validWork(item)) push(violations, "missing_or_incompatible_provenance", { planWorkId: key }); expected.set(key, { ...item, key, day });
     }
     for (const [slotId, item] of state.availability) {
+      if (vacantSlotIds.has(slotId) && item?.status !== "vacant_unfilled") push(violations, "vacant_slot_availability_mismatch", { dayOfWeek: day, slotId, status: item?.status || null });
+      if (!vacantSlotIds.has(slotId) && item?.status === "vacant_unfilled") push(violations, "vacant_slot_not_declared", { dayOfWeek: day, slotId });
       if (item?.status === "working" && !validEligibilityAuthority(item)) push(violations, "working_slot_missing_eligibility_provenance", { dayOfWeek: day, slotId });
       availability.set(`${day}\u0000${slotId}`, item);
     }
     for (const [workId, slotId] of state.locks) locks.set(`${day}:${workId}`, slotId);
   }
   const assignments = array(result.weeklyAssignments); const seen = new Set(); const byDaySlot = new Map(); const priorityUncovered = new Map(); let travelCost = 0; let disruption = 0;
+  const isEffectiveRequired = (work) => work?.required !== false && !vacantSlotIds.has(text(work?.originSlotId));
   const sourceRows = new Map([...expected.keys()].map((key) => [key, []]));
   for (const assignment of assignments) {
     const key = text(assignment.planWorkId || `${assignment.dayOfWeek}:${assignment.workId}`);
@@ -392,12 +399,15 @@ export function verifyStaticWeeklyScheduleResult(input = {}, result = {}, deadli
     const baselineSlotId = text(work.originSlotId);
     let baseline = null; let optimized = null;
     if (baselineSlotId) {
-      try { baseline = snapshotIncumbency(slotById.get(baselineSlotId), occurrenceDate); } catch (error) { push(violations, "baseline_identity_not_canonical", { planWorkId: key, detail: error.code || error.message }); }
+      try { baseline = vacantSlotIds.has(baselineSlotId)
+        ? snapshotVacantRosterSlot(slotById.get(baselineSlotId), occurrenceDate)
+        : snapshotIncumbency(slotById.get(baselineSlotId), occurrenceDate); } catch (error) { push(violations, "baseline_identity_not_canonical", { planWorkId: key, detail: error.code || error.message }); }
     } else if (work.required !== false) {
       push(violations, "required_work_missing_baseline_identity", { planWorkId: key });
     }
     if (assignment.planWorkId !== key || assignment.workId !== work.workId || Number(assignment.dayOfWeek) !== work.day || assignment.serviceDate !== occurrenceDate || assignment.locationId !== work.locationId || assignment.window?.start !== work.window?.start || assignment.window?.end !== work.window?.end || Number(assignment.serviceEffortMinutes) !== Number(work.serviceEffortMinutes)) push(violations, "immutable_work_fact_mismatch", { planWorkId: key });
     if (assignment.status === "ASSIGNED") {
+      if (vacantSlotIds.has(baselineSlotId)) push(violations, "vacant_work_was_assigned", { planWorkId: key, baselineSlotId });
       try { optimized = snapshotIncumbency(slotById.get(text(assignment.slotId)), occurrenceDate); } catch (error) { push(violations, "optimized_identity_not_canonical", { planWorkId: key, detail: error.code || error.message }); }
     }
     const expectedOwnerDigest = postgresJsonbContentDigest({ planWorkId: key, slotId: optimized?.slotId || null, personId: optimized?.personId || null, serviceDate: occurrenceDate });
@@ -410,10 +420,10 @@ export function verifyStaticWeeklyScheduleResult(input = {}, result = {}, deadli
       actualActorPersonId: null, ownerDigest: expectedOwnerDigest, exactOwnerIdentity: expectedExactOwnerIdentity,
     };
     for (const [field, value] of Object.entries(canonicalFacts)) if ((assignment[field] ?? null) !== value) push(violations, "canonical_identity_fact_mismatch", { planWorkId: key, field });
-    const canonicalStatus = assignment.status === "ASSIGNED" ? "ASSIGNED" : (work.required !== false ? "REVIEW" : "OPEN");
+    const canonicalStatus = assignment.status === "ASSIGNED" ? "ASSIGNED" : (isEffectiveRequired(work) ? "REVIEW" : "OPEN");
     if (assignment.status !== canonicalStatus) push(violations, "assignment_status_not_canonical", { planWorkId: key, expected: canonicalStatus, actual: assignment.status ?? null });
     if (assignment.status !== "ASSIGNED") {
-      if (work.required !== false) priorityUncovered.set(Number(work.priority), (priorityUncovered.get(Number(work.priority)) || 0) + 1);
+      if (isEffectiveRequired(work)) priorityUncovered.set(Number(work.priority), (priorityUncovered.get(Number(work.priority)) || 0) + 1);
       disruption += 1; continue;
     }
     if (text(assignment.optimizedOwnerSlotId) !== text(assignment.slotId) || text(assignment.optimizedOwnerPersonId) !== text(assignment.personId)) push(violations, "optimized_owner_fact_mismatch", { planWorkId: key });
@@ -433,11 +443,11 @@ export function verifyStaticWeeklyScheduleResult(input = {}, result = {}, deadli
     const qualifications = new Set(array(candidate.qualifications).map(text)); if (array(work.requiredQualifications).map(text).some((qualification) => !qualifications.has(qualification))) push(violations, "qualification_violation", { planWorkId: key, slotId });
     if (locks.get(key) && locks.get(key) !== slotId) push(violations, "manual_lock_violation", { planWorkId: key, slotId });
     if (flexibleCoverage && !locks.get(key) && work.custodialCoverageMode === "zoo_employee_baseline" && (!work.originSlotId || slotId !== work.originSlotId)) push(violations, "baseline_owner_violation", { planWorkId: key, slotId, requiredSlotId: work.originSlotId || null });
-    if (flexibleCoverage && edge(edges, cap.route.startLocationId, work.locationId) === undefined) push(violations, "missing_flexible_coverage_directed_route", { planWorkId: key, slotId, from: cap.route.startLocationId, to: work.locationId });
+    if (flexibleCoverage && work.serviceMode !== STATIC_WEEKLY_SERVICE_MODES.REMINDER_ONLY && edge(edges, cap.route.startLocationId, work.locationId) === undefined) push(violations, "missing_flexible_coverage_directed_route", { planWorkId: key, slotId, from: cap.route.startLocationId, to: work.locationId });
     const groupKey = `${work.day}\u0000${slotId}`; if (!byDaySlot.has(groupKey)) byDaySlot.set(groupKey, []); byDaySlot.get(groupKey).push({ assignment, work, cap });
     if (slotId !== work.originSlotId) disruption += 1;
   }
-  for (const [key, work] of expected) if (!seen.has(key)) { push(violations, "coverage_missing", { planWorkId: key }); if (work.required !== false) priorityUncovered.set(Number(work.priority), (priorityUncovered.get(Number(work.priority)) || 0) + 1); disruption += 1; }
+  for (const [key, work] of expected) if (!seen.has(key)) { push(violations, "coverage_missing", { planWorkId: key }); if (isEffectiveRequired(work)) priorityUncovered.set(Number(work.priority), (priorityUncovered.get(Number(work.priority)) || 0) + 1); disruption += 1; }
   // The optimizer receipt is a single exact projection of the independently
   // validated public weekly assignments.  This binds assigned, OPEN and REVIEW
   // rows alike, preserves canonical row order, and rejects any missing,
@@ -528,6 +538,7 @@ export function verifyStaticWeeklyScheduleResult(input = {}, result = {}, deadli
     const waitingMinutes = fixedWindowWaitingMinutes + transitWaitingMinutes;
     let flexibleCoverageTravelMinutes = 0;
     for (const entry of flexibleEntries) {
+      if (entry.work.serviceMode === STATIC_WEEKLY_SERVICE_MODES.REMINDER_ONLY) continue;
       const minutes = edge(edges, cap.route.startLocationId, entry.work.locationId);
       if (minutes === undefined) {
         push(violations, "missing_flexible_coverage_directed_route", { daySlot: key, planWorkId: entry.work.key, from: cap.route.startLocationId, to: entry.work.locationId });
@@ -586,11 +597,11 @@ export function verifyStaticWeeklyScheduleResult(input = {}, result = {}, deadli
   const dailyRanked = daily.flatMap((day) => day.loads.map((load) => ({ dayOfWeek: day.dayOfWeek, slotId: load.slotId, value: exactRatio(load.serviceEffortMinutes, load.productiveCapacityMinutes, exactEquityScale) }))).sort((left, right) => (right.value ?? -Infinity) - (left.value ?? -Infinity) || left.dayOfWeek - right.dayOfWeek || stableCompare(left.slotId, right.slotId));
   const weeklyRanked = [...weeklyExactUtilization.entries()].map(([slotId, value]) => ({ slotId, value })).sort((left, right) => (right.value ?? -Infinity) - (left.value ?? -Infinity) || stableCompare(left.slotId, right.slotId));
   if (dailyRanked.some((item) => item.value == null) || weeklyRanked.some((item) => item.value == null)) push(violations, "exact_equity_scale_not_lossless");
-  const priorities = [...new Set([...expected.values()].filter((work) => work.required !== false).map((work) => Number(work.priority)))].sort((a, b) => b - a);
-  const bestEffortOrders = [...new Set([...expected.values()].filter((work) => work.required === false && (work.coveragePolicy === "best_effort" || work.bestEffortCoverage === true)).map((work) => Number(work.coveragePolicyOrder ?? 1)))].sort((a, b) => a - b);
+  const priorities = [...new Set([...expected.values()].filter(isEffectiveRequired).map((work) => Number(work.priority)))].sort((a, b) => b - a);
+  const bestEffortOrders = [...new Set([...expected.values()].filter((work) => !vacantSlotIds.has(text(work.originSlotId)) && work.required === false && (work.coveragePolicy === "best_effort" || work.bestEffortCoverage === true)).map((work) => Number(work.coveragePolicyOrder ?? 1)))].sort((a, b) => a - b);
   const expectedTiers = [
     ...priorities.map((priority) => ({ name: `required_uncovered_priority_${priority}`, family: "required_coverage", value: priorityUncovered.get(priority) || 0 })),
-    ...bestEffortOrders.map((coverageOrder) => ({ name: `best_effort_open_order_${coverageOrder}`, family: "best_effort_coverage", value: [...expected.values()].filter((work) => work.required === false && (work.coveragePolicy === "best_effort" || work.bestEffortCoverage === true) && Number(work.coveragePolicyOrder ?? 1) === coverageOrder).filter((work) => assignments.find((assignment) => text(assignment.planWorkId || `${assignment.dayOfWeek}:${assignment.workId}`) === work.key)?.status !== "ASSIGNED").length })),
+    ...bestEffortOrders.map((coverageOrder) => ({ name: `best_effort_open_order_${coverageOrder}`, family: "best_effort_coverage", value: [...expected.values()].filter((work) => !vacantSlotIds.has(text(work.originSlotId)) && work.required === false && (work.coveragePolicy === "best_effort" || work.bestEffortCoverage === true) && Number(work.coveragePolicyOrder ?? 1) === coverageOrder).filter((work) => assignments.find((assignment) => text(assignment.planWorkId || `${assignment.dayOfWeek}:${assignment.workId}`) === work.key)?.status !== "ASSIGNED").length })),
     ...dailyRanked.map((item, index) => ({ name: `daily_service_effort_utilization_rank_${index + 1}`, family: "daily_leximax", rank: index + 1, value: item.value })),
     { name: "daily_stable_id_rank_tie", family: "daily_stable_tie", value: dailyRanked.reduce((total, item, rankIndex) => { const ordered = [...dailyLoads.values()].sort((left, right) => left.dayOfWeek - right.dayOfWeek || stableCompare(left.slotId, right.slotId)); return total + ((ordered.length - ordered.findIndex((source) => source.dayOfWeek === item.dayOfWeek && source.slotId === item.slotId)) * (rankIndex + 1)); }, 0) },
     ...weeklyRanked.map((item, index) => ({ name: `weekly_service_effort_utilization_rank_${index + 1}`, family: "weekly_leximax", rank: index + 1, value: item.value })),
@@ -692,10 +703,10 @@ export function verifyStaticWeeklyScheduleResult(input = {}, result = {}, deadli
     const extraRegeneratedTier = regeneratedWitnessTiers.next();
     if (!extraRegeneratedTier.done) push(violations, "canonical_witness_program_generation_failed", { detail: extraRegeneratedTier.value?.error?.code || "unexpected_extra_witness_tier" });
   }
-  const derivedReviewWork = assignments.filter((assignment) => assignment.status !== "ASSIGNED" && expected.get(text(assignment.planWorkId || `${assignment.dayOfWeek}:${assignment.workId}`))?.required !== false);
-  const derivedOpenWork = assignments.filter((assignment) => assignment.status !== "ASSIGNED" && expected.get(text(assignment.planWorkId || `${assignment.dayOfWeek}:${assignment.workId}`))?.required === false).map((assignment) => {
+  const derivedReviewWork = assignments.filter((assignment) => assignment.status !== "ASSIGNED" && isEffectiveRequired(expected.get(text(assignment.planWorkId || `${assignment.dayOfWeek}:${assignment.workId}`))));
+  const derivedOpenWork = assignments.filter((assignment) => assignment.status !== "ASSIGNED" && !isEffectiveRequired(expected.get(text(assignment.planWorkId || `${assignment.dayOfWeek}:${assignment.workId}`)))).map((assignment) => {
     const work = expected.get(text(assignment.planWorkId || `${assignment.dayOfWeek}:${assignment.workId}`));
-    const bestEffort = work?.coveragePolicy === "best_effort" || work?.bestEffortCoverage === true;
+    const bestEffort = !vacantSlotIds.has(text(work?.originSlotId)) && (work?.coveragePolicy === "best_effort" || work?.bestEffortCoverage === true);
     return { ...assignment, openPolicy: bestEffort ? "best_effort" : "permitted_open", coveragePolicyOrder: bestEffort ? Number(work.coveragePolicyOrder ?? 1) : null };
   });
   const derivedStatus = derivedReviewWork.length ? "REVIEW" : "FEASIBLE";

@@ -737,6 +737,19 @@ export function createStaticWeeklyControlPlane({
         mutate: () => call(client, "static_weekly_v4_replace_employee", [text(slotId), text(newEmployeeName), text(reason), requireRevision(expectedRevision), actor.managerId, key]),
       }));
     },
+    async createVacantRosterSlot({ manager, slotId, slotLabel, expectedRevision, idempotencyKey }) {
+      const actor = requireManager(manager); const key = requireIdempotencyKey(idempotencyKey);
+      return transaction((client) => call(client, "static_weekly_v7_create_vacant_roster_slot", [
+        text(slotId), text(slotLabel), requireRevision(expectedRevision), actor.managerId, key,
+      ]));
+    },
+    async fillVacantRosterSlot({ manager, slotId, newEmployeeName, effectiveStart, reason, expectedRevision, idempotencyKey }) {
+      const actor = requireManager(manager); const key = requireIdempotencyKey(idempotencyKey);
+      return transaction((client) => call(client, "static_weekly_v7_fill_vacant_roster_slot", [
+        text(slotId), text(newEmployeeName), requireMonday(effectiveStart, "vacancy effective start"), text(reason),
+        requireRevision(expectedRevision), actor.managerId, key,
+      ]));
+    },
     async materializeProjection({ manager, publicationId, serviceDate, expectedRevision, idempotencyKey }) {
       const actor = requireManager(manager); const weekStart = requireMonday(serviceDate, "projection start"); const effectivePublicationId = requirePublicationId(publicationId); const revision = requireRevision(expectedRevision); const key = requireIdempotencyKey(idempotencyKey);
       return transaction(async (client) => {

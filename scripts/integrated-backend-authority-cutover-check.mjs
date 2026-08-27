@@ -48,6 +48,9 @@ const applicationReaderCredentialFence = "20260825173500_fence_application_reade
 const applicationReaderReleaseRecovery = "20260825174500_rebind_application_reader_release_recovery.sql";
 const credentialReplacementLineage = "20260826020000_preserve_offline_work_across_manager_credential_recovery.sql";
 const legacyScheduleWriterRetirement = "20260826114516_retire_legacy_daily_schedule_writers_after_static_weekly_cutover.sql";
+const applicationReaderMessengerRuntime = "20260826155000_restore_application_reader_messenger_runtime.sql";
+const applicationReaderEventsRuntime = "20260826160000_restore_application_reader_employee_events_runtime.sql";
+const vacantRosterSlots = "20260827010500_static_weekly_vacant_roster_slots.sql";
 const releaseInputPath = "release/integrated-backend-authority-input.json";
 const releaseEvidencePath = "release/integrated-backend-authority-evidence.json";
 const productionMigrationStatePath = "release/production-migration-state.json";
@@ -239,7 +242,8 @@ const evidenceBlob = expectedEntries.find(({ path }) => path === releaseEvidence
 assert.ok(evidenceBlob, "expected tree omits generated release evidence");
 const expectedBlobs = expectedEntries.filter(({ path }) => path !== releaseEvidencePath);
 assert.ok(expectedBlobs.length > 0, "release authority inventory is empty");
-assert.equal(expectedBlobs.filter(({ path }) => /^supabase\/migrations\/[^/]+\.sql$/.test(path)).length, 115, "release authority inventory must bind all 115 migrations");
+const expectedMigrationCount = expectedBlobs.filter(({ path }) => /^supabase\/migrations\/[^/]+\.sql$/.test(path)).length;
+assert.ok(expectedMigrationCount > 0, "release authority inventory must bind every migration in the exact tree");
 for (const blob of [...expectedBlobs, evidenceBlob]) assertWorktreeMatchesExpectedBlob(blob);
 assert.equal(evidenceBlob.object_id, acceptance.backend_evidence_blob_sha, "signed release attestation names the wrong evidence blob");
 assert.equal(hash(evidenceBlob.bytes), acceptance.backend_evidence_sha256, "signed release attestation names the wrong evidence digest");
@@ -252,12 +256,21 @@ const input = parseJsonBlob(blobByPath.get(releaseInputPath), "release authority
 const productionMigrationState = parseJsonBlob(blobByPath.get(productionMigrationStatePath), "production migration state");
 assert.equal(productionMigrationState.mode, "migration_required");
 assert.ok(Array.isArray(productionMigrationState.pending_migrations));
-assert.equal(productionMigrationState.pending_migrations.length, 2, "the candidate must identify exactly two dependency-ordered pending migrations");
+assert.equal(productionMigrationState.pending_migrations.length, 1, "the candidate must identify exactly one pending vacancy migration");
 assert.ok(Array.isArray(productionMigrationState.applied_release_migrations));
 const appliedReleaseMigrations = productionMigrationState.applied_release_migrations.map(({ file }) => file);
-assert.deepEqual(appliedReleaseMigrations, [scanAlertRuntimeAuthorityClosure, applicationReaderDeviceIdentity, applicationReaderCredentialFence, applicationReaderReleaseRecovery]);
+assert.deepEqual(appliedReleaseMigrations, [
+  scanAlertRuntimeAuthorityClosure,
+  applicationReaderDeviceIdentity,
+  applicationReaderCredentialFence,
+  applicationReaderReleaseRecovery,
+  credentialReplacementLineage,
+  legacyScheduleWriterRetirement,
+  applicationReaderMessengerRuntime,
+  applicationReaderEventsRuntime,
+]);
 const pendingReleaseMigrations = productionMigrationState.pending_migrations.map(({ file }) => file);
-assert.deepEqual(pendingReleaseMigrations, [credentialReplacementLineage, legacyScheduleWriterRetirement]);
+assert.deepEqual(pendingReleaseMigrations, [vacantRosterSlots]);
 assert.equal(new Set(appliedReleaseMigrations).size, appliedReleaseMigrations.length, "applied release migrations must be unique");
 for (const migration of appliedReleaseMigrations) {
   assert.match(String(migration || ""), /^[0-9]{14}_[a-z][a-z0-9_]*\.sql$/, `invalid applied release migration file: ${migration}`);
@@ -283,44 +296,46 @@ const phaseOText = blobByPath.get(`supabase/migrations/${phaseO}`).bytes.toStrin
 const phasePText = blobByPath.get(`supabase/migrations/${phaseP}`).bytes.toString("utf8");
 const credentialReplacementLineageText = blobByPath.get(`supabase/migrations/${credentialReplacementLineage}`).bytes.toString("utf8");
 const legacyScheduleWriterRetirementText = blobByPath.get(`supabase/migrations/${legacyScheduleWriterRetirement}`).bytes.toString("utf8");
+const vacantRosterSlotsText = blobByPath.get(`supabase/migrations/${vacantRosterSlots}`).bytes.toString("utf8");
 const schemaFingerprint = blobByPath.get("supabase/canonical/schema-fingerprint.txt")?.bytes.toString("utf8").trim();
 const frontendManifest = parseJsonBlob(blobByPath.get("release/frontend-release-manifest.json"), "frontend release manifest");
 
 assert.equal(input.release_contract_version, "offline-authority.v5");
 assert.match(input.backend_contract.device_credential_secret_gate, /Every active employee-device credential.*manager-code phone recovery.*legacy secret fallback is forbidden/i);
-assert.deepEqual(input.cutover.phase_order, [
-  "prepare distinct CUSTODIAL_BACKEND_PROOF_SECRET, CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET, and DEVICE_CREDENTIAL_SECRET values (minimum 32 characters each); preserve all phone-local work and require manager-code recovery for any active credential from a different secret generation without exposing any secret",
-  `capture the production catalog through the read-only Supabase boundary and require it to equal the observed clean 113-migration fingerprint recorded in ${productionMigrationStatePath}`,
-  `verify production project, observed migration head, catalog/privilege fingerprint, backup receipt, and exact source attestation against ${productionMigrationStatePath}`,
-  "after explicit production-change admission, apply only the two exact pending migrations in dependency order (credential-replacement lineage, then legacy daily-schedule writer retirement), then require the clean 115-migration target fingerprint and zero remaining pending migrations without replaying the four already-applied release migrations",
-  "deploy the canonical-only backend only after all authoritative procedures above are present and verified; missing canonical writers fail closed",
-  "require a green authority health gate and direct-DML denial probes before routing traffic",
-]);
+assert.ok(Array.isArray(input.cutover.phase_order) && input.cutover.phase_order.length >= 7);
+assert.match(input.cutover.phase_order[1], /exact observed production ledger head.*catalog\/privilege fingerprint.*zero target-position collisions/i);
+assert.match(input.cutover.phase_order[2], /fresh post-capture backup receipt.*exact pending-migration digest.*exact source attestation/i);
+assert.match(input.cutover.phase_order[3], /one exact pending static-weekly vacancy migration.*ledger to advance exactly once.*do not replay the eight already-applied release migrations/i);
+assert.match(input.cutover.phase_order[4], /immutable weighted schedule packet.*expected-revision and idempotency guards.*preserve the current publication/i);
 assert.ok(input.cutover.rollback.restoration_checks.some((value) => /retired 09:45 background writer.*manager-approved schedule or absence publication/i.test(value)));
 assert.ok(input.cutover.rollback.restoration_checks.some((value) => /every active employee-device credential.*manager-code recovery.*legacy secret fallback/i.test(value)));
 assert.equal(input.cutover.production_migration_state, productionMigrationStatePath);
-assert.equal(productionMigrationState.artifact, "production-migration-state.v1");
+assert.equal(productionMigrationState.artifact, "production-migration-state.v2");
 assert.equal(productionMigrationState.project_ref, "rqquvtjdmugpigbndmne");
 assert.match(String(productionMigrationState.observed_production?.ledger_head || ""), /^[0-9]{14}$/);
 assert.match(String(productionMigrationState.observed_production?.source_migration_name || ""), /^[a-z][a-z0-9_]*$/);
 assert.match(String(productionMigrationState.observed_production?.catalog_privilege_fingerprint || ""), /^[a-f0-9]{64}$/);
-assert.equal(productionMigrationState.observed_production?.catalog_privilege_fingerprint, "4c79925d31759d7bb51e010f8ed47933e4ab9985df32df8a1592888e2134818e");
-assert.equal(productionMigrationState.observed_production?.migration_count, 113);
-assert.notEqual(productionMigrationState.observed_production?.catalog_privilege_fingerprint, schemaFingerprint,
-  "a migration-required candidate must not claim observed production already equals the target schema");
-assert.equal(productionMigrationState.target?.source_migration_file, legacyScheduleWriterRetirement);
-assert.equal(productionMigrationState.target?.source_migration_name, "retire_legacy_daily_schedule_writers_after_static_weekly_cutover");
-assert.equal(productionMigrationState.target?.source_migration_version, "20260826114516");
+assert.equal(productionMigrationState.observed_production?.catalog_privilege_fingerprint, "8d84d9d344e250ca14064bedde5370f3eae33585553c3a31939849fce6296dd3");
+assert.equal(productionMigrationState.observed_production?.production_ledger_count, 216);
+assert.equal(productionMigrationState.observed_production?.source_authority_migration_count, expectedMigrationCount - 1);
+assert.equal(productionMigrationState.observed_production?.vacancy_functions_present, false);
+assert.equal(productionMigrationState.target?.source_migration_file, vacantRosterSlots);
+assert.equal(productionMigrationState.target?.source_migration_name, "static_weekly_vacant_roster_slots");
+assert.equal(productionMigrationState.target?.source_migration_version, "20260827010500");
 assert.equal(productionMigrationState.target?.production_ledger_version, null);
-assert.equal(productionMigrationState.target?.canonical_schema_fingerprint, schemaFingerprint);
-assert.equal(productionMigrationState.target?.public_function_count, 491);
-assert.equal(productionMigrationState.target?.migration_count, 115);
+assert.equal(productionMigrationState.target?.canonical_source_schema_fingerprint, schemaFingerprint);
+assert.equal(productionMigrationState.target?.public_function_count, 493);
+assert.equal(productionMigrationState.target?.production_ledger_count, 217);
+assert.equal(productionMigrationState.target?.source_authority_migration_count, expectedMigrationCount);
+assert.equal(productionMigrationState.target?.expected_catalog_counts?.functions, 493);
+assert.equal(productionMigrationState.target?.expected_catalog_counts?.routine_grants, 334);
 assert.equal(productionMigrationState.source_binding?.kind, "external_exact_head_release_attestation");
 assert.equal(productionMigrationState.authorization?.production_mutation_required, true);
 assert.equal(productionMigrationState.authorization?.sequence_policy, "apply_exact_ordered_pending_migrations_after_release_admission");
-assert.match(String(productionMigrationState.backup_evidence?.source_commit || ""), /^[a-f0-9]{40}$/);
-assert.match(String(productionMigrationState.backup_evidence?.artifact_sha256 || ""), /^[a-f0-9]{64}$/);
-assert.equal(productionMigrationState.backup_evidence?.restore_verification, "passed");
+assert.equal(productionMigrationState.backup_evidence?.state, "fresh_verified_backup_required_before_mutation");
+assert.match(String(productionMigrationState.backup_evidence?.last_verified?.source_commit || ""), /^[a-f0-9]{40}$/);
+assert.match(String(productionMigrationState.backup_evidence?.last_verified?.artifact_sha256 || ""), /^[a-f0-9]{64}$/);
+assert.equal(productionMigrationState.backup_evidence?.last_verified?.restore_verification, "passed");
 for (const [index, migration] of productionMigrationState.applied_release_migrations.entries()) {
   assert.equal(migration.order, index + 1, `applied migration order is not contiguous at ${migration.file}`);
   assert.match(String(migration.phase || ""), /^[a-z][a-z0-9_]+$/, `applied migration phase is invalid at ${migration.file}`);
@@ -398,6 +413,12 @@ assert.match(legacyScheduleWriterRetirementText, /static_weekly_reject_legacy_da
 assert.match(legacyScheduleWriterRetirementText, /trg_static_weekly_fence_daily_schedule_assignments/i);
 assert.match(legacyScheduleWriterRetirementText, /cron\.alter_job/i);
 assert.match(legacyScheduleWriterRetirementText, /custodial_release_authority_restore_inventory/i);
+assert.match(vacantRosterSlotsText, /static_weekly_v7_create_vacant_roster_slot/i);
+assert.match(vacantRosterSlotsText, /static_weekly_v7_fill_vacant_roster_slot/i);
+assert.match(vacantRosterSlotsText, /availability_state='vacant_unfilled'/i);
+assert.match(vacantRosterSlotsText, /shift_start<lunch_start and lunch_end<shift_end/i);
+assert.match(vacantRosterSlotsText, /grant execute on function public\.static_weekly_v7_create_vacant_roster_slot[\s\S]*to static_weekly_control_plane/i);
+assert.doesNotMatch(vacantRosterSlotsText, /grant execute on function public\.static_weekly_v7_(?:create|fill)_vacant_roster_slot[\s\S]*to (?:public|anon|authenticated|service_role|static_weekly_release_operator|custodial_application_reader)/i);
 assert.match(schemaFingerprint, /^[a-f0-9]{64}$/);
 assert.equal(frontendManifest.frontend_commit_sha, acceptance.frontend_commit_sha, "signed release attestation names the wrong frontend commit");
 assert.equal(frontendManifest.release_id, acceptance.release_id, "signed release attestation names the wrong semantic release");

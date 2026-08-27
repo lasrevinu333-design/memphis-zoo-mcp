@@ -154,6 +154,42 @@ assert.equal(document.receipt.compiler.certificate.schema, "memphis-zoo.static-w
 assert.equal(document.receipt.compiler.independentVerification.ok, true);
 assert.equal("attestation" in document, false, "the pure adapter never receives or emits a scheduler signing key; PostgreSQL v3 attests inside the control plane");
 
+const vacancyInput = sevenDayInput();
+const vacantSlot = "20000000-0000-4000-8000-000000000003";
+vacancyInput.slots.push({ id: vacantSlot, label: "Stable vacant position", incumbencies: [] });
+vacancyInput.versions[0].vacancyCapableSlotIds = [vacantSlot];
+vacancyInput.versions[0].vacantSlotIds = [vacantSlot];
+vacancyInput.versions[0].slotAvailability.push({
+  ...vacancyInput.versions[0].slotAvailability[0],
+  slotId: vacantSlot,
+  dayOfWeek: 1,
+  status: "vacant_unfilled",
+  shift: { start: "08:00", end: "17:00" },
+  lunch: { start: "12:30", end: "13:30" },
+});
+vacancyInput.versions[0].assignments.push({
+  ...vacancyInput.versions[0].assignments[1],
+  workId: "vacant-position-work",
+  ownerSlotId: vacantSlot,
+  required: true,
+});
+const vacancyCompiled = await compileStaticWeeklySchedule(vacancyInput);
+assert.equal(vacancyCompiled.status, "FEASIBLE", `vacant adapter fixture compiles: ${JSON.stringify(vacancyCompiled.fatal || vacancyCompiled.verifier)}`);
+const vacancyDocument = adaptCompiledStaticWeeklySchedule(vacancyCompiled, { requirePublishable: true });
+const vacantAvailability = vacancyDocument.slot_availability.find((row) => row.slot_id === vacantSlot);
+assert.equal(vacantAvailability.availability_state, "vacant_unfilled");
+assert.equal(vacantAvailability.shift_start, "08:00");
+assert.equal(vacantAvailability.shift_end, "17:00");
+assert.equal(vacantAvailability.lunch_start, "12:30");
+assert.equal(vacantAvailability.lunch_end, "13:30");
+assert.equal(vacantAvailability.incumbent_person_id_snapshot, null);
+assert.equal(vacantAvailability.incumbent_name_snapshot, null);
+const vacantAssignment = vacancyDocument.assignments.find((row) => row.work_id === "vacant-position-work");
+assert.equal(vacantAssignment.status, "open");
+assert.equal(vacantAssignment.owner_slot_id, null);
+assert.equal(vacantAssignment.payload_json.authority_facts.baseline_owner_slot_id, vacantSlot);
+assert.equal(vacantAssignment.payload_json.authority_facts.baseline_owner_person_id, null);
+
 const draft = createStaticWeeklyDraftRpcInput({ result: real, expectedRevision: 4, actor: manager });
 assert.deepEqual(draft.document, document, "the adapter result is deterministic for the exact real compiler result");
 assert.deepEqual(draft.objective, real.canonicalAuthority.optimizerResult.objective);

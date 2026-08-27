@@ -92,7 +92,12 @@ const trackedInventory = inventoryFromExactTree(sourceTree);
 const authorityInventory = trackedInventory.filter(({ path }) => path !== generatedEvidencePath);
 const migrations = authorityInventory
   .filter(({ path }) => /^supabase\/migrations\/[^/]+\.sql$/.test(path));
-assert.equal(migrations.length, 115, "release authority inventory must bind every migration at this head");
+assert.ok(migrations.length > 0, "release authority inventory must bind every migration at this head");
+assert.equal(
+  input.cutover?.source_identity?.authority_inventory?.source,
+  "all-tracked-paths-in-external-expected-tree",
+  "migration inventory count must be derived from the exact tracked tree, never a hand-maintained constant",
+);
 const output = buildIntegratedBackendAuthorityReleaseEvidence({
   input,
   schemaFingerprint,
