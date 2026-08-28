@@ -104,8 +104,17 @@ assert.equal(rejectedStatus, 401);
 assert.equal(rejectedCode, "device_credential_required");
 
 const index = readFileSync(resolve(import.meta.dirname, "../src/index.js"), "utf8");
+const rateLimitMigration = readFileSync(resolve(import.meta.dirname, "../supabase/migrations/20260827150000_disaster_recovery_global_mutation_fence.sql"), "utf8");
+const readerMigration = readFileSync(resolve(import.meta.dirname, "../supabase/migrations/20260827151000_restore_application_reader_feedback_runtime.sql"), "utf8");
 assert.match(index, /const FEEDBACK_CONTRACT_VERSION = "feedback\.v3\.enrolled-authority"/);
 assert.match(index, /app\.post\("\/feedback-api\/submit", publicSubmissionRateLimit\("feedback"\), requireFeedbackSubmitAuthority/);
+assert.match(index, /app_get_public_rate_limit_count/, "public ingest must read its HMAC bucket through the bounded FORCE-RLS-safe function");
+assert.match(rateLimitMigration, /security definer[\s\S]*app_get_public_rate_limit_count|app_get_public_rate_limit_count[\s\S]*security definer/i);
+assert.match(readerMigration, /grant select \([\s\S]*operation_id[\s\S]*metadata_json[\s\S]*\) on table public\.system_feedback_items to custodial_application_reader/i);
+assert.match(readerMigration, /create policy custodial_application_reader_system_feedback_runtime[\s\S]*for select[\s\S]*using \(true\)/i);
+assert.match(readerMigration, /revoke all privileges on table public\.system_feedback_legacy_image_backups[\s\S]*from custodial_application_reader/i);
+assert.doesNotMatch(readerMigration, /grant\s+(?:insert|update|delete|all)[\s\S]*system_feedback_items[\s\S]*custodial_application_reader/i);
+assert.match(readerMigration, /custodial_release_authority_restore_inventory[\s\S]*public\.system_feedback_items:custodial_application_reader_system_feedback_runtime/i);
 assert.match(index, /\.\.\.authoritativeFeedbackPayload\(req\)/);
 assert.doesNotMatch(
   index.slice(index.indexOf('app.post("/feedback-api/submit"'), index.indexOf('app.get("/guest-api/status"')),

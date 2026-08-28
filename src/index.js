@@ -45,7 +45,7 @@ import { installOperationalAnalyticsRoutes } from "./operational-analytics-api.j
 import { normalizeAttendanceRecord, toNullableNonNegativeInteger } from "./attendance-state.js";
 import { normalizeCanonicalScanEvidence } from "./scan-evidence.js";
 import { buildReleaseCanaryTransportProbeCall } from "./native-phone-transport.js";
-import { makeRestoreMutationGate } from "./restore-mutation-gate.js";
+import { makeRestoreMutationGate, withApplicationMutationLease } from "./restore-mutation-gate.js";
 import { runCanonicalScanRpc } from "./scan-authority-cutover.js";
 import {
   guestFeatureState,
@@ -90,7 +90,7 @@ const supabaseAdmin =
     : null;
 const restoreGateRequired = process.env.NODE_ENV === "production"
   || /^(1|true|yes)$/i.test(String(process.env.CUSTODIAL_RESTORE_GATE_REQUIRED || ""));
-app.use(makeRestoreMutationGate({ supabase: supabaseAdmin, required: restoreGateRequired }));
+app.use(makeRestoreMutationGate({ supabase: supabaseAdmin, required: restoreGateRequired, serviceName: "memphis-zoo-backend" }));
 const BACKEND_COMMIT_SHA = String(
   process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || process.env.SOURCE_VERSION || "unknown"
 ).trim() || "unknown";
@@ -257,7 +257,7 @@ function publicSubmissionRateLimit(scope) {
       const bucketKey = createHmac("sha256", getFeedbackLinkSecret()).update(`${scope}:${ip}`).digest("hex");
       await runOperationalCommand("public_rate_limit", { bucket_key: bucketKey, scope });
       const rows = await runReadOnlySql(
-        `select request_count from public.public_submission_rate_limits where bucket_key=${sqlLiteral(bucketKey)} limit 1`
+        `select public.app_get_public_rate_limit_count(${sqlLiteral(bucketKey)},${sqlLiteral(scope)}) as request_count`
       );
       const count = Number(rows?.[0]?.request_count);
       if (!Number.isFinite(count) || count > RATE_LIMIT_MAX) {
@@ -1518,7 +1518,8 @@ async function getGuestCleanlinessReportById(reportId) {
   return rows[0];
 }
 
-async function processGuestCleanlinessNotificationJob(job) {
+async function processGuestCleanlinessNotificationJob(job, { assertActive = () => {} } = {}) {
+  assertActive();
   const report = await getGuestCleanlinessReportById(job.source_id);
   if (report.status !== "open" || report.marketing_review_status !== "approved") {
     throw new Error("Guest report has not completed Marketing approval.");
@@ -1529,7 +1530,9 @@ async function processGuestCleanlinessNotificationJob(job) {
   const memphisRows = await runReadOnlySql("select public.msg_get_memphis_user_id() as memphis_user_id");
   const memphisUserId = Array.isArray(memphisRows) && memphisRows.length ? memphisRows[0].memphis_user_id : null;
   if (!isUuid(memphisUserId)) throw new Error("Memphis bot identity is unavailable.");
+  assertActive();
   const notification = await notifyGuestReportRecipients({ report, currentOwner, opsRecipients, memphisUserId });
+  assertActive();
   const deliveredCount = Number(notification.ops_count || 0) + (notification.employee_user_id ? 1 : 0);
   if (notification.errors.length || deliveredCount === 0) {
     throw new Error(notification.errors.length
@@ -1551,45 +1554,55 @@ async function runOperationalNotificationWorker({ limit = 10 } = {}) {
     const jobs = Array.isArray(claimed) ? claimed : (claimed ? [claimed] : []);
     const results = [];
     for (const job of jobs) {
-      let succeeded = false;
-      let errorMessage = null;
-      let terminal = false;
-      let deferFinish = false;
-      try {
-        if (job.job_type === "guest_cleanliness_report") {
-          await processGuestCleanlinessNotificationJob(job);
-        } else {
-          const handler = operationalNotificationJobHandlers.get(String(job.job_type || "").trim());
-          if (!handler) throw new Error(`Unsupported operational notification job type: ${job.job_type}`);
-          await handler(job);
-        }
-        succeeded = true;
-      } catch (error) {
-        errorMessage = String(error?.message || "Operational notification failed.").slice(0, 2000);
-        terminal = error?.terminal === true;
-        deferFinish = error?.deferFinish === true;
-      }
-      if (deferFinish) {
-        results.push({ job_id: job.job_id, succeeded: false, terminal: false, deferred: true, error: errorMessage });
-        continue;
-      }
-      const retrySeconds = Math.min(3600, Math.max(15, 15 * (2 ** Math.min(8, Number(job.attempts || 1) - 1))));
-      if (terminal) {
-        await runRpc("finish_operational_notification_job_terminal", {
-          p_job_id: job.job_id,
-          p_lease_token: job.lease_token,
-          p_error: errorMessage,
-        });
-      } else {
-        await runRpc("finish_operational_notification_job", {
-          p_job_id: job.job_id,
-          p_lease_token: job.lease_token,
-          p_succeeded: succeeded,
-          p_error: errorMessage,
-          p_retry_seconds: retrySeconds,
-        });
-      }
-      results.push({ job_id: job.job_id, succeeded, terminal, error: errorMessage });
+      const result = await withApplicationMutationLease({
+        supabase: supabaseAdmin,
+        serviceName: "memphis-zoo-operational-notification-worker",
+        operation: async (mutationLease) => {
+          let succeeded = false;
+          let errorMessage = null;
+          let terminal = false;
+          let deferFinish = false;
+          try {
+            mutationLease.assertActive();
+            if (job.job_type === "guest_cleanliness_report") {
+              await processGuestCleanlinessNotificationJob(job, mutationLease);
+            } else {
+              const handler = operationalNotificationJobHandlers.get(String(job.job_type || "").trim());
+              if (!handler) throw new Error(`Unsupported operational notification job type: ${job.job_type}`);
+              await handler(job, mutationLease);
+            }
+            mutationLease.assertActive();
+            succeeded = true;
+          } catch (error) {
+            errorMessage = String(error?.message || "Operational notification failed.").slice(0, 2000);
+            terminal = error?.terminal === true;
+            deferFinish = error?.deferFinish === true;
+          }
+          if (deferFinish) {
+            return { job_id: job.job_id, succeeded: false, terminal: false, deferred: true, error: errorMessage };
+          }
+          const retrySeconds = Math.min(3600, Math.max(15, 15 * (2 ** Math.min(8, Number(job.attempts || 1) - 1))));
+          mutationLease.assertActive();
+          if (terminal) {
+            await runRpc("finish_operational_notification_job_terminal", {
+              p_job_id: job.job_id,
+              p_lease_token: job.lease_token,
+              p_error: errorMessage,
+            });
+          } else {
+            await runRpc("finish_operational_notification_job", {
+              p_job_id: job.job_id,
+              p_lease_token: job.lease_token,
+              p_succeeded: succeeded,
+              p_error: errorMessage,
+              p_retry_seconds: retrySeconds,
+            });
+          }
+          mutationLease.assertActive();
+          return { job_id: job.job_id, succeeded, terminal, error: errorMessage };
+        },
+      });
+      results.push(result);
     }
     const custodial = await runCustodialOfflineReconciliationNotificationWorker({ limit });
     return {
@@ -1760,7 +1773,7 @@ function validateSystemFeedbackImageAttachment(input) {
   };
 }
 
-async function storeSystemFeedbackImageAttachment(feedbackId, operationId, imageAttachment) {
+async function storeSystemFeedbackImageAttachment(feedbackId, operationId, imageAttachment, { assertActive = () => {} } = {}) {
   if (!imageAttachment) return null;
   if (!supabaseAdmin) throw new Error("Feedback image storage is not configured.");
   const extension = {
@@ -1772,6 +1785,7 @@ async function storeSystemFeedbackImageAttachment(feedbackId, operationId, image
   const objectPath = `feedback/${operationId}/${imageAttachment.sha256}.${extension}`;
   const body = Buffer.from(String(imageAttachment.base64 || ""), "base64");
   if (!body.length || body.length > FEEDBACK_IMAGE_MAX_BYTES) throw new Error("image_attachment is empty or too large.");
+  assertActive();
   const { error } = await supabaseAdmin.storage
     .from(FEEDBACK_IMAGE_BUCKET)
     .upload(objectPath, body, {
@@ -1780,6 +1794,7 @@ async function storeSystemFeedbackImageAttachment(feedbackId, operationId, image
       cacheControl: "private, max-age=3600",
     });
   if (error && !/already exists|duplicate/i.test(String(error.message || ""))) throw new Error(error.message || "Feedback image upload failed.");
+  assertActive();
   return {
     name: imageAttachment.name,
     type: imageAttachment.type,
@@ -1791,7 +1806,7 @@ async function storeSystemFeedbackImageAttachment(feedbackId, operationId, image
   };
 }
 
-async function removeUnreferencedSystemFeedbackImage(imageAttachment) {
+async function removeUnreferencedSystemFeedbackImage(imageAttachment, { assertActive = () => {} } = {}) {
   if (!imageAttachment?._newly_uploaded || !imageAttachment.storage_path || !supabaseAdmin) return;
   try {
     const rows = await runReadOnlySql(`
@@ -1802,6 +1817,7 @@ async function removeUnreferencedSystemFeedbackImage(imageAttachment) {
       ) as referenced
     `);
     if (rows?.[0]?.referenced) return;
+    assertActive();
     const { error } = await supabaseAdmin.storage
       .from(imageAttachment.storage_bucket || FEEDBACK_IMAGE_BUCKET)
       .remove([imageAttachment.storage_path]);
@@ -1817,7 +1833,7 @@ function persistedSystemFeedbackImageMetadata(imageAttachment) {
   return persisted;
 }
 
-async function migrateLegacySystemFeedbackImageJob(job) {
+async function migrateLegacySystemFeedbackImageJob(job, mutationLease = {}) {
   const feedbackId = String(job?.source_id || "").trim();
   if (!isUuid(feedbackId)) throw new Error("Legacy feedback image job has an invalid feedback id.");
   const rows = await runReadOnlySql(`
@@ -1836,6 +1852,7 @@ async function migrateLegacySystemFeedbackImageJob(job) {
     feedbackId,
     `legacy-${feedbackId}`,
     validatedImage,
+    mutationLease,
   );
   const persistedImage = persistedSystemFeedbackImageMetadata(storedImage);
   const updatedMetadata = { ...metadata, image_attachment: persistedImage };
@@ -1845,7 +1862,7 @@ async function migrateLegacySystemFeedbackImageJob(job) {
       storage_bucket: persistedImage.storage_bucket, storage_path: persistedImage.storage_path,
     });
   } catch (error) {
-    await removeUnreferencedSystemFeedbackImage(storedImage);
+    await removeUnreferencedSystemFeedbackImage(storedImage, mutationLease);
     throw error;
   }
   return { migrated: true, feedback_id: feedbackId };
@@ -2305,13 +2322,23 @@ app.use(
   }),
 );
 app.use("/admin-api/events", createEventsAdminRouter({ runReadOnlySql, runCommand: runEventCommand, buildHealthPayload, appVersion: APP_VERSION, releaseId: RELEASE_ID, maintenanceController: eventMaintenanceController, requireAdminApiAuth: requireOpsManagerAuth, requireAdminApiWrite: requireOpsManagerWrite }));
-app.use(["/version", "/release-manifest", "/scheduler-runtime-config", "/health", "/health/dependencies"], (req, res, next) => {
+app.use(["/version", "/release-manifest", "/scheduler-runtime-config", "/healthz", "/health", "/health/dependencies"], (req, res, next) => {
   setPublicDashboardCors(res, req);
   if (req.method === "OPTIONS") {
     res.sendStatus(200);
     return;
   }
   next();
+});
+app.get("/healthz", (_req, res) => {
+  res.status(200).json({
+    ok: true,
+    process_alive: true,
+    probe_scope: "process_liveness",
+    dependencies_ready: null,
+    release_id: RELEASE_ID,
+    app_version: APP_VERSION,
+  });
 });
 app.get("/version", (_req, res) => { setPublicDashboardCors(res, _req); res.status(200).json(buildHealthPayload("version")); });
 app.get("/release-manifest", (_req, res) => { setPublicDashboardCors(res, _req); res.status(200).json(buildReleaseManifest({ appVersion: APP_VERSION, releaseId: RELEASE_ID, contracts: buildHealthPayload("contracts").contracts })); });

@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import express from "express";
 import { createEventMaintenanceController, createEventsAdminRouter, createEventsEmployeeRouter, createEventsPublicRouter } from "../src/events-api.js";
 
@@ -9,6 +11,18 @@ const TEST_ZOO_VENUE_ID = "10000000-0000-4000-8000-000000000000";
 const TEST_RESTROOM_GROUP_ID = "30000000-0000-4000-8000-000000000001";
 const TEST_MANAGER_ID = "90000000-0000-4000-8000-000000000001";
 const TEST_MANAGER_NAME = "Authenticated Event Manager";
+const outlookAuthorityMigration = readFileSync(resolve(
+  import.meta.dirname,
+  "../supabase/migrations/20260827152000_adopt_outlook_event_sync_authority.sql",
+), "utf8");
+
+assert.match(outlookAuthorityMigration, /create table if not exists public\.events_app_outlook_sync/i);
+assert.match(outlookAuthorityMigration, /unique \(outlook_message_id, source_event_key\)/i);
+assert.match(outlookAuthorityMigration, /foreign key \(event_id\) references public\.events_app_events\(id\) on delete set null/i);
+assert.match(outlookAuthorityMigration, /enable row level security/i);
+assert.match(outlookAuthorityMigration, /revoke all privileges[\s\S]*public, anon, authenticated, service_role, custodial_application_reader/i);
+assert.match(outlookAuthorityMigration, /grant delete, insert, maintain, references, select, trigger, truncate, update[\s\S]*to service_role/i);
+assert.doesNotMatch(outlookAuthorityMigration, /grant[\s\S]*to (?:public|anon|authenticated|custodial_application_reader)/i);
 
 function buildApp({ writeCalls = [], readCalls = [], writeResults = {}, eventRows = [] } = {}) {
   const app = express();

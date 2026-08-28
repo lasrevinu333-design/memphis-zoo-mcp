@@ -3,14 +3,14 @@
   "release_id": "release-2026.07.19.custodial-v3.12",
   "frontend_commit_sha": "5d0d5716e03f6179110708add09f7b2fc3afc2b3",
   "frontend_commit_state": "final_pair_bound",
-  "schema_fingerprint": "e0f9aaebe6013f5b912cf261bd7bf7703c7b604a64bc94d98fc2aae9506387cd",
+  "schema_fingerprint": "0a687e3ee3340b9c94c4fd6153d99cf1030713770ce731c2932115ad0bed099e",
   "schema_transition": {
-    "transition_id": "application-reader-release-recovery-20260825",
-    "from_fingerprint": "0c3cd0cb822f147842d5c09a2bc15ffae41401956b7664f2ccfaedd13b79d527",
-    "to_fingerprint": "e0f9aaebe6013f5b912cf261bd7bf7703c7b604a64bc94d98fc2aae9506387cd",
+    "transition_id": "disaster-recovery-mutation-fence-20260827",
+    "from_fingerprint": "e0f9aaebe6013f5b912cf261bd7bf7703c7b604a64bc94d98fc2aae9506387cd",
+    "to_fingerprint": "0a687e3ee3340b9c94c4fd6153d99cf1030713770ce731c2932115ad0bed099e",
     "expires_at": "2026-09-03T23:59:59Z"
   },
-  "frontend_source_fingerprint": "e0f9aaebe6013f5b912cf261bd7bf7703c7b604a64bc94d98fc2aae9506387cd",
+  "frontend_source_fingerprint": "0a687e3ee3340b9c94c4fd6153d99cf1030713770ce731c2932115ad0bed099e",
   "backend_contract": {
     "scan": "scan.v4.snapshot-bound-authority",
     "authority": "offline-authority.v5",
@@ -56,6 +56,7 @@
     "credential_replacement_lineage_phase": "20260826020000 preserves frozen offline work across manager-approved credential recovery through append-only same-device predecessor-to-successor transport lineage without rewriting the original actor, device, credential, or work evidence",
     "application_reader_runtime_recovery_phase": "20260826155000 restores restricted Messenger reads and 20260826160000 restores restricted Employee Events reads without granting browser roles direct relation authority",
     "static_weekly_vacancy_and_lunch_phase": "20260827010500 adds first-class empty schedule positions, requires every vacant shift to retain a valid lunch inside its shift, keeps vacant work OPEN without synthetic identity, and permits only the static-weekly control plane to create or fill a position",
+    "disaster_recovery_foundation_phase": "20260827150000 fences application mutations across an exact quiescent restore lease and restores scheduler state before traffic resumes; 20260827151000 restores the bounded feedback reader projection, RLS policy, and recovery inventory without exposing legacy images; 20260827152000 adopts the production Outlook event-sync audit ledger without rewriting its rows or granting browser authority",
     "static_weekly_writer_and_device_secret_closure_phase": "The release runtime removes the retired minute-driven 09:45 schedule writer, confines coverage rebalance to explicit manager-approved schedule or absence publication, identifies the deployed DEVICE_CREDENTIAL_SECRET generation without exposing it, and blocks canary resume until every active employee credential is confirmed and matches that generation or completes manager-code recovery."
   },
   "rollback": {
@@ -83,7 +84,7 @@
       "prepare distinct CUSTODIAL_BACKEND_PROOF_SECRET, CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET, and DEVICE_CREDENTIAL_SECRET values (minimum 32 characters each); preserve all phone-local work and require manager-code recovery for any active credential from a different secret generation without exposing any secret",
       "capture the production catalog through the read-only Supabase boundary and require the exact observed production ledger head, catalog/privilege fingerprint, object counts, static-weekly state, and zero target-position collisions recorded in release/production-migration-state.json",
       "verify production project, fresh post-capture backup receipt, observed production identity, exact pending-migration digest, and exact source attestation against release/production-migration-state.json",
-      "after explicit production-change admission, apply only the one exact pending static-weekly registered-source dated-status identity migration, require the production ledger to advance exactly once and the complete catalog delta to match the reviewed postconditions, and do not replay the ten already-applied release migrations or remove newer production-only event objects",
+      "after explicit production-change admission, apply only the three exact ordered pending release-foundation migrations for the global restore mutation fence, restricted feedback reader, and Outlook event-sync authority adoption; require the production ledger to advance exactly three entries and the complete catalog delta to match the reviewed postconditions; do not replay the eleven already-applied release migrations or rewrite the production Outlook event-sync rows",
       "after schema admission, refresh and publish the already-preserved immutable weighted-schedule draft through the static-weekly control plane with expected-revision and idempotency guards; do not create a competing draft, and preserve the current publication until the replacement publication and projection are complete",
       "deploy the canonical-only backend only after all authoritative procedures above are present and verified; missing canonical writers fail closed",
       "require a green authority health gate and direct-DML denial probes before routing traffic"
@@ -109,7 +110,10 @@
         "complete Weekly Schedule day-change batches pass the database receipt-chain health gate; exact replay is read-only and prefix, extension, reorder, and content conflicts fail atomically",
         "the retired 09:45 background writer has no scheduled runtime; only an explicit manager-approved schedule or absence publication may rebalance current static-weekly coverage",
         "every active employee-device credential is confirmed and matches the deployed DEVICE_CREDENTIAL_SECRET generation before canary resume; an unconfirmed or mismatched credential requires manager-code recovery that preserves phone-local work and never restores a legacy secret fallback",
-        "static-weekly governed dates reject every insert, update, or delete through the four legacy daily schedule shadow tables; the retained rolling helper is non-mutating for governed dates and its cron is disabled"
+        "static-weekly governed dates reject every insert, update, or delete through the four legacy daily schedule shadow tables; the retained rolling helper is non-mutating for governed dates and its cron is disabled",
+        "every mutable public table is guarded during recovery, the restore lease is quiescent and exact-identity-bound, expired Gemini cleanup leases recover without concurrent execution, and scheduler state is restored and compared before application traffic resumes",
+        "the restricted feedback reader sees only its exact application projection, cannot mutate feedback or read legacy image backups, and the policy, grants, rate function, and recovery inventory remain exact",
+        "the production Outlook event-sync ledger retains its exact shape, rows, indexes, RLS state, service-role privileges, and audit comment while browser roles remain ungranted"
       ]
     }
   },
@@ -184,7 +188,7 @@
       {
         "path": ".github/workflows/production-backup-migration-rehearsal.yml",
         "mode": "100644",
-        "object_id": "ef667bac1cfa8a61c85556d913ff3e0f2cacf72f"
+        "object_id": "79974f6206227dac0c9c27ac62314c667e539f82"
       },
       {
         "path": ".github/workflows/production-database-credential-bridge.yml",
@@ -194,7 +198,7 @@
       {
         "path": ".github/workflows/production-disaster-recovery-backup.yml",
         "mode": "100644",
-        "object_id": "f8a6c7893a270c1ab0fcfaf05d7d28cf607b394b"
+        "object_id": "48a0d4571438f24c5176a609c485dfa3b507ddbb"
       },
       {
         "path": ".github/workflows/production-schema-c674-bootstrap.yml",
@@ -364,12 +368,12 @@
       {
         "path": "package-lock.json",
         "mode": "100644",
-        "object_id": "891f963038bff00ad9fb1b9b867b9fe12e552322"
+        "object_id": "6a8b096eaef74235d4ba692b9ac262c87f606afd"
       },
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "11acb1a1e4c25c2e40de217701f011c7dc88499f"
+        "object_id": "d90cf104fae4ac393cb4ad87a97206fd06e48fe2"
       },
       {
         "path": "public/moxie-assets/contacts-creekside-animal.png",
@@ -417,19 +421,24 @@
         "object_id": "3e06fc6aaea8f2af937b1436560fc5805dcf2652"
       },
       {
+        "path": "release/disaster-recovery-runtime-contract.json",
+        "mode": "100644",
+        "object_id": "40c824d5870979e290164fe348e64be3c2b52e98"
+      },
+      {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "97cf6e462d967adf2976779b7a11271290ca2487"
+        "object_id": "4e7ac2fab2f37aed460248ee8886368a3d77925f"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
         "mode": "100644",
-        "object_id": "3eaf95f52e4c4a36f668c43ceedb3ddebde30024"
+        "object_id": "61b1bcb25024668c3ea8681f8f9f8e631ab35b2d"
       },
       {
         "path": "release/production-migration-state.json",
         "mode": "100644",
-        "object_id": "15ec65249dceb8680482b346bcf3ada269f2b46c"
+        "object_id": "56044588ca3253557feed77d867aceeeb6ff6fd7"
       },
       {
         "path": "release/reviewed-migrations/20260809125735_cleaning_inspection_24_hour_freshness.sql",
@@ -439,7 +448,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "884b58f2df3c32904acf65e13fa4a6fd62437e9c"
+        "object_id": "27bd8beac48cea102a2030c7b66d004cafdff598"
       },
       {
         "path": "research/european_herbalism_through_paracelsus.md",
@@ -452,14 +461,29 @@
         "object_id": "2f2ae6f36c94016d5873ca546f4208b3b640580d"
       },
       {
+        "path": "scripts/apply-abandoned-mutation-lease-reconciliation.mjs",
+        "mode": "100644",
+        "object_id": "0fe2db041e54259bc0ca402fabc89a497c3caf39"
+      },
+      {
         "path": "scripts/apply-annie-migration.mjs",
         "mode": "100644",
         "object_id": "aff3e6215b90ecdc337fdf3e1c8a08a4f7c4485d"
       },
       {
+        "path": "scripts/apply-production-restore-reconciliation.mjs",
+        "mode": "100644",
+        "object_id": "c69c82e82cbd96bbcde288265895179b0f35e52b"
+      },
+      {
+        "path": "scripts/apply-release-migration-plan.mjs",
+        "mode": "100644",
+        "object_id": "6d654421af13aa62a7a04c30b95fa8d9a26bca35"
+      },
+      {
         "path": "scripts/audit3-repair-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "aa8b8853833be331c15ac1edee8c407276594956"
+        "object_id": "6bcdb9e3314e9101f37bb8341cf3f1a9d5611754"
       },
       {
         "path": "scripts/audit4-repair-contract-tests.mjs",
@@ -504,7 +528,7 @@
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "7d7c0d2ca860ee2c698c4e34a5ee97cdb3ebc3ac"
+        "object_id": "5367f319ddac09747b748bcc23bd65c5359f8b6a"
       },
       {
         "path": "scripts/cleaning-identity-gps-database-tests.mjs",
@@ -517,14 +541,39 @@
         "object_id": "8142bb6d8e16599257ba74334ff8f5b850cef41a"
       },
       {
+        "path": "scripts/create-abandoned-mutation-lease-reconciliation.mjs",
+        "mode": "100644",
+        "object_id": "9dcae4babbecfeb1d83d88945f063c9a48d52cba"
+      },
+      {
         "path": "scripts/create-production-restore-intent.mjs",
         "mode": "100644",
-        "object_id": "0d9151a310df52d124954a7142d16d1fc2d66544"
+        "object_id": "839bb0c330b498abc29c8e7a3d6d501736782f68"
+      },
+      {
+        "path": "scripts/create-production-restore-reconciliation.mjs",
+        "mode": "100644",
+        "object_id": "e065549147d5f2aad0e9544b125678a0ba4e1087"
+      },
+      {
+        "path": "scripts/create-rehearsal-service-role-jwt.mjs",
+        "mode": "100644",
+        "object_id": "02d491662591c2b1f891ea97503b00a9fb918a26"
       },
       {
         "path": "scripts/create-release-attestation.mjs",
         "mode": "100644",
         "object_id": "f8286e751a6f1451437b9e5f505c0baecee2da11"
+      },
+      {
+        "path": "scripts/create-release-migration-authorization.mjs",
+        "mode": "100644",
+        "object_id": "b831396fb15b2c341dab5e65edd2c4ffc7390bd8"
+      },
+      {
+        "path": "scripts/create-release-migration-rehearsal-attestation.mjs",
+        "mode": "100644",
+        "object_id": "77a390a75a69528c07a39397f264d516f07851c1"
       },
       {
         "path": "scripts/create-release-signing-key.mjs",
@@ -627,19 +676,64 @@
         "object_id": "bcd18be23f24c5ee4cd7238ce295d64e1283a160"
       },
       {
+        "path": "scripts/disaster-recovery-archive-tests.mjs",
+        "mode": "100644",
+        "object_id": "0d95e2aadecee233de0ec33daa89df3978dc7922"
+      },
+      {
+        "path": "scripts/disaster-recovery-archive.mjs",
+        "mode": "100644",
+        "object_id": "719dea1420cf11dfb56fc7b767dcb646fdd83b52"
+      },
+      {
+        "path": "scripts/disaster-recovery-cron-tests.mjs",
+        "mode": "100644",
+        "object_id": "3a06f539a0814372e67f9b8c840337b167e361fb"
+      },
+      {
+        "path": "scripts/disaster-recovery-cron.mjs",
+        "mode": "100644",
+        "object_id": "6dab294fb3f0c6166eee2aa534af59ad510418ee"
+      },
+      {
         "path": "scripts/disaster-recovery-crypto-tests.mjs",
         "mode": "100644",
-        "object_id": "d0b823094d76f13525ef6f083e56232e45bbf39f"
+        "object_id": "d1a83ed5dc4e15193ad6ad3a95adf594edf244b0"
       },
       {
         "path": "scripts/disaster-recovery-crypto.mjs",
         "mode": "100644",
-        "object_id": "1393c237dedcd41042911dda78b446063878cd02"
+        "object_id": "6b966639d2ce940d2203096d6b1912d709c97eb3"
+      },
+      {
+        "path": "scripts/disaster-recovery-mutation-fence-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "0b7a22272d4d4266e32ce912295dfe509fe111c0"
+      },
+      {
+        "path": "scripts/disaster-recovery-runtime-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "e7dea26e339b469342eefc9665de94093944b77a"
+      },
+      {
+        "path": "scripts/disaster-recovery-runtime-contract.mjs",
+        "mode": "100644",
+        "object_id": "0c1196ab5839392404391e32be2435aa3dce8cda"
       },
       {
         "path": "scripts/disaster-recovery-state.mjs",
         "mode": "100644",
         "object_id": "0af393dce719506ea552ecd9af9fcee34a1724a0"
+      },
+      {
+        "path": "scripts/disaster-recovery-storage-tests.mjs",
+        "mode": "100644",
+        "object_id": "2b42cb4fa43cecc264bf2e540b45c76f67ac06cc"
+      },
+      {
+        "path": "scripts/disaster-recovery-storage.mjs",
+        "mode": "100644",
+        "object_id": "be70043b64d675511cbadbf7f5bb051688ee5210"
       },
       {
         "path": "scripts/employee-notification-contract-tests.mjs",
@@ -664,7 +758,7 @@
       {
         "path": "scripts/events-api-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "3308eea2375c4ac4f59b637f81d2a0085e806778"
+        "object_id": "4667d28b5246484b476bb0896e09880b4f830603"
       },
       {
         "path": "scripts/events-parser-tests.mjs",
@@ -679,12 +773,17 @@
       {
         "path": "scripts/feedback-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "3df5b31e384eb0c51f5475aa06f7f051746f38b3"
+        "object_id": "d1e3a8d3fe7c9aaadc19a7a007ec575d6637c861"
       },
       {
         "path": "scripts/feedback-contract-tests.mjs",
         "mode": "100644",
         "object_id": "bf042c996f5997eed3ac9f1ff0447c7c5e4b0eb8"
+      },
+      {
+        "path": "scripts/feedback-reader-database-probe.mjs",
+        "mode": "100644",
+        "object_id": "29ced11cc61e0e41bf19b30e4957a8fcd5760d9f"
       },
       {
         "path": "scripts/final-closure-database-isolated-tests.mjs",
@@ -774,12 +873,12 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "a030173c71ff026df380f0f9f2f453e32a5de97b"
+        "object_id": "996cde72a4d6efcfba0a1c175f56ec32dcb512e1"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "affa3ef622e144d49bdbe94a793a98c74346db91"
+        "object_id": "7fedc45e22df20ba0ddbda5e2b2c318a0c980ab8"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
@@ -962,9 +1061,14 @@
         "object_id": "364312d92c66efa82530635c2c25fe0a3d78463e"
       },
       {
+        "path": "scripts/prepare-isolated-restore-target.mjs",
+        "mode": "100644",
+        "object_id": "e94fa6db2f9261948027b0dda49982207b92f15e"
+      },
+      {
         "path": "scripts/production-backup.mjs",
         "mode": "100644",
-        "object_id": "59b384163cabf6d07b4cbb265a33eb84ba05f979"
+        "object_id": "cb9eec661ead4a202b43c2dbf3c3f630651f930b"
       },
       {
         "path": "scripts/production-database-credential-bridge.mjs",
@@ -984,12 +1088,12 @@
       {
         "path": "scripts/production-restore-drill.mjs",
         "mode": "100644",
-        "object_id": "03b035b266bc0e3ba32b3982af3385b62efcf7d6"
+        "object_id": "c2b88aa91e5b58d58f2f539ccdc9914d7653f607"
       },
       {
         "path": "scripts/production-restore.mjs",
         "mode": "100644",
-        "object_id": "b5debd5cc5379fba8f60a9be73acefb7093fc54c"
+        "object_id": "b38495faf0c853d281d787bd73ae5f2d80e28f62"
       },
       {
         "path": "scripts/production-runtime-contract-tests.mjs",
@@ -1039,7 +1143,7 @@
       {
         "path": "scripts/refresh-schema-fingerprint.mjs",
         "mode": "100644",
-        "object_id": "6a81c41b3d9e9c1af6b0413e268fcd7fa1391791"
+        "object_id": "f218e13e23e6e68dc97ced8a321601dfe64b6bfa"
       },
       {
         "path": "scripts/release-canary-recovery-database-tests.mjs",
@@ -1052,9 +1156,29 @@
         "object_id": "33e9b2743549701c4c277c61100682341b513225"
       },
       {
+        "path": "scripts/release-migration-authorization-tests.mjs",
+        "mode": "100644",
+        "object_id": "1d0091858358473fc5b6be5c1e8fe523369a6519"
+      },
+      {
+        "path": "scripts/release-migration-plan-database-tests.mjs",
+        "mode": "100644",
+        "object_id": "ec3659ce00d9d2f158210350320fad51e4efcdfb"
+      },
+      {
+        "path": "scripts/resolve-isolated-restore-rehearsal.mjs",
+        "mode": "100644",
+        "object_id": "4126c0a195d3b7f11e13668a7bd137ef0deed5d3"
+      },
+      {
+        "path": "scripts/restore-mutation-gate-terminated-owner-fixture.mjs",
+        "mode": "100644",
+        "object_id": "0d3aed290b886cebcf4f4561935c410db5a5ac43"
+      },
+      {
         "path": "scripts/restore-mutation-gate-tests.mjs",
         "mode": "100644",
-        "object_id": "5c0f683d98c975a8ea63e1a9f48025af5147f54b"
+        "object_id": "c122cd92596f1921f4fadcd256ad91a32e3dabfd"
       },
       {
         "path": "scripts/restroom-rebalance-route-tests.mjs",
@@ -1114,7 +1238,7 @@
       {
         "path": "scripts/schema-transition-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "9e72662c075d7c223334e3e663a9ecbc3388b47c"
+        "object_id": "95574920b2858ef03692ab42cf057efe507f0f7e"
       },
       {
         "path": "scripts/smoke-ai-intent.mjs",
@@ -1224,12 +1348,12 @@
       {
         "path": "scripts/static-weekly-control-plane-runtime-tests.mjs",
         "mode": "100644",
-        "object_id": "cd6c4fcde2e6a2f0b29eefa4aa17aa851dc0f614"
+        "object_id": "bf5802cc8a5b579540fb6e2e7f1ac25d29c89b5f"
       },
       {
         "path": "scripts/static-weekly-control-plane-tests.mjs",
         "mode": "100644",
-        "object_id": "b8bc7dec6c6247fc277152c44657a55fb318e626"
+        "object_id": "caa80a3d59ca8d8e3673d710bde8f45999aa253c"
       },
       {
         "path": "scripts/static-weekly-day-changes-database-tests.mjs",
@@ -1320,6 +1444,11 @@
         "path": "scripts/static-weekly-vacant-roster-slot-database-tests.mjs",
         "mode": "100644",
         "object_id": "f396a1f0204bae8fe2ec2f626ef73cbfb88c14d2"
+      },
+      {
+        "path": "scripts/supabase-rest-rehearsal-proxy.mjs",
+        "mode": "100644",
+        "object_id": "a879f76740dc6a1371c5adad447140744bb21d01"
       },
       {
         "path": "scripts/temporary-repair-payload-retirement-tests.mjs",
@@ -1644,7 +1773,7 @@
       {
         "path": "src/gemini-console-api.js",
         "mode": "100644",
-        "object_id": "d28393cd9912e780a6e8329e136f623d88d594aa"
+        "object_id": "3e921489445a05442555b7aca46400fae462d432"
       },
       {
         "path": "src/gemini-controlled-worker.js",
@@ -1684,12 +1813,12 @@
       {
         "path": "src/index.js",
         "mode": "100644",
-        "object_id": "fd95263e320edf0841c9aec863363691fc01ec63"
+        "object_id": "56343a6b7e4ffcb5c5e18659ed6be3ead807cd7a"
       },
       {
         "path": "src/integrated-backend-authority-release-evidence.js",
         "mode": "100644",
-        "object_id": "0263df380cb7fe514af49552d952fc5a646f701e"
+        "object_id": "1243972fcf066f3f27fbc6d60eba97f28ca9e148"
       },
       {
         "path": "src/leadership-bootstrap.js",
@@ -1794,7 +1923,7 @@
       {
         "path": "src/restore-mutation-gate.js",
         "mode": "100644",
-        "object_id": "7023d2aa08904fe775e424407a8792b87e4261c4"
+        "object_id": "8b99693ae4acb1b95269874f64c7272372613aae"
       },
       {
         "path": "src/routes/index.js",
@@ -1844,12 +1973,12 @@
       {
         "path": "src/static-weekly-control-plane-runtime.js",
         "mode": "100644",
-        "object_id": "7ddc0d93d6875422c215dbe950c9a4d398962cdc"
+        "object_id": "6eafab907965d5c6fb986369370ae05f4226a4ce"
       },
       {
         "path": "src/static-weekly-control-plane.js",
         "mode": "100644",
-        "object_id": "ebc310ab27df3ec1402081fdf026b9578af56bb5"
+        "object_id": "7c1b26fb8c75ff3bc2ab77a2ce0e9bd895afff47"
       },
       {
         "path": "src/static-weekly-schedule-compiler-runtime.js",
@@ -1954,12 +2083,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "8f7fc5b2460196263b1c4520f8cff2e129291211"
+        "object_id": "fcb2240748109f6a61fbafb5540f9144b8f4aa72"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "bb63ed1742de7ce510084786fc43851a575cb3df"
+        "object_id": "b321fb916f8ef69f245546fd1b9b7d028ad165a8"
       },
       {
         "path": "supabase/config.toml",
@@ -3152,13 +3281,28 @@
         "object_id": "17aee6acb3a2616179f7324cdf3256d8b3c9c4c3"
       },
       {
+        "path": "supabase/migrations/20260827150000_disaster_recovery_global_mutation_fence.sql",
+        "mode": "100644",
+        "object_id": "38b54318359b6bf30f9a450b28b7c6828300ae43"
+      },
+      {
+        "path": "supabase/migrations/20260827151000_restore_application_reader_feedback_runtime.sql",
+        "mode": "100644",
+        "object_id": "0eebacb0e5e9424ca9ed16574f89332307b7edb1"
+      },
+      {
+        "path": "supabase/migrations/20260827152000_adopt_outlook_event_sync_authority.sql",
+        "mode": "100644",
+        "object_id": "f4101ef550727c34535b689261b0a0aa84638dfd"
+      },
+      {
         "path": "tmp/write_probe.txt",
         "mode": "100644",
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 608,
-    "migration_path_count": 120,
+    "authority_path_count": 636,
+    "migration_path_count": 123,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
   },
@@ -3528,6 +3672,15 @@
     },
     {
       "name": "20260827033500_static_weekly_registered_source_dated_status.sql"
+    },
+    {
+      "name": "20260827150000_disaster_recovery_global_mutation_fence.sql"
+    },
+    {
+      "name": "20260827151000_restore_application_reader_feedback_runtime.sql"
+    },
+    {
+      "name": "20260827152000_adopt_outlook_event_sync_authority.sql"
     }
   ],
   "release_boundary": "Prepare distinct minimum-32-character backend, native-route, and employee-device credential secrets before cutover; configure database digests immediately after the migrations that create each configuration function, retain the bridge backend artifact through the scan-snapshot phase, require manager-code recovery without phone-local work loss for any device-credential generation mismatch, and require the executable health/restoration probes before traffic changes."
