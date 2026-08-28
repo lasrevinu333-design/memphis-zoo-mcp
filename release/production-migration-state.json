@@ -57,15 +57,15 @@
     "outlook_event_sync_table_present": true
   },
   "target": {
-    "source_migration_file": "20260827152000_adopt_outlook_event_sync_authority.sql",
-    "source_migration_name": "adopt_outlook_event_sync_authority",
-    "source_migration_version": "20260827152000",
+    "source_migration_file": "20260827153000_scope_release_health_identity_projection.sql",
+    "source_migration_name": "scope_release_health_identity_projection",
+    "source_migration_version": "20260827153000",
     "production_ledger_version": null,
-    "canonical_source_schema_fingerprint": "0a687e3ee3340b9c94c4fd6153d99cf1030713770ce731c2932115ad0bed099e",
+    "canonical_source_schema_fingerprint": "837f1ffc54a7527ec65e2d8618717dfa1073e8e244bf91f8128a08f72e26ff33",
     "public_function_count": 499,
-    "production_ledger_count": 222,
-    "source_authority_migration_count": 123,
-    "pending_migration_count": 3,
+    "production_ledger_count": 223,
+    "source_authority_migration_count": 124,
+    "pending_migration_count": 4,
     "registered_source_dated_status_excluded": true,
     "expected_catalog_counts": {
       "extensions": 8,
@@ -120,7 +120,7 @@
     "production migration ledger head equals 20260827042443 and names static_weekly_registered_source_dated_status",
     "production catalog and privilege fingerprint equals 155ecd281da5d5452a8c629f724af0d3df32c96df03c7803b7f715313a0e694c under connected_database_catalog.v1 normalization",
     "a fresh encrypted backup with restore verification completes after the observed production capture and before mutation",
-    "production exposes exactly 494 public functions and 335 non-owner routine grants before the three pending release-foundation migrations",
+    "production exposes exactly 494 public functions and 335 non-owner routine grants before the four pending release-foundation migrations",
     "one active authority key and two immutable registered sources exist",
     "the guarded weighted-schedule authority has exactly 22 roster slots, 21 incumbencies, five target positions, no draft, two accepted publications, two projections, 766 occurrences and sixteen command receipts at authority revision 16",
     "the vacancy create/fill functions are present and narrowly executable only by static_weekly_control_plane",
@@ -144,15 +144,17 @@
   "pending_migrations": [
     { "order": 1, "phase": "disaster_recovery_global_mutation_fence", "file": "20260827150000_disaster_recovery_global_mutation_fence.sql", "source_migration_version": "20260827150000", "sha256": "0ca73b35c14a29c7823766324b56cbdafaf8d39da2174c79c1dbdb70cbd34b7f" },
     { "order": 2, "phase": "restore_application_reader_feedback_runtime", "file": "20260827151000_restore_application_reader_feedback_runtime.sql", "source_migration_version": "20260827151000", "sha256": "85e463dc262b0001182969db7dfd6efb2bebcdd64368c784332659b1c2c3b8c5" },
-    { "order": 3, "phase": "adopt_outlook_event_sync_authority", "file": "20260827152000_adopt_outlook_event_sync_authority.sql", "source_migration_version": "20260827152000", "sha256": "27ee85fc8dba1365cbdcd7143d941242d7c281a072aa8d19b4db6375bde9de52" }
+    { "order": 3, "phase": "adopt_outlook_event_sync_authority", "file": "20260827152000_adopt_outlook_event_sync_authority.sql", "source_migration_version": "20260827152000", "sha256": "27ee85fc8dba1365cbdcd7143d941242d7c281a072aa8d19b4db6375bde9de52" },
+    { "order": 4, "phase": "scope_release_health_identity_projection", "file": "20260827153000_scope_release_health_identity_projection.sql", "source_migration_version": "20260827153000", "sha256": "f821899197b375bbd1a96dfeef11034a3e1ec5313a4b387c8a91e7a8e14cbc1a" }
   ],
   "postconditions": [
-    "production ledger records the three ordered pending migrations exactly once and advances from 219 to 222 without replaying static_weekly_registered_source_dated_status",
-    "the complete public catalog and privilege fingerprint equals 0a687e3ee3340b9c94c4fd6153d99cf1030713770ce731c2932115ad0bed099e with the exact reviewed object counts, including the pinned provider bootstrap's explicit postgres schema-usage edge normalized as migration_owner and fail-closed retention of expired external-mutation leases",
+    "production ledger records the four ordered pending migrations exactly once and advances from 219 to 223 without replaying static_weekly_registered_source_dated_status",
+    "the complete public catalog and privilege fingerprint equals 837f1ffc54a7527ec65e2d8618717dfa1073e8e244bf91f8128a08f72e26ff33 with the exact reviewed object counts, including the pinned provider bootstrap's explicit postgres schema-usage edge normalized as migration_owner and fail-closed retention of expired external-mutation leases",
     "production exposes exactly 499 public functions and 341 non-owner routine grants after the ordered migrations",
     "all existing mutable public tables carry the authoritative mutation guard and future public mutable tables receive it through the reviewed event trigger",
     "restore mutation admission is quiescent, binds exact restore identity and expected ledger/catalog state, records lease ownership and heartbeat, and fails closed outside the admitted restore process",
     "the restricted application reader sees only the exact 21-column feedback projection selected by application identity, cannot mutate feedback or read legacy image backups, and its policy/grant recovery inventory is exact",
+    "release health verifies the exact 22-column employee/device identity projection only across devices, employees and device_aliases, preserves the separate feedback projection, and remains true after present-but-broken authority restoration",
     "the Outlook event-sync audit ledger retains its exact production columns, constraints, indexes, RLS state, service-role privileges, comment and every pre-existing row without granting browser roles",
     "the existing two accepted publications, two projections, 766 occurrences, 22 roster slots, 21 incumbencies, sixteen command receipts and authority revision 16 remain unchanged by the release-foundation migrations",
     "no existing publication, schedule history, employee history, event authority or production-only schema object is deleted or rewritten",

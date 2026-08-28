@@ -39,7 +39,7 @@
       "prepare distinct CUSTODIAL_BACKEND_PROOF_SECRET, CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET, and DEVICE_CREDENTIAL_SECRET values (minimum 32 characters each); preserve all phone-local work and require manager-code recovery for any active credential from a different secret generation without exposing any secret",
       "capture the production catalog through the read-only Supabase boundary and require the exact observed production ledger head, catalog/privilege fingerprint, object counts, static-weekly state, and zero target-position collisions recorded in release/production-migration-state.json",
       "verify production project, fresh post-capture backup receipt, observed production identity, exact pending-migration digest, and exact source attestation against release/production-migration-state.json",
-      "after explicit production-change admission, apply only the three exact ordered pending release-foundation migrations for the global restore mutation fence, restricted feedback reader, and Outlook event-sync authority adoption; require the production ledger to advance exactly three entries and the complete catalog delta to match the reviewed postconditions; do not replay the eleven already-applied release migrations or rewrite the production Outlook event-sync rows",
+      "after explicit production-change admission, apply only the four exact ordered pending release-foundation migrations for the global restore mutation fence, restricted feedback reader, Outlook event-sync authority adoption, and release-health identity projection correction; require the production ledger to advance exactly four entries and the complete catalog delta to match the reviewed postconditions; do not replay the eleven already-applied release migrations or rewrite the production Outlook event-sync rows",
       "after schema admission, refresh and publish the already-preserved immutable weighted-schedule draft through the static-weekly control plane with expected-revision and idempotency guards; do not create a competing draft, and preserve the current publication until the replacement publication and projection are complete",
       "deploy the canonical-only backend only after all authoritative procedures above are present and verified; missing canonical writers fail closed",
       "require a green authority health gate and direct-DML denial probes before routing traffic"
@@ -69,6 +69,7 @@
         ,"every mutable public table is guarded during recovery, the restore lease is quiescent and exact-identity-bound, expired Gemini cleanup leases recover without concurrent execution, and scheduler state is restored and compared before application traffic resumes"
         ,"the restricted feedback reader sees only its exact application projection, cannot mutate feedback or read legacy image backups, and the policy, grants, rate function, and recovery inventory remain exact"
         ,"the production Outlook event-sync ledger retains its exact shape, rows, indexes, RLS state, service-role privileges, and audit comment while browser roles remain ungranted"
+        ,"release health scopes the 22-column employee/device identity projection to devices, employees, and device_aliases, preserves the separately inventoried 21-column feedback projection, and remains green after exact authority restoration"
       ]
     }
   },

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
+import { createContext, runInContext } from 'node:vm';
 import express from 'express';
 import {
   employeeNotificationInternals,
@@ -646,6 +647,143 @@ assert.match(source, /\.in\('state', \['pending', 'leased', 'failed'\]\)[\s\S]*m
 assert.match(source, /finish_operational_notification_job_terminal/);
 assert.match(indexSource, /error\?\.terminal === true[\s\S]*finish_operational_notification_job_terminal/);
 assert.match(source, /deferFinish[\s\S]*if \(deferFinish\) continue/);
-assert.match(indexSource, /deferFinish[\s\S]*deferred: true[\s\S]*continue/);
+const operationalWorkerStart = indexSource.indexOf("async function runOperationalNotificationWorker");
+const operationalWorkerEnd = indexSource.indexOf("async function listGuestCleanlinessReports");
+assert.ok(operationalWorkerStart >= 0 && operationalWorkerEnd > operationalWorkerStart, "the operational worker must remain inspectable");
+const operationalWorker = indexSource.slice(operationalWorkerStart, operationalWorkerEnd);
+assert.equal(
+  createHash("sha256").update(operationalWorker).digest("hex"),
+  "f9151af2a3115297b05a9a9725b56f8fa8e9d23394f8fd190565e5b6871008db",
+  "notification finalization authority is bound to the exact reviewed worker source",
+);
+
+async function assertOperationalWorkerDeferral(workerSource) {
+  const rpcReferences = workerSource.match(/\brunRpc\b/g) || [];
+  const awaitedRpcCalls = workerSource.match(/\bawait\s+runRpc\s*\(/g) || [];
+  assert.equal(
+    rpcReferences.length,
+    3,
+    "the worker must contain exactly three owned RPC references: claim and the two mutually exclusive finish calls",
+  );
+  assert.equal(
+    awaitedRpcCalls.length,
+    rpcReferences.length,
+    "every worker RPC reference must be a directly awaited call; aliasing or callback finalization is forbidden",
+  );
+  const rpcCalls = [];
+  const handlerCalls = [];
+  const claimedJobs = [
+    { job_id: "10000000-0000-4000-8000-000000000001", job_type: "deferred_fixture", lease_token: "20000000-0000-4000-8000-000000000001", attempts: 1 },
+    { job_id: "10000000-0000-4000-8000-000000000002", job_type: "success_fixture", lease_token: "20000000-0000-4000-8000-000000000002", attempts: 1 },
+  ];
+  const context = createContext({
+    runRpc: async (name, payload) => {
+      rpcCalls.push({ name, payload });
+      if (name === "claim_operational_notification_jobs") return claimedJobs;
+      return { ok: true };
+    },
+    withApplicationMutationLease: async ({ operation }) => operation({ assertActive() {} }),
+    supabaseAdmin: {},
+    processGuestCleanlinessNotificationJob: async () => { throw new Error("guest fixture must not run"); },
+    operationalNotificationJobHandlers: new Map([
+      ["deferred_fixture", async (job) => {
+        handlerCalls.push(job.job_id);
+        throw Object.assign(new Error("provider result remains in flight"), { deferFinish: true });
+      }],
+      ["success_fixture", async (job) => { handlerCalls.push(job.job_id); }],
+    ]),
+    runCustodialOfflineReconciliationNotificationWorker: async () => ({ ok: true, claimed: 0 }),
+    Promise: undefined,
+    process: undefined,
+    queueMicrotask: undefined,
+    setImmediate: undefined,
+    setTimeout: undefined,
+  }, {
+    codeGeneration: { strings: false, wasm: false },
+    name: "operational-notification-worker-contract",
+  });
+  const worker = runInContext(
+    `"use strict";
+     let operationalNotificationWorkerInFlight = false;
+     const OPERATIONAL_NOTIFICATION_WORKER_ID = "notification-contract-worker";
+     ${workerSource}
+     runOperationalNotificationWorker;`,
+    context,
+    { timeout: 1_000 },
+  );
+  const outcome = await worker({ limit: 10 });
+  assert.deepEqual(handlerCalls, claimedJobs.map((job) => job.job_id), "a deferred first job must not stop the outer loop from processing the next claimed job");
+  assert.equal(outcome.results.length, 2);
+  assert.equal(outcome.results[0].deferred, true);
+  assert.equal(outcome.results[0].succeeded, false);
+  assert.equal(outcome.results[1].succeeded, true);
+  const finishCalls = rpcCalls.filter(({ name }) => name !== "claim_operational_notification_jobs");
+  assert.deepEqual(finishCalls.map(({ name, payload }) => ({ name, job_id: payload.p_job_id })), [
+    { name: "finish_operational_notification_job", job_id: claimedJobs[1].job_id },
+  ], "a deferred job must invoke neither retry nor terminal finalization; only the succeeding second job may finish");
+}
+
+await assertOperationalWorkerDeferral(operationalWorker);
+const aliasedDeferredFinishMutant = operationalWorker.replace(
+  "if (deferFinish) {",
+  'if (deferFinish) {\n            await runRpc("finish_operational_" + "notification_job", { p_job_id: job.job_id, p_lease_token: job.lease_token });',
+);
+assert.notEqual(aliasedDeferredFinishMutant, operationalWorker);
+await assert.rejects(() => assertOperationalWorkerDeferral(aliasedDeferredFinishMutant), /exactly three owned RPC references/);
+const earlyBreakMutant = operationalWorker.replace("results.push(result);", "results.push(result);\n      break;");
+assert.notEqual(earlyBreakMutant, operationalWorker);
+await assert.rejects(() => assertOperationalWorkerDeferral(earlyBreakMutant), /must not stop the outer loop/);
+const asynchronousDeferredFinishMutant = operationalWorker.replace(
+  "if (deferFinish) {",
+  `if (deferFinish) {
+            setTimeout(() => {
+              void runRpc(["finish_operational", "notification_job"].join("_"), {
+                p_job_id: job.job_id,
+                p_lease_token: job.lease_token,
+                p_succeeded: false,
+              });
+            }, 0);`,
+);
+assert.notEqual(asynchronousDeferredFinishMutant, operationalWorker);
+await assert.rejects(() => assertOperationalWorkerDeferral(asynchronousDeferredFinishMutant), /exactly three owned RPC references/);
+const obfuscatedGlobalTimerFinishMutant = operationalWorker.replace(
+  "if (deferFinish) {",
+  `if (deferFinish) {
+            globalThis[["set", "Timeout"].join("")](() => {
+              void runRpc(["finish_operational", "notification_job"].join("_"), {
+                p_job_id: job.job_id,
+                p_lease_token: job.lease_token,
+                p_succeeded: false,
+              });
+            }, 100);`,
+);
+assert.notEqual(obfuscatedGlobalTimerFinishMutant, operationalWorker);
+await assert.rejects(
+  () => assertOperationalWorkerDeferral(obfuscatedGlobalTimerFinishMutant),
+  /exactly three owned RPC references/,
+);
+const intrinsicPromiseFinishMutant = operationalWorker.replace(
+  "if (deferFinish) {",
+  `if (deferFinish) {
+            let schedulerHops = 0;
+            const scheduleLateFinish = () => {
+              schedulerHops += 1;
+              if (schedulerHops === 100) {
+                void runRpc(["finish", "operational", "notification", "job"].join("_"), {
+                  p_job_id: job.job_id,
+                  p_lease_token: job.lease_token,
+                  p_succeeded: false,
+                });
+                return;
+              }
+              (async () => {})().then(scheduleLateFinish);
+            };
+            scheduleLateFinish();`,
+);
+assert.notEqual(intrinsicPromiseFinishMutant, operationalWorker);
+await assert.rejects(
+  () => assertOperationalWorkerDeferral(intrinsicPromiseFinishMutant),
+  /exactly three owned RPC references/,
+);
 
 console.log('EMPLOYEE_NATIVE_NOTIFICATION_CONTRACT_PASS');

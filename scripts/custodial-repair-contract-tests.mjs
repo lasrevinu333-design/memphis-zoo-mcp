@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import { once } from "node:events";
 import { readFileSync } from "node:fs";
+import { createServer } from "node:net";
 
 const indexSource = readFileSync("src/index.js", "utf8");
 const messagingSource = readFileSync("src/messaging-api.js", "utf8");
@@ -66,7 +69,123 @@ assert.doesNotMatch(indexSource, /create table if not exists public\.system_feed
 assert.match(indexSource, /storage_bucket/);
 assert.match(indexSource, /supabaseAdmin\.storage/);
 assert.match(indexSource, /\/release-manifest/);
-assert.match(indexSource, /app\.use\(\["\/version", "\/release-manifest", "\/scheduler-runtime-config", "\/health", "\/health\/dependencies"\]/);
+assert.match(indexSource, /app\.use\(\["\/version", "\/release-manifest", "\/scheduler-runtime-config", "\/healthz", "\/health", "\/health\/dependencies"\]/);
+function assertConstantProcessLivenessRoute(source) {
+  assert.equal(
+    source.match(/\/healthz/g)?.length || 0,
+    2,
+    "the backend may mention /healthz only in its public CORS admission and unconditional route",
+  );
+  const livenessRouteStart = source.indexOf('app.get("/healthz"');
+  const livenessRouteEnd = source.indexOf('app.get("/version"');
+  assert.ok(livenessRouteStart >= 0 && livenessRouteEnd > livenessRouteStart, "the process-liveness route must remain inspectable");
+  const livenessRoute = source.slice(livenessRouteStart, livenessRouteEnd).trim();
+  assert.equal(livenessRoute, `app.get("/healthz", (_req, res) => {
+  res.status(200).json({
+    ok: true,
+    process_alive: true,
+    probe_scope: "process_liveness",
+    dependencies_ready: null,
+    release_id: RELEASE_ID,
+    app_version: APP_VERSION,
+  });
+});`, "process liveness must remain an unconditional constant response");
+}
+
+async function reserveLoopbackPort() {
+  const probe = createServer();
+  await new Promise((resolve, reject) => {
+    probe.once("error", reject);
+    probe.listen(0, "127.0.0.1", resolve);
+  });
+  const address = probe.address();
+  await new Promise((resolve, reject) => probe.close((error) => error ? reject(error) : resolve()));
+  return address.port;
+}
+
+async function proveProcessLivenessWithUnavailableDependencies() {
+  const port = await reserveLoopbackPort();
+  const childEnv = { ...process.env };
+  for (const name of [
+    "DATABASE_URL",
+    "MEMPHIS_RELEASE_ATTESTATION_JSON",
+    "MEMPHIS_RELEASE_ATTESTATION_PUBLIC_KEY",
+    "RENDER",
+    "RENDER_GIT_COMMIT",
+  ]) delete childEnv[name];
+  Object.assign(childEnv, {
+    NODE_ENV: "production",
+    PORT: String(port),
+    OPS_MANAGER_SESSION_SECRET: `liveness-ops-${process.pid}-${Date.now()}-independent-secret`,
+    SUPABASE_URL: "http://127.0.0.1:1",
+    SUPABASE_SERVICE_ROLE_KEY: "custodial-liveness-unavailable-fixture",
+    CUSTODIAL_READONLY_DATABASE_URL: "postgresql://invalid:invalid@127.0.0.1:1/invalid",
+    EVENT_MAINTENANCE_SWEEP_MS: "0",
+    FEEDBACK_REMINDER_SWEEP_MS: "0",
+    OPERATIONAL_NOTIFICATION_SWEEP_MS: "0",
+  });
+  const child = spawn(process.execPath, ["src/index.js"], {
+    cwd: process.cwd(),
+    env: childEnv,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let output = "";
+  child.stdout.on("data", (chunk) => { output += chunk; });
+  child.stderr.on("data", (chunk) => { output += chunk; });
+  try {
+    let livenessResponse = null;
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      if (child.exitCode !== null) throw new Error(`liveness fixture exited before startup: ${output}`);
+      try {
+        livenessResponse = await fetch(`http://127.0.0.1:${port}/healthz`, { signal: AbortSignal.timeout(250) });
+        break;
+      } catch {
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+    }
+    assert.ok(livenessResponse, `liveness fixture did not start: ${output}`);
+    assert.equal(livenessResponse.status, 200);
+    assert.deepEqual(await livenessResponse.json(), {
+      ok: true,
+      process_alive: true,
+      probe_scope: "process_liveness",
+      dependencies_ready: null,
+      release_id: "release-2026.07.19.custodial-v3.12",
+      app_version: "release-2026.07.19.custodial-v3.12",
+    });
+    const readinessResponse = await fetch(`http://127.0.0.1:${port}/health/dependencies`, { signal: AbortSignal.timeout(2_000) });
+    assert.equal(readinessResponse.status, 503, "unavailable database authority must fail dependency readiness without failing process liveness");
+    const readiness = await readinessResponse.json();
+    assert.equal(readiness.ok, false);
+    assert.equal(readiness.process_alive, true);
+    assert.equal(readiness.database_reachable, false);
+  } finally {
+    if (child.exitCode === null) child.kill("SIGTERM");
+    await Promise.race([
+      once(child, "exit"),
+      new Promise((_, reject) => setTimeout(() => reject(new Error(`liveness fixture did not stop: ${output}`)), 5_000)),
+    ]);
+  }
+}
+
+assertConstantProcessLivenessRoute(indexSource);
+const dependencyGatedLivenessMutant = indexSource.replace(
+  'app.get("/healthz", (_req, res) => {',
+  'app.get("/healthz", (_req, res) => {\n  if (!process.env.DATABASE_URL) return res.status(503).json({ ok: false });',
+);
+assert.notEqual(dependencyGatedLivenessMutant, indexSource);
+assert.throws(() => assertConstantProcessLivenessRoute(dependencyGatedLivenessMutant), /unconditional constant response/);
+const productionMiddlewareLivenessMutant = indexSource.replace(
+  'app.get("/healthz", (_req, res) => {',
+  `app.use("/healthz", (_req, res, next) => {
+  if (process.env.NODE_ENV === "production" && !process.env.DATABASE_URL) return res.status(503).json({ ok: false });
+  next();
+});
+app.get("/healthz", (_req, res) => {`,
+);
+assert.notEqual(productionMiddlewareLivenessMutant, indexSource);
+assert.throws(() => assertConstantProcessLivenessRoute(productionMiddlewareLivenessMutant), /may mention \/healthz only/);
+await proveProcessLivenessWithUnavailableDependencies();
 assert.match(indexSource, /app\.get\(\["\/health", "\/health\/dependencies"\]/);
 assert.match(indexSource, /req\.method === "OPTIONS"/);
 assert.match(indexSource, /\/health\/dependencies/);
