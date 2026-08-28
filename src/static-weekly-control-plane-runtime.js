@@ -5,6 +5,7 @@ import { createClient } from "@supabase/supabase-js";
 import { assertOpsManagerSessionSecret, createSupabaseTrustedDeviceStore, makeOpsAccessMiddleware } from "./auth/shared-access-auth.js";
 import { createStaticWeeklyControlPlane, createStaticWeeklyControlPlaneDatabase } from "./static-weekly-control-plane.js";
 import { assertConfiguredReleaseIdentity } from "./release-manifest.js";
+import { makeRestoreMutationGate } from "./restore-mutation-gate.js";
 
 const text = (value) => typeof value === "string" ? value.trim() : "";
 const fail = (code, message = code) => Object.assign(new Error(message), { code });
@@ -54,6 +55,7 @@ export function createStaticWeeklyControlPlaneRuntime({
   const authorityDatabase = database || createDatabase({
     connectionString: env?.STATIC_WEEKLY_CONTROL_PLANE_DATABASE_URL,
     caPem: env?.STATIC_WEEKLY_CONTROL_PLANE_DATABASE_CA_PEM,
+    allowInsecureLoopbackRehearsal: /^(1|true|yes)$/i.test(text(env?.STATIC_WEEKLY_CONTROL_PLANE_ALLOW_INSECURE_LOOPBACK_REHEARSAL)),
   });
   const authorityControlPlane = controlPlane || createControlPlane({ database: authorityDatabase });
   const app = express();
@@ -65,6 +67,7 @@ export function createStaticWeeklyControlPlaneRuntime({
     next();
   });
   app.use(express.json({ limit: "128kb" }));
+  app.use(makeRestoreMutationGate({ supabase: trustedSupabase, required: true, serviceName: "memphis-zoo-static-weekly-control-plane" }));
 
   const requireManagerWrite = makeOpsAccessMiddleware({
     env,

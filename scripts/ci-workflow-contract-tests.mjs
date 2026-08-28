@@ -148,13 +148,35 @@ assert.match(populatedSchemaPreflight, /set -euo pipefail[\s\S]*release:populate
 const productionBackupRehearsal = readFileSync(resolve(workflowDirectory, "production-backup-migration-rehearsal.yml"), "utf8");
 const productionSourceRoleCatalog = readFileSync(resolve(root, "supabase/canonical/production-source-role-catalog.sql"), "utf8");
 const emptyDatabaseRebuild = readFileSync(resolve(root, "scripts/empty-database-rebuild-check.mjs"), "utf8");
-assert.match(productionBackupRehearsal, /RESTORE_DATABASE_ONLY=true[\s\S]*release:populated-schema:preflight/,
-  "the production-backup rehearsal must restore data before checking the exact live source fingerprint");
-assert.doesNotMatch(productionBackupRehearsal, /--schema-only[^\n]*(?:--no-owner|--no-privileges)/,
-  "the production-backup rehearsal must preserve ownership and grants because both are part of the accepted schema fingerprint");
+assert.match(productionBackupRehearsal, /RESTORE_DATABASE_ONLY=true[\s\S]*release:observed-production-schema:preflight[\s\S]*release:migrations:apply[\s\S]*release:populated-schema:preflight/,
+  "the production-backup rehearsal must prove the restored pre-migration state, apply the signed plan, and only then check the target fingerprint");
+assert.doesNotMatch(productionBackupRehearsal, /SUPABASE_DB_URL:\s*\$\{\{\s*secrets\.SUPABASE_DB_URL/,
+  "the production-backup rehearsal must not read live production while reconstructing the signed archive");
+assert.doesNotMatch(productionBackupRehearsal, /\bpg_dump\b/,
+  "the production-backup rehearsal must restore its signed archive schema instead of dumping a fresh production schema");
+assert.match(productionBackupRehearsal, /memphis-zoo-disaster-recovery\.v4/,
+  "the independent rehearsal must require the signed v4 archive");
+assert.match(productionBackupRehearsal, /test "\$source_commit" = "\$GITHUB_SHA"/,
+  "the independent rehearsal must bind the archived source commit to its workflow target");
+assert.match(productionBackupRehearsal, /git rev-parse HEAD\^\{tree\}[\s\S]*"\$source_tree"/,
+  "the independent rehearsal must bind the archived source tree to its checkout");
+assert.match(productionBackupRehearsal, /inventory\/application-schema\.sql[\s\S]*restore:prepare-isolated[\s\S]*restore:intent[\s\S]*RESTORE_APPLY=true/,
+  "the independent rehearsal must restore signed schema/control state before applying signed application data");
+assert.match(productionBackupRehearsal, /RESTORE_REHEARSAL_ACCEPT_EMPTY_TARGET=true[\s\S]*restore:reconcile-isolated[\s\S]*custodial_configure_backend_execution_key/,
+  "the independent rehearsal must explicitly reconcile its disposable empty target before exercising recovered application writers");
+assert.match(productionBackupRehearsal, /test:feedback-reader-database[\s\S]*npm start[\s\S]*feedback_first_http_status[\s\S]*feedback_replay_http_status/,
+  "the recovered application pair must prove bounded feedback reader authority before exact HTTP write and replay");
+assert.match(productionBackupRehearsal, /expires_at>clock_timestamp\(\)[\s\S]*active_mutation_leases[\s\S]*expired_mutation_leases/,
+  "the recovered pair must distinguish live mutation leases from expired fail-closed blockers");
+assert.match(productionBackupRehearsal, /test "\$active_mutation_leases" = '0'[\s\S]*test "\$expired_mutation_leases" = '0'/,
+  "the exact recovered pair must prove that neither active nor expired mutation leases remain");
+assert.match(productionBackupRehearsal, /RELEASE_MIGRATION_REHEARSAL=true[\s\S]*RELEASE_MIGRATION_SOURCE_LEDGER_SHA256/,
+  "the isolated mutator must bind the complete signed source ledger while production requires separate authorization");
 assert.match(productionBackupRehearsal, /cron\.database_name="\$database"/,
   "the production-backup rehearsal must bind pg_cron to its isolated restored database");
-assert.match(productionBackupRehearsal, /-p 127\.0\.0\.1::5432[\s\S]*listen_addresses='\*'[\s\S]*SUPABASE_DB_URL="postgresql:\/\/supabase_admin:postgres@127\.0\.0\.1:/,
+assert.match(productionBackupRehearsal, /cron\.launch_active_jobs=off/,
+  "the production-backup rehearsal must retain cron catalog evidence without executing archived jobs");
+assert.match(productionBackupRehearsal, /-p 127\.0\.0\.1::5432[\s\S]*listen_addresses='\*'[\s\S]*local_db_url="postgresql:\/\/supabase_admin:postgres@127\.0\.0\.1:/,
   "the production-backup rehearsal must expose Postgres only on runner loopback while making the mapped container interface reachable");
 assert.match(productionBackupRehearsal, /State\.Health[\s\S]*test "\$healthy" = 'true'[\s\S]*sleep 10[\s\S]*createdb/,
   "the production-backup rehearsal must survive the Supabase image's first-boot restart before creating its database");
@@ -172,12 +194,17 @@ assert.match(emptyDatabaseRebuild, /shared_preload_libraries=pg_cron,pg_net,pg_s
   "the clean-rebuild test must retain cron catalog evidence without letting wall-clock jobs mutate its disposable fixtures");
 assert.match(productionBackupRehearsal, /oom_killed=\{\{\.State\.OOMKilled\}\}[\s\S]*docker logs --timestamps --tail 2000[\s\S]*production-backup-migration-rehearsal-postgres\.log/,
   "the production-backup rehearsal must retain bounded Postgres failure evidence instead of retrying blind");
-assert.equal((productionBackupRehearsal.match(/202608\d+_[a-z0-9_]+\.sql/g) || []).filter((name, index, values) => values.indexOf(name) === index).length, 25,
-  "the production-backup rehearsal must apply the exact 25 pending migrations");
+assert.equal((productionBackupRehearsal.match(/202608\d+_[a-z0-9_]+\.sql/g) || []).length, 0,
+  "the production-backup rehearsal migration scope must come from signed inventory, never a hard-coded stale list");
+assert.match(productionBackupRehearsal, /target_migration_head=.*production-migration-state\.json[\s\S]*target_migration_count=.*production-migration-state\.json[\s\S]*test "\$target_migration_head" != "\$migration_head"/,
+  "the restored backup must advance from its archived ledger to the exact source-declared target ledger");
 assert.match(productionBackupRehearsal, /custodial_configure_backend_execution_key[\s\S]*custodial_configure_native_route_proof_key[\s\S]*custodial_backend_authority_health/,
   "the production-backup rehearsal must configure both secret boundaries and prove final authority health");
 assert.match(productionBackupRehearsal, /set role service_role; truncate public\.sessions/,
   "the production-backup rehearsal must attack direct terminal DML after migration");
+assert.match(productionBackupRehearsal,
+  /RELEASE_REHEARSAL_ATTESTATION_SIGNING_KEY:[\s\S]*release:migrations:attest-rehearsal[\s\S]*production-backup-migration-rehearsal-attestation\.json/,
+  "the exact successful rehearsal receipt must be independently signed and retained with GitHub run provenance");
 
 const workflowFixture = (commands) => `name: fixture\njobs:\n  validate:\n    steps:\n      - run: |\n${commands.map((command) => `          ${command}`).join("\n")}\n`;
 assert.doesNotThrow(() => assertExactCommandsInJob(

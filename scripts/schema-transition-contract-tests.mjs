@@ -14,6 +14,7 @@ import { sanitizeReadOnlySql } from "../src/supabase/read.js";
 
 const input = JSON.parse(readFileSync(new URL("../release/schema-alignment-input.json", import.meta.url), "utf8"));
 const frontend = JSON.parse(readFileSync(new URL("../release/frontend-release-manifest.json", import.meta.url), "utf8"));
+const canonicalCatalog = JSON.parse(readFileSync(new URL("../supabase/canonical/schema-fingerprint-input.json", import.meta.url), "utf8"));
 const target = readFileSync(new URL("../supabase/canonical/schema-fingerprint.txt", import.meta.url), "utf8").trim();
 const now = Date.parse("2026-08-21T00:00:00Z");
 
@@ -51,6 +52,30 @@ for (const section of ["table_grants", "routine_grants"]) {
     `${section} must exclude only the two equivalent managed migration-owner identities`);
 }
 assert.match(SCHEMA_CATALOG_QUERIES.tables, /then 'migration_owner'/);
+assert.match(SCHEMA_CATALOG_QUERIES.schema_grants, /coalesce\(grantee\.rolname,'PUBLIC'\) in \('postgres','supabase_admin'\) then 'migration_owner'/,
+  "provider administrator schema grants must remain visible under one normalized migration-owner identity");
+assert.doesNotMatch(SCHEMA_CATALOG_QUERIES.schema_grants, /not in \('postgres','supabase_admin'\)/,
+  "schema authority must not hide explicit provider-administrator grants");
+assert.equal(canonicalCatalog.schema_grants.length, 9, "the clean target must bind all nine public-schema grants");
+assert.deepEqual(
+  canonicalCatalog.schema_grants.filter((grant) =>
+    grant.grantee === "migration_owner" &&
+    grant.grantor === "pg_database_owner" &&
+    grant.privilege_type === "USAGE"),
+  [{
+    grantee: "migration_owner",
+    grantor: "pg_database_owner",
+    is_grantable: false,
+    privilege_type: "USAGE",
+    schema_name: "public",
+  }],
+  "the pinned Supabase bootstrap postgres USAGE edge must survive clean reconstruction and normalization",
+);
+assert.equal(
+  canonicalCatalog.schema_grants.some((grant) => grant.grantee === "PUBLIC"),
+  false,
+  "PUBLIC schema authority must remain revoked",
+);
 assert.match(SCHEMA_CATALOG_QUERIES.default_privileges, /select distinct[\s\S]*owner\.rolname in \('postgres','supabase_admin'\)/,
   "default privileges must normalize equivalent managed migration owners independently of caller identity");
 assert.match(SCHEMA_CATALOG_QUERIES.default_privileges, /grantee\.rolname='service_role'/,

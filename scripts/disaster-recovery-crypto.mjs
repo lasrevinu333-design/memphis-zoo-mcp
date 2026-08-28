@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 
 export function stable(value) {
   if (Array.isArray(value)) return value.map(stable);
@@ -11,6 +11,14 @@ export function stable(value) {
 
 export function stableJson(value) {
   return JSON.stringify(stable(value));
+}
+
+export function stableJsonFile(value) {
+  return `${JSON.stringify(stable(value), null, 2)}\n`;
+}
+
+export function stableJsonFileSha256(value) {
+  return createHash("sha256").update(stableJsonFile(value)).digest("hex");
 }
 
 export function requireSigningKey(value, name) {
@@ -30,10 +38,10 @@ export function verifyBinding(binding, signature, key) {
   return provided.length === expected.length && timingSafeEqual(provided, expected);
 }
 
-export function archiveSignatureBinding({ archiveDigest, projectRef, sourceIdentity }) {
+export function archiveSignatureBinding({ archiveDigest, projectRef, sourceIdentity, archiveFormat = "memphis-zoo-disaster-recovery.v3" }) {
   return {
     purpose: "memphis-zoo-disaster-recovery-archive",
-    format: "memphis-zoo-disaster-recovery.v3",
+    format: archiveFormat,
     archive_digest: archiveDigest,
     project_ref: projectRef,
     source_identity: sourceIdentity,
@@ -45,5 +53,37 @@ export function restoreIntentBinding(intent) {
     purpose: "memphis-zoo-production-restore-intent",
     format: "memphis-zoo-production-restore-intent.v1",
     ...intent,
+  };
+}
+
+export function restoreReconciliationBinding(intent) {
+  return {
+    purpose: "memphis-zoo-production-restore-reconciliation",
+    format: "memphis-zoo-production-restore-reconciliation.v1",
+    ...intent,
+  };
+}
+
+export function abandonedMutationLeaseReconciliationBinding(intent) {
+  return {
+    purpose: "memphis-zoo-abandoned-mutation-lease-reconciliation",
+    format: "memphis-zoo-abandoned-mutation-lease-reconciliation.v1",
+    ...intent,
+  };
+}
+
+export function releaseMigrationAuthorizationBinding(intent) {
+  return {
+    purpose: "memphis-zoo-release-migration-authorization",
+    format: "memphis-zoo-release-migration-authorization.v1",
+    ...intent,
+  };
+}
+
+export function releaseMigrationRehearsalAttestationBinding(attestation) {
+  return {
+    purpose: "memphis-zoo-release-migration-rehearsal-attestation",
+    format: "memphis-zoo-release-migration-rehearsal-attestation.v1",
+    ...attestation,
   };
 }

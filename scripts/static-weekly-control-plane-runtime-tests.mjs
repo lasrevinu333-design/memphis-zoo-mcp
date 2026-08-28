@@ -48,6 +48,22 @@ assert.throws(() => staticWeeklyDatabaseConnectionOptions({
   connectionString: "https://db.example.invalid/postgres",
   caPem: "-----BEGIN CERTIFICATE-----\\ntest-ca-body\\n-----END CERTIFICATE-----",
 }), /database_url_invalid/, "non-PostgreSQL URLs must be rejected before pool creation");
+const loopbackRehearsal = staticWeeklyDatabaseConnectionOptions({
+  connectionString: "postgresql://runtime:fixture@127.0.0.1:5432/mz_schema_rebuild_fixture",
+  caPem: "",
+  allowInsecureLoopbackRehearsal: true,
+});
+assert.equal(loopbackRehearsal.ssl, false, "an explicit test-only loopback rehearsal may use the disposable runner database without TLS");
+assert.throws(() => staticWeeklyDatabaseConnectionOptions({
+  connectionString: "postgresql://runtime:fixture@127.0.0.1:5432/postgres",
+  caPem: "",
+  allowInsecureLoopbackRehearsal: true,
+}), /certificate authority is required/i, "the rehearsal switch is restricted to an isolated mz_schema_rebuild database");
+assert.throws(() => staticWeeklyDatabaseConnectionOptions({
+  connectionString: "postgresql://runtime:fixture@db.example.invalid:5432/postgres",
+  caPem: "",
+  allowInsecureLoopbackRehearsal: true,
+}), /certificate authority is required/i, "the rehearsal switch can never weaken a non-loopback database connection");
 
 assert.throws(() => createStaticWeeklyControlPlaneRuntime({
   env: { ...env, SUPABASE_URL: "" }, trustedDeviceStore: { async find() { return null; } }, database: {}, controlPlane: {},
@@ -76,7 +92,13 @@ const controlPlane = {
   async applyDayChanges(request) { dayChangesRequest = request; mutations += 1; return { operation: "apply_day_changes", revision: mutations, data: { mutation_count: request.operations.length } }; },
   async rebuildCurrentProjection(request) { rebuildRequest = request; rebuilds += 1; return { revision: request.expectedRevision + 1, data: { projection_id: `rebuild-${request.weekStart}-${request.idempotencyKey}` } }; },
 };
-const runtime = createStaticWeeklyControlPlaneRuntime({ env, trustedDeviceStore: store, database: {}, controlPlane });
+const runtime = createStaticWeeklyControlPlaneRuntime({
+  env,
+  supabase: { async rpc() { return { data: { mutations_paused: false, state: "READY", authority_generation: 0, restore_id: null }, error: null }; } },
+  trustedDeviceStore: store,
+  database: {},
+  controlPlane,
+});
 const server = createServer(runtime.app);
 await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
 const origin = `http://127.0.0.1:${server.address().port}`;

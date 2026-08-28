@@ -1,0 +1,58 @@
+{
+  "format": "memphis-zoo.disaster-recovery-runtime-contract.v1",
+  "node_version": "22.23.1",
+  "services": {
+    "backend": {
+      "build_command": "npm ci --ignore-scripts",
+      "start_command": "npm start",
+      "liveness_path": "/healthz",
+      "readiness_path": "/health/dependencies",
+      "required_non_secret_environment": {
+        "NODE_ENV": "production",
+        "NODE_VERSION": "22.23.1",
+        "GITHUB_OWNER": "lasrevinu333-design",
+        "GITHUB_REPO": "memphis-zoo-mcp",
+        "GITHUB_BRANCH": "main",
+        "SUPABASE_URL": "$SUPABASE_PROJECT_URL",
+        "CUSTODIAL_RESTORE_GATE_REQUIRED": "true"
+      },
+      "required_secret_presence": [
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "CUSTODIAL_READONLY_DATABASE_URL",
+        "CUSTODIAL_BACKEND_PROOF_SECRET",
+        "CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET",
+        "DEVICE_CREDENTIAL_SECRET",
+        "OPS_MANAGER_SESSION_SECRET",
+        "MEMPHIS_RELEASE_ATTESTATION_JSON",
+        "MEMPHIS_RELEASE_ATTESTATION_PUBLIC_KEY"
+      ]
+    },
+    "static_weekly_control_plane": {
+      "build_command": "npm ci --ignore-scripts",
+      "start_command": "npm run start:static-weekly-control-plane",
+      "liveness_path": "/healthz",
+      "readiness_path": "/ready",
+      "required_non_secret_environment": {
+        "NODE_ENV": "production",
+        "NODE_VERSION": "22.23.1",
+        "SUPABASE_URL": "$SUPABASE_PROJECT_URL",
+        "STATIC_WEEKLY_CONTROL_PLANE_ALLOWED_ORIGINS": "https://lasrevinu333-design.github.io"
+      },
+      "required_secret_presence": [
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "OPS_MANAGER_SESSION_SECRET",
+        "STATIC_WEEKLY_CONTROL_PLANE_DATABASE_URL",
+        "STATIC_WEEKLY_CONTROL_PLANE_DATABASE_CA_PEM",
+        "MEMPHIS_RELEASE_ATTESTATION_JSON",
+        "MEMPHIS_RELEASE_ATTESTATION_PUBLIC_KEY"
+      ]
+    }
+  },
+  "required_dependencies": [
+    "supabase_project_ref",
+    "backend_render_service_id",
+    "static_weekly_render_service_id",
+    "frontend_origin",
+    "attendance_origin"
+  ]
+}

@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { extname } from "node:path";
 import mammoth from "mammoth";
 import { getGeminiApiKey, getGeminiDiagnostics } from "./utils/gemini-config.js";
+import { withApplicationMutationLease } from "./restore-mutation-gate.js";
 
 const BUCKET = "gemini-console-private";
 const MAX_FILE_BYTES = 6 * 1024 * 1024;
@@ -458,6 +459,7 @@ export function createGeminiConsoleRouter({
       const validated = validateGeminiAttachment({ filename: req.body?.filename, declaredMime: req.body?.mime_type, buffer });
       const attachmentId = randomUUID();
       uploadedPath = `${actor.managerId}/${req.params.conversationId}/${attachmentId}/${validated.filename}`;
+      req.restoreMutationLease?.assertActive?.();
       const upload = await supabase.storage.from(BUCKET).upload(uploadedPath, buffer, { contentType: validated.mimeType, upsert: false, cacheControl: "0" });
       if (upload.error) throw upload.error;
       const { data, error } = await supabase.from("gemini_console_attachments").insert({
@@ -498,6 +500,7 @@ export function createGeminiConsoleRouter({
       const { data, error } = await supabase.from("gemini_console_attachments").select("*").eq("attachment_id", req.params.attachmentId).eq("manager_id", actor.managerId).eq("status", "pending").maybeSingle();
       if (error) throw error;
       if (!data) throw Object.assign(new Error("Pending attachment not found."), { status: 404 });
+      req.restoreMutationLease?.assertActive?.();
       const removed = await supabase.storage.from(data.storage_bucket).remove([data.storage_path]);
       if (removed.error) throw removed.error;
       await supabase.from("gemini_console_attachments").update({ status: "deleted", deleted_at: new Date().toISOString() }).eq("attachment_id", data.attachment_id);
@@ -633,16 +636,24 @@ export function createGeminiConsoleRouter({
   });
 
   async function cleanupAbandonedAttachments() {
-    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    const { data, error } = await supabase.from("gemini_console_attachments").select("attachment_id,storage_bucket,storage_path").eq("status", "pending").lt("created_at", cutoff).limit(100);
-    if (error) throw error;
-    for (const item of data || []) {
-      const removed = await supabase.storage.from(item.storage_bucket).remove([item.storage_path]);
-      if (removed.error) continue;
-      await supabase.from("gemini_console_attachments").update({ status: "deleted", deleted_at: new Date().toISOString() }).eq("attachment_id", item.attachment_id).eq("status", "pending");
-    }
-    const stale = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-    await supabase.from("gemini_console_messages").update({ state: "failed", error_code: "worker_restart", error_message: "Generation was interrupted and may be retried." }).eq("state", "generating").lt("created_at", stale);
+    return withApplicationMutationLease({
+      supabase,
+      serviceName: "memphis-zoo-gemini-console-cleanup",
+      operation: async ({ assertActive }) => {
+        const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        const { data, error } = await supabase.from("gemini_console_attachments").select("attachment_id,storage_bucket,storage_path").eq("status", "pending").lt("created_at", cutoff).limit(100);
+        if (error) throw error;
+        for (const item of data || []) {
+          assertActive();
+          const removed = await supabase.storage.from(item.storage_bucket).remove([item.storage_path]);
+          if (removed.error) continue;
+          await supabase.from("gemini_console_attachments").update({ status: "deleted", deleted_at: new Date().toISOString() }).eq("attachment_id", item.attachment_id).eq("status", "pending");
+        }
+        assertActive();
+        const stale = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+        await supabase.from("gemini_console_messages").update({ state: "failed", error_code: "worker_restart", error_message: "Generation was interrupted and may be retried." }).eq("state", "generating").lt("created_at", stale);
+      },
+    });
   }
 
   const cleanupTimer = setInterval(() => cleanupAbandonedAttachments().catch(() => {}), 60 * 60 * 1000);

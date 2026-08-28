@@ -245,17 +245,11 @@ function replacementDraftInput(source, effectiveStart, { versionId = randomUUID(
 export function staticWeeklyDatabaseConnectionOptions({
   connectionString = process.env.STATIC_WEEKLY_CONTROL_PLANE_DATABASE_URL,
   caPem = process.env.STATIC_WEEKLY_CONTROL_PLANE_DATABASE_CA_PEM,
+  allowInsecureLoopbackRehearsal = /^(1|true|yes)$/i.test(String(process.env.STATIC_WEEKLY_CONTROL_PLANE_ALLOW_INSECURE_LOOPBACK_REHEARSAL || "")),
 } = {}) {
   const rawConnectionString = text(connectionString);
   if (!rawConnectionString) throw fail("static_weekly_control_plane_database_url_required");
   const ca = String(caPem || "").replaceAll("\\n", "\n").trim();
-  if (!/^-----BEGIN CERTIFICATE-----[\s\S]+-----END CERTIFICATE-----$/.test(ca)) {
-    throw fail(
-      "static_weekly_control_plane_database_ca_required",
-      "A PEM database certificate authority is required for the static weekly control plane.",
-    );
-  }
-
   let url;
   try {
     url = new URL(rawConnectionString);
@@ -264,6 +258,17 @@ export function staticWeeklyDatabaseConnectionOptions({
   }
   if (!new Set(["postgres:", "postgresql:"]).has(url.protocol)) {
     throw fail("static_weekly_control_plane_database_url_invalid");
+  }
+  if (allowInsecureLoopbackRehearsal
+      && /^(127\.0\.0\.1|localhost)$/.test(url.hostname)
+      && /^\/mz_schema_rebuild_[a-zA-Z0-9_]+$/.test(url.pathname)) {
+    return { connectionString: url.toString(), ssl: false };
+  }
+  if (!/^-----BEGIN CERTIFICATE-----[\s\S]+-----END CERTIFICATE-----$/.test(ca)) {
+    throw fail(
+      "static_weekly_control_plane_database_ca_required",
+      "A PEM database certificate authority is required for the static weekly control plane.",
+    );
   }
 
   // pg-connection-string lets URL TLS options replace an explicitly supplied
@@ -281,11 +286,12 @@ export function staticWeeklyDatabaseConnectionOptions({
 export function createStaticWeeklyControlPlaneDatabase({
   connectionString = process.env.STATIC_WEEKLY_CONTROL_PLANE_DATABASE_URL,
   caPem = process.env.STATIC_WEEKLY_CONTROL_PLANE_DATABASE_CA_PEM,
+  allowInsecureLoopbackRehearsal,
   pool = null,
 } = {}) {
   if (pool) return pool;
   const database = new Pool({
-    ...staticWeeklyDatabaseConnectionOptions({ connectionString, caPem }),
+    ...staticWeeklyDatabaseConnectionOptions({ connectionString, caPem, allowInsecureLoopbackRehearsal }),
     max: 4,
     idleTimeoutMillis: 10_000,
     connectionTimeoutMillis: 10_000,
@@ -423,6 +429,13 @@ export function createStaticWeeklyControlPlane({
         // capability group. Ordinary service-role credentials lack membership.
         await client.query("set local role static_weekly_control_plane");
         await client.query(`set local statement_timeout = '${health ? healthTransactionMilliseconds : operationStatementMilliseconds}ms'`);
+        if (!health) {
+          // Acquire the shared disaster-recovery generation fence before any
+          // source read or isolated compile. A restore therefore drains this
+          // complete transaction and a later generation can never accept a
+          // write prepared from pre-restore state.
+          await client.query("select public.custodial_begin_application_mutation()");
+        }
         const result = await work(client);
         if (asynchronousConnectionError) throw asynchronousConnectionError;
         await client.query("commit");

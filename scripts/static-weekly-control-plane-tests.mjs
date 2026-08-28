@@ -479,10 +479,10 @@ const applied = await controlPlane.applyException({
 });
 assert.equal(applied.revision, 2, "a successful staffing mutation returns the final projection revision");
 assert.equal(applied.data.current_projection.projection_id, "projection-2", "a successful staffing mutation returns the current projection");
-assert.deepEqual(authority.queries.map((entry) => entry.statement), ["begin", "set local role static_weekly_control_plane", "set local statement_timeout = '120000ms'", "select public.static_weekly_v3_apply_exception($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) as result", "select public.static_weekly_v3_read_publication_source($1,$2) as result", "select public.static_weekly_v3_materialize_projection($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) as result", "select public.static_weekly_v3_read_manager_snapshot($1) as result", "commit"], "a mutation, canonical compile, current projection, and confirmation share one bounded transaction");
-assert.equal(authority.queries[3].values[9], manager.manager_id, "the trusted manager ID is the only actor value passed to PostgreSQL");
-assert.equal(authority.queries[3].values.includes(manager.manager_display_name), false, "PostgreSQL must derive the actor name from its manager registry");
-assert.match(authority.queries[5].values[10], /^projection-[0-9a-f]{64}$/, "the projection subcommand uses a derived idempotency key");
+assert.deepEqual(authority.queries.map((entry) => entry.statement), ["begin", "set local role static_weekly_control_plane", "set local statement_timeout = '120000ms'", "select public.custodial_begin_application_mutation()", "select public.static_weekly_v3_apply_exception($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) as result", "select public.static_weekly_v3_read_publication_source($1,$2) as result", "select public.static_weekly_v3_materialize_projection($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) as result", "select public.static_weekly_v3_read_manager_snapshot($1) as result", "commit"], "a generation fence, mutation, canonical compile, current projection, and confirmation share one bounded transaction");
+assert.equal(authority.queries[4].values[9], manager.manager_id, "the trusted manager ID is the only actor value passed to PostgreSQL");
+assert.equal(authority.queries[4].values.includes(manager.manager_display_name), false, "PostgreSQL must derive the actor name from its manager registry");
+assert.match(authority.queries[6].values[10], /^projection-[0-9a-f]{64}$/, "the projection subcommand uses a derived idempotency key");
 
 const contractor = await controlPlane.applyContractorCapacity({
   manager, serviceDate: "2026-10-06", baseVersionId: versionId, publicationId, slotId: contractorSlot,
@@ -561,7 +561,7 @@ assert.deepEqual(dayChangesReplay, dayChanges, "replaying an accepted daily batc
 assert.equal(dayChangesAuthority.mutationAttempts(), 3, "replaying a daily batch does not apply any child mutation again");
 assert.equal(dayChangesAuthority.revision(), 4, "replaying a daily batch does not advance authority revision");
 const replayQueries = dayChangesAuthority.queries.slice(dayChangesAuthority.queries.findLastIndex((entry) => entry.statement === "begin"));
-assert.deepEqual(replayQueries.map((entry) => entry.statement), ["begin", "set local role static_weekly_control_plane", "set local statement_timeout = '120000ms'", "select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended($1,0))", "select public.static_weekly_v4_begin_day_changes($1,$2,$3,$4,$5,$6,$7,$8) as result", "commit"], "accepted whole-action replay locks and stops before mutable publication authority is reread");
+assert.deepEqual(replayQueries.map((entry) => entry.statement), ["begin", "set local role static_weekly_control_plane", "set local statement_timeout = '120000ms'", "select public.custodial_begin_application_mutation()", "select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended($1,0))", "select public.static_weekly_v4_begin_day_changes($1,$2,$3,$4,$5,$6,$7,$8) as result", "commit"], "accepted whole-action replay is generation-fenced, authority-locked, and stops before mutable publication authority is reread");
 
 const invalidDayChangesAuthority = createAuthorityDatabase();
 await assert.rejects(() => controlPlaneFor(invalidDayChangesAuthority).applyDayChanges({
@@ -600,7 +600,7 @@ const snapshotAuthority = createAuthorityDatabase({ revision: 7 });
 const snapshotControlPlane = controlPlaneFor(snapshotAuthority);
 const snapshot = await snapshotControlPlane.getManagerSnapshot({ manager, weekStart: "2026-10-05" });
 assert.equal(snapshot.authority_revision, 7);
-assert.deepEqual(snapshotAuthority.queries.map((entry) => entry.statement), ["begin", "set local role static_weekly_control_plane", "set local statement_timeout = '120000ms'", "select public.static_weekly_v3_read_manager_snapshot($1) as result", "commit"]);
+assert.deepEqual(snapshotAuthority.queries.map((entry) => entry.statement), ["begin", "set local role static_weekly_control_plane", "set local statement_timeout = '120000ms'", "select public.custodial_begin_application_mutation()", "select public.static_weekly_v3_read_manager_snapshot($1) as result", "commit"]);
 await assert.rejects(() => snapshotControlPlane.getManagerSnapshot({ manager, weekStart: "2026-10-06" }), /Monday-aligned/i, "projection workflows reject non-Monday week identity before a transaction starts");
 
 const vacancyAuthority = createAuthorityDatabase();
@@ -612,8 +612,8 @@ const filledSlot = await vacancyControlPlane.fillVacantRosterSlot({ manager, slo
 assert.equal(filledSlot.revision, 2);
 assert.equal(filledSlot.data.new_employee_name, "New Custodian");
 assert.deepEqual(vacancyAuthority.queries.map((entry) => entry.statement), [
-  "begin", "set local role static_weekly_control_plane", "set local statement_timeout = '120000ms'", "select public.static_weekly_v7_create_vacant_roster_slot($1,$2,$3,$4,$5) as result", "commit",
-  "begin", "set local role static_weekly_control_plane", "set local statement_timeout = '120000ms'", "select public.static_weekly_v7_fill_vacant_roster_slot($1,$2,$3,$4,$5,$6,$7) as result", "commit",
+  "begin", "set local role static_weekly_control_plane", "set local statement_timeout = '120000ms'", "select public.custodial_begin_application_mutation()", "select public.static_weekly_v7_create_vacant_roster_slot($1,$2,$3,$4,$5) as result", "commit",
+  "begin", "set local role static_weekly_control_plane", "set local statement_timeout = '120000ms'", "select public.custodial_begin_application_mutation()", "select public.static_weekly_v7_fill_vacant_roster_slot($1,$2,$3,$4,$5,$6,$7) as result", "commit",
 ], "vacant position creation and later hiring are bounded named-manager operations without an APK or schedule-template rewrite");
 
 const splitCallerAuthority = createAuthorityDatabase();

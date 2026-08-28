@@ -31,6 +31,7 @@ jobs:
           BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
           BACKUP_MANIFEST_SIGNING_KEY: ${{ secrets.BACKUP_MANIFEST_SIGNING_KEY }}
           BACKUP_MANIFEST_SIGNING_KEY_ID: ${{ vars.BACKUP_MANIFEST_SIGNING_KEY_ID }}
+          BACKUP_RUNTIME_CONFIGURATION_JSON: ${{ vars.DISASTER_RECOVERY_RUNTIME_CONFIGURATION_JSON }}
         run: |
           test -n "$SUPABASE_PROJECT_REF"
           test -n "$SUPABASE_DB_URL"
@@ -38,11 +39,17 @@ jobs:
           test -n "$BACKUP_ENCRYPTION_PASSPHRASE"
           test -n "$BACKUP_MANIFEST_SIGNING_KEY"
           test -n "$BACKUP_MANIFEST_SIGNING_KEY_ID"
+          test -n "$BACKUP_RUNTIME_CONFIGURATION_JSON"
       - name: Bind backup tooling to the exact source tree
         run: |
           echo "BACKUP_TOOL_COMMIT=${GITHUB_SHA}" >> "$GITHUB_ENV"
           echo "BACKUP_TOOL_TREE=$(git rev-parse HEAD^{tree})" >> "$GITHUB_ENV"
-      - name: Capture coherent database and Storage archive
+          echo "BACKUP_PG_DUMP_IMAGE=supabase/postgres@sha256:80d7b27c3e8d77cfa7226eee9508671796da214781ff15a35b3670d7ad5ee453" >> "$GITHUB_ENV"
+      - name: Pull exact schema-capture tooling before opening the database snapshot
+        run: |
+          set -euo pipefail
+          docker pull "$BACKUP_PG_DUMP_IMAGE"
+      - name: Capture schema, database, and Storage under one exported snapshot
         env:
           BACKUP_DIR: ${{ runner.temp }}/memphis-zoo-backup
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
@@ -51,6 +58,7 @@ jobs:
           SUPABASE_DB_CA_CERT_PATH: ${{ github.workspace }}/.github/certs/prod-ca-2021.crt
           BACKUP_MANIFEST_SIGNING_KEY: ${{ secrets.BACKUP_MANIFEST_SIGNING_KEY }}
           BACKUP_MANIFEST_SIGNING_KEY_ID: ${{ vars.BACKUP_MANIFEST_SIGNING_KEY_ID }}
+          BACKUP_RUNTIME_CONFIGURATION_JSON: ${{ vars.DISASTER_RECOVERY_RUNTIME_CONFIGURATION_JSON }}
         run: npm run backup:production
       - name: Verify restore archive without applying writes
         env:

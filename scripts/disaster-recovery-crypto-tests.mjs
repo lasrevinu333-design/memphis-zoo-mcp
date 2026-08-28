@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import {
   archiveSignatureBinding,
+  releaseMigrationRehearsalAttestationBinding,
   restoreIntentBinding,
   signBinding,
   verifyBinding,
@@ -24,5 +25,14 @@ const intent = restoreIntentBinding({ restore_id: "fixture", authority_generatio
 const intentSignature = signBinding(intent, intentKey);
 assert.equal(verifyBinding(intent, intentSignature, intentKey), true);
 assert.equal(verifyBinding({ ...intent, authority_generation: 8 }, intentSignature, intentKey), false);
+
+const rehearsal = releaseMigrationRehearsalAttestationBinding({
+  receipt_sha256: "c".repeat(64),
+  repository: "lasrevinu333-design/memphis-zoo-mcp",
+  run_id: "100",
+});
+const rehearsalSignature = signBinding(rehearsal, intentKey);
+assert.equal(verifyBinding(rehearsal, rehearsalSignature, intentKey), true);
+assert.equal(verifyBinding({ ...rehearsal, run_id: "101" }, rehearsalSignature, intentKey), false);
 
 console.log("DISASTER_RECOVERY_CRYPTO_TESTS_PASS");
