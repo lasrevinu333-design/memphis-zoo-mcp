@@ -23,6 +23,11 @@ import { assertServerAssignedActor, authenticatedManagerActor } from "./manager-
 import { authoritativeFeedbackPayload, makeFeedbackSubmitAuthority } from "./feedback-authority.js";
 import { makeMcpConnectorMiddleware } from "./auth/mcp-connector-auth.js";
 import {
+  assertMcpOAuthConfig,
+  createMcpOAuthRouter,
+  createMcpOAuthVerifier,
+} from "./auth/mcp-oauth.js";
+import {
   getDeviceCredentialSecretReadiness,
   installDeviceCredentialRoutes,
   makeDeviceCredentialMiddleware,
@@ -78,6 +83,9 @@ app.use((req, res, next) => {
   return generalJsonParser(req, res, next);
 });
 app.use(express.urlencoded({ extended: false, limit: "32kb" }));
+const mcpOAuthConfig = assertMcpOAuthConfig(process.env);
+const mcpOAuthVerifier = createMcpOAuthVerifier({ env: process.env });
+app.use(createMcpOAuthRouter({ env: process.env }));
 
 const MOXIE_MOUNT_PATH = (String(process.env.MOXIE_PREFIX || "/moxie").trim() || "/moxie").replace(/\/+$/, "") || "/moxie";
 const MOXIE_STATIC_DIR = fileURLToPath(new URL("../public/moxie-assets/", import.meta.url));
@@ -199,10 +207,14 @@ function requireGuestMarketingReviewAuth(req, res, next) {
 
 const requireOpsManagerAuth = makeOpsAccessMiddleware({ trustedDeviceStore: opsTrustedDeviceStore });
 const requireOpsManagerWrite = makeOpsAccessMiddleware({ requireWrite: true, trustedDeviceStore: opsTrustedDeviceStore });
-// Streamable HTTP defaults to the full connector tool set so connected ChatGPT
-// sessions can read and write without a second credential prompt.
-// Legacy SSE remains token-only because its follow-up /messages request uses a separate HTTP request.
-const requireMcpAuth = makeMcpConnectorMiddleware();
+// Streamable HTTP exposes the full connector tool set only after either the
+// legacy service token or an allowlisted Supabase OAuth user/client pair is
+// verified. Legacy SSE remains service-token-only because its follow-up
+// /messages request uses a separate HTTP request.
+const requireMcpAuth = makeMcpConnectorMiddleware({
+  oauthVerifier: mcpOAuthVerifier,
+  resourceMetadataUrl: mcpOAuthConfig.enabled ? mcpOAuthConfig.resourceMetadataUrl : null,
+});
 const requireLegacyMcpAuth = makeMcpConnectorMiddleware({
   allowFullNoAuth: false,
   allowReadOnlyNoAuth: false,

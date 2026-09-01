@@ -19,6 +19,12 @@ Route factories for messaging, schedule, and events are re-exported from `src/ro
 | `GET` | `/mcp` | Returns method-not-supported message. |
 | `GET` | `/sse` | Legacy SSE MCP endpoint. |
 | `POST` | `/messages` | Legacy SSE message post endpoint. |
+| `GET` | `/.well-known/oauth-protected-resource/mcp` | RFC 9728 protected-resource metadata for ChatGPT OAuth discovery when enabled. |
+| `GET` | `/.well-known/oauth-protected-resource` | Compatibility protected-resource metadata for clients that probe the origin root. |
+| `GET` | `/oauth/consent` | Private Supabase OAuth consent UI. Requires a valid `authorization_id`. |
+| `POST` | `/oauth/login` | Bounded sign-in for an allowlisted Supabase Auth user; creates an encrypted HttpOnly UI session. |
+| `POST` | `/oauth/decision` | CSRF-bound allowlisted OAuth approval or denial. |
+| `POST` | `/oauth/logout` | Revokes the local OAuth UI session and clears its cookie. |
 
 ## Admin API
 

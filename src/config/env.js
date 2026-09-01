@@ -1,5 +1,6 @@
 import { getGeminiDiagnostics } from "../utils/gemini-config.js";
 import { redactSecrets } from "../utils/redact-secrets.js";
+import { getMcpOAuthConfig } from "../auth/mcp-oauth.js";
 
 function read(name, fallback = "") {
   return String(process.env[name] ?? fallback).trim();
@@ -20,6 +21,7 @@ export function getRuntimeEnv() {
   const githubRepo = read("GITHUB_REPO");
   const githubAllowedRepos = readCsv("GITHUB_ALLOWED_REPOS", githubRepo);
   const gemini = getGeminiDiagnostics({ preferred: ["MEMPHIS_GEMINI_API_KEY"], model: read("MEMPHIS_GEMINI_MODEL", read("GEMINI_MODEL", "gemini-2.5-flash")) });
+  const mcpOAuth = getMcpOAuthConfig(process.env);
 
   return {
     app: {
@@ -40,6 +42,16 @@ export function getRuntimeEnv() {
       readonly_database_url_present: present("CUSTODIAL_READONLY_DATABASE_URL"),
       configured: present("SUPABASE_URL") && present("SUPABASE_SERVICE_ROLE_KEY"),
     },
+    mcp_oauth: {
+      enabled: mcpOAuth.enabled,
+      ready: mcpOAuth.ready,
+      public_url_present: present("MCP_PUBLIC_URL"),
+      publishable_key_present: present("SUPABASE_PUBLISHABLE_KEY") || present("SUPABASE_ANON_KEY"),
+      cookie_secret_present: present("MCP_OAUTH_COOKIE_SECRET"),
+      allowed_subject_count: mcpOAuth.allowedSubjects.size,
+      allowed_client_count: mcpOAuth.allowedClientIds.size,
+      scopes: [...mcpOAuth.scopes],
+    },
     custodial_authority: {
       backend_proof_secret_present: present("CUSTODIAL_BACKEND_PROOF_SECRET"),
       native_route_proof_secret_present: present("CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET"),
@@ -59,6 +71,7 @@ export function getRuntimeEnv() {
 
 export function validateRuntimeEnv({ strict = false } = {}) {
   const env = getRuntimeEnv();
+  const mcpOAuth = getMcpOAuthConfig(process.env);
   const warnings = [];
   const errors = [];
 
@@ -67,6 +80,7 @@ export function validateRuntimeEnv({ strict = false } = {}) {
   if (!env.github.token_present) errors.push("GITHUB_TOKEN or GH_TOKEN is missing.");
   if (!env.supabase.url_present) errors.push("SUPABASE_URL is missing.");
   if (!env.supabase.service_role_key_present) errors.push("SUPABASE_SERVICE_ROLE_KEY is missing.");
+  if (mcpOAuth.enabled && !mcpOAuth.ready) errors.push(...mcpOAuth.errors);
 
   if (env.app.node_env === "production") {
     if (!env.custodial_authority.backend_proof_secret_present) errors.push("CUSTODIAL_BACKEND_PROOF_SECRET is missing.");

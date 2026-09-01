@@ -14,13 +14,24 @@ This document lists the environment variables used by the Memphis Zoo MCP backen
 
 | Name | Required | Purpose |
 |---|---:|---|
-| `MCP_CONNECTOR_TOKEN` | **Required for mutation** | Dedicated bearer/custom-header token for authenticated service clients and legacy SSE access. |
+| `MCP_CONNECTOR_TOKEN` | Required for legacy service clients | Dedicated bearer/custom-header token for non-ChatGPT service clients and legacy SSE access. Never paste it into ChatGPT. |
+| `MCP_OAUTH_ENABLED` | **Yes for ChatGPT** | Enables Supabase OAuth 2.1 discovery, consent, and access-token verification for Streamable HTTP `/mcp`. Defaults to `false`. |
+| `MCP_PUBLIC_URL` | **Yes when OAuth is enabled** | Exact public HTTPS origin of this service, for example `https://memphis-zoo-mcp.onrender.com`. Paths, queries, fragments, and embedded credentials are rejected. |
+| `SUPABASE_PUBLISHABLE_KEY` | **Yes when OAuth is enabled** | Public Supabase key used for user sign-in, consent, and token validation. `SUPABASE_ANON_KEY` is accepted only as a legacy fallback. This is not the service-role key. |
+| `MCP_OAUTH_COOKIE_SECRET` | **Yes when OAuth is enabled** | Dedicated secret of at least 32 characters used only to encrypt the short-lived, HttpOnly OAuth consent session. Do not share it with manager, device, Supabase, or connector-token secret classes. |
+| `MCP_OAUTH_ALLOWED_SUBJECTS` | **Yes when OAuth is enabled** | Comma-separated allowlist of exact Supabase Auth user UUIDs permitted to authorize complete MCP access. |
+| `MCP_OAUTH_ALLOWED_CLIENT_IDS` | **Yes when OAuth is enabled** | Comma-separated allowlist of exact pre-registered Supabase OAuth client UUIDs. Dynamic client registration is not required or recommended for this private connector. |
+| `MCP_OAUTH_SCOPES` | No | Space- or comma-separated identity scopes advertised to OAuth clients. Defaults to `openid email profile`; only Supabase's standard `openid`, `email`, `profile`, and `phone` scopes are accepted. These scopes do not grant GitHub or database authority. |
+| `MCP_OAUTH_UI_SESSION_SECONDS` | No | Maximum encrypted consent-session cookie lifetime. Defaults to 8 hours and is capped at 24 hours. |
+| `MCP_OAUTH_CSRF_SECONDS` | No | Consent-form CSRF lifetime. Defaults to 10 minutes and is capped at 30 minutes. |
 | `MCP_ALLOW_FULL_NOAUTH` | Retired | Ignored and always fail-closed. Tokenless clients never receive GitHub or Supabase mutation tools. |
 | `MCP_ALLOW_READONLY_NOAUTH` | No | Optional tokenless diagnostic-only surface. Defaults to `false`; when enabled it exposes no GitHub or Supabase adapter. |
 
-MCP access precedence is: a valid presented connector token receives the scoped authenticated tool set; a presented invalid token is rejected; a tokenless request receives only the diagnostic-only server when `MCP_ALLOW_READONLY_NOAUTH=true`, otherwise it is rejected. Legacy SSE is token-only.
+Streamable HTTP access precedence is: a valid legacy connector token or a verified Supabase OAuth token from both an allowlisted subject and an allowlisted client receives the full tool set; a presented invalid credential is rejected; a tokenless request receives only the diagnostic-only server when `MCP_ALLOW_READONLY_NOAUTH=true`, otherwise it is rejected. A wrong custom service-token header is never retried as OAuth. Legacy SSE remains connector-token-only.
 
-The production `/mcp` URL is public. Connected clients must therefore carry the dedicated connector credential; UI provenance is not an authorization boundary.
+The production `/mcp` URL is public. ChatGPT must discover OAuth through `/.well-known/oauth-protected-resource/mcp`; UI provenance is not an authorization boundary. OAuth is fail-closed unless every required value above is valid. OAuth identity scopes are informational identity scopes only—the server-side subject/client allowlists are what authorize the existing privileged GitHub and Supabase adapters.
+
+See `docs/chatgpt-mcp-oauth.md` for the reviewed enablement and rollback sequence.
 
 ## GitHub
 
@@ -39,6 +50,7 @@ The production `/mcp` URL is public. Connected clients must therefore carry the 
 |---|---:|---|
 | `SUPABASE_URL` | Yes | Supabase project URL. |
 | `SUPABASE_SERVICE_ROLE_KEY` | Yes | Service role key for trusted server-side RPC calls. |
+| `SUPABASE_PUBLISHABLE_KEY` | Yes for OAuth consent | Public browser-safe key used only for Supabase Auth user sessions and OAuth consent. It never replaces the service-role key used by trusted server adapters. |
 | `CUSTODIAL_READONLY_DATABASE_URL` | Yes in production | Dedicated PostgreSQL login for application and MCP reads. It must inherit only `custodial_application_reader`, have no `BYPASSRLS`, and must not be an admin, `postgres`, service-role, or migration credential. Every query runs inside an explicit `READ ONLY` transaction. |
 
 ## Custodial device identity
