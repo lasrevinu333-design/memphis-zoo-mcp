@@ -1,16 +1,16 @@
 {
   "artifact": "integrated-backend-authority-release-evidence.v2",
   "release_id": "release-2026.07.19.custodial-v3.12",
-  "frontend_commit_sha": "5d0d5716e03f6179110708add09f7b2fc3afc2b3",
+  "frontend_commit_sha": "cbd7d052d925e26fc915005ac42d865b92844ee1",
   "frontend_commit_state": "final_pair_bound",
-  "schema_fingerprint": "837f1ffc54a7527ec65e2d8618717dfa1073e8e244bf91f8128a08f72e26ff33",
+  "schema_fingerprint": "5ae6172bd008c657df8cd4b35e7cc1154a73da9dfd73f664156f48351d285709",
   "schema_transition": {
-    "transition_id": "disaster-recovery-mutation-fence-20260827",
+    "transition_id": "custodial-build52-recovery-20260914",
     "from_fingerprint": "e0f9aaebe6013f5b912cf261bd7bf7703c7b604a64bc94d98fc2aae9506387cd",
-    "to_fingerprint": "837f1ffc54a7527ec65e2d8618717dfa1073e8e244bf91f8128a08f72e26ff33",
-    "expires_at": "2026-09-03T23:59:59Z"
+    "to_fingerprint": "5ae6172bd008c657df8cd4b35e7cc1154a73da9dfd73f664156f48351d285709",
+    "expires_at": "2026-09-27T23:59:59Z"
   },
-  "frontend_source_fingerprint": "837f1ffc54a7527ec65e2d8618717dfa1073e8e244bf91f8128a08f72e26ff33",
+  "frontend_source_fingerprint": "5ae6172bd008c657df8cd4b35e7cc1154a73da9dfd73f664156f48351d285709",
   "backend_contract": {
     "scan": "scan.v4.snapshot-bound-authority",
     "authority": "offline-authority.v5",
@@ -84,7 +84,7 @@
       "prepare distinct CUSTODIAL_BACKEND_PROOF_SECRET, CUSTODIAL_NATIVE_ROUTE_PROOF_SECRET, and DEVICE_CREDENTIAL_SECRET values (minimum 32 characters each); preserve all phone-local work and require manager-code recovery for any active credential from a different secret generation without exposing any secret",
       "capture the production catalog through the read-only Supabase boundary and require the exact observed production ledger head, catalog/privilege fingerprint, object counts, static-weekly state, and zero target-position collisions recorded in release/production-migration-state.json",
       "verify production project, fresh post-capture backup receipt, observed production identity, exact pending-migration digest, and exact source attestation against release/production-migration-state.json",
-      "after explicit production-change admission, apply only the four exact ordered pending release-foundation migrations for the global restore mutation fence, restricted feedback reader, Outlook event-sync authority adoption, and release-health identity projection correction; require the production ledger to advance exactly four entries and the complete catalog delta to match the reviewed postconditions; do not replay the eleven already-applied release migrations or rewrite the production Outlook event-sync rows",
+      "after explicit production-change admission, apply only the five exact ordered pending migrations for the global restore mutation fence, restricted feedback reader, Outlook event-sync authority adoption, release-health identity projection correction, and messaging read-horizon/idempotent-send repair; require the production ledger to advance exactly five entries and the complete catalog delta to match the reviewed postconditions; do not replay historical production migrations or rewrite the production Outlook event-sync rows",
       "after schema admission, refresh and publish the already-preserved immutable weighted-schedule draft through the static-weekly control plane with expected-revision and idempotency guards; do not create a competing draft, and preserve the current publication until the replacement publication and projection are complete",
       "deploy the canonical-only backend only after all authoritative procedures above are present and verified; missing canonical writers fail closed",
       "require a green authority health gate and direct-DML denial probes before routing traffic"
@@ -189,7 +189,7 @@
       {
         "path": ".github/workflows/production-backup-migration-rehearsal.yml",
         "mode": "100644",
-        "object_id": "79974f6206227dac0c9c27ac62314c667e539f82"
+        "object_id": "6440b6dfaa1cf3fb6ecde7eb76090bbbed58e5f4"
       },
       {
         "path": ".github/workflows/production-database-credential-bridge.yml",
@@ -374,7 +374,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "d90cf104fae4ac393cb4ad87a97206fd06e48fe2"
+        "object_id": "89df23063e8d29ec0bba618e21fe25daeb1115df"
       },
       {
         "path": "public/moxie-assets/contacts-creekside-animal.png",
@@ -429,17 +429,17 @@
       {
         "path": "release/frontend-release-manifest.json",
         "mode": "100644",
-        "object_id": "087fd78c3eb958d6185615a1a3e7e2976ca57ccf"
+        "object_id": "4243e198d74c1ef5a127ae01fc92cef76a7c74c7"
       },
       {
         "path": "release/integrated-backend-authority-input.json",
         "mode": "100644",
-        "object_id": "9114362c8424374bb7e296833632fad09e196b55"
+        "object_id": "42048d7ca310dd1403f263a70a202cbe9969f208"
       },
       {
         "path": "release/production-migration-state.json",
         "mode": "100644",
-        "object_id": "4ba5ef4ff31d71c8fff8bcce2bba78b9682a4d64"
+        "object_id": "4374e8d760919c011ac799774aac110467d2d82c"
       },
       {
         "path": "release/reviewed-migrations/20260809125735_cleaning_inspection_24_hour_freshness.sql",
@@ -449,7 +449,7 @@
       {
         "path": "release/schema-alignment-input.json",
         "mode": "100644",
-        "object_id": "27bd8beac48cea102a2030c7b66d004cafdff598"
+        "object_id": "6b9e5e5452062ec4e4d6a3f0abde3b0b920d3e84"
       },
       {
         "path": "research/european_herbalism_through_paracelsus.md",
@@ -529,7 +529,7 @@
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "5367f319ddac09747b748bcc23bd65c5359f8b6a"
+        "object_id": "dababdfac87027b888872b4dfc28114b54ac07e6"
       },
       {
         "path": "scripts/cleaning-identity-gps-database-tests.mjs",
@@ -639,7 +639,7 @@
       {
         "path": "scripts/custodial-repair-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "98d75592c223afcf49891546866f49e9695b2ee5"
+        "object_id": "b3c395ca451e547498422559ce19547c3d5a930d"
       },
       {
         "path": "scripts/custodial-u4-migration-convergence-tests.mjs",
@@ -659,7 +659,7 @@
       {
         "path": "scripts/device-credential-foundation-tests.mjs",
         "mode": "100644",
-        "object_id": "b6ea4fd5b65d44c5aa0de856864a553d6b85bc22"
+        "object_id": "76d2ee9263280e18b18c824bdf650bf9fb94b59b"
       },
       {
         "path": "scripts/device-popup-fully-kiosk-test.mjs",
@@ -759,7 +759,7 @@
       {
         "path": "scripts/events-api-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "4667d28b5246484b476bb0896e09880b4f830603"
+        "object_id": "9e2d4dbe014a35ce5f86de4d7502530056be1306"
       },
       {
         "path": "scripts/events-parser-tests.mjs",
@@ -874,12 +874,12 @@
       {
         "path": "scripts/integrated-backend-authority-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "c70719af1cd4b51631d925791a44cb311329abf7"
+        "object_id": "cf77dcd76e6ec5585ec86fc8a1ed2211bc03ff6b"
       },
       {
         "path": "scripts/integrated-backend-authority-cutover-check.mjs",
         "mode": "100644",
-        "object_id": "771ea446a1e27400903e778c54cc01fad949cbb7"
+        "object_id": "cfd36b96ea1a841cfa38ece7996713f30b890dbf"
       },
       {
         "path": "scripts/integrated-backend-authority-release-provenance-tests.mjs",
@@ -954,7 +954,12 @@
       {
         "path": "scripts/memphis-messaging-route-recovery-tests.mjs",
         "mode": "100644",
-        "object_id": "62ab269533fed093f09046837f5725e53935a40b"
+        "object_id": "dd5a30c62d86c2b0ed256b03f667d4426799dc46"
+      },
+      {
+        "path": "scripts/messaging-durability-contract-tests.mjs",
+        "mode": "100644",
+        "object_id": "d8bec9252819e3d4eca90cb19d626e36c835f610"
       },
       {
         "path": "scripts/messaging-incremental-sync-tests.mjs",
@@ -964,7 +969,7 @@
       {
         "path": "scripts/messaging-manager-authority-tests.mjs",
         "mode": "100644",
-        "object_id": "0a57dae9fa62772317198c2a8b9a48553b9386cd"
+        "object_id": "0865f8033930d75fbc35623b83f875960b6493c7"
       },
       {
         "path": "scripts/migrate-annie-log.mjs",
@@ -1039,7 +1044,7 @@
       {
         "path": "scripts/operations-leadership-mobile-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "0bad36dc51cc536e02998685c3a6fc8eb8295c19"
+        "object_id": "c336597c97b4d835cd42c675329108fb8970c799"
       },
       {
         "path": "scripts/operations-leadership-mobile-database-tests.mjs",
@@ -1144,7 +1149,7 @@
       {
         "path": "scripts/refresh-schema-fingerprint.mjs",
         "mode": "100644",
-        "object_id": "f218e13e23e6e68dc97ced8a321601dfe64b6bfa"
+        "object_id": "5674e9b554bd248d092118bc9a7684df9251c1da"
       },
       {
         "path": "scripts/release-canary-recovery-database-tests.mjs",
@@ -1154,7 +1159,7 @@
       {
         "path": "scripts/release-closure-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "33e9b2743549701c4c277c61100682341b513225"
+        "object_id": "e1548a1beca19d04b9ef342ad052fe0e4865976e"
       },
       {
         "path": "scripts/release-migration-authorization-tests.mjs",
@@ -1239,7 +1244,7 @@
       {
         "path": "scripts/schema-transition-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "95574920b2858ef03692ab42cf057efe507f0f7e"
+        "object_id": "ae9c6fbe1b9371eb64505eb1a997c209bd2b743e"
       },
       {
         "path": "scripts/smoke-ai-intent.mjs",
@@ -1719,7 +1724,7 @@
       {
         "path": "src/auth/device-credential-auth.js",
         "mode": "100644",
-        "object_id": "26978515de9049bc5d59875a5adf3f8c8b3d7b10"
+        "object_id": "73f5113ab922ab6d2f25f16775d0f1f89f5a7b76"
       },
       {
         "path": "src/auth/mcp-connector-auth.js",
@@ -1744,12 +1749,12 @@
       {
         "path": "src/custodial-employee-admin.js",
         "mode": "100644",
-        "object_id": "0366c9c94240a55adb7e8e6e832e787f8afeb45b"
+        "object_id": "19500b8be7ee9827edd6c0cdc0f9a3dc89172996"
       },
       {
         "path": "src/device-identity.js",
         "mode": "100644",
-        "object_id": "9417225b0d4381251b6f47703dba2bdae82c3fa5"
+        "object_id": "0f9f67f1ba9c4dc87abecefb148b2a3ac82e478d"
       },
       {
         "path": "src/employee-notifications.js",
@@ -1764,7 +1769,7 @@
       {
         "path": "src/events-api.js",
         "mode": "100644",
-        "object_id": "b067874faac3e21647ae10450831932cf118d543"
+        "object_id": "ad2c278d74514800a6c2e7ed364ac5b9e01d9f85"
       },
       {
         "path": "src/feedback-authority.js",
@@ -1884,7 +1889,7 @@
       {
         "path": "src/messaging-api.js",
         "mode": "100644",
-        "object_id": "397361b8340e157e015342768619afa6d694d665"
+        "object_id": "4ba344b4342377054493aceddabe6939ad105b26"
       },
       {
         "path": "src/native-phone-transport.js",
@@ -2069,12 +2074,12 @@
       {
         "path": "supabase/canonical/production-schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "909e289d0208984289e942ff661946a35a266c16"
+        "object_id": "4da7edd9d3e93e38be1a18c32809b9a5d4308653"
       },
       {
         "path": "supabase/canonical/production-schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "cd7ef7823292c90df6f9bf31570fd4a1a39f420b"
+        "object_id": "7672a5282530d5177a2b93862030248c188a78d9"
       },
       {
         "path": "supabase/canonical/production-source-role-catalog.sql",
@@ -2084,12 +2089,12 @@
       {
         "path": "supabase/canonical/schema-fingerprint-input.json",
         "mode": "100644",
-        "object_id": "55695e68a8d1b082244c80382ad4acb45caa96e5"
+        "object_id": "d3bc76248f7fbd6e85403776c2d8845a380cddf5"
       },
       {
         "path": "supabase/canonical/schema-fingerprint.txt",
         "mode": "100644",
-        "object_id": "86f7b2976bf88d296c251a48b95cc46ed47aa68f"
+        "object_id": "0bcd653c6917f65e404c8c1001fbf4fb83999329"
       },
       {
         "path": "supabase/config.toml",
@@ -3302,13 +3307,18 @@
         "object_id": "bab6f69001ac13085215c8c65b6b56caeb6258ab"
       },
       {
+        "path": "supabase/migrations/20260914051527_messaging_read_horizon_and_send_idempotency.sql",
+        "mode": "100644",
+        "object_id": "9ca00198695e35ad29be9c97c49e612755a6793d"
+      },
+      {
         "path": "tmp/write_probe.txt",
         "mode": "100644",
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 637,
-    "migration_path_count": 124,
+    "authority_path_count": 639,
+    "migration_path_count": 125,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
   },
@@ -3690,6 +3700,9 @@
     },
     {
       "name": "20260827153000_scope_release_health_identity_projection.sql"
+    },
+    {
+      "name": "20260914051527_messaging_read_horizon_and_send_idempotency.sql"
     }
   ],
   "release_boundary": "Prepare distinct minimum-32-character backend, native-route, and employee-device credential secrets before cutover; configure database digests immediately after the migrations that create each configuration function, retain the bridge backend artifact through the scan-snapshot phase, require manager-code recovery without phone-local work loss for any device-credential generation mismatch, and require the executable health/restoration probes before traffic changes."
