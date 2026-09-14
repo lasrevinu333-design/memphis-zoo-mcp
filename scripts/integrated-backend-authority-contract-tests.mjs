@@ -213,12 +213,12 @@ assert.equal(productionMigrationState.target.source_migration_name, "messaging_r
 assert.equal(productionMigrationState.target.source_migration_version, "20260914051527");
 assert.equal(productionMigrationState.target.production_ledger_version, null);
 assert.equal(productionMigrationState.target.canonical_source_schema_fingerprint, canonicalFingerprint);
-assert.equal(productionMigrationState.target.public_function_count, 500);
+assert.equal(productionMigrationState.target.public_function_count, 501);
 assert.equal(productionMigrationState.target.production_ledger_count, 225);
 assert.equal(productionMigrationState.target.source_authority_migration_count, exactMigrationCount);
 assert.equal(productionMigrationState.target.pending_migration_count, exactPendingReleaseMigrations.length);
 assert.equal(productionMigrationState.target.registered_source_dated_status_excluded, true);
-assert.equal(productionMigrationState.target.expected_catalog_counts.functions, 500);
+assert.equal(productionMigrationState.target.expected_catalog_counts.functions, 501);
 assert.equal(productionMigrationState.target.expected_catalog_counts.triggers, 310);
 assert.equal(productionMigrationState.target.expected_catalog_counts.policies, 42);
 assert.equal(productionMigrationState.target.expected_catalog_counts.routine_grants, 342);
@@ -317,7 +317,7 @@ assert.match(releaseEvidence.compatibility_window.disaster_recovery_foundation_p
 assert.match(dayChangeReconciliation, /static_weekly_v4_begin_day_changes/);
 assert.equal(releaseEvidence.artifact, "integrated-backend-authority-release-evidence.v2");
 assert.equal(releaseEvidence.release_id, "release-2026.07.19.custodial-v3.12");
-assert.equal(releaseEvidence.frontend_commit_sha, "cbd7d052d925e26fc915005ac42d865b92844ee1");
+assert.equal(releaseEvidence.frontend_commit_sha, "c0217701295cd404d7025cfb582782ac3f4d5432");
 assert.equal(releaseEvidence.frontend_commit_state, "final_pair_bound");
 assert.equal(releaseEvidence.schema_fingerprint, canonicalFingerprint);
 assert.equal(releaseEvidence.cutover.source_identity.kind, "external_signed_release_attestation");

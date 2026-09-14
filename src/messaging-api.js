@@ -103,6 +103,24 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       || /^00000000-0000-0000-0000-000000000000$/i.test(String(value || "").trim());
   }
 
+  function assertMessageBodyWithinLimit(body) {
+    // Keep the HTTP boundary aligned with the RPC's trimmed message payload.
+    // This runs before identity resolution too, because manager identity
+    // resolution itself is an RPC-backed operation.
+    if (Array.from(String(body ?? "").trim()).length > 2000) {
+      throw Object.assign(new Error("Message body cannot exceed 2000 characters."), { status: 422 });
+    }
+  }
+
+  function rejectOversizeMessageBodyBeforeAuth(req, res, next) {
+    try {
+      assertMessageBodyWithinLimit(req.body?.body);
+      next();
+    } catch (error) {
+      fail(res, error, "Send message failed");
+    }
+  }
+
   function waitFor(milliseconds) {
     return new Promise((resolve) => setTimeout(resolve, milliseconds));
   }
@@ -1176,6 +1194,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     if (!normalizedUserId) throw new Error("user_id is required.");
     if (!normalizedDeviceId) throw new Error("device_id is required.");
     if (!normalizedBody) throw new Error("body is required.");
+    assertMessageBodyWithinLimit(normalizedBody);
 
     const canonicalThread = await runRpc("msg_get_or_create_memphis_thread", { p_user_id: normalizedUserId });
     let thread = canonicalThread;
@@ -1739,7 +1758,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     });
   });
 
-  router.post("/thread/:threadId/message", requireWritableDeviceOrOpsAuth, async (req, res) => {
+  router.post("/thread/:threadId/message", rejectOversizeMessageBodyBeforeAuth, requireWritableDeviceOrOpsAuth, async (req, res) => {
     try {
       const threadId = String(req.params.threadId || "").trim();
       const senderUserId = String(req.body?.sender_user_id || "").trim();
@@ -1748,6 +1767,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const metadataJson = req.body?.metadata_json && typeof req.body.metadata_json === "object" ? req.body.metadata_json : {};
       const clientMessageId = String(req.body?.client_message_id || req.body?.clientMessageId || metadataJson.client_message_id || "").trim();
       const deviceId = String(req.body?.device_id || req.body?.deviceId || "").trim();
+      assertMessageBodyWithinLimit(body);
       const viewer = await resolveViewerContext({ userId: senderUserId, deviceId, managerSession: req.memphisAuth || null });
       if (senderUserId && viewer.effectiveUserId !== senderUserId) {
         res.status(403).json({ ok: false, error: "Sender user ID must match the authenticated viewer." });
@@ -1817,7 +1837,12 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         return;
       }
       const deviceId = String(req.body?.device_id || req.body?.deviceId || "").trim();
+      const claimedUserId = String(req.body?.user_id || req.body?.userId || "").trim();
       const viewer = await resolveViewerContext({ deviceId, managerSession: req.memphisAuth || null });
+      if (claimedUserId && claimedUserId !== viewer.effectiveUserId) {
+        res.status(403).json({ ok: false, error: "Deletion user ID must match the authenticated viewer." });
+        return;
+      }
       const thread = await getThreadIdentity(threadId);
       if (!thread) {
         res.status(404).json({ ok: false, error: "Conversation was not found." });
@@ -2047,7 +2072,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
     }
   });
 
-  router.post("/memphis/message", requireWritableDeviceOrOpsAuth, async (req, res) => {
+  router.post("/memphis/message", rejectOversizeMessageBodyBeforeAuth, requireWritableDeviceOrOpsAuth, async (req, res) => {
     try {
       const requestedUserId = String(req.body?.user_id || "").trim();
       const body = String(req.body?.body || "").trim();
@@ -2055,6 +2080,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const clientMessageId = String(req.body?.client_message_id || req.body?.clientMessageId || "").trim();
       const threadId = String(req.body?.thread_id || req.body?.threadId || "").trim();
       if (!body) throw new Error("body is required.");
+      assertMessageBodyWithinLimit(body);
 
       const viewer = await resolveViewerContext({ userId: requestedUserId, deviceId, managerSession: req.memphisAuth || null });
       const canonicalDeviceId = String(viewer.identity?.canonical_device_id || deviceId).trim();

@@ -263,7 +263,7 @@ const input = parseJsonBlob(blobByPath.get(releaseInputPath), "release authority
 const productionMigrationState = parseJsonBlob(blobByPath.get(productionMigrationStatePath), "production migration state");
 assert.equal(productionMigrationState.mode, "migration_required");
 assert.ok(Array.isArray(productionMigrationState.pending_migrations));
-assert.equal(productionMigrationState.pending_migrations.length, 4, "the candidate must identify the four ordered pending release-foundation migrations");
+assert.equal(productionMigrationState.pending_migrations.length, 5, "the candidate must identify the five ordered pending release-foundation and messaging migrations");
 assert.ok(Array.isArray(productionMigrationState.applied_release_migrations));
 const appliedReleaseMigrations = productionMigrationState.applied_release_migrations.map(({ file }) => file);
 assert.deepEqual(appliedReleaseMigrations, [
@@ -352,12 +352,12 @@ assert.equal(productionMigrationState.target?.source_migration_name, "messaging_
 assert.equal(productionMigrationState.target?.source_migration_version, "20260914051527");
 assert.equal(productionMigrationState.target?.production_ledger_version, null);
 assert.equal(productionMigrationState.target?.canonical_source_schema_fingerprint, schemaFingerprint);
-assert.equal(productionMigrationState.target?.public_function_count, 500);
+assert.equal(productionMigrationState.target?.public_function_count, 501);
 assert.equal(productionMigrationState.target?.production_ledger_count, 225);
 assert.equal(productionMigrationState.target?.source_authority_migration_count, expectedMigrationCount);
 assert.equal(productionMigrationState.target?.pending_migration_count, pendingReleaseMigrations.length);
 assert.equal(productionMigrationState.target?.registered_source_dated_status_excluded, true);
-assert.equal(productionMigrationState.target?.expected_catalog_counts?.functions, 500);
+assert.equal(productionMigrationState.target?.expected_catalog_counts?.functions, 501);
 assert.equal(productionMigrationState.target?.expected_catalog_counts?.triggers, 310);
 assert.equal(productionMigrationState.target?.expected_catalog_counts?.policies, 42);
 assert.equal(productionMigrationState.target?.expected_catalog_counts?.routine_grants, 342);

@@ -96,6 +96,42 @@ try {
   assert.equal(rpcCalls.some((call) => call.name === 'msg_get_or_create_memphis_thread'), false, 'Thread listing must not recreate a conversation the user deleted');
 
   rpcCalls.length = 0;
+  const genericOversize = await fetch(`${base}/messaging-api/thread/${THREAD_ID}/message`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sender_user_id: USER_ID,
+      device_id: 'KIOSK_02',
+      body: 'g'.repeat(2001),
+      client_message_id: 'generic-oversize-message',
+    }),
+  });
+  assert.equal(genericOversize.status, 422, 'Generic sends must reject 2001 characters at the API boundary');
+  assert.deepEqual(await genericOversize.json(), {
+    ok: false,
+    error: 'Message body cannot exceed 2000 characters.',
+  });
+  assert.equal(rpcCalls.length, 0, 'A rejected generic body must not start identity, thread, or send RPC work');
+
+  rpcCalls.length = 0;
+  const memphisOversize = await fetch(`${base}/messaging-api/memphis/message`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      user_id: USER_ID,
+      device_id: 'KIOSK_02',
+      body: 'm'.repeat(4001),
+      client_message_id: 'memphis-oversize-message',
+    }),
+  });
+  assert.equal(memphisOversize.status, 422, 'Memphis sends must reject 4001 characters at the API boundary');
+  assert.deepEqual(await memphisOversize.json(), {
+    ok: false,
+    error: 'Message body cannot exceed 2000 characters.',
+  });
+  assert.equal(rpcCalls.length, 0, 'A rejected Memphis body must not start identity, thread, or send RPC work');
+
+  rpcCalls.length = 0;
   messageCounter = 0;
   const response = await fetch(`${base}/messaging-api/thread/${THREAD_ID}/message`, {
     method: 'POST',

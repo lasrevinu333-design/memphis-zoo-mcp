@@ -110,6 +110,26 @@ async function get(path) {
 }
 
 try {
+  const genericOversize = await post(`/messaging-api/thread/${THREAD_ID}/message`, {
+    sender_user_id: MANAGER_USER_ID,
+    body: "g".repeat(2001),
+  });
+  assert.equal(genericOversize.status, 422, "a generic oversize message is rejected before manager identity RPCs");
+  assert.deepEqual(genericOversize.body, {
+    ok: false,
+    error: "Message body cannot exceed 2000 characters.",
+  });
+  const memphisOversize = await post("/messaging-api/memphis/message", {
+    user_id: MANAGER_USER_ID,
+    body: "m".repeat(4001),
+  });
+  assert.equal(memphisOversize.status, 422, "a Memphis oversize message is rejected before manager identity RPCs");
+  assert.deepEqual(memphisOversize.body, {
+    ok: false,
+    error: "Message body cannot exceed 2000 characters.",
+  });
+  assert.equal(calls.length, 0, "oversize requests must not invoke manager identity or send RPCs");
+
   const identity = await get("/messaging-api/me/by-device");
   assert.equal(identity.status, 200);
   assert.equal(identity.body.data.display_name, "Authority Test Manager");

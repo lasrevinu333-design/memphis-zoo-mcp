@@ -832,6 +832,7 @@ await withServer(deleteThreadApp, async (baseUrl) => {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       device_id: 'KIOSK_04',
+      user_id: EMPLOYEE_USER_ID,
       operation_id: '00000000-0000-4000-8000-000000000099',
     }),
   });
@@ -844,6 +845,25 @@ await withServer(deleteThreadApp, async (baseUrl) => {
   assert.equal(payload.meta.authoritative, true);
   assert.equal(payload.meta.old_history_restores, false);
 });
+
+const acceptedDeleteRpc = deleteThreadRpcCall;
+await withServer(deleteThreadApp, async (baseUrl) => {
+  const response = await fetch(`${baseUrl}/messaging-api/thread/${DIRECT_THREAD_ID}/delete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      device_id: 'KIOSK_04',
+      user_id: '10000000-0000-4000-8000-000000000777',
+      operation_id: '00000000-0000-4000-8000-000000000100',
+    }),
+  });
+  assert.equal(response.status, 403, 'A claimed deletion user must match the resolved device viewer');
+  assert.deepEqual(await response.json(), {
+    ok: false,
+    error: 'Deletion user ID must match the authenticated viewer.',
+  });
+});
+assert.equal(deleteThreadRpcCall, acceptedDeleteRpc, 'A mismatched deletion claim must not reach the delete RPC');
 
 assert.deepEqual(deleteThreadRpcCall, {
   name: 'msg_delete_thread',
