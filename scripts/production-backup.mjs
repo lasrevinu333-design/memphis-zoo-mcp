@@ -56,13 +56,22 @@ if (!secret) throw new Error("SUPABASE_SECRET or SUPABASE_SERVICE_ROLE_KEY is re
 if (!databaseUrl) throw new Error("SUPABASE_DB_URL or DATABASE_URL is required for a transactionally consistent snapshot.");
 if (!databaseCaCertPath) throw new Error("SUPABASE_DB_CA_CERT_PATH is required for synchronized schema capture.");
 if (!backupDir) throw new Error("BACKUP_DIR is required.");
-let databaseUsername = "";
+let databaseConnection;
 try {
-  databaseUsername = decodeURIComponent(new URL(databaseUrl).username).trim();
+  databaseConnection = new URL(databaseUrl);
 } catch {
   // The production backup contract requires a URL-form PostgreSQL connection string.
 }
-if (!databaseUsername) throw new Error("SUPABASE_DB_URL must contain an explicit PostgreSQL username for containerized pg_dump.");
+const databaseUsername = decodeURIComponent(databaseConnection?.username || "").trim();
+const databasePassword = decodeURIComponent(databaseConnection?.password || "");
+const databaseHost = String(databaseConnection?.hostname || "").trim();
+const databasePort = String(databaseConnection?.port || "5432").trim();
+const databaseName = decodeURIComponent(String(databaseConnection?.pathname || "").replace(/^\//, "")).trim();
+if (!["postgres:", "postgresql:"].includes(databaseConnection?.protocol)
+    || !databaseUsername || !databasePassword || !databaseHost
+    || !/^[1-9][0-9]{0,4}$/.test(databasePort) || !databaseName || databaseName.includes("/")) {
+  throw new Error("SUPABASE_DB_URL must be an explicit PostgreSQL URL for containerized pg_dump.");
+}
 if (!/^[a-zA-Z0-9._:-]{1,120}$/.test(manifestSigningKeyId)) throw new Error("BACKUP_MANIFEST_SIGNING_KEY_ID is required.");
 if (!/^[0-9a-f]{40}$/.test(backupToolCommit) || !/^[0-9a-f]{40}$/.test(backupToolTree)) {
   throw new Error("BACKUP_TOOL_COMMIT and BACKUP_TOOL_TREE must be exact Git identities.");
@@ -126,18 +135,21 @@ async function captureApplicationSchema(exportedSnapshot) {
   const args = [
     "run", "--rm", "--entrypoint", "pg_dump",
     "--user", `${process.getuid?.() ?? 1000}:${process.getgid?.() ?? 1000}`,
-    "-e", "PGDATABASE", "-e", "PGOPTIONS=-c default_transaction_read_only=on",
+    "-e", "PGPASSWORD", "-e", "PGOPTIONS=-c default_transaction_read_only=on",
     "-e", "PGSSLMODE=verify-full", "-e", "PGSSLROOTCERT=/cert/prod-ca.crt",
     "-v", `${caPath}:/cert/prod-ca.crt:ro`,
     "-v", `${inventoryDir}:/backup:rw`,
     pgDumpImage,
+    "--host", databaseHost,
+    "--port", databasePort,
     "--username", databaseUsername,
+    "--dbname", databaseName,
     "--no-password",
     "--schema-only", "--clean", "--if-exists", `--snapshot=${exportedSnapshot}`,
     "--file=/backup/application-schema.sql",
   ];
   await execFileAsync("docker", args, {
-    env: { ...process.env, PGDATABASE: databaseUrl },
+    env: { ...process.env, PGPASSWORD: databasePassword },
     maxBuffer: 10 * 1024 * 1024,
   });
   if (!statSync(applicationSchemaPath).isFile() || statSync(applicationSchemaPath).size < 1024) {

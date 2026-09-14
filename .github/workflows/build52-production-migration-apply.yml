@@ -1,0 +1,183 @@
+name: Build 52 production migration apply
+
+on:
+  workflow_dispatch:
+    inputs:
+      backup_run_id:
+        description: Successful exact-candidate disaster-recovery backup run ID
+        required: true
+        type: string
+      rehearsal_run_id:
+        description: Successful exact-candidate production backup migration rehearsal run ID
+        required: true
+        type: string
+      candidate_commit:
+        description: Exact 40-character candidate commit
+        required: true
+        type: string
+      candidate_tree:
+        description: Exact 40-character candidate tree
+        required: true
+        type: string
+      confirm_project_ref:
+        description: Type the exact production Supabase project reference
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: build52-production-migration-apply
+  cancel-in-progress: false
+
+jobs:
+  authorize-and-apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.23.1'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Bind the operator confirmation to the checked-out candidate
+        shell: bash
+        env:
+          INPUT_BACKUP_RUN_ID: ${{ inputs.backup_run_id }}
+          INPUT_REHEARSAL_RUN_ID: ${{ inputs.rehearsal_run_id }}
+          INPUT_CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
+          INPUT_CANDIDATE_TREE: ${{ inputs.candidate_tree }}
+          INPUT_CONFIRM_PROJECT_REF: ${{ inputs.confirm_project_ref }}
+        run: |
+          set -euo pipefail
+          test "$INPUT_BACKUP_RUN_ID" != "$INPUT_REHEARSAL_RUN_ID"
+          [[ "$INPUT_BACKUP_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$INPUT_REHEARSAL_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$INPUT_CANDIDATE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$INPUT_CANDIDATE_TREE" =~ ^[0-9a-f]{40}$ ]]
+          test "$INPUT_CONFIRM_PROJECT_REF" = 'rqquvtjdmugpigbndmne'
+          test "$GITHUB_SHA" = "$INPUT_CANDIDATE_COMMIT"
+          test "$(git rev-parse HEAD^{tree})" = "$INPUT_CANDIDATE_TREE"
+          test "$(git status --porcelain)" = ''
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: memphis-zoo-disaster-recovery-${{ inputs.backup_run_id }}
+          path: ${{ runner.temp }}/encrypted-backup
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.backup_run_id }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: production-backup-migration-rehearsal-${{ inputs.rehearsal_run_id }}
+          path: ${{ runner.temp }}/migration-rehearsal
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.rehearsal_run_id }}
+      - name: Verify evidence, create a short-lived authorization, and apply atomically
+        shell: bash
+        env:
+          BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.BACKUP_ENCRYPTION_PASSPHRASE }}
+          RELEASE_MIGRATION_ARCHIVE_VERIFY_KEY: ${{ secrets.BACKUP_MANIFEST_SIGNING_KEY }}
+          RELEASE_MIGRATION_ARCHIVE_VERIFY_KEY_ID: ${{ vars.BACKUP_MANIFEST_SIGNING_KEY_ID }}
+          RELEASE_REHEARSAL_ATTESTATION_VERIFY_KEY: ${{ secrets.RELEASE_REHEARSAL_ATTESTATION_SIGNING_KEY }}
+          RELEASE_REHEARSAL_ATTESTATION_VERIFY_KEY_ID: ${{ vars.RELEASE_REHEARSAL_ATTESTATION_SIGNING_KEY_ID }}
+          RELEASE_MIGRATION_AUTHORIZATION_SIGNING_KEY: ${{ secrets.RELEASE_MIGRATION_AUTHORIZATION_SIGNING_KEY }}
+          RELEASE_MIGRATION_AUTHORIZATION_SIGNING_KEY_ID: ${{ vars.RELEASE_MIGRATION_AUTHORIZATION_SIGNING_KEY_ID }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          INPUT_BACKUP_RUN_ID: ${{ inputs.backup_run_id }}
+          INPUT_REHEARSAL_RUN_ID: ${{ inputs.rehearsal_run_id }}
+          INPUT_CANDIDATE_COMMIT: ${{ inputs.candidate_commit }}
+          INPUT_CANDIDATE_TREE: ${{ inputs.candidate_tree }}
+        run: |
+          set -euo pipefail
+          test -n "$BACKUP_ENCRYPTION_PASSPHRASE"
+          test -n "$RELEASE_MIGRATION_ARCHIVE_VERIFY_KEY"
+          test -n "$RELEASE_MIGRATION_ARCHIVE_VERIFY_KEY_ID"
+          test -n "$RELEASE_REHEARSAL_ATTESTATION_VERIFY_KEY"
+          test -n "$RELEASE_REHEARSAL_ATTESTATION_VERIFY_KEY_ID"
+          test -n "$RELEASE_MIGRATION_AUTHORIZATION_SIGNING_KEY"
+          test -n "$RELEASE_MIGRATION_AUTHORIZATION_SIGNING_KEY_ID"
+          test -n "$SUPABASE_DB_URL"
+
+          backup_dir="${RUNNER_TEMP}/verified-production-backup"
+          authorization_path="${RUNNER_TEMP}/build52-production-migration-authorization.json"
+          result_path="${RUNNER_TEMP}/build52-production-migration-result.json"
+          receipt_path="${RUNNER_TEMP}/build52-production-migration-receipt.jsonl"
+          rehearsal_receipt="${RUNNER_TEMP}/migration-rehearsal/production-backup-migration-rehearsal.jsonl"
+          rehearsal_attestation="${RUNNER_TEMP}/migration-rehearsal/production-backup-migration-rehearsal-attestation.json"
+          mkdir -p "$backup_dir"
+
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 250000 \
+            -in "${RUNNER_TEMP}/encrypted-backup/memphis-zoo-backup.tar.gz.enc" \
+            -out "${RUNNER_TEMP}/memphis-zoo-backup.tar.gz" \
+            -pass env:BACKUP_ENCRYPTION_PASSPHRASE
+          tar -C "$backup_dir" -xzf "${RUNNER_TEMP}/memphis-zoo-backup.tar.gz"
+          test -s "$rehearsal_receipt"
+          test -s "$rehearsal_attestation"
+          RESTORE_SOURCE_DIR="$backup_dir" \
+            RESTORE_ARCHIVE_VERIFY_KEY="$RELEASE_MIGRATION_ARCHIVE_VERIFY_KEY" \
+            RESTORE_ARCHIVE_VERIFY_KEY_ID="$RELEASE_MIGRATION_ARCHIVE_VERIFY_KEY_ID" \
+            npm run --silent restore:verify
+
+          RELEASE_MIGRATION_BACKUP_DIR="$backup_dir" \
+            RELEASE_MIGRATION_REHEARSAL_RECEIPT="$rehearsal_receipt" \
+            RELEASE_MIGRATION_REHEARSAL_ATTESTATION="$rehearsal_attestation" \
+            RELEASE_MIGRATION_CANDIDATE_COMMIT="$INPUT_CANDIDATE_COMMIT" \
+            RELEASE_MIGRATION_CANDIDATE_TREE="$INPUT_CANDIDATE_TREE" \
+            RELEASE_MIGRATION_AUTHORIZATION_NAMED_ACTOR='Eric Build 52 approved production release' \
+            RELEASE_MIGRATION_AUTHORIZATION_TTL_MINUTES=15 \
+            npm run --silent release:migrations:authorize > "$authorization_path"
+          jq -e \
+            --arg commit "$INPUT_CANDIDATE_COMMIT" \
+            --arg tree "$INPUT_CANDIDATE_TREE" \
+            --arg project 'rqquvtjdmugpigbndmne' \
+            '.format == "memphis-zoo-release-migration-authorization.v1"
+             and .intent.candidate_commit == $commit
+             and .intent.candidate_tree == $tree
+             and .intent.project_ref == $project' \
+            "$authorization_path" >/dev/null
+
+          printf '{"stage":"authorization_created","repository":"%s","workflow_sha":"%s","candidate_commit":"%s","candidate_tree":"%s","backup_run_id":"%s","rehearsal_run_id":"%s","authorization_sha256":"%s"}\n' \
+            "$GITHUB_REPOSITORY" "$GITHUB_SHA" "$INPUT_CANDIDATE_COMMIT" "$INPUT_CANDIDATE_TREE" \
+            "$INPUT_BACKUP_RUN_ID" "$INPUT_REHEARSAL_RUN_ID" \
+            "$(sha256sum "$authorization_path" | awk '{print $1}')" > "$receipt_path"
+
+          RELEASE_MIGRATION_APPLY=true \
+            RELEASE_MIGRATION_CONFIRM_PROJECT_REF='rqquvtjdmugpigbndmne' \
+            RELEASE_MIGRATION_NAMED_ACTOR='Eric Build 52 approved production release' \
+            RELEASE_MIGRATION_CANDIDATE_COMMIT="$INPUT_CANDIDATE_COMMIT" \
+            RELEASE_MIGRATION_CANDIDATE_TREE="$INPUT_CANDIDATE_TREE" \
+            RELEASE_MIGRATION_AUTHORIZATION_VERIFY_KEY="$RELEASE_MIGRATION_AUTHORIZATION_SIGNING_KEY" \
+            RELEASE_MIGRATION_AUTHORIZATION_VERIFY_KEY_ID="$RELEASE_MIGRATION_AUTHORIZATION_SIGNING_KEY_ID" \
+            RELEASE_MIGRATION_AUTHORIZATION_JSON="$(<"$authorization_path")" \
+            SUPABASE_PROJECT_REF='rqquvtjdmugpigbndmne' \
+            SUPABASE_DB_CA_CERT_PATH="$GITHUB_WORKSPACE/.github/certs/prod-ca-2021.crt" \
+            npm run --silent release:migrations:apply | tee "$result_path"
+
+          jq -e \
+            --arg commit "$INPUT_CANDIDATE_COMMIT" \
+            --arg tree "$INPUT_CANDIDATE_TREE" \
+            '.ok == true
+             and .candidate_commit == $commit
+             and .candidate_tree == $tree
+             and .before_ledger_count == 220
+             and .before_ledger_head == "20260827213545"
+             and .after_ledger_count == 225
+             and .after_ledger_head == "20260914051527"
+             and (.applied | length) == 5' \
+            "$result_path" >/dev/null
+          printf '{"stage":"production_apply_committed","result_sha256":"%s","completed_at":"%s"}\n' \
+            "$(sha256sum "$result_path" | awk '{print $1}')" "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$receipt_path"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: build52-production-migration-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/build52-production-migration-authorization.json
+            ${{ runner.temp }}/build52-production-migration-result.json
+            ${{ runner.temp }}/build52-production-migration-receipt.jsonl
+          if-no-files-found: warn
+          retention-days: 30
