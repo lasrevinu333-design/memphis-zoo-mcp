@@ -5,8 +5,10 @@ import { createMessagingRouter } from '../src/messaging-api.js';
 const USER_ID = '10000000-0000-4000-8000-000000000001';
 const BOT_ID = '10000000-0000-4000-8000-000000000002';
 const THREAD_ID = '20000000-0000-4000-8000-000000000001';
+const REQUESTED_THREAD_ID = '20000000-0000-4000-8000-000000000002';
 const rpcCalls = [];
 let messageCounter = 0;
+let skipBotClaim = false;
 
 const runReadOnlySql = async (sql) => {
   const query = String(sql || '');
@@ -22,7 +24,8 @@ const runReadOnlySql = async (sql) => {
     return [{ msg_user_id: USER_ID, display_name: 'Alijah Collins', role: 'employee' }];
   }
   if (/select\s+t\.id,\s*t\.thread_type/i.test(query)) {
-    return [{ id: THREAD_ID, thread_type: 'bot', title: 'Memphis', is_active: true, has_memphis_bot: true }];
+    const id = query.includes(REQUESTED_THREAD_ID) ? REQUESTED_THREAD_ID : THREAD_ID;
+    return [{ id, thread_type: 'bot', title: 'Memphis', is_active: true, has_memphis_bot: true }];
   }
   if (/from public\.msg_thread_participants/i.test(query) && /select 1/i.test(query)) return [{ one: 1 }];
   if (/msg_get_memphis_user_id/i.test(query)) return [{ memphis_user_id: BOT_ID }];
@@ -58,6 +61,7 @@ const runRpc = async (name, params = {}) => {
     };
   }
   if (name === 'claim_operational_notification_job_by_key') {
+    if (skipBotClaim) return null;
     return {
       job_id: '40000000-0000-4000-8000-000000000001',
       source_id: '30000000-0000-4000-8000-000000000001',
@@ -116,6 +120,27 @@ try {
   assert.equal(sendCalls[1].params.p_metadata_json.reply_to_message_id, '30000000-0000-4000-8000-000000000001');
   assert.ok(rpcCalls.some((call) => call.name === 'claim_operational_notification_job_by_key'), 'The request path must lease the durable bot job rather than starting untracked work');
   assert.ok(rpcCalls.some((call) => call.name === 'finish_operational_notification_job' && call.params.p_succeeded === true), 'The durable bot job must be finalized with its authoritative lease');
+
+  rpcCalls.length = 0;
+  messageCounter = 0;
+  skipBotClaim = true;
+  const explicitResponse = await fetch(`${base}/messaging-api/memphis/message`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      user_id: USER_ID,
+      device_id: 'KIOSK_02',
+      thread_id: REQUESTED_THREAD_ID,
+      body: 'continue this exact Memphis conversation',
+      client_message_id: 'client-message-explicit-thread',
+    }),
+  });
+  const explicitPayload = await explicitResponse.json();
+  assert.equal(explicitResponse.status, 200);
+  assert.equal(explicitPayload.data.thread.id, REQUESTED_THREAD_ID);
+  const explicitSend = rpcCalls.find((call) => call.name === 'msg_send_message');
+  assert.equal(explicitSend.params.p_thread_id, REQUESTED_THREAD_ID,
+    '/memphis/message must preserve the exact conversation selected by the client');
 
   console.log('MEMPHIS_MESSAGING_ROUTE_RECOVERY_TESTS_PASS');
 } finally {

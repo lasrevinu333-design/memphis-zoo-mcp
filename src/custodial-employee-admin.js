@@ -358,7 +358,7 @@ async function issueEmployeeEnrollmentCode(db, env, req, deviceId) {
     max_uses: 1,
     device_id: device.device_id,
     device_name: device.device_name,
-    employee: { id: employee.id, employee_code: employee.employee_code, display_name: employee.display_name },
+    employee: { id: employee.id, employee_code: employee.employee_code, display_name: employee.display_name, role: employee.role || null },
   };
 }
 
@@ -499,7 +499,7 @@ export function installCustodialEmployeeAdminRoutes(app, { env = process.env, su
         credential_expires_at: expiresAt,
         device_id: device.device_id,
         device_name: device.device_name,
-        employee: { id: employee.id, employee_code: employee.employee_code, display_name: employee.display_name },
+        employee: { id: employee.id, employee_code: employee.employee_code, display_name: employee.display_name, role: employee.role || null },
       };
       const encrypted = encryptEnrollmentResult(env, operationId, candidateResult);
       const consumed = await db.rpc("device_auth_consume_enrollment_operation", {

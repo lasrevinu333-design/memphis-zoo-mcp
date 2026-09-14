@@ -7,7 +7,9 @@ const MANAGER_ID = "00000000-0000-4000-8000-000000000701";
 const MANAGER_USER_ID = "00000000-0000-4000-8000-000000000702";
 const FORGED_EMPLOYEE_ID = "00000000-0000-4000-8000-000000000703";
 const THREAD_ID = "00000000-0000-4000-8000-000000000704";
+const MESSAGE_ID = "00000000-0000-4000-8000-000000000708";
 const ARCHIVED_THREAD_ID = "00000000-0000-4000-8000-000000000709";
+const OVERVIEW_ONLY_THREAD_ID = "00000000-0000-4000-8000-000000000710";
 const calls = [];
 
 async function runRpc(fn, args) {
@@ -21,6 +23,7 @@ async function runRpc(fn, args) {
   if (fn === "msg_create_group_thread_v2") return { id: THREAD_ID, created_by_user_id: args.p_created_by_user_id, title: args.p_title, client_thread_id: args.p_client_thread_id };
   if (fn === "msg_send_message") return { id: "message-test", sender_user_id: args.p_sender_user_id };
   if (fn === "msg_mark_thread_read") return { marked: true, user_id: args.p_user_id };
+  if (fn === "msg_mark_thread_read_through") return { marked: true, user_id: args.p_user_id, through_message_id: args.p_through_message_id };
   return {};
 }
 
@@ -42,7 +45,7 @@ async function runReadOnlySql(sql) {
     ];
   }
   if (/select m\.id, m\.thread_id, m\.sender_user_id, m\.is_deleted/i.test(sql)) {
-    return [{ id: "00000000-0000-4000-8000-000000000708", thread_id: THREAD_ID, sender_user_id: MANAGER_USER_ID, is_deleted: false }];
+    return [{ id: MESSAGE_ID, thread_id: THREAD_ID, sender_user_id: MANAGER_USER_ID, is_deleted: false }];
   }
   if (/from public\.msg_threads t/i.test(sql)) {
     if (sql.includes(ARCHIVED_THREAD_ID)) {
@@ -55,9 +58,12 @@ async function runReadOnlySql(sql) {
         has_memphis_bot: false,
       }];
     }
-    return [{ id: THREAD_ID, thread_type: "group", title: "Authority test", is_active: true, has_memphis_bot: false }];
+    const id = sql.includes(OVERVIEW_ONLY_THREAD_ID) ? OVERVIEW_ONLY_THREAD_ID : THREAD_ID;
+    return [{ id, thread_type: "group", title: "Authority test", is_active: true, has_memphis_bot: false }];
   }
-  if (/from public\.msg_thread_participants/i.test(sql)) return [];
+  if (/from public\.msg_thread_participants/i.test(sql)) {
+    return sql.includes(OVERVIEW_ONLY_THREAD_ID) ? [] : [{ one: 1 }];
+  }
   return [];
 }
 
@@ -129,6 +135,30 @@ try {
 
   const forgedRead = await post(`/messaging-api/thread/${THREAD_ID}/read`, { user_id: FORGED_EMPLOYEE_ID });
   assert.equal(forgedRead.status, 403);
+
+  const boundedRead = await post(`/messaging-api/thread/${THREAD_ID}/read`, {
+    through_message_id: MESSAGE_ID,
+  });
+  assert.equal(boundedRead.status, 200);
+  const boundedReadCall = calls.find((call) => call.fn === "msg_mark_thread_read_through");
+  assert.deepEqual(boundedReadCall?.args, {
+    p_thread_id: THREAD_ID,
+    p_user_id: MANAGER_USER_ID,
+    p_through_message_id: MESSAGE_ID,
+  });
+
+  const malformedRead = await post(`/messaging-api/thread/${THREAD_ID}/read`, {
+    through_message_id: "not-a-message-id",
+  });
+  assert.equal(malformedRead.status, 422);
+
+  const overviewRead = await post(`/messaging-api/thread/${OVERVIEW_ONLY_THREAD_ID}/read`, {
+    through_message_id: MESSAGE_ID,
+  });
+  assert.equal(overviewRead.status, 200);
+  assert.equal(overviewRead.body.data, 0);
+  assert.equal(overviewRead.body.meta.read_acknowledgement, "not_applicable_to_manager_overview");
+  assert.equal(calls.some((call) => call.fn === "msg_mark_thread_read_through" && call.args.p_thread_id === OVERVIEW_ONLY_THREAD_ID), false);
 
   const archivedRead = await post(`/messaging-api/thread/${ARCHIVED_THREAD_ID}/read`, {});
   assert.equal(archivedRead.status, 409);

@@ -1328,6 +1328,7 @@ export function installDeviceCredentialRoutes(app, {
           canonical_device_id: result.device.canonical_device_id,
           device_name: authenticated ? result.device.device_name : null,
           employee_name: authenticated ? result.device.assigned_employee_name : null,
+          employee_role: authenticated ? (result.device.role || null) : null,
           credential_id: authenticated ? (result.credential?.credential_id || null) : null,
           credential_expires_at: authenticated ? (result.credential?.expires_at || null) : null,
         },

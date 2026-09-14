@@ -100,8 +100,9 @@ function normalizeTimeInput(value) {
 
 function toNullableInt(value) {
   if (value == null || value === "") return null;
-  const parsed = Number.parseInt(String(value), 10);
-  if (!Number.isFinite(parsed) || parsed < 0) {
+  const raw = String(value).trim();
+  const parsed = Number(raw);
+  if (!/^\d+$/.test(raw) || !Number.isSafeInteger(parsed) || parsed < 0) {
     throw new Error("attendee_count must be a whole number or blank.");
   }
   return parsed;
@@ -389,6 +390,24 @@ async function listUpcomingEvents(runReadOnlySql) {
   return Array.isArray(rows) ? rows : [];
 }
 
+function boundedWholeNumber(value, fallback, minimum, maximum) {
+  const raw = String(value ?? "").trim();
+  if (!/^\d+$/.test(raw)) return fallback;
+  return Math.min(maximum, Math.max(minimum, Number(raw)));
+}
+
+async function listEmployeeEvents(runReadOnlySql, { windowDays = 30, limit = 80 } = {}) {
+  const days = boundedWholeNumber(windowDays, 30, 1, 90);
+  const rowLimit = boundedWholeNumber(limit, 80, 1, 200);
+  const rows = await runReadOnlySql(buildEventResponseSelectSql(
+    `coalesce(e.status, 'SCHEDULED') in ('SCHEDULED', 'CANCELLED')
+     and coalesce(e.end_date, e.event_date) >= (now() at time zone '${EVENTS_TIME_ZONE}')::date
+     and e.event_date <= (now() at time zone '${EVENTS_TIME_ZONE}')::date + ${days}`,
+    `order by e.event_date asc, e.start_time asc, e.event_name asc limit ${rowLimit}`
+  ));
+  return Array.isArray(rows) ? rows : [];
+}
+
 const PUBLIC_EVENT_FIELDS = Object.freeze([
   "id",
   "event_name",
@@ -405,8 +424,17 @@ const PUBLIC_EVENT_FIELDS = Object.freeze([
   "event_timezone",
 ]);
 
+const EMPLOYEE_EVENT_FIELDS = Object.freeze([
+  ...PUBLIC_EVENT_FIELDS,
+  "notes",
+]);
+
 function toPublicEvent(event = {}) {
   return Object.fromEntries(PUBLIC_EVENT_FIELDS.map((field) => [field, event[field] ?? null]));
+}
+
+function toEmployeeEvent(event = {}) {
+  return Object.fromEntries(EMPLOYEE_EVENT_FIELDS.map((field) => [field, event[field] ?? null]));
 }
 
 function buildEventResponseSelectSql(whereSql, suffixSql = "") {
@@ -917,9 +945,15 @@ export function createEventsEmployeeRouter({
   const router = express.Router();
   router.use(requireDeviceAccess);
 
-  router.get("/", async (_req, res) => {
+  router.get("/", async (req, res) => {
     try {
-      const events = (await listUpcomingEvents(runReadOnlySql)).map(toPublicEvent);
+      const events = (await listEmployeeEvents(runReadOnlySql, {
+        windowDays: req.query.window_days,
+        limit: req.query.limit,
+      })).map(toEmployeeEvent);
+      const device = req.memphisDevice || {};
+      const credential = req.memphisDeviceCredential || {};
+      res.setHeader("Cache-Control", "private, no-store");
       res.status(200).json({
         ok: true,
         data: events,
@@ -928,6 +962,11 @@ export function createEventsEmployeeRouter({
           release_id: releaseId,
           contract_version: EVENTS_CONTRACT_VERSION,
           timezone: EVENTS_TIME_ZONE,
+          generated_at: new Date().toISOString(),
+          canonical_device_id: device.canonical_device_id || device.device_id || null,
+          employee_id: device.assigned_employee_id || device.employee_id || null,
+          assignment_epoch: Number.isSafeInteger(Number(device.assignment_epoch)) ? Number(device.assignment_epoch) : null,
+          credential_id: credential.credential_id || null,
         },
       });
     } catch (error) {

@@ -170,7 +170,8 @@ function buildEmployeeApp(eventRows = []) {
         res.status(401).json({ ok: false, code: "device_credential_required" });
         return;
       }
-      req.memphisDevice = { device_id: "KIOSK_08", employee_id: "employee-karen" };
+      req.memphisDevice = { canonical_device_id: "KIOSK_08", assigned_employee_id: "employee-karen", assignment_epoch: 7 };
+      req.memphisDeviceCredential = { credential_id: "credential-kiosk-08" };
       next();
     },
   }));
@@ -222,12 +223,27 @@ const employeeEventRows = [{
   start_time: "09:00:00",
   end_time: "11:00:00",
   spans_overnight: false,
-  attendee_count: 50,
+  attendee_count: 0,
   display_location: "Zoo Footprint",
   venue_name: "Zoo Footprint",
+  status: "CANCELLED",
+  event_timezone: "America/Chicago",
+  notes: "Use the service entrance after 8:30 AM.",
+}, {
+  id: "80000000-0000-4000-8000-000000000003",
+  event_name: "Missing Count Event",
+  event_title: "Missing Count Event",
+  event_date: "2026-08-03",
+  end_date: "2026-08-03",
+  start_time: "10:00:00",
+  end_time: "12:00:00",
+  spans_overnight: false,
+  attendee_count: null,
+  display_location: "Event Center",
+  venue_name: "Event Center",
   status: "SCHEDULED",
   event_timezone: "America/Chicago",
-  notes: "Manager-only note",
+  notes: null,
 }];
 
 await withServer(buildEmployeeApp(employeeEventRows), async (baseUrl) => {
@@ -241,7 +257,20 @@ await withServer(buildEmployeeApp(employeeEventRows), async (baseUrl) => {
   const payload = await allowed.json();
   assert.equal(payload.ok, true);
   assert.equal(payload.data[0].event_name, "Employee Event");
-  assert.equal("notes" in payload.data[0], false, "Employee Events must not expose manager-only fields");
+  assert.equal(payload.data[0].notes, "Use the service entrance after 8:30 AM.", "enrolled employees must receive operational event notes");
+  assert.equal(payload.data[0].attendee_count, 0, "known zero must remain distinct from a missing expected attendee count");
+  assert.equal(payload.data[0].status, "CANCELLED", "future cancelled events must remain visible to employees");
+  assert.equal(payload.data[1].attendee_count, null, "missing expected attendee count must remain null");
+  assert.equal(allowed.headers.get("cache-control"), "private, no-store");
+  assert.equal(payload.meta.canonical_device_id, "KIOSK_08");
+  assert.equal(payload.meta.employee_id, "employee-karen");
+  assert.equal(payload.meta.assignment_epoch, 7);
+  assert.equal(payload.meta.credential_id, "credential-kiosk-08");
+  assert.ok(Number.isFinite(Date.parse(payload.meta.generated_at)));
+  for (const privateField of [
+    "created_by", "overridden_by", "parse_reason", "parser_confidence",
+    "coverage_location_ids", "staffing_area_ids", "source_location_text",
+  ]) assert.equal(privateField in payload.data[0], false, `employee event leaked manager-only field ${privateField}`);
 });
 
 await withServer(buildApp(), async (baseUrl) => {
@@ -287,6 +316,24 @@ assert.equal(createCall.payload.record.created_by, TEST_MANAGER_NAME, "client cr
 assert.equal(createCall.payload.actor, TEST_MANAGER_NAME);
 assert.doesNotMatch(JSON.stringify(createCall.payload), /Operational flags/i);
 assert.doesNotMatch(JSON.stringify(createCall.payload), /contract test/i, "client actor fields must not reach event mutation authority");
+
+for (const invalidAttendeeCount of ["12abc", "1.5"]) {
+  await withServer(buildApp(), async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/admin-api/events/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        event_name: "Invalid Attendee Count",
+        location_group_id: TEST_GROUP_ID,
+        event_date: "2026-06-12",
+        start_time: "17:30",
+        end_time: "20:00",
+        attendee_count: invalidAttendeeCount,
+      }),
+    });
+    assert.equal(response.status, 400, `attendee_count ${invalidAttendeeCount} must not be partially parsed`);
+  });
+}
 
 await withServer(buildApp({
   writeResults: {

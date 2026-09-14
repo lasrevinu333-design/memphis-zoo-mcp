@@ -1921,13 +1921,42 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const threadId = String(req.params.threadId || "").trim();
       const userId = String(req.body?.user_id || "").trim();
       const deviceId = String(req.body?.device_id || req.body?.deviceId || "").trim();
+      const throughMessageId = String(req.body?.through_message_id || req.body?.throughMessageId || "").trim();
       const viewer = await resolveViewerContext({ userId, deviceId, managerSession: req.memphisAuth || null });
       if (userId && viewer.effectiveUserId !== userId) {
         res.status(403).json({ ok: false, error: "Read acknowledgement user ID must match the authenticated viewer." });
         return;
       }
       assertActiveMutableThread(await getThreadIdentity(threadId));
-      const data = await runRpc("msg_mark_thread_read", { p_thread_id: threadId, p_user_id: viewer.effectiveUserId });
+      if (throughMessageId && !isUuid(throughMessageId)) {
+        res.status(422).json({ ok: false, error: "through_message_id must be a valid message id." });
+        return;
+      }
+      const viewerIsParticipant = await isThreadParticipant(threadId, viewer.effectiveUserId);
+      if (!viewerIsParticipant) {
+        if (!viewer.isManagerOverview) {
+          res.status(403).json({ ok: false, error: "Device's user is not a participant in this thread." });
+          return;
+        }
+        res.status(200).json({
+          ok: true,
+          data: 0,
+          meta: {
+            version: appVersion,
+            release_id: releaseId,
+            contract_version: contractVersion,
+            read_acknowledgement: "not_applicable_to_manager_overview",
+          },
+        });
+        return;
+      }
+      const data = throughMessageId
+        ? await runRpc("msg_mark_thread_read_through", {
+          p_thread_id: threadId,
+          p_user_id: viewer.effectiveUserId,
+          p_through_message_id: throughMessageId,
+        })
+        : await runRpc("msg_mark_thread_read", { p_thread_id: threadId, p_user_id: viewer.effectiveUserId });
       res.status(200).json({ ok: true, data, meta: { version: appVersion, release_id: releaseId, contract_version: contractVersion } });
     } catch (error) {
       fail(res, error, "Mark thread read failed");
@@ -2024,6 +2053,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
       const body = String(req.body?.body || "").trim();
       const deviceId = String(req.body?.device_id || req.body?.deviceId || req.header("x-device-id") || "").trim();
       const clientMessageId = String(req.body?.client_message_id || req.body?.clientMessageId || "").trim();
+      const threadId = String(req.body?.thread_id || req.body?.threadId || "").trim();
       if (!body) throw new Error("body is required.");
 
       const viewer = await resolveViewerContext({ userId: requestedUserId, deviceId, managerSession: req.memphisAuth || null });
@@ -2033,6 +2063,7 @@ export function createMessagingRouter({ runReadOnlySql, runRpc, buildHealthPaylo
         deviceId: canonicalDeviceId,
         body,
         clientMessageId,
+        threadId,
         managerId: String(req.memphisAuth?.manager_id || "").trim(),
       });
 

@@ -53,6 +53,7 @@ const deviceA = {
   assigned_employee_id: "22222222-2222-4222-8222-222222222222",
   assigned_employee_name: "Kinnaye Peete",
   employee_code: "EMP005",
+  role: "staff",
   employee_active: true,
   assignment_valid: true,
 };
@@ -416,7 +417,15 @@ await statusHandler(request({ deviceId: "KIOSK_06" }), statusRes);
 assert.equal(statusRes.code, 200);
 assert.equal(statusRes.payload.data.authenticated, false);
 assert.equal(statusRes.payload.data.employee_name, null, "unenrolled status must not disclose employee identity");
+assert.equal(statusRes.payload.data.employee_role, null, "unenrolled status must not disclose employee role");
 assert.equal(statusRes.payload.data.device_name, null, "unenrolled status must not disclose device labels");
+
+const authenticatedStatusRes = responseCapture();
+routeStore.findCredential = async () => credential;
+await statusHandler(request({ cookie }), authenticatedStatusRes);
+assert.equal(authenticatedStatusRes.code, 200);
+assert.equal(authenticatedStatusRes.payload.data.employee_name, "Kinnaye Peete");
+assert.equal(authenticatedStatusRes.payload.data.employee_role, "staff");
 
 const logoutHandler = app.routes.get("POST /device-auth/logout").at(-1);
 const logoutWithoutHeader = responseCapture();
