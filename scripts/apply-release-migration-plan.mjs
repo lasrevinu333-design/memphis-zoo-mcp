@@ -193,16 +193,28 @@ try {
     }
   }
   const afterLedger = await db.query("select version::text,name::text,statements from supabase_migrations.schema_migrations order by version");
+  const expectedVersions = new Set([
+    ...beforeLedger.rows.map((row) => row.version),
+    ...plan.map((item) => item.source_migration_version),
+  ]);
+  const afterByVersion = new Map(afterLedger.rows.map((row) => [row.version, row]));
+  const plannedRowsAreExact = plan.every((item) => {
+    const row = afterByVersion.get(item.source_migration_version);
+    return row?.name === item.phase && stableJson(row.statements) === stableJson([item.sql]);
+  });
   if (afterLedger.rowCount !== Number(state.target.production_ledger_count)
       || afterLedger.rows.at(-1)?.version !== state.target.source_migration_version
-      || stableJson(afterLedger.rows.slice(-plan.length).map((row) => row.version)) !== stableJson(plan.map((item) => item.source_migration_version))) {
+      || afterByVersion.size !== afterLedger.rowCount
+      || expectedVersions.size !== afterLedger.rowCount
+      || afterLedger.rows.some((row) => !expectedVersions.has(row.version))
+      || !plannedRowsAreExact) {
     throw new Error("Release migration ledger did not advance by the exact ordered plan.");
   }
   const outlookAfter = await outlookSnapshot(db);
   if (stableJson(outlookAfter) !== stableJson(outlookBefore)) {
     throw new Error("Outlook event-sync rows changed while adopting their source authority.");
   }
-  if (stableJson(afterLedger.rows.slice(0, beforeLedger.rowCount)) !== stableJson(beforeLedger.rows)) {
+  if (beforeLedger.rows.some((row) => stableJson(afterByVersion.get(row.version)) !== stableJson(row))) {
     throw new Error("An earlier migration-ledger entry changed while applying the release plan.");
   }
   const afterCatalog = normalizeCatalog(await captureSchemaCatalog({ query: (sql) => db.query(sql) }), currentDatabase);
