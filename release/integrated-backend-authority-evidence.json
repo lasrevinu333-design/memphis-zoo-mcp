@@ -479,7 +479,7 @@
       {
         "path": "scripts/apply-release-migration-plan.mjs",
         "mode": "100644",
-        "object_id": "6d654421af13aa62a7a04c30b95fa8d9a26bca35"
+        "object_id": "1c3eaa78c9cf404ddd64ca3efafefa810f68a944"
       },
       {
         "path": "scripts/audit3-repair-contract-tests.mjs",
@@ -1169,7 +1169,7 @@
       {
         "path": "scripts/release-migration-plan-database-tests.mjs",
         "mode": "100644",
-        "object_id": "9002f1ec474303d51f8c71d77eb2acb4277309fd"
+        "object_id": "f33d53f45676648e0caae6ee3ad794881d252524"
       },
       {
         "path": "scripts/resolve-isolated-restore-rehearsal.mjs",
