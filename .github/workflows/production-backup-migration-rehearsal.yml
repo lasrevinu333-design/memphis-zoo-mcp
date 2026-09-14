@@ -166,7 +166,7 @@ jobs:
           docker exec "$container" psql -v ON_ERROR_STOP=1 -At -U supabase_admin -d "$database" \
             -c "select public.custodial_configure_backend_execution_key('$backend_secret_digest','isolated-production-backup-rehearsal'); select public.custodial_configure_native_route_proof_key('$native_secret_digest','isolated-production-backup-rehearsal');"
           SCHEMA_FINGERPRINT_DOCKER_CONTAINER="$container" SCHEMA_FINGERPRINT_DATABASE="$database" \
-            npm run --silent release:populated-schema:preflight | tee -a "$receipt"
+            npm run --silent release:target-schema:preflight | tee -a "$receipt"
           SCHEMA_FINGERPRINT_DOCKER_CONTAINER="$container" SCHEMA_FINGERPRINT_DATABASE="$database" \
             npm run --silent test:schema-fingerprint | tee -a "$receipt"
           target_migration_head="$(jq -r '.target.source_migration_version' release/production-migration-state.json)"

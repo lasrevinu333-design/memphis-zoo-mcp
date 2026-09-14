@@ -16,7 +16,8 @@ const input = JSON.parse(readFileSync(new URL("../release/schema-alignment-input
 const frontend = JSON.parse(readFileSync(new URL("../release/frontend-release-manifest.json", import.meta.url), "utf8"));
 const canonicalCatalog = JSON.parse(readFileSync(new URL("../supabase/canonical/schema-fingerprint-input.json", import.meta.url), "utf8"));
 const target = readFileSync(new URL("../supabase/canonical/schema-fingerprint.txt", import.meta.url), "utf8").trim();
-const now = Date.parse("2026-08-21T00:00:00Z");
+const RELEASE_VALIDATION_TIME = "2026-09-14T12:00:00Z";
+const now = Date.parse(RELEASE_VALIDATION_TIME);
 
 assert.equal(frontend.frontend_commit_sha, input.frontend_commit_sha, "the backend manifest must pin the exact audited frontend");
 assert.equal(frontend.frontend_commit_state, "final_pair_bound");
@@ -28,6 +29,14 @@ assert.deepEqual(backend.queue_compatibility_versions, input.queue_compatibility
 assert.deepEqual(backend.minimum_supported, input.minimum_supported);
 
 const transition = frontend.schema_transition;
+assert.ok(
+  Date.parse(transition.expires_at) > now,
+  `the configured transition must remain active at the ${RELEASE_VALIDATION_TIME} release validation gate`,
+);
+assert.ok(
+  Date.parse(transition.expires_at) - now <= 14 * 24 * 60 * 60 * 1000,
+  "the configured transition must not exceed the bounded 14-day release window",
+);
 const aligned = assertSchemaAlignment({
   backendManifest: backend,
   frontendManifest: { schema_fingerprint: frontend.schema_fingerprint, schema_transition: transition },

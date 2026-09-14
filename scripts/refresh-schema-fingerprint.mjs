@@ -19,7 +19,8 @@ const args=process.argv.slice(2);
 const checkOnly=args.length===1&&args[0]==="--check";
 const preflightOnly=args.length===1&&args[0]==="--preflight";
 const observedProductionPreflightOnly=args.length===1&&args[0]==="--observed-production-preflight";
-if(args.length>0&&!checkOnly&&!preflightOnly&&!observedProductionPreflightOnly)throw new Error("Usage: refresh-schema-fingerprint.mjs [--check|--preflight|--observed-production-preflight]");
+const targetPreflightOnly=args.length===1&&args[0]==="--target-preflight";
+if(args.length>0&&!checkOnly&&!preflightOnly&&!observedProductionPreflightOnly&&!targetPreflightOnly)throw new Error("Usage: refresh-schema-fingerprint.mjs [--check|--preflight|--observed-production-preflight|--target-preflight]");
 const queryNames=new Map(Object.entries(SCHEMA_CATALOG_QUERIES).map(([name,sql])=>[sql,name]));
 
 function queryDocker(sql,name){
@@ -70,7 +71,13 @@ function firstTextDifference(expected,actual){
   }
   return null;
 }
-if(observedProductionPreflightOnly){
+if(targetPreflightOnly){
+  const releaseState=JSON.parse(readFileSync(resolve(root,"release/production-migration-state.json"),"utf8"));
+  const canonicalExpected=readFileSync(hashPath,"utf8").trim();
+  const releaseExpected=String(releaseState.target?.canonical_source_schema_fingerprint||"");
+  if(!/^[0-9a-f]{64}$/.test(canonicalExpected)||releaseExpected!==canonicalExpected)throw new Error("Release target schema fingerprint is invalid or differs from the canonical target.");
+  if(fingerprint!==canonicalExpected)throw new Error(`Restored post-migration database fingerprint ${fingerprint} differs from canonical target ${canonicalExpected}.`);
+}else if(observedProductionPreflightOnly){
   const releaseState=JSON.parse(readFileSync(resolve(root,"release/production-migration-state.json"),"utf8"));
   const expected=String(releaseState.observed_production?.catalog_privilege_fingerprint||"");
   if(!/^[0-9a-f]{64}$/.test(expected))throw new Error("Observed production schema fingerprint is invalid.");
@@ -88,4 +95,4 @@ if(observedProductionPreflightOnly){
   writeFileSync(inputPath,inputText);
   writeFileSync(hashPath,hashText);
 }
-console.log(JSON.stringify({ok:true,mode:observedProductionPreflightOnly?"observed-production-preflight":preflightOnly?"populated-preflight":checkOnly?"check":"refresh",checked:checkOnly||preflightOnly||observedProductionPreflightOnly,schema_fingerprint:fingerprint,counts:Object.fromEntries(Object.entries(inventory).map(([name,rows])=>[name,rows.length]))},null,2));
+console.log(JSON.stringify({ok:true,mode:targetPreflightOnly?"target-preflight":observedProductionPreflightOnly?"observed-production-preflight":preflightOnly?"populated-preflight":checkOnly?"check":"refresh",checked:checkOnly||preflightOnly||observedProductionPreflightOnly||targetPreflightOnly,schema_fingerprint:fingerprint,counts:Object.fromEntries(Object.entries(inventory).map(([name,rows])=>[name,rows.length]))},null,2));

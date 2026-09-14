@@ -89,6 +89,7 @@
     "test:schema-transition": "node scripts/refresh-release-schema-alignment.mjs --check && node scripts/schema-transition-contract-tests.mjs",
     "release:schema-alignment:refresh": "node scripts/refresh-release-schema-alignment.mjs",
     "release:populated-schema:preflight": "node scripts/refresh-schema-fingerprint.mjs --preflight",
+    "release:target-schema:preflight": "node scripts/refresh-schema-fingerprint.mjs --target-preflight",
     "release:observed-production-schema:preflight": "node scripts/refresh-schema-fingerprint.mjs --observed-production-preflight",
     "release:migrations:apply": "RELEASE_MIGRATION_APPLY=true node scripts/apply-release-migration-plan.mjs",
     "release:migrations:authorize": "node scripts/create-release-migration-authorization.mjs",

@@ -38,6 +38,8 @@ const outlookEventSyncAuthorityFile = "20260827152000_adopt_outlook_event_sync_a
 const outlookEventSyncAuthority = readFileSync(`supabase/migrations/${outlookEventSyncAuthorityFile}`, "utf8");
 const releaseHealthIdentityProjectionFile = "20260827153000_scope_release_health_identity_projection.sql";
 const releaseHealthIdentityProjection = readFileSync(`supabase/migrations/${releaseHealthIdentityProjectionFile}`, "utf8");
+const messagingDurabilityFile = "20260914051527_messaging_read_horizon_and_send_idempotency.sql";
+const messagingDurability = readFileSync(`supabase/migrations/${messagingDurabilityFile}`, "utf8");
 const index = readFileSync("src/index.js", "utf8");
 const scanAuthorityCutover = readFileSync("src/scan-authority-cutover.js", "utf8");
 const schedulerControlPlane = readFileSync("src/static-weekly-control-plane.js", "utf8");
@@ -70,6 +72,7 @@ const exactPendingReleaseMigrations = [
   applicationReaderFeedbackRuntimeFile,
   outlookEventSyncAuthorityFile,
   releaseHealthIdentityProjectionFile,
+  messagingDurabilityFile,
 ];
 const exactMigrationCount = readdirSync("supabase/migrations").filter((name) => /^[0-9]{14}_.+\.sql$/.test(name)).length;
 
@@ -168,60 +171,64 @@ assert.match(scheduleApi, /owner:\s*"static_weekly_authority"/);
 assert.equal(releaseEvidence.backend_contract.authority, "offline-authority.v5");
 assert.match(releaseInput.backend_contract.device_credential_secret_gate, /Every active employee-device credential.*manager-code phone recovery.*legacy secret fallback is forbidden/i);
 assert.equal(packageManifest.scripts["release:populated-schema:preflight"], "node scripts/refresh-schema-fingerprint.mjs --preflight");
+assert.equal(packageManifest.scripts["release:target-schema:preflight"], "node scripts/refresh-schema-fingerprint.mjs --target-preflight");
 assert.match(schemaFingerprintRefresh, /schema_from_fingerprint/);
+assert.match(schemaFingerprintRefresh, /target\?\.canonical_source_schema_fingerprint/);
 assert.match(populatedPreflightWorkflow, /release:populated-schema:preflight/);
 assert.match(releaseInput.cutover.phase_order[1], /exact observed production ledger head.*catalog\/privilege fingerprint.*zero target-position collisions/i);
 assert.match(releaseInput.cutover.phase_order[2], /fresh post-capture backup receipt.*exact pending-migration digest.*exact source attestation/i);
-assert.match(releaseInput.cutover.phase_order[3], /four exact ordered pending release-foundation migrations.*global restore mutation fence.*restricted feedback reader.*Outlook event-sync authority adoption.*release-health identity projection correction.*ledger to advance exactly four entries.*do not replay the eleven already-applied release migrations/i);
+assert.match(releaseInput.cutover.phase_order[3], /five exact ordered pending migrations.*global restore mutation fence.*restricted feedback reader.*Outlook event-sync authority adoption.*release-health identity projection correction.*messaging read-horizon\/idempotent-send repair.*ledger to advance exactly five entries.*do not replay historical production migrations/i);
 assert.match(releaseInput.cutover.phase_order[4], /refresh and publish the already-preserved immutable weighted-schedule draft.*expected-revision and idempotency guards.*do not create a competing draft.*preserve the current publication/i);
 assert.equal(releaseInput.cutover.production_migration_state, "release/production-migration-state.json");
 assert.equal(productionMigrationState.artifact, "production-migration-state.v2");
 assert.equal(productionMigrationState.mode, "migration_required");
 assert.equal(productionMigrationState.project_ref, "rqquvtjdmugpigbndmne");
-assert.equal(productionMigrationState.observed_production.ledger_head, "20260827042443");
-assert.equal(productionMigrationState.observed_production.source_migration_name, "static_weekly_registered_source_dated_status");
-assert.equal(productionMigrationState.observed_production.catalog_privilege_fingerprint, "155ecd281da5d5452a8c629f724af0d3df32c96df03c7803b7f715313a0e694c");
+assert.equal(productionMigrationState.observed_production.ledger_head, "20260827213545");
+assert.equal(productionMigrationState.observed_production.source_migration_name, "cancel_gregory_staples_future_hire");
+assert.equal(productionMigrationState.observed_production.catalog_privilege_fingerprint, "1588473249aa66193d784dd1e525f24a8305f24ba784c37ae04a374c474d2651");
 assert.equal(productionMigrationState.observed_production.catalog_capture_format, "connected_database_catalog.v1 stable normalized JSON SHA-256");
 assert.equal(productionMigrationState.observed_production.public_function_count, 494);
 assert.equal(productionMigrationState.observed_production.registered_source_count, 2);
 assert.equal(productionMigrationState.observed_production.active_authority_key_count, 1);
 assert.equal(productionMigrationState.observed_production.roster_slot_count, 22);
-assert.equal(productionMigrationState.observed_production.roster_incumbency_count, 21);
+assert.equal(productionMigrationState.observed_production.roster_incumbency_count, 20);
 assert.equal(productionMigrationState.observed_production.published_version_count, 2);
 assert.equal(productionMigrationState.observed_production.draft_version_count, 0);
 assert.equal(productionMigrationState.observed_production.publication_count, 2);
-assert.equal(productionMigrationState.observed_production.command_receipt_count, 16);
-assert.equal(productionMigrationState.observed_production.authority_revision, 16);
-assert.equal(productionMigrationState.observed_production.projection_count, 2);
-assert.equal(productionMigrationState.observed_production.occurrence_count, 766);
+assert.equal(productionMigrationState.observed_production.command_receipt_count, 18);
+assert.equal(productionMigrationState.observed_production.authority_revision, 18);
+assert.equal(productionMigrationState.observed_production.projection_count, 3);
+assert.equal(productionMigrationState.observed_production.occurrence_count, 1080);
 assert.equal(productionMigrationState.observed_production.application_reader_identity_policy_count, 14);
 assert.equal(productionMigrationState.observed_production.application_reader_credential_select, false);
-assert.equal(productionMigrationState.observed_production.production_ledger_count, 219);
+assert.equal(productionMigrationState.observed_production.production_ledger_count, 220);
 assert.equal(productionMigrationState.observed_production.source_authority_migration_count, exactMigrationCount - exactPendingReleaseMigrations.length);
 assert.equal(productionMigrationState.observed_production.target_schedule_slot_count, 5);
 assert.equal(productionMigrationState.observed_production.vacancy_functions_present, true);
 assert.equal(productionMigrationState.observed_production.hydrated_initial_draft_reader_present, true);
 assert.equal(productionMigrationState.observed_production.registered_source_dated_status_excluded, true);
 assert.equal(productionMigrationState.observed_production.outlook_event_sync_table_present, true);
-assert.equal(productionMigrationState.target.source_migration_file, releaseHealthIdentityProjectionFile);
-assert.equal(productionMigrationState.target.source_migration_name, "scope_release_health_identity_projection");
-assert.equal(productionMigrationState.target.source_migration_version, "20260827153000");
+assert.equal(productionMigrationState.target.source_migration_file, messagingDurabilityFile);
+assert.equal(productionMigrationState.target.source_migration_name, "messaging_read_horizon_and_send_idempotency");
+assert.equal(productionMigrationState.target.source_migration_version, "20260914051527");
 assert.equal(productionMigrationState.target.production_ledger_version, null);
 assert.equal(productionMigrationState.target.canonical_source_schema_fingerprint, canonicalFingerprint);
-assert.equal(productionMigrationState.target.public_function_count, 499);
-assert.equal(productionMigrationState.target.production_ledger_count, 223);
+assert.equal(productionMigrationState.target.public_function_count, 500);
+assert.equal(productionMigrationState.target.production_ledger_count, 225);
 assert.equal(productionMigrationState.target.source_authority_migration_count, exactMigrationCount);
 assert.equal(productionMigrationState.target.pending_migration_count, exactPendingReleaseMigrations.length);
 assert.equal(productionMigrationState.target.registered_source_dated_status_excluded, true);
-assert.equal(productionMigrationState.target.expected_catalog_counts.functions, 499);
+assert.equal(productionMigrationState.target.expected_catalog_counts.functions, 500);
 assert.equal(productionMigrationState.target.expected_catalog_counts.triggers, 310);
 assert.equal(productionMigrationState.target.expected_catalog_counts.policies, 42);
-assert.equal(productionMigrationState.target.expected_catalog_counts.routine_grants, 341);
+assert.equal(productionMigrationState.target.expected_catalog_counts.routine_grants, 342);
 assert.equal(productionMigrationState.target.expected_catalog_counts.schema_grants, 9);
 assert.match(releaseHealthIdentityProjection, /bb04f7c05f72d959b4aba5a3a047adad1163eaf6b88aeeebd5d0f9f6a3b10baf/);
 assert.match(releaseHealthIdentityProjection, /c\.relname in \('devices','employees','device_aliases'\)/);
 assert.match(releaseHealthIdentityProjection, /Release health recovery inventory row is missing or duplicated/);
 assert.match(releaseHealthIdentityProjection, /identity_projection_exact is not true or feedback_projection_exact is not true/);
+assert.match(messagingDurability, /msg_mark_thread_read_through/);
+assert.match(messagingDurability, /p_client_message_id/);
 assert.deepEqual(
   productionMigrationState.target.expected_catalog_counts,
   Object.fromEntries(Object.keys(productionMigrationState.target.expected_catalog_counts).map((section) => [section, canonicalCatalog[section].length])),
@@ -269,7 +276,7 @@ assert.match(outlookEventSyncAuthority, /revoke all privileges on table public\.
 assert.doesNotMatch(outlookEventSyncAuthority, /grant\s+[^;]+\s+to\s+(?:anon|authenticated|custodial_application_reader)\b/i);
 assert.equal(releaseEvidence.compatibility_window.accepted_engine.scan, "scan.v2");
 assert.equal(releaseEvidence.compatibility_window.required_engine.scan, "scan.v4.snapshot-bound-authority");
-assert.equal(releaseEvidence.migrations.at(-1).name, releaseHealthIdentityProjectionFile);
+assert.equal(releaseEvidence.migrations.at(-1).name, messagingDurabilityFile);
 assert.match(applicationReaderReleaseRecovery, /application_reader_identity_projection_bounded/i);
 assert.match(applicationReaderReleaseRecovery, /custodial_application_reader_device_identity/i);
 assert.match(applicationReaderReleaseRecovery, /' grant '\|\|g\.privilege_type\|\|' \('\|\|quote_ident\(a\.attname\)/i);
@@ -310,7 +317,7 @@ assert.match(releaseEvidence.compatibility_window.disaster_recovery_foundation_p
 assert.match(dayChangeReconciliation, /static_weekly_v4_begin_day_changes/);
 assert.equal(releaseEvidence.artifact, "integrated-backend-authority-release-evidence.v2");
 assert.equal(releaseEvidence.release_id, "release-2026.07.19.custodial-v3.12");
-assert.equal(releaseEvidence.frontend_commit_sha, "5d0d5716e03f6179110708add09f7b2fc3afc2b3");
+assert.equal(releaseEvidence.frontend_commit_sha, "cbd7d052d925e26fc915005ac42d865b92844ee1");
 assert.equal(releaseEvidence.frontend_commit_state, "final_pair_bound");
 assert.equal(releaseEvidence.schema_fingerprint, canonicalFingerprint);
 assert.equal(releaseEvidence.cutover.source_identity.kind, "external_signed_release_attestation");
@@ -327,7 +334,7 @@ assert.equal(releaseEvidence.authority_content_identity.expected_tree_inventory.
 assert.equal(releaseEvidence.authority_content_identity.authority_path_count, releaseEvidence.authority_content_identity.expected_tree_inventory.length);
 assert.equal(releaseEvidence.authority_content_identity.migration_path_count, exactMigrationCount);
 assert.equal(releaseEvidence.migrations.length, exactMigrationCount);
-assert.equal(releaseEvidence.migrations.at(-1).name, releaseHealthIdentityProjectionFile);
+assert.equal(releaseEvidence.migrations.at(-1).name, messagingDurabilityFile);
 assert.match(releaseEvidence.compatibility_window.credential_replacement_lineage_phase,
   /append-only same-device predecessor-to-successor transport lineage.*original actor, device, credential, or work evidence/i);
 assert.equal(Object.hasOwn(releaseEvidence.authority_content_identity, "value"), false, "generated evidence must not self-assert a worktree-derived content hash");
