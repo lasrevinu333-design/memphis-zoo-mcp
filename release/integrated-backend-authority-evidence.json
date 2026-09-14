@@ -127,6 +127,11 @@
         "object_id": "3d693669b23c340c57a3457bdc8b6fefe1806cc5"
       },
       {
+        "path": ".github/workflows/build52-production-migration-apply.yml",
+        "mode": "100644",
+        "object_id": "5ee6abc9ce3bc49fffcf9c1b266ef0da9a7fa536"
+      },
+      {
         "path": ".github/workflows/custodial-populated-schema-preflight.yml",
         "mode": "100644",
         "object_id": "ad8b37f899866384ab4ad510b9d8e8fa0c750227"
@@ -1079,7 +1084,7 @@
       {
         "path": "scripts/production-backup.mjs",
         "mode": "100644",
-        "object_id": "cb9eec661ead4a202b43c2dbf3c3f630651f930b"
+        "object_id": "3f3f56fef3d9f70d5cb52ff2ee96ee6c33e1fa91"
       },
       {
         "path": "scripts/production-database-credential-bridge.mjs",
@@ -3322,7 +3327,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 640,
+    "authority_path_count": 641,
     "migration_path_count": 125,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
