@@ -16,6 +16,10 @@ const migration = readFileSync(
   new URL("../supabase/migrations/20260810140000_finalize_named_manager_messenger_retirement_integrity.sql", import.meta.url),
   "utf8",
 );
+const currentMessagingMigration = readFileSync(
+  new URL("../supabase/migrations/20260914051527_messaging_read_horizon_and_send_idempotency.sql", import.meta.url),
+  "utf8",
+);
 
 const USER_A = "00000000-0000-4000-8000-00000000e111";
 const USER_B = "00000000-0000-4000-8000-00000000e112";
@@ -69,7 +73,14 @@ function applyFinalCorrection() {
   const result = execFileSync("docker", [
     "exec", "-i", container, "psql", "-X", "-v", "ON_ERROR_STOP=1",
     "-U", "supabase_admin", "-d", database,
-  ], { input: migration, encoding: "utf8", maxBuffer: 32 * 1024 * 1024 });
+  ], {
+    // This suite deliberately replays a historical correction. Restore the
+    // later messaging definition in the same call so the test cannot leave a
+    // clean-head database at an older schema merely because of test order.
+    input: `${migration}\n${currentMessagingMigration}`,
+    encoding: "utf8",
+    maxBuffer: 32 * 1024 * 1024,
+  });
   assert.match(result, /COMMIT/);
 }
 
