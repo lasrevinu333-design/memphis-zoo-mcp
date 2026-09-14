@@ -56,6 +56,13 @@ if (!secret) throw new Error("SUPABASE_SECRET or SUPABASE_SERVICE_ROLE_KEY is re
 if (!databaseUrl) throw new Error("SUPABASE_DB_URL or DATABASE_URL is required for a transactionally consistent snapshot.");
 if (!databaseCaCertPath) throw new Error("SUPABASE_DB_CA_CERT_PATH is required for synchronized schema capture.");
 if (!backupDir) throw new Error("BACKUP_DIR is required.");
+let databaseUsername = "";
+try {
+  databaseUsername = decodeURIComponent(new URL(databaseUrl).username).trim();
+} catch {
+  // The production backup contract requires a URL-form PostgreSQL connection string.
+}
+if (!databaseUsername) throw new Error("SUPABASE_DB_URL must contain an explicit PostgreSQL username for containerized pg_dump.");
 if (!/^[a-zA-Z0-9._:-]{1,120}$/.test(manifestSigningKeyId)) throw new Error("BACKUP_MANIFEST_SIGNING_KEY_ID is required.");
 if (!/^[0-9a-f]{40}$/.test(backupToolCommit) || !/^[0-9a-f]{40}$/.test(backupToolTree)) {
   throw new Error("BACKUP_TOOL_COMMIT and BACKUP_TOOL_TREE must be exact Git identities.");
@@ -124,6 +131,8 @@ async function captureApplicationSchema(exportedSnapshot) {
     "-v", `${caPath}:/cert/prod-ca.crt:ro`,
     "-v", `${inventoryDir}:/backup:rw`,
     pgDumpImage,
+    "--username", databaseUsername,
+    "--no-password",
     "--schema-only", "--clean", "--if-exists", `--snapshot=${exportedSnapshot}`,
     "--file=/backup/application-schema.sql",
   ];
