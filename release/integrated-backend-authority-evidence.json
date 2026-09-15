@@ -139,7 +139,7 @@
       {
         "path": ".github/workflows/custodial-production-repair.yml",
         "mode": "100644",
-        "object_id": "69ea635574a81f76dc94aa6f45c1f23ffb39e313"
+        "object_id": "4a5dd7ce0a7380e0cb00e3b02a87824ce5e049ba"
       },
       {
         "path": ".github/workflows/device-credential-foundation.yml",
@@ -154,7 +154,7 @@
       {
         "path": ".github/workflows/foundation-security-gate.yml",
         "mode": "100644",
-        "object_id": "249288ba30e36c99cd033c49ae8a511c0a655245"
+        "object_id": "2ca0ed94017aee5ba32c3f4541ff13650edfaa3f"
       },
       {
         "path": ".github/workflows/integrated-release-attestation.yml",
@@ -194,7 +194,7 @@
       {
         "path": ".github/workflows/production-backup-migration-rehearsal.yml",
         "mode": "100644",
-        "object_id": "9cd70f3b4e29d76312305011a384580d35ec35e3"
+        "object_id": "71eff2425117528619f1212073af48ca69ab7539"
       },
       {
         "path": ".github/workflows/production-database-credential-bridge.yml",
@@ -384,7 +384,7 @@
       {
         "path": "package.json",
         "mode": "100644",
-        "object_id": "5b5eb4043d082121c4bd6265c98ce61d75ac4f7e"
+        "object_id": "1974553fc412424e87fafd55cb8ceb4b1e557880"
       },
       {
         "path": "public/moxie-assets/contacts-creekside-animal.png",
@@ -539,7 +539,7 @@
       {
         "path": "scripts/ci-workflow-contract-tests.mjs",
         "mode": "100644",
-        "object_id": "d9547a364b0f1cc2da3799c9484f547afb1eda59"
+        "object_id": "a8e477b2c2cc7cddc64074ff13f1e0295254c556"
       },
       {
         "path": "scripts/cleaning-identity-gps-database-tests.mjs",
@@ -907,6 +907,16 @@
         "object_id": "a2e56a2df4eddcd526de7954156cb59ed36335a8"
       },
       {
+        "path": "scripts/isolated-restore-lease-shim-tests.mjs",
+        "mode": "100644",
+        "object_id": "e0bdf79211cbd088835334028e34af155444f1cc"
+      },
+      {
+        "path": "scripts/isolated-restore-lease-shim.mjs",
+        "mode": "100644",
+        "object_id": "dadafa3af037e4cebfe7a0855e3615f5d5bd4422"
+      },
+      {
         "path": "scripts/live-release-alignment-check.mjs",
         "mode": "100644",
         "object_id": "a1f0902b2fad20c0e3bf9df272c94fe6225077cd"
@@ -1089,7 +1099,7 @@
       {
         "path": "scripts/prepare-isolated-restore-target.mjs",
         "mode": "100644",
-        "object_id": "e94fa6db2f9261948027b0dda49982207b92f15e"
+        "object_id": "d69e276192620fd254708aa35e9afc7003c31a13"
       },
       {
         "path": "scripts/production-backup.mjs",
@@ -1114,7 +1124,7 @@
       {
         "path": "scripts/production-restore-drill.mjs",
         "mode": "100644",
-        "object_id": "c2b88aa91e5b58d58f2f539ccdc9914d7653f607"
+        "object_id": "b41589653ea0da749b2bb52144742b15d7fbef1b"
       },
       {
         "path": "scripts/production-restore.mjs",
@@ -1194,7 +1204,7 @@
       {
         "path": "scripts/resolve-isolated-restore-rehearsal.mjs",
         "mode": "100644",
-        "object_id": "4126c0a195d3b7f11e13668a7bd137ef0deed5d3"
+        "object_id": "8a7bc9dcb2c648752d30fcab70e57fc316c6dc4f"
       },
       {
         "path": "scripts/restore-mutation-gate-terminated-owner-fixture.mjs",
@@ -3342,7 +3352,7 @@
         "object_id": "017e9f51b1e7e62fbf534830224101a49cfde99b"
       }
     ],
-    "authority_path_count": 644,
+    "authority_path_count": 646,
     "migration_path_count": 125,
     "generated_evidence_excluded_path": "release/integrated-backend-authority-evidence.json",
     "binding": "The executable cutover gate verifies one external Ed25519-signed release attestation, deterministically enumerates every tracked entry in its exact backend tree, rejects non-regular or symlink authority entries and forbidden index flags, compares every worktree byte sequence and mode with its exact tree blob and mode, and separately verifies this generated evidence file against the signed digest and exact tree blob."
