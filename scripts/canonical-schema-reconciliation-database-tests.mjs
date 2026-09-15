@@ -12,8 +12,12 @@ if (!/^mz_schema_rebuild_[a-zA-Z0-9_]+$/.test(container) || !/^(postgres|mz_sche
   throw new Error("A disposable schema-rebuild database is required.");
 }
 
-const migration = readFileSync(
+const historicalReconciliationMigration = readFileSync(
   new URL("../supabase/migrations/20260810140000_finalize_named_manager_messenger_retirement_integrity.sql", import.meta.url),
+  "utf8",
+);
+const currentMessagingMigration = readFileSync(
+  new URL("../supabase/migrations/20260914051527_messaging_read_horizon_and_send_idempotency.sql", import.meta.url),
   "utf8",
 );
 const ARCHIVE_MESSAGE_ID = "00000000-0000-4000-8000-00000000d901";
@@ -28,7 +32,7 @@ async function sql(statement) {
   return stdout.trim().split("\n").at(-1);
 }
 
-function applyReconciliation() {
+function applyMigration(migration) {
   const result = execFileSync("docker", [
     "exec", "-i", container, "psql", "-X", "-v", "ON_ERROR_STOP=1",
     "-U", "supabase_admin", "-d", database,
@@ -144,6 +148,9 @@ with functions as (
       'msg_mark_message_delivered',
       'msg_mark_message_displayed',
       'msg_acknowledge_message',
+      'msg_mark_thread_read_through',
+      'msg_effective_message_metadata',
+      'msg_send_message',
       'msg_delete_message',
       'msg_reject_retired_ops_manager_shared_thread_mutation',
       'msg_reject_retired_ops_manager_shared_participation',
@@ -185,8 +192,14 @@ select jsonb_build_object(
 `;
 
 const before = JSON.parse(await sql(inventorySql));
-applyReconciliation();
-applyReconciliation();
+applyMigration(historicalReconciliationMigration);
+applyMigration(historicalReconciliationMigration);
+// The historical reconciliation intentionally owns retirement behavior, but
+// it predates the current read-horizon and send-idempotency definitions. A
+// shared-database test must converge back to migration head before returning
+// so later checks observe the same schema as a clean rebuild.
+applyMigration(currentMessagingMigration);
+applyMigration(currentMessagingMigration);
 const afterReplay = JSON.parse(await sql(inventorySql));
 assert.deepEqual(afterReplay, before, "replaying the final correction changed canonical schema or archived evidence");
 
